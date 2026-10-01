@@ -1,0 +1,48 @@
+# Rust
+/target/
+**/*.rs.bk
+# Cargo.lock IS committed (application workspace)
+
+# JavaScript / Vite+ (vp + pnpm only; pnpm-lock.yaml IS committed)
+node_modules/
+.pnpm-store/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+# Any lockfile other than pnpm-lock.yaml is forbidden (docs/DECISIONS.md F2); CI fails on them.
+# They are also ignored here so they are never committed by accident.
+package-lock.json
+npm-shrinkwrap.json
+yarn.lock
+bun.lock
+bun.lockb
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local data
+*.sqlite
+*.sqlite3
+*.db
+/.data/
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+
+# Claude Code local state (CLAUDE.md is committed)
+.claude/settings.local.json
+.claude/worktrees/
+
+# Scratch
+/.work/
+*.log
