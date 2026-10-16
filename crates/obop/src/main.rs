@@ -22,6 +22,15 @@ const USAGE: &str = "usage: obop <command>
       and OBOP_IMAGE or OBOP_REPO (+ OBOP_BRANCH); optional OBOP_MARKETPLACE_URL and
       OBOP_CELL_INSTANCE_HOST (host:port instances use for the cell, e.g. obop-postgres.internal:5432),
       OBOP_CELL_INSTANCE_HOST (host:port instances use for the cell, e.g. obop-postgres.internal:5432)
+      the control plane also serves /community (forum) and /status (status page); settings:
+      OBOP_PLATFORM_ADMINS (staff emails), OBOP_PUBLIC_URL, OBOP_STATUS_INTERVAL_SECS (default 60),
+      OBOP_CELL_ADMIN_URL (adds the cell database check)
+  status incident create --title T [--impact none|minor|major|critical] [--status S]
+      [--components website,api,community,provisioning,celldb,instances] [--message M]
+  status incident update ID [--status investigating|identified|monitoring|resolved]
+      [--impact I] --message M
+  status incident resolve ID [--message M] | status incident list
+                                                manage status-page incidents (--db as for platform serve)
   serve [--addr 127.0.0.1:8080] [--static DIR]  REST API and the backoffice
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
   commands [--token TOKEN]                      list the commands visible to a token
@@ -51,6 +60,11 @@ fn main() -> ExitCode {
     let (static_dir, args) = take_opt(&args, "--static");
     let (provisioner, args) = take_opt(&args, "--provisioner");
     let (instance_static, args) = take_opt(&args, "--instance-static");
+    let (title, args) = take_opt(&args, "--title");
+    let (impact, args) = take_opt(&args, "--impact");
+    let (inc_status, args) = take_opt(&args, "--status");
+    let (components, args) = take_opt(&args, "--components");
+    let (message, args) = take_opt(&args, "--message");
     let (flags, args): (Vec<&str>, Vec<&str>) = args
         .into_iter()
         .partition(|a| matches!(*a, "--demo" | "--dev-auth" | "--all-groups"));
@@ -82,6 +96,23 @@ fn main() -> ExitCode {
         ["platform", "serve"] => {
             platform_serve(&opts, addr, static_dir, provisioner, instance_static)
         }
+        [
+            "status",
+            "incident",
+            verb @ ("create" | "update" | "resolve" | "list"),
+            rest @ ..,
+        ] if rest.len() <= 1 => status_incident(
+            &opts,
+            verb,
+            &IncidentArgs {
+                id: rest.first().copied(),
+                title,
+                impact,
+                status: inc_status,
+                components,
+                message,
+            },
+        ),
         ["mcp"] => mcp(&opts),
         ["commands"] => commands(&opts),
         ["call", model, command, kv @ ..] => call(&opts, model, command, kv),
@@ -454,13 +485,143 @@ fn platform_serve(
         obop_storage::open(&url).map_err(|e| fail(&format!("cannot open database: {e}")))?;
     let prov =
         make_provisioner(provisioner.unwrap_or("local"), instance_static).map_err(|e| fail(&e))?;
-    let platform =
-        obop_platform::Platform::new(Arc::new(Auth::new(backend.clone())), backend, prov);
-    let router = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), static_dir);
+    let auth = Arc::new(Auth::new(backend.clone()));
+    let platform = obop_platform::Platform::new(auth.clone(), backend.clone(), prov);
+    // The public forum (/community) and status page (/status), with their background checker.
+    let community =
+        obop_community::Community::open(obop_community::Config::from_env(), auth, backend.clone())
+            .map_err(|e| fail(&format!("cannot open the community data: {e}")))?;
+    let interval = std::env::var("OBOP_STATUS_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .unwrap_or(60)
+        .max(5);
+    community.spawn_checker(
+        status_probes(
+            backend,
+            addr,
+            static_dir.is_some(),
+            provisioner.unwrap_or("local"),
+        ),
+        std::time::Duration::from_secs(interval),
+    );
+    let router = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), static_dir)
+        .merge(obop_http::community::router(community));
     eprintln!("obop platform listening on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     rt.block_on(obop_http::serve(addr, router))
         .map_err(|e| fail(&format!("error: {e}")))
+}
+
+/// The status page's checks for `platform serve`: website (only when a static site is served),
+/// control plane API, community, provisioning, the cell database (only when
+/// `OBOP_CELL_ADMIN_URL` is set) and the customer instances.
+fn status_probes(
+    backend: Arc<dyn obop_storage::Backend>,
+    addr: &str,
+    has_static: bool,
+    provisioner: &str,
+) -> Vec<obop_community::status::Probe> {
+    use obop_community::status::{self as st, UreqHttp};
+    let mut probes = vec![
+        st::probe_storage("api", backend.clone(), "status_probe_api"),
+        st::probe_storage("community", backend.clone(), "community_probe"),
+        st::probe_provisioning(provisioner.into(), Arc::new(st::sliplane_version)),
+        st::probe_instances(backend, Arc::new(UreqHttp { hardened: true })),
+    ];
+    if has_static && let Some(port) = addr.rsplit(':').next().filter(|p| p.parse::<u16>().is_ok()) {
+        probes.push(st::probe_website(
+            format!("http://127.0.0.1:{port}/"),
+            Arc::new(UreqHttp { hardened: false }),
+        ));
+    }
+    if let Ok(url) = std::env::var("OBOP_CELL_ADMIN_URL") {
+        probes.push(st::probe_celldb(url));
+    }
+    probes
+}
+
+/// Arguments of `obop status incident ...`.
+struct IncidentArgs<'a> {
+    id: Option<&'a str>,
+    title: Option<&'a str>,
+    impact: Option<&'a str>,
+    status: Option<&'a str>,
+    components: Option<&'a str>,
+    message: Option<&'a str>,
+}
+
+/// `obop status incident create|update|resolve|list`: manage status-page incidents from the
+/// command line, directly in the control plane's database.
+fn status_incident(o: &Opts, verb: &str, a: &IncidentArgs) -> Exit {
+    use obop_community::status::{Impact, IncStatus, Status};
+    let url =
+        o.db.clone()
+            .unwrap_or_else(|| "sqlite://obop-platform.db".into());
+    let backend =
+        obop_storage::open(&url).map_err(|e| fail(&format!("cannot open database: {e}")))?;
+    let st = Status::open(backend).map_err(|e| fail(&format!("cannot read status data: {e}")))?;
+    let now = obop_community::util::now();
+    let bad = |what: &str, v: &str| fail(&format!("invalid {what}: {v}"));
+    let impact = match a.impact {
+        Some(i) => {
+            Some(Impact::parse(i).ok_or_else(|| bad("impact (none|minor|major|critical)", i))?)
+        }
+        None => None,
+    };
+    let status = match a.status {
+        Some(s) => Some(
+            IncStatus::parse(s)
+                .ok_or_else(|| bad("status (investigating|identified|monitoring|resolved)", s))?,
+        ),
+        None => None,
+    };
+    let need_id = || -> Result<u64, ExitCode> {
+        a.id.and_then(|i| i.parse().ok())
+            .ok_or_else(|| fail("an incident id is required"))
+    };
+    let msg = a.message.unwrap_or("");
+    match verb {
+        "create" => {
+            let title = a.title.ok_or_else(|| fail("--title is required"))?;
+            let id = st
+                .create_incident(
+                    title,
+                    impact.unwrap_or(Impact::Minor),
+                    status.unwrap_or(IncStatus::Investigating),
+                    &csv(a.components),
+                    msg,
+                    now,
+                )
+                .map_err(|e| fail(&format!("error: {e}")))?;
+            println!("incident {id} created");
+        }
+        "update" => {
+            let id = need_id()?;
+            st.update_incident(id, status, impact, msg, now)
+                .map_err(|e| fail(&format!("error: {e}")))?;
+            println!("incident {id} updated");
+        }
+        "resolve" => {
+            let id = need_id()?;
+            st.resolve_incident(id, if msg.is_empty() { "Resolved." } else { msg }, now)
+                .map_err(|e| fail(&format!("error: {e}")))?;
+            println!("incident {id} resolved");
+        }
+        _ => {
+            for i in st.incidents() {
+                println!(
+                    "{}\t{}\t{}\t{}\t{}",
+                    i.id,
+                    i.status.code(),
+                    i.impact.code(),
+                    i.components.join(","),
+                    i.title
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 fn mcp(o: &Opts) -> Exit {
@@ -1100,6 +1261,148 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
         assert_eq!(last, 404);
+    }
+
+    /// The control-plane router with the forum and status page merged in, as `platform serve`
+    /// builds it: the new routes work and the platform API and static fallback are untouched.
+    #[tokio::test]
+    async fn community_and_status_do_not_shadow_the_platform_routes() {
+        let dir = std::env::temp_dir().join(format!("obop-site-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("index.html"), "<h1>static home</h1>").unwrap();
+        let backend = obop_storage::open("memory:").unwrap();
+        let auth = Arc::new(Auth::with_test_params(backend.clone()));
+        let platform = obop_platform::Platform::new(
+            auth.clone(),
+            backend.clone(),
+            Arc::new(obop_platform::provision::Fake::default()),
+        );
+        let community =
+            obop_community::Community::open(obop_community::Config::default(), auth, backend)
+                .unwrap();
+        let r = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), dir.to_str())
+            .merge(obop_http::community::router(community));
+        let text = |resp: axum::response::Response| async move {
+            let s = resp.status().as_u16();
+            let b = resp.into_body().collect().await.unwrap().to_bytes();
+            (s, String::from_utf8_lossy(&b).into_owned())
+        };
+        let (s, b) = text(
+            r.clone()
+                .oneshot(Request::get("/").body(Body::empty()).unwrap())
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!((s, b.as_str()), (200, "<h1>static home</h1>"));
+        let (s, b) = text(
+            r.clone()
+                .oneshot(Request::get("/community").body(Body::empty()).unwrap())
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(s, 200);
+        assert!(b.contains("obop community") && b.contains("Announcements"));
+        let (s, b) = text(
+            r.clone()
+                .oneshot(
+                    Request::get("/community/t/1")
+                        .header("accept", "text/markdown")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(s, 404, "{b}");
+        let (s, b) = text(
+            r.clone()
+                .oneshot(
+                    Request::get("/status/api/v2/status.json")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(s, 200);
+        assert!(b.contains("\"indicator\":\"none\""), "{b}");
+        // A POST body larger than the limit is refused before it reaches the application.
+        let big = "x=".to_string() + &"a".repeat(70_000);
+        let resp = r
+            .clone()
+            .oneshot(
+                Request::post("/community/login")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(big))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status().as_u16(), 413);
+        // The JSON platform API still works next to it.
+        let (s, b) = post(
+            &r,
+            None,
+            "/api/platform/signup",
+            json!({"email": "ada@example.test", "password": "correct horse battery"}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+        assert!(b["token"].as_str().is_some());
+        let (s, _) = post(
+            &r,
+            None,
+            "/api/platform/login",
+            json!({"email": "ada@example.test", "password": "wrong wrong wrong"}),
+        )
+        .await;
+        assert_eq!(s, 401);
+        // The same account signs in to the forum.
+        let resp = r
+            .clone()
+            .oneshot(
+                Request::get("/community/login")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let csrf = resp
+            .headers()
+            .get_all("set-cookie")
+            .iter()
+            .find_map(|c| {
+                c.to_str()
+                    .ok()?
+                    .strip_prefix("obop_csrf=")
+                    .map(|v| v.split(';').next().unwrap_or("").to_string())
+            })
+            .expect("csrf cookie");
+        let resp = r
+            .clone()
+            .oneshot(
+                Request::post("/community/login")
+                    .header("cookie", format!("obop_csrf={csrf}"))
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(format!(
+                        "csrf={csrf}&email=ada%40example.test&password=correct+horse+battery"
+                    )))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status().as_u16(), 303);
+        assert!(
+            resp.headers()
+                .get_all("set-cookie")
+                .iter()
+                .any(|c| c.to_str().unwrap().starts_with("obop_session="))
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
