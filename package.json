@@ -1,0 +1,9 @@
+{
+  "name": "obop",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.6.0",
+  "devDependencies": {
+    "vite-plus": "1.0.0"
+  }
+}
