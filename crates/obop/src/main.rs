@@ -1132,3 +1132,423 @@ mod tests {
         );
     }
 }
+
+/// Every bundled package, installed through the real installer and exercised through the one
+/// dispatcher: sample records for every model, every declared action, the metadata gates, and
+/// admin uninstall and reinstall.
+#[cfg(test)]
+mod bundled_packages {
+    use super::*;
+    use obop_commands::{ADMIN_GROUP, CallError, FieldInfo, ModelInfo};
+    use obop_pkg::{Bundled, Manifest, Marketplace};
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+    /// Where the greedy walk over each model's actions (first action leading to a state not
+    /// seen yet) must end, starting from the first option of `state`.
+    const FINAL_STATE: &[(&str, &str)] = &[
+        ("appointments_appointment", "done"),
+        ("documents_document", "archived"),
+        ("expenses_expense", "paid"),
+        ("fleet_vehicle", "in_service"),
+        ("fleet_vehicle_driver", "suspended"),
+        ("fleet_vehicle_service", "done"),
+        ("helpdesk_ticket", "closed"),
+        ("hr_employee", "offboarded"),
+        ("hr_leave_request", "approved"),
+        ("inventory_move", "done"),
+        ("manufacturing_order", "done"),
+        ("projects_milestone", "reached"),
+        ("projects_project", "done"),
+        ("projects_task", "done"),
+        ("purchase_order", "received"),
+        ("subscriptions_subscription", "cancelled"),
+        ("timesheets_entry", "approved"),
+    ];
+
+    fn call(
+        app: &App,
+        p: &Principal,
+        id: &str,
+        input: Value,
+    ) -> Result<obop_commands::Response, CallError> {
+        app.dispatcher
+            .call(Surface::Rest, p, &mut Vault::new(), id, &input)
+    }
+
+    fn by_id(id: &str) -> Value {
+        Value::map([("id", Value::text(id))])
+    }
+
+    fn id_of(r: &obop_commands::Response) -> String {
+        match &r.value {
+            Value::Map(m) => match &m["id"] {
+                Value::Text(t) => t.clone(),
+                other => panic!("id is not text: {other:?}"),
+            },
+            other => panic!("no record in {other:?}"),
+        }
+    }
+
+    fn all_manifests() -> Vec<Manifest> {
+        Bundled
+            .list()
+            .unwrap()
+            .iter()
+            .map(|l| Manifest::parse(&Bundled.fetch(&l.id).unwrap()).unwrap())
+            .collect()
+    }
+
+    /// Dependency order computed from `depends`; built-in module ids count as installed.
+    fn install_order(app: &App, mut left: Vec<Manifest>) -> Vec<Manifest> {
+        let mut have: BTreeSet<String> = app.modules.iter().map(|m| m.id.clone()).collect();
+        let mut out = Vec::new();
+        while !left.is_empty() {
+            let at = left
+                .iter()
+                .position(|m| m.module.depends.iter().all(|d| have.contains(d)))
+                .expect("a dependency cycle or a dependency that no package provides");
+            let m = left.remove(at);
+            have.insert(m.module.id.clone());
+            out.push(m);
+        }
+        out
+    }
+
+    fn models_of(app: &App, p: &Principal) -> HashMap<String, ModelInfo> {
+        app.dispatcher
+            .meta(Surface::Rest, p)
+            .into_iter()
+            .flat_map(|m| m.models)
+            .map(|m| (m.name.clone(), m))
+            .collect()
+    }
+
+    /// Builds sample records from field metadata, creating referenced records first.
+    struct Maker<'a> {
+        app: &'a App,
+        meta: HashMap<String, ModelInfo>,
+        pkg_models: BTreeSet<String>,
+        pkg_user: Principal,
+        admin: Principal,
+        made: HashMap<String, String>,
+    }
+
+    impl Maker<'_> {
+        fn input(&mut self, model: &str, state: Option<&str>, open: &mut Vec<String>) -> Value {
+            let fields: Vec<FieldInfo> = self.meta[model].fields.clone();
+            let mut m = BTreeMap::new();
+            for f in fields {
+                let v = match f.kind {
+                    "text" => Value::text("sample"),
+                    "longtext" => Value::text("a longer sample text"),
+                    "number" => Value::Int(1),
+                    "money" => Value::Int(12_345),
+                    "date" => Value::text("2026-01-31"),
+                    "bool" => Value::Bool(true),
+                    "select" => match (f.name, state) {
+                        ("state", Some(s)) => Value::text(s),
+                        _ => Value::text(f.options[0]),
+                    },
+                    "ref" => {
+                        let to = f.to.expect("ref has a target");
+                        if open.iter().any(|o| o == to) {
+                            assert!(!f.required, "{model}.{} refers to itself", f.name);
+                            continue;
+                        }
+                        Value::Text(self.record(to, open))
+                    }
+                    other => panic!("{model}.{}: unknown kind {other}", f.name),
+                };
+                m.insert(f.name.to_string(), v);
+            }
+            Value::Map(m)
+        }
+
+        /// A record of `model` in its first state, reused when already made.
+        fn record(&mut self, model: &str, open: &mut Vec<String>) -> String {
+            if let Some(id) = self.made.get(model) {
+                return id.clone();
+            }
+            open.push(model.to_string());
+            let input = self.input(model, None, open);
+            open.pop();
+            let id = self.create(model, input);
+            self.made.insert(model.to_string(), id.clone());
+            id
+        }
+
+        fn create(&self, model: &str, input: Value) -> String {
+            let p = if self.pkg_models.contains(model) {
+                &self.pkg_user
+            } else {
+                &self.admin
+            };
+            let r = call(self.app, p, &format!("{model}.create"), input)
+                .unwrap_or_else(|e| panic!("{model}.create failed: {e:?}"));
+            id_of(&r)
+        }
+
+        /// A fresh record of `model` whose state starts as `state`.
+        fn fresh(&mut self, model: &str, state: &str) -> String {
+            let mut open = vec![model.to_string()];
+            let input = self.input(model, Some(state), &mut open);
+            self.create(model, input)
+        }
+    }
+
+    fn state_of(app: &App, model: &str, id: &str) -> String {
+        match app.store.field(model, id, "state") {
+            Some(Value::Text(t)) => t,
+            other => panic!("{model} {id} has no state: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn every_bundled_package_installs_and_every_model_and_action_works() {
+        let app = App::new();
+        let manifests = install_order(&app, all_manifests());
+        assert!(manifests.len() >= 12);
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        let mut seen_special = false;
+        let mut seen_financial = false;
+
+        for m in &manifests {
+            let id = &m.module.id;
+            app.installer
+                .install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
+                .unwrap_or_else(|e| panic!("{id} did not install: {e}"));
+
+            let groups = m.groups();
+            let group_refs: Vec<&str> = groups.iter().map(String::as_str).collect();
+            let user = Principal::user("tester", &group_refs);
+            let visible = models_of(&app, &user);
+            let admin_meta = models_of(&app, &admin);
+            let pkg_models: BTreeSet<String> = m.model.iter().map(|x| x.name.clone()).collect();
+
+            // The metadata of every field: described, classified, never personal data as `none`.
+            for model in &m.model {
+                let info = visible
+                    .get(&model.name)
+                    .unwrap_or_else(|| panic!("{} is not visible to its own groups", model.name));
+                assert_eq!(info.fields.len(), model.field.len(), "{}", model.name);
+                assert_eq!(info.actions.len(), model.action.len(), "{}", model.name);
+                assert!(info.can_create && info.can_update, "{}", model.name);
+                for f in &info.fields {
+                    assert!(
+                        !f.description.trim().is_empty(),
+                        "{}.{}",
+                        model.name,
+                        f.name
+                    );
+                    assert!(
+                        !(f.personal_data && f.class == "none"),
+                        "{}.{} is personal data classed none",
+                        model.name,
+                        f.name
+                    );
+                    seen_special |= id == "hr" && f.class == "special_category";
+                    seen_financial |= id == "hr" && f.class == "financial";
+                }
+                for a in &model.action {
+                    let c = info
+                        .actions
+                        .iter()
+                        .find(|c| c.id == format!("{}.{}", model.name, a.name))
+                        .unwrap_or_else(|| panic!("{}.{} not exposed", model.name, a.name));
+                    assert_eq!(c.needs_approval, a.approval, "{}.{}", model.name, a.name);
+                }
+            }
+
+            let mut mk = Maker {
+                app: &app,
+                meta: admin_meta,
+                pkg_models,
+                pkg_user: user.clone(),
+                admin: admin.clone(),
+                made: HashMap::new(),
+            };
+
+            for model in &m.model {
+                let name = model.name.as_str();
+                // A record with every field filled in is accepted and can be read back.
+                let rec = mk.record(name, &mut Vec::new());
+                call(&app, &user, &format!("{name}.get"), by_id(&rec)).unwrap();
+                let list = call(
+                    &app,
+                    &user,
+                    &format!("{name}.list"),
+                    Value::Map(Default::default()),
+                )
+                .unwrap();
+                assert!(
+                    matches!(list.value, Value::List(l) if !l.is_empty()),
+                    "{name}"
+                );
+                // A required field cannot be left out.
+                if let Some(req) = model.field.iter().find(|f| f.required) {
+                    let Value::Map(mut input) = mk.input(name, None, &mut vec![name.to_string()])
+                    else {
+                        unreachable!()
+                    };
+                    input.remove(&req.name);
+                    let e = call(&app, &user, &format!("{name}.create"), Value::Map(input))
+                        .unwrap_err();
+                    assert!(
+                        matches!(e, CallError::Handler(ref s) if s.contains("required")),
+                        "{name}: {e:?}"
+                    );
+                }
+                if model.action.is_empty() {
+                    continue;
+                }
+
+                // Each action works from its `from` state and is refused out of order.
+                for a in &model.action {
+                    let from = a.from.as_deref().unwrap();
+                    let rec = mk.fresh(name, from);
+                    let cmd = format!("{name}.{}", a.name);
+                    call(&app, &user, &cmd, by_id(&rec)).unwrap();
+                    assert_eq!(state_of(&app, name, &rec), a.to, "{cmd}");
+                    assert!(call(&app, &user, &cmd, by_id(&rec)).is_err(), "{cmd} twice");
+                    // Agents may only propose an action that needs approval.
+                    let bot = Principal::agent("bot", &group_refs, &group_refs);
+                    let again = mk.fresh(name, from);
+                    let r = call(&app, &bot, &cmd, by_id(&again));
+                    if a.approval {
+                        assert!(
+                            matches!(r, Err(CallError::ApprovalRequired { .. })),
+                            "{cmd}"
+                        );
+                        assert_eq!(state_of(&app, name, &again), from, "{cmd} proposed only");
+                    } else {
+                        r.unwrap_or_else(|e| panic!("{cmd} for an agent: {e:?}"));
+                    }
+                }
+
+                // The workflow, walked from its first state, ends where it should.
+                let states = model.field.iter().find(|f| f.name == "state").unwrap();
+                let mut now = states.options[0].clone();
+                let rec = mk.fresh(name, &now);
+                let mut visited = BTreeSet::from([now.clone()]);
+                while let Some(a) = model
+                    .action
+                    .iter()
+                    .find(|a| a.from.as_deref() == Some(now.as_str()) && !visited.contains(&a.to))
+                {
+                    call(&app, &user, &format!("{name}.{}", a.name), by_id(&rec)).unwrap();
+                    now = a.to.clone();
+                    visited.insert(now.clone());
+                    assert_eq!(state_of(&app, name, &rec), now);
+                }
+                let want = FINAL_STATE
+                    .iter()
+                    .find(|(n, _)| *n == name)
+                    .unwrap_or_else(|| panic!("no expected final state for {name}"))
+                    .1;
+                assert_eq!(now, want, "{name} workflow ends in {want}");
+            }
+        }
+
+        // hr is classified strictly, and pay is hidden from those who only read the directory.
+        assert!(seen_special && seen_financial);
+        let reader = Principal::user("r", &["hr.user"]);
+        let employee = &models_of(&app, &reader)["hr_employee"];
+        let names: Vec<_> = employee.fields.iter().map(|f| f.name).collect();
+        assert!(names.contains(&"name") && names.contains(&"work_email"));
+        for hidden in [
+            "salary",
+            "national_id",
+            "bank_iban",
+            "health_note",
+            "union_member",
+        ] {
+            assert!(
+                !names.contains(&hidden),
+                "{hidden} must need a stricter group"
+            );
+        }
+        let manager = Principal::user("m", &["hr.user", "hr.manager"]);
+        let names: Vec<_> = models_of(&app, &manager)["hr_employee"]
+            .fields
+            .iter()
+            .map(|f| f.name)
+            .collect();
+        assert!(names.contains(&"salary") && !names.contains(&"health_note"));
+    }
+
+    #[test]
+    fn platform_admin_uninstalls_and_reinstalls_every_package_without_losing_data() {
+        let app = App::new();
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        let manifests = install_order(&app, all_manifests());
+        for m in &manifests {
+            call(
+                &app,
+                &admin,
+                "marketplace_listing.install",
+                by_id(&m.module.id),
+            )
+            .unwrap();
+        }
+        // One record per model, made as admin (who holds every group).
+        let mut mk = Maker {
+            app: &app,
+            meta: models_of(&app, &admin),
+            pkg_models: BTreeSet::new(),
+            pkg_user: admin.clone(),
+            admin: admin.clone(),
+            made: HashMap::new(),
+        };
+        let mut counts = Vec::new();
+        for m in &manifests {
+            for model in &m.model {
+                mk.record(&model.name, &mut Vec::new());
+                counts.push((model.name.clone(), app.store.count(&model.name)));
+            }
+        }
+        assert!(counts.iter().all(|(_, n)| *n >= 1));
+
+        // A package other packages depend on cannot be removed first.
+        assert!(
+            manifests
+                .iter()
+                .any(|m| m.module.depends.contains(&"projects".to_string()))
+        );
+        assert!(call(&app, &admin, "module.uninstall", by_id("projects")).is_err());
+        assert!(app.dispatcher.has_model("projects_task"));
+
+        for m in manifests.iter().rev() {
+            call(&app, &admin, "module.uninstall", by_id(&m.module.id))
+                .unwrap_or_else(|e| panic!("uninstall {}: {e:?}", m.module.id));
+            for model in &m.model {
+                assert!(!app.dispatcher.has_model(&model.name), "{}", model.name);
+            }
+        }
+        for m in &manifests {
+            call(
+                &app,
+                &admin,
+                "marketplace_listing.install",
+                by_id(&m.module.id),
+            )
+            .unwrap();
+            for model in &m.model {
+                let want = counts.iter().find(|(n, _)| *n == model.name).unwrap().1;
+                assert_eq!(
+                    app.store.count(&model.name),
+                    want,
+                    "{} data kept",
+                    model.name
+                );
+                let list = call(
+                    &app,
+                    &admin,
+                    &format!("{}.list", model.name),
+                    Value::Map(Default::default()),
+                )
+                .unwrap();
+                assert!(matches!(list.value, Value::List(l) if l.len() == want));
+            }
+        }
+    }
+}
