@@ -7,6 +7,8 @@ publish.workspace = true
 
 [dependencies]
 obop-types.workspace = true
+obop-registry.workspace = true
+base.workspace = true
 
 [lints]
 workspace = true

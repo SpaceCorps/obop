@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/kernel/obop-types", "crates/obop"]
+members = ["crates/kernel/*", "crates/modules/*", "crates/obop"]
 
 [workspace.package]
 edition = "2024"
@@ -9,6 +9,10 @@ publish = false
 
 [workspace.dependencies]
 obop-types = { path = "crates/kernel/obop-types" }
+obop-registry = { path = "crates/kernel/obop-registry" }
+obop-masking = { path = "crates/kernel/obop-masking" }
+base-api = { path = "crates/modules/base-api" }
+base = { path = "crates/modules/base" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -3,7 +3,40 @@
 version = 4
 
 [[package]]
+name = "base"
+version = "0.0.0"
+dependencies = [
+ "base-api",
+ "obop-registry",
+ "obop-types",
+]
+
+[[package]]
+name = "base-api"
+version = "0.0.0"
+dependencies = [
+ "obop-registry",
+ "obop-types",
+]
+
+[[package]]
 name = "obop"
+version = "0.0.0"
+dependencies = [
+ "base",
+ "obop-registry",
+ "obop-types",
+]
+
+[[package]]
+name = "obop-masking"
+version = "0.0.0"
+dependencies = [
+ "obop-types",
+]
+
+[[package]]
+name = "obop-registry"
 version = "0.0.0"
 dependencies = [
  "obop-types",
