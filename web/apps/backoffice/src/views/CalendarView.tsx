@@ -81,14 +81,14 @@ export function CalendarView(p: ViewProps) {
         <div className="calnav" role="group" aria-label="Navigate">
           <button className="icon-btn" aria-label="Previous" onClick={() => step(-1)}>
             <span style={{ transform: "scaleX(-1)", display: "inline-flex" }}>
-              <Icon name="caretRight" size={16} />
+              <Icon name="chevron-right" size={16} />
             </span>
           </button>
           <button className="btn small" onClick={() => setCursor(new Date())}>
             Today
           </button>
           <button className="icon-btn" aria-label="Next" onClick={() => step(1)}>
-            <Icon name="caretRight" size={16} />
+            <Icon name="chevron-right" size={16} />
           </button>
         </div>
         <h2 className="calhead" aria-live="polite">

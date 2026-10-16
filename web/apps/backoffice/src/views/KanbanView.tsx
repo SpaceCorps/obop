@@ -148,7 +148,7 @@ export function KanbanView(p: ViewProps) {
                 aria-label={`${isFolded ? "Unfold" : "Fold"} ${name}`}
                 onClick={() => setFold(key)}
               >
-                <Icon name={isFolded ? "caretRight" : "caret"} size={13} />
+                <Icon name={isFolded ? "chevron-right" : "chevron-down"} size={13} />
               </button>
               <b className="kname">
                 {gf.kind === "select" ? (

@@ -1,12 +1,13 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import type { IconName } from "@obop/ui";
 import type { FieldMeta } from "./api.ts";
 import type { Favorite } from "./favorites.ts";
 import { FilterPanel } from "./FilterPanel.tsx";
 import { label } from "./format.ts";
 import { describeCond, type Cond, type Lookup, type ViewState } from "./query.ts";
-import { Icon, useDismiss } from "./ui.tsx";
+import { Button, Icon, Segmented, useDismiss } from "./ui.tsx";
 
-export type ViewDef = { id: string; label: string; icon: string };
+export type ViewDef = { id: string; label: string; icon: IconName };
 
 type Props = {
   appName: string;
@@ -96,9 +97,16 @@ export function ControlPanel(p: Props) {
       <div className="cp-top">
         <div className="crumbs">
           <span>{p.appName}</span>
-          <Icon name="caretRight" size={12} />
+          <Icon name="chevron-right" size={12} />
           <strong>{p.title}</strong>
         </div>
+        {p.canCreate && (
+          <Button variant="primary" icon="plus" onClick={p.onNew}>
+            New
+          </Button>
+        )}
+      </div>
+      <div className="cp-bottom">
         <div className="searchwrap" ref={root}>
           <div className={`searchbox${open ? " open" : ""}`} onClick={() => input.current?.focus()}>
             <Icon name="search" size={15} />
@@ -166,7 +174,7 @@ export function ControlPanel(p: Props) {
                 setOpen(!open);
               }}
             >
-              <Icon name="caret" size={14} />
+              <Icon name="filter" size={15} />
             </button>
           </div>
           {suggest && options.length > 0 && (
@@ -204,32 +212,19 @@ export function ControlPanel(p: Props) {
             </div>
           )}
         </div>
-      </div>
-      <div className="cp-bottom">
-        {p.canCreate && (
-          <button className="btn primary" onClick={p.onNew}>
-            <Icon name="plus" size={14} /> New
-          </button>
-        )}
         {p.extra}
         <span className="grow" />
         <span className="count" aria-live="polite">
           {p.count} {p.count === 1 ? "record" : "records"}
         </span>
-        <div className="switcher" role="group" aria-label="View">
-          {p.views.map((v) => (
-            <button
-              key={v.id}
-              aria-pressed={p.view === v.id}
-              aria-label={v.label}
-              title={v.label}
-              onClick={() => p.setView(v.id)}
-            >
-              <Icon name={v.icon} size={15} />
-              <span className="vlabel">{v.label}</span>
-            </button>
-          ))}
-        </div>
+        <Segmented
+          mode="toggle"
+          label="View"
+          iconOnlyNarrow
+          value={p.view}
+          onChange={p.setView}
+          options={p.views.map((v) => ({ value: v.id, label: v.label, icon: v.icon }))}
+        />
       </div>
     </div>
   );

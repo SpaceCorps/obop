@@ -6,7 +6,7 @@ import { FieldInput, RefLabel } from "./fields.tsx";
 import { isMasked, isState, label, modelLabel, optionLabel } from "./format.ts";
 import { encodeState } from "./query.ts";
 import { nav } from "./route.ts";
-import { Icon } from "./ui.tsx";
+import { Button, Icon, IconButton, Kbd } from "./ui.tsx";
 
 type Props = {
   model: ModelMeta;
@@ -189,19 +189,18 @@ export function RecordPanel({
           <h2>{creating ? `New ${title.toLowerCase()}` : d.recordLabel(model.name, row)}</h2>
           {!creating && <span className="hint">{title}</span>}
         </div>
-        <button className="icon-btn" onClick={onClose} aria-label="Close record">
-          <Icon name="close" size={16} />
-        </button>
+        <IconButton icon="close" label="Close record" onClick={onClose} />
       </header>
       {statusField && (
         <ol className="statusbar" aria-label={label(statusField.name)}>
-          {statusField.options?.map((s) => {
+          {statusField.options?.map((s, idx, all) => {
             const on = String(value(statusField)) === s;
+            const current = all.indexOf(String(value(statusField)));
             const click = creating || model.can_update;
             return (
               <li key={s}>
                 <button
-                  className={on ? "on" : ""}
+                  className={on ? "on" : idx < current ? "done" : ""}
                   aria-current={on ? "step" : undefined}
                   disabled={!click || busy}
                   onClick={() => void setStatus(s)}
@@ -244,16 +243,15 @@ export function RecordPanel({
       {!creating && model.actions.length > 0 && (
         <div className="actionrow">
           {model.actions.map((a) => (
-            <button
+            <Button
               key={a.id}
-              className="btn"
               title={`${a.description}${a.needs_approval ? " (needs a human's approval when an agent runs it)" : ""}`}
               disabled={busy}
               onClick={() => void act(a.id, a.needs_approval)}
             >
               {label(a.id.split(".")[1] ?? a.id)}
               {a.needs_approval ? " *" : ""}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -353,16 +351,15 @@ export function RecordPanel({
           </p>
         )}
         <footer className="formbar">
-          <button
+          <Button
             type="submit"
-            className="btn primary"
-            disabled={(!dirty && !creating) || busy || !canEdit}
+            variant="primary"
+            loading={busy}
+            disabled={(!dirty && !creating) || !canEdit}
           >
             {creating ? "Create" : "Save"}
-          </button>
-          <button
-            type="button"
-            className="btn"
+          </Button>
+          <Button
             onClick={() => {
               if (dirty) {
                 setDraft({});
@@ -372,11 +369,11 @@ export function RecordPanel({
             }}
           >
             {dirty ? "Discard" : "Close"}
-          </button>
+          </Button>
           {!canEdit && <span className="hint">Read only for you</span>}
           <span className="grow" />
           <span className="hint kbd-hint">
-            <kbd>⌘S</kbd> save <kbd>Esc</kbd> close
+            <Kbd>⌘S</Kbd> save <Kbd>Esc</Kbd> close
           </span>
         </footer>
       </form>

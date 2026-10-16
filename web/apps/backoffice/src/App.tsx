@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadSettings, login, meta, type ModuleMeta, type Settings } from "./api.ts";
-import { AppIcon, Launcher, Palette, TopBar, buildApps } from "./Chrome.tsx";
+import { AppIcon, Launcher, Palette, TopBar, appBlurb, buildApps } from "./Chrome.tsx";
 import { Customize } from "./Customize.tsx";
 import { DataProvider, type Tone } from "./data.tsx";
 import { modelLabel } from "./format.ts";
 import { ModelPage } from "./ModelPage.tsx";
 import { href, nav, useRoute } from "./route.ts";
-import { ConfirmDialog, Skeleton, Toasts, type ConfirmRequest, type ToastItem } from "./ui.tsx";
+import {
+  Button,
+  ConfirmDialog,
+  Icon,
+  Input,
+  Logo,
+  Notice,
+  Skeleton,
+  ToastRegion,
+  type ConfirmRequest,
+  type ToastItem,
+} from "./ui.tsx";
 import { applyTheme, resolveTheme } from "./theme.ts";
 
 function read(key: string): string {
@@ -36,37 +47,59 @@ function recentApps(): string[] {
 
 function SignIn({ onDone }: { onDone: (token: string, user: string) => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   return (
     <main className="signin-wrap">
+      <aside className="signin-brand">
+        <h1 className="signin-logo-lg">
+          <Logo variant="full" size={28} title="obop" />
+        </h1>
+        <p className="signin-claim">One business, one platform.</p>
+        <ul>
+          <li>
+            <Icon name="users" size={18} /> Every app shares one set of contacts and products
+          </li>
+          <li>
+            <Icon name="shield-check" size={18} /> Personal data is masked unless you may see it
+          </li>
+          <li>
+            <Icon name="sparkle" size={18} /> Agents can do what you can, and ask before they act
+          </li>
+        </ul>
+      </aside>
       <form
-        className="signin panel"
+        className="signin"
         onSubmit={async (e) => {
           e.preventDefault();
           const f = new FormData(e.currentTarget);
           const user = String(f.get("username"));
+          setBusy(true);
+          setError(null);
           const t = await login(user, String(f.get("password")));
+          setBusy(false);
           if (t) onDone(t, user);
           else setError("Invalid username or password");
         }}
       >
-        <h1>obop</h1>
-        <p className="hint">Sign in to your instance.</p>
-        <label className="field">
-          <span className="flabel">Username</span>
-          <input name="username" autoComplete="username" required autoFocus />
-        </label>
-        <label className="field">
-          <span className="flabel">Password</span>
-          <input name="password" type="password" autoComplete="current-password" required />
-        </label>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
-        <button type="submit" className="btn primary">
+        <h1 className="signin-logo">
+          <Logo variant="full" size={30} title="obop" />
+        </h1>
+        <div className="signin-head">
+          <h2>Sign in</h2>
+          <p className="hint">Sign in to your instance.</p>
+        </div>
+        <Input label="Username" name="username" autoComplete="username" required autoFocus />
+        <Input
+          label="Password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+        {error && <Notice tone="danger" title={error} />}
+        <Button type="submit" variant="primary" size="lg" loading={busy}>
           Sign in
-        </button>
+        </Button>
       </form>
     </main>
   );
@@ -153,6 +186,9 @@ export function App() {
   const isAdmin = modules.some((m) => m.id === "platform");
   const apps = useMemo(() => buildApps(modules, settings, isAdmin), [modules, settings, isAdmin]);
   const app = apps.find((a) => a.id === route.app);
+  // Everyone may set their own theme and read the brand book; the rest of Customize is for admins.
+  const personalCustomize =
+    route.app === "customize" && !isAdmin && ["theme", "brand"].includes(route.tab || route.model);
   const model = app?.module.models.find((m) => m.name === route.model) ?? app?.module.models[0];
 
   const linkFor = useCallback(
@@ -192,10 +228,12 @@ export function App() {
   if (!ready)
     return (
       <div className="canvas">
-        <div className="topbar panel" />
-        <section className="main panel">
-          <Skeleton rows={8} cols={4} />
-        </section>
+        <div className="topbar" />
+        <div className="workspace">
+          <section className="main panel">
+            <Skeleton rows={8} cols={4} />
+          </section>
+        </div>
       </div>
     );
 
@@ -220,12 +258,13 @@ export function App() {
           onPalette={() => setPalette(true)}
           onSignOut={signOut}
           onTheme={() => go({ app: "customize", model: "theme", tab: "theme" })}
+          onBrand={() => go({ app: "customize", model: "brand", tab: "brand" })}
         />
         <div className="workspace">
           {app && app.id !== "customize" && (
             <nav
               id="app-menu"
-              className={`sidebar panel${menu ? " open" : ""}`}
+              className={`sidebar${menu ? " open" : ""}`}
               aria-label={`${app.name} menu`}
               onClick={() => setMenu(false)}
             >
@@ -233,6 +272,9 @@ export function App() {
                 <AppIcon app={app} size={32} />
                 <strong>{app.name}</strong>
               </div>
+              <span className="overline side-label" aria-hidden="true">
+                Records
+              </span>
               {app.module.models.map((m) => (
                 <a
                   key={m.name}
@@ -245,15 +287,17 @@ export function App() {
               ))}
             </nav>
           )}
-          {app?.id === "customize" ? (
+          {app?.id === "customize" || personalCustomize ? (
             <Customize
               token={token}
-              tab={route.tab}
+              tab={route.tab || route.model}
+              section={route.view}
               apps={apps}
               modules={modules}
               settings={settings}
               isAdmin={isAdmin}
               go={(tab) => go({ app: "customize", model: tab, tab })}
+              goSection={(view) => go({ app: "customize", model: "brand", tab: "brand", view })}
               onSettings={(s) => {
                 setSettings(s);
                 applyTheme(resolveTheme(s.theme));
@@ -278,28 +322,68 @@ export function App() {
         )}
         {palette && <Palette apps={apps} onClose={() => setPalette(false)} />}
         {confirmReq && <ConfirmDialog req={confirmReq} />}
-        <Toasts items={toasts} onDismiss={dismiss} />
+        <ToastRegion items={toasts} onDismiss={dismiss} />
       </div>
     </DataProvider>
   );
 }
 
 function Home({ apps }: { apps: ReturnType<typeof buildApps> }) {
+  const [q, setQ] = useState("");
+  const recent = recentApps()
+    .map((id) => apps.find((a) => a.id === id))
+    .filter((a): a is (typeof apps)[number] => !!a)
+    .slice(0, 4);
+  const shown = apps.filter((a) => a.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const first = (a: (typeof apps)[number]) => href({ app: a.id, model: a.module.models[0]?.name });
   return (
     <section className="main panel home">
-      <h1>Your apps</h1>
-      <p className="hint">Everything shares one database, one set of permissions and one API.</p>
-      <div className="app-grid">
-        {apps.map((a) => (
-          <a
-            key={a.id}
-            className="app-tile"
-            href={href({ app: a.id, model: a.module.models[0]?.name })}
-          >
-            <AppIcon app={a} size={64} />
-            <span>{a.name}</span>
-          </a>
-        ))}
+      <header className="home-head">
+        <div>
+          <h1>Your apps</h1>
+          <p className="hint">
+            Everything shares one database, one set of permissions and one API.
+          </p>
+        </div>
+        <div className="searchfield">
+          <Icon name="search" size={16} />
+          <input
+            placeholder="Filter apps"
+            aria-label="Filter apps"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+      </header>
+      <div className="home-body">
+        {!q && recent.length > 0 && (
+          <section aria-label="Recently opened">
+            <h2 className="overline">Recently opened</h2>
+            <div className="app-grid small">
+              {recent.map((a) => (
+                <a key={a.id} className="app-tile row" href={first(a)}>
+                  <AppIcon app={a} size={36} />
+                  <span>{a.name}</span>
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
+        <section aria-label="All apps">
+          <h2 className="overline">{q ? "Results" : "All apps"}</h2>
+          <div className="app-grid">
+            {shown.map((a) => (
+              <a key={a.id} className="app-tile card" href={first(a)}>
+                <AppIcon app={a} size={48} />
+                <span className="app-tile-text">
+                  <strong>{a.name}</strong>
+                  <small>{appBlurb(a)}</small>
+                </span>
+              </a>
+            ))}
+          </div>
+          {shown.length === 0 && <p className="hint">No app matches.</p>}
+        </section>
       </div>
     </section>
   );

@@ -130,7 +130,7 @@ export function PivotView(p: ViewProps) {
         />
       </div>
       <div className="tablewrap">
-        <table className="pivot-table">
+        <table className="table pivot-table">
           <caption className="sr-only">
             {m ? `Sum of ${label(m.name)}` : "Count"} by {label(rowF.name)}
             {colF ? ` and ${label(colF.name)}` : ""}. Select a cell to list its records.
