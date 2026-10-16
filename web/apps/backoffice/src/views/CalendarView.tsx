@@ -84,9 +84,7 @@ export function CalendarView(p: ViewProps) {
       <div className="viewbar">
         <div className="calnav" role="group" aria-label={t("Navigate")}>
           <button className="icon-btn" aria-label={t("Previous")} onClick={() => step(-1)}>
-            <span style={{ transform: "scaleX(-1)", display: "inline-flex" }}>
-              <Icon name="chevron-right" size={16} />
-            </span>
+            <Icon name="chevron-left" size={16} />
           </button>
           <button className="btn small" onClick={() => setCursor(new Date())}>
             {t("Today")}

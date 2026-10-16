@@ -19,6 +19,17 @@ function shape(s: Shape, i: number) {
   return <path key={i} d={s} />;
 }
 
+/** Icons that point along the reading direction: mirrored when the page is right-to-left. */
+const DIRECTIONAL = new Set<string>([
+  "chevron-left",
+  "chevron-right",
+  "arrow-right",
+  "log-out",
+  "panel-left",
+  "undo",
+  "external",
+]);
+
 export type IconProps = {
   name: IconName;
   size?: number;
@@ -42,7 +53,7 @@ export function Icon({ name, size = 20, label, className, strokeWidth = 1.75, st
       strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className ? `ico ${className}` : "ico"}
+      className={["ico", DIRECTIONAL.has(name) && "flip-rtl", className].filter(Boolean).join(" ")}
       style={style}
       role={label ? "img" : undefined}
       aria-label={label}

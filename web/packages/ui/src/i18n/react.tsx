@@ -62,7 +62,7 @@ function flatten(x: unknown, out: (string | ReactNode)[] = []): (string | ReactN
 }
 
 /**
- * A message with tags: `rich("Press <kbd>Esc</kbd> to <b>cancel</b>", {}, { kbd: (c) => <Kbd>{c}</Kbd> })`.
+ * A message with tags, for example "Press &lt;kbd&gt;Esc&lt;/kbd&gt; to cancel", with one renderer per tag.
  * Tags and `{placeholders}` may be reordered by a translation. Never renders HTML from the string.
  */
 export function rich(

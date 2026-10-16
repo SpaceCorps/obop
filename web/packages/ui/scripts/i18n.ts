@@ -31,9 +31,15 @@ function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (statSync(p).isDirectory()) {
-      if (name === "i18n" || name === "node_modules") continue;
+      if (name === "node_modules") continue;
       walk(p, out);
-    } else if (/\.(ts|tsx)$/.test(name) && !/\.(test|d)\.tsx?$/.test(name)) out.push(p);
+      // The runtime in src/i18n documents t() with examples; only its React pickers carry messages.
+    } else if (
+      /\.(ts|tsx)$/.test(name) &&
+      !/\.(test|d)\.tsx?$/.test(name) &&
+      (!p.includes("/i18n/") || name === "react.tsx")
+    )
+      out.push(p);
   }
   return out;
 }
@@ -290,7 +296,12 @@ export function checkAll(): string[] {
         continue;
       }
       const tr = readJson<Record<string, string>>(f, {});
-      problems.push(...checkLocale(lang, en, tr, allow, b.name));
+      const own = readJson<string[]>(
+        join(root, "web/packages/ui/locales", lang, "identical.json"),
+        [],
+      );
+      const allowed: Allow = { "*": allow["*"] ?? [], [lang]: [...(allow[lang] ?? []), ...own] };
+      problems.push(...checkLocale(lang, en, tr, allowed, b.name));
       const sf = join(dir, "status.json");
       const st = readJson<Record<string, string>>(sf, {});
       for (const k of Object.keys(tr)) {
@@ -306,6 +317,30 @@ export function checkAll(): string[] {
     }
   }
   return problems;
+}
+
+/** Make status.json list exactly the keys of messages.json: new keys are machine-drafted. */
+export function syncStatus(): number {
+  let changed = 0;
+  for (const b of BUNDLES) {
+    for (const lang of TARGETS) {
+      const dir = join(root, b.out, lang);
+      const mf = join(dir, "messages.json");
+      if (!existsSync(mf)) continue;
+      const tr = readJson<Record<string, string>>(mf, {});
+      const old = readJson<Record<string, string>>(join(dir, "status.json"), {});
+      const next: Record<string, string> = {};
+      for (const k of Object.keys(tr))
+        next[k] = old[k] === "reviewed" ? "reviewed" : "machine-drafted";
+      const text = json(next);
+      const sf = join(dir, "status.json");
+      if (!existsSync(sf) || readFileSync(sf, "utf8") !== text) {
+        writeFileSync(sf, text);
+        changed++;
+      }
+    }
+  }
+  return changed;
 }
 
 function status() {
@@ -337,9 +372,10 @@ if (import.meta.main) {
       process.exit(1);
     }
     console.log("catalogues ok");
-  } else if (cmd === "status") status();
+  } else if (cmd === "sync") console.log(`${syncStatus()} status file(s) updated`);
+  else if (cmd === "status") status();
   else {
-    console.error("usage: i18n.ts extract|check|status");
+    console.error("usage: i18n.ts extract|check|status|sync");
     process.exit(2);
   }
 }

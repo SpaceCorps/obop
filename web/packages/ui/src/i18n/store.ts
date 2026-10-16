@@ -158,6 +158,11 @@ async function activate(lang: Lang) {
   emit();
 }
 
+/** Register a catalogue from code (tests, or a host that bundles its own); then `setLanguage` uses it. */
+export function provideCatalogue(lang: Lang, messages: Catalogue) {
+  loaded.set(lang, messages);
+}
+
 /** The person chooses a language: loaded, applied, remembered and sent to the server as a cookie. */
 export async function setLanguage(lang: Lang, persist = true): Promise<void> {
   await activate(lang);

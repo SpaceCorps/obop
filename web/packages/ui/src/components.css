@@ -930,11 +930,24 @@ button.avatar {
     transform: translateY(8px) scale(0.985);
   }
 }
+/* Arrows and chevrons follow the reading direction. */
+:dir(rtl) .ico.flip-rtl {
+  transform: scaleX(-1);
+}
 @keyframes ui-slide {
   from {
     opacity: 0;
     transform: translateX(16px);
   }
+}
+@keyframes ui-slide-rtl {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+:dir(rtl) .dialog.sheet {
+  animation-name: ui-slide-rtl;
 }
 @media (max-width: 40rem) {
   .overlay {

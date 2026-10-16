@@ -4,7 +4,7 @@
 // code with its messages, replace the patterns by that code.
 import { getLang, t, tx } from "@obop/ui";
 import type { ModuleMeta } from "./api.ts";
-import { label, modelLabel, optionLabel } from "./format.ts";
+import { label, optionLabel } from "./format.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
 
 let modules: ModuleMeta[] = [];
@@ -18,8 +18,7 @@ function modelName(name: string): string {
     const hit = m.models.find((x) => x.name === name);
     if (hit) return modelTitle(hit, m.id);
   }
-  const mod = name.split("_")[0] ?? name;
-  return tx("model", modelLabel(name, mod));
+  return tx("model", label(name));
 }
 
 function fieldName(model: string, field: string): string {

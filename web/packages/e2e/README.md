@@ -42,3 +42,11 @@ HTML report goes to `playwright-report/`. `OBOP_E2E_KEEP=1` keeps the temp direc
 - Drag and drop: a pointer drag needs the card and the drop target on screen together, so tests drop on a
   column header. See the "tall board" test in `tests/kanban.spec.ts` for the synthetic-event variant.
 - `test.fixme` marks a known application bug with its reproduction in a comment; fix the app, then remove it.
+
+## Languages
+
+The suite pins English: the `language` option (default `en`) stores `obop-lang` before any page script
+runs, and `locale` is `en-US`. `tests/i18n.spec.ts` opts out per test (`test.use({ language: null })`) or
+opens a language with `?lang=de`. It reads the expected wording from the catalogues in
+`web/apps/*/locales/<lang>/messages.json`, so a reworded translation does not break it.
+`support/layout.ts` finds sideways scroll, controls outside the viewport and cut-off text from element boxes.

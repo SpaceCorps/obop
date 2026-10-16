@@ -14,6 +14,7 @@
   "scripts": {
     "i18n:extract": "node scripts/i18n.ts extract",
     "i18n:check": "node scripts/i18n.ts check",
+    "i18n:sync": "node scripts/i18n.ts sync",
     "i18n:status": "node scripts/i18n.ts status"
   },
   "dependencies": {

@@ -10,9 +10,14 @@ export {
 } from "./message.ts";
 export {
   currencyExponent,
+  formatDateTime,
+  formatInteger,
   formatList,
   formatMoney,
+  formatMonth,
+  formatNumber,
   formatPlainDate,
+  formatRelative,
   minorToDecimal,
   moneyInputText,
   parseMoney as parseMoneyIn,
@@ -39,6 +44,7 @@ export {
   msg,
   msgx,
   personalLang,
+  provideCatalogue,
   rawMessage,
   resetLanguage,
   setInstanceDefaults,

@@ -7,7 +7,6 @@ import { DashboardsApp } from "./dashboards/DashboardsApp.tsx";
 import { BOARD, boardHref } from "./dashboards/route.ts";
 import { DataProvider, type Tone } from "./data.tsx";
 import { modelTitle } from "./labels.ts";
-import { serverMessage } from "./serverMessage.ts";
 import { ModelPage } from "./ModelPage.tsx";
 import { href, nav, useRoute } from "./route.ts";
 import {
@@ -82,10 +81,10 @@ function SignIn({ onDone }: { onDone: (token: string, user: string) => void }) {
           const user = String(f.get("username"));
           setBusy(true);
           setError(null);
-          const t = await login(user, String(f.get("password")));
+          const token = await login(user, String(f.get("password")));
           setBusy(false);
-          if (t) onDone(t, user);
-          else setError(serverMessage("invalid username or password"));
+          if (token) onDone(token, user);
+          else setError(t("Invalid username or password"));
         }}
       >
         <h1 className="signin-logo">

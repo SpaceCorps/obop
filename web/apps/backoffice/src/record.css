@@ -11,6 +11,15 @@
 .record:focus {
   outline: none;
 }
+@keyframes slide-rtl {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+:dir(rtl) .record {
+  animation-name: slide-rtl;
+}
 @keyframes slide {
   from {
     opacity: 0;
