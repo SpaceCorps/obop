@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { create, list, login, remove, signup, type Instance } from "./api.ts";
 
 function stored(): string {
@@ -63,6 +63,53 @@ function Auth({ onToken }: { onToken: (t: string) => void }) {
   );
 }
 
+const STEPS = ["Database", "Admin account", "Service", "Build and start", "Ready"];
+
+function stepOf(i: Instance): number {
+  if (i.status === "running") return STEPS.length;
+  const p = i.phase;
+  if (p.startsWith("Building")) return 3;
+  if (p.startsWith("Creating the service")) return 2;
+  if (p.startsWith("Creating your admin")) return 1;
+  return 0;
+}
+
+/** Live progress of an instance being set up or torn down. */
+function Progress({ instance }: { instance: Instance }) {
+  const started = useRef(Date.now());
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const secs = Math.floor((Date.now() - started.current) / 1000);
+  const elapsed = `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, "0")}s`;
+  if (instance.status === "deleting") {
+    return (
+      <div className="progress" role="status">
+        <span className="spinner" aria-hidden="true" /> {instance.phase || "Deleting"}{" "}
+        <span className="hint">({elapsed})</span>
+      </div>
+    );
+  }
+  const step = stepOf(instance);
+  return (
+    <div className="progress" role="status">
+      <ol className="steps-live">
+        {STEPS.map((label, n) => (
+          <li key={label} className={n < step ? "done" : n === step ? "now" : ""}>
+            {n < step ? "✓" : n === step ? <span className="spinner" aria-hidden="true" /> : "·"}{" "}
+            {label}
+          </li>
+        ))}
+      </ol>
+      <div className="hint">
+        {instance.phase || "Queued"} · {elapsed} elapsed. A first build takes a few minutes.
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [token, setTokenState] = useState(stored);
   const [instances, setInstances] = useState<Instance[]>([]);
@@ -84,7 +131,7 @@ export function App() {
   }, [refresh]);
 
   // Poll while anything is still being set up.
-  const busy = instances.some((i) => i.status === "provisioning");
+  const busy = instances.some((i) => i.status === "provisioning" || i.status === "deleting");
   useEffect(() => {
     if (!busy) return;
     const t = setInterval(() => void refresh(), 2000);
@@ -113,20 +160,28 @@ export function App() {
                     {i.url}
                   </a>
                 )}
-                {i.status === "provisioning" && "Setting up. This takes a minute."}
                 {i.status === "failed" && `Failed: ${i.error}`}
               </div>
+              {(i.status === "provisioning" || i.status === "deleting") && (
+                <Progress instance={i} />
+              )}
             </div>
             <button
-              disabled={i.status === "provisioning"}
+              disabled={i.status === "provisioning" || i.status === "deleting"}
               onClick={async () => {
                 if (!confirm(`Delete ${i.name} and all of its data?`)) return;
+                // Show the change at once; the teardown continues in the background.
+                setInstances((all) =>
+                  all.map((x) =>
+                    x.id === i.id ? { ...x, status: "deleting", phase: "Queued" } : x,
+                  ),
+                );
                 const r = await remove(token, i.id);
                 if (!r.ok) setError(r.error);
                 await refresh();
               }}
             >
-              Delete
+              {i.status === "deleting" ? "Deleting…" : "Delete"}
             </button>
           </li>
         ))}

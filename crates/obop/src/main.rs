@@ -404,6 +404,8 @@ fn make_provisioner(
                 server_id: env("OBOP_SLIPLANE_SERVER")?,
                 source,
                 marketplace_url: std::env::var("OBOP_MARKETPLACE_URL").ok(),
+                poll: sliplane::Config::DEFAULT_POLL,
+                timeout: sliplane::Config::DEFAULT_TIMEOUT,
             };
             let cell = sliplane::PgCell {
                 admin_url: env("OBOP_CELL_ADMIN_URL")?,
@@ -900,28 +902,23 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
         assert_eq!(status, "running");
-        assert_eq!(
-            post(
-                &r,
-                Some(&tok),
-                &format!("/api/platform/instances/{id}/delete"),
-                json!({})
-            )
-            .await
-            .0,
-            200
+        let path = format!("/api/platform/instances/{id}/delete");
+        let (s, b) = post(&r, Some(&tok), &path, json!({})).await;
+        assert_eq!((s, b["status"].as_str()), (202, Some("deleting")));
+        assert!(
+            b.get("phase").is_some(),
+            "the live phase is part of the record"
         );
-        assert_eq!(
-            post(
-                &r,
-                Some(&tok),
-                &format!("/api/platform/instances/{id}/delete"),
-                json!({})
-            )
-            .await
-            .0,
-            404
-        );
+        // Once the background teardown finishes the instance is gone.
+        let mut last = 0;
+        for _ in 0..100 {
+            last = post(&r, Some(&tok), &path, json!({})).await.0;
+            if last == 404 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert_eq!(last, 404);
     }
 
     #[test]

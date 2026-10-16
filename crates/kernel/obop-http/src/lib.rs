@@ -223,7 +223,7 @@ pub trait PlatformApi: Send + Sync {
     fn me(&self, token: &str) -> Result<String, String>;
     fn list(&self, token: &str) -> Result<Vec<J>, String>;
     fn create(&self, token: &str, name: &str) -> Result<J, String>;
-    fn delete(&self, token: &str, id: &str) -> Result<(), String>;
+    fn delete(&self, token: &str, id: &str) -> Result<J, String>;
 }
 
 type Api = State<Arc<dyn PlatformApi>>;
@@ -325,7 +325,7 @@ async fn p_delete(State(api): Api, h: HeaderMap, Path(id): Path<String>) -> Resp
 
 fn p_delete_blocking(api: Arc<dyn PlatformApi>, h: HeaderMap, id: String) -> Response {
     match api.delete(bearer(&h), &id) {
-        Ok(()) => Json(json!({"deleted": true})).into_response(),
+        Ok(i) => (StatusCode::ACCEPTED, Json(i)).into_response(),
         Err(e) if e == "not signed in" => err(StatusCode::UNAUTHORIZED, e),
         Err(e) if e == "no such instance" => err(StatusCode::NOT_FOUND, e),
         Err(e) => err(StatusCode::BAD_REQUEST, e),

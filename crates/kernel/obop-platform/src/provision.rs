@@ -17,9 +17,12 @@ pub struct Provisioned {
     pub url: String,
 }
 
+/// Reports what a long-running step is doing right now; shown live to the person waiting.
+pub type Progress<'a> = &'a (dyn Fn(&str) + Sync);
+
 pub trait Provisioner: Send + Sync {
-    fn create(&self, spec: &InstanceSpec) -> Result<Provisioned, String>;
-    fn delete(&self, slug: &str, external_id: &str) -> Result<(), String>;
+    fn create(&self, spec: &InstanceSpec, progress: Progress) -> Result<Provisioned, String>;
+    fn delete(&self, slug: &str, external_id: &str, progress: Progress) -> Result<(), String>;
 }
 
 /// Records what it was asked to do. For tests.
@@ -28,10 +31,13 @@ pub struct Fake {
     pub created: Mutex<Vec<InstanceSpec>>,
     pub deleted: Mutex<Vec<String>>,
     pub fail_with: Mutex<Option<String>>,
+    pub delete_delay: Mutex<std::time::Duration>,
+    pub delete_fail: Mutex<Option<String>>,
 }
 
 impl Provisioner for Fake {
-    fn create(&self, spec: &InstanceSpec) -> Result<Provisioned, String> {
+    fn create(&self, spec: &InstanceSpec, progress: Progress) -> Result<Provisioned, String> {
+        progress("Creating the instance");
         if let Some(e) = self.fail_with.lock().unwrap().clone() {
             return Err(e);
         }
@@ -42,7 +48,12 @@ impl Provisioner for Fake {
         })
     }
 
-    fn delete(&self, slug: &str, _: &str) -> Result<(), String> {
+    fn delete(&self, slug: &str, _: &str, progress: Progress) -> Result<(), String> {
+        progress("Removing the instance");
+        std::thread::sleep(*self.delete_delay.lock().unwrap());
+        if let Some(e) = self.delete_fail.lock().unwrap().clone() {
+            return Err(e);
+        }
         self.deleted.lock().unwrap().push(slug.into());
         Ok(())
     }
@@ -77,7 +88,8 @@ impl Local {
 }
 
 impl Provisioner for Local {
-    fn create(&self, spec: &InstanceSpec) -> Result<Provisioned, String> {
+    fn create(&self, spec: &InstanceSpec, progress: Progress) -> Result<Provisioned, String> {
+        progress("Preparing the database");
         std::fs::create_dir_all(&self.data_dir).map_err(|e| e.to_string())?;
         let db = format!("sqlite://{}", self.db_path(&spec.slug).display());
         // Seed the first admin before the server starts, with the owner's own password hash.
@@ -87,6 +99,7 @@ impl Provisioner for Local {
             &spec.password_hash,
             &[obop_commands::ADMIN_GROUP.to_string()],
         )?;
+        progress("Starting the server");
         let port = std::net::TcpListener::bind("127.0.0.1:0")
             .and_then(|l| l.local_addr())
             .map_err(|e| e.to_string())?
@@ -118,7 +131,8 @@ impl Provisioner for Local {
         Err("the instance did not start listening".into())
     }
 
-    fn delete(&self, slug: &str, _: &str) -> Result<(), String> {
+    fn delete(&self, slug: &str, _: &str, progress: Progress) -> Result<(), String> {
+        progress("Stopping the server and removing its data");
         if let Some(mut c) = self.children.lock().unwrap().remove(slug) {
             let _ = c.kill();
             let _ = c.wait();

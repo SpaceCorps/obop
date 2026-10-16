@@ -2,9 +2,11 @@ export type Instance = {
   id: string;
   name: string;
   slug: string;
-  status: "provisioning" | "running" | "failed";
+  status: "provisioning" | "running" | "failed" | "deleting";
   url: string;
   error: string;
+  /** What the background job is doing right now. */
+  phase: string;
 };
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -38,4 +40,4 @@ export const list = (token: string) =>
 export const create = (token: string, name: string) =>
   request<Instance>(token, "POST", "/api/platform/instances", { name });
 export const remove = (token: string, id: string) =>
-  request<{ deleted: boolean }>(token, "POST", `/api/platform/instances/${id}/delete`, {});
+  request<Instance>(token, "POST", `/api/platform/instances/${id}/delete`, {});

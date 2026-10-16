@@ -22,15 +22,17 @@ pub struct Instance {
     pub owner: String,
     pub name: String,
     pub slug: String,
-    /// `provisioning`, `running`, `failed` or `deleted`.
+    /// `provisioning`, `running`, `failed`, `deleting` or `deleted`.
     pub status: String,
     pub url: String,
     pub error: String,
+    /// What the background job is doing right now, e.g. "Building the service (1m 20s)".
+    pub phase: String,
 }
 
 impl Instance {
     pub fn to_json(&self) -> J {
-        json!({"id": self.id, "name": self.name, "slug": self.slug, "status": self.status, "url": self.url, "error": self.error})
+        json!({"id": self.id, "name": self.name, "slug": self.slug, "status": self.status, "url": self.url, "error": self.error, "phase": self.phase})
     }
 
     fn from_fields(id: &str, f: &Fields) -> Instance {
@@ -43,6 +45,7 @@ impl Instance {
             status: g("status"),
             url: g("url"),
             error: g("error"),
+            phase: g("phase"),
         }
     }
 }
@@ -176,21 +179,30 @@ impl Platform {
         };
         let rec = id.clone();
         std::thread::spawn(move || {
+            let report = |ph: &str| me.set_phase(&rec, ph);
             let mut patch = Fields::new();
-            match me.provisioner.create(&spec) {
+            match me.provisioner.create(&spec, &report) {
                 Ok(p) => {
                     patch.insert("status".into(), J::from("running"));
+                    patch.insert("phase".into(), J::from(""));
                     patch.insert("url".into(), J::from(p.url));
                     patch.insert("external_id".into(), J::from(p.external_id));
                 }
                 Err(e) => {
                     patch.insert("status".into(), J::from("failed"));
+                    patch.insert("phase".into(), J::from(""));
                     patch.insert("error".into(), J::from(e));
                 }
             }
             let _ = me.backend.update(TABLE, &rec, &patch);
         });
         Ok(Instance::from_fields(&id, &f))
+    }
+
+    fn set_phase(&self, id: &str, phase: &str) {
+        let mut p = Fields::new();
+        p.insert("phase".into(), J::from(phase));
+        let _ = self.backend.update(TABLE, id, &p);
     }
 
     pub fn get(&self, token: &str, id: &str) -> Result<Instance, String> {
@@ -205,19 +217,45 @@ impl Platform {
         }
     }
 
-    /// Tear an instance down and mark it deleted. Its database is dropped by the provisioner.
-    pub fn delete_instance(&self, token: &str, id: &str) -> Result<(), String> {
-        let i = self.get(token, id)?;
-        let f = self.backend.get(TABLE, id)?.ok_or("no such instance")?;
-        let ext = f.get("external_id").and_then(J::as_str).unwrap_or("");
-        if i.status == "provisioning" {
-            return Err("wait until provisioning finishes".into());
+    /// Start tearing an instance down. Returns at once with status `deleting`; the provisioner
+    /// (a Sliplane service and a database, which takes a while) runs in the background and the
+    /// record turns `deleted`, or `failed` with the reason so the delete can be retried.
+    pub fn delete_instance(self: &Arc<Self>, token: &str, id: &str) -> Result<Instance, String> {
+        let mut i = self.get(token, id)?;
+        match i.status.as_str() {
+            "deleting" => return Ok(i),
+            "provisioning" => return Err("wait until provisioning finishes".into()),
+            _ => {}
         }
-        self.provisioner.delete(&i.slug, ext)?;
+        let f = self.backend.get(TABLE, id)?.ok_or("no such instance")?;
+        let ext = f
+            .get("external_id")
+            .and_then(J::as_str)
+            .unwrap_or("")
+            .to_string();
         let mut p = Fields::new();
-        p.insert("status".into(), J::from("deleted"));
+        p.insert("status".into(), J::from("deleting"));
+        p.insert("error".into(), J::from(""));
+        p.insert("phase".into(), J::from("Queued"));
         self.backend.update(TABLE, id, &p)?;
-        Ok(())
+        i.status = "deleting".into();
+        let (me, slug, rec) = (self.clone(), i.slug.clone(), id.to_string());
+        std::thread::spawn(move || {
+            let report = |ph: &str| me.set_phase(&rec, ph);
+            let mut patch = Fields::new();
+            patch.insert("phase".into(), J::from(""));
+            match me.provisioner.delete(&slug, &ext, &report) {
+                Ok(()) => {
+                    patch.insert("status".into(), J::from("deleted"));
+                }
+                Err(e) => {
+                    patch.insert("status".into(), J::from("failed"));
+                    patch.insert("error".into(), J::from(format!("delete failed: {e}")));
+                }
+            }
+            let _ = me.backend.update(TABLE, &rec, &patch);
+        });
+        Ok(i)
     }
 }
 
@@ -240,8 +278,8 @@ impl obop_http::PlatformApi for Api {
     fn create(&self, token: &str, name: &str) -> Result<J, String> {
         Platform::create_instance(&self.0, token, name).map(|i| i.to_json())
     }
-    fn delete(&self, token: &str, id: &str) -> Result<(), String> {
-        Platform::delete_instance(&self.0, token, id)
+    fn delete(&self, token: &str, id: &str) -> Result<J, String> {
+        Platform::delete_instance(&self.0, token, id).map(|i| i.to_json())
     }
 }
 
@@ -307,6 +345,56 @@ mod tests {
     }
 
     #[test]
+    fn delete_does_not_wait_for_the_provisioner() {
+        let (p, fake) = platform();
+        let t = p.signup("a@example.test", "correct horse battery").unwrap();
+        let i = p.create_instance(&t, "alpha-one").unwrap();
+        let i = wait_for(&p, &t, &i.id, "running");
+        *fake.delete_delay.lock().unwrap() = std::time::Duration::from_millis(400);
+        let started = std::time::Instant::now();
+        let d = p.delete_instance(&t, &i.id).unwrap();
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(200),
+            "returned before teardown finished"
+        );
+        assert_eq!(d.status, "deleting");
+        // A second delete while it runs is harmless, and the name stays taken until it is done.
+        assert_eq!(p.delete_instance(&t, &i.id).unwrap().status, "deleting");
+        assert!(
+            p.create_instance(&t, "alpha-one")
+                .unwrap_err()
+                .contains("taken")
+        );
+        wait_for_gone(&p, &t, &i.id);
+        p.create_instance(&t, "alpha-one").unwrap();
+    }
+
+    fn wait_for_gone(p: &Platform, tok: &str, id: &str) {
+        for _ in 0..300 {
+            if p.get(tok, id).is_err() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("instance never disappeared");
+    }
+
+    #[test]
+    fn a_failed_delete_is_reported_and_can_be_retried() {
+        let (p, fake) = platform();
+        let t = p.signup("a@example.test", "correct horse battery").unwrap();
+        let i = p.create_instance(&t, "alpha-one").unwrap();
+        wait_for(&p, &t, &i.id, "running");
+        *fake.delete_fail.lock().unwrap() = Some("sliplane unreachable".into());
+        p.delete_instance(&t, &i.id).unwrap();
+        let failed = wait_for(&p, &t, &i.id, "failed");
+        assert!(failed.error.contains("sliplane unreachable"));
+        *fake.delete_fail.lock().unwrap() = None;
+        p.delete_instance(&t, &i.id).unwrap();
+        wait_for_gone(&p, &t, &i.id);
+    }
+
+    #[test]
     fn names_are_unique_and_accounts_are_capped() {
         let (p, _) = platform();
         let a = p.signup("a@example.test", "correct horse battery").unwrap();
@@ -350,7 +438,14 @@ mod tests {
         let i = p.create_instance(&t, "alpha-one").unwrap();
         let i = wait_for(&p, &t, &i.id, "failed");
         assert_eq!(i.error, "no capacity");
-        p.delete_instance(&t, &i.id).unwrap();
+        let d = p.delete_instance(&t, &i.id).unwrap();
+        assert_eq!(d.status, "deleting", "delete returns at once");
+        for _ in 0..200 {
+            if p.list(&t).unwrap().is_empty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         assert!(p.list(&t).unwrap().is_empty());
         assert!(
             fake.deleted

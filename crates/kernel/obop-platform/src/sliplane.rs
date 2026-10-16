@@ -2,7 +2,7 @@
 //! PostgreSQL, one service per instance. The CLI is the only thing that talks to Sliplane, so
 //! it is behind a trait and the whole flow is tested without a network.
 
-use crate::provision::{InstanceSpec, Provisioned, Provisioner};
+use crate::provision::{InstanceSpec, Progress, Provisioned, Provisioner};
 use obop_auth::Auth;
 use serde_json::Value as J;
 use std::sync::Arc;
@@ -137,6 +137,14 @@ pub struct Config {
     pub source: Source,
     /// A catalog base URL handed to every instance as `OBOP_MARKETPLACE_URL`.
     pub marketplace_url: Option<String>,
+    /// How often to ask Sliplane whether the service is live, and how long to wait.
+    pub poll: std::time::Duration,
+    pub timeout: std::time::Duration,
+}
+
+impl Config {
+    pub const DEFAULT_POLL: std::time::Duration = std::time::Duration::from_secs(5);
+    pub const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 }
 
 pub struct Sliplane {
@@ -166,12 +174,75 @@ impl Sliplane {
     }
 }
 
+impl Sliplane {
+    /// Poll until Sliplane reports the service live, reporting progress. A failed build or
+    /// deploy shows up as an event; its message becomes the error.
+    fn wait_live(&self, service_id: &str, progress: Progress) -> Result<(), String> {
+        let started = std::time::Instant::now();
+        loop {
+            let mut get = self.base(&["services", "get"]);
+            get.extend(["--service-id".into(), service_id.into()]);
+            let j: J = serde_json::from_str(&self.runner.run(&get)?).map_err(|e| e.to_string())?;
+            if j["status"].as_str() == Some("live") {
+                return Ok(());
+            }
+            let mut ev = self.base(&["services", "events"]);
+            ev.extend(["--service-id".into(), service_id.into()]);
+            if let Ok(out) = self.runner.run(&ev)
+                && let Ok(J::Array(events)) = serde_json::from_str::<J>(&out)
+                && let Some(f) = events
+                    .iter()
+                    .find(|e| e["type"].as_str().is_some_and(|t| t.ends_with("_failed")))
+            {
+                let msg = f["message"].as_str().unwrap_or("the build failed");
+                return Err(format!(
+                    "the service did not start: {}",
+                    msg.chars().take(300).collect::<String>()
+                ));
+            }
+            if started.elapsed() > self.cfg.timeout {
+                return Err("the service did not come up in time".into());
+            }
+            let secs = started.elapsed().as_secs();
+            progress(&format!(
+                "Building and starting the service ({}m {:02}s)",
+                secs / 60,
+                secs % 60
+            ));
+            std::thread::sleep(self.cfg.poll);
+        }
+    }
+
+    /// Delete a service after checking that it is one of ours.
+    fn delete_service(&self, slug: &str, id: &str) -> Result<(), String> {
+        let mut get = self.base(&["services", "get"]);
+        get.extend(["--service-id".into(), id.into()]);
+        let out = match self.runner.run(&get) {
+            Ok(o) => o,
+            // Already gone is fine: the goal is that it does not exist.
+            Err(e) if e.contains("not_found") || e.contains("does not exist") => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        let j: J = serde_json::from_str(&out).map_err(|e| e.to_string())?;
+        if j["name"].as_str() != Some(&Self::service_name(slug)) {
+            return Err("refusing to delete: the service name does not match this instance".into());
+        }
+        let mut del = self.base(&["services", "delete"]);
+        del.extend(["--service-id".into(), id.into()]);
+        self.runner.run(&del).map(|_| ())
+    }
+}
+
 impl Provisioner for Sliplane {
-    fn create(&self, spec: &InstanceSpec) -> Result<Provisioned, String> {
+    fn create(&self, spec: &InstanceSpec, progress: Progress) -> Result<Provisioned, String> {
+        progress("Creating the database");
         let urls = self.cell.create_database(&spec.slug)?;
+        let mut service_id: Option<String> = None;
         let result = (|| {
+            progress("Creating your admin account");
             self.cell
                 .seed_admin(&urls.control, &spec.owner_email, &spec.password_hash)?;
+            progress("Creating the service");
             let mut args = self.base(&["services", "create"]);
             args.extend([
                 "--name".into(),
@@ -208,36 +279,33 @@ impl Provisioner for Sliplane {
                 .as_str()
                 .ok_or("sliplane returned no service id")?
                 .to_string();
+            service_id = Some(id.clone());
             let domain = j["network"]["managedDomain"]
                 .as_str()
                 .ok_or("sliplane returned no domain")?;
+            progress("Building and starting the service (0m 00s)");
+            self.wait_live(&id, progress)?;
             Ok(Provisioned {
                 external_id: id,
                 url: format!("https://{domain}"),
             })
         })();
         if result.is_err() {
-            // Do not leave a database behind for an instance that never started.
+            // Leave nothing behind: a failed instance must not hold its name or database.
+            if let Some(id) = &service_id {
+                let _ = self.delete_service(&spec.slug, id);
+            }
             let _ = self.cell.drop_database(&spec.slug);
         }
         result
     }
 
-    fn delete(&self, slug: &str, external_id: &str) -> Result<(), String> {
+    fn delete(&self, slug: &str, external_id: &str, progress: Progress) -> Result<(), String> {
         if !external_id.is_empty() {
-            // Only ever delete a service this provisioner created: check the name first.
-            let mut get = self.base(&["services", "get"]);
-            get.extend(["--service-id".into(), external_id.into()]);
-            let j: J = serde_json::from_str(&self.runner.run(&get)?).map_err(|e| e.to_string())?;
-            if j["name"].as_str() != Some(&Self::service_name(slug)) {
-                return Err(
-                    "refusing to delete: the service name does not match this instance".into(),
-                );
-            }
-            let mut del = self.base(&["services", "delete"]);
-            del.extend(["--service-id".into(), external_id.into()]);
-            self.runner.run(&del)?;
+            progress("Removing the service");
+            self.delete_service(slug, external_id)?;
         }
+        progress("Removing the database");
         self.cell.drop_database(slug)
     }
 }
@@ -289,8 +357,13 @@ mod tests {
             server_id: "server_1".into(),
             source,
             marketplace_url: None,
+            poll: std::time::Duration::ZERO,
+            timeout: std::time::Duration::from_secs(5),
         }
     }
+
+    const LIVE: &str = r#"{"status":"live"}"#;
+    const NOOP: Progress<'static> = &|_| {};
 
     fn spec() -> InstanceSpec {
         InstanceSpec {
@@ -308,13 +381,29 @@ mod tests {
             Arc::new(FakeRunner::default()),
             Arc::new(FakeCell::default()),
         );
-        runner.reply.lock().unwrap().push(Ok(CREATED.into()));
+        runner
+            .reply
+            .lock()
+            .unwrap()
+            .extend([Ok(CREATED.into()), Ok(LIVE.into())]);
         let s = Sliplane::new(
             cfg(Source::Image("ghcr.io/x/obop:1".into())),
             runner.clone(),
             cell.clone(),
         );
-        let p = s.create(&spec()).unwrap();
+        let seen = Mutex::new(Vec::<String>::new());
+        let p = s
+            .create(&spec(), &|ph| seen.lock().unwrap().push(ph.into()))
+            .unwrap();
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [
+                "Creating the database",
+                "Creating your admin account",
+                "Creating the service",
+                "Building and starting the service (0m 00s)"
+            ]
+        );
         assert_eq!(
             (p.external_id.as_str(), p.url.as_str()),
             ("service_9", "https://obop-acme.sliplane.app")
@@ -348,14 +437,18 @@ mod tests {
             Arc::new(FakeRunner::default()),
             Arc::new(FakeCell::default()),
         );
-        runner.reply.lock().unwrap().push(Ok(CREATED.into()));
+        runner
+            .reply
+            .lock()
+            .unwrap()
+            .extend([Ok(CREATED.into()), Ok(LIVE.into())]);
         let mut c = cfg(Source::Repo {
             url: "https://github.com/SpaceCorps/obop".into(),
             branch: "deploy".into(),
         });
         c.marketplace_url = Some("https://market.example.test".into());
         Sliplane::new(c, runner.clone(), cell)
-            .create(&spec())
+            .create(&spec(), NOOP)
             .unwrap();
         let args = runner.calls.lock().unwrap()[0].join(" ");
         assert!(args.contains(
@@ -376,7 +469,7 @@ mod tests {
             .unwrap()
             .push(Err("rate_limited".into()));
         let e = Sliplane::new(cfg(Source::Image("i".into())), runner, cell.clone())
-            .create(&spec())
+            .create(&spec(), NOOP)
             .unwrap_err();
         assert_eq!(e, "rate_limited");
         assert_eq!(cell.log.lock().unwrap().last().unwrap(), "drop acme");
@@ -395,7 +488,7 @@ mod tests {
             .push(Ok(r#"{"name":"hangar"}"#.into()));
         let s = Sliplane::new(cfg(Source::Image("i".into())), runner.clone(), cell.clone());
         assert!(
-            s.delete("acme", "service_9")
+            s.delete("acme", "service_9", NOOP)
                 .unwrap_err()
                 .contains("refusing")
         );
@@ -411,12 +504,109 @@ mod tests {
             .lock()
             .unwrap()
             .extend([Ok(r#"{"name":"obop-acme"}"#.into()), Ok("{}".into())]);
-        s.delete("acme", "service_9").unwrap();
+        s.delete("acme", "service_9", NOOP).unwrap();
         assert!(
             runner.calls.lock().unwrap()[2]
                 .join(" ")
                 .contains("services delete")
         );
+        assert_eq!(*cell.log.lock().unwrap(), ["drop acme"]);
+    }
+
+    #[test]
+    fn waits_for_the_build_and_reports_elapsed_time() {
+        let (runner, cell) = (
+            Arc::new(FakeRunner::default()),
+            Arc::new(FakeCell::default()),
+        );
+        // created, then pending (get + events) twice, then live
+        runner.reply.lock().unwrap().extend([
+            Ok(CREATED.into()),
+            Ok(r#"{"status":"pending"}"#.into()),
+            Ok("[]".into()),
+            Ok(r#"{"status":"pending"}"#.into()),
+            Ok("[]".into()),
+            Ok(LIVE.into()),
+        ]);
+        let seen = Mutex::new(Vec::<String>::new());
+        Sliplane::new(cfg(Source::Image("i".into())), runner, cell)
+            .create(&spec(), &|ph| seen.lock().unwrap().push(ph.into()))
+            .unwrap();
+        let building = seen
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| p.starts_with("Building and starting"))
+            .count();
+        assert_eq!(building, 3, "initial report plus one per poll");
+    }
+
+    #[test]
+    fn a_failed_build_is_reported_and_cleaned_up() {
+        let (runner, cell) = (
+            Arc::new(FakeRunner::default()),
+            Arc::new(FakeCell::default()),
+        );
+        runner.reply.lock().unwrap().extend([
+            Ok(CREATED.into()),
+            Ok(r#"{"status":"pending"}"#.into()),
+            Ok(r#"[{"type":"service_build_failed","message":"process did not complete successfully: exit code: 1"}]"#.into()),
+            // cleanup: the name check, then the delete
+            Ok(r#"{"name":"obop-acme"}"#.into()),
+            Ok("{}".into()),
+        ]);
+        let e = Sliplane::new(cfg(Source::Image("i".into())), runner.clone(), cell.clone())
+            .create(&spec(), NOOP)
+            .unwrap_err();
+        assert!(e.contains("exit code: 1"), "{e}");
+        assert!(
+            runner
+                .calls
+                .lock()
+                .unwrap()
+                .last()
+                .unwrap()
+                .join(" ")
+                .contains("services delete")
+        );
+        assert_eq!(cell.log.lock().unwrap().last().unwrap(), "drop acme");
+    }
+
+    #[test]
+    fn times_out_when_the_service_never_comes_up() {
+        let (runner, cell) = (
+            Arc::new(FakeRunner::default()),
+            Arc::new(FakeCell::default()),
+        );
+        let mut c = cfg(Source::Image("i".into()));
+        c.timeout = std::time::Duration::ZERO;
+        runner.reply.lock().unwrap().extend([
+            Ok(CREATED.into()),
+            Ok(r#"{"status":"pending"}"#.into()),
+            Ok("[]".into()),
+            Ok(r#"{"name":"obop-acme"}"#.into()),
+            Ok("{}".into()),
+        ]);
+        let e = Sliplane::new(c, runner, cell)
+            .create(&spec(), NOOP)
+            .unwrap_err();
+        assert!(e.contains("in time"));
+    }
+
+    #[test]
+    fn deleting_a_service_that_is_already_gone_still_drops_the_database() {
+        let (runner, cell) = (
+            Arc::new(FakeRunner::default()),
+            Arc::new(FakeCell::default()),
+        );
+        runner
+            .reply
+            .lock()
+            .unwrap()
+            .push(Err("code: not_found".into()));
+        Sliplane::new(cfg(Source::Image("i".into())), runner, cell.clone())
+            .delete("acme", "service_9", NOOP)
+            .unwrap();
         assert_eq!(*cell.log.lock().unwrap(), ["drop acme"]);
     }
 
