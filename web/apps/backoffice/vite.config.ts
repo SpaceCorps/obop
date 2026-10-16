@@ -5,6 +5,8 @@ import { defineConfig } from "../../config/index.ts";
 // server may serve files from there. The build bundles it as a string.
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 
+// Under a public site the back office is served from /admin/ (set OBOP_ADMIN_BASE=/admin/).
 export default defineConfig({
+  base: process.env.OBOP_ADMIN_BASE ?? "/",
   server: { fs: { allow: [repoRoot] } },
 });

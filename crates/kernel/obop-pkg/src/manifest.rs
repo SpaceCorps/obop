@@ -2,6 +2,7 @@
 //! permission groups and state-transition actions. A package contains no code, so installing
 //! one cannot run anything the registry does not already control.
 
+use obop_commands::{PublicRead, PublicReceipt, PublicSpec, PublicSubmit};
 use obop_registry::{
     CommandDef, FieldDef, FieldKind, GENERATED_COMMANDS, ModelDef, Module, check_module, intern,
 };
@@ -48,6 +49,42 @@ pub struct ModelM {
     pub field: Vec<FieldM>,
     #[serde(default)]
     pub action: Vec<ActionM>,
+    /// What anonymous visitors may read and submit (D50). Absent: nothing is public.
+    pub public: Option<PublicM>,
+}
+
+/// `[model.public]`: declarative public exposure (D50).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicM {
+    /// Anonymous visitors may read published records. Needs `published_field` and `fields`.
+    #[serde(default)]
+    pub read: bool,
+    /// A `bool` field (public when true) or a `select` field (public when it equals
+    /// `published_value`).
+    pub published_field: Option<String>,
+    pub published_value: Option<String>,
+    /// A select option meaning "was public, retired for good": answered with 410.
+    pub gone_value: Option<String>,
+    /// The only fields a public read returns.
+    #[serde(default)]
+    pub fields: Vec<String>,
+    pub order_by: Option<String>,
+    /// `asc` (default) or `desc`.
+    pub order_dir: Option<String>,
+    /// Anonymous visitors may create records.
+    #[serde(default)]
+    pub submit: bool,
+    #[serde(default)]
+    pub submit_fields: Vec<String>,
+    pub rate_limit_per_hour: Option<u32>,
+    /// A `secret` text field holding an unguessable token: whoever holds the token may read the
+    /// record back through `receipt_fields` (an order confirmation).
+    pub receipt_token_field: Option<String>,
+    /// A ref to the model that has a token: this record is shown with its parent (order lines).
+    pub receipt_parent: Option<String>,
+    #[serde(default)]
+    pub receipt_fields: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -219,7 +256,92 @@ impl Manifest {
                 }
             }
         }
+        self.public_specs()?;
         Ok(())
+    }
+
+    /// The public declarations of the package (D50), checked for shape. The field-level gate
+    /// (data classes, personal data) runs in `to_module` and again at registration.
+    pub fn public_specs(&self) -> Result<Vec<PublicSpec>, String> {
+        let mut out = Vec::new();
+        for m in &self.model {
+            let Some(p) = &m.public else { continue };
+            let at = format!("{}.public", m.name);
+            for n in p
+                .fields
+                .iter()
+                .chain(&p.submit_fields)
+                .chain(p.published_field.iter())
+                .chain(p.order_by.iter())
+                .chain(&p.receipt_fields)
+                .chain(p.receipt_token_field.iter())
+                .chain(p.receipt_parent.iter())
+            {
+                if !m.field.iter().any(|f| &f.name == n) {
+                    return Err(format!("{at}: no field {n:?}"));
+                }
+            }
+            if !p.read
+                && (p.published_field.is_some()
+                    || p.published_value.is_some()
+                    || p.gone_value.is_some()
+                    || !p.fields.is_empty()
+                    || p.order_by.is_some()
+                    || p.order_dir.is_some())
+            {
+                return Err(format!(
+                    "{at}: published_field, fields, order_by and friends need read = true"
+                ));
+            }
+            if !p.submit && (!p.submit_fields.is_empty() || p.rate_limit_per_hour.is_some()) {
+                return Err(format!(
+                    "{at}: submit_fields and rate_limit_per_hour need submit = true"
+                ));
+            }
+            if p.submit && p.rate_limit_per_hour.is_none() {
+                return Err(format!("{at}: submit = true needs rate_limit_per_hour"));
+            }
+            if p.read && p.published_field.is_none() {
+                return Err(format!(
+                    "{at}: read = true needs published_field, so only published records are public"
+                ));
+            }
+            let has_receipt = p.receipt_token_field.is_some() || p.receipt_parent.is_some();
+            if !has_receipt && !p.receipt_fields.is_empty() {
+                return Err(format!(
+                    "{at}: receipt_fields need receipt_token_field or receipt_parent"
+                ));
+            }
+            if !p.read && !p.submit && !has_receipt {
+                return Err(format!("{at}: declares nothing public"));
+            }
+            let desc = match p.order_dir.as_deref() {
+                None | Some("asc") => false,
+                Some("desc") => true,
+                Some(o) => return Err(format!("{at}: order_dir must be asc or desc, not {o:?}")),
+            };
+            out.push(PublicSpec {
+                model: m.name.clone(),
+                read: p.read.then(|| PublicRead {
+                    published_field: p.published_field.clone().unwrap_or_default(),
+                    published_value: p.published_value.clone(),
+                    gone_value: p.gone_value.clone(),
+                    fields: p.fields.clone(),
+                    order_by: p.order_by.clone(),
+                    order_desc: desc,
+                }),
+                submit: p.submit.then(|| PublicSubmit {
+                    fields: p.submit_fields.clone(),
+                    rate_limit_per_hour: p.rate_limit_per_hour.unwrap_or(1),
+                }),
+                receipt: has_receipt.then(|| PublicReceipt {
+                    token_field: p.receipt_token_field.clone(),
+                    parent_field: p.receipt_parent.clone(),
+                    fields: p.receipt_fields.clone(),
+                }),
+            });
+        }
+        Ok(out)
     }
 
     /// Consistency of `kind`, `options`, `to` and `required` on one field.
@@ -365,6 +487,17 @@ impl Manifest {
             models,
             network_destinations: vec![],
         };
+        let mut public_problems = Vec::new();
+        for spec in self.public_specs()? {
+            if let Some(def) = module.models.iter().find(|d| d.name == spec.model)
+                && let Err(e) = spec.check(def)
+            {
+                public_problems.push(e);
+            }
+        }
+        if !public_problems.is_empty() {
+            return Err(public_problems.join("; "));
+        }
         let violations = check_module(&module);
         if violations.is_empty() {
             Ok(module)

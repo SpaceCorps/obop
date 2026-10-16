@@ -125,6 +125,11 @@ impl Installer {
                 d.register_transition(module, intern(&model.name), &a.name, &self.store);
             }
         }
+        // Public exposure (D50) takes effect only once the models exist; the gate runs again.
+        if let Err(e) = d.register_public(&m.module.id, m.public_specs()?) {
+            d.unregister_module(&m.module.id);
+            return Err(e);
+        }
         Ok(())
     }
 

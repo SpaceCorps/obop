@@ -1,0 +1,448 @@
+//! The public website and web shop of an instance (D50, docs/STOREFRONT.md).
+//!
+//! Server-rendered HTML for ordinary visitors, built only from what the installed `website` and
+//! `ecommerce` packages declare public and what is published. No framework: [`Site::handle`]
+//! takes a [`Req`] and returns a [`Resp`]; `obop-http` is the one place they meet axum (D29).
+//!
+//! Everything a visitor can read or write goes through `obop_commands::PublicApi`, so the
+//! declarations of the packages are the whole attack surface: whitelisted fields of published
+//! records, submissions restricted to declared fields, prices always taken from the listing.
+
+pub mod assets;
+mod content;
+pub mod http;
+pub mod i18n;
+pub mod layout;
+pub mod md;
+pub mod seed;
+mod seo;
+pub mod settings;
+mod shop;
+pub mod theme;
+pub mod util;
+
+use http::{Req, Resp};
+use i18n::{Lang, Source};
+use layout::{Caps, Ctx, MenuItem, Page};
+use obop_commands::{Lookup, PublicApi, PublicFilter, PublicRecord, Value};
+use settings::Settings;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use util::{ct_eq, esc, random_token, sha256_hex};
+
+pub use http::MAX_BODY;
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    /// Public origin (`OBOP_PUBLIC_URL`) used when the `site.base_url` setting is empty.
+    pub public_url: Option<String>,
+    /// Where the backoffice is served (`/admin`), for the "sign in" link and `robots.txt`.
+    pub admin_prefix: Option<String>,
+    /// How long settings and the menu are cached.
+    pub settings_ttl: Duration,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            public_url: None,
+            admin_prefix: Some("/admin".into()),
+            settings_ttl: Duration::from_secs(5),
+        }
+    }
+}
+
+impl Config {
+    pub fn from_env() -> Config {
+        Config {
+            public_url: std::env::var("OBOP_PUBLIC_URL")
+                .ok()
+                .map(|u| u.trim().trim_end_matches('/').to_string())
+                .filter(|u| settings::origin_ok(u)),
+            ..Config::default()
+        }
+    }
+}
+
+struct Cached {
+    at: Instant,
+    settings: Arc<Settings>,
+    menu: Vec<MenuItem>,
+    css: Arc<(String, String)>,
+}
+
+pub struct Site {
+    api: PublicApi,
+    cfg: Config,
+    cached: Mutex<Option<Cached>>,
+    /// Sliding-window counters for the limits that are not the packages' own (order look-ups,
+    /// checkout bursts), keyed by a hash of the client address.
+    limits: Mutex<HashMap<String, VecDeque<Instant>>>,
+    /// Idempotency keys of placed orders: key -> (order token, when).
+    idem: Mutex<HashMap<String, (String, Instant)>>,
+}
+
+impl Site {
+    pub fn new(api: PublicApi, cfg: Config) -> Site {
+        Site {
+            api,
+            cfg,
+            cached: Mutex::new(None),
+            limits: Mutex::new(HashMap::new()),
+            idem: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Whether the instance has anything to show publicly at all (a package declared it).
+    pub fn has_public_models(&self) -> bool {
+        ["website_page", "website_blog_post", "ecommerce_listing"]
+            .iter()
+            .any(|m| self.api.is_readable(m))
+    }
+
+    pub fn api(&self) -> &PublicApi {
+        &self.api
+    }
+
+    fn refresh(&self) -> (Arc<Settings>, Vec<MenuItem>, Arc<(String, String)>) {
+        let mut g = self.cached.lock().unwrap();
+        if let Some(c) = g.as_ref()
+            && c.at.elapsed() < self.cfg.settings_ttl
+        {
+            return (c.settings.clone(), c.menu.clone(), c.css.clone());
+        }
+        let s = Arc::new(Settings::from_map(&self.api.site_settings()));
+        let menu = self.load_menu();
+        let css = assets::css(&s.accent);
+        let version = layout::css_version(&css);
+        let c = Cached {
+            at: Instant::now(),
+            settings: s.clone(),
+            menu: menu.clone(),
+            css: Arc::new((css, version)),
+        };
+        let css = c.css.clone();
+        *g = Some(c);
+        (s, menu, css)
+    }
+
+    fn load_menu(&self) -> Vec<MenuItem> {
+        let Ok((rows, _)) = self.api.list("website_menu_item", &[], Some(50), 0) else {
+            return Vec::new();
+        };
+        rows.iter()
+            .filter_map(|r| {
+                let (label, url) = (r.text("label").trim(), r.text("url").trim());
+                let ok = md::safe_url(url) && !url.starts_with('#') && !url.starts_with("mailto:");
+                (!label.is_empty() && label.chars().count() <= 60 && ok).then(|| MenuItem {
+                    label: label.to_string(),
+                    url: url.to_string(),
+                    new_window: r.flag("new_window"),
+                })
+            })
+            .collect()
+    }
+
+    fn caps(&self) -> Caps {
+        let sub = |m: &str| self.api.spec(m).is_some_and(|s| s.submit.is_some());
+        Caps {
+            shop: self.api.is_readable("ecommerce_listing"),
+            blog: self.api.is_readable("website_blog_post"),
+            pages: self.api.is_readable("website_page"),
+            contact: sub("website_form_submission"),
+        }
+    }
+
+    /// Count a hit for `key`; false when more than `max` fall in the last `window`.
+    fn allow(&self, key: &str, max: usize, window: Duration) -> bool {
+        let now = Instant::now();
+        let mut g = self.limits.lock().unwrap();
+        if g.len() > 20_000 {
+            g.retain(|_, q| q.back().is_some_and(|t| now.duration_since(*t) < window));
+        }
+        let q = g.entry(key.to_string()).or_default();
+        while q.front().is_some_and(|t| now.duration_since(*t) >= window) {
+            q.pop_front();
+        }
+        if q.len() >= max {
+            return false;
+        }
+        q.push_back(now);
+        true
+    }
+
+    /// The origin used in canonical links, feeds and sitemaps: the owner's setting, the
+    /// configured public URL, or (last resort) the request's own `Host`.
+    fn base(&self, req: &Req, s: &Settings) -> String {
+        if let Some(u) = &s.base_url {
+            return u.clone();
+        }
+        if let Some(u) = &self.cfg.public_url {
+            return u.clone();
+        }
+        let host = req.header("host").unwrap_or("localhost");
+        let host_ok = !host.is_empty()
+            && host.len() <= 255
+            && host
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || ".-:[]".contains(c));
+        let host = if host_ok { host } else { "localhost" };
+        format!("{}://{host}", if req.is_https() { "https" } else { "http" })
+    }
+
+    fn ctx<'a>(&self, req: &'a Req) -> (Ctx<'a>, Arc<(String, String)>) {
+        let (s, menu, css) = self.refresh();
+        let from_query = req.q("lang").and_then(|l| Lang::parse(&l));
+        let from_cookie = req.cookie("lang").and_then(|l| Lang::parse(&l));
+        let from_header = req.header("accept-language").and_then(Lang::from_accept);
+        let (lang, lang_source) = match (from_query, from_cookie, from_header) {
+            (Some(l), _, _) => (l, Source::Query),
+            (_, Some(l), _) => (l, Source::Cookie),
+            (_, _, Some(l)) => (l, Source::Header),
+            _ => (s.default_lang, Source::Default),
+        };
+        let mut set_cookies = Vec::new();
+        if lang_source == Source::Query && from_cookie != Some(lang) {
+            set_cookies.push(http::cookie(
+                "lang",
+                lang.code(),
+                31_536_000,
+                req.is_https(),
+            ));
+        }
+        let ctx = Ctx {
+            req,
+            lang,
+            lang_source,
+            md: req.wants_markdown(),
+            base: self.base(req, &s),
+            caps: self.caps(),
+            menu,
+            admin_prefix: self.cfg.admin_prefix.clone(),
+            csrf: String::new(),
+            set_cookies,
+            css_version: css.1.clone(),
+            js_version: layout::css_version(assets::JS),
+            s,
+        };
+        (ctx, css)
+    }
+
+    /// Answer one request.
+    pub fn handle(&self, req: &Req) -> Resp {
+        let (mut ctx, css) = self.ctx(req);
+        let method = req.method.as_str();
+        let path = req.path.as_str();
+
+        // Assets and robots work even when the site is switched off.
+        if method == "GET" || method == "HEAD" {
+            match path {
+                "/assets/site.css" => {
+                    return asset(css.0.as_str(), "text/css; charset=utf-8", req, &ctx);
+                }
+                "/assets/cart.js" => {
+                    return asset(assets::JS, "text/javascript; charset=utf-8", req, &ctx);
+                }
+                "/robots.txt" => return seo::robots(&ctx),
+                "/favicon.svg" | "/favicon.ico" => return seo::favicon(&ctx),
+                _ => {}
+            }
+        }
+        if !ctx.s.enabled {
+            return self.closed(&ctx);
+        }
+        let known_post = matches!(path, "/shop/checkout" | "/contact");
+        if !matches!(method, "GET" | "HEAD") && !(method == "POST" && known_post) {
+            return method_not_allowed(&ctx, if known_post { "POST" } else { "GET, HEAD" });
+        }
+        if req.body.len() > MAX_BODY {
+            return self.error(&ctx, 413, "e413.title", "err.too_large");
+        }
+        let segs: Vec<String> = path
+            .trim_matches('/')
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .map(util::pct_decode)
+            .collect();
+        let segs: Vec<&str> = segs.iter().map(String::as_str).collect();
+        match (method, segs.as_slice()) {
+            (_, []) => self.home(&mut ctx),
+            ("GET" | "HEAD", ["sitemap.xml"]) => seo::sitemap(self, &ctx),
+            ("GET" | "HEAD", ["feed.xml"]) => seo::feed(self, &ctx),
+            ("GET" | "HEAD", ["llms.txt"]) => seo::llms(self, &ctx),
+            ("GET" | "HEAD", [".well-known", "security.txt"]) => seo::security_txt(&ctx),
+            ("GET" | "HEAD", ["blog"]) => self.blog_index(&mut ctx),
+            ("GET" | "HEAD", ["blog", slug]) => self.blog_post(&mut ctx, slug),
+            ("GET" | "HEAD", ["shop"]) => self.shop_index(&mut ctx),
+            ("GET" | "HEAD", ["shop", product]) => self.product(&mut ctx, product),
+            ("GET" | "HEAD", ["shop", "order", token]) => self.order_page(&mut ctx, token),
+            ("GET" | "HEAD", ["cart"]) => self.cart(&mut ctx, None),
+            ("POST", ["shop", "checkout"]) => self.checkout(&mut ctx),
+            ("GET" | "HEAD" | "POST", ["contact"]) => self.contact(&mut ctx),
+            ("GET" | "HEAD", [slug]) => self.page(&mut ctx, slug),
+            _ => self.not_found(&ctx),
+        }
+    }
+
+    // ---- shared page plumbing -------------------------------------------------------------
+
+    fn closed(&self, ctx: &Ctx) -> Resp {
+        let mut p = Page::new(ctx.t("closed.title"), ctx.t("closed.body"), &ctx.req.path);
+        p.status = 503;
+        p.noindex = true;
+        p.body = format!(
+            "<h1>{}</h1><p class=\"lede\">{}</p>",
+            esc(ctx.t("closed.title")),
+            esc(ctx.t("closed.body"))
+        );
+        p.md = format!("{}\n", ctx.t("closed.body"));
+        layout::render(ctx, p).header("retry-after", "3600")
+    }
+
+    fn error(&self, ctx: &Ctx, status: u16, title: &str, body: &str) -> Resp {
+        let mut p = Page::new(ctx.t(title), ctx.t(body), "/");
+        p.status = status;
+        p.noindex = true;
+        p.body = format!(
+            "<h1>{}</h1><p class=\"lede\">{}</p><p><a class=\"btn\" href=\"{}\">{}</a></p>",
+            esc(ctx.t(title)),
+            esc(ctx.t(body)),
+            esc(&ctx.lpath("/")),
+            esc(ctx.t("nav.home"))
+        );
+        p.md = format!("{}\n", ctx.t(body));
+        layout::render(ctx, p)
+    }
+
+    fn not_found(&self, ctx: &Ctx) -> Resp {
+        self.error(ctx, 404, "e404.title", "e404.body")
+    }
+
+    fn gone(&self, ctx: &Ctx) -> Resp {
+        self.error(ctx, 410, "e410.title", "e410.body")
+    }
+
+    /// Make sure the visitor has a CSRF cookie and put its value into `ctx.csrf` (double
+    /// submit: the same value goes into the form).
+    fn ensure_csrf(&self, ctx: &mut Ctx) {
+        match ctx.req.cookie("obop_csrf").filter(|c| valid_token(c)) {
+            Some(c) => ctx.csrf = c,
+            None => {
+                let t = random_token();
+                ctx.set_cookies
+                    .push(http::cookie("obop_csrf", &t, 86_400, ctx.req.is_https()));
+                ctx.csrf = t;
+            }
+        }
+    }
+
+    /// The checks every state-changing request passes: same-origin and a matching CSRF token.
+    fn check_post(&self, ctx: &Ctx, form: &http::Form) -> Result<(), Resp> {
+        let refuse = |s: &Site| s.error(ctx, 403, "e403.title", "err.csrf");
+        if let Some(origin) = ctx.req.header("origin") {
+            let host = ctx.req.header("host").unwrap_or("");
+            let origin_host = origin.split_once("://").map_or("", |(_, h)| h);
+            if origin == "null" || origin_host != host {
+                return Err(refuse(self));
+            }
+        }
+        let cookie = ctx.req.cookie("obop_csrf").unwrap_or_default();
+        let field = form.get("csrf");
+        if !valid_token(&cookie) || !ct_eq(&cookie, field) {
+            return Err(refuse(self));
+        }
+        Ok(())
+    }
+
+    /// A short opaque key for rate limits; the address itself is never stored or logged.
+    fn source(&self, req: &Req) -> String {
+        sha256_hex(&format!("obop-site-src:{}", req.client))[..24].to_string()
+    }
+
+    // ---- lookups the pages share ----------------------------------------------------------
+
+    /// Translations of one record: the one for `lang` (if any) and every language that has one.
+    fn translations(&self, model: &str, ref_field: &str, id: &str) -> Vec<PublicRecord> {
+        self.api
+            .list(
+                model,
+                &[(ref_field.to_string(), PublicFilter::Eq(Value::text(id)))],
+                Some(20),
+                0,
+            )
+            .map(|(rows, _)| rows)
+            .unwrap_or_default()
+    }
+
+    /// All translations into one language, keyed by the id of the translated record.
+    fn translations_into(
+        &self,
+        model: &str,
+        ref_field: &str,
+        lang: Lang,
+    ) -> HashMap<String, PublicRecord> {
+        let rows = self
+            .api
+            .list(
+                model,
+                &[(
+                    "lang".to_string(),
+                    PublicFilter::Eq(Value::text(lang.code())),
+                )],
+                None,
+                0,
+            )
+            .map(|(r, _)| r)
+            .unwrap_or_default();
+        rows.into_iter()
+            .filter_map(|r| {
+                let id = r.fields.get(ref_field)?.get("id")?.as_str()?.to_string();
+                Some((id, r))
+            })
+            .collect()
+    }
+
+    fn find(&self, model: &str, slug: &str) -> Lookup {
+        if !valid_slug(slug) {
+            return Lookup::NotFound;
+        }
+        self.api
+            .find_by(model, "slug", slug)
+            .unwrap_or(Lookup::NotFound)
+    }
+}
+
+#[cfg(test)]
+mod tests;
+
+fn method_not_allowed(ctx: &Ctx, allow: &str) -> Resp {
+    let mut p = Page::new(ctx.t("e405.title"), ctx.t("e405.title"), "/");
+    p.status = 405;
+    p.noindex = true;
+    p.body = format!("<h1>{}</h1>", esc(ctx.t("e405.title")));
+    p.md = format!("{}\n", ctx.t("e405.title"));
+    layout::render(ctx, p).header("allow", allow)
+}
+
+/// A static asset whose URL carries a hash of its content (`?v=`): cacheable for a year.
+fn asset(body: &str, ctype: &str, req: &Req, ctx: &Ctx) -> Resp {
+    let r = Resp::new(200, ctype, body);
+    let r = if req.q("v").is_some() {
+        r.header("cache-control", "public, max-age=31536000, immutable")
+    } else {
+        r.header("cache-control", "public, max-age=3600")
+    };
+    layout::security_headers(r.conditional(req, None), ctx)
+}
+
+pub(crate) fn valid_slug(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 120
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+pub(crate) fn valid_token(s: &str) -> bool {
+    s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
+}

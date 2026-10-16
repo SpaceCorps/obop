@@ -125,6 +125,7 @@ pub(crate) fn declared_fields(
 /// dispatcher, so this always sees real values.
 fn check_value(
     store: &Store,
+    pending: &[(String, String)],
     model: &str,
     name: &str,
     kind: &FieldKind,
@@ -136,6 +137,11 @@ fn check_value(
         (FieldKind::Bool, Value::Bool(_)) => Ok(()),
         (FieldKind::Date, Value::Text(t)) if is_valid_date(t) => Ok(()),
         (FieldKind::Select(o), Value::Text(t)) if o.contains(&t.as_str()) => Ok(()),
+        (FieldKind::Ref(to), Value::Text(id))
+            if pending.iter().any(|(m, i)| m == to && i == id) =>
+        {
+            Ok(())
+        }
         (FieldKind::Ref(to), Value::Text(id)) => match store.backend.get(to, id) {
             Ok(Some(_)) => Ok(()),
             Ok(None) => Err(format!(
@@ -155,6 +161,18 @@ pub fn validate(
     fields: &BTreeMap<String, Value>,
     creating: bool,
 ) -> Result<(), String> {
+    validate_with(def, store, fields, creating, &[])
+}
+
+/// Like `validate`, but a ref may also point at a record of `pending` (model, id) pairs that a
+/// batch is about to insert together with this one.
+pub fn validate_with(
+    def: &ModelDef,
+    store: &Store,
+    fields: &BTreeMap<String, Value>,
+    creating: bool,
+    pending: &[(String, String)],
+) -> Result<(), String> {
     for f in &def.fields {
         match fields.get(f.name) {
             None if creating && f.required => {
@@ -168,7 +186,7 @@ pub fn validate(
                 ));
             }
             Some(Value::Null) => {}
-            Some(v) => check_value(store, def.name, f.name, &f.kind, v)?,
+            Some(v) => check_value(store, pending, def.name, f.name, &f.kind, v)?,
         }
     }
     Ok(())

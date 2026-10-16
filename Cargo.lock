@@ -876,6 +876,7 @@ dependencies = [
  "obop-pkg",
  "obop-platform",
  "obop-registry",
+ "obop-site",
  "obop-storage",
  "obop-types",
  "product",
@@ -934,6 +935,7 @@ dependencies = [
  "http-body-util",
  "obop-commands",
  "obop-community",
+ "obop-site",
  "serde_json",
  "tokio",
  "tower",
@@ -988,6 +990,23 @@ name = "obop-registry"
 version = "0.0.0"
 dependencies = [
  "obop-types",
+]
+
+[[package]]
+name = "obop-site"
+version = "0.0.0"
+dependencies = [
+ "ammonia",
+ "base",
+ "form_urlencoded",
+ "getrandom 0.4.3",
+ "obop-commands",
+ "obop-pkg",
+ "obop-storage",
+ "product",
+ "pulldown-cmark",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

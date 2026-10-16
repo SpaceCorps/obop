@@ -199,9 +199,12 @@ pub struct Dispatcher {
     txn: std::sync::Mutex<()>,
     /// Module ids in the order they were first registered, so the launcher is stable.
     order: std::sync::RwLock<Vec<String>>,
+    /// Public declarations by model name, with the module that registered them (D50).
+    public: std::sync::RwLock<HashMap<String, (String, PublicSpec)>>,
 }
 
 pub(crate) struct ModelMeta {
+    pub(crate) def: obop_registry::ModelDef,
     module: String,
     module_name: String,
     description: &'static str,
@@ -365,6 +368,7 @@ impl Dispatcher {
         self.models.write().unwrap().insert(
             m.name.to_string(),
             ModelMeta {
+                def: m.clone(),
                 module: module.id.clone(),
                 module_name: module.name.clone(),
                 description: m.description,
@@ -408,6 +412,7 @@ impl Dispatcher {
 
     /// Remove every command a module registered. Its data stays in the store.
     pub fn unregister_module(&self, module: &str) {
+        self.public.write().unwrap().retain(|_, (m, _)| m != module);
         self.guards
             .write()
             .unwrap()
@@ -729,9 +734,14 @@ pub trait Authenticator: Send + Sync {
 
 mod guards;
 pub mod json;
+pub mod public;
 pub mod query;
 pub mod store;
 
+pub use public::{
+    Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
+    PublicSubmit, Receipt, Submission, SubmitError,
+};
 pub use store::Store;
 
 pub mod names {

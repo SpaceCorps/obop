@@ -25,6 +25,19 @@ pub trait Backend: Send + Sync {
     fn count(&self, model: &str) -> Result<usize>;
     /// Remove a record. `false` if it did not exist.
     fn delete(&self, model: &str, id: &str) -> Result<bool>;
+    /// Insert several records all-or-nothing. The default inserts one by one and removes what it
+    /// inserted when one fails; the shipped backends override it with a transaction.
+    fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
+        for (i, (model, id, fields)) in rows.iter().enumerate() {
+            if let Err(e) = self.insert(model, id, fields) {
+                for (m, id, _) in &rows[..i] {
+                    let _ = self.delete(m, id);
+                }
+                return Err(e);
+            }
+        }
+        Ok(())
+    }
     /// Short name for logs: `memory`, `sqlite` or `postgres`.
     fn kind(&self) -> &'static str;
 }
@@ -114,6 +127,21 @@ impl Backend for Memory {
         let before = rows.len();
         rows.retain(|(i, _)| i != id);
         Ok(rows.len() < before)
+    }
+    fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
+        let mut g = self.rows.lock().unwrap();
+        for (n, (model, id, _)) in rows.iter().enumerate() {
+            let dup_in_batch = rows[..n].iter().any(|(m, i, _)| m == model && i == id);
+            if dup_in_batch || g.get(model).is_some_and(|r| r.iter().any(|(i, _)| i == id)) {
+                return Err(format!("duplicate {model} {id}"));
+            }
+        }
+        for (model, id, fields) in rows {
+            g.entry(model.clone())
+                .or_default()
+                .push((id.clone(), fields.clone()));
+        }
+        Ok(())
     }
     fn kind(&self) -> &'static str {
         "memory"
@@ -249,6 +277,18 @@ impl Backend for Sqlite {
             .map(|n| n > 0)
             .map_err(|e| e.to_string())
     }
+    fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
+        let mut g = self.conn.lock().unwrap();
+        let tx = g.transaction().map_err(|e| e.to_string())?;
+        for (model, id, fields) in rows {
+            tx.execute(
+                "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)",
+                (model, id, J::Object(fields.clone()).to_string()),
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        tx.commit().map_err(|e| e.to_string())
+    }
     fn kind(&self) -> &'static str {
         "sqlite"
     }
@@ -365,6 +405,19 @@ impl Backend for Pg {
             .map_err(|e| e.to_string())?;
         Ok(n > 0)
     }
+    fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
+        let mut g = self.client.lock().unwrap();
+        let mut tx = g.transaction().map_err(|e| e.to_string())?;
+        for (model, id, fields) in rows {
+            let data = J::Object(fields.clone());
+            tx.execute(
+                "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
+                &[model, id, &data],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        tx.commit().map_err(|e| e.to_string())
+    }
     fn kind(&self) -> &'static str {
         "postgres"
     }
@@ -408,6 +461,13 @@ mod tests {
         assert!(b.delete(&model, "b").unwrap());
         assert!(!b.delete(&model, "b").unwrap());
         assert_eq!(b.count(&model).unwrap(), 1);
+        // A batch is all or nothing.
+        let row = |id: &str| (model.clone(), id.to_string(), fields("n", J::from(2)));
+        b.insert_many(&[row("m1"), row("m2")]).unwrap();
+        assert_eq!(b.count(&model).unwrap(), 3);
+        assert!(b.insert_many(&[row("m3"), row("a")]).is_err());
+        assert!(b.get(&model, "m3").unwrap().is_none(), "rolled back");
+        assert_eq!(b.count(&model).unwrap(), 3);
     }
 
     #[test]

@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use tower_http::services::{ServeDir, ServeFile};
 
 pub mod community;
+pub mod public;
 
 type Session = Arc<Mutex<Vault>>;
 
@@ -65,15 +66,20 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
         .expect("handler panicked")
 }
 
-pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
-    let api = Router::new()
+/// The REST routes under `/api`, without any static or public fallback.
+pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
+    Router::new()
         .route("/api/auth/login", post(login))
         .route("/api/auth/agent-token", post(agent_token))
         .route("/api/commands", get(commands))
         .route("/api/meta", get(meta))
         .route("/api/approve/{plan_id}", post(approve))
         .route("/api/{model}/{command}", post(call))
-        .with_state(state);
+        .with_state(state)
+}
+
+pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
+    let api = api_routes(state);
     match static_dir {
         Some(dir) => api.fallback_service(
             ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html"))),
@@ -267,7 +273,12 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
 
 pub async fn serve(addr: &str, app: Router) -> std::io::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await
+    // The peer address is what the public site keys its rate limits on.
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await
 }
 
 /// What the control-plane routes need from the platform (implemented by `obop-platform`).

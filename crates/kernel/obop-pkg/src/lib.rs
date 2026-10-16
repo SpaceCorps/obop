@@ -10,3 +10,5 @@ pub use check::check_manifest;
 pub use installer::{Installer, PackageInfo, admin_module, register_admin};
 pub use manifest::Manifest;
 pub use marketplace::{Bundled, Chain, Http, Listing, Marketplace};
+#[cfg(test)]
+mod public_tests;
