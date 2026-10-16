@@ -54,6 +54,15 @@ impl HttpState {
 
 type Shared = State<Arc<HttpState>>;
 
+/// Storage backends block (the PostgreSQL client runs its own runtime, which panics if used on an
+/// async worker), so every handler that touches the dispatcher, the authenticator or the platform
+/// runs on the blocking pool.
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    tokio::task::spawn_blocking(f)
+        .await
+        .expect("handler panicked")
+}
+
 pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
     let api = Router::new()
         .route("/api/auth/login", post(login))
@@ -71,6 +80,10 @@ pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
 }
 
 async fn login(State(s): Shared, Json(body): Json<J>) -> Response {
+    blocking(move || login_blocking(s, body)).await
+}
+
+fn login_blocking(s: Arc<HttpState>, body: J) -> Response {
     let (u, p) = (
         body["username"].as_str().unwrap_or(""),
         body["password"].as_str().unwrap_or(""),
@@ -86,6 +99,10 @@ async fn login(State(s): Shared, Json(body): Json<J>) -> Response {
 
 /// A signed-in human issues a scoped token for an agent. The token is shown once.
 async fn agent_token(State(s): Shared, h: HeaderMap, Json(body): Json<J>) -> Response {
+    blocking(move || agent_token_blocking(s, h, body)).await
+}
+
+fn agent_token_blocking(s: Arc<HttpState>, h: HeaderMap, body: J) -> Response {
     let (p, _) = match s.auth(&h) {
         Ok(x) => x,
         Err(c) => return c.into_response(),
@@ -108,6 +125,10 @@ async fn agent_token(State(s): Shared, h: HeaderMap, Json(body): Json<J>) -> Res
 }
 
 async fn commands(State(s): Shared, h: HeaderMap) -> Response {
+    blocking(move || commands_blocking(s, h)).await
+}
+
+fn commands_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
     let (p, _) = match s.auth(&h) {
         Ok(x) => x,
         Err(c) => return c.into_response(),
@@ -127,6 +148,16 @@ async fn call(
     Path((model, command)): Path<(String, String)>,
     body: Option<Json<J>>,
 ) -> Response {
+    blocking(move || call_blocking(s, h, model, command, body)).await
+}
+
+fn call_blocking(
+    s: Arc<HttpState>,
+    h: HeaderMap,
+    model: String,
+    command: String,
+    body: Option<Json<J>>,
+) -> Response {
     let (p, session) = match s.auth(&h) {
         Ok(x) => x,
         Err(c) => return c.into_response(),
@@ -140,6 +171,10 @@ async fn call(
 }
 
 async fn approve(State(s): Shared, h: HeaderMap, Path(plan_id): Path<String>) -> Response {
+    blocking(move || approve_blocking(s, h, plan_id)).await
+}
+
+fn approve_blocking(s: Arc<HttpState>, h: HeaderMap, plan_id: String) -> Response {
     let (p, session) = match s.auth(&h) {
         Ok(x) => x,
         Err(c) => return c.into_response(),
@@ -222,6 +257,10 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
 }
 
 async fn p_signup(State(api): Api, Json(b): Json<J>) -> Response {
+    blocking(move || p_signup_blocking(api, b)).await
+}
+
+fn p_signup_blocking(api: Arc<dyn PlatformApi>, b: J) -> Response {
     match api.signup(
         b["email"].as_str().unwrap_or(""),
         b["password"].as_str().unwrap_or(""),
@@ -232,6 +271,10 @@ async fn p_signup(State(api): Api, Json(b): Json<J>) -> Response {
 }
 
 async fn p_login(State(api): Api, Json(b): Json<J>) -> Response {
+    blocking(move || p_login_blocking(api, b)).await
+}
+
+fn p_login_blocking(api: Arc<dyn PlatformApi>, b: J) -> Response {
     match api.login(
         b["email"].as_str().unwrap_or(""),
         b["password"].as_str().unwrap_or(""),
@@ -243,6 +286,10 @@ async fn p_login(State(api): Api, Json(b): Json<J>) -> Response {
 }
 
 async fn p_me(State(api): Api, h: HeaderMap) -> Response {
+    blocking(move || p_me_blocking(api, h)).await
+}
+
+fn p_me_blocking(api: Arc<dyn PlatformApi>, h: HeaderMap) -> Response {
     match api.me(bearer(&h)) {
         Ok(email) => Json(json!({"email": email})).into_response(),
         Err(e) => err(StatusCode::UNAUTHORIZED, e),
@@ -250,6 +297,10 @@ async fn p_me(State(api): Api, h: HeaderMap) -> Response {
 }
 
 async fn p_list(State(api): Api, h: HeaderMap) -> Response {
+    blocking(move || p_list_blocking(api, h)).await
+}
+
+fn p_list_blocking(api: Arc<dyn PlatformApi>, h: HeaderMap) -> Response {
     match api.list(bearer(&h)) {
         Ok(l) => Json(json!({"instances": l})).into_response(),
         Err(e) => err(StatusCode::UNAUTHORIZED, e),
@@ -257,6 +308,10 @@ async fn p_list(State(api): Api, h: HeaderMap) -> Response {
 }
 
 async fn p_create(State(api): Api, h: HeaderMap, Json(b): Json<J>) -> Response {
+    blocking(move || p_create_blocking(api, h, b)).await
+}
+
+fn p_create_blocking(api: Arc<dyn PlatformApi>, h: HeaderMap, b: J) -> Response {
     match api.create(bearer(&h), b["name"].as_str().unwrap_or("")) {
         Ok(i) => (StatusCode::ACCEPTED, Json(i)).into_response(),
         Err(e) if e == "not signed in" => err(StatusCode::UNAUTHORIZED, e),
@@ -265,6 +320,10 @@ async fn p_create(State(api): Api, h: HeaderMap, Json(b): Json<J>) -> Response {
 }
 
 async fn p_delete(State(api): Api, h: HeaderMap, Path(id): Path<String>) -> Response {
+    blocking(move || p_delete_blocking(api, h, id)).await
+}
+
+fn p_delete_blocking(api: Arc<dyn PlatformApi>, h: HeaderMap, id: String) -> Response {
     match api.delete(bearer(&h), &id) {
         Ok(()) => Json(json!({"deleted": true})).into_response(),
         Err(e) if e == "not signed in" => err(StatusCode::UNAUTHORIZED, e),

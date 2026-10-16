@@ -809,6 +809,41 @@ mod tests {
         );
     }
 
+    /// Regression: the PostgreSQL client panics when used on an async worker thread, which took
+    /// every deployed instance down on its first login. Needs `OBOP_TEST_POSTGRES_URL`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn postgres_backed_instance_serves_requests_inside_the_runtime() {
+        let Ok(url) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+            eprintln!("skipped: set OBOP_TEST_POSTGRES_URL");
+            return;
+        };
+        let user = format!("pg{}@example.test", std::process::id());
+        let router = tokio::task::spawn_blocking({
+            let user = user.clone();
+            move || {
+                let app = App::with_store(obop_commands::Store::open(&url).unwrap());
+                app.seed_demo();
+                let auth = Arc::new(Auth::with_test_params(app.store.backend()));
+                auth.create_user(&user, "correct horse battery", &app.all_groups())
+                    .unwrap();
+                obop_http::router(
+                    obop_http::HttpState::new(app.dispatcher.clone(), auth),
+                    None,
+                )
+            }
+        })
+        .await
+        .unwrap();
+        let token = login(&router, &user, "correct horse battery").await;
+        let (s, b) = post(&router, Some(&token), "/api/party/list", json!({})).await;
+        assert_eq!(s, 200, "{b}");
+        assert!(b["value"].as_array().is_some_and(|v| !v.is_empty()));
+        // Dropping the PostgreSQL client also blocks, so drop it off the async threads too.
+        tokio::task::spawn_blocking(move || drop(router))
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn platform_signup_to_instance_over_http() {
         let backend = obop_storage::open("memory:").unwrap();
