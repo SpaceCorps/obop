@@ -423,6 +423,7 @@ fn make_provisioner(
                 marketplace_url: std::env::var("OBOP_MARKETPLACE_URL").ok(),
                 poll: sliplane::Config::DEFAULT_POLL,
                 timeout: sliplane::Config::DEFAULT_TIMEOUT,
+                check_reachable: true,
             };
             let cell = sliplane::PgCell {
                 admin_url: env("OBOP_CELL_ADMIN_URL")?,

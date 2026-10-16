@@ -166,6 +166,10 @@ pub struct Config {
     /// How often to ask Sliplane whether the service is live, and how long to wait.
     pub poll: std::time::Duration,
     pub timeout: std::time::Duration,
+    /// After Sliplane reports the service live, wait until its public address resolves and
+    /// accepts connections before calling the instance running. New names reach public DNS a
+    /// while after the service is live, and a browser that asks too early caches "not found".
+    pub check_reachable: bool,
 }
 
 impl Config {
@@ -255,6 +259,36 @@ impl Sliplane {
         }
     }
 
+    /// Wait for the public address to resolve and accept a TCP connection on 443.
+    fn wait_reachable(&self, domain: &str, progress: Progress) -> Result<(), String> {
+        use std::net::{TcpStream, ToSocketAddrs};
+        let started = std::time::Instant::now();
+        loop {
+            let ok = (domain, 443)
+                .to_socket_addrs()
+                .ok()
+                .and_then(|mut a| a.next())
+                .is_some_and(|addr| {
+                    TcpStream::connect_timeout(&addr, Duration::from_secs(3)).is_ok()
+                });
+            if ok {
+                return Ok(());
+            }
+            if started.elapsed() > Duration::from_secs(10 * 60) {
+                return Err(format!(
+                    "the service is live but {domain} does not resolve yet; try again in a few minutes"
+                ));
+            }
+            let secs = started.elapsed().as_secs();
+            progress(&format!(
+                "Waiting for the address to resolve ({}m {:02}s)",
+                secs / 60,
+                secs % 60
+            ));
+            std::thread::sleep(Duration::from_secs(5));
+        }
+    }
+
     /// Delete a service after checking that it is one of ours.
     fn delete_service(&self, slug: &str, id: &str) -> Result<(), String> {
         let mut get = self.base(&["services", "get"]);
@@ -327,6 +361,9 @@ impl Provisioner for Sliplane {
                 .ok_or("sliplane returned no domain")?;
             progress("Building and starting the service (0m 00s)");
             self.wait_live(&id, progress)?;
+            if self.cfg.check_reachable {
+                self.wait_reachable(domain, progress)?;
+            }
             Ok(Provisioned {
                 external_id: id,
                 url: format!("https://{domain}"),
@@ -401,6 +438,7 @@ mod tests {
             marketplace_url: None,
             poll: std::time::Duration::ZERO,
             timeout: std::time::Duration::from_secs(5),
+            check_reachable: false,
         }
     }
 

@@ -63,11 +63,12 @@ function Auth({ onToken }: { onToken: (t: string) => void }) {
   );
 }
 
-const STEPS = ["Database", "Admin account", "Service", "Build and start", "Ready"];
+const STEPS = ["Database", "Admin account", "Service", "Build and start", "Address", "Ready"];
 
 function stepOf(i: Instance): number {
   if (i.status === "running") return STEPS.length;
   const p = i.phase;
+  if (p.startsWith("Waiting for the address")) return 4;
   if (p.startsWith("Building")) return 3;
   if (p.startsWith("Creating the service")) return 2;
   if (p.startsWith("Creating your admin")) return 1;
