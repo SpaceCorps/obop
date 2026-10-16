@@ -6,6 +6,7 @@ use crate::provision::{InstanceSpec, Progress, Provisioned, Provisioner};
 use obop_auth::Auth;
 use serde_json::Value as J;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Runs `sliplane` with the given arguments and returns stdout.
 pub trait Runner: Send + Sync {
@@ -13,6 +14,31 @@ pub trait Runner: Send + Sync {
 }
 
 pub struct Cli;
+
+/// The CLI prints warnings and a JSON error envelope on stderr. Keep the part a person needs:
+/// `code: message`, with the code kept so callers can recognise `not_found`.
+pub fn clean_error(stderr: &str) -> String {
+    let body: String = stderr
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("warning:"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    match serde_json::from_str::<J>(body.trim()) {
+        Ok(j) => {
+            let code = j["code"].as_str().unwrap_or("error");
+            let msg = j["error"].as_str().unwrap_or("");
+            let detail = j["detail"].as_str().unwrap_or("");
+            // Detail repeats the API body; keep it short and only when it adds something.
+            let tail = if detail.is_empty() || detail.contains(msg) {
+                String::new()
+            } else {
+                format!(" ({})", detail.chars().take(160).collect::<String>())
+            };
+            format!("{code}: {msg}{tail}")
+        }
+        Err(_) => body.trim().to_string(),
+    }
+}
 
 impl Runner for Cli {
     fn run(&self, args: &[String]) -> Result<String, String> {
@@ -24,7 +50,7 @@ impl Runner for Cli {
         if out.status.success() {
             Ok(String::from_utf8_lossy(&out.stdout).into_owned())
         } else {
-            Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+            Err(clean_error(&String::from_utf8_lossy(&out.stderr)))
         }
     }
 }
@@ -179,12 +205,28 @@ impl Sliplane {
     /// deploy shows up as an event; its message becomes the error.
     fn wait_live(&self, service_id: &str, progress: Progress) -> Result<(), String> {
         let started = std::time::Instant::now();
+        let mut failures = 0u32;
         loop {
             let mut get = self.base(&["services", "get"]);
             get.extend(["--service-id".into(), service_id.into()]);
-            let j: J = serde_json::from_str(&self.runner.run(&get)?).map_err(|e| e.to_string())?;
-            if j["status"].as_str() == Some("live") {
-                return Ok(());
+            match self.runner.run(&get) {
+                Ok(out) => {
+                    failures = 0;
+                    let j: J = serde_json::from_str(&out).map_err(|e| e.to_string())?;
+                    if j["status"].as_str() == Some("live") {
+                        return Ok(());
+                    }
+                }
+                // Sliplane can answer "not found" for a service it created a moment ago, and the
+                // network can blip: keep waiting, and give up only after repeated failures.
+                Err(e) => {
+                    failures += 1;
+                    let young =
+                        e.contains("not_found") && started.elapsed() < Duration::from_secs(90);
+                    if !young && failures >= 3 {
+                        return Err(e);
+                    }
+                }
             }
             let mut ev = self.base(&["services", "events"]);
             ev.extend(["--service-id".into(), service_id.into()]);
@@ -570,6 +612,37 @@ mod tests {
                 .contains("services delete")
         );
         assert_eq!(cell.log.lock().unwrap().last().unwrap(), "drop acme");
+    }
+
+    #[test]
+    fn a_just_created_service_that_is_briefly_not_found_is_waited_for() {
+        let (runner, cell) = (
+            Arc::new(FakeRunner::default()),
+            Arc::new(FakeCell::default()),
+        );
+        runner.reply.lock().unwrap().extend([
+            Ok(CREATED.into()),
+            Err("not_found: The resource does not exist.".into()),
+            Err("not_found: The resource does not exist.".into()),
+            Err("not_found: The resource does not exist.".into()),
+            Err("not_found: The resource does not exist.".into()),
+            Ok(LIVE.into()),
+        ]);
+        Sliplane::new(cfg(Source::Image("i".into())), runner, cell)
+            .create(&spec(), NOOP)
+            .unwrap();
+    }
+
+    #[test]
+    fn errors_from_the_cli_are_short_and_keep_their_code() {
+        let raw = "warning: API keys are stored unencrypted in /root/.config/sliplane-cli/secrets.json (SLIPLANE_ALLOW_PLAINTEXT_STORE=1).\n{\n  \"error\": \"The resource does not exist.\",\n  \"code\": \"not_found\",\n  \"detail\": \"HTTP 404: {\\\"code\\\":\\\"not_found\\\",\\\"message\\\":\\\"Service not found\\\"}\"\n}";
+        let e = clean_error(raw);
+        assert!(
+            e.starts_with("not_found: The resource does not exist."),
+            "{e}"
+        );
+        assert!(!e.contains("warning") && !e.contains("secrets.json"));
+        assert_eq!(clean_error("plain failure"), "plain failure");
     }
 
     #[test]
