@@ -99,6 +99,7 @@ Interpretations, all Proposed (Q10):
 | D41 | Agent-ready module contract | PROPOSED | Every command and field carries class, permission and description; REST, MCP and CLI are generated; install gate enforces it |
 | D42 | Agent safety timing | PROPOSED | Agent permissions, plan/approve policy and masking ship in W1 with MCP; AI gateway stays W3 |
 | D43 | Hosting providers | PROPOSED | Provider-neutral `HostingTarget` port; self-host and Sliplane are reference adapters |
+| D44 | Storage backends: SQLite locally, PostgreSQL for deployments | BINDING | Owner-directed 2026-10-16; supersedes the "SQLite is never the domain database" part of D37 |
 
 Proposed and awaiting the owner: D1, D2, D3, D4, D5, D12, D13, D14, D16, D17, D20, D23, D25, D26, D40, D41, D42, D43, interpretations I-1 to I-4, the exit-drill clause of D15, and the renames and labels of D24.
 
@@ -351,7 +352,7 @@ Proposed and awaiting the owner: D1, D2, D3, D4, D5, D12, D13, D14, D16, D17, D2
 **Why.** It is what 4-12 people can sustain, with ERPNext and Tryton precedent. **Rejected.** Migrate-per-test; hand-made fixtures. **Consequences.** A quality-platform engineer (0.5-1 FTE); benchmark the three clone strategies in sprint one. **Evidence.** R27 A-B.
 
 #### D37 Runtime topology and edge store
-**Status** BINDING. **Reversibility** two-way door (low to medium). **Owner action** no.
+**Status** BINDING; the "SQLite is never the domain database" clause is superseded by D44. **Reversibility** two-way door (low to medium). **Owner action** no.
 
 **Decision.** One binary with roles (`http`, `cron`, `bus`, `ext`, `hub`, `all`), static musl with embedded frontend assets, PostgreSQL behind PgBouncer 1.26+ (direct connections for migrations, LISTEN and session locks), blobs behind an `object_store` trait on S3-compatible storage (not MinIO), in-process cache, pgBackRest for PITR. Solo and demo installs use embedded PostgreSQL. SQLite is only the fixed-schema edge store `obop-edge` (at most 15 tables, `PRAGMA user_version`), never a projection of the server schema. The store hub is the same binary on rusqlite; POS shells are Tauri 2 plus a Rust hardware agent, with a PWA baseline; browser-only mode uses sqlite-wasm. No Node on customer servers.
 
@@ -398,6 +399,13 @@ Proposed and awaiting the owner: D1, D2, D3, D4, D5, D12, D13, D14, D16, D17, D2
 **Decision.** obop is hosting-neutral. It needs one container (the `obop` binary, D37), PostgreSQL 17 or 18 and optionally an S3-compatible store; nothing in the kernel names a provider. Provider integrations implement one `HostingTarget` port (provision, deploy, upgrade, backup and restore, domains, logs, scale), exposed as `obop host ...` subcommands (name Proposed) and as X4 packages. Reference targets: plain self-hosting (container plus PostgreSQL) and Sliplane, chosen as a convenience target because it gives a one-click path from a template to a running business; more providers (Hetzner, Fly.io, Render and others) are added through the same port. Sliplane's PostgreSQL versions, backup guarantees and extension support are unverified and are checked before the adapter ships. SpaceCorps already has a `Sliplane-Cli` that the adapter can build on. Hosted plans sold by obop (D2) are separate from, and do not depend on, any third-party target.
 
 **Why.** Easy deployment is a product goal; coupling to one vendor would contradict the open edition and exit promises (D38). **Rejected.** A Sliplane-only deploy path; per-provider code in the kernel. **Consequences.** The port needs a conformance test that every adapter passes, including a verified restore (ENGINEERING 1.1). **Evidence.** D37, D38; the provider facts above are not yet researched.
+
+#### D44 Storage backends: SQLite locally, PostgreSQL for deployments
+**Status** BINDING (owner-directed in chat, 2026-10-16). **Reversibility** two-way door. **Owner action** no.
+
+**Decision.** Local development and solo use run on SQLite (`sqlite://PATH`, the default is `obop.db`); every deployment, including hosted targets such as Sliplane (D43), runs on PostgreSQL 17 or 18 (`postgres://...`). The storage layer (`obop-storage`) is one small contract with memory, SQLite and PostgreSQL backends, selected by `--db` or `OBOP_DATABASE_URL`, and every backend must pass the same contract test; PostgreSQL is tested in CI and locally against a container. This supersedes the clause of D37 that SQLite is never the domain database and the embedded-PostgreSQL solo profile as the default; embedded PostgreSQL stays possible. The database-enforced integrity guarantees of D30 (balance, immutability, gapless numbers, hash chain) exist on PostgreSQL only, so a SQLite database is for development and evaluation and the product never claims those guarantees there; the Assurance and compliance claims apply to PostgreSQL deployments.
+
+**Why.** A zero-setup local start removes the biggest barrier for module authors and agents trying obop; PostgreSQL stays the production target. **Rejected.** SQLite everywhere (cannot meet D30); PostgreSQL required locally. **Consequences.** Migrations and the schema manager (`obop-schema`) target PostgreSQL first, so SQLite support for typed columns lags and may stay document-style; an export from SQLite to PostgreSQL is needed before any production use (Proposed); the SQLite backend must not appear in the compliance test matrix. **Evidence.** D6, D8, D30, D37.
 
 ### 2.3 Deferred items
 

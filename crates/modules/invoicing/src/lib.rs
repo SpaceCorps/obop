@@ -96,16 +96,18 @@ pub fn register(d: &mut Dispatcher, store: &Store) {
 }
 
 pub fn seed(store: &Store, order_id: &str) -> String {
-    store.insert(
-        "invoice",
-        [
-            ("sale_order_id".to_string(), Value::text(order_id)),
-            ("state".to_string(), Value::text("draft")),
-            ("total_minor".to_string(), Value::Int(120_000)),
-            ("number".to_string(), Value::Null),
-        ]
-        .into(),
-    )
+    store
+        .insert(
+            "invoice",
+            [
+                ("sale_order_id".to_string(), Value::text(order_id)),
+                ("state".to_string(), Value::text("draft")),
+                ("total_minor".to_string(), Value::Int(120_000)),
+                ("number".to_string(), Value::Null),
+            ]
+            .into(),
+        )
+        .expect("seed")
 }
 
 #[cfg(test)]

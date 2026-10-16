@@ -10,8 +10,13 @@ pub struct App {
 }
 
 impl App {
+    /// An app over an in-memory store (tests, `modules check`).
     pub fn new() -> Self {
-        let (mut d, store) = (Dispatcher::new(), Store::new());
+        Self::with_store(Store::new())
+    }
+
+    pub fn with_store(store: Store) -> Self {
+        let mut d = Dispatcher::new();
         base::register(&mut d, &store);
         product::register(&mut d, &store);
         crm::register(&mut d, &store);
@@ -31,8 +36,12 @@ impl App {
         }
     }
 
-    /// Fake demo records so every surface has something to show.
+    /// Fake demo records so every surface has something to show. Does nothing if the database
+    /// already holds parties, so restarting never duplicates data.
     pub fn seed_demo(&self) {
+        if self.store.count("party") > 0 {
+            return;
+        }
         let party = base::seed(&self.store);
         product::seed(&self.store);
         crm::seed(&self.store);

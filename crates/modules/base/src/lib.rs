@@ -80,16 +80,18 @@ pub fn register(d: &mut Dispatcher, store: &Store) {
 /// Fake demo data; never real personal data.
 pub fn seed(store: &Store) -> String {
     let t = |s: &str| Value::text(s);
-    store.insert(
-        "party",
-        [
-            ("name".to_string(), t("Ada Example")),
-            ("email".to_string(), t("ada@example.test")),
-            ("tax_id".to_string(), t("DE000000000")),
-            ("notes".to_string(), t("Prefers invoices by email")),
-        ]
-        .into(),
-    )
+    store
+        .insert(
+            "party",
+            [
+                ("name".to_string(), t("Ada Example")),
+                ("email".to_string(), t("ada@example.test")),
+                ("tax_id".to_string(), t("DE000000000")),
+                ("notes".to_string(), t("Prefers invoices by email")),
+            ]
+            .into(),
+        )
+        .expect("seed")
 }
 
 #[cfg(test)]

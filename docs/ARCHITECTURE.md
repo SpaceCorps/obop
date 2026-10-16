@@ -55,7 +55,7 @@ Pins are the verified versions of [R00 s3]; Proposed rows wait for the owner.
 ### 1.4 Non-goals
 
 - No microservices (D27); pool-mode multi-tenancy is not built (D6).
-- No `NOTIFY` in business transactions (D7); SQLite is never the domain database (D37).
+- No `NOTIFY` in business transactions (D7); SQLite is never the domain database of a deployment (D37; D44 allows it for local development and solo use only).
 - No in-process third-party Rust, no Rhai in W1 and W2; CEL is the only expression language stored in data, and minijinja and Typst templates are bounded render-time templates that never hold conditions, modifiers, formulas, validation or policies (D11; the template clause is Proposed with D14 and D20).
 - No XML-RPC and no GraphQL in W1 (D31); a `/json/2/` endpoint is DEFERRED (D22).
 - No Electric, PowerSync or Zero, and no CRDT for transactional data (D13, D37).

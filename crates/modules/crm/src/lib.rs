@@ -88,20 +88,22 @@ pub fn register(d: &mut Dispatcher, store: &Store) {
 }
 
 pub fn seed(store: &Store) -> String {
-    store.insert(
-        "lead",
-        [
-            ("title".to_string(), Value::text("Annual support contract")),
-            ("contact_name".to_string(), Value::text("Grace Example")),
-            (
-                "contact_email".to_string(),
-                Value::text("grace@example.test"),
-            ),
-            ("expected_revenue_minor".to_string(), Value::Int(500_000)),
-            ("stage".to_string(), Value::text("qualified")),
-        ]
-        .into(),
-    )
+    store
+        .insert(
+            "lead",
+            [
+                ("title".to_string(), Value::text("Annual support contract")),
+                ("contact_name".to_string(), Value::text("Grace Example")),
+                (
+                    "contact_email".to_string(),
+                    Value::text("grace@example.test"),
+                ),
+                ("expected_revenue_minor".to_string(), Value::Int(500_000)),
+                ("stage".to_string(), Value::text("qualified")),
+            ]
+            .into(),
+        )
+        .expect("seed")
 }
 
 #[cfg(test)]

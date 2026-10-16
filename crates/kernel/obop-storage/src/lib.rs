@@ -1,0 +1,413 @@
+//! Layer 1 storage: one small record contract with three backends.
+//!
+//! - `memory:` for tests.
+//! - `sqlite://PATH` (or `sqlite::memory:`) for local development and solo use.
+//! - `postgres://...` for every deployment (D6, D8, D30, D44). The database-enforced integrity
+//!   guarantees of D30 exist on PostgreSQL only; SQLite is a convenience backend.
+//!
+//! Records are JSON documents keyed by (model, id) in one table, so no DDL is built from model
+//! names. The typed-column schema manager (`obop-schema`) replaces this on PostgreSQL later.
+
+use serde_json::Value as J;
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+
+pub type Fields = serde_json::Map<String, J>;
+pub type Result<T> = std::result::Result<T, String>;
+
+pub trait Backend: Send + Sync {
+    fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()>;
+    fn get(&self, model: &str, id: &str) -> Result<Option<Fields>>;
+    /// Records of a model in insertion order.
+    fn list(&self, model: &str) -> Result<Vec<(String, Fields)>>;
+    /// Merge `patch` into an existing record atomically. `false` if it does not exist.
+    fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool>;
+    fn count(&self, model: &str) -> Result<usize>;
+    /// Short name for logs: `memory`, `sqlite` or `postgres`.
+    fn kind(&self) -> &'static str;
+}
+
+pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
+    if url == "memory:" {
+        Ok(Arc::new(Memory::default()))
+    } else if let Some(path) = url
+        .strip_prefix("sqlite://")
+        .or_else(|| url.strip_prefix("sqlite:"))
+    {
+        Ok(Arc::new(Sqlite::open(path)?))
+    } else if url.starts_with("postgres://") || url.starts_with("postgresql://") {
+        Ok(Arc::new(Pg::connect(url)?))
+    } else {
+        Err(format!(
+            "unsupported database url (use memory:, sqlite://PATH or postgres://...): {url}"
+        ))
+    }
+}
+
+fn parse(text: &str) -> Result<Fields> {
+    match serde_json::from_str(text).map_err(|e| e.to_string())? {
+        J::Object(m) => Ok(m),
+        _ => Err("stored record is not an object".into()),
+    }
+}
+
+fn merged(mut base: Fields, patch: &Fields) -> Fields {
+    base.extend(patch.clone());
+    base
+}
+
+// ---- memory -------------------------------------------------------------------------------
+
+#[derive(Default)]
+struct Memory {
+    rows: Mutex<BTreeMap<String, Vec<(String, Fields)>>>,
+}
+
+impl Backend for Memory {
+    fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+        let mut g = self.rows.lock().unwrap();
+        let rows = g.entry(model.into()).or_default();
+        if rows.iter().any(|(i, _)| i == id) {
+            return Err(format!("duplicate {model} {id}"));
+        }
+        rows.push((id.into(), fields.clone()));
+        Ok(())
+    }
+    fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
+        let g = self.rows.lock().unwrap();
+        Ok(g.get(model)
+            .and_then(|r| r.iter().find(|(i, _)| i == id))
+            .map(|(_, f)| f.clone()))
+    }
+    fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
+        Ok(self
+            .rows
+            .lock()
+            .unwrap()
+            .get(model)
+            .cloned()
+            .unwrap_or_default())
+    }
+    fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
+        let mut g = self.rows.lock().unwrap();
+        match g
+            .get_mut(model)
+            .and_then(|r| r.iter_mut().find(|(i, _)| i == id))
+        {
+            Some((_, f)) => {
+                f.extend(patch.clone());
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+    fn count(&self, model: &str) -> Result<usize> {
+        Ok(self.rows.lock().unwrap().get(model).map_or(0, Vec::len))
+    }
+    fn kind(&self) -> &'static str {
+        "memory"
+    }
+}
+
+// ---- sqlite -------------------------------------------------------------------------------
+
+struct Sqlite {
+    conn: Mutex<rusqlite::Connection>,
+}
+
+impl Sqlite {
+    fn open(path: &str) -> Result<Self> {
+        let conn = if path == ":memory:" || path.is_empty() {
+            rusqlite::Connection::open_in_memory()
+        } else {
+            rusqlite::Connection::open(path)
+        }
+        .map_err(|e| e.to_string())?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA foreign_keys = ON;
+             CREATE TABLE IF NOT EXISTS obop_record (
+                 seq   INTEGER PRIMARY KEY AUTOINCREMENT,
+                 model TEXT NOT NULL,
+                 id    TEXT NOT NULL,
+                 data  TEXT NOT NULL CHECK (json_valid(data)),
+                 UNIQUE (model, id)
+             );",
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+}
+
+impl Backend for Sqlite {
+    fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+        let data = J::Object(fields.clone()).to_string();
+        self.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)",
+                (model, id, data),
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare("SELECT data FROM obop_record WHERE model = ?1 AND id = ?2")
+            .map_err(|e| e.to_string())?;
+        let mut rows = st.query((model, id)).map_err(|e| e.to_string())?;
+        match rows.next().map_err(|e| e.to_string())? {
+            Some(r) => Ok(Some(parse(
+                &r.get::<_, String>(0).map_err(|e| e.to_string())?,
+            )?)),
+            None => Ok(None),
+        }
+    }
+    fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare("SELECT id, data FROM obop_record WHERE model = ?1 ORDER BY seq")
+            .map_err(|e| e.to_string())?;
+        let rows = st
+            .query_map((model,), |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })
+            .map_err(|e| e.to_string())?;
+        rows.map(|r| {
+            let (id, data) = r.map_err(|e| e.to_string())?;
+            Ok((id, parse(&data)?))
+        })
+        .collect()
+    }
+    fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
+        let mut g = self.conn.lock().unwrap();
+        let tx = g
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(|e| e.to_string())?;
+        let current: Option<String> = tx
+            .query_row(
+                "SELECT data FROM obop_record WHERE model = ?1 AND id = ?2",
+                (model, id),
+                |r| r.get(0),
+            )
+            .map(Some)
+            .or_else(|e| {
+                if e == rusqlite::Error::QueryReturnedNoRows {
+                    Ok(None)
+                } else {
+                    Err(e)
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        let Some(current) = current else {
+            return Ok(false);
+        };
+        let data = J::Object(merged(parse(&current)?, patch)).to_string();
+        tx.execute(
+            "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
+            (model, id, data),
+        )
+        .map_err(|e| e.to_string())?;
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+    fn count(&self, model: &str) -> Result<usize> {
+        self.conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM obop_record WHERE model = ?1",
+                (model,),
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|n| n as usize)
+            .map_err(|e| e.to_string())
+    }
+    fn kind(&self) -> &'static str {
+        "sqlite"
+    }
+}
+
+// ---- postgres -----------------------------------------------------------------------------
+
+struct Pg {
+    client: Mutex<postgres::Client>,
+}
+
+impl Pg {
+    fn connect(url: &str) -> Result<Self> {
+        let mut client =
+            postgres::Client::connect(url, postgres::NoTls).map_err(|e| e.to_string())?;
+        client
+            .batch_execute(
+                "CREATE TABLE IF NOT EXISTS obop_record (
+                     seq   BIGINT GENERATED ALWAYS AS IDENTITY,
+                     model TEXT NOT NULL,
+                     id    TEXT NOT NULL,
+                     data  JSONB NOT NULL CHECK (jsonb_typeof(data) = 'object'),
+                     PRIMARY KEY (model, id)
+                 );
+                 CREATE INDEX IF NOT EXISTS obop_record_seq ON obop_record (model, seq);",
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            client: Mutex::new(client),
+        })
+    }
+}
+
+fn pg_fields(v: J) -> Result<Fields> {
+    match v {
+        J::Object(m) => Ok(m),
+        _ => Err("stored record is not an object".into()),
+    }
+}
+
+impl Backend for Pg {
+    fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+        let data = J::Object(fields.clone());
+        self.client
+            .lock()
+            .unwrap()
+            .execute(
+                "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
+                &[&model, &id, &data],
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
+        let row = self
+            .client
+            .lock()
+            .unwrap()
+            .query_opt(
+                "SELECT data FROM obop_record WHERE model = $1 AND id = $2",
+                &[&model, &id],
+            )
+            .map_err(|e| e.to_string())?;
+        row.map(|r| pg_fields(r.get::<_, J>(0))).transpose()
+    }
+    fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
+        let rows = self
+            .client
+            .lock()
+            .unwrap()
+            .query(
+                "SELECT id, data FROM obop_record WHERE model = $1 ORDER BY seq",
+                &[&model],
+            )
+            .map_err(|e| e.to_string())?;
+        rows.into_iter()
+            .map(|r| Ok((r.get::<_, String>(0), pg_fields(r.get::<_, J>(1))?)))
+            .collect()
+    }
+    fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
+        let patch = J::Object(patch.clone());
+        let n = self
+            .client
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE obop_record SET data = data || $3 WHERE model = $1 AND id = $2",
+                &[&model, &id, &patch],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(n > 0)
+    }
+    fn count(&self, model: &str) -> Result<usize> {
+        let r = self
+            .client
+            .lock()
+            .unwrap()
+            .query_one(
+                "SELECT COUNT(*) FROM obop_record WHERE model = $1",
+                &[&model],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(r.get::<_, i64>(0) as usize)
+    }
+    fn kind(&self) -> &'static str {
+        "postgres"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fields(k: &str, v: J) -> Fields {
+        let mut m = Fields::new();
+        m.insert(k.into(), v);
+        m
+    }
+
+    /// The contract every backend must meet. Also run against PostgreSQL by
+    /// `OBOP_TEST_POSTGRES_URL=postgres://... cargo test -p obop-storage`.
+    fn contract(b: &dyn Backend) {
+        let model = format!("t{}", std::process::id());
+        b.insert(&model, "a", &fields("n", J::from(1))).unwrap();
+        b.insert(&model, "b", &fields("n", J::Null)).unwrap();
+        assert!(
+            b.insert(&model, "a", &Fields::new()).is_err(),
+            "duplicate id"
+        );
+        assert_eq!(b.count(&model).unwrap(), 2);
+        assert_eq!(b.get(&model, "a").unwrap().unwrap()["n"], J::from(1));
+        assert!(b.get(&model, "zzz").unwrap().is_none());
+        let ids: Vec<_> = b
+            .list(&model)
+            .unwrap()
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(ids, ["a", "b"], "insertion order");
+        // A merge keeps other fields and may set a field to null.
+        assert!(b.update(&model, "a", &fields("m", J::Null)).unwrap());
+        let a = b.get(&model, "a").unwrap().unwrap();
+        assert_eq!((a["n"].clone(), a["m"].clone()), (J::from(1), J::Null));
+        assert!(!b.update(&model, "zzz", &Fields::new()).unwrap());
+    }
+
+    #[test]
+    fn memory_meets_contract() {
+        contract(&*open("memory:").unwrap());
+    }
+
+    #[test]
+    fn sqlite_meets_contract_and_persists() {
+        contract(&*open("sqlite::memory:").unwrap());
+        let path = std::env::temp_dir().join(format!("obop-test-{}.db", std::process::id()));
+        let url = format!("sqlite://{}", path.display());
+        open(&url)
+            .unwrap()
+            .insert("m", "x", &fields("k", J::from("v")))
+            .unwrap();
+        // A second open sees the record: it is on disk.
+        assert_eq!(
+            open(&url).unwrap().get("m", "x").unwrap().unwrap()["k"],
+            J::from("v")
+        );
+        for ext in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
+        }
+    }
+
+    #[test]
+    fn postgres_meets_contract_when_available() {
+        let Ok(url) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+            eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
+            return;
+        };
+        contract(&*open(&url).unwrap());
+    }
+
+    #[test]
+    fn rejects_unknown_urls() {
+        assert!(open("mysql://x").is_err());
+    }
+}

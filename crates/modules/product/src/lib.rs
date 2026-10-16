@@ -41,16 +41,18 @@ pub fn register(d: &mut Dispatcher, store: &Store) {
 }
 
 pub fn seed(store: &Store) -> String {
-    store.insert(
-        "product",
-        [
-            ("name".to_string(), Value::text("Consulting day")),
-            ("sku".to_string(), Value::text("SVC-DAY")),
-            ("list_price_minor".to_string(), Value::Int(120_000)),
-            ("cost_minor".to_string(), Value::Int(70_000)),
-        ]
-        .into(),
-    )
+    store
+        .insert(
+            "product",
+            [
+                ("name".to_string(), Value::text("Consulting day")),
+                ("sku".to_string(), Value::text("SVC-DAY")),
+                ("list_price_minor".to_string(), Value::Int(120_000)),
+                ("cost_minor".to_string(), Value::Int(70_000)),
+            ]
+            .into(),
+        )
+        .expect("seed")
 }
 
 #[cfg(test)]

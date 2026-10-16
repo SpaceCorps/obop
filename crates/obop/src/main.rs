@@ -11,8 +11,11 @@ const USAGE: &str = "usage: obop <command>
   commands [--as TOKEN]                          list commands visible to a dev principal
   call [--as TOKEN] <model> <command> [k=v...]   run one command through the dispatcher
   approve [--as TOKEN] <plan_id>                 (only useful inside `serve`; plans are per process)
-  serve [--addr 127.0.0.1:8080] [--static DIR]   REST API and the backoffice, with demo data
-  mcp [--as TOKEN]                               MCP server on stdio, with demo data
+  serve [--addr 127.0.0.1:8080] [--static DIR]   REST API and the backoffice (localhost only for now)
+  mcp [--as TOKEN]                               MCP server on stdio
+database (serve, mcp, call): --db URL or OBOP_DATABASE_URL
+  sqlite://obop.db (default, local)   postgres://user:pass@host/db (deployments)   memory:
+  fake demo data is added to an empty SQLite database, or to any database with --demo
 dev tokens: dev-admin (default), dev-agent, dev-sales";
 
 fn main() -> ExitCode {
@@ -20,6 +23,12 @@ fn main() -> ExitCode {
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let (token, args) = take_opt(&args, "--as");
     let token = token.unwrap_or("dev-admin");
+    let (db, args) = take_opt(&args, "--db");
+    let demo = args.contains(&"--demo");
+    let args: Vec<&str> = args.into_iter().filter(|a| *a != "--demo").collect();
+    let db = db
+        .map(String::from)
+        .or_else(|| std::env::var("OBOP_DATABASE_URL").ok());
     match args.as_slice() {
         [] | ["--version"] => {
             println!("{} {}", obop_types::NAME, env!("CARGO_PKG_VERSION"));
@@ -27,9 +36,9 @@ fn main() -> ExitCode {
         }
         ["modules", "check"] => modules_check(),
         ["commands"] => commands(token),
-        ["call", model, command, kv @ ..] => call(token, model, command, kv),
-        ["serve", rest @ ..] => serve(rest),
-        ["mcp"] => mcp(token),
+        ["call", model, command, kv @ ..] => call(token, model, command, kv, db, demo),
+        ["serve", rest @ ..] => serve(rest, db, demo),
+        ["mcp"] => mcp(token, db, demo),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -88,17 +97,43 @@ fn commands(token: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Open the configured database; default is a local SQLite file. Fake demo data goes into an
+/// empty SQLite database, or into any database when `--demo` is given.
+fn open_app(db: Option<String>, demo: bool) -> Result<App, ExitCode> {
+    let url = db.unwrap_or_else(|| "sqlite://obop.db".into());
+    let store = obop_commands::Store::open(&url).map_err(|e| {
+        eprintln!("cannot open database: {e}");
+        ExitCode::FAILURE
+    })?;
+    eprintln!("database: {}", store.backend_kind());
+    let seed = demo || store.backend_kind() == "sqlite";
+    let app = App::with_store(store);
+    if seed {
+        app.seed_demo();
+    }
+    Ok(app)
+}
+
 fn bad_token() -> ExitCode {
     eprintln!("unknown dev token");
     ExitCode::from(2)
 }
 
-fn call(token: &str, model: &str, command: &str, kv: &[&str]) -> ExitCode {
+fn call(
+    token: &str,
+    model: &str,
+    command: &str,
+    kv: &[&str],
+    db: Option<String>,
+    demo: bool,
+) -> ExitCode {
     let Some(p) = dev_principal(token) else {
         return bad_token();
     };
-    let app = App::new();
-    app.seed_demo();
+    let app = match open_app(db, demo) {
+        Ok(a) => a,
+        Err(c) => return c,
+    };
     let Some(id) = names::from_cli(&[model, command]) else {
         return ExitCode::from(2);
     };
@@ -129,12 +164,23 @@ fn call(token: &str, model: &str, command: &str, kv: &[&str]) -> ExitCode {
     }
 }
 
-fn serve(args: &[&str]) -> ExitCode {
+fn serve(args: &[&str], db: Option<String>, demo: bool) -> ExitCode {
     let (addr, rest) = take_opt(args, "--addr");
     let (static_dir, _) = take_opt(&rest, "--static");
     let addr = addr.unwrap_or("127.0.0.1:8080");
-    let app = App::new();
-    app.seed_demo();
+    let insecure = rest.contains(&"--insecure-dev-auth");
+    // Authentication is three hard-coded dev tokens; never expose that beyond this machine
+    // unless the operator says so explicitly (D33).
+    if !is_loopback(addr) && !insecure {
+        eprintln!(
+            "refusing to bind {addr}: only dev tokens exist, so serve is localhost-only until real authentication lands (override: --insecure-dev-auth)"
+        );
+        return ExitCode::from(2);
+    }
+    let app = match open_app(db, demo) {
+        Ok(a) => a,
+        Err(c) => return c,
+    };
     let state = obop_http::HttpState::new(Arc::new(app.dispatcher), Arc::new(dev_principal));
     let router = obop_http::router(state, static_dir);
     eprintln!("obop listening on http://{addr} (dev tokens: dev-admin, dev-agent, dev-sales)");
@@ -148,12 +194,19 @@ fn serve(args: &[&str]) -> ExitCode {
     }
 }
 
-fn mcp(token: &str) -> ExitCode {
+fn is_loopback(addr: &str) -> bool {
+    addr.rsplit_once(':')
+        .is_some_and(|(host, _)| matches!(host, "127.0.0.1" | "localhost" | "[::1]"))
+}
+
+fn mcp(token: &str, db: Option<String>, demo: bool) -> ExitCode {
     let Some(p) = dev_principal(token) else {
         return bad_token();
     };
-    let app = App::new();
-    app.seed_demo();
+    let app = match open_app(db, demo) {
+        Ok(a) => a,
+        Err(c) => return c,
+    };
     match obop_mcp::serve_stdio(&app.dispatcher, &p) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -273,6 +326,14 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn serve_binds_only_loopback_by_default() {
+        assert!(
+            is_loopback("127.0.0.1:8080") && is_loopback("localhost:1") && is_loopback("[::1]:9")
+        );
+        assert!(!is_loopback("0.0.0.0:8080") && !is_loopback("10.0.0.5:80"));
     }
 
     #[test]
