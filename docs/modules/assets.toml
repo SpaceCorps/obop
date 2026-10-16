@@ -1,0 +1,127 @@
+[module]
+id = "assets"
+version = "0.1.0"
+name = "Assets"
+description = "A register of company equipment: categories, individual assets with a holder, and a stock, assigned, in repair, retired life cycle. Purchase prices are visible to managers only; retiring an asset needs a human approval."
+author = "Example Ltd"
+depends = ["base"]
+
+[[model]]
+name = "assets_category"
+description = "A kind of asset, for example Laptops or Vehicles"
+read_group = "assets.user"
+write_group = "assets.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Category name"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "useful_life_years"
+  description = "How many years assets of this kind are expected to last"
+  class = "none"
+  kind = "number"
+
+[[model]]
+name = "assets_asset"
+description = "One piece of equipment the company owns"
+read_group = "assets.user"
+write_group = "assets.user"
+
+  [[model.field]]
+  name = "tag"
+  description = "Inventory tag stuck on the asset, unique by convention"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "name"
+  description = "What the asset is, for example MacBook Pro 14"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "category_id"
+  description = "The category of the asset"
+  class = "none"
+  kind = "ref"
+  to = "assets_category"
+
+  [[model.field]]
+  name = "supplier_id"
+  description = "The contact the asset was bought from"
+  class = "none"
+  kind = "ref"
+  to = "party"
+
+  [[model.field]]
+  name = "replaces_id"
+  description = "The older asset this one replaced"
+  class = "none"
+  kind = "ref"
+  to = "assets_asset"
+
+  [[model.field]]
+  name = "purchased_on"
+  description = "Purchase date (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "purchase_price"
+  description = "Price paid (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+  group = "assets.manager"
+
+  [[model.field]]
+  name = "holder"
+  description = "Name of the person who has the asset"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "notes"
+  description = "Free-text remarks"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Life cycle: in_stock, assigned, in_repair, retired"
+  class = "none"
+  kind = "select"
+  options = ["in_stock", "assigned", "in_repair", "retired"]
+  required = true
+
+  [[model.action]]
+  name = "assign"
+  description = "Hand the asset to a person"
+  field = "state"
+  from = "in_stock"
+  to = "assigned"
+
+  [[model.action]]
+  name = "take_back"
+  description = "Take the asset back into stock"
+  field = "state"
+  from = "assigned"
+  to = "in_stock"
+
+  [[model.action]]
+  name = "send_to_repair"
+  description = "Send an assigned asset to repair"
+  field = "state"
+  from = "assigned"
+  to = "in_repair"
+
+  [[model.action]]
+  name = "retire"
+  description = "Write the asset off for good (manager only)"
+  field = "state"
+  from = "in_stock"
+  to = "retired"
+  group = "assets.manager"
+  approval = true

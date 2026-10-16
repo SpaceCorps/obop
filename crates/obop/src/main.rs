@@ -1703,4 +1703,145 @@ mod bundled_packages {
         assert!(widget("gauge", "sum").is_err());
         assert!(widget("kpi", "average").is_err());
     }
+
+    /// The tutorial module of docs/MODULES.md installs, upgrades and fails exactly as the
+    /// document says. Keep the error strings here in step with the table in that document.
+    #[test]
+    fn the_tutorial_module_and_its_documented_errors_are_real() {
+        const ASSETS: &str = include_str!("../../../docs/modules/assets.toml");
+        let app = App::new();
+        let info = app.installer.install(ASSETS, "upload", "test").unwrap();
+        assert_eq!(info.models, ["assets_category", "assets_asset"]);
+        assert_eq!(info.groups, ["assets.manager", "assets.user"]);
+        let again = app.installer.install(ASSETS, "upload", "test").unwrap_err();
+        assert!(again.contains("is not an upgrade"), "{again}");
+        let v2 = ASSETS.replace("version = \"0.1.0\"", "version = \"0.2.0\"");
+        assert_eq!(
+            app.installer
+                .install(&v2, "upload", "test")
+                .unwrap()
+                .version,
+            "0.2.0"
+        );
+        let older = ASSETS.replace("version = \"0.1.0\"", "version = \"0.1.5\"");
+        assert!(app.installer.install(&older, "upload", "test").is_err());
+
+        // The purchase price needs assets.manager; the holder is personal data.
+        let staff = Principal::user("s", &["assets.user"]);
+        let names: Vec<_> = models_of(&app, &staff)["assets_asset"]
+            .fields
+            .iter()
+            .map(|f| f.name)
+            .collect();
+        assert!(names.contains(&"tag") && !names.contains(&"purchase_price"));
+
+        // Parse and gate errors quoted in the manifest reference.
+        let parse = |t: &str| Manifest::parse(t).and_then(|m| m.to_module().map(|_| ()));
+        for (from, to, want) in [
+            ("id = \"assets\"", "id = \"Assets\"", "module id"),
+            (
+                "version = \"0.1.0\"",
+                "version = \"1.0\"",
+                "version must look like 1.2.3",
+            ),
+            (
+                "name = \"assets_category\"",
+                "name = \"category\"",
+                "must be \"assets\" or start with \"assets_\"",
+            ),
+            ("assets.manager", "managers", "must look like module.role"),
+            (
+                "class = \"internal\"",
+                "class = \"bogus\"",
+                "unknown data class",
+            ),
+            (
+                "class = \"internal\"\n  personal_data = true",
+                "class = \"none\"\n  personal_data = true",
+                "personal data cannot be classed `none`",
+            ),
+            (
+                "to = \"assets_category\"",
+                "to = \"assets_ghost\"",
+                "which this package does not declare",
+            ),
+            ("kind = \"money\"", "kind = \"float\"", "unknown kind"),
+            (
+                "kind = \"money\"",
+                "kind = \"money\"\n  options = [\"a\"]",
+                "options are only valid",
+            ),
+            (
+                "to = \"assigned\"",
+                "to = \"lost\"",
+                "is not one of the options of state",
+            ),
+            (
+                "field = \"state\"\n  from = \"in_stock\"\n  to = \"assigned\"",
+                "field = \"status\"\n  from = \"in_stock\"\n  to = \"assigned\"",
+                "acts on undeclared field",
+            ),
+            ("name = \"assign\"", "name = \"create\"", "bad action name"),
+            (
+                "description = \"Category name\"",
+                "description = \"\"",
+                "field has no description",
+            ),
+            (
+                "author = \"Example Ltd\"",
+                "author = \"x\"\nnetwork_destinations = [\"a.example\"]",
+                "may not declare network destinations",
+            ),
+            (
+                "author = \"Example Ltd\"",
+                "author = \"x\"\nbogus = 1",
+                "invalid obop.toml",
+            ),
+            (
+                "name = \"tag\"",
+                "name = \"id\"",
+                "bad or repeated field name",
+            ),
+        ] {
+            assert!(ASSETS.contains(from), "fixture lost {from:?}");
+            let e = parse(&ASSETS.replacen(from, to, 1)).unwrap_err();
+            assert!(e.contains(want), "{from:?} -> {to:?}: {e}");
+        }
+
+        // Install-time errors.
+        let app = App::new();
+        let e = app
+            .installer
+            .install(
+                &ASSETS.replace("depends = [\"base\"]", "depends = [\"ghost\"]"),
+                "upload",
+                "t",
+            )
+            .unwrap_err();
+        assert!(
+            e.contains("needs module ghost, which is not installed"),
+            "{e}"
+        );
+        let e = app
+            .installer
+            .install(
+                &ASSETS.replace("to = \"party\"", "to = \"ghost_model\""),
+                "upload",
+                "t",
+            )
+            .unwrap_err();
+        assert!(
+            e.contains("refers to model ghost_model, which is not installed"),
+            "{e}"
+        );
+        let e = app
+            .installer
+            .install(
+                &ASSETS.replace("id = \"assets\"", "id = \"base\""),
+                "upload",
+                "t",
+            )
+            .unwrap_err();
+        assert!(!e.is_empty());
+    }
 }
