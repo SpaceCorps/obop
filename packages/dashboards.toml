@@ -1,0 +1,107 @@
+[module]
+id = "dashboards"
+version = "0.1.0"
+name = "Dashboards"
+description = "Dashboards and their widgets stored as data, for a UI to render. A dashboard has a title and an owner. A widget describes one tile with these fields: kind (kpi, bar, line, pie or table), model_name (the model to read, for example sale_order), measure_field (the field to aggregate; empty for count), aggregate (count or sum; sum needs a number or money measure_field), group_by (field to split by, for bar, line, pie and table; empty for a single kpi value), filter (a JSON object of field names to exact values, for example {\"state\":\"paid\"}; empty means all records) and position (order on the dashboard, lowest first). The package only stores the definition; it does not check that the model or fields exist and it computes nothing."
+author = "SpaceCorps"
+
+[[model]]
+name = "dashboards_dashboard"
+description = "A dashboard: a titled, ordered collection of widgets"
+read_group = "dashboards.user"
+write_group = "dashboards.manager"
+
+  [[model.field]]
+  name = "title"
+  description = "Dashboard title, for example Sales overview"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "owner"
+  description = "Name of the person who owns the dashboard"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "description"
+  description = "What the dashboard shows and for whom"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "shared"
+  description = "Whether everyone with access to the Dashboards app sees it, or only the owner"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "position"
+  description = "Order among dashboards, lowest first"
+  class = "none"
+  kind = "number"
+
+[[model]]
+name = "dashboards_widget"
+description = "One tile on a dashboard, defined by what to read and how to aggregate it"
+read_group = "dashboards.user"
+write_group = "dashboards.manager"
+
+  [[model.field]]
+  name = "dashboard_id"
+  description = "The dashboard the widget is on"
+  class = "none"
+  kind = "ref"
+  to = "dashboards_dashboard"
+  required = true
+
+  [[model.field]]
+  name = "title"
+  description = "Tile title, for example Paid orders"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "kind"
+  description = "How the tile is drawn: kpi, bar, line, pie, table"
+  class = "none"
+  kind = "select"
+  options = ["kpi", "bar", "line", "pie", "table"]
+  required = true
+
+  [[model.field]]
+  name = "model_name"
+  description = "Model the tile reads, for example sale_order"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "measure_field"
+  description = "Field to aggregate: a number or money field of the model; empty when counting"
+  class = "none"
+
+  [[model.field]]
+  name = "aggregate"
+  description = "How records are combined: count or sum"
+  class = "none"
+  kind = "select"
+  options = ["count", "sum"]
+  required = true
+
+  [[model.field]]
+  name = "group_by"
+  description = "Field to split the result by (a select, ref or date field); empty for one value"
+  class = "none"
+
+  [[model.field]]
+  name = "filter"
+  description = "JSON object of field names to exact values that records must match, for example {\"state\":\"paid\"}; empty means all records"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "position"
+  description = "Order of the tile on the dashboard, lowest first"
+  class = "none"
+  kind = "number"

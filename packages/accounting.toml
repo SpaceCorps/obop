@@ -1,0 +1,480 @@
+[module]
+id = "accounting"
+version = "0.1.0"
+name = "Accounting"
+description = "Chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal years and periods, and bank statement lines. Amounts are money fields in minor currency units and tax rates are numbers in basis points (2000 means 20.00 percent). Nothing is computed: balancing of debits and credits, tax amounts and entry numbers are the responsibility of whoever enters them. Posting an entry and closing a period or fiscal year need a human approval and the stricter accounting.approver group; agents may only propose them."
+author = "SpaceCorps"
+depends = ["base"]
+
+[[model]]
+name = "accounting_account"
+description = "An account of the chart of accounts"
+read_group = "accounting.user"
+write_group = "accounting.manager"
+
+  [[model.field]]
+  name = "code"
+  description = "Account code as used in the chart, for example 400000"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "name"
+  description = "Account name, for example Trade receivables"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "account_type"
+  description = "Type of account: asset_receivable, asset_cash, asset_current, asset_fixed, liability_payable, liability_current, liability_non_current, equity, income, income_other, expense, expense_direct_cost"
+  class = "none"
+  kind = "select"
+  options = ["asset_receivable", "asset_cash", "asset_current", "asset_fixed", "liability_payable", "liability_current", "liability_non_current", "equity", "income", "income_other", "expense", "expense_direct_cost"]
+  required = true
+
+  [[model.field]]
+  name = "reconcile"
+  description = "Whether open items on this account can be reconciled (receivable, payable, bank clearing)"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "deprecated"
+  description = "Whether the account is closed to new postings"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "note"
+  description = "Internal remarks about how the account is used"
+  class = "none"
+  kind = "longtext"
+
+[[model]]
+name = "accounting_journal"
+description = "A journal that groups entries of one kind (sales, purchases, bank, cash, miscellaneous)"
+read_group = "accounting.user"
+write_group = "accounting.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Journal name, for example Customer invoices"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "code"
+  description = "Short code used in entry numbers, for example INV"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "kind"
+  description = "What the journal records: sale, purchase, cash, bank, general"
+  class = "none"
+  kind = "select"
+  options = ["sale", "purchase", "cash", "bank", "general"]
+  required = true
+
+  [[model.field]]
+  name = "default_account_id"
+  description = "Default account for entries of this journal (the bank account for a bank journal)"
+  class = "none"
+  kind = "ref"
+  to = "accounting_account"
+
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code of the journal, for example EUR; empty means the company currency"
+  class = "none"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the journal can still receive entries"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "accounting_tax"
+description = "A tax rate that entry lines can refer to"
+read_group = "accounting.user"
+write_group = "accounting.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Tax name, for example VAT 20% sales"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "rate_bp"
+  description = "Rate in basis points: 2000 means 20.00 percent, 550 means 5.50 percent"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "scope"
+  description = "Where the tax applies: sales, purchases, none"
+  class = "none"
+  kind = "select"
+  options = ["sales", "purchases", "none"]
+  required = true
+
+  [[model.field]]
+  name = "price_included"
+  description = "Whether prices already include this tax"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "tax_account_id"
+  description = "Account the tax amount is booked on"
+  class = "none"
+  kind = "ref"
+  to = "accounting_account"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the tax can still be chosen on new lines"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "accounting_fiscal_year"
+description = "A fiscal year, opened and closed as a whole"
+read_group = "accounting.user"
+write_group = "accounting.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Fiscal year name, for example FY2026"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "start_on"
+  description = "First day of the fiscal year (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "end_on"
+  description = "Last day of the fiscal year (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "state"
+  description = "Fiscal year status: open, closed"
+  class = "none"
+  kind = "select"
+  options = ["open", "closed"]
+  required = true
+
+  [[model.action]]
+  name = "close"
+  description = "Close the fiscal year so nothing more is posted in it (approver only)"
+  field = "state"
+  from = "open"
+  to = "closed"
+  group = "accounting.approver"
+  approval = true
+
+  [[model.action]]
+  name = "reopen"
+  description = "Reopen a closed fiscal year to correct it (approver only)"
+  field = "state"
+  from = "closed"
+  to = "open"
+  group = "accounting.approver"
+  approval = true
+
+[[model]]
+name = "accounting_period"
+description = "An accounting period (normally a month) inside a fiscal year"
+read_group = "accounting.user"
+write_group = "accounting.manager"
+
+  [[model.field]]
+  name = "fiscal_year_id"
+  description = "The fiscal year the period belongs to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_fiscal_year"
+  required = true
+
+  [[model.field]]
+  name = "name"
+  description = "Period name, for example 2026-03"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "start_on"
+  description = "First day of the period (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "end_on"
+  description = "Last day of the period (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "state"
+  description = "Period status: open, closed"
+  class = "none"
+  kind = "select"
+  options = ["open", "closed"]
+  required = true
+
+  [[model.action]]
+  name = "close"
+  description = "Close the period against further posting (approver only)"
+  field = "state"
+  from = "open"
+  to = "closed"
+  group = "accounting.approver"
+  approval = true
+
+  [[model.action]]
+  name = "reopen"
+  description = "Reopen a closed period (approver only)"
+  field = "state"
+  from = "closed"
+  to = "open"
+  group = "accounting.approver"
+  approval = true
+
+[[model]]
+name = "accounting_move"
+description = "A journal entry: a dated set of debit and credit lines in one journal"
+read_group = "accounting.user"
+write_group = "accounting.user"
+
+  [[model.field]]
+  name = "journal_id"
+  description = "The journal the entry belongs to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_journal"
+  required = true
+
+  [[model.field]]
+  name = "date"
+  description = "Accounting date of the entry (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "number"
+  description = "Entry number such as INV/2026/0001. Free text: packages cannot generate sequences, so whoever posts the entry assigns the next number by hand and keeps the series gapless"
+  class = "none"
+
+  [[model.field]]
+  name = "reference"
+  description = "External reference, for example the supplier's invoice number"
+  class = "none"
+
+  [[model.field]]
+  name = "partner_id"
+  description = "The contact the entry is about"
+  class = "none"
+  kind = "ref"
+  to = "party"
+
+  [[model.field]]
+  name = "narration"
+  description = "Free-text note about the entry"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Entry status: draft, posted, cancelled, reversed"
+  class = "none"
+  kind = "select"
+  options = ["draft", "posted", "cancelled", "reversed"]
+  required = true
+
+  [[model.action]]
+  name = "post"
+  description = "Post a draft entry to the ledger (approver only; balance of debits and credits is not checked)"
+  field = "state"
+  from = "draft"
+  to = "posted"
+  group = "accounting.approver"
+  approval = true
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a draft entry that was never posted"
+  field = "state"
+  from = "draft"
+  to = "cancelled"
+
+  [[model.action]]
+  name = "reverse"
+  description = "Mark a posted entry as reversed; the opposite entry is booked separately (approver only)"
+  field = "state"
+  from = "posted"
+  to = "reversed"
+  group = "accounting.approver"
+  approval = true
+
+[[model]]
+name = "accounting_move_line"
+description = "One debit or credit line of a journal entry"
+read_group = "accounting.user"
+write_group = "accounting.user"
+
+  [[model.field]]
+  name = "move_id"
+  description = "The journal entry the line belongs to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_move"
+  required = true
+
+  [[model.field]]
+  name = "account_id"
+  description = "The account the line is booked on"
+  class = "none"
+  kind = "ref"
+  to = "accounting_account"
+  required = true
+
+  [[model.field]]
+  name = "partner_id"
+  description = "The contact the line is about"
+  class = "none"
+  kind = "ref"
+  to = "party"
+
+  [[model.field]]
+  name = "label"
+  description = "Line description"
+  class = "none"
+
+  [[model.field]]
+  name = "debit"
+  description = "Debit amount in minor currency units; 0 when the line is a credit"
+  class = "financial"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "credit"
+  description = "Credit amount in minor currency units; 0 when the line is a debit"
+  class = "financial"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "tax_id"
+  description = "Tax the line carries, if any"
+  class = "none"
+  kind = "ref"
+  to = "accounting_tax"
+
+  [[model.field]]
+  name = "due_on"
+  description = "Due date for receivable and payable lines (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "reconciled"
+  description = "Whether the line has been matched against a payment"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "accounting_bank_statement_line"
+description = "A line of a bank statement waiting to be matched to entries"
+read_group = "accounting.user"
+write_group = "accounting.user"
+
+  [[model.field]]
+  name = "journal_id"
+  description = "The bank journal the statement belongs to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_journal"
+  required = true
+
+  [[model.field]]
+  name = "date"
+  description = "Booking date at the bank (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "label"
+  description = "Payment reference or description as the bank reports it"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "amount"
+  description = "Amount in minor currency units; positive for money in, negative for money out"
+  class = "financial"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "counterparty_name"
+  description = "Name of the payer or payee as the bank reports it"
+  class = "financial"
+  personal_data = true
+
+  [[model.field]]
+  name = "counterparty_iban"
+  description = "Bank account of the payer or payee"
+  class = "financial"
+  personal_data = true
+
+  [[model.field]]
+  name = "move_line_id"
+  description = "The entry line this statement line was matched to"
+  class = "none"
+  kind = "ref"
+  to = "accounting_move_line"
+
+  [[model.field]]
+  name = "state"
+  description = "Matching status: unmatched, matched, reconciled"
+  class = "none"
+  kind = "select"
+  options = ["unmatched", "matched", "reconciled"]
+  required = true
+
+  [[model.action]]
+  name = "match"
+  description = "Record that the line corresponds to an entry line"
+  field = "state"
+  from = "unmatched"
+  to = "matched"
+
+  [[model.action]]
+  name = "reconcile"
+  description = "Reconcile a matched line (manager only)"
+  field = "state"
+  from = "matched"
+  to = "reconciled"
+  group = "accounting.manager"
+
+  [[model.action]]
+  name = "unmatch"
+  description = "Undo a match that was wrong"
+  field = "state"
+  from = "matched"
+  to = "unmatched"

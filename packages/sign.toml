@@ -1,0 +1,164 @@
+[module]
+id = "sign"
+version = "0.1.0"
+name = "Sign"
+description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence as references. A signed request is immutable by convention only: the platform cannot yet lock a record, so nobody should edit a request once it is signed, and the document_hash records what was signed. Sending and recording a signature need a human approval; agents may only propose them."
+author = "SpaceCorps"
+
+[[model]]
+name = "sign_template"
+description = "A document that can be sent out for signature"
+read_group = "sign.user"
+write_group = "sign.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Template name, for example Employment contract"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "description"
+  description = "What the document is for and who signs it"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "body"
+  description = "The document text, or a reference to where the file is kept"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "signer_role"
+  description = "Role of the person who signs, for example Customer"
+  class = "none"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether new requests can use the template"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "sign_request"
+description = "A request for one person to sign one document"
+read_group = "sign.user"
+write_group = "sign.user"
+
+  [[model.field]]
+  name = "template_id"
+  description = "The document to sign"
+  class = "none"
+  kind = "ref"
+  to = "sign_template"
+  required = true
+
+  [[model.field]]
+  name = "title"
+  description = "Subject shown to the signer"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "message"
+  description = "Message shown to the signer in the request"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "signer_name"
+  description = "Name of the person who must sign"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "signer_email"
+  description = "Email address the request is sent to"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "sent_on"
+  description = "Day the request was sent (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "expires_on"
+  description = "Last day the request can be signed (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "signed_on"
+  description = "Day the document was signed (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "signer_ip"
+  description = "IP address the signature came from (evidence)"
+  class = "internal"
+  personal_data = true
+  group = "sign.manager"
+
+  [[model.field]]
+  name = "signer_user_agent"
+  description = "Browser the signature was made with (evidence)"
+  class = "internal"
+  personal_data = true
+  group = "sign.manager"
+
+  [[model.field]]
+  name = "signature_reference"
+  description = "Where the signature image or certificate is stored"
+  class = "none"
+  group = "sign.manager"
+
+  [[model.field]]
+  name = "document_hash"
+  description = "SHA-256 hash (hex) of the signed document, to prove it was not changed afterwards"
+  class = "none"
+  group = "sign.manager"
+
+  [[model.field]]
+  name = "state"
+  description = "Request status: draft, sent, signed, declined, expired"
+  class = "none"
+  kind = "select"
+  options = ["draft", "sent", "signed", "declined", "expired"]
+  required = true
+
+  [[model.action]]
+  name = "send"
+  description = "Send the request to the signer"
+  field = "state"
+  from = "draft"
+  to = "sent"
+  approval = true
+
+  [[model.action]]
+  name = "sign"
+  description = "Record that the signer signed; the record is immutable by convention afterwards"
+  field = "state"
+  from = "sent"
+  to = "signed"
+  group = "sign.manager"
+  approval = true
+
+  [[model.action]]
+  name = "decline"
+  description = "Record that the signer declined"
+  field = "state"
+  from = "sent"
+  to = "declined"
+
+  [[model.action]]
+  name = "expire"
+  description = "Record that the request ran out unsigned"
+  field = "state"
+  from = "sent"
+  to = "expired"

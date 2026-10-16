@@ -1,0 +1,208 @@
+[module]
+id = "field_service"
+version = "0.1.0"
+name = "Field Service"
+description = "On-site jobs for customers, done by a technician: scheduled, en route, in progress, done or cancelled. A job records the customer, the site, the technician, the planned day and start (minutes since midnight), the parts used and whether the customer must sign off. Site address and contact details are personal data. Needs the Human Resources and Products packages."
+author = "SpaceCorps"
+depends = ["base", "product", "hr"]
+
+[[model]]
+name = "field_service_job"
+description = "An on-site job for a customer"
+read_group = "field_service.user"
+write_group = "field_service.user"
+
+  [[model.field]]
+  name = "name"
+  description = "Short title of the job, for example Replace boiler pump"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "customer_id"
+  description = "The customer the job is for"
+  class = "none"
+  kind = "ref"
+  to = "party"
+  required = true
+
+  [[model.field]]
+  name = "site_name"
+  description = "Name of the site, for example Main warehouse"
+  class = "none"
+
+  [[model.field]]
+  name = "site_address"
+  description = "Street address where the work is done; often a person's home"
+  class = "internal"
+  personal_data = true
+  kind = "longtext"
+
+  [[model.field]]
+  name = "site_city"
+  description = "City of the site"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "site_postcode"
+  description = "Postcode of the site"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "site_country"
+  description = "Country of the site"
+  class = "none"
+
+  [[model.field]]
+  name = "site_contact_name"
+  description = "Name of the person to meet on site"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "site_contact_phone"
+  description = "Phone number of the person to meet on site"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "technician_id"
+  description = "Technician assigned to the job"
+  class = "internal"
+  personal_data = true
+  kind = "ref"
+  to = "hr_employee"
+
+  [[model.field]]
+  name = "priority"
+  description = "How urgent the job is: low, normal, high, urgent"
+  class = "none"
+  kind = "select"
+  options = ["low", "normal", "high", "urgent"]
+
+  [[model.field]]
+  name = "description"
+  description = "What has to be done and what the customer reported"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "scheduled_on"
+  description = "Planned day of the visit (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "scheduled_start_minute"
+  description = "Planned start in minutes since midnight (540 is 09:00)"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "planned_minutes"
+  description = "Planned duration in minutes"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "signature_required"
+  description = "Whether the customer has to sign off the work before it counts as done"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "signed_by"
+  description = "Name of the person who signed off the work"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "signed_on"
+  description = "Day the customer signed off (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "work_report"
+  description = "What was done, written by the technician"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Job status: scheduled, en_route, in_progress, done, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["scheduled", "en_route", "in_progress", "done", "cancelled"]
+  required = true
+
+  [[model.action]]
+  name = "depart"
+  description = "The technician is on the way"
+  field = "state"
+  from = "scheduled"
+  to = "en_route"
+
+  [[model.action]]
+  name = "start"
+  description = "The technician has arrived and started work"
+  field = "state"
+  from = "en_route"
+  to = "in_progress"
+
+  [[model.action]]
+  name = "complete"
+  description = "Finish the job; when a signature is required, record signed_by and signed_on first"
+  field = "state"
+  from = "in_progress"
+  to = "done"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a job that has not started"
+  field = "state"
+  from = "scheduled"
+  to = "cancelled"
+  group = "field_service.manager"
+
+[[model]]
+name = "field_service_part"
+description = "A part or product used on a job"
+read_group = "field_service.user"
+write_group = "field_service.user"
+
+  [[model.field]]
+  name = "job_id"
+  description = "The job the part was used on"
+  class = "none"
+  kind = "ref"
+  to = "field_service_job"
+  required = true
+
+  [[model.field]]
+  name = "product_id"
+  description = "The product that was used"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "quantity"
+  description = "How many units were used"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "unit_price"
+  description = "Price per unit charged to the customer (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "note"
+  description = "Remark about the part, for example serial number"
+  class = "none"

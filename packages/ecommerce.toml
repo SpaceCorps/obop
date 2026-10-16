@@ -1,0 +1,384 @@
+[module]
+id = "ecommerce"
+version = "0.1.0"
+name = "eCommerce"
+description = "An online shop: product listings, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data. Order totals are entered, not computed. Needs the Products package."
+author = "SpaceCorps"
+depends = ["base", "product"]
+
+[[model]]
+name = "ecommerce_listing"
+description = "A product as it appears in the online shop"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [[model.field]]
+  name = "product_id"
+  description = "The product being sold online"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "title"
+  description = "Title shown in the shop"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "slug"
+  description = "URL part of the product page, lowercase with dashes"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "description"
+  description = "Description shown on the product page"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "price"
+  description = "Shop price including tax (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "compare_at_price"
+  description = "Previous price shown crossed out (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "stock_policy"
+  description = "What happens when stock runs out: always_available, block_when_out, allow_backorder"
+  class = "none"
+  kind = "select"
+  options = ["always_available", "block_when_out", "allow_backorder"]
+
+  [[model.field]]
+  name = "published"
+  description = "Whether the listing is visible to shoppers"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "ecommerce_shipping_method"
+description = "A way of delivering orders with its price"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Name shown at checkout, for example Standard delivery"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "carrier"
+  description = "Carrier that delivers, for example DHL"
+  class = "none"
+
+  [[model.field]]
+  name = "price"
+  description = "Delivery price (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "free_over"
+  description = "Order total above which delivery is free (minor currency units); empty means never"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "delivery_days"
+  description = "Usual number of days until delivery"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether shoppers can choose it"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "ecommerce_discount_code"
+description = "A code a shopper enters at checkout for a reduction"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [[model.field]]
+  name = "code"
+  description = "The code shoppers type, for example SPRING10"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "kind"
+  description = "Type of reduction: percent or fixed"
+  class = "none"
+  kind = "select"
+  options = ["percent", "fixed"]
+  required = true
+
+  [[model.field]]
+  name = "value"
+  description = "Reduction: basis points for percent (1000 is 10.00 percent), minor currency units for fixed"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "starts_on"
+  description = "First day the code works (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "ends_on"
+  description = "Last day the code works (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "max_uses"
+  description = "How many times the code may be used in total; empty means unlimited"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "used_count"
+  description = "How many times it has been used (kept up to date by hand)"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "minimum_order"
+  description = "Smallest order total the code applies to (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the code can be used"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "ecommerce_order"
+description = "An order placed online"
+read_group = "ecommerce.user"
+write_group = "ecommerce.user"
+
+  [[model.field]]
+  name = "number"
+  description = "Order number shown to the shopper. Free text: packages cannot generate sequences"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "customer_email"
+  description = "Email address of the shopper"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "customer_name"
+  description = "Name of the shopper"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "customer_id"
+  description = "The matching contact, once the shopper is known"
+  class = "none"
+  kind = "ref"
+  to = "party"
+
+  [[model.field]]
+  name = "shipping_address"
+  description = "Delivery address"
+  class = "internal"
+  personal_data = true
+  kind = "longtext"
+
+  [[model.field]]
+  name = "billing_address"
+  description = "Billing address when different from delivery"
+  class = "internal"
+  personal_data = true
+  kind = "longtext"
+
+  [[model.field]]
+  name = "shipping_method_id"
+  description = "The chosen way of delivery"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_shipping_method"
+
+  [[model.field]]
+  name = "discount_code_id"
+  description = "The discount code used, if any"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_discount_code"
+
+  [[model.field]]
+  name = "placed_on"
+  description = "Day the order was placed (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code, for example EUR"
+  class = "none"
+
+  [[model.field]]
+  name = "subtotal"
+  description = "Sum of the lines (minor currency units, entered not computed)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "discount_total"
+  description = "Reduction from the discount code (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "shipping_total"
+  description = "Delivery charge (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "tax_total"
+  description = "Tax included in the total (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "total"
+  description = "Amount the shopper pays (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "payment_reference"
+  description = "Reference from the payment provider; never a card number"
+  class = "financial"
+  personal_data = true
+
+  [[model.field]]
+  name = "tracking_reference"
+  description = "Carrier tracking number"
+  class = "none"
+
+  [[model.field]]
+  name = "state"
+  description = "Fulfilment status: pending, paid, shipped, delivered, cancelled, refunded"
+  class = "none"
+  kind = "select"
+  options = ["pending", "paid", "shipped", "delivered", "cancelled", "refunded"]
+  required = true
+
+  [[model.action]]
+  name = "mark_paid"
+  description = "The payment arrived"
+  field = "state"
+  from = "pending"
+  to = "paid"
+
+  [[model.action]]
+  name = "ship"
+  description = "The parcel was handed to the carrier"
+  field = "state"
+  from = "paid"
+  to = "shipped"
+
+  [[model.action]]
+  name = "deliver"
+  description = "The parcel reached the shopper"
+  field = "state"
+  from = "shipped"
+  to = "delivered"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel an order that was never paid"
+  field = "state"
+  from = "pending"
+  to = "cancelled"
+
+  [[model.action]]
+  name = "refund"
+  description = "Return the money for a paid order that was not delivered (manager only)"
+  field = "state"
+  from = "paid"
+  to = "refunded"
+  group = "ecommerce.manager"
+  approval = true
+
+  [[model.action]]
+  name = "refund_delivered"
+  description = "Return the money for a delivered order, for example after a return (manager only)"
+  field = "state"
+  from = "delivered"
+  to = "refunded"
+  group = "ecommerce.manager"
+  approval = true
+
+[[model]]
+name = "ecommerce_order_line"
+description = "One product line of a web order"
+read_group = "ecommerce.user"
+write_group = "ecommerce.user"
+
+  [[model.field]]
+  name = "order_id"
+  description = "The order the line belongs to"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_order"
+  required = true
+
+  [[model.field]]
+  name = "product_id"
+  description = "The product ordered"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "description"
+  description = "Product text as it was when ordered"
+  class = "none"
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units ordered"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "unit_price"
+  description = "Price per unit including tax (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "subtotal"
+  description = "Line total (minor currency units, entered not computed)"
+  class = "none"
+  kind = "money"

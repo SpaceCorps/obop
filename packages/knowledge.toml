@@ -1,0 +1,94 @@
+[module]
+id = "knowledge"
+version = "0.1.0"
+name = "Knowledge"
+description = "A wiki: articles arranged in a tree through a parent article, with a draft, published, archived flow, a visibility setting and tags. Visibility is a label for the UI and for people to respect; the platform has no row-level permissions yet, so everyone with the Knowledge groups can read every article."
+author = "SpaceCorps"
+
+[[model]]
+name = "knowledge_article"
+description = "An article of the knowledge base"
+read_group = "knowledge.user"
+write_group = "knowledge.user"
+
+  [[model.field]]
+  name = "title"
+  description = "Article title"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "parent_id"
+  description = "The article this one is nested under; empty for a top-level article"
+  class = "none"
+  kind = "ref"
+  to = "knowledge_article"
+
+  [[model.field]]
+  name = "body"
+  description = "Article content (Markdown)"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "visibility"
+  description = "Who the article is meant for: private, workspace, public"
+  class = "none"
+  kind = "select"
+  options = ["private", "workspace", "public"]
+  required = true
+
+  [[model.field]]
+  name = "tags"
+  description = "Comma-separated tags, for example onboarding,hr"
+  class = "none"
+
+  [[model.field]]
+  name = "author_name"
+  description = "Name of the author"
+  class = "public_directory"
+  personal_data = true
+
+  [[model.field]]
+  name = "sequence"
+  description = "Order among its siblings, lowest first"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "published_on"
+  description = "Day the article was published (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "state"
+  description = "Article status: draft, published, archived"
+  class = "none"
+  kind = "select"
+  options = ["draft", "published", "archived"]
+  required = true
+
+  [[model.action]]
+  name = "publish"
+  description = "Publish the article (manager only)"
+  field = "state"
+  from = "draft"
+  to = "published"
+  group = "knowledge.manager"
+
+  [[model.action]]
+  name = "unpublish"
+  description = "Take the article back to draft"
+  field = "state"
+  from = "published"
+  to = "draft"
+  group = "knowledge.manager"
+
+  [[model.action]]
+  name = "archive"
+  description = "Archive an article that is out of date"
+  field = "state"
+  from = "published"
+  to = "archived"
+  group = "knowledge.manager"

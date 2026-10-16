@@ -1,0 +1,143 @@
+[module]
+id = "planning"
+version = "0.1.0"
+name = "Planning"
+description = "Shifts for employees, with roles and reusable templates. A shift has a day and a start and end in minutes since midnight (0 to 1439; 540 is 09:00). A shift with no employee is an open shift. Workflow: open, published, confirmed by the employee. Needs the Human Resources package."
+author = "SpaceCorps"
+depends = ["hr"]
+
+[[model]]
+name = "planning_role"
+description = "A role a shift is planned for, for example cashier or electrician"
+read_group = "planning.user"
+write_group = "planning.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Role name"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "note"
+  description = "What the role involves"
+  class = "none"
+  kind = "longtext"
+
+[[model]]
+name = "planning_template"
+description = "A reusable shift pattern to copy into shifts"
+read_group = "planning.user"
+write_group = "planning.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Template name, for example Morning shift"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "role_id"
+  description = "The role the template is for"
+  class = "none"
+  kind = "ref"
+  to = "planning_role"
+
+  [[model.field]]
+  name = "start_minute"
+  description = "Start in minutes since midnight (540 is 09:00)"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "end_minute"
+  description = "End in minutes since midnight (1020 is 17:00)"
+  class = "none"
+  kind = "number"
+  required = true
+
+[[model]]
+name = "planning_shift"
+description = "A slot of work on one day for one role, optionally assigned to an employee"
+read_group = "planning.user"
+write_group = "planning.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Short title, for example Opening shift"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "role_id"
+  description = "The role needed"
+  class = "none"
+  kind = "ref"
+  to = "planning_role"
+
+  [[model.field]]
+  name = "employee_id"
+  description = "Employee the shift is assigned to; empty for an open shift"
+  class = "internal"
+  personal_data = true
+  kind = "ref"
+  to = "hr_employee"
+
+  [[model.field]]
+  name = "work_date"
+  description = "Day of the shift (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "start_minute"
+  description = "Start in minutes since midnight, 0 to 1439 (540 is 09:00)"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "end_minute"
+  description = "End in minutes since midnight, 0 to 1439 (1020 is 17:00)"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "note"
+  description = "Instructions for whoever works the shift"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Shift status: open, published, confirmed"
+  class = "none"
+  kind = "select"
+  options = ["open", "published", "confirmed"]
+  required = true
+
+  [[model.action]]
+  name = "publish"
+  description = "Publish the shift to the assigned employee, or to everyone when it is open"
+  field = "state"
+  from = "open"
+  to = "published"
+  group = "planning.manager"
+
+  [[model.action]]
+  name = "unpublish"
+  description = "Pull a published shift back to open"
+  field = "state"
+  from = "published"
+  to = "open"
+  group = "planning.manager"
+
+  [[model.action]]
+  name = "confirm"
+  description = "The employee confirms they will work the shift"
+  field = "state"
+  from = "published"
+  to = "confirmed"

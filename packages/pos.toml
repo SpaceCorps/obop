@@ -1,0 +1,312 @@
+[module]
+id = "pos"
+version = "0.1.0"
+name = "Point of Sale"
+description = "Shop tills: a point-of-sale configuration, cash-controlled sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Totals, change and cash differences are entered, not computed. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
+author = "SpaceCorps"
+depends = ["base", "product"]
+
+[[model]]
+name = "pos_config"
+description = "A point of sale (a till or a shop) and its rules"
+read_group = "pos.user"
+write_group = "pos.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Name of the till or shop, for example Main street shop"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code, for example EUR"
+  class = "none"
+
+  [[model.field]]
+  name = "receipt_header"
+  description = "Text printed at the top of receipts"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "cash_control"
+  description = "Whether sessions must count the cash in the drawer when they open and close"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "default_opening_cash"
+  description = "Cash normally left in the drawer overnight (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "allow_refunds"
+  description = "Whether cashiers may propose refunds at this point of sale"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the point of sale is in use"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "pos_session"
+description = "One shift of selling at a point of sale, from opening to closing the cash drawer"
+read_group = "pos.user"
+write_group = "pos.user"
+
+  [[model.field]]
+  name = "config_id"
+  description = "The point of sale the session belongs to"
+  class = "none"
+  kind = "ref"
+  to = "pos_config"
+  required = true
+
+  [[model.field]]
+  name = "cashier"
+  description = "Name of the cashier who opened the session"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "opened_on"
+  description = "Day the session was opened (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "closed_on"
+  description = "Day the session was closed (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "opening_cash"
+  description = "Cash counted in the drawer at opening (minor currency units)"
+  class = "financial"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "expected_cash"
+  description = "Cash the drawer should hold at closing: opening cash plus cash payments (entered, not computed)"
+  class = "financial"
+  kind = "money"
+
+  [[model.field]]
+  name = "closing_cash"
+  description = "Cash actually counted in the drawer at closing"
+  class = "financial"
+  kind = "money"
+
+  [[model.field]]
+  name = "cash_difference"
+  description = "Closing cash minus expected cash; negative means money is missing"
+  class = "financial"
+  kind = "money"
+
+  [[model.field]]
+  name = "note"
+  description = "Explanation for any cash difference"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Session status: open, closed"
+  class = "none"
+  kind = "select"
+  options = ["open", "closed"]
+  required = true
+
+  [[model.action]]
+  name = "close"
+  description = "Close the session once the drawer is counted (manager only)"
+  field = "state"
+  from = "open"
+  to = "closed"
+  group = "pos.manager"
+  approval = true
+
+[[model]]
+name = "pos_order"
+description = "A sale rung up at a point of sale"
+read_group = "pos.user"
+write_group = "pos.user"
+
+  [[model.field]]
+  name = "session_id"
+  description = "The session the sale was made in"
+  class = "none"
+  kind = "ref"
+  to = "pos_session"
+  required = true
+
+  [[model.field]]
+  name = "receipt_number"
+  description = "Number printed on the receipt. Free text: packages cannot generate sequences"
+  class = "none"
+
+  [[model.field]]
+  name = "ordered_on"
+  description = "Day of the sale (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "customer_id"
+  description = "The customer, when one was identified"
+  class = "none"
+  kind = "ref"
+  to = "party"
+
+  [[model.field]]
+  name = "tax_total"
+  description = "Tax included in the total (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "total"
+  description = "Total paid by the customer including tax (minor currency units, entered not computed)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "note"
+  description = "Remark about the sale"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Sale status: draft, paid, refunded, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "paid", "refunded", "cancelled"]
+  required = true
+
+  [[model.action]]
+  name = "pay"
+  description = "The sale is fully paid"
+  field = "state"
+  from = "draft"
+  to = "paid"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a sale that was never paid"
+  field = "state"
+  from = "draft"
+  to = "cancelled"
+
+  [[model.action]]
+  name = "refund"
+  description = "Refund a paid sale to the customer (manager only)"
+  field = "state"
+  from = "paid"
+  to = "refunded"
+  group = "pos.manager"
+  approval = true
+
+[[model]]
+name = "pos_order_line"
+description = "One product line of a sale"
+read_group = "pos.user"
+write_group = "pos.user"
+
+  [[model.field]]
+  name = "order_id"
+  description = "The sale the line belongs to"
+  class = "none"
+  kind = "ref"
+  to = "pos_order"
+  required = true
+
+  [[model.field]]
+  name = "product_id"
+  description = "The product sold"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "description"
+  description = "Text shown on the receipt"
+  class = "none"
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units sold"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "unit_price"
+  description = "Price per unit including tax (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "discount_bp"
+  description = "Discount in basis points: 1000 means 10.00 percent"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "subtotal"
+  description = "Line total after discount (minor currency units, entered not computed)"
+  class = "none"
+  kind = "money"
+
+[[model]]
+name = "pos_payment"
+description = "A payment received against a sale; a sale may be paid with several methods"
+read_group = "pos.user"
+write_group = "pos.user"
+
+  [[model.field]]
+  name = "order_id"
+  description = "The sale the payment is for"
+  class = "none"
+  kind = "ref"
+  to = "pos_order"
+  required = true
+
+  [[model.field]]
+  name = "method"
+  description = "How the customer paid: cash, card, bank_transfer, voucher, other"
+  class = "none"
+  kind = "select"
+  options = ["cash", "card", "bank_transfer", "voucher", "other"]
+  required = true
+
+  [[model.field]]
+  name = "amount"
+  description = "Amount paid with this method (minor currency units)"
+  class = "financial"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "paid_on"
+  description = "Day of the payment (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "provider_reference"
+  description = "Reference from the card terminal or payment provider; never a card number"
+  class = "financial"
+  personal_data = true

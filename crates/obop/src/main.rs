@@ -1147,6 +1147,21 @@ mod bundled_packages {
     /// Where the greedy walk over each model's actions (first action leading to a state not
     /// seen yet) must end, starting from the first option of `state`.
     const FINAL_STATE: &[(&str, &str)] = &[
+        ("accounting_bank_statement_line", "reconciled"),
+        ("accounting_fiscal_year", "closed"),
+        ("accounting_move", "reversed"),
+        ("accounting_period", "closed"),
+        ("ecommerce_order", "refunded"),
+        ("email_marketing_campaign", "sent"),
+        ("field_service_job", "done"),
+        ("knowledge_article", "archived"),
+        ("planning_shift", "confirmed"),
+        ("pos_order", "refunded"),
+        ("pos_session", "closed"),
+        ("sign_request", "signed"),
+        ("website_blog_post", "archived"),
+        ("website_form_submission", "handled"),
+        ("website_page", "archived"),
         ("appointments_appointment", "done"),
         ("documents_document", "archived"),
         ("expenses_expense", "paid"),
@@ -1308,7 +1323,7 @@ mod bundled_packages {
     fn every_bundled_package_installs_and_every_model_and_action_works() {
         let app = App::new();
         let manifests = install_order(&app, all_manifests());
-        assert!(manifests.len() >= 12);
+        assert!(manifests.len() >= 22);
         let admin = Principal::user("root", &[ADMIN_GROUP]);
         let mut seen_special = false;
         let mut seen_financial = false;
@@ -1517,6 +1532,19 @@ mod bundled_packages {
         );
         assert!(call(&app, &admin, "module.uninstall", by_id("projects")).is_err());
         assert!(app.dispatcher.has_model("projects_task"));
+        // The same holds for the packages that refer to people and to other apps.
+        for (dep, model) in [("hr", "hr_employee"), ("accounting", "accounting_move")] {
+            if manifests
+                .iter()
+                .any(|m| m.module.depends.contains(&dep.to_string()))
+            {
+                assert!(
+                    call(&app, &admin, "module.uninstall", by_id(dep)).is_err(),
+                    "{dep}"
+                );
+                assert!(app.dispatcher.has_model(model), "{dep} still installed");
+            }
+        }
 
         for m in manifests.iter().rev() {
             call(&app, &admin, "module.uninstall", by_id(&m.module.id))
@@ -1551,5 +1579,269 @@ mod bundled_packages {
                 assert!(matches!(list.value, Value::List(l) if l.len() == want));
             }
         }
+    }
+
+    /// The apps the landing page promises are all in the catalogue.
+    #[test]
+    fn the_promised_apps_are_all_bundled() {
+        let ids: BTreeSet<String> = all_manifests().into_iter().map(|m| m.module.id).collect();
+        for id in [
+            "accounting",
+            "planning",
+            "field_service",
+            "pos",
+            "ecommerce",
+            "website",
+            "email_marketing",
+            "sign",
+            "dashboards",
+            "knowledge",
+        ] {
+            assert!(ids.contains(id), "{id} is missing from packages/");
+        }
+    }
+
+    /// Money-moving or irreversible steps of the new apps need an approval and the stricter
+    /// group, so a plain user of the app cannot take them.
+    #[test]
+    fn new_apps_separate_duties_on_the_steps_that_matter() {
+        let app = App::new();
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        for m in install_order(&app, all_manifests()) {
+            app.installer
+                .install(&Bundled.fetch(&m.module.id).unwrap(), "marketplace", "test")
+                .unwrap();
+        }
+        let mut mk = Maker {
+            app: &app,
+            meta: models_of(&app, &admin),
+            pkg_models: BTreeSet::new(),
+            pkg_user: admin.clone(),
+            admin: admin.clone(),
+            made: HashMap::new(),
+        };
+        for (model, action, from, group) in [
+            ("accounting_move", "post", "draft", "accounting.approver"),
+            ("accounting_period", "close", "open", "accounting.approver"),
+            (
+                "accounting_fiscal_year",
+                "close",
+                "open",
+                "accounting.approver",
+            ),
+            ("pos_order", "refund", "paid", "pos.manager"),
+            ("pos_session", "close", "open", "pos.manager"),
+            ("ecommerce_order", "refund", "paid", "ecommerce.manager"),
+            (
+                "email_marketing_campaign",
+                "send",
+                "scheduled",
+                "email_marketing.manager",
+            ),
+        ] {
+            let prefix = group.split_once('.').unwrap().0;
+            let user_group = format!("{prefix}.user");
+            let plain = Principal::user("u", &[user_group.as_str()]);
+            let rec = mk.fresh(model, from);
+            let cmd = format!("{model}.{action}");
+            let denied = call(&app, &plain, &cmd, by_id(&rec));
+            assert!(
+                matches!(denied, Err(CallError::Forbidden(_))),
+                "{cmd} must need {group}: {denied:?}"
+            );
+            assert_eq!(
+                state_of(&app, model, &rec),
+                from,
+                "{cmd} refused, state unchanged"
+            );
+            let allowed = Principal::user("a", &[group]);
+            call(&app, &allowed, &cmd, by_id(&rec)).unwrap_or_else(|e| panic!("{cmd}: {e:?}"));
+        }
+    }
+
+    /// A dashboard and its widgets round-trip with the documented schema, and a widget kind or
+    /// aggregate outside the documented lists is refused.
+    #[test]
+    fn dashboard_widgets_follow_the_documented_schema() {
+        let app = App::new();
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        app.installer
+            .install(&Bundled.fetch("dashboards").unwrap(), "marketplace", "test")
+            .unwrap();
+        let board = call(
+            &app,
+            &admin,
+            "dashboards_dashboard.create",
+            Value::map([
+                ("title", Value::text("Sales overview")),
+                ("owner", Value::text("Ada")),
+            ]),
+        )
+        .unwrap();
+        let widget = |kind: &str, aggregate: &str| {
+            call(
+                &app,
+                &admin,
+                "dashboards_widget.create",
+                Value::map([
+                    ("dashboard_id", Value::Text(id_of(&board))),
+                    ("title", Value::text("Paid orders")),
+                    ("kind", Value::text(kind)),
+                    ("model_name", Value::text("sale_order")),
+                    ("measure_field", Value::text("total")),
+                    ("aggregate", Value::text(aggregate)),
+                    ("group_by", Value::text("state")),
+                    ("filter", Value::text("{\"state\":\"paid\"}")),
+                    ("position", Value::Int(1)),
+                ]),
+            )
+        };
+        for kind in ["kpi", "bar", "line", "pie", "table"] {
+            widget(kind, "sum").unwrap_or_else(|e| panic!("{kind}: {e:?}"));
+        }
+        assert!(widget("kpi", "count").is_ok());
+        assert!(widget("gauge", "sum").is_err());
+        assert!(widget("kpi", "average").is_err());
+    }
+
+    /// The tutorial module of docs/MODULES.md installs, upgrades and fails exactly as the
+    /// document says. Keep the error strings here in step with the table in that document.
+    #[test]
+    fn the_tutorial_module_and_its_documented_errors_are_real() {
+        const ASSETS: &str = include_str!("../../../docs/modules/assets.toml");
+        let app = App::new();
+        let info = app.installer.install(ASSETS, "upload", "test").unwrap();
+        assert_eq!(info.models, ["assets_category", "assets_asset"]);
+        assert_eq!(info.groups, ["assets.manager", "assets.user"]);
+        let again = app.installer.install(ASSETS, "upload", "test").unwrap_err();
+        assert!(again.contains("is not an upgrade"), "{again}");
+        let v2 = ASSETS.replace("version = \"0.1.0\"", "version = \"0.2.0\"");
+        assert_eq!(
+            app.installer
+                .install(&v2, "upload", "test")
+                .unwrap()
+                .version,
+            "0.2.0"
+        );
+        let older = ASSETS.replace("version = \"0.1.0\"", "version = \"0.1.5\"");
+        assert!(app.installer.install(&older, "upload", "test").is_err());
+
+        // The purchase price needs assets.manager; the holder is personal data.
+        let staff = Principal::user("s", &["assets.user"]);
+        let names: Vec<_> = models_of(&app, &staff)["assets_asset"]
+            .fields
+            .iter()
+            .map(|f| f.name)
+            .collect();
+        assert!(names.contains(&"tag") && !names.contains(&"purchase_price"));
+
+        // Parse and gate errors quoted in the manifest reference.
+        let parse = |t: &str| Manifest::parse(t).and_then(|m| m.to_module().map(|_| ()));
+        for (from, to, want) in [
+            ("id = \"assets\"", "id = \"Assets\"", "module id"),
+            (
+                "version = \"0.1.0\"",
+                "version = \"1.0\"",
+                "version must look like 1.2.3",
+            ),
+            (
+                "name = \"assets_category\"",
+                "name = \"category\"",
+                "must be \"assets\" or start with \"assets_\"",
+            ),
+            ("assets.manager", "managers", "must look like module.role"),
+            (
+                "class = \"internal\"",
+                "class = \"bogus\"",
+                "unknown data class",
+            ),
+            (
+                "class = \"internal\"\n  personal_data = true",
+                "class = \"none\"\n  personal_data = true",
+                "personal data cannot be classed `none`",
+            ),
+            (
+                "to = \"assets_category\"",
+                "to = \"assets_ghost\"",
+                "which this package does not declare",
+            ),
+            ("kind = \"money\"", "kind = \"float\"", "unknown kind"),
+            (
+                "kind = \"money\"",
+                "kind = \"money\"\n  options = [\"a\"]",
+                "options are only valid",
+            ),
+            (
+                "to = \"assigned\"",
+                "to = \"lost\"",
+                "is not one of the options of state",
+            ),
+            (
+                "field = \"state\"\n  from = \"in_stock\"\n  to = \"assigned\"",
+                "field = \"status\"\n  from = \"in_stock\"\n  to = \"assigned\"",
+                "acts on undeclared field",
+            ),
+            ("name = \"assign\"", "name = \"create\"", "bad action name"),
+            (
+                "description = \"Category name\"",
+                "description = \"\"",
+                "field has no description",
+            ),
+            (
+                "author = \"Example Ltd\"",
+                "author = \"x\"\nnetwork_destinations = [\"a.example\"]",
+                "may not declare network destinations",
+            ),
+            (
+                "author = \"Example Ltd\"",
+                "author = \"x\"\nbogus = 1",
+                "invalid obop.toml",
+            ),
+            (
+                "name = \"tag\"",
+                "name = \"id\"",
+                "bad or repeated field name",
+            ),
+        ] {
+            assert!(ASSETS.contains(from), "fixture lost {from:?}");
+            let e = parse(&ASSETS.replacen(from, to, 1)).unwrap_err();
+            assert!(e.contains(want), "{from:?} -> {to:?}: {e}");
+        }
+
+        // Install-time errors.
+        let app = App::new();
+        let e = app
+            .installer
+            .install(
+                &ASSETS.replace("depends = [\"base\"]", "depends = [\"ghost\"]"),
+                "upload",
+                "t",
+            )
+            .unwrap_err();
+        assert!(
+            e.contains("needs module ghost, which is not installed"),
+            "{e}"
+        );
+        let e = app
+            .installer
+            .install(
+                &ASSETS.replace("to = \"party\"", "to = \"ghost_model\""),
+                "upload",
+                "t",
+            )
+            .unwrap_err();
+        assert!(
+            e.contains("refers to model ghost_model, which is not installed"),
+            "{e}"
+        );
+        let e = app
+            .installer
+            .install(
+                &ASSETS.replace("id = \"assets\"", "id = \"base\""),
+                "upload",
+                "t",
+            )
+            .unwrap_err();
+        assert!(!e.is_empty());
     }
 }
