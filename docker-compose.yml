@@ -15,7 +15,7 @@ services:
       db: { condition: service_healthy }
     environment:
       OBOP_DATABASE_URL: postgres://postgres:obop-local@db/postgres
-    command: ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/web", "--demo"]
+    command: ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/backoffice", "--demo"]
     ports: ["127.0.0.1:8080:8080"]
 volumes:
   pgdata:
