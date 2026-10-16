@@ -865,10 +865,10 @@ mod tests {
                 .unwrap_err()
                 .contains("not an upgrade")
         );
-        let newer = fleet.replace("version = \"0.1.0\"", "version = \"0.2.0\"");
+        let newer = fleet.replace("version = \"0.2.0\"", "version = \"0.3.0\"");
         assert_eq!(
             inst.install(&newer, "upload", "r").unwrap().version,
-            "0.2.0"
+            "0.3.0"
         );
         assert!(
             inst.install(fleet, "upload", "r")

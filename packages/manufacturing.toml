@@ -1,0 +1,157 @@
+[module]
+id = "manufacturing"
+version = "0.1.0"
+name = "Manufacturing"
+description = "Bills of materials and manufacturing orders with a draft, confirmed, in progress and done flow. Component stock is not consumed automatically."
+author = "SpaceCorps"
+depends = ["product"]
+
+[[model]]
+name = "manufacturing_bom"
+description = "A recipe: the components needed to make a product"
+read_group = "manufacturing.user"
+write_group = "manufacturing.manager"
+
+  [[model.field]]
+  name = "product_id"
+  description = "The finished product the recipe makes"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "name"
+  description = "Name of the recipe, for example Standard assembly"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units of the finished product one run produces"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "instructions"
+  description = "Assembly notes for the shop floor"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the recipe can be used for new orders"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "manufacturing_bom_line"
+description = "One component of a bill of materials"
+read_group = "manufacturing.user"
+write_group = "manufacturing.manager"
+
+  [[model.field]]
+  name = "bom_id"
+  description = "The recipe the component belongs to"
+  class = "none"
+  kind = "ref"
+  to = "manufacturing_bom"
+  required = true
+
+  [[model.field]]
+  name = "component_id"
+  description = "The product consumed"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units of the component used per run"
+  class = "none"
+  kind = "number"
+  required = true
+
+[[model]]
+name = "manufacturing_order"
+description = "An instruction to produce a quantity of a product"
+read_group = "manufacturing.user"
+write_group = "manufacturing.user"
+
+  [[model.field]]
+  name = "reference"
+  description = "Order number, for example MO-0042"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "bom_id"
+  description = "The recipe to follow"
+  class = "none"
+  kind = "ref"
+  to = "manufacturing_bom"
+  required = true
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units of the finished product to make"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "planned_on"
+  description = "Date production should start (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "deadline"
+  description = "Date the goods are needed (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "responsible"
+  description = "Name of the person in charge of the run"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "state"
+  description = "Order status: draft, confirmed, in_progress, done, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "confirmed", "in_progress", "done", "cancelled"]
+  required = true
+
+  [[model.action]]
+  name = "confirm"
+  description = "Confirm a draft order so production can be planned"
+  field = "state"
+  from = "draft"
+  to = "confirmed"
+  group = "manufacturing.manager"
+
+  [[model.action]]
+  name = "start"
+  description = "Start production on a confirmed order"
+  field = "state"
+  from = "confirmed"
+  to = "in_progress"
+
+  [[model.action]]
+  name = "finish"
+  description = "Mark production as finished"
+  field = "state"
+  from = "in_progress"
+  to = "done"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel an order that has not been confirmed"
+  field = "state"
+  from = "draft"
+  to = "cancelled"

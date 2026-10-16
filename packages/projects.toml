@@ -1,8 +1,8 @@
 [module]
 id = "projects"
-version = "0.1.0"
+version = "0.2.0"
 name = "Projects"
-description = "Projects and tasks with a todo, doing and done flow"
+description = "Projects, milestones and tasks with assignees, deadlines and status flows. Progress is tracked by status, not computed from task effort."
 author = "SpaceCorps"
 
 [[model]]
@@ -18,11 +18,47 @@ write_group = "projects.manager"
   required = true
 
   [[model.field]]
+  name = "code"
+  description = "Short reference used in reports, for example WEB-24"
+  class = "none"
+
+  [[model.field]]
+  name = "project_manager"
+  description = "Name of the person accountable for the project"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "start_on"
+  description = "Planned start date (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "deadline"
+  description = "Date the project must be finished (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "budget"
+  description = "Agreed budget for the project (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "description"
+  description = "Goal and scope of the project"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
   name = "state"
-  description = "Project status: planned, active or done"
+  description = "Project status: planned, active, done"
   class = "none"
   kind = "select"
   options = ["planned", "active", "done"]
+  required = true
 
   [[model.action]]
   name = "start"
@@ -38,6 +74,67 @@ write_group = "projects.manager"
   from = "active"
   to = "done"
 
+  [[model.action]]
+  name = "reopen"
+  description = "Reopen a finished project"
+  field = "state"
+  from = "done"
+  to = "active"
+
+[[model]]
+name = "projects_milestone"
+description = "A checkpoint in a project"
+read_group = "projects.user"
+write_group = "projects.manager"
+
+  [[model.field]]
+  name = "project_id"
+  description = "The project the milestone belongs to"
+  class = "none"
+  kind = "ref"
+  to = "projects_project"
+  required = true
+
+  [[model.field]]
+  name = "name"
+  description = "Milestone name, for example Design approved"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "due_on"
+  description = "Date the milestone is due (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "description"
+  description = "What must be true for the milestone to count as reached"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Milestone status: pending, reached, missed"
+  class = "none"
+  kind = "select"
+  options = ["pending", "reached", "missed"]
+  required = true
+
+  [[model.action]]
+  name = "reach"
+  description = "Mark a pending milestone as reached"
+  field = "state"
+  from = "pending"
+  to = "reached"
+
+  [[model.action]]
+  name = "miss"
+  description = "Record that a pending milestone was missed"
+  field = "state"
+  from = "pending"
+  to = "missed"
+
 [[model]]
 name = "projects_task"
 description = "A unit of work inside a project"
@@ -52,10 +149,17 @@ write_group = "projects.user"
 
   [[model.field]]
   name = "project_id"
-  description = "The project this task belongs to"
+  description = "The project this task belongs to; empty for a private task"
   class = "none"
   kind = "ref"
   to = "projects_project"
+
+  [[model.field]]
+  name = "milestone_id"
+  description = "The milestone this task contributes to"
+  class = "none"
+  kind = "ref"
+  to = "projects_milestone"
 
   [[model.field]]
   name = "assignee"
@@ -64,11 +168,36 @@ write_group = "projects.user"
   personal_data = true
 
   [[model.field]]
-  name = "state"
-  description = "Task status: todo, doing or done"
+  name = "priority"
+  description = "How important the task is: low, normal, high"
   class = "none"
   kind = "select"
-  options = ["todo", "doing", "done"]
+  options = ["low", "normal", "high"]
+
+  [[model.field]]
+  name = "due_on"
+  description = "Date the task is due (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "estimate_minutes"
+  description = "Planned effort in minutes"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "description"
+  description = "Details, acceptance criteria and links"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Task status: todo, doing, done, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["todo", "doing", "done", "cancelled"]
 
   [[model.action]]
   name = "begin"
@@ -83,3 +212,10 @@ write_group = "projects.user"
   field = "state"
   from = "doing"
   to = "done"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Drop a task that was never started"
+  field = "state"
+  from = "todo"
+  to = "cancelled"

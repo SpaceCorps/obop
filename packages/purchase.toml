@@ -1,0 +1,185 @@
+[module]
+id = "purchase"
+version = "0.1.0"
+name = "Purchase"
+description = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received and cancelled flow. Order totals are entered, not summed from the lines."
+author = "SpaceCorps"
+depends = ["base", "product"]
+
+[[model]]
+name = "purchase_vendor"
+description = "Purchasing terms for a contact you buy from"
+read_group = "purchase.user"
+write_group = "purchase.manager"
+
+  [[model.field]]
+  name = "party_id"
+  description = "The contact record of the vendor"
+  class = "none"
+  kind = "ref"
+  to = "party"
+  required = true
+
+  [[model.field]]
+  name = "vendor_reference"
+  description = "Your customer number at this vendor"
+  class = "none"
+
+  [[model.field]]
+  name = "payment_terms_days"
+  description = "Days allowed to pay an invoice"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "lead_time_days"
+  description = "Usual days between order and delivery"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "iban"
+  description = "Bank account the vendor is paid into"
+  class = "financial"
+  personal_data = true
+  group = "purchase.manager"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether you still buy from this vendor"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "purchase_order"
+description = "A request to a vendor to supply goods or services"
+read_group = "purchase.user"
+write_group = "purchase.user"
+
+  [[model.field]]
+  name = "reference"
+  description = "Order number printed on the document"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "vendor_id"
+  description = "The vendor ordered from"
+  class = "none"
+  kind = "ref"
+  to = "purchase_vendor"
+  required = true
+
+  [[model.field]]
+  name = "ordered_on"
+  description = "Date the order was placed (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "expected_on"
+  description = "Date the goods are expected (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code, for example EUR"
+  class = "none"
+
+  [[model.field]]
+  name = "total"
+  description = "Order total as agreed with the vendor (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "notes"
+  description = "Delivery instructions and remarks for the vendor"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Order status: draft, sent, confirmed, received, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "sent", "confirmed", "received", "cancelled"]
+  required = true
+
+  [[model.action]]
+  name = "send"
+  description = "Send a draft order to the vendor as a request for quotation"
+  field = "state"
+  from = "draft"
+  to = "sent"
+
+  [[model.action]]
+  name = "confirm"
+  description = "Commit to the order with the vendor (manager only)"
+  field = "state"
+  from = "sent"
+  to = "confirmed"
+  group = "purchase.manager"
+  approval = true
+
+  [[model.action]]
+  name = "receive"
+  description = "Record that the goods arrived"
+  field = "state"
+  from = "confirmed"
+  to = "received"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel an order that was not yet sent"
+  field = "state"
+  from = "draft"
+  to = "cancelled"
+
+[[model]]
+name = "purchase_order_line"
+description = "One product or service on a purchase order"
+read_group = "purchase.user"
+write_group = "purchase.user"
+
+  [[model.field]]
+  name = "order_id"
+  description = "The order the line belongs to"
+  class = "none"
+  kind = "ref"
+  to = "purchase_order"
+  required = true
+
+  [[model.field]]
+  name = "product_id"
+  description = "The product ordered"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "description"
+  description = "Wording for the vendor if different from the product name"
+  class = "none"
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units ordered"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "unit_price"
+  description = "Agreed price per unit (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "received_quantity"
+  description = "Units received so far"
+  class = "none"
+  kind = "number"

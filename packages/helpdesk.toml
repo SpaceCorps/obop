@@ -1,9 +1,49 @@
 [module]
 id = "helpdesk"
-version = "0.1.0"
+version = "0.2.0"
 name = "Helpdesk"
-description = "Support tickets with a simple open, resolved and closed flow"
+description = "Support tickets with priority, severity, service-level targets and an open, in progress, resolved and closed flow. Targets are recorded, not enforced or timed automatically."
 author = "SpaceCorps"
+
+[[model]]
+name = "helpdesk_sla"
+description = "A service-level policy: how fast tickets of a priority should be answered and solved"
+read_group = "helpdesk.agent"
+write_group = "helpdesk.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Policy name, for example Urgent in 4 hours"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "priority"
+  description = "Ticket priority the policy applies to: low, normal, high, urgent"
+  class = "none"
+  kind = "select"
+  options = ["low", "normal", "high", "urgent"]
+  required = true
+
+  [[model.field]]
+  name = "first_response_minutes"
+  description = "Target time to the first reply, in minutes"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "resolution_minutes"
+  description = "Target time to resolve the ticket, in minutes"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the policy can be attached to new tickets"
+  class = "none"
+  kind = "bool"
 
 [[model]]
 name = "helpdesk_ticket"
@@ -18,30 +58,121 @@ write_group = "helpdesk.agent"
   required = true
 
   [[model.field]]
+  name = "description"
+  description = "Full description of the problem and what the customer tried"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "requester_name"
+  description = "Name of the person asking for help"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
   name = "requester_email"
   description = "Email address of the person asking for help"
   class = "internal"
   personal_data = true
 
   [[model.field]]
-  name = "state"
-  description = "Ticket status: open, resolved or closed"
+  name = "category"
+  description = "What kind of request it is: question, incident, problem, feature_request"
   class = "none"
   kind = "select"
-  options = ["open", "resolved", "closed"]
+  options = ["question", "incident", "problem", "feature_request"]
+
+  [[model.field]]
+  name = "priority"
+  description = "How soon it should be handled: low, normal, high, urgent"
+  class = "none"
+  kind = "select"
+  options = ["low", "normal", "high", "urgent"]
+
+  [[model.field]]
+  name = "severity"
+  description = "How badly the customer is affected: minor, major, critical"
+  class = "none"
+  kind = "select"
+  options = ["minor", "major", "critical"]
+
+  [[model.field]]
+  name = "assignee"
+  description = "Name of the agent working on the ticket"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "sla_id"
+  description = "Service-level policy the ticket is measured against"
+  class = "none"
+  kind = "ref"
+  to = "helpdesk_sla"
+
+  [[model.field]]
+  name = "opened_on"
+  description = "Date the ticket was received (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "first_response_on"
+  description = "Date of the first reply to the customer (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "due_on"
+  description = "Date by which it should be solved under the policy (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "resolved_on"
+  description = "Date the problem was solved (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "resolution"
+  description = "How the problem was solved"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Ticket status: open, in_progress, resolved, closed"
+  class = "none"
+  kind = "select"
+  options = ["open", "in_progress", "resolved", "closed"]
+  required = true
+
+  [[model.action]]
+  name = "take"
+  description = "Start working on an open ticket"
+  field = "state"
+  from = "open"
+  to = "in_progress"
 
   [[model.action]]
   name = "resolve"
-  description = "Mark an open ticket as resolved"
+  description = "Mark a ticket in progress as resolved"
   field = "state"
-  from = "open"
+  from = "in_progress"
   to = "resolved"
 
   [[model.action]]
   name = "close"
-  description = "Close a resolved ticket for good"
+  description = "Close a resolved ticket for good (manager only)"
   field = "state"
   from = "resolved"
   to = "closed"
   group = "helpdesk.manager"
   approval = true
+
+  [[model.action]]
+  name = "reopen"
+  description = "Reopen a resolved ticket when the problem came back"
+  field = "state"
+  from = "resolved"
+  to = "open"

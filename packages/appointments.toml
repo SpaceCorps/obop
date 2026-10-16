@@ -1,0 +1,140 @@
+[module]
+id = "appointments"
+version = "0.1.0"
+name = "Appointments"
+description = "Bookable resources (people, rooms, equipment) and appointments with a date, start and end time and a status flow. Overlaps are not prevented automatically."
+author = "SpaceCorps"
+
+[[model]]
+name = "appointments_resource"
+description = "Something or someone that can be booked"
+read_group = "appointments.user"
+write_group = "appointments.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Name of the resource, for example Meeting room 2"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "kind"
+  description = "What kind of resource it is: person, room, equipment"
+  class = "none"
+  kind = "select"
+  options = ["person", "room", "equipment"]
+  required = true
+
+  [[model.field]]
+  name = "capacity"
+  description = "How many people it can serve at once"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the resource can be booked"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "appointments_appointment"
+description = "A booking of a resource at a time"
+read_group = "appointments.user"
+write_group = "appointments.user"
+
+  [[model.field]]
+  name = "resource_id"
+  description = "The resource booked"
+  class = "none"
+  kind = "ref"
+  to = "appointments_resource"
+  required = true
+
+  [[model.field]]
+  name = "title"
+  description = "What the appointment is for"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "day"
+  description = "Date of the appointment (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "start_minute"
+  description = "Start time as minutes since midnight, for example 540 for 09:00"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "end_minute"
+  description = "End time as minutes since midnight, for example 600 for 10:00"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "attendee_name"
+  description = "Name of the person attending"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "attendee_email"
+  description = "Email address of the attendee"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "attendee_phone"
+  description = "Phone number of the attendee"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "notes"
+  description = "Anything the host should know beforehand"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Booking status: scheduled, confirmed, done, cancelled, no_show"
+  class = "none"
+  kind = "select"
+  options = ["scheduled", "confirmed", "done", "cancelled", "no_show"]
+  required = true
+
+  [[model.action]]
+  name = "confirm"
+  description = "Confirm a scheduled appointment"
+  field = "state"
+  from = "scheduled"
+  to = "confirmed"
+
+  [[model.action]]
+  name = "complete"
+  description = "Mark a confirmed appointment as held"
+  field = "state"
+  from = "confirmed"
+  to = "done"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a scheduled appointment"
+  field = "state"
+  from = "scheduled"
+  to = "cancelled"
+
+  [[model.action]]
+  name = "mark_no_show"
+  description = "Record that the attendee did not come"
+  field = "state"
+  from = "confirmed"
+  to = "no_show"

@@ -1,0 +1,168 @@
+[module]
+id = "subscriptions"
+version = "0.1.0"
+name = "Subscriptions"
+description = "Recurring plans and customer subscriptions with a trial, active, past due and cancelled flow. It records the next invoice date; it does not create invoices on its own."
+author = "SpaceCorps"
+depends = ["base"]
+
+[[model]]
+name = "subscriptions_plan"
+description = "A recurring offer customers can subscribe to"
+read_group = "subscriptions.user"
+write_group = "subscriptions.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Plan name, for example Team yearly"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "code"
+  description = "Short code of the plan"
+  class = "none"
+
+  [[model.field]]
+  name = "interval"
+  description = "How often the customer is billed: monthly, quarterly, yearly"
+  class = "none"
+  kind = "select"
+  options = ["monthly", "quarterly", "yearly"]
+  required = true
+
+  [[model.field]]
+  name = "price"
+  description = "Standard price per billing interval (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "trial_days"
+  description = "Length of the free trial in days"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether new customers can pick the plan"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "subscriptions_subscription"
+description = "A customer's recurring subscription to a plan"
+read_group = "subscriptions.user"
+write_group = "subscriptions.manager"
+
+  [[model.field]]
+  name = "customer_id"
+  description = "The customer who subscribed"
+  class = "none"
+  kind = "ref"
+  to = "party"
+  required = true
+
+  [[model.field]]
+  name = "plan_id"
+  description = "The plan subscribed to"
+  class = "none"
+  kind = "ref"
+  to = "subscriptions_plan"
+  required = true
+
+  [[model.field]]
+  name = "started_on"
+  description = "Date the subscription began (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "trial_ends_on"
+  description = "Date the free trial ends (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "next_invoice_on"
+  description = "Date the next invoice is due (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "recurring_amount"
+  description = "Amount billed each interval after discounts (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code, for example EUR"
+  class = "none"
+
+  [[model.field]]
+  name = "seats"
+  description = "Number of licences or users covered"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "cancel_reason"
+  description = "Why the customer cancelled"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Subscription status: trial, active, past_due, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["trial", "active", "past_due", "cancelled"]
+  required = true
+
+  [[model.action]]
+  name = "activate"
+  description = "Start billing at the end of the trial"
+  field = "state"
+  from = "trial"
+  to = "active"
+
+  [[model.action]]
+  name = "mark_past_due"
+  description = "Flag an active subscription whose payment failed"
+  field = "state"
+  from = "active"
+  to = "past_due"
+
+  [[model.action]]
+  name = "recover"
+  description = "Return a past due subscription to active after payment"
+  field = "state"
+  from = "past_due"
+  to = "active"
+
+  [[model.action]]
+  name = "cancel_trial"
+  description = "Cancel a subscription during its trial"
+  field = "state"
+  from = "trial"
+  to = "cancelled"
+  approval = true
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel an active subscription"
+  field = "state"
+  from = "active"
+  to = "cancelled"
+  approval = true
+
+  [[model.action]]
+  name = "cancel_overdue"
+  description = "Cancel a past due subscription"
+  field = "state"
+  from = "past_due"
+  to = "cancelled"
+  approval = true

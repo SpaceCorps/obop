@@ -1,0 +1,181 @@
+[module]
+id = "inventory"
+version = "0.1.0"
+name = "Inventory"
+description = "Warehouses, stock locations, stock levels and stock moves. Quantities are entered and validated by people; they are not updated automatically by moves."
+author = "SpaceCorps"
+depends = ["product"]
+
+[[model]]
+name = "inventory_warehouse"
+description = "A building or site where stock is kept"
+read_group = "inventory.user"
+write_group = "inventory.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Warehouse name"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "code"
+  description = "Short code printed on documents, for example WH1"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "address"
+  description = "Postal address of the site"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the warehouse is in use"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "inventory_location"
+description = "A place inside a warehouse where stock can sit"
+read_group = "inventory.user"
+write_group = "inventory.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Location name, for example Shelf A3"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "warehouse_id"
+  description = "The warehouse the location belongs to"
+  class = "none"
+  kind = "ref"
+  to = "inventory_warehouse"
+  required = true
+
+  [[model.field]]
+  name = "kind"
+  description = "What the location is used for: internal, receiving, shipping, transit, scrap"
+  class = "none"
+  kind = "select"
+  options = ["internal", "receiving", "shipping", "transit", "scrap"]
+  required = true
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the location is in use"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "inventory_item"
+description = "The quantity of one product held at one location"
+read_group = "inventory.user"
+write_group = "inventory.manager"
+
+  [[model.field]]
+  name = "product_id"
+  description = "The product held"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "location_id"
+  description = "Where it is held"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
+  required = true
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units on hand"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "reorder_level"
+  description = "Quantity at or below which the product should be replenished"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "lot"
+  description = "Lot or batch number, if tracked"
+  class = "none"
+
+[[model]]
+name = "inventory_move"
+description = "A movement of a product between locations, or into or out of the business"
+read_group = "inventory.user"
+write_group = "inventory.user"
+
+  [[model.field]]
+  name = "reference"
+  description = "Reference of the move, for example a delivery or receipt number"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "product_id"
+  description = "The product moved"
+  class = "none"
+  kind = "ref"
+  to = "product"
+  required = true
+
+  [[model.field]]
+  name = "from_location_id"
+  description = "Where it leaves; empty for a receipt from a supplier"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
+
+  [[model.field]]
+  name = "to_location_id"
+  description = "Where it arrives; empty for a delivery to a customer"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
+
+  [[model.field]]
+  name = "quantity"
+  description = "Units moved"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "scheduled_on"
+  description = "Date the move is planned for (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "state"
+  description = "Move status: draft, done, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "done", "cancelled"]
+  required = true
+
+  [[model.action]]
+  name = "validate"
+  description = "Confirm that the goods really moved; a done move cannot be undone"
+  field = "state"
+  from = "draft"
+  to = "done"
+  approval = true
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a draft move"
+  field = "state"
+  from = "draft"
+  to = "cancelled"

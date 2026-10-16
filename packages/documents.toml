@@ -1,0 +1,117 @@
+[module]
+id = "documents"
+version = "0.1.0"
+name = "Documents"
+description = "A register of business documents: folders, document records with kind, owner, expiry and confidentiality, and a draft, published and archived flow. It stores references, not file contents."
+author = "SpaceCorps"
+
+[[model]]
+name = "documents_folder"
+description = "A folder that groups documents"
+read_group = "documents.user"
+write_group = "documents.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Folder name"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "parent_id"
+  description = "The folder this one sits in"
+  class = "none"
+  kind = "ref"
+  to = "documents_folder"
+
+  [[model.field]]
+  name = "description"
+  description = "What belongs in the folder"
+  class = "none"
+  kind = "longtext"
+
+[[model]]
+name = "documents_document"
+description = "A contract, policy, certificate or other document on record"
+read_group = "documents.user"
+write_group = "documents.user"
+
+  [[model.field]]
+  name = "title"
+  description = "Document title"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "folder_id"
+  description = "The folder the document is filed in"
+  class = "none"
+  kind = "ref"
+  to = "documents_folder"
+
+  [[model.field]]
+  name = "kind"
+  description = "Type of document: contract, invoice, policy, report, certificate, other"
+  class = "none"
+  kind = "select"
+  options = ["contract", "invoice", "policy", "report", "certificate", "other"]
+  required = true
+
+  [[model.field]]
+  name = "confidentiality"
+  description = "Who should see it, as a label for readers: public, internal, confidential, restricted"
+  class = "none"
+  kind = "select"
+  options = ["public", "internal", "confidential", "restricted"]
+  required = true
+
+  [[model.field]]
+  name = "owner"
+  description = "Name of the person responsible for the document"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "reference"
+  description = "Reference number, for example a contract number"
+  class = "none"
+
+  [[model.field]]
+  name = "location"
+  description = "Where the file is stored, such as a link or archive box"
+  class = "none"
+
+  [[model.field]]
+  name = "expires_on"
+  description = "Date after which the document is no longer valid (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "summary"
+  description = "What the document says, in a few lines"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Document status: draft, published, archived"
+  class = "none"
+  kind = "select"
+  options = ["draft", "published", "archived"]
+  required = true
+
+  [[model.action]]
+  name = "publish"
+  description = "Make a draft document the current version"
+  field = "state"
+  from = "draft"
+  to = "published"
+
+  [[model.action]]
+  name = "archive"
+  description = "Archive a published document (manager only)"
+  field = "state"
+  from = "published"
+  to = "archived"
+  group = "documents.manager"

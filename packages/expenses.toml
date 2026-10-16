@@ -1,0 +1,114 @@
+[module]
+id = "expenses"
+version = "0.1.0"
+name = "Expenses"
+description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission and needs a human approval; receipts are referenced by note, not stored."
+author = "SpaceCorps"
+
+[[model]]
+name = "expenses_expense"
+description = "An amount an employee spent for the business and wants reimbursed"
+read_group = "expenses.user"
+write_group = "expenses.user"
+
+  [[model.field]]
+  name = "description"
+  description = "What the money was spent on"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "employee"
+  description = "Name of the person claiming the expense"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "spent_on"
+  description = "Date of the purchase (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "category"
+  description = "Expense category: travel, meals, lodging, supplies, software, other"
+  class = "none"
+  kind = "select"
+  options = ["travel", "meals", "lodging", "supplies", "software", "other"]
+  required = true
+
+  [[model.field]]
+  name = "amount"
+  description = "Amount owed to the employee (minor currency units, e.g. cents)"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code, for example EUR"
+  class = "none"
+
+  [[model.field]]
+  name = "receipt_note"
+  description = "Where the receipt is kept and what it shows"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "paid_on"
+  description = "Date the employee was reimbursed (YYYY-MM-DD)"
+  class = "financial"
+  personal_data = true
+  kind = "date"
+  group = "expenses.finance"
+
+  [[model.field]]
+  name = "payment_reference"
+  description = "Bank transfer reference of the reimbursement"
+  class = "financial"
+  personal_data = true
+  group = "expenses.finance"
+
+  [[model.field]]
+  name = "state"
+  description = "Claim status: draft, submitted, approved, paid, refused"
+  class = "none"
+  kind = "select"
+  options = ["draft", "submitted", "approved", "paid", "refused"]
+  required = true
+
+  [[model.action]]
+  name = "submit"
+  description = "Submit the claim for approval"
+  field = "state"
+  from = "draft"
+  to = "submitted"
+
+  [[model.action]]
+  name = "approve"
+  description = "Approve a submitted claim (manager only)"
+  field = "state"
+  from = "submitted"
+  to = "approved"
+  group = "expenses.manager"
+
+  [[model.action]]
+  name = "pay"
+  description = "Record the reimbursement as paid (finance only)"
+  field = "state"
+  from = "approved"
+  to = "paid"
+  group = "expenses.finance"
+  approval = true
+
+  [[model.action]]
+  name = "refuse"
+  description = "Refuse a submitted claim (manager only)"
+  field = "state"
+  from = "submitted"
+  to = "refused"
+  group = "expenses.manager"

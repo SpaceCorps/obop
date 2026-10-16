@@ -1,8 +1,8 @@
 [module]
 id = "fleet"
-version = "0.1.0"
+version = "0.2.0"
 name = "Fleet"
-description = "Vehicles, drivers and service status for a small fleet"
+description = "Vehicles, drivers and service history for a small fleet. Tracks status and service records; it does not compute running costs or fuel use."
 author = "SpaceCorps"
 
 [[model]]
@@ -19,21 +19,52 @@ write_group = "fleet.manager"
 
   [[model.field]]
   name = "model"
-  description = "Make and model"
+  description = "Make and model, for example Renault Master"
   class = "none"
 
   [[model.field]]
+  name = "vin"
+  description = "Vehicle identification number (chassis number)"
+  class = "none"
+
+  [[model.field]]
+  name = "fuel"
+  description = "Fuel or drive type: petrol, diesel, hybrid, electric, other"
+  class = "none"
+  kind = "select"
+  options = ["petrol", "diesel", "hybrid", "electric", "other"]
+
+  [[model.field]]
+  name = "odometer_km"
+  description = "Last known odometer reading in kilometres"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "acquired_on"
+  description = "Date the vehicle entered the fleet (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
   name = "driver"
-  description = "Name of the assigned driver"
+  description = "Name of the driver currently using the vehicle, as free text"
   class = "internal"
   personal_data = true
 
   [[model.field]]
+  name = "driver_id"
+  description = "Driver record currently assigned to the vehicle"
+  class = "none"
+  kind = "ref"
+  to = "fleet_vehicle_driver"
+
+  [[model.field]]
   name = "state"
-  description = "Availability: available, in_service or maintenance"
+  description = "Availability: available, in_service, maintenance, retired"
   class = "none"
   kind = "select"
-  options = ["available", "in_service", "maintenance"]
+  options = ["available", "in_service", "maintenance", "retired"]
 
   [[model.action]]
   name = "dispatch"
@@ -48,3 +79,142 @@ write_group = "fleet.manager"
   field = "state"
   from = "in_service"
   to = "available"
+
+  [[model.action]]
+  name = "retire"
+  description = "Remove an available vehicle from the fleet for good (needs the approver)"
+  field = "state"
+  from = "available"
+  to = "retired"
+  group = "fleet.approver"
+  approval = true
+
+[[model]]
+name = "fleet_vehicle_driver"
+description = "A person authorised to drive fleet vehicles"
+read_group = "fleet.user"
+write_group = "fleet.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Full name of the driver"
+  class = "public_directory"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "phone"
+  description = "Work phone number of the driver"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "licence_number"
+  description = "Driving licence number"
+  class = "confidential_hr"
+  personal_data = true
+  group = "fleet.manager"
+
+  [[model.field]]
+  name = "licence_expiry"
+  description = "Date the driving licence expires (YYYY-MM-DD)"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "date"
+  group = "fleet.manager"
+
+  [[model.field]]
+  name = "state"
+  description = "Driver status: active, suspended"
+  class = "none"
+  kind = "select"
+  options = ["active", "suspended"]
+  required = true
+
+  [[model.action]]
+  name = "suspend"
+  description = "Suspend a driver, for example after an expired licence"
+  field = "state"
+  from = "active"
+  to = "suspended"
+
+  [[model.action]]
+  name = "reactivate"
+  description = "Allow a suspended driver to drive again"
+  field = "state"
+  from = "suspended"
+  to = "active"
+
+[[model]]
+name = "fleet_vehicle_service"
+description = "A maintenance, repair or inspection job on a vehicle"
+read_group = "fleet.user"
+write_group = "fleet.user"
+
+  [[model.field]]
+  name = "vehicle_id"
+  description = "The vehicle serviced"
+  class = "none"
+  kind = "ref"
+  to = "fleet_vehicle"
+  required = true
+
+  [[model.field]]
+  name = "kind"
+  description = "Type of job: maintenance, repair, inspection, tyres, other"
+  class = "none"
+  kind = "select"
+  options = ["maintenance", "repair", "inspection", "tyres", "other"]
+  required = true
+
+  [[model.field]]
+  name = "service_on"
+  description = "Date of the job (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "odometer_km"
+  description = "Odometer reading in kilometres when serviced"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "cost"
+  description = "Total invoiced by the workshop (minor currency units, e.g. cents)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "workshop"
+  description = "Name of the workshop or garage"
+  class = "none"
+
+  [[model.field]]
+  name = "notes"
+  description = "What was done or found"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "state"
+  description = "Job status: planned, done, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["planned", "done", "cancelled"]
+  required = true
+
+  [[model.action]]
+  name = "complete"
+  description = "Mark a planned job as done"
+  field = "state"
+  from = "planned"
+  to = "done"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a planned job"
+  field = "state"
+  from = "planned"
+  to = "cancelled"

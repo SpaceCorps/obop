@@ -1,0 +1,299 @@
+[module]
+id = "hr"
+version = "0.1.0"
+name = "Human Resources"
+description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group."
+author = "SpaceCorps"
+
+[[model]]
+name = "hr_department"
+description = "A team or department of the company"
+read_group = "hr.user"
+write_group = "hr.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Department name"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "head"
+  description = "Name of the department head"
+  class = "public_directory"
+  personal_data = true
+
+  [[model.field]]
+  name = "cost_centre"
+  description = "Cost centre code used by finance"
+  class = "none"
+
+[[model]]
+name = "hr_employee"
+description = "A person employed by the company"
+read_group = "hr.user"
+write_group = "hr.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Full name"
+  class = "public_directory"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "job_title"
+  description = "Job title"
+  class = "public_directory"
+  personal_data = true
+
+  [[model.field]]
+  name = "work_email"
+  description = "Work email address"
+  class = "public_directory"
+  personal_data = true
+
+  [[model.field]]
+  name = "work_phone"
+  description = "Work phone number"
+  class = "public_directory"
+  personal_data = true
+
+  [[model.field]]
+  name = "department_id"
+  description = "The department the person belongs to"
+  class = "none"
+  kind = "ref"
+  to = "hr_department"
+
+  [[model.field]]
+  name = "reports_to_id"
+  description = "The person's line manager"
+  class = "none"
+  kind = "ref"
+  to = "hr_employee"
+
+  [[model.field]]
+  name = "hired_on"
+  description = "First day of employment (YYYY-MM-DD)"
+  class = "internal"
+  personal_data = true
+  kind = "date"
+
+  [[model.field]]
+  name = "contract_type"
+  description = "Type of employment contract: permanent, fixed_term, contractor, intern"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "select"
+  options = ["permanent", "fixed_term", "contractor", "intern"]
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "private_email"
+  description = "Private email address"
+  class = "confidential_hr"
+  personal_data = true
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "private_phone"
+  description = "Private phone number"
+  class = "confidential_hr"
+  personal_data = true
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "home_address"
+  description = "Private home address"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "longtext"
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "birth_date"
+  description = "Date of birth (YYYY-MM-DD)"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "date"
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "national_id"
+  description = "National identity or social security number"
+  class = "confidential_hr"
+  personal_data = true
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "emergency_contact"
+  description = "Name and phone of the person to call in an emergency"
+  class = "confidential_hr"
+  personal_data = true
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "salary"
+  description = "Gross annual salary (minor currency units, e.g. cents)"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "bank_iban"
+  description = "Bank account salary is paid into"
+  class = "financial"
+  personal_data = true
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "union_member"
+  description = "Whether the person is a trade union member"
+  class = "special_category"
+  personal_data = true
+  kind = "bool"
+  group = "hr.special_reader"
+
+  [[model.field]]
+  name = "work_permit_expiry"
+  description = "Date the work permit expires, for non-citizens (YYYY-MM-DD)"
+  class = "special_category"
+  personal_data = true
+  kind = "date"
+  group = "hr.special_reader"
+
+  [[model.field]]
+  name = "health_note"
+  description = "Health condition or disability relevant to the workplace"
+  class = "special_category"
+  personal_data = true
+  kind = "longtext"
+  group = "hr.special_reader"
+
+  [[model.field]]
+  name = "state"
+  description = "Employment status: onboarding, active, offboarded"
+  class = "none"
+  kind = "select"
+  options = ["onboarding", "active", "offboarded"]
+  required = true
+
+  [[model.action]]
+  name = "activate"
+  description = "Complete onboarding and mark the employee as active"
+  field = "state"
+  from = "onboarding"
+  to = "active"
+
+  [[model.action]]
+  name = "offboard"
+  description = "End the employment record; reverse only with an HR decision"
+  field = "state"
+  from = "active"
+  to = "offboarded"
+  approval = true
+
+[[model]]
+name = "hr_leave_request"
+description = "A request for time off"
+read_group = "hr.user"
+write_group = "hr.user"
+
+  [[model.field]]
+  name = "employee_id"
+  description = "The employee asking for time off"
+  class = "none"
+  kind = "ref"
+  to = "hr_employee"
+  required = true
+
+  [[model.field]]
+  name = "leave_kind"
+  description = "Kind of leave: paid, unpaid, parental, study, other"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "select"
+  options = ["paid", "unpaid", "parental", "study", "other"]
+  required = true
+
+  [[model.field]]
+  name = "start_on"
+  description = "First day of absence (YYYY-MM-DD)"
+  class = "internal"
+  personal_data = true
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "end_on"
+  description = "Last day of absence (YYYY-MM-DD)"
+  class = "internal"
+  personal_data = true
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "days"
+  description = "Working days requested"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "reason"
+  description = "Why the leave is requested"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "longtext"
+  group = "hr.manager"
+
+  [[model.field]]
+  name = "is_sick_leave"
+  description = "Whether the absence is due to illness"
+  class = "special_category"
+  personal_data = true
+  kind = "bool"
+  group = "hr.special_reader"
+
+  [[model.field]]
+  name = "medical_note"
+  description = "Reference to the medical certificate, if any"
+  class = "special_category"
+  personal_data = true
+  kind = "longtext"
+  group = "hr.special_reader"
+
+  [[model.field]]
+  name = "state"
+  description = "Request status: draft, requested, approved, refused"
+  class = "none"
+  kind = "select"
+  options = ["draft", "requested", "approved", "refused"]
+  required = true
+
+  [[model.action]]
+  name = "request"
+  description = "Submit the request to the manager"
+  field = "state"
+  from = "draft"
+  to = "requested"
+
+  [[model.action]]
+  name = "approve"
+  description = "Approve a requested leave (manager only)"
+  field = "state"
+  from = "requested"
+  to = "approved"
+  group = "hr.manager"
+  approval = true
+
+  [[model.action]]
+  name = "refuse"
+  description = "Refuse a requested leave (manager only)"
+  field = "state"
+  from = "requested"
+  to = "refused"
+  group = "hr.manager"
+  approval = true

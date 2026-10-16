@@ -1,0 +1,92 @@
+[module]
+id = "timesheets"
+version = "0.1.0"
+name = "Timesheets"
+description = "Time spent on project tasks, entered in minutes, with a billable flag and an approval step. Needs the Projects package."
+author = "SpaceCorps"
+depends = ["projects"]
+
+[[model]]
+name = "timesheets_entry"
+description = "Time one person spent on one task on one day"
+read_group = "timesheets.user"
+write_group = "timesheets.user"
+
+  [[model.field]]
+  name = "task_id"
+  description = "The task worked on"
+  class = "none"
+  kind = "ref"
+  to = "projects_task"
+  required = true
+
+  [[model.field]]
+  name = "worker"
+  description = "Name of the person who did the work"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "worked_on"
+  description = "Day the work was done (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+  required = true
+
+  [[model.field]]
+  name = "minutes"
+  description = "Time spent, in minutes"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "billable"
+  description = "Whether the time can be charged to the customer"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "description"
+  description = "What was done"
+  class = "none"
+
+  [[model.field]]
+  name = "cost_rate"
+  description = "Internal hourly cost of the worker at the time of entry (minor currency units, e.g. cents)"
+  class = "financial"
+  personal_data = true
+  kind = "money"
+  group = "timesheets.cost_viewer"
+
+  [[model.field]]
+  name = "state"
+  description = "Entry status: draft, submitted, approved"
+  class = "none"
+  kind = "select"
+  options = ["draft", "submitted", "approved"]
+  required = true
+
+  [[model.action]]
+  name = "submit"
+  description = "Submit the entry for approval"
+  field = "state"
+  from = "draft"
+  to = "submitted"
+
+  [[model.action]]
+  name = "approve"
+  description = "Approve a submitted entry so it can be billed (manager only)"
+  field = "state"
+  from = "submitted"
+  to = "approved"
+  group = "timesheets.manager"
+
+  [[model.action]]
+  name = "reject"
+  description = "Send a submitted entry back to draft (manager only)"
+  field = "state"
+  from = "submitted"
+  to = "draft"
+  group = "timesheets.manager"

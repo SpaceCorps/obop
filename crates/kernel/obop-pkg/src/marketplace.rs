@@ -23,14 +23,47 @@ pub trait Marketplace: Send + Sync {
 pub struct Bundled;
 
 const BUNDLED: &[(&str, &str)] = &[
+    (
+        "appointments",
+        include_str!("../../../../packages/appointments.toml"),
+    ),
+    (
+        "documents",
+        include_str!("../../../../packages/documents.toml"),
+    ),
+    (
+        "expenses",
+        include_str!("../../../../packages/expenses.toml"),
+    ),
     ("fleet", include_str!("../../../../packages/fleet.toml")),
     (
         "helpdesk",
         include_str!("../../../../packages/helpdesk.toml"),
     ),
+    ("hr", include_str!("../../../../packages/hr.toml")),
+    (
+        "inventory",
+        include_str!("../../../../packages/inventory.toml"),
+    ),
+    (
+        "manufacturing",
+        include_str!("../../../../packages/manufacturing.toml"),
+    ),
     (
         "projects",
         include_str!("../../../../packages/projects.toml"),
+    ),
+    (
+        "purchase",
+        include_str!("../../../../packages/purchase.toml"),
+    ),
+    (
+        "subscriptions",
+        include_str!("../../../../packages/subscriptions.toml"),
+    ),
+    (
+        "timesheets",
+        include_str!("../../../../packages/timesheets.toml"),
     ),
 ];
 
@@ -142,7 +175,29 @@ mod tests {
     fn bundled_catalog_is_valid() {
         let l = Bundled.list().unwrap();
         let ids: Vec<_> = l.iter().map(|x| x.id.as_str()).collect();
-        assert_eq!(ids, ["fleet", "helpdesk", "projects"]);
+        assert_eq!(
+            ids,
+            [
+                "appointments",
+                "documents",
+                "expenses",
+                "fleet",
+                "helpdesk",
+                "hr",
+                "inventory",
+                "manufacturing",
+                "projects",
+                "purchase",
+                "subscriptions",
+                "timesheets"
+            ]
+        );
+        let mut sorted = ids.clone();
+        sorted.sort();
+        assert_eq!(
+            ids, sorted,
+            "the catalogue is listed in a stable, sorted order"
+        );
         for x in &l {
             assert!(
                 crate::manifest::Manifest::parse(&Bundled.fetch(&x.id).unwrap())
