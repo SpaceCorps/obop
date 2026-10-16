@@ -61,6 +61,9 @@ export function TopBar(props: {
   apps: App[];
   current: App | undefined;
   email: string;
+  menuOpen: boolean;
+  hasMenu: boolean;
+  onMenu: () => void;
   onLauncher: () => void;
   onPalette: () => void;
   onSignOut: () => void;
@@ -91,6 +94,24 @@ export function TopBar(props: {
           )}
         </svg>
       </button>
+      {props.hasMenu && (
+        <button
+          className="icon-btn menu-btn"
+          onClick={props.onMenu}
+          aria-label="Toggle the menu"
+          aria-expanded={props.menuOpen}
+          aria-controls="app-menu"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path
+              d="M4 6h16M4 12h16M4 18h16"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      )}
       <a className="brand" href="#/">
         {current ? current.name : "obop"}
       </a>

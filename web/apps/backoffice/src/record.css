@@ -1,0 +1,332 @@
+/* The record floats beside the list instead of replacing it. */
+.record {
+  width: 27rem;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  animation: slide 0.18s ease-out;
+}
+.record:focus {
+  outline: none;
+}
+@keyframes slide {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+.record > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.record h2 {
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.statusbar {
+  list-style: none;
+  display: flex;
+  margin: 0;
+  padding: 0.8rem 1rem 0;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.statusbar button {
+  padding: 0.28rem 0.85rem;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 500;
+}
+.statusbar button:hover:not(:disabled):not(.on) {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.statusbar button:disabled:not(.on) {
+  cursor: default;
+  opacity: 0.7;
+}
+.statusbar button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.smart {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.8rem 1rem 0;
+}
+.smartbtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) - 3px);
+  background: var(--panel-2);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+a.smartbtn:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.smartbtn.disabled {
+  opacity: 0.6;
+}
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.flabel {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+.shield {
+  display: inline-flex;
+  color: var(--warn);
+  cursor: help;
+}
+.field input:not([type="checkbox"]),
+.field select,
+.field textarea,
+.row input:not([type="checkbox"]),
+.row select,
+.signin input,
+.inline-edit input:not([type="checkbox"]),
+.inline-edit select,
+.inline-edit textarea,
+.refpicker input {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: calc(var(--radius) - 4px);
+  padding: 0.45rem 0.6rem;
+  color: var(--fg);
+  width: 100%;
+  min-width: 0;
+}
+.row input:not([type="checkbox"]),
+.row select {
+  width: auto;
+}
+.field textarea,
+.inline-edit textarea {
+  resize: vertical;
+  font: inherit;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.row input:focus,
+.row select:focus,
+.signin input:focus,
+.inline-edit input:focus,
+.inline-edit select:focus,
+.inline-edit textarea:focus,
+.refpicker input:focus,
+.quick input:focus,
+.inline-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+[aria-invalid="true"] {
+  border-color: var(--danger) !important;
+}
+.field input[readonly],
+.field textarea[readonly] {
+  background: transparent;
+  border-style: dashed;
+}
+.field.inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.moneyin {
+  position: relative;
+}
+.field .moneyin input {
+  padding-inline-end: 1.8rem;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+.moneyin span {
+  position: absolute;
+  inset-inline-end: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.switch .track {
+  width: 2.3rem;
+  height: 1.3rem;
+  border-radius: 999px;
+  background: var(--line);
+  position: relative;
+  transition: background 0.15s;
+  flex: none;
+}
+.switch .track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.3rem - 4px);
+  height: calc(1.3rem - 4px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s;
+}
+.switch input:checked + .track {
+  background: var(--accent);
+}
+.switch input:checked + .track::after {
+  transform: translateX(1rem);
+}
+.switch input:focus-visible + .track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.switch input:disabled + .track {
+  opacity: 0.5;
+}
+.refpicker {
+  position: relative;
+}
+.refpicker input {
+  padding-inline-end: 2rem;
+}
+.refpicker .clear {
+  position: absolute;
+  inset-inline-end: 0.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 1.6rem;
+  height: 1.6rem;
+}
+.rp-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+.rp-list li {
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.rp-list li[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.maskedfield {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.error.banner {
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border-radius: 8px;
+}
+.formbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+  flex-wrap: wrap;
+}
+.kbd-hint {
+  font-size: 0.75rem;
+}
+
+/* Customize */
+.fieldrow {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+.frow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.frow > input,
+.frow > select {
+  flex: 1;
+  min-width: 7rem;
+}
+
+@media (max-width: 40rem) {
+  /* The record opens as a full-screen sheet on phones */
+  .record {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    width: auto;
+    border-radius: 0;
+    border: 0;
+    animation: sheet 0.2s ease-out;
+  }
+  .kbd-hint {
+    display: none;
+  }
+}
+@keyframes sheet {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+.withheld {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}

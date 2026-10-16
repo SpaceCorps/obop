@@ -1,0 +1,299 @@
+import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import type { FieldMeta, Row } from "../api.ts";
+import { Cell } from "../fields.tsx";
+import { labelField, useData } from "../data.tsx";
+import { readPref, writePref } from "../favorites.ts";
+import { isEmpty, isMasked, isState, label, money } from "../format.ts";
+import { groupDomain, groupKey, groupLabel, groupable, sumOf } from "../query.ts";
+import { Icon } from "../ui.tsx";
+import type { ViewProps } from "./types.ts";
+
+/** The field the board is grouped by: the person's choice, else a status, else the first groupable. */
+export function kanbanField(
+  fields: FieldMeta[],
+  chosen: string | undefined,
+): FieldMeta | undefined {
+  const g = groupable(fields);
+  return (
+    g.find((f) => f.name === chosen) ??
+    g.find((f) => isState(f)) ??
+    g.find((f) => f.kind === "select") ??
+    g.find((f) => f.kind === "ref") ??
+    g[0]
+  );
+}
+
+function defaultsFor(f: FieldMeta, key: string): Record<string, unknown> {
+  if (key === "") return {};
+  if (f.kind === "bool") return { [f.name]: key === "true" };
+  if (f.kind === "date") return { [f.name]: `${key}-01` };
+  return { [f.name]: key };
+}
+
+export function KanbanView(p: ViewProps) {
+  const d = useData();
+  const { fields, rows, model } = p;
+  const gf = kanbanField(fields, p.state.group[0]);
+  const foldKey = `obop-fold:${model.name}:${gf?.name}`;
+  const [folded, setFolded] = useState<string[]>(() => readPref<string[]>(foldKey, []));
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const [quick, setQuick] = useState<{ key: string; text: string } | null>(null);
+  const board = useRef<HTMLDivElement>(null);
+
+  const keys = useMemo(
+    () => (gf ? groupDomain(gf, rows, d.lookup) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gf, rows, d.version],
+  );
+  if (!gf) return null;
+
+  const titleField = labelField(model);
+  const money1 = fields.find((f) => f.kind === "money");
+  const secondary = fields
+    .filter((f) => f.name !== gf.name && f.name !== titleField?.name)
+    .sort((a, b) => weight(a) - weight(b))
+    .slice(0, 3);
+  const canDrag = p.canUpdate && gf.kind !== "date";
+
+  const setFold = (key: string) => {
+    const next = folded.includes(key) ? folded.filter((k) => k !== key) : [...folded, key];
+    setFolded(next);
+    writePref(foldKey, next);
+  };
+
+  async function move(id: string, key: string) {
+    if (!gf) return;
+    const row = rows.find((r) => r.id === id);
+    if (!row || groupKey(gf, row) === key) return;
+    if (key === "" && gf.required) return d.notify(`${label(gf.name)} is required`, "error");
+    const value = key === "" ? null : gf.kind === "bool" ? key === "true" : key;
+    const err = await p.update(id, { [gf.name]: value });
+    if (err) d.notify(err, "error");
+  }
+  const drop = (e: DragEvent, key: string) => {
+    e.preventDefault();
+    setOver(null);
+    const id = e.dataTransfer.getData("text/plain");
+    if (id) void move(id, key);
+  };
+
+  async function submitQuick() {
+    if (!quick || !gf || !titleField) return;
+    const text = quick.text.trim();
+    if (!text) return setQuick(null);
+    const err = await p.create({ [titleField.name]: text, ...defaultsFor(gf, quick.key) });
+    if (err) d.notify(err, "error");
+    else setQuick(null);
+  }
+
+  const cardKey = (e: KeyboardEvent, row: Row, key: string, index: number) => {
+    const focus = (c: number, i: number) => {
+      const cards = board.current?.querySelectorAll<HTMLElement>(`[data-col="${c}"] [data-card]`);
+      cards?.[Math.min(i, cards.length - 1)]?.focus();
+    };
+    const col = keys.indexOf(key);
+    if (e.key === "Enter") {
+      e.preventDefault();
+      p.onOpen(row.id);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      focus(col, index + 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      focus(col, Math.max(0, index - 1));
+    } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      const to = col + (e.key === "ArrowRight" ? 1 : -1);
+      if (to < 0 || to >= keys.length) return;
+      if (e.shiftKey && canDrag)
+        void move(row.id, keys[to]!).then(() => requestAnimationFrame(() => focusById(row.id)));
+      else focus(to, index);
+    }
+  };
+  const focusById = (id: string) =>
+    board.current?.querySelector<HTMLElement>(`[data-card="${id}"]`)?.focus();
+
+  return (
+    <div
+      className="kanban"
+      ref={board}
+      role="group"
+      aria-label={`${p.title} board by ${label(gf.name)}`}
+    >
+      {keys.map((key, col) => {
+        const cards = rows.filter((r) => groupKey(gf, r) === key);
+        const total = money1 ? sumOf(cards, money1.name) : null;
+        const isFolded = folded.includes(key);
+        const name = groupLabel(gf, key, d.lookup);
+        const lines = secondary;
+        return (
+          <section
+            key={key || "none"}
+            data-col={col}
+            className={`kcol${over === key ? " over" : ""}${isFolded ? " folded" : ""}`}
+            aria-label={`${name}, ${cards.length} ${cards.length === 1 ? "card" : "cards"}`}
+            onDragOver={(e) => {
+              if (!canDrag) return;
+              e.preventDefault();
+              setOver(key);
+            }}
+            onDragLeave={() => setOver((o) => (o === key ? null : o))}
+            onDrop={(e) => canDrag && drop(e, key)}
+          >
+            <header>
+              <button
+                className="foldbtn"
+                aria-expanded={!isFolded}
+                aria-label={`${isFolded ? "Unfold" : "Fold"} ${name}`}
+                onClick={() => setFold(key)}
+              >
+                <Icon name={isFolded ? "caretRight" : "caret"} size={13} />
+              </button>
+              <b className="kname">
+                {gf.kind === "select" ? (
+                  key ? (
+                    <Cell field={gf} value={key} />
+                  ) : (
+                    <span className="badge t-neutral">None</span>
+                  )
+                ) : (
+                  name
+                )}
+              </b>
+              <span className="count">{cards.length}</span>
+              {!isFolded && total !== null && total > 0 && (
+                <span className="sum" title={`Total ${label(money1!.name)}`}>
+                  {money(total)}
+                </span>
+              )}
+              {p.canCreate && !isFolded && (
+                <button
+                  className="icon-btn"
+                  aria-label={`Add a card to ${name}`}
+                  onClick={() => setQuick({ key, text: "" })}
+                >
+                  <Icon name="plus" size={14} />
+                </button>
+              )}
+            </header>
+            {!isFolded && quick?.key === key && (
+              <form
+                className="quick"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void submitQuick();
+                }}
+              >
+                {titleField ? (
+                  <input
+                    autoFocus
+                    aria-label={`New ${label(titleField.name).toLowerCase()}`}
+                    placeholder={`${label(titleField.name)}…`}
+                    value={quick.text}
+                    onChange={(e) => setQuick({ key, text: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.stopPropagation();
+                        setQuick(null);
+                      }
+                    }}
+                  />
+                ) : (
+                  <span className="hint">Open the full form to fill this card.</span>
+                )}
+                <div className="actionrow">
+                  {titleField && (
+                    <button type="submit" className="btn small primary">
+                      Add
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn small"
+                    onClick={() => {
+                      setQuick(null);
+                      p.newWith({
+                        ...defaultsFor(gf, key),
+                        ...(titleField && quick.text.trim()
+                          ? { [titleField.name]: quick.text.trim() }
+                          : {}),
+                      });
+                    }}
+                  >
+                    Edit
+                  </button>
+                </div>
+              </form>
+            )}
+            {!isFolded &&
+              cards.map((r, i) => (
+                <article
+                  key={r.id}
+                  data-card={r.id}
+                  tabIndex={0}
+                  aria-label={
+                    titleField
+                      ? String(r[titleField.name] ?? "") || r.id.slice(0, 8)
+                      : r.id.slice(0, 8)
+                  }
+                  className={`kcard${r.id === p.selectedId ? " sel" : ""}${dragging === r.id ? " drag" : ""}`}
+                  draggable={canDrag}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", r.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    setDragging(r.id);
+                  }}
+                  onDragEnd={() => setDragging(null)}
+                  onClick={() => p.onOpen(r.id)}
+                  onKeyDown={(e) => cardKey(e, r, key, i)}
+                >
+                  <strong className="ktitle">{d.recordLabel(model.name, r)}</strong>
+                  {lines.map((f) =>
+                    isEmpty(r[f.name]) ? null : (
+                      <div key={f.name} className={`kline${f.kind === "money" ? " strong" : ""}`}>
+                        <span>{label(f.name)}</span>
+                        <span className={isMasked(r[f.name]) ? "" : "kval"}>
+                          <Cell field={f} value={r[f.name]} link={false} />
+                        </span>
+                      </div>
+                    ),
+                  )}
+                  {/* Keyboard and touch twin of dragging */}
+                  {p.canUpdate && gf.kind !== "date" && (
+                    <select
+                      className="moveto"
+                      aria-label={`Move ${d.recordLabel(model.name, r)} to`}
+                      value=""
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        e.target.value !== "" &&
+                        void move(r.id, e.target.value === "\u0000" ? "" : e.target.value)
+                      }
+                    >
+                      <option value="">Move to…</option>
+                      {keys
+                        .filter((k) => k !== key && (k !== "" || !gf.required))
+                        .map((k) => (
+                          <option key={k} value={k === "" ? "\u0000" : k}>
+                            {groupLabel(gf, k, d.lookup)}
+                          </option>
+                        ))}
+                    </select>
+                  )}
+                </article>
+              ))}
+            {!isFolded && cards.length === 0 && quick?.key !== key && (
+              <p className="kempty">Nothing here{canDrag ? ". Drop a card." : "."}</p>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function weight(f: FieldMeta): number {
+  return { money: 0, select: 1, date: 2, ref: 3, number: 4, bool: 5, text: 6, longtext: 9 }[f.kind];
+}

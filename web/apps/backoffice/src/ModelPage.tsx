@@ -1,26 +1,37 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
-import { call, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ModelMeta } from "./api.ts";
 import type { App } from "./Chrome.tsx";
-import { RecordPanel } from "./RecordPanel.tsx";
+import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
+import { useData, useRows } from "./data.tsx";
+import { loadFavorites, type Favorite } from "./favorites.ts";
+import { isState, label, modelLabel, visibleFields } from "./format.ts";
 import {
-  display,
-  isMasked,
-  isMoney,
-  isState,
-  label,
-  modelLabel,
-  money,
-  visibleFields,
-} from "./format.ts";
-import type { Route } from "./route.ts";
+  applyFacets,
+  decodeState,
+  encodeState,
+  groupable,
+  sortRows,
+  type Cond,
+  type ViewState,
+} from "./query.ts";
+import { RecordPanel } from "./RecordPanel.tsx";
+import type { Go, Route } from "./route.ts";
+import { EmptyState, Skeleton } from "./ui.tsx";
+import { CalendarView, dateFields } from "./views/CalendarView.tsx";
+import { GraphView } from "./views/GraphView.tsx";
+import { KanbanView, kanbanField } from "./views/KanbanView.tsx";
+import { ListView } from "./views/ListView.tsx";
+import { PivotView } from "./views/PivotView.tsx";
+import type { ViewProps } from "./views/types.ts";
 
-type Props = {
-  token: string;
-  app: App;
-  model: ModelMeta;
-  route: Route;
-  go: (r: Partial<Route>) => void;
-  notify: (text: string) => void;
+type Props = { app: App; model: ModelMeta; route: Route; go: Go };
+
+const VIEWS: Record<string, ViewDef> = {
+  list: { id: "list", label: "List", icon: "list" },
+  kanban: { id: "kanban", label: "Kanban", icon: "kanban" },
+  calendar: { id: "calendar", label: "Calendar", icon: "calendar" },
+  pivot: { id: "pivot", label: "Pivot", icon: "pivot" },
+  graph: { id: "graph", label: "Graph", icon: "graph" },
 };
 
 function storedView(model: string): string {
@@ -31,40 +42,57 @@ function storedView(model: string): string {
   }
 }
 
-export function ModelPage({ token, app, model, route, go, notify }: Props) {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [withheld, setWithheld] = useState<string[]>([]);
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const fields = useMemo(() => visibleFields(model.fields), [model]);
-  const stateField = fields.find((f) => isState(f.name))?.name;
-  const [groupBy, setGroupBy] = useState<string>(stateField ?? "");
-  const view = route.view || storedView(model.name) || (stateField ? "kanban" : "list");
+export function ModelPage({ app, model, route, go }: Props) {
+  const d = useData();
+  const { rows, loaded, error, denied } = useRows(model.name);
+  // Fields withheld from this principal never come back, so they are left out of every view.
+  const fields = useMemo(
+    () => visibleFields(model.fields).filter((f) => !denied.includes(`${model.name}.${f.name}`)),
+    [model, denied],
+  );
+  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
   const title = modelLabel(model.name, app.module.id);
+  const state = useMemo(() => decodeState(route.st), [route.st]);
 
-  const load = useCallback(async () => {
-    const r = await call(token, `${model.name}.list`);
-    if (r.kind === "ok") {
-      setRows(r.value as Row[]);
-      setWithheld(r.denied);
-    }
-    setLoading(false);
-  }, [token, model.name]);
+  const available = useMemo(() => {
+    const ids = ["list"];
+    const canGroup = groupable(fields).length > 0;
+    if (canGroup) ids.push("kanban");
+    if (dateFields(fields).length) ids.push("calendar");
+    if (canGroup) ids.push("pivot", "graph");
+    return ids;
+  }, [fields]);
+  const preferred = route.view || storedView(model.name);
+  const view = available.includes(preferred)
+    ? preferred
+    : fields.some(isState) && available.includes("kanban")
+      ? "kanban"
+      : "list";
 
+  const base = useMemo(() => ({ app: route.app, model: route.model }), [route.app, route.model]);
+  const put = useCallback(
+    (patch: { view?: string; id?: string; st?: string }, replace = false) =>
+      go(
+        {
+          ...base,
+          view: patch.view ?? route.view,
+          id: patch.id ?? route.id,
+          st: patch.st ?? route.st,
+        },
+        { replace },
+      ),
+    [go, base, route.view, route.id, route.st],
+  );
+  const setState = useCallback((s: ViewState) => put({ st: encodeState(s) }), [put]);
+
+  // A favorite marked default applies when the model opens without any search of its own.
   useEffect(() => {
-    setLoading(true);
-    setQuery("");
-    setGroupBy(stateField ?? "");
-    void load();
-  }, [load, stateField]);
-
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
-      fields.some((f) => display(f.name, r[f.name]).toLowerCase().includes(q)),
-    );
-  }, [rows, query, fields]);
+    if (route.st) return;
+    const fav = loadFavorites(model.name).find((f) => f.isDefault);
+    if (fav) put({ st: encodeState(fav.state), view: fav.view }, true);
+    // only on first open of this model
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setView = (v: string) => {
     try {
@@ -72,308 +100,160 @@ export function ModelPage({ token, app, model, route, go, notify }: Props) {
     } catch {
       /* ignore */
     }
-    go({ app: route.app, model: route.model, view: v, id: route.id });
+    put({ view: v });
   };
 
-  const open = (id: string) => go({ app: route.app, model: route.model, view, id });
+  const filtered = useMemo(
+    () => sortRows(applyFacets(rows, state.facets, fields, d.lookup), state.sort, fields, d.lookup),
+    // lookup changes when ref labels load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, state.facets, state.sort, fields, d.version],
+  );
+
+  const open = (id: string) => put({ id });
+  const close = useCallback(() => put({ id: "" }), [put]);
+  const openNew = (defaults: Record<string, unknown> = {}) => {
+    setNewDefaults(defaults);
+    put({ id: "new" });
+  };
   const selected = route.id === "new" ? "new" : rows.find((r) => r.id === route.id);
+
+  const update: ViewProps["update"] = async (id, patch) => {
+    const r = await d.run(`${model.name}.update`, { id, ...patch });
+    if (r.kind === "ok") return null;
+    if (r.kind === "approval")
+      return `Approval needed (plan ${r.planId.slice(0, 8)}); nothing changed yet`;
+    return r.message;
+  };
+  const create: ViewProps["create"] = async (body) => {
+    const r = await d.run(`${model.name}.create`, body);
+    if (r.kind === "ok") {
+      d.notify(`${title} created`);
+      return null;
+    }
+    if (r.kind === "approval")
+      return `Approval needed (plan ${r.planId.slice(0, 8)}); nothing created yet`;
+    return r.message;
+  };
+  const drill = (conds: Cond[]) =>
+    put({ view: "list", st: encodeState({ ...state, facets: [...state.facets, ...conds] }) });
+
+  const applyFavorite = (f: Favorite) =>
+    put({ st: encodeState(f.state), view: available.includes(f.view) ? f.view : view });
+
+  const vp: ViewProps = {
+    model,
+    title,
+    fields,
+    rows: filtered,
+    state,
+    setState,
+    selectedId: route.id,
+    onOpen: open,
+    canCreate: model.can_create,
+    canUpdate: model.can_update,
+    update,
+    create,
+    newWith: openNew,
+    drill,
+  };
+
+  const filtering = state.facets.length > 0;
+  const kf = view === "kanban" ? kanbanField(fields, state.group[0]) : undefined;
 
   return (
     <>
-      <section className="main panel">
-        <div className="controlpanel">
-          <div className="crumbs">
-            <span>{app.name}</span>
-            <span aria-hidden="true">›</span>
-            <strong>{title}</strong>
-          </div>
-          {model.can_create && (
-            <button className="btn primary" onClick={() => open("new")}>
-              New
-            </button>
-          )}
-          <div className="search">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Search ${title.toLowerCase()}…`}
-              aria-label="Search records"
-            />
-            {query && (
-              <span className="facet">
-                {query}
-                <button onClick={() => setQuery("")} aria-label="Clear search">
-                  ×
-                </button>
-              </span>
-            )}
-          </div>
-          {view === "kanban" && (
-            <label className="groupby">
-              Group by
-              <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
-                {fields.map((f) => (
-                  <option key={f.name} value={f.name}>
-                    {label(f.name)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <div className="switcher" role="group" aria-label="View">
-            <button aria-pressed={view === "list"} onClick={() => setView("list")}>
-              List
-            </button>
-            <button
-              aria-pressed={view === "kanban"}
-              onClick={() => setView("kanban")}
-              disabled={fields.length === 0}
-            >
-              Kanban
-            </button>
-          </div>
-        </div>
-        {withheld.length > 0 && (
+      <section className="main panel" aria-label={title}>
+        <ControlPanel
+          appName={app.name}
+          title={title}
+          model={model.name}
+          fields={fields}
+          canCreate={model.can_create}
+          onNew={() => openNew()}
+          state={state}
+          setState={setState}
+          lookup={d.lookup}
+          views={available.map((v) => VIEWS[v]!)}
+          view={view}
+          setView={setView}
+          applyFavorite={applyFavorite}
+          count={filtered.length}
+          extra={
+            kf && (
+              <label className="inline-field">
+                <span>Group by</span>
+                <select
+                  value={kf.name}
+                  onChange={(e) => setState({ ...state, group: [e.target.value] })}
+                >
+                  {groupable(fields).map((f) => (
+                    <option key={f.name} value={f.name}>
+                      {label(f.name)}
+                      {f.kind === "date" ? " (month)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )
+          }
+        />
+        {denied.length > 0 && (
           <p className="notice-bar">
-            🛡 Withheld from you: {withheld.map((w) => label(w.split(".")[1] ?? w)).join(", ")}
+            Withheld from you: {denied.map((w) => label(w.split(".")[1] ?? w)).join(", ")}
           </p>
         )}
-        <div className="content">
-          {loading ? (
-            <p className="hint pad">Loading…</p>
-          ) : shown.length === 0 ? (
-            <Empty
-              title={title}
-              canCreate={model.can_create}
-              onNew={() => open("new")}
-              searching={!!query}
+        <div className={`content view-${view}`}>
+          {error ? (
+            <EmptyState title="Could not load records" hint={error} />
+          ) : !loaded ? (
+            <Skeleton rows={8} cols={Math.min(fields.length, 5)} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              title={`No ${title.toLowerCase()} yet`}
+              hint="Records you create show up here."
+              action={
+                model.can_create
+                  ? { label: `Create the first ${title.toLowerCase()}`, onClick: () => openNew() }
+                  : undefined
+              }
             />
-          ) : view === "kanban" && groupBy ? (
-            <Kanban
-              token={token}
-              model={model}
-              fields={fields}
-              rows={shown}
-              groupBy={groupBy}
-              selectedId={route.id}
-              onOpen={open}
-              onMoved={load}
-              notify={notify}
+          ) : filtered.length === 0 && view !== "calendar" ? (
+            <EmptyState
+              title="No matches"
+              hint="No record fits the current search."
+              action={
+                filtering
+                  ? { label: "Clear filters", onClick: () => setState({ ...state, facets: [] }) }
+                  : undefined
+              }
             />
+          ) : view === "kanban" ? (
+            <KanbanView {...vp} />
+          ) : view === "pivot" ? (
+            <PivotView {...vp} />
+          ) : view === "graph" ? (
+            <GraphView {...vp} />
+          ) : view === "calendar" ? (
+            <CalendarView {...vp} />
           ) : (
-            <List fields={fields} rows={shown} selectedId={route.id} onOpen={open} />
+            <ListView {...vp} />
           )}
         </div>
-        <footer className="countbar">
-          {shown.length} {shown.length === 1 ? "record" : "records"}
-        </footer>
       </section>
       {selected && (
         <RecordPanel
-          key={route.id}
-          token={token}
+          key={route.id === "new" ? `new-${JSON.stringify(newDefaults)}` : route.id}
           model={model}
           fields={fields}
           row={selected === "new" ? null : selected}
-          allRows={rows}
+          defaults={newDefaults}
+          withheld={denied}
           title={title}
-          onClose={() => go({ app: route.app, model: route.model, view: route.view })}
-          onSaved={async (id) => {
-            await load();
-            go({ app: route.app, model: route.model, view: route.view, id });
-          }}
-          notify={notify}
+          onClose={close}
+          onSaved={(id) => put({ id })}
         />
       )}
     </>
-  );
-}
-
-function Empty({
-  title,
-  canCreate,
-  onNew,
-  searching,
-}: {
-  title: string;
-  canCreate: boolean;
-  onNew: () => void;
-  searching: boolean;
-}) {
-  return (
-    <div className="empty">
-      <div className="empty-art" aria-hidden="true" />
-      <h3>{searching ? "No matches" : `No ${title.toLowerCase()} yet`}</h3>
-      <p className="hint">
-        {searching ? "Try a different search." : "Records you create show up here."}
-      </p>
-      {canCreate && !searching && (
-        <button className="btn primary" onClick={onNew}>
-          Create the first one
-        </button>
-      )}
-    </div>
-  );
-}
-
-function Cell({ field, value }: { field: string; value: unknown }) {
-  if (isState(field) && typeof value === "string" && value)
-    return (
-      <span className={`badge s-${value.replace(/[^a-z0-9]/gi, "")}`}>
-        {value.replace(/_/g, " ")}
-      </span>
-    );
-  if (isMasked(value)) return <span className="masked">{String(value)}</span>;
-  return <>{display(field, value)}</>;
-}
-
-function List({
-  fields,
-  rows,
-  selectedId,
-  onOpen,
-}: {
-  fields: FieldMeta[];
-  rows: Row[];
-  selectedId: string;
-  onOpen: (id: string) => void;
-}) {
-  return (
-    <table className="list">
-      <thead>
-        <tr>
-          {fields.map((f) => (
-            <th key={f.name} className={isMoney(f.name) ? "num" : ""} title={f.description}>
-              {label(f.name)}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => (
-          <tr
-            key={r.id}
-            aria-selected={r.id === selectedId}
-            tabIndex={0}
-            onClick={() => onOpen(r.id)}
-            onKeyDown={(e) => e.key === "Enter" && onOpen(r.id)}
-          >
-            {fields.map((f) => (
-              <td key={f.name} className={isMoney(f.name) ? "num" : ""}>
-                <Cell field={f.name} value={r[f.name]} />
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function Kanban(props: {
-  token: string;
-  model: ModelMeta;
-  fields: FieldMeta[];
-  rows: Row[];
-  groupBy: string;
-  selectedId: string;
-  onOpen: (id: string) => void;
-  onMoved: () => Promise<void>;
-  notify: (t: string) => void;
-}) {
-  const { token, model, fields, rows, groupBy, selectedId, onOpen, onMoved, notify } = props;
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [over, setOver] = useState<string | null>(null);
-  const columns = useMemo(() => {
-    const seen: string[] = [];
-    for (const r of rows) {
-      const v = String(r[groupBy] ?? "");
-      if (!seen.includes(v)) seen.push(v);
-    }
-    return seen;
-  }, [rows, groupBy]);
-  const title =
-    fields.find((f) => !isState(f.name) && !isMoney(f.name) && f.name !== groupBy) ?? fields[0];
-  const money1 = fields.find((f) => isMoney(f.name));
-  const rest = fields.filter((f) => f.name !== title?.name && f.name !== groupBy).slice(0, 3);
-
-  async function move(id: string, to: string) {
-    const r = await call(token, `${model.name}.update`, { id, [groupBy]: to });
-    if (r.kind === "error") notify(r.message);
-    await onMoved();
-  }
-  const drop = (e: DragEvent, col: string) => {
-    e.preventDefault();
-    setOver(null);
-    const id = e.dataTransfer.getData("text/plain");
-    if (id && col !== "") void move(id, col);
-  };
-
-  return (
-    <div className="kanban">
-      {columns.map((col) => {
-        const cards = rows.filter((r) => String(r[groupBy] ?? "") === col);
-        const total = money1 ? cards.reduce((n, r) => n + (Number(r[money1.name]) || 0), 0) : null;
-        return (
-          <section
-            key={col || "none"}
-            className={`kcol${over === col ? " over" : ""}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setOver(col);
-            }}
-            onDragLeave={() => setOver(null)}
-            onDrop={(e) => drop(e, col)}
-            aria-label={col || "No value"}
-          >
-            <header>
-              <b>{(col || "No value").replace(/_/g, " ")}</b>
-              <span className="count">{cards.length}</span>
-              {total !== null && <span className="sum">{money(total)}</span>}
-            </header>
-            {cards.map((r) => (
-              <article
-                key={r.id}
-                className={`kcard${r.id === selectedId ? " sel" : ""}${dragging === r.id ? " drag" : ""}`}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData("text/plain", r.id);
-                  setDragging(r.id);
-                }}
-                onDragEnd={() => setDragging(null)}
-                onClick={() => onOpen(r.id)}
-              >
-                <strong>{title ? display(title.name, r[title.name]) : r.id.slice(0, 8)}</strong>
-                {rest.map((f) => (
-                  <div key={f.name} className="kline">
-                    <span>{label(f.name)}</span>
-                    <span>
-                      <Cell field={f.name} value={r[f.name]} />
-                    </span>
-                  </div>
-                ))}
-                {/* Keyboard and touch twin of dragging */}
-                <select
-                  className="moveto"
-                  aria-label="Move to"
-                  value=""
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => e.target.value && void move(r.id, e.target.value)}
-                >
-                  <option value="">Move to…</option>
-                  {columns
-                    .filter((c) => c !== col && c !== "")
-                    .map((c) => (
-                      <option key={c} value={c}>
-                        {c.replace(/_/g, " ")}
-                      </option>
-                    ))}
-                </select>
-              </article>
-            ))}
-          </section>
-        );
-      })}
-    </div>
   );
 }
