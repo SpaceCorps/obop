@@ -2,5 +2,8 @@
   "name": "@obop/landing",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "vite-plus": "1.0.0"
+  }
 }
