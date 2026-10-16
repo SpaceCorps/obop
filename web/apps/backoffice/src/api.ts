@@ -1,11 +1,18 @@
 export type Command = { id: string; description: string; needs_approval: boolean };
 export type Row = Record<string, unknown> & { id: string };
 
+export type Kind = "text" | "longtext" | "number" | "money" | "date" | "bool" | "select" | "ref";
 export type FieldMeta = {
   name: string;
   description: string;
   class: string;
   personal_data: boolean;
+  kind: Kind;
+  required: boolean;
+  /** Only for `select`: the allowed values, in their natural order (for example statuses). */
+  options?: string[];
+  /** Only for `ref`: the model the id points at. */
+  to?: string;
 };
 export type ModelMeta = {
   name: string;
@@ -35,7 +42,26 @@ export async function approve(token: string, planId: string): Promise<Reply> {
 export async function meta(token: string): Promise<ModuleMeta[] | null> {
   const res = await fetch("/api/meta", { headers: { authorization: `Bearer ${token}` } });
   if (res.status === 401) return null;
-  return res.ok ? (await res.json()).modules : [];
+  if (!res.ok) return [];
+  const modules = (await res.json()).modules as ModuleMeta[];
+  // An older server may not send the kind yet: money by name, everything else text.
+  for (const m of modules)
+    for (const model of m.models)
+      for (const f of model.fields) {
+        f.kind ??= f.name.endsWith("_minor") ? "money" : "text";
+        f.required ??= false;
+      }
+  return modules;
+}
+
+/** Every principal-visible row of a model, plus the fields withheld from this principal. */
+export async function list(
+  token: string,
+  model: string,
+): Promise<{ rows: Row[]; denied: string[] } | { error: string }> {
+  const r = await call(token, `${model}.list`);
+  if (r.kind === "ok") return { rows: r.value as Row[], denied: r.denied };
+  return { error: r.kind === "error" ? r.message : "Needs approval" };
 }
 
 async function send(token: string, path: string, body: object): Promise<Reply> {
