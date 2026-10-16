@@ -81,12 +81,13 @@ let counter = 0;
 export const test = base.extend<Fixtures>({
   api: async ({ request }, use) => use(new Api(request)),
 
+  // eslint-disable-next-line no-empty-pattern -- Playwright needs a destructured first argument
   uid: async ({}, use, info) => {
     const run = Date.now().toString(36);
     await use((prefix) => `${prefix} ${run}${++counter}w${info.workerIndex}`);
   },
 
-  scratchModule: async ({ api }, use, info) => {
+  scratchModule: async ({ api }, use) => {
     const installed: string[] = [];
     await use(async (spec) => {
       const id = spec.id ?? `t${Date.now().toString(36)}${++counter}`;
@@ -95,7 +96,6 @@ export const test = base.extend<Fixtures>({
       return id;
     });
     for (const id of installed) await api.run("root", "module.uninstall", { id });
-    void info;
   },
 
   signIn: async ({ page, api }, use) => {
@@ -113,6 +113,7 @@ export const test = base.extend<Fixtures>({
     });
   },
 
+  // eslint-disable-next-line no-empty-pattern -- Playwright needs a destructured first argument
   allowHttpErrors: async ({}, use) => {
     // The guard (an auto fixture) reads the module-level list and resets it before each test.
     await use((...statuses) => void allowed.push(...statuses));
@@ -127,13 +128,16 @@ export const test = base.extend<Fixtures>({
       page.on("console", (m: ConsoleMessage) => {
         if (m.type() !== "error") return;
         // Chrome logs every 4xx/5xx response as a console error; the test declares the expected ones.
-        const http = /Failed to load resource: the server responded with a status of (\d+)/.exec(m.text());
+        const http = /Failed to load resource: the server responded with a status of (\d+)/.exec(
+          m.text(),
+        );
         if (http) failedLoads.push({ status: Number(http[1]), text: m.text() });
         else problems.push(`console error: ${m.text()}`);
       });
       await use();
       if (info.status !== info.expectedStatus) return; // the test already failed for its own reason
-      for (const f of failedLoads) if (!allowed.includes(f.status)) problems.push(`unexpected ${f.text}`);
+      for (const f of failedLoads)
+        if (!allowed.includes(f.status)) problems.push(`unexpected ${f.text}`);
       expect(problems, "console errors and page errors").toEqual([]);
     },
     { auto: true },
@@ -152,7 +156,8 @@ export async function open(page: Page, hash: string): Promise<void> {
 export async function unnamedControls(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const bad: string[] = [];
-    const sel = "button, input, select, textarea, a[href], [role=button], [role=combobox], [role=checkbox], [role=radio], [role=tab]";
+    const sel =
+      "button, input, select, textarea, a[href], [role=button], [role=combobox], [role=checkbox], [role=radio], [role=tab]";
     for (const el of document.querySelectorAll<HTMLElement>(sel)) {
       if (el instanceof HTMLInputElement && el.type === "hidden") continue;
       if (el.closest("[hidden], [aria-hidden=true]")) continue;
@@ -166,12 +171,20 @@ export async function unnamedControls(page: Page): Promise<string[]> {
       const name =
         el.getAttribute("aria-label")?.trim() ||
         byIds ||
-        (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement
-          ? (el.labels && el.labels.length ? Array.from(el.labels).map((l) => l.textContent).join("").trim() : "") ||
-            forLabel?.textContent?.trim()
+        (el instanceof HTMLInputElement ||
+        el instanceof HTMLSelectElement ||
+        el instanceof HTMLTextAreaElement
+          ? (el.labels && el.labels.length
+              ? Array.from(el.labels)
+                  .map((l) => l.textContent)
+                  .join("")
+                  .trim()
+              : "") || forLabel?.textContent?.trim()
           : "") ||
         (el instanceof HTMLInputElement && el.type === "color" ? el.title : "") ||
-        (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? "" : el.textContent?.trim()) ||
+        (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
+          ? ""
+          : el.textContent?.trim()) ||
         el.getAttribute("title")?.trim();
       if (!name) bad.push(el.outerHTML.slice(0, 140));
     }

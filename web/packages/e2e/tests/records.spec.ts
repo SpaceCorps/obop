@@ -4,7 +4,11 @@ const leadRow = (page: import("@playwright/test").Page, title: string) =>
   page.getByRole("grid", { name: "Lead list" }).getByRole("row", { name: new RegExp(title) });
 
 test.describe("records in a built-in module (CRM leads)", () => {
-  test("create a lead: required field is validated, then the record appears in the list", async ({ page, signIn, uid }) => {
+  test("create a lead: required field is validated, then the record appears in the list", async ({
+    page,
+    signIn,
+    uid,
+  }) => {
     const title = uid("Create lead");
     await signIn("root");
     await open(page, "/crm/lead?view=list");
@@ -48,7 +52,9 @@ test.describe("records in a built-in module (CRM leads)", () => {
 
     await panel.getByLabel("Expected revenue").fill("abc");
     await panel.getByRole("button", { name: "Create" }).click();
-    await expect(panel.getByRole("alert").filter({ hasText: "must be an amount like 12.50" })).toBeVisible();
+    await expect(
+      panel.getByRole("alert").filter({ hasText: "must be an amount like 12.50" }),
+    ).toBeVisible();
 
     // The form accepts this amount, but it does not fit the server's integer: its message lands on the field.
     await panel.getByLabel("Expected revenue").fill("99999999999999999999.99");
@@ -66,7 +72,12 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await expect(leadRow(page, title)).toContainText("€10.00");
   });
 
-  test("edit a lead: Save persists it and Discard throws the draft away", async ({ page, signIn, api, uid }) => {
+  test("edit a lead: Save persists it and Discard throws the draft away", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
     const title = uid("Edit lead");
     await api.create("root", "lead", { title, stage: "new", expected_revenue_minor: 5000 });
     await signIn("root", "/crm/lead?view=list");
@@ -91,7 +102,12 @@ test.describe("records in a built-in module (CRM leads)", () => {
     expect(stored?.expected_revenue_minor).toBe(7500);
   });
 
-  test("leaving a form with unsaved edits asks first, and Keep editing keeps the draft", async ({ page, signIn, api, uid }) => {
+  test("leaving a form with unsaved edits asks first, and Keep editing keeps the draft", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
     const title = uid("Guarded lead");
     await api.create("root", "lead", { title });
     await signIn("root", "/crm/lead?view=list");
@@ -122,9 +138,18 @@ test.describe("records in a built-in module (CRM leads)", () => {
 });
 
 test.describe("inline edit in the list", () => {
-  test("click a cell, type, Enter saves; Escape cancels; a bad value shows an inline error", async ({ page, signIn, api, uid }) => {
+  test("click a cell, type, Enter saves; Escape cancels; a bad value shows an inline error", async ({
+    page,
+    signIn,
+    api,
+    uid,
+  }) => {
     const title = uid("Inline lead");
-    await api.create("root", "lead", { title, contact_name: "Original Name", expected_revenue_minor: 1000 });
+    await api.create("root", "lead", {
+      title,
+      contact_name: "Original Name",
+      expected_revenue_minor: 1000,
+    });
     await signIn("root", "/crm/lead?view=list");
     const row = leadRow(page, title);
     const cell = (n: number) => row.locator(`td[data-c="${n}"]`);

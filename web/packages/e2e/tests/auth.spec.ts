@@ -13,7 +13,10 @@ test.describe("sign in and out", () => {
     await expect(page.getByRole("button", { name: "R", exact: true })).toBeVisible();
   });
 
-  test("a wrong password is refused with a clear message and no session", async ({ page, allowHttpErrors }) => {
+  test("a wrong password is refused with a clear message and no session", async ({
+    page,
+    allowHttpErrors,
+  }) => {
     allowHttpErrors(401);
     await page.goto("/");
     await page.getByLabel("Username").fill("nobody");

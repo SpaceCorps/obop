@@ -48,6 +48,37 @@ jobs:
             (cd web/apps/$app && vp build)
           done
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.21.2
+      - run: vp install --frozen-lockfile
+      - name: Build the binary under test
+        run: cargo build --locked
+      - name: Build the apps and assemble the site
+        run: |
+          (cd web/apps/backoffice && vp build)
+          deploy/build-site.sh
+      - name: Check the e2e package
+        run: cd web/packages/e2e && vp check && vp run typecheck
+      - name: Install Chromium
+        run: cd web/packages/e2e && vp exec playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: cd web/packages/e2e && vp run e2e
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: playwright-report
+          path: |
+            web/packages/e2e/playwright-report
+            web/packages/e2e/test-results
+          retention-days: 7
+
   lockfiles:
     runs-on: ubuntu-latest
     steps:
@@ -59,8 +90,8 @@ jobs:
 
   all:
     if: always()
-    needs: [rust, web, lockfiles]
+    needs: [rust, web, e2e, lockfiles]
     runs-on: ubuntu-latest
     steps:
       - run: |
-          test "${{ needs.rust.result }}" = success && test "${{ needs.web.result }}" = success && test "${{ needs.lockfiles.result }}" = success
+          test "${{ needs.rust.result }}" = success && test "${{ needs.web.result }}" = success && test "${{ needs.e2e.result }}" = success && test "${{ needs.lockfiles.result }}" = success

@@ -10,7 +10,8 @@ export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../
 /** The binary under test: `$OBOP_BIN`, else the debug build at the repository root. */
 export function obopBinary(): string {
   const bin = process.env.OBOP_BIN ?? resolve(repoRoot, "target/debug/obop");
-  if (!existsSync(bin)) throw new Error(`obop binary not found at ${bin}; run \`cargo build\` or set OBOP_BIN`);
+  if (!existsSync(bin))
+    throw new Error(`obop binary not found at ${bin}; run \`cargo build\` or set OBOP_BIN`);
   return bin;
 }
 
@@ -22,7 +23,8 @@ export function requireBuilt(): void {
     [backofficeDist, "(cd web/apps/backoffice && vp build)"],
     [siteDir, "deploy/build-site.sh"],
   ] as const)
-    if (!existsSync(resolve(dir, "index.html"))) throw new Error(`${dir} is missing; run ${how} first`);
+    if (!existsSync(resolve(dir, "index.html")))
+      throw new Error(`${dir} is missing; run ${how} first`);
 }
 
 /** Test accounts, created with the CLI before the instance starts. Test values only. */

@@ -27,7 +27,10 @@ test.describe("launcher and command palette", () => {
     await expect(page.getByRole("heading", { name: "Your apps" })).toBeVisible();
   });
 
-  test("Ctrl/Cmd+K opens the palette; typing and Enter jump to a list", async ({ page, signIn }) => {
+  test("Ctrl/Cmd+K opens the palette; typing and Enter jump to a list", async ({
+    page,
+    signIn,
+  }) => {
     await signIn("root");
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog", { name: "Command palette" });
@@ -65,7 +68,10 @@ test.describe("launcher and command palette", () => {
     await expect(page).toHaveURL(/id=new/);
   });
 
-  test("the palette says so when nothing matches, and the theme command opens Customize", async ({ page, signIn }) => {
+  test("the palette says so when nothing matches, and the theme command opens Customize", async ({
+    page,
+    signIn,
+  }) => {
     await signIn("root");
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog", { name: "Command palette" });

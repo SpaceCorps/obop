@@ -23,7 +23,15 @@ if (kind === "app") {
   const db = `sqlite://${join(dir, "app.sqlite")}`;
   for (const u of Object.values(users))
     run(["admin", "create", u.name, "--groups", u.groups, "--db", db], `${u.password}\n`);
-  args = ["serve", "--addr", `127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`, "--db", db, "--static", backofficeDist];
+  args = [
+    "serve",
+    "--addr",
+    `127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`,
+    "--db",
+    db,
+    "--static",
+    backofficeDist,
+  ];
 } else if (kind === "platform") {
   const db = `sqlite://${join(dir, "platform.sqlite")}`;
   args = [

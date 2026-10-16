@@ -48,7 +48,13 @@ test.describe("kanban board", () => {
     expect(await stateOf(api, model, a)).toBe("qualified");
   });
 
-  test("a card added with the quick form can be dragged at once", async ({ page, signIn, api, uid, scratchModule }) => {
+  test("a card added with the quick form can be dragged at once", async ({
+    page,
+    signIn,
+    api,
+    uid,
+    scratchModule,
+  }) => {
     const model = await scratchModule({ title: "Quick board", fields });
     const title = uid("Quick");
     await api.create("root", model, { title: uid("Seed"), state: "new" });
@@ -77,7 +83,9 @@ test.describe("kanban board", () => {
     await signIn("root", `/${model}/${model}?view=kanban`);
 
     const cardIn = (stage: string) => card(column(page, stage), title);
-    await cardIn("New").getByLabel(/^Move .* to$/).selectOption({ label: "Lost" });
+    await cardIn("New")
+      .getByLabel(/^Move .* to$/)
+      .selectOption({ label: "Lost" });
     await expect(cardIn("Lost")).toHaveCount(1);
     expect(await stateOf(api, model, title)).toBe("lost");
 
@@ -110,7 +118,8 @@ test.describe("kanban board", () => {
     const model = await scratchModule({ title: "Tall board", fields });
     const title = uid("Far");
     await api.create("root", model, { title, state: "new" });
-    for (let i = 0; i < 30; i++) await api.create("root", model, { title: uid("Filler"), state: "won" });
+    for (let i = 0; i < 30; i++)
+      await api.create("root", model, { title: uid("Filler"), state: "won" });
     await signIn("root", `/${model}/${model}?view=kanban`);
 
     await expect(column(page, "Won").locator(".kcard")).toHaveCount(30);
@@ -125,7 +134,13 @@ test.describe("kanban board", () => {
     expect(await stateOf(api, model, title)).toBe("won");
   });
 
-  test("a column folds away and stays folded after a reload", async ({ page, signIn, api, uid, scratchModule }) => {
+  test("a column folds away and stays folded after a reload", async ({
+    page,
+    signIn,
+    api,
+    uid,
+    scratchModule,
+  }) => {
     const model = await scratchModule({ title: "Fold board", fields });
     await api.create("root", model, { title: uid("Folded"), state: "lost" });
     await signIn("root", `/${model}/${model}?view=kanban`);
