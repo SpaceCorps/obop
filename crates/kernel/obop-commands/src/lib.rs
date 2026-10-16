@@ -39,6 +39,9 @@ pub enum Surface {
 /// The instance administrator group.
 pub const ADMIN_GROUP: &str = "platform.admin";
 
+/// A command group that every authenticated principal satisfies.
+pub const ANY_GROUP: &str = "*";
+
 #[derive(Debug, Clone)]
 pub struct Principal {
     pub id: String,
@@ -72,6 +75,10 @@ impl Principal {
     /// installed later need no re-granting) and, if scoped, the scope allows it. An agent's scopes
     /// always list concrete groups, so an admin's agent still gets only what it was scoped to.
     pub fn allows(&self, group: &str) -> bool {
+        // `*` means any signed-in principal (settings every user may read).
+        if group == ANY_GROUP {
+            return true;
+        }
         let held = self.groups.contains(group) || self.groups.contains(ADMIN_GROUP);
         held && self.scopes.as_ref().is_none_or(|s| s.contains(group))
     }
@@ -137,7 +144,43 @@ struct Registered {
 pub struct Dispatcher {
     pending: std::sync::Mutex<HashMap<String, Pending>>,
     commands: std::sync::RwLock<HashMap<String, Arc<Registered>>>,
-    fields: std::sync::RwLock<HashMap<String, Vec<FieldDef>>>,
+    models: std::sync::RwLock<HashMap<String, ModelMeta>>,
+    /// Module ids in the order they were first registered, so the launcher is stable.
+    order: std::sync::RwLock<Vec<String>>,
+}
+
+struct ModelMeta {
+    module: String,
+    module_name: String,
+    description: &'static str,
+    fields: Vec<FieldDef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldInfo {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub class: &'static str,
+    pub personal_data: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelInfo {
+    pub name: String,
+    pub description: &'static str,
+    /// Fields this principal may read.
+    pub fields: Vec<FieldInfo>,
+    /// Commands beyond get, list, create and update that this principal may call.
+    pub actions: Vec<CommandInfo>,
+    pub can_create: bool,
+    pub can_update: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModuleInfo {
+    pub id: String,
+    pub name: String,
+    pub models: Vec<ModelInfo>,
 }
 
 impl Dispatcher {
@@ -161,6 +204,84 @@ impl Dispatcher {
             .collect()
     }
 
+    /// What the UI renders from: the modules, models, readable fields and actions this principal
+    /// can see. A model appears only if its `list` command is visible, and a field only if the
+    /// principal may read it, so metadata never reveals what data would not.
+    pub fn meta(&self, surface: Surface, p: &Principal) -> Vec<ModuleInfo> {
+        let cmds = self.commands.read().unwrap();
+        let models = self.models.read().unwrap();
+        let order = self.order.read().unwrap();
+        let visible =
+            |c: &Registered| on_surface(c.surfaces, surface) && p.allows(c.permission_group);
+        let mut out = Vec::new();
+        for module in order.iter() {
+            let mut infos = Vec::new();
+            let mut names: Vec<&String> = models
+                .iter()
+                .filter(|(_, m)| &m.module == module)
+                .map(|(n, _)| n)
+                .collect();
+            names.sort();
+            for name in names {
+                let m = &models[name];
+                let Some(list) = cmds.get(&format!("{name}.list")) else {
+                    continue;
+                };
+                if !visible(list) {
+                    continue;
+                }
+                let can = |c: &str| cmds.get(&format!("{name}.{c}")).is_some_and(|r| visible(r));
+                let mut actions: Vec<CommandInfo> = cmds
+                    .iter()
+                    .filter(|(id, c)| {
+                        c.model == name.as_str()
+                            && id.starts_with(&format!("{name}."))
+                            && !["get", "list", "create", "update"].contains(&&id[name.len() + 1..])
+                            && visible(c)
+                    })
+                    .map(|(id, c)| CommandInfo {
+                        id: id.clone(),
+                        description: c.description,
+                        permission_group: c.permission_group,
+                        needs_approval: c.needs_approval,
+                    })
+                    .collect();
+                actions.sort_by(|a, b| a.id.cmp(&b.id));
+                infos.push(ModelInfo {
+                    name: name.clone(),
+                    description: m.description,
+                    fields: m
+                        .fields
+                        .iter()
+                        .filter(|f| p.allows(f.permission_group))
+                        .map(|f| FieldInfo {
+                            name: f.name,
+                            description: f.description,
+                            class: f.class.map_or("none", |c| c.as_str()),
+                            personal_data: f.personal_data,
+                        })
+                        .collect(),
+                    actions,
+                    can_create: can("create"),
+                    can_update: can("update"),
+                });
+            }
+            if !infos.is_empty() {
+                let name = models
+                    .values()
+                    .find(|m| &m.module == module)
+                    .map(|m| m.module_name.clone())
+                    .unwrap_or_else(|| module.clone());
+                out.push(ModuleInfo {
+                    id: module.clone(),
+                    name,
+                    models: infos,
+                });
+            }
+        }
+        out
+    }
+
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
     /// undeclared command is a programming error: the surface is generated from the registry.
     pub fn register(&self, module: &Module, model: &str, command: &str, handler: Handler) {
@@ -174,10 +295,21 @@ impl Dispatcher {
             .into_iter()
             .find(|c| c.name == command)
             .unwrap_or_else(|| panic!("{}.{model}: command {command} is not declared", module.id));
-        self.fields
-            .write()
-            .unwrap()
-            .insert(m.name.to_string(), m.fields.clone());
+        self.models.write().unwrap().insert(
+            m.name.to_string(),
+            ModelMeta {
+                module: module.id.clone(),
+                module_name: module.name.clone(),
+                description: m.description,
+                fields: m.fields.clone(),
+            },
+        );
+        {
+            let mut order = self.order.write().unwrap();
+            if !order.contains(&module.id) {
+                order.push(module.id.clone());
+            }
+        }
         self.commands.write().unwrap().insert(
             format!("{model}.{command}"),
             Arc::new(Registered {
@@ -202,10 +334,11 @@ impl Dispatcher {
             .collect();
         let models: Vec<String> = models.into_iter().map(String::from).collect();
         cmds.retain(|_, c| c.module != module);
-        let mut f = self.fields.write().unwrap();
+        let mut f = self.models.write().unwrap();
         for m in models {
             f.remove(&m);
         }
+        self.order.write().unwrap().retain(|x| x != module);
     }
 
     /// Whether any command of `model` is registered.
@@ -366,7 +499,12 @@ impl Dispatcher {
                 };
                 let mut shaped = BTreeMap::new();
                 for (k, v) in m {
-                    let defs = self.fields.read().unwrap().get(model).cloned();
+                    let defs = self
+                        .models
+                        .read()
+                        .unwrap()
+                        .get(model)
+                        .map(|m| m.fields.clone());
                     let Some(def) = defs.as_ref().and_then(|f| f.iter().find(|f| f.name == k))
                     else {
                         // Unclassified output is withheld: the gate guarantees declared fields only.

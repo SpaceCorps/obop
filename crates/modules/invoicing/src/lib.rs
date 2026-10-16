@@ -7,6 +7,7 @@ use obop_types::DataClass::None as NoClass;
 pub fn module() -> Module {
     Module {
         id: "invoicing".into(),
+        name: "Invoicing".into(),
         models: vec![ModelDef {
             name: "invoice",
             description: "A customer invoice; posted invoices are corrected only by credit notes",

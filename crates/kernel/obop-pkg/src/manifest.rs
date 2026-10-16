@@ -233,6 +233,7 @@ impl Manifest {
             .collect();
         let module = Module {
             id: self.module.id.clone(),
+            name: self.module.name.clone(),
             models,
             network_destinations: vec![],
         };

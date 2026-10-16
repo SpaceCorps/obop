@@ -847,6 +847,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn meta_endpoint_describes_what_the_caller_can_see() {
+        let (r, auth) = real();
+        auth.create_user(
+            "root",
+            "an admin password!",
+            &["platform.admin".to_string()],
+        )
+        .unwrap();
+        let get = |token: String| {
+            let r = r.clone();
+            async move {
+                let resp = r
+                    .oneshot(
+                        Request::get("/api/meta")
+                            .header("authorization", format!("Bearer {token}"))
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                let status = resp.status().as_u16();
+                (
+                    status,
+                    serde_json::from_slice::<J>(
+                        &resp.into_body().collect().await.unwrap().to_bytes(),
+                    )
+                    .unwrap_or(J::Null),
+                )
+            }
+        };
+        assert_eq!(get("obop_forged".into()).await.0, 401);
+        let sam = login(&r, "sam", "another long password").await;
+        let (s, b) = get(sam).await;
+        assert_eq!(s, 200);
+        let ids: Vec<_> = b["modules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["id"].as_str().unwrap())
+            .collect();
+        assert!(ids.contains(&"crm") && ids.contains(&"base"));
+        assert!(!ids.contains(&"invoicing"), "sam holds no invoicing group");
+        let party = b["modules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|m| m["models"].as_array().unwrap())
+            .find(|m| m["name"] == "party")
+            .unwrap();
+        assert!(
+            party["fields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|f| f["name"] == "tax_id" && f["class"] == "financial")
+        );
+        let root = login(&r, "root", "an admin password!").await;
+        let (_, b) = get(root).await;
+        assert!(
+            b["modules"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["id"] == "platform"),
+            "admins also get the customize models"
+        );
+    }
+
+    #[tokio::test]
     async fn platform_signup_to_instance_over_http() {
         let backend = obop_storage::open("memory:").unwrap();
         let platform = obop_platform::Platform::new(

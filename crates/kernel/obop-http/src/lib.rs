@@ -68,6 +68,7 @@ pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
         .route("/api/auth/login", post(login))
         .route("/api/auth/agent-token", post(agent_token))
         .route("/api/commands", get(commands))
+        .route("/api/meta", get(meta))
         .route("/api/approve/{plan_id}", post(approve))
         .route("/api/{model}/{command}", post(call))
         .with_state(state);
@@ -122,6 +123,43 @@ fn agent_token_blocking(s: Arc<HttpState>, h: HeaderMap, body: J) -> Response {
         Ok(token) => Json(json!({"token": token})).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
+}
+
+async fn meta(State(s): Shared, h: HeaderMap) -> Response {
+    blocking(move || meta_blocking(s, h)).await
+}
+
+/// Everything the UI renders from: modules, models, readable fields and actions for this caller.
+fn meta_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
+    let (p, _) = match s.auth(&h) {
+        Ok(x) => x,
+        Err(c) => return c.into_response(),
+    };
+    let modules: Vec<J> = s
+        .dispatcher
+        .meta(Surface::Rest, &p)
+        .into_iter()
+        .map(|m| {
+            json!({
+                "id": m.id,
+                "name": m.name,
+                "models": m.models.iter().map(|x| json!({
+                    "name": x.name,
+                    "description": x.description,
+                    "can_create": x.can_create,
+                    "can_update": x.can_update,
+                    "fields": x.fields.iter().map(|f| json!({
+                        "name": f.name, "description": f.description,
+                        "class": f.class, "personal_data": f.personal_data,
+                    })).collect::<Vec<_>>(),
+                    "actions": x.actions.iter().map(|a| json!({
+                        "id": a.id, "description": a.description, "needs_approval": a.needs_approval,
+                    })).collect::<Vec<_>>(),
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    Json(json!({"modules": modules})).into_response()
 }
 
 async fn commands(State(s): Shared, h: HeaderMap) -> Response {

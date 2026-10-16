@@ -7,6 +7,7 @@ use obop_types::DataClass::*;
 pub fn module() -> Module {
     Module {
         id: "base".into(),
+        name: "Contacts".into(),
         models: vec![ModelDef {
             name: "party",
             description: "A person or organisation the business deals with",

@@ -129,6 +129,8 @@ impl ModelDef {
 #[derive(Debug, Clone, Default)]
 pub struct Module {
     pub id: String,
+    /// Name shown in the app launcher.
+    pub name: String,
     pub models: Vec<ModelDef>,
     /// Network destinations the module declares in `obop.toml` (D41).
     pub network_destinations: Vec<String>,
@@ -240,6 +242,7 @@ mod tests {
     fn module(f: FieldDef) -> Module {
         Module {
             id: "t".into(),
+            name: "T".into(),
             models: vec![ModelDef {
                 name: "party",
                 description: "Party",

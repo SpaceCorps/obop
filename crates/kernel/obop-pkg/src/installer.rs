@@ -4,7 +4,7 @@
 
 use crate::manifest::Manifest;
 use crate::marketplace::Marketplace;
-use obop_commands::{ADMIN_GROUP, Dispatcher, Store, Value};
+use obop_commands::{ADMIN_GROUP, ANY_GROUP, Dispatcher, Store, Value};
 use obop_registry::{CommandDef, FieldDef, ModelDef, Module, intern};
 use obop_storage::{Backend, Fields};
 use obop_types::DataClass;
@@ -81,7 +81,7 @@ impl Installer {
     fn builtin_info(m: &Module) -> PackageInfo {
         PackageInfo {
             id: m.id.clone(),
-            name: m.id.clone(),
+            name: m.name.clone(),
             version: "built in".into(),
             description: format!("First-party module with {} model(s)", m.models.len()),
             source: "builtin".into(),
@@ -258,6 +258,32 @@ impl Installer {
             .is_some_and(|m| m.module.depends.iter().any(|d| d == dep))
     }
 
+    /// The instance-wide UI settings (theme, app order): one JSON object kept as text.
+    pub fn settings(&self) -> String {
+        self.backend
+            .get("obop_setting", "instance")
+            .ok()
+            .flatten()
+            .and_then(|f| f.get("value").and_then(J::as_str).map(String::from))
+            .unwrap_or_else(|| "{}".into())
+    }
+
+    pub fn set_settings(&self, text: &str) -> Result<(), String> {
+        if text.len() > 64 * 1024 {
+            return Err("settings are larger than 64 KiB".into());
+        }
+        match serde_json::from_str::<J>(text) {
+            Ok(J::Object(_)) => {}
+            _ => return Err("settings must be a JSON object".into()),
+        }
+        let mut f = Fields::new();
+        f.insert("value".into(), J::from(text));
+        if !self.backend.update("obop_setting", "instance", &f)? {
+            self.backend.insert("obop_setting", "instance", &f)?;
+        }
+        Ok(())
+    }
+
     /// Register every stored package again after a restart. Returns what failed.
     pub fn load_installed(&self) -> Vec<(String, String)> {
         let mut failed = Vec::new();
@@ -319,6 +345,7 @@ pub fn admin_module() -> Module {
         |name, description| FieldDef::new(name, description, DataClass::None, false, ADMIN_GROUP);
     Module {
         id: "platform".into(),
+        name: "Customize".into(),
         models: vec![
             ModelDef {
                 name: "module",
@@ -370,6 +397,20 @@ pub fn admin_module() -> Module {
                     )
                     .approval(),
                 ],
+            },
+            ModelDef {
+                name: "setting",
+                description: "Instance-wide interface settings: theme and the app launcher layout",
+                read_group: ANY_GROUP,
+                write_group: ADMIN_GROUP,
+                fields: vec![FieldDef::new(
+                    "value",
+                    "The settings as a JSON object",
+                    DataClass::None,
+                    false,
+                    ANY_GROUP,
+                )],
+                commands: vec![],
             },
         ],
         network_destinations: vec![],
@@ -428,6 +469,32 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
             let id = text(x, "id")?;
             i.uninstall(&id)
                 .map(|()| Value::map([("id", s(&id)), ("uninstalled", Value::Bool(true))]))
+        }),
+    );
+    let i = inst.clone();
+    d.register(
+        &m,
+        "setting",
+        "get",
+        Box::new(move |_| {
+            Ok(Value::map([
+                ("id", s("instance")),
+                ("value", s(&i.settings())),
+            ]))
+        }),
+    );
+    let i = inst.clone();
+    d.register(
+        &m,
+        "setting",
+        "update",
+        Box::new(move |input| {
+            let Value::Map(x) = input else {
+                return Err("expected an object".into());
+            };
+            let v = text(x, "value")?;
+            i.set_settings(&v)?;
+            Ok(Value::map([("id", s("instance")), ("value", s(&v))]))
         }),
     );
     let i = inst.clone();
@@ -601,6 +668,85 @@ mod tests {
     }
 
     #[test]
+    fn everyone_reads_settings_but_only_admins_write_them() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        let user = Principal::user("u", &["base.user"]);
+        let read = |p: &Principal| call(&d, p, "setting.get", by_id("instance"));
+        let v = read(&user).unwrap().value;
+        assert!(matches!(v, Value::Map(m) if m["value"] == Value::text("{}")));
+        let set = |p: &Principal, v: &str| {
+            call(
+                &d,
+                p,
+                "setting.update",
+                Value::map([("id", Value::text("instance")), ("value", Value::text(v))]),
+            )
+        };
+        assert!(matches!(set(&user, "{}"), Err(CallError::Forbidden(_))));
+        set(&admin(), r##"{"theme":{"accent":"#6d3fd0"}}"##).unwrap();
+        assert!(inst.settings().contains("#6d3fd0"));
+        assert!(
+            matches!(read(&user).unwrap().value, Value::Map(m) if matches!(&m["value"], Value::Text(t) if t.contains("accent")))
+        );
+        assert!(matches!(set(&admin(), "[1]"), Err(CallError::Handler(_))));
+        assert!(matches!(
+            set(&admin(), "not json"),
+            Err(CallError::Handler(_))
+        ));
+        // An agent scoped to base.user can still read them, and cannot write.
+        let bot = Principal::agent("bot", &["base.user"], &["base.user"]);
+        assert!(read(&bot).is_ok());
+        assert!(matches!(set(&bot, "{}"), Err(CallError::Forbidden(_))));
+    }
+
+    #[test]
+    fn meta_lists_only_what_the_principal_can_see() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/fleet.toml"),
+            "marketplace",
+            "root",
+        )
+        .unwrap();
+        let none = Principal::user("n", &["base.user"]);
+        assert!(
+            d.meta(Surface::Rest, &none).iter().all(|m| m.id != "fleet"),
+            "no fleet group, no fleet app"
+        );
+        let viewer = Principal::user("v", &["fleet.user"]);
+        let fleet = d
+            .meta(Surface::Rest, &viewer)
+            .into_iter()
+            .find(|m| m.id == "fleet")
+            .unwrap();
+        assert_eq!(fleet.name, "Fleet");
+        let model = &fleet.models[0];
+        assert_eq!(model.name, "fleet_vehicle");
+        assert!(!model.can_create, "fleet.manager writes");
+        assert!(model.actions.is_empty(), "dispatch needs fleet.manager too");
+        let manager = Principal::user("m", &["fleet.user", "fleet.manager"]);
+        let fleet = d
+            .meta(Surface::Rest, &manager)
+            .into_iter()
+            .find(|m| m.id == "fleet")
+            .unwrap();
+        let model = &fleet.models[0];
+        assert!(model.can_create && model.can_update);
+        assert_eq!(
+            model
+                .actions
+                .iter()
+                .map(|a| a.id.as_str())
+                .collect::<Vec<_>>(),
+            ["fleet_vehicle.dispatch", "fleet_vehicle.return_to_pool"]
+        );
+        let driver = model.fields.iter().find(|f| f.name == "driver").unwrap();
+        assert_eq!((driver.class, driver.personal_data), ("internal", true));
+    }
+
+    #[test]
     fn non_admins_cannot_see_or_run_module_commands() {
         let (d, _) = setup(&Store::new());
         let user = Principal::user("u", &["base.user"]);
@@ -613,7 +759,11 @@ mod tests {
             ),
             Err(CallError::Forbidden(_))
         ));
-        assert!(d.visible(Surface::Rest, &user).is_empty());
+        assert_eq!(
+            d.visible(Surface::Rest, &user),
+            ["setting.get"],
+            "only the settings everyone may read"
+        );
     }
 
     #[test]
