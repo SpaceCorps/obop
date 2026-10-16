@@ -183,10 +183,10 @@ export function CodeBlock({ code, lang = "" }: { code: string; lang?: string }) 
     timer.current = window.setTimeout(() => setCopied(false), 1800);
   }
   return (
-    <div className="code" data-lang={lang || undefined} ref={root}>
-      <div className="code-bar">
-        <span className="code-lang">{lang || "text"}</span>
-        <button type="button" className="code-copy" onClick={() => void copy()}>
+    <div className="codeblock" data-lang={lang || undefined} ref={root}>
+      <div className="codeblock-bar">
+        <span className="codeblock-lang">{lang || "text"}</span>
+        <button type="button" className="codeblock-copy" onClick={() => void copy()}>
           <Icon name={copied ? "check" : "copy"} size={14} />
           <span>{copied ? "Copied" : "Copy"}</span>
         </button>
@@ -194,7 +194,7 @@ export function CodeBlock({ code, lang = "" }: { code: string; lang?: string }) 
       <pre tabIndex={0} aria-label={`${lang || "Code"} example`}>
         <code>
           {lines.map((toks, i) => (
-            <span key={i} className="code-line">
+            <span key={i} className="codeblock-line">
               {toks.map((t, j) => (
                 <span key={j} className={t.cls ? `tok-${t.cls}` : undefined}>
                   {t.text}

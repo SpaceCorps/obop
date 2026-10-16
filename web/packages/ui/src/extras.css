@@ -96,7 +96,7 @@
   font-weight: var(--weight-semibold);
   letter-spacing: -0.022em;
   line-height: 1.1;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .stat-hint {
   color: var(--text-muted);
@@ -116,13 +116,13 @@
 }
 
 /* ---------- Code block ---------- */
-.code {
+.codeblock {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface-2);
   overflow: hidden;
 }
-.code-bar {
+.codeblock-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -131,13 +131,13 @@
   border-block-end: 1px solid var(--border);
   background: var(--surface-3);
 }
-.code-lang {
+.codeblock-lang {
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   text-transform: lowercase;
 }
-.code-copy {
+.codeblock-copy {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -150,11 +150,11 @@
   font-size: var(--text-xs);
   cursor: pointer;
 }
-.code-copy:hover {
+.codeblock-copy:hover {
   background: var(--surface);
   color: var(--text);
 }
-.code pre {
+.codeblock pre {
   margin: 0;
   padding: var(--space-3) var(--space-4);
   overflow-x: auto;
@@ -163,7 +163,7 @@
   line-height: 1.55;
   tab-size: 2;
 }
-.code pre code {
+.codeblock pre code {
   font: inherit;
   background: none;
   padding: 0;
