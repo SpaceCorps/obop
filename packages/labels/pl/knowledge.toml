@@ -1,0 +1,65 @@
+[labels.pl.module]
+name = "Baza wiedzy"
+description = "Wiki: artykuły ułożone w drzewo przez artykuł nadrzędny, z obiegiem wersja robocza, opublikowane, zarchiwizowane, ustawieniem widoczności i tagami. Widoczność jest etykietą dla interfejsu i dla ludzi; platforma nie ma jeszcze uprawnień na poziomie wierszy, więc każdy z grupami Bazy wiedzy może czytać wszystkie artykuły."
+
+[labels.pl.model.knowledge_article]
+name = "Artykuł"
+description = "Artykuł bazy wiedzy"
+
+[labels.pl.model.knowledge_article.field.title]
+label = "Tytuł"
+description = "Tytuł artykułu"
+
+[labels.pl.model.knowledge_article.field.parent_id]
+label = "Element nadrzędny"
+description = "Artykuł, pod którym ten jest zagnieżdżony; puste dla artykułu najwyższego poziomu"
+
+[labels.pl.model.knowledge_article.field.body]
+label = "Treść"
+description = "Treść artykułu (Markdown)"
+
+[labels.pl.model.knowledge_article.field.visibility]
+label = "Widoczność"
+description = "Dla kogo przeznaczony jest artykuł: prywatne, przestrzeń robocza, publiczne"
+
+[labels.pl.model.knowledge_article.field.visibility.options]
+private = "Prywatne"
+workspace = "Przestrzeń robocza"
+public = "Publiczne"
+
+[labels.pl.model.knowledge_article.field.tags]
+label = "Tagi"
+description = "Tagi oddzielone przecinkami, na przykład wdrożenie,kadry"
+
+[labels.pl.model.knowledge_article.field.author_name]
+label = "Autor"
+description = "Imię i nazwisko autora"
+
+[labels.pl.model.knowledge_article.field.sequence]
+label = "Kolejność"
+description = "Kolejność wśród artykułów tego samego poziomu, od najniższej"
+
+[labels.pl.model.knowledge_article.field.published_on]
+label = "Data publikacji"
+description = "Dzień opublikowania artykułu (YYYY-MM-DD)"
+
+[labels.pl.model.knowledge_article.field.state]
+label = "Status"
+description = "Status artykułu: wersja robocza, opublikowane, zarchiwizowane"
+
+[labels.pl.model.knowledge_article.field.state.options]
+draft = "Wersja robocza"
+published = "Opublikowane"
+archived = "Zarchiwizowane"
+
+[labels.pl.model.knowledge_article.action.publish]
+label = "Opublikuj"
+description = "Publikuje artykuł (tylko kierownik)"
+
+[labels.pl.model.knowledge_article.action.unpublish]
+label = "Cofnij publikację"
+description = "Przywraca artykuł do wersji roboczej"
+
+[labels.pl.model.knowledge_article.action.archive]
+label = "Archiwizuj"
+description = "Archiwizuje nieaktualny artykuł"

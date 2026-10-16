@@ -1,0 +1,324 @@
+[labels.de.module]
+name = "Buchhaltung"
+description = "Kontenplan, Journale, Steuersätze, Buchungen mit Soll- und Haben-Zeilen, Geschäftsjahre, Perioden und Kontoauszugszeilen. Beträge stehen in der kleinsten Währungseinheit, Steuersätze in Basispunkten (2000 = 20,00 Prozent). Es wird nichts berechnet. Buchen und Abschließen brauchen eine menschliche Genehmigung (Gruppe accounting.approver); Agenten dürfen nur vorschlagen."
+
+[labels.de.model.accounting_account]
+name = "Konto"
+description = "Ein Konto des Kontenplans"
+
+[labels.de.model.accounting_account.field.code]
+label = "Code"
+description = "Kontonummer wie im Kontenplan, zum Beispiel 400000"
+
+[labels.de.model.accounting_account.field.name]
+label = "Name"
+description = "Kontobezeichnung, zum Beispiel Forderungen aus Lieferungen und Leistungen"
+
+[labels.de.model.accounting_account.field.account_type]
+label = "Kontoart"
+description = "Art des Kontos: asset_receivable, asset_cash, asset_current, asset_fixed, liability_payable, liability_current, liability_non_current, equity, income, income_other, expense, expense_direct_cost"
+
+[labels.de.model.accounting_account.field.account_type.options]
+asset_receivable = "Forderungen"
+asset_cash = "Liquide Mittel"
+asset_current = "Umlaufvermögen"
+asset_fixed = "Anlagevermögen"
+liability_payable = "Verbindlichkeiten"
+liability_current = "Kurzfristige Verbindlichkeiten"
+liability_non_current = "Langfristige Verbindlichkeiten"
+equity = "Eigenkapital"
+income = "Erlöse"
+income_other = "Sonstige Erlöse"
+expense = "Aufwand"
+expense_direct_cost = "Direkte Kosten"
+
+[labels.de.model.accounting_account.field.reconcile]
+label = "Abgleichbar"
+description = "Ob offene Posten dieses Kontos abgeglichen werden können (Forderungen, Verbindlichkeiten, Bankverrechnung)"
+
+[labels.de.model.accounting_account.field.deprecated]
+label = "Veraltet"
+description = "Ob das Konto für neue Buchungen gesperrt ist"
+
+[labels.de.model.accounting_account.field.note]
+label = "Notiz"
+description = "Interne Hinweise zur Verwendung des Kontos"
+
+[labels.de.model.accounting_journal]
+name = "Journal"
+description = "Ein Journal, das Buchungen einer Art zusammenfasst (Verkauf, Einkauf, Bank, Kasse, Sonstiges)"
+
+[labels.de.model.accounting_journal.field.name]
+label = "Name"
+description = "Name des Journals, zum Beispiel Kundenrechnungen"
+
+[labels.de.model.accounting_journal.field.code]
+label = "Code"
+description = "Kurzcode in den Buchungsnummern, zum Beispiel INV"
+
+[labels.de.model.accounting_journal.field.kind]
+label = "Art"
+description = "Was das Journal erfasst: Verkauf, Einkauf, Kasse, Bank, Allgemein"
+
+[labels.de.model.accounting_journal.field.kind.options]
+sale = "Verkauf"
+purchase = "Einkauf"
+cash = "Kasse"
+bank = "Bank"
+general = "Allgemein"
+
+[labels.de.model.accounting_journal.field.default_account_id]
+label = "Standardkonto"
+description = "Standardkonto für Buchungen dieses Journals (bei einem Bankjournal das Bankkonto)"
+
+[labels.de.model.accounting_journal.field.currency]
+label = "Währung"
+description = "Währungscode des Journals nach ISO 4217, zum Beispiel EUR; leer bedeutet die Firmenwährung"
+
+[labels.de.model.accounting_journal.field.active]
+label = "Aktiv"
+description = "Ob das Journal noch Buchungen aufnehmen kann"
+
+[labels.de.model.accounting_tax]
+name = "Steuer"
+description = "Ein Steuersatz, auf den Buchungszeilen verweisen können"
+
+[labels.de.model.accounting_tax.field.name]
+label = "Name"
+description = "Bezeichnung der Steuer, zum Beispiel 20 % USt Verkauf"
+
+[labels.de.model.accounting_tax.field.rate_bp]
+label = "Satz (BP)"
+description = "Satz in Basispunkten: 2000 bedeutet 20,00 Prozent, 550 bedeutet 5,50 Prozent"
+
+[labels.de.model.accounting_tax.field.scope]
+label = "Geltungsbereich"
+description = "Wo die Steuer gilt: Verkauf, Einkauf, keiner"
+
+[labels.de.model.accounting_tax.field.scope.options]
+sales = "Verkäufe"
+purchases = "Einkäufe"
+none = "Keine"
+
+[labels.de.model.accounting_tax.field.price_included]
+label = "Preis inkl. Steuer"
+description = "Ob die Preise diese Steuer bereits enthalten"
+
+[labels.de.model.accounting_tax.field.tax_account_id]
+label = "Steuerkonto"
+description = "Konto, auf das der Steuerbetrag gebucht wird"
+
+[labels.de.model.accounting_tax.field.active]
+label = "Aktiv"
+description = "Ob die Steuer in neuen Zeilen noch gewählt werden kann"
+
+[labels.de.model.accounting_fiscal_year]
+name = "Geschäftsjahr"
+description = "Ein Geschäftsjahr, das als Ganzes eröffnet und abgeschlossen wird"
+
+[labels.de.model.accounting_fiscal_year.field.name]
+label = "Name"
+description = "Bezeichnung des Geschäftsjahres, zum Beispiel GJ2026"
+
+[labels.de.model.accounting_fiscal_year.field.start_on]
+label = "Beginn"
+description = "Erster Tag des Geschäftsjahres (YYYY-MM-DD)"
+
+[labels.de.model.accounting_fiscal_year.field.end_on]
+label = "Ende"
+description = "Letzter Tag des Geschäftsjahres (YYYY-MM-DD)"
+
+[labels.de.model.accounting_fiscal_year.field.state]
+label = "Status"
+description = "Status des Geschäftsjahres: offen, abgeschlossen"
+
+[labels.de.model.accounting_fiscal_year.field.state.options]
+open = "Offen"
+closed = "Abgeschlossen"
+
+[labels.de.model.accounting_fiscal_year.action.close]
+label = "Abschließen"
+description = "Das Geschäftsjahr abschließen, sodass darin nichts mehr gebucht wird (nur Genehmigende)"
+
+[labels.de.model.accounting_fiscal_year.action.reopen]
+label = "Wieder öffnen"
+description = "Ein abgeschlossenes Geschäftsjahr zur Korrektur wieder öffnen (nur Genehmigende)"
+
+[labels.de.model.accounting_period]
+name = "Periode"
+description = "Eine Buchungsperiode (normalerweise ein Monat) innerhalb eines Geschäftsjahres"
+
+[labels.de.model.accounting_period.field.fiscal_year_id]
+label = "Geschäftsjahr"
+description = "Das Geschäftsjahr, zu dem die Periode gehört"
+
+[labels.de.model.accounting_period.field.name]
+label = "Name"
+description = "Bezeichnung der Periode, zum Beispiel 2026-03"
+
+[labels.de.model.accounting_period.field.start_on]
+label = "Beginn"
+description = "Erster Tag der Periode (YYYY-MM-DD)"
+
+[labels.de.model.accounting_period.field.end_on]
+label = "Ende"
+description = "Letzter Tag der Periode (YYYY-MM-DD)"
+
+[labels.de.model.accounting_period.field.state]
+label = "Status"
+description = "Status der Periode: offen, abgeschlossen"
+
+[labels.de.model.accounting_period.field.state.options]
+open = "Offen"
+closed = "Abgeschlossen"
+
+[labels.de.model.accounting_period.action.close]
+label = "Abschließen"
+description = "Die Periode für weitere Buchungen sperren (nur Genehmigende)"
+
+[labels.de.model.accounting_period.action.reopen]
+label = "Wieder öffnen"
+description = "Eine abgeschlossene Periode wieder öffnen (nur Genehmigende)"
+
+[labels.de.model.accounting_move]
+name = "Buchung"
+description = "Eine Journalbuchung: eine datierte Menge von Soll- und Haben-Zeilen in einem Journal"
+
+[labels.de.model.accounting_move.field.journal_id]
+label = "Journal"
+description = "Das Journal, zu dem die Buchung gehört"
+
+[labels.de.model.accounting_move.field.date]
+label = "Datum"
+description = "Buchungsdatum (YYYY-MM-DD)"
+
+[labels.de.model.accounting_move.field.number]
+label = "Nummer"
+description = "Buchungsnummer wie INV/2026/0001. Freitext: Pakete können keine Nummernkreise erzeugen, daher vergibt die buchende Person die nächste Nummer von Hand und hält die Reihe lückenlos"
+
+[labels.de.model.accounting_move.field.reference]
+label = "Referenz"
+description = "Externe Referenz, zum Beispiel die Rechnungsnummer des Lieferanten"
+
+[labels.de.model.accounting_move.field.partner_id]
+label = "Geschäftspartner"
+description = "Der Geschäftspartner, um den es in der Buchung geht"
+
+[labels.de.model.accounting_move.field.narration]
+label = "Buchungstext"
+description = "Freitextnotiz zur Buchung"
+
+[labels.de.model.accounting_move.field.state]
+label = "Status"
+description = "Buchungsstatus: Entwurf, gebucht, storniert, Storno gebucht"
+
+[labels.de.model.accounting_move.field.state.options]
+draft = "Entwurf"
+posted = "Gebucht"
+cancelled = "Storniert"
+reversed = "Storno gebucht"
+
+[labels.de.model.accounting_move.action.post]
+label = "Buchen"
+description = "Eine Buchung im Entwurf ins Hauptbuch buchen (nur Genehmigende; der Ausgleich von Soll und Haben wird nicht geprüft)"
+
+[labels.de.model.accounting_move.action.cancel]
+label = "Stornieren"
+description = "Eine Buchung im Entwurf stornieren, die nie gebucht wurde"
+
+[labels.de.model.accounting_move.action.reverse]
+label = "Storno buchen"
+description = "Eine gebuchte Buchung als storniert kennzeichnen; die Gegenbuchung wird separat erfasst (nur Genehmigende)"
+
+[labels.de.model.accounting_move_line]
+name = "Buchungszeile"
+description = "Eine Soll- oder Haben-Zeile einer Journalbuchung"
+
+[labels.de.model.accounting_move_line.field.move_id]
+label = "Buchung"
+description = "Die Journalbuchung, zu der die Zeile gehört"
+
+[labels.de.model.accounting_move_line.field.account_id]
+label = "Konto"
+description = "Das Konto, auf das die Zeile gebucht wird"
+
+[labels.de.model.accounting_move_line.field.partner_id]
+label = "Geschäftspartner"
+description = "Der Geschäftspartner, um den es in der Zeile geht"
+
+[labels.de.model.accounting_move_line.field.label]
+label = "Bezeichnung"
+description = "Beschreibung der Zeile"
+
+[labels.de.model.accounting_move_line.field.debit]
+label = "Soll"
+description = "Sollbetrag in der kleinsten Währungseinheit; 0, wenn die Zeile ein Haben ist"
+
+[labels.de.model.accounting_move_line.field.credit]
+label = "Haben"
+description = "Habenbetrag in der kleinsten Währungseinheit; 0, wenn die Zeile ein Soll ist"
+
+[labels.de.model.accounting_move_line.field.tax_id]
+label = "Steuer"
+description = "Steuer der Zeile, falls vorhanden"
+
+[labels.de.model.accounting_move_line.field.due_on]
+label = "Fällig am"
+description = "Fälligkeitsdatum bei Forderungs- und Verbindlichkeitszeilen (YYYY-MM-DD)"
+
+[labels.de.model.accounting_move_line.field.reconciled]
+label = "Abgeglichen"
+description = "Ob die Zeile mit einer Zahlung abgeglichen wurde"
+
+[labels.de.model.accounting_bank_statement_line]
+name = "Kontoauszugszeile"
+description = "Eine Zeile eines Kontoauszugs, die auf die Zuordnung zu Buchungen wartet"
+
+[labels.de.model.accounting_bank_statement_line.field.journal_id]
+label = "Journal"
+description = "Das Bankjournal, zu dem der Kontoauszug gehört"
+
+[labels.de.model.accounting_bank_statement_line.field.date]
+label = "Datum"
+description = "Buchungsdatum bei der Bank (YYYY-MM-DD)"
+
+[labels.de.model.accounting_bank_statement_line.field.label]
+label = "Bezeichnung"
+description = "Verwendungszweck oder Beschreibung, wie die Bank sie meldet"
+
+[labels.de.model.accounting_bank_statement_line.field.amount]
+label = "Betrag"
+description = "Betrag in der kleinsten Währungseinheit; positiv für Eingänge, negativ für Ausgänge"
+
+[labels.de.model.accounting_bank_statement_line.field.counterparty_name]
+label = "Name Gegenpartei"
+description = "Name von Zahler oder Empfänger, wie die Bank ihn meldet"
+
+[labels.de.model.accounting_bank_statement_line.field.counterparty_iban]
+label = "IBAN Gegenpartei"
+description = "Bankkonto von Zahler oder Empfänger"
+
+[labels.de.model.accounting_bank_statement_line.field.move_line_id]
+label = "Buchungszeile"
+description = "Die Buchungszeile, der diese Kontoauszugszeile zugeordnet wurde"
+
+[labels.de.model.accounting_bank_statement_line.field.state]
+label = "Status"
+description = "Zuordnungsstatus: nicht zugeordnet, zugeordnet, abgeglichen"
+
+[labels.de.model.accounting_bank_statement_line.field.state.options]
+unmatched = "Nicht zugeordnet"
+matched = "Zugeordnet"
+reconciled = "Abgeglichen"
+
+[labels.de.model.accounting_bank_statement_line.action.match]
+label = "Zuordnen"
+description = "Festhalten, dass die Zeile einer Buchungszeile entspricht"
+
+[labels.de.model.accounting_bank_statement_line.action.reconcile]
+label = "Abgleichen"
+description = "Eine zugeordnete Zeile abgleichen (nur Führungskräfte)"
+
+[labels.de.model.accounting_bank_statement_line.action.unmatch]
+label = "Zuordnung aufheben"
+description = "Eine falsche Zuordnung rückgängig machen"

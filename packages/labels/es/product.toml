@@ -1,0 +1,22 @@
+[labels.es.module]
+name = "Productos"
+
+[labels.es.model.product]
+name = "Producto"
+description = "Un bien o servicio que vende la empresa"
+
+[labels.es.model.product.field.name]
+label = "Nombre"
+description = "Nombre del producto"
+
+[labels.es.model.product.field.sku]
+label = "SKU"
+description = "Código de artículo (SKU)"
+
+[labels.es.model.product.field.list_price_minor]
+label = "Precio de tarifa"
+description = "Precio de lista en la unidad menor de la moneda"
+
+[labels.es.model.product.field.cost_minor]
+label = "Coste"
+description = "Coste unitario en la unidad menor de la moneda"

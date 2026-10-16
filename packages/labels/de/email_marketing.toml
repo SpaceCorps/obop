@@ -1,0 +1,147 @@
+[labels.de.module]
+name = "E-Mail-Marketing"
+description = "Verteilerlisten, Kontakte darauf mit Einwilligungsstatus und -datum sowie Kampagnen (Entwurf, terminiert, gesendet). Der Versand ist unumkehrbar und braucht die Genehmigung einer Führungskraft; Agenten dürfen ihn nur vorschlagen. Statistiken sind erfasste Zahlen. Kontakte sind personenbezogene Daten: Einwilligung aktuell halten und nie Kontakte anschreiben, die nicht eingewilligt haben."
+
+[labels.de.model.email_marketing_list]
+name = "Liste"
+description = "Eine Verteilerliste, der Kontakte angehören können"
+
+[labels.de.model.email_marketing_list.field.name]
+label = "Name"
+description = "Name der Liste, zum Beispiel Newsletter"
+
+[labels.de.model.email_marketing_list.field.description]
+label = "Beschreibung"
+description = "Was Abonnenten erhalten"
+
+[labels.de.model.email_marketing_list.field.is_public]
+label = "Öffentlich"
+description = "Ob sich Besucher selbst anmelden können"
+
+[labels.de.model.email_marketing_contact]
+name = "Kontakt"
+description = "Eine Person auf einer Verteilerliste"
+
+[labels.de.model.email_marketing_contact.field.list_id]
+label = "Liste"
+description = "Die Liste, auf der der Kontakt steht"
+
+[labels.de.model.email_marketing_contact.field.email]
+label = "E-Mail"
+description = "E-Mail-Adresse"
+
+[labels.de.model.email_marketing_contact.field.name]
+label = "Name"
+description = "Name des Kontakts"
+
+[labels.de.model.email_marketing_contact.field.consent_status]
+label = "Einwilligungsstatus"
+description = "Erlaubnis zum Anschreiben: ausstehend, eingewilligt, abgemeldet, unzustellbar"
+
+[labels.de.model.email_marketing_contact.field.consent_status.options]
+pending = "Ausstehend"
+opted_in = "Eingewilligt"
+opted_out = "Abgemeldet"
+bounced = "Unzustellbar"
+
+[labels.de.model.email_marketing_contact.field.consent_date]
+label = "Einwilligungsdatum"
+description = "Tag, an dem der Kontakt die Erlaubnis erteilt oder widerrufen hat (YYYY-MM-DD)"
+
+[labels.de.model.email_marketing_contact.field.consent_source]
+label = "Einwilligungsquelle"
+description = "Wo die Einwilligung eingeholt wurde, zum Beispiel Anmeldeformular der Website"
+
+[labels.de.model.email_marketing_campaign]
+name = "Kampagne"
+description = "Ein Mailing, das an eine Liste gesendet wird"
+
+[labels.de.model.email_marketing_campaign.field.name]
+label = "Name"
+description = "Interner Kampagnenname"
+
+[labels.de.model.email_marketing_campaign.field.subject]
+label = "Betreff"
+description = "Betreffzeile der E-Mail"
+
+[labels.de.model.email_marketing_campaign.field.preview_text]
+label = "Vorschautext"
+description = "Kurzer Text, der im Posteingang nach dem Betreff erscheint"
+
+[labels.de.model.email_marketing_campaign.field.from_name]
+label = "Absendername"
+description = "Absendername, wie ihn Empfänger sehen"
+
+[labels.de.model.email_marketing_campaign.field.from_email]
+label = "Absender-E-Mail"
+description = "Absenderadresse, wie sie Empfänger sehen"
+
+[labels.de.model.email_marketing_campaign.field.list_id]
+label = "Liste"
+description = "Die Liste, an die die Kampagne geht"
+
+[labels.de.model.email_marketing_campaign.field.body]
+label = "Inhalt"
+description = "Inhalt der E-Mail (HTML oder Markdown, je nach Erwartung des Versenders)"
+
+[labels.de.model.email_marketing_campaign.field.scheduled_for]
+label = "Geplant für"
+description = "Tag, an dem die Kampagne gesendet werden soll (YYYY-MM-DD)"
+
+[labels.de.model.email_marketing_campaign.field.sent_on]
+label = "Gesendet am"
+description = "Tag, an dem die Kampagne gesendet wurde (YYYY-MM-DD)"
+
+[labels.de.model.email_marketing_campaign.field.sent_count]
+label = "Gesendet"
+description = "An den Mailserver übergebene E-Mails"
+
+[labels.de.model.email_marketing_campaign.field.delivered_count]
+label = "Zugestellt"
+description = "Von den Servern der Empfänger angenommene E-Mails"
+
+[labels.de.model.email_marketing_campaign.field.opened_count]
+label = "Geöffnet"
+description = "Empfänger, die die E-Mail geöffnet haben"
+
+[labels.de.model.email_marketing_campaign.field.clicked_count]
+label = "Klicks"
+description = "Empfänger, die auf einen Link geklickt haben"
+
+[labels.de.model.email_marketing_campaign.field.bounced_count]
+label = "Unzustellbar"
+description = "E-Mails, die nicht zugestellt werden konnten"
+
+[labels.de.model.email_marketing_campaign.field.unsubscribed_count]
+label = "Abmeldungen"
+description = "Empfänger, die sich aufgrund dieser Kampagne abgemeldet haben"
+
+[labels.de.model.email_marketing_campaign.field.state]
+label = "Status"
+description = "Kampagnenstatus: Entwurf, terminiert, gesendet, storniert"
+
+[labels.de.model.email_marketing_campaign.field.state.options]
+draft = "Entwurf"
+scheduled = "Terminiert"
+sent = "Gesendet"
+cancelled = "Storniert"
+
+[labels.de.model.email_marketing_campaign.action.schedule]
+label = "Einplanen"
+description = "Die Kampagne für den geplanten Tag vormerken"
+
+[labels.de.model.email_marketing_campaign.action.send]
+label = "Senden"
+description = "Die terminierte Kampagne an die ganze Liste senden (nur Führungskräfte)"
+
+[labels.de.model.email_marketing_campaign.action.send_now]
+label = "Jetzt senden"
+description = "Eine Kampagne im Entwurf sofort senden (nur Führungskräfte)"
+
+[labels.de.model.email_marketing_campaign.action.unschedule]
+label = "Einplanung aufheben"
+description = "Eine terminierte Kampagne zurück auf Entwurf setzen"
+
+[labels.de.model.email_marketing_campaign.action.cancel]
+label = "Stornieren"
+description = "Eine terminierte Kampagne stornieren"

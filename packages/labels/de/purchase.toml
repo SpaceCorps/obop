@@ -1,0 +1,118 @@
+[labels.de.module]
+name = "Einkauf"
+description = "Lieferanten, Bestellungen und Bestellpositionen mit dem Ablauf Entwurf, gesendet, bestätigt, eingegangen und storniert. Bestellsummen werden erfasst, nicht aus den Positionen summiert."
+
+[labels.de.model.purchase_vendor]
+name = "Lieferant"
+description = "Einkaufskonditionen für einen Kontakt, bei dem Sie einkaufen"
+
+[labels.de.model.purchase_vendor.field.party_id]
+label = "Geschäftspartner"
+description = "Der Kontaktdatensatz des Lieferanten"
+
+[labels.de.model.purchase_vendor.field.vendor_reference]
+label = "Lieferantenreferenz"
+description = "Ihre Kundennummer bei diesem Lieferanten"
+
+[labels.de.model.purchase_vendor.field.payment_terms_days]
+label = "Zahlungsziel (Tage)"
+description = "Tage, die zum Bezahlen einer Rechnung zur Verfügung stehen"
+
+[labels.de.model.purchase_vendor.field.lead_time_days]
+label = "Lieferzeit (Tage)"
+description = "Übliche Tage zwischen Bestellung und Lieferung"
+
+[labels.de.model.purchase_vendor.field.iban]
+label = "IBAN"
+description = "Bankkonto, auf das der Lieferant bezahlt wird"
+
+[labels.de.model.purchase_vendor.field.active]
+label = "Aktiv"
+description = "Ob Sie noch bei diesem Lieferanten einkaufen"
+
+[labels.de.model.purchase_order]
+name = "Bestellung"
+description = "Eine Anfrage an einen Lieferanten, Waren oder Dienstleistungen zu liefern"
+
+[labels.de.model.purchase_order.field.reference]
+label = "Referenz"
+description = "Auf dem Beleg gedruckte Bestellnummer"
+
+[labels.de.model.purchase_order.field.vendor_id]
+label = "Lieferant"
+description = "Der Lieferant, bei dem bestellt wurde"
+
+[labels.de.model.purchase_order.field.ordered_on]
+label = "Bestellt am"
+description = "Datum, an dem die Bestellung aufgegeben wurde (YYYY-MM-DD)"
+
+[labels.de.model.purchase_order.field.expected_on]
+label = "Erwartet am"
+description = "Datum, an dem die Ware erwartet wird (YYYY-MM-DD)"
+
+[labels.de.model.purchase_order.field.currency]
+label = "Währung"
+description = "Währungscode nach ISO 4217, zum Beispiel EUR"
+
+[labels.de.model.purchase_order.field.total]
+label = "Gesamt"
+description = "Bestellsumme wie mit dem Lieferanten vereinbart (kleinste Währungseinheit, z. B. Cent)"
+
+[labels.de.model.purchase_order.field.notes]
+label = "Notizen"
+description = "Lieferhinweise und Anmerkungen für den Lieferanten"
+
+[labels.de.model.purchase_order.field.state]
+label = "Status"
+description = "Bestellstatus: Entwurf, gesendet, bestätigt, eingegangen, storniert"
+
+[labels.de.model.purchase_order.field.state.options]
+draft = "Entwurf"
+sent = "Gesendet"
+confirmed = "Bestätigt"
+received = "Eingegangen"
+cancelled = "Storniert"
+
+[labels.de.model.purchase_order.action.send]
+label = "Senden"
+description = "Eine Bestellung im Entwurf als Angebotsanfrage an den Lieferanten senden"
+
+[labels.de.model.purchase_order.action.confirm]
+label = "Bestätigen"
+description = "Die Bestellung beim Lieferanten verbindlich machen (nur Führungskräfte)"
+
+[labels.de.model.purchase_order.action.receive]
+label = "Eingang erfassen"
+description = "Festhalten, dass die Ware angekommen ist"
+
+[labels.de.model.purchase_order.action.cancel]
+label = "Stornieren"
+description = "Eine noch nicht gesendete Bestellung stornieren"
+
+[labels.de.model.purchase_order_line]
+name = "Bestellposition"
+description = "Ein Produkt oder eine Dienstleistung einer Bestellung"
+
+[labels.de.model.purchase_order_line.field.order_id]
+label = "Bestellung"
+description = "Die Bestellung, zu der die Position gehört"
+
+[labels.de.model.purchase_order_line.field.product_id]
+label = "Produkt"
+description = "Das bestellte Produkt"
+
+[labels.de.model.purchase_order_line.field.description]
+label = "Beschreibung"
+description = "Formulierung für den Lieferanten, falls sie vom Produktnamen abweicht"
+
+[labels.de.model.purchase_order_line.field.quantity]
+label = "Menge"
+description = "Bestellte Stückzahl"
+
+[labels.de.model.purchase_order_line.field.unit_price]
+label = "Stückpreis"
+description = "Vereinbarter Preis pro Stück (kleinste Währungseinheit, z. B. Cent)"
+
+[labels.de.model.purchase_order_line.field.received_quantity]
+label = "Erhaltene Menge"
+description = "Bisher erhaltene Stückzahl"

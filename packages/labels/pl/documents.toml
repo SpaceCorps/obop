@@ -1,0 +1,90 @@
+[labels.pl.module]
+name = "Dokumenty"
+description = "Rejestr dokumentów firmowych: foldery oraz dokumenty z rodzajem, właścicielem, terminem ważności i poufnością, z obiegiem wersja robocza, opublikowany, zarchiwizowany. Przechowuje odwołania, a nie zawartość plików."
+
+[labels.pl.model.documents_folder]
+name = "Folder"
+description = "Folder grupujący dokumenty"
+
+[labels.pl.model.documents_folder.field.name]
+label = "Nazwa"
+description = "Nazwa folderu"
+
+[labels.pl.model.documents_folder.field.parent_id]
+label = "Element nadrzędny"
+description = "Folder, w którym znajduje się ten folder"
+
+[labels.pl.model.documents_folder.field.description]
+label = "Opis"
+description = "Co należy do folderu"
+
+[labels.pl.model.documents_document]
+name = "Dokument"
+description = "Umowa, regulamin, certyfikat lub inny zarejestrowany dokument"
+
+[labels.pl.model.documents_document.field.title]
+label = "Tytuł"
+description = "Tytuł dokumentu"
+
+[labels.pl.model.documents_document.field.folder_id]
+label = "Folder"
+description = "Folder, w którym złożono dokument"
+
+[labels.pl.model.documents_document.field.kind]
+label = "Rodzaj"
+description = "Typ dokumentu: umowa, faktura, regulamin, raport, certyfikat, inne"
+
+[labels.pl.model.documents_document.field.kind.options]
+contract = "Umowa"
+invoice = "Faktura"
+policy = "Regulamin"
+report = "Raport"
+certificate = "Certyfikat"
+other = "Inne"
+
+[labels.pl.model.documents_document.field.confidentiality]
+label = "Poufność"
+description = "Kto powinien go widzieć, jako oznaczenie dla czytelników: publiczne, wewnętrzne, poufne, zastrzeżone"
+
+[labels.pl.model.documents_document.field.confidentiality.options]
+public = "Publiczne"
+internal = "Wewnętrzne"
+confidential = "Poufne"
+restricted = "Zastrzeżone"
+
+[labels.pl.model.documents_document.field.owner]
+label = "Właściciel"
+description = "Imię i nazwisko osoby odpowiedzialnej za dokument"
+
+[labels.pl.model.documents_document.field.reference]
+label = "Referencja"
+description = "Numer referencyjny, na przykład numer umowy"
+
+[labels.pl.model.documents_document.field.location]
+label = "Lokalizacja"
+description = "Miejsce przechowywania pliku, np. link lub pudło archiwalne"
+
+[labels.pl.model.documents_document.field.expires_on]
+label = "Data wygaśnięcia"
+description = "Data, po której dokument przestaje być ważny (YYYY-MM-DD)"
+
+[labels.pl.model.documents_document.field.summary]
+label = "Podsumowanie"
+description = "Treść dokumentu w kilku wierszach"
+
+[labels.pl.model.documents_document.field.state]
+label = "Status"
+description = "Status dokumentu: wersja robocza, opublikowany, zarchiwizowany"
+
+[labels.pl.model.documents_document.field.state.options]
+draft = "Wersja robocza"
+published = "Opublikowane"
+archived = "Zarchiwizowane"
+
+[labels.pl.model.documents_document.action.publish]
+label = "Opublikuj"
+description = "Czyni dokument roboczy aktualną wersją"
+
+[labels.pl.model.documents_document.action.archive]
+label = "Archiwizuj"
+description = "Archiwizuje opublikowany dokument (tylko kierownik)"

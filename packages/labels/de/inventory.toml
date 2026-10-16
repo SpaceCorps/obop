@@ -1,0 +1,119 @@
+[labels.de.module]
+name = "Lager"
+description = "Lager, Lagerorte, Bestände und Lagerbewegungen. Mengen werden von Menschen erfasst und geprüft; Bewegungen aktualisieren sie nicht automatisch."
+
+[labels.de.model.inventory_warehouse]
+name = "Lager"
+description = "Ein Gebäude oder Standort, an dem Ware gelagert wird"
+
+[labels.de.model.inventory_warehouse.field.name]
+label = "Name"
+description = "Name des Lagers"
+
+[labels.de.model.inventory_warehouse.field.code]
+label = "Code"
+description = "Kurzcode auf Belegen, zum Beispiel WH1"
+
+[labels.de.model.inventory_warehouse.field.address]
+label = "Adresse"
+description = "Postanschrift des Standorts"
+
+[labels.de.model.inventory_warehouse.field.active]
+label = "Aktiv"
+description = "Ob das Lager in Benutzung ist"
+
+[labels.de.model.inventory_location]
+name = "Lagerort"
+description = "Ein Platz in einem Lager, an dem Ware liegen kann"
+
+[labels.de.model.inventory_location.field.name]
+label = "Name"
+description = "Name des Lagerorts, zum Beispiel Regal A3"
+
+[labels.de.model.inventory_location.field.warehouse_id]
+label = "Lager"
+description = "Das Lager, zu dem der Lagerort gehört"
+
+[labels.de.model.inventory_location.field.kind]
+label = "Art"
+description = "Wofür der Lagerort genutzt wird: intern, Wareneingang, Warenausgang, Transit, Ausschuss"
+
+[labels.de.model.inventory_location.field.kind.options]
+internal = "Intern"
+receiving = "Wareneingang"
+shipping = "Warenausgang"
+transit = "Transit"
+scrap = "Ausschuss"
+
+[labels.de.model.inventory_location.field.active]
+label = "Aktiv"
+description = "Ob der Lagerort in Benutzung ist"
+
+[labels.de.model.inventory_item]
+name = "Bestand"
+description = "Die Menge eines Produkts an einem Lagerort"
+
+[labels.de.model.inventory_item.field.product_id]
+label = "Produkt"
+description = "Das gelagerte Produkt"
+
+[labels.de.model.inventory_item.field.location_id]
+label = "Lagerort"
+description = "Wo es gelagert wird"
+
+[labels.de.model.inventory_item.field.quantity]
+label = "Menge"
+description = "Vorrätige Stückzahl"
+
+[labels.de.model.inventory_item.field.reorder_level]
+label = "Meldebestand"
+description = "Menge, bei der oder unterhalb der das Produkt nachbestellt werden sollte"
+
+[labels.de.model.inventory_item.field.lot]
+label = "Charge"
+description = "Chargen- oder Losnummer, falls geführt"
+
+[labels.de.model.inventory_move]
+name = "Lagerbewegung"
+description = "Eine Bewegung eines Produkts zwischen Lagerorten oder in das Unternehmen hinein oder aus ihm heraus"
+
+[labels.de.model.inventory_move.field.reference]
+label = "Referenz"
+description = "Referenz der Bewegung, zum Beispiel eine Liefer- oder Belegnummer"
+
+[labels.de.model.inventory_move.field.product_id]
+label = "Produkt"
+description = "Das bewegte Produkt"
+
+[labels.de.model.inventory_move.field.from_location_id]
+label = "Herkunftsort"
+description = "Von wo es abgeht; leer bei einem Wareneingang vom Lieferanten"
+
+[labels.de.model.inventory_move.field.to_location_id]
+label = "Zielort"
+description = "Wo es ankommt; leer bei einer Lieferung an einen Kunden"
+
+[labels.de.model.inventory_move.field.quantity]
+label = "Menge"
+description = "Bewegte Stückzahl"
+
+[labels.de.model.inventory_move.field.scheduled_on]
+label = "Terminiert am"
+description = "Datum, für das die Bewegung geplant ist (YYYY-MM-DD)"
+
+[labels.de.model.inventory_move.field.state]
+label = "Status"
+description = "Status der Bewegung: Entwurf, erledigt, storniert"
+
+[labels.de.model.inventory_move.field.state.options]
+draft = "Entwurf"
+done = "Erledigt"
+cancelled = "Storniert"
+
+[labels.de.model.inventory_move.action.validate]
+label = "Validieren"
+description = "Bestätigen, dass die Ware tatsächlich bewegt wurde; eine erledigte Bewegung lässt sich nicht rückgängig machen"
+
+[labels.de.model.inventory_move.action.cancel]
+label = "Stornieren"
+description = "Eine Bewegung im Entwurf stornieren"

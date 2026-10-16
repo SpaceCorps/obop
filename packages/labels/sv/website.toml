@@ -1,0 +1,268 @@
+[labels.sv.module]
+name = "Webbplats"
+description = "Innehåll till en publik webbplats: sidor med URL-slug och flödet utkast, publicerad, arkiverad, menyval, blogginlägg med byline och publiceringsdatum, översättningar av båda samt formulärsvar från besökare. Publicering gör innehåll offentligt och kräver mänskligt godkännande; agenter får bara föreslå. Avsändare är personuppgifter och är aldrig offentliga."
+
+[labels.sv.model.website_page]
+name = "Sida"
+description = "En sida på webbplatsen"
+
+[labels.sv.model.website_page.field.title]
+label = "Titel"
+description = "Sidans titel"
+
+[labels.sv.model.website_page.field.slug]
+label = "URL-slug"
+description = "Sidans sökväg utan snedstreck i ändarna, gemener med bindestreck, till exempel om-oss. Sidan med slug home är startsidan"
+
+[labels.sv.model.website_page.field.body]
+label = "Brödtext"
+description = "Sidans innehåll i Markdown (en säker delmängd: rubriker, listor, länkar, betoning, kod, citat, tabeller)"
+
+[labels.sv.model.website_page.field.seo_title]
+label = "SEO-titel"
+description = "Titel som visas i sökresultat; tomt betyder sidans titel"
+
+[labels.sv.model.website_page.field.seo_description]
+label = "SEO-beskrivning"
+description = "Beskrivning som visas i sökresultat"
+
+[labels.sv.model.website_page.field.published_on]
+label = "Publicerad den"
+description = "Dagen då sidan blev offentlig (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.website_page.field.state]
+label = "Status"
+description = "Sidans status: utkast, publicerad, arkiverad"
+
+[labels.sv.model.website_page.field.state.options]
+draft = "Utkast"
+published = "Publicerad"
+archived = "Arkiverad"
+
+[labels.sv.model.website_page.action.publish]
+label = "Publicera"
+description = "Gör sidan offentlig (endast chef)"
+
+[labels.sv.model.website_page.action.unpublish]
+label = "Avpublicera"
+description = "Ta ner sidan och återställ den till utkast"
+
+[labels.sv.model.website_page.action.archive]
+label = "Arkivera"
+description = "Ta en publicerad sida ur bruk för gott"
+
+[labels.sv.model.website_menu_item]
+name = "Menyval"
+description = "Ett val i webbplatsens navigering"
+
+[labels.sv.model.website_menu_item.field.label]
+label = "Etikett"
+description = "Text som visas i menyn"
+
+[labels.sv.model.website_menu_item.field.url]
+label = "URL"
+description = "Vart valet leder: en sidas slug som börjar med snedstreck, eller en fullständig adress"
+
+[labels.sv.model.website_menu_item.field.parent_id]
+label = "Överordnad"
+description = "Valet som det här ligger under; tomt för ett val på översta nivån"
+
+[labels.sv.model.website_menu_item.field.sequence]
+label = "Ordningsföljd"
+description = "Ordning bland val på samma nivå, lägst först"
+
+[labels.sv.model.website_menu_item.field.visible]
+label = "Synlig"
+description = "Om valet visas"
+
+[labels.sv.model.website_menu_item.field.new_window]
+label = "Nytt fönster"
+description = "Om länken öppnas i ett nytt fönster"
+
+[labels.sv.model.website_blog_post]
+name = "Blogginlägg"
+description = "Ett blogginlägg"
+
+[labels.sv.model.website_blog_post.field.title]
+label = "Titel"
+description = "Inläggets titel"
+
+[labels.sv.model.website_blog_post.field.slug]
+label = "URL-slug"
+description = "Inläggets del av webbadressen, gemener med bindestreck"
+
+[labels.sv.model.website_blog_post.field.author_name]
+label = "Författarens namn"
+description = "Författarens namn, för teamets egna register"
+
+[labels.sv.model.website_blog_post.field.byline]
+label = "Författarrad"
+description = "Författarrad som visas offentligt, till exempel teamets eller varumärkets namn; ange ett personnamn endast om personen har samtyckt"
+
+[labels.sv.model.website_blog_post.field.summary]
+label = "Sammanfattning"
+description = "Teaser som visas i listor"
+
+[labels.sv.model.website_blog_post.field.body]
+label = "Brödtext"
+description = "Inläggets innehåll i Markdown (en säker delmängd: rubriker, listor, länkar, betoning, kod, citat, tabeller)"
+
+[labels.sv.model.website_blog_post.field.tags]
+label = "Taggar"
+description = "Kommaseparerade taggar, till exempel nyheter,produkt"
+
+[labels.sv.model.website_blog_post.field.published_on]
+label = "Publicerad den"
+description = "Dagen som inlägget är daterat (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.website_blog_post.field.state]
+label = "Status"
+description = "Inläggets status: utkast, publicerat, arkiverat"
+
+[labels.sv.model.website_blog_post.field.state.options]
+draft = "Utkast"
+published = "Publicerat"
+archived = "Arkiverat"
+
+[labels.sv.model.website_blog_post.action.publish]
+label = "Publicera"
+description = "Gör inlägget offentligt (endast chef)"
+
+[labels.sv.model.website_blog_post.action.unpublish]
+label = "Avpublicera"
+description = "Ta ner inlägget och återställ det till utkast"
+
+[labels.sv.model.website_blog_post.action.archive]
+label = "Arkivera"
+description = "Ta ett publicerat inlägg ur bruk"
+
+[labels.sv.model.website_form_submission]
+name = "Formulärsvar"
+description = "Ett meddelande som en besökare skickade via ett formulär på webbplatsen"
+
+[labels.sv.model.website_form_submission.field.form_name]
+label = "Formulärnamn"
+description = "Vilket formulär det kom från, till exempel contact"
+
+[labels.sv.model.website_form_submission.field.sender_name]
+label = "Avsändarnamn"
+description = "Namnet som besökaren angav"
+
+[labels.sv.model.website_form_submission.field.sender_email]
+label = "Avsändarens e-post"
+description = "E-postadressen som besökaren angav"
+
+[labels.sv.model.website_form_submission.field.sender_phone]
+label = "Avsändarens telefon"
+description = "Telefonnumret som besökaren angav"
+
+[labels.sv.model.website_form_submission.field.message]
+label = "Meddelande"
+description = "Vad besökaren skrev"
+
+[labels.sv.model.website_form_submission.field.source_page]
+label = "Källsida"
+description = "Slug för sidan som formuläret fanns på"
+
+[labels.sv.model.website_form_submission.field.submitted_on]
+label = "Inskickad den"
+description = "Dagen för inskickningen (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.website_form_submission.field.consent_given]
+label = "Samtycke lämnat"
+description = "Om besökaren kryssade i rutan för samtycke till kontakt"
+
+[labels.sv.model.website_form_submission.field.state]
+label = "Status"
+description = "Hanteringsstatus: ny, hanterad, skräppost"
+
+[labels.sv.model.website_form_submission.field.state.options]
+new = "Ny"
+handled = "Hanterad"
+spam = "Skräppost"
+
+[labels.sv.model.website_form_submission.action.handle]
+label = "Hantera"
+description = "Markera meddelandet som besvarat eller åtgärdat"
+
+[labels.sv.model.website_form_submission.action.mark_spam]
+label = "Markera som skräppost"
+description = "Markera meddelandet som skräppost"
+
+[labels.sv.model.website_page_translation]
+name = "Sidöversättning"
+description = "En sida översatt till ett annat språk; den publika webbplatsen visar den för besökare som läser det språket"
+
+[labels.sv.model.website_page_translation.field.page_id]
+label = "Sida"
+description = "Sidan som översättningen gäller"
+
+[labels.sv.model.website_page_translation.field.lang]
+label = "Språk"
+description = "Översättningens språk: en, de, fr, pl, fi, sv eller es"
+
+[labels.sv.model.website_page_translation.field.lang.options]
+en = "Engelska"
+de = "Tyska"
+fr = "Franska"
+pl = "Polska"
+fi = "Finska"
+sv = "Svenska"
+es = "Spanska"
+
+[labels.sv.model.website_page_translation.field.title]
+label = "Titel"
+description = "Översatt sidtitel"
+
+[labels.sv.model.website_page_translation.field.body]
+label = "Brödtext"
+description = "Översatt sidinnehåll i Markdown"
+
+[labels.sv.model.website_page_translation.field.seo_title]
+label = "SEO-titel"
+description = "Översatt titel som visas i sökresultat"
+
+[labels.sv.model.website_page_translation.field.seo_description]
+label = "SEO-beskrivning"
+description = "Översatt beskrivning som visas i sökresultat"
+
+[labels.sv.model.website_page_translation.field.published]
+label = "Publicerad"
+description = "Om översättningen visas; den nås bara medan dess sida är publicerad"
+
+[labels.sv.model.website_blog_post_translation]
+name = "Blogginläggsöversättning"
+description = "Ett blogginlägg översatt till ett annat språk"
+
+[labels.sv.model.website_blog_post_translation.field.post_id]
+label = "Inlägg"
+description = "Inlägget som översättningen gäller"
+
+[labels.sv.model.website_blog_post_translation.field.lang]
+label = "Språk"
+description = "Översättningens språk: en, de, fr, pl, fi, sv eller es"
+
+[labels.sv.model.website_blog_post_translation.field.lang.options]
+en = "Engelska"
+de = "Tyska"
+fr = "Franska"
+pl = "Polska"
+fi = "Finska"
+sv = "Svenska"
+es = "Spanska"
+
+[labels.sv.model.website_blog_post_translation.field.title]
+label = "Titel"
+description = "Översatt inläggstitel"
+
+[labels.sv.model.website_blog_post_translation.field.summary]
+label = "Sammanfattning"
+description = "Översatt teaser"
+
+[labels.sv.model.website_blog_post_translation.field.body]
+label = "Brödtext"
+description = "Översatt inläggsinnehåll i Markdown"
+
+[labels.sv.model.website_blog_post_translation.field.published]
+label = "Publicerad"
+description = "Om översättningen visas; den nås bara medan dess inlägg är publicerat"

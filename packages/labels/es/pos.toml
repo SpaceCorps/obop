@@ -1,0 +1,204 @@
+[labels.es.module]
+name = "Punto de venta"
+description = "Cajas de tienda: punto de venta, sesiones con control de efectivo, pedidos con líneas y pagos por método. Un reembolso y el cierre de una sesión requieren aprobación humana de un responsable; los agentes solo pueden proponerlos. Totales, cambio y diferencias se introducen, no se calculan. Nunca se guardan números de tarjeta, solo la referencia de la pasarela. Requiere Productos."
+
+[labels.es.model.pos_config]
+name = "Configuración"
+description = "Un punto de venta (una caja o una tienda) y sus reglas"
+
+[labels.es.model.pos_config.field.name]
+label = "Nombre"
+description = "Nombre de la caja o la tienda, por ejemplo Tienda de la calle Mayor"
+
+[labels.es.model.pos_config.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217, por ejemplo EUR"
+
+[labels.es.model.pos_config.field.receipt_header]
+label = "Encabezado del tique"
+description = "Texto impreso en la parte superior de los tickets"
+
+[labels.es.model.pos_config.field.cash_control]
+label = "Control de efectivo"
+description = "Indica si las sesiones deben contar el efectivo del cajón al abrir y al cerrar"
+
+[labels.es.model.pos_config.field.default_opening_cash]
+label = "Efectivo de apertura predeterminado"
+description = "Efectivo que normalmente se deja en el cajón por la noche (unidad menor de la moneda)"
+
+[labels.es.model.pos_config.field.allow_refunds]
+label = "Permitir reembolsos"
+description = "Indica si los cajeros pueden proponer reembolsos en este punto de venta"
+
+[labels.es.model.pos_config.field.active]
+label = "Activo"
+description = "Indica si el punto de venta está en uso"
+
+[labels.es.model.pos_session]
+name = "Sesión"
+description = "Un turno de ventas en un punto de venta, desde la apertura hasta el cierre del cajón de caja"
+
+[labels.es.model.pos_session.field.config_id]
+label = "Configuración"
+description = "El punto de venta al que pertenece la sesión"
+
+[labels.es.model.pos_session.field.cashier]
+label = "Cajero"
+description = "Nombre del cajero que abrió la sesión"
+
+[labels.es.model.pos_session.field.opened_on]
+label = "Fecha de apertura"
+description = "Día en que se abrió la sesión (YYYY-MM-DD)"
+
+[labels.es.model.pos_session.field.closed_on]
+label = "Fecha de cierre"
+description = "Día en que se cerró la sesión (YYYY-MM-DD)"
+
+[labels.es.model.pos_session.field.opening_cash]
+label = "Efectivo de apertura"
+description = "Efectivo contado en el cajón al abrir (unidad menor de la moneda)"
+
+[labels.es.model.pos_session.field.expected_cash]
+label = "Efectivo previsto"
+description = "Efectivo que debería haber en el cajón al cerrar: efectivo inicial más pagos en efectivo (introducido, no calculado)"
+
+[labels.es.model.pos_session.field.closing_cash]
+label = "Efectivo de cierre"
+description = "Efectivo realmente contado en el cajón al cerrar"
+
+[labels.es.model.pos_session.field.cash_difference]
+label = "Diferencia de efectivo"
+description = "Efectivo al cierre menos efectivo esperado; un valor negativo significa que falta dinero"
+
+[labels.es.model.pos_session.field.note]
+label = "Nota"
+description = "Explicación de cualquier diferencia de caja"
+
+[labels.es.model.pos_session.field.state]
+label = "Estado"
+description = "Estado de la sesión: abierta, cerrada"
+
+[labels.es.model.pos_session.field.state.options]
+open = "Abierto"
+closed = "Cerrado"
+
+[labels.es.model.pos_session.action.close]
+label = "Cerrar"
+description = "Cerrar la sesión una vez contado el cajón (solo responsables)"
+
+[labels.es.model.pos_order]
+name = "Pedido"
+description = "Una venta registrada en un punto de venta"
+
+[labels.es.model.pos_order.field.session_id]
+label = "Sesión"
+description = "La sesión en la que se hizo la venta"
+
+[labels.es.model.pos_order.field.receipt_number]
+label = "Número de tique"
+description = "Número impreso en el ticket. Texto libre: los paquetes no pueden generar secuencias"
+
+[labels.es.model.pos_order.field.ordered_on]
+label = "Fecha del pedido"
+description = "Día de la venta (YYYY-MM-DD)"
+
+[labels.es.model.pos_order.field.customer_id]
+label = "Cliente"
+description = "El cliente, cuando se identificó a uno"
+
+[labels.es.model.pos_order.field.tax_total]
+label = "Total de impuestos"
+description = "Impuestos incluidos en el total (unidad menor de la moneda)"
+
+[labels.es.model.pos_order.field.total]
+label = "Total"
+description = "Total pagado por el cliente con impuestos incluidos (unidad menor de la moneda, introducido, no calculado)"
+
+[labels.es.model.pos_order.field.note]
+label = "Nota"
+description = "Observación sobre la venta"
+
+[labels.es.model.pos_order.field.state]
+label = "Estado"
+description = "Estado de la venta: borrador, pagada, reembolsada, cancelada"
+
+[labels.es.model.pos_order.field.state.options]
+draft = "Borrador"
+paid = "Pagado"
+refunded = "Reembolsado"
+cancelled = "Cancelado"
+
+[labels.es.model.pos_order.action.pay]
+label = "Pagar"
+description = "La venta está pagada por completo"
+
+[labels.es.model.pos_order.action.cancel]
+label = "Cancelar"
+description = "Cancelar una venta que nunca se pagó"
+
+[labels.es.model.pos_order.action.refund]
+label = "Reembolsar"
+description = "Reembolsar al cliente una venta pagada (solo responsables)"
+
+[labels.es.model.pos_order_line]
+name = "Línea de pedido"
+description = "Una línea de producto de una venta"
+
+[labels.es.model.pos_order_line.field.order_id]
+label = "Pedido"
+description = "La venta a la que pertenece la línea"
+
+[labels.es.model.pos_order_line.field.product_id]
+label = "Producto"
+description = "El producto vendido"
+
+[labels.es.model.pos_order_line.field.description]
+label = "Descripción"
+description = "Texto que se muestra en el ticket"
+
+[labels.es.model.pos_order_line.field.quantity]
+label = "Cantidad"
+description = "Unidades vendidas"
+
+[labels.es.model.pos_order_line.field.unit_price]
+label = "Precio unitario"
+description = "Precio por unidad con impuestos incluidos (unidad menor de la moneda)"
+
+[labels.es.model.pos_order_line.field.discount_bp]
+label = "Descuento (pb)"
+description = "Descuento en puntos básicos: 1000 significa 10,00 %"
+
+[labels.es.model.pos_order_line.field.subtotal]
+label = "Subtotal"
+description = "Total de la línea tras el descuento (unidad menor de la moneda, introducido, no calculado)"
+
+[labels.es.model.pos_payment]
+name = "Pago"
+description = "Un pago recibido por una venta; una venta puede pagarse con varios métodos"
+
+[labels.es.model.pos_payment.field.order_id]
+label = "Pedido"
+description = "La venta a la que corresponde el pago"
+
+[labels.es.model.pos_payment.field.method]
+label = "Método"
+description = "Cómo pagó el cliente: efectivo, tarjeta, transferencia bancaria, vale, otro"
+
+[labels.es.model.pos_payment.field.method.options]
+cash = "Efectivo"
+card = "Tarjeta"
+bank_transfer = "Transferencia bancaria"
+voucher = "Vale"
+other = "Otro"
+
+[labels.es.model.pos_payment.field.amount]
+label = "Importe"
+description = "Importe pagado con este método (unidad menor de la moneda)"
+
+[labels.es.model.pos_payment.field.paid_on]
+label = "Fecha de pago"
+description = "Día del pago (YYYY-MM-DD)"
+
+[labels.es.model.pos_payment.field.provider_reference]
+label = "Referencia del proveedor de pago"
+description = "Referencia del terminal de tarjetas o de la pasarela de pago; nunca un número de tarjeta"

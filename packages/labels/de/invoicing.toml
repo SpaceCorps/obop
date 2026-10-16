@@ -1,0 +1,35 @@
+[labels.de.module]
+name = "Rechnungsstellung"
+
+[labels.de.model.invoice]
+name = "Rechnung"
+description = "Eine Kundenrechnung; gebuchte Rechnungen werden nur durch Gutschriften korrigiert"
+
+[labels.de.model.invoice.field.sale_order_id]
+label = "Verkaufsauftrag"
+description = "ID des zugrunde liegenden Verkaufsauftrags"
+
+[labels.de.model.invoice.field.state]
+label = "Status"
+description = "Lebenszyklus: Entwurf, gebucht oder storniert"
+
+[labels.de.model.invoice.field.state.options]
+draft = "Entwurf"
+posted = "Gebucht"
+cancelled = "Storniert"
+
+[labels.de.model.invoice.field.total_minor]
+label = "Gesamt"
+description = "Rechnungssumme in der kleinsten Währungseinheit"
+
+[labels.de.model.invoice.field.number]
+label = "Nummer"
+description = "Lückenlose gesetzliche Rechnungsnummer, wird beim Buchen vergeben"
+
+[labels.de.model.invoice.action.post]
+label = "Buchen"
+description = "Einen Rechnungsentwurf buchen und die gesetzliche Nummer vergeben"
+
+[labels.de.model.invoice.action.cancel]
+label = "Stornieren"
+description = "Einen Rechnungsentwurf stornieren"

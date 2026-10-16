@@ -1,0 +1,118 @@
+[labels.sv.module]
+name = "Inköp"
+description = "Leverantörer, inköpsorder och orderrader med flödet utkast, skickad, bekräftad, mottagen och annullerad. Orderns totalbelopp anges och summeras inte från raderna."
+
+[labels.sv.model.purchase_vendor]
+name = "Leverantör"
+description = "Inköpsvillkor för en kontakt som du köper från"
+
+[labels.sv.model.purchase_vendor.field.party_id]
+label = "Part"
+description = "Leverantörens kontaktpost"
+
+[labels.sv.model.purchase_vendor.field.vendor_reference]
+label = "Leverantörens referens"
+description = "Ditt kundnummer hos leverantören"
+
+[labels.sv.model.purchase_vendor.field.payment_terms_days]
+label = "Betalningsvillkor (dagar)"
+description = "Antal dagar som en faktura får betalas inom"
+
+[labels.sv.model.purchase_vendor.field.lead_time_days]
+label = "Ledtid (dagar)"
+description = "Vanligt antal dagar mellan beställning och leverans"
+
+[labels.sv.model.purchase_vendor.field.iban]
+label = "IBAN"
+description = "Bankkonto som leverantören betalas till"
+
+[labels.sv.model.purchase_vendor.field.active]
+label = "Aktiv"
+description = "Om du fortfarande köper från leverantören"
+
+[labels.sv.model.purchase_order]
+name = "Inköpsorder"
+description = "En beställning hos en leverantör av varor eller tjänster"
+
+[labels.sv.model.purchase_order.field.reference]
+label = "Referens"
+description = "Ordernummer som skrivs ut på dokumentet"
+
+[labels.sv.model.purchase_order.field.vendor_id]
+label = "Leverantör"
+description = "Leverantören som beställningen görs hos"
+
+[labels.sv.model.purchase_order.field.ordered_on]
+label = "Orderdatum"
+description = "Datum då ordern lades (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.purchase_order.field.expected_on]
+label = "Förväntat datum"
+description = "Datum då varorna förväntas (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.purchase_order.field.currency]
+label = "Valuta"
+description = "Valutakod enligt ISO 4217, till exempel SEK"
+
+[labels.sv.model.purchase_order.field.total]
+label = "Totalt"
+description = "Orderns totalbelopp som överenskommet med leverantören (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.purchase_order.field.notes]
+label = "Anteckningar"
+description = "Leveransinstruktioner och kommentarer till leverantören"
+
+[labels.sv.model.purchase_order.field.state]
+label = "Status"
+description = "Orderstatus: utkast, skickad, bekräftad, mottagen, annullerad"
+
+[labels.sv.model.purchase_order.field.state.options]
+draft = "Utkast"
+sent = "Skickad"
+confirmed = "Bekräftad"
+received = "Mottagen"
+cancelled = "Annullerad"
+
+[labels.sv.model.purchase_order.action.send]
+label = "Skicka"
+description = "Skicka en order i utkast till leverantören som en offertförfrågan"
+
+[labels.sv.model.purchase_order.action.confirm]
+label = "Bekräfta"
+description = "Förbinda sig till ordern hos leverantören (endast chef)"
+
+[labels.sv.model.purchase_order.action.receive]
+label = "Ta emot"
+description = "Registrera att varorna har kommit"
+
+[labels.sv.model.purchase_order.action.cancel]
+label = "Annullera"
+description = "Annullera en order som ännu inte skickats"
+
+[labels.sv.model.purchase_order_line]
+name = "Inköpsorderrad"
+description = "En produkt eller tjänst på en inköpsorder"
+
+[labels.sv.model.purchase_order_line.field.order_id]
+label = "Order"
+description = "Ordern som raden tillhör"
+
+[labels.sv.model.purchase_order_line.field.product_id]
+label = "Produkt"
+description = "Den beställda produkten"
+
+[labels.sv.model.purchase_order_line.field.description]
+label = "Beskrivning"
+description = "Formulering till leverantören om den skiljer sig från produktnamnet"
+
+[labels.sv.model.purchase_order_line.field.quantity]
+label = "Antal"
+description = "Antal beställda enheter"
+
+[labels.sv.model.purchase_order_line.field.unit_price]
+label = "Styckpris"
+description = "Överenskommet pris per enhet (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.purchase_order_line.field.received_quantity]
+label = "Mottaget antal"
+description = "Antal enheter som mottagits hittills"

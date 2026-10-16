@@ -1,0 +1,78 @@
+[labels.pl.module]
+name = "Wydatki"
+description = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone i opłacone. Wypłata to osobne uprawnienie i wymaga zatwierdzenia przez człowieka; paragony są wskazywane w notatce, nie przechowywane."
+
+[labels.pl.model.expenses_expense]
+name = "Wydatek"
+description = "Kwota wydana przez pracownika na potrzeby firmy, o której zwrot się on ubiega"
+
+[labels.pl.model.expenses_expense.field.description]
+label = "Opis"
+description = "Na co wydano pieniądze"
+
+[labels.pl.model.expenses_expense.field.employee]
+label = "Pracownik"
+description = "Imię i nazwisko osoby składającej wniosek o zwrot wydatku"
+
+[labels.pl.model.expenses_expense.field.spent_on]
+label = "Data wydatku"
+description = "Data zakupu (YYYY-MM-DD)"
+
+[labels.pl.model.expenses_expense.field.category]
+label = "Kategoria"
+description = "Kategoria wydatku: podróże, posiłki, zakwaterowanie, materiały, oprogramowanie, inne"
+
+[labels.pl.model.expenses_expense.field.category.options]
+travel = "Podróże"
+meals = "Posiłki"
+lodging = "Zakwaterowanie"
+supplies = "Materiały"
+software = "Oprogramowanie"
+other = "Inne"
+
+[labels.pl.model.expenses_expense.field.amount]
+label = "Kwota"
+description = "Kwota należna pracownikowi (w jednostkach podrzędnych waluty, np. grosze)"
+
+[labels.pl.model.expenses_expense.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217, na przykład PLN"
+
+[labels.pl.model.expenses_expense.field.receipt_note]
+label = "Notatka do paragonu"
+description = "Gdzie przechowywany jest paragon i co na nim widnieje"
+
+[labels.pl.model.expenses_expense.field.paid_on]
+label = "Data płatności"
+description = "Data zwrotu środków pracownikowi (YYYY-MM-DD)"
+
+[labels.pl.model.expenses_expense.field.payment_reference]
+label = "Referencja płatności"
+description = "Tytuł przelewu bankowego ze zwrotem"
+
+[labels.pl.model.expenses_expense.field.state]
+label = "Status"
+description = "Status wniosku: wersja robocza, przesłane, zatwierdzone, opłacone, odrzucone"
+
+[labels.pl.model.expenses_expense.field.state.options]
+draft = "Wersja robocza"
+submitted = "Przesłane"
+approved = "Zatwierdzone"
+paid = "Opłacone"
+refused = "Odrzucone"
+
+[labels.pl.model.expenses_expense.action.submit]
+label = "Prześlij"
+description = "Przesyła wniosek do zatwierdzenia"
+
+[labels.pl.model.expenses_expense.action.approve]
+label = "Zatwierdź"
+description = "Zatwierdza przesłany wniosek (tylko kierownik)"
+
+[labels.pl.model.expenses_expense.action.pay]
+label = "Zapłać"
+description = "Rejestruje zwrot jako opłacony (tylko dział finansów)"
+
+[labels.pl.model.expenses_expense.action.refuse]
+label = "Odrzuć"
+description = "Odrzuca przesłany wniosek (tylko kierownik)"

@@ -1,0 +1,90 @@
+[labels.de.module]
+name = "Dokumente"
+description = "Ein Verzeichnis von Geschäftsdokumenten: Ordner, Dokumentsätze mit Art, Eigentümer, Ablaufdatum und Vertraulichkeit sowie ein Ablauf aus Entwurf, veröffentlicht und archiviert. Es speichert Verweise, keine Dateiinhalte."
+
+[labels.de.model.documents_folder]
+name = "Ordner"
+description = "Ein Ordner, der Dokumente zusammenfasst"
+
+[labels.de.model.documents_folder.field.name]
+label = "Name"
+description = "Name des Ordners"
+
+[labels.de.model.documents_folder.field.parent_id]
+label = "Übergeordnet"
+description = "Der Ordner, in dem dieser liegt"
+
+[labels.de.model.documents_folder.field.description]
+label = "Beschreibung"
+description = "Was in den Ordner gehört"
+
+[labels.de.model.documents_document]
+name = "Dokument"
+description = "Ein Vertrag, eine Richtlinie, ein Zertifikat oder ein anderes erfasstes Dokument"
+
+[labels.de.model.documents_document.field.title]
+label = "Titel"
+description = "Titel des Dokuments"
+
+[labels.de.model.documents_document.field.folder_id]
+label = "Ordner"
+description = "Der Ordner, in dem das Dokument abgelegt ist"
+
+[labels.de.model.documents_document.field.kind]
+label = "Art"
+description = "Dokumentart: Vertrag, Rechnung, Richtlinie, Bericht, Zertifikat, Sonstiges"
+
+[labels.de.model.documents_document.field.kind.options]
+contract = "Vertrag"
+invoice = "Rechnung"
+policy = "Richtlinie"
+report = "Bericht"
+certificate = "Zertifikat"
+other = "Sonstiges"
+
+[labels.de.model.documents_document.field.confidentiality]
+label = "Vertraulichkeit"
+description = "Wer es sehen soll, als Hinweis für Lesende: öffentlich, intern, vertraulich, eingeschränkt"
+
+[labels.de.model.documents_document.field.confidentiality.options]
+public = "Öffentlich"
+internal = "Intern"
+confidential = "Vertraulich"
+restricted = "Eingeschränkt"
+
+[labels.de.model.documents_document.field.owner]
+label = "Eigentümer"
+description = "Name der für das Dokument verantwortlichen Person"
+
+[labels.de.model.documents_document.field.reference]
+label = "Referenz"
+description = "Referenznummer, zum Beispiel eine Vertragsnummer"
+
+[labels.de.model.documents_document.field.location]
+label = "Ort"
+description = "Wo die Datei liegt, etwa ein Link oder ein Archivkarton"
+
+[labels.de.model.documents_document.field.expires_on]
+label = "Läuft ab am"
+description = "Datum, nach dem das Dokument nicht mehr gültig ist (YYYY-MM-DD)"
+
+[labels.de.model.documents_document.field.summary]
+label = "Zusammenfassung"
+description = "Was im Dokument steht, in wenigen Zeilen"
+
+[labels.de.model.documents_document.field.state]
+label = "Status"
+description = "Dokumentstatus: Entwurf, veröffentlicht, archiviert"
+
+[labels.de.model.documents_document.field.state.options]
+draft = "Entwurf"
+published = "Veröffentlicht"
+archived = "Archiviert"
+
+[labels.de.model.documents_document.action.publish]
+label = "Veröffentlichen"
+description = "Einen Dokumententwurf zur aktuellen Version machen"
+
+[labels.de.model.documents_document.action.archive]
+label = "Archivieren"
+description = "Ein veröffentlichtes Dokument archivieren (nur Führungskräfte)"

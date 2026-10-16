@@ -1,0 +1,204 @@
+[labels.pl.module]
+name = "Punkt sprzedaży"
+description = "Kasy sklepowe: punkt sprzedaży, sesje z kontrolą gotówki, zamówienia z pozycjami i płatności według metody. Zwrot środków i zamknięcie sesji zatwierdza kierownik; agenci mogą je tylko zaproponować. Sumy i różnice kasowe są wpisywane, nie wyliczane. Nie przechowuje numerów kart, tylko referencję operatora płatności. Wymaga pakietu Produkty."
+
+[labels.pl.model.pos_config]
+name = "Kasa"
+description = "Punkt sprzedaży (kasa lub sklep) i jego zasady"
+
+[labels.pl.model.pos_config.field.name]
+label = "Nazwa"
+description = "Nazwa kasy lub sklepu, na przykład Sklep na Głównej"
+
+[labels.pl.model.pos_config.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217, na przykład PLN"
+
+[labels.pl.model.pos_config.field.receipt_header]
+label = "Nagłówek paragonu"
+description = "Tekst drukowany na górze paragonów"
+
+[labels.pl.model.pos_config.field.cash_control]
+label = "Kontrola gotówki"
+description = "Czy sesje muszą liczyć gotówkę w szufladzie przy otwarciu i zamknięciu"
+
+[labels.pl.model.pos_config.field.default_opening_cash]
+label = "Domyślna gotówka początkowa"
+description = "Gotówka zwykle zostawiana w szufladzie na noc (w jednostkach podrzędnych waluty)"
+
+[labels.pl.model.pos_config.field.allow_refunds]
+label = "Zezwalaj na zwroty"
+description = "Czy kasjerzy mogą proponować zwroty w tym punkcie sprzedaży"
+
+[labels.pl.model.pos_config.field.active]
+label = "Aktywny"
+description = "Czy punkt sprzedaży jest w użyciu"
+
+[labels.pl.model.pos_session]
+name = "Sesja"
+description = "Jedna zmiana sprzedaży w punkcie sprzedaży, od otwarcia do zamknięcia szuflady kasowej"
+
+[labels.pl.model.pos_session.field.config_id]
+label = "Kasa"
+description = "Punkt sprzedaży, do którego należy sesja"
+
+[labels.pl.model.pos_session.field.cashier]
+label = "Kasjer"
+description = "Imię i nazwisko kasjera, który otworzył sesję"
+
+[labels.pl.model.pos_session.field.opened_on]
+label = "Data otwarcia"
+description = "Dzień otwarcia sesji (YYYY-MM-DD)"
+
+[labels.pl.model.pos_session.field.closed_on]
+label = "Data zamknięcia"
+description = "Dzień zamknięcia sesji (YYYY-MM-DD)"
+
+[labels.pl.model.pos_session.field.opening_cash]
+label = "Gotówka początkowa"
+description = "Gotówka policzona w szufladzie przy otwarciu (w jednostkach podrzędnych waluty)"
+
+[labels.pl.model.pos_session.field.expected_cash]
+label = "Oczekiwana gotówka"
+description = "Gotówka, która powinna być w szufladzie przy zamknięciu: gotówka początkowa plus płatności gotówką (wpisywana, nie wyliczana)"
+
+[labels.pl.model.pos_session.field.closing_cash]
+label = "Gotówka przy zamknięciu"
+description = "Gotówka faktycznie policzona w szufladzie przy zamknięciu"
+
+[labels.pl.model.pos_session.field.cash_difference]
+label = "Różnica kasowa"
+description = "Gotówka przy zamknięciu minus oczekiwana gotówka; wartość ujemna oznacza brak pieniędzy"
+
+[labels.pl.model.pos_session.field.note]
+label = "Notatka"
+description = "Wyjaśnienie ewentualnej różnicy kasowej"
+
+[labels.pl.model.pos_session.field.state]
+label = "Status"
+description = "Status sesji: otwarte, zamknięte"
+
+[labels.pl.model.pos_session.field.state.options]
+open = "Otwarte"
+closed = "Zamknięte"
+
+[labels.pl.model.pos_session.action.close]
+label = "Zamknij"
+description = "Zamyka sesję po przeliczeniu szuflady (tylko kierownik)"
+
+[labels.pl.model.pos_order]
+name = "Zamówienie"
+description = "Sprzedaż zarejestrowana w punkcie sprzedaży"
+
+[labels.pl.model.pos_order.field.session_id]
+label = "Sesja"
+description = "Sesja, w której dokonano sprzedaży"
+
+[labels.pl.model.pos_order.field.receipt_number]
+label = "Numer paragonu"
+description = "Numer drukowany na paragonie. Dowolny tekst: pakiety nie mogą generować sekwencji"
+
+[labels.pl.model.pos_order.field.ordered_on]
+label = "Data zamówienia"
+description = "Dzień sprzedaży (YYYY-MM-DD)"
+
+[labels.pl.model.pos_order.field.customer_id]
+label = "Klient"
+description = "Klient, jeśli został zidentyfikowany"
+
+[labels.pl.model.pos_order.field.tax_total]
+label = "Kwota podatku"
+description = "Podatek zawarty w sumie (w jednostkach podrzędnych waluty)"
+
+[labels.pl.model.pos_order.field.total]
+label = "Razem"
+description = "Suma zapłacona przez klienta z podatkiem (w jednostkach podrzędnych waluty, wpisywana, nie wyliczana)"
+
+[labels.pl.model.pos_order.field.note]
+label = "Notatka"
+description = "Uwaga dotycząca sprzedaży"
+
+[labels.pl.model.pos_order.field.state]
+label = "Status"
+description = "Status sprzedaży: wersja robocza, opłacone, zwrócone, anulowane"
+
+[labels.pl.model.pos_order.field.state.options]
+draft = "Wersja robocza"
+paid = "Opłacone"
+refunded = "Zwrócone"
+cancelled = "Anulowane"
+
+[labels.pl.model.pos_order.action.pay]
+label = "Zapłać"
+description = "Sprzedaż jest w pełni opłacona"
+
+[labels.pl.model.pos_order.action.cancel]
+label = "Anuluj"
+description = "Anuluje sprzedaż, która nigdy nie została opłacona"
+
+[labels.pl.model.pos_order.action.refund]
+label = "Zwróć środki"
+description = "Zwraca klientowi środki za opłaconą sprzedaż (tylko kierownik)"
+
+[labels.pl.model.pos_order_line]
+name = "Pozycja zamówienia"
+description = "Jedna pozycja produktowa sprzedaży"
+
+[labels.pl.model.pos_order_line.field.order_id]
+label = "Zamówienie"
+description = "Sprzedaż, do której należy pozycja"
+
+[labels.pl.model.pos_order_line.field.product_id]
+label = "Produkt"
+description = "Sprzedany produkt"
+
+[labels.pl.model.pos_order_line.field.description]
+label = "Opis"
+description = "Tekst widoczny na paragonie"
+
+[labels.pl.model.pos_order_line.field.quantity]
+label = "Ilość"
+description = "Liczba sprzedanych sztuk"
+
+[labels.pl.model.pos_order_line.field.unit_price]
+label = "Cena jednostkowa"
+description = "Cena za sztukę z podatkiem (w jednostkach podrzędnych waluty)"
+
+[labels.pl.model.pos_order_line.field.discount_bp]
+label = "Rabat (pb)"
+description = "Rabat w punktach bazowych: 1000 oznacza 10,00 procent"
+
+[labels.pl.model.pos_order_line.field.subtotal]
+label = "Suma częściowa"
+description = "Wartość pozycji po rabacie (w jednostkach podrzędnych waluty, wpisywana, nie wyliczana)"
+
+[labels.pl.model.pos_payment]
+name = "Płatność"
+description = "Płatność przyjęta za sprzedaż; sprzedaż może być opłacona kilkoma metodami"
+
+[labels.pl.model.pos_payment.field.order_id]
+label = "Zamówienie"
+description = "Sprzedaż, której dotyczy płatność"
+
+[labels.pl.model.pos_payment.field.method]
+label = "Metoda"
+description = "Sposób zapłaty klienta: gotówka, karta, przelew bankowy, bon, inne"
+
+[labels.pl.model.pos_payment.field.method.options]
+cash = "Gotówka"
+card = "Karta"
+bank_transfer = "Przelew bankowy"
+voucher = "Bon"
+other = "Inne"
+
+[labels.pl.model.pos_payment.field.amount]
+label = "Kwota"
+description = "Kwota zapłacona tą metodą (w jednostkach podrzędnych waluty)"
+
+[labels.pl.model.pos_payment.field.paid_on]
+label = "Data płatności"
+description = "Dzień płatności (YYYY-MM-DD)"
+
+[labels.pl.model.pos_payment.field.provider_reference]
+label = "Referencja operatora"
+description = "Referencja z terminala płatniczego lub operatora płatności; nigdy numer karty"

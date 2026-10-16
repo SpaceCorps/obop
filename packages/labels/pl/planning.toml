@@ -1,0 +1,88 @@
+[labels.pl.module]
+name = "Planowanie"
+description = "Zmiany dla pracowników, z rolami i szablonami wielokrotnego użytku. Zmiana ma dzień oraz początek i koniec w minutach od północy (0 do 1439; 540 to 09:00). Zmiana bez pracownika jest zmianą otwartą. Obieg: otwarte, opublikowane, potwierdzone przez pracownika. Wymaga pakietu Kadry."
+
+[labels.pl.model.planning_role]
+name = "Rola"
+description = "Rola, na którą planuje się zmianę, na przykład kasjer lub elektryk"
+
+[labels.pl.model.planning_role.field.name]
+label = "Nazwa"
+description = "Nazwa roli"
+
+[labels.pl.model.planning_role.field.note]
+label = "Notatka"
+description = "Na czym polega rola"
+
+[labels.pl.model.planning_template]
+name = "Szablon"
+description = "Wzorzec zmiany wielokrotnego użytku, kopiowany do zmian"
+
+[labels.pl.model.planning_template.field.name]
+label = "Nazwa"
+description = "Nazwa szablonu, na przykład Zmiana poranna"
+
+[labels.pl.model.planning_template.field.role_id]
+label = "Rola"
+description = "Rola, dla której przeznaczony jest szablon"
+
+[labels.pl.model.planning_template.field.start_minute]
+label = "Początek (min)"
+description = "Początek w minutach od północy (540 to 09:00)"
+
+[labels.pl.model.planning_template.field.end_minute]
+label = "Koniec (min)"
+description = "Koniec w minutach od północy (1020 to 17:00)"
+
+[labels.pl.model.planning_shift]
+name = "Zmiana"
+description = "Przedział pracy w jednym dniu dla jednej roli, opcjonalnie przypisany do pracownika"
+
+[labels.pl.model.planning_shift.field.name]
+label = "Nazwa"
+description = "Krótki tytuł, na przykład Zmiana otwierająca"
+
+[labels.pl.model.planning_shift.field.role_id]
+label = "Rola"
+description = "Wymagana rola"
+
+[labels.pl.model.planning_shift.field.employee_id]
+label = "Pracownik"
+description = "Pracownik, do którego przypisano zmianę; puste dla zmiany otwartej"
+
+[labels.pl.model.planning_shift.field.work_date]
+label = "Data pracy"
+description = "Dzień zmiany (YYYY-MM-DD)"
+
+[labels.pl.model.planning_shift.field.start_minute]
+label = "Początek (min)"
+description = "Początek w minutach od północy, od 0 do 1439 (540 to 09:00)"
+
+[labels.pl.model.planning_shift.field.end_minute]
+label = "Koniec (min)"
+description = "Koniec w minutach od północy, od 0 do 1439 (1020 to 17:00)"
+
+[labels.pl.model.planning_shift.field.note]
+label = "Notatka"
+description = "Wskazówki dla osoby pracującej na zmianie"
+
+[labels.pl.model.planning_shift.field.state]
+label = "Status"
+description = "Status zmiany: otwarte, opublikowane, potwierdzone"
+
+[labels.pl.model.planning_shift.field.state.options]
+open = "Otwarte"
+published = "Opublikowane"
+confirmed = "Potwierdzone"
+
+[labels.pl.model.planning_shift.action.publish]
+label = "Opublikuj"
+description = "Publikuje zmianę dla przypisanego pracownika lub dla wszystkich, gdy jest otwarta"
+
+[labels.pl.model.planning_shift.action.unpublish]
+label = "Cofnij publikację"
+description = "Przywraca opublikowaną zmianę do stanu otwartego"
+
+[labels.pl.model.planning_shift.action.confirm]
+label = "Potwierdź"
+description = "Pracownik potwierdza, że przyjdzie na zmianę"

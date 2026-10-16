@@ -1,0 +1,187 @@
+[labels.fr.module]
+name = "Ressources humaines"
+description = "Employés, départements et demandes de congé. Les données personnelles sont classées strictement : la paie, la banque et l’identifiant national ne sont visibles que des responsables, et les données de santé et syndicales du groupe de lecture spécial."
+
+[labels.fr.model.hr_department]
+name = "Département"
+description = "Une équipe ou un département de l’entreprise"
+
+[labels.fr.model.hr_department.field.name]
+label = "Nom"
+description = "Nom du département"
+
+[labels.fr.model.hr_department.field.head]
+label = "Responsable"
+description = "Nom du responsable du département"
+
+[labels.fr.model.hr_department.field.cost_centre]
+label = "Centre de coûts"
+description = "Code du centre de coûts utilisé par la finance"
+
+[labels.fr.model.hr_employee]
+name = "Employé"
+description = "Une personne employée par l’entreprise"
+
+[labels.fr.model.hr_employee.field.name]
+label = "Nom"
+description = "Nom complet"
+
+[labels.fr.model.hr_employee.field.job_title]
+label = "Poste"
+description = "Intitulé du poste"
+
+[labels.fr.model.hr_employee.field.work_email]
+label = "E-mail professionnel"
+description = "Adresse e-mail professionnelle"
+
+[labels.fr.model.hr_employee.field.work_phone]
+label = "Téléphone professionnel"
+description = "Numéro de téléphone professionnel"
+
+[labels.fr.model.hr_employee.field.department_id]
+label = "Département"
+description = "Le département auquel appartient la personne"
+
+[labels.fr.model.hr_employee.field.reports_to_id]
+label = "Responsable hiérarchique"
+description = "Le supérieur hiérarchique de la personne"
+
+[labels.fr.model.hr_employee.field.hired_on]
+label = "Date d’embauche"
+description = "Premier jour d’emploi (YYYY-MM-DD)"
+
+[labels.fr.model.hr_employee.field.contract_type]
+label = "Type de contrat"
+description = "Type de contrat de travail : CDI, CDD, prestataire, stagiaire"
+
+[labels.fr.model.hr_employee.field.contract_type.options]
+permanent = "CDI"
+fixed_term = "CDD"
+contractor = "Prestataire"
+intern = "Stagiaire"
+
+[labels.fr.model.hr_employee.field.private_email]
+label = "E-mail personnel"
+description = "Adresse e-mail personnelle"
+
+[labels.fr.model.hr_employee.field.private_phone]
+label = "Téléphone personnel"
+description = "Numéro de téléphone personnel"
+
+[labels.fr.model.hr_employee.field.home_address]
+label = "Adresse personnelle"
+description = "Adresse du domicile"
+
+[labels.fr.model.hr_employee.field.birth_date]
+label = "Date de naissance"
+description = "Date de naissance (YYYY-MM-DD)"
+
+[labels.fr.model.hr_employee.field.national_id]
+label = "Identifiant national"
+description = "Numéro d’identité nationale ou de sécurité sociale"
+
+[labels.fr.model.hr_employee.field.emergency_contact]
+label = "Contact d’urgence"
+description = "Nom et téléphone de la personne à appeler en cas d’urgence"
+
+[labels.fr.model.hr_employee.field.salary]
+label = "Salaire"
+description = "Salaire annuel brut (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.hr_employee.field.bank_iban]
+label = "IBAN bancaire"
+description = "Compte bancaire sur lequel le salaire est versé"
+
+[labels.fr.model.hr_employee.field.union_member]
+label = "Syndiqué"
+description = "Indique si la personne est membre d’un syndicat"
+
+[labels.fr.model.hr_employee.field.work_permit_expiry]
+label = "Expiration du permis de travail"
+description = "Date d’expiration du permis de travail, pour les non-ressortissants (YYYY-MM-DD)"
+
+[labels.fr.model.hr_employee.field.health_note]
+label = "Note de santé"
+description = "État de santé ou handicap pertinent pour le lieu de travail"
+
+[labels.fr.model.hr_employee.field.state]
+label = "Statut"
+description = "Statut d’emploi : intégration, actif, sorti"
+
+[labels.fr.model.hr_employee.field.state.options]
+onboarding = "Intégration"
+active = "Actif"
+offboarded = "Sorti"
+
+[labels.fr.model.hr_employee.action.activate]
+label = "Activer"
+description = "Termine l’intégration et marque l’employé comme actif"
+
+[labels.fr.model.hr_employee.action.offboard]
+label = "Valider le départ"
+description = "Met fin au dossier d’emploi ; ne l’annulez que sur décision des RH"
+
+[labels.fr.model.hr_leave_request]
+name = "Demande de congé"
+description = "Une demande d’absence"
+
+[labels.fr.model.hr_leave_request.field.employee_id]
+label = "Employé"
+description = "L’employé qui demande un congé"
+
+[labels.fr.model.hr_leave_request.field.leave_kind]
+label = "Type de congé"
+description = "Type de congé : payé, sans solde, parental, études, autre"
+
+[labels.fr.model.hr_leave_request.field.leave_kind.options]
+paid = "Payé"
+unpaid = "Sans solde"
+parental = "Parental"
+study = "Études"
+other = "Autre"
+
+[labels.fr.model.hr_leave_request.field.start_on]
+label = "Début le"
+description = "Premier jour d’absence (YYYY-MM-DD)"
+
+[labels.fr.model.hr_leave_request.field.end_on]
+label = "Fin le"
+description = "Dernier jour d’absence (YYYY-MM-DD)"
+
+[labels.fr.model.hr_leave_request.field.days]
+label = "Jours"
+description = "Jours ouvrés demandés"
+
+[labels.fr.model.hr_leave_request.field.reason]
+label = "Motif"
+description = "Raison de la demande de congé"
+
+[labels.fr.model.hr_leave_request.field.is_sick_leave]
+label = "Arrêt maladie"
+description = "Indique si l’absence est due à une maladie"
+
+[labels.fr.model.hr_leave_request.field.medical_note]
+label = "Note médicale"
+description = "Référence du certificat médical, le cas échéant"
+
+[labels.fr.model.hr_leave_request.field.state]
+label = "Statut"
+description = "Statut de la demande : brouillon, demandée, approuvée, refusée"
+
+[labels.fr.model.hr_leave_request.field.state.options]
+draft = "Brouillon"
+requested = "Demandée"
+approved = "Approuvée"
+refused = "Refusée"
+
+[labels.fr.model.hr_leave_request.action.request]
+label = "Demander"
+description = "Soumet la demande au responsable"
+
+[labels.fr.model.hr_leave_request.action.approve]
+label = "Approuver"
+description = "Approuve un congé demandé (responsable uniquement)"
+
+[labels.fr.model.hr_leave_request.action.refuse]
+label = "Refuser"
+description = "Refuse un congé demandé (responsable uniquement)"

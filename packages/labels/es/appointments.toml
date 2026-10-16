@@ -1,0 +1,95 @@
+[labels.es.module]
+name = "Citas"
+description = "Recursos reservables (personas, salas, equipos) y citas con fecha, hora de inicio y de fin y un flujo de estados. Los solapamientos no se evitan automáticamente."
+
+[labels.es.model.appointments_resource]
+name = "Recurso"
+description = "Algo o alguien que se puede reservar"
+
+[labels.es.model.appointments_resource.field.name]
+label = "Nombre"
+description = "Nombre del recurso, por ejemplo Sala de reuniones 2"
+
+[labels.es.model.appointments_resource.field.kind]
+label = "Tipo"
+description = "Tipo de recurso: persona, sala, equipo"
+
+[labels.es.model.appointments_resource.field.kind.options]
+person = "Persona"
+room = "Sala"
+equipment = "Equipo"
+
+[labels.es.model.appointments_resource.field.capacity]
+label = "Capacidad"
+description = "A cuántas personas puede atender a la vez"
+
+[labels.es.model.appointments_resource.field.active]
+label = "Activo"
+description = "Indica si el recurso se puede reservar"
+
+[labels.es.model.appointments_appointment]
+name = "Cita"
+description = "Una reserva de un recurso en un momento dado"
+
+[labels.es.model.appointments_appointment.field.resource_id]
+label = "Recurso"
+description = "El recurso reservado"
+
+[labels.es.model.appointments_appointment.field.title]
+label = "Título"
+description = "Motivo de la cita"
+
+[labels.es.model.appointments_appointment.field.day]
+label = "Día"
+description = "Fecha de la cita (YYYY-MM-DD)"
+
+[labels.es.model.appointments_appointment.field.start_minute]
+label = "Minuto de inicio"
+description = "Hora de inicio en minutos desde la medianoche, por ejemplo 540 para las 09:00"
+
+[labels.es.model.appointments_appointment.field.end_minute]
+label = "Minuto de fin"
+description = "Hora de fin en minutos desde la medianoche, por ejemplo 600 para las 10:00"
+
+[labels.es.model.appointments_appointment.field.attendee_name]
+label = "Nombre del asistente"
+description = "Nombre de la persona que asiste"
+
+[labels.es.model.appointments_appointment.field.attendee_email]
+label = "Correo electrónico del asistente"
+description = "Correo electrónico del asistente"
+
+[labels.es.model.appointments_appointment.field.attendee_phone]
+label = "Teléfono del asistente"
+description = "Teléfono del asistente"
+
+[labels.es.model.appointments_appointment.field.notes]
+label = "Notas"
+description = "Cualquier cosa que el anfitrión deba saber de antemano"
+
+[labels.es.model.appointments_appointment.field.state]
+label = "Estado"
+description = "Estado de la reserva: programada, confirmada, realizada, cancelada, no se presentó"
+
+[labels.es.model.appointments_appointment.field.state.options]
+scheduled = "Programado"
+confirmed = "Confirmado"
+done = "Hecho"
+cancelled = "Cancelado"
+no_show = "No presentado"
+
+[labels.es.model.appointments_appointment.action.confirm]
+label = "Confirmar"
+description = "Confirmar una cita programada"
+
+[labels.es.model.appointments_appointment.action.complete]
+label = "Completar"
+description = "Marcar una cita confirmada como realizada"
+
+[labels.es.model.appointments_appointment.action.cancel]
+label = "Cancelar"
+description = "Cancelar una cita programada"
+
+[labels.es.model.appointments_appointment.action.mark_no_show]
+label = "Marcar como no presentado"
+description = "Registrar que el asistente no se presentó"

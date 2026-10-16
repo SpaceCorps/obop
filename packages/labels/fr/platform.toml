@@ -1,0 +1,82 @@
+[labels.fr.module]
+name = "Personnaliser"
+
+[labels.fr.model.module]
+name = "Module"
+description = "Un module installé : intégré, importé ou issu de la place de marché"
+
+[labels.fr.model.module.field.name]
+label = "Nom"
+description = "Nom affiché"
+
+[labels.fr.model.module.field.version]
+label = "Version"
+description = "Version installée"
+
+[labels.fr.model.module.field.description]
+label = "Description"
+description = "Ce que fait le module"
+
+[labels.fr.model.module.field.source]
+label = "Source"
+description = "Intégré (builtin), importé (upload) ou place de marché (marketplace)"
+
+[labels.fr.model.module.field.models]
+label = "Modèles"
+description = "Modèles ajoutés par le module"
+
+[labels.fr.model.module.field.groups]
+label = "Groupes"
+description = "Groupes de droits utilisés par le module"
+
+[labels.fr.model.module.action.install]
+label = "Installer"
+description = "Installe ou met à jour un module à partir du texte de son obop.toml"
+
+[labels.fr.model.module.action.uninstall]
+label = "Désinstaller"
+description = "Retire un module ; ses données restent dans la base de données"
+
+[labels.fr.model.marketplace_listing]
+name = "Fiche de la place de marché"
+description = "Un module proposé par la place de marché"
+
+[labels.fr.model.marketplace_listing.field.name]
+label = "Nom"
+description = "Nom affiché"
+
+[labels.fr.model.marketplace_listing.field.version]
+label = "Version"
+description = "Dernière version"
+
+[labels.fr.model.marketplace_listing.field.description]
+label = "Description"
+description = "Ce que fait le module"
+
+[labels.fr.model.marketplace_listing.field.author]
+label = "Auteur"
+description = "Qui le publie"
+
+[labels.fr.model.marketplace_listing.field.source]
+label = "Source"
+description = "Origine de l’installation"
+
+[labels.fr.model.marketplace_listing.field.models]
+label = "Modèles"
+description = "Modèles ajoutés par le module"
+
+[labels.fr.model.marketplace_listing.field.groups]
+label = "Groupes"
+description = "Groupes de droits utilisés par le module"
+
+[labels.fr.model.marketplace_listing.action.install]
+label = "Installer"
+description = "Installe un module de la place de marché à partir de son identifiant"
+
+[labels.fr.model.setting]
+name = "Paramètre"
+description = "Paramètres d’interface valables pour toute l’instance : thème et disposition du lanceur d’applications"
+
+[labels.fr.model.setting.field.value]
+label = "Valeur"
+description = "Les paramètres sous forme d’objet JSON"

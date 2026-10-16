@@ -1,0 +1,26 @@
+[labels.sv.module]
+name = "Kontakter"
+
+[labels.sv.model.party]
+name = "Part"
+description = "En person eller organisation som företaget har affärer med"
+
+[labels.sv.model.party.field.name]
+label = "Namn"
+description = "Visningsnamn"
+
+[labels.sv.model.party.field.email]
+label = "E-post"
+description = "E-postadress till arbetet"
+
+[labels.sv.model.party.field.tax_id]
+label = "Skatte-ID"
+description = "Skatteidentifierare för en fysisk person"
+
+[labels.sv.model.party.field.notes]
+label = "Anteckningar"
+description = "Interna anteckningar i fritext"
+
+[labels.sv.model.party.action.erase]
+label = "Radera"
+description = "Anonymisera parten på plats och registrera raderingen"

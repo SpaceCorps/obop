@@ -1,0 +1,56 @@
+[labels.fi.module]
+name = "Tuntiseuranta"
+description = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe. Vaatii Projektit-paketin."
+
+[labels.fi.model.timesheets_entry]
+name = "Tuntikirjaus"
+description = "Yhden henkilön yhdelle tehtävälle yhtenä päivänä käyttämä aika"
+
+[labels.fi.model.timesheets_entry.field.task_id]
+label = "Tehtävä"
+description = "Tehtävä, jota työstettiin"
+
+[labels.fi.model.timesheets_entry.field.worker]
+label = "Tekijä"
+description = "Työn tehneen henkilön nimi"
+
+[labels.fi.model.timesheets_entry.field.worked_on]
+label = "Työpäivä"
+description = "Päivä, jona työ tehtiin (YYYY-MM-DD)"
+
+[labels.fi.model.timesheets_entry.field.minutes]
+label = "Minuutit"
+description = "Käytetty aika minuutteina"
+
+[labels.fi.model.timesheets_entry.field.billable]
+label = "Laskutettava"
+description = "Voiko ajan laskuttaa asiakkaalta"
+
+[labels.fi.model.timesheets_entry.field.description]
+label = "Kuvaus"
+description = "Mitä tehtiin"
+
+[labels.fi.model.timesheets_entry.field.cost_rate]
+label = "Tuntikustannus"
+description = "Tekijän sisäinen tuntikustannus kirjaushetkellä (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.timesheets_entry.field.state]
+label = "Tila"
+description = "Kirjauksen tila: luonnos, hyväksyttävänä, hyväksytty"
+
+[labels.fi.model.timesheets_entry.field.state.options]
+draft = "Luonnos"
+submitted = "Hyväksyttävänä"
+approved = "Hyväksytty"
+
+[labels.fi.model.timesheets_entry.action.submit]
+label = "Lähetä hyväksyttäväksi"
+description = "Lähetä tuntikirjaus hyväksyttäväksi"
+
+[labels.fi.model.timesheets_entry.action.approve]
+label = "Hyväksy"
+description = "Hyväksy lähetetty tuntikirjaus laskutettavaksi (vain esihenkilö)"
+
+[labels.fi.model.timesheets_entry.action.reject]
+label = "Hylkää"
+description = "Palauta lähetetty tuntikirjaus luonnokseksi (vain esihenkilö)"

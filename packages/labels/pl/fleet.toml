@@ -1,0 +1,160 @@
+[labels.pl.module]
+name = "Flota"
+description = "Pojazdy, kierowcy i historia serwisowa małej floty. Śledzi status i wpisy serwisowe; nie oblicza kosztów eksploatacji ani zużycia paliwa."
+
+[labels.pl.model.fleet_vehicle]
+name = "Pojazd"
+description = "Pojazd użytkowany przez firmę"
+
+[labels.pl.model.fleet_vehicle.field.plate]
+label = "Nr rejestracyjny"
+description = "Numer rejestracyjny pojazdu"
+
+[labels.pl.model.fleet_vehicle.field.model]
+label = "Marka i model"
+description = "Marka i model, na przykład Renault Master"
+
+[labels.pl.model.fleet_vehicle.field.vin]
+label = "VIN"
+description = "Numer identyfikacyjny pojazdu (numer nadwozia)"
+
+[labels.pl.model.fleet_vehicle.field.fuel]
+label = "Paliwo"
+description = "Rodzaj paliwa lub napędu: benzyna, diesel, hybryda, elektryczny, inny"
+
+[labels.pl.model.fleet_vehicle.field.fuel.options]
+petrol = "Benzyna"
+diesel = "Diesel"
+hybrid = "Hybryda"
+electric = "Elektryczny"
+other = "Inny"
+
+[labels.pl.model.fleet_vehicle.field.odometer_km]
+label = "Przebieg (km)"
+description = "Ostatni znany stan licznika w kilometrach"
+
+[labels.pl.model.fleet_vehicle.field.acquired_on]
+label = "Data nabycia"
+description = "Data włączenia pojazdu do floty (YYYY-MM-DD)"
+
+[labels.pl.model.fleet_vehicle.field.driver]
+label = "Kierowca"
+description = "Imię i nazwisko kierowcy aktualnie używającego pojazdu, jako tekst"
+
+[labels.pl.model.fleet_vehicle.field.driver_id]
+label = "Kierowca"
+description = "Kierowca aktualnie przypisany do pojazdu"
+
+[labels.pl.model.fleet_vehicle.field.state]
+label = "Status"
+description = "Dostępność: dostępne, w użyciu, konserwacja, wycofane"
+
+[labels.pl.model.fleet_vehicle.field.state.options]
+available = "Dostępne"
+in_service = "W użyciu"
+maintenance = "Konserwacja"
+retired = "Wycofane"
+
+[labels.pl.model.fleet_vehicle.action.dispatch]
+label = "Wydaj"
+description = "Oddaje dostępny pojazd do użytku"
+
+[labels.pl.model.fleet_vehicle.action.return_to_pool]
+label = "Zwróć do puli"
+description = "Zwraca używany pojazd do puli dostępnych"
+
+[labels.pl.model.fleet_vehicle.action.retire]
+label = "Wycofaj"
+description = "Trwale usuwa dostępny pojazd z floty (wymaga osoby zatwierdzającej)"
+
+[labels.pl.model.fleet_vehicle_driver]
+name = "Kierowca"
+description = "Osoba uprawniona do prowadzenia pojazdów floty"
+
+[labels.pl.model.fleet_vehicle_driver.field.name]
+label = "Nazwa"
+description = "Imię i nazwisko kierowcy"
+
+[labels.pl.model.fleet_vehicle_driver.field.phone]
+label = "Telefon"
+description = "Służbowy numer telefonu kierowcy"
+
+[labels.pl.model.fleet_vehicle_driver.field.licence_number]
+label = "Numer prawa jazdy"
+description = "Numer prawa jazdy"
+
+[labels.pl.model.fleet_vehicle_driver.field.licence_expiry]
+label = "Ważność prawa jazdy"
+description = "Data wygaśnięcia prawa jazdy (YYYY-MM-DD)"
+
+[labels.pl.model.fleet_vehicle_driver.field.state]
+label = "Status"
+description = "Status kierowcy: aktywny, zawieszony"
+
+[labels.pl.model.fleet_vehicle_driver.field.state.options]
+active = "Aktywne"
+suspended = "Zawieszone"
+
+[labels.pl.model.fleet_vehicle_driver.action.suspend]
+label = "Zawieś"
+description = "Zawiesza kierowcę, na przykład po wygaśnięciu prawa jazdy"
+
+[labels.pl.model.fleet_vehicle_driver.action.reactivate]
+label = "Aktywuj ponownie"
+description = "Pozwala zawieszonemu kierowcy ponownie prowadzić pojazdy"
+
+[labels.pl.model.fleet_vehicle_service]
+name = "Serwis pojazdu"
+description = "Konserwacja, naprawa lub przegląd pojazdu"
+
+[labels.pl.model.fleet_vehicle_service.field.vehicle_id]
+label = "Pojazd"
+description = "Serwisowany pojazd"
+
+[labels.pl.model.fleet_vehicle_service.field.kind]
+label = "Rodzaj"
+description = "Rodzaj prac: konserwacja, naprawa, przegląd techniczny, opony, inne"
+
+[labels.pl.model.fleet_vehicle_service.field.kind.options]
+maintenance = "Konserwacja"
+repair = "Naprawa"
+inspection = "Przegląd techniczny"
+tyres = "Opony"
+other = "Inne"
+
+[labels.pl.model.fleet_vehicle_service.field.service_on]
+label = "Data serwisu"
+description = "Data wykonania prac (YYYY-MM-DD)"
+
+[labels.pl.model.fleet_vehicle_service.field.odometer_km]
+label = "Przebieg (km)"
+description = "Stan licznika w kilometrach w chwili serwisu"
+
+[labels.pl.model.fleet_vehicle_service.field.cost]
+label = "Koszt"
+description = "Łączna kwota zafakturowana przez warsztat (w jednostkach podrzędnych waluty, np. grosze)"
+
+[labels.pl.model.fleet_vehicle_service.field.workshop]
+label = "Warsztat"
+description = "Nazwa warsztatu lub serwisu"
+
+[labels.pl.model.fleet_vehicle_service.field.notes]
+label = "Notatki"
+description = "Co zrobiono lub co stwierdzono"
+
+[labels.pl.model.fleet_vehicle_service.field.state]
+label = "Status"
+description = "Status prac: zaplanowane, wykonane, anulowane"
+
+[labels.pl.model.fleet_vehicle_service.field.state.options]
+planned = "Zaplanowane"
+done = "Wykonane"
+cancelled = "Anulowane"
+
+[labels.pl.model.fleet_vehicle_service.action.complete]
+label = "Zakończ"
+description = "Oznacza zaplanowane prace jako wykonane"
+
+[labels.pl.model.fleet_vehicle_service.action.cancel]
+label = "Anuluj"
+description = "Anuluje zaplanowane prace"

@@ -1,0 +1,65 @@
+[labels.de.module]
+name = "Wissen"
+description = "Ein Wiki: Artikel, über einen übergeordneten Artikel als Baum angeordnet, mit dem Ablauf Entwurf, veröffentlicht, archiviert, einer Sichtbarkeit und Schlagwörtern. Die Sichtbarkeit ist ein Hinweis für die Oberfläche und zur Beachtung durch Menschen; die Plattform kennt noch keine Berechtigungen pro Datensatz, daher kann jeder mit den Wissen-Gruppen jeden Artikel lesen."
+
+[labels.de.model.knowledge_article]
+name = "Artikel"
+description = "Ein Artikel der Wissensdatenbank"
+
+[labels.de.model.knowledge_article.field.title]
+label = "Titel"
+description = "Titel des Artikels"
+
+[labels.de.model.knowledge_article.field.parent_id]
+label = "Übergeordnet"
+description = "Der Artikel, unter dem dieser eingeordnet ist; leer bei einem Artikel der obersten Ebene"
+
+[labels.de.model.knowledge_article.field.body]
+label = "Inhalt"
+description = "Inhalt des Artikels (Markdown)"
+
+[labels.de.model.knowledge_article.field.visibility]
+label = "Sichtbarkeit"
+description = "Für wen der Artikel gedacht ist: privat, Arbeitsbereich, öffentlich"
+
+[labels.de.model.knowledge_article.field.visibility.options]
+private = "Privat"
+workspace = "Arbeitsbereich"
+public = "Öffentlich"
+
+[labels.de.model.knowledge_article.field.tags]
+label = "Schlagwörter"
+description = "Durch Kommas getrennte Schlagwörter, zum Beispiel onboarding,hr"
+
+[labels.de.model.knowledge_article.field.author_name]
+label = "Autor"
+description = "Name des Autors"
+
+[labels.de.model.knowledge_article.field.sequence]
+label = "Reihenfolge"
+description = "Reihenfolge unter gleichrangigen Artikeln, niedrigste zuerst"
+
+[labels.de.model.knowledge_article.field.published_on]
+label = "Veröffentlicht am"
+description = "Tag, an dem der Artikel veröffentlicht wurde (YYYY-MM-DD)"
+
+[labels.de.model.knowledge_article.field.state]
+label = "Status"
+description = "Artikelstatus: Entwurf, veröffentlicht, archiviert"
+
+[labels.de.model.knowledge_article.field.state.options]
+draft = "Entwurf"
+published = "Veröffentlicht"
+archived = "Archiviert"
+
+[labels.de.model.knowledge_article.action.publish]
+label = "Veröffentlichen"
+description = "Den Artikel veröffentlichen (nur Führungskräfte)"
+
+[labels.de.model.knowledge_article.action.unpublish]
+label = "Veröffentlichung zurückziehen"
+description = "Den Artikel zurück auf Entwurf setzen"
+
+[labels.de.model.knowledge_article.action.archive]
+label = "Archivieren"
+description = "Einen veralteten Artikel archivieren"

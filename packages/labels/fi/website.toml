@@ -1,0 +1,268 @@
+[labels.fi.module]
+name = "Verkkosivusto"
+description = "Julkisen verkkosivuston sisältö: sivut, valikkokohdat, blogikirjoitukset, niiden käännökset ja kävijöiden lähettämät lomakeviestit. Kun julkinen sivusto on käytössä, julkaistu sisältö tarjoillaan kävijöille hakukoneystävällisenä ilman kirjautumista; vain julkiseksi merkityt kentät näkyvät. Julkaisu vaatii ihmisen hyväksynnän. Lähettäjät ovat henkilötietoja."
+
+[labels.fi.model.website_page]
+name = "Sivu"
+description = "Verkkosivuston sivu"
+
+[labels.fi.model.website_page.field.title]
+label = "Otsikko"
+description = "Sivun otsikko"
+
+[labels.fi.model.website_page.field.slug]
+label = "URL-tunnus"
+description = "Sivun URL-polku ilman vinoviivoja päissä, pienillä kirjaimilla ja viivoilla, esimerkiksi tietoa-meista. Sivu, jonka URL-tunnus on home, on etusivu"
+
+[labels.fi.model.website_page.field.body]
+label = "Sisältö"
+description = "Sivun sisältö Markdown-muodossa (turvallinen osajoukko: otsikot, luettelot, linkit, korostukset, koodi, lainaukset, taulukot)"
+
+[labels.fi.model.website_page.field.seo_title]
+label = "SEO-otsikko"
+description = "Hakutuloksissa näytettävä otsikko; tyhjä tarkoittaa sivun otsikkoa"
+
+[labels.fi.model.website_page.field.seo_description]
+label = "SEO-kuvaus"
+description = "Hakutuloksissa näytettävä kuvaus"
+
+[labels.fi.model.website_page.field.published_on]
+label = "Julkaistu"
+description = "Päivä, jona sivu julkaistiin (YYYY-MM-DD)"
+
+[labels.fi.model.website_page.field.state]
+label = "Tila"
+description = "Sivun tila: luonnos, julkaistu, arkistoitu"
+
+[labels.fi.model.website_page.field.state.options]
+draft = "Luonnos"
+published = "Julkaistu"
+archived = "Arkistoitu"
+
+[labels.fi.model.website_page.action.publish]
+label = "Julkaise"
+description = "Julkaise sivu (vain esihenkilö)"
+
+[labels.fi.model.website_page.action.unpublish]
+label = "Peru julkaisu"
+description = "Poista sivu verkosta ja palauta se luonnokseksi"
+
+[labels.fi.model.website_page.action.archive]
+label = "Arkistoi"
+description = "Poista julkaistu sivu lopullisesti käytöstä"
+
+[labels.fi.model.website_menu_item]
+name = "Valikkokohta"
+description = "Sivuston navigaation kohta"
+
+[labels.fi.model.website_menu_item.field.label]
+label = "Nimike"
+description = "Valikossa näytettävä teksti"
+
+[labels.fi.model.website_menu_item.field.url]
+label = "URL"
+description = "Minne kohta johtaa: vinoviivalla alkava sivun URL-tunnus tai täysi osoite"
+
+[labels.fi.model.website_menu_item.field.parent_id]
+label = "Ylätaso"
+description = "Kohta, jonka alle tämä sijoitetaan; tyhjä ylimmän tason kohdalle"
+
+[labels.fi.model.website_menu_item.field.sequence]
+label = "Järjestys"
+description = "Järjestys samalla tasolla olevien joukossa, pienin ensin"
+
+[labels.fi.model.website_menu_item.field.visible]
+label = "Näkyvissä"
+description = "Näytetäänkö kohta"
+
+[labels.fi.model.website_menu_item.field.new_window]
+label = "Uusi ikkuna"
+description = "Aukeaako linkki uuteen ikkunaan"
+
+[labels.fi.model.website_blog_post]
+name = "Blogikirjoitus"
+description = "Blogikirjoitus"
+
+[labels.fi.model.website_blog_post.field.title]
+label = "Otsikko"
+description = "Kirjoituksen otsikko"
+
+[labels.fi.model.website_blog_post.field.slug]
+label = "URL-tunnus"
+description = "Kirjoituksen URL-osa, pienillä kirjaimilla ja viivoilla"
+
+[labels.fi.model.website_blog_post.field.author_name]
+label = "Kirjoittajan nimi"
+description = "Kirjoittajan nimi tiimin omiin tietoihin"
+
+[labels.fi.model.website_blog_post.field.byline]
+label = "Julkinen tekijärivi"
+description = "Julkisesti näytettävä tekijärivi, esimerkiksi tiimin tai brändin nimi; käytä henkilön nimeä vain, jos hän on suostunut siihen"
+
+[labels.fi.model.website_blog_post.field.summary]
+label = "Yhteenveto"
+description = "Luetteloissa näytettävä esittely"
+
+[labels.fi.model.website_blog_post.field.body]
+label = "Sisältö"
+description = "Kirjoituksen sisältö Markdown-muodossa (turvallinen osajoukko: otsikot, luettelot, linkit, korostukset, koodi, lainaukset, taulukot)"
+
+[labels.fi.model.website_blog_post.field.tags]
+label = "Tunnisteet"
+description = "Pilkulla erotetut tunnisteet, esimerkiksi uutiset,tuote"
+
+[labels.fi.model.website_blog_post.field.published_on]
+label = "Julkaistu"
+description = "Kirjoituksen päiväys (YYYY-MM-DD)"
+
+[labels.fi.model.website_blog_post.field.state]
+label = "Tila"
+description = "Kirjoituksen tila: luonnos, julkaistu, arkistoitu"
+
+[labels.fi.model.website_blog_post.field.state.options]
+draft = "Luonnos"
+published = "Julkaistu"
+archived = "Arkistoitu"
+
+[labels.fi.model.website_blog_post.action.publish]
+label = "Julkaise"
+description = "Julkaise kirjoitus (vain esihenkilö)"
+
+[labels.fi.model.website_blog_post.action.unpublish]
+label = "Peru julkaisu"
+description = "Poista kirjoitus verkosta ja palauta se luonnokseksi"
+
+[labels.fi.model.website_blog_post.action.archive]
+label = "Arkistoi"
+description = "Poista julkaistu kirjoitus käytöstä"
+
+[labels.fi.model.website_form_submission]
+name = "Lomakeviesti"
+description = "Kävijän sivuston lomakkeella lähettämä viesti"
+
+[labels.fi.model.website_form_submission.field.form_name]
+label = "Lomakkeen nimi"
+description = "Mistä lomakkeesta viesti tuli, esimerkiksi yhteydenotto"
+
+[labels.fi.model.website_form_submission.field.sender_name]
+label = "Lähettäjän nimi"
+description = "Kävijän antama nimi"
+
+[labels.fi.model.website_form_submission.field.sender_email]
+label = "Lähettäjän sähköposti"
+description = "Kävijän antama sähköpostiosoite"
+
+[labels.fi.model.website_form_submission.field.sender_phone]
+label = "Lähettäjän puhelin"
+description = "Kävijän antama puhelinnumero"
+
+[labels.fi.model.website_form_submission.field.message]
+label = "Viesti"
+description = "Mitä kävijä kirjoitti"
+
+[labels.fi.model.website_form_submission.field.source_page]
+label = "Lähdesivu"
+description = "Sivun URL-tunnus, jolla lomake oli"
+
+[labels.fi.model.website_form_submission.field.submitted_on]
+label = "Lähetetty"
+description = "Lähetyspäivä (YYYY-MM-DD)"
+
+[labels.fi.model.website_form_submission.field.consent_given]
+label = "Suostumus annettu"
+description = "Rastiko kävijä suostumusruudun yhteydenottoa varten"
+
+[labels.fi.model.website_form_submission.field.state]
+label = "Tila"
+description = "Käsittelyn tila: uusi, käsitelty, roskaposti"
+
+[labels.fi.model.website_form_submission.field.state.options]
+new = "Uusi"
+handled = "Käsitelty"
+spam = "Roskaposti"
+
+[labels.fi.model.website_form_submission.action.handle]
+label = "Käsittele"
+description = "Merkitse viesti vastatuksi tai hoidetuksi"
+
+[labels.fi.model.website_form_submission.action.mark_spam]
+label = "Merkitse roskapostiksi"
+description = "Merkitse viesti roskapostiksi"
+
+[labels.fi.model.website_page_translation]
+name = "Sivun käännös"
+description = "Sivu käännettynä toiselle kielelle; julkinen sivusto näyttää sen sitä kieltä lukeville kävijöille"
+
+[labels.fi.model.website_page_translation.field.page_id]
+label = "Sivu"
+description = "Sivu, jonka käännös tämä on"
+
+[labels.fi.model.website_page_translation.field.lang]
+label = "Kieli"
+description = "Käännöksen kieli: en, de, fr, pl, fi, sv tai es"
+
+[labels.fi.model.website_page_translation.field.lang.options]
+en = "Englanti"
+de = "Saksa"
+fr = "Ranska"
+pl = "Puola"
+fi = "Suomi"
+sv = "Ruotsi"
+es = "Espanja"
+
+[labels.fi.model.website_page_translation.field.title]
+label = "Otsikko"
+description = "Käännetty sivun otsikko"
+
+[labels.fi.model.website_page_translation.field.body]
+label = "Sisältö"
+description = "Käännetty sivun sisältö Markdown-muodossa"
+
+[labels.fi.model.website_page_translation.field.seo_title]
+label = "SEO-otsikko"
+description = "Käännetty hakutuloksissa näytettävä otsikko"
+
+[labels.fi.model.website_page_translation.field.seo_description]
+label = "SEO-kuvaus"
+description = "Käännetty hakutuloksissa näytettävä kuvaus"
+
+[labels.fi.model.website_page_translation.field.published]
+label = "Julkaistu"
+description = "Näytetäänkö käännös; se on tavoitettavissa vain, kun sen sivu on julkaistu"
+
+[labels.fi.model.website_blog_post_translation]
+name = "Blogikirjoituksen käännös"
+description = "Blogikirjoitus käännettynä toiselle kielelle"
+
+[labels.fi.model.website_blog_post_translation.field.post_id]
+label = "Blogikirjoitus"
+description = "Kirjoitus, jonka käännös tämä on"
+
+[labels.fi.model.website_blog_post_translation.field.lang]
+label = "Kieli"
+description = "Käännöksen kieli: en, de, fr, pl, fi, sv tai es"
+
+[labels.fi.model.website_blog_post_translation.field.lang.options]
+en = "Englanti"
+de = "Saksa"
+fr = "Ranska"
+pl = "Puola"
+fi = "Suomi"
+sv = "Ruotsi"
+es = "Espanja"
+
+[labels.fi.model.website_blog_post_translation.field.title]
+label = "Otsikko"
+description = "Käännetty kirjoituksen otsikko"
+
+[labels.fi.model.website_blog_post_translation.field.summary]
+label = "Yhteenveto"
+description = "Käännetty esittely"
+
+[labels.fi.model.website_blog_post_translation.field.body]
+label = "Sisältö"
+description = "Käännetty kirjoituksen sisältö Markdown-muodossa"
+
+[labels.fi.model.website_blog_post_translation.field.published]
+label = "Julkaistu"
+description = "Näytetäänkö käännös; se on tavoitettavissa vain, kun sen kirjoitus on julkaistu"

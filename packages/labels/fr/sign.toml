@@ -1,0 +1,106 @@
+[labels.fr.module]
+name = "Signature"
+description = "Modèles de documents et demandes de signature (brouillon, envoyée, signée, déclinée, expirée). Une demande désigne le signataire (donnée personnelle) et conserve les preuves sous forme de références. Une demande signée n’est immuable que par convention ; document_hash enregistre ce qui a été signé. L’envoi et la signature exigent une approbation humaine ; les agents peuvent seulement les proposer."
+
+[labels.fr.model.sign_template]
+name = "Modèle"
+description = "Un document qui peut être envoyé pour signature"
+
+[labels.fr.model.sign_template.field.name]
+label = "Nom"
+description = "Nom du modèle, par exemple Contrat de travail"
+
+[labels.fr.model.sign_template.field.description]
+label = "Description"
+description = "À quoi sert le document et qui le signe"
+
+[labels.fr.model.sign_template.field.body]
+label = "Contenu"
+description = "Le texte du document, ou une référence indiquant où le fichier est conservé"
+
+[labels.fr.model.sign_template.field.signer_role]
+label = "Rôle du signataire"
+description = "Rôle de la personne qui signe, par exemple Client"
+
+[labels.fr.model.sign_template.field.active]
+label = "Actif"
+description = "Indique si de nouvelles demandes peuvent utiliser le modèle"
+
+[labels.fr.model.sign_request]
+name = "Demande"
+description = "Une demande faite à une personne de signer un document"
+
+[labels.fr.model.sign_request.field.template_id]
+label = "Modèle"
+description = "Le document à signer"
+
+[labels.fr.model.sign_request.field.title]
+label = "Titre"
+description = "Objet affiché au signataire"
+
+[labels.fr.model.sign_request.field.message]
+label = "Message"
+description = "Message affiché au signataire dans la demande"
+
+[labels.fr.model.sign_request.field.signer_name]
+label = "Nom du signataire"
+description = "Nom de la personne qui doit signer"
+
+[labels.fr.model.sign_request.field.signer_email]
+label = "E-mail du signataire"
+description = "Adresse e-mail à laquelle la demande est envoyée"
+
+[labels.fr.model.sign_request.field.sent_on]
+label = "Envoyé le"
+description = "Jour d’envoi de la demande (YYYY-MM-DD)"
+
+[labels.fr.model.sign_request.field.expires_on]
+label = "Expire le"
+description = "Dernier jour où la demande peut être signée (YYYY-MM-DD)"
+
+[labels.fr.model.sign_request.field.signed_on]
+label = "Signé le"
+description = "Jour où le document a été signé (YYYY-MM-DD)"
+
+[labels.fr.model.sign_request.field.signer_ip]
+label = "IP du signataire"
+description = "Adresse IP d’où provient la signature (preuve)"
+
+[labels.fr.model.sign_request.field.signer_user_agent]
+label = "Agent utilisateur du signataire"
+description = "Navigateur avec lequel la signature a été faite (preuve)"
+
+[labels.fr.model.sign_request.field.signature_reference]
+label = "Référence de signature"
+description = "Où l’image ou le certificat de signature est conservé"
+
+[labels.fr.model.sign_request.field.document_hash]
+label = "Empreinte du document"
+description = "Empreinte SHA-256 (hexadécimal) du document signé, pour prouver qu’il n’a pas été modifié ensuite"
+
+[labels.fr.model.sign_request.field.state]
+label = "Statut"
+description = "Statut de la demande : brouillon, envoyée, signée, déclinée, expirée"
+
+[labels.fr.model.sign_request.field.state.options]
+draft = "Brouillon"
+sent = "Envoyée"
+signed = "Signée"
+declined = "Déclinée"
+expired = "Expirée"
+
+[labels.fr.model.sign_request.action.send]
+label = "Envoyer"
+description = "Envoie la demande au signataire"
+
+[labels.fr.model.sign_request.action.sign]
+label = "Signer"
+description = "Enregistre que le signataire a signé ; l’enregistrement est ensuite immuable par convention"
+
+[labels.fr.model.sign_request.action.decline]
+label = "Décliner"
+description = "Enregistre que le signataire a décliné"
+
+[labels.fr.model.sign_request.action.expire]
+label = "Marquer expiré"
+description = "Enregistre que la demande est arrivée à échéance sans signature"

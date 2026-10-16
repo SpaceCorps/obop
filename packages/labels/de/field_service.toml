@@ -1,0 +1,140 @@
+[labels.de.module]
+name = "Außendienst"
+description = "Einsätze vor Ort bei Kunden, ausgeführt von einem Techniker: terminiert, unterwegs, in Bearbeitung, erledigt oder storniert. Ein Einsatz erfasst Kunde, Einsatzort, Techniker, geplanten Tag und Beginn (Minuten seit Mitternacht), verwendete Teile und ob der Kunde die Arbeit abzeichnen muss. Einsatzadresse und Kontaktdaten sind personenbezogene Daten. Benötigt die Pakete Personal und Produkte."
+
+[labels.de.model.field_service_job]
+name = "Einsatz"
+description = "Ein Einsatz vor Ort bei einem Kunden"
+
+[labels.de.model.field_service_job.field.name]
+label = "Name"
+description = "Kurztitel des Einsatzes, zum Beispiel Heizungspumpe austauschen"
+
+[labels.de.model.field_service_job.field.customer_id]
+label = "Kunde"
+description = "Der Kunde, für den der Einsatz erfolgt"
+
+[labels.de.model.field_service_job.field.site_name]
+label = "Standort"
+description = "Name des Einsatzorts, zum Beispiel Hauptlager"
+
+[labels.de.model.field_service_job.field.site_address]
+label = "Einsatzadresse"
+description = "Straßenadresse, an der die Arbeit erfolgt; oft die Wohnung einer Person"
+
+[labels.de.model.field_service_job.field.site_city]
+label = "Ort (Einsatz)"
+description = "Ort des Einsatzorts"
+
+[labels.de.model.field_service_job.field.site_postcode]
+label = "PLZ (Einsatz)"
+description = "Postleitzahl des Einsatzorts"
+
+[labels.de.model.field_service_job.field.site_country]
+label = "Land (Einsatz)"
+description = "Land des Einsatzorts"
+
+[labels.de.model.field_service_job.field.site_contact_name]
+label = "Ansprechpartner vor Ort"
+description = "Name der Person, die vor Ort zu treffen ist"
+
+[labels.de.model.field_service_job.field.site_contact_phone]
+label = "Telefon vor Ort"
+description = "Telefonnummer der Person, die vor Ort zu treffen ist"
+
+[labels.de.model.field_service_job.field.technician_id]
+label = "Techniker"
+description = "Dem Einsatz zugewiesener Techniker"
+
+[labels.de.model.field_service_job.field.priority]
+label = "Priorität"
+description = "Wie dringend der Einsatz ist: niedrig, normal, hoch, dringend"
+
+[labels.de.model.field_service_job.field.priority.options]
+low = "Niedrig"
+normal = "Normal"
+high = "Hoch"
+urgent = "Dringend"
+
+[labels.de.model.field_service_job.field.description]
+label = "Beschreibung"
+description = "Was zu tun ist und was der Kunde gemeldet hat"
+
+[labels.de.model.field_service_job.field.scheduled_on]
+label = "Terminiert am"
+description = "Geplanter Tag des Besuchs (YYYY-MM-DD)"
+
+[labels.de.model.field_service_job.field.scheduled_start_minute]
+label = "Geplanter Beginn"
+description = "Geplanter Beginn in Minuten seit Mitternacht (540 ist 09:00)"
+
+[labels.de.model.field_service_job.field.planned_minutes]
+label = "Geplante Dauer (Min.)"
+description = "Geplante Dauer in Minuten"
+
+[labels.de.model.field_service_job.field.signature_required]
+label = "Unterschrift erforderlich"
+description = "Ob der Kunde die Arbeit abzeichnen muss, bevor sie als erledigt gilt"
+
+[labels.de.model.field_service_job.field.signed_by]
+label = "Unterzeichnet von"
+description = "Name der Person, die die Arbeit abgezeichnet hat"
+
+[labels.de.model.field_service_job.field.signed_on]
+label = "Unterzeichnet am"
+description = "Tag, an dem der Kunde abgezeichnet hat (YYYY-MM-DD)"
+
+[labels.de.model.field_service_job.field.work_report]
+label = "Arbeitsbericht"
+description = "Was getan wurde, vom Techniker verfasst"
+
+[labels.de.model.field_service_job.field.state]
+label = "Status"
+description = "Einsatzstatus: terminiert, unterwegs, in Bearbeitung, erledigt, storniert"
+
+[labels.de.model.field_service_job.field.state.options]
+scheduled = "Terminiert"
+en_route = "Unterwegs"
+in_progress = "In Bearbeitung"
+done = "Erledigt"
+cancelled = "Storniert"
+
+[labels.de.model.field_service_job.action.depart]
+label = "Losfahren"
+description = "Der Techniker ist unterwegs"
+
+[labels.de.model.field_service_job.action.start]
+label = "Starten"
+description = "Der Techniker ist angekommen und hat die Arbeit begonnen"
+
+[labels.de.model.field_service_job.action.complete]
+label = "Erledigen"
+description = "Den Einsatz abschließen; ist eine Unterschrift erforderlich, zuerst Unterzeichnet von und Unterzeichnet am erfassen"
+
+[labels.de.model.field_service_job.action.cancel]
+label = "Stornieren"
+description = "Einen noch nicht begonnenen Einsatz stornieren"
+
+[labels.de.model.field_service_part]
+name = "Teil"
+description = "Ein bei einem Einsatz verwendetes Teil oder Produkt"
+
+[labels.de.model.field_service_part.field.job_id]
+label = "Einsatz"
+description = "Der Einsatz, bei dem das Teil verwendet wurde"
+
+[labels.de.model.field_service_part.field.product_id]
+label = "Produkt"
+description = "Das verwendete Produkt"
+
+[labels.de.model.field_service_part.field.quantity]
+label = "Menge"
+description = "Wie viele Stück verwendet wurden"
+
+[labels.de.model.field_service_part.field.unit_price]
+label = "Stückpreis"
+description = "Dem Kunden berechneter Preis pro Stück (kleinste Währungseinheit, z. B. Cent)"
+
+[labels.de.model.field_service_part.field.note]
+label = "Notiz"
+description = "Anmerkung zum Teil, zum Beispiel die Seriennummer"

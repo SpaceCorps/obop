@@ -1,0 +1,106 @@
+[labels.fi.module]
+name = "Allekirjoitus"
+description = "Asiakirjamallit ja allekirjoituspyynnöt luonnos-, lähetetty-, allekirjoitettu-, hylätty- ja vanhentunut-kulussa. Pyyntö nimeää allekirjoittajan (henkilötieto) ja säilyttää todisteet viitteinä. Allekirjoitettua pyyntöä ei saa muokata, ja asiakirjan tiiviste kertoo, mitä allekirjoitettiin. Lähetys ja allekirjoituksen kirjaus vaativat ihmisen hyväksynnän."
+
+[labels.fi.model.sign_template]
+name = "Asiakirjamalli"
+description = "Asiakirja, joka voidaan lähettää allekirjoitettavaksi"
+
+[labels.fi.model.sign_template.field.name]
+label = "Nimi"
+description = "Mallin nimi, esimerkiksi Työsopimus"
+
+[labels.fi.model.sign_template.field.description]
+label = "Kuvaus"
+description = "Mihin asiakirjaa käytetään ja kuka sen allekirjoittaa"
+
+[labels.fi.model.sign_template.field.body]
+label = "Sisältö"
+description = "Asiakirjan teksti tai viite paikkaan, jossa tiedosto säilytetään"
+
+[labels.fi.model.sign_template.field.signer_role]
+label = "Allekirjoittajan rooli"
+description = "Allekirjoittajan rooli, esimerkiksi Asiakas"
+
+[labels.fi.model.sign_template.field.active]
+label = "Aktiivinen"
+description = "Voivatko uudet pyynnöt käyttää mallia"
+
+[labels.fi.model.sign_request]
+name = "Allekirjoituspyyntö"
+description = "Pyyntö, että yksi henkilö allekirjoittaa yhden asiakirjan"
+
+[labels.fi.model.sign_request.field.template_id]
+label = "Malli"
+description = "Allekirjoitettava asiakirja"
+
+[labels.fi.model.sign_request.field.title]
+label = "Otsikko"
+description = "Allekirjoittajalle näytettävä aihe"
+
+[labels.fi.model.sign_request.field.message]
+label = "Viesti"
+description = "Allekirjoittajalle pyynnössä näytettävä viesti"
+
+[labels.fi.model.sign_request.field.signer_name]
+label = "Allekirjoittajan nimi"
+description = "Allekirjoittavan henkilön nimi"
+
+[labels.fi.model.sign_request.field.signer_email]
+label = "Allekirjoittajan sähköposti"
+description = "Sähköpostiosoite, johon pyyntö lähetetään"
+
+[labels.fi.model.sign_request.field.sent_on]
+label = "Lähetetty"
+description = "Päivä, jona pyyntö lähetettiin (YYYY-MM-DD)"
+
+[labels.fi.model.sign_request.field.expires_on]
+label = "Vanhenee"
+description = "Viimeinen päivä, jona pyynnön voi allekirjoittaa (YYYY-MM-DD)"
+
+[labels.fi.model.sign_request.field.signed_on]
+label = "Allekirjoitettu"
+description = "Päivä, jona asiakirja allekirjoitettiin (YYYY-MM-DD)"
+
+[labels.fi.model.sign_request.field.signer_ip]
+label = "Allekirjoittajan IP-osoite"
+description = "IP-osoite, josta allekirjoitus tehtiin (todiste)"
+
+[labels.fi.model.sign_request.field.signer_user_agent]
+label = "Allekirjoittajan selain"
+description = "Selain, jolla allekirjoitus tehtiin (todiste)"
+
+[labels.fi.model.sign_request.field.signature_reference]
+label = "Allekirjoitusviite"
+description = "Missä allekirjoituskuva tai varmenne säilytetään"
+
+[labels.fi.model.sign_request.field.document_hash]
+label = "Asiakirjan tiiviste"
+description = "Allekirjoitetun asiakirjan SHA-256-tiiviste (heksa) sen todistamiseksi, ettei sitä muutettu jälkikäteen"
+
+[labels.fi.model.sign_request.field.state]
+label = "Tila"
+description = "Pyynnön tila: luonnos, lähetetty, allekirjoitettu, hylätty, vanhentunut"
+
+[labels.fi.model.sign_request.field.state.options]
+draft = "Luonnos"
+sent = "Lähetetty"
+signed = "Allekirjoitettu"
+declined = "Hylätty"
+expired = "Vanhentunut"
+
+[labels.fi.model.sign_request.action.send]
+label = "Lähetä"
+description = "Lähetä pyyntö allekirjoittajalle"
+
+[labels.fi.model.sign_request.action.sign]
+label = "Allekirjoita"
+description = "Kirjaa, että allekirjoittaja allekirjoitti; tietuetta ei saa sen jälkeen muokata"
+
+[labels.fi.model.sign_request.action.decline]
+label = "Kieltäydy"
+description = "Kirjaa, että allekirjoittaja kieltäytyi"
+
+[labels.fi.model.sign_request.action.expire]
+label = "Merkitse vanhentuneeksi"
+description = "Kirjaa, että pyyntö vanheni allekirjoittamatta"

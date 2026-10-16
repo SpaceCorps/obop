@@ -1,0 +1,187 @@
+[labels.sv.module]
+name = "Personal"
+description = "Anställda, avdelningar och ledighetsansökningar. Personuppgifter klassas strikt: lön, bank och personnummer syns bara för chefer, och hälso- och fackuppgifter för den särskilda läsargruppen."
+
+[labels.sv.model.hr_department]
+name = "Avdelning"
+description = "Ett team eller en avdelning i företaget"
+
+[labels.sv.model.hr_department.field.name]
+label = "Namn"
+description = "Avdelningens namn"
+
+[labels.sv.model.hr_department.field.head]
+label = "Avdelningschef"
+description = "Namn på avdelningschefen"
+
+[labels.sv.model.hr_department.field.cost_centre]
+label = "Kostnadsställe"
+description = "Kostnadsställeskod som ekonomi använder"
+
+[labels.sv.model.hr_employee]
+name = "Anställd"
+description = "En person som är anställd av företaget"
+
+[labels.sv.model.hr_employee.field.name]
+label = "Namn"
+description = "Fullständigt namn"
+
+[labels.sv.model.hr_employee.field.job_title]
+label = "Befattning"
+description = "Befattning"
+
+[labels.sv.model.hr_employee.field.work_email]
+label = "E-post (arbete)"
+description = "E-postadress till arbetet"
+
+[labels.sv.model.hr_employee.field.work_phone]
+label = "Telefon (arbete)"
+description = "Telefonnummer till arbetet"
+
+[labels.sv.model.hr_employee.field.department_id]
+label = "Avdelning"
+description = "Avdelningen som personen tillhör"
+
+[labels.sv.model.hr_employee.field.reports_to_id]
+label = "Rapporterar till"
+description = "Personens närmaste chef"
+
+[labels.sv.model.hr_employee.field.hired_on]
+label = "Anställningsdatum"
+description = "Första anställningsdagen (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.hr_employee.field.contract_type]
+label = "Anställningsform"
+description = "Typ av anställningsavtal: tillsvidare, visstid, konsult, praktikant"
+
+[labels.sv.model.hr_employee.field.contract_type.options]
+permanent = "Tillsvidare"
+fixed_term = "Visstidsanställning"
+contractor = "Konsult"
+intern = "Praktikant"
+
+[labels.sv.model.hr_employee.field.private_email]
+label = "Privat e-post"
+description = "Privat e-postadress"
+
+[labels.sv.model.hr_employee.field.private_phone]
+label = "Privat telefon"
+description = "Privat telefonnummer"
+
+[labels.sv.model.hr_employee.field.home_address]
+label = "Hemadress"
+description = "Privat hemadress"
+
+[labels.sv.model.hr_employee.field.birth_date]
+label = "Födelsedatum"
+description = "Födelsedatum (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.hr_employee.field.national_id]
+label = "Personnummer"
+description = "Personnummer eller annat nationellt id-nummer"
+
+[labels.sv.model.hr_employee.field.emergency_contact]
+label = "Nödkontakt"
+description = "Namn och telefonnummer till personen att ringa vid nödfall"
+
+[labels.sv.model.hr_employee.field.salary]
+label = "Lön"
+description = "Bruttoårslön (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.hr_employee.field.bank_iban]
+label = "Bankens IBAN"
+description = "Bankkonto som lönen betalas till"
+
+[labels.sv.model.hr_employee.field.union_member]
+label = "Fackmedlem"
+description = "Om personen är medlem i ett fackförbund"
+
+[labels.sv.model.hr_employee.field.work_permit_expiry]
+label = "Arbetstillstånd giltigt till"
+description = "Datum då arbetstillståndet går ut, för utländska medborgare (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.hr_employee.field.health_note]
+label = "Hälsoanteckning"
+description = "Hälsotillstånd eller funktionsnedsättning som är relevant på arbetsplatsen"
+
+[labels.sv.model.hr_employee.field.state]
+label = "Status"
+description = "Anställningsstatus: introduktion, aktiv, avslutad"
+
+[labels.sv.model.hr_employee.field.state.options]
+onboarding = "Introduktion"
+active = "Aktiv"
+offboarded = "Avslutad"
+
+[labels.sv.model.hr_employee.action.activate]
+label = "Aktivera"
+description = "Slutför introduktionen och markera den anställde som aktiv"
+
+[labels.sv.model.hr_employee.action.offboard]
+label = "Avsluta anställning"
+description = "Avsluta anställningsposten; ångra bara efter beslut av HR"
+
+[labels.sv.model.hr_leave_request]
+name = "Ledighetsansökan"
+description = "En ansökan om ledighet"
+
+[labels.sv.model.hr_leave_request.field.employee_id]
+label = "Anställd"
+description = "Den anställde som ansöker om ledighet"
+
+[labels.sv.model.hr_leave_request.field.leave_kind]
+label = "Ledighetstyp"
+description = "Typ av ledighet: betald, obetald, föräldraledighet, studieledighet, övrigt"
+
+[labels.sv.model.hr_leave_request.field.leave_kind.options]
+paid = "Betald"
+unpaid = "Obetald"
+parental = "Föräldraledighet"
+study = "Studieledighet"
+other = "Övrigt"
+
+[labels.sv.model.hr_leave_request.field.start_on]
+label = "Startdatum"
+description = "Första frånvarodagen (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.hr_leave_request.field.end_on]
+label = "Slutdatum"
+description = "Sista frånvarodagen (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.hr_leave_request.field.days]
+label = "Dagar"
+description = "Begärda arbetsdagar"
+
+[labels.sv.model.hr_leave_request.field.reason]
+label = "Orsak"
+description = "Varför ledigheten begärs"
+
+[labels.sv.model.hr_leave_request.field.is_sick_leave]
+label = "Sjukfrånvaro"
+description = "Om frånvaron beror på sjukdom"
+
+[labels.sv.model.hr_leave_request.field.medical_note]
+label = "Läkarintyg"
+description = "Hänvisning till läkarintyget, om det finns"
+
+[labels.sv.model.hr_leave_request.field.state]
+label = "Status"
+description = "Ansökans status: utkast, begärd, godkänd, avslagen"
+
+[labels.sv.model.hr_leave_request.field.state.options]
+draft = "Utkast"
+requested = "Begärd"
+approved = "Godkänd"
+refused = "Avslagen"
+
+[labels.sv.model.hr_leave_request.action.request]
+label = "Begär"
+description = "Skicka ansökan till chefen"
+
+[labels.sv.model.hr_leave_request.action.approve]
+label = "Godkänn"
+description = "Godkänn en begärd ledighet (endast chef)"
+
+[labels.sv.model.hr_leave_request.action.refuse]
+label = "Avslå"
+description = "Avslå en begärd ledighet (endast chef)"

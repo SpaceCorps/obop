@@ -1,0 +1,35 @@
+[labels.fi.module]
+name = "Laskutus"
+
+[labels.fi.model.invoice]
+name = "Lasku"
+description = "Asiakaslasku; kirjattuja laskuja korjataan vain hyvityslaskuilla"
+
+[labels.fi.model.invoice.field.sale_order_id]
+label = "Myyntitilaus"
+description = "Lähteenä olevan myyntitilauksen tunniste"
+
+[labels.fi.model.invoice.field.state]
+label = "Tila"
+description = "Elinkaari: luonnos, kirjattu tai peruutettu"
+
+[labels.fi.model.invoice.field.state.options]
+draft = "Luonnos"
+posted = "Kirjattu"
+cancelled = "Peruutettu"
+
+[labels.fi.model.invoice.field.total_minor]
+label = "Yhteensä"
+description = "Laskun loppusumma valuutan pienimmässä yksikössä"
+
+[labels.fi.model.invoice.field.number]
+label = "Numero"
+description = "Katkeamaton lakisääteinen numero, jonka kirjaaminen antaa"
+
+[labels.fi.model.invoice.action.post]
+label = "Kirjaa"
+description = "Kirjaa luonnoslasku ja anna sille lakisääteinen numero"
+
+[labels.fi.model.invoice.action.cancel]
+label = "Peruuta"
+description = "Peruuta luonnoslasku"

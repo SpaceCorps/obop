@@ -1,0 +1,78 @@
+[labels.sv.module]
+name = "Instrumentpaneler"
+description = "Instrumentpaneler och deras rutor lagrade som data för ett gränssnitt att visa. En ruta anger typ (nyckeltal, stapel, linje, cirkel eller tabell), modell, måttfält, beräkning (antal eller summa), gruppering, filter och placering. Paketet lagrar bara definitionen, kontrollerar inte att modell eller fält finns och beräknar ingenting."
+
+[labels.sv.model.dashboards_dashboard]
+name = "Instrumentpanel"
+description = "En instrumentpanel: en titulerad, ordnad samling rutor"
+
+[labels.sv.model.dashboards_dashboard.field.title]
+label = "Titel"
+description = "Panelens titel, till exempel Försäljningsöversikt"
+
+[labels.sv.model.dashboards_dashboard.field.owner]
+label = "Ägare"
+description = "Namn på personen som äger panelen"
+
+[labels.sv.model.dashboards_dashboard.field.description]
+label = "Beskrivning"
+description = "Vad panelen visar och för vem"
+
+[labels.sv.model.dashboards_dashboard.field.shared]
+label = "Delad"
+description = "Om alla med åtkomst till appen Instrumentpaneler ser den, eller bara ägaren"
+
+[labels.sv.model.dashboards_dashboard.field.position]
+label = "Placering"
+description = "Ordning bland panelerna, lägst först"
+
+[labels.sv.model.dashboards_widget]
+name = "Ruta"
+description = "En ruta på en instrumentpanel, definierad av vad som läses och hur det sammanställs"
+
+[labels.sv.model.dashboards_widget.field.dashboard_id]
+label = "Instrumentpanel"
+description = "Panelen som rutan ligger på"
+
+[labels.sv.model.dashboards_widget.field.title]
+label = "Titel"
+description = "Rutans titel, till exempel Betalda ordrar"
+
+[labels.sv.model.dashboards_widget.field.kind]
+label = "Typ"
+description = "Hur rutan ritas: nyckeltal, stapel, linje, cirkel, tabell"
+
+[labels.sv.model.dashboards_widget.field.kind.options]
+kpi = "Nyckeltal"
+bar = "Stapel"
+line = "Linje"
+pie = "Cirkel"
+table = "Tabell"
+
+[labels.sv.model.dashboards_widget.field.model_name]
+label = "Modellnamn"
+description = "Modellen som rutan läser, till exempel sale_order"
+
+[labels.sv.model.dashboards_widget.field.measure_field]
+label = "Måttfält"
+description = "Fältet som sammanställs: ett tal- eller beloppsfält i modellen; tomt vid räkning"
+
+[labels.sv.model.dashboards_widget.field.aggregate]
+label = "Beräkning"
+description = "Hur posterna sammanställs: antal eller summa"
+
+[labels.sv.model.dashboards_widget.field.aggregate.options]
+count = "Antal"
+sum = "Summa"
+
+[labels.sv.model.dashboards_widget.field.group_by]
+label = "Gruppera efter"
+description = "Fält att dela upp resultatet efter (ett val-, referens- eller datumfält); tomt för ett enda värde"
+
+[labels.sv.model.dashboards_widget.field.filter]
+label = "Filter"
+description = "Fältnamn med exakta värden som posterna måste ha, till exempel state = paid; tomt betyder alla poster"
+
+[labels.sv.model.dashboards_widget.field.position]
+label = "Placering"
+description = "Rutans ordning på panelen, lägst först"

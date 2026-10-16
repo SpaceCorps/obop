@@ -1,0 +1,160 @@
+[labels.fi.module]
+name = "Kalusto"
+description = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria. Seuraa tilaa ja huoltotietoja; se ei laske käyttökustannuksia tai polttoaineen kulutusta."
+
+[labels.fi.model.fleet_vehicle]
+name = "Ajoneuvo"
+description = "Yrityksen käyttämä ajoneuvo"
+
+[labels.fi.model.fleet_vehicle.field.plate]
+label = "Rekisterinumero"
+description = "Rekisterikilpi"
+
+[labels.fi.model.fleet_vehicle.field.model]
+label = "Malli"
+description = "Merkki ja malli, esimerkiksi Renault Master"
+
+[labels.fi.model.fleet_vehicle.field.vin]
+label = "VIN"
+description = "Ajoneuvon valmistenumero (alustanumero)"
+
+[labels.fi.model.fleet_vehicle.field.fuel]
+label = "Käyttövoima"
+description = "Käyttövoima: bensiini, diesel, hybridi, sähkö, muu"
+
+[labels.fi.model.fleet_vehicle.field.fuel.options]
+petrol = "Bensiini"
+diesel = "Diesel"
+hybrid = "Hybridi"
+electric = "Sähkö"
+other = "Muu"
+
+[labels.fi.model.fleet_vehicle.field.odometer_km]
+label = "Mittarilukema (km)"
+description = "Viimeisin tiedossa oleva mittarilukema kilometreinä"
+
+[labels.fi.model.fleet_vehicle.field.acquired_on]
+label = "Hankittu"
+description = "Päivä, jona ajoneuvo tuli kalustoon (YYYY-MM-DD)"
+
+[labels.fi.model.fleet_vehicle.field.driver]
+label = "Kuljettaja"
+description = "Ajoneuvoa parhaillaan käyttävän kuljettajan nimi vapaana tekstinä"
+
+[labels.fi.model.fleet_vehicle.field.driver_id]
+label = "Kuljettaja"
+description = "Ajoneuvolle parhaillaan määrätty kuljettaja"
+
+[labels.fi.model.fleet_vehicle.field.state]
+label = "Tila"
+description = "Saatavuus: vapaana, käytössä, huolto, poistettu käytöstä"
+
+[labels.fi.model.fleet_vehicle.field.state.options]
+available = "Vapaana"
+in_service = "Käytössä"
+maintenance = "Huolto"
+retired = "Poistettu käytöstä"
+
+[labels.fi.model.fleet_vehicle.action.dispatch]
+label = "Ota ajoon"
+description = "Ota vapaana oleva ajoneuvo käyttöön"
+
+[labels.fi.model.fleet_vehicle.action.return_to_pool]
+label = "Palauta vapaaksi"
+description = "Palauta käytössä oleva ajoneuvo vapaiden joukkoon"
+
+[labels.fi.model.fleet_vehicle.action.retire]
+label = "Poista käytöstä"
+description = "Poista vapaana oleva ajoneuvo kalustosta pysyvästi (vaatii hyväksyjän)"
+
+[labels.fi.model.fleet_vehicle_driver]
+name = "Kuljettaja"
+description = "Henkilö, jolla on lupa ajaa kaluston ajoneuvoja"
+
+[labels.fi.model.fleet_vehicle_driver.field.name]
+label = "Nimi"
+description = "Kuljettajan koko nimi"
+
+[labels.fi.model.fleet_vehicle_driver.field.phone]
+label = "Puhelin"
+description = "Kuljettajan työpuhelinnumero"
+
+[labels.fi.model.fleet_vehicle_driver.field.licence_number]
+label = "Ajokortin numero"
+description = "Ajokortin numero"
+
+[labels.fi.model.fleet_vehicle_driver.field.licence_expiry]
+label = "Ajokortti voimassa"
+description = "Päivä, jona ajokortti vanhenee (YYYY-MM-DD)"
+
+[labels.fi.model.fleet_vehicle_driver.field.state]
+label = "Tila"
+description = "Kuljettajan tila: aktiivinen, keskeytetty"
+
+[labels.fi.model.fleet_vehicle_driver.field.state.options]
+active = "Aktiivinen"
+suspended = "Keskeytetty"
+
+[labels.fi.model.fleet_vehicle_driver.action.suspend]
+label = "Keskeytä"
+description = "Keskeytä kuljettaja, esimerkiksi ajokortin vanhennuttua"
+
+[labels.fi.model.fleet_vehicle_driver.action.reactivate]
+label = "Aktivoi uudelleen"
+description = "Salli keskeytetyn kuljettajan ajaa taas"
+
+[labels.fi.model.fleet_vehicle_service]
+name = "Ajoneuvohuolto"
+description = "Ajoneuvon huolto-, korjaus- tai tarkastustyö"
+
+[labels.fi.model.fleet_vehicle_service.field.vehicle_id]
+label = "Ajoneuvo"
+description = "Huollettu ajoneuvo"
+
+[labels.fi.model.fleet_vehicle_service.field.kind]
+label = "Laji"
+description = "Työn laji: huolto, korjaus, tarkastus, renkaat, muu"
+
+[labels.fi.model.fleet_vehicle_service.field.kind.options]
+maintenance = "Huolto"
+repair = "Korjaus"
+inspection = "Tarkastus"
+tyres = "Renkaat"
+other = "Muu"
+
+[labels.fi.model.fleet_vehicle_service.field.service_on]
+label = "Huoltopäivä"
+description = "Työn päivä (YYYY-MM-DD)"
+
+[labels.fi.model.fleet_vehicle_service.field.odometer_km]
+label = "Mittarilukema (km)"
+description = "Mittarilukema kilometreinä huollon aikaan"
+
+[labels.fi.model.fleet_vehicle_service.field.cost]
+label = "Kustannus"
+description = "Korjaamon laskuttama kokonaissumma (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.fleet_vehicle_service.field.workshop]
+label = "Korjaamo"
+description = "Korjaamon nimi"
+
+[labels.fi.model.fleet_vehicle_service.field.notes]
+label = "Muistiinpanot"
+description = "Mitä tehtiin tai havaittiin"
+
+[labels.fi.model.fleet_vehicle_service.field.state]
+label = "Tila"
+description = "Työn tila: suunniteltu, valmis, peruutettu"
+
+[labels.fi.model.fleet_vehicle_service.field.state.options]
+planned = "Suunniteltu"
+done = "Valmis"
+cancelled = "Peruutettu"
+
+[labels.fi.model.fleet_vehicle_service.action.complete]
+label = "Merkitse valmiiksi"
+description = "Merkitse suunniteltu työ valmiiksi"
+
+[labels.fi.model.fleet_vehicle_service.action.cancel]
+label = "Peruuta"
+description = "Peruuta suunniteltu työ"

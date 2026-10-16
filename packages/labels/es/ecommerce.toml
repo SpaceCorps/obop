@@ -1,0 +1,341 @@
+[labels.es.module]
+name = "Comercio electrónico"
+description = "Tienda online: categorías, fichas de producto con traducciones, métodos de envío, códigos de descuento y pedidos web. Con el sitio público activado, los visitantes piden sin cuenta y el servidor calcula siempre los precios. No hay pasarela de pago. Los reembolsos requieren aprobación humana de un responsable; los datos del cliente son personales y nunca públicos. Requiere Productos."
+
+[labels.es.model.ecommerce_category]
+name = "Categoría"
+description = "Un grupo de fichas que se muestran juntas en la tienda"
+
+[labels.es.model.ecommerce_category.field.name]
+label = "Nombre"
+description = "Nombre de la categoría que se muestra en la tienda"
+
+[labels.es.model.ecommerce_category.field.slug]
+label = "Slug"
+description = "Parte de la URL de la categoría, en minúsculas y con guiones"
+
+[labels.es.model.ecommerce_category.field.description]
+label = "Descripción"
+description = "Texto breve sobre la categoría"
+
+[labels.es.model.ecommerce_category.field.sequence]
+label = "Secuencia"
+description = "Orden entre categorías, de menor a mayor"
+
+[labels.es.model.ecommerce_category.field.published]
+label = "Publicado"
+description = "Indica si la categoría es visible para los compradores"
+
+[labels.es.model.ecommerce_listing]
+name = "Ficha de producto"
+description = "Un producto tal como aparece en la tienda online"
+
+[labels.es.model.ecommerce_listing.field.product_id]
+label = "Producto"
+description = "El producto que se vende online"
+
+[labels.es.model.ecommerce_listing.field.title]
+label = "Título"
+description = "Título que se muestra en la tienda"
+
+[labels.es.model.ecommerce_listing.field.slug]
+label = "Slug"
+description = "Parte de la URL de la página del producto, en minúsculas y con guiones"
+
+[labels.es.model.ecommerce_listing.field.summary]
+label = "Resumen"
+description = "Una o dos frases que se muestran en las tarjetas de producto"
+
+[labels.es.model.ecommerce_listing.field.description]
+label = "Descripción"
+description = "Descripción que se muestra en la página del producto, en Markdown"
+
+[labels.es.model.ecommerce_listing.field.category_id]
+label = "Categoría"
+description = "La categoría bajo la que se muestra la ficha"
+
+[labels.es.model.ecommerce_listing.field.price]
+label = "Precio"
+description = "Precio en tienda con impuestos incluidos (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.ecommerce_listing.field.compare_at_price]
+label = "Precio de comparación"
+description = "Precio anterior mostrado tachado (unidad menor de la moneda)"
+
+[labels.es.model.ecommerce_listing.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217 de los precios, por ejemplo EUR; vacío significa la moneda de la tienda de los ajustes de la instancia"
+
+[labels.es.model.ecommerce_listing.field.sku]
+label = "SKU"
+description = "Código de artículo (SKU) que se muestra en la página del producto"
+
+[labels.es.model.ecommerce_listing.field.stock_policy]
+label = "Política de existencias"
+description = "Qué pasa cuando se agota el stock: siempre disponible, bloquear al agotarse, permitir pedidos pendientes de entrega"
+
+[labels.es.model.ecommerce_listing.field.stock_policy.options]
+always_available = "Siempre disponible"
+block_when_out = "Bloquear sin existencias"
+allow_backorder = "Permitir pedidos pendientes"
+
+[labels.es.model.ecommerce_listing.field.stock_quantity]
+label = "Cantidad en stock"
+description = "Unidades disponibles, usadas con la política de stock. Los pedidos no lo reducen: se ajusta a mano"
+
+[labels.es.model.ecommerce_listing.field.published]
+label = "Publicado"
+description = "Indica si la ficha es visible para los compradores"
+
+[labels.es.model.ecommerce_listing_translation]
+name = "Traducción de la ficha"
+description = "Una ficha traducida a otro idioma"
+
+[labels.es.model.ecommerce_listing_translation.field.listing_id]
+label = "Ficha"
+description = "La ficha que traduce esta traducción"
+
+[labels.es.model.ecommerce_listing_translation.field.lang]
+label = "Idioma"
+description = "Idioma de la traducción: en, de, fr, pl, fi, sv o es"
+
+[labels.es.model.ecommerce_listing_translation.field.lang.options]
+en = "Inglés"
+de = "Alemán"
+fr = "Francés"
+pl = "Polaco"
+fi = "Finés"
+sv = "Sueco"
+es = "Español"
+
+[labels.es.model.ecommerce_listing_translation.field.title]
+label = "Título"
+description = "Título traducido"
+
+[labels.es.model.ecommerce_listing_translation.field.summary]
+label = "Resumen"
+description = "Texto de tarjeta traducido"
+
+[labels.es.model.ecommerce_listing_translation.field.description]
+label = "Descripción"
+description = "Descripción traducida en Markdown"
+
+[labels.es.model.ecommerce_listing_translation.field.published]
+label = "Publicado"
+description = "Indica si la traducción se muestra; solo es accesible mientras su ficha esté publicada"
+
+[labels.es.model.ecommerce_shipping_method]
+name = "Método de envío"
+description = "Una forma de entregar los pedidos con su precio"
+
+[labels.es.model.ecommerce_shipping_method.field.name]
+label = "Nombre"
+description = "Nombre que se muestra al finalizar la compra, por ejemplo Envío estándar"
+
+[labels.es.model.ecommerce_shipping_method.field.carrier]
+label = "Transportista"
+description = "Transportista que entrega, por ejemplo DHL"
+
+[labels.es.model.ecommerce_shipping_method.field.price]
+label = "Precio"
+description = "Precio del envío (unidad menor de la moneda)"
+
+[labels.es.model.ecommerce_shipping_method.field.free_over]
+label = "Gratis a partir de"
+description = "Total del pedido a partir del cual el envío es gratuito (unidad menor de la moneda); vacío significa nunca"
+
+[labels.es.model.ecommerce_shipping_method.field.delivery_days]
+label = "Días de entrega"
+description = "Número habitual de días hasta la entrega"
+
+[labels.es.model.ecommerce_shipping_method.field.active]
+label = "Activo"
+description = "Indica si los compradores pueden elegirlo"
+
+[labels.es.model.ecommerce_discount_code]
+name = "Código de descuento"
+description = "Un código que el comprador introduce al finalizar la compra para obtener una rebaja"
+
+[labels.es.model.ecommerce_discount_code.field.code]
+label = "Código"
+description = "El código que escriben los compradores, por ejemplo PRIMAVERA10"
+
+[labels.es.model.ecommerce_discount_code.field.kind]
+label = "Tipo"
+description = "Tipo de rebaja: porcentaje o importe fijo"
+
+[labels.es.model.ecommerce_discount_code.field.kind.options]
+percent = "Porcentaje"
+fixed = "Importe fijo"
+
+[labels.es.model.ecommerce_discount_code.field.value]
+label = "Valor"
+description = "Rebaja: puntos básicos para porcentaje (1000 es 10,00 %), unidad menor de la moneda para importe fijo"
+
+[labels.es.model.ecommerce_discount_code.field.starts_on]
+label = "Fecha de comienzo"
+description = "Primer día en que funciona el código (YYYY-MM-DD)"
+
+[labels.es.model.ecommerce_discount_code.field.ends_on]
+label = "Fecha de finalización"
+description = "Último día en que funciona el código (YYYY-MM-DD)"
+
+[labels.es.model.ecommerce_discount_code.field.max_uses]
+label = "Usos máximos"
+description = "Cuántas veces se puede usar el código en total; vacío significa sin límite"
+
+[labels.es.model.ecommerce_discount_code.field.used_count]
+label = "Usos"
+description = "Cuántas veces se ha usado (se mantiene al día a mano)"
+
+[labels.es.model.ecommerce_discount_code.field.minimum_order]
+label = "Pedido mínimo"
+description = "Total de pedido mínimo al que se aplica el código (unidad menor de la moneda)"
+
+[labels.es.model.ecommerce_discount_code.field.active]
+label = "Activo"
+description = "Indica si el código se puede usar"
+
+[labels.es.model.ecommerce_order]
+name = "Pedido"
+description = "Un pedido hecho online"
+
+[labels.es.model.ecommerce_order.field.number]
+label = "Número"
+description = "Número de pedido que se muestra al comprador. Texto libre: los paquetes no pueden generar secuencias; la compra pública genera uno aleatorio"
+
+[labels.es.model.ecommerce_order.field.customer_email]
+label = "Correo electrónico del cliente"
+description = "Correo electrónico del comprador"
+
+[labels.es.model.ecommerce_order.field.customer_name]
+label = "Nombre del cliente"
+description = "Nombre del comprador"
+
+[labels.es.model.ecommerce_order.field.customer_id]
+label = "Cliente"
+description = "El contacto correspondiente, una vez que se conoce al comprador"
+
+[labels.es.model.ecommerce_order.field.shipping_address]
+label = "Dirección de envío"
+description = "Dirección de entrega"
+
+[labels.es.model.ecommerce_order.field.billing_address]
+label = "Dirección de facturación"
+description = "Dirección de facturación cuando es distinta de la de entrega"
+
+[labels.es.model.ecommerce_order.field.shipping_method_id]
+label = "Método de envío"
+description = "La forma de entrega elegida"
+
+[labels.es.model.ecommerce_order.field.discount_code_id]
+label = "Código de descuento"
+description = "El código de descuento usado, si lo hay"
+
+[labels.es.model.ecommerce_order.field.placed_on]
+label = "Fecha de realización"
+description = "Día en que se hizo el pedido (YYYY-MM-DD)"
+
+[labels.es.model.ecommerce_order.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217, por ejemplo EUR"
+
+[labels.es.model.ecommerce_order.field.subtotal]
+label = "Subtotal"
+description = "Suma de las líneas (unidad menor de la moneda, introducida, no calculada)"
+
+[labels.es.model.ecommerce_order.field.discount_total]
+label = "Total de descuentos"
+description = "Rebaja del código de descuento (unidad menor de la moneda)"
+
+[labels.es.model.ecommerce_order.field.shipping_total]
+label = "Total de envío"
+description = "Gastos de envío (unidad menor de la moneda)"
+
+[labels.es.model.ecommerce_order.field.tax_total]
+label = "Total de impuestos"
+description = "Impuestos incluidos en el total (unidad menor de la moneda)"
+
+[labels.es.model.ecommerce_order.field.total]
+label = "Total"
+description = "Importe que paga el comprador (unidad menor de la moneda)"
+
+[labels.es.model.ecommerce_order.field.payment_reference]
+label = "Referencia de pago"
+description = "Referencia de la pasarela de pago; nunca un número de tarjeta"
+
+[labels.es.model.ecommerce_order.field.tracking_reference]
+label = "Número de seguimiento"
+description = "Número de seguimiento del transportista"
+
+[labels.es.model.ecommerce_order.field.access_token]
+label = "Token de acceso"
+description = "Token secreto del enlace que permite al comprador de un pedido público ver su página de confirmación. Nadie puede volver a leerlo"
+
+[labels.es.model.ecommerce_order.field.state]
+label = "Estado"
+description = "Estado de cumplimiento: pendiente, pagado, enviado, entregado, cancelado, reembolsado"
+
+[labels.es.model.ecommerce_order.field.state.options]
+pending = "Pendiente"
+paid = "Pagado"
+shipped = "Enviado"
+delivered = "Entregado"
+cancelled = "Cancelado"
+refunded = "Reembolsado"
+
+[labels.es.model.ecommerce_order.action.mark_paid]
+label = "Marcar como pagado"
+description = "El pago ha llegado"
+
+[labels.es.model.ecommerce_order.action.ship]
+label = "Enviar"
+description = "El paquete se entregó al transportista"
+
+[labels.es.model.ecommerce_order.action.deliver]
+label = "Entregar"
+description = "El paquete llegó al comprador"
+
+[labels.es.model.ecommerce_order.action.cancel]
+label = "Cancelar"
+description = "Cancelar un pedido que nunca se pagó"
+
+[labels.es.model.ecommerce_order.action.refund]
+label = "Reembolsar"
+description = "Devolver el dinero de un pedido pagado que no se entregó (solo responsables)"
+
+[labels.es.model.ecommerce_order.action.refund_delivered]
+label = "Reembolsar tras la entrega"
+description = "Devolver el dinero de un pedido entregado, por ejemplo tras una devolución (solo responsables)"
+
+[labels.es.model.ecommerce_order_line]
+name = "Línea de pedido"
+description = "Una línea de producto de un pedido web"
+
+[labels.es.model.ecommerce_order_line.field.order_id]
+label = "Pedido"
+description = "El pedido al que pertenece la línea"
+
+[labels.es.model.ecommerce_order_line.field.product_id]
+label = "Producto"
+description = "El producto pedido"
+
+[labels.es.model.ecommerce_order_line.field.listing_id]
+label = "Ficha"
+description = "La ficha de la tienda desde la que se pidió la línea"
+
+[labels.es.model.ecommerce_order_line.field.description]
+label = "Descripción"
+description = "Texto del producto tal como estaba al hacer el pedido"
+
+[labels.es.model.ecommerce_order_line.field.quantity]
+label = "Cantidad"
+description = "Unidades pedidas"
+
+[labels.es.model.ecommerce_order_line.field.unit_price]
+label = "Precio unitario"
+description = "Precio por unidad con impuestos incluidos (unidad menor de la moneda)"
+
+[labels.es.model.ecommerce_order_line.field.subtotal]
+label = "Subtotal"
+description = "Total de la línea (unidad menor de la moneda, introducido, no calculado)"

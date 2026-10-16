@@ -1,0 +1,268 @@
+[labels.de.module]
+name = "Website"
+description = "Inhalte für eine öffentliche Website: Seiten, Menüeinträge, Blogbeiträge, deren Übersetzungen und Formulareingänge von Besuchern. Veröffentlichte Inhalte werden ohne Anmeldung serverseitig ausgeliefert, sichtbar sind nur öffentliche Felder. Veröffentlichen braucht eine menschliche Genehmigung; Agenten dürfen nur vorschlagen. Absender sind personenbezogene Daten und nie öffentlich."
+
+[labels.de.model.website_page]
+name = "Seite"
+description = "Eine Seite der Website"
+
+[labels.de.model.website_page.field.title]
+label = "Titel"
+description = "Seitentitel"
+
+[labels.de.model.website_page.field.slug]
+label = "URL-Pfad"
+description = "URL-Pfad der Seite ohne Schrägstriche an den Enden, Kleinbuchstaben mit Bindestrichen, zum Beispiel ueber-uns. Die Seite mit dem Pfad home ist die Startseite"
+
+[labels.de.model.website_page.field.body]
+label = "Inhalt"
+description = "Seiteninhalt in Markdown (eine sichere Teilmenge: Überschriften, Listen, Links, Hervorhebungen, Code, Zitate, Tabellen)"
+
+[labels.de.model.website_page.field.seo_title]
+label = "SEO-Titel"
+description = "In Suchergebnissen angezeigter Titel; leer bedeutet den Seitentitel"
+
+[labels.de.model.website_page.field.seo_description]
+label = "SEO-Beschreibung"
+description = "In Suchergebnissen angezeigte Beschreibung"
+
+[labels.de.model.website_page.field.published_on]
+label = "Veröffentlicht am"
+description = "Tag, an dem die Seite öffentlich wurde (YYYY-MM-DD)"
+
+[labels.de.model.website_page.field.state]
+label = "Status"
+description = "Seitenstatus: Entwurf, veröffentlicht, archiviert"
+
+[labels.de.model.website_page.field.state.options]
+draft = "Entwurf"
+published = "Veröffentlicht"
+archived = "Archiviert"
+
+[labels.de.model.website_page.action.publish]
+label = "Veröffentlichen"
+description = "Die Seite öffentlich machen (nur Führungskräfte)"
+
+[labels.de.model.website_page.action.unpublish]
+label = "Veröffentlichung zurückziehen"
+description = "Die Seite offline nehmen und zurück auf Entwurf setzen"
+
+[labels.de.model.website_page.action.archive]
+label = "Archivieren"
+description = "Eine veröffentlichte Seite endgültig außer Dienst stellen"
+
+[labels.de.model.website_menu_item]
+name = "Menüeintrag"
+description = "Ein Eintrag der Seitennavigation"
+
+[labels.de.model.website_menu_item.field.label]
+label = "Bezeichnung"
+description = "Im Menü angezeigter Text"
+
+[labels.de.model.website_menu_item.field.url]
+label = "URL"
+description = "Wohin der Eintrag führt: ein Seitenpfad mit führendem Schrägstrich oder eine vollständige Adresse"
+
+[labels.de.model.website_menu_item.field.parent_id]
+label = "Übergeordnet"
+description = "Der Eintrag, unter dem dieser eingeordnet ist; leer bei einem Eintrag der obersten Ebene"
+
+[labels.de.model.website_menu_item.field.sequence]
+label = "Reihenfolge"
+description = "Reihenfolge unter gleichrangigen Einträgen, niedrigste zuerst"
+
+[labels.de.model.website_menu_item.field.visible]
+label = "Sichtbar"
+description = "Ob der Eintrag angezeigt wird"
+
+[labels.de.model.website_menu_item.field.new_window]
+label = "Neues Fenster"
+description = "Ob der Link in einem neuen Fenster geöffnet wird"
+
+[labels.de.model.website_blog_post]
+name = "Blogbeitrag"
+description = "Ein Beitrag im Blog"
+
+[labels.de.model.website_blog_post.field.title]
+label = "Titel"
+description = "Titel des Beitrags"
+
+[labels.de.model.website_blog_post.field.slug]
+label = "URL-Pfad"
+description = "URL-Teil des Beitrags, Kleinbuchstaben mit Bindestrichen"
+
+[labels.de.model.website_blog_post.field.author_name]
+label = "Autor"
+description = "Name des Autors, für die internen Unterlagen des Teams"
+
+[labels.de.model.website_blog_post.field.byline]
+label = "Autorenzeile"
+description = "Öffentlich angezeigte Autorenzeile, zum Beispiel Team- oder Markenname; einen Personennamen nur mit Einverständnis der Person verwenden"
+
+[labels.de.model.website_blog_post.field.summary]
+label = "Zusammenfassung"
+description = "Anrisstext in Übersichten"
+
+[labels.de.model.website_blog_post.field.body]
+label = "Inhalt"
+description = "Beitragsinhalt in Markdown (eine sichere Teilmenge: Überschriften, Listen, Links, Hervorhebungen, Code, Zitate, Tabellen)"
+
+[labels.de.model.website_blog_post.field.tags]
+label = "Schlagwörter"
+description = "Durch Kommas getrennte Schlagwörter, zum Beispiel news,product"
+
+[labels.de.model.website_blog_post.field.published_on]
+label = "Veröffentlicht am"
+description = "Tag, auf den der Beitrag datiert ist (YYYY-MM-DD)"
+
+[labels.de.model.website_blog_post.field.state]
+label = "Status"
+description = "Beitragsstatus: Entwurf, veröffentlicht, archiviert"
+
+[labels.de.model.website_blog_post.field.state.options]
+draft = "Entwurf"
+published = "Veröffentlicht"
+archived = "Archiviert"
+
+[labels.de.model.website_blog_post.action.publish]
+label = "Veröffentlichen"
+description = "Den Beitrag öffentlich machen (nur Führungskräfte)"
+
+[labels.de.model.website_blog_post.action.unpublish]
+label = "Veröffentlichung zurückziehen"
+description = "Den Beitrag offline nehmen und zurück auf Entwurf setzen"
+
+[labels.de.model.website_blog_post.action.archive]
+label = "Archivieren"
+description = "Einen veröffentlichten Beitrag außer Dienst stellen"
+
+[labels.de.model.website_form_submission]
+name = "Formulareingang"
+description = "Eine Nachricht, die ein Besucher über ein Formular der Website gesendet hat"
+
+[labels.de.model.website_form_submission.field.form_name]
+label = "Formular"
+description = "Von welchem Formular sie stammt, zum Beispiel contact"
+
+[labels.de.model.website_form_submission.field.sender_name]
+label = "Absendername"
+description = "Vom Besucher angegebener Name"
+
+[labels.de.model.website_form_submission.field.sender_email]
+label = "Absender-E-Mail"
+description = "Vom Besucher angegebene E-Mail-Adresse"
+
+[labels.de.model.website_form_submission.field.sender_phone]
+label = "Absendertelefon"
+description = "Vom Besucher angegebene Telefonnummer"
+
+[labels.de.model.website_form_submission.field.message]
+label = "Nachricht"
+description = "Was der Besucher geschrieben hat"
+
+[labels.de.model.website_form_submission.field.source_page]
+label = "Quellseite"
+description = "URL-Pfad der Seite, auf der das Formular stand"
+
+[labels.de.model.website_form_submission.field.submitted_on]
+label = "Eingereicht am"
+description = "Tag des Eingangs (YYYY-MM-DD)"
+
+[labels.de.model.website_form_submission.field.consent_given]
+label = "Einwilligung erteilt"
+description = "Ob der Besucher das Kontrollkästchen zur Einwilligung in die Kontaktaufnahme angekreuzt hat"
+
+[labels.de.model.website_form_submission.field.state]
+label = "Status"
+description = "Bearbeitungsstatus: neu, bearbeitet, Spam"
+
+[labels.de.model.website_form_submission.field.state.options]
+new = "Neu"
+handled = "Bearbeitet"
+spam = "Spam"
+
+[labels.de.model.website_form_submission.action.handle]
+label = "Als bearbeitet markieren"
+description = "Die Nachricht als beantwortet oder erledigt markieren"
+
+[labels.de.model.website_form_submission.action.mark_spam]
+label = "Als Spam markieren"
+description = "Die Nachricht als Spam markieren"
+
+[labels.de.model.website_page_translation]
+name = "Seitenübersetzung"
+description = "Eine in eine andere Sprache übersetzte Seite; die öffentliche Website zeigt sie Besuchern, die diese Sprache lesen"
+
+[labels.de.model.website_page_translation.field.page_id]
+label = "Seite"
+description = "Die Seite, die hier übersetzt wird"
+
+[labels.de.model.website_page_translation.field.lang]
+label = "Sprache"
+description = "Sprache der Übersetzung: en, de, fr, pl, fi, sv oder es"
+
+[labels.de.model.website_page_translation.field.lang.options]
+en = "Englisch"
+de = "Deutsch"
+fr = "Französisch"
+pl = "Polnisch"
+fi = "Finnisch"
+sv = "Schwedisch"
+es = "Spanisch"
+
+[labels.de.model.website_page_translation.field.title]
+label = "Titel"
+description = "Übersetzter Seitentitel"
+
+[labels.de.model.website_page_translation.field.body]
+label = "Inhalt"
+description = "Übersetzter Seiteninhalt in Markdown"
+
+[labels.de.model.website_page_translation.field.seo_title]
+label = "SEO-Titel"
+description = "Übersetzter Titel in Suchergebnissen"
+
+[labels.de.model.website_page_translation.field.seo_description]
+label = "SEO-Beschreibung"
+description = "Übersetzte Beschreibung in Suchergebnissen"
+
+[labels.de.model.website_page_translation.field.published]
+label = "Veröffentlicht"
+description = "Ob die Übersetzung angezeigt wird; sie ist nur erreichbar, solange ihre Seite veröffentlicht ist"
+
+[labels.de.model.website_blog_post_translation]
+name = "Übersetzung des Blogbeitrags"
+description = "Ein in eine andere Sprache übersetzter Blogbeitrag"
+
+[labels.de.model.website_blog_post_translation.field.post_id]
+label = "Beitrag"
+description = "Der Beitrag, der hier übersetzt wird"
+
+[labels.de.model.website_blog_post_translation.field.lang]
+label = "Sprache"
+description = "Sprache der Übersetzung: en, de, fr, pl, fi, sv oder es"
+
+[labels.de.model.website_blog_post_translation.field.lang.options]
+en = "Englisch"
+de = "Deutsch"
+fr = "Französisch"
+pl = "Polnisch"
+fi = "Finnisch"
+sv = "Schwedisch"
+es = "Spanisch"
+
+[labels.de.model.website_blog_post_translation.field.title]
+label = "Titel"
+description = "Übersetzter Beitragstitel"
+
+[labels.de.model.website_blog_post_translation.field.summary]
+label = "Zusammenfassung"
+description = "Übersetzter Anrisstext"
+
+[labels.de.model.website_blog_post_translation.field.body]
+label = "Inhalt"
+description = "Übersetzter Beitragsinhalt in Markdown"
+
+[labels.de.model.website_blog_post_translation.field.published]
+label = "Veröffentlicht"
+description = "Ob die Übersetzung angezeigt wird; sie ist nur erreichbar, solange ihr Beitrag veröffentlicht ist"

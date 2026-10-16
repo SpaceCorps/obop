@@ -1,0 +1,136 @@
+[labels.sv.module]
+name = "Kundtjänst"
+description = "Supportärenden med prioritet, allvarlighetsgrad, servicenivåmål och flödet öppen, pågår, löst och stängd. Målen registreras men tillämpas och tidtas inte automatiskt."
+
+[labels.sv.model.helpdesk_sla]
+name = "SLA"
+description = "En servicenivåpolicy: hur snabbt ärenden med en viss prioritet ska besvaras och lösas"
+
+[labels.sv.model.helpdesk_sla.field.name]
+label = "Namn"
+description = "Policyns namn, till exempel Brådskande inom 4 timmar"
+
+[labels.sv.model.helpdesk_sla.field.priority]
+label = "Prioritet"
+description = "Ärendeprioritet som policyn gäller för: låg, normal, hög, brådskande"
+
+[labels.sv.model.helpdesk_sla.field.priority.options]
+low = "Låg"
+normal = "Normal"
+high = "Hög"
+urgent = "Brådskande"
+
+[labels.sv.model.helpdesk_sla.field.first_response_minutes]
+label = "Första svar (minuter)"
+description = "Mål för tiden till första svar, i minuter"
+
+[labels.sv.model.helpdesk_sla.field.resolution_minutes]
+label = "Lösningstid (minuter)"
+description = "Mål för tiden till lösning av ärendet, i minuter"
+
+[labels.sv.model.helpdesk_sla.field.active]
+label = "Aktiv"
+description = "Om policyn kan kopplas till nya ärenden"
+
+[labels.sv.model.helpdesk_ticket]
+name = "Ärende"
+description = "En supportförfrågan från en kund"
+
+[labels.sv.model.helpdesk_ticket.field.subject]
+label = "Ämne"
+description = "Sammanfattning av problemet på en rad"
+
+[labels.sv.model.helpdesk_ticket.field.description]
+label = "Beskrivning"
+description = "Fullständig beskrivning av problemet och vad kunden har provat"
+
+[labels.sv.model.helpdesk_ticket.field.requester_name]
+label = "Anmälarens namn"
+description = "Namn på personen som ber om hjälp"
+
+[labels.sv.model.helpdesk_ticket.field.requester_email]
+label = "Anmälarens e-post"
+description = "E-postadress till personen som ber om hjälp"
+
+[labels.sv.model.helpdesk_ticket.field.category]
+label = "Kategori"
+description = "Vilken typ av förfrågan det är: fråga, incident, problem, önskemål om funktion"
+
+[labels.sv.model.helpdesk_ticket.field.category.options]
+question = "Fråga"
+incident = "Incident"
+problem = "Problem"
+feature_request = "Önskemål om funktion"
+
+[labels.sv.model.helpdesk_ticket.field.priority]
+label = "Prioritet"
+description = "Hur snart det ska hanteras: låg, normal, hög, brådskande"
+
+[labels.sv.model.helpdesk_ticket.field.priority.options]
+low = "Låg"
+normal = "Normal"
+high = "Hög"
+urgent = "Brådskande"
+
+[labels.sv.model.helpdesk_ticket.field.severity]
+label = "Allvarlighetsgrad"
+description = "Hur illa kunden påverkas: mindre, allvarlig, kritisk"
+
+[labels.sv.model.helpdesk_ticket.field.severity.options]
+minor = "Mindre"
+major = "Allvarlig"
+critical = "Kritisk"
+
+[labels.sv.model.helpdesk_ticket.field.assignee]
+label = "Tilldelad"
+description = "Namn på handläggaren som arbetar med ärendet"
+
+[labels.sv.model.helpdesk_ticket.field.sla_id]
+label = "SLA"
+description = "Servicenivåpolicy som ärendet mäts mot"
+
+[labels.sv.model.helpdesk_ticket.field.opened_on]
+label = "Öppnad den"
+description = "Datum då ärendet kom in (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.helpdesk_ticket.field.first_response_on]
+label = "Första svar den"
+description = "Datum för det första svaret till kunden (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.helpdesk_ticket.field.due_on]
+label = "Förfallodatum"
+description = "Datum då det enligt policyn ska vara löst (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.helpdesk_ticket.field.resolved_on]
+label = "Löst den"
+description = "Datum då problemet löstes (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.helpdesk_ticket.field.resolution]
+label = "Lösning"
+description = "Hur problemet löstes"
+
+[labels.sv.model.helpdesk_ticket.field.state]
+label = "Status"
+description = "Ärendets status: öppen, pågår, löst, stängd"
+
+[labels.sv.model.helpdesk_ticket.field.state.options]
+open = "Öppen"
+in_progress = "Pågår"
+resolved = "Löst"
+closed = "Stängd"
+
+[labels.sv.model.helpdesk_ticket.action.take]
+label = "Ta ärendet"
+description = "Börja arbeta med ett öppet ärende"
+
+[labels.sv.model.helpdesk_ticket.action.resolve]
+label = "Lös"
+description = "Markera ett pågående ärende som löst"
+
+[labels.sv.model.helpdesk_ticket.action.close]
+label = "Stäng"
+description = "Stäng ett löst ärende för gott (endast chef)"
+
+[labels.sv.model.helpdesk_ticket.action.reopen]
+label = "Öppna igen"
+description = "Öppna ett löst ärende igen när problemet kom tillbaka"

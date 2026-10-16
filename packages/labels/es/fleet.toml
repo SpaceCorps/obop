@@ -1,0 +1,160 @@
+[labels.es.module]
+name = "Flota"
+description = "Vehículos, conductores e historial de mantenimiento de una flota pequeña. Registra el estado y los servicios; no calcula costes de uso ni consumo de combustible."
+
+[labels.es.model.fleet_vehicle]
+name = "Vehículo"
+description = "Un vehículo que utiliza la empresa"
+
+[labels.es.model.fleet_vehicle.field.plate]
+label = "Matrícula"
+description = "Matrícula"
+
+[labels.es.model.fleet_vehicle.field.model]
+label = "Modelo"
+description = "Marca y modelo, por ejemplo Renault Master"
+
+[labels.es.model.fleet_vehicle.field.vin]
+label = "Número de bastidor (VIN)"
+description = "Número de identificación del vehículo (número de bastidor)"
+
+[labels.es.model.fleet_vehicle.field.fuel]
+label = "Combustible"
+description = "Combustible o tipo de propulsión: gasolina, diésel, híbrido, eléctrico, otro"
+
+[labels.es.model.fleet_vehicle.field.fuel.options]
+petrol = "Gasolina"
+diesel = "Diésel"
+hybrid = "Híbrido"
+electric = "Eléctrico"
+other = "Otro"
+
+[labels.es.model.fleet_vehicle.field.odometer_km]
+label = "Cuentakilómetros (km)"
+description = "Última lectura conocida del cuentakilómetros, en kilómetros"
+
+[labels.es.model.fleet_vehicle.field.acquired_on]
+label = "Fecha de adquisición"
+description = "Fecha en que el vehículo entró en la flota (YYYY-MM-DD)"
+
+[labels.es.model.fleet_vehicle.field.driver]
+label = "Conductor"
+description = "Nombre del conductor que usa el vehículo actualmente, en texto libre"
+
+[labels.es.model.fleet_vehicle.field.driver_id]
+label = "Conductor"
+description = "Ficha del conductor asignado actualmente al vehículo"
+
+[labels.es.model.fleet_vehicle.field.state]
+label = "Estado"
+description = "Disponibilidad: disponible, en servicio, en mantenimiento, retirado"
+
+[labels.es.model.fleet_vehicle.field.state.options]
+available = "Disponible"
+in_service = "En servicio"
+maintenance = "Mantenimiento"
+retired = "Retirado"
+
+[labels.es.model.fleet_vehicle.action.dispatch]
+label = "Poner en servicio"
+description = "Poner en servicio un vehículo disponible"
+
+[labels.es.model.fleet_vehicle.action.return_to_pool]
+label = "Devolver a la flota"
+description = "Devolver un vehículo en servicio al grupo de disponibles"
+
+[labels.es.model.fleet_vehicle.action.retire]
+label = "Retirar"
+description = "Retirar definitivamente de la flota un vehículo disponible (requiere aprobador)"
+
+[labels.es.model.fleet_vehicle_driver]
+name = "Conductor"
+description = "Una persona autorizada para conducir los vehículos de la flota"
+
+[labels.es.model.fleet_vehicle_driver.field.name]
+label = "Nombre"
+description = "Nombre completo del conductor"
+
+[labels.es.model.fleet_vehicle_driver.field.phone]
+label = "Teléfono"
+description = "Teléfono de trabajo del conductor"
+
+[labels.es.model.fleet_vehicle_driver.field.licence_number]
+label = "Número del permiso de conducir"
+description = "Número del permiso de conducir"
+
+[labels.es.model.fleet_vehicle_driver.field.licence_expiry]
+label = "Caducidad del permiso de conducir"
+description = "Fecha de caducidad del permiso de conducir (YYYY-MM-DD)"
+
+[labels.es.model.fleet_vehicle_driver.field.state]
+label = "Estado"
+description = "Estado del conductor: activo, suspendido"
+
+[labels.es.model.fleet_vehicle_driver.field.state.options]
+active = "Activo"
+suspended = "Suspendido"
+
+[labels.es.model.fleet_vehicle_driver.action.suspend]
+label = "Suspender"
+description = "Suspender a un conductor, por ejemplo por un permiso caducado"
+
+[labels.es.model.fleet_vehicle_driver.action.reactivate]
+label = "Reactivar"
+description = "Permitir que un conductor suspendido vuelva a conducir"
+
+[labels.es.model.fleet_vehicle_service]
+name = "Servicio de vehículo"
+description = "Un trabajo de mantenimiento, reparación o inspección de un vehículo"
+
+[labels.es.model.fleet_vehicle_service.field.vehicle_id]
+label = "Vehículo"
+description = "El vehículo revisado"
+
+[labels.es.model.fleet_vehicle_service.field.kind]
+label = "Tipo"
+description = "Tipo de trabajo: mantenimiento, reparación, inspección, neumáticos, otro"
+
+[labels.es.model.fleet_vehicle_service.field.kind.options]
+maintenance = "Mantenimiento"
+repair = "Reparación"
+inspection = "Inspección"
+tyres = "Neumáticos"
+other = "Otro"
+
+[labels.es.model.fleet_vehicle_service.field.service_on]
+label = "Fecha del servicio"
+description = "Fecha del trabajo (YYYY-MM-DD)"
+
+[labels.es.model.fleet_vehicle_service.field.odometer_km]
+label = "Cuentakilómetros (km)"
+description = "Lectura del cuentakilómetros, en kilómetros, en el momento del servicio"
+
+[labels.es.model.fleet_vehicle_service.field.cost]
+label = "Coste"
+description = "Total facturado por el taller (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.fleet_vehicle_service.field.workshop]
+label = "Taller"
+description = "Nombre del taller"
+
+[labels.es.model.fleet_vehicle_service.field.notes]
+label = "Notas"
+description = "Qué se hizo o qué se encontró"
+
+[labels.es.model.fleet_vehicle_service.field.state]
+label = "Estado"
+description = "Estado del trabajo: planificado, hecho, cancelado"
+
+[labels.es.model.fleet_vehicle_service.field.state.options]
+planned = "Planificado"
+done = "Hecho"
+cancelled = "Cancelado"
+
+[labels.es.model.fleet_vehicle_service.action.complete]
+label = "Completar"
+description = "Marcar un trabajo planificado como hecho"
+
+[labels.es.model.fleet_vehicle_service.action.cancel]
+label = "Cancelar"
+description = "Cancelar un trabajo planificado"

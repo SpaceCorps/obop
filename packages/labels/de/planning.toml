@@ -1,0 +1,88 @@
+[labels.de.module]
+name = "Planung"
+description = "Schichten für Mitarbeiter, mit Rollen und wiederverwendbaren Vorlagen. Eine Schicht hat einen Tag sowie Beginn und Ende in Minuten seit Mitternacht (0 bis 1439; 540 ist 09:00). Eine Schicht ohne Mitarbeiter ist eine offene Schicht. Ablauf: offen, veröffentlicht, vom Mitarbeiter bestätigt. Benötigt das Paket Personal."
+
+[labels.de.model.planning_role]
+name = "Rolle"
+description = "Eine Rolle, für die eine Schicht geplant wird, zum Beispiel Kassierer oder Elektriker"
+
+[labels.de.model.planning_role.field.name]
+label = "Name"
+description = "Name der Rolle"
+
+[labels.de.model.planning_role.field.note]
+label = "Notiz"
+description = "Was die Rolle umfasst"
+
+[labels.de.model.planning_template]
+name = "Vorlage"
+description = "Ein wiederverwendbares Schichtmuster, das in Schichten kopiert wird"
+
+[labels.de.model.planning_template.field.name]
+label = "Name"
+description = "Name der Vorlage, zum Beispiel Frühschicht"
+
+[labels.de.model.planning_template.field.role_id]
+label = "Rolle"
+description = "Die Rolle, für die die Vorlage gilt"
+
+[labels.de.model.planning_template.field.start_minute]
+label = "Startzeit"
+description = "Beginn in Minuten seit Mitternacht (540 ist 09:00)"
+
+[labels.de.model.planning_template.field.end_minute]
+label = "Endzeit"
+description = "Ende in Minuten seit Mitternacht (1020 ist 17:00)"
+
+[labels.de.model.planning_shift]
+name = "Schicht"
+description = "Ein Arbeitsabschnitt an einem Tag für eine Rolle, optional einem Mitarbeiter zugewiesen"
+
+[labels.de.model.planning_shift.field.name]
+label = "Name"
+description = "Kurztitel, zum Beispiel Öffnungsschicht"
+
+[labels.de.model.planning_shift.field.role_id]
+label = "Rolle"
+description = "Die benötigte Rolle"
+
+[labels.de.model.planning_shift.field.employee_id]
+label = "Mitarbeiter"
+description = "Mitarbeiter, dem die Schicht zugewiesen ist; leer bei einer offenen Schicht"
+
+[labels.de.model.planning_shift.field.work_date]
+label = "Arbeitstag"
+description = "Tag der Schicht (YYYY-MM-DD)"
+
+[labels.de.model.planning_shift.field.start_minute]
+label = "Startzeit"
+description = "Beginn in Minuten seit Mitternacht, 0 bis 1439 (540 ist 09:00)"
+
+[labels.de.model.planning_shift.field.end_minute]
+label = "Endzeit"
+description = "Ende in Minuten seit Mitternacht, 0 bis 1439 (1020 ist 17:00)"
+
+[labels.de.model.planning_shift.field.note]
+label = "Notiz"
+description = "Anweisungen für die Person, die die Schicht arbeitet"
+
+[labels.de.model.planning_shift.field.state]
+label = "Status"
+description = "Schichtstatus: offen, veröffentlicht, bestätigt"
+
+[labels.de.model.planning_shift.field.state.options]
+open = "Offen"
+published = "Veröffentlicht"
+confirmed = "Bestätigt"
+
+[labels.de.model.planning_shift.action.publish]
+label = "Veröffentlichen"
+description = "Die Schicht dem zugewiesenen Mitarbeiter bekannt geben, bei einer offenen Schicht allen"
+
+[labels.de.model.planning_shift.action.unpublish]
+label = "Veröffentlichung zurückziehen"
+description = "Eine veröffentlichte Schicht wieder auf offen setzen"
+
+[labels.de.model.planning_shift.action.confirm]
+label = "Bestätigen"
+description = "Der Mitarbeiter bestätigt, dass er die Schicht arbeitet"

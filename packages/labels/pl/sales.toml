@@ -1,0 +1,39 @@
+[labels.pl.module]
+name = "Sprzedaż"
+
+[labels.pl.model.sale_order]
+name = "Zamówienie sprzedaży"
+description = "Oferta lub potwierdzone zamówienie dla klienta"
+
+[labels.pl.model.sale_order.field.party_id]
+label = "Kontrahent"
+description = "Identyfikator kontrahenta będącego klientem"
+
+[labels.pl.model.sale_order.field.state]
+label = "Status"
+description = "Cykl życia: wersja robocza, potwierdzone lub anulowane"
+
+[labels.pl.model.sale_order.field.state.options]
+draft = "Wersja robocza"
+confirmed = "Potwierdzone"
+cancelled = "Anulowane"
+
+[labels.pl.model.sale_order.field.total_minor]
+label = "Razem"
+description = "Suma zamówienia w jednostkach podrzędnych waluty"
+
+[labels.pl.model.sale_order.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217"
+
+[labels.pl.model.sale_order.action.confirm]
+label = "Potwierdź"
+description = "Potwierdza zamówienie robocze"
+
+[labels.pl.model.sale_order.action.cancel]
+label = "Anuluj"
+description = "Anuluje zamówienie"
+
+[labels.pl.model.sale_order.action.reset_to_draft]
+label = "Przywróć wersję roboczą"
+description = "Przywraca anulowane zamówienie do wersji roboczej"

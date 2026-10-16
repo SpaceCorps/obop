@@ -1,0 +1,341 @@
+[labels.fi.module]
+name = "Verkkokauppa"
+description = "Verkkokauppa: luokat, käännetyt tuotesivut, toimitustavat, alennuskoodit ja verkkotilaukset riveineen. Julkisella sivustolla kävijät tilaavat ilman tiliä; palvelin hinnoittelee tilauksen aina julkaistun tuotesivun mukaan. Maksupalvelua ei ole. Hyvitykset vaativat esihenkilön hyväksynnän. Asiakkaan tiedot ovat henkilötietoja. Vaatii Tuotteet-paketin."
+
+[labels.fi.model.ecommerce_category]
+name = "Luokka"
+description = "Verkkokaupassa yhdessä esitettävien tuotesivujen ryhmä"
+
+[labels.fi.model.ecommerce_category.field.name]
+label = "Nimi"
+description = "Kaupassa näytettävä luokan nimi"
+
+[labels.fi.model.ecommerce_category.field.slug]
+label = "URL-tunnus"
+description = "Luokan URL-osa, pienillä kirjaimilla ja viivoilla"
+
+[labels.fi.model.ecommerce_category.field.description]
+label = "Kuvaus"
+description = "Lyhyt teksti luokasta"
+
+[labels.fi.model.ecommerce_category.field.sequence]
+label = "Järjestys"
+description = "Luokkien järjestys, pienin ensin"
+
+[labels.fi.model.ecommerce_category.field.published]
+label = "Julkaistu"
+description = "Näkyykö luokka ostajille"
+
+[labels.fi.model.ecommerce_listing]
+name = "Tuotesivu"
+description = "Tuote sellaisena kuin se näkyy verkkokaupassa"
+
+[labels.fi.model.ecommerce_listing.field.product_id]
+label = "Tuote"
+description = "Verkossa myytävä tuote"
+
+[labels.fi.model.ecommerce_listing.field.title]
+label = "Otsikko"
+description = "Kaupassa näytettävä otsikko"
+
+[labels.fi.model.ecommerce_listing.field.slug]
+label = "URL-tunnus"
+description = "Tuotesivun URL-osa, pienillä kirjaimilla ja viivoilla"
+
+[labels.fi.model.ecommerce_listing.field.summary]
+label = "Yhteenveto"
+description = "Yksi tai kaksi lausetta tuotekorteissa näytettäväksi"
+
+[labels.fi.model.ecommerce_listing.field.description]
+label = "Kuvaus"
+description = "Tuotesivulla näytettävä kuvaus Markdown-muodossa"
+
+[labels.fi.model.ecommerce_listing.field.category_id]
+label = "Luokka"
+description = "Luokka, jonka alla tuotesivu näytetään"
+
+[labels.fi.model.ecommerce_listing.field.price]
+label = "Hinta"
+description = "Kaupan hinta verokanta mukaan lukien (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.ecommerce_listing.field.compare_at_price]
+label = "Vertailuhinta"
+description = "Aiempi hinta, joka näytetään yliviivattuna (valuutan pienin yksikkö)"
+
+[labels.fi.model.ecommerce_listing.field.currency]
+label = "Valuutta"
+description = "Hintojen ISO 4217 -valuuttakoodi, esimerkiksi EUR; tyhjä tarkoittaa instanssin asetusten kaupan valuuttaa"
+
+[labels.fi.model.ecommerce_listing.field.sku]
+label = "SKU"
+description = "Tuotesivulla näytettävä varastonimike (SKU)"
+
+[labels.fi.model.ecommerce_listing.field.stock_policy]
+label = "Varastokäytäntö"
+description = "Mitä tapahtuu, kun varasto loppuu: aina saatavilla, estä kun loppu, salli jälkitoimitus"
+
+[labels.fi.model.ecommerce_listing.field.stock_policy.options]
+always_available = "Aina saatavilla"
+block_when_out = "Estä, kun loppu"
+allow_backorder = "Salli jälkitoimitus"
+
+[labels.fi.model.ecommerce_listing.field.stock_quantity]
+label = "Varastosaldo"
+description = "Käsillä olevat yksiköt varastokäytännön käyttöön. Tilaukset eivät vähennä sitä: päivitä se käsin"
+
+[labels.fi.model.ecommerce_listing.field.published]
+label = "Julkaistu"
+description = "Näkyykö tuotesivu ostajille"
+
+[labels.fi.model.ecommerce_listing_translation]
+name = "Tuotesivun käännös"
+description = "Tuotesivu käännettynä toiselle kielelle"
+
+[labels.fi.model.ecommerce_listing_translation.field.listing_id]
+label = "Tuotesivu"
+description = "Tuotesivu, jonka käännös tämä on"
+
+[labels.fi.model.ecommerce_listing_translation.field.lang]
+label = "Kieli"
+description = "Käännöksen kieli: en, de, fr, pl, fi, sv tai es"
+
+[labels.fi.model.ecommerce_listing_translation.field.lang.options]
+en = "Englanti"
+de = "Saksa"
+fr = "Ranska"
+pl = "Puola"
+fi = "Suomi"
+sv = "Ruotsi"
+es = "Espanja"
+
+[labels.fi.model.ecommerce_listing_translation.field.title]
+label = "Otsikko"
+description = "Käännetty otsikko"
+
+[labels.fi.model.ecommerce_listing_translation.field.summary]
+label = "Yhteenveto"
+description = "Käännetty korttiteksti"
+
+[labels.fi.model.ecommerce_listing_translation.field.description]
+label = "Kuvaus"
+description = "Käännetty kuvaus Markdown-muodossa"
+
+[labels.fi.model.ecommerce_listing_translation.field.published]
+label = "Julkaistu"
+description = "Näytetäänkö käännös; se on tavoitettavissa vain, kun sen tuotesivu on julkaistu"
+
+[labels.fi.model.ecommerce_shipping_method]
+name = "Toimitustapa"
+description = "Tapa toimittaa tilauksia hintoineen"
+
+[labels.fi.model.ecommerce_shipping_method.field.name]
+label = "Nimi"
+description = "Kassalla näytettävä nimi, esimerkiksi Normaali toimitus"
+
+[labels.fi.model.ecommerce_shipping_method.field.carrier]
+label = "Kuljetusliike"
+description = "Toimituksen hoitava kuljetusliike, esimerkiksi DHL"
+
+[labels.fi.model.ecommerce_shipping_method.field.price]
+label = "Hinta"
+description = "Toimituksen hinta (valuutan pienin yksikkö)"
+
+[labels.fi.model.ecommerce_shipping_method.field.free_over]
+label = "Ilmainen toimitus yli"
+description = "Tilauksen summa, jonka ylittyessä toimitus on ilmainen (valuutan pienin yksikkö); tyhjä tarkoittaa ei koskaan"
+
+[labels.fi.model.ecommerce_shipping_method.field.delivery_days]
+label = "Toimitusaika (pv)"
+description = "Tavallinen toimitusaika päivinä"
+
+[labels.fi.model.ecommerce_shipping_method.field.active]
+label = "Aktiivinen"
+description = "Voivatko ostajat valita sen"
+
+[labels.fi.model.ecommerce_discount_code]
+name = "Alennuskoodi"
+description = "Koodi, jonka ostaja syöttää kassalla alennusta varten"
+
+[labels.fi.model.ecommerce_discount_code.field.code]
+label = "Koodi"
+description = "Ostajan kirjoittama koodi, esimerkiksi KEVAT10"
+
+[labels.fi.model.ecommerce_discount_code.field.kind]
+label = "Laji"
+description = "Alennuksen tyyppi: prosentti tai kiinteä"
+
+[labels.fi.model.ecommerce_discount_code.field.kind.options]
+percent = "Prosentti"
+fixed = "Kiinteä"
+
+[labels.fi.model.ecommerce_discount_code.field.value]
+label = "Arvo"
+description = "Alennus: peruspisteinä prosenttialennuksessa (1000 tarkoittaa 10,00 prosenttia), valuutan pienimpänä yksikkönä kiinteässä"
+
+[labels.fi.model.ecommerce_discount_code.field.starts_on]
+label = "Alkaa"
+description = "Ensimmäinen päivä, jona koodi toimii (YYYY-MM-DD)"
+
+[labels.fi.model.ecommerce_discount_code.field.ends_on]
+label = "Päättyy"
+description = "Viimeinen päivä, jona koodi toimii (YYYY-MM-DD)"
+
+[labels.fi.model.ecommerce_discount_code.field.max_uses]
+label = "Käyttökertoja enintään"
+description = "Kuinka monta kertaa koodia saa käyttää yhteensä; tyhjä tarkoittaa rajoittamatonta"
+
+[labels.fi.model.ecommerce_discount_code.field.used_count]
+label = "Käyttökerrat"
+description = "Kuinka monta kertaa koodia on käytetty (päivitetään käsin)"
+
+[labels.fi.model.ecommerce_discount_code.field.minimum_order]
+label = "Vähimmäistilaus"
+description = "Pienin tilauksen summa, johon koodi pätee (valuutan pienin yksikkö)"
+
+[labels.fi.model.ecommerce_discount_code.field.active]
+label = "Aktiivinen"
+description = "Voiko koodia käyttää"
+
+[labels.fi.model.ecommerce_order]
+name = "Tilaus"
+description = "Verkossa tehty tilaus"
+
+[labels.fi.model.ecommerce_order.field.number]
+label = "Numero"
+description = "Ostajalle näytettävä tilausnumero. Vapaa teksti: paketit eivät voi luoda numerosarjoja, ja julkinen kassa arpoo satunnaisen numeron"
+
+[labels.fi.model.ecommerce_order.field.customer_email]
+label = "Asiakkaan sähköposti"
+description = "Ostajan sähköpostiosoite"
+
+[labels.fi.model.ecommerce_order.field.customer_name]
+label = "Asiakkaan nimi"
+description = "Ostajan nimi"
+
+[labels.fi.model.ecommerce_order.field.customer_id]
+label = "Asiakas"
+description = "Vastaava yhteystieto, kun ostaja tunnetaan"
+
+[labels.fi.model.ecommerce_order.field.shipping_address]
+label = "Toimitusosoite"
+description = "Toimitusosoite"
+
+[labels.fi.model.ecommerce_order.field.billing_address]
+label = "Laskutusosoite"
+description = "Laskutusosoite, kun se poikkeaa toimitusosoitteesta"
+
+[labels.fi.model.ecommerce_order.field.shipping_method_id]
+label = "Toimitustapa"
+description = "Valittu toimitustapa"
+
+[labels.fi.model.ecommerce_order.field.discount_code_id]
+label = "Alennuskoodi"
+description = "Käytetty alennuskoodi, jos sellainen on"
+
+[labels.fi.model.ecommerce_order.field.placed_on]
+label = "Tilauspäivä"
+description = "Päivä, jona tilaus tehtiin (YYYY-MM-DD)"
+
+[labels.fi.model.ecommerce_order.field.currency]
+label = "Valuutta"
+description = "ISO 4217 -valuuttakoodi, esimerkiksi EUR"
+
+[labels.fi.model.ecommerce_order.field.subtotal]
+label = "Välisumma"
+description = "Rivien summa (valuutan pienin yksikkö, syötetty eikä laskettu)"
+
+[labels.fi.model.ecommerce_order.field.discount_total]
+label = "Alennukset yhteensä"
+description = "Alennuskoodin antama alennus (valuutan pienin yksikkö)"
+
+[labels.fi.model.ecommerce_order.field.shipping_total]
+label = "Toimituskulut yhteensä"
+description = "Toimituskulut (valuutan pienin yksikkö)"
+
+[labels.fi.model.ecommerce_order.field.tax_total]
+label = "Verot yhteensä"
+description = "Kokonaissummaan sisältyvä vero (valuutan pienin yksikkö)"
+
+[labels.fi.model.ecommerce_order.field.total]
+label = "Yhteensä"
+description = "Summa, jonka ostaja maksaa (valuutan pienin yksikkö)"
+
+[labels.fi.model.ecommerce_order.field.payment_reference]
+label = "Maksuviite"
+description = "Maksupalvelun viite; ei koskaan korttinumero"
+
+[labels.fi.model.ecommerce_order.field.tracking_reference]
+label = "Seurantatunnus"
+description = "Kuljetusliikkeen seurantatunnus"
+
+[labels.fi.model.ecommerce_order.field.access_token]
+label = "Käyttötunniste"
+description = "Salainen linkkitunniste, jolla julkisen tilauksen tehnyt ostaja näkee vahvistussivunsa. Sitä ei voi lukea takaisin"
+
+[labels.fi.model.ecommerce_order.field.state]
+label = "Tila"
+description = "Toimituksen tila: odottaa, maksettu, lähetetty, toimitettu, peruutettu, hyvitetty"
+
+[labels.fi.model.ecommerce_order.field.state.options]
+pending = "Odottaa"
+paid = "Maksettu"
+shipped = "Lähetetty"
+delivered = "Toimitettu"
+cancelled = "Peruutettu"
+refunded = "Hyvitetty"
+
+[labels.fi.model.ecommerce_order.action.mark_paid]
+label = "Merkitse maksetuksi"
+description = "Maksu on saapunut"
+
+[labels.fi.model.ecommerce_order.action.ship]
+label = "Lähetä"
+description = "Paketti on luovutettu kuljetusliikkeelle"
+
+[labels.fi.model.ecommerce_order.action.deliver]
+label = "Toimita"
+description = "Paketti on saapunut ostajalle"
+
+[labels.fi.model.ecommerce_order.action.cancel]
+label = "Peruuta"
+description = "Peruuta tilaus, jota ei ole koskaan maksettu"
+
+[labels.fi.model.ecommerce_order.action.refund]
+label = "Hyvitä"
+description = "Palauta maksetun, toimittamattoman tilauksen rahat (vain esihenkilö)"
+
+[labels.fi.model.ecommerce_order.action.refund_delivered]
+label = "Hyvitä toimitettu"
+description = "Palauta toimitetun tilauksen rahat, esimerkiksi palautuksen jälkeen (vain esihenkilö)"
+
+[labels.fi.model.ecommerce_order_line]
+name = "Tilausrivi"
+description = "Verkkotilauksen yksi tuoterivi"
+
+[labels.fi.model.ecommerce_order_line.field.order_id]
+label = "Tilaus"
+description = "Tilaus, johon rivi kuuluu"
+
+[labels.fi.model.ecommerce_order_line.field.product_id]
+label = "Tuote"
+description = "Tilattu tuote"
+
+[labels.fi.model.ecommerce_order_line.field.listing_id]
+label = "Tuotesivu"
+description = "Verkkokaupan tuotesivu, jolta rivi tilattiin"
+
+[labels.fi.model.ecommerce_order_line.field.description]
+label = "Kuvaus"
+description = "Tuotteen teksti tilaushetkellä"
+
+[labels.fi.model.ecommerce_order_line.field.quantity]
+label = "Määrä"
+description = "Tilatut yksiköt"
+
+[labels.fi.model.ecommerce_order_line.field.unit_price]
+label = "Yksikköhinta"
+description = "Yksikköhinta verokanta mukaan lukien (valuutan pienin yksikkö)"
+
+[labels.fi.model.ecommerce_order_line.field.subtotal]
+label = "Välisumma"
+description = "Rivin summa (valuutan pienin yksikkö, syötetty eikä laskettu)"

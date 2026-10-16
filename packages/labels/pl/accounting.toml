@@ -1,0 +1,324 @@
+[labels.pl.module]
+name = "Księgowość"
+description = "Plan kont, dzienniki, stawki podatku, operacje księgowe z pozycjami winien i ma, lata obrotowe, okresy oraz pozycje wyciągów bankowych. Kwoty są w jednostkach podrzędnych waluty, stawki podatku w punktach bazowych. Nic nie jest obliczane. Księgowanie i zamykanie okresów wymaga zatwierdzenia przez człowieka; agenci mogą je tylko zaproponować."
+
+[labels.pl.model.accounting_account]
+name = "Konto"
+description = "Konto planu kont"
+
+[labels.pl.model.accounting_account.field.code]
+label = "Kod"
+description = "Kod konta używany w planie kont, na przykład 400000"
+
+[labels.pl.model.accounting_account.field.name]
+label = "Nazwa"
+description = "Nazwa konta, na przykład Należności z tytułu dostaw i usług"
+
+[labels.pl.model.accounting_account.field.account_type]
+label = "Typ konta"
+description = "Typ konta: należności, środki pieniężne, aktywa obrotowe, aktywa trwałe, zobowiązania handlowe, zobowiązania krótkoterminowe, zobowiązania długoterminowe, kapitał własny, przychody, pozostałe przychody, koszty, koszty bezpośrednie"
+
+[labels.pl.model.accounting_account.field.account_type.options]
+asset_receivable = "Należności"
+asset_cash = "Środki pieniężne"
+asset_current = "Aktywa obrotowe"
+asset_fixed = "Aktywa trwałe"
+liability_payable = "Zobowiązania handlowe"
+liability_current = "Zobowiązania krótkoterminowe"
+liability_non_current = "Zobowiązania długoterminowe"
+equity = "Kapitał własny"
+income = "Przychody"
+income_other = "Pozostałe przychody"
+expense = "Koszty"
+expense_direct_cost = "Koszty bezpośrednie"
+
+[labels.pl.model.accounting_account.field.reconcile]
+label = "Do uzgadniania"
+description = "Czy otwarte pozycje na tym koncie można uzgadniać (należności, zobowiązania, rozliczenia bankowe)"
+
+[labels.pl.model.accounting_account.field.deprecated]
+label = "Wycofane"
+description = "Czy konto jest zamknięte dla nowych księgowań"
+
+[labels.pl.model.accounting_account.field.note]
+label = "Notatka"
+description = "Wewnętrzne uwagi o sposobie używania konta"
+
+[labels.pl.model.accounting_journal]
+name = "Dziennik"
+description = "Dziennik grupujący operacje jednego rodzaju (sprzedaż, zakupy, bank, kasa, różne)"
+
+[labels.pl.model.accounting_journal.field.name]
+label = "Nazwa"
+description = "Nazwa dziennika, na przykład Faktury sprzedaży"
+
+[labels.pl.model.accounting_journal.field.code]
+label = "Kod"
+description = "Krótki kod używany w numerach operacji, na przykład FS"
+
+[labels.pl.model.accounting_journal.field.kind]
+label = "Rodzaj"
+description = "Co rejestruje dziennik: sprzedaż, zakup, gotówka, bank, ogólny"
+
+[labels.pl.model.accounting_journal.field.kind.options]
+sale = "Sprzedaż"
+purchase = "Zakup"
+cash = "Gotówka"
+bank = "Bank"
+general = "Ogólny"
+
+[labels.pl.model.accounting_journal.field.default_account_id]
+label = "Konto domyślne"
+description = "Domyślne konto operacji tego dziennika (rachunek bankowy w dzienniku bankowym)"
+
+[labels.pl.model.accounting_journal.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217 dziennika, na przykład PLN; puste oznacza walutę firmy"
+
+[labels.pl.model.accounting_journal.field.active]
+label = "Aktywny"
+description = "Czy dziennik może jeszcze przyjmować operacje"
+
+[labels.pl.model.accounting_tax]
+name = "Podatek"
+description = "Stawka podatku, do której mogą odwoływać się pozycje operacji"
+
+[labels.pl.model.accounting_tax.field.name]
+label = "Nazwa"
+description = "Nazwa podatku, na przykład VAT 23% sprzedaż"
+
+[labels.pl.model.accounting_tax.field.rate_bp]
+label = "Stawka (pb)"
+description = "Stawka w punktach bazowych: 2300 oznacza 23,00 procent, 550 oznacza 5,50 procent"
+
+[labels.pl.model.accounting_tax.field.scope]
+label = "Zakres"
+description = "Gdzie stosuje się podatek: sprzedaż, zakupy, brak"
+
+[labels.pl.model.accounting_tax.field.scope.options]
+sales = "Sprzedaż"
+purchases = "Zakupy"
+none = "Brak"
+
+[labels.pl.model.accounting_tax.field.price_included]
+label = "Podatek w cenie"
+description = "Czy ceny już zawierają ten podatek"
+
+[labels.pl.model.accounting_tax.field.tax_account_id]
+label = "Konto podatku"
+description = "Konto, na którym księgowana jest kwota podatku"
+
+[labels.pl.model.accounting_tax.field.active]
+label = "Aktywny"
+description = "Czy podatek można jeszcze wybierać w nowych pozycjach"
+
+[labels.pl.model.accounting_fiscal_year]
+name = "Rok obrotowy"
+description = "Rok obrotowy, otwierany i zamykany w całości"
+
+[labels.pl.model.accounting_fiscal_year.field.name]
+label = "Nazwa"
+description = "Nazwa roku obrotowego, na przykład RO2026"
+
+[labels.pl.model.accounting_fiscal_year.field.start_on]
+label = "Data rozpoczęcia"
+description = "Pierwszy dzień roku obrotowego (YYYY-MM-DD)"
+
+[labels.pl.model.accounting_fiscal_year.field.end_on]
+label = "Data zakończenia"
+description = "Ostatni dzień roku obrotowego (YYYY-MM-DD)"
+
+[labels.pl.model.accounting_fiscal_year.field.state]
+label = "Status"
+description = "Status roku obrotowego: otwarte, zamknięte"
+
+[labels.pl.model.accounting_fiscal_year.field.state.options]
+open = "Otwarte"
+closed = "Zamknięte"
+
+[labels.pl.model.accounting_fiscal_year.action.close]
+label = "Zamknij"
+description = "Zamyka rok obrotowy, aby nic więcej nie było w nim księgowane (tylko osoba zatwierdzająca)"
+
+[labels.pl.model.accounting_fiscal_year.action.reopen]
+label = "Otwórz ponownie"
+description = "Otwiera ponownie zamknięty rok obrotowy w celu korekty (tylko osoba zatwierdzająca)"
+
+[labels.pl.model.accounting_period]
+name = "Okres"
+description = "Okres księgowy (zwykle miesiąc) w ramach roku obrotowego"
+
+[labels.pl.model.accounting_period.field.fiscal_year_id]
+label = "Rok obrotowy"
+description = "Rok obrotowy, do którego należy okres"
+
+[labels.pl.model.accounting_period.field.name]
+label = "Nazwa"
+description = "Nazwa okresu, na przykład 2026-03"
+
+[labels.pl.model.accounting_period.field.start_on]
+label = "Data rozpoczęcia"
+description = "Pierwszy dzień okresu (YYYY-MM-DD)"
+
+[labels.pl.model.accounting_period.field.end_on]
+label = "Data zakończenia"
+description = "Ostatni dzień okresu (YYYY-MM-DD)"
+
+[labels.pl.model.accounting_period.field.state]
+label = "Status"
+description = "Status okresu: otwarte, zamknięte"
+
+[labels.pl.model.accounting_period.field.state.options]
+open = "Otwarte"
+closed = "Zamknięte"
+
+[labels.pl.model.accounting_period.action.close]
+label = "Zamknij"
+description = "Zamyka okres dla dalszych księgowań (tylko osoba zatwierdzająca)"
+
+[labels.pl.model.accounting_period.action.reopen]
+label = "Otwórz ponownie"
+description = "Otwiera ponownie zamknięty okres (tylko osoba zatwierdzająca)"
+
+[labels.pl.model.accounting_move]
+name = "Operacja"
+description = "Operacja księgowa: datowany zestaw pozycji winien i ma w jednym dzienniku"
+
+[labels.pl.model.accounting_move.field.journal_id]
+label = "Dziennik"
+description = "Dziennik, do którego należy operacja"
+
+[labels.pl.model.accounting_move.field.date]
+label = "Data"
+description = "Data księgowania operacji (YYYY-MM-DD)"
+
+[labels.pl.model.accounting_move.field.number]
+label = "Numer"
+description = "Numer operacji, np. FS/2026/0001. Dowolny tekst: pakiety nie generują numeracji, więc osoba księgująca nadaje kolejny numer ręcznie i dba o ciągłość serii"
+
+[labels.pl.model.accounting_move.field.reference]
+label = "Referencja"
+description = "Referencja zewnętrzna, na przykład numer faktury dostawcy"
+
+[labels.pl.model.accounting_move.field.partner_id]
+label = "Kontrahent"
+description = "Kontrahent, którego dotyczy operacja"
+
+[labels.pl.model.accounting_move.field.narration]
+label = "Komentarz"
+description = "Notatka o operacji w dowolnej formie"
+
+[labels.pl.model.accounting_move.field.state]
+label = "Status"
+description = "Status operacji: wersja robocza, zaksięgowane, anulowane, wystornowane"
+
+[labels.pl.model.accounting_move.field.state.options]
+draft = "Wersja robocza"
+posted = "Zaksięgowane"
+cancelled = "Anulowane"
+reversed = "Wystornowane"
+
+[labels.pl.model.accounting_move.action.post]
+label = "Zaksięguj"
+description = "Księguje roboczą operację w księdze (tylko osoba zatwierdzająca; zgodność winien i ma nie jest sprawdzana)"
+
+[labels.pl.model.accounting_move.action.cancel]
+label = "Anuluj"
+description = "Anuluje roboczą operację, która nigdy nie była zaksięgowana"
+
+[labels.pl.model.accounting_move.action.reverse]
+label = "Wystornuj"
+description = "Oznacza zaksięgowaną operację jako wystornowaną; operacja przeciwna jest księgowana osobno (tylko osoba zatwierdzająca)"
+
+[labels.pl.model.accounting_move_line]
+name = "Pozycja operacji"
+description = "Jedna pozycja winien lub ma operacji księgowej"
+
+[labels.pl.model.accounting_move_line.field.move_id]
+label = "Operacja"
+description = "Operacja księgowa, do której należy pozycja"
+
+[labels.pl.model.accounting_move_line.field.account_id]
+label = "Konto"
+description = "Konto, na którym zaksięgowano pozycję"
+
+[labels.pl.model.accounting_move_line.field.partner_id]
+label = "Kontrahent"
+description = "Kontrahent, którego dotyczy pozycja"
+
+[labels.pl.model.accounting_move_line.field.label]
+label = "Etykieta"
+description = "Opis pozycji"
+
+[labels.pl.model.accounting_move_line.field.debit]
+label = "Winien"
+description = "Kwota po stronie winien w jednostkach podrzędnych waluty; 0, gdy pozycja jest po stronie ma"
+
+[labels.pl.model.accounting_move_line.field.credit]
+label = "Ma"
+description = "Kwota po stronie ma w jednostkach podrzędnych waluty; 0, gdy pozycja jest po stronie winien"
+
+[labels.pl.model.accounting_move_line.field.tax_id]
+label = "Podatek"
+description = "Podatek przypisany do pozycji, jeśli jest"
+
+[labels.pl.model.accounting_move_line.field.due_on]
+label = "Termin"
+description = "Termin płatności pozycji należności i zobowiązań (YYYY-MM-DD)"
+
+[labels.pl.model.accounting_move_line.field.reconciled]
+label = "Uzgodniony"
+description = "Czy pozycję dopasowano do płatności"
+
+[labels.pl.model.accounting_bank_statement_line]
+name = "Pozycja wyciągu bankowego"
+description = "Pozycja wyciągu bankowego oczekująca na dopasowanie do operacji"
+
+[labels.pl.model.accounting_bank_statement_line.field.journal_id]
+label = "Dziennik"
+description = "Dziennik bankowy, do którego należy wyciąg"
+
+[labels.pl.model.accounting_bank_statement_line.field.date]
+label = "Data"
+description = "Data księgowania w banku (YYYY-MM-DD)"
+
+[labels.pl.model.accounting_bank_statement_line.field.label]
+label = "Etykieta"
+description = "Tytuł lub opis płatności zgłoszony przez bank"
+
+[labels.pl.model.accounting_bank_statement_line.field.amount]
+label = "Kwota"
+description = "Kwota w jednostkach podrzędnych waluty; dodatnia dla wpływu, ujemna dla wypływu"
+
+[labels.pl.model.accounting_bank_statement_line.field.counterparty_name]
+label = "Nazwa kontrahenta"
+description = "Nazwa płatnika lub odbiorcy zgłoszona przez bank"
+
+[labels.pl.model.accounting_bank_statement_line.field.counterparty_iban]
+label = "IBAN kontrahenta"
+description = "Rachunek bankowy płatnika lub odbiorcy"
+
+[labels.pl.model.accounting_bank_statement_line.field.move_line_id]
+label = "Pozycja operacji"
+description = "Pozycja operacji, do której dopasowano tę pozycję wyciągu"
+
+[labels.pl.model.accounting_bank_statement_line.field.state]
+label = "Status"
+description = "Status dopasowania: niedopasowane, dopasowane, uzgodnione"
+
+[labels.pl.model.accounting_bank_statement_line.field.state.options]
+unmatched = "Niedopasowane"
+matched = "Dopasowane"
+reconciled = "Uzgodnione"
+
+[labels.pl.model.accounting_bank_statement_line.action.match]
+label = "Dopasuj"
+description = "Rejestruje, że pozycja odpowiada pozycji operacji"
+
+[labels.pl.model.accounting_bank_statement_line.action.reconcile]
+label = "Uzgodnij"
+description = "Uzgadnia dopasowaną pozycję (tylko kierownik)"
+
+[labels.pl.model.accounting_bank_statement_line.action.unmatch]
+label = "Cofnij dopasowanie"
+description = "Cofa błędne dopasowanie"

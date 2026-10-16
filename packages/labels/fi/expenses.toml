@@ -1,0 +1,78 @@
+[labels.fi.module]
+name = "Kulut"
+description = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa. Maksaminen on oma käyttöoikeutensa ja vaatii ihmisen hyväksynnän; kuitteihin viitataan huomautuksella, niitä ei tallenneta."
+
+[labels.fi.model.expenses_expense]
+name = "Kulu"
+description = "Summa, jonka työntekijä on käyttänyt yrityksen lukuun ja jonka hän haluaa korvattavaksi"
+
+[labels.fi.model.expenses_expense.field.description]
+label = "Kuvaus"
+description = "Mihin rahat käytettiin"
+
+[labels.fi.model.expenses_expense.field.employee]
+label = "Työntekijä"
+description = "Kulun hakevan henkilön nimi"
+
+[labels.fi.model.expenses_expense.field.spent_on]
+label = "Ostopäivä"
+description = "Oston päivämäärä (YYYY-MM-DD)"
+
+[labels.fi.model.expenses_expense.field.category]
+label = "Luokka"
+description = "Kululuokka: matkat, ateriat, majoitus, tarvikkeet, ohjelmisto, muu"
+
+[labels.fi.model.expenses_expense.field.category.options]
+travel = "Matkat"
+meals = "Ateriat"
+lodging = "Majoitus"
+supplies = "Tarvikkeet"
+software = "Ohjelmisto"
+other = "Muu"
+
+[labels.fi.model.expenses_expense.field.amount]
+label = "Summa"
+description = "Työntekijälle maksettava summa (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.expenses_expense.field.currency]
+label = "Valuutta"
+description = "ISO 4217 -valuuttakoodi, esimerkiksi EUR"
+
+[labels.fi.model.expenses_expense.field.receipt_note]
+label = "Kuitin huomautus"
+description = "Missä kuitti säilytetään ja mitä se osoittaa"
+
+[labels.fi.model.expenses_expense.field.paid_on]
+label = "Korvattu"
+description = "Päivä, jona työntekijälle korvattiin kulu (YYYY-MM-DD)"
+
+[labels.fi.model.expenses_expense.field.payment_reference]
+label = "Maksuviite"
+description = "Korvauksen tilisiirron viite"
+
+[labels.fi.model.expenses_expense.field.state]
+label = "Tila"
+description = "Korvauksen tila: luonnos, hyväksyttävänä, hyväksytty, maksettu, hylätty"
+
+[labels.fi.model.expenses_expense.field.state.options]
+draft = "Luonnos"
+submitted = "Hyväksyttävänä"
+approved = "Hyväksytty"
+paid = "Maksettu"
+refused = "Hylätty"
+
+[labels.fi.model.expenses_expense.action.submit]
+label = "Lähetä hyväksyttäväksi"
+description = "Lähetä kulukorvaus hyväksyttäväksi"
+
+[labels.fi.model.expenses_expense.action.approve]
+label = "Hyväksy"
+description = "Hyväksy lähetetty kulukorvaus (vain esihenkilö)"
+
+[labels.fi.model.expenses_expense.action.pay]
+label = "Maksa"
+description = "Kirjaa korvaus maksetuksi (vain talous)"
+
+[labels.fi.model.expenses_expense.action.refuse]
+label = "Hylkää"
+description = "Hylkää lähetetty kulukorvaus (vain esihenkilö)"

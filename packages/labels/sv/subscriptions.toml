@@ -1,0 +1,110 @@
+[labels.sv.module]
+name = "Abonnemang"
+description = "Återkommande planer och kundabonnemang med flödet provperiod, aktivt, förfallet och annullerat. Det registrerar nästa fakturadatum men skapar inga fakturor på egen hand."
+
+[labels.sv.model.subscriptions_plan]
+name = "Plan"
+description = "Ett återkommande erbjudande som kunder kan prenumerera på"
+
+[labels.sv.model.subscriptions_plan.field.name]
+label = "Namn"
+description = "Planens namn, till exempel Team årsvis"
+
+[labels.sv.model.subscriptions_plan.field.code]
+label = "Kod"
+description = "Planens korta kod"
+
+[labels.sv.model.subscriptions_plan.field.interval]
+label = "Intervall"
+description = "Hur ofta kunden faktureras: månadsvis, kvartalsvis, årsvis"
+
+[labels.sv.model.subscriptions_plan.field.interval.options]
+monthly = "Månadsvis"
+quarterly = "Kvartalsvis"
+yearly = "Årsvis"
+
+[labels.sv.model.subscriptions_plan.field.price]
+label = "Pris"
+description = "Standardpris per faktureringsintervall (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.subscriptions_plan.field.trial_days]
+label = "Provperiod (dagar)"
+description = "Den kostnadsfria provperiodens längd i dagar"
+
+[labels.sv.model.subscriptions_plan.field.active]
+label = "Aktiv"
+description = "Om nya kunder kan välja planen"
+
+[labels.sv.model.subscriptions_subscription]
+name = "Abonnemang"
+description = "En kunds återkommande abonnemang på en plan"
+
+[labels.sv.model.subscriptions_subscription.field.customer_id]
+label = "Kund"
+description = "Kunden som tecknade abonnemanget"
+
+[labels.sv.model.subscriptions_subscription.field.plan_id]
+label = "Plan"
+description = "Planen som abonnemanget gäller"
+
+[labels.sv.model.subscriptions_subscription.field.started_on]
+label = "Startad den"
+description = "Datum då abonnemanget började (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.subscriptions_subscription.field.trial_ends_on]
+label = "Provperioden slutar"
+description = "Datum då den kostnadsfria provperioden slutar (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.subscriptions_subscription.field.next_invoice_on]
+label = "Nästa fakturadatum"
+description = "Datum då nästa faktura ska skickas (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.subscriptions_subscription.field.recurring_amount]
+label = "Återkommande belopp"
+description = "Belopp som faktureras varje intervall efter rabatter (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.subscriptions_subscription.field.currency]
+label = "Valuta"
+description = "Valutakod enligt ISO 4217, till exempel SEK"
+
+[labels.sv.model.subscriptions_subscription.field.seats]
+label = "Platser"
+description = "Antal licenser eller användare som ingår"
+
+[labels.sv.model.subscriptions_subscription.field.cancel_reason]
+label = "Annulleringsorsak"
+description = "Varför kunden sade upp abonnemanget"
+
+[labels.sv.model.subscriptions_subscription.field.state]
+label = "Status"
+description = "Abonnemangets status: provperiod, aktivt, förfallet, annullerat"
+
+[labels.sv.model.subscriptions_subscription.field.state.options]
+trial = "Provperiod"
+active = "Aktivt"
+past_due = "Förfallet"
+cancelled = "Annullerat"
+
+[labels.sv.model.subscriptions_subscription.action.activate]
+label = "Aktivera"
+description = "Starta faktureringen när provperioden är slut"
+
+[labels.sv.model.subscriptions_subscription.action.mark_past_due]
+label = "Markera som förfallet"
+description = "Flagga ett aktivt abonnemang vars betalning misslyckades"
+
+[labels.sv.model.subscriptions_subscription.action.recover]
+label = "Återuppta"
+description = "Gör ett förfallet abonnemang aktivt igen efter betalning"
+
+[labels.sv.model.subscriptions_subscription.action.cancel_trial]
+label = "Avbryt provperiod"
+description = "Avbryt ett abonnemang under provperioden"
+
+[labels.sv.model.subscriptions_subscription.action.cancel]
+label = "Annullera"
+description = "Annullera ett aktivt abonnemang"
+
+[labels.sv.model.subscriptions_subscription.action.cancel_overdue]
+label = "Annullera förfallet"
+description = "Annullera ett förfallet abonnemang"

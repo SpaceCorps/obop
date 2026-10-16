@@ -1,0 +1,147 @@
+[labels.fi.module]
+name = "Sähköpostimarkkinointi"
+description = "Postituslistat, niillä olevat yhteystiedot suostumuksen tilan ja päivän kanssa sekä kampanjat luonnos-, ajoitettu- ja lähetetty-kulussa. Lähetys on peruuttamaton ja tavoittaa oikeita ihmisiä, joten se vaatii esihenkilön hyväksynnän; agentit voivat vain ehdottaa sitä. Tilastot syötetään tai tuodaan, niitä ei lasketa. Älä koskaan lähetä viestiä yhteystiedolle, joka ei ole tilannut."
+
+[labels.fi.model.email_marketing_list]
+name = "Postituslista"
+description = "Postituslista, johon yhteystiedot voivat kuulua"
+
+[labels.fi.model.email_marketing_list.field.name]
+label = "Nimi"
+description = "Listan nimi, esimerkiksi Uutiskirje"
+
+[labels.fi.model.email_marketing_list.field.description]
+label = "Kuvaus"
+description = "Mitä tilaajat saavat"
+
+[labels.fi.model.email_marketing_list.field.is_public]
+label = "Julkinen"
+description = "Voivatko kävijät liittyä listalle itse"
+
+[labels.fi.model.email_marketing_contact]
+name = "Postituslistan yhteystieto"
+description = "Postituslistalla oleva henkilö"
+
+[labels.fi.model.email_marketing_contact.field.list_id]
+label = "Postituslista"
+description = "Lista, jolla yhteystieto on"
+
+[labels.fi.model.email_marketing_contact.field.email]
+label = "Sähköposti"
+description = "Sähköpostiosoite"
+
+[labels.fi.model.email_marketing_contact.field.name]
+label = "Nimi"
+description = "Yhteystiedon nimi"
+
+[labels.fi.model.email_marketing_contact.field.consent_status]
+label = "Suostumuksen tila"
+description = "Lähetyslupa: odottaa, tilannut, kieltäytynyt, palautunut"
+
+[labels.fi.model.email_marketing_contact.field.consent_status.options]
+pending = "Odottaa"
+opted_in = "Tilannut"
+opted_out = "Kieltäytynyt"
+bounced = "Palautunut"
+
+[labels.fi.model.email_marketing_contact.field.consent_date]
+label = "Suostumuksen päivä"
+description = "Päivä, jona yhteystieto antoi tai peruutti luvan (YYYY-MM-DD)"
+
+[labels.fi.model.email_marketing_contact.field.consent_source]
+label = "Suostumuksen lähde"
+description = "Mistä suostumus kerättiin, esimerkiksi verkkosivuston tilauslomake"
+
+[labels.fi.model.email_marketing_campaign]
+name = "Kampanja"
+description = "Yksi listalle lähetettävä postitus"
+
+[labels.fi.model.email_marketing_campaign.field.name]
+label = "Nimi"
+description = "Kampanjan sisäinen nimi"
+
+[labels.fi.model.email_marketing_campaign.field.subject]
+label = "Aihe"
+description = "Sähköpostin aiherivi"
+
+[labels.fi.model.email_marketing_campaign.field.preview_text]
+label = "Esikatseluteksti"
+description = "Lyhyt teksti, joka näkyy aiheen jälkeen saapuneet-kansiossa"
+
+[labels.fi.model.email_marketing_campaign.field.from_name]
+label = "Lähettäjän nimi"
+description = "Vastaanottajille näytettävä lähettäjän nimi"
+
+[labels.fi.model.email_marketing_campaign.field.from_email]
+label = "Lähettäjän sähköposti"
+description = "Vastaanottajille näytettävä lähettäjän osoite"
+
+[labels.fi.model.email_marketing_campaign.field.list_id]
+label = "Postituslista"
+description = "Lista, jolle kampanja lähetetään"
+
+[labels.fi.model.email_marketing_campaign.field.body]
+label = "Sisältö"
+description = "Sähköpostin sisältö (HTML tai Markdown lähettäjän odotuksen mukaan)"
+
+[labels.fi.model.email_marketing_campaign.field.scheduled_for]
+label = "Ajoitettu"
+description = "Päivä, jona kampanja lähetetään (YYYY-MM-DD)"
+
+[labels.fi.model.email_marketing_campaign.field.sent_on]
+label = "Lähetetty"
+description = "Päivä, jona kampanja lähetettiin (YYYY-MM-DD)"
+
+[labels.fi.model.email_marketing_campaign.field.sent_count]
+label = "Lähetetyt"
+description = "Postipalvelimelle luovutetut viestit"
+
+[labels.fi.model.email_marketing_campaign.field.delivered_count]
+label = "Toimitetut"
+description = "Vastaanottajien palvelimien hyväksymät viestit"
+
+[labels.fi.model.email_marketing_campaign.field.opened_count]
+label = "Avatut"
+description = "Vastaanottajat, jotka avasivat viestin"
+
+[labels.fi.model.email_marketing_campaign.field.clicked_count]
+label = "Klikkaukset"
+description = "Vastaanottajat, jotka klikkasivat linkkiä"
+
+[labels.fi.model.email_marketing_campaign.field.bounced_count]
+label = "Palautuneet"
+description = "Takaisin palautuneet viestit"
+
+[labels.fi.model.email_marketing_campaign.field.unsubscribed_count]
+label = "Listalta poistuneet"
+description = "Vastaanottajat, jotka poistuivat listalta tämän kampanjan vuoksi"
+
+[labels.fi.model.email_marketing_campaign.field.state]
+label = "Tila"
+description = "Kampanjan tila: luonnos, ajoitettu, lähetetty, peruutettu"
+
+[labels.fi.model.email_marketing_campaign.field.state.options]
+draft = "Luonnos"
+scheduled = "Ajoitettu"
+sent = "Lähetetty"
+cancelled = "Peruutettu"
+
+[labels.fi.model.email_marketing_campaign.action.schedule]
+label = "Ajoita"
+description = "Aseta kampanja jonoon ajoitettua päivää varten"
+
+[labels.fi.model.email_marketing_campaign.action.send]
+label = "Lähetä"
+description = "Lähetä ajoitettu kampanja koko listalle (vain esihenkilö)"
+
+[labels.fi.model.email_marketing_campaign.action.send_now]
+label = "Lähetä nyt"
+description = "Lähetä luonnoskampanja heti (vain esihenkilö)"
+
+[labels.fi.model.email_marketing_campaign.action.unschedule]
+label = "Poista ajoitus"
+description = "Palauta ajoitettu kampanja luonnokseksi"
+
+[labels.fi.model.email_marketing_campaign.action.cancel]
+label = "Peruuta"
+description = "Peruuta ajoitettu kampanja"

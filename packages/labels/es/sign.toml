@@ -1,0 +1,106 @@
+[labels.es.module]
+name = "Firma"
+description = "Plantillas de documentos y solicitudes de firma con flujo de borrador, enviada, firmada, rechazada y caducada. Una solicitud indica quién firma (dato personal) y guarda las pruebas como referencias. Una solicitud firmada es inmutable solo por convención y el hash del documento registra lo firmado. Enviar y registrar una firma requieren aprobación humana; los agentes solo pueden proponerlos."
+
+[labels.es.model.sign_template]
+name = "Plantilla"
+description = "Un documento que se puede enviar a firmar"
+
+[labels.es.model.sign_template.field.name]
+label = "Nombre"
+description = "Nombre de la plantilla, por ejemplo Contrato de trabajo"
+
+[labels.es.model.sign_template.field.description]
+label = "Descripción"
+description = "Para qué sirve el documento y quién lo firma"
+
+[labels.es.model.sign_template.field.body]
+label = "Cuerpo"
+description = "El texto del documento, o una referencia a dónde se guarda el archivo"
+
+[labels.es.model.sign_template.field.signer_role]
+label = "Rol del firmante"
+description = "Función de la persona que firma, por ejemplo Cliente"
+
+[labels.es.model.sign_template.field.active]
+label = "Activo"
+description = "Indica si las solicitudes nuevas pueden usar la plantilla"
+
+[labels.es.model.sign_request]
+name = "Solicitud"
+description = "Una solicitud para que una persona firme un documento"
+
+[labels.es.model.sign_request.field.template_id]
+label = "Plantilla"
+description = "El documento que se debe firmar"
+
+[labels.es.model.sign_request.field.title]
+label = "Título"
+description = "Asunto que ve el firmante"
+
+[labels.es.model.sign_request.field.message]
+label = "Mensaje"
+description = "Mensaje que ve el firmante en la solicitud"
+
+[labels.es.model.sign_request.field.signer_name]
+label = "Nombre del firmante"
+description = "Nombre de la persona que debe firmar"
+
+[labels.es.model.sign_request.field.signer_email]
+label = "Correo electrónico del firmante"
+description = "Dirección de correo a la que se envía la solicitud"
+
+[labels.es.model.sign_request.field.sent_on]
+label = "Fecha de envío"
+description = "Día en que se envió la solicitud (YYYY-MM-DD)"
+
+[labels.es.model.sign_request.field.expires_on]
+label = "Fecha de caducidad"
+description = "Último día en que se puede firmar la solicitud (YYYY-MM-DD)"
+
+[labels.es.model.sign_request.field.signed_on]
+label = "Fecha de firma"
+description = "Día en que se firmó el documento (YYYY-MM-DD)"
+
+[labels.es.model.sign_request.field.signer_ip]
+label = "IP del firmante"
+description = "Dirección IP desde la que se hizo la firma (prueba)"
+
+[labels.es.model.sign_request.field.signer_user_agent]
+label = "Agente de usuario del firmante"
+description = "Navegador con el que se hizo la firma (prueba)"
+
+[labels.es.model.sign_request.field.signature_reference]
+label = "Referencia de la firma"
+description = "Dónde se guarda la imagen o el certificado de la firma"
+
+[labels.es.model.sign_request.field.document_hash]
+label = "Hash del documento"
+description = "Hash SHA-256 (hexadecimal) del documento firmado, para demostrar que no se modificó después"
+
+[labels.es.model.sign_request.field.state]
+label = "Estado"
+description = "Estado de la solicitud: borrador, enviada, firmada, rechazada, caducada"
+
+[labels.es.model.sign_request.field.state.options]
+draft = "Borrador"
+sent = "Enviado"
+signed = "Firmado"
+declined = "Rechazado"
+expired = "Caducado"
+
+[labels.es.model.sign_request.action.send]
+label = "Enviar"
+description = "Enviar la solicitud al firmante"
+
+[labels.es.model.sign_request.action.sign]
+label = "Firmar"
+description = "Registrar que el firmante firmó; después el registro es inmutable por convención"
+
+[labels.es.model.sign_request.action.decline]
+label = "Rechazar"
+description = "Registrar que el firmante rechazó"
+
+[labels.es.model.sign_request.action.expire]
+label = "Marcar como caducado"
+description = "Registrar que la solicitud caducó sin firma"

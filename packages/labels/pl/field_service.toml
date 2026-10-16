@@ -1,0 +1,140 @@
+[labels.pl.module]
+name = "Serwis terenowy"
+description = "Zlecenia u klientów wykonywane przez technika na miejscu: zaplanowane, w drodze, w toku, wykonane lub anulowane. Zlecenie zapisuje klienta, miejsce, technika, planowany dzień i początek (minuty od północy), użyte części oraz to, czy klient musi potwierdzić wykonanie podpisem. Adres miejsca i dane kontaktowe to dane osobowe. Wymaga pakietów Kadry i Produkty."
+
+[labels.pl.model.field_service_job]
+name = "Zlecenie"
+description = "Zlecenie wykonywane u klienta na miejscu"
+
+[labels.pl.model.field_service_job.field.name]
+label = "Nazwa"
+description = "Krótki tytuł zlecenia, na przykład Wymiana pompy kotła"
+
+[labels.pl.model.field_service_job.field.customer_id]
+label = "Klient"
+description = "Klient, którego dotyczy zlecenie"
+
+[labels.pl.model.field_service_job.field.site_name]
+label = "Nazwa miejsca"
+description = "Nazwa miejsca, na przykład Magazyn główny"
+
+[labels.pl.model.field_service_job.field.site_address]
+label = "Adres miejsca"
+description = "Adres, pod którym wykonywane są prace; często dom prywatny"
+
+[labels.pl.model.field_service_job.field.site_city]
+label = "Miejscowość"
+description = "Miejscowość, w której znajduje się miejsce prac"
+
+[labels.pl.model.field_service_job.field.site_postcode]
+label = "Kod pocztowy"
+description = "Kod pocztowy miejsca prac"
+
+[labels.pl.model.field_service_job.field.site_country]
+label = "Kraj"
+description = "Kraj, w którym znajduje się miejsce prac"
+
+[labels.pl.model.field_service_job.field.site_contact_name]
+label = "Osoba kontaktowa na miejscu"
+description = "Imię i nazwisko osoby, z którą należy się spotkać na miejscu"
+
+[labels.pl.model.field_service_job.field.site_contact_phone]
+label = "Telefon osoby kontaktowej"
+description = "Numer telefonu osoby, z którą należy się spotkać na miejscu"
+
+[labels.pl.model.field_service_job.field.technician_id]
+label = "Technik"
+description = "Technik przypisany do zlecenia"
+
+[labels.pl.model.field_service_job.field.priority]
+label = "Priorytet"
+description = "Pilność zlecenia: niski, normalny, wysoki, pilny"
+
+[labels.pl.model.field_service_job.field.priority.options]
+low = "Niski"
+normal = "Normalny"
+high = "Wysoki"
+urgent = "Pilny"
+
+[labels.pl.model.field_service_job.field.description]
+label = "Opis"
+description = "Co trzeba zrobić i co zgłosił klient"
+
+[labels.pl.model.field_service_job.field.scheduled_on]
+label = "Data planowana"
+description = "Planowany dzień wizyty (YYYY-MM-DD)"
+
+[labels.pl.model.field_service_job.field.scheduled_start_minute]
+label = "Planowany początek (min)"
+description = "Planowany początek w minutach od północy (540 oznacza 09:00)"
+
+[labels.pl.model.field_service_job.field.planned_minutes]
+label = "Planowany czas (min)"
+description = "Planowany czas trwania w minutach"
+
+[labels.pl.model.field_service_job.field.signature_required]
+label = "Wymagany podpis"
+description = "Czy klient musi podpisać odbiór prac, zanim zostaną uznane za wykonane"
+
+[labels.pl.model.field_service_job.field.signed_by]
+label = "Podpisane przez"
+description = "Imię i nazwisko osoby, która podpisała odbiór prac"
+
+[labels.pl.model.field_service_job.field.signed_on]
+label = "Data podpisania"
+description = "Dzień podpisania odbioru przez klienta (YYYY-MM-DD)"
+
+[labels.pl.model.field_service_job.field.work_report]
+label = "Protokół prac"
+description = "Opis wykonanych prac sporządzony przez technika"
+
+[labels.pl.model.field_service_job.field.state]
+label = "Status"
+description = "Status zlecenia: zaplanowane, w drodze, w toku, wykonane, anulowane"
+
+[labels.pl.model.field_service_job.field.state.options]
+scheduled = "Zaplanowane"
+en_route = "W drodze"
+in_progress = "W toku"
+done = "Wykonane"
+cancelled = "Anulowane"
+
+[labels.pl.model.field_service_job.action.depart]
+label = "Wyrusz"
+description = "Technik jest w drodze"
+
+[labels.pl.model.field_service_job.action.start]
+label = "Rozpocznij"
+description = "Technik dotarł na miejsce i rozpoczął pracę"
+
+[labels.pl.model.field_service_job.action.complete]
+label = "Zakończ"
+description = "Kończy zlecenie; gdy wymagany jest podpis, najpierw zapisz podpisującego i datę podpisania"
+
+[labels.pl.model.field_service_job.action.cancel]
+label = "Anuluj"
+description = "Anuluje zlecenie, którego nie rozpoczęto"
+
+[labels.pl.model.field_service_part]
+name = "Część"
+description = "Część lub produkt użyty przy zleceniu"
+
+[labels.pl.model.field_service_part.field.job_id]
+label = "Zlecenie"
+description = "Zlecenie, przy którym użyto części"
+
+[labels.pl.model.field_service_part.field.product_id]
+label = "Produkt"
+description = "Użyty produkt"
+
+[labels.pl.model.field_service_part.field.quantity]
+label = "Ilość"
+description = "Ile sztuk użyto"
+
+[labels.pl.model.field_service_part.field.unit_price]
+label = "Cena jednostkowa"
+description = "Cena za sztukę naliczona klientowi (w jednostkach podrzędnych waluty, np. grosze)"
+
+[labels.pl.model.field_service_part.field.note]
+label = "Notatka"
+description = "Uwaga o części, na przykład numer seryjny"

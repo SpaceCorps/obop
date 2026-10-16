@@ -1,0 +1,119 @@
+[labels.fr.module]
+name = "Inventaire"
+description = "Entrepôts, emplacements de stock, niveaux de stock et mouvements de stock. Les quantités sont saisies et validées par des personnes ; elles ne sont pas mises à jour automatiquement par les mouvements."
+
+[labels.fr.model.inventory_warehouse]
+name = "Entrepôt"
+description = "Un bâtiment ou un site où le stock est conservé"
+
+[labels.fr.model.inventory_warehouse.field.name]
+label = "Nom"
+description = "Nom de l’entrepôt"
+
+[labels.fr.model.inventory_warehouse.field.code]
+label = "Code"
+description = "Code court imprimé sur les documents, par exemple WH1"
+
+[labels.fr.model.inventory_warehouse.field.address]
+label = "Adresse"
+description = "Adresse postale du site"
+
+[labels.fr.model.inventory_warehouse.field.active]
+label = "Actif"
+description = "Indique si l’entrepôt est utilisé"
+
+[labels.fr.model.inventory_location]
+name = "Emplacement"
+description = "Un endroit d’un entrepôt où du stock peut être placé"
+
+[labels.fr.model.inventory_location.field.name]
+label = "Nom"
+description = "Nom de l’emplacement, par exemple Étagère A3"
+
+[labels.fr.model.inventory_location.field.warehouse_id]
+label = "Entrepôt"
+description = "L’entrepôt auquel appartient l’emplacement"
+
+[labels.fr.model.inventory_location.field.kind]
+label = "Type"
+description = "Usage de l’emplacement : interne, réception, expédition, transit, rebut"
+
+[labels.fr.model.inventory_location.field.kind.options]
+internal = "Interne"
+receiving = "Réception"
+shipping = "Expédition"
+transit = "Transit"
+scrap = "Rebut"
+
+[labels.fr.model.inventory_location.field.active]
+label = "Actif"
+description = "Indique si l’emplacement est utilisé"
+
+[labels.fr.model.inventory_item]
+name = "Stock"
+description = "La quantité d’un produit conservée à un emplacement"
+
+[labels.fr.model.inventory_item.field.product_id]
+label = "Produit"
+description = "Le produit conservé"
+
+[labels.fr.model.inventory_item.field.location_id]
+label = "Emplacement"
+description = "Où il est conservé"
+
+[labels.fr.model.inventory_item.field.quantity]
+label = "Quantité"
+description = "Unités en stock"
+
+[labels.fr.model.inventory_item.field.reorder_level]
+label = "Seuil de réapprovisionnement"
+description = "Quantité à laquelle ou en dessous de laquelle le produit doit être réapprovisionné"
+
+[labels.fr.model.inventory_item.field.lot]
+label = "Lot"
+description = "Numéro de lot, s’il est suivi"
+
+[labels.fr.model.inventory_move]
+name = "Mouvement"
+description = "Un déplacement de produit entre emplacements, ou vers l’entreprise ou hors de celle-ci"
+
+[labels.fr.model.inventory_move.field.reference]
+label = "Référence"
+description = "Référence du mouvement, par exemple un numéro de livraison ou de réception"
+
+[labels.fr.model.inventory_move.field.product_id]
+label = "Produit"
+description = "Le produit déplacé"
+
+[labels.fr.model.inventory_move.field.from_location_id]
+label = "Emplacement d’origine"
+description = "D’où il part ; vide pour une réception d’un fournisseur"
+
+[labels.fr.model.inventory_move.field.to_location_id]
+label = "Emplacement de destination"
+description = "Où il arrive ; vide pour une livraison à un client"
+
+[labels.fr.model.inventory_move.field.quantity]
+label = "Quantité"
+description = "Unités déplacées"
+
+[labels.fr.model.inventory_move.field.scheduled_on]
+label = "Planifié le"
+description = "Date prévue pour le mouvement (YYYY-MM-DD)"
+
+[labels.fr.model.inventory_move.field.state]
+label = "Statut"
+description = "Statut du mouvement : brouillon, terminé, annulé"
+
+[labels.fr.model.inventory_move.field.state.options]
+draft = "Brouillon"
+done = "Terminé"
+cancelled = "Annulé"
+
+[labels.fr.model.inventory_move.action.validate]
+label = "Valider"
+description = "Confirme que la marchandise a bien été déplacée ; un mouvement terminé ne peut pas être annulé"
+
+[labels.fr.model.inventory_move.action.cancel]
+label = "Annuler"
+description = "Annule un mouvement en brouillon"

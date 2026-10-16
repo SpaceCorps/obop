@@ -1,0 +1,136 @@
+[labels.pl.module]
+name = "Helpdesk"
+description = "Zgłoszenia pomocy technicznej z priorytetem, istotnością, celami poziomu usług oraz obiegiem otwarte, w toku, rozwiązane i zamknięte. Cele są rejestrowane, a nie egzekwowane ani automatycznie mierzone."
+
+[labels.pl.model.helpdesk_sla]
+name = "SLA"
+description = "Zasada poziomu usług: jak szybko zgłoszenia o danym priorytecie powinny zostać obsłużone i rozwiązane"
+
+[labels.pl.model.helpdesk_sla.field.name]
+label = "Nazwa"
+description = "Nazwa zasady, na przykład Pilne w 4 godziny"
+
+[labels.pl.model.helpdesk_sla.field.priority]
+label = "Priorytet"
+description = "Priorytet zgłoszeń, do których stosuje się zasada: niski, normalny, wysoki, pilny"
+
+[labels.pl.model.helpdesk_sla.field.priority.options]
+low = "Niski"
+normal = "Normalny"
+high = "Wysoki"
+urgent = "Pilny"
+
+[labels.pl.model.helpdesk_sla.field.first_response_minutes]
+label = "Czas pierwszej odpowiedzi (min)"
+description = "Docelowy czas do pierwszej odpowiedzi, w minutach"
+
+[labels.pl.model.helpdesk_sla.field.resolution_minutes]
+label = "Czas rozwiązania (min)"
+description = "Docelowy czas rozwiązania zgłoszenia, w minutach"
+
+[labels.pl.model.helpdesk_sla.field.active]
+label = "Aktywny"
+description = "Czy zasadę można przypisać do nowych zgłoszeń"
+
+[labels.pl.model.helpdesk_ticket]
+name = "Zgłoszenie"
+description = "Zgłoszenie klienta do pomocy technicznej"
+
+[labels.pl.model.helpdesk_ticket.field.subject]
+label = "Temat"
+description = "Jednowierszowe podsumowanie problemu"
+
+[labels.pl.model.helpdesk_ticket.field.description]
+label = "Opis"
+description = "Pełny opis problemu i tego, co próbował klient"
+
+[labels.pl.model.helpdesk_ticket.field.requester_name]
+label = "Zgłaszający"
+description = "Imię i nazwisko osoby proszącej o pomoc"
+
+[labels.pl.model.helpdesk_ticket.field.requester_email]
+label = "E-mail zgłaszającego"
+description = "Adres e-mail osoby proszącej o pomoc"
+
+[labels.pl.model.helpdesk_ticket.field.category]
+label = "Kategoria"
+description = "Rodzaj zgłoszenia: pytanie, incydent, problem, propozycja funkcji"
+
+[labels.pl.model.helpdesk_ticket.field.category.options]
+question = "Pytanie"
+incident = "Incydent"
+problem = "Problem"
+feature_request = "Propozycja funkcji"
+
+[labels.pl.model.helpdesk_ticket.field.priority]
+label = "Priorytet"
+description = "Jak szybko należy je obsłużyć: niski, normalny, wysoki, pilny"
+
+[labels.pl.model.helpdesk_ticket.field.priority.options]
+low = "Niski"
+normal = "Normalny"
+high = "Wysoki"
+urgent = "Pilny"
+
+[labels.pl.model.helpdesk_ticket.field.severity]
+label = "Istotność"
+description = "Jak poważnie dotknięty jest klient: drobne, poważne, krytyczne"
+
+[labels.pl.model.helpdesk_ticket.field.severity.options]
+minor = "Drobne"
+major = "Poważne"
+critical = "Krytyczne"
+
+[labels.pl.model.helpdesk_ticket.field.assignee]
+label = "Osoba przypisana"
+description = "Imię i nazwisko agenta pracującego nad zgłoszeniem"
+
+[labels.pl.model.helpdesk_ticket.field.sla_id]
+label = "SLA"
+description = "Zasada poziomu usług, względem której mierzone jest zgłoszenie"
+
+[labels.pl.model.helpdesk_ticket.field.opened_on]
+label = "Data otwarcia"
+description = "Data otrzymania zgłoszenia (YYYY-MM-DD)"
+
+[labels.pl.model.helpdesk_ticket.field.first_response_on]
+label = "Data pierwszej odpowiedzi"
+description = "Data pierwszej odpowiedzi dla klienta (YYYY-MM-DD)"
+
+[labels.pl.model.helpdesk_ticket.field.due_on]
+label = "Termin"
+description = "Data, do której zgodnie z zasadą należy je rozwiązać (YYYY-MM-DD)"
+
+[labels.pl.model.helpdesk_ticket.field.resolved_on]
+label = "Data rozwiązania"
+description = "Data rozwiązania problemu (YYYY-MM-DD)"
+
+[labels.pl.model.helpdesk_ticket.field.resolution]
+label = "Rozwiązanie"
+description = "Jak problem został rozwiązany"
+
+[labels.pl.model.helpdesk_ticket.field.state]
+label = "Status"
+description = "Status zgłoszenia: otwarte, w toku, rozwiązane, zamknięte"
+
+[labels.pl.model.helpdesk_ticket.field.state.options]
+open = "Otwarte"
+in_progress = "W toku"
+resolved = "Rozwiązane"
+closed = "Zamknięte"
+
+[labels.pl.model.helpdesk_ticket.action.take]
+label = "Przejmij"
+description = "Rozpoczyna pracę nad otwartym zgłoszeniem"
+
+[labels.pl.model.helpdesk_ticket.action.resolve]
+label = "Rozwiąż"
+description = "Oznacza zgłoszenie w toku jako rozwiązane"
+
+[labels.pl.model.helpdesk_ticket.action.close]
+label = "Zamknij"
+description = "Zamyka rozwiązane zgłoszenie na stałe (tylko kierownik)"
+
+[labels.pl.model.helpdesk_ticket.action.reopen]
+label = "Otwórz ponownie"
+description = "Otwiera ponownie rozwiązane zgłoszenie, gdy problem wrócił"

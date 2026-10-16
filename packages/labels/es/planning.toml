@@ -1,0 +1,88 @@
+[labels.es.module]
+name = "Planificación"
+description = "Turnos de empleados, con funciones y plantillas reutilizables. Un turno tiene un día y una hora de inicio y de fin en minutos desde la medianoche (de 0 a 1439; 540 son las 09:00). Un turno sin empleado es un turno abierto. Flujo: abierto, publicado, confirmado por el empleado. Requiere el paquete Recursos humanos."
+
+[labels.es.model.planning_role]
+name = "Rol"
+description = "Una función para la que se planifica un turno, por ejemplo cajero o electricista"
+
+[labels.es.model.planning_role.field.name]
+label = "Nombre"
+description = "Nombre de la función"
+
+[labels.es.model.planning_role.field.note]
+label = "Nota"
+description = "En qué consiste la función"
+
+[labels.es.model.planning_template]
+name = "Plantilla"
+description = "Un patrón de turno reutilizable que se copia en los turnos"
+
+[labels.es.model.planning_template.field.name]
+label = "Nombre"
+description = "Nombre de la plantilla, por ejemplo Turno de mañana"
+
+[labels.es.model.planning_template.field.role_id]
+label = "Rol"
+description = "La función a la que corresponde la plantilla"
+
+[labels.es.model.planning_template.field.start_minute]
+label = "Minuto de inicio"
+description = "Inicio en minutos desde la medianoche (540 son las 09:00)"
+
+[labels.es.model.planning_template.field.end_minute]
+label = "Minuto de fin"
+description = "Fin en minutos desde la medianoche (1020 son las 17:00)"
+
+[labels.es.model.planning_shift]
+name = "Turno"
+description = "Un tramo de trabajo en un día para una función, asignado opcionalmente a un empleado"
+
+[labels.es.model.planning_shift.field.name]
+label = "Nombre"
+description = "Título breve, por ejemplo Turno de apertura"
+
+[labels.es.model.planning_shift.field.role_id]
+label = "Rol"
+description = "La función necesaria"
+
+[labels.es.model.planning_shift.field.employee_id]
+label = "Empleado"
+description = "Empleado al que se asigna el turno; vacío para un turno abierto"
+
+[labels.es.model.planning_shift.field.work_date]
+label = "Fecha de trabajo"
+description = "Día del turno (YYYY-MM-DD)"
+
+[labels.es.model.planning_shift.field.start_minute]
+label = "Minuto de inicio"
+description = "Inicio en minutos desde la medianoche, de 0 a 1439 (540 son las 09:00)"
+
+[labels.es.model.planning_shift.field.end_minute]
+label = "Minuto de fin"
+description = "Fin en minutos desde la medianoche, de 0 a 1439 (1020 son las 17:00)"
+
+[labels.es.model.planning_shift.field.note]
+label = "Nota"
+description = "Instrucciones para quien trabaje el turno"
+
+[labels.es.model.planning_shift.field.state]
+label = "Estado"
+description = "Estado del turno: abierto, publicado, confirmado"
+
+[labels.es.model.planning_shift.field.state.options]
+open = "Abierto"
+published = "Publicado"
+confirmed = "Confirmado"
+
+[labels.es.model.planning_shift.action.publish]
+label = "Publicar"
+description = "Publicar el turno al empleado asignado, o a todos si está abierto"
+
+[labels.es.model.planning_shift.action.unpublish]
+label = "Despublicar"
+description = "Devolver un turno publicado a abierto"
+
+[labels.es.model.planning_shift.action.confirm]
+label = "Confirmar"
+description = "El empleado confirma que trabajará el turno"

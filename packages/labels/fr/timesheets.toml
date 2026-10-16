@@ -1,0 +1,56 @@
+[labels.fr.module]
+name = "Feuilles de temps"
+description = "Temps passé sur les tâches de projet, saisi en minutes, avec un indicateur facturable et une étape d’approbation. Nécessite le package Projets."
+
+[labels.fr.model.timesheets_entry]
+name = "Saisie de temps"
+description = "Le temps qu’une personne a passé sur une tâche un jour donné"
+
+[labels.fr.model.timesheets_entry.field.task_id]
+label = "Tâche"
+description = "La tâche sur laquelle on a travaillé"
+
+[labels.fr.model.timesheets_entry.field.worker]
+label = "Intervenant"
+description = "Nom de la personne qui a fait le travail"
+
+[labels.fr.model.timesheets_entry.field.worked_on]
+label = "Date travaillée"
+description = "Jour où le travail a été fait (YYYY-MM-DD)"
+
+[labels.fr.model.timesheets_entry.field.minutes]
+label = "Minutes"
+description = "Temps passé, en minutes"
+
+[labels.fr.model.timesheets_entry.field.billable]
+label = "Facturable"
+description = "Indique si le temps peut être facturé au client"
+
+[labels.fr.model.timesheets_entry.field.description]
+label = "Description"
+description = "Ce qui a été fait"
+
+[labels.fr.model.timesheets_entry.field.cost_rate]
+label = "Coût horaire"
+description = "Coût horaire interne de l’intervenant au moment de la saisie (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.timesheets_entry.field.state]
+label = "Statut"
+description = "Statut de la saisie : brouillon, soumise, approuvée"
+
+[labels.fr.model.timesheets_entry.field.state.options]
+draft = "Brouillon"
+submitted = "Soumise"
+approved = "Approuvée"
+
+[labels.fr.model.timesheets_entry.action.submit]
+label = "Soumettre"
+description = "Soumet la saisie pour approbation"
+
+[labels.fr.model.timesheets_entry.action.approve]
+label = "Approuver"
+description = "Approuve une saisie soumise pour qu’elle puisse être facturée (responsable uniquement)"
+
+[labels.fr.model.timesheets_entry.action.reject]
+label = "Rejeter"
+description = "Renvoie une saisie soumise en brouillon (responsable uniquement)"

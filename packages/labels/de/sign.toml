@@ -1,0 +1,106 @@
+[labels.de.module]
+name = "Signatur"
+description = "Dokumentvorlagen und Signaturanfragen (Entwurf, gesendet, unterzeichnet, abgelehnt, abgelaufen). Eine Anfrage nennt den Unterzeichner (personenbezogene Daten) und hält Belege fest. Eine unterzeichnete Anfrage ist nur per Konvention unveränderlich; der Dokument-Hash hält fest, was unterzeichnet wurde. Senden und Unterzeichnen brauchen eine menschliche Genehmigung."
+
+[labels.de.model.sign_template]
+name = "Vorlage"
+description = "Ein Dokument, das zur Unterzeichnung versendet werden kann"
+
+[labels.de.model.sign_template.field.name]
+label = "Name"
+description = "Name der Vorlage, zum Beispiel Arbeitsvertrag"
+
+[labels.de.model.sign_template.field.description]
+label = "Beschreibung"
+description = "Wofür das Dokument gedacht ist und wer es unterzeichnet"
+
+[labels.de.model.sign_template.field.body]
+label = "Inhalt"
+description = "Der Dokumenttext oder ein Verweis darauf, wo die Datei liegt"
+
+[labels.de.model.sign_template.field.signer_role]
+label = "Rolle Unterzeichner"
+description = "Rolle der Person, die unterzeichnet, zum Beispiel Kunde"
+
+[labels.de.model.sign_template.field.active]
+label = "Aktiv"
+description = "Ob neue Anfragen die Vorlage verwenden können"
+
+[labels.de.model.sign_request]
+name = "Signaturanfrage"
+description = "Eine Aufforderung an eine Person, ein Dokument zu unterzeichnen"
+
+[labels.de.model.sign_request.field.template_id]
+label = "Vorlage"
+description = "Das zu unterzeichnende Dokument"
+
+[labels.de.model.sign_request.field.title]
+label = "Titel"
+description = "Betreff, der dem Unterzeichner angezeigt wird"
+
+[labels.de.model.sign_request.field.message]
+label = "Nachricht"
+description = "Nachricht, die dem Unterzeichner in der Anfrage angezeigt wird"
+
+[labels.de.model.sign_request.field.signer_name]
+label = "Name Unterzeichner"
+description = "Name der Person, die unterzeichnen muss"
+
+[labels.de.model.sign_request.field.signer_email]
+label = "E-Mail Unterzeichner"
+description = "E-Mail-Adresse, an die die Anfrage gesendet wird"
+
+[labels.de.model.sign_request.field.sent_on]
+label = "Gesendet am"
+description = "Tag, an dem die Anfrage gesendet wurde (YYYY-MM-DD)"
+
+[labels.de.model.sign_request.field.expires_on]
+label = "Läuft ab am"
+description = "Letzter Tag, an dem die Anfrage unterzeichnet werden kann (YYYY-MM-DD)"
+
+[labels.de.model.sign_request.field.signed_on]
+label = "Unterzeichnet am"
+description = "Tag, an dem das Dokument unterzeichnet wurde (YYYY-MM-DD)"
+
+[labels.de.model.sign_request.field.signer_ip]
+label = "IP-Adresse Unterzeichner"
+description = "IP-Adresse, von der die Unterschrift kam (Beleg)"
+
+[labels.de.model.sign_request.field.signer_user_agent]
+label = "User-Agent Unterzeichner"
+description = "Browser, mit dem unterzeichnet wurde (Beleg)"
+
+[labels.de.model.sign_request.field.signature_reference]
+label = "Signaturreferenz"
+description = "Wo das Signaturbild oder Zertifikat gespeichert ist"
+
+[labels.de.model.sign_request.field.document_hash]
+label = "Dokument-Hash"
+description = "SHA-256-Hash (hex) des unterzeichneten Dokuments, als Nachweis, dass es danach nicht verändert wurde"
+
+[labels.de.model.sign_request.field.state]
+label = "Status"
+description = "Anfragestatus: Entwurf, gesendet, unterzeichnet, abgelehnt, abgelaufen"
+
+[labels.de.model.sign_request.field.state.options]
+draft = "Entwurf"
+sent = "Gesendet"
+signed = "Unterzeichnet"
+declined = "Abgelehnt"
+expired = "Abgelaufen"
+
+[labels.de.model.sign_request.action.send]
+label = "Senden"
+description = "Die Anfrage an den Unterzeichner senden"
+
+[labels.de.model.sign_request.action.sign]
+label = "Unterzeichnen"
+description = "Festhalten, dass der Unterzeichner unterzeichnet hat; der Datensatz ist danach per Konvention unveränderlich"
+
+[labels.de.model.sign_request.action.decline]
+label = "Ablehnen"
+description = "Festhalten, dass der Unterzeichner abgelehnt hat"
+
+[labels.de.model.sign_request.action.expire]
+label = "Ablaufen lassen"
+description = "Festhalten, dass die Anfrage unterzeichnet abgelaufen ist"

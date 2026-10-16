@@ -1,0 +1,147 @@
+[labels.es.module]
+name = "Marketing por correo"
+description = "Listas de correo, contactos con su consentimiento y campañas con flujo de borrador, programada y enviada. Enviar es irreversible y llega a personas reales, por lo que requiere aprobación humana de un responsable; los agentes solo pueden proponerlo. Las estadísticas se introducen, no se calculan. Los contactos son datos personales: no escribas a quien no haya dado su consentimiento."
+
+[labels.es.model.email_marketing_list]
+name = "Lista"
+description = "Una lista de correo a la que pueden pertenecer contactos"
+
+[labels.es.model.email_marketing_list.field.name]
+label = "Nombre"
+description = "Nombre de la lista, por ejemplo Boletín"
+
+[labels.es.model.email_marketing_list.field.description]
+label = "Descripción"
+description = "Qué reciben los suscriptores"
+
+[labels.es.model.email_marketing_list.field.is_public]
+label = "Público"
+description = "Indica si los visitantes pueden suscribirse por sí mismos"
+
+[labels.es.model.email_marketing_contact]
+name = "Contacto"
+description = "Una persona de una lista de correo"
+
+[labels.es.model.email_marketing_contact.field.list_id]
+label = "Lista"
+description = "La lista en la que está el contacto"
+
+[labels.es.model.email_marketing_contact.field.email]
+label = "Correo electrónico"
+description = "Dirección de correo electrónico"
+
+[labels.es.model.email_marketing_contact.field.name]
+label = "Nombre"
+description = "Nombre del contacto"
+
+[labels.es.model.email_marketing_contact.field.consent_status]
+label = "Estado del consentimiento"
+description = "Permiso para enviar correo: pendiente, consentido, retirado, rebotado"
+
+[labels.es.model.email_marketing_contact.field.consent_status.options]
+pending = "Pendiente"
+opted_in = "Suscrito"
+opted_out = "Dado de baja"
+bounced = "Rebotado"
+
+[labels.es.model.email_marketing_contact.field.consent_date]
+label = "Fecha del consentimiento"
+description = "Día en que el contacto dio o retiró el permiso (YYYY-MM-DD)"
+
+[labels.es.model.email_marketing_contact.field.consent_source]
+label = "Origen del consentimiento"
+description = "Dónde se obtuvo el consentimiento, por ejemplo formulario de suscripción del sitio web"
+
+[labels.es.model.email_marketing_campaign]
+name = "Campaña"
+description = "Un envío realizado a una lista"
+
+[labels.es.model.email_marketing_campaign.field.name]
+label = "Nombre"
+description = "Nombre interno de la campaña"
+
+[labels.es.model.email_marketing_campaign.field.subject]
+label = "Asunto"
+description = "Asunto del correo"
+
+[labels.es.model.email_marketing_campaign.field.preview_text]
+label = "Texto de vista previa"
+description = "Texto breve que se muestra tras el asunto en las bandejas de entrada"
+
+[labels.es.model.email_marketing_campaign.field.from_name]
+label = "Nombre del remitente"
+description = "Nombre del remitente que ven los destinatarios"
+
+[labels.es.model.email_marketing_campaign.field.from_email]
+label = "Correo electrónico del remitente"
+description = "Dirección del remitente que ven los destinatarios"
+
+[labels.es.model.email_marketing_campaign.field.list_id]
+label = "Lista"
+description = "La lista a la que va la campaña"
+
+[labels.es.model.email_marketing_campaign.field.body]
+label = "Cuerpo"
+description = "Contenido del correo (HTML o Markdown, según espere el remitente)"
+
+[labels.es.model.email_marketing_campaign.field.scheduled_for]
+label = "Programado para"
+description = "Día en que se enviará la campaña (YYYY-MM-DD)"
+
+[labels.es.model.email_marketing_campaign.field.sent_on]
+label = "Fecha de envío"
+description = "Día en que se envió la campaña (YYYY-MM-DD)"
+
+[labels.es.model.email_marketing_campaign.field.sent_count]
+label = "Enviados"
+description = "Correos entregados al servidor de correo"
+
+[labels.es.model.email_marketing_campaign.field.delivered_count]
+label = "Entregados"
+description = "Correos aceptados por los servidores de los destinatarios"
+
+[labels.es.model.email_marketing_campaign.field.opened_count]
+label = "Aperturas"
+description = "Destinatarios que abrieron el correo"
+
+[labels.es.model.email_marketing_campaign.field.clicked_count]
+label = "Clics"
+description = "Destinatarios que hicieron clic en un enlace"
+
+[labels.es.model.email_marketing_campaign.field.bounced_count]
+label = "Rebotados"
+description = "Correos rebotados"
+
+[labels.es.model.email_marketing_campaign.field.unsubscribed_count]
+label = "Bajas"
+description = "Destinatarios que se dieron de baja por esta campaña"
+
+[labels.es.model.email_marketing_campaign.field.state]
+label = "Estado"
+description = "Estado de la campaña: borrador, programada, enviada, cancelada"
+
+[labels.es.model.email_marketing_campaign.field.state.options]
+draft = "Borrador"
+scheduled = "Programado"
+sent = "Enviado"
+cancelled = "Cancelado"
+
+[labels.es.model.email_marketing_campaign.action.schedule]
+label = "Programar"
+description = "Poner la campaña en cola para el día programado"
+
+[labels.es.model.email_marketing_campaign.action.send]
+label = "Enviar"
+description = "Enviar la campaña programada a toda la lista (solo responsables)"
+
+[labels.es.model.email_marketing_campaign.action.send_now]
+label = "Enviar ahora"
+description = "Enviar de inmediato una campaña en borrador (solo responsables)"
+
+[labels.es.model.email_marketing_campaign.action.unschedule]
+label = "Cancelar programación"
+description = "Devolver una campaña programada a borrador"
+
+[labels.es.model.email_marketing_campaign.action.cancel]
+label = "Cancelar"
+description = "Cancelar una campaña programada"

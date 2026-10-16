@@ -1,0 +1,26 @@
+[labels.es.module]
+name = "Contactos"
+
+[labels.es.model.party]
+name = "Tercero"
+description = "Una persona u organización con la que trata la empresa"
+
+[labels.es.model.party.field.name]
+label = "Nombre"
+description = "Nombre para mostrar"
+
+[labels.es.model.party.field.email]
+label = "Correo electrónico"
+description = "Correo electrónico de trabajo"
+
+[labels.es.model.party.field.tax_id]
+label = "Impuesto"
+description = "Identificador fiscal de una persona física"
+
+[labels.es.model.party.field.notes]
+label = "Notas"
+description = "Notas internas de texto libre"
+
+[labels.es.model.party.action.erase]
+label = "Suprimir datos"
+description = "Anonimizar el tercero en el propio registro y dejar constancia del borrado"

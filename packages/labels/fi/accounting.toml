@@ -1,0 +1,324 @@
+[labels.fi.module]
+name = "Kirjanpito"
+description = "Tilikartta, päiväkirjat, verokannat, kirjaukset debet- ja kredit-riveineen, tilikaudet, jaksot ja tiliotteen rivit. Summat ovat valuutan pienimmässä yksikössä ja verokannat peruspisteinä. Mitään ei lasketa: tasapaino, verot ja numerot syöttää käyttäjä. Kirjaaminen sekä jakson tai tilikauden sulkeminen vaativat ihmisen hyväksynnän (accounting.approver); agentit voivat vain ehdottaa niitä."
+
+[labels.fi.model.accounting_account]
+name = "Tili"
+description = "Tilikartan tili"
+
+[labels.fi.model.accounting_account.field.code]
+label = "Koodi"
+description = "Tilin koodi tilikartassa, esimerkiksi 400000"
+
+[labels.fi.model.accounting_account.field.name]
+label = "Nimi"
+description = "Tilin nimi, esimerkiksi Myyntisaamiset"
+
+[labels.fi.model.accounting_account.field.account_type]
+label = "Tilityyppi"
+description = "Tilin tyyppi: myyntisaamiset, kassa ja pankki, lyhytaikaiset vastaavat, pysyvät vastaavat, ostovelat, lyhyt- tai pitkäaikainen vieras pääoma, oma pääoma, tuotot, kulut"
+
+[labels.fi.model.accounting_account.field.account_type.options]
+asset_receivable = "Myyntisaamiset"
+asset_cash = "Kassa ja pankki"
+asset_current = "Lyhytaikaiset vastaavat"
+asset_fixed = "Pysyvät vastaavat"
+liability_payable = "Ostovelat"
+liability_current = "Lyhytaikainen vieras pääoma"
+liability_non_current = "Pitkäaikainen vieras pääoma"
+equity = "Oma pääoma"
+income = "Tuotot"
+income_other = "Muut tuotot"
+expense = "Kulut"
+expense_direct_cost = "Välittömät kulut"
+
+[labels.fi.model.accounting_account.field.reconcile]
+label = "Täsmäytettävä"
+description = "Voidaanko tämän tilin avoimet erät täsmäyttää (myyntisaamiset, ostovelat, pankin välitili)"
+
+[labels.fi.model.accounting_account.field.deprecated]
+label = "Vanhentunut"
+description = "Onko tili suljettu uusilta kirjauksilta"
+
+[labels.fi.model.accounting_account.field.note]
+label = "Huomautus"
+description = "Sisäisiä huomioita tilin käytöstä"
+
+[labels.fi.model.accounting_journal]
+name = "Päiväkirja"
+description = "Päiväkirja, johon ryhmitellään yhden lajin kirjaukset (myynti, osto, pankki, kassa, muut)"
+
+[labels.fi.model.accounting_journal.field.name]
+label = "Nimi"
+description = "Päiväkirjan nimi, esimerkiksi Myyntilaskut"
+
+[labels.fi.model.accounting_journal.field.code]
+label = "Koodi"
+description = "Lyhyt koodi kirjausnumeroissa, esimerkiksi INV"
+
+[labels.fi.model.accounting_journal.field.kind]
+label = "Laji"
+description = "Mitä päiväkirja kirjaa: myynti, osto, kassa, pankki, yleinen"
+
+[labels.fi.model.accounting_journal.field.kind.options]
+sale = "Myynti"
+purchase = "Osto"
+cash = "Käteinen"
+bank = "Pankki"
+general = "Yleinen"
+
+[labels.fi.model.accounting_journal.field.default_account_id]
+label = "Oletustili"
+description = "Päiväkirjan kirjausten oletustili (pankkipäiväkirjassa pankkitili)"
+
+[labels.fi.model.accounting_journal.field.currency]
+label = "Valuutta"
+description = "Päiväkirjan ISO 4217 -valuuttakoodi, esimerkiksi EUR; tyhjä tarkoittaa yrityksen valuuttaa"
+
+[labels.fi.model.accounting_journal.field.active]
+label = "Aktiivinen"
+description = "Voiko päiväkirjaan vielä tehdä kirjauksia"
+
+[labels.fi.model.accounting_tax]
+name = "Vero"
+description = "Verokanta, johon kirjausrivit voivat viitata"
+
+[labels.fi.model.accounting_tax.field.name]
+label = "Nimi"
+description = "Veron nimi, esimerkiksi ALV 24 % myynti"
+
+[labels.fi.model.accounting_tax.field.rate_bp]
+label = "Verokanta (bp)"
+description = "Verokanta peruspisteinä: 2000 tarkoittaa 20,00 prosenttia, 550 tarkoittaa 5,50 prosenttia"
+
+[labels.fi.model.accounting_tax.field.scope]
+label = "Soveltamisala"
+description = "Mihin veroa sovelletaan: myynti, osto, ei mihinkään"
+
+[labels.fi.model.accounting_tax.field.scope.options]
+sales = "Myynnit"
+purchases = "Ostot"
+none = "Ei mikään"
+
+[labels.fi.model.accounting_tax.field.price_included]
+label = "Sisältyy hintaan"
+description = "Sisältävätkö hinnat jo tämän veron"
+
+[labels.fi.model.accounting_tax.field.tax_account_id]
+label = "Verotili"
+description = "Tili, jolle veron määrä kirjataan"
+
+[labels.fi.model.accounting_tax.field.active]
+label = "Aktiivinen"
+description = "Voiko veron vielä valita uusille riveille"
+
+[labels.fi.model.accounting_fiscal_year]
+name = "Tilikausi"
+description = "Tilikausi, joka avataan ja suljetaan kokonaisuutena"
+
+[labels.fi.model.accounting_fiscal_year.field.name]
+label = "Nimi"
+description = "Tilikauden nimi, esimerkiksi TK2026"
+
+[labels.fi.model.accounting_fiscal_year.field.start_on]
+label = "Alkaa"
+description = "Tilikauden ensimmäinen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.accounting_fiscal_year.field.end_on]
+label = "Päättyy"
+description = "Tilikauden viimeinen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.accounting_fiscal_year.field.state]
+label = "Tila"
+description = "Tilikauden tila: avoin, suljettu"
+
+[labels.fi.model.accounting_fiscal_year.field.state.options]
+open = "Avoin"
+closed = "Suljettu"
+
+[labels.fi.model.accounting_fiscal_year.action.close]
+label = "Sulje"
+description = "Sulje tilikausi, jotta siihen ei kirjata enää mitään (vain hyväksyjä)"
+
+[labels.fi.model.accounting_fiscal_year.action.reopen]
+label = "Avaa uudelleen"
+description = "Avaa suljettu tilikausi uudelleen korjausta varten (vain hyväksyjä)"
+
+[labels.fi.model.accounting_period]
+name = "Jakso"
+description = "Kirjanpitojakso (yleensä kuukausi) tilikauden sisällä"
+
+[labels.fi.model.accounting_period.field.fiscal_year_id]
+label = "Tilikausi"
+description = "Tilikausi, johon jakso kuuluu"
+
+[labels.fi.model.accounting_period.field.name]
+label = "Nimi"
+description = "Jakson nimi, esimerkiksi 2026-03"
+
+[labels.fi.model.accounting_period.field.start_on]
+label = "Alkaa"
+description = "Jakson ensimmäinen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.accounting_period.field.end_on]
+label = "Päättyy"
+description = "Jakson viimeinen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.accounting_period.field.state]
+label = "Tila"
+description = "Jakson tila: avoin, suljettu"
+
+[labels.fi.model.accounting_period.field.state.options]
+open = "Avoin"
+closed = "Suljettu"
+
+[labels.fi.model.accounting_period.action.close]
+label = "Sulje"
+description = "Sulje jakso, jotta siihen ei kirjata enää (vain hyväksyjä)"
+
+[labels.fi.model.accounting_period.action.reopen]
+label = "Avaa uudelleen"
+description = "Avaa suljettu jakso uudelleen (vain hyväksyjä)"
+
+[labels.fi.model.accounting_move]
+name = "Kirjaus"
+description = "Päiväkirjan kirjaus: päivätty joukko debet- ja kredit-rivejä yhdessä päiväkirjassa"
+
+[labels.fi.model.accounting_move.field.journal_id]
+label = "Päiväkirja"
+description = "Päiväkirja, johon kirjaus kuuluu"
+
+[labels.fi.model.accounting_move.field.date]
+label = "Päivämäärä"
+description = "Kirjauksen kirjanpitopäivä (YYYY-MM-DD)"
+
+[labels.fi.model.accounting_move.field.number]
+label = "Numero"
+description = "Kirjausnumero, esimerkiksi INV/2026/0001. Vapaa teksti: paketit eivät voi luoda numerosarjoja, joten kirjaaja antaa seuraavan numeron käsin ja pitää sarjan katkeamattomana"
+
+[labels.fi.model.accounting_move.field.reference]
+label = "Viite"
+description = "Ulkoinen viite, esimerkiksi toimittajan laskunumero"
+
+[labels.fi.model.accounting_move.field.partner_id]
+label = "Kumppani"
+description = "Yhteystieto, jota kirjaus koskee"
+
+[labels.fi.model.accounting_move.field.narration]
+label = "Selite"
+description = "Vapaamuotoinen huomautus kirjauksesta"
+
+[labels.fi.model.accounting_move.field.state]
+label = "Tila"
+description = "Kirjauksen tila: luonnos, kirjattu, peruutettu, vastakirjattu"
+
+[labels.fi.model.accounting_move.field.state.options]
+draft = "Luonnos"
+posted = "Kirjattu"
+cancelled = "Peruutettu"
+reversed = "Vastakirjattu"
+
+[labels.fi.model.accounting_move.action.post]
+label = "Kirjaa"
+description = "Kirjaa luonnos pääkirjaan (vain hyväksyjä; debetin ja kreditin tasapainoa ei tarkisteta)"
+
+[labels.fi.model.accounting_move.action.cancel]
+label = "Peruuta"
+description = "Peruuta luonnos, jota ei ole koskaan kirjattu"
+
+[labels.fi.model.accounting_move.action.reverse]
+label = "Vastakirjaa"
+description = "Merkitse kirjattu kirjaus vastakirjatuksi; vastakirjaus tehdään erikseen (vain hyväksyjä)"
+
+[labels.fi.model.accounting_move_line]
+name = "Kirjausrivi"
+description = "Kirjauksen yksi debet- tai kredit-rivi"
+
+[labels.fi.model.accounting_move_line.field.move_id]
+label = "Kirjaus"
+description = "Kirjaus, johon rivi kuuluu"
+
+[labels.fi.model.accounting_move_line.field.account_id]
+label = "Tili"
+description = "Tili, jolle rivi kirjataan"
+
+[labels.fi.model.accounting_move_line.field.partner_id]
+label = "Kumppani"
+description = "Yhteystieto, jota rivi koskee"
+
+[labels.fi.model.accounting_move_line.field.label]
+label = "Nimike"
+description = "Rivin kuvaus"
+
+[labels.fi.model.accounting_move_line.field.debit]
+label = "Debet"
+description = "Debet-summa valuutan pienimmässä yksikössä; 0, kun rivi on kredit"
+
+[labels.fi.model.accounting_move_line.field.credit]
+label = "Kredit"
+description = "Kredit-summa valuutan pienimmässä yksikössä; 0, kun rivi on debet"
+
+[labels.fi.model.accounting_move_line.field.tax_id]
+label = "Vero"
+description = "Rivin vero, jos sellainen on"
+
+[labels.fi.model.accounting_move_line.field.due_on]
+label = "Eräpäivä"
+description = "Myyntisaamis- ja ostovelkarivien eräpäivä (YYYY-MM-DD)"
+
+[labels.fi.model.accounting_move_line.field.reconciled]
+label = "Täsmäytetty"
+description = "Onko rivi kohdistettu maksuun"
+
+[labels.fi.model.accounting_bank_statement_line]
+name = "Tiliotteen rivi"
+description = "Tiliotteen rivi, joka odottaa kohdistamista kirjauksiin"
+
+[labels.fi.model.accounting_bank_statement_line.field.journal_id]
+label = "Päiväkirja"
+description = "Pankkipäiväkirja, johon tiliote kuuluu"
+
+[labels.fi.model.accounting_bank_statement_line.field.date]
+label = "Päivämäärä"
+description = "Pankin kirjauspäivä (YYYY-MM-DD)"
+
+[labels.fi.model.accounting_bank_statement_line.field.label]
+label = "Nimike"
+description = "Maksuviite tai kuvaus sellaisena kuin pankki sen ilmoittaa"
+
+[labels.fi.model.accounting_bank_statement_line.field.amount]
+label = "Summa"
+description = "Summa valuutan pienimmässä yksikössä; positiivinen tulevalle ja negatiivinen lähtevälle rahalle"
+
+[labels.fi.model.accounting_bank_statement_line.field.counterparty_name]
+label = "Vastapuolen nimi"
+description = "Maksajan tai saajan nimi sellaisena kuin pankki sen ilmoittaa"
+
+[labels.fi.model.accounting_bank_statement_line.field.counterparty_iban]
+label = "Vastapuolen IBAN"
+description = "Maksajan tai saajan pankkitili"
+
+[labels.fi.model.accounting_bank_statement_line.field.move_line_id]
+label = "Kirjausrivi"
+description = "Kirjausrivi, johon tämä tiliotteen rivi kohdistettiin"
+
+[labels.fi.model.accounting_bank_statement_line.field.state]
+label = "Tila"
+description = "Kohdistuksen tila: kohdistamaton, kohdistettu, täsmäytetty"
+
+[labels.fi.model.accounting_bank_statement_line.field.state.options]
+unmatched = "Kohdistamaton"
+matched = "Kohdistettu"
+reconciled = "Täsmäytetty"
+
+[labels.fi.model.accounting_bank_statement_line.action.match]
+label = "Kohdista"
+description = "Merkitse, että rivi vastaa kirjausriviä"
+
+[labels.fi.model.accounting_bank_statement_line.action.reconcile]
+label = "Täsmäytä"
+description = "Täsmäytä kohdistettu rivi (vain esihenkilö)"
+
+[labels.fi.model.accounting_bank_statement_line.action.unmatch]
+label = "Poista kohdistus"
+description = "Peruuta virheellinen kohdistus"

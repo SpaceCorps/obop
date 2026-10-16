@@ -1,0 +1,110 @@
+[labels.fr.module]
+name = "Abonnements"
+description = "Formules récurrentes et abonnements clients avec un flux essai, actif, en retard et annulé. Il enregistre la date de la prochaine facture ; il ne crée pas de factures de lui-même."
+
+[labels.fr.model.subscriptions_plan]
+name = "Formule"
+description = "Une offre récurrente à laquelle les clients peuvent s’abonner"
+
+[labels.fr.model.subscriptions_plan.field.name]
+label = "Nom"
+description = "Nom de la formule, par exemple Équipe annuelle"
+
+[labels.fr.model.subscriptions_plan.field.code]
+label = "Code"
+description = "Code court de la formule"
+
+[labels.fr.model.subscriptions_plan.field.interval]
+label = "Périodicité"
+description = "Fréquence de facturation du client : mensuelle, trimestrielle, annuelle"
+
+[labels.fr.model.subscriptions_plan.field.interval.options]
+monthly = "Mensuel"
+quarterly = "Trimestriel"
+yearly = "Annuel"
+
+[labels.fr.model.subscriptions_plan.field.price]
+label = "Prix"
+description = "Prix standard par période de facturation (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.subscriptions_plan.field.trial_days]
+label = "Jours d’essai"
+description = "Durée de l’essai gratuit en jours"
+
+[labels.fr.model.subscriptions_plan.field.active]
+label = "Active"
+description = "Indique si les nouveaux clients peuvent choisir la formule"
+
+[labels.fr.model.subscriptions_subscription]
+name = "Abonnement"
+description = "L’abonnement récurrent d’un client à une formule"
+
+[labels.fr.model.subscriptions_subscription.field.customer_id]
+label = "Client"
+description = "Le client qui s’est abonné"
+
+[labels.fr.model.subscriptions_subscription.field.plan_id]
+label = "Formule"
+description = "La formule souscrite"
+
+[labels.fr.model.subscriptions_subscription.field.started_on]
+label = "Commencé le"
+description = "Date de début de l’abonnement (YYYY-MM-DD)"
+
+[labels.fr.model.subscriptions_subscription.field.trial_ends_on]
+label = "Fin de l’essai le"
+description = "Date de fin de l’essai gratuit (YYYY-MM-DD)"
+
+[labels.fr.model.subscriptions_subscription.field.next_invoice_on]
+label = "Prochaine facture le"
+description = "Date d’échéance de la prochaine facture (YYYY-MM-DD)"
+
+[labels.fr.model.subscriptions_subscription.field.recurring_amount]
+label = "Montant récurrent"
+description = "Montant facturé à chaque période après remises (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.subscriptions_subscription.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217, par exemple EUR"
+
+[labels.fr.model.subscriptions_subscription.field.seats]
+label = "Licences"
+description = "Nombre de licences ou d’utilisateurs couverts"
+
+[labels.fr.model.subscriptions_subscription.field.cancel_reason]
+label = "Motif d’annulation"
+description = "Raison pour laquelle le client a résilié"
+
+[labels.fr.model.subscriptions_subscription.field.state]
+label = "Statut"
+description = "Statut de l’abonnement : essai, actif, en retard, annulé"
+
+[labels.fr.model.subscriptions_subscription.field.state.options]
+trial = "Essai"
+active = "Actif"
+past_due = "En retard"
+cancelled = "Annulé"
+
+[labels.fr.model.subscriptions_subscription.action.activate]
+label = "Activer"
+description = "Démarre la facturation à la fin de l’essai"
+
+[labels.fr.model.subscriptions_subscription.action.mark_past_due]
+label = "Marquer en retard"
+description = "Signale un abonnement actif dont le paiement a échoué"
+
+[labels.fr.model.subscriptions_subscription.action.recover]
+label = "Régulariser"
+description = "Remet un abonnement en retard à l’état actif après paiement"
+
+[labels.fr.model.subscriptions_subscription.action.cancel_trial]
+label = "Annuler l’essai"
+description = "Annule un abonnement pendant son essai"
+
+[labels.fr.model.subscriptions_subscription.action.cancel]
+label = "Annuler"
+description = "Annule un abonnement actif"
+
+[labels.fr.model.subscriptions_subscription.action.cancel_overdue]
+label = "Annuler (en retard)"
+description = "Annule un abonnement en retard"

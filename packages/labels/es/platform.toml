@@ -1,0 +1,82 @@
+[labels.es.module]
+name = "Personalizar"
+
+[labels.es.model.module]
+name = "Módulo"
+description = "Un módulo instalado: integrado, subido o del mercado"
+
+[labels.es.model.module.field.name]
+label = "Nombre"
+description = "Nombre para mostrar"
+
+[labels.es.model.module.field.version]
+label = "Versión"
+description = "Versión instalada"
+
+[labels.es.model.module.field.description]
+label = "Descripción"
+description = "Qué hace el módulo"
+
+[labels.es.model.module.field.source]
+label = "Origen"
+description = "integrado, subido o mercado"
+
+[labels.es.model.module.field.models]
+label = "Modelos"
+description = "Modelos que añade el módulo"
+
+[labels.es.model.module.field.groups]
+label = "Grupos"
+description = "Grupos de permisos que usa el módulo"
+
+[labels.es.model.module.action.install]
+label = "Instalar"
+description = "Instalar o actualizar un módulo a partir del texto de su obop.toml"
+
+[labels.es.model.module.action.uninstall]
+label = "Desinstalar"
+description = "Quitar un módulo; sus datos permanecen en la base de datos"
+
+[labels.es.model.marketplace_listing]
+name = "Ficha del mercado"
+description = "Un módulo que ofrece el mercado"
+
+[labels.es.model.marketplace_listing.field.name]
+label = "Nombre"
+description = "Nombre para mostrar"
+
+[labels.es.model.marketplace_listing.field.version]
+label = "Versión"
+description = "Última versión"
+
+[labels.es.model.marketplace_listing.field.description]
+label = "Descripción"
+description = "Qué hace el módulo"
+
+[labels.es.model.marketplace_listing.field.author]
+label = "Autor"
+description = "Quién lo publica"
+
+[labels.es.model.marketplace_listing.field.source]
+label = "Origen"
+description = "De dónde procede la instalación"
+
+[labels.es.model.marketplace_listing.field.models]
+label = "Modelos"
+description = "Modelos que añade el módulo"
+
+[labels.es.model.marketplace_listing.field.groups]
+label = "Grupos"
+description = "Grupos de permisos que usa el módulo"
+
+[labels.es.model.marketplace_listing.action.install]
+label = "Instalar"
+description = "Instalar un módulo del mercado por su identificador"
+
+[labels.es.model.setting]
+name = "Ajuste"
+description = "Ajustes de interfaz de toda la instancia: tema y distribución del lanzador de aplicaciones"
+
+[labels.es.model.setting.field.value]
+label = "Valor"
+description = "Los ajustes como un objeto JSON"

@@ -1,0 +1,119 @@
+[labels.es.module]
+name = "Inventario"
+description = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock. Las cantidades las introducen y validan personas; los movimientos no las actualizan automáticamente."
+
+[labels.es.model.inventory_warehouse]
+name = "Almacén"
+description = "Un edificio o lugar donde se guarda el stock"
+
+[labels.es.model.inventory_warehouse.field.name]
+label = "Nombre"
+description = "Nombre del almacén"
+
+[labels.es.model.inventory_warehouse.field.code]
+label = "Código"
+description = "Código corto impreso en los documentos, por ejemplo ALM1"
+
+[labels.es.model.inventory_warehouse.field.address]
+label = "Dirección"
+description = "Dirección postal del lugar"
+
+[labels.es.model.inventory_warehouse.field.active]
+label = "Activo"
+description = "Indica si el almacén está en uso"
+
+[labels.es.model.inventory_location]
+name = "Ubicación"
+description = "Un lugar dentro de un almacén donde puede haber stock"
+
+[labels.es.model.inventory_location.field.name]
+label = "Nombre"
+description = "Nombre de la ubicación, por ejemplo Estante A3"
+
+[labels.es.model.inventory_location.field.warehouse_id]
+label = "Almacén"
+description = "El almacén al que pertenece la ubicación"
+
+[labels.es.model.inventory_location.field.kind]
+label = "Tipo"
+description = "Para qué se usa la ubicación: interna, recepción, expedición, tránsito, desecho"
+
+[labels.es.model.inventory_location.field.kind.options]
+internal = "Interno"
+receiving = "Recepción"
+shipping = "Envío"
+transit = "Tránsito"
+scrap = "Desecho"
+
+[labels.es.model.inventory_location.field.active]
+label = "Activo"
+description = "Indica si la ubicación está en uso"
+
+[labels.es.model.inventory_item]
+name = "Existencia"
+description = "La cantidad de un producto que hay en una ubicación"
+
+[labels.es.model.inventory_item.field.product_id]
+label = "Producto"
+description = "El producto almacenado"
+
+[labels.es.model.inventory_item.field.location_id]
+label = "Ubicación"
+description = "Dónde se encuentra"
+
+[labels.es.model.inventory_item.field.quantity]
+label = "Cantidad"
+description = "Unidades disponibles"
+
+[labels.es.model.inventory_item.field.reorder_level]
+label = "Nivel de reaprovisionamiento"
+description = "Cantidad igual o inferior a la cual se debe reponer el producto"
+
+[labels.es.model.inventory_item.field.lot]
+label = "Lote"
+description = "Número de lote, si se controla"
+
+[labels.es.model.inventory_move]
+name = "Movimiento"
+description = "Un movimiento de un producto entre ubicaciones, o hacia dentro o fuera de la empresa"
+
+[labels.es.model.inventory_move.field.reference]
+label = "Referencia"
+description = "Referencia del movimiento, por ejemplo un número de entrega o de recepción"
+
+[labels.es.model.inventory_move.field.product_id]
+label = "Producto"
+description = "El producto movido"
+
+[labels.es.model.inventory_move.field.from_location_id]
+label = "Ubicación de origen"
+description = "De dónde sale; vacío para una recepción de un proveedor"
+
+[labels.es.model.inventory_move.field.to_location_id]
+label = "Ubicación de destino"
+description = "A dónde llega; vacío para una entrega a un cliente"
+
+[labels.es.model.inventory_move.field.quantity]
+label = "Cantidad"
+description = "Unidades movidas"
+
+[labels.es.model.inventory_move.field.scheduled_on]
+label = "Fecha programada"
+description = "Fecha prevista del movimiento (YYYY-MM-DD)"
+
+[labels.es.model.inventory_move.field.state]
+label = "Estado"
+description = "Estado del movimiento: borrador, hecho, cancelado"
+
+[labels.es.model.inventory_move.field.state.options]
+draft = "Borrador"
+done = "Hecho"
+cancelled = "Cancelado"
+
+[labels.es.model.inventory_move.action.validate]
+label = "Validar"
+description = "Confirmar que la mercancía se movió de verdad; un movimiento hecho no se puede deshacer"
+
+[labels.es.model.inventory_move.action.cancel]
+label = "Cancelar"
+description = "Cancelar un movimiento en borrador"

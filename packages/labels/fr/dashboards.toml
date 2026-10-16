@@ -1,0 +1,78 @@
+[labels.fr.module]
+name = "Tableaux de bord"
+description = "Tableaux de bord et leurs tuiles, stockés comme données pour qu’une interface les affiche. Une tuile définit son type (kpi, bar, line, pie ou table), le modèle lu, le champ de mesure, l’agrégation (count ou sum), le regroupement, un filtre JSON et une position. Le package ne stocke que la définition ; il ne vérifie rien et ne calcule rien."
+
+[labels.fr.model.dashboards_dashboard]
+name = "Tableau de bord"
+description = "Un tableau de bord : un ensemble ordonné de tuiles portant un titre"
+
+[labels.fr.model.dashboards_dashboard.field.title]
+label = "Titre"
+description = "Titre du tableau de bord, par exemple Vue d’ensemble des ventes"
+
+[labels.fr.model.dashboards_dashboard.field.owner]
+label = "Propriétaire"
+description = "Nom de la personne à qui appartient le tableau de bord"
+
+[labels.fr.model.dashboards_dashboard.field.description]
+label = "Description"
+description = "Ce que montre le tableau de bord et pour qui"
+
+[labels.fr.model.dashboards_dashboard.field.shared]
+label = "Partagé"
+description = "Indique si toute personne ayant accès à l’application Tableaux de bord le voit, ou seulement le propriétaire"
+
+[labels.fr.model.dashboards_dashboard.field.position]
+label = "Position"
+description = "Ordre parmi les tableaux de bord, le plus petit d’abord"
+
+[labels.fr.model.dashboards_widget]
+name = "Tuile"
+description = "Un bloc d’un tableau de bord, défini par ce qu’il lit et la façon de l’agréger"
+
+[labels.fr.model.dashboards_widget.field.dashboard_id]
+label = "Tableau de bord"
+description = "Le tableau de bord qui contient la tuile"
+
+[labels.fr.model.dashboards_widget.field.title]
+label = "Titre"
+description = "Titre de la tuile, par exemple Commandes payées"
+
+[labels.fr.model.dashboards_widget.field.kind]
+label = "Type"
+description = "Mode d’affichage de la tuile : kpi, bar, line, pie, table"
+
+[labels.fr.model.dashboards_widget.field.kind.options]
+kpi = "Indicateur"
+bar = "Barres"
+line = "Courbe"
+pie = "Secteurs"
+table = "Tableau"
+
+[labels.fr.model.dashboards_widget.field.model_name]
+label = "Nom du modèle"
+description = "Modèle lu par la tuile, par exemple sale_order"
+
+[labels.fr.model.dashboards_widget.field.measure_field]
+label = "Champ de mesure"
+description = "Champ à agréger : un champ numérique ou monétaire du modèle ; vide pour un comptage"
+
+[labels.fr.model.dashboards_widget.field.aggregate]
+label = "Agrégation"
+description = "Façon de combiner les enregistrements : count ou sum"
+
+[labels.fr.model.dashboards_widget.field.aggregate.options]
+count = "Nombre"
+sum = "Somme"
+
+[labels.fr.model.dashboards_widget.field.group_by]
+label = "Regrouper par"
+description = "Champ selon lequel découper le résultat (champ de sélection, de référence ou de date) ; vide pour une seule valeur"
+
+[labels.fr.model.dashboards_widget.field.filter]
+label = "Filtre"
+description = "Objet JSON associant des noms de champs à des valeurs exactes que les enregistrements doivent respecter, par exemple state=paid ; vide signifie tous les enregistrements"
+
+[labels.fr.model.dashboards_widget.field.position]
+label = "Position"
+description = "Ordre de la tuile sur le tableau de bord, le plus petit d’abord"

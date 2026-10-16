@@ -1,0 +1,48 @@
+[labels.sv.module]
+name = "CRM"
+
+[labels.sv.model.lead]
+name = "Lead"
+description = "Ett potentiellt affärstillfälle med en kontakt"
+
+[labels.sv.model.lead.field.title]
+label = "Titel"
+description = "Kort beskrivning av affärsmöjligheten"
+
+[labels.sv.model.lead.field.contact_name]
+label = "Kontaktens namn"
+description = "Kontaktpersonens namn"
+
+[labels.sv.model.lead.field.contact_email]
+label = "Kontaktens e-post"
+description = "Kontaktpersonens e-postadress"
+
+[labels.sv.model.lead.field.expected_revenue_minor]
+label = "Förväntade intäkter"
+description = "Förväntade intäkter i valutans minsta enhet"
+
+[labels.sv.model.lead.field.stage]
+label = "Fas"
+description = "Fas i säljtratten: ny, kvalificerad, vunnen eller förlorad"
+
+[labels.sv.model.lead.field.stage.options]
+new = "Ny"
+qualified = "Kvalificerad"
+won = "Vunnen"
+lost = "Förlorad"
+
+[labels.sv.model.lead.action.qualify]
+label = "Kvalificera"
+description = "Flytta en ny lead till fasen kvalificerad"
+
+[labels.sv.model.lead.action.mark_won]
+label = "Markera som vunnen"
+description = "Flytta leaden till fasen vunnen"
+
+[labels.sv.model.lead.action.mark_lost]
+label = "Markera som förlorad"
+description = "Flytta leaden till fasen förlorad"
+
+[labels.sv.model.lead.action.reopen]
+label = "Öppna igen"
+description = "Flytta tillbaka leaden till fasen ny"

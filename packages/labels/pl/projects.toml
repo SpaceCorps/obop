@@ -1,0 +1,156 @@
+[labels.pl.module]
+name = "Projekty"
+description = "Projekty, kamienie milowe i zadania z osobami przypisanymi, terminami i obiegiem statusów. Postęp śledzi się według statusu, a nie wylicza z nakładu pracy przy zadaniach."
+
+[labels.pl.model.projects_project]
+name = "Projekt"
+description = "Zbiór prac prowadzących do określonego celu"
+
+[labels.pl.model.projects_project.field.name]
+label = "Nazwa"
+description = "Nazwa projektu"
+
+[labels.pl.model.projects_project.field.code]
+label = "Kod"
+description = "Krótka referencja używana w raportach, na przykład WEB-24"
+
+[labels.pl.model.projects_project.field.project_manager]
+label = "Kierownik projektu"
+description = "Imię i nazwisko osoby odpowiedzialnej za projekt"
+
+[labels.pl.model.projects_project.field.start_on]
+label = "Data rozpoczęcia"
+description = "Planowana data rozpoczęcia (YYYY-MM-DD)"
+
+[labels.pl.model.projects_project.field.deadline]
+label = "Ostateczny termin"
+description = "Data, do której projekt musi być zakończony (YYYY-MM-DD)"
+
+[labels.pl.model.projects_project.field.budget]
+label = "Budżet"
+description = "Uzgodniony budżet projektu (w jednostkach podrzędnych waluty, np. groszach)"
+
+[labels.pl.model.projects_project.field.description]
+label = "Opis"
+description = "Cel i zakres projektu"
+
+[labels.pl.model.projects_project.field.state]
+label = "Status"
+description = "Status projektu: zaplanowane, aktywne, wykonane"
+
+[labels.pl.model.projects_project.field.state.options]
+planned = "Zaplanowane"
+active = "Aktywne"
+done = "Wykonane"
+
+[labels.pl.model.projects_project.action.start]
+label = "Rozpocznij"
+description = "Przenosi zaplanowany projekt do statusu aktywnego"
+
+[labels.pl.model.projects_project.action.finish]
+label = "Zakończ"
+description = "Oznacza aktywny projekt jako wykonany"
+
+[labels.pl.model.projects_project.action.reopen]
+label = "Otwórz ponownie"
+description = "Ponownie otwiera zakończony projekt"
+
+[labels.pl.model.projects_milestone]
+name = "Kamień milowy"
+description = "Punkt kontrolny w projekcie"
+
+[labels.pl.model.projects_milestone.field.project_id]
+label = "Projekt"
+description = "Projekt, do którego należy kamień milowy"
+
+[labels.pl.model.projects_milestone.field.name]
+label = "Nazwa"
+description = "Nazwa kamienia milowego, na przykład Projekt zatwierdzony"
+
+[labels.pl.model.projects_milestone.field.due_on]
+label = "Termin"
+description = "Data, do której należy osiągnąć kamień milowy (YYYY-MM-DD)"
+
+[labels.pl.model.projects_milestone.field.description]
+label = "Opis"
+description = "Co musi być spełnione, aby uznać kamień milowy za osiągnięty"
+
+[labels.pl.model.projects_milestone.field.state]
+label = "Status"
+description = "Status kamienia milowego: oczekujące, osiągnięte, nieosiągnięte"
+
+[labels.pl.model.projects_milestone.field.state.options]
+pending = "Oczekujące"
+reached = "Osiągnięte"
+missed = "Nieosiągnięte"
+
+[labels.pl.model.projects_milestone.action.reach]
+label = "Oznacz jako osiągnięte"
+description = "Oznacza oczekujący kamień milowy jako osiągnięty"
+
+[labels.pl.model.projects_milestone.action.miss]
+label = "Oznacz jako nieosiągnięte"
+description = "Rejestruje, że oczekujący kamień milowy nie został osiągnięty"
+
+[labels.pl.model.projects_task]
+name = "Zadanie"
+description = "Jednostka pracy w projekcie"
+
+[labels.pl.model.projects_task.field.title]
+label = "Tytuł"
+description = "Co trzeba zrobić"
+
+[labels.pl.model.projects_task.field.project_id]
+label = "Projekt"
+description = "Projekt, do którego należy zadanie; puste dla zadania prywatnego"
+
+[labels.pl.model.projects_task.field.milestone_id]
+label = "Kamień milowy"
+description = "Kamień milowy, do którego przyczynia się zadanie"
+
+[labels.pl.model.projects_task.field.assignee]
+label = "Osoba przypisana"
+description = "Imię i nazwisko osoby odpowiedzialnej"
+
+[labels.pl.model.projects_task.field.priority]
+label = "Priorytet"
+description = "Jak ważne jest zadanie: niski, normalny, wysoki"
+
+[labels.pl.model.projects_task.field.priority.options]
+low = "Niski"
+normal = "Normalny"
+high = "Wysoki"
+
+[labels.pl.model.projects_task.field.due_on]
+label = "Termin"
+description = "Data, do której należy wykonać zadanie (YYYY-MM-DD)"
+
+[labels.pl.model.projects_task.field.estimate_minutes]
+label = "Szacowany czas (min)"
+description = "Planowany nakład pracy w minutach"
+
+[labels.pl.model.projects_task.field.description]
+label = "Opis"
+description = "Szczegóły, kryteria akceptacji i linki"
+
+[labels.pl.model.projects_task.field.state]
+label = "Status"
+description = "Status zadania: do zrobienia, w toku, wykonane, anulowane"
+
+[labels.pl.model.projects_task.field.state.options]
+todo = "Do zrobienia"
+doing = "W toku"
+done = "Wykonane"
+cancelled = "Anulowane"
+
+[labels.pl.model.projects_task.action.begin]
+label = "Rozpocznij"
+description = "Rozpoczyna pracę nad zadaniem do zrobienia"
+
+[labels.pl.model.projects_task.action.complete]
+label = "Zakończ"
+description = "Oznacza zadanie w toku jako wykonane"
+
+[labels.pl.model.projects_task.action.cancel]
+label = "Anuluj"
+description = "Odrzuca zadanie, którego nigdy nie rozpoczęto"

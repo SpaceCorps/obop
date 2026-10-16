@@ -1,0 +1,106 @@
+[labels.pl.module]
+name = "Podpisy"
+description = "Szablony dokumentów i wnioski o podpis z obiegiem wersja robocza, wysłane, podpisane, odrzucone, wygasłe. Wniosek wskazuje podpisującego (dane osobowe) i przechowuje dowody podpisu jako referencje. Podpisany wniosek jest niezmienny tylko umownie: nie należy go edytować, a skrót dokumentu zapisuje, co podpisano. Wysłanie i zapis podpisu wymagają zatwierdzenia przez człowieka."
+
+[labels.pl.model.sign_template]
+name = "Szablon"
+description = "Dokument, który można wysłać do podpisu"
+
+[labels.pl.model.sign_template.field.name]
+label = "Nazwa"
+description = "Nazwa szablonu, na przykład Umowa o pracę"
+
+[labels.pl.model.sign_template.field.description]
+label = "Opis"
+description = "Do czego służy dokument i kto go podpisuje"
+
+[labels.pl.model.sign_template.field.body]
+label = "Treść"
+description = "Tekst dokumentu lub odwołanie do miejsca przechowywania pliku"
+
+[labels.pl.model.sign_template.field.signer_role]
+label = "Rola podpisującego"
+description = "Rola osoby podpisującej, na przykład Klient"
+
+[labels.pl.model.sign_template.field.active]
+label = "Aktywny"
+description = "Czy nowe wnioski mogą używać szablonu"
+
+[labels.pl.model.sign_request]
+name = "Wniosek o podpis"
+description = "Prośba, aby jedna osoba podpisała jeden dokument"
+
+[labels.pl.model.sign_request.field.template_id]
+label = "Szablon"
+description = "Dokument do podpisania"
+
+[labels.pl.model.sign_request.field.title]
+label = "Tytuł"
+description = "Temat widoczny dla podpisującego"
+
+[labels.pl.model.sign_request.field.message]
+label = "Wiadomość"
+description = "Wiadomość widoczna dla podpisującego we wniosku"
+
+[labels.pl.model.sign_request.field.signer_name]
+label = "Imię i nazwisko podpisującego"
+description = "Imię i nazwisko osoby, która musi podpisać"
+
+[labels.pl.model.sign_request.field.signer_email]
+label = "E-mail podpisującego"
+description = "Adres e-mail, na który wysyłany jest wniosek"
+
+[labels.pl.model.sign_request.field.sent_on]
+label = "Data wysłania"
+description = "Dzień wysłania wniosku (YYYY-MM-DD)"
+
+[labels.pl.model.sign_request.field.expires_on]
+label = "Data wygaśnięcia"
+description = "Ostatni dzień, w którym można podpisać wniosek (YYYY-MM-DD)"
+
+[labels.pl.model.sign_request.field.signed_on]
+label = "Data podpisania"
+description = "Dzień podpisania dokumentu (YYYY-MM-DD)"
+
+[labels.pl.model.sign_request.field.signer_ip]
+label = "IP podpisującego"
+description = "Adres IP, z którego złożono podpis (dowód)"
+
+[labels.pl.model.sign_request.field.signer_user_agent]
+label = "Przeglądarka podpisującego"
+description = "Przeglądarka użyta do złożenia podpisu (dowód)"
+
+[labels.pl.model.sign_request.field.signature_reference]
+label = "Referencja podpisu"
+description = "Miejsce przechowywania obrazu podpisu lub certyfikatu"
+
+[labels.pl.model.sign_request.field.document_hash]
+label = "Skrót dokumentu"
+description = "Skrót SHA-256 (szesnastkowo) podpisanego dokumentu, dowodzący, że nie zmieniono go później"
+
+[labels.pl.model.sign_request.field.state]
+label = "Status"
+description = "Status wniosku: wersja robocza, wysłane, podpisane, odrzucone, wygasłe"
+
+[labels.pl.model.sign_request.field.state.options]
+draft = "Wersja robocza"
+sent = "Wysłane"
+signed = "Podpisane"
+declined = "Odrzucone"
+expired = "Wygasłe"
+
+[labels.pl.model.sign_request.action.send]
+label = "Wyślij"
+description = "Wysyła wniosek do podpisującego"
+
+[labels.pl.model.sign_request.action.sign]
+label = "Podpisz"
+description = "Rejestruje, że podpisujący złożył podpis; od tej chwili rekord jest niezmienny umownie"
+
+[labels.pl.model.sign_request.action.decline]
+label = "Odrzuć"
+description = "Rejestruje, że podpisujący odmówił podpisu"
+
+[labels.pl.model.sign_request.action.expire]
+label = "Oznacz jako wygasłe"
+description = "Rejestruje, że wniosek wygasł bez podpisu"

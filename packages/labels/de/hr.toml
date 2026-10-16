@@ -1,0 +1,187 @@
+[labels.de.module]
+name = "Personal"
+description = "Mitarbeiter, Abteilungen und Abwesenheitsanträge. Personenbezogene Daten sind streng klassifiziert: Gehalt, Bankverbindung und Ausweisnummer sind nur für Führungskräfte sichtbar, Gesundheits- und Gewerkschaftsdaten nur für die Sonderlesegruppe."
+
+[labels.de.model.hr_department]
+name = "Abteilung"
+description = "Ein Team oder eine Abteilung des Unternehmens"
+
+[labels.de.model.hr_department.field.name]
+label = "Name"
+description = "Name der Abteilung"
+
+[labels.de.model.hr_department.field.head]
+label = "Leitung"
+description = "Name der Abteilungsleitung"
+
+[labels.de.model.hr_department.field.cost_centre]
+label = "Kostenstelle"
+description = "Kostenstellennummer, die das Finanzwesen verwendet"
+
+[labels.de.model.hr_employee]
+name = "Mitarbeiter"
+description = "Eine im Unternehmen beschäftigte Person"
+
+[labels.de.model.hr_employee.field.name]
+label = "Name"
+description = "Vollständiger Name"
+
+[labels.de.model.hr_employee.field.job_title]
+label = "Stellenbezeichnung"
+description = "Bezeichnung der Stelle"
+
+[labels.de.model.hr_employee.field.work_email]
+label = "E-Mail geschäftlich"
+description = "Geschäftliche E-Mail-Adresse"
+
+[labels.de.model.hr_employee.field.work_phone]
+label = "Telefon geschäftlich"
+description = "Geschäftliche Telefonnummer"
+
+[labels.de.model.hr_employee.field.department_id]
+label = "Abteilung"
+description = "Die Abteilung, zu der die Person gehört"
+
+[labels.de.model.hr_employee.field.reports_to_id]
+label = "Berichtet an"
+description = "Die direkte Führungskraft der Person"
+
+[labels.de.model.hr_employee.field.hired_on]
+label = "Eingestellt am"
+description = "Erster Arbeitstag (YYYY-MM-DD)"
+
+[labels.de.model.hr_employee.field.contract_type]
+label = "Vertragsart"
+description = "Art des Arbeitsvertrags: unbefristet, befristet, freiberuflich, Praktikum"
+
+[labels.de.model.hr_employee.field.contract_type.options]
+permanent = "Unbefristet"
+fixed_term = "Befristet"
+contractor = "Freiberuflich"
+intern = "Praktikum"
+
+[labels.de.model.hr_employee.field.private_email]
+label = "E-Mail privat"
+description = "Private E-Mail-Adresse"
+
+[labels.de.model.hr_employee.field.private_phone]
+label = "Telefon privat"
+description = "Private Telefonnummer"
+
+[labels.de.model.hr_employee.field.home_address]
+label = "Privatadresse"
+description = "Private Wohnadresse"
+
+[labels.de.model.hr_employee.field.birth_date]
+label = "Geburtsdatum"
+description = "Geburtsdatum (YYYY-MM-DD)"
+
+[labels.de.model.hr_employee.field.national_id]
+label = "Ausweisnummer"
+description = "Nationale Ausweis- oder Sozialversicherungsnummer"
+
+[labels.de.model.hr_employee.field.emergency_contact]
+label = "Notfallkontakt"
+description = "Name und Telefonnummer der Person, die im Notfall anzurufen ist"
+
+[labels.de.model.hr_employee.field.salary]
+label = "Gehalt"
+description = "Brutto-Jahresgehalt (kleinste Währungseinheit, z. B. Cent)"
+
+[labels.de.model.hr_employee.field.bank_iban]
+label = "Bank-IBAN"
+description = "Bankkonto, auf das das Gehalt gezahlt wird"
+
+[labels.de.model.hr_employee.field.union_member]
+label = "Gewerkschaftsmitglied"
+description = "Ob die Person Mitglied einer Gewerkschaft ist"
+
+[labels.de.model.hr_employee.field.work_permit_expiry]
+label = "Arbeitserlaubnis gültig bis"
+description = "Datum, an dem die Arbeitserlaubnis abläuft, für Nicht-Staatsangehörige (YYYY-MM-DD)"
+
+[labels.de.model.hr_employee.field.health_note]
+label = "Gesundheitshinweis"
+description = "Gesundheitliche Einschränkung oder Behinderung mit Bedeutung für den Arbeitsplatz"
+
+[labels.de.model.hr_employee.field.state]
+label = "Status"
+description = "Beschäftigungsstatus: Einarbeitung, aktiv, ausgeschieden"
+
+[labels.de.model.hr_employee.field.state.options]
+onboarding = "Einarbeitung"
+active = "Aktiv"
+offboarded = "Ausgeschieden"
+
+[labels.de.model.hr_employee.action.activate]
+label = "Aktivieren"
+description = "Die Einarbeitung abschließen und den Mitarbeiter als aktiv markieren"
+
+[labels.de.model.hr_employee.action.offboard]
+label = "Austritt erfassen"
+description = "Den Beschäftigungsdatensatz beenden; nur mit Entscheidung der Personalabteilung rückgängig zu machen"
+
+[labels.de.model.hr_leave_request]
+name = "Abwesenheitsantrag"
+description = "Ein Antrag auf freie Tage"
+
+[labels.de.model.hr_leave_request.field.employee_id]
+label = "Mitarbeiter"
+description = "Der Mitarbeiter, der freie Tage beantragt"
+
+[labels.de.model.hr_leave_request.field.leave_kind]
+label = "Abwesenheitsart"
+description = "Art der Abwesenheit: bezahlt, unbezahlt, Elternzeit, Bildung, Sonstiges"
+
+[labels.de.model.hr_leave_request.field.leave_kind.options]
+paid = "Bezahlt"
+unpaid = "Unbezahlt"
+parental = "Elternzeit"
+study = "Bildung"
+other = "Sonstiges"
+
+[labels.de.model.hr_leave_request.field.start_on]
+label = "Beginn"
+description = "Erster Abwesenheitstag (YYYY-MM-DD)"
+
+[labels.de.model.hr_leave_request.field.end_on]
+label = "Ende"
+description = "Letzter Abwesenheitstag (YYYY-MM-DD)"
+
+[labels.de.model.hr_leave_request.field.days]
+label = "Tage"
+description = "Beantragte Arbeitstage"
+
+[labels.de.model.hr_leave_request.field.reason]
+label = "Grund"
+description = "Warum die Abwesenheit beantragt wird"
+
+[labels.de.model.hr_leave_request.field.is_sick_leave]
+label = "Krankheitsbedingt"
+description = "Ob die Abwesenheit auf einer Krankheit beruht"
+
+[labels.de.model.hr_leave_request.field.medical_note]
+label = "Ärztliches Attest"
+description = "Verweis auf das ärztliche Attest, falls vorhanden"
+
+[labels.de.model.hr_leave_request.field.state]
+label = "Status"
+description = "Antragsstatus: Entwurf, beantragt, genehmigt, abgelehnt"
+
+[labels.de.model.hr_leave_request.field.state.options]
+draft = "Entwurf"
+requested = "Beantragt"
+approved = "Genehmigt"
+refused = "Abgelehnt"
+
+[labels.de.model.hr_leave_request.action.request]
+label = "Beantragen"
+description = "Den Antrag bei der Führungskraft einreichen"
+
+[labels.de.model.hr_leave_request.action.approve]
+label = "Genehmigen"
+description = "Eine beantragte Abwesenheit genehmigen (nur Führungskräfte)"
+
+[labels.de.model.hr_leave_request.action.refuse]
+label = "Ablehnen"
+description = "Eine beantragte Abwesenheit ablehnen (nur Führungskräfte)"

@@ -1,0 +1,118 @@
+[labels.es.module]
+name = "Compras"
+description = "Proveedores, pedidos de compra y líneas de pedido con un flujo de borrador, enviado, confirmado, recibido y cancelado. Los totales de los pedidos se introducen, no se suman a partir de las líneas."
+
+[labels.es.model.purchase_vendor]
+name = "Proveedor"
+description = "Condiciones de compra de un contacto al que compras"
+
+[labels.es.model.purchase_vendor.field.party_id]
+label = "Tercero"
+description = "La ficha de contacto del proveedor"
+
+[labels.es.model.purchase_vendor.field.vendor_reference]
+label = "Referencia del proveedor"
+description = "Tu número de cliente en este proveedor"
+
+[labels.es.model.purchase_vendor.field.payment_terms_days]
+label = "Plazo de pago (días)"
+description = "Días de plazo para pagar una factura"
+
+[labels.es.model.purchase_vendor.field.lead_time_days]
+label = "Plazo de entrega (días)"
+description = "Días habituales entre el pedido y la entrega"
+
+[labels.es.model.purchase_vendor.field.iban]
+label = "IBAN"
+description = "Cuenta bancaria en la que se paga al proveedor"
+
+[labels.es.model.purchase_vendor.field.active]
+label = "Activo"
+description = "Indica si todavía compras a este proveedor"
+
+[labels.es.model.purchase_order]
+name = "Pedido"
+description = "Una solicitud a un proveedor para que suministre bienes o servicios"
+
+[labels.es.model.purchase_order.field.reference]
+label = "Referencia"
+description = "Número de pedido impreso en el documento"
+
+[labels.es.model.purchase_order.field.vendor_id]
+label = "Proveedor"
+description = "El proveedor al que se hace el pedido"
+
+[labels.es.model.purchase_order.field.ordered_on]
+label = "Fecha del pedido"
+description = "Fecha en que se hizo el pedido (YYYY-MM-DD)"
+
+[labels.es.model.purchase_order.field.expected_on]
+label = "Fecha prevista"
+description = "Fecha en que se esperan los bienes (YYYY-MM-DD)"
+
+[labels.es.model.purchase_order.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217, por ejemplo EUR"
+
+[labels.es.model.purchase_order.field.total]
+label = "Total"
+description = "Total del pedido acordado con el proveedor (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.purchase_order.field.notes]
+label = "Notas"
+description = "Instrucciones de entrega y observaciones para el proveedor"
+
+[labels.es.model.purchase_order.field.state]
+label = "Estado"
+description = "Estado del pedido: borrador, enviado, confirmado, recibido, cancelado"
+
+[labels.es.model.purchase_order.field.state.options]
+draft = "Borrador"
+sent = "Enviado"
+confirmed = "Confirmado"
+received = "Recibido"
+cancelled = "Cancelado"
+
+[labels.es.model.purchase_order.action.send]
+label = "Enviar"
+description = "Enviar un pedido en borrador al proveedor como solicitud de presupuesto"
+
+[labels.es.model.purchase_order.action.confirm]
+label = "Confirmar"
+description = "Comprometer el pedido con el proveedor (solo responsables)"
+
+[labels.es.model.purchase_order.action.receive]
+label = "Recibir"
+description = "Registrar que llegó la mercancía"
+
+[labels.es.model.purchase_order.action.cancel]
+label = "Cancelar"
+description = "Cancelar un pedido que aún no se envió"
+
+[labels.es.model.purchase_order_line]
+name = "Línea de pedido"
+description = "Un producto o servicio de un pedido de compra"
+
+[labels.es.model.purchase_order_line.field.order_id]
+label = "Pedido"
+description = "El pedido al que pertenece la línea"
+
+[labels.es.model.purchase_order_line.field.product_id]
+label = "Producto"
+description = "El producto pedido"
+
+[labels.es.model.purchase_order_line.field.description]
+label = "Descripción"
+description = "Texto para el proveedor si es distinto del nombre del producto"
+
+[labels.es.model.purchase_order_line.field.quantity]
+label = "Cantidad"
+description = "Unidades pedidas"
+
+[labels.es.model.purchase_order_line.field.unit_price]
+label = "Precio unitario"
+description = "Precio acordado por unidad (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.purchase_order_line.field.received_quantity]
+label = "Cantidad recibida"
+description = "Unidades recibidas hasta ahora"

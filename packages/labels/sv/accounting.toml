@@ -1,0 +1,324 @@
+[labels.sv.module]
+name = "Bokföring"
+description = "Kontoplan, verifikationsserier, skattesatser, verifikationer med debet- och kreditrader, räkenskapsår, perioder och kontoutdragsrader. Belopp anges i valutans minsta enhet, skattesatser i baspunkter (2000 är 20,00 procent). Inget beräknas automatiskt. Bokföring samt stängning av period eller räkenskapsår kräver mänskligt godkännande; agenter får bara föreslå."
+
+[labels.sv.model.accounting_account]
+name = "Konto"
+description = "Ett konto i kontoplanen"
+
+[labels.sv.model.accounting_account.field.code]
+label = "Kod"
+description = "Kontonummer som det används i kontoplanen, till exempel 1510"
+
+[labels.sv.model.accounting_account.field.name]
+label = "Namn"
+description = "Kontonamn, till exempel Kundfordringar"
+
+[labels.sv.model.accounting_account.field.account_type]
+label = "Kontotyp"
+description = "Kontotyp: asset_receivable, asset_cash, asset_current, asset_fixed, liability_payable, liability_current, liability_non_current, equity, income, income_other, expense, expense_direct_cost"
+
+[labels.sv.model.accounting_account.field.account_type.options]
+asset_receivable = "Kundfordran"
+asset_cash = "Kassa och bank"
+asset_current = "Omsättningstillgång"
+asset_fixed = "Anläggningstillgång"
+liability_payable = "Leverantörsskuld"
+liability_current = "Kortfristig skuld"
+liability_non_current = "Långfristig skuld"
+equity = "Eget kapital"
+income = "Intäkt"
+income_other = "Övrig intäkt"
+expense = "Kostnad"
+expense_direct_cost = "Direkt kostnad"
+
+[labels.sv.model.accounting_account.field.reconcile]
+label = "Avstämning"
+description = "Om öppna poster på kontot kan stämmas av (kundfordringar, leverantörsskulder, bankkonton för genomgångsposter)"
+
+[labels.sv.model.accounting_account.field.deprecated]
+label = "Utfasat"
+description = "Om kontot är stängt för nya bokningar"
+
+[labels.sv.model.accounting_account.field.note]
+label = "Anteckning"
+description = "Interna kommentarer om hur kontot används"
+
+[labels.sv.model.accounting_journal]
+name = "Verifikationsserie"
+description = "En serie som samlar verifikationer av ett slag (försäljning, inköp, bank, kassa, övrigt)"
+
+[labels.sv.model.accounting_journal.field.name]
+label = "Namn"
+description = "Seriens namn, till exempel Kundfakturor"
+
+[labels.sv.model.accounting_journal.field.code]
+label = "Kod"
+description = "Kort kod som används i verifikationsnummer, till exempel KF"
+
+[labels.sv.model.accounting_journal.field.kind]
+label = "Typ"
+description = "Vad serien registrerar: försäljning, inköp, kassa, bank, allmänt"
+
+[labels.sv.model.accounting_journal.field.kind.options]
+sale = "Försäljning"
+purchase = "Inköp"
+cash = "Kassa"
+bank = "Bank"
+general = "Allmän"
+
+[labels.sv.model.accounting_journal.field.default_account_id]
+label = "Standardkonto"
+description = "Standardkonto för verifikationer i serien (bankkontot för en bankserie)"
+
+[labels.sv.model.accounting_journal.field.currency]
+label = "Valuta"
+description = "Seriens valutakod enligt ISO 4217, till exempel SEK; tomt betyder företagets valuta"
+
+[labels.sv.model.accounting_journal.field.active]
+label = "Aktiv"
+description = "Om serien fortfarande kan ta emot verifikationer"
+
+[labels.sv.model.accounting_tax]
+name = "Skatt"
+description = "En skattesats som verifikationsrader kan hänvisa till"
+
+[labels.sv.model.accounting_tax.field.name]
+label = "Namn"
+description = "Skattens namn, till exempel Moms 25 % försäljning"
+
+[labels.sv.model.accounting_tax.field.rate_bp]
+label = "Sats (baspunkter)"
+description = "Sats i baspunkter: 2000 betyder 20,00 procent, 550 betyder 5,50 procent"
+
+[labels.sv.model.accounting_tax.field.scope]
+label = "Tillämpning"
+description = "Var skatten gäller: försäljning, inköp, ingen"
+
+[labels.sv.model.accounting_tax.field.scope.options]
+sales = "Försäljning"
+purchases = "Inköp"
+none = "Ingen"
+
+[labels.sv.model.accounting_tax.field.price_included]
+label = "Ingår i priset"
+description = "Om priserna redan inkluderar denna skatt"
+
+[labels.sv.model.accounting_tax.field.tax_account_id]
+label = "Skattekonto"
+description = "Konto som skattebeloppet bokförs på"
+
+[labels.sv.model.accounting_tax.field.active]
+label = "Aktiv"
+description = "Om skatten fortfarande kan väljas på nya rader"
+
+[labels.sv.model.accounting_fiscal_year]
+name = "Räkenskapsår"
+description = "Ett räkenskapsår som öppnas och stängs som en helhet"
+
+[labels.sv.model.accounting_fiscal_year.field.name]
+label = "Namn"
+description = "Räkenskapsårets namn, till exempel RÅ2026"
+
+[labels.sv.model.accounting_fiscal_year.field.start_on]
+label = "Startdatum"
+description = "Räkenskapsårets första dag (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.accounting_fiscal_year.field.end_on]
+label = "Slutdatum"
+description = "Räkenskapsårets sista dag (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.accounting_fiscal_year.field.state]
+label = "Status"
+description = "Räkenskapsårets status: öppet, stängt"
+
+[labels.sv.model.accounting_fiscal_year.field.state.options]
+open = "Öppet"
+closed = "Stängt"
+
+[labels.sv.model.accounting_fiscal_year.action.close]
+label = "Stäng"
+description = "Stäng räkenskapsåret så att inget mer bokförs i det (endast godkännare)"
+
+[labels.sv.model.accounting_fiscal_year.action.reopen]
+label = "Öppna igen"
+description = "Öppna ett stängt räkenskapsår för att rätta det (endast godkännare)"
+
+[labels.sv.model.accounting_period]
+name = "Period"
+description = "En bokföringsperiod (vanligtvis en månad) inom ett räkenskapsår"
+
+[labels.sv.model.accounting_period.field.fiscal_year_id]
+label = "Räkenskapsår"
+description = "Räkenskapsåret som perioden tillhör"
+
+[labels.sv.model.accounting_period.field.name]
+label = "Namn"
+description = "Periodens namn, till exempel 2026-03"
+
+[labels.sv.model.accounting_period.field.start_on]
+label = "Startdatum"
+description = "Periodens första dag (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.accounting_period.field.end_on]
+label = "Slutdatum"
+description = "Periodens sista dag (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.accounting_period.field.state]
+label = "Status"
+description = "Periodens status: öppen, stängd"
+
+[labels.sv.model.accounting_period.field.state.options]
+open = "Öppen"
+closed = "Stängd"
+
+[labels.sv.model.accounting_period.action.close]
+label = "Stäng"
+description = "Stäng perioden för vidare bokföring (endast godkännare)"
+
+[labels.sv.model.accounting_period.action.reopen]
+label = "Öppna igen"
+description = "Öppna en stängd period (endast godkännare)"
+
+[labels.sv.model.accounting_move]
+name = "Verifikation"
+description = "En verifikation: en daterad uppsättning debet- och kreditrader i en verifikationsserie"
+
+[labels.sv.model.accounting_move.field.journal_id]
+label = "Verifikationsserie"
+description = "Serien som verifikationen tillhör"
+
+[labels.sv.model.accounting_move.field.date]
+label = "Datum"
+description = "Verifikationens bokföringsdatum (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.accounting_move.field.number]
+label = "Nummer"
+description = "Verifikationsnummer som KF/2026/0001. Fritext: paket kan inte generera nummerserier, så den som bokför verifikationen anger nästa nummer manuellt och håller serien sammanhängande"
+
+[labels.sv.model.accounting_move.field.reference]
+label = "Referens"
+description = "Extern referens, till exempel leverantörens fakturanummer"
+
+[labels.sv.model.accounting_move.field.partner_id]
+label = "Partner"
+description = "Kontakten som verifikationen gäller"
+
+[labels.sv.model.accounting_move.field.narration]
+label = "Verifikationstext"
+description = "Anteckning i fritext om verifikationen"
+
+[labels.sv.model.accounting_move.field.state]
+label = "Status"
+description = "Verifikationens status: utkast, bokförd, annullerad, återförd"
+
+[labels.sv.model.accounting_move.field.state.options]
+draft = "Utkast"
+posted = "Bokförd"
+cancelled = "Annullerad"
+reversed = "Återförd"
+
+[labels.sv.model.accounting_move.action.post]
+label = "Bokför"
+description = "Bokför en verifikation i utkast i huvudboken (endast godkännare; balansen mellan debet och kredit kontrolleras inte)"
+
+[labels.sv.model.accounting_move.action.cancel]
+label = "Annullera"
+description = "Annullera en verifikation i utkast som aldrig bokförts"
+
+[labels.sv.model.accounting_move.action.reverse]
+label = "Återför"
+description = "Markera en bokförd verifikation som återförd; motverifikationen bokförs separat (endast godkännare)"
+
+[labels.sv.model.accounting_move_line]
+name = "Verifikationsrad"
+description = "En debet- eller kreditrad i en verifikation"
+
+[labels.sv.model.accounting_move_line.field.move_id]
+label = "Verifikation"
+description = "Verifikationen som raden tillhör"
+
+[labels.sv.model.accounting_move_line.field.account_id]
+label = "Konto"
+description = "Kontot som raden bokförs på"
+
+[labels.sv.model.accounting_move_line.field.partner_id]
+label = "Partner"
+description = "Kontakten som raden gäller"
+
+[labels.sv.model.accounting_move_line.field.label]
+label = "Etikett"
+description = "Radbeskrivning"
+
+[labels.sv.model.accounting_move_line.field.debit]
+label = "Debet"
+description = "Debetbelopp i valutans minsta enhet; 0 när raden är en kredit"
+
+[labels.sv.model.accounting_move_line.field.credit]
+label = "Kredit"
+description = "Kreditbelopp i valutans minsta enhet; 0 när raden är en debet"
+
+[labels.sv.model.accounting_move_line.field.tax_id]
+label = "Skatt"
+description = "Skatt som raden bär, om någon"
+
+[labels.sv.model.accounting_move_line.field.due_on]
+label = "Förfallodatum"
+description = "Förfallodatum för kundfordrings- och leverantörsskuldsrader (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.accounting_move_line.field.reconciled]
+label = "Avstämd"
+description = "Om raden har matchats mot en betalning"
+
+[labels.sv.model.accounting_bank_statement_line]
+name = "Kontoutdragsrad"
+description = "En rad i ett kontoutdrag som väntar på att matchas mot verifikationer"
+
+[labels.sv.model.accounting_bank_statement_line.field.journal_id]
+label = "Verifikationsserie"
+description = "Bankserien som kontoutdraget tillhör"
+
+[labels.sv.model.accounting_bank_statement_line.field.date]
+label = "Datum"
+description = "Bokföringsdatum hos banken (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.accounting_bank_statement_line.field.label]
+label = "Etikett"
+description = "Betalningsreferens eller beskrivning som banken anger den"
+
+[labels.sv.model.accounting_bank_statement_line.field.amount]
+label = "Belopp"
+description = "Belopp i valutans minsta enhet; positivt för inbetalning, negativt för utbetalning"
+
+[labels.sv.model.accounting_bank_statement_line.field.counterparty_name]
+label = "Motpartens namn"
+description = "Betalarens eller mottagarens namn som banken anger det"
+
+[labels.sv.model.accounting_bank_statement_line.field.counterparty_iban]
+label = "Motpartens IBAN"
+description = "Betalarens eller mottagarens bankkonto"
+
+[labels.sv.model.accounting_bank_statement_line.field.move_line_id]
+label = "Verifikationsrad"
+description = "Verifikationsraden som kontoutdragsraden matchades mot"
+
+[labels.sv.model.accounting_bank_statement_line.field.state]
+label = "Status"
+description = "Matchningsstatus: ej matchad, matchad, avstämd"
+
+[labels.sv.model.accounting_bank_statement_line.field.state.options]
+unmatched = "Ej matchad"
+matched = "Matchad"
+reconciled = "Avstämd"
+
+[labels.sv.model.accounting_bank_statement_line.action.match]
+label = "Matcha"
+description = "Registrera att raden motsvarar en verifikationsrad"
+
+[labels.sv.model.accounting_bank_statement_line.action.reconcile]
+label = "Stäm av"
+description = "Stäm av en matchad rad (endast chef)"
+
+[labels.sv.model.accounting_bank_statement_line.action.unmatch]
+label = "Ta bort matchning"
+description = "Ångra en matchning som blev fel"

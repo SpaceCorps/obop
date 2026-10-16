@@ -1,0 +1,140 @@
+[labels.fr.module]
+name = "Interventions"
+description = "Interventions sur site chez des clients, réalisées par un technicien : planifiée, en route, en cours, terminée ou annulée. Une intervention enregistre le client, le site, le technicien, le jour et l’heure de début, les pièces utilisées et la signature éventuelle du client. Données personnelles incluses. Nécessite les packages Ressources humaines et Produits."
+
+[labels.fr.model.field_service_job]
+name = "Intervention"
+description = "Une intervention sur site pour un client"
+
+[labels.fr.model.field_service_job.field.name]
+label = "Nom"
+description = "Titre court de l’intervention, par exemple Remplacer la pompe de la chaudière"
+
+[labels.fr.model.field_service_job.field.customer_id]
+label = "Client"
+description = "Le client concerné par l’intervention"
+
+[labels.fr.model.field_service_job.field.site_name]
+label = "Nom du site"
+description = "Nom du site, par exemple Entrepôt principal"
+
+[labels.fr.model.field_service_job.field.site_address]
+label = "Adresse du site"
+description = "Adresse où le travail est réalisé ; souvent le domicile d’une personne"
+
+[labels.fr.model.field_service_job.field.site_city]
+label = "Ville du site"
+description = "Ville du site"
+
+[labels.fr.model.field_service_job.field.site_postcode]
+label = "Code postal du site"
+description = "Code postal du site"
+
+[labels.fr.model.field_service_job.field.site_country]
+label = "Pays du site"
+description = "Pays du site"
+
+[labels.fr.model.field_service_job.field.site_contact_name]
+label = "Contact sur site"
+description = "Nom de la personne à rencontrer sur place"
+
+[labels.fr.model.field_service_job.field.site_contact_phone]
+label = "Téléphone du contact sur site"
+description = "Numéro de téléphone de la personne à rencontrer sur place"
+
+[labels.fr.model.field_service_job.field.technician_id]
+label = "Technicien"
+description = "Technicien affecté à l’intervention"
+
+[labels.fr.model.field_service_job.field.priority]
+label = "Priorité"
+description = "Degré d’urgence de l’intervention : basse, normale, haute, urgente"
+
+[labels.fr.model.field_service_job.field.priority.options]
+low = "Basse"
+normal = "Normale"
+high = "Haute"
+urgent = "Urgente"
+
+[labels.fr.model.field_service_job.field.description]
+label = "Description"
+description = "Ce qu’il faut faire et ce que le client a signalé"
+
+[labels.fr.model.field_service_job.field.scheduled_on]
+label = "Planifié le"
+description = "Jour prévu de la visite (YYYY-MM-DD)"
+
+[labels.fr.model.field_service_job.field.scheduled_start_minute]
+label = "Minute de début prévue"
+description = "Début prévu en minutes depuis minuit (540 correspond à 09:00)"
+
+[labels.fr.model.field_service_job.field.planned_minutes]
+label = "Minutes prévues"
+description = "Durée prévue en minutes"
+
+[labels.fr.model.field_service_job.field.signature_required]
+label = "Signature requise"
+description = "Indique si le client doit valider les travaux par sa signature avant qu’ils comptent comme terminés"
+
+[labels.fr.model.field_service_job.field.signed_by]
+label = "Signé par"
+description = "Nom de la personne qui a validé les travaux"
+
+[labels.fr.model.field_service_job.field.signed_on]
+label = "Signé le"
+description = "Jour où le client a validé les travaux (YYYY-MM-DD)"
+
+[labels.fr.model.field_service_job.field.work_report]
+label = "Rapport d’intervention"
+description = "Ce qui a été fait, rédigé par le technicien"
+
+[labels.fr.model.field_service_job.field.state]
+label = "Statut"
+description = "Statut de l’intervention : planifiée, en route, en cours, terminée, annulée"
+
+[labels.fr.model.field_service_job.field.state.options]
+scheduled = "Planifiée"
+en_route = "En route"
+in_progress = "En cours"
+done = "Terminée"
+cancelled = "Annulée"
+
+[labels.fr.model.field_service_job.action.depart]
+label = "Partir"
+description = "Le technicien est en chemin"
+
+[labels.fr.model.field_service_job.action.start]
+label = "Démarrer"
+description = "Le technicien est arrivé et a commencé le travail"
+
+[labels.fr.model.field_service_job.action.complete]
+label = "Terminer"
+description = "Termine l’intervention ; si une signature est requise, enregistrez d’abord signed_by et signed_on"
+
+[labels.fr.model.field_service_job.action.cancel]
+label = "Annuler"
+description = "Annule une intervention qui n’a pas commencé"
+
+[labels.fr.model.field_service_part]
+name = "Pièce"
+description = "Une pièce ou un produit utilisé lors d’une intervention"
+
+[labels.fr.model.field_service_part.field.job_id]
+label = "Intervention"
+description = "L’intervention sur laquelle la pièce a été utilisée"
+
+[labels.fr.model.field_service_part.field.product_id]
+label = "Produit"
+description = "Le produit qui a été utilisé"
+
+[labels.fr.model.field_service_part.field.quantity]
+label = "Quantité"
+description = "Nombre d’unités utilisées"
+
+[labels.fr.model.field_service_part.field.unit_price]
+label = "Prix unitaire"
+description = "Prix par unité facturé au client (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.field_service_part.field.note]
+label = "Note"
+description = "Remarque sur la pièce, par exemple le numéro de série"

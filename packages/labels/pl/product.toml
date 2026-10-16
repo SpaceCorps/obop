@@ -1,0 +1,22 @@
+[labels.pl.module]
+name = "Produkty"
+
+[labels.pl.model.product]
+name = "Produkt"
+description = "Towar lub usługa sprzedawana przez firmę"
+
+[labels.pl.model.product.field.name]
+label = "Nazwa"
+description = "Nazwa produktu"
+
+[labels.pl.model.product.field.sku]
+label = "SKU"
+description = "Jednostka magazynowa (SKU)"
+
+[labels.pl.model.product.field.list_price_minor]
+label = "Cena katalogowa"
+description = "Cena katalogowa w jednostkach podrzędnych waluty"
+
+[labels.pl.model.product.field.cost_minor]
+label = "Koszt"
+description = "Koszt jednostkowy w jednostkach podrzędnych waluty"

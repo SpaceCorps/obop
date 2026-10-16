@@ -1,0 +1,22 @@
+[labels.sv.module]
+name = "Produkter"
+
+[labels.sv.model.product]
+name = "Produkt"
+description = "En vara eller tjänst som företaget säljer"
+
+[labels.sv.model.product.field.name]
+label = "Namn"
+description = "Produktnamn"
+
+[labels.sv.model.product.field.sku]
+label = "Artikelnummer (SKU)"
+description = "Artikelnummer för lagerhållning"
+
+[labels.sv.model.product.field.list_price_minor]
+label = "Listpris"
+description = "Listpris i valutans minsta enhet"
+
+[labels.sv.model.product.field.cost_minor]
+label = "Kostnad"
+description = "Kostnad per enhet i valutans minsta enhet"

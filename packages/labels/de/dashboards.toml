@@ -1,0 +1,78 @@
+[labels.de.module]
+name = "Dashboards"
+description = "Dashboards und ihre Kacheln, als Daten gespeichert und von einer Oberfläche darzustellen. Eine Kachel legt fest: Darstellung (kpi, bar, line, pie, table), zu lesendes Modell, Kennzahlfeld, Aggregation (Anzahl oder Summe), Gruppierung, Filter und Position. Das Paket speichert nur die Definition; es prüft nicht, ob Modell oder Felder existieren, und berechnet nichts."
+
+[labels.de.model.dashboards_dashboard]
+name = "Dashboard"
+description = "Ein Dashboard: eine betitelte, geordnete Sammlung von Kacheln"
+
+[labels.de.model.dashboards_dashboard.field.title]
+label = "Titel"
+description = "Titel des Dashboards, zum Beispiel Verkaufsübersicht"
+
+[labels.de.model.dashboards_dashboard.field.owner]
+label = "Eigentümer"
+description = "Name der Person, der das Dashboard gehört"
+
+[labels.de.model.dashboards_dashboard.field.description]
+label = "Beschreibung"
+description = "Was das Dashboard zeigt und für wen"
+
+[labels.de.model.dashboards_dashboard.field.shared]
+label = "Geteilt"
+description = "Ob alle mit Zugriff auf die App Dashboards es sehen oder nur der Eigentümer"
+
+[labels.de.model.dashboards_dashboard.field.position]
+label = "Position"
+description = "Reihenfolge unter den Dashboards, niedrigste zuerst"
+
+[labels.de.model.dashboards_widget]
+name = "Kachel"
+description = "Eine Kachel auf einem Dashboard, festgelegt durch das zu lesende Modell und die Art der Aggregation"
+
+[labels.de.model.dashboards_widget.field.dashboard_id]
+label = "Dashboard"
+description = "Das Dashboard, auf dem die Kachel liegt"
+
+[labels.de.model.dashboards_widget.field.title]
+label = "Titel"
+description = "Titel der Kachel, zum Beispiel Bezahlte Aufträge"
+
+[labels.de.model.dashboards_widget.field.kind]
+label = "Art"
+description = "Wie die Kachel dargestellt wird: kpi, bar, line, pie, table"
+
+[labels.de.model.dashboards_widget.field.kind.options]
+kpi = "KPI"
+bar = "Balken"
+line = "Linie"
+pie = "Kreis"
+table = "Tabelle"
+
+[labels.de.model.dashboards_widget.field.model_name]
+label = "Modellname"
+description = "Modell, das die Kachel liest, zum Beispiel sale_order"
+
+[labels.de.model.dashboards_widget.field.measure_field]
+label = "Kennzahlfeld"
+description = "Zu aggregierendes Feld: ein Zahlen- oder Geldfeld des Modells; leer beim Zählen"
+
+[labels.de.model.dashboards_widget.field.aggregate]
+label = "Aggregation"
+description = "Wie Datensätze zusammengefasst werden: Anzahl oder Summe"
+
+[labels.de.model.dashboards_widget.field.aggregate.options]
+count = "Anzahl"
+sum = "Summe"
+
+[labels.de.model.dashboards_widget.field.group_by]
+label = "Gruppieren nach"
+description = "Feld, nach dem das Ergebnis aufgeteilt wird (Auswahl-, Referenz- oder Datumsfeld); leer für einen Wert"
+
+[labels.de.model.dashboards_widget.field.filter]
+label = "Filter"
+description = "JSON-Objekt aus Feldnamen und exakten Werten, denen Datensätze entsprechen müssen, zum Beispiel state mit dem Wert paid; leer bedeutet alle Datensätze"
+
+[labels.de.model.dashboards_widget.field.position]
+label = "Position"
+description = "Reihenfolge der Kachel auf dem Dashboard, niedrigste zuerst"

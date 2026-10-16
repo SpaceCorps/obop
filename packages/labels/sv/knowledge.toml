@@ -1,0 +1,65 @@
+[labels.sv.module]
+name = "Kunskapsbas"
+description = "En wiki: artiklar ordnade i ett träd via en överordnad artikel, med flödet utkast, publicerad, arkiverad, en synlighetsinställning och taggar. Synlighet är en etikett för gränssnittet och för människor att följa; plattformen har ännu inga behörigheter per post, så alla med kunskapsbasens grupper kan läsa alla artiklar."
+
+[labels.sv.model.knowledge_article]
+name = "Artikel"
+description = "En artikel i kunskapsbasen"
+
+[labels.sv.model.knowledge_article.field.title]
+label = "Titel"
+description = "Artikelns titel"
+
+[labels.sv.model.knowledge_article.field.parent_id]
+label = "Överordnad"
+description = "Artikeln som den här ligger under; tomt för en artikel på översta nivån"
+
+[labels.sv.model.knowledge_article.field.body]
+label = "Brödtext"
+description = "Artikelns innehåll (Markdown)"
+
+[labels.sv.model.knowledge_article.field.visibility]
+label = "Synlighet"
+description = "Vem artikeln är avsedd för: privat, arbetsyta, offentlig"
+
+[labels.sv.model.knowledge_article.field.visibility.options]
+private = "Privat"
+workspace = "Arbetsyta"
+public = "Offentlig"
+
+[labels.sv.model.knowledge_article.field.tags]
+label = "Taggar"
+description = "Kommaseparerade taggar, till exempel introduktion,hr"
+
+[labels.sv.model.knowledge_article.field.author_name]
+label = "Författarens namn"
+description = "Författarens namn"
+
+[labels.sv.model.knowledge_article.field.sequence]
+label = "Ordningsföljd"
+description = "Ordning bland artiklar på samma nivå, lägst först"
+
+[labels.sv.model.knowledge_article.field.published_on]
+label = "Publicerad den"
+description = "Dagen då artikeln publicerades (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.knowledge_article.field.state]
+label = "Status"
+description = "Artikelns status: utkast, publicerad, arkiverad"
+
+[labels.sv.model.knowledge_article.field.state.options]
+draft = "Utkast"
+published = "Publicerad"
+archived = "Arkiverad"
+
+[labels.sv.model.knowledge_article.action.publish]
+label = "Publicera"
+description = "Publicera artikeln (endast chef)"
+
+[labels.sv.model.knowledge_article.action.unpublish]
+label = "Avpublicera"
+description = "Flytta artikeln tillbaka till utkast"
+
+[labels.sv.model.knowledge_article.action.archive]
+label = "Arkivera"
+description = "Arkivera en artikel som är inaktuell"

@@ -1,0 +1,98 @@
+[labels.sv.module]
+name = "Tillverkning"
+description = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar. Komponenternas lagersaldo förbrukas inte automatiskt."
+
+[labels.sv.model.manufacturing_bom]
+name = "Stycklista"
+description = "Ett recept: komponenterna som behövs för att tillverka en produkt"
+
+[labels.sv.model.manufacturing_bom.field.product_id]
+label = "Produkt"
+description = "Färdigprodukten som receptet tillverkar"
+
+[labels.sv.model.manufacturing_bom.field.name]
+label = "Namn"
+description = "Receptets namn, till exempel Standardmontering"
+
+[labels.sv.model.manufacturing_bom.field.quantity]
+label = "Antal"
+description = "Antal enheter färdigprodukt som en tillverkningsomgång ger"
+
+[labels.sv.model.manufacturing_bom.field.instructions]
+label = "Instruktioner"
+description = "Monteringsanvisningar för verkstadsgolvet"
+
+[labels.sv.model.manufacturing_bom.field.active]
+label = "Aktiv"
+description = "Om receptet kan användas för nya order"
+
+[labels.sv.model.manufacturing_bom_line]
+name = "Stycklisterad"
+description = "En komponent i en stycklista"
+
+[labels.sv.model.manufacturing_bom_line.field.bom_id]
+label = "Stycklista"
+description = "Receptet som komponenten tillhör"
+
+[labels.sv.model.manufacturing_bom_line.field.component_id]
+label = "Komponent"
+description = "Produkten som förbrukas"
+
+[labels.sv.model.manufacturing_bom_line.field.quantity]
+label = "Antal"
+description = "Antal enheter av komponenten som används per omgång"
+
+[labels.sv.model.manufacturing_order]
+name = "Tillverkningsorder"
+description = "En instruktion att tillverka ett antal av en produkt"
+
+[labels.sv.model.manufacturing_order.field.reference]
+label = "Referens"
+description = "Ordernummer, till exempel TO-0042"
+
+[labels.sv.model.manufacturing_order.field.bom_id]
+label = "Stycklista"
+description = "Receptet som ska följas"
+
+[labels.sv.model.manufacturing_order.field.quantity]
+label = "Antal"
+description = "Antal enheter färdigprodukt som ska tillverkas"
+
+[labels.sv.model.manufacturing_order.field.planned_on]
+label = "Planerat datum"
+description = "Datum då tillverkningen ska starta (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.manufacturing_order.field.deadline]
+label = "Tidsfrist"
+description = "Datum då varorna behövs (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.manufacturing_order.field.responsible]
+label = "Ansvarig"
+description = "Namn på personen som leder omgången"
+
+[labels.sv.model.manufacturing_order.field.state]
+label = "Status"
+description = "Orderstatus: utkast, bekräftad, pågår, klar, annullerad"
+
+[labels.sv.model.manufacturing_order.field.state.options]
+draft = "Utkast"
+confirmed = "Bekräftad"
+in_progress = "Pågår"
+done = "Klar"
+cancelled = "Annullerad"
+
+[labels.sv.model.manufacturing_order.action.confirm]
+label = "Bekräfta"
+description = "Bekräfta en order i utkast så att tillverkningen kan planeras"
+
+[labels.sv.model.manufacturing_order.action.start]
+label = "Starta"
+description = "Starta tillverkningen av en bekräftad order"
+
+[labels.sv.model.manufacturing_order.action.finish]
+label = "Avsluta"
+description = "Markera tillverkningen som avslutad"
+
+[labels.sv.model.manufacturing_order.action.cancel]
+label = "Annullera"
+description = "Annullera en order som inte har bekräftats"

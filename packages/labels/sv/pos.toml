@@ -1,0 +1,204 @@
+[labels.sv.module]
+name = "Kassa"
+description = "Butikskassor: en kassakonfiguration, kassapass med kassakontroll som öppnas och stängs, order med rader och betalningsrader per betalsätt. Återbetalning och stängning av kassapass kräver en chefs godkännande; agenter får bara föreslå dem. Totaler, växel och kassadifferenser anges, de beräknas inte. Kortnummer får aldrig lagras; spara bara betaltjänstens referens. Kräver paketet Produkter."
+
+[labels.sv.model.pos_config]
+name = "Kassa"
+description = "En försäljningsplats (en kassa eller en butik) och dess regler"
+
+[labels.sv.model.pos_config.field.name]
+label = "Namn"
+description = "Kassans eller butikens namn, till exempel Butiken på Storgatan"
+
+[labels.sv.model.pos_config.field.currency]
+label = "Valuta"
+description = "Valutakod enligt ISO 4217, till exempel SEK"
+
+[labels.sv.model.pos_config.field.receipt_header]
+label = "Kvittohuvud"
+description = "Text som skrivs ut överst på kvitton"
+
+[labels.sv.model.pos_config.field.cash_control]
+label = "Kassakontroll"
+description = "Om kassapass måste räkna kontanterna i kassalådan vid öppning och stängning"
+
+[labels.sv.model.pos_config.field.default_opening_cash]
+label = "Ingående kassa (standard)"
+description = "Kontanter som normalt lämnas kvar i kassalådan över natten (valutans minsta enhet)"
+
+[labels.sv.model.pos_config.field.allow_refunds]
+label = "Tillåt återbetalningar"
+description = "Om kassörer får föreslå återbetalningar vid den här kassan"
+
+[labels.sv.model.pos_config.field.active]
+label = "Aktiv"
+description = "Om kassan används"
+
+[labels.sv.model.pos_session]
+name = "Kassapass"
+description = "Ett säljpass vid en kassa, från öppning till stängning av kassalådan"
+
+[labels.sv.model.pos_session.field.config_id]
+label = "Kassa"
+description = "Kassan som kassapasset tillhör"
+
+[labels.sv.model.pos_session.field.cashier]
+label = "Kassör"
+description = "Namn på kassören som öppnade kassapasset"
+
+[labels.sv.model.pos_session.field.opened_on]
+label = "Öppnad den"
+description = "Dagen då kassapasset öppnades (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.pos_session.field.closed_on]
+label = "Stängd den"
+description = "Dagen då kassapasset stängdes (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.pos_session.field.opening_cash]
+label = "Ingående kassa"
+description = "Kontanter som räknades i kassalådan vid öppning (valutans minsta enhet)"
+
+[labels.sv.model.pos_session.field.expected_cash]
+label = "Förväntad kassa"
+description = "Kontanter som kassalådan ska innehålla vid stängning: ingående kassa plus kontantbetalningar (anges, beräknas inte)"
+
+[labels.sv.model.pos_session.field.closing_cash]
+label = "Utgående kassa"
+description = "Kontanter som faktiskt räknades i kassalådan vid stängning"
+
+[labels.sv.model.pos_session.field.cash_difference]
+label = "Kassadifferens"
+description = "Utgående kassa minus förväntad kassa; negativt betyder att pengar saknas"
+
+[labels.sv.model.pos_session.field.note]
+label = "Anteckning"
+description = "Förklaring till en eventuell kassadifferens"
+
+[labels.sv.model.pos_session.field.state]
+label = "Status"
+description = "Kassapassets status: öppet, stängt"
+
+[labels.sv.model.pos_session.field.state.options]
+open = "Öppet"
+closed = "Stängt"
+
+[labels.sv.model.pos_session.action.close]
+label = "Stäng"
+description = "Stäng kassapasset när kassalådan har räknats (endast chef)"
+
+[labels.sv.model.pos_order]
+name = "Order"
+description = "En försäljning som slagits in i en kassa"
+
+[labels.sv.model.pos_order.field.session_id]
+label = "Kassapass"
+description = "Kassapasset som försäljningen gjordes i"
+
+[labels.sv.model.pos_order.field.receipt_number]
+label = "Kvittonummer"
+description = "Nummer som skrivs ut på kvittot. Fritext: paket kan inte generera nummerserier"
+
+[labels.sv.model.pos_order.field.ordered_on]
+label = "Orderdatum"
+description = "Försäljningsdagen (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.pos_order.field.customer_id]
+label = "Kund"
+description = "Kunden, när en sådan har identifierats"
+
+[labels.sv.model.pos_order.field.tax_total]
+label = "Skatt totalt"
+description = "Skatt som ingår i totalbeloppet (valutans minsta enhet)"
+
+[labels.sv.model.pos_order.field.total]
+label = "Totalt"
+description = "Totalt belopp som kunden betalat inklusive skatt (valutans minsta enhet, anges och beräknas inte)"
+
+[labels.sv.model.pos_order.field.note]
+label = "Anteckning"
+description = "Kommentar om försäljningen"
+
+[labels.sv.model.pos_order.field.state]
+label = "Status"
+description = "Försäljningens status: utkast, betald, återbetald, annullerad"
+
+[labels.sv.model.pos_order.field.state.options]
+draft = "Utkast"
+paid = "Betald"
+refunded = "Återbetald"
+cancelled = "Annullerad"
+
+[labels.sv.model.pos_order.action.pay]
+label = "Betala"
+description = "Försäljningen är helt betald"
+
+[labels.sv.model.pos_order.action.cancel]
+label = "Annullera"
+description = "Annullera en försäljning som aldrig betalades"
+
+[labels.sv.model.pos_order.action.refund]
+label = "Återbetala"
+description = "Återbetala en betald försäljning till kunden (endast chef)"
+
+[labels.sv.model.pos_order_line]
+name = "Orderrad"
+description = "En produktrad i en försäljning"
+
+[labels.sv.model.pos_order_line.field.order_id]
+label = "Order"
+description = "Försäljningen som raden tillhör"
+
+[labels.sv.model.pos_order_line.field.product_id]
+label = "Produkt"
+description = "Den sålda produkten"
+
+[labels.sv.model.pos_order_line.field.description]
+label = "Beskrivning"
+description = "Text som visas på kvittot"
+
+[labels.sv.model.pos_order_line.field.quantity]
+label = "Antal"
+description = "Antal sålda enheter"
+
+[labels.sv.model.pos_order_line.field.unit_price]
+label = "Styckpris"
+description = "Pris per enhet inklusive skatt (valutans minsta enhet)"
+
+[labels.sv.model.pos_order_line.field.discount_bp]
+label = "Rabatt (baspunkter)"
+description = "Rabatt i baspunkter: 1000 är 10,00 procent"
+
+[labels.sv.model.pos_order_line.field.subtotal]
+label = "Delsumma"
+description = "Radsumma efter rabatt (valutans minsta enhet, anges och beräknas inte)"
+
+[labels.sv.model.pos_payment]
+name = "Betalning"
+description = "En betalning mottagen för en försäljning; en försäljning kan betalas med flera betalsätt"
+
+[labels.sv.model.pos_payment.field.order_id]
+label = "Order"
+description = "Försäljningen som betalningen avser"
+
+[labels.sv.model.pos_payment.field.method]
+label = "Betalsätt"
+description = "Hur kunden betalade: kontant, kort, banköverföring, presentkort, övrigt"
+
+[labels.sv.model.pos_payment.field.method.options]
+cash = "Kontant"
+card = "Kort"
+bank_transfer = "Banköverföring"
+voucher = "Presentkort"
+other = "Övrigt"
+
+[labels.sv.model.pos_payment.field.amount]
+label = "Belopp"
+description = "Belopp som betalats med detta betalsätt (valutans minsta enhet)"
+
+[labels.sv.model.pos_payment.field.paid_on]
+label = "Betaldatum"
+description = "Betalningsdagen (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.pos_payment.field.provider_reference]
+label = "Betaltjänstens referens"
+description = "Referens från kortterminalen eller betaltjänsten; aldrig ett kortnummer"

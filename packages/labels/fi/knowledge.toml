@@ -1,0 +1,65 @@
+[labels.fi.module]
+name = "Tietämys"
+description = "Wiki: ylätason artikkelin kautta puuksi järjestetyt artikkelit luonnos-, julkaistu- ja arkistoitu-kulussa, näkyvyysasetus ja tunnisteet. Näkyvyys on käyttöliittymän ja ihmisten noudatettava merkintä; alustalla ei ole vielä rivikohtaisia oikeuksia, joten kaikki Tietämys-ryhmien jäsenet voivat lukea kaikki artikkelit."
+
+[labels.fi.model.knowledge_article]
+name = "Artikkeli"
+description = "Tietämyskannan artikkeli"
+
+[labels.fi.model.knowledge_article.field.title]
+label = "Otsikko"
+description = "Artikkelin otsikko"
+
+[labels.fi.model.knowledge_article.field.parent_id]
+label = "Ylätaso"
+description = "Artikkeli, jonka alle tämä sijoitetaan; tyhjä ylimmän tason artikkelille"
+
+[labels.fi.model.knowledge_article.field.body]
+label = "Sisältö"
+description = "Artikkelin sisältö (Markdown)"
+
+[labels.fi.model.knowledge_article.field.visibility]
+label = "Näkyvyys"
+description = "Kenelle artikkeli on tarkoitettu: yksityinen, työtila, julkinen"
+
+[labels.fi.model.knowledge_article.field.visibility.options]
+private = "Yksityinen"
+workspace = "Työtila"
+public = "Julkinen"
+
+[labels.fi.model.knowledge_article.field.tags]
+label = "Tunnisteet"
+description = "Pilkulla erotetut tunnisteet, esimerkiksi perehdytys,henkilöstö"
+
+[labels.fi.model.knowledge_article.field.author_name]
+label = "Kirjoittajan nimi"
+description = "Kirjoittajan nimi"
+
+[labels.fi.model.knowledge_article.field.sequence]
+label = "Järjestys"
+description = "Järjestys samalla tasolla olevien artikkelien joukossa, pienin ensin"
+
+[labels.fi.model.knowledge_article.field.published_on]
+label = "Julkaistu"
+description = "Päivä, jona artikkeli julkaistiin (YYYY-MM-DD)"
+
+[labels.fi.model.knowledge_article.field.state]
+label = "Tila"
+description = "Artikkelin tila: luonnos, julkaistu, arkistoitu"
+
+[labels.fi.model.knowledge_article.field.state.options]
+draft = "Luonnos"
+published = "Julkaistu"
+archived = "Arkistoitu"
+
+[labels.fi.model.knowledge_article.action.publish]
+label = "Julkaise"
+description = "Julkaise artikkeli (vain esihenkilö)"
+
+[labels.fi.model.knowledge_article.action.unpublish]
+label = "Peru julkaisu"
+description = "Palauta artikkeli luonnokseksi"
+
+[labels.fi.model.knowledge_article.action.archive]
+label = "Arkistoi"
+description = "Arkistoi vanhentunut artikkeli"

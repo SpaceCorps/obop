@@ -1,0 +1,95 @@
+[labels.de.module]
+name = "Termine"
+description = "Buchbare Ressourcen (Personen, Räume, Ausstattung) und Termine mit Datum, Start- und Endzeit sowie einem Statusablauf. Überschneidungen werden nicht automatisch verhindert."
+
+[labels.de.model.appointments_resource]
+name = "Ressource"
+description = "Etwas oder jemand, das oder der gebucht werden kann"
+
+[labels.de.model.appointments_resource.field.name]
+label = "Name"
+description = "Name der Ressource, zum Beispiel Besprechungsraum 2"
+
+[labels.de.model.appointments_resource.field.kind]
+label = "Art"
+description = "Um welche Art von Ressource es sich handelt: Person, Raum, Ausstattung"
+
+[labels.de.model.appointments_resource.field.kind.options]
+person = "Person"
+room = "Raum"
+equipment = "Ausstattung"
+
+[labels.de.model.appointments_resource.field.capacity]
+label = "Kapazität"
+description = "Wie viele Personen gleichzeitig bedient werden können"
+
+[labels.de.model.appointments_resource.field.active]
+label = "Aktiv"
+description = "Ob die Ressource gebucht werden kann"
+
+[labels.de.model.appointments_appointment]
+name = "Termin"
+description = "Eine Buchung einer Ressource zu einer bestimmten Zeit"
+
+[labels.de.model.appointments_appointment.field.resource_id]
+label = "Ressource"
+description = "Die gebuchte Ressource"
+
+[labels.de.model.appointments_appointment.field.title]
+label = "Titel"
+description = "Wofür der Termin gedacht ist"
+
+[labels.de.model.appointments_appointment.field.day]
+label = "Tag"
+description = "Datum des Termins (YYYY-MM-DD)"
+
+[labels.de.model.appointments_appointment.field.start_minute]
+label = "Startzeit"
+description = "Startzeit in Minuten seit Mitternacht, zum Beispiel 540 für 09:00"
+
+[labels.de.model.appointments_appointment.field.end_minute]
+label = "Endzeit"
+description = "Endzeit in Minuten seit Mitternacht, zum Beispiel 600 für 10:00"
+
+[labels.de.model.appointments_appointment.field.attendee_name]
+label = "Name Teilnehmer"
+description = "Name der teilnehmenden Person"
+
+[labels.de.model.appointments_appointment.field.attendee_email]
+label = "E-Mail Teilnehmer"
+description = "E-Mail-Adresse der teilnehmenden Person"
+
+[labels.de.model.appointments_appointment.field.attendee_phone]
+label = "Telefon Teilnehmer"
+description = "Telefonnummer der teilnehmenden Person"
+
+[labels.de.model.appointments_appointment.field.notes]
+label = "Notizen"
+description = "Alles, was die gastgebende Person vorab wissen sollte"
+
+[labels.de.model.appointments_appointment.field.state]
+label = "Status"
+description = "Buchungsstatus: terminiert, bestätigt, erledigt, storniert, nicht erschienen"
+
+[labels.de.model.appointments_appointment.field.state.options]
+scheduled = "Terminiert"
+confirmed = "Bestätigt"
+done = "Erledigt"
+cancelled = "Storniert"
+no_show = "Nicht erschienen"
+
+[labels.de.model.appointments_appointment.action.confirm]
+label = "Bestätigen"
+description = "Einen terminierten Termin bestätigen"
+
+[labels.de.model.appointments_appointment.action.complete]
+label = "Erledigen"
+description = "Einen bestätigten Termin als stattgefunden markieren"
+
+[labels.de.model.appointments_appointment.action.cancel]
+label = "Stornieren"
+description = "Einen terminierten Termin stornieren"
+
+[labels.de.model.appointments_appointment.action.mark_no_show]
+label = "Als nicht erschienen markieren"
+description = "Festhalten, dass die teilnehmende Person nicht gekommen ist"

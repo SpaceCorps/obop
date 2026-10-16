@@ -1,0 +1,90 @@
+[labels.fr.module]
+name = "Documents"
+description = "Un registre des documents de l’entreprise : dossiers, documents avec type, propriétaire, expiration et confidentialité, et un flux brouillon, publié, archivé. Il stocke des références, pas le contenu des fichiers."
+
+[labels.fr.model.documents_folder]
+name = "Dossier"
+description = "Un dossier qui regroupe des documents"
+
+[labels.fr.model.documents_folder.field.name]
+label = "Nom"
+description = "Nom du dossier"
+
+[labels.fr.model.documents_folder.field.parent_id]
+label = "Parent"
+description = "Le dossier dans lequel celui-ci se trouve"
+
+[labels.fr.model.documents_folder.field.description]
+label = "Description"
+description = "Ce qui a sa place dans le dossier"
+
+[labels.fr.model.documents_document]
+name = "Document"
+description = "Un contrat, une politique, un certificat ou un autre document enregistré"
+
+[labels.fr.model.documents_document.field.title]
+label = "Titre"
+description = "Titre du document"
+
+[labels.fr.model.documents_document.field.folder_id]
+label = "Dossier"
+description = "Le dossier dans lequel le document est classé"
+
+[labels.fr.model.documents_document.field.kind]
+label = "Type"
+description = "Type de document : contrat, facture, politique, rapport, certificat, autre"
+
+[labels.fr.model.documents_document.field.kind.options]
+contract = "Contrat"
+invoice = "Facture"
+policy = "Politique"
+report = "Rapport"
+certificate = "Certificat"
+other = "Autre"
+
+[labels.fr.model.documents_document.field.confidentiality]
+label = "Confidentialité"
+description = "Qui doit le voir, sous forme d’indication pour les lecteurs : public, interne, confidentiel, restreint"
+
+[labels.fr.model.documents_document.field.confidentiality.options]
+public = "Public"
+internal = "Interne"
+confidential = "Confidentiel"
+restricted = "Restreint"
+
+[labels.fr.model.documents_document.field.owner]
+label = "Propriétaire"
+description = "Nom de la personne responsable du document"
+
+[labels.fr.model.documents_document.field.reference]
+label = "Référence"
+description = "Numéro de référence, par exemple un numéro de contrat"
+
+[labels.fr.model.documents_document.field.location]
+label = "Emplacement"
+description = "Où le fichier est conservé, par exemple un lien ou une boîte d’archive"
+
+[labels.fr.model.documents_document.field.expires_on]
+label = "Expire le"
+description = "Date après laquelle le document n’est plus valable (YYYY-MM-DD)"
+
+[labels.fr.model.documents_document.field.summary]
+label = "Résumé"
+description = "Ce que dit le document, en quelques lignes"
+
+[labels.fr.model.documents_document.field.state]
+label = "Statut"
+description = "Statut du document : brouillon, publié, archivé"
+
+[labels.fr.model.documents_document.field.state.options]
+draft = "Brouillon"
+published = "Publié"
+archived = "Archivé"
+
+[labels.fr.model.documents_document.action.publish]
+label = "Publier"
+description = "Fait d’un document en brouillon la version en vigueur"
+
+[labels.fr.model.documents_document.action.archive]
+label = "Archiver"
+description = "Archive un document publié (responsable uniquement)"

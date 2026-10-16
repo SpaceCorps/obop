@@ -1,0 +1,56 @@
+[labels.de.module]
+name = "Zeiterfassung"
+description = "Auf Projektaufgaben verwendete Zeit, in Minuten erfasst, mit Kennzeichen für Abrechenbarkeit und einem Genehmigungsschritt. Benötigt das Paket Projekte."
+
+[labels.de.model.timesheets_entry]
+name = "Zeiteintrag"
+description = "Zeit, die eine Person an einem Tag für eine Aufgabe aufgewendet hat"
+
+[labels.de.model.timesheets_entry.field.task_id]
+label = "Aufgabe"
+description = "Die bearbeitete Aufgabe"
+
+[labels.de.model.timesheets_entry.field.worker]
+label = "Ausführende Person"
+description = "Name der Person, die die Arbeit geleistet hat"
+
+[labels.de.model.timesheets_entry.field.worked_on]
+label = "Gearbeitet am"
+description = "Tag, an dem gearbeitet wurde (YYYY-MM-DD)"
+
+[labels.de.model.timesheets_entry.field.minutes]
+label = "Minuten"
+description = "Aufgewendete Zeit in Minuten"
+
+[labels.de.model.timesheets_entry.field.billable]
+label = "Abrechenbar"
+description = "Ob die Zeit dem Kunden in Rechnung gestellt werden kann"
+
+[labels.de.model.timesheets_entry.field.description]
+label = "Beschreibung"
+description = "Was getan wurde"
+
+[labels.de.model.timesheets_entry.field.cost_rate]
+label = "Kostensatz"
+description = "Interne Stundenkosten der Person zum Zeitpunkt der Erfassung (kleinste Währungseinheit, z. B. Cent)"
+
+[labels.de.model.timesheets_entry.field.state]
+label = "Status"
+description = "Eintragsstatus: Entwurf, eingereicht, genehmigt"
+
+[labels.de.model.timesheets_entry.field.state.options]
+draft = "Entwurf"
+submitted = "Eingereicht"
+approved = "Genehmigt"
+
+[labels.de.model.timesheets_entry.action.submit]
+label = "Einreichen"
+description = "Den Eintrag zur Genehmigung einreichen"
+
+[labels.de.model.timesheets_entry.action.approve]
+label = "Genehmigen"
+description = "Einen eingereichten Eintrag genehmigen, damit er abgerechnet werden kann (nur Führungskräfte)"
+
+[labels.de.model.timesheets_entry.action.reject]
+label = "Zurückweisen"
+description = "Einen eingereichten Eintrag zurück auf Entwurf setzen (nur Führungskräfte)"

@@ -1,0 +1,136 @@
+[labels.fr.module]
+name = "Assistance"
+description = "Tickets d’assistance avec priorité, gravité, objectifs de niveau de service et un flux ouvert, en cours, résolu et clôturé. Les objectifs sont enregistrés, ni appliqués ni chronométrés automatiquement."
+
+[labels.fr.model.helpdesk_sla]
+name = "SLA"
+description = "Une politique de niveau de service : à quelle vitesse les tickets d’une priorité doivent recevoir une réponse et être résolus"
+
+[labels.fr.model.helpdesk_sla.field.name]
+label = "Nom"
+description = "Nom de la politique, par exemple Urgent en 4 heures"
+
+[labels.fr.model.helpdesk_sla.field.priority]
+label = "Priorité"
+description = "Priorité de ticket à laquelle s’applique la politique : basse, normale, haute, urgente"
+
+[labels.fr.model.helpdesk_sla.field.priority.options]
+low = "Basse"
+normal = "Normale"
+high = "Haute"
+urgent = "Urgente"
+
+[labels.fr.model.helpdesk_sla.field.first_response_minutes]
+label = "Première réponse (minutes)"
+description = "Délai cible avant la première réponse, en minutes"
+
+[labels.fr.model.helpdesk_sla.field.resolution_minutes]
+label = "Résolution (minutes)"
+description = "Délai cible de résolution du ticket, en minutes"
+
+[labels.fr.model.helpdesk_sla.field.active]
+label = "Active"
+description = "Indique si la politique peut être associée à de nouveaux tickets"
+
+[labels.fr.model.helpdesk_ticket]
+name = "Ticket"
+description = "Une demande d’assistance d’un client"
+
+[labels.fr.model.helpdesk_ticket.field.subject]
+label = "Objet"
+description = "Résumé du problème en une ligne"
+
+[labels.fr.model.helpdesk_ticket.field.description]
+label = "Description"
+description = "Description complète du problème et de ce que le client a essayé"
+
+[labels.fr.model.helpdesk_ticket.field.requester_name]
+label = "Nom du demandeur"
+description = "Nom de la personne qui demande de l’aide"
+
+[labels.fr.model.helpdesk_ticket.field.requester_email]
+label = "E-mail du demandeur"
+description = "Adresse e-mail de la personne qui demande de l’aide"
+
+[labels.fr.model.helpdesk_ticket.field.category]
+label = "Catégorie"
+description = "Type de demande : question, incident, problème, demande d’évolution"
+
+[labels.fr.model.helpdesk_ticket.field.category.options]
+question = "Question"
+incident = "Incident"
+problem = "Problème"
+feature_request = "Demande d’évolution"
+
+[labels.fr.model.helpdesk_ticket.field.priority]
+label = "Priorité"
+description = "Rapidité de traitement souhaitée : basse, normale, haute, urgente"
+
+[labels.fr.model.helpdesk_ticket.field.priority.options]
+low = "Basse"
+normal = "Normale"
+high = "Haute"
+urgent = "Urgente"
+
+[labels.fr.model.helpdesk_ticket.field.severity]
+label = "Gravité"
+description = "Degré d’impact pour le client : mineure, majeure, critique"
+
+[labels.fr.model.helpdesk_ticket.field.severity.options]
+minor = "Mineure"
+major = "Majeure"
+critical = "Critique"
+
+[labels.fr.model.helpdesk_ticket.field.assignee]
+label = "Assigné à"
+description = "Nom de l’agent qui traite le ticket"
+
+[labels.fr.model.helpdesk_ticket.field.sla_id]
+label = "SLA"
+description = "Politique de niveau de service par rapport à laquelle le ticket est mesuré"
+
+[labels.fr.model.helpdesk_ticket.field.opened_on]
+label = "Ouvert le"
+description = "Date de réception du ticket (YYYY-MM-DD)"
+
+[labels.fr.model.helpdesk_ticket.field.first_response_on]
+label = "Première réponse le"
+description = "Date de la première réponse au client (YYYY-MM-DD)"
+
+[labels.fr.model.helpdesk_ticket.field.due_on]
+label = "Date d’échéance"
+description = "Date à laquelle il devrait être résolu selon la politique (YYYY-MM-DD)"
+
+[labels.fr.model.helpdesk_ticket.field.resolved_on]
+label = "Résolu le"
+description = "Date de résolution du problème (YYYY-MM-DD)"
+
+[labels.fr.model.helpdesk_ticket.field.resolution]
+label = "Résolution"
+description = "Comment le problème a été résolu"
+
+[labels.fr.model.helpdesk_ticket.field.state]
+label = "Statut"
+description = "Statut du ticket : ouvert, en cours, résolu, clôturé"
+
+[labels.fr.model.helpdesk_ticket.field.state.options]
+open = "Ouvert"
+in_progress = "En cours"
+resolved = "Résolu"
+closed = "Clôturé"
+
+[labels.fr.model.helpdesk_ticket.action.take]
+label = "Prendre en charge"
+description = "Commence à traiter un ticket ouvert"
+
+[labels.fr.model.helpdesk_ticket.action.resolve]
+label = "Résoudre"
+description = "Marque un ticket en cours comme résolu"
+
+[labels.fr.model.helpdesk_ticket.action.close]
+label = "Clôturer"
+description = "Clôture définitivement un ticket résolu (responsable uniquement)"
+
+[labels.fr.model.helpdesk_ticket.action.reopen]
+label = "Rouvrir"
+description = "Rouvre un ticket résolu lorsque le problème est revenu"

@@ -1,0 +1,268 @@
+[labels.pl.module]
+name = "Strona internetowa"
+description = "Treści publicznej strony: strony, menu nawigacji, wpisy na blogu, ich tłumaczenia oraz zgłoszenia z formularzy. Przy włączonej stronie publicznej opublikowane treści są dostępne bez logowania, z SEO; widoczne są tylko pola publiczne. Publikację zatwierdza człowiek, agenci mogą ją tylko zaproponować. Dane nadawców są osobowe i nigdy publiczne."
+
+[labels.pl.model.website_page]
+name = "Strona"
+description = "Strona witryny internetowej"
+
+[labels.pl.model.website_page.field.title]
+label = "Tytuł"
+description = "Tytuł strony"
+
+[labels.pl.model.website_page.field.slug]
+label = "Slug URL"
+description = "Ścieżka URL strony bez ukośników na końcach, małe litery z myślnikami, na przykład o-nas. Strona ze slugiem home jest stroną główną"
+
+[labels.pl.model.website_page.field.body]
+label = "Treść"
+description = "Treść strony w Markdown (bezpieczny podzbiór: nagłówki, listy, linki, wyróżnienia, kod, cytaty, tabele)"
+
+[labels.pl.model.website_page.field.seo_title]
+label = "Tytuł SEO"
+description = "Tytuł wyświetlany w wynikach wyszukiwania; puste oznacza tytuł strony"
+
+[labels.pl.model.website_page.field.seo_description]
+label = "Opis SEO"
+description = "Opis wyświetlany w wynikach wyszukiwania"
+
+[labels.pl.model.website_page.field.published_on]
+label = "Data publikacji"
+description = "Dzień, w którym strona stała się publiczna (YYYY-MM-DD)"
+
+[labels.pl.model.website_page.field.state]
+label = "Status"
+description = "Status strony: wersja robocza, opublikowane, zarchiwizowane"
+
+[labels.pl.model.website_page.field.state.options]
+draft = "Wersja robocza"
+published = "Opublikowane"
+archived = "Zarchiwizowane"
+
+[labels.pl.model.website_page.action.publish]
+label = "Opublikuj"
+description = "Udostępnia stronę publicznie (tylko kierownik)"
+
+[labels.pl.model.website_page.action.unpublish]
+label = "Cofnij publikację"
+description = "Wyłącza stronę z sieci i przywraca wersję roboczą"
+
+[labels.pl.model.website_page.action.archive]
+label = "Archiwizuj"
+description = "Wycofuje opublikowaną stronę na stałe"
+
+[labels.pl.model.website_menu_item]
+name = "Pozycja menu"
+description = "Wpis w nawigacji witryny"
+
+[labels.pl.model.website_menu_item.field.label]
+label = "Etykieta"
+description = "Tekst wyświetlany w menu"
+
+[labels.pl.model.website_menu_item.field.url]
+label = "URL"
+description = "Dokąd prowadzi wpis: slug strony zaczynający się od ukośnika lub pełny adres"
+
+[labels.pl.model.website_menu_item.field.parent_id]
+label = "Element nadrzędny"
+description = "Wpis, pod którym ten jest zagnieżdżony; puste dla wpisu najwyższego poziomu"
+
+[labels.pl.model.website_menu_item.field.sequence]
+label = "Kolejność"
+description = "Kolejność wśród wpisów tego samego poziomu, od najniższej"
+
+[labels.pl.model.website_menu_item.field.visible]
+label = "Widoczny"
+description = "Czy wpis jest wyświetlany"
+
+[labels.pl.model.website_menu_item.field.new_window]
+label = "Nowe okno"
+description = "Czy link otwiera się w nowym oknie"
+
+[labels.pl.model.website_blog_post]
+name = "Wpis na blogu"
+description = "Wpis na blogu"
+
+[labels.pl.model.website_blog_post.field.title]
+label = "Tytuł"
+description = "Tytuł wpisu"
+
+[labels.pl.model.website_blog_post.field.slug]
+label = "Slug URL"
+description = "Część adresu URL wpisu, małe litery z myślnikami"
+
+[labels.pl.model.website_blog_post.field.author_name]
+label = "Autor"
+description = "Imię i nazwisko autora, na użytek wewnętrzny zespołu"
+
+[labels.pl.model.website_blog_post.field.byline]
+label = "Podpis autora"
+description = "Wiersz autora wyświetlany publicznie, na przykład nazwa zespołu lub marki; imię i nazwisko tylko za zgodą osoby"
+
+[labels.pl.model.website_blog_post.field.summary]
+label = "Podsumowanie"
+description = "Zajawka wyświetlana na listach"
+
+[labels.pl.model.website_blog_post.field.body]
+label = "Treść"
+description = "Treść wpisu w Markdown (bezpieczny podzbiór: nagłówki, listy, linki, wyróżnienia, kod, cytaty, tabele)"
+
+[labels.pl.model.website_blog_post.field.tags]
+label = "Tagi"
+description = "Tagi oddzielone przecinkami, na przykład nowości,produkt"
+
+[labels.pl.model.website_blog_post.field.published_on]
+label = "Data publikacji"
+description = "Dzień, którym datowany jest wpis (YYYY-MM-DD)"
+
+[labels.pl.model.website_blog_post.field.state]
+label = "Status"
+description = "Status wpisu: wersja robocza, opublikowane, zarchiwizowane"
+
+[labels.pl.model.website_blog_post.field.state.options]
+draft = "Wersja robocza"
+published = "Opublikowane"
+archived = "Zarchiwizowane"
+
+[labels.pl.model.website_blog_post.action.publish]
+label = "Opublikuj"
+description = "Udostępnia wpis publicznie (tylko kierownik)"
+
+[labels.pl.model.website_blog_post.action.unpublish]
+label = "Cofnij publikację"
+description = "Wyłącza wpis z sieci i przywraca wersję roboczą"
+
+[labels.pl.model.website_blog_post.action.archive]
+label = "Archiwizuj"
+description = "Wycofuje opublikowany wpis"
+
+[labels.pl.model.website_form_submission]
+name = "Zgłoszenie z formularza"
+description = "Wiadomość wysłana przez odwiedzającego za pomocą formularza na stronie"
+
+[labels.pl.model.website_form_submission.field.form_name]
+label = "Nazwa formularza"
+description = "Z którego formularza pochodzi zgłoszenie, na przykład kontakt"
+
+[labels.pl.model.website_form_submission.field.sender_name]
+label = "Imię i nazwisko nadawcy"
+description = "Imię i nazwisko podane przez odwiedzającego"
+
+[labels.pl.model.website_form_submission.field.sender_email]
+label = "E-mail nadawcy"
+description = "Adres e-mail podany przez odwiedzającego"
+
+[labels.pl.model.website_form_submission.field.sender_phone]
+label = "Telefon nadawcy"
+description = "Numer telefonu podany przez odwiedzającego"
+
+[labels.pl.model.website_form_submission.field.message]
+label = "Wiadomość"
+description = "Treść napisana przez odwiedzającego"
+
+[labels.pl.model.website_form_submission.field.source_page]
+label = "Strona źródłowa"
+description = "Slug strony, na której był formularz"
+
+[labels.pl.model.website_form_submission.field.submitted_on]
+label = "Data przesłania"
+description = "Dzień przesłania zgłoszenia (YYYY-MM-DD)"
+
+[labels.pl.model.website_form_submission.field.consent_given]
+label = "Wyrażono zgodę"
+description = "Czy odwiedzający zaznaczył zgodę na kontakt"
+
+[labels.pl.model.website_form_submission.field.state]
+label = "Status"
+description = "Status obsługi: nowe, obsłużone, spam"
+
+[labels.pl.model.website_form_submission.field.state.options]
+new = "Nowe"
+handled = "Obsłużone"
+spam = "Spam"
+
+[labels.pl.model.website_form_submission.action.handle]
+label = "Oznacz jako obsłużone"
+description = "Oznacza wiadomość jako odpowiedzianą lub załatwioną"
+
+[labels.pl.model.website_form_submission.action.mark_spam]
+label = "Oznacz jako spam"
+description = "Oznacza wiadomość jako spam"
+
+[labels.pl.model.website_page_translation]
+name = "Tłumaczenie strony"
+description = "Strona przetłumaczona na inny język; strona publiczna pokazuje ją odwiedzającym czytającym w tym języku"
+
+[labels.pl.model.website_page_translation.field.page_id]
+label = "Strona"
+description = "Strona, którą tłumaczy ten rekord"
+
+[labels.pl.model.website_page_translation.field.lang]
+label = "Język"
+description = "Język tłumaczenia: angielski, niemiecki, francuski, polski, fiński, szwedzki lub hiszpański"
+
+[labels.pl.model.website_page_translation.field.lang.options]
+en = "angielski"
+de = "niemiecki"
+fr = "francuski"
+pl = "polski"
+fi = "fiński"
+sv = "szwedzki"
+es = "hiszpański"
+
+[labels.pl.model.website_page_translation.field.title]
+label = "Tytuł"
+description = "Przetłumaczony tytuł strony"
+
+[labels.pl.model.website_page_translation.field.body]
+label = "Treść"
+description = "Przetłumaczona treść strony w Markdown"
+
+[labels.pl.model.website_page_translation.field.seo_title]
+label = "Tytuł SEO"
+description = "Przetłumaczony tytuł wyświetlany w wynikach wyszukiwania"
+
+[labels.pl.model.website_page_translation.field.seo_description]
+label = "Opis SEO"
+description = "Przetłumaczony opis wyświetlany w wynikach wyszukiwania"
+
+[labels.pl.model.website_page_translation.field.published]
+label = "Opublikowany"
+description = "Czy tłumaczenie jest pokazywane; dostępne tylko, gdy jego strona jest opublikowana"
+
+[labels.pl.model.website_blog_post_translation]
+name = "Tłumaczenie wpisu na blogu"
+description = "Wpis na blogu przetłumaczony na inny język"
+
+[labels.pl.model.website_blog_post_translation.field.post_id]
+label = "Wpis"
+description = "Wpis, który tłumaczy ten rekord"
+
+[labels.pl.model.website_blog_post_translation.field.lang]
+label = "Język"
+description = "Język tłumaczenia: angielski, niemiecki, francuski, polski, fiński, szwedzki lub hiszpański"
+
+[labels.pl.model.website_blog_post_translation.field.lang.options]
+en = "angielski"
+de = "niemiecki"
+fr = "francuski"
+pl = "polski"
+fi = "fiński"
+sv = "szwedzki"
+es = "hiszpański"
+
+[labels.pl.model.website_blog_post_translation.field.title]
+label = "Tytuł"
+description = "Przetłumaczony tytuł wpisu"
+
+[labels.pl.model.website_blog_post_translation.field.summary]
+label = "Podsumowanie"
+description = "Przetłumaczona zajawka"
+
+[labels.pl.model.website_blog_post_translation.field.body]
+label = "Treść"
+description = "Przetłumaczona treść wpisu w Markdown"
+
+[labels.pl.model.website_blog_post_translation.field.published]
+label = "Opublikowany"
+description = "Czy tłumaczenie jest pokazywane; dostępne tylko, gdy jego wpis jest opublikowany"

@@ -1,0 +1,88 @@
+[labels.sv.module]
+name = "Planering"
+description = "Arbetspass för anställda, med roller och återanvändbara mallar. Ett pass har en dag samt start och slut i minuter efter midnatt (0 till 1439; 540 är 09:00). Ett pass utan anställd är ett öppet pass. Flöde: öppet, publicerat, bekräftat av den anställde. Kräver paketet Personal."
+
+[labels.sv.model.planning_role]
+name = "Roll"
+description = "En roll som ett pass planeras för, till exempel kassör eller elektriker"
+
+[labels.sv.model.planning_role.field.name]
+label = "Namn"
+description = "Rollens namn"
+
+[labels.sv.model.planning_role.field.note]
+label = "Anteckning"
+description = "Vad rollen innebär"
+
+[labels.sv.model.planning_template]
+name = "Mall"
+description = "Ett återanvändbart passmönster som kan kopieras till arbetspass"
+
+[labels.sv.model.planning_template.field.name]
+label = "Namn"
+description = "Mallens namn, till exempel Morgonpass"
+
+[labels.sv.model.planning_template.field.role_id]
+label = "Roll"
+description = "Rollen som mallen gäller"
+
+[labels.sv.model.planning_template.field.start_minute]
+label = "Startminut"
+description = "Start i minuter efter midnatt (540 är 09:00)"
+
+[labels.sv.model.planning_template.field.end_minute]
+label = "Slutminut"
+description = "Slut i minuter efter midnatt (1020 är 17:00)"
+
+[labels.sv.model.planning_shift]
+name = "Arbetspass"
+description = "Ett arbetspass en dag för en roll, som kan tilldelas en anställd"
+
+[labels.sv.model.planning_shift.field.name]
+label = "Namn"
+description = "Kort titel, till exempel Öppningspass"
+
+[labels.sv.model.planning_shift.field.role_id]
+label = "Roll"
+description = "Rollen som behövs"
+
+[labels.sv.model.planning_shift.field.employee_id]
+label = "Anställd"
+description = "Anställd som passet är tilldelat; tomt för ett öppet pass"
+
+[labels.sv.model.planning_shift.field.work_date]
+label = "Arbetsdatum"
+description = "Passets dag (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.planning_shift.field.start_minute]
+label = "Startminut"
+description = "Start i minuter efter midnatt, 0 till 1439 (540 är 09:00)"
+
+[labels.sv.model.planning_shift.field.end_minute]
+label = "Slutminut"
+description = "Slut i minuter efter midnatt, 0 till 1439 (1020 är 17:00)"
+
+[labels.sv.model.planning_shift.field.note]
+label = "Anteckning"
+description = "Instruktioner till den som arbetar passet"
+
+[labels.sv.model.planning_shift.field.state]
+label = "Status"
+description = "Passets status: öppet, publicerat, bekräftat"
+
+[labels.sv.model.planning_shift.field.state.options]
+open = "Öppet"
+published = "Publicerat"
+confirmed = "Bekräftat"
+
+[labels.sv.model.planning_shift.action.publish]
+label = "Publicera"
+description = "Publicera passet till den tilldelade anställda, eller till alla när det är öppet"
+
+[labels.sv.model.planning_shift.action.unpublish]
+label = "Avpublicera"
+description = "Dra tillbaka ett publicerat pass till öppet"
+
+[labels.sv.model.planning_shift.action.confirm]
+label = "Bekräfta"
+description = "Den anställde bekräftar att hen arbetar passet"

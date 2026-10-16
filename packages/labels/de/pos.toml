@@ -1,0 +1,204 @@
+[labels.de.module]
+name = "Kassensystem"
+description = "Kassen im Laden: Kassenkonfiguration, kassengeprüfte Sitzungen, Aufträge mit Positionen und Zahlungen je Zahlungsart. Erstattungen und der Abschluss einer Sitzung brauchen die Genehmigung einer Führungskraft; Agenten dürfen sie nur vorschlagen. Summen und Kassendifferenzen werden erfasst, nicht berechnet. Keine Kartennummern speichern. Benötigt das Paket Produkte."
+
+[labels.de.model.pos_config]
+name = "Kasse"
+description = "Eine Verkaufsstelle (eine Kasse oder ein Laden) und ihre Regeln"
+
+[labels.de.model.pos_config.field.name]
+label = "Name"
+description = "Name der Kasse oder des Ladens, zum Beispiel Laden Hauptstraße"
+
+[labels.de.model.pos_config.field.currency]
+label = "Währung"
+description = "Währungscode nach ISO 4217, zum Beispiel EUR"
+
+[labels.de.model.pos_config.field.receipt_header]
+label = "Belegkopf"
+description = "Text am Anfang der Belege"
+
+[labels.de.model.pos_config.field.cash_control]
+label = "Kassenkontrolle"
+description = "Ob Sitzungen das Bargeld in der Kassenschublade beim Öffnen und Schließen zählen müssen"
+
+[labels.de.model.pos_config.field.default_opening_cash]
+label = "Standard-Anfangsbestand"
+description = "Bargeld, das üblicherweise über Nacht in der Schublade bleibt (kleinste Währungseinheit)"
+
+[labels.de.model.pos_config.field.allow_refunds]
+label = "Erstattungen erlauben"
+description = "Ob Kassierer an dieser Verkaufsstelle Erstattungen vorschlagen dürfen"
+
+[labels.de.model.pos_config.field.active]
+label = "Aktiv"
+description = "Ob die Verkaufsstelle in Benutzung ist"
+
+[labels.de.model.pos_session]
+name = "Sitzung"
+description = "Eine Verkaufsschicht an einer Verkaufsstelle, vom Öffnen bis zum Schließen der Kassenschublade"
+
+[labels.de.model.pos_session.field.config_id]
+label = "Kasse"
+description = "Die Verkaufsstelle, zu der die Sitzung gehört"
+
+[labels.de.model.pos_session.field.cashier]
+label = "Kassierer"
+description = "Name des Kassierers, der die Sitzung eröffnet hat"
+
+[labels.de.model.pos_session.field.opened_on]
+label = "Eröffnet am"
+description = "Tag, an dem die Sitzung eröffnet wurde (YYYY-MM-DD)"
+
+[labels.de.model.pos_session.field.closed_on]
+label = "Abgeschlossen am"
+description = "Tag, an dem die Sitzung abgeschlossen wurde (YYYY-MM-DD)"
+
+[labels.de.model.pos_session.field.opening_cash]
+label = "Kassenanfangsbestand"
+description = "Beim Öffnen gezähltes Bargeld in der Schublade (kleinste Währungseinheit)"
+
+[labels.de.model.pos_session.field.expected_cash]
+label = "Kassensollbestand"
+description = "Bargeld, das die Schublade beim Schließen enthalten sollte: Anfangsbestand plus Barzahlungen (erfasst, nicht berechnet)"
+
+[labels.de.model.pos_session.field.closing_cash]
+label = "Kassenendbestand"
+description = "Beim Schließen tatsächlich gezähltes Bargeld in der Schublade"
+
+[labels.de.model.pos_session.field.cash_difference]
+label = "Kassendifferenz"
+description = "Endbestand minus Sollbestand; negativ bedeutet, es fehlt Geld"
+
+[labels.de.model.pos_session.field.note]
+label = "Notiz"
+description = "Erklärung für eine Kassendifferenz"
+
+[labels.de.model.pos_session.field.state]
+label = "Status"
+description = "Sitzungsstatus: offen, abgeschlossen"
+
+[labels.de.model.pos_session.field.state.options]
+open = "Offen"
+closed = "Abgeschlossen"
+
+[labels.de.model.pos_session.action.close]
+label = "Abschließen"
+description = "Die Sitzung abschließen, sobald die Schublade gezählt ist (nur Führungskräfte)"
+
+[labels.de.model.pos_order]
+name = "Auftrag"
+description = "Ein an einer Verkaufsstelle erfasster Verkauf"
+
+[labels.de.model.pos_order.field.session_id]
+label = "Sitzung"
+description = "Die Sitzung, in der der Verkauf erfolgte"
+
+[labels.de.model.pos_order.field.receipt_number]
+label = "Belegnummer"
+description = "Auf dem Beleg gedruckte Nummer. Freitext: Pakete können keine Nummernkreise erzeugen"
+
+[labels.de.model.pos_order.field.ordered_on]
+label = "Bestellt am"
+description = "Tag des Verkaufs (YYYY-MM-DD)"
+
+[labels.de.model.pos_order.field.customer_id]
+label = "Kunde"
+description = "Der Kunde, falls er erfasst wurde"
+
+[labels.de.model.pos_order.field.tax_total]
+label = "Steuerbetrag"
+description = "In der Gesamtsumme enthaltene Steuer (kleinste Währungseinheit)"
+
+[labels.de.model.pos_order.field.total]
+label = "Gesamt"
+description = "Vom Kunden gezahlte Gesamtsumme inklusive Steuer (kleinste Währungseinheit, erfasst, nicht berechnet)"
+
+[labels.de.model.pos_order.field.note]
+label = "Notiz"
+description = "Anmerkung zum Verkauf"
+
+[labels.de.model.pos_order.field.state]
+label = "Status"
+description = "Verkaufsstatus: Entwurf, bezahlt, erstattet, storniert"
+
+[labels.de.model.pos_order.field.state.options]
+draft = "Entwurf"
+paid = "Bezahlt"
+refunded = "Erstattet"
+cancelled = "Storniert"
+
+[labels.de.model.pos_order.action.pay]
+label = "Bezahlen"
+description = "Der Verkauf ist vollständig bezahlt"
+
+[labels.de.model.pos_order.action.cancel]
+label = "Stornieren"
+description = "Einen Verkauf stornieren, der nie bezahlt wurde"
+
+[labels.de.model.pos_order.action.refund]
+label = "Erstatten"
+description = "Einen bezahlten Verkauf an den Kunden erstatten (nur Führungskräfte)"
+
+[labels.de.model.pos_order_line]
+name = "Auftragsposition"
+description = "Eine Produktposition eines Verkaufs"
+
+[labels.de.model.pos_order_line.field.order_id]
+label = "Auftrag"
+description = "Der Verkauf, zu dem die Position gehört"
+
+[labels.de.model.pos_order_line.field.product_id]
+label = "Produkt"
+description = "Das verkaufte Produkt"
+
+[labels.de.model.pos_order_line.field.description]
+label = "Beschreibung"
+description = "Auf dem Beleg angezeigter Text"
+
+[labels.de.model.pos_order_line.field.quantity]
+label = "Menge"
+description = "Verkaufte Stückzahl"
+
+[labels.de.model.pos_order_line.field.unit_price]
+label = "Stückpreis"
+description = "Preis pro Stück inklusive Steuer (kleinste Währungseinheit)"
+
+[labels.de.model.pos_order_line.field.discount_bp]
+label = "Rabatt (BP)"
+description = "Rabatt in Basispunkten: 1000 bedeutet 10,00 Prozent"
+
+[labels.de.model.pos_order_line.field.subtotal]
+label = "Zwischensumme"
+description = "Positionssumme nach Rabatt (kleinste Währungseinheit, erfasst, nicht berechnet)"
+
+[labels.de.model.pos_payment]
+name = "Zahlung"
+description = "Eine zu einem Verkauf erhaltene Zahlung; ein Verkauf kann mit mehreren Zahlungsarten bezahlt werden"
+
+[labels.de.model.pos_payment.field.order_id]
+label = "Auftrag"
+description = "Der Verkauf, für den die Zahlung erfolgt"
+
+[labels.de.model.pos_payment.field.method]
+label = "Zahlungsart"
+description = "Wie der Kunde bezahlt hat: Bargeld, Karte, Überweisung, Gutschein, Sonstiges"
+
+[labels.de.model.pos_payment.field.method.options]
+cash = "Bargeld"
+card = "Karte"
+bank_transfer = "Überweisung"
+voucher = "Gutschein"
+other = "Sonstiges"
+
+[labels.de.model.pos_payment.field.amount]
+label = "Betrag"
+description = "Mit dieser Zahlungsart gezahlter Betrag (kleinste Währungseinheit)"
+
+[labels.de.model.pos_payment.field.paid_on]
+label = "Bezahlt am"
+description = "Tag der Zahlung (YYYY-MM-DD)"
+
+[labels.de.model.pos_payment.field.provider_reference]
+label = "Anbieterreferenz"
+description = "Referenz des Kartenterminals oder Zahlungsanbieters; nie eine Kartennummer"

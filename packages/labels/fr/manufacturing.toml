@@ -1,0 +1,98 @@
+[labels.fr.module]
+name = "Fabrication"
+description = "Nomenclatures et ordres de fabrication avec un flux brouillon, confirmé, en cours et terminé. Le stock des composants n’est pas consommé automatiquement."
+
+[labels.fr.model.manufacturing_bom]
+name = "Nomenclature"
+description = "Une recette : les composants nécessaires pour fabriquer un produit"
+
+[labels.fr.model.manufacturing_bom.field.product_id]
+label = "Produit"
+description = "Le produit fini que fabrique la recette"
+
+[labels.fr.model.manufacturing_bom.field.name]
+label = "Nom"
+description = "Nom de la recette, par exemple Assemblage standard"
+
+[labels.fr.model.manufacturing_bom.field.quantity]
+label = "Quantité"
+description = "Unités de produit fini produites par un cycle"
+
+[labels.fr.model.manufacturing_bom.field.instructions]
+label = "Instructions"
+description = "Consignes d’assemblage pour l’atelier"
+
+[labels.fr.model.manufacturing_bom.field.active]
+label = "Active"
+description = "Indique si la recette peut servir pour de nouveaux ordres"
+
+[labels.fr.model.manufacturing_bom_line]
+name = "Ligne de nomenclature"
+description = "Un composant d’une nomenclature"
+
+[labels.fr.model.manufacturing_bom_line.field.bom_id]
+label = "Nomenclature"
+description = "La recette à laquelle appartient le composant"
+
+[labels.fr.model.manufacturing_bom_line.field.component_id]
+label = "Composant"
+description = "Le produit consommé"
+
+[labels.fr.model.manufacturing_bom_line.field.quantity]
+label = "Quantité"
+description = "Unités du composant utilisées par cycle"
+
+[labels.fr.model.manufacturing_order]
+name = "Ordre de fabrication"
+description = "Une instruction de produire une quantité d’un produit"
+
+[labels.fr.model.manufacturing_order.field.reference]
+label = "Référence"
+description = "Numéro d’ordre, par exemple MO-0042"
+
+[labels.fr.model.manufacturing_order.field.bom_id]
+label = "Nomenclature"
+description = "La recette à suivre"
+
+[labels.fr.model.manufacturing_order.field.quantity]
+label = "Quantité"
+description = "Unités de produit fini à fabriquer"
+
+[labels.fr.model.manufacturing_order.field.planned_on]
+label = "Prévu le"
+description = "Date de début de production prévue (YYYY-MM-DD)"
+
+[labels.fr.model.manufacturing_order.field.deadline]
+label = "Échéance"
+description = "Date à laquelle les produits sont nécessaires (YYYY-MM-DD)"
+
+[labels.fr.model.manufacturing_order.field.responsible]
+label = "Responsable"
+description = "Nom de la personne en charge du cycle"
+
+[labels.fr.model.manufacturing_order.field.state]
+label = "Statut"
+description = "Statut de l’ordre : brouillon, confirmé, en cours, terminé, annulé"
+
+[labels.fr.model.manufacturing_order.field.state.options]
+draft = "Brouillon"
+confirmed = "Confirmé"
+in_progress = "En cours"
+done = "Terminé"
+cancelled = "Annulé"
+
+[labels.fr.model.manufacturing_order.action.confirm]
+label = "Confirmer"
+description = "Confirme un ordre en brouillon pour que la production puisse être planifiée"
+
+[labels.fr.model.manufacturing_order.action.start]
+label = "Démarrer"
+description = "Démarre la production d’un ordre confirmé"
+
+[labels.fr.model.manufacturing_order.action.finish]
+label = "Achever"
+description = "Marque la production comme achevée"
+
+[labels.fr.model.manufacturing_order.action.cancel]
+label = "Annuler"
+description = "Annule un ordre qui n’a pas été confirmé"

@@ -1,0 +1,39 @@
+[labels.es.module]
+name = "Ventas"
+
+[labels.es.model.sale_order]
+name = "Pedido de venta"
+description = "Un presupuesto o pedido confirmado para un cliente"
+
+[labels.es.model.sale_order.field.party_id]
+label = "Tercero"
+description = "Identificador del tercero cliente"
+
+[labels.es.model.sale_order.field.state]
+label = "Estado"
+description = "Ciclo de vida: borrador, confirmado o cancelado"
+
+[labels.es.model.sale_order.field.state.options]
+draft = "Borrador"
+confirmed = "Confirmado"
+cancelled = "Cancelado"
+
+[labels.es.model.sale_order.field.total_minor]
+label = "Total"
+description = "Total del pedido en unidades menores"
+
+[labels.es.model.sale_order.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217"
+
+[labels.es.model.sale_order.action.confirm]
+label = "Confirmar"
+description = "Confirmar un pedido en borrador"
+
+[labels.es.model.sale_order.action.cancel]
+label = "Cancelar"
+description = "Cancelar un pedido"
+
+[labels.es.model.sale_order.action.reset_to_draft]
+label = "Volver a borrador"
+description = "Devolver un pedido cancelado a borrador"

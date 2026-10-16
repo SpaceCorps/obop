@@ -1,0 +1,119 @@
+[labels.sv.module]
+name = "Lager"
+description = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser. Antal anges och kontrolleras av människor; de uppdateras inte automatiskt av rörelser."
+
+[labels.sv.model.inventory_warehouse]
+name = "Lagerställe"
+description = "En byggnad eller plats där varor lagras"
+
+[labels.sv.model.inventory_warehouse.field.name]
+label = "Namn"
+description = "Lagerställets namn"
+
+[labels.sv.model.inventory_warehouse.field.code]
+label = "Kod"
+description = "Kort kod som skrivs ut på dokument, till exempel LAG1"
+
+[labels.sv.model.inventory_warehouse.field.address]
+label = "Adress"
+description = "Platsens postadress"
+
+[labels.sv.model.inventory_warehouse.field.active]
+label = "Aktiv"
+description = "Om lagerstället används"
+
+[labels.sv.model.inventory_location]
+name = "Lagerplats"
+description = "En plats i ett lagerställe där varor kan stå"
+
+[labels.sv.model.inventory_location.field.name]
+label = "Namn"
+description = "Lagerplatsens namn, till exempel Hylla A3"
+
+[labels.sv.model.inventory_location.field.warehouse_id]
+label = "Lagerställe"
+description = "Lagerstället som platsen tillhör"
+
+[labels.sv.model.inventory_location.field.kind]
+label = "Typ"
+description = "Vad platsen används till: intern, inleverans, utleverans, under transport, skrot"
+
+[labels.sv.model.inventory_location.field.kind.options]
+internal = "Intern"
+receiving = "Inleverans"
+shipping = "Utleverans"
+transit = "Under transport"
+scrap = "Skrot"
+
+[labels.sv.model.inventory_location.field.active]
+label = "Aktiv"
+description = "Om lagerplatsen används"
+
+[labels.sv.model.inventory_item]
+name = "Lagerartikel"
+description = "Antalet av en produkt på en lagerplats"
+
+[labels.sv.model.inventory_item.field.product_id]
+label = "Produkt"
+description = "Produkten som lagras"
+
+[labels.sv.model.inventory_item.field.location_id]
+label = "Lagerplats"
+description = "Var den lagras"
+
+[labels.sv.model.inventory_item.field.quantity]
+label = "Antal"
+description = "Antal enheter i lager"
+
+[labels.sv.model.inventory_item.field.reorder_level]
+label = "Beställningspunkt"
+description = "Antal då eller under vilket produkten bör fyllas på"
+
+[labels.sv.model.inventory_item.field.lot]
+label = "Parti"
+description = "Parti- eller batchnummer, om det spåras"
+
+[labels.sv.model.inventory_move]
+name = "Lagerrörelse"
+description = "En förflyttning av en produkt mellan lagerplatser, eller in i eller ut ur verksamheten"
+
+[labels.sv.model.inventory_move.field.reference]
+label = "Referens"
+description = "Rörelsens referens, till exempel ett leverans- eller inleveransnummer"
+
+[labels.sv.model.inventory_move.field.product_id]
+label = "Produkt"
+description = "Produkten som flyttas"
+
+[labels.sv.model.inventory_move.field.from_location_id]
+label = "Från plats"
+description = "Varifrån den lämnar; tomt för inleverans från en leverantör"
+
+[labels.sv.model.inventory_move.field.to_location_id]
+label = "Till plats"
+description = "Vart den kommer; tomt för leverans till en kund"
+
+[labels.sv.model.inventory_move.field.quantity]
+label = "Antal"
+description = "Antal flyttade enheter"
+
+[labels.sv.model.inventory_move.field.scheduled_on]
+label = "Planerat datum"
+description = "Datum då rörelsen är planerad (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.inventory_move.field.state]
+label = "Status"
+description = "Rörelsens status: utkast, klar, annullerad"
+
+[labels.sv.model.inventory_move.field.state.options]
+draft = "Utkast"
+done = "Klar"
+cancelled = "Annullerad"
+
+[labels.sv.model.inventory_move.action.validate]
+label = "Validera"
+description = "Bekräfta att varorna verkligen flyttats; en genomförd rörelse kan inte ångras"
+
+[labels.sv.model.inventory_move.action.cancel]
+label = "Annullera"
+description = "Annullera en rörelse i utkast"
