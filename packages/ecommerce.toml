@@ -1,16 +1,63 @@
 [module]
 id = "ecommerce"
-version = "0.1.0"
+version = "0.2.0"
 name = "eCommerce"
-description = "An online shop: product listings, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data. Order totals are entered, not computed. Needs the Products package."
+description = "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. There is no payment provider: an order starts as pending and the shop contacts the buyer. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package."
 author = "SpaceCorps"
 depends = ["base", "product"]
+
+[[model]]
+name = "ecommerce_category"
+description = "A group of listings shown together in the shop"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["name", "slug", "description", "sequence"]
+  order_by = "sequence"
+
+  [[model.field]]
+  name = "name"
+  description = "Category name shown in the shop"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "slug"
+  description = "URL part of the category, lowercase with dashes"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "description"
+  description = "Short text about the category"
+  class = "none"
+
+  [[model.field]]
+  name = "sequence"
+  description = "Order among categories, lowest first"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "published"
+  description = "Whether the category is visible to shoppers"
+  class = "none"
+  kind = "bool"
 
 [[model]]
 name = "ecommerce_listing"
 description = "A product as it appears in the online shop"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["title", "slug", "summary", "description", "price", "compare_at_price", "currency", "sku", "stock_policy", "stock_quantity", "category_id"]
+  order_by = "title"
 
   [[model.field]]
   name = "product_id"
@@ -33,10 +80,22 @@ write_group = "ecommerce.manager"
   required = true
 
   [[model.field]]
+  name = "summary"
+  description = "One or two sentences shown on product cards"
+  class = "none"
+
+  [[model.field]]
   name = "description"
-  description = "Description shown on the product page"
+  description = "Description shown on the product page, in Markdown"
   class = "none"
   kind = "longtext"
+
+  [[model.field]]
+  name = "category_id"
+  description = "The category the listing is shown under"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_category"
 
   [[model.field]]
   name = "price"
@@ -52,11 +111,27 @@ write_group = "ecommerce.manager"
   kind = "money"
 
   [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code of the prices, for example EUR; empty means the shop currency from the instance settings"
+  class = "none"
+
+  [[model.field]]
+  name = "sku"
+  description = "Stock keeping unit shown on the product page"
+  class = "none"
+
+  [[model.field]]
   name = "stock_policy"
   description = "What happens when stock runs out: always_available, block_when_out, allow_backorder"
   class = "none"
   kind = "select"
   options = ["always_available", "block_when_out", "allow_backorder"]
+
+  [[model.field]]
+  name = "stock_quantity"
+  description = "Units on hand, used with the stock policy. Orders do not reduce it: adjust it by hand"
+  class = "none"
+  kind = "number"
 
   [[model.field]]
   name = "published"
@@ -65,10 +140,66 @@ write_group = "ecommerce.manager"
   kind = "bool"
 
 [[model]]
+name = "ecommerce_listing_translation"
+description = "A listing translated into another language"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["listing_id", "lang", "title", "summary", "description"]
+
+  [[model.field]]
+  name = "listing_id"
+  description = "The listing this translates"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_listing"
+  required = true
+
+  [[model.field]]
+  name = "lang"
+  description = "Language of the translation: en, de, fr, pl, fi, sv or es"
+  class = "none"
+  kind = "select"
+  options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
+  required = true
+
+  [[model.field]]
+  name = "title"
+  description = "Translated title"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "summary"
+  description = "Translated card text"
+  class = "none"
+
+  [[model.field]]
+  name = "description"
+  description = "Translated description in Markdown"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "published"
+  description = "Whether the translation is shown; it is only reachable while its listing is published"
+  class = "none"
+  kind = "bool"
+
+[[model]]
 name = "ecommerce_shipping_method"
 description = "A way of delivering orders with its price"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
+
+  [model.public]
+  read = true
+  published_field = "active"
+  fields = ["name", "carrier", "price", "free_over", "delivery_days"]
+  order_by = "price"
 
   [[model.field]]
   name = "name"
@@ -175,9 +306,16 @@ description = "An order placed online"
 read_group = "ecommerce.user"
 write_group = "ecommerce.user"
 
+  [model.public]
+  submit = true
+  submit_fields = ["customer_email", "customer_name", "shipping_address", "shipping_method_id"]
+  rate_limit_per_hour = 10
+  receipt_token_field = "access_token"
+  receipt_fields = ["number", "customer_email", "customer_name", "shipping_address", "placed_on", "currency", "subtotal", "shipping_total", "total", "state"]
+
   [[model.field]]
   name = "number"
-  description = "Order number shown to the shopper. Free text: packages cannot generate sequences"
+  description = "Order number shown to the shopper. Free text: packages cannot generate sequences; the public checkout makes a random one"
   class = "none"
   required = true
 
@@ -283,6 +421,11 @@ write_group = "ecommerce.user"
   class = "none"
 
   [[model.field]]
+  name = "access_token"
+  description = "Secret link token that lets the shopper who placed a public order see its confirmation page. Nobody can read it back"
+  class = "secret"
+
+  [[model.field]]
   name = "state"
   description = "Fulfilment status: pending, paid, shipped, delivered, cancelled, refunded"
   class = "none"
@@ -342,6 +485,13 @@ description = "One product line of a web order"
 read_group = "ecommerce.user"
 write_group = "ecommerce.user"
 
+  [model.public]
+  submit = true
+  submit_fields = ["listing_id", "quantity"]
+  rate_limit_per_hour = 10
+  receipt_parent = "order_id"
+  receipt_fields = ["description", "quantity", "unit_price", "subtotal"]
+
   [[model.field]]
   name = "order_id"
   description = "The order the line belongs to"
@@ -356,7 +506,13 @@ write_group = "ecommerce.user"
   class = "none"
   kind = "ref"
   to = "product"
-  required = true
+
+  [[model.field]]
+  name = "listing_id"
+  description = "The shop listing the line was ordered from"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_listing"
 
   [[model.field]]
   name = "description"

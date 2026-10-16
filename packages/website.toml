@@ -1,8 +1,8 @@
 [module]
 id = "website"
-version = "0.1.0"
+version = "0.2.0"
 name = "Website"
-description = "Content for a public website: pages with a slug and a draft, published, archived flow, navigation menu items, blog posts with an author and a publish date, and the form submissions visitors send in. This package stores and organises the content; a UI or site generator renders it. Publishing makes content public and needs a human approval, agents may only propose it. Authors and senders are personal data."
+description = "Content for a public website: pages with a slug and a draft, published, archived flow, navigation menu items, blog posts with a byline and a publish date, translations of both, and the form submissions visitors send in. When the instance runs with the public site enabled it serves the published content to visitors as a server-rendered website with SEO and no login; only the fields marked public are ever visible to them. Publishing makes content public and needs a human approval, agents may only propose it. Senders are personal data and are never public."
 author = "SpaceCorps"
 
 [[model]]
@@ -10,6 +10,14 @@ name = "website_page"
 description = "A page of the website"
 read_group = "website.user"
 write_group = "website.user"
+
+  [model.public]
+  read = true
+  published_field = "state"
+  published_value = "published"
+  gone_value = "archived"
+  fields = ["title", "slug", "body", "seo_title", "seo_description", "published_on"]
+  order_by = "title"
 
   [[model.field]]
   name = "title"
@@ -19,13 +27,13 @@ write_group = "website.user"
 
   [[model.field]]
   name = "slug"
-  description = "URL path of the page without slashes at the ends, lowercase with dashes, for example about-us"
+  description = "URL path of the page without slashes at the ends, lowercase with dashes, for example about-us. The page with slug home is the front page"
   class = "none"
   required = true
 
   [[model.field]]
   name = "body"
-  description = "Page content (Markdown or HTML, as the renderer expects)"
+  description = "Page content in Markdown (a safe subset: headings, lists, links, emphasis, code, quotes, tables)"
   class = "none"
   kind = "longtext"
 
@@ -84,6 +92,12 @@ description = "An entry of the site navigation"
 read_group = "website.user"
 write_group = "website.manager"
 
+  [model.public]
+  read = true
+  published_field = "visible"
+  fields = ["label", "url", "sequence", "new_window"]
+  order_by = "sequence"
+
   [[model.field]]
   name = "label"
   description = "Text shown in the menu"
@@ -127,6 +141,15 @@ description = "A blog post"
 read_group = "website.user"
 write_group = "website.user"
 
+  [model.public]
+  read = true
+  published_field = "state"
+  published_value = "published"
+  gone_value = "archived"
+  fields = ["title", "slug", "byline", "summary", "body", "tags", "published_on"]
+  order_by = "published_on"
+  order_dir = "desc"
+
   [[model.field]]
   name = "title"
   description = "Post title"
@@ -141,10 +164,15 @@ write_group = "website.user"
 
   [[model.field]]
   name = "author_name"
-  description = "Name of the author shown on the post"
+  description = "Name of the author, for the team's own records"
   class = "public_directory"
   personal_data = true
   required = true
+
+  [[model.field]]
+  name = "byline"
+  description = "Author line shown publicly, for example the team or brand name; use a name here only if the person agreed to it"
+  class = "none"
 
   [[model.field]]
   name = "summary"
@@ -153,7 +181,7 @@ write_group = "website.user"
 
   [[model.field]]
   name = "body"
-  description = "Post content (Markdown or HTML, as the renderer expects)"
+  description = "Post content in Markdown (a safe subset: headings, lists, links, emphasis, code, quotes, tables)"
   class = "none"
   kind = "longtext"
 
@@ -206,6 +234,11 @@ name = "website_form_submission"
 description = "A message a visitor sent through a form on the site"
 read_group = "website.user"
 write_group = "website.user"
+
+  [model.public]
+  submit = true
+  submit_fields = ["sender_name", "sender_email", "sender_phone", "message", "consent_given"]
+  rate_limit_per_hour = 10
 
   [[model.field]]
   name = "form_name"
@@ -277,3 +310,108 @@ write_group = "website.user"
   field = "state"
   from = "new"
   to = "spam"
+
+[[model]]
+name = "website_page_translation"
+description = "A page translated into another language; the public site shows it to visitors who read that language"
+read_group = "website.user"
+write_group = "website.user"
+
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["page_id", "lang", "title", "body", "seo_title", "seo_description"]
+
+  [[model.field]]
+  name = "page_id"
+  description = "The page this translates"
+  class = "none"
+  kind = "ref"
+  to = "website_page"
+  required = true
+
+  [[model.field]]
+  name = "lang"
+  description = "Language of the translation: en, de, fr, pl, fi, sv or es"
+  class = "none"
+  kind = "select"
+  options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
+  required = true
+
+  [[model.field]]
+  name = "title"
+  description = "Translated page title"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "body"
+  description = "Translated page content in Markdown"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "seo_title"
+  description = "Translated title shown in search results"
+  class = "none"
+
+  [[model.field]]
+  name = "seo_description"
+  description = "Translated description shown in search results"
+  class = "none"
+
+  [[model.field]]
+  name = "published"
+  description = "Whether the translation is shown; it is only reachable while its page is published"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "website_blog_post_translation"
+description = "A blog post translated into another language"
+read_group = "website.user"
+write_group = "website.user"
+
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["post_id", "lang", "title", "summary", "body"]
+
+  [[model.field]]
+  name = "post_id"
+  description = "The post this translates"
+  class = "none"
+  kind = "ref"
+  to = "website_blog_post"
+  required = true
+
+  [[model.field]]
+  name = "lang"
+  description = "Language of the translation: en, de, fr, pl, fi, sv or es"
+  class = "none"
+  kind = "select"
+  options = ["en", "de", "fr", "pl", "fi", "sv", "es"]
+  required = true
+
+  [[model.field]]
+  name = "title"
+  description = "Translated post title"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "summary"
+  description = "Translated teaser"
+  class = "none"
+
+  [[model.field]]
+  name = "body"
+  description = "Translated post content in Markdown"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "published"
+  description = "Whether the translation is shown; it is only reachable while its post is published"
+  class = "none"
+  kind = "bool"
