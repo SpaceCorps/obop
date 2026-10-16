@@ -1304,11 +1304,14 @@ mod bundled_packages {
             id_of(&r)
         }
 
-        /// A fresh record of `model` whose state starts as `state`.
+        /// A fresh record of `model` whose state starts as `state`. Written to the store
+        /// directly: `create` only accepts the first state (D48).
         fn fresh(&mut self, model: &str, state: &str) -> String {
             let mut open = vec![model.to_string()];
-            let input = self.input(model, Some(state), &mut open);
-            self.create(model, input)
+            let Value::Map(fields) = self.input(model, Some(state), &mut open) else {
+                unreachable!()
+            };
+            self.app.store.insert(model, fields).unwrap()
         }
     }
 

@@ -2,7 +2,8 @@
 //! (memory, SQLite or PostgreSQL); it implements the command contract, so modules do not change
 //! when the backend does.
 
-use crate::{Dispatcher, Value};
+use crate::query::Query;
+use crate::{Dispatcher, Value, guards};
 use obop_registry::{FieldKind, ModelDef, Module, is_valid_date};
 use obop_storage::{Backend, Fields};
 use std::collections::BTreeMap;
@@ -10,7 +11,7 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Store {
-    backend: Arc<dyn Backend>,
+    pub(crate) backend: Arc<dyn Backend>,
 }
 
 impl Default for Store {
@@ -89,7 +90,7 @@ impl Store {
     }
 }
 
-fn id_of(input: &Value) -> Result<String, String> {
+pub(crate) fn id_of(input: &Value) -> Result<String, String> {
     match input {
         Value::Map(m) => match m.get("id") {
             Some(Value::Text(id)) => Ok(id.clone()),
@@ -189,19 +190,45 @@ impl Dispatcher {
                     Ok(to_row(&id, &f))
                 }),
             );
-            let s = store.clone();
+            let (s, d) = (store.clone(), def.clone());
             self.register(
                 module,
                 name,
                 "list",
-                Box::new(move |_| {
-                    Ok(Value::List(
-                        s.backend
-                            .list(name)?
-                            .iter()
-                            .map(|(id, f)| to_row(id, f))
-                            .collect(),
-                    ))
+                Box::new(move |input| {
+                    let (rows, _) = run_query(&s, &d, input)?;
+                    Ok(Value::List(rows))
+                }),
+            );
+            let (s, d) = (store.clone(), def.clone());
+            self.register(
+                module,
+                name,
+                "search",
+                Box::new(move |input| {
+                    let (rows, total) = run_query(&s, &d, input)?;
+                    Ok(Value::map([
+                        ("rows", Value::List(rows)),
+                        ("total", Value::Int(total as i64)),
+                    ]))
+                }),
+            );
+            let (s, models) = (store.clone(), self.models.clone());
+            self.register(
+                module,
+                name,
+                "delete",
+                Box::new(move |input| {
+                    let id = id_of(input)?;
+                    // Checked again here, not only in the guard, so the rule holds for any caller
+                    // of the handler.
+                    if let Some(why) = guards::referrers(&models, &*s.backend, name, &id)? {
+                        return Err(why);
+                    }
+                    if !s.backend.delete(name, &id)? {
+                        return Err(format!("no {name} {id}"));
+                    }
+                    Ok(Value::map([("id", Value::text(&id))]))
                 }),
             );
             let (s, d) = (store.clone(), def.clone());
@@ -232,7 +259,50 @@ impl Dispatcher {
                 }),
             );
         }
+        self.register_guards(module, store);
     }
+
+    /// Bind the generic handler of a command declared as a transition (D48): it sets the field
+    /// to the declared value. Its checks (current state, required fields) are the command's
+    /// guard, registered by `register_crud`.
+    pub fn register_transition(&self, module: &Module, model: &str, command: &str, store: &Store) {
+        let t = module
+            .models
+            .iter()
+            .find(|m| m.name == model)
+            .and_then(|m| m.commands.iter().find(|c| c.name == command))
+            .and_then(|c| c.transition)
+            .unwrap_or_else(|| panic!("{model}.{command} is not declared as a transition"));
+        let (s, name) = (store.clone(), obop_registry::intern(model));
+        self.register(
+            module,
+            model,
+            command,
+            Box::new(move |input| {
+                let id = id_of(input)?;
+                s.update(
+                    name,
+                    &id,
+                    BTreeMap::from([(t.field.to_string(), Value::text(t.to))]),
+                )?;
+                Ok(Value::map([
+                    ("id", Value::text(&id)),
+                    (t.field, Value::text(t.to)),
+                ]))
+            }),
+        );
+    }
+}
+
+/// Run the optional filter, order, limit and offset of `list` and `search` over the records of a
+/// model. Returns the rows of the page and the number of matches before paging.
+fn run_query(s: &Store, d: &ModelDef, input: &Value) -> Result<(Vec<Value>, usize), String> {
+    // The dispatcher's guard has already refused fields the caller cannot read; the handler
+    // only needs the structure.
+    let q = Query::parse(d, input, &|_| true)?;
+    let all = s.backend.list(d.name)?;
+    let (page, total) = q.apply(all);
+    Ok((page.iter().map(|(id, f)| to_row(id, f)).collect(), total))
 }
 
 #[cfg(test)]

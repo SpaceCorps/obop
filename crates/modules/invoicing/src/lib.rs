@@ -52,7 +52,13 @@ pub fn module() -> Module {
                     "Post a draft invoice and assign its legal number",
                     "invoicing.manager",
                 )
+                .transition("state", Some("draft"), "posted")
                 .approval(),
+                CommandDef::new("cancel", "Cancel a draft invoice", "invoicing.user").transition(
+                    "state",
+                    Some("draft"),
+                    "cancelled",
+                ),
             ],
         }],
         network_destinations: vec![],
@@ -62,6 +68,7 @@ pub fn module() -> Module {
 pub fn register(d: &Dispatcher, store: &Store) {
     let m = module();
     d.register_crud(&m, store);
+    d.register_transition(&m, "invoice", "cancel", store);
     let s = store.clone();
     d.register(
         &m,

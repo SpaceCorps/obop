@@ -2,7 +2,9 @@
 //! permission groups and state-transition actions. A package contains no code, so installing
 //! one cannot run anything the registry does not already control.
 
-use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef, Module, check_module, intern};
+use obop_registry::{
+    CommandDef, FieldDef, FieldKind, GENERATED_COMMANDS, ModelDef, Module, check_module, intern,
+};
 use obop_types::DataClass;
 use serde::Deserialize;
 
@@ -178,32 +180,45 @@ impl Manifest {
                 }
                 self.check_kind(m, f)?;
             }
+            let mut actions = std::collections::HashSet::new();
             for a in &m.action {
-                if !ident_ok(&a.name)
-                    || ["get", "list", "create", "update"].contains(&a.name.as_str())
-                {
+                if !ident_ok(&a.name) || GENERATED_COMMANDS.contains(&a.name.as_str()) {
                     return Err(format!("{}: bad action name {:?}", m.name, a.name));
                 }
-                if !m.field.iter().any(|f| f.name == a.field) {
+                if !actions.insert(&a.name) {
+                    return Err(format!(
+                        "{}: action {:?} is declared twice",
+                        m.name, a.name
+                    ));
+                }
+                let Some(f) = m.field.iter().find(|f| f.name == a.field) else {
                     return Err(format!(
                         "{}.{}: acts on undeclared field {:?}",
                         m.name, a.name, a.field
                     ));
+                };
+                if f.kind != "select" {
+                    return Err(format!(
+                        "{}.{}: acts on {}, which is a {} field; an action moves a select field between its options",
+                        m.name, a.name, f.name, f.kind
+                    ));
                 }
-                if let Some(f) = m.field.iter().find(|f| f.name == a.field)
-                    && f.kind == "select"
-                {
-                    for v in a.from.iter().chain(std::iter::once(&a.to)) {
-                        if !f.options.contains(v) {
-                            return Err(format!(
-                                "{}.{}: {v:?} is not one of the options of {} ({})",
-                                m.name,
-                                a.name,
-                                f.name,
-                                f.options.join(", ")
-                            ));
-                        }
+                for v in a.from.iter().chain(std::iter::once(&a.to)) {
+                    if !f.options.contains(v) {
+                        return Err(format!(
+                            "{}.{}: {v:?} is not one of the options of {} ({})",
+                            m.name,
+                            a.name,
+                            f.name,
+                            f.options.join(", ")
+                        ));
                     }
+                }
+                if a.from.as_ref() == Some(&a.to) {
+                    return Err(format!(
+                        "{}.{}: `from` and `to` are both {:?}; an action must change the state",
+                        m.name, a.name, a.to
+                    ));
                 }
             }
         }
@@ -341,6 +356,7 @@ impl Manifest {
                             intern(&a.description),
                             intern(a.group.as_deref().unwrap_or(&m.write_group)),
                         );
+                        let c = c.transition(&a.field, a.from.as_deref(), &a.to);
                         if a.approval { c.approval() } else { c }
                     })
                     .collect(),
@@ -397,6 +413,8 @@ write_group = "fleet.manager"
   name = "state"
   description = "available or in_service"
   class = "none"
+  kind = "select"
+  options = ["available", "in_service"]
 
   [[model.action]]
   name = "dispatch"
@@ -410,7 +428,7 @@ write_group = "fleet.manager"
     fn valid_manifest_becomes_a_module_that_passes_the_gate() {
         let m = Manifest::parse(FLEET).unwrap();
         let module = m.to_module().unwrap();
-        assert_eq!(module.models[0].all_commands().len(), 5);
+        assert_eq!(module.models[0].all_commands().len(), 7);
         assert_eq!(m.groups(), ["fleet.manager", "fleet.user"]);
     }
 
@@ -457,13 +475,9 @@ write_group = "fleet.manager"
         assert!(err(&bad).contains("personal data cannot be classed"));
     }
 
-    /// FLEET with a typed `state` and a ref, as manifests now declare them.
+    /// FLEET with a ref added.
     fn typed() -> String {
         FLEET
-            .replace(
-                "description = \"available or in_service\"\n  class = \"none\"",
-                "description = \"available or in_service\"\n  class = \"none\"\n  kind = \"select\"\n  options = [\"available\", \"in_service\"]",
-            )
             .replace(
                 "[[model.action]]",
                 "[[model.field]]\n  name = \"parent_id\"\n  description = \"Parent vehicle\"\n  class = \"none\"\n  kind = \"ref\"\n  to = \"fleet_vehicle\"\n  required = true\n\n  [[model.action]]",

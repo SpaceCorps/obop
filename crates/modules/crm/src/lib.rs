@@ -53,11 +53,16 @@ pub fn module() -> Module {
                 )
                 .select(&["new", "qualified", "won", "lost"]),
             ],
-            commands: vec![CommandDef::new(
-                "mark_won",
-                "Move the lead to the won stage",
-                "crm.user",
-            )],
+            commands: vec![
+                CommandDef::new("qualify", "Move a new lead to the qualified stage", "crm.user")
+                    .transition("stage", Some("new"), "qualified"),
+                CommandDef::new("mark_won", "Move the lead to the won stage", "crm.user")
+                    .transition("stage", Option::None, "won"),
+                CommandDef::new("mark_lost", "Move the lead to the lost stage", "crm.user")
+                    .transition("stage", Option::None, "lost"),
+                CommandDef::new("reopen", "Move the lead back to the new stage", "crm.user")
+                    .transition("stage", Option::None, "new"),
+            ],
         }],
         network_destinations: vec![],
     }
@@ -66,29 +71,9 @@ pub fn module() -> Module {
 pub fn register(d: &Dispatcher, store: &Store) {
     let m = module();
     d.register_crud(&m, store);
-    let s = store.clone();
-    d.register(
-        &m,
-        "lead",
-        "mark_won",
-        Box::new(move |input| {
-            let Value::Map(i) = input else {
-                return Err("expected an object".into());
-            };
-            let Some(Value::Text(id)) = i.get("id") else {
-                return Err("missing id".into());
-            };
-            s.update(
-                "lead",
-                id,
-                [("stage".to_string(), Value::text("won"))].into(),
-            )?;
-            Ok(Value::map([
-                ("id", Value::text(id)),
-                ("stage", Value::text("won")),
-            ]))
-        }),
-    );
+    for command in ["qualify", "mark_won", "mark_lost", "reopen"] {
+        d.register_transition(&m, "lead", command, store);
+    }
 }
 
 pub fn seed(store: &Store) -> String {

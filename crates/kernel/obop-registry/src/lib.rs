@@ -143,6 +143,18 @@ pub struct CommandDef {
     pub needs_approval: bool,
     /// Exposed through generated REST, MCP and CLI (D41: all or none, so this is not optional).
     pub surfaces: Surfaces,
+    /// Set when the command is a state transition (D48): it moves a `select` field to a new
+    /// value. The field is then governed: generic `create` and `update` may not set it freely.
+    pub transition: Option<Transition>,
+}
+
+/// A declared state transition: set `field` to `to`, only when it currently equals `from` (if
+/// given). Part of the registry metadata so every surface and the generic commands agree on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Transition {
+    pub field: &'static str,
+    pub from: Option<&'static str>,
+    pub to: &'static str,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -164,7 +176,19 @@ impl CommandDef {
             permission_group,
             needs_approval: false,
             surfaces: Surfaces::ALL,
+            transition: None,
         }
+    }
+
+    /// Declare the command a transition of `field` (strings are interned, so literals and
+    /// manifest text both work).
+    pub fn transition(mut self, field: &str, from: Option<&str>, to: &str) -> Self {
+        self.transition = Some(Transition {
+            field: intern(field),
+            from: from.map(intern),
+            to: intern(to),
+        });
+        self
     }
 
     pub fn approval(mut self) -> Self {
@@ -240,20 +264,53 @@ pub struct ModelDef {
 }
 
 impl ModelDef {
-    /// Generated `get`, `list`, `create` and `update`, followed by the custom commands. The
-    /// REST, MCP and CLI surfaces are derived from this list (D29, D41).
+    /// Generated `get`, `list`, `search`, `create`, `update` and `delete`, followed by the custom
+    /// commands. The REST, MCP and CLI surfaces are derived from this list (D29, D41, D49).
     pub fn all_commands(&self) -> Vec<CommandDef> {
         let crud = CommandDef::new;
         let mut v = vec![
             crud("get", "Read one record by id", self.read_group),
-            crud("list", "List records", self.read_group),
+            crud(
+                "list",
+                "List records; optional filter, order, limit and offset",
+                self.read_group,
+            ),
+            crud(
+                "search",
+                "Like list, but returns {rows, total} with the count before limit and offset",
+                self.read_group,
+            ),
             crud("create", "Create a record", self.write_group),
             crud("update", "Update fields of a record", self.write_group),
+            crud(
+                "delete",
+                "Delete a record that no other record refers to",
+                self.write_group,
+            )
+            .approval(),
         ];
         v.extend(self.commands.iter().cloned());
         v
     }
+
+    /// The transitions declared by this model's commands, with the command that runs each.
+    pub fn transitions(&self) -> impl Iterator<Item = (&CommandDef, Transition)> {
+        self.commands
+            .iter()
+            .filter_map(|c| c.transition.map(|t| (c, t)))
+    }
+
+    /// Fields that are the target of at least one declared transition (D48).
+    pub fn governed_fields(&self) -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = self.transitions().map(|(_, t)| t.field).collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    }
 }
+
+/// Command names the platform generates for every model; a custom command cannot use them.
+pub const GENERATED_COMMANDS: [&str; 6] = ["get", "list", "search", "create", "update", "delete"];
 
 #[derive(Debug, Clone, Default)]
 pub struct Module {
@@ -348,6 +405,32 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
                 _ => {}
             }
         }
+        let mut command_names = HashSet::new();
+        for c in &model.commands {
+            if GENERATED_COMMANDS.contains(&c.name) || !command_names.insert(c.name) {
+                bad(
+                    format!("{mp}::{}", c.name),
+                    "command name is generated or declared twice",
+                );
+            }
+            if let Some(t) = c.transition {
+                match model.fields.iter().find(|f| f.name == t.field) {
+                    Some(f) if matches!(f.kind, FieldKind::Select(_)) => {
+                        let o = f.kind.options();
+                        if t.from.iter().chain([&t.to]).any(|v| !o.contains(v)) {
+                            bad(
+                                format!("{mp}::{}", c.name),
+                                "transition uses a value that is not an option of the field",
+                            );
+                        }
+                    }
+                    _ => bad(
+                        format!("{mp}::{}", c.name),
+                        "transition must act on a declared select field",
+                    ),
+                }
+            }
+        }
         for c in &model.all_commands() {
             let cp = format!("{mp}::{}", c.name);
             if c.description.trim().is_empty() {
@@ -440,6 +523,7 @@ mod tests {
                 mcp: false,
                 cli: true,
             },
+            transition: None,
         });
         assert_eq!(check_module(&m).len(), 1);
     }

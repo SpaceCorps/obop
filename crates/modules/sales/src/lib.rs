@@ -46,11 +46,21 @@ pub fn module() -> Module {
                     "sales.user",
                 ),
             ],
-            commands: vec![CommandDef::new(
-                "confirm",
-                "Confirm a draft order",
-                "sales.user",
-            )],
+            commands: vec![
+                CommandDef::new("confirm", "Confirm a draft order", "sales.user").transition(
+                    "state",
+                    Some("draft"),
+                    "confirmed",
+                ),
+                CommandDef::new("cancel", "Cancel an order", "sales.user")
+                    .transition("state", None, "cancelled"),
+                CommandDef::new(
+                    "reset_to_draft",
+                    "Put a cancelled order back to draft",
+                    "sales.user",
+                )
+                .transition("state", Some("cancelled"), "draft"),
+            ],
         }],
         network_destinations: vec![],
     }
@@ -59,34 +69,9 @@ pub fn module() -> Module {
 pub fn register(d: &Dispatcher, store: &Store) {
     let m = module();
     d.register_crud(&m, store);
-    let s = store.clone();
-    d.register(
-        &m,
-        "sale_order",
-        "confirm",
-        Box::new(move |input| {
-            let Value::Map(i) = input else {
-                return Err("expected an object".into());
-            };
-            let Some(Value::Text(id)) = i.get("id") else {
-                return Err("missing id".into());
-            };
-            match s.field("sale_order", id, "state") {
-                Some(Value::Text(st)) if st == "draft" => {}
-                Some(_) => return Err("only a draft order can be confirmed".into()),
-                None => return Err(format!("no sale_order {id}")),
-            }
-            s.update(
-                "sale_order",
-                id,
-                [("state".to_string(), Value::text("confirmed"))].into(),
-            )?;
-            Ok(Value::map([
-                ("id", Value::text(id)),
-                ("state", Value::text("confirmed")),
-            ]))
-        }),
-    );
+    for command in ["confirm", "cancel", "reset_to_draft"] {
+        d.register_transition(&m, "sale_order", command, store);
+    }
 }
 
 pub fn seed(store: &Store, party_id: &str) -> String {

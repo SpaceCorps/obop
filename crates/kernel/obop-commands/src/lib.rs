@@ -5,7 +5,7 @@
 
 use obop_masking::mode_for;
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
-use obop_registry::{FieldDef, Module};
+use obop_registry::{FieldDef, GENERATED_COMMANDS, Module, Transition};
 use obop_types::MaskMode;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -110,6 +110,35 @@ pub struct CommandInfo {
     pub description: &'static str,
     pub permission_group: &'static str,
     pub needs_approval: bool,
+    /// For a state transition (D48): the governed field and the values it moves between.
+    pub transition: Option<Transition>,
+}
+
+/// What a guard decides about one call (D48).
+#[derive(Debug, Default)]
+pub struct Verdict {
+    /// The input to run instead of the one received, when the guard normalised it (a default
+    /// filled in).
+    pub input: Option<Value>,
+    /// Groups of the transitions this call implicitly runs. The caller already holds them (the
+    /// guard checked); a human approving a proposal must hold them too.
+    pub requires: Vec<&'static str>,
+    /// An agent may only propose this call, although the command itself needs no approval.
+    pub approval: bool,
+}
+
+/// A pre-hook on one command, run by the dispatcher after the permission check and before the
+/// call executes or is turned into a proposal. It sees the principal and the restored input and
+/// may refuse with a message. It is re-run when a proposal is approved, because the record may
+/// have changed since.
+pub type Guard = Box<dyn Fn(&Principal, &Value) -> Result<Verdict, String> + Send + Sync>;
+
+struct Guarded {
+    module: String,
+    /// Mutating guards run under the dispatcher's transaction lock, so the check and the write
+    /// of one call cannot interleave with another guarded call.
+    serialize: bool,
+    guard: Guard,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -135,6 +164,9 @@ struct Registered {
     model: &'static str,
     permission_group: &'static str,
     surfaces: obop_registry::Surfaces,
+    transition: Option<Transition>,
+    /// `search`: the handler returns `{rows, total}` and only the rows are shaped.
+    envelope: bool,
     handler: Handler,
 }
 
@@ -144,16 +176,22 @@ struct Registered {
 pub struct Dispatcher {
     pending: std::sync::Mutex<HashMap<String, Pending>>,
     commands: std::sync::RwLock<HashMap<String, Arc<Registered>>>,
-    models: std::sync::RwLock<HashMap<String, ModelMeta>>,
+    /// Shared with the generated `delete` handler, which looks for records that refer to the
+    /// one being deleted in every registered model.
+    models: Arc<std::sync::RwLock<HashMap<String, ModelMeta>>>,
+    /// Guards by command id (D48).
+    guards: std::sync::RwLock<HashMap<String, Arc<Guarded>>>,
+    /// Held across the guard and the handler of every mutating guarded call.
+    txn: std::sync::Mutex<()>,
     /// Module ids in the order they were first registered, so the launcher is stable.
     order: std::sync::RwLock<Vec<String>>,
 }
 
-struct ModelMeta {
+pub(crate) struct ModelMeta {
     module: String,
     module_name: String,
     description: &'static str,
-    fields: Vec<FieldDef>,
+    pub(crate) fields: Vec<FieldDef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -181,6 +219,7 @@ pub struct ModelInfo {
     pub actions: Vec<CommandInfo>,
     pub can_create: bool,
     pub can_update: bool,
+    pub can_delete: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,6 +245,7 @@ impl Dispatcher {
                     description: c.description,
                     permission_group: c.permission_group,
                     needs_approval: c.needs_approval,
+                    transition: c.transition,
                 }
             })
             .collect()
@@ -243,7 +283,7 @@ impl Dispatcher {
                     .filter(|(id, c)| {
                         c.model == name.as_str()
                             && id.starts_with(&format!("{name}."))
-                            && !["get", "list", "create", "update"].contains(&&id[name.len() + 1..])
+                            && !GENERATED_COMMANDS.contains(&&id[name.len() + 1..])
                             && visible(c)
                     })
                     .map(|(id, c)| CommandInfo {
@@ -251,6 +291,7 @@ impl Dispatcher {
                         description: c.description,
                         permission_group: c.permission_group,
                         needs_approval: c.needs_approval,
+                        transition: c.transition,
                     })
                     .collect();
                 actions.sort_by(|a, b| a.id.cmp(&b.id));
@@ -275,6 +316,7 @@ impl Dispatcher {
                     actions,
                     can_create: can("create"),
                     can_update: can("update"),
+                    can_delete: can("delete"),
                 });
             }
             if !infos.is_empty() {
@@ -330,13 +372,29 @@ impl Dispatcher {
                 model: m.name,
                 permission_group: c.permission_group,
                 surfaces: c.surfaces,
+                transition: c.transition,
+                envelope: command == "search",
                 handler,
+            }),
+        );
+    }
+
+    /// Attach a guard to the command `id` (`model.command`) of `module`. It is removed with the
+    /// module. `serialize` makes the call hold the transaction lock from guard to handler.
+    pub fn register_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        self.guards.write().unwrap().insert(
+            id.to_string(),
+            Arc::new(Guarded {
+                module: module.into(),
+                serialize,
+                guard,
             }),
         );
     }
 
     /// Remove every command a module registered. Its data stays in the store.
     pub fn unregister_module(&self, module: &str) {
+        self.guards.write().unwrap().retain(|_, g| g.module != module);
         let mut cmds = self.commands.write().unwrap();
         let models: HashSet<&str> = cmds
             .values()
@@ -399,7 +457,20 @@ impl Dispatcher {
         if let Value::Map(m) = &mut input {
             m.remove("_caller");
         }
-        if c.needs_approval && p.kind == PrincipalKind::Agent {
+        let guard = self.guards.read().unwrap().get(id).cloned();
+        let _txn = guard
+            .as_ref()
+            .filter(|g| g.serialize)
+            .map(|_| self.txn.lock().unwrap_or_else(|e| e.into_inner()));
+        let mut guard_approval = false;
+        if let Some(g) = &guard {
+            let v = (g.guard)(p, &input).map_err(CallError::Handler)?;
+            guard_approval = v.approval;
+            if let Some(i) = v.input {
+                input = i;
+            }
+        }
+        if (c.needs_approval || guard_approval) && p.kind == PrincipalKind::Agent {
             // Dry-run: keep the restored input, hand back a plan id (D18, D42).
             let plan_id = uuid::Uuid::now_v7().to_string();
             self.pending.lock().unwrap().insert(
@@ -426,6 +497,7 @@ impl Dispatcher {
         if approver.kind != PrincipalKind::User {
             return Err(CallError::Forbidden("approve".into()));
         }
+        let _txn = self.txn.lock().unwrap_or_else(|e| e.into_inner());
         let mut pending = self.pending.lock().unwrap();
         let plan = pending
             .get(plan_id)
@@ -440,9 +512,22 @@ impl Dispatcher {
         if !approver.allows(c.permission_group) || !plan.principal.allows(c.permission_group) {
             return Err(CallError::Forbidden(plan.id.clone()));
         }
+        // The record may have changed since the proposal, so the guard runs again, and the
+        // approver must hold the groups of any transition the call implicitly runs (D48).
+        let mut input = plan.input.clone();
+        let guard = self.guards.read().unwrap().get(&plan.id).cloned();
+        if let Some(g) = guard {
+            let v = (g.guard)(&plan.principal, &input).map_err(CallError::Handler)?;
+            if v.requires.iter().any(|r| !approver.allows(r)) {
+                return Err(CallError::Forbidden(plan.id.clone()));
+            }
+            if let Some(i) = v.input {
+                input = i;
+            }
+        }
         let plan = pending.remove(plan_id).expect("checked above");
         drop(pending);
-        self.run(&c, &plan.principal, vault, plan.input)
+        self.run(&c, &plan.principal, vault, input)
     }
 
     fn run(
@@ -460,7 +545,16 @@ impl Dispatcher {
         }
         let out = (c.handler)(&input).map_err(CallError::Handler)?;
         let mut denied = Vec::new();
-        let value = self.shape(c.model, p, vault, out, &mut denied);
+        let value = match out {
+            // `search`: shape the rows, keep the envelope.
+            Value::Map(mut m) if c.envelope => {
+                if let Some(rows) = m.remove("rows") {
+                    m.insert("rows".into(), self.shape(c.model, p, vault, rows, &mut denied));
+                }
+                Value::Map(m)
+            }
+            out => self.shape(c.model, p, vault, out, &mut denied),
+        };
         // A list shapes every row; name each withheld field once.
         let mut seen = HashSet::new();
         denied.retain(|d| seen.insert(d.clone()));
@@ -512,13 +606,13 @@ impl Dispatcher {
                     _ => model.to_string(),
                 };
                 let mut shaped = BTreeMap::new();
+                let defs = self
+                    .models
+                    .read()
+                    .unwrap()
+                    .get(model)
+                    .map(|m| m.fields.clone());
                 for (k, v) in m {
-                    let defs = self
-                        .models
-                        .read()
-                        .unwrap()
-                        .get(model)
-                        .map(|m| m.fields.clone());
                     let Some(def) = defs.as_ref().and_then(|f| f.iter().find(|f| f.name == k))
                     else {
                         // Unclassified output is withheld: the gate guarantees declared fields only.
@@ -595,7 +689,9 @@ pub trait Authenticator: Send + Sync {
     ) -> Result<String, String>;
 }
 
+mod guards;
 pub mod json;
+pub mod query;
 pub mod store;
 
 pub use store::Store;

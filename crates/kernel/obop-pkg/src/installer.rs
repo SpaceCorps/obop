@@ -117,61 +117,12 @@ impl Installer {
 
     fn register(&self, m: &Manifest, module: &Module) -> Result<(), String> {
         let d = self.d()?;
+        // Registers the generated commands and, from the transitions declared in the registry
+        // metadata, the guards that govern state fields (D48).
         d.register_crud(module, &self.store);
         for model in &m.model {
             for a in &model.action {
-                let (store, name, field, from, to) = (
-                    self.store.clone(),
-                    intern(&model.name),
-                    a.field.clone(),
-                    a.from.clone(),
-                    a.to.clone(),
-                );
-                // A select field only ever takes one of its options (D47).
-                let options: Vec<String> = model
-                    .field
-                    .iter()
-                    .find(|f| f.name == a.field && f.kind == "select")
-                    .map(|f| f.options.clone())
-                    .unwrap_or_default();
-                if !options.is_empty() && !options.contains(&to) {
-                    return Err(format!(
-                        "{name}.{}: {to:?} is not one of the options of {field}",
-                        a.name
-                    ));
-                }
-                d.register(
-                    module,
-                    name,
-                    &a.name,
-                    Box::new(move |input| {
-                        let Value::Map(i) = input else {
-                            return Err("expected an object".into());
-                        };
-                        let Some(Value::Text(id)) = i.get("id") else {
-                            return Err("missing id".into());
-                        };
-                        let current = store
-                            .field(name, id, &field)
-                            .ok_or_else(|| format!("no {name} {id}"))?;
-                        if let Some(from) = &from
-                            && current != Value::text(from)
-                        {
-                            return Err(format!(
-                                "{field} must be {from} to do this, it is {current:?}"
-                            ));
-                        }
-                        store.update(
-                            name,
-                            id,
-                            BTreeMap::from([(field.clone(), Value::text(&to))]),
-                        )?;
-                        Ok(Value::map([
-                            ("id", Value::text(id)),
-                            (field.as_str(), Value::text(&to)),
-                        ]))
-                    }),
-                );
+                d.register_transition(module, intern(&model.name), &a.name, &self.store);
             }
         }
         Ok(())
@@ -916,19 +867,18 @@ mod tests {
             "root",
         )
         .unwrap();
-        let human = Principal::user("h", &["helpdesk.agent", "helpdesk.manager"]);
-        let id = id_of(
-            &call(
-                &d,
-                &human,
-                "helpdesk_ticket.create",
-                Value::map([
-                    ("subject", Value::text("printer")),
-                    ("state", Value::text("resolved")),
-                ]),
+        // `create` only starts a ticket in its first state (D48), so put one in `resolved`
+        // the way an import would: straight into the store.
+        let id = store
+            .insert(
+                "helpdesk_ticket",
+                [
+                    ("subject".to_string(), Value::text("printer")),
+                    ("state".to_string(), Value::text("resolved")),
+                ]
+                .into(),
             )
-            .unwrap(),
-        );
+            .unwrap();
         let bot = Principal::agent("bot", &["helpdesk.manager"], &["helpdesk.manager"]);
         assert!(matches!(
             call(&d, &bot, "helpdesk_ticket.close", by_id(&id)),
