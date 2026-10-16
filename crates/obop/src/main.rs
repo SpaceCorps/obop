@@ -1,3 +1,5 @@
+use obop_commands::{Dispatcher, Principal, Surface, Value, names};
+use obop_masking::Vault;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -13,8 +15,11 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         ["modules", "check"] => modules_check(),
+        ["call", rest @ ..] => call(rest),
         _ => {
-            eprintln!("usage: obop [--version | modules check]");
+            eprintln!(
+                "usage: obop [--version | modules check | call [--agent] <model> <command> [key=value...]]"
+            );
             ExitCode::from(2)
         }
     }
@@ -39,5 +44,46 @@ fn modules_check() -> ExitCode {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
+    }
+}
+
+/// Demo of the one dispatch path over fake in-memory data (no database yet).
+fn call(args: &[&str]) -> ExitCode {
+    let (agent, args) = match args {
+        ["--agent", rest @ ..] => (true, rest),
+        rest => (false, rest),
+    };
+    let [model, command, kv @ ..] = args else {
+        eprintln!("usage: obop call [--agent] <model> <command> [key=value...]");
+        return ExitCode::from(2);
+    };
+    let Some(id) = names::from_cli(&[model, command]) else {
+        return ExitCode::from(2);
+    };
+    let input = Value::Map(
+        kv.iter()
+            .filter_map(|p| p.split_once('='))
+            .map(|(k, v)| (k.to_string(), Value::text(v)))
+            .collect(),
+    );
+    let principal = if agent {
+        Principal::agent("cli-agent", &["base.user"], &["base.user"])
+    } else {
+        Principal::user("cli-user", &["base.user", "privacy.officer"])
+    };
+    let mut d = Dispatcher::new();
+    base::register(&mut d, base::demo_store());
+    match d.call(Surface::Cli, &principal, &mut Vault::new(), &id, &input) {
+        Ok(r) => {
+            println!("{:#?}", r.value);
+            if !r.denied.is_empty() {
+                println!("denied: {}", r.denied.join(", "));
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {e:?}");
+            ExitCode::FAILURE
+        }
     }
 }

@@ -7,6 +7,8 @@ name = "base"
 version = "0.0.0"
 dependencies = [
  "base-api",
+ "obop-commands",
+ "obop-masking",
  "obop-registry",
  "obop-types",
 ]
@@ -24,6 +26,17 @@ name = "obop"
 version = "0.0.0"
 dependencies = [
  "base",
+ "obop-commands",
+ "obop-masking",
+ "obop-registry",
+ "obop-types",
+]
+
+[[package]]
+name = "obop-commands"
+version = "0.0.0"
+dependencies = [
+ "obop-masking",
  "obop-registry",
  "obop-types",
 ]
