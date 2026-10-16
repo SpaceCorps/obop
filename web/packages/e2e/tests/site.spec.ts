@@ -86,9 +86,9 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator("a[rel=prev]")).toContainText("Create an agent token");
     await expect(page.locator("a[rel=next]")).toContainText("Use the REST API");
     await expect(page.getByRole("navigation", { name: "On this page" })).toContainText(
-      "Claude Desktop",
+      "MCP over stdio",
     );
-    await expect(page.getByRole("heading", { name: "Cursor" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cursor" }).first()).toBeVisible();
   });
 
   test("the module manifest reference is rendered from docs/MODULES.md", async ({ page }) => {
