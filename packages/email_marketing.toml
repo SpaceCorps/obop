@@ -1,0 +1,221 @@
+[module]
+id = "email_marketing"
+version = "0.1.0"
+name = "Email Marketing"
+description = "Mailing lists, the contacts on them with their consent status and date, and campaigns with a draft, scheduled, sent flow. Sending is irreversible and reaches real people, so it needs a human approval from a manager; agents may only propose it. Campaign statistics are numbers entered or imported, not computed. Contacts are personal data: keep consent_status and consent_date accurate and never mail a contact that is not opted_in."
+author = "SpaceCorps"
+
+[[model]]
+name = "email_marketing_list"
+description = "A mailing list contacts can belong to"
+read_group = "email_marketing.user"
+write_group = "email_marketing.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "List name, for example Newsletter"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "description"
+  description = "What subscribers receive"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "is_public"
+  description = "Whether visitors can subscribe themselves"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "email_marketing_contact"
+description = "A person on a mailing list"
+read_group = "email_marketing.user"
+write_group = "email_marketing.user"
+
+  [[model.field]]
+  name = "list_id"
+  description = "The list the contact is on"
+  class = "none"
+  kind = "ref"
+  to = "email_marketing_list"
+  required = true
+
+  [[model.field]]
+  name = "email"
+  description = "Email address"
+  class = "internal"
+  personal_data = true
+  required = true
+
+  [[model.field]]
+  name = "name"
+  description = "Name of the contact"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "consent_status"
+  description = "Permission to mail: pending, opted_in, opted_out, bounced"
+  class = "internal"
+  personal_data = true
+  kind = "select"
+  options = ["pending", "opted_in", "opted_out", "bounced"]
+  required = true
+
+  [[model.field]]
+  name = "consent_date"
+  description = "Day the contact gave or withdrew permission (YYYY-MM-DD)"
+  class = "internal"
+  personal_data = true
+  kind = "date"
+
+  [[model.field]]
+  name = "consent_source"
+  description = "Where consent was collected, for example website signup form"
+  class = "internal"
+  personal_data = true
+
+[[model]]
+name = "email_marketing_campaign"
+description = "One mailing sent to a list"
+read_group = "email_marketing.user"
+write_group = "email_marketing.user"
+
+  [[model.field]]
+  name = "name"
+  description = "Internal campaign name"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "subject"
+  description = "Email subject line"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "preview_text"
+  description = "Short text shown after the subject in inboxes"
+  class = "none"
+
+  [[model.field]]
+  name = "from_name"
+  description = "Sender name shown to recipients"
+  class = "none"
+
+  [[model.field]]
+  name = "from_email"
+  description = "Sender address shown to recipients"
+  class = "none"
+
+  [[model.field]]
+  name = "list_id"
+  description = "The list the campaign goes to"
+  class = "none"
+  kind = "ref"
+  to = "email_marketing_list"
+  required = true
+
+  [[model.field]]
+  name = "body"
+  description = "Email content (HTML or Markdown, as the sender expects)"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "scheduled_for"
+  description = "Day the campaign is to be sent (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "sent_on"
+  description = "Day the campaign was sent (YYYY-MM-DD)"
+  class = "none"
+  kind = "date"
+
+  [[model.field]]
+  name = "sent_count"
+  description = "Emails handed to the mail server"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "delivered_count"
+  description = "Emails accepted by recipients' servers"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "opened_count"
+  description = "Recipients who opened the email"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "clicked_count"
+  description = "Recipients who clicked a link"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "bounced_count"
+  description = "Emails that bounced"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "unsubscribed_count"
+  description = "Recipients who unsubscribed because of this campaign"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "state"
+  description = "Campaign status: draft, scheduled, sent, cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "scheduled", "sent", "cancelled"]
+  required = true
+
+  [[model.action]]
+  name = "schedule"
+  description = "Queue the campaign for its scheduled day"
+  field = "state"
+  from = "draft"
+  to = "scheduled"
+
+  [[model.action]]
+  name = "send"
+  description = "Send the scheduled campaign to the whole list (manager only)"
+  field = "state"
+  from = "scheduled"
+  to = "sent"
+  group = "email_marketing.manager"
+  approval = true
+
+  [[model.action]]
+  name = "send_now"
+  description = "Send a draft campaign immediately (manager only)"
+  field = "state"
+  from = "draft"
+  to = "sent"
+  group = "email_marketing.manager"
+  approval = true
+
+  [[model.action]]
+  name = "unschedule"
+  description = "Take a scheduled campaign back to draft"
+  field = "state"
+  from = "scheduled"
+  to = "draft"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a scheduled campaign"
+  field = "state"
+  from = "scheduled"
+  to = "cancelled"

@@ -24,16 +24,36 @@ pub struct Bundled;
 
 const BUNDLED: &[(&str, &str)] = &[
     (
+        "accounting",
+        include_str!("../../../../packages/accounting.toml"),
+    ),
+    (
         "appointments",
         include_str!("../../../../packages/appointments.toml"),
+    ),
+    (
+        "dashboards",
+        include_str!("../../../../packages/dashboards.toml"),
     ),
     (
         "documents",
         include_str!("../../../../packages/documents.toml"),
     ),
     (
+        "ecommerce",
+        include_str!("../../../../packages/ecommerce.toml"),
+    ),
+    (
+        "email_marketing",
+        include_str!("../../../../packages/email_marketing.toml"),
+    ),
+    (
         "expenses",
         include_str!("../../../../packages/expenses.toml"),
+    ),
+    (
+        "field_service",
+        include_str!("../../../../packages/field_service.toml"),
     ),
     ("fleet", include_str!("../../../../packages/fleet.toml")),
     (
@@ -46,9 +66,18 @@ const BUNDLED: &[(&str, &str)] = &[
         include_str!("../../../../packages/inventory.toml"),
     ),
     (
+        "knowledge",
+        include_str!("../../../../packages/knowledge.toml"),
+    ),
+    (
         "manufacturing",
         include_str!("../../../../packages/manufacturing.toml"),
     ),
+    (
+        "planning",
+        include_str!("../../../../packages/planning.toml"),
+    ),
+    ("pos", include_str!("../../../../packages/pos.toml")),
     (
         "projects",
         include_str!("../../../../packages/projects.toml"),
@@ -57,6 +86,7 @@ const BUNDLED: &[(&str, &str)] = &[
         "purchase",
         include_str!("../../../../packages/purchase.toml"),
     ),
+    ("sign", include_str!("../../../../packages/sign.toml")),
     (
         "subscriptions",
         include_str!("../../../../packages/subscriptions.toml"),
@@ -65,6 +95,7 @@ const BUNDLED: &[(&str, &str)] = &[
         "timesheets",
         include_str!("../../../../packages/timesheets.toml"),
     ),
+    ("website", include_str!("../../../../packages/website.toml")),
 ];
 
 impl Marketplace for Bundled {
@@ -178,18 +209,28 @@ mod tests {
         assert_eq!(
             ids,
             [
+                "accounting",
                 "appointments",
+                "dashboards",
                 "documents",
+                "ecommerce",
+                "email_marketing",
                 "expenses",
+                "field_service",
                 "fleet",
                 "helpdesk",
                 "hr",
                 "inventory",
+                "knowledge",
                 "manufacturing",
+                "planning",
+                "pos",
                 "projects",
                 "purchase",
+                "sign",
                 "subscriptions",
-                "timesheets"
+                "timesheets",
+                "website"
             ]
         );
         let mut sorted = ids.clone();

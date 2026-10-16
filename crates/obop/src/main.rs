@@ -1147,6 +1147,21 @@ mod bundled_packages {
     /// Where the greedy walk over each model's actions (first action leading to a state not
     /// seen yet) must end, starting from the first option of `state`.
     const FINAL_STATE: &[(&str, &str)] = &[
+        ("accounting_bank_statement_line", "reconciled"),
+        ("accounting_fiscal_year", "closed"),
+        ("accounting_move", "reversed"),
+        ("accounting_period", "closed"),
+        ("ecommerce_order", "refunded"),
+        ("email_marketing_campaign", "sent"),
+        ("field_service_job", "done"),
+        ("knowledge_article", "archived"),
+        ("planning_shift", "confirmed"),
+        ("pos_order", "refunded"),
+        ("pos_session", "closed"),
+        ("sign_request", "signed"),
+        ("website_blog_post", "archived"),
+        ("website_form_submission", "handled"),
+        ("website_page", "archived"),
         ("appointments_appointment", "done"),
         ("documents_document", "archived"),
         ("expenses_expense", "paid"),
@@ -1308,7 +1323,7 @@ mod bundled_packages {
     fn every_bundled_package_installs_and_every_model_and_action_works() {
         let app = App::new();
         let manifests = install_order(&app, all_manifests());
-        assert!(manifests.len() >= 12);
+        assert!(manifests.len() >= 22);
         let admin = Principal::user("root", &[ADMIN_GROUP]);
         let mut seen_special = false;
         let mut seen_financial = false;
@@ -1517,6 +1532,19 @@ mod bundled_packages {
         );
         assert!(call(&app, &admin, "module.uninstall", by_id("projects")).is_err());
         assert!(app.dispatcher.has_model("projects_task"));
+        // The same holds for the packages that refer to people and to other apps.
+        for (dep, model) in [("hr", "hr_employee"), ("accounting", "accounting_move")] {
+            if manifests
+                .iter()
+                .any(|m| m.module.depends.contains(&dep.to_string()))
+            {
+                assert!(
+                    call(&app, &admin, "module.uninstall", by_id(dep)).is_err(),
+                    "{dep}"
+                );
+                assert!(app.dispatcher.has_model(model), "{dep} still installed");
+            }
+        }
 
         for m in manifests.iter().rev() {
             call(&app, &admin, "module.uninstall", by_id(&m.module.id))
@@ -1551,5 +1579,128 @@ mod bundled_packages {
                 assert!(matches!(list.value, Value::List(l) if l.len() == want));
             }
         }
+    }
+
+    /// The apps the landing page promises are all in the catalogue.
+    #[test]
+    fn the_promised_apps_are_all_bundled() {
+        let ids: BTreeSet<String> = all_manifests().into_iter().map(|m| m.module.id).collect();
+        for id in [
+            "accounting",
+            "planning",
+            "field_service",
+            "pos",
+            "ecommerce",
+            "website",
+            "email_marketing",
+            "sign",
+            "dashboards",
+            "knowledge",
+        ] {
+            assert!(ids.contains(id), "{id} is missing from packages/");
+        }
+    }
+
+    /// Money-moving or irreversible steps of the new apps need an approval and the stricter
+    /// group, so a plain user of the app cannot take them.
+    #[test]
+    fn new_apps_separate_duties_on_the_steps_that_matter() {
+        let app = App::new();
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        for m in install_order(&app, all_manifests()) {
+            app.installer
+                .install(&Bundled.fetch(&m.module.id).unwrap(), "marketplace", "test")
+                .unwrap();
+        }
+        let mut mk = Maker {
+            app: &app,
+            meta: models_of(&app, &admin),
+            pkg_models: BTreeSet::new(),
+            pkg_user: admin.clone(),
+            admin: admin.clone(),
+            made: HashMap::new(),
+        };
+        for (model, action, from, group) in [
+            ("accounting_move", "post", "draft", "accounting.approver"),
+            ("accounting_period", "close", "open", "accounting.approver"),
+            (
+                "accounting_fiscal_year",
+                "close",
+                "open",
+                "accounting.approver",
+            ),
+            ("pos_order", "refund", "paid", "pos.manager"),
+            ("pos_session", "close", "open", "pos.manager"),
+            ("ecommerce_order", "refund", "paid", "ecommerce.manager"),
+            (
+                "email_marketing_campaign",
+                "send",
+                "scheduled",
+                "email_marketing.manager",
+            ),
+        ] {
+            let prefix = group.split_once('.').unwrap().0;
+            let user_group = format!("{prefix}.user");
+            let plain = Principal::user("u", &[user_group.as_str()]);
+            let rec = mk.fresh(model, from);
+            let cmd = format!("{model}.{action}");
+            let denied = call(&app, &plain, &cmd, by_id(&rec));
+            assert!(
+                matches!(denied, Err(CallError::Forbidden(_))),
+                "{cmd} must need {group}: {denied:?}"
+            );
+            assert_eq!(
+                state_of(&app, model, &rec),
+                from,
+                "{cmd} refused, state unchanged"
+            );
+            let allowed = Principal::user("a", &[group]);
+            call(&app, &allowed, &cmd, by_id(&rec)).unwrap_or_else(|e| panic!("{cmd}: {e:?}"));
+        }
+    }
+
+    /// A dashboard and its widgets round-trip with the documented schema, and a widget kind or
+    /// aggregate outside the documented lists is refused.
+    #[test]
+    fn dashboard_widgets_follow_the_documented_schema() {
+        let app = App::new();
+        let admin = Principal::user("root", &[ADMIN_GROUP]);
+        app.installer
+            .install(&Bundled.fetch("dashboards").unwrap(), "marketplace", "test")
+            .unwrap();
+        let board = call(
+            &app,
+            &admin,
+            "dashboards_dashboard.create",
+            Value::map([
+                ("title", Value::text("Sales overview")),
+                ("owner", Value::text("Ada")),
+            ]),
+        )
+        .unwrap();
+        let widget = |kind: &str, aggregate: &str| {
+            call(
+                &app,
+                &admin,
+                "dashboards_widget.create",
+                Value::map([
+                    ("dashboard_id", Value::Text(id_of(&board))),
+                    ("title", Value::text("Paid orders")),
+                    ("kind", Value::text(kind)),
+                    ("model_name", Value::text("sale_order")),
+                    ("measure_field", Value::text("total")),
+                    ("aggregate", Value::text(aggregate)),
+                    ("group_by", Value::text("state")),
+                    ("filter", Value::text("{\"state\":\"paid\"}")),
+                    ("position", Value::Int(1)),
+                ]),
+            )
+        };
+        for kind in ["kpi", "bar", "line", "pie", "table"] {
+            widget(kind, "sum").unwrap_or_else(|e| panic!("{kind}: {e:?}"));
+        }
+        assert!(widget("kpi", "count").is_ok());
+        assert!(widget("gauge", "sum").is_err());
+        assert!(widget("kpi", "average").is_err());
     }
 }
