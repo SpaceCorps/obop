@@ -1,0 +1,120 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fff;
+  --fg: #1a1a1a;
+  --muted: #666;
+  --line: #ddd;
+  --accent: #2b59ff;
+  font-family: system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14151a;
+    --fg: #eee;
+    --muted: #9a9aa5;
+    --line: #2c2d35;
+    --accent: #7c9bff;
+  }
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+.shell {
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  min-height: 100vh;
+}
+aside {
+  border-inline-end: 1px solid var(--line);
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+nav {
+  display: grid;
+  gap: 0.25rem;
+}
+nav button {
+  text-align: start;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+nav button[aria-current="true"] {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+main {
+  padding: 1.5rem;
+  overflow-x: auto;
+}
+h2 {
+  text-transform: capitalize;
+  margin-top: 0;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  text-align: start;
+  padding: 0.5rem 0.75rem;
+  border-block-end: 1px solid var(--line);
+}
+th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.notice {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+.actions {
+  display: flex;
+  gap: 0.4rem;
+}
+button {
+  font: inherit;
+}
+.actions button,
+.notice button {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  aside {
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--line);
+  }
+}

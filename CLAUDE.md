@@ -20,4 +20,6 @@ Open-source operating system for businesses: an Odoo-class modular suite (ERP, C
 - `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/BUSINESS.md`, `docs/LOCALIZATION.md`, `docs/ENGINEERING.md`, `docs/GLOSSARY.md`.
 - `docs/spec/` — per-domain product specifications.
 - `docs/research/` — the fact-checked research corpus (index: `docs/research/README.md`).
-- Status: pre-code. Nothing is built yet.
+- Status: early code. A Cargo workspace (`crates/kernel/*`, `crates/modules/*`, `crates/obop`) and a Vite+ backoffice (`web/apps/backoffice`) exist. Everything is in memory: no PostgreSQL yet.
+- Code map: `obop-registry` (model/field/command metadata and the D41 install gate), `obop-commands` (the one `Dispatcher` behind REST, MCP and CLI: permissions, masking, approvals, generated CRUD), `obop-masking` (D40), `obop-http` (axum), `obop-mcp` (stdio), modules `base`, `product`, `crm`, `sales`, `invoicing`. A module declares models in the registry and gets all surfaces generated; every field needs a data class, permission group and description (`obop modules check`).
+- Commands: `cargo test`, `cargo run -- serve --static web/apps/backoffice/dist` (after `cd web/apps/backoffice && vp build`), `cargo run -- commands --as dev-agent`, `cargo run -- mcp`. Dev tokens (`dev-admin`, `dev-sales`, `dev-agent`) are test values for localhost only.
