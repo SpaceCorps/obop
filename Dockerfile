@@ -1,5 +1,6 @@
 # Dev image: builds the backoffice with Vite+ (pnpm only) and the obop binary.
-# Not production-ready: authentication is dev tokens only (see docs/DECISIONS.md D44).
+# Create the first user: echo "a long password" | docker compose exec -T obop obop admin create admin --all-groups
+# Not production-ready yet: no TLS (terminate it at the proxy), in-memory approvals, no migrations.
 FROM rust:1.99.0-slim AS build
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates unzip && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
@@ -18,4 +19,4 @@ COPY --from=build /src/target/release/obop /usr/local/bin/obop
 COPY --from=web /src/web/apps/backoffice/dist /srv/web
 ENV OBOP_DATABASE_URL=memory:
 EXPOSE 8080
-CMD ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/web", "--insecure-dev-auth"]
+CMD ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/web"]

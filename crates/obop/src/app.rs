@@ -1,6 +1,6 @@
 //! Composition root: the linked first-party modules, one dispatcher and one store.
 
-use obop_commands::{Dispatcher, Principal, Store};
+use obop_commands::{Authenticator, Dispatcher, Principal, Store};
 use obop_registry::Module;
 
 pub struct App {
@@ -72,5 +72,35 @@ pub fn dev_principal(token: &str) -> Option<Principal> {
             &["base.user", "crm.user", "sales.user", "product.user"],
         )),
         _ => None,
+    }
+}
+
+/// `--dev-auth`: the three fixed dev principals as an `Authenticator`. Loopback only.
+pub struct DevAuth;
+
+impl Authenticator for DevAuth {
+    fn resolve(&self, token: &str) -> Option<Principal> {
+        dev_principal(token)
+    }
+    fn login(&self, _: &str, _: &str) -> Result<String, String> {
+        Err("login is disabled with --dev-auth; use a dev token".into())
+    }
+    fn issue_agent_token(&self, _: &Principal, _: &[String], _: &str) -> Result<String, String> {
+        Err("agent tokens are disabled with --dev-auth".into())
+    }
+}
+
+impl App {
+    /// Every permission group the linked modules declare.
+    pub fn all_groups(&self) -> Vec<String> {
+        let mut g: Vec<String> = self
+            .modules
+            .iter()
+            .flat_map(|m| m.permission_groups())
+            .map(String::from)
+            .collect();
+        g.sort();
+        g.dedup();
+        g
     }
 }

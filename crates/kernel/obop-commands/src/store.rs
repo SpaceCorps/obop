@@ -45,6 +45,11 @@ impl Store {
         })
     }
 
+    /// The backend, for components that keep their own records (identity).
+    pub fn backend(&self) -> Arc<dyn Backend> {
+        self.backend.clone()
+    }
+
     pub fn backend_kind(&self) -> &'static str {
         self.backend.kind()
     }

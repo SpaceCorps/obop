@@ -1,4 +1,4 @@
-# Local trial of the PostgreSQL deployment shape. Dev tokens only: published on localhost.
+# Local trial of the PostgreSQL deployment shape, published on localhost only.
 services:
   db:
     image: postgres:18
@@ -15,7 +15,7 @@ services:
       db: { condition: service_healthy }
     environment:
       OBOP_DATABASE_URL: postgres://postgres:obop-local@db/postgres
-    command: ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/web", "--insecure-dev-auth", "--demo"]
+    command: ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/web", "--demo"]
     ports: ["127.0.0.1:8080:8080"]
 volumes:
   pgdata:

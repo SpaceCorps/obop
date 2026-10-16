@@ -10,26 +10,25 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use obop_commands::{CallError, Dispatcher, Principal, Surface, Value, Vault};
+use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value, Vault};
 use serde_json::{Value as J, json};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tower_http::services::{ServeDir, ServeFile};
 
-type Resolver = Arc<dyn Fn(&str) -> Option<Principal> + Send + Sync>;
 type Session = Arc<Mutex<Vault>>;
 
 pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
-    resolve: Resolver,
+    auth: Arc<dyn Authenticator>,
     sessions: Mutex<HashMap<String, Session>>,
 }
 
 impl HttpState {
-    pub fn new(dispatcher: Arc<Dispatcher>, resolve: Resolver) -> Arc<Self> {
+    pub fn new(dispatcher: Arc<Dispatcher>, auth: Arc<dyn Authenticator>) -> Arc<Self> {
         Arc::new(Self {
             dispatcher,
-            resolve,
+            auth,
             sessions: Mutex::new(HashMap::new()),
         })
     }
@@ -41,7 +40,7 @@ impl HttpState {
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer "))
             .ok_or(StatusCode::UNAUTHORIZED)?;
-        let p = (self.resolve)(token).ok_or(StatusCode::UNAUTHORIZED)?;
+        let p = self.auth.resolve(token).ok_or(StatusCode::UNAUTHORIZED)?;
         let s = self
             .sessions
             .lock()
@@ -57,6 +56,8 @@ type Shared = State<Arc<HttpState>>;
 
 pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
     let api = Router::new()
+        .route("/api/auth/login", post(login))
+        .route("/api/auth/agent-token", post(agent_token))
         .route("/api/commands", get(commands))
         .route("/api/approve/{plan_id}", post(approve))
         .route("/api/{model}/{command}", post(call))
@@ -66,6 +67,43 @@ pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
             ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html"))),
         ),
         None => api,
+    }
+}
+
+async fn login(State(s): Shared, Json(body): Json<J>) -> Response {
+    let (u, p) = (
+        body["username"].as_str().unwrap_or(""),
+        body["password"].as_str().unwrap_or(""),
+    );
+    match s.auth.login(u, p) {
+        Ok(token) => Json(json!({"token": token})).into_response(),
+        Err(e) if e.contains("too many") => {
+            (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": e}))).into_response()
+        }
+        Err(e) => (StatusCode::UNAUTHORIZED, Json(json!({"error": e}))).into_response(),
+    }
+}
+
+/// A signed-in human issues a scoped token for an agent. The token is shown once.
+async fn agent_token(State(s): Shared, h: HeaderMap, Json(body): Json<J>) -> Response {
+    let (p, _) = match s.auth(&h) {
+        Ok(x) => x,
+        Err(c) => return c.into_response(),
+    };
+    let scopes: Vec<String> = body["scopes"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    match s
+        .auth
+        .issue_agent_token(&p, &scopes, body["label"].as_str().unwrap_or("agent"))
+    {
+        Ok(token) => Json(json!({"token": token})).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response(),
     }
 }
 

@@ -371,6 +371,22 @@ fn on_surface(s: obop_registry::Surfaces, surface: Surface) -> bool {
 }
 
 /// Surface naming adapters. All three map to the same command id, so a call is the same call.
+/// Identity provider for the network surfaces (D33). Implemented by `obop-auth`.
+pub trait Authenticator: Send + Sync {
+    /// Resolve a bearer token to a principal; `None` for unknown, expired or revoked tokens.
+    fn resolve(&self, token: &str) -> Option<Principal>;
+    /// Exchange credentials for a session token.
+    fn login(&self, username: &str, password: &str) -> Result<String, String>;
+    /// A human issues a scoped token for an agent acting on their behalf (D18). Scopes must be
+    /// groups the human holds.
+    fn issue_agent_token(
+        &self,
+        owner: &Principal,
+        scopes: &[String],
+        label: &str,
+    ) -> Result<String, String>;
+}
+
 pub mod json;
 pub mod store;
 

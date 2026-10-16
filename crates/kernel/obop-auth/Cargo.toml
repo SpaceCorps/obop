@@ -1,0 +1,17 @@
+[package]
+name = "obop-auth"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+obop-commands.workspace = true
+obop-storage.workspace = true
+argon2 = "0.6"
+sha2 = "0.11"
+getrandom = "0.4"
+serde_json = "1"
+
+[lints]
+workspace = true

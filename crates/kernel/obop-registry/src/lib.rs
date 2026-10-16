@@ -118,6 +118,25 @@ pub struct Module {
     pub network_destinations: Vec<String>,
 }
 
+impl Module {
+    /// Every permission group the module refers to, sorted and de-duplicated.
+    pub fn permission_groups(&self) -> Vec<&'static str> {
+        let mut g: Vec<&'static str> = self
+            .models
+            .iter()
+            .flat_map(|m| {
+                [m.read_group, m.write_group]
+                    .into_iter()
+                    .chain(m.fields.iter().map(|f| f.permission_group))
+                    .chain(m.commands.iter().map(|c| c.permission_group))
+            })
+            .collect();
+        g.sort_unstable();
+        g.dedup();
+        g
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Violation {
     pub path: String,

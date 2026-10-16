@@ -14,10 +14,11 @@ export async function approve(token: string, planId: string): Promise<Reply> {
   return send(token, `/api/approve/${planId}`, {});
 }
 
-export async function commands(token: string): Promise<Command[]> {
+/** `null` means the token was rejected: the caller signs out. */
+export async function commands(token: string): Promise<Command[] | null> {
   const res = await fetch("/api/commands", { headers: { authorization: `Bearer ${token}` } });
-  if (!res.ok) return [];
-  return (await res.json()).commands;
+  if (res.status === 401) return null;
+  return res.ok ? (await res.json()).commands : [];
 }
 
 async function send(token: string, path: string, body: object): Promise<Reply> {
@@ -30,4 +31,13 @@ async function send(token: string, path: string, body: object): Promise<Reply> {
   if (res.status === 202) return { kind: "approval", planId: json.plan_id };
   if (!res.ok) return { kind: "error", status: res.status, message: json.error ?? res.statusText };
   return { kind: "ok", value: json.value, denied: json.denied ?? [] };
+}
+
+export async function login(username: string, password: string): Promise<string | null> {
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  return res.ok ? (await res.json()).token : null;
 }

@@ -1,0 +1,357 @@
+//! Identity: users with Argon2id password hashes, and bearer tokens stored only as SHA-256
+//! hashes. Session tokens expire; agent tokens carry scopes that narrow their owner's groups
+//! (D18). Records live in the storage backend under `auth_user` and `auth_token`, outside the
+//! module registry, so no generated command can read or write them.
+
+use argon2::password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash};
+use argon2::{Argon2, Params};
+use obop_commands::{Authenticator, Principal, PrincipalKind};
+use obop_storage::{Backend, Fields};
+use serde_json::{Value as J, json};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+const SESSION_SECS: u64 = 12 * 3600;
+const MAX_FAILURES: u32 = 5;
+const LOCKOUT: Duration = Duration::from_secs(60);
+
+pub struct Auth {
+    backend: Arc<dyn Backend>,
+    hasher: Argon2<'static>,
+    failures: Mutex<HashMap<String, (u32, Instant)>>,
+}
+
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+fn random_bytes<const N: usize>() -> [u8; N] {
+    let mut b = [0u8; N];
+    getrandom::fill(&mut b).expect("operating system randomness");
+    b
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn token_hash(token: &str) -> String {
+    hex(&Sha256::digest(token.as_bytes()))
+}
+
+fn str_list(v: &J) -> Vec<String> {
+    v.as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+impl Auth {
+    pub fn new(backend: Arc<dyn Backend>) -> Self {
+        Self {
+            backend,
+            hasher: Argon2::default(),
+            failures: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Cheap hashing parameters for tests only.
+    pub fn with_test_params(backend: Arc<dyn Backend>) -> Self {
+        let params = Params::new(8, 1, 1, None).expect("valid params");
+        Self {
+            hasher: Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params),
+            ..Self::new(backend)
+        }
+    }
+
+    pub fn user_count(&self) -> usize {
+        self.backend.count("auth_user").unwrap_or(0)
+    }
+
+    fn hash_password(&self, password: &str) -> Result<String, String> {
+        self.hasher
+            .hash_password(password.as_bytes())
+            .map(|h: PasswordHash| h.to_string())
+            .map_err(|e| e.to_string())
+    }
+
+    /// Create a user. Usernames are lowercased and unique.
+    pub fn create_user(
+        &self,
+        username: &str,
+        password: &str,
+        groups: &[String],
+    ) -> Result<(), String> {
+        let name = username.trim().to_lowercase();
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-@".contains(c))
+        {
+            return Err("username must be letters, digits or . _ - @".into());
+        }
+        if password.chars().count() < 12 {
+            return Err("password must be at least 12 characters".into());
+        }
+        let mut f = Fields::new();
+        f.insert(
+            "password_hash".into(),
+            J::from(self.hash_password(password)?),
+        );
+        f.insert("groups".into(), json!(groups));
+        self.backend.insert("auth_user", &name, &f).map_err(|e| {
+            if e.contains("duplicate") || e.contains("UNIQUE") || e.contains("unique") {
+                format!("user {name} exists")
+            } else {
+                e
+            }
+        })
+    }
+
+    /// The principal of an existing user, for operator tooling that already has database access.
+    pub fn principal(&self, name: &str) -> Option<Principal> {
+        self.user_principal(&name.trim().to_lowercase())
+    }
+
+    fn user_principal(&self, name: &str) -> Option<Principal> {
+        let u = self.backend.get("auth_user", name).ok()??;
+        let groups: Vec<_> = str_list(&u["groups"]);
+        Some(Principal::user(
+            name,
+            &groups.iter().map(String::as_str).collect::<Vec<_>>(),
+        ))
+    }
+
+    fn issue(
+        &self,
+        owner: &str,
+        kind: &str,
+        scopes: &[String],
+        label: &str,
+        ttl: Option<u64>,
+    ) -> Result<String, String> {
+        let token = format!("obop_{}", hex(&random_bytes::<32>()));
+        let mut f = Fields::new();
+        f.insert("owner".into(), J::from(owner));
+        f.insert("kind".into(), J::from(kind));
+        f.insert("scopes".into(), json!(scopes));
+        f.insert("label".into(), J::from(label));
+        f.insert(
+            "expires_at".into(),
+            ttl.map_or(J::Null, |t| J::from(now() + t)),
+        );
+        f.insert("revoked".into(), J::Bool(false));
+        self.backend.insert("auth_token", &token_hash(&token), &f)?;
+        Ok(token)
+    }
+
+    pub fn revoke(&self, token: &str) -> bool {
+        let mut p = Fields::new();
+        p.insert("revoked".into(), J::Bool(true));
+        self.backend
+            .update("auth_token", &token_hash(token), &p)
+            .unwrap_or(false)
+    }
+
+    fn locked_out(&self, name: &str) -> bool {
+        let g = self.failures.lock().unwrap();
+        g.get(name)
+            .is_some_and(|(n, at)| *n >= MAX_FAILURES && at.elapsed() < LOCKOUT)
+    }
+
+    fn record_failure(&self, name: &str) {
+        let mut g = self.failures.lock().unwrap();
+        let e = g.entry(name.into()).or_insert((0, Instant::now()));
+        if e.1.elapsed() >= LOCKOUT {
+            *e = (0, Instant::now());
+        }
+        *e = (e.0 + 1, Instant::now());
+    }
+}
+
+impl Authenticator for Auth {
+    fn resolve(&self, token: &str) -> Option<Principal> {
+        let t = self.backend.get("auth_token", &token_hash(token)).ok()??;
+        if t["revoked"].as_bool() == Some(true)
+            || t["expires_at"].as_u64().is_some_and(|e| e <= now())
+        {
+            return None;
+        }
+        let owner = t["owner"].as_str()?;
+        let mut p = self.user_principal(owner)?;
+        if t["kind"].as_str() == Some("agent") {
+            p.id = format!("{owner}/agent");
+            p.kind = PrincipalKind::Agent;
+            p.scopes = Some(str_list(&t["scopes"]).into_iter().collect());
+        }
+        Some(p)
+    }
+
+    fn login(&self, username: &str, password: &str) -> Result<String, String> {
+        let name = username.trim().to_lowercase();
+        if self.locked_out(&name) {
+            return Err("too many attempts, try again in a minute".into());
+        }
+        // Verify against a dummy hash for unknown users so timing does not reveal them.
+        let stored = self.backend.get("auth_user", &name).ok().flatten();
+        let dummy = self
+            .hash_password("dummy-password-for-timing")
+            .unwrap_or_default();
+        let hash = stored
+            .as_ref()
+            .and_then(|u| u["password_hash"].as_str().map(String::from))
+            .unwrap_or(dummy);
+        let ok = hash
+            .parse::<PasswordHash>()
+            .is_ok_and(|h| self.hasher.verify_password(password.as_bytes(), &h).is_ok());
+        if ok && stored.is_some() {
+            return self.issue(&name, "user", &[], "session", Some(SESSION_SECS));
+        }
+        self.record_failure(&name);
+        Err("invalid username or password".into())
+    }
+
+    fn issue_agent_token(
+        &self,
+        owner: &Principal,
+        scopes: &[String],
+        label: &str,
+    ) -> Result<String, String> {
+        if owner.kind != PrincipalKind::User {
+            return Err("only a human user can issue agent tokens".into());
+        }
+        if scopes.is_empty() {
+            return Err("an agent token needs at least one scope".into());
+        }
+        if let Some(bad) = scopes.iter().find(|s| !owner.groups.contains(*s)) {
+            return Err(format!("you do not hold {bad}, so you cannot delegate it"));
+        }
+        self.issue(&owner.id, "agent", scopes, label, None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn auth() -> Auth {
+        Auth::with_test_params(obop_storage::open("memory:").unwrap())
+    }
+
+    fn groups(g: &[&str]) -> Vec<String> {
+        g.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn login_resolves_to_the_user() {
+        let a = auth();
+        a.create_user("Ada", "correct horse battery", &groups(&["base.user"]))
+            .unwrap();
+        let t = a.login("ada", "correct horse battery").unwrap();
+        let p = a.resolve(&t).unwrap();
+        assert_eq!((p.id.as_str(), p.kind), ("ada", PrincipalKind::User));
+        assert!(p.allows("base.user") && !p.allows("sales.user"));
+    }
+
+    #[test]
+    fn wrong_password_and_unknown_user_fail_the_same_way() {
+        let a = auth();
+        a.create_user("ada", "correct horse battery", &[]).unwrap();
+        assert_eq!(a.login("ada", "nope"), a.login("ghost", "nope"));
+        assert!(a.resolve("obop_made_up").is_none());
+    }
+
+    #[test]
+    fn lockout_after_repeated_failures() {
+        let a = auth();
+        a.create_user("ada", "correct horse battery", &[]).unwrap();
+        for _ in 0..MAX_FAILURES {
+            assert!(a.login("ada", "wrong").is_err());
+        }
+        let e = a.login("ada", "correct horse battery").unwrap_err();
+        assert!(e.contains("too many"));
+    }
+
+    #[test]
+    fn weak_passwords_and_duplicates_are_rejected() {
+        let a = auth();
+        assert!(a.create_user("ada", "short", &[]).is_err());
+        a.create_user("ada", "correct horse battery", &[]).unwrap();
+        assert!(
+            a.create_user("ADA", "correct horse battery", &[])
+                .unwrap_err()
+                .contains("exists")
+        );
+        assert!(a.create_user("a b", "correct horse battery", &[]).is_err());
+    }
+
+    #[test]
+    fn agent_tokens_are_scoped_to_what_the_owner_holds() {
+        let a = auth();
+        a.create_user(
+            "ada",
+            "correct horse battery",
+            &groups(&["base.user", "sales.user"]),
+        )
+        .unwrap();
+        let human = a
+            .resolve(&a.login("ada", "correct horse battery").unwrap())
+            .unwrap();
+        assert!(
+            a.issue_agent_token(&human, &groups(&["invoicing.manager"]), "x")
+                .is_err()
+        );
+        assert!(a.issue_agent_token(&human, &[], "x").is_err());
+        let t = a
+            .issue_agent_token(&human, &groups(&["sales.user"]), "crm bot")
+            .unwrap();
+        let agent = a.resolve(&t).unwrap();
+        assert_eq!(agent.kind, PrincipalKind::Agent);
+        assert!(
+            agent.allows("sales.user") && !agent.allows("base.user"),
+            "scope narrows the owner's groups"
+        );
+        // An agent cannot mint further tokens.
+        assert!(
+            a.issue_agent_token(&agent, &groups(&["sales.user"]), "y")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn revoked_and_deleted_owners_stop_working() {
+        let a = auth();
+        a.create_user("ada", "correct horse battery", &groups(&["base.user"]))
+            .unwrap();
+        let t = a.login("ada", "correct horse battery").unwrap();
+        assert!(a.revoke(&t));
+        assert!(a.resolve(&t).is_none());
+    }
+
+    #[test]
+    fn tokens_are_stored_hashed() {
+        let b = obop_storage::open("memory:").unwrap();
+        let a = Auth::with_test_params(b.clone());
+        a.create_user("ada", "correct horse battery", &[]).unwrap();
+        let t = a.login("ada", "correct horse battery").unwrap();
+        assert!(
+            b.get("auth_token", &t).unwrap().is_none(),
+            "the raw token is never a key"
+        );
+        assert!(b.get("auth_token", &token_hash(&t)).unwrap().is_some());
+        let user = b.get("auth_user", "ada").unwrap().unwrap();
+        assert!(
+            user["password_hash"]
+                .as_str()
+                .unwrap()
+                .starts_with("$argon2id$")
+        );
+    }
+}

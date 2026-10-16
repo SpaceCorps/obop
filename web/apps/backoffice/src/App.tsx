@@ -1,10 +1,57 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { approve, call, commands, type Command, type Reply, type Row } from "./api.ts";
+import { approve, call, commands, login, type Command, type Reply, type Row } from "./api.ts";
 
-const TOKENS = ["dev-admin", "dev-sales", "dev-agent"];
+function stored(): string {
+  try {
+    return sessionStorage.getItem("obop-token") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function remember(token: string) {
+  try {
+    if (token) sessionStorage.setItem("obop-token", token);
+    else sessionStorage.removeItem("obop-token");
+  } catch {
+    /* storage unavailable: the session lasts until reload */
+  }
+}
+
+function SignIn({ onToken }: { onToken: (t: string) => void }) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="signin"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const f = new FormData(e.currentTarget);
+        const t = await login(String(f.get("username")), String(f.get("password")));
+        if (t) onToken(t);
+        else setError("Invalid username or password");
+      }}
+    >
+      <h1>obop</h1>
+      <label>
+        Username
+        <input name="username" autoComplete="username" required autoFocus />
+      </label>
+      <label>
+        Password
+        <input name="password" type="password" autoComplete="current-password" required />
+      </label>
+      {error && <p role="alert">{error}</p>}
+      <button type="submit">Sign in</button>
+    </form>
+  );
+}
 
 export function App() {
-  const [token, setToken] = useState("dev-admin");
+  const [token, setTokenState] = useState(stored);
+  const setToken = useCallback((t: string) => {
+    remember(t);
+    setTokenState(t);
+  }, []);
   const [cmds, setCmds] = useState<Command[]>([]);
   const [model, setModel] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
@@ -25,12 +72,14 @@ export function App() {
   );
 
   useEffect(() => {
+    if (!token) return;
     commands(token).then((c) => {
+      if (c === null) return setToken("");
       setCmds(c);
       const first = c.find((x) => x.id.endsWith(".list"))?.id.split(".")[0] ?? null;
       setModel((m) => (m && c.some((x) => x.id === `${m}.list`) ? m : first));
     });
-  }, [token]);
+  }, [token, setToken]);
 
   const load = useCallback(async () => {
     if (!model) return setRows([]);
@@ -69,20 +118,17 @@ export function App() {
     await load();
   }
 
+  if (!token) return <SignIn onToken={setToken} />;
+
   const columns = rows[0] ? Object.keys(rows[0]).filter((k) => k !== "id") : [];
 
   return (
     <div className="shell">
       <aside>
         <h1>obop</h1>
-        <label>
-          Signed in as
-          <select value={token} onChange={(e) => setToken(e.target.value)}>
-            {TOKENS.map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
-        </label>
+        <button className="signout" onClick={() => setToken("")}>
+          Sign out
+        </button>
         <nav aria-label="Models">
           {models.map((m) => (
             <button key={m} aria-current={m === model} onClick={() => setModel(m)}>
