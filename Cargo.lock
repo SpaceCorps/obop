@@ -991,6 +991,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "obop-site"
+version = "0.0.0"
+dependencies = [
+ "ammonia",
+ "base",
+ "form_urlencoded",
+ "getrandom 0.4.3",
+ "obop-commands",
+ "obop-pkg",
+ "obop-storage",
+ "product",
+ "pulldown-cmark",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "obop-storage"
 version = "0.0.0"
 dependencies = [

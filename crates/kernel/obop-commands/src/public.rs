@@ -318,7 +318,7 @@ impl Dispatcher {
                     .def
                     .fields
                     .iter()
-                    .find(|f| &f.name == pf)
+                    .find(|f| f.name == pf.as_str())
                     .and_then(|f| f.kind.target())
                     .unwrap_or_default();
                 let has_token = specs
@@ -391,7 +391,7 @@ impl PublicApi {
             let target = def.as_ref().and_then(|d| {
                 d.fields
                     .iter()
-                    .find(|f| &f.name == name)
+                    .find(|f| f.name == name.as_str())
                     .and_then(|f| match f.kind {
                         FieldKind::Ref(to) => Some(to),
                         _ => None,
@@ -609,7 +609,7 @@ impl PublicApi {
             let points_here = def
                 .fields
                 .iter()
-                .any(|f| &f.name == pf && f.kind.target() == Some(model));
+                .any(|f| f.name == pf.as_str() && f.kind.target() == Some(model));
             if !points_here {
                 continue;
             }
@@ -700,7 +700,7 @@ impl PublicApi {
             let def = self.def(&s.model).ok_or(SubmitError::NotPublic)?;
             let mut fields: BTreeMap<String, Value> = BTreeMap::new();
             for (k, v) in &s.visitor {
-                let Some(f) = def.fields.iter().find(|f| &f.name == k) else {
+                let Some(f) = def.fields.iter().find(|f| f.name == k.as_str()) else {
                     return Err(SubmitError::Rejected(format!(
                         "unknown field {}.{k}",
                         s.model

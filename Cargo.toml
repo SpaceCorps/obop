@@ -17,6 +17,7 @@ obop-pkg = { path = "crates/kernel/obop-pkg" }
 obop-platform = { path = "crates/kernel/obop-platform" }
 obop-commands = { path = "crates/kernel/obop-commands" }
 obop-community = { path = "crates/kernel/obop-community" }
+obop-site = { path = "crates/kernel/obop-site" }
 obop-http = { path = "crates/kernel/obop-http" }
 obop-mcp = { path = "crates/kernel/obop-mcp" }
 base = { path = "crates/modules/base" }
