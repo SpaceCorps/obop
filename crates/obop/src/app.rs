@@ -1,12 +1,25 @@
 //! Composition root: the linked first-party modules, one dispatcher and one store.
 
 use obop_commands::{Authenticator, Dispatcher, Principal, Store};
+use obop_pkg::{Bundled, Chain, Http, Installer, Marketplace};
 use obop_registry::Module;
+use std::sync::Arc;
 
 pub struct App {
     pub modules: Vec<Module>,
-    pub dispatcher: Dispatcher,
+    pub dispatcher: Arc<Dispatcher>,
     pub store: Store,
+    pub installer: Arc<Installer>,
+    pub market: Arc<dyn Marketplace>,
+}
+
+/// The bundled catalog, plus a remote one when `OBOP_MARKETPLACE_URL` is set.
+fn marketplace() -> Arc<dyn Marketplace> {
+    let mut sources: Vec<Box<dyn Marketplace>> = vec![Box::new(Bundled)];
+    if let Ok(url) = std::env::var("OBOP_MARKETPLACE_URL") {
+        sources.push(Box::new(Http::new(&url)));
+    }
+    Arc::new(Chain(sources))
 }
 
 impl App {
@@ -16,23 +29,32 @@ impl App {
     }
 
     pub fn with_store(store: Store) -> Self {
-        let mut d = Dispatcher::new();
-        base::register(&mut d, &store);
-        product::register(&mut d, &store);
-        crm::register(&mut d, &store);
-        sales::register(&mut d, &store);
-        invoicing::register(&mut d, &store);
+        let d = Arc::new(Dispatcher::new());
+        base::register(&d, &store);
+        product::register(&d, &store);
+        crm::register(&d, &store);
+        sales::register(&d, &store);
+        invoicing::register(&d, &store);
         let modules = vec![
             base::module(),
             product::module(),
             crm::module(),
             sales::module(),
             invoicing::module(),
+            obop_pkg::admin_module(),
         ];
+        let market = marketplace();
+        let installer = Installer::new(store.clone(), &d, modules.clone(), market.clone());
+        obop_pkg::register_admin(&d, &installer);
+        for (id, why) in installer.load_installed() {
+            eprintln!("could not load installed module {id}: {why}");
+        }
         Self {
             modules,
             dispatcher: d,
             store,
+            installer,
+            market,
         }
     }
 

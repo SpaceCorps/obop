@@ -59,7 +59,7 @@ pub fn module() -> Module {
     }
 }
 
-pub fn register(d: &mut Dispatcher, store: &Store) {
+pub fn register(d: &Dispatcher, store: &Store) {
     let m = module();
     d.register_crud(&m, store);
     let s = store.clone();
@@ -119,8 +119,8 @@ mod tests {
 
     #[test]
     fn mark_won_changes_stage() {
-        let (mut d, s) = (Dispatcher::new(), Store::new());
-        register(&mut d, &s);
+        let (d, s) = (Dispatcher::new(), Store::new());
+        register(&d, &s);
         let id = seed(&s);
         let u = Principal::user("u", &["crm.user"]);
         let i = Value::map([("id", Value::text(&id))]);

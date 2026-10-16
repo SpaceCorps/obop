@@ -36,7 +36,7 @@ pub fn module() -> Module {
     }
 }
 
-pub fn register(d: &mut Dispatcher, store: &Store) {
+pub fn register(d: &Dispatcher, store: &Store) {
     d.register_crud(&module(), store);
 }
 
@@ -68,8 +68,8 @@ mod tests {
 
     #[test]
     fn cost_needs_its_own_group() {
-        let (mut d, s) = (Dispatcher::new(), Store::new());
-        register(&mut d, &s);
+        let (d, s) = (Dispatcher::new(), Store::new());
+        register(&d, &s);
         let id = seed(&s);
         let input = Value::map([("id", Value::text(&id))]);
         let plain = Principal::user("u", &["product.user"]);

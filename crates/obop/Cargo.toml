@@ -13,6 +13,7 @@ obop-commands.workspace = true
 obop-masking.workspace = true
 obop-http.workspace = true
 obop-auth.workspace = true
+obop-pkg.workspace = true
 obop-mcp.workspace = true
 product.workspace = true
 crm.workspace = true

@@ -1,0 +1,77 @@
+[module]
+id = "projects"
+version = "0.1.0"
+name = "Projects"
+description = "Projects and tasks with a todo, doing and done flow"
+author = "SpaceCorps"
+
+[[model]]
+name = "projects_project"
+description = "A body of work with a goal"
+read_group = "projects.user"
+write_group = "projects.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Project name"
+  class = "none"
+
+  [[model.field]]
+  name = "state"
+  description = "planned, active or done"
+  class = "none"
+
+  [[model.action]]
+  name = "start"
+  description = "Move a planned project to active"
+  field = "state"
+  from = "planned"
+  to = "active"
+
+  [[model.action]]
+  name = "finish"
+  description = "Mark an active project as done"
+  field = "state"
+  from = "active"
+  to = "done"
+
+[[model]]
+name = "projects_task"
+description = "A unit of work inside a project"
+read_group = "projects.user"
+write_group = "projects.user"
+
+  [[model.field]]
+  name = "title"
+  description = "What needs doing"
+  class = "none"
+
+  [[model.field]]
+  name = "project_id"
+  description = "Id of the project this task belongs to"
+  class = "none"
+
+  [[model.field]]
+  name = "assignee"
+  description = "Name of the person responsible"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "state"
+  description = "todo, doing or done"
+  class = "none"
+
+  [[model.action]]
+  name = "begin"
+  description = "Start working on a todo task"
+  field = "state"
+  from = "todo"
+  to = "doing"
+
+  [[model.action]]
+  name = "complete"
+  description = "Mark a task in progress as done"
+  field = "state"
+  from = "doing"
+  to = "done"

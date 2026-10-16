@@ -1,0 +1,19 @@
+[package]
+name = "obop-pkg"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+obop-types.workspace = true
+obop-registry.workspace = true
+obop-commands.workspace = true
+obop-storage.workspace = true
+serde = { version = "1", features = ["derive"] }
+toml = "1"
+ureq = "3"
+serde_json = "1"
+
+[lints]
+workspace = true

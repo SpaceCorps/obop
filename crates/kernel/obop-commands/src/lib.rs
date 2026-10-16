@@ -8,6 +8,7 @@ pub use obop_masking::{PrincipalKind, RestoreError, Vault};
 use obop_registry::{FieldDef, Module};
 use obop_types::MaskMode;
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value {
@@ -34,6 +35,9 @@ pub enum Surface {
     Mcp,
     Cli,
 }
+
+/// The instance administrator group.
+pub const ADMIN_GROUP: &str = "platform.admin";
 
 #[derive(Debug, Clone)]
 pub struct Principal {
@@ -64,9 +68,12 @@ impl Principal {
         }
     }
 
-    /// Effective permission: the group is held and, if scoped, the scope allows it.
+    /// Effective permission: the group is held (`platform.admin` holds every group, so modules
+    /// installed later need no re-granting) and, if scoped, the scope allows it. An agent's scopes
+    /// always list concrete groups, so an admin's agent still gets only what it was scoped to.
     pub fn allows(&self, group: &str) -> bool {
-        self.groups.contains(group) && self.scopes.as_ref().is_none_or(|s| s.contains(group))
+        let held = self.groups.contains(group) || self.groups.contains(ADMIN_GROUP);
+        held && self.scopes.as_ref().is_none_or(|s| s.contains(group))
     }
 }
 
@@ -114,6 +121,8 @@ struct Pending {
 }
 
 struct Registered {
+    /// Id of the module that registered the command, for uninstall.
+    module: String,
     description: &'static str,
     needs_approval: bool,
     model: &'static str,
@@ -122,11 +131,13 @@ struct Registered {
     handler: Handler,
 }
 
+/// Commands can be registered and removed while the server runs (module install and uninstall),
+/// so the tables sit behind locks and handlers run on `Arc` clones taken out of the lock.
 #[derive(Default)]
 pub struct Dispatcher {
     pending: std::sync::Mutex<HashMap<String, Pending>>,
-    commands: HashMap<String, Registered>,
-    fields: HashMap<&'static str, Vec<FieldDef>>,
+    commands: std::sync::RwLock<HashMap<String, Arc<Registered>>>,
+    fields: std::sync::RwLock<HashMap<String, Vec<FieldDef>>>,
 }
 
 impl Dispatcher {
@@ -139,7 +150,7 @@ impl Dispatcher {
         self.visible(surface, p)
             .into_iter()
             .map(|id| {
-                let c = &self.commands[&id];
+                let c = self.commands.read().unwrap()[&id].clone();
                 CommandInfo {
                     id,
                     description: c.description,
@@ -152,7 +163,7 @@ impl Dispatcher {
 
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
     /// undeclared command is a programming error: the surface is generated from the registry.
-    pub fn register(&mut self, module: &Module, model: &str, command: &str, handler: Handler) {
+    pub fn register(&self, module: &Module, model: &str, command: &str, handler: Handler) {
         let m = module
             .models
             .iter()
@@ -163,24 +174,53 @@ impl Dispatcher {
             .into_iter()
             .find(|c| c.name == command)
             .unwrap_or_else(|| panic!("{}.{model}: command {command} is not declared", module.id));
-        self.fields.insert(m.name, m.fields.clone());
-        self.commands.insert(
+        self.fields
+            .write()
+            .unwrap()
+            .insert(m.name.to_string(), m.fields.clone());
+        self.commands.write().unwrap().insert(
             format!("{model}.{command}"),
-            Registered {
+            Arc::new(Registered {
+                module: module.id.clone(),
                 description: c.description,
                 needs_approval: c.needs_approval,
                 model: m.name,
                 permission_group: c.permission_group,
                 surfaces: c.surfaces,
                 handler,
-            },
+            }),
         );
+    }
+
+    /// Remove every command a module registered. Its data stays in the store.
+    pub fn unregister_module(&self, module: &str) {
+        let mut cmds = self.commands.write().unwrap();
+        let models: HashSet<&str> = cmds
+            .values()
+            .filter(|c| c.module == module)
+            .map(|c| c.model)
+            .collect();
+        let models: Vec<String> = models.into_iter().map(String::from).collect();
+        cmds.retain(|_, c| c.module != module);
+        let mut f = self.fields.write().unwrap();
+        for m in models {
+            f.remove(&m);
+        }
+    }
+
+    /// Whether any command of `model` is registered.
+    pub fn has_model(&self, model: &str) -> bool {
+        self.commands
+            .read()
+            .unwrap()
+            .values()
+            .any(|c| c.model == model)
     }
 
     /// Command ids the principal may call on `surface`: what MCP `tools/list` and CLI help show.
     pub fn visible(&self, surface: Surface, p: &Principal) -> Vec<String> {
-        let mut v: Vec<_> = self
-            .commands
+        let cmds = self.commands.read().unwrap();
+        let mut v: Vec<_> = cmds
             .iter()
             .filter(|(_, c)| on_surface(c.surfaces, surface) && p.allows(c.permission_group))
             .map(|(id, _)| id.clone())
@@ -199,7 +239,10 @@ impl Dispatcher {
     ) -> Result<Response, CallError> {
         let c = self
             .commands
+            .read()
+            .unwrap()
             .get(id)
+            .cloned()
             .ok_or_else(|| CallError::UnknownCommand(id.into()))?;
         if !on_surface(c.surfaces, surface) {
             return Err(CallError::NotOnSurface(id.into()));
@@ -208,7 +251,10 @@ impl Dispatcher {
         if !p.allows(c.permission_group) {
             return Err(CallError::Forbidden(id.into()));
         }
-        let input = self.restore(p, vault, input)?;
+        let mut input = self.restore(p, vault, input)?;
+        if let Value::Map(m) = &mut input {
+            m.remove("_caller");
+        }
         if c.needs_approval && p.kind == PrincipalKind::Agent {
             // Dry-run: keep the restored input, hand back a plan id (D18, D42).
             let plan_id = uuid::Uuid::now_v7().to_string();
@@ -222,7 +268,7 @@ impl Dispatcher {
             );
             return Err(CallError::ApprovalRequired { plan_id });
         }
-        self.run(c, p, vault, input)
+        self.run(&c, p, vault, input)
     }
 
     /// A human approves a proposed plan. The command runs with the proposing agent's own
@@ -240,13 +286,19 @@ impl Dispatcher {
         let plan = pending
             .get(plan_id)
             .ok_or_else(|| CallError::UnknownPlan(plan_id.into()))?;
-        let c = &self.commands[&plan.id];
+        let c = self
+            .commands
+            .read()
+            .unwrap()
+            .get(&plan.id)
+            .cloned()
+            .ok_or_else(|| CallError::UnknownCommand(plan.id.clone()))?;
         if !approver.allows(c.permission_group) || !plan.principal.allows(c.permission_group) {
             return Err(CallError::Forbidden(plan.id.clone()));
         }
         let plan = pending.remove(plan_id).expect("checked above");
         drop(pending);
-        self.run(&self.commands[&plan.id], &plan.principal, vault, plan.input)
+        self.run(&c, &plan.principal, vault, plan.input)
     }
 
     fn run(
@@ -256,6 +308,12 @@ impl Dispatcher {
         vault: &mut Vault,
         input: Value,
     ) -> Result<Response, CallError> {
+        // Handlers that need to know who is calling (audit trails) read `_caller`. The dispatcher
+        // sets it after discarding anything a client sent under that name.
+        let mut input = input;
+        if let Value::Map(m) = &mut input {
+            m.insert("_caller".into(), Value::text(&p.id));
+        }
         let out = (c.handler)(&input).map_err(CallError::Handler)?;
         let mut denied = Vec::new();
         let value = self.shape(c.model, p, vault, out, &mut denied);
@@ -287,7 +345,7 @@ impl Dispatcher {
 
     fn shape(
         &self,
-        model: &'static str,
+        model: &str,
         p: &Principal,
         vault: &mut Vault,
         out: Value,
@@ -308,10 +366,8 @@ impl Dispatcher {
                 };
                 let mut shaped = BTreeMap::new();
                 for (k, v) in m {
-                    let Some(def) = self
-                        .fields
-                        .get(model)
-                        .and_then(|f| f.iter().find(|f| f.name == k))
+                    let defs = self.fields.read().unwrap().get(model).cloned();
+                    let Some(def) = defs.as_ref().and_then(|f| f.iter().find(|f| f.name == k))
                     else {
                         // Unclassified output is withheld: the gate guarantees declared fields only.
                         if k != "id" {

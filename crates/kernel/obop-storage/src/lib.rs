@@ -23,6 +23,8 @@ pub trait Backend: Send + Sync {
     /// Merge `patch` into an existing record atomically. `false` if it does not exist.
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool>;
     fn count(&self, model: &str) -> Result<usize>;
+    /// Remove a record. `false` if it did not exist.
+    fn delete(&self, model: &str, id: &str) -> Result<bool>;
     /// Short name for logs: `memory`, `sqlite` or `postgres`.
     fn kind(&self) -> &'static str;
 }
@@ -103,6 +105,15 @@ impl Backend for Memory {
     }
     fn count(&self, model: &str) -> Result<usize> {
         Ok(self.rows.lock().unwrap().get(model).map_or(0, Vec::len))
+    }
+    fn delete(&self, model: &str, id: &str) -> Result<bool> {
+        let mut g = self.rows.lock().unwrap();
+        let Some(rows) = g.get_mut(model) else {
+            return Ok(false);
+        };
+        let before = rows.len();
+        rows.retain(|(i, _)| i != id);
+        Ok(rows.len() < before)
     }
     fn kind(&self) -> &'static str {
         "memory"
@@ -227,6 +238,17 @@ impl Backend for Sqlite {
             .map(|n| n as usize)
             .map_err(|e| e.to_string())
     }
+    fn delete(&self, model: &str, id: &str) -> Result<bool> {
+        self.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "DELETE FROM obop_record WHERE model = ?1 AND id = ?2",
+                (model, id),
+            )
+            .map(|n| n > 0)
+            .map_err(|e| e.to_string())
+    }
     fn kind(&self) -> &'static str {
         "sqlite"
     }
@@ -331,6 +353,18 @@ impl Backend for Pg {
             .map_err(|e| e.to_string())?;
         Ok(r.get::<_, i64>(0) as usize)
     }
+    fn delete(&self, model: &str, id: &str) -> Result<bool> {
+        let n = self
+            .client
+            .lock()
+            .unwrap()
+            .execute(
+                "DELETE FROM obop_record WHERE model = $1 AND id = $2",
+                &[&model, &id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(n > 0)
+    }
     fn kind(&self) -> &'static str {
         "postgres"
     }
@@ -371,6 +405,9 @@ mod tests {
         let a = b.get(&model, "a").unwrap().unwrap();
         assert_eq!((a["n"].clone(), a["m"].clone()), (J::from(1), J::Null));
         assert!(!b.update(&model, "zzz", &Fields::new()).unwrap());
+        assert!(b.delete(&model, "b").unwrap());
+        assert!(!b.delete(&model, "b").unwrap());
+        assert_eq!(b.count(&model).unwrap(), 1);
     }
 
     #[test]

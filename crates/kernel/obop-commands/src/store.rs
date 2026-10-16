@@ -106,7 +106,7 @@ fn declared_fields(def: &ModelDef, input: &Value) -> Result<BTreeMap<String, Val
     };
     let mut out = BTreeMap::new();
     for (k, v) in m {
-        if k == "id" {
+        if k == "id" || k == "_caller" {
             continue;
         }
         if !def.fields.iter().any(|f| f.name == k) {
@@ -119,7 +119,7 @@ fn declared_fields(def: &ModelDef, input: &Value) -> Result<BTreeMap<String, Val
 
 impl Dispatcher {
     /// Register `get`, `list`, `create` and `update` for every model of `module` against `store`.
-    pub fn register_crud(&mut self, module: &Module, store: &Store) {
+    pub fn register_crud(&self, module: &Module, store: &Store) {
         for def in &module.models {
             let name = def.name;
             let s = store.clone();

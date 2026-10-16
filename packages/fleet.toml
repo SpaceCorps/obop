@@ -1,0 +1,47 @@
+[module]
+id = "fleet"
+version = "0.1.0"
+name = "Fleet"
+description = "Vehicles, drivers and service status for a small fleet"
+author = "SpaceCorps"
+
+[[model]]
+name = "fleet_vehicle"
+description = "A vehicle the business operates"
+read_group = "fleet.user"
+write_group = "fleet.manager"
+
+  [[model.field]]
+  name = "plate"
+  description = "Registration plate"
+  class = "none"
+
+  [[model.field]]
+  name = "model"
+  description = "Make and model"
+  class = "none"
+
+  [[model.field]]
+  name = "driver"
+  description = "Name of the assigned driver"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "state"
+  description = "available, in_service or maintenance"
+  class = "none"
+
+  [[model.action]]
+  name = "dispatch"
+  description = "Put an available vehicle in service"
+  field = "state"
+  from = "available"
+  to = "in_service"
+
+  [[model.action]]
+  name = "return_to_pool"
+  description = "Return a vehicle in service to the available pool"
+  field = "state"
+  from = "in_service"
+  to = "available"

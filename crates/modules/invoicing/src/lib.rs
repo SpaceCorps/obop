@@ -55,7 +55,7 @@ pub fn module() -> Module {
     }
 }
 
-pub fn register(d: &mut Dispatcher, store: &Store) {
+pub fn register(d: &Dispatcher, store: &Store) {
     let m = module();
     d.register_crud(&m, store);
     let s = store.clone();
@@ -123,8 +123,8 @@ mod tests {
 
     #[test]
     fn agent_proposes_human_posts() {
-        let (mut d, s) = (Dispatcher::new(), Store::new());
-        register(&mut d, &s);
+        let (d, s) = (Dispatcher::new(), Store::new());
+        register(&d, &s);
         let id = seed(&s, "o1");
         let i = Value::map([("id", Value::text(&id))]);
         let agent = Principal::agent("a", &["invoicing.manager"], &["invoicing.manager"]);

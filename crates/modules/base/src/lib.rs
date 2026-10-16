@@ -49,7 +49,7 @@ pub fn module() -> Module {
     }
 }
 
-pub fn register(d: &mut Dispatcher, store: &Store) {
+pub fn register(d: &Dispatcher, store: &Store) {
     let m = module();
     d.register_crud(&m, store);
     let s = store.clone();
@@ -101,8 +101,8 @@ mod tests {
     use obop_commands::{CallError, Principal, Surface, names};
 
     fn setup() -> (Dispatcher, Store, String) {
-        let (mut d, store) = (Dispatcher::new(), Store::new());
-        register(&mut d, &store);
+        let (d, store) = (Dispatcher::new(), Store::new());
+        register(&d, &store);
         let id = seed(&store);
         (d, store, id)
     }

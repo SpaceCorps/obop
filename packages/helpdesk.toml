@@ -1,0 +1,44 @@
+[module]
+id = "helpdesk"
+version = "0.1.0"
+name = "Helpdesk"
+description = "Support tickets with a simple open, resolved and closed flow"
+author = "SpaceCorps"
+
+[[model]]
+name = "helpdesk_ticket"
+description = "A customer support request"
+read_group = "helpdesk.agent"
+write_group = "helpdesk.agent"
+
+  [[model.field]]
+  name = "subject"
+  description = "One-line summary of the problem"
+  class = "none"
+
+  [[model.field]]
+  name = "requester_email"
+  description = "Email address of the person asking for help"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "state"
+  description = "open, resolved or closed"
+  class = "none"
+
+  [[model.action]]
+  name = "resolve"
+  description = "Mark an open ticket as resolved"
+  field = "state"
+  from = "open"
+  to = "resolved"
+
+  [[model.action]]
+  name = "close"
+  description = "Close a resolved ticket for good"
+  field = "state"
+  from = "resolved"
+  to = "closed"
+  group = "helpdesk.manager"
+  approval = true

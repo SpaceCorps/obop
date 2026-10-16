@@ -10,6 +10,8 @@ use std::sync::Arc;
 const USAGE: &str = "usage: obop <command>
   --version
   modules check                                 run the install gate over linked modules
+  modules list | install FILE | uninstall ID    manage packages in the database (operator tool)
+  modules market                                list the marketplace; install with `modules install-from ID`
   admin create USER [--groups a,b | --all-groups]
                                                 create a user; the password is read from stdin
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)
@@ -60,6 +62,11 @@ fn main() -> ExitCode {
             Ok(())
         }
         ["modules", "check"] => modules_check(),
+        ["modules", "list"] => modules_list(&opts),
+        ["modules", "market"] => modules_market(&opts),
+        ["modules", "install", file] => modules_install(&opts, Some(file), None),
+        ["modules", "install-from", id] => modules_install(&opts, None, Some(id)),
+        ["modules", "uninstall", id] => modules_uninstall(&opts, id),
         ["admin", "create", user] => admin_create(&opts, user, groups, has("--all-groups")),
         ["agent-token", user] => agent_token(&opts, user, scopes, label),
         ["serve"] => serve(&opts, addr, static_dir),
@@ -158,6 +165,68 @@ fn modules_check() -> Exit {
     } else {
         Ok(())
     }
+}
+
+fn modules_list(o: &Opts) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    for p in app.installer.list() {
+        println!(
+            "{:<14} {:<10} {:<12} {}",
+            p.id, p.version, p.source, p.description
+        );
+    }
+    Ok(())
+}
+
+fn modules_market(o: &Opts) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    let items = app.market.list().map_err(|e| fail(&e))?;
+    for l in items {
+        println!("{:<14} {:<10} {}", l.id, l.version, l.description);
+    }
+    Ok(())
+}
+
+fn modules_install(o: &Opts, file: Option<&str>, market_id: Option<&str>) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    let by = "operator";
+    let r = match (file, market_id) {
+        (Some(f), _) => app.installer.install(
+            &std::fs::read_to_string(f).map_err(|e| fail(&format!("{f}: {e}")))?,
+            "upload",
+            by,
+        ),
+        (_, Some(id)) => app.installer.install_from_marketplace(id, by),
+        _ => unreachable!(),
+    };
+    let p = r.map_err(|e| fail(&e))?;
+    println!(
+        "installed {} {} (models: {}; groups: {})",
+        p.id,
+        p.version,
+        p.models.join(", "),
+        p.groups.join(", ")
+    );
+    Ok(())
+}
+
+fn modules_uninstall(o: &Opts, id: &str) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    app.installer.uninstall(id).map_err(|e| fail(&e))?;
+    println!("uninstalled {id}; its data stays in the database");
+    Ok(())
 }
 
 fn admin_create(o: &Opts, user: &str, groups: Option<&str>, all: bool) -> Exit {
@@ -274,7 +343,7 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
             "no users yet: create one with `obop admin create NAME --all-groups` (or try --dev-auth on localhost)"
         );
     }
-    let state = obop_http::HttpState::new(Arc::new(app.dispatcher), auth);
+    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     let router = obop_http::router(state, static_dir);
     eprintln!(
         "obop listening on http://{addr}{}",
@@ -318,7 +387,7 @@ mod tests {
         .unwrap();
         (
             obop_http::router(
-                obop_http::HttpState::new(Arc::new(app.dispatcher), auth.clone()),
+                obop_http::HttpState::new(app.dispatcher.clone(), auth.clone()),
                 None,
             ),
             auth,
@@ -329,7 +398,7 @@ mod tests {
         let app = App::new();
         app.seed_demo();
         obop_http::router(
-            obop_http::HttpState::new(Arc::new(app.dispatcher), Arc::new(DevAuth)),
+            obop_http::HttpState::new(app.dispatcher.clone(), Arc::new(DevAuth)),
             None,
         )
     }
@@ -533,6 +602,125 @@ mod tests {
                 r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#
             )
             .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn admin_installs_a_module_over_rest_and_it_appears_everywhere() {
+        let (r, auth) = real();
+        auth.create_user(
+            "root",
+            "an admin password!",
+            &["platform.admin".to_string()],
+        )
+        .unwrap();
+        let admin = login(&r, "root", "an admin password!").await;
+        let sam = login(&r, "sam", "another long password").await;
+
+        // A non-admin cannot even see the command.
+        assert_eq!(
+            post(&r, Some(&sam), "/api/marketplace_listing/list", json!({}))
+                .await
+                .0,
+            404
+        );
+        let (s, b) = post(&r, Some(&admin), "/api/marketplace_listing/list", json!({})).await;
+        assert_eq!(s, 200);
+        assert!(
+            b["value"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|l| l["id"] == "fleet")
+        );
+
+        assert_eq!(
+            post(&r, Some(&admin), "/api/fleet_vehicle/list", json!({}))
+                .await
+                .0,
+            404
+        );
+        assert_eq!(
+            post(
+                &r,
+                Some(&admin),
+                "/api/marketplace_listing/install",
+                json!({"id": "fleet"})
+            )
+            .await
+            .0,
+            200
+        );
+        let (s, b) = post(
+            &r,
+            Some(&admin),
+            "/api/fleet_vehicle/create",
+            json!({"plate": "KLM-42", "driver": "Dana Example", "state": "available"}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+        let id = b["value"]["id"].as_str().unwrap().to_string();
+        assert_eq!(
+            post(
+                &r,
+                Some(&admin),
+                "/api/fleet_vehicle/dispatch",
+                json!({"id": id})
+            )
+            .await
+            .0,
+            200
+        );
+        // sam holds no fleet group, so the new models are invisible to them.
+        assert_eq!(
+            post(&r, Some(&sam), "/api/fleet_vehicle/list", json!({}))
+                .await
+                .0,
+            404
+        );
+
+        // An admin's agent token (scoped to platform.admin) can only propose an uninstall.
+        let (_, b) = post(
+            &r,
+            Some(&admin),
+            "/api/auth/agent-token",
+            json!({"scopes": ["platform.admin"]}),
+        )
+        .await;
+        let agent = b["token"].as_str().unwrap().to_string();
+        assert_eq!(
+            post(
+                &r,
+                Some(&agent),
+                "/api/module/uninstall",
+                json!({"id": "fleet"})
+            )
+            .await
+            .0,
+            202
+        );
+        assert_eq!(
+            post(&r, Some(&admin), "/api/fleet_vehicle/list", json!({}))
+                .await
+                .0,
+            200
+        );
+        assert_eq!(
+            post(
+                &r,
+                Some(&admin),
+                "/api/module/uninstall",
+                json!({"id": "fleet"})
+            )
+            .await
+            .0,
+            200
+        );
+        assert_eq!(
+            post(&r, Some(&admin), "/api/fleet_vehicle/list", json!({}))
+                .await
+                .0,
+            404
         );
     }
 

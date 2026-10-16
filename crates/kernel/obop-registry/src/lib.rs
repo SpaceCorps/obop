@@ -1,6 +1,22 @@
 //! Layer 3 registry: model, field and command metadata, and the D41 install gate.
 
 use obop_types::DataClass;
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
+
+/// Registry metadata uses `&'static str`. Modules installed at runtime build their names from
+/// manifests, so those strings are interned: each distinct string is leaked once, which bounds
+/// the cost at the number of distinct names ever installed.
+pub fn intern(s: &str) -> &'static str {
+    static POOL: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
+    let mut pool = POOL.get_or_init(Default::default).lock().unwrap();
+    if let Some(found) = pool.get(s) {
+        return found;
+    }
+    let leaked: &'static str = Box::leak(s.to_owned().into_boxed_str());
+    pool.insert(leaked);
+    leaked
+}
 
 #[derive(Debug, Clone)]
 pub struct FieldDef {
@@ -194,6 +210,17 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
         }
     }
     v
+}
+
+#[cfg(test)]
+mod intern_tests {
+    #[test]
+    fn same_string_same_pointer() {
+        assert!(std::ptr::eq(
+            super::intern("abc"),
+            super::intern(&String::from("abc"))
+        ));
+    }
 }
 
 #[cfg(test)]

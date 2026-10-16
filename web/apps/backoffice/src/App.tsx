@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Modules } from "./Modules.tsx";
 import { approve, call, commands, login, type Command, type Reply, type Row } from "./api.ts";
 
 function stored(): string {
@@ -59,8 +60,13 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [plan, setPlan] = useState<string | null>(null);
 
+  const isAdmin = cmds.some((c) => c.id === "module.install");
   const models = useMemo(
-    () => cmds.filter((c) => c.id.endsWith(".list")).map((c) => c.id.split(".")[0]!),
+    () =>
+      cmds
+        .filter((c) => c.id.endsWith(".list"))
+        .map((c) => c.id.split(".")[0]!)
+        .filter((m) => m !== "module" && m !== "marketplace_listing"),
     [cmds],
   );
   const custom = useMemo(
@@ -82,7 +88,7 @@ export function App() {
   }, [token, setToken]);
 
   const load = useCallback(async () => {
-    if (!model) return setRows([]);
+    if (!model || model === "@modules") return setRows([]);
     const r = await call(token, `${model}.list`);
     if (r.kind === "ok") {
       setRows(r.value as Row[]);
@@ -130,6 +136,11 @@ export function App() {
           Sign out
         </button>
         <nav aria-label="Models">
+          {isAdmin && (
+            <button aria-current={model === "@modules"} onClick={() => setModel("@modules")}>
+              Modules
+            </button>
+          )}
           {models.map((m) => (
             <button key={m} aria-current={m === model} onClick={() => setModel(m)}>
               {m.replace("_", " ")}
@@ -138,48 +149,54 @@ export function App() {
         </nav>
       </aside>
       <main>
-        <h2>{model?.replace("_", " ") ?? "Nothing available"}</h2>
-        {denied.length > 0 && (
-          <p className="hint">Withheld from this principal: {denied.join(", ")}</p>
-        )}
-        {notice && (
-          <p className="notice" role="status">
-            {notice} {plan && <button onClick={approvePlan}>Approve</button>}
-          </p>
-        )}
-        <table>
-          <thead>
-            <tr>
-              {columns.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={String(r.id)}>
-                {columns.map((c) => (
-                  <td key={c}>{String(r[c] ?? "")}</td>
-                ))}
-                <td className="actions">
-                  {custom.map((c) => (
-                    <button
-                      key={c.id}
-                      title={c.description}
-                      onClick={() => run(c.id, String(r.id))}
-                    >
-                      {c.id.split(".")[1]}
-                      {c.needs_approval ? " *" : ""}
-                    </button>
+        {model === "@modules" ? (
+          <Modules token={token} onChange={() => commands(token).then((c) => c && setCmds(c))} />
+        ) : (
+          <>
+            <h2>{model?.replace("_", " ") ?? "Nothing available"}</h2>
+            {denied.length > 0 && (
+              <p className="hint">Withheld from this principal: {denied.join(", ")}</p>
+            )}
+            {notice && (
+              <p className="notice" role="status">
+                {notice} {plan && <button onClick={approvePlan}>Approve</button>}
+              </p>
+            )}
+            <table>
+              <thead>
+                <tr>
+                  {columns.map((c) => (
+                    <th key={c}>{c}</th>
                   ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {rows.length === 0 && <p className="hint">No records.</p>}
-        <p className="hint">* agents only propose these; a human approves.</p>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={String(r.id)}>
+                    {columns.map((c) => (
+                      <td key={c}>{String(r[c] ?? "")}</td>
+                    ))}
+                    <td className="actions">
+                      {custom.map((c) => (
+                        <button
+                          key={c.id}
+                          title={c.description}
+                          onClick={() => run(c.id, String(r.id))}
+                        >
+                          {c.id.split(".")[1]}
+                          {c.needs_approval ? " *" : ""}
+                        </button>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {rows.length === 0 && <p className="hint">No records.</p>}
+            <p className="hint">* agents only propose these; a human approves.</p>
+          </>
+        )}
       </main>
     </div>
   );
