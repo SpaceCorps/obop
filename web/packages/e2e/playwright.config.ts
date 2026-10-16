@@ -56,6 +56,7 @@ export default defineConfig({
     colorScheme: "light",
     locale: "en-US",
     timezoneId: "UTC",
+    actionTimeout: 10_000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     ...browser,

@@ -28,6 +28,8 @@ test.describe("Customize: marketplace, module builder and theme", () => {
       await panel.getByLabel("Plate").fill(plate);
       await panel.getByLabel("Odometer km").fill("120000");
       await panel.getByRole("button", { name: "Create" }).click();
+      // Wait for the save: switching views while the form is still dirty would ask to discard it.
+      await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();
       await page.getByRole("button", { name: "List", exact: true }).click();
       await expect(page.getByRole("row", { name: new RegExp(plate) })).toContainText("120,000");
 
@@ -101,6 +103,7 @@ test.describe("Customize: marketplace, module builder and theme", () => {
       await panel.getByLabel("Customer").click();
       await page.getByRole("option", { name: "Ada Example" }).click();
       await panel.getByRole("button", { name: "Create" }).click();
+      await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();
 
       await page.getByRole("button", { name: "List", exact: true }).click();
       const row = page.getByRole("row", { name: new RegExp(title) });
