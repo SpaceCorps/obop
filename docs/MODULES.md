@@ -74,9 +74,9 @@ write_group = "assets.manager"
   kind = "number"
 ```
 
-A model needs a description and two groups: people holding `read_group` can read records (and `get`/`list`); people holding `write_group` can `create` and `update`. Every field needs a description and a data class. `class = "none"` is how you say "this is not personal data and not otherwise sensitive"; it must be written out. `required = true` makes the server refuse a create without the field. Fields default to `kind = "text"`.
+A model needs a description and two groups: people holding `read_group` can read records (`get`, `list`, `search`); people holding `write_group` can `create`, `update` and `delete`. Every field needs a description and a data class. `class = "none"` is how you say "this is not personal data and not otherwise sensitive"; it must be written out. `required = true` makes the server refuse a create without the field. Fields default to `kind = "text"`.
 
-Each model automatically gets four commands: `<model>.get`, `.list`, `.create`, `.update` (there is no delete). Records get an `id` assigned by the server.
+Each model automatically gets six commands, with the same names on REST, MCP and the CLI: `<model>.get`, `.list`, `.search`, `.create`, `.update` and `.delete`. Records get an `id` assigned by the server. `list` and `search` take the optional `filter`, `order`, `limit` and `offset` of section 4.1; `delete` removes a record that no other record refers to and, being destructive, is only *proposed* by an agent. A field that is the target of an action is governed (section 6.1): `create` and `update` cannot set it freely.
 
 ### 2.3 The main model: kinds, refs, a field-level group, personal data
 
@@ -254,11 +254,11 @@ The file is TOML, at most **256 KiB**, with at most **50 models** and **200 fiel
 
 | Key | Type | Default | Rules |
 |---|---|---|---|
-| `name` | string | required | Identifier; not `get`, `list`, `create` or `update`. Keep names unique within a model (the manifest check does not catch duplicates). The command id is `<model>.<name>`. |
+| `name` | string | required | Identifier; not `get`, `list`, `search`, `create`, `update` or `delete`; unique within the model (a duplicate is refused). The command id is `<model>.<name>`. |
 | `description` | string | required | Not blank. |
-| `field` | string | required | A field declared in the same model. Every bundled package and the UI use `state`. |
-| `from` | string | none | The value the field must have now. If the field is a `select`, it must be one of its options. Without `from` the action works from any value; the bundled packages always set it. |
-| `to` | string | required | The value to set. For a `select` field it must be one of the options. |
+| `field` | string | required | A `select` field declared in the same model; any select field, not only `state` (the UI draws `state` as the status bar and kanban, other selects are governed the same way). That field becomes *governed* (section 6.1). |
+| `from` | string | none | The value the field must have now; one of the options. Without `from` the action works from any value; the bundled packages always set it. Must differ from `to`. |
+| `to` | string | required | The value to set; one of the options. |
 | `group` | string | the model's `write_group` | `module.role`. |
 | `approval` | bool | `false` | Agents may only propose it (D18). |
 
@@ -286,9 +286,12 @@ Parse and gate errors (from `obop modules install`, the Customize upload or `mod
 | `M.F: a ref needs `to`, the target model` | Add `to`. |
 | `M.F: `to` "X" is not a model name` | Target must be an identifier. |
 | `M.F: `to` names "X", which this package does not declare` | A ref to a model that starts with your own id must be one of your models. |
-| `M: bad action name "X"` | Not an identifier, or one of `get`, `list`, `create`, `update`. |
+| `M: bad action name "X"` | Not an identifier, or one of `get`, `list`, `search`, `create`, `update`, `delete`. |
+| `M: action "X" is declared twice` | Two actions of one model share a name; use distinct names (two ways to one state need two names). |
 | `M.A: acts on undeclared field "X"` | `field` must name a field of the same model. |
+| `M.A: acts on F, which is a text field; an action moves a select field between its options` | Make the field `kind = "select"` with `options`. |
 | `M.A: "V" is not one of the options of F (...)` | `from` or `to` is not in the select's options. |
+| `M.A: `from` and `to` are both "V"; an action must change the state` | An action that changes nothing is refused. |
 | `...: personal data cannot be classed `none`` | The D41 gate: choose a real class for a field with `personal_data = true`. |
 | `...: field has no description` / `command has no description` / `model has no description` | Descriptions are mandatory (they are what agents and the UI show). |
 
@@ -318,6 +321,27 @@ Values travel as JSON on REST and MCP, and as `key=value` text on the CLI (which
 | `select` | string | One of `options`. `"in_stock"` |
 | `ref` | string | The id of an existing record of model `to`; a dangling id is refused. `"9f3c..."` |
 
+### 4.1 `list`, `search` and `delete`
+
+`<model>.list` and `<model>.search` take the same optional input; `list` returns a bare array of rows (as before, with no input it returns every record in insertion order), `search` returns `{"rows": [...], "total": N}` where `total` counts the matches *before* `limit` and `offset`.
+
+```json
+{
+  "filter": [ {"field": "stage", "op": "in", "value": ["new", "qualified"]},
+              {"field": "expected_revenue_minor", "op": "gte", "value": 100000} ],
+  "order":  [ {"field": "expected_revenue_minor", "dir": "desc"}, {"field": "title"} ],
+  "limit": 50, "offset": 100
+}
+```
+
+- `filter`: conditions `{field, op, value}`, ANDed (at most 50). Ops: `eq`, `ne`, `contains` (text and longtext only, case-insensitive substring, no wildcards), `in` (an array of at most 1000 values), `gt`, `gte`, `lt`, `lte` (not for `bool` or `ref`), `is_null` (`value` true, the default, or false). `ne` also matches records where the field is empty; the other ops never match an empty value. Values must have the field's kind (`number` and `money` as integers, `date` as `YYYY-MM-DD`, a `select` value must be an option, a `ref` is an id) and comparisons are typed: numbers numerically, dates chronologically, selects in option order, text bytewise (`contains` and `order` ignore case). `id` can be used as a field.
+- `order`: up to 5 `{field, dir}` with `dir` `asc` (default) or `desc`; empty values sort last in both directions; ties keep insertion order.
+- `limit`: 1 to 5000 (default: no limit); `offset`: 0 or more.
+- Unknown keys, ops or malformed values are an error (HTTP 400, for example `unknown op "like" (use eq, ne, contains, in, gt, gte, lt, lte, is_null)`).
+- Filtering and ordering happen before masking and withholding, so they are restricted to fields the caller can read in clear: a field the caller's groups do not include, a secret field, and for an agent any personal-data or sensitive field (which it sees only as a token or not at all) are refused with exactly the error of a field that does not exist, `unknown field <model>.<name>`. A search can therefore not be used to guess values the caller may not see.
+
+`<model>.delete` takes `{"id": ...}` and returns `{"id": ...}`. It needs the model's `write_group`; an agent only gets an approval plan. It is refused while another record has a `ref` to the record: `cannot delete party P: still referenced by accounting_move (3): id1, id2, id3; sale_order (1): id4` (the first five ids of each model).
+
 Conventions the bundled packages follow: refs are named `<thing>_id`; time of day is a `number` of minutes since midnight (540 is 09:00) next to a `date`; rates are `number`s in basis points (2000 is 20.00 percent); free-text codes such as invoice numbers are `text` because packages cannot generate sequences; yes/no with more than two states is a `select`.
 
 ## 5. Data classes, personal data and permission groups
@@ -346,7 +370,7 @@ A group is just a name `module.role`; it exists as soon as something refers to i
 
 Three places take a group:
 
-1. Model `read_group` / `write_group`: read (`get`, `list`) and write (`create`, `update`).
+1. Model `read_group` / `write_group`: read (`get`, `list`, `search`) and write (`create`, `update`, `delete`).
 2. Field `group` (default: the model's read group): who sees the field. A field the principal cannot read is not described to it in `/api/meta`.
 3. Action `group` (default: the model's write group): who may run the step. This is how you require a stricter group for posting, paying, closing.
 
@@ -362,7 +386,20 @@ What the dispatcher does with `approval = true`:
 
 Mark `approval = true` on anything irreversible or money-moving: posting to a ledger, paying, refunding, sending to customers, publishing publicly, closing a period, retiring an asset. Reversible bookkeeping steps (assign, schedule, handle) normally do not need it.
 
-What actions cannot do: set more than one field, compute anything, create records, notify, call out, or check other fields (for example that required fields are filled). They are also not the only way to change a state: see section 10.
+What actions cannot do: set more than one field, compute anything, create records, notify or call out. When an action runs it also checks that the record has every `required` field set (the error names the field, for example `helpdesk_ticket.subject is required and must be set before state can change to "in_progress"`).
+
+### 6.1 Governed fields: actions are the only way to move a state (D48)
+
+A field that is the `field` of at least one action is *governed*. The generic `create` and `update` cannot set it freely, so the stricter group and the `approval` flag of an action cannot be bypassed:
+
+- **create**: leave a governed field out (it becomes the first option of its select) or send exactly the first option. Anything else is refused: `helpdesk_ticket.state starts as "open" when a record is created; it moves on through the model's actions`. A value that is not an option at all gets the ordinary `must be one of: ...`.
+- **update**: setting a governed field to the value it already has is not a change. Changing it from `a` to `b` is accepted only as an implicit run of a declared action: there must be an action on that field with `to = b` and `from` unset or `= a`, and the caller must hold *that action's* group. If the action has `approval = true`, an agent's update returns the usual approval plan (`202`, `plan_id`), and a human who holds the action's group approves it; the action then really runs (side effects such as the invoice number included). A change with no such action is refused and says where the record can go: `helpdesk_ticket.state cannot change from "open" to "closed"; from "open" it can only go to: in_progress`, or `... no transition leaves "closed"`. A caller without the group is told which action and group: `... moving from "draft" to "posted" is the post action, which needs the accounting.approver group`.
+- Other fields of the same `update` are validated as before, all before anything is written, so a mixed update applies completely or not at all. The record's required fields must be set for a transition to run.
+- When several actions lead to the same state the caller uses one it may run (an exact `from` before an open one). This is how the UI's kanban drag and status-bar clicks keep working: they send `update` with the new state, and succeed exactly when the person could have pressed the corresponding action button.
+- A proposal is checked again when it is approved, because the record may have changed since.
+- Data written outside the commands (seeds, imports straight into the store) is not checked.
+
+The built-in modules follow the same rule: `lead.stage` (actions `qualify`, `mark_won`, `mark_lost`, `reopen`), `sale_order.state` (`confirm`, `cancel`, `reset_to_draft`) and `invoice.state` (`post`, needing `invoicing.manager` and approval, and `cancel`).
 
 ## 7. Refs, `depends`, installing, upgrading, removing
 
@@ -377,7 +414,7 @@ What actions cannot do: set more than one field, compute anything, create record
 ### Test a package
 
 - `cargo run -- modules install FILE --db sqlite:///path/x.db` runs exactly the checks of an upload: parse, validation, the D41 gate, dependencies, refs. It prints the models and groups it created, or the error. Use a throwaway database; install dependencies first with `modules install-from ID` (for bundled packages).
-- `cargo run -- modules check` runs the gate over the *linked* (built-in) modules only; it does not read your file.
+- `cargo run -- modules check FILE...` needs no database: it parses each file, runs the D41 gate, and applies the install rules that need no database (the id is not a built-in module, every `depends` entry is a built-in module or a bundled package, every `ref` to a model outside the package points at a model of the dependencies). It prints `ok  FILE`, or `FAIL  FILE: <error>` for each problem, and exits non-zero if any file fails. `cargo run -- modules check` without files runs the gate over the linked built-in modules.
 - Customize app, **Module builder**: define models, fields (name, description, kind, options, target), and actions in a form; it writes the `obop.toml` for you and installs it. Customize, **Upload your own** accepts any `.toml` file and shows the error text on failure.
 - To exercise a package like the bundled ones, copy the pattern of the `bundled_packages` tests in `crates/obop/src/main.rs`: install through the real installer, create a record per model from the metadata, run every action in and out of order, check agents are only given a proposal for approval actions.
 - Try as an ordinary user: `echo "a-long-password" | cargo run -- admin create alice --groups assets.user --db sqlite:///path/x.db`, then log in and see which fields and buttons appear.
@@ -421,11 +458,11 @@ Declarative X1 deliberately cannot do the following. Plan around them or wait fo
 - **No sequences or unique constraints.** Numbers such as `INV/2026/0001` are free text; uniqueness and gaplessness are conventions the people entering them keep. Two records can have the same `tag` or `slug`.
 - **No row-level permissions.** Access is by model and field group only. Everyone holding `knowledge.user` reads every article regardless of its `visibility` field; that field is a label.
 - **No side effects.** Actions change one field. They do not send email, create invoices, post to a ledger, move stock or call a payment provider. The email, sign, eCommerce and POS packages record what happened or should happen; something else must do it.
-- **State is not locked.** The generic `update` command can set any field, including `state`, to any valid option for a person who holds the model's `write_group`; the stricter group on an action applies only to the action. Signed or posted records are "immutable by convention" only. If a transition must be restricted, make the model's `write_group` the stricter group and keep the day-to-day work in a separate model, or wait for X2 validation rules. A ref and `required` are also only checked on create and update, not when an action runs.
-- **No delete command**, no cascade, no cross-record validation (dates in order, totals matching lines).
+- **Governed state, but not locked records.** A state field is protected (section 6.1), but every other field of a posted or signed record can still be edited by anyone who holds the `write_group`; "immutable once posted" is not enforced. Keep such data in a model with a stricter `write_group`. Data written outside the commands bypasses the rules. Nothing stops two servers racing on one PostgreSQL database between the check and the write of a transition (one server serialises them).
+- **Delete is plain**: `delete` removes the record for good and refuses while another record refers to it through a `ref` (the error lists the referencing models, counts and up to five ids). There is no cascade, no soft delete and no tombstone; the check sees only models that are installed now. Personal-data erasure still uses the dedicated `erase` command of the owning module (`party.erase`), which anonymises in place and keeps the references valid; `delete` is not a substitute for it. There is no cross-record validation (dates in order, totals matching lines).
 - **No migrations**: see section 7.
-- **Lists are plain**: `list` returns all records; filtering, sorting, grouping and search happen in the client.
-- Limits: 256 KiB, 50 models, 200 fields per package; no floats; one workflow field per action.
+- **Search is evaluated in memory**: `list`/`search` filter, sort and page on the server (section 4.1), but the server reads the model's records from the store to do it, on all three backends, so a very large table is slow; there are no indexes, no full-text search and no grouping or aggregation on the server. Filtering and sorting on a field the caller cannot read in clear (not permitted, withheld, or masked for an agent) is refused.
+- Limits: 256 KiB, 50 models, 200 fields per package; no floats; one field per action; at most 50 filter conditions, 5 order keys and 5000 rows per call.
 
 ## 11. FAQ
 
@@ -451,4 +488,4 @@ Declarative X1 deliberately cannot do the following. Plan around them or wait fo
 
 **Can a module have no models?** The file parses with no `[[model]]`, but it adds nothing.
 
-**Where are decisions recorded?** D11 (tiers), D45 (packages and the admin), D46 (backoffice and Customize), D47 (typed fields) in `docs/DECISIONS.md`; data classes in `docs/CONVENTIONS.md` section 5.
+**Where are decisions recorded?** D11 (tiers), D45 (packages and the admin), D46 (backoffice and Customize), D47 (typed fields), D48 (governed fields), D49 (delete and search) in `docs/DECISIONS.md`; data classes in `docs/CONVENTIONS.md` section 5.

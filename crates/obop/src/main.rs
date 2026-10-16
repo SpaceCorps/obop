@@ -352,6 +352,22 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
         kv.iter()
             .filter_map(|p| p.split_once('='))
             .map(|(k, v)| {
+                // `list` and `search` options (D49): limit=5 offset=10 filter='[{...}]' order='[...]'.
+                if matches!(command, "list" | "search") {
+                    match k {
+                        "limit" | "offset" => {
+                            if let Ok(n) = v.parse() {
+                                return (k.to_string(), Value::Int(n));
+                            }
+                        }
+                        "filter" | "order" => {
+                            if let Ok(j) = serde_json::from_str(v) {
+                                return (k.to_string(), Value::from_json(&j));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 let typed = match kind_of(k) {
                     "number" | "money" => v.parse().map(Value::Int).ok(),
                     "bool" => v.parse().map(Value::Bool).ok(),
