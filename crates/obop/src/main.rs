@@ -311,10 +311,27 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
     let app = open_app(o)?;
     let p = principal(&app, o)?;
     let id = names::from_cli(&[model, command]).ok_or(ExitCode::from(2))?;
+    // Command-line values are all text; give number, money and bool fields their JSON types so
+    // typed fields (D47) validate the same way as over REST. Anything else stays a string.
+    let meta = app.dispatcher.meta(Surface::Cli, &p);
+    let kind_of = |field: &str| {
+        meta.iter()
+            .flat_map(|m| &m.models)
+            .find(|m| m.name == model)
+            .and_then(|m| m.fields.iter().find(|f| f.name == field))
+            .map_or("text", |f| f.kind)
+    };
     let input = Value::Map(
         kv.iter()
             .filter_map(|p| p.split_once('='))
-            .map(|(k, v)| (k.to_string(), Value::text(v)))
+            .map(|(k, v)| {
+                let typed = match kind_of(k) {
+                    "number" | "money" => v.parse().map(Value::Int).ok(),
+                    "bool" => v.parse().map(Value::Bool).ok(),
+                    _ => None,
+                };
+                (k.to_string(), typed.unwrap_or_else(|| Value::text(v)))
+            })
             .collect(),
     );
     match app
@@ -913,6 +930,100 @@ mod tests {
                 .any(|m| m["id"] == "platform"),
             "admins also get the customize models"
         );
+    }
+
+    #[tokio::test]
+    async fn meta_exposes_field_kinds_and_bad_types_are_http_400() {
+        let (r, _) = real();
+        let ada = login(&r, "ada", "correct horse battery").await;
+        let resp = r
+            .clone()
+            .oneshot(
+                Request::get("/api/meta")
+                    .header("authorization", format!("Bearer {ada}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status().as_u16(), 200);
+        let b: J =
+            serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        let field = |model: &str, name: &str| -> J {
+            b["modules"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|m| m["models"].as_array().unwrap())
+                .find(|m| m["name"] == model)
+                .unwrap()["fields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|f| f["name"] == name)
+                .unwrap_or_else(|| panic!("{model}.{name}"))
+                .clone()
+        };
+        let stage = field("lead", "stage");
+        assert_eq!(stage["kind"], "select");
+        assert_eq!(stage["options"], json!(["new", "qualified", "won", "lost"]));
+        assert_eq!(stage["required"], false);
+        assert!(stage["class"].is_string() && stage["personal_data"].is_boolean());
+        let party = field("sale_order", "party_id");
+        assert_eq!(
+            (party["kind"].as_str(), party["to"].as_str()),
+            (Some("ref"), Some("party"))
+        );
+        assert!(party.get("options").is_none());
+        let total = field("sale_order", "total_minor");
+        assert_eq!(total["kind"], "money");
+        assert!(total.get("to").is_none() && total.get("options").is_none());
+        assert_eq!(field("party", "name")["required"], true);
+        assert_eq!(field("party", "notes")["kind"], "longtext");
+        assert_eq!(field("party", "email")["kind"], "text");
+
+        let (s, e) = post(
+            &r,
+            Some(&ada),
+            "/api/sale_order/create",
+            json!({"total_minor": 12.5}),
+        )
+        .await;
+        assert_eq!(s, 400, "{e}");
+        assert!(
+            e.to_string()
+                .contains("sale_order.total_minor must be an integer in minor currency units"),
+            "{e}"
+        );
+        let (s, e) = post(
+            &r,
+            Some(&ada),
+            "/api/lead/create",
+            json!({"title": "x", "stage": "maybe"}),
+        )
+        .await;
+        assert_eq!(s, 400);
+        assert!(
+            e.to_string()
+                .contains("lead.stage must be one of: new, qualified, won, lost"),
+            "{e}"
+        );
+        let (s, _) = post(
+            &r,
+            Some(&ada),
+            "/api/sale_order/create",
+            json!({"party_id": "ghost"}),
+        )
+        .await;
+        assert_eq!(s, 400);
+        let (s, b) = post(
+            &r,
+            Some(&ada),
+            "/api/lead/create",
+            json!({"title": "ok", "stage": "new", "expected_revenue_minor": 1000}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
     }
 
     #[tokio::test]

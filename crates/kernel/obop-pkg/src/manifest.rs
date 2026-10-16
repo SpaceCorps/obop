@@ -2,7 +2,7 @@
 //! permission groups and state-transition actions. A package contains no code, so installing
 //! one cannot run anything the registry does not already control.
 
-use obop_registry::{CommandDef, FieldDef, ModelDef, Module, check_module, intern};
+use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef, Module, check_module, intern};
 use obop_types::DataClass;
 use serde::Deserialize;
 
@@ -59,6 +59,21 @@ pub struct FieldM {
     pub personal_data: bool,
     /// Defaults to the model's read group.
     pub group: Option<String>,
+    /// Field kind (D47): text, longtext, number, money, date, bool, select or ref.
+    #[serde(default = "default_kind")]
+    pub kind: String,
+    /// Allowed values; only for `select`. For a `state` field they are the status order.
+    #[serde(default)]
+    pub options: Vec<String>,
+    /// Target model; only for `ref`.
+    pub to: Option<String>,
+    /// Must be present and non-null on create. Defaults to false.
+    #[serde(default)]
+    pub required: bool,
+}
+
+fn default_kind() -> String {
+    "text".into()
 }
 
 /// A state transition: set `field` to `to`, only when it currently equals `from` (if given).
@@ -161,6 +176,7 @@ impl Manifest {
                         m.name, f.name, f.class
                     ));
                 }
+                self.check_kind(m, f)?;
             }
             for a in &m.action {
                 if !ident_ok(&a.name)
@@ -174,9 +190,88 @@ impl Manifest {
                         m.name, a.name, a.field
                     ));
                 }
+                if let Some(f) = m.field.iter().find(|f| f.name == a.field)
+                    && f.kind == "select"
+                {
+                    for v in a.from.iter().chain(std::iter::once(&a.to)) {
+                        if !f.options.contains(v) {
+                            return Err(format!(
+                                "{}.{}: {v:?} is not one of the options of {} ({})",
+                                m.name,
+                                a.name,
+                                f.name,
+                                f.options.join(", ")
+                            ));
+                        }
+                    }
+                }
             }
         }
         Ok(())
+    }
+
+    /// Consistency of `kind`, `options`, `to` and `required` on one field.
+    fn check_kind(&self, m: &ModelM, f: &FieldM) -> Result<(), String> {
+        let at = format!("{}.{}", m.name, f.name);
+        if !FieldKind::is_known(&f.kind) {
+            return Err(format!(
+                "{at}: unknown kind {:?} (use text, longtext, number, money, date, bool, select or ref)",
+                f.kind
+            ));
+        }
+        if f.kind != "select" && !f.options.is_empty() {
+            return Err(format!("{at}: options are only valid for kind \"select\""));
+        }
+        if f.kind != "ref" && f.to.is_some() {
+            return Err(format!("{at}: `to` is only valid for kind \"ref\""));
+        }
+        if f.kind == "select" {
+            if f.options.is_empty() {
+                return Err(format!("{at}: a select needs options"));
+            }
+            let mut seen = std::collections::HashSet::new();
+            for o in &f.options {
+                if o.trim().is_empty() || !seen.insert(o) {
+                    return Err(format!(
+                        "{at}: select options must be non-empty and unique (got {o:?})"
+                    ));
+                }
+            }
+        }
+        if f.kind == "ref" {
+            let Some(to) = f.to.as_deref() else {
+                return Err(format!("{at}: a ref needs `to`, the target model"));
+            };
+            if !ident_ok(to) {
+                return Err(format!("{at}: `to` {to:?} is not a model name"));
+            }
+            // A target outside this package is checked at install time, against what is
+            // registered then; a target inside it must really be one of its models.
+            let own = to == self.module.id || to.starts_with(&format!("{}_", self.module.id));
+            if own && !self.model.iter().any(|x| x.name == to) {
+                return Err(format!(
+                    "{at}: `to` names {to:?}, which this package does not declare"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Models that `ref` fields point at and that this package does not declare: they must be
+    /// registered already when the package is installed.
+    pub fn external_refs(&self) -> Vec<(String, String)> {
+        let mut v = Vec::new();
+        for m in &self.model {
+            for f in &m.field {
+                if let Some(to) = &f.to
+                    && f.kind == "ref"
+                    && !self.model.iter().any(|x| &x.name == to)
+                {
+                    v.push((format!("{}.{}", m.name, f.name), to.clone()));
+                }
+            }
+        }
+        v
     }
 
     /// Permission groups the package refers to.
@@ -209,12 +304,32 @@ impl Manifest {
                 fields: m
                     .field
                     .iter()
-                    .map(|f| FieldDef {
-                        name: intern(&f.name),
-                        description: intern(&f.description),
-                        class: DataClass::parse(&f.class),
-                        permission_group: intern(f.group.as_deref().unwrap_or(&m.read_group)),
-                        personal_data: f.personal_data,
+                    .map(|f| {
+                        let kind = match f.kind.as_str() {
+                            "longtext" => FieldKind::LongText,
+                            "number" => FieldKind::Number,
+                            "money" => FieldKind::Money,
+                            "date" => FieldKind::Date,
+                            "bool" => FieldKind::Bool,
+                            "select" => FieldKind::Select(
+                                f.options
+                                    .iter()
+                                    .map(|o| intern(o))
+                                    .collect::<Vec<_>>()
+                                    .into(),
+                            ),
+                            "ref" => FieldKind::Ref(intern(f.to.as_deref().unwrap_or(""))),
+                            _ => FieldKind::Text,
+                        };
+                        FieldDef {
+                            name: intern(&f.name),
+                            description: intern(&f.description),
+                            class: DataClass::parse(&f.class),
+                            permission_group: intern(f.group.as_deref().unwrap_or(&m.read_group)),
+                            personal_data: f.personal_data,
+                            kind,
+                            required: f.required,
+                        }
                     })
                     .collect(),
                 commands: m
@@ -340,5 +455,96 @@ write_group = "fleet.manager"
             "class = \"none\"\n  personal_data = true",
         );
         assert!(err(&bad).contains("personal data cannot be classed"));
+    }
+
+    /// FLEET with a typed `state` and a ref, as manifests now declare them.
+    fn typed() -> String {
+        FLEET
+            .replace(
+                "description = \"available or in_service\"\n  class = \"none\"",
+                "description = \"available or in_service\"\n  class = \"none\"\n  kind = \"select\"\n  options = [\"available\", \"in_service\"]",
+            )
+            .replace(
+                "[[model.action]]",
+                "[[model.field]]\n  name = \"parent_id\"\n  description = \"Parent vehicle\"\n  class = \"none\"\n  kind = \"ref\"\n  to = \"fleet_vehicle\"\n  required = true\n\n  [[model.action]]",
+            )
+    }
+
+    #[test]
+    fn kinds_options_to_and_required_reach_the_registry() {
+        let module = Manifest::parse(&typed()).unwrap().to_module().unwrap();
+        let f = &module.models[0].fields;
+        assert_eq!(f[0].kind, FieldKind::Text, "kind defaults to text");
+        assert!(!f[0].required);
+        assert_eq!(f[2].kind.name(), "select");
+        assert_eq!(f[2].kind.options(), ["available", "in_service"]);
+        assert_eq!(f[3].kind.target(), Some("fleet_vehicle"));
+        assert!(f[3].required);
+    }
+
+    #[test]
+    fn every_kind_name_parses() {
+        for k in ["text", "longtext", "number", "money", "date", "bool"] {
+            let t = FLEET.replace(
+                "name = \"plate\"",
+                &format!("name = \"plate\"\n  kind = \"{k}\""),
+            );
+            let module = Manifest::parse(&t).unwrap().to_module().unwrap();
+            assert_eq!(module.models[0].fields[0].kind.name(), k);
+        }
+    }
+
+    #[test]
+    fn rejects_inconsistent_field_kinds() {
+        let at = |extra: &str| {
+            FLEET.replace("name = \"plate\"", &format!("name = \"plate\"\n  {extra}"))
+        };
+        assert!(err(&at("kind = \"float\"")).contains("unknown kind"));
+        assert!(err(&at("options = [\"a\"]")).contains("options are only valid"));
+        assert!(
+            err(&at("kind = \"money\"\n  options = [\"a\"]"))
+                .contains("only valid for kind \"select\"")
+        );
+        assert!(err(&at("to = \"fleet_vehicle\"")).contains("`to` is only valid"));
+        assert!(err(&at("kind = \"select\"")).contains("needs options"));
+        assert!(err(&at("kind = \"select\"\n  options = []")).contains("needs options"));
+        assert!(err(&at("kind = \"select\"\n  options = [\"a\", \"a\"]")).contains("unique"));
+        assert!(err(&at("kind = \"ref\"")).contains("needs `to`"));
+        assert!(err(&at("kind = \"ref\"\n  to = \"Bad Name\"")).contains("not a model name"));
+        assert!(err(&at("kind = \"ref\"\n  to = \"fleet_ghost\"")).contains("does not declare"));
+        assert!(err(&at("required = \"yes\"")).contains("invalid obop.toml"));
+    }
+
+    #[test]
+    fn refs_to_other_packages_wait_for_install_time() {
+        let t = FLEET.replace(
+            "name = \"plate\"",
+            "name = \"plate\"\n  kind = \"ref\"\n  to = \"party\"",
+        );
+        let m = Manifest::parse(&t).unwrap();
+        assert_eq!(
+            m.external_refs(),
+            [("fleet_vehicle.plate".to_string(), "party".to_string())]
+        );
+        assert!(
+            Manifest::parse(&typed())
+                .unwrap()
+                .external_refs()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_field_named_id_is_refused() {
+        assert!(err(&FLEET.replace("name = \"plate\"", "name = \"id\"")).contains("field name"));
+    }
+
+    #[test]
+    fn action_transitions_must_use_the_options_of_a_select() {
+        let bad_to = typed().replace("to = \"in_service\"", "to = \"scrapped\"");
+        assert!(err(&bad_to).contains("not one of the options"));
+        let bad_from = typed().replace("from = \"available\"", "from = \"missing\"");
+        assert!(err(&bad_from).contains("not one of the options"));
+        assert!(Manifest::parse(&typed()).is_ok());
     }
 }

@@ -1,7 +1,7 @@
 //! `sales`: quotations and orders.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, ModelDef, Module};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
 use obop_types::DataClass::None as NoClass;
 
 pub fn module() -> Module {
@@ -20,21 +20,24 @@ pub fn module() -> Module {
                     NoClass,
                     false,
                     "sales.user",
-                ),
+                )
+                .reference("party"),
                 F::new(
                     "state",
                     "Lifecycle: draft, confirmed or cancelled",
                     NoClass,
                     false,
                     "sales.user",
-                ),
+                )
+                .select(&["draft", "confirmed", "cancelled"]),
                 F::new(
                     "total_minor",
                     "Order total in minor units",
                     NoClass,
                     false,
                     "sales.user",
-                ),
+                )
+                .kind(FieldKind::Money),
                 F::new(
                     "currency",
                     "ISO 4217 currency code",

@@ -162,6 +162,13 @@ pub struct FieldInfo {
     pub description: &'static str,
     pub class: &'static str,
     pub personal_data: bool,
+    /// Lowercase field kind (D47): text, longtext, number, money, date, bool, select or ref.
+    pub kind: &'static str,
+    pub required: bool,
+    /// Options of a `select`; empty for other kinds.
+    pub options: Vec<&'static str>,
+    /// Target model of a `ref`.
+    pub to: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -259,6 +266,10 @@ impl Dispatcher {
                             description: f.description,
                             class: f.class.map_or("none", |c| c.as_str()),
                             personal_data: f.personal_data,
+                            kind: f.kind.name(),
+                            required: f.required,
+                            options: f.kind.options().to_vec(),
+                            to: f.kind.target(),
                         })
                         .collect(),
                     actions,

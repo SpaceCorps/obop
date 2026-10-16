@@ -15,11 +15,14 @@ write_group = "projects.manager"
   name = "name"
   description = "Project name"
   class = "none"
+  required = true
 
   [[model.field]]
   name = "state"
-  description = "planned, active or done"
+  description = "Project status: planned, active or done"
   class = "none"
+  kind = "select"
+  options = ["planned", "active", "done"]
 
   [[model.action]]
   name = "start"
@@ -45,11 +48,14 @@ write_group = "projects.user"
   name = "title"
   description = "What needs doing"
   class = "none"
+  required = true
 
   [[model.field]]
   name = "project_id"
-  description = "Id of the project this task belongs to"
+  description = "The project this task belongs to"
   class = "none"
+  kind = "ref"
+  to = "projects_project"
 
   [[model.field]]
   name = "assignee"
@@ -59,8 +65,10 @@ write_group = "projects.user"
 
   [[model.field]]
   name = "state"
-  description = "todo, doing or done"
+  description = "Task status: todo, doing or done"
   class = "none"
+  kind = "select"
+  options = ["todo", "doing", "done"]
 
   [[model.action]]
   name = "begin"

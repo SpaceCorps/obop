@@ -2,7 +2,7 @@
 
 use obop_types::DataClass;
 use std::collections::HashSet;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// Registry metadata uses `&'static str`. Modules installed at runtime build their names from
 /// manifests, so those strings are interned: each distinct string is leaked once, which bounds
@@ -18,6 +18,110 @@ pub fn intern(s: &str) -> &'static str {
     leaked
 }
 
+/// The type of a field (D47). Serialised lowercase (`FieldKind::name`) in manifests and in
+/// `/api/meta`. Cheap to clone: options are shared, the target model name is interned.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum FieldKind {
+    /// JSON string.
+    #[default]
+    Text,
+    /// JSON string, multi-line.
+    LongText,
+    /// JSON integer.
+    Number,
+    /// JSON integer in minor currency units, never a float.
+    Money,
+    /// JSON string `YYYY-MM-DD`, a real calendar date.
+    Date,
+    /// JSON boolean.
+    Bool,
+    /// JSON string, one of the options (in status order for a `state` field).
+    Select(Arc<[&'static str]>),
+    /// JSON string: the id of an existing record of the named model.
+    Ref(&'static str),
+}
+
+impl FieldKind {
+    /// The lowercase name used in manifests and `/api/meta`.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::LongText => "longtext",
+            Self::Number => "number",
+            Self::Money => "money",
+            Self::Date => "date",
+            Self::Bool => "bool",
+            Self::Select(_) => "select",
+            Self::Ref(_) => "ref",
+        }
+    }
+
+    /// Whether `name` is one of the kind names.
+    pub fn is_known(name: &str) -> bool {
+        matches!(
+            name,
+            "text" | "longtext" | "number" | "money" | "date" | "bool" | "select" | "ref"
+        )
+    }
+
+    /// The options of a `select`, empty for every other kind.
+    pub fn options(&self) -> &[&'static str] {
+        match self {
+            Self::Select(o) => o,
+            _ => &[],
+        }
+    }
+
+    /// The target model of a `ref`.
+    pub fn target(&self) -> Option<&'static str> {
+        match self {
+            Self::Ref(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// What a valid value is, for "`model.field` must be ..." messages.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Text | Self::LongText => "a string".into(),
+            Self::Number => "an integer".into(),
+            Self::Money => "an integer in minor currency units".into(),
+            Self::Date => "a real calendar date as YYYY-MM-DD".into(),
+            Self::Bool => "true or false".into(),
+            Self::Select(o) => format!("one of: {}", o.join(", ")),
+            Self::Ref(t) => format!("the id of an existing {t} record"),
+        }
+    }
+}
+
+/// Whether `s` is a real calendar date written `YYYY-MM-DD` (leap years included).
+pub fn is_valid_date(s: &str) -> bool {
+    let b = s.as_bytes();
+    if b.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return false;
+    }
+    let digits = |r: std::ops::Range<usize>| -> Option<u32> {
+        let part = s.get(r)?;
+        if part.bytes().all(|c| c.is_ascii_digit()) {
+            part.parse().ok()
+        } else {
+            None
+        }
+    };
+    let (Some(y), Some(m), Some(d)) = (digits(0..4), digits(5..7), digits(8..10)) else {
+        return false;
+    };
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let days = match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    y >= 1 && (1..=days).contains(&d)
+}
+
 #[derive(Debug, Clone)]
 pub struct FieldDef {
     pub name: &'static str,
@@ -25,6 +129,8 @@ pub struct FieldDef {
     pub class: Option<DataClass>,
     pub permission_group: &'static str,
     pub personal_data: bool,
+    pub kind: FieldKind,
+    pub required: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -81,7 +187,30 @@ impl FieldDef {
             class: Some(class),
             permission_group,
             personal_data,
+            kind: FieldKind::Text,
+            required: false,
         }
+    }
+
+    pub fn kind(mut self, kind: FieldKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    /// A `select` with these options (interned, so literals and manifest strings both work).
+    pub fn select(self, options: &[&str]) -> Self {
+        let o: Vec<&'static str> = options.iter().map(|x| intern(x)).collect();
+        self.kind(FieldKind::Select(o.into()))
+    }
+
+    /// A `ref` to records of `model`.
+    pub fn reference(self, model: &str) -> Self {
+        self.kind(FieldKind::Ref(intern(model)))
+    }
+
+    pub fn required(mut self) -> Self {
+        self.required = true;
+        self
     }
 }
 
@@ -197,6 +326,27 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
                 }
                 _ => {}
             }
+            if f.name == "id" {
+                bad(
+                    fp.clone(),
+                    "a field cannot be named `id`; it is the record id",
+                );
+            }
+            match &f.kind {
+                FieldKind::Select(o) if o.is_empty() => {
+                    bad(fp.clone(), "select field has no options")
+                }
+                FieldKind::Select(o) => {
+                    let mut seen = HashSet::new();
+                    if o.iter().any(|x| x.is_empty() || !seen.insert(*x)) {
+                        bad(fp.clone(), "select options must be non-empty and unique");
+                    }
+                }
+                FieldKind::Ref(t) if t.trim().is_empty() => {
+                    bad(fp.clone(), "ref field has no target model")
+                }
+                _ => {}
+            }
         }
         for c in &model.all_commands() {
             let cp = format!("{mp}::{}", c.name);
@@ -236,6 +386,8 @@ mod tests {
             class,
             permission_group: "base.user",
             personal_data: personal,
+            kind: FieldKind::Text,
+            required: false,
         }
     }
 
@@ -290,5 +442,79 @@ mod tests {
             },
         });
         assert_eq!(check_module(&m).len(), 1);
+    }
+
+    fn gate(f: FieldDef) -> Vec<Violation> {
+        check_module(&module(f))
+    }
+
+    fn ok_field() -> FieldDef {
+        field(Some(DataClass::Internal), true)
+    }
+
+    #[test]
+    fn typed_fields_pass_when_well_formed() {
+        assert!(gate(ok_field().select(&["a", "b"]).required()).is_empty());
+        assert!(gate(ok_field().reference("party")).is_empty());
+    }
+
+    #[test]
+    fn select_needs_unique_options() {
+        assert!(
+            gate(ok_field().select(&[]))[0]
+                .problem
+                .contains("no options")
+        );
+        assert!(
+            gate(ok_field().select(&["a", "a"]))[0]
+                .problem
+                .contains("unique")
+        );
+    }
+
+    #[test]
+    fn ref_needs_a_target() {
+        assert!(gate(ok_field().reference(""))[0].problem.contains("target"));
+    }
+
+    #[test]
+    fn a_field_cannot_be_named_id() {
+        let mut f = ok_field();
+        f.name = "id";
+        assert!(gate(f)[0].problem.contains("`id`"));
+    }
+
+    #[test]
+    fn kind_names_and_descriptions() {
+        assert_eq!(FieldKind::Money.name(), "money");
+        assert_eq!(FieldKind::default(), FieldKind::Text);
+        let f = ok_field().select(&["x", "y"]);
+        assert_eq!(f.kind.describe(), "one of: x, y");
+        assert_eq!(f.kind.options(), ["x", "y"]);
+        assert_eq!(ok_field().reference("party").kind.target(), Some("party"));
+        assert!(FieldKind::is_known("longtext") && !FieldKind::is_known("float"));
+    }
+
+    #[test]
+    fn dates_are_checked_against_the_calendar() {
+        for ok in ["2024-02-29", "2000-02-29", "2023-12-31", "0001-01-01"] {
+            assert!(is_valid_date(ok), "{ok}");
+        }
+        for bad in [
+            "2023-02-29",
+            "1900-02-29",
+            "2024-13-01",
+            "2024-00-10",
+            "2024-04-31",
+            "2024-1-01",
+            "2024-01-001",
+            "20240101",
+            "2024/01/01",
+            "+024-01-01",
+            "0000-01-01",
+            "",
+        ] {
+            assert!(!is_valid_date(bad), "{bad}");
+        }
     }
 }

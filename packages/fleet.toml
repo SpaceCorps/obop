@@ -15,6 +15,7 @@ write_group = "fleet.manager"
   name = "plate"
   description = "Registration plate"
   class = "none"
+  required = true
 
   [[model.field]]
   name = "model"
@@ -29,8 +30,10 @@ write_group = "fleet.manager"
 
   [[model.field]]
   name = "state"
-  description = "available, in_service or maintenance"
+  description = "Availability: available, in_service or maintenance"
   class = "none"
+  kind = "select"
+  options = ["available", "in_service", "maintenance"]
 
   [[model.action]]
   name = "dispatch"
