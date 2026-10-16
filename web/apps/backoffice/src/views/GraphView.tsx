@@ -120,7 +120,7 @@ export function GraphView(p: ViewProps) {
         <p className="hint pad">No data to chart.</p>
       ) : asTable ? (
         <div className="tablewrap">
-          <table className="pivot-table">
+          <table className="table pivot-table">
             <caption className="sr-only">{name}</caption>
             <thead>
               <tr>

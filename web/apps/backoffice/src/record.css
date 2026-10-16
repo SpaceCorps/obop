@@ -1,11 +1,12 @@
 /* The record floats beside the list instead of replacing it. */
 .record {
-  width: 27rem;
-  flex: none;
   display: flex;
+  flex: none;
   flex-direction: column;
+  inline-size: 28rem;
   overflow-y: auto;
-  animation: slide 0.18s ease-out;
+  animation: slide var(--dur-3) var(--ease-out);
+  scroll-padding-block: 5rem 5rem;
 }
 .record:focus {
   outline: none;
@@ -17,272 +18,205 @@
   }
 }
 .record > header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--line);
+  padding: 1rem 1rem 0.85rem 1.25rem;
+  border-block-end: 1px solid var(--border);
+  background: var(--surface);
 }
 .record h2 {
-  font-size: 1.15rem;
-  letter-spacing: -0.01em;
+  font-size: var(--text-xl);
   overflow-wrap: anywhere;
 }
+.record > header .hint {
+  display: block;
+  margin-block-start: 0.1rem;
+}
+
 .statusbar {
-  list-style: none;
   display: flex;
-  margin: 0;
-  padding: 0.8rem 1rem 0;
-  gap: 4px;
   flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 1rem 1.25rem 0;
+  list-style: none;
 }
 .statusbar button {
-  padding: 0.28rem 0.85rem;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  border-radius: 999px;
-  font-size: 0.8rem;
-  color: var(--muted);
+  min-block-size: 1.75rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   cursor: pointer;
-  font-weight: 500;
+  transition:
+    background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
 }
-.statusbar button:hover:not(:disabled):not(.on) {
-  border-color: var(--accent);
+.statusbar button.done {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.statusbar button:hover:not(:disabled, .on) {
+  border-color: var(--accent-fill);
   color: var(--accent-ink);
 }
 .statusbar button:disabled:not(.on) {
   cursor: default;
-  opacity: 0.7;
+  opacity: 0.75;
 }
 .statusbar button.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  font-weight: 700;
+  border-color: var(--accent-fill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  font-weight: var(--weight-semibold);
 }
 .smart {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  padding: 0.8rem 1rem 0;
+  padding: 0.85rem 1.25rem 0;
 }
 .smartbtn {
   display: inline-flex;
   align-items: center;
-  padding: 0.35rem 0.8rem;
-  border: 1px solid var(--line);
-  border-radius: calc(var(--radius) - 3px);
-  background: var(--panel-2);
-  font-size: 0.85rem;
-  font-weight: 600;
+  min-block-size: 1.75rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
 }
 a.smartbtn:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
   color: var(--accent-ink);
 }
 .smartbtn.disabled {
   opacity: 0.6;
 }
+.record .actionrow {
+  padding: 0.85rem 1.25rem 0;
+}
 .fields {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  padding: 1rem;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  min-width: 0;
-}
-.flabel {
-  font-size: 0.8rem;
-  color: var(--muted);
-  font-weight: 600;
-  display: flex;
-  gap: 0.35rem;
-  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
 }
 .shield {
   display: inline-flex;
-  color: var(--warn);
+  color: var(--warning-ink);
   cursor: help;
-}
-.field input:not([type="checkbox"]),
-.field select,
-.field textarea,
-.row input:not([type="checkbox"]),
-.row select,
-.signin input,
-.inline-edit input:not([type="checkbox"]),
-.inline-edit select,
-.inline-edit textarea,
-.refpicker input {
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  border-radius: calc(var(--radius) - 4px);
-  padding: 0.45rem 0.6rem;
-  color: var(--fg);
-  width: 100%;
-  min-width: 0;
-}
-.row input:not([type="checkbox"]),
-.row select {
-  width: auto;
-}
-.field textarea,
-.inline-edit textarea {
-  resize: vertical;
-  font: inherit;
-}
-.field input:focus,
-.field select:focus,
-.field textarea:focus,
-.row input:focus,
-.row select:focus,
-.signin input:focus,
-.inline-edit input:focus,
-.inline-edit select:focus,
-.inline-edit textarea:focus,
-.refpicker input:focus,
-.quick input:focus,
-.inline-field select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-[aria-invalid="true"] {
-  border-color: var(--danger) !important;
-}
-.field input[readonly],
-.field textarea[readonly] {
-  background: transparent;
-  border-style: dashed;
 }
 .field.inline {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
 }
+.field .moneyin input {
+  padding-inline-end: 1.9rem;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
 .moneyin {
   position: relative;
 }
-.field .moneyin input {
-  padding-inline-end: 1.8rem;
-  text-align: end;
-  font-variant-numeric: tabular-nums;
-}
 .moneyin span {
   position: absolute;
-  inset-inline-end: 0.65rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--muted);
+  inset-block-start: 50%;
+  inset-inline-end: 0.7rem;
+  color: var(--text-muted);
   pointer-events: none;
-}
-.switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-.switch input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-}
-.switch .track {
-  width: 2.3rem;
-  height: 1.3rem;
-  border-radius: 999px;
-  background: var(--line);
-  position: relative;
-  transition: background 0.15s;
-  flex: none;
-}
-.switch .track::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: calc(1.3rem - 4px);
-  height: calc(1.3rem - 4px);
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s;
-}
-.switch input:checked + .track {
-  background: var(--accent);
-}
-.switch input:checked + .track::after {
-  transform: translateX(1rem);
-}
-.switch input:focus-visible + .track {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.switch input:disabled + .track {
-  opacity: 0.5;
+  transform: translateY(-50%);
 }
 .refpicker {
   position: relative;
 }
 .refpicker input {
-  padding-inline-end: 2rem;
+  padding-inline-end: 2.25rem;
 }
 .refpicker .clear {
   position: absolute;
-  inset-inline-end: 0.2rem;
-  top: 50%;
+  inset-block-start: 50%;
+  inset-inline-end: 0.25rem;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
   transform: translateY(-50%);
-  min-width: 1.6rem;
-  height: 1.6rem;
 }
 .rp-list {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 30;
-  list-style: none;
+  inset-inline: 0;
+  inset-block-start: calc(100% + 4px);
+  z-index: var(--z-popover);
+  max-block-size: 14rem;
   margin: 0;
   padding: 0.3rem;
-  max-height: 14rem;
   overflow-y: auto;
+  list-style: none;
+  box-shadow: var(--shadow-3);
 }
 .rp-list li {
   padding: 0.4rem 0.6rem;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
-  font-size: 0.9rem;
 }
 .rp-list li[aria-selected="true"] {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: var(--accent-soft);
 }
 .maskedfield {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
-  flex-wrap: wrap;
+}
+.masked {
+  padding: 0.1rem 0.5rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
 }
 .error.banner {
-  padding: 0.5rem 0.75rem;
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
 }
 .formbar {
+  position: sticky;
+  inset-block-end: -1.25rem;
+  z-index: 2;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  padding-top: 0.4rem;
-  flex-wrap: wrap;
+  margin: 0.25rem -1.25rem -1.25rem;
+  padding: 0.85rem 1.25rem;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface);
 }
 .kbd-hint {
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--text-xs);
+}
+.withheld {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 /* Customize */
@@ -293,14 +227,14 @@ a.smartbtn:hover {
 }
 .frow {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 }
 .frow > input,
 .frow > select {
   flex: 1;
-  min-width: 7rem;
+  min-inline-size: 7rem;
 }
 
 @media (max-width: 40rem) {
@@ -308,11 +242,11 @@ a.smartbtn:hover {
   .record {
     position: fixed;
     inset: 0;
-    z-index: 45;
-    width: auto;
-    border-radius: 0;
+    z-index: 55;
+    inline-size: auto;
     border: 0;
-    animation: sheet 0.2s ease-out;
+    border-radius: 0;
+    animation: sheet var(--dur-3) var(--ease-out);
   }
   .kbd-hint {
     display: none;
@@ -320,13 +254,7 @@ a.smartbtn:hover {
 }
 @keyframes sheet {
   from {
-    transform: translateY(24px);
     opacity: 0;
+    transform: translateY(24px);
   }
-}
-
-.withheld {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
 }

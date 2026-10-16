@@ -1,171 +1,181 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useId, useState } from "react";
 import { call, saveSettings, type ModuleMeta, type Settings, type Theme } from "./api.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
+import { BuildTab } from "./ModuleBuilder.tsx";
+import { ContrastReport } from "./brand/ContrastReport.tsx";
 import {
-  appColor,
   ACCENTS,
+  appColor,
+  applyTheme,
   hasPersonalTheme,
   rememberTheme,
   resolveTheme,
-  applyTheme,
 } from "./theme.ts";
-import { BuildTab } from "./ModuleBuilder.tsx";
+import {
+  Badge,
+  Button,
+  Chip,
+  Icon,
+  Input,
+  Notice,
+  Segmented,
+  Skeleton,
+  Switch,
+  Tabs,
+  panelId,
+} from "@obop/ui";
+
+const BrandBook = lazy(() =>
+  import("./brand/BrandBook.tsx").then((m) => ({ default: m.BrandBook })),
+);
 
 type Props = {
   token: string;
   tab: string;
+  section: string;
   apps: App[];
   modules: ModuleMeta[];
   settings: Settings;
   isAdmin: boolean;
   go: (tab: string) => void;
+  goSection: (section: string) => void;
   onSettings: (s: Settings) => void;
   onModulesChanged: () => void;
   notify: (t: string, tone?: "ok" | "error" | "info") => void;
 };
 
 const TABS = [
-  ["theme", "Theme"],
-  ["apps", "Apps"],
-  ["modules", "Modules"],
-  ["build", "Build a module"],
+  { id: "theme", label: "Theme", icon: "sun" },
+  { id: "apps", label: "Apps", icon: "grid" },
+  { id: "modules", label: "Modules", icon: "plug" },
+  { id: "build", label: "Build a module", icon: "edit" },
+  { id: "brand", label: "Brand book", icon: "sparkle" },
 ] as const;
 
 export function Customize(p: Props) {
-  const tab = TABS.some(([id]) => id === p.tab) ? p.tab : "theme";
+  // Everyone gets their own theme and the read-only brand book; the rest changes the instance.
+  const tabs = TABS.filter((t) => p.isAdmin || t.id === "theme" || t.id === "brand");
+  const tab = tabs.some((t) => t.id === p.tab) ? p.tab : "theme";
+  const current = tabs.find((t) => t.id === tab)!;
   return (
-    <section className="main panel customize">
+    <section className="main panel customize" aria-label="Customize">
       <div className="controlpanel">
-        <div className="crumbs">
-          <span>Customize</span>
-          <span aria-hidden="true">›</span>
-          <strong>{TABS.find(([id]) => id === tab)![1]}</strong>
+        <div className="cp-top">
+          <div className="crumbs">
+            <span>Customize</span>
+            <Icon name="chevron-right" size={12} />
+            <strong>{current.label}</strong>
+          </div>
         </div>
-        <div className="switcher" role="tablist" aria-label="Customize">
-          {TABS.map(([id, name]) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={tab === id}
-              aria-pressed={tab === id}
-              onClick={() => p.go(id)}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          label="Customize"
+          idPrefix="cz"
+          value={tab as (typeof TABS)[number]["id"]}
+          onChange={(id) => p.go(id)}
+          tabs={tabs.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))}
+        />
       </div>
-      <div className="content pad">
+      <div
+        className="content pad"
+        role="tabpanel"
+        id={panelId("cz")}
+        aria-labelledby={`cz-tab-${tab}`}
+      >
         {tab === "theme" && <ThemeTab {...p} />}
         {tab === "apps" && <AppsTab {...p} />}
         {tab === "modules" && <ModulesTab {...p} />}
         {tab === "build" && <BuildTab {...p} />}
+        {tab === "brand" && (
+          <Suspense fallback={<Skeleton rows={6} cols={3} />}>
+            <BrandBook section={p.section} goSection={p.goSection} notify={p.notify} />
+          </Suspense>
+        )}
       </div>
     </section>
   );
 }
 
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  name,
-}: {
-  value: T;
-  options: [T, string][];
-  onChange: (v: T) => void;
-  name: string;
-}) {
-  return (
-    <div className="switcher" role="radiogroup" aria-label={name}>
-      {options.map(([v, l]) => (
-        <button
-          key={v}
-          role="radio"
-          aria-checked={value === v}
-          aria-pressed={value === v}
-          onClick={() => onChange(v)}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ThemeTab({ settings, isAdmin, token, onSettings, notify }: Props) {
+function ThemeTab({ settings, isAdmin, token, onSettings, notify, go }: Props) {
   const [theme, setTheme] = useState(() => resolveTheme(settings.theme));
+  const colorId = useId();
   const set = (patch: Theme) => {
     const next = { ...theme, ...patch };
     setTheme(next);
     applyTheme(next); // live: the whole app changes as you pick
   };
   return (
-    <div className="two">
+    <div className="two theme-tab">
       <div className="stack">
-        <h3>Colour</h3>
-        <div className="swatches">
-          {ACCENTS.map((a) => (
-            <button
-              key={a.value}
-              className="swatch"
-              style={{ background: a.value }}
-              aria-label={a.name}
-              aria-pressed={theme.accent.toLowerCase() === a.value}
-              onClick={() => set({ accent: a.value })}
-            />
-          ))}
-          <label className="swatch custom" title="Custom colour">
-            <input
-              type="color"
-              value={theme.accent}
-              onChange={(e) => set({ accent: e.target.value })}
-              aria-label="Custom colour"
-            />
-          </label>
-        </div>
-        <h3>Mode</h3>
-        <Segmented
-          name="Mode"
-          value={theme.mode}
-          onChange={(mode) => set({ mode })}
-          options={[
-            ["system", "System"],
-            ["light", "Light"],
-            ["dark", "Dark"],
-          ]}
-        />
-        <h3>Density</h3>
-        <Segmented
-          name="Density"
-          value={theme.density}
-          onChange={(density) => set({ density })}
-          options={[
-            ["comfortable", "Comfortable"],
-            ["compact", "Compact"],
-          ]}
-        />
-        <h3>Corners</h3>
-        <Segmented
-          name="Corners"
-          value={theme.radius}
-          onChange={(radius) => set({ radius })}
-          options={[
-            ["sharp", "Sharp"],
-            ["soft", "Soft"],
-            ["round", "Round"],
-          ]}
-        />
+        <section className="stack" aria-labelledby={`${colorId}-h`}>
+          <h3 id={`${colorId}-h`} className="overline">
+            Colour
+          </h3>
+          <div className="swatches">
+            {ACCENTS.map((a) => (
+              <button
+                key={a.value}
+                className="swatch"
+                style={{ background: a.value }}
+                aria-label={a.name}
+                title={a.name}
+                aria-pressed={theme.accent.toLowerCase() === a.value}
+                onClick={() => set({ accent: a.value })}
+              />
+            ))}
+            <label className="swatch custom" title="Custom colour">
+              <input
+                type="color"
+                value={theme.accent}
+                onChange={(e) => set({ accent: e.target.value })}
+                aria-label="Custom colour"
+              />
+            </label>
+          </div>
+        </section>
+        <section className="stack">
+          <h3 className="overline">Mode</h3>
+          <Segmented
+            label="Mode"
+            value={theme.mode}
+            onChange={(mode) => set({ mode })}
+            options={[
+              { value: "system", label: "System", icon: "settings" },
+              { value: "light", label: "Light", icon: "sun" },
+              { value: "dark", label: "Dark", icon: "moon" },
+            ]}
+          />
+        </section>
+        <section className="stack">
+          <h3 className="overline">Density</h3>
+          <Segmented
+            label="Density"
+            value={theme.density}
+            onChange={(density) => set({ density })}
+            options={[
+              { value: "comfortable", label: "Comfortable" },
+              { value: "compact", label: "Compact" },
+            ]}
+          />
+        </section>
+        <section className="stack">
+          <h3 className="overline">Corners</h3>
+          <Segmented
+            label="Corners"
+            value={theme.radius}
+            onChange={(radius) => set({ radius })}
+            options={[
+              { value: "sharp", label: "Sharp" },
+              { value: "soft", label: "Soft" },
+              { value: "round", label: "Round" },
+            ]}
+          />
+        </section>
         <div className="actionrow">
-          <button
-            className="btn primary"
-            onClick={() => (rememberTheme(theme), notify("Saved for you"))}
-          >
+          <Button variant="primary" onClick={() => (rememberTheme(theme), notify("Saved for you"))}>
             Save for me
-          </button>
+          </Button>
           {isAdmin && (
-            <button
-              className="btn"
+            <Button
               onClick={async () => {
                 const next = { ...settings, theme };
                 const r = await saveSettings(token, next);
@@ -173,15 +183,15 @@ function ThemeTab({ settings, isAdmin, token, onSettings, notify }: Props) {
                   onSettings(next);
                   rememberTheme(null);
                   notify("Set as the default for everyone");
-                } else notify("Could not save");
+                } else notify("Could not save", "error");
               }}
             >
               Set for everyone
-            </button>
+            </Button>
           )}
           {hasPersonalTheme() && (
-            <button
-              className="btn"
+            <Button
+              variant="ghost"
               onClick={() => {
                 rememberTheme(null);
                 const t = resolveTheme(settings.theme);
@@ -191,25 +201,52 @@ function ThemeTab({ settings, isAdmin, token, onSettings, notify }: Props) {
               }}
             >
               Reset mine
-            </button>
+            </Button>
           )}
         </div>
       </div>
-      <div className="preview panel" aria-label="Preview">
-        <div className="mini-top">
-          <span className="dot" />
-          <span className="bar" />
+      <div className="stack">
+        <div className="preview panel" aria-label="Preview">
+          <div className="mini-top">
+            <span className="dot" />
+            <span className="bar" />
+            <span className="mini-av" />
+          </div>
+          <div className="mini-grid">
+            <div className="mini-side" aria-hidden="true">
+              <i className="on" />
+              <i />
+              <i />
+              <i />
+            </div>
+            <div className="mini-body">
+              <div className="mini-card">
+                <b>Preview</b>
+                <Badge tone="accent">open</Badge>
+                <Button variant="primary" size="sm">
+                  Primary
+                </Button>
+              </div>
+              <div className="mini-card">
+                <b>Another card</b>
+                <Button size="sm">Secondary</Button>
+              </div>
+              <div className="mini-card">
+                <Chip tone="accent">Filter</Chip>
+                <Switch label="Switch" defaultChecked />
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="mini-body">
-          <div className="mini-card">
-            <b>Preview</b>
-            <span className="badge">open</span>
-            <button className="btn primary">Primary</button>
-          </div>
-          <div className="mini-card">
-            <b>Another card</b>
-            <button className="btn">Secondary</button>
-          </div>
+        <ContrastReport accent={theme.accent} />
+        <Notice tone="info" title="Looking for the rules?">
+          The Brand book shows every colour, type size, icon and component in the theme you just
+          picked.
+        </Notice>
+        <div>
+          <Button variant="ghost" iconEnd="arrow-right" onClick={() => go("brand")}>
+            Open the Brand book
+          </Button>
         </div>
       </div>
     </div>
@@ -224,7 +261,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
     const s = { ...settings, apps: next };
     const r = await saveSettings(token, s);
     if (r.kind === "ok") onSettings(s);
-    else notify("Could not save");
+    else notify("Could not save", "error");
   };
   const move = (i: number, d: number) => {
     const ids = real.map((a) => a.id);
@@ -234,7 +271,9 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
     void save({ ...layout, order: ids });
   };
   if (!isAdmin)
-    return <p className="hint">Only an administrator can change the app launcher for everyone.</p>;
+    return (
+      <Notice tone="info">Only an administrator can change the app launcher for everyone.</Notice>
+    );
   return (
     <div className="stack">
       <p className="hint">
@@ -276,28 +315,28 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
               Shown
             </label>
             <span className="grow" />
-            <button
-              className="icon-btn"
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="arrow-up"
               onClick={() => move(i, -1)}
               disabled={i === 0}
               aria-label={`Move ${a.name} up`}
-            >
-              ↑
-            </button>
-            <button
-              className="icon-btn"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="arrow-down"
               onClick={() => move(i, 1)}
               disabled={i === real.length - 1}
               aria-label={`Move ${a.name} down`}
-            >
-              ↓
-            </button>
+            />
           </li>
         ))}
       </ul>
-      <button className="btn" onClick={() => save({})}>
-        Reset the launcher
-      </button>
+      <div>
+        <Button onClick={() => save({})}>Reset the launcher</Button>
+      </div>
     </div>
   );
 }
@@ -320,70 +359,86 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
     const r = await call(token, id, body);
     notify(
       r.kind === "ok" ? done : r.kind === "error" ? r.message : "Waiting for a human to approve",
+      r.kind === "error" ? "error" : "ok",
     );
     await refresh();
     onModulesChanged();
   }
   const have = new Set(installed.map((p) => p.id));
   return (
-    <div className="stack">
-      <h3>Marketplace</h3>
-      <div className="cards3">
-        {market.map((p) => (
-          <article key={p.id} className="card">
-            <AppIcon app={{ name: p.name, color: appColor(p.id) }} size={40} />
-            <div>
-              <strong>{p.name}</strong>
-              <p className="hint">{p.description}</p>
-            </div>
-            <button
-              className="btn primary"
-              disabled={have.has(p.id)}
-              onClick={() =>
-                act("marketplace_listing.install", { id: p.id }, `Installed ${p.name}`)
-              }
-            >
-              {have.has(p.id) ? "Installed" : "Install"}
-            </button>
-          </article>
-        ))}
-      </div>
-      <h3>Installed</h3>
-      <ul className="rows">
-        {installed.map((p) => (
-          <li key={p.id} className="row">
-            <strong>{p.name}</strong>
-            <span className="hint">{p.description}</span>
-            <span className="grow" />
-            <span className="chip">{p.source}</span>
-            <span className="hint">{p.version}</span>
-            {p.source !== "builtin" && (
-              <button
-                className="btn"
-                onClick={() => act("module.uninstall", { id: p.id }, `Removed ${p.name}`)}
+    <div className="stack gap-lg">
+      <section className="stack">
+        <h3 className="overline">Marketplace</h3>
+        <div className="cards3">
+          {market.map((p) => (
+            <article key={p.id} className="card">
+              <AppIcon
+                app={{ id: p.id, name: p.name, color: appColor(p.id, undefined, p.name) }}
+                size={40}
+              />
+              <div>
+                <strong>{p.name}</strong>
+                <p className="hint">{p.description}</p>
+              </div>
+              <Button
+                variant={have.has(p.id) ? "secondary" : "primary"}
+                size="sm"
+                disabled={have.has(p.id)}
+                icon={have.has(p.id) ? "check" : undefined}
+                onClick={() =>
+                  act("marketplace_listing.install", { id: p.id }, `Installed ${p.name}`)
+                }
               >
-                Uninstall
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      <h3>Upload your own</h3>
-      <p className="hint">
-        An obop.toml file: models, fields with data classes, permission groups and actions. Or build
-        one in the next tab.
-      </p>
-      <input
-        type="file"
-        accept=".toml"
-        aria-label="Upload an obop.toml file"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          if (file)
-            await act("module.install", { manifest: await file.text() }, `Installed ${file.name}`);
-          e.target.value = "";
-        }}
-      />
+                {have.has(p.id) ? "Installed" : "Install"}
+              </Button>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="stack">
+        <h3 className="overline">Installed</h3>
+        <ul className="rows">
+          {installed.map((p) => (
+            <li key={p.id} className="row">
+              <strong>{p.name}</strong>
+              <span className="hint">{p.description}</span>
+              <span className="grow" />
+              <Chip>{p.source}</Chip>
+              <span className="hint tabular">{p.version}</span>
+              {p.source !== "builtin" && (
+                <Button
+                  size="sm"
+                  onClick={() => act("module.uninstall", { id: p.id }, `Removed ${p.name}`)}
+                >
+                  Uninstall
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="stack">
+        <h3 className="overline">Upload your own</h3>
+        <p className="hint">
+          An obop.toml file: models, fields with data classes, permission groups and actions. Or
+          build one in the next tab.
+        </p>
+        <Input
+          type="file"
+          accept=".toml"
+          aria-label="Upload an obop.toml file"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (file)
+              await act(
+                "module.install",
+                { manifest: await file.text() },
+                `Installed ${file.name}`,
+              );
+            e.target.value = "";
+          }}
+        />
+      </section>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useData } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
 import { csvCell, download, isState, label, optionLabel, plainText } from "../format.ts";
 import { buildGroups, formatSum, sumOf, type Group } from "../query.ts";
-import { Dropdown, Icon } from "../ui.tsx";
+import { Popover, Icon } from "../ui.tsx";
 import { InlineEdit } from "./InlineEdit.tsx";
 import type { ViewProps } from "./types.ts";
 
@@ -166,7 +166,7 @@ export function ListView(p: ViewProps) {
           <div className="bulkbar" role="toolbar" aria-label="Bulk actions">
             <strong>{live.size} selected</strong>
             {p.canUpdate && settableFields.length > 0 && (
-              <Dropdown label="Set…" ariaLabel="Set a field on the selected records">
+              <Popover label="Set…" ariaLabel="Set a field on the selected records">
                 {(close) => (
                   <div className="menu-list">
                     {settableFields.map((f) => (
@@ -187,7 +187,7 @@ export function ListView(p: ViewProps) {
                     ))}
                   </div>
                 )}
-              </Dropdown>
+              </Popover>
             )}
             <button className="btn small" onClick={exportCsv}>
               <Icon name="download" size={13} /> Export selected
@@ -210,7 +210,7 @@ export function ListView(p: ViewProps) {
         >
           <Icon name="download" size={13} /> Export CSV
         </button>
-        <Dropdown
+        <Popover
           label={
             <>
               <Icon name="columns" size={14} /> Columns
@@ -243,11 +243,11 @@ export function ListView(p: ViewProps) {
               ))}
             </div>
           )}
-        </Dropdown>
+        </Popover>
       </div>
       <div className="tablewrap">
         <table
-          className="list"
+          className="table list"
           role="grid"
           aria-label={`${p.title} list`}
           aria-rowcount={rows.length + 1}
@@ -318,7 +318,7 @@ export function ListView(p: ViewProps) {
                       }
                     >
                       <span className={`caret${collapsed.has(it.g.path) ? "" : " down"}`}>
-                        <Icon name="caretRight" size={13} />
+                        <Icon name="chevron-right" size={13} />
                       </span>
                       <span className="gname">
                         {it.g.field.kind === "select" && it.g.key ? (

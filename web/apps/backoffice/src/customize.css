@@ -1,0 +1,140 @@
+/* Customize: theme picker, contrast report. The Brand book has its own sheet (brand.css). */
+.customize .content.pad {
+  padding: var(--space-6) var(--space-8) var(--space-10);
+}
+.customize .stack.gap-lg {
+  gap: var(--space-8);
+}
+.customize .actionrow {
+  padding: var(--space-2) 0 0;
+}
+
+.contrast {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.contrast-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.contrast-head h4 {
+  font-size: var(--text-base);
+}
+.contrast .table-wrap {
+  background: var(--surface);
+}
+.contrast .table th,
+.contrast .table td {
+  padding-inline: 0.75rem;
+  font-size: var(--text-sm);
+}
+.contrast .table thead th {
+  background: var(--surface-2);
+}
+.ratio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: var(--weight-medium);
+}
+.ratio.pass {
+  color: var(--success-ink);
+}
+.ratio.fail {
+  color: var(--danger-ink);
+}
+.contrast-sw {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+  gap: var(--space-2);
+}
+.contrast-sw span {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.08);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+}
+
+/* The theme preview is a small real app built from the same primitives. */
+.preview {
+  overflow: hidden;
+  background: var(--bg);
+}
+.mini-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+}
+.mini-top .dot {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: 6px;
+  background: var(--accent-fill);
+}
+.mini-top .bar {
+  flex: 1;
+  block-size: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.mini-av {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: 50%;
+  background: var(--accent-fill);
+}
+.mini-grid {
+  display: grid;
+  grid-template-columns: 4rem 1fr;
+  gap: 0.75rem;
+  padding: 0 0.75rem 0.75rem;
+}
+.mini-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-block-start: 0.4rem;
+}
+.mini-side i {
+  block-size: 1.1rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+}
+.mini-side i.on {
+  background: var(--surface);
+  box-shadow:
+    var(--shadow-1),
+    inset 2px 0 0 var(--accent-fill);
+}
+.mini-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.mini-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.mini-card b {
+  flex: 1;
+  font-weight: var(--weight-semibold);
+}

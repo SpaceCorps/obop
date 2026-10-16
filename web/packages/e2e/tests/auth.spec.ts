@@ -37,7 +37,7 @@ test.describe("sign in and out", () => {
     await page.reload();
     await expect(page.locator(".topbar")).toBeVisible();
     // ...until the person signs out.
-    await page.getByRole("button", { name: "S", exact: true }).click();
+    await page.getByRole("button", { name: "Account" }).click();
     await expect(page.getByText(users.sam.name)).toBeVisible();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
