@@ -146,7 +146,7 @@ export function FieldInput(p: InputProps) {
             const st = p.optionState?.(o);
             return (
               <option key={o} value={o} disabled={st?.disabled} title={st?.title}>
-                {optionLabel(o)}
+                {optionLabel(o, f)}
               </option>
             );
           })}

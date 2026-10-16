@@ -365,7 +365,7 @@ function ConditionRow(p: {
             <option value="">{t("Choose")}</option>
             {f.options?.map((o) => (
               <option key={o} value={o}>
-                {optionLabel(o)}
+                {optionLabel(o, f)}
               </option>
             ))}
           </Select>

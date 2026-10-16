@@ -1,4 +1,12 @@
-import { fmt, minorToDecimal, tx, t, validDate as validPlainDate } from "@obop/ui";
+import {
+  fmt,
+  getLang,
+  labelFor,
+  minorToDecimal,
+  tx,
+  t,
+  validDate as validPlainDate,
+} from "@obop/ui";
 import type { FieldMeta } from "./api.ts";
 
 /**
@@ -28,10 +36,14 @@ export function optionKey(v: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** The select value in the active language; unknown values fall back to the English words. */
-export function optionLabel(v: string): string {
+/**
+ * The select value in the active language: the server's `option_labels` of `field` when it sent
+ * one for the active language, else the client table of the built-in modules, else the English
+ * words. Pass the field wherever it is known; without it only the client table applies.
+ */
+export function optionLabel(v: string, field?: Pick<FieldMeta, "option_labels">): string {
   if (v === "") return t("None");
-  return tx("option", optionKey(v));
+  return labelFor({ labels: field?.option_labels?.[v] }, getLang(), tx("option", optionKey(v)));
 }
 
 /** The currency of a record: its own `currency` field when it has a valid one, else the instance's. */
@@ -121,7 +133,7 @@ export function plainText(
     case "ref":
       return f.to ? refText(f.to, String(v)) : String(v);
     case "select":
-      return optionLabel(String(v));
+      return optionLabel(String(v), f);
     default:
       return typeof v === "object" ? JSON.stringify(v) : String(v);
   }

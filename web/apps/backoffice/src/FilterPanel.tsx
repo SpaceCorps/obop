@@ -56,7 +56,7 @@ function FiltersSection({ fields, state, setState }: Props) {
                 }
               />
               <span>
-                {t("{field}: {values}", { field: fieldTitle(f), values: optionLabel(o) })}
+                {t("{field}: {values}", { field: fieldTitle(f), values: optionLabel(o, f) })}
               </span>
             </label>
           ))}
@@ -227,7 +227,7 @@ function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond)
                 <option value="">{t("Choose…")}</option>
                 {f.options?.map((o) => (
                   <option key={o} value={o}>
-                    {optionLabel(o)}
+                    {optionLabel(o, f)}
                   </option>
                 ))}
               </select>

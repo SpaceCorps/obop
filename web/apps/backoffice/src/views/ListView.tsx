@@ -213,7 +213,7 @@ export function ListView(p: ViewProps) {
                               ? o === "true"
                                 ? t("Yes")
                                 : t("No")
-                              : optionLabel(o)}
+                              : optionLabel(o, f)}
                           </button>
                         ))}
                       </div>

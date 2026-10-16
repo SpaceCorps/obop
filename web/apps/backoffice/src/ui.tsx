@@ -65,7 +65,9 @@ export function toneClass(f: FieldMeta | undefined, value: string): string {
 }
 
 export function Badge({ field, value }: { field?: FieldMeta; value: string }) {
-  return <UiBadge tone={toneClass(field, value) as `t-${string}`}>{optionLabel(value)}</UiBadge>;
+  return (
+    <UiBadge tone={toneClass(field, value) as `t-${string}`}>{optionLabel(value, field)}</UiBadge>
+  );
 }
 
 export type ConfirmRequest = {

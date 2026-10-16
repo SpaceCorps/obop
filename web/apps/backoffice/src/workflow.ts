@@ -79,8 +79,8 @@ export function canMove(
     allowed: false,
     reason: t("No action moves a {noun} from {from} to {to}", {
       noun: inSentence(noun),
-      from: cur ? optionLabel(cur) : t("no state"),
-      to: optionLabel(to),
+      from: cur ? optionLabel(cur, field) : t("no state"),
+      to: optionLabel(to, field),
     }),
     needsApproval: false,
     current: false,
@@ -96,8 +96,14 @@ export type MoveOutcome =
   | { kind: "error"; message: string };
 
 /** Text for the toast of a 202: names the plan and what it would do. */
-export function moveApproval(noun: string, to: string, planId: string, action?: Command): string {
-  const vars = { noun: inSentence(noun), state: optionLabel(to), plan: planId.slice(0, 8) };
+export function moveApproval(
+  noun: string,
+  to: string,
+  planId: string,
+  action?: Command,
+  field?: FieldMeta,
+): string {
+  const vars = { noun: inSentence(noun), state: optionLabel(to, field), plan: planId.slice(0, 8) };
   return action
     ? t(
         "Approval needed: moving {noun} to {state} ({action}) was proposed as plan {plan}. Nothing changes until a human approves it.",
@@ -131,7 +137,7 @@ export async function moveRecord(
     return {
       kind: "approval",
       planId: r.planId,
-      message: moveApproval(noun, to, r.planId, m.action),
+      message: moveApproval(noun, to, r.planId, m.action, field),
     };
   }
   return { kind: "error", message: serverMessage(r.message) };
