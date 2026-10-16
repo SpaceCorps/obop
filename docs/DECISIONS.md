@@ -95,8 +95,12 @@ Interpretations, all Proposed (Q10):
 | D37 | Runtime topology and edge store | BINDING | One binary with roles; SQLite only as fixed-schema edge store |
 | D38 | Docs, disclosure and legal pack | BINDING | VitePress in Vite+; equal-time advisories; Data Act terms; export everywhere |
 | D39 | Collaboration and messaging services | BINDING | First-party chatter, OAuth-only mail gateway, honest e-signature |
+| D40 | Mask-and-restore at the command boundary | PROPOSED | Per-principal masking by data class on every read surface; reversible tokens restored server-side on write |
+| D41 | Agent-ready module contract | PROPOSED | Every command and field carries class, permission and description; REST, MCP and CLI are generated; install gate enforces it |
+| D42 | Agent safety timing | PROPOSED | Agent permissions, plan/approve policy and masking ship in W1 with MCP; AI gateway stays W3 |
+| D43 | Hosting providers | PROPOSED | Provider-neutral `HostingTarget` port; self-host and Sliplane are reference adapters |
 
-Proposed and awaiting the owner: D1, D2, D3, D4, D5, D12, D13, D14, D16, D17, D20, D23, D25, D26, interpretations I-1 to I-4, the exit-drill clause of D15, and the renames and labels of D24.
+Proposed and awaiting the owner: D1, D2, D3, D4, D5, D12, D13, D14, D16, D17, D20, D23, D25, D26, D40, D41, D42, D43, interpretations I-1 to I-4, the exit-drill clause of D15, and the renames and labels of D24.
 
 ### 2.2 Records
 
@@ -367,6 +371,34 @@ Proposed and awaiting the owner: D1, D2, D3, D4, D5, D12, D13, D14, D16, D17, D2
 
 **Why.** Microsoft begins default-disabling EWS in Exchange Online tenants from 2026-10-01 (rolling, admin-reversible) and turns it off permanently on 2027-04-01; it disables basic SMTP AUTH by default for existing tenants at the end of December 2026. **Rejected.** LISTEN/NOTIFY bus; self-labelled "advanced" signatures. **Consequences.** A CI licence gate; a cross-implementation Yjs/yrs test. **Evidence.** R15, R21.
 
+#### D40 Mask-and-restore at the command boundary
+**Status** PROPOSED. **Reversibility** two-way door. **Owner action** yes (Q21).
+
+**Decision.** Every read surface of the typed command API (REST, MCP, CLI and the AI gateway) shapes its response through one masking policy, resolved per principal and per data class ([CONVENTIONS.md](CONVENTIONS.md) section 5) from registry metadata. Modes: `allow`, `mask` (a reversible token such as `PERSON_12`, stable inside a business and principal session), `redact` (irreversible) and `deny`. Defaults for agent principals: the three sensitive classes `deny`, other `personal_data` fields `mask`, `secret` never leaves the vault. On write, a token in a command input is resolved server-side only if the principal could read the underlying record under D10; an unresolvable token rejects the command. Token tables sit in the business database and are erased with the data subject (erasure, [spec/security-privacy.md](spec/security-privacy.md) 4.6). Masking is applied where the data leaves the permission path, so it cannot be skipped by a client, a module or a model route.
+
+**Why.** Agents and external MCP clients send what they read to a model the business does not control; a block-or-allow egress rule (ai 4.5) either withholds too much to be useful or leaks too much. **Rejected.** Client-side masking; masking only inside the AI gateway (W3), which leaves W1 MCP unprotected; raw text-to-SQL. **Consequences.** The masking engine is a kernel component; a field without a data class cannot be masked, which D41 forbids. Whether token stability should span sessions is open (Q21). **Evidence.** D10, D18, D33, R16, R18 s12.
+
+#### D41 Agent-ready module contract
+**Status** PROPOSED. **Reversibility** one-way door once third parties publish. **Owner action** yes (Q21).
+
+**Decision.** Everything a module adds is reachable by agents and operators through the same generated surfaces, and nothing is reachable without metadata. Every model, field, command, view and event declares a description, a permission group and a data class (or an explicit non-personal marker); REST, OpenAPI, MCP tools and `obop` CLI commands are generated from the registry, never hand-written, so a command exists on all four or on none. A module may narrow who may call a command (permission, `agent_readable`), not remove it from the surface. Its `obop.toml` also declares its network destinations and the data classes it will egress. The structural suite and the install gate reject a first-party or marketplace package that fails any of this.
+
+**Why.** "Everything has AI and CLI access" and "agents are principals" (D18) only hold if no module can add a side door or an unclassified field. **Rejected.** Opt-in agent exposure; hand-written per-module CLIs. **Consequences.** Extends the structural checks of [ENGINEERING.md](ENGINEERING.md) section 1.4 and the package manifest of D32; raises the cost of writing a module slightly and removes a class of review work. **Evidence.** D18, D29, D31, D32, R21, R24.
+
+#### D42 Agent safety timing
+**Status** PROPOSED. **Reversibility** two-way door. **Owner action** yes (Q21).
+
+**Decision.** Agent principals and delegation, the dry-run and `plan_id` write protocol, a minimal approval policy (`auto`, `confirm`, `approve-by-role`, with posting and paying always at least `confirm`) and D40 masking ship in W1 together with MCP. D18 and D25 place the full approval policy engine in W2 and the AI gateway in W3; those stay, and only the minimum needed to expose MCP safely moves forward.
+
+**Why.** MCP in W1 without them lets any connected client read unmasked data and propose unapproved writes. **Rejected.** Delaying MCP to W2 (loses the agent-first differentiator); shipping MCP read-only without masking. **Consequences.** Adds W1 scope under the D5 hiring gate; [spec/ai.md](spec/ai.md) 4.1 to 4.3 and ROADMAP need the W1 content list updated if ratified. **Evidence.** D18, D25, R16 s11.
+
+#### D43 Hosting providers
+**Status** PROPOSED. **Reversibility** two-way door. **Owner action** yes (Q21).
+
+**Decision.** obop is hosting-neutral. It needs one container (the `obop` binary, D37), PostgreSQL 17 or 18 and optionally an S3-compatible store; nothing in the kernel names a provider. Provider integrations implement one `HostingTarget` port (provision, deploy, upgrade, backup and restore, domains, logs, scale), exposed as `obop host ...` subcommands (name Proposed) and as X4 packages. Reference targets: plain self-hosting (container plus PostgreSQL) and Sliplane, chosen as a convenience target because it gives a one-click path from a template to a running business; more providers (Hetzner, Fly.io, Render and others) are added through the same port. Sliplane's PostgreSQL versions, backup guarantees and extension support are unverified and are checked before the adapter ships. SpaceCorps already has a `Sliplane-Cli` that the adapter can build on. Hosted plans sold by obop (D2) are separate from, and do not depend on, any third-party target.
+
+**Why.** Easy deployment is a product goal; coupling to one vendor would contradict the open edition and exit promises (D38). **Rejected.** A Sliplane-only deploy path; per-provider code in the kernel. **Consequences.** The port needs a conformance test that every adapter passes, including a verified restore (ENGINEERING 1.1). **Evidence.** D37, D38; the provider facts above are not yet researched.
+
 ### 2.3 Deferred items
 
 | Item | Trigger |
@@ -599,6 +631,7 @@ Q1-Q14 are ranked by irreversibility; Q15 onward were added after that ranking a
 | Q18 | Identifier families that share letters (section 4): keep and qualify, or rename (UI tiers, integration rules, spikes, goals) | Two-way | Keep and qualify now; rename only on the owner's request, before the first public commit | 2026-11-13 |
 | Q19 | Operated services on the paid list, and later additions to the closed list (D2, section 6; BUSINESS BQ2, BQ11) | One-way | Open code with paid operation for the registry server, brokers, relays, SMS and routing; new capabilities join the paid list only by a published amendment with steward-board consent and 12 months' notice, for capabilities never shipped open | 2026-10-20 |
 | Q20 | Where the company is incorporated, which decides the CRA manufacturer role and the dogfood ledger (ROADMAP section 9.3) | Costly | No default in the research; ask counsel with Q5 | 2026-10-23 |
+| Q21 | Ratify D40 to D43: masking at the command boundary, the agent-ready module contract, W1 agent-safety minimum, and hosting-neutral `HostingTarget` with Sliplane as a reference target; also whether mask tokens may be stable across sessions | Two-way (D41 one-way once third parties publish) | Ratify as written; session-stable tokens only | 2026-11-13 |
 
 **Companion lists.** Questions that stay in their own documents are two-way details owned there: [BUSINESS.md](BUSINESS.md) BQ1 and BQ3-BQ10, [ENGINEERING.md](ENGINEERING.md) Q-E4, Q-E5 and Q-E7 onward, [ROADMAP.md](ROADMAP.md) section 9.3 items 1, 6, 7 and 8, [PRODUCT.md](PRODUCT.md) section 14.3 and the open questions at the end of each spec. Folded in above: Q-E1 (Q17), Q-E2 (Q10), Q-E3 (Q7), Q-E6 (Q15), BQ2 and BQ11 (Q19), BQ12 and ROADMAP 9.3 item 3 (Q4), ROADMAP 9.3 item 2 (Q20), items 4 and 9 (Q7), item 5 and BQ13 (Q16). Time-only invoicing stays in [ARCHITECTURE.md](ARCHITECTURE.md) section 16.3 (item 7) and is decided with Q8. [CONVENTIONS.md](CONVENTIONS.md) section 9.1 collects the owner decisions that affect names; each points back to Q2, Q8, Q10, Q11 or Q18, to D27 above, or to an open question of its own spec.
 

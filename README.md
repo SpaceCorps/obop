@@ -20,7 +20,7 @@ Everything below is Proposed unless a binding decision is cited (section 2); pri
 | How is it built? | Rust backend, Vite+ frontend driven only through `vp`, pnpm as the only package manager, one binary plus PostgreSQL (F1, F2, D37). |
 | Where does the project stand? | Pre-code and pre-formation: no seed round closed (about EUR 3M planned), no counsel retained, no design partner signed ([ROADMAP.md section 5.2](docs/ROADMAP.md#52-dependency-register)). |
 | Top risks? | The funding gap (BR-01), the accounting, localisation and payroll burden (BR-02), customisation without recompiling (BR-03), and an uncleared name (section 7). Full register: [BUSINESS.md section 9](docs/BUSINESS.md#9-consolidated-risk-register). |
-| What must the owner decide? | Fourteen Proposed decisions and four Proposed interpretations (I-1 to I-4), none ratified; twenty owner questions (Q1 to Q20). First answers are due 2026-10-15 (Q10: interpretations, pin policy and the Rust window; Q15: pnpm major) and 2026-10-20 (Q1 to Q3: licence and CLA, name and public flip, free and paid lists; Q19: operated services). See [DECISIONS.md section 8](docs/DECISIONS.md#8-open-questions-for-the-owner). |
+| What must the owner decide? | Eighteen Proposed decisions and four Proposed interpretations (I-1 to I-4), none ratified; twenty-one owner questions (Q1 to Q21). First answers are due 2026-10-15 (Q10: interpretations, pin policy and the Rust window; Q15: pnpm major) and 2026-10-20 (Q1 to Q3: licence and CLA, name and public flip, free and paid lists; Q19: operated services). See [DECISIONS.md section 8](docs/DECISIONS.md#8-open-questions-for-the-owner). |
 
 ## 1. What obop is
 
@@ -31,7 +31,7 @@ obop is an open-source operating system for businesses: sales, purchasing, stock
 **Pre-code: research and product definition complete as of 2026-10-01; nothing is built yet.** There is nothing to install or run.
 
 - A 28-file fact-checked research corpus exists; the product, architecture, business and domain documents are Draft 0.1.
-- Fourteen decisions (D1 to D5, D12, D13, D14, D16, D17, D20, D23, D25, D26) and interpretations I-1 to I-4 await the owner, as do the exit-drill clause of D15 and the renames and labels of D24; none is ratified. Unless a binding decision is cited, everything here is Proposed; figures marked (target), (estimate) or (hypothesis) are not measurements.
+- Eighteen decisions (D1 to D5, D12, D13, D14, D16, D17, D20, D23, D25, D26, D40 to D43) and interpretations I-1 to I-4 await the owner, as do the exit-drill clause of D15 and the renames and labels of D24; none is ratified. Unless a binding decision is cited, everything here is Proposed; figures marked (target), (estimate) or (hypothesis) are not measurements.
 - The repository goes public only after gate G0 (Proposed, D26); which counsel advice must exist first, and so the gate's date, is open (Q16).
 
 ## 3. Headline differentiators (design commitments; nothing built yet)
@@ -102,7 +102,7 @@ Start with [docs/PRODUCT.md](docs/PRODUCT.md), or jump in by reader.
 | [CLAUDE.md](CLAUDE.md) | Hard constraints |
 | [docs/PRODUCT.md](docs/PRODUCT.md) | Master product description |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture and stack |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Decision register (25 binding, 14 proposed; D15 and D24 are binding with Proposed parts) |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Decision register (25 binding, 18 proposed; D15 and D24 are binding with Proposed parts) |
 | [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | Naming and contract authority: identifiers, events, permission groups, data classes, ports |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Waves, calendar, team, gates |
 | [docs/BUSINESS.md](docs/BUSINESS.md) | Licensing, pricing, economics, risks |

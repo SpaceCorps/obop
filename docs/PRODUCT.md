@@ -12,7 +12,7 @@
 - **Price:** self-hosting the open edition costs EUR 0; hosted plans are EUR 0, 49, 249 and from 899 per organisation per month (hypotheses, section 9).
 - **Dates:** first delivery (W1) 2027-01-01 to 2027-09-30; paid beta 2027-07-06; German pack stable 2027-09-30; 1.0 LTS 2028-04-18 (Proposed, D26; section 12).
 - **State and risks:** nothing is built. The top risks are funding, the accounting and localisation burden, and customisation without recompiling (section 14.1).
-- **Owner decisions:** fourteen decisions and the interpretations I-1 to I-4 are Proposed, and twenty owner questions are open; the first answers (Q10 and Q15, Q1 to Q3 and Q19, Q4, Q17 and Q20) fall due between 2026-10-15 and 2026-10-23 (section 14.2).
+- **Owner decisions:** eighteen decisions and the interpretations I-1 to I-4 are Proposed, and twenty-one owner questions are open; the first answers (Q10 and Q15, Q1 to Q3 and Q19, Q4, Q17 and Q20) fall due between 2026-10-15 and 2026-10-23 (section 14.2).
 
 **How to read.**
 
