@@ -7,11 +7,14 @@ obop reads a small number of environment variables. Command line flags win over 
 
 ## Instance and CLI
 
-| Variable               | Meaning                                                                                                                         | Default            |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| `OBOP_DATABASE_URL`    | Where the data lives: `sqlite://obop.db`, `sqlite:///abs/path.db`, `postgres://user:pass@host/db` or `memory:`. Same as `--db`. | `sqlite://obop.db` |
-| `OBOP_TOKEN`           | Bearer token for `obop mcp`, `obop call` and `obop commands`. Same as `--token`.                                                | none               |
-| `OBOP_MARKETPLACE_URL` | An extra marketplace: a host serving `index.json` and `packages/<id>.toml`. Shown after the bundled catalog.                    | none               |
+| Variable                   | Meaning                                                                                                                                            | Default            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| `OBOP_DATABASE_URL`        | Where the data lives: `sqlite://obop.db`, `sqlite:///abs/path.db`, `postgres://user:pass@host/db` or `memory:`. Same as `--db`.                    | `sqlite://obop.db` |
+| `OBOP_TOKEN`               | Bearer token for `obop mcp`, `obop call` and `obop commands`. Same as `--token`.                                                                   | none               |
+| `OBOP_MARKETPLACE_URL`     | An extra marketplace: a host serving `index.json` and `packages/<id>.toml`. Shown after the bundled catalog.                                       | none               |
+| `OBOP_PUBLIC_URL`          | External URL of an instance behind a proxy (`https://acme.example.com`), used in the MCP discovery documents and in the `401` challenge of `/mcp`. | from the request   |
+| `OBOP_ALLOWED_ORIGINS`     | Comma-separated browser origins allowed to call `/mcp` (DNS-rebinding protection). Clients that are not browsers send no origin.                   | none               |
+| `OBOP_MCP_RATE_PER_MINUTE` | Requests per token per minute on `/mcp`; `0` turns the limit off.                                                                                  | 600                |
 
 ## Control plane
 

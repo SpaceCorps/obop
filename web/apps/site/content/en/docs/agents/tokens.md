@@ -67,6 +67,15 @@ shown once; store it like a password
 
 Add `--db postgres://...` (or set `OBOP_DATABASE_URL`) if the instance does not use the default `sqlite://obop.db`.
 
+## Use the token for MCP
+
+The same token connects an MCP client to the instance's remote MCP server, `https://YOUR-INSTANCE/mcp`: send it as `Authorization: Bearer obop_...` (clients have a `headers` field or a bearer-token variable for it). A token created with the CLI or over REST works for both; there is nothing MCP-specific to create. Keep these points in mind:
+
+- Create a separate token per client and give it only the scopes that client needs. The MCP tool list is exactly the commands the scopes allow.
+- A session token from sign-in also works, but it expires after 12 hours; an agent token does not.
+- The token must be sent on every request, not only the first; clients do this once it is in their configuration.
+- There is no OAuth sign-in for MCP yet, so clients that only offer a browser login cannot connect. See [Connect over MCP](/docs/agents/mcp/).
+
 ## Store it safely
 
 - Put it in an environment variable or a secret store, not in a repository.

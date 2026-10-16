@@ -93,6 +93,10 @@ Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input 
 | 415  | Body not sent as `application/json`.                                              |
 | 429  | Sign-in lockout (five failures, one minute).                                      |
 
+## MCP
+
+The same commands are also exposed as MCP tools at `POST /mcp` (Streamable HTTP, protocol revisions 2025-11-25, 2025-06-18 and 2025-03-26), with the same bearer token, permissions, masking and approvals. A command `lead.search` is the tool `lead__search`; its input is the REST body, described by a JSON Schema generated from the model. An approval-required step is a normal result with `"status": "approval_required"` and a `plan_id` instead of HTTP 202; a refused input is a tool result with `isError: true` instead of HTTP 400; a hidden or unknown tool is a JSON-RPC error instead of 404. The OpenAPI document advertises the endpoint in `x-mcp`, and `GET /api/meta` in a `Link` header (`rel="mcp"`). Setup, limits, discovery documents and client configuration: [Connect over MCP](/docs/agents/mcp/).
+
 ## Versioning
 
 There is no version header or deprecation policy yet. The product plan calls for a dated version header; until it exists, treat the API as unstable during the beta and check the [changelog](/changelog/).
