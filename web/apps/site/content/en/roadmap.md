@@ -42,13 +42,13 @@ obop is in beta. This page separates what runs today from what the plan describe
 
 The product plan names five waves. All dates are proposals.
 
-| Wave | Window | Aims |
-|---|---|---|
-| W0 Foundations | 2026-10 to 2026-12 | The kernel, first tagged preview build, security policy. |
-| W1 Loop | 2027-01 to 2027-09 | The seven-app loop (contacts, products, CRM, sales, invoicing, accounting, purchase and stock basics), MCP, code tiers X1, X2 and X4, a first country pack, public alpha and a paid beta. |
-| W2 Release | 2027-10 to 2028-06 | Services apps, more country packs, WebAssembly host, a 1.0 long-term-support release with five years of support. |
-| W3 Breadth | 2028-07 to 2029-06 | More apps (manufacturing, point of sale, website, e-commerce, helpdesk and others), payroll engine, custom domains, partner programme. |
-| W4 Ecosystem | from 2029-07 | Marketplace commerce, verticals, 2.0. |
+| Wave           | Window             | Aims                                                                                                                                                                                      |
+| -------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W0 Foundations | 2026-10 to 2026-12 | The kernel, first tagged preview build, security policy.                                                                                                                                  |
+| W1 Loop        | 2027-01 to 2027-09 | The seven-app loop (contacts, products, CRM, sales, invoicing, accounting, purchase and stock basics), MCP, code tiers X1, X2 and X4, a first country pack, public alpha and a paid beta. |
+| W2 Release     | 2027-10 to 2028-06 | Services apps, more country packs, WebAssembly host, a 1.0 long-term-support release with five years of support.                                                                          |
+| W3 Breadth     | 2028-07 to 2029-06 | More apps (manufacturing, point of sale, website, e-commerce, helpdesk and others), payroll engine, custom domains, partner programme.                                                    |
+| W4 Ecosystem   | from 2029-07       | Marketplace commerce, verticals, 2.0.                                                                                                                                                     |
 
 ## Decisions that are still open
 

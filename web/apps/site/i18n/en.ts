@@ -256,14 +256,24 @@ export const en: Messages = {
         price: "€249",
         period: "/month",
         blurb: "More capacity, support and service levels.",
-        features: ["25 full users", "All apps, 100 GB", "Point-in-time recovery, staging", "Next-business-day support"],
+        features: [
+          "25 full users",
+          "All apps, 100 GB",
+          "Point-in-time recovery, staging",
+          "Next-business-day support",
+        ],
       },
       {
         name: "Scale",
         price: "from €899",
         period: "/month",
         blurb: "Dedicated capacity and a named contact.",
-        features: ["100 or more users", "Dedicated cell, region pinning", "SAML and SCIM", "99.9 percent target, 24x5"],
+        features: [
+          "100 or more users",
+          "Dedicated cell, region pinning",
+          "SAML and SCIM",
+          "99.9 percent target, 24x5",
+        ],
       },
     ],
     plannedBadge: "Planned, not yet charged",
@@ -352,8 +362,7 @@ export const en: Messages = {
     englishNote: "English",
     agentsCan:
       "An agent can read, search, create and update records of this app, and run the actions that need no approval, within the permission groups of its token.",
-    agentsPropose:
-      "It can only propose these steps, and a person must approve them: {list}.",
+    agentsPropose: "It can only propose these steps, and a person must approve them: {list}.",
     agentsMasked: "Personal data is masked as placeholder tokens: {list}.",
     agentsWithheld: "These fields are withheld from agents entirely: {list}.",
     agentsNone: "none",

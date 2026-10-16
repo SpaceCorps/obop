@@ -7,7 +7,7 @@ eyebrow: "Apps you can install"
 
 ## The bundled catalog
 
-These 22 packages ship with obop (the `packages/` directory of the repository, compiled into the program). Administrators install them from *Customize*, then *Marketplace*, or with `obop modules install-from ID`. The five built-in apps (Contacts, Products, CRM, Sales and Invoicing) are not listed here because they are always present. Each name links to its app page.
+These 22 packages ship with obop (the `packages/` directory of the repository, compiled into the program). Administrators install them from _Customize_, then _Marketplace_, or with `obop modules install-from ID`. The five built-in apps (Contacts, Products, CRM, Sales and Invoicing) are not listed here because they are always present. Each name links to its app page.
 
 %%catalog%%
 
@@ -15,7 +15,7 @@ Every package is checked on install: every field needs a description, a data cla
 
 ## Install a package
 
-In the web app: *Customize*, *Marketplace*, choose an app, *Install*. Installing needs the administrator group.
+In the web app: _Customize_, _Marketplace_, choose an app, _Install_. Installing needs the administrator group.
 
 From the command line, against a database:
 

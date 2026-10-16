@@ -26,5 +26,5 @@ Moderators may edit or remove posts that break these rules.
 
 - **Report bugs and ideas** as GitHub issues.
 - **Write a package.** The [module manifest reference](/docs/reference/module-manifest/) shows how, and you can publish it in [your own marketplace](/marketplace/).
-- **Improve the documentation.** Every docs page has an *Edit this page on GitHub* link.
+- **Improve the documentation.** Every docs page has an _Edit this page on GitHub_ link.
 - **Review a translation.** The translations of this website are machine-drafted and need native review; see the repository's site documentation.

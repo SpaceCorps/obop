@@ -9,8 +9,10 @@ lead: "Agents can work with people's data without seeing it. This page explains 
 For a field that holds personal data, the server replaces the value with a token built from the field name and a counter, such as `EMAIL_1`, `NAME_2` or `CONTACT_EMAIL_7`. Fields in a sensitive data class are left out and named in `denied` (REST) or `withheld_fields` (MCP).
 
 ```json
-{"denied":["party.tax_id"],
- "value":{"email":"EMAIL_4","id":"01a14650-2667-...","name":"NAME_5","notes":"NOTES_6"}}
+{
+  "denied": ["party.tax_id"],
+  "value": { "email": "EMAIL_4", "id": "01a14650-2667-...", "name": "NAME_5", "notes": "NOTES_6" }
+}
 ```
 
 ## Rules of the tokens

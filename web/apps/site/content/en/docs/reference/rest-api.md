@@ -12,14 +12,14 @@ Content-Type: application/json
 
 ## Endpoints
 
-| Method and path | Purpose |
-|---|---|
-| `POST /api/auth/login` | Body `{"username","password"}`. Returns `{"token"}`, a session token valid for 12 hours. `401` for wrong credentials, `429` when locked out. |
-| `POST /api/auth/agent-token` | Body `{"scopes":[...],"label":"..."}`. A person creates a scoped agent token. Returns `{"token"}` once. |
-| `GET /api/commands` | The commands this caller may use: `{"commands":[{"id","description","needs_approval"}]}`. |
-| `GET /api/meta` | The modules, models, readable fields and actions this caller may see. Drives the web app. |
-| `POST /api/{model}/{command}` | Runs a command. The body is the command input. |
-| `POST /api/approve/{plan_id}` | A person approves a proposed plan. |
+| Method and path               | Purpose                                                                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/auth/login`        | Body `{"username","password"}`. Returns `{"token"}`, a session token valid for 12 hours. `401` for wrong credentials, `429` when locked out. |
+| `POST /api/auth/agent-token`  | Body `{"scopes":[...],"label":"..."}`. A person creates a scoped agent token. Returns `{"token"}` once.                                      |
+| `GET /api/commands`           | The commands this caller may use: `{"commands":[{"id","description","needs_approval"}]}`.                                                    |
+| `GET /api/meta`               | The modules, models, readable fields and actions this caller may see. Drives the web app.                                                    |
+| `POST /api/{model}/{command}` | Runs a command. The body is the command input.                                                                                               |
+| `POST /api/approve/{plan_id}` | A person approves a proposed plan.                                                                                                           |
 
 Instances also serve the web app from `/`. The control plane serves its own endpoints under `/api/platform/` (sign-up, sign-in, instances); they are used by the sign-up app and are not covered here.
 
@@ -37,14 +37,14 @@ Success: `200` with
 
 Every model gets these. For model `lead`:
 
-| Command | Input | Result |
-|---|---|---|
-| `lead.get` | `{"id"}` | The record. |
-| `lead.list` | optional `filter`, `order`, `limit`, `offset` | An array of records. |
-| `lead.search` | same as list | `{"rows":[...],"total":N}`, where `total` counts matches before `limit` and `offset`. |
-| `lead.create` | the fields | The new record, with its `id`. Governed fields start at their first option. |
-| `lead.update` | `{"id", ...fields}` | The updated record. Changing a governed field runs the matching action. |
-| `lead.delete` | `{"id"}` | `{"id"}`. Refused while another record refers to it. Agents only propose it. |
+| Command       | Input                                         | Result                                                                                |
+| ------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `lead.get`    | `{"id"}`                                      | The record.                                                                           |
+| `lead.list`   | optional `filter`, `order`, `limit`, `offset` | An array of records.                                                                  |
+| `lead.search` | same as list                                  | `{"rows":[...],"total":N}`, where `total` counts matches before `limit` and `offset`. |
+| `lead.create` | the fields                                    | The new record, with its `id`. Governed fields start at their first option.           |
+| `lead.update` | `{"id", ...fields}`                           | The updated record. Changing a governed field runs the matching action.               |
+| `lead.delete` | `{"id"}`                                      | `{"id"}`. Refused while another record refers to it. Agents only propose it.          |
 
 Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input is `{"id"}`, plus any `required` fields it needs.
 
@@ -53,10 +53,10 @@ Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input 
 ```json
 {
   "filter": [
-    {"field": "stage", "op": "in", "value": ["new", "qualified"]},
-    {"field": "expected_revenue_minor", "op": "gte", "value": 100000}
+    { "field": "stage", "op": "in", "value": ["new", "qualified"] },
+    { "field": "expected_revenue_minor", "op": "gte", "value": 100000 }
   ],
-  "order": [{"field": "expected_revenue_minor", "dir": "desc"}, {"field": "title"}],
+  "order": [{ "field": "expected_revenue_minor", "dir": "desc" }, { "field": "title" }],
   "limit": 50,
   "offset": 100
 }
@@ -71,27 +71,27 @@ Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input 
 
 ## Field values
 
-| Kind | JSON |
-|---|---|
-| `text`, `longtext` | string |
-| `number` | integer (no floats) |
-| `money` | integer in minor currency units: 12.34 is `1234` |
-| `date` | `"YYYY-MM-DD"`, a real calendar date |
-| `bool` | `true` or `false` |
-| `select` | one of the field's options |
-| `ref` | the id of an existing record of the target model |
+| Kind               | JSON                                             |
+| ------------------ | ------------------------------------------------ |
+| `text`, `longtext` | string                                           |
+| `number`           | integer (no floats)                              |
+| `money`            | integer in minor currency units: 12.34 is `1234` |
+| `date`             | `"YYYY-MM-DD"`, a real calendar date             |
+| `bool`             | `true` or `false`                                |
+| `select`           | one of the field's options                       |
+| `ref`              | the id of an existing record of the target model |
 
 ## Status codes
 
-| Code | Meaning |
-|---|---|
-| 200 | Success. |
-| 202 | Approval required; nothing changed. |
-| 400 | Input refused. `{"error":"..."}` says why. |
-| 401 | Missing, unknown, expired or revoked token; or wrong sign-in. |
-| 404 | Unknown, hidden or forbidden command; unknown plan. Indistinguishable on purpose. |
-| 415 | Body not sent as `application/json`. |
-| 429 | Sign-in lockout (five failures, one minute). |
+| Code | Meaning                                                                           |
+| ---- | --------------------------------------------------------------------------------- |
+| 200  | Success.                                                                          |
+| 202  | Approval required; nothing changed.                                               |
+| 400  | Input refused. `{"error":"..."}` says why.                                        |
+| 401  | Missing, unknown, expired or revoked token; or wrong sign-in.                     |
+| 404  | Unknown, hidden or forbidden command; unknown plan. Indistinguishable on purpose. |
+| 415  | Body not sent as `application/json`.                                              |
+| 429  | Sign-in lockout (five failures, one minute).                                      |
 
 ## Versioning
 

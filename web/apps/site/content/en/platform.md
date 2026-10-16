@@ -35,12 +35,12 @@ State changes are named actions. An action can need a stricter group and can nee
 
 ## Three surfaces, one set of commands
 
-| Surface | For | How |
-|---|---|---|
-| Web app | People | Generated from the module descriptions: lists, boards, forms. |
-| REST | Scripts, services, agents | `POST /api/{model}/{command}` with a bearer token. [REST reference](/docs/reference/rest-api/) |
-| MCP | AI assistants | `obop mcp` over stdio, one tool per command. [Connect over MCP](/docs/agents/mcp/) |
-| CLI | Shells and cron | `obop call model command key=value`. [CLI reference](/docs/reference/cli/) |
+| Surface | For                       | How                                                                                            |
+| ------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
+| Web app | People                    | Generated from the module descriptions: lists, boards, forms.                                  |
+| REST    | Scripts, services, agents | `POST /api/{model}/{command}` with a bearer token. [REST reference](/docs/reference/rest-api/) |
+| MCP     | AI assistants             | `obop mcp` over stdio, one tool per command. [Connect over MCP](/docs/agents/mcp/)             |
+| CLI     | Shells and cron           | `obop call model command key=value`. [CLI reference](/docs/reference/cli/)                     |
 
 All of them call the same dispatcher, so permission checks, masking and approvals are identical.
 

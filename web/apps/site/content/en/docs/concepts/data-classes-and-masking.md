@@ -7,15 +7,15 @@ description: "Every obop field has a data class. Agents see personal data as sta
 
 Every field in every module declares a **data class**. It says how sensitive the value is, and it drives masking for agents. A field without a class cannot be installed.
 
-| Class | Use for | Examples |
-|---|---|---|
-| `none` | Not personal and not otherwise sensitive. Must be written out. | Product code, state, quantity |
-| `public_directory` | Directory data every internal user may see. | Employee name, work email |
-| `internal` | Business data about people and work. | Ticket requester, site address |
-| `confidential_hr` | Personal employment facts that are not money. | Contract type, national id |
-| `special_category` | Health, union, biometrics. | Sick-leave flag |
-| `financial` | Money owed to or held for a named person; bank accounts. | Salary, IBAN, tax identifier |
-| `secret` | Credentials and keys. | API keys |
+| Class              | Use for                                                        | Examples                       |
+| ------------------ | -------------------------------------------------------------- | ------------------------------ |
+| `none`             | Not personal and not otherwise sensitive. Must be written out. | Product code, state, quantity  |
+| `public_directory` | Directory data every internal user may see.                    | Employee name, work email      |
+| `internal`         | Business data about people and work.                           | Ticket requester, site address |
+| `confidential_hr`  | Personal employment facts that are not money.                  | Contract type, national id     |
+| `special_category` | Health, union, biometrics.                                     | Sick-leave flag                |
+| `financial`        | Money owed to or held for a named person; bank accounts.       | Salary, IBAN, tax identifier   |
+| `secret`           | Credentials and keys.                                          | API keys                       |
 
 A field can also be marked `personal_data = true`: it is about an identifiable person. A personal-data field may never be class `none`.
 
@@ -23,10 +23,10 @@ A field can also be marked `personal_data = true`: it is about an identifiable p
 
 ## What people and agents see
 
-| Reader | `none`, `internal`, `public_directory` | Personal data | Sensitive classes | `secret` |
-|---|---|---|---|---|
-| A person | in clear | in clear | in clear, if their group allows | never returned |
-| An agent | in clear | masked as a token | withheld | withheld |
+| Reader   | `none`, `internal`, `public_directory` | Personal data     | Sensitive classes               | `secret`       |
+| -------- | -------------------------------------- | ----------------- | ------------------------------- | -------------- |
+| A person | in clear                               | in clear          | in clear, if their group allows | never returned |
+| An agent | in clear                               | masked as a token | withheld                        | withheld       |
 
 A person sees real values under their normal permissions. An agent token (see [Agents](/docs/agents/)) gets:
 

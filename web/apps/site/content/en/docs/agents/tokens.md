@@ -6,7 +6,7 @@ lead: "An agent token is a bearer token that belongs to a person and carries a l
 
 ## What a token is
 
-- It belongs to the person who created it (its *owner*) and acts with a subset of that person's groups.
+- It belongs to the person who created it (its _owner_) and acts with a subset of that person's groups.
 - It is shown **once**. obop stores only a hash, so a lost token cannot be recovered; create a new one.
 - It starts with `obop_`. Treat it like a password.
 - Only a person can create tokens. An agent cannot mint another token.
@@ -16,14 +16,14 @@ lead: "An agent token is a bearer token that belongs to a person and carries a l
 
 Scopes are [permission groups](/docs/concepts/permission-groups/). Look at what the agent should do and give it only those groups. Common groups of the built-in apps:
 
-| Group | Lets the agent |
-|---|---|
-| `base.user` | read and write Contacts (personal data stays masked) |
-| `crm.user` | read and write leads and move them through the pipeline |
-| `sales.user` | read and write quotations and orders |
-| `invoicing.user` | read and write invoices and cancel drafts |
-| `invoicing.manager` | propose posting an invoice (a person still approves) |
-| `product.user` | read products and prices |
+| Group               | Lets the agent                                          |
+| ------------------- | ------------------------------------------------------- |
+| `base.user`         | read and write Contacts (personal data stays masked)    |
+| `crm.user`          | read and write leads and move them through the pipeline |
+| `sales.user`        | read and write quotations and orders                    |
+| `invoicing.user`    | read and write invoices and cancel drafts               |
+| `invoicing.manager` | propose posting an invoice (a person still approves)    |
+| `product.user`      | read products and prices                                |
 
 Installed packages add their own groups, for example `helpdesk.agent`. The [app pages](/apps/) list the groups of each app.
 
@@ -47,7 +47,7 @@ curl -s -X POST http://127.0.0.1:8080/api/auth/agent-token \
 ```
 
 ```json
-{"token":"obop_1e00c3..."}
+{ "token": "obop_1e00c3..." }
 ```
 
 `scopes` is required and must name at least one group that you hold. `label` is free text. On a hosted instance use its address instead of `127.0.0.1:8080`, and sign in with your sign-up email as the username.
@@ -75,11 +75,11 @@ Add `--db postgres://...` (or set `OBOP_DATABASE_URL`) if the instance does not 
 
 ## Errors
 
-| Answer | Meaning |
-|---|---|
-| `400 {"error":"an agent token needs at least one scope"}` | `scopes` was empty. |
-| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}` | You asked for a group you do not hold. |
-| `400 {"error":"only a human user can issue agent tokens"}` | You used an agent token to ask for another. |
-| `401` | Missing, wrong or expired session token. |
+| Answer                                                                         | Meaning                                     |
+| ------------------------------------------------------------------------------ | ------------------------------------------- |
+| `400 {"error":"an agent token needs at least one scope"}`                      | `scopes` was empty.                         |
+| `400 {"error":"you do not hold invoicing.manager, so you cannot delegate it"}` | You asked for a group you do not hold.      |
+| `400 {"error":"only a human user can issue agent tokens"}`                     | You used an agent token to ask for another. |
+| `401`                                                                          | Missing, wrong or expired session token.    |
 
 Next: [connect over MCP](/docs/agents/mcp/) or [use the REST API](/docs/agents/rest/).

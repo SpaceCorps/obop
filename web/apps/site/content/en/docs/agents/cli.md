@@ -84,10 +84,10 @@ Structured arguments such as `filter` are JSON text. For anything beyond a few f
 
 ## Flags
 
-| Flag | Meaning |
-|---|---|
-| `--token TOKEN` | Bearer token. Default: `OBOP_TOKEN`. |
-| `--db URL` | `sqlite://file.db`, `postgres://user:pass@host/db` or `memory:`. Default: `OBOP_DATABASE_URL`, then `sqlite://obop.db`. |
-| `--dev-auth` | Use the fixed dev tokens (`dev-admin`, `dev-sales`, `dev-agent`). Local development only. |
+| Flag            | Meaning                                                                                                                 |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `--token TOKEN` | Bearer token. Default: `OBOP_TOKEN`.                                                                                    |
+| `--db URL`      | `sqlite://file.db`, `postgres://user:pass@host/db` or `memory:`. Default: `OBOP_DATABASE_URL`, then `sqlite://obop.db`. |
+| `--dev-auth`    | Use the fixed dev tokens (`dev-admin`, `dev-sales`, `dev-agent`). Local development only.                               |
 
 The full list is in the [CLI reference](/docs/reference/cli/).

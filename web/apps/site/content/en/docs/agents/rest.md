@@ -29,11 +29,21 @@ curl -s http://127.0.0.1:8080/api/commands -H "Authorization: Bearer $AGENT_TOKE
 ```
 
 ```json
-{"commands":[
-  {"id":"lead.create","description":"Create a record","needs_approval":false},
-  {"id":"lead.delete","description":"Delete a record that no other record refers to","needs_approval":true},
-  {"id":"lead.qualify","description":"Move a new lead to the qualified stage","needs_approval":false}
-]}
+{
+  "commands": [
+    { "id": "lead.create", "description": "Create a record", "needs_approval": false },
+    {
+      "id": "lead.delete",
+      "description": "Delete a record that no other record refers to",
+      "needs_approval": true
+    },
+    {
+      "id": "lead.qualify",
+      "description": "Move a new lead to the qualified stage",
+      "needs_approval": false
+    }
+  ]
+}
 ```
 
 `needs_approval` tells the agent in advance which commands it can only propose.
@@ -46,8 +56,17 @@ curl -s -X POST http://127.0.0.1:8080/api/party/list \
 ```
 
 ```json
-{"denied":["party.tax_id"],
- "value":[{"email":"EMAIL_1","id":"01a1464f-b0c8-700e-9f39-0cbf8e848c0b","name":"NAME_2","notes":"NOTES_3"}]}
+{
+  "denied": ["party.tax_id"],
+  "value": [
+    {
+      "email": "EMAIL_1",
+      "id": "01a1464f-b0c8-700e-9f39-0cbf8e848c0b",
+      "name": "NAME_2",
+      "notes": "NOTES_3"
+    }
+  ]
+}
 ```
 
 The tax identifier is withheld and named in `denied`. Name, email and notes are personal data and come back as tokens.
@@ -65,7 +84,22 @@ curl -s -X POST http://127.0.0.1:8080/api/lead/search \
 ```
 
 ```json
-{"denied":[],"value":{"rows":[{"id":"...","stage":"new","title":"Fleet telematics","expected_revenue_minor":3125000,"contact_email":"CONTACT_EMAIL_7","contact_name":"CONTACT_NAME_8"}],"total":1}}
+{
+  "denied": [],
+  "value": {
+    "rows": [
+      {
+        "id": "...",
+        "stage": "new",
+        "title": "Fleet telematics",
+        "expected_revenue_minor": 3125000,
+        "contact_email": "CONTACT_EMAIL_7",
+        "contact_name": "CONTACT_NAME_8"
+      }
+    ],
+    "total": 1
+  }
+}
 ```
 
 Operators: `eq`, `ne`, `contains`, `in`, `gt`, `gte`, `lt`, `lte`, `is_null`. At most 50 conditions, 5 order keys and 5000 rows per call.
@@ -116,15 +150,15 @@ Nothing has changed. Give the plan id to a person; see [The approval loop](/docs
 
 ## Status codes
 
-| Code | Meaning |
-|---|---|
-| 200 | Done. Read `value` and `denied`. |
-| 202 | Approval required. `plan_id` is in the body. Nothing changed. |
-| 400 | The input was refused. `error` says why, for example `lead.title is required` or `invalid token`. |
-| 401 | No bearer token, or an unknown, expired or revoked one. |
-| 404 | The command does not exist, is not visible to this token, or the plan is unknown. All three look the same on purpose. |
-| 415 | The body was not sent as `application/json`. |
-| 429 | Too many failed sign-ins (five in a minute lock a username for a minute). |
+| Code | Meaning                                                                                                               |
+| ---- | --------------------------------------------------------------------------------------------------------------------- |
+| 200  | Done. Read `value` and `denied`.                                                                                      |
+| 202  | Approval required. `plan_id` is in the body. Nothing changed.                                                         |
+| 400  | The input was refused. `error` says why, for example `lead.title is required` or `invalid token`.                     |
+| 401  | No bearer token, or an unknown, expired or revoked one.                                                               |
+| 404  | The command does not exist, is not visible to this token, or the plan is unknown. All three look the same on purpose. |
+| 415  | The body was not sent as `application/json`.                                                                          |
+| 429  | Too many failed sign-ins (five in a minute lock a username for a minute).                                             |
 
 ## Tips for agents
 

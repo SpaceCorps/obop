@@ -17,11 +17,11 @@ The field an action moves becomes **governed**. You cannot set it freely with `c
 
 An action can be marked `approval = true`. Mark anything irreversible or money-moving: posting an invoice, paying, refunding, sending to customers, publishing, closing a period.
 
-| Who runs it | What happens |
-|---|---|
-| A person with the action's group | It runs at once. |
-| An agent | Nothing changes. The server answers with a **plan id** (`202` over REST, `approval_required` over MCP). |
-| A person approving the plan | The action runs, as that person. |
+| Who runs it                      | What happens                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| A person with the action's group | It runs at once.                                                                                        |
+| An agent                         | Nothing changes. The server answers with a **plan id** (`202` over REST, `approval_required` over MCP). |
+| A person approving the plan      | The action runs, as that person.                                                                        |
 
 Deleting a record is also only proposed by agents. A proposal is checked again when it is approved, because the record may have changed in between.
 

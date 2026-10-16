@@ -8,11 +8,11 @@ lead: "Three ways to run obop. Pick the hosted beta to try it in minutes, Docker
 
 The hosted service gives each business its own instance with its own database. It is free during the beta.
 
-1. **Sign up.** Open [the sign-up app](/app/), enter your email and a password, and choose *Create account*.
+1. **Sign up.** Open [the sign-up app](/app/), enter your email and a password, and choose _Create account_.
 2. **Create an instance.** Give it a name of 3 to 30 characters. The address is made from the name. Setting up takes a short while; the page shows the progress.
 3. **Sign in.** Follow the link to your instance and sign in with the same email and password. Your sign-up account becomes the first administrator of the instance.
-4. **Install an app.** Open *Customize*, then *Marketplace*, and install an app such as Helpdesk or Projects. Installing and removing apps needs the administrator group. The five built-in apps (CRM, Sales, Invoicing, Products and Contacts) are already there.
-5. **Create records.** Open an app, choose *New* and fill in the form. Lists, boards and the side panel are generated from the app's description.
+4. **Install an app.** Open _Customize_, then _Marketplace_, and install an app such as Helpdesk or Projects. Installing and removing apps needs the administrator group. The five built-in apps (CRM, Sales, Invoicing, Products and Contacts) are already there.
+5. **Create records.** Open an app, choose _New_ and fill in the form. Lists, boards and the side panel are generated from the app's description.
 6. **Invite an agent.** There is no screen for agent tokens yet. Sign in over the REST API and [create an agent token](/docs/agents/tokens/), then [connect over MCP](/docs/agents/mcp/) or use [REST](/docs/agents/rest/).
 
 ## Option 2: self-host with Docker and PostgreSQL
@@ -65,6 +65,6 @@ Open `http://127.0.0.1:8080` and sign in as `alice`. The data is in `obop.db` in
 ## What next
 
 - Learn the building blocks in [Concepts](/docs/concepts/).
-- Browse the [apps](/apps/) and install the ones you need from *Customize*, or from the command line with `obop modules install-from helpdesk`.
+- Browse the [apps](/apps/) and install the ones you need from _Customize_, or from the command line with `obop modules install-from helpdesk`.
 - Set up an agent: [Agents overview](/docs/agents/).
 - Write your own app: [module manifest reference](/docs/reference/module-manifest/).

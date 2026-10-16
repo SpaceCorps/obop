@@ -13,14 +13,14 @@ The name is **obop**: lowercase always, including at the start of a sentence. Ne
 
 The logo is a mark and a wordmark, drawn as SVG in one colour. The mark is a ring open on one side with a dot in the opening: one platform, the business in orbit. The wordmark is lowercase, geometric and monoline, drawn from the same circles, so it needs no font.
 
-| Download | Use on |
-|---|---|
-| [Full logo, ink](/brand/obop-logo.svg) | Light backgrounds |
-| [Full logo, white](/brand/obop-logo-white.svg) | Dark backgrounds |
-| [Full logo, black](/brand/obop-logo-black.svg) | One-colour print |
-| [Mark](/brand/obop-mark.svg) | Favicons, app badges |
-| [Wordmark](/brand/obop-wordmark.svg) | Tight horizontal spaces |
-| [Favicon](/favicon.svg) | The mark in white on an accent tile |
+| Download                                       | Use on                              |
+| ---------------------------------------------- | ----------------------------------- |
+| [Full logo, ink](/brand/obop-logo.svg)         | Light backgrounds                   |
+| [Full logo, white](/brand/obop-logo-white.svg) | Dark backgrounds                    |
+| [Full logo, black](/brand/obop-logo-black.svg) | One-colour print                    |
+| [Mark](/brand/obop-mark.svg)                   | Favicons, app badges                |
+| [Wordmark](/brand/obop-wordmark.svg)           | Tight horizontal spaces             |
+| [Favicon](/favicon.svg)                        | The mark in white on an accent tile |
 
 Rules:
 
@@ -41,12 +41,12 @@ Sans: **Geist Variable**. Mono: **Geist Mono Variable**. Both are open source (S
 
 Plain, specific, calm, honest, helpful, human. Sentence case. No exclamation marks. No invented customers, quotes or metrics anywhere.
 
-| Do not | Do |
-|---|---|
+| Do not                      | Do                                                            |
+| --------------------------- | ------------------------------------------------------------- |
 | Oops! Something went wrong! | Could not save the lead. Check your connection and try again. |
-| No data. | No leads yet. Create the first one to start your pipeline. |
-| Submit | Create invoice |
-| Action pending. | Waiting for a human to approve: post invoice INV-0042. |
+| No data.                    | No leads yet. Create the first one to start your pipeline.    |
+| Submit                      | Create invoice                                                |
+| Action pending.             | Waiting for a human to approve: post invoice INV-0042.        |
 
 ## Motion and accessibility
 

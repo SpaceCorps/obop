@@ -29,7 +29,7 @@ Rust for the backend and Vite+ with React for the web apps. This website is buil
 
 ### How do I add an app?
 
-Open *Customize*, then *Marketplace*, and install one. From the command line: `obop modules install-from helpdesk`. You can also upload your own `obop.toml`. See [Apps and modules](/docs/concepts/apps-and-modules/).
+Open _Customize_, then _Marketplace_, and install one. From the command line: `obop modules install-from helpdesk`. You can also upload your own `obop.toml`. See [Apps and modules](/docs/concepts/apps-and-modules/).
 
 ### Can I write my own app?
 

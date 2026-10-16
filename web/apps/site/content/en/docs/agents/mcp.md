@@ -45,7 +45,7 @@ The snippets below use `/usr/local/bin/obop` and a placeholder token. Replace bo
 
 ## Claude Desktop
 
-Open *Settings*, then *Developer*, then *Edit Config*. The file is `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS and `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Add:
+Open _Settings_, then _Developer_, then _Edit Config_. The file is `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS and `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Add:
 
 ```json
 {
@@ -145,7 +145,7 @@ Create `.vscode/mcp.json`. VS Code's top-level key is `servers`, not `mcpServers
 }
 ```
 
-VS Code's guided *MCP: Add Server* command may suggest a portable `.mcp.json` with the `mcpServers` format instead; both are accepted according to its documentation.
+VS Code's guided _MCP: Add Server_ command may suggest a portable `.mcp.json` with the `mcpServers` format instead; both are accepted according to its documentation.
 
 ## Windsurf
 
@@ -209,14 +209,14 @@ obop is a plain stdio server. Whatever the client's file looks like, it needs a 
 
 ## What the agent sees
 
-After connecting, ask the agent to list its tools. You should see only the commands its scopes allow, with the suffix "(agents propose; a human approves)" on those that need approval. Try a read first, for example *"List the three newest leads"*, then see [The approval loop](/docs/agents/approvals/).
+After connecting, ask the agent to list its tools. You should see only the commands its scopes allow, with the suffix "(agents propose; a human approves)" on those that need approval. Try a read first, for example _"List the three newest leads"_, then see [The approval loop](/docs/agents/approvals/).
 
 If the client shows no tools or an error, go to [Troubleshooting](/docs/agents/troubleshooting/).
 
 ## Verified and not verified
 
-| Item | Status |
-|---|---|
-| `obop mcp` handshake, `tools/list`, `tools/call`, approval result | Run against a real local instance. |
+| Item                                                                                      | Status                                                                 |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `obop mcp` handshake, `tools/list`, `tools/call`, approval result                         | Run against a real local instance.                                     |
 | Configuration formats for Claude Desktop, Claude Code, Cursor, VS Code, Codex, Gemini CLI | Taken from each client's documentation. We did not start every client. |
-| Windsurf file location | Unconfirmed, see above. |
+| Windsurf file location                                                                    | Unconfirmed, see above.                                                |

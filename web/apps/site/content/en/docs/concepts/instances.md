@@ -11,7 +11,7 @@ The hosted service is a **control plane**, a second mode of the same program (`o
 
 1. People sign up with an email and a password.
 2. Each person can create, list and delete their own instances.
-3. For each instance it asks a *provisioner* to start something.
+3. For each instance it asks a _provisioner_ to start something.
 
 There are three provisioners. `local` starts child `obop serve` processes with SQLite on one machine. `sliplane` creates a database on a shared PostgreSQL server and a service on Sliplane for each instance. `fake` is for tests.
 

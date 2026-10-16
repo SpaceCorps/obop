@@ -36,7 +36,7 @@ HTTP/1.1 202 Accepted
 {"approval_required":true,"plan_id":"01a14662-bb99-74fe-bc64-1b98f21d855f"}
 ```
 
-The agent reports: *"Draft invoice 01a1464f... for 1,200.00 is ready to post. Waiting for approval: plan 01a14662-bb99..."* A person with `invoicing.manager` approves:
+The agent reports: _"Draft invoice 01a1464f... for 1,200.00 is ready to post. Waiting for approval: plan 01a14662-bb99..."_ A person with `invoicing.manager` approves:
 
 ```bash
 curl -si -X POST http://127.0.0.1:8080/api/approve/01a14662-bb99-74fe-bc64-1b98f21d855f \
@@ -56,11 +56,31 @@ Approving something that no longer applies, or that the approver may not run, fa
 ## Over MCP
 
 ```json
-{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"lead__delete","arguments":{"id":"01a1464f-b0c9-7689-8fe1-ec6283086c76"}}}
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "lead__delete",
+    "arguments": { "id": "01a1464f-b0c9-7689-8fe1-ec6283086c76" }
+  }
+}
 ```
 
 ```json
-{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"{\"plan_id\":\"01a14660-1971-733a-8a1e-19e32cc341b2\",\"status\":\"approval_required\"}"}],"isError":false}}
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"plan_id\":\"01a14660-1971-733a-8a1e-19e32cc341b2\",\"status\":\"approval_required\"}"
+      }
+    ],
+    "isError": false
+  }
+}
 ```
 
 `isError` is `false` because a proposal is not a failure. Tell the agent in its instructions to treat `approval_required` as "stop and ask a person".

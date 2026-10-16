@@ -6,11 +6,11 @@ lead: "What you need to run obop for real, and an honest list of what you have t
 
 ## The pieces
 
-| Piece | Command | What it does |
-|---|---|---|
-| Instance | `obop serve` | One business: REST, MCP over the CLI and the web app. SQLite locally, PostgreSQL when `OBOP_DATABASE_URL` starts with `postgres://`. |
-| Control plane | `obop platform serve` | Sign-up, instances, and the public website. Runs a provisioner per instance. |
-| Provisioners | `--provisioner local\|sliplane\|fake` | `local` starts child `obop serve` processes with SQLite; `sliplane` creates a database on a shared PostgreSQL and a Sliplane service per instance; `fake` is for tests. |
+| Piece         | Command                               | What it does                                                                                                                                                            |
+| ------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Instance      | `obop serve`                          | One business: REST, MCP over the CLI and the web app. SQLite locally, PostgreSQL when `OBOP_DATABASE_URL` starts with `postgres://`.                                    |
+| Control plane | `obop platform serve`                 | Sign-up, instances, and the public website. Runs a provisioner per instance.                                                                                            |
+| Provisioners  | `--provisioner local\|sliplane\|fake` | `local` starts child `obop serve` processes with SQLite; `sliplane` creates a database on a shared PostgreSQL and a Sliplane service per instance; `fake` is for tests. |
 
 ## One instance with Docker and PostgreSQL
 

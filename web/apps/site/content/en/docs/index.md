@@ -15,12 +15,12 @@ obop is an open-source business platform. One program serves the web app, a REST
 
 ## How the documentation is organised
 
-| Section | What it answers |
-|---|---|
-| Start here | How do I get an instance and use it? |
-| Concepts | What are apps, data classes, permission groups, workflows and instances? |
-| Agents | How do I set agents up safely, and what can they do? |
-| Reference | Exact commands, endpoints, settings and limits. |
+| Section    | What it answers                                                          |
+| ---------- | ------------------------------------------------------------------------ |
+| Start here | How do I get an instance and use it?                                     |
+| Concepts   | What are apps, data classes, permission groups, workflows and instances? |
+| Agents     | How do I set agents up safely, and what can they do?                     |
+| Reference  | Exact commands, endpoints, settings and limits.                          |
 
 ## Status
 

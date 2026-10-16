@@ -21,12 +21,12 @@ The obop project, run by SpaceCorps. There is no data protection officer or EU r
 
 When you create an account and an instance we process:
 
-| Data | Why | Where |
-|---|---|---|
-| Email address | Sign in, and to identify the account | The control plane's database |
-| Password | Sign in. Stored only as a one-way Argon2id hash | The control plane and, as a hash, your instance |
-| Instance name and address | To provision and show your instance | The control plane |
-| Everything you enter into your instance | To provide the service | A database belonging to your instance |
+| Data                                    | Why                                             | Where                                           |
+| --------------------------------------- | ----------------------------------------------- | ----------------------------------------------- |
+| Email address                           | Sign in, and to identify the account            | The control plane's database                    |
+| Password                                | Sign in. Stored only as a one-way Argon2id hash | The control plane and, as a hash, your instance |
+| Instance name and address               | To provision and show your instance             | The control plane                               |
+| Everything you enter into your instance | To provide the service                          | A database belonging to your instance           |
 
 We do not sell personal data. We do not use the data in your instance for anything but running it.
 
