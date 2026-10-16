@@ -1,7 +1,7 @@
 //! `base` implementation: the Contacts app foundation.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, ModelDef, Module};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
 use obop_types::DataClass::*;
 
 pub fn module() -> Module {
@@ -14,7 +14,7 @@ pub fn module() -> Module {
             read_group: "base.user",
             write_group: "base.user",
             fields: vec![
-                F::new("name", "Display name", PublicDirectory, true, "base.user"),
+                F::new("name", "Display name", PublicDirectory, true, "base.user").required(),
                 F::new(
                     "email",
                     "Work email address",
@@ -35,7 +35,8 @@ pub fn module() -> Module {
                     Internal,
                     true,
                     "base.user",
-                ),
+                )
+                .kind(FieldKind::LongText),
             ],
             commands: vec![
                 CommandDef::new(

@@ -15,6 +15,7 @@ write_group = "helpdesk.agent"
   name = "subject"
   description = "One-line summary of the problem"
   class = "none"
+  required = true
 
   [[model.field]]
   name = "requester_email"
@@ -24,8 +25,10 @@ write_group = "helpdesk.agent"
 
   [[model.field]]
   name = "state"
-  description = "open, resolved or closed"
+  description = "Ticket status: open, resolved or closed"
   class = "none"
+  kind = "select"
+  options = ["open", "resolved", "closed"]
 
   [[model.action]]
   name = "resolve"

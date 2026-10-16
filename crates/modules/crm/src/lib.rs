@@ -1,7 +1,7 @@
 //! `crm`: leads and opportunities.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, ModelDef, Module};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
 use obop_types::DataClass::*;
 
 pub fn module() -> Module {
@@ -20,7 +20,8 @@ pub fn module() -> Module {
                     None,
                     false,
                     "crm.user",
-                ),
+                )
+                .required(),
                 F::new(
                     "contact_name",
                     "Name of the contact person",
@@ -41,14 +42,16 @@ pub fn module() -> Module {
                     None,
                     false,
                     "crm.user",
-                ),
+                )
+                .kind(FieldKind::Money),
                 F::new(
                     "stage",
                     "Pipeline stage: new, qualified, won or lost",
                     None,
                     false,
                     "crm.user",
-                ),
+                )
+                .select(&["new", "qualified", "won", "lost"]),
             ],
             commands: vec![CommandDef::new(
                 "mark_won",

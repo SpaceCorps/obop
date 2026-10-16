@@ -3,7 +3,7 @@
 //! when the backend does.
 
 use crate::{Dispatcher, Value};
-use obop_registry::{ModelDef, Module};
+use obop_registry::{FieldKind, ModelDef, Module, is_valid_date};
 use obop_storage::{Backend, Fields};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -117,6 +117,59 @@ fn declared_fields(def: &ModelDef, input: &Value) -> Result<BTreeMap<String, Val
     Ok(out)
 }
 
+/// Check one non-null value against its field kind (D47). Tokens are already restored by the
+/// dispatcher, so this always sees real values.
+fn check_value(
+    store: &Store,
+    model: &str,
+    name: &str,
+    kind: &FieldKind,
+    v: &Value,
+) -> Result<(), String> {
+    match (kind, v) {
+        (FieldKind::Text | FieldKind::LongText, Value::Text(_)) => Ok(()),
+        (FieldKind::Number | FieldKind::Money, Value::Int(_)) => Ok(()),
+        (FieldKind::Bool, Value::Bool(_)) => Ok(()),
+        (FieldKind::Date, Value::Text(t)) if is_valid_date(t) => Ok(()),
+        (FieldKind::Select(o), Value::Text(t)) if o.contains(&t.as_str()) => Ok(()),
+        (FieldKind::Ref(to), Value::Text(id)) => match store.backend.get(to, id) {
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => Err(format!(
+                "{model}.{name} must be {}; there is no {to} {id}",
+                kind.describe()
+            )),
+            Err(e) => Err(e),
+        },
+        _ => Err(format!("{model}.{name} must be {}", kind.describe())),
+    }
+}
+
+/// Validate the fields of a create (`creating`) or an update against the model's field kinds.
+pub fn validate(
+    def: &ModelDef,
+    store: &Store,
+    fields: &BTreeMap<String, Value>,
+    creating: bool,
+) -> Result<(), String> {
+    for f in &def.fields {
+        match fields.get(f.name) {
+            None if creating && f.required => {
+                return Err(format!("{}.{} is required", def.name, f.name));
+            }
+            None => {}
+            Some(Value::Null) if f.required => {
+                return Err(format!(
+                    "{}.{} is required and cannot be null",
+                    def.name, f.name
+                ));
+            }
+            Some(Value::Null) => {}
+            Some(v) => check_value(store, def.name, f.name, &f.kind, v)?,
+        }
+    }
+    Ok(())
+}
+
 impl Dispatcher {
     /// Register `get`, `list`, `create` and `update` for every model of `module` against `store`.
     pub fn register_crud(&self, module: &Module, store: &Store) {
@@ -158,6 +211,7 @@ impl Dispatcher {
                 "create",
                 Box::new(move |input| {
                     let fields = declared_fields(&d, input)?;
+                    validate(&d, &s, &fields, true)?;
                     let id = s.insert(name, fields)?;
                     let f = s.backend.get(name, &id)?.ok_or("record vanished")?;
                     Ok(to_row(&id, &f))
@@ -170,11 +224,272 @@ impl Dispatcher {
                 "update",
                 Box::new(move |input| {
                     let id = id_of(input)?;
-                    s.update(name, &id, declared_fields(&d, input)?)?;
+                    let fields = declared_fields(&d, input)?;
+                    validate(&d, &s, &fields, false)?;
+                    s.update(name, &id, fields)?;
                     let f = s.backend.get(name, &id)?.ok_or("record vanished")?;
                     Ok(to_row(&id, &f))
                 }),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Principal, Surface, Vault};
+    use obop_registry::{FieldDef, ModelDef};
+    use obop_types::DataClass;
+
+    fn f(name: &'static str) -> FieldDef {
+        FieldDef::new(name, "d", DataClass::None, false, "t.user")
+    }
+
+    fn setup() -> (Dispatcher, Store, Principal) {
+        let model = |name, fields| ModelDef {
+            name,
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            fields,
+            commands: vec![],
+        };
+        let module = Module {
+            id: "t".into(),
+            name: "T".into(),
+            models: vec![
+                model("customer", vec![f("name").required()]),
+                model(
+                    "deal",
+                    vec![
+                        f("title").required(),
+                        f("notes").kind(FieldKind::LongText),
+                        f("qty").kind(FieldKind::Number),
+                        f("price").kind(FieldKind::Money),
+                        f("due").kind(FieldKind::Date),
+                        f("won").kind(FieldKind::Bool),
+                        f("stage").select(&["new", "won"]),
+                        f("customer_id").reference("customer"),
+                    ],
+                ),
+            ],
+            network_destinations: vec![],
+        };
+        let (d, s) = (Dispatcher::new(), Store::new());
+        d.register_crud(&module, &s);
+        (d, s, Principal::user("u", &["t.user"]))
+    }
+
+    fn call(
+        d: &Dispatcher,
+        u: &Principal,
+        cmd: &str,
+        pairs: Vec<(&str, Value)>,
+    ) -> Result<Value, String> {
+        d.call(
+            Surface::Rest,
+            u,
+            &mut Vault::new(),
+            cmd,
+            &Value::Map(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect()),
+        )
+        .map(|r| r.value)
+        .map_err(|e| match e {
+            crate::CallError::Handler(m) => m,
+            other => format!("{other:?}"),
+        })
+    }
+
+    fn deal(d: &Dispatcher, u: &Principal, extra: Vec<(&str, Value)>) -> Result<Value, String> {
+        let mut v = vec![("title", Value::text("t"))];
+        v.extend(extra);
+        call(d, u, "deal.create", v)
+    }
+
+    fn rejects(r: Result<Value, String>, want: &str) {
+        let e = r.expect_err("should be rejected");
+        assert!(e.contains(want), "{e:?} should contain {want:?}");
+    }
+
+    #[test]
+    fn valid_values_of_every_kind_are_accepted() {
+        let (d, _, u) = setup();
+        let c = call(
+            &d,
+            &u,
+            "customer.create",
+            vec![("name", Value::text("Acme"))],
+        )
+        .unwrap();
+        let Value::Map(c) = c else { panic!() };
+        deal(
+            &d,
+            &u,
+            vec![
+                ("notes", Value::text("a\nb")),
+                ("qty", Value::Int(-3)),
+                ("price", Value::Int(1999)),
+                ("due", Value::text("2024-02-29")),
+                ("won", Value::Bool(false)),
+                ("stage", Value::text("won")),
+                ("customer_id", c["id"].clone()),
+            ],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn wrong_json_types_are_rejected_with_the_field_named() {
+        let (d, _, u) = setup();
+        rejects(
+            deal(&d, &u, vec![("qty", Value::text("3"))]),
+            "deal.qty must be an integer",
+        );
+        rejects(
+            deal(&d, &u, vec![("won", Value::text("true"))]),
+            "deal.won must be true or false",
+        );
+        rejects(
+            deal(&d, &u, vec![("notes", Value::Int(1))]),
+            "deal.notes must be a string",
+        );
+        rejects(
+            deal(&d, &u, vec![("title", Value::Bool(true))]),
+            "deal.title must be a string",
+        );
+    }
+
+    #[test]
+    fn money_must_be_an_integer() {
+        let (d, _, u) = setup();
+        // A JSON float reaches the store as non-integer text, so it is not an integer either.
+        let float: serde_json::Value = serde_json::json!(12.5);
+        rejects(
+            deal(&d, &u, vec![("price", Value::from_json(&float))]),
+            "deal.price must be an integer in minor currency units",
+        );
+        rejects(
+            deal(&d, &u, vec![("price", Value::text("1999"))]),
+            "deal.price must be an integer",
+        );
+        assert!(deal(&d, &u, vec![("price", Value::Int(0))]).is_ok());
+    }
+
+    #[test]
+    fn dates_must_be_real_calendar_dates() {
+        let (d, _, u) = setup();
+        for ok in ["2024-02-29", "2000-02-29", "1999-12-31"] {
+            deal(&d, &u, vec![("due", Value::text(ok))]).unwrap();
+        }
+        for bad in [
+            "2023-02-29",
+            "1900-02-29",
+            "2024-13-01",
+            "2024-04-31",
+            "01/02/2024",
+        ] {
+            rejects(
+                deal(&d, &u, vec![("due", Value::text(bad))]),
+                "deal.due must be a real calendar date",
+            );
+        }
+        rejects(
+            deal(&d, &u, vec![("due", Value::Int(20240101))]),
+            "deal.due must be",
+        );
+    }
+
+    #[test]
+    fn select_must_be_one_of_the_options() {
+        let (d, _, u) = setup();
+        rejects(
+            deal(&d, &u, vec![("stage", Value::text("lost"))]),
+            "deal.stage must be one of: new, won",
+        );
+        rejects(
+            deal(&d, &u, vec![("stage", Value::Int(1))]),
+            "one of: new, won",
+        );
+    }
+
+    #[test]
+    fn ref_must_point_at_an_existing_record_of_the_target_model() {
+        let (d, s, u) = setup();
+        rejects(
+            deal(&d, &u, vec![("customer_id", Value::text("nope"))]),
+            "there is no customer nope",
+        );
+        // A real id of the wrong model is dangling too.
+        let other = deal(&d, &u, vec![]).unwrap();
+        let Value::Map(other) = other else { panic!() };
+        rejects(
+            deal(&d, &u, vec![("customer_id", other["id"].clone())]),
+            "deal.customer_id must be the id of an existing customer",
+        );
+        rejects(
+            deal(&d, &u, vec![("customer_id", Value::Int(1))]),
+            "must be the id of",
+        );
+        let c = s
+            .insert("customer", [("name".to_string(), Value::text("A"))].into())
+            .unwrap();
+        deal(&d, &u, vec![("customer_id", Value::text(&c))]).unwrap();
+    }
+
+    #[test]
+    fn required_is_enforced_on_create_and_null_on_update() {
+        let (d, _, u) = setup();
+        rejects(
+            call(&d, &u, "deal.create", vec![]),
+            "deal.title is required",
+        );
+        rejects(
+            call(&d, &u, "deal.create", vec![("title", Value::Null)]),
+            "deal.title is required",
+        );
+        let made = deal(&d, &u, vec![]).unwrap();
+        let Value::Map(made) = made else { panic!() };
+        let id = made["id"].clone();
+        rejects(
+            call(
+                &d,
+                &u,
+                "deal.update",
+                vec![("id", id.clone()), ("title", Value::Null)],
+            ),
+            "cannot be null",
+        );
+        // Absent on update is fine, and null clears an optional field.
+        call(
+            &d,
+            &u,
+            "deal.update",
+            vec![("id", id.clone()), ("qty", Value::Int(2))],
+        )
+        .unwrap();
+        call(
+            &d,
+            &u,
+            "deal.update",
+            vec![("id", id), ("qty", Value::Null)],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn update_validates_like_create() {
+        let (d, _, u) = setup();
+        let made = deal(&d, &u, vec![]).unwrap();
+        let Value::Map(made) = made else { panic!() };
+        rejects(
+            call(
+                &d,
+                &u,
+                "deal.update",
+                vec![("id", made["id"].clone()), ("stage", Value::text("zzz"))],
+            ),
+            "deal.stage must be one of",
+        );
     }
 }

@@ -1,7 +1,7 @@
 //! `invoicing`: customer invoices. Posting is irreversible, so agents may only propose it.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, ModelDef, Module};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
 use obop_types::DataClass::None as NoClass;
 
 pub fn module() -> Module {
@@ -20,21 +20,24 @@ pub fn module() -> Module {
                     NoClass,
                     false,
                     "invoicing.user",
-                ),
+                )
+                .reference("sale_order"),
                 F::new(
                     "state",
                     "Lifecycle: draft, posted or cancelled",
                     NoClass,
                     false,
                     "invoicing.user",
-                ),
+                )
+                .select(&["draft", "posted", "cancelled"]),
                 F::new(
                     "total_minor",
                     "Invoice total in minor units",
                     NoClass,
                     false,
                     "invoicing.user",
-                ),
+                )
+                .kind(FieldKind::Money),
                 F::new(
                     "number",
                     "Gapless legal number, set when posted",

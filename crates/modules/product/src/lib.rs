@@ -1,7 +1,7 @@
 //! `product`: what the business sells.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{FieldDef as F, ModelDef, Module};
+use obop_registry::{FieldDef as F, FieldKind, ModelDef, Module};
 use obop_types::DataClass::None as NoClass;
 
 pub fn module() -> Module {
@@ -14,7 +14,7 @@ pub fn module() -> Module {
             read_group: "product.user",
             write_group: "product.manager",
             fields: vec![
-                F::new("name", "Product name", NoClass, false, "product.user"),
+                F::new("name", "Product name", NoClass, false, "product.user").required(),
                 F::new("sku", "Stock keeping unit", NoClass, false, "product.user"),
                 F::new(
                     "list_price_minor",
@@ -22,14 +22,16 @@ pub fn module() -> Module {
                     NoClass,
                     false,
                     "product.user",
-                ),
+                )
+                .kind(FieldKind::Money),
                 F::new(
                     "cost_minor",
                     "Unit cost in minor currency units",
                     NoClass,
                     false,
                     "product.cost_viewer",
-                ),
+                )
+                .kind(FieldKind::Money),
             ],
             commands: vec![],
         }],

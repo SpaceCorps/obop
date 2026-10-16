@@ -127,6 +127,19 @@ impl Installer {
                     a.from.clone(),
                     a.to.clone(),
                 );
+                // A select field only ever takes one of its options (D47).
+                let options: Vec<String> = model
+                    .field
+                    .iter()
+                    .find(|f| f.name == a.field && f.kind == "select")
+                    .map(|f| f.options.clone())
+                    .unwrap_or_default();
+                if !options.is_empty() && !options.contains(&to) {
+                    return Err(format!(
+                        "{name}.{}: {to:?} is not one of the options of {field}",
+                        a.name
+                    ));
+                }
                 d.register(
                     module,
                     name,
@@ -193,6 +206,11 @@ impl Installer {
             let owned_by_self = existing.is_some();
             if d.has_model(m.name) && !owned_by_self {
                 return Err(format!("model {} already exists", m.name));
+            }
+        }
+        for (at, to) in manifest.external_refs() {
+            if !d.has_model(&to) {
+                return Err(format!("{at} refers to model {to}, which is not installed"));
             }
         }
         if existing.is_some() {
@@ -916,5 +934,129 @@ mod tests {
             call(&d, &bot, "helpdesk_ticket.close", by_id(&id)),
             Err(CallError::ApprovalRequired { .. })
         ));
+    }
+
+    #[test]
+    fn installed_models_validate_field_kinds_and_actions_keep_working() {
+        let store = Store::new();
+        let (d, _) = setup(&store);
+        call(
+            &d,
+            &admin(),
+            "marketplace_listing.install",
+            by_id("projects"),
+        )
+        .unwrap();
+        let u = Principal::user("u", &["projects.user", "projects.manager"]);
+        let msg = |r: Result<obop_commands::Response, CallError>| match r {
+            Err(CallError::Handler(m)) => m,
+            other => panic!("expected a handler error, got {other:?}"),
+        };
+        // A required field, a select outside its options and a dangling ref are all refused.
+        let task = |extra: Vec<(&str, Value)>| {
+            let mut v = vec![("title", Value::text("Write docs"))];
+            v.extend(extra);
+            Value::Map(v.into_iter().map(|(k, x)| (k.to_string(), x)).collect())
+        };
+        assert!(
+            msg(call(
+                &d,
+                &u,
+                "projects_task.create",
+                Value::map([("assignee", Value::text("x"))])
+            ))
+            .contains("projects_task.title is required")
+        );
+        assert!(
+            msg(call(
+                &d,
+                &u,
+                "projects_task.create",
+                task(vec![("state", Value::text("blocked"))])
+            ))
+            .contains("one of: todo, doing, done")
+        );
+        assert!(
+            msg(call(
+                &d,
+                &u,
+                "projects_task.create",
+                task(vec![("project_id", Value::text("ghost"))])
+            ))
+            .contains("there is no projects_project ghost")
+        );
+        let p = call(
+            &d,
+            &u,
+            "projects_project.create",
+            Value::map([
+                ("name", Value::text("Site")),
+                ("state", Value::text("planned")),
+            ]),
+        )
+        .unwrap();
+        let t = call(
+            &d,
+            &u,
+            "projects_task.create",
+            task(vec![
+                ("project_id", Value::text(&id_of(&p))),
+                ("state", Value::text("todo")),
+            ]),
+        )
+        .unwrap();
+        // The transition action still works and lands on an allowed option.
+        call(&d, &u, "projects_task.begin", by_id(&id_of(&t))).unwrap();
+        assert_eq!(
+            store.field("projects_task", &id_of(&t), "state"),
+            Some(Value::text("doing"))
+        );
+    }
+
+    #[test]
+    fn refs_to_models_outside_the_package_need_them_installed() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        let pkg = r#"
+[module]
+id = "notes"
+version = "0.1.0"
+name = "Notes"
+description = "Notes about customers"
+
+[[model]]
+name = "notes_note"
+description = "A note"
+read_group = "notes.user"
+write_group = "notes.user"
+
+  [[model.field]]
+  name = "party_id"
+  description = "Who the note is about"
+  class = "none"
+  kind = "ref"
+  to = "party"
+"#;
+        let e = inst.install(pkg, "upload", "root").unwrap_err();
+        assert!(
+            e.contains("refers to model party, which is not installed"),
+            "{e}"
+        );
+        // Once a model of that name is registered, the same package installs.
+        let party = Module {
+            id: "base".into(),
+            name: "Contacts".into(),
+            models: vec![ModelDef {
+                name: "party",
+                description: "p",
+                read_group: "base.user",
+                write_group: "base.user",
+                fields: vec![],
+                commands: vec![],
+            }],
+            network_destinations: vec![],
+        };
+        d.register_crud(&party, &store);
+        inst.install(pkg, "upload", "root").unwrap();
     }
 }
