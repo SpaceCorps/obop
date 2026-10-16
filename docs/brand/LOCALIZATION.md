@@ -86,11 +86,12 @@ so no floating point touches an amount, and typed text is parsed back by digits 
 | `12,50` | de, fr, pl, fi, sv, es | 12.50 | the locale's own decimal mark |
 | `12.50` | any | 12.50 | the numpad or a habit; two digits cannot be a group |
 | `1.250,00` | de, es | 1250.00 | |
-| `1 250,5` / `1 250,5` | fr, pl, fi, sv | 1250.50 | NBSP, narrow NBSP and spaces are group marks |
+| `1 250,5` (space, NBSP or narrow NBSP) | fr, pl, fi, sv | 1250.50 | all three are group marks |
 | `1'250.50` | de-CH | 1250.50 | |
 | `1.250` | de | 1250.00 | `.` is the group mark of `de` |
 | `1,250` | de | 1250.00, **shown first** | three digits after a mark that is not the locale's group mark: the form shows "Read as 1.250,00 €" before commit |
-| `12,505` | any | rejected | more decimals than the currency allows |
+| `12,505` | de | 12.505,00, **shown first** | three digits after a mark: read as a group, flagged like `1,250` |
+| `12,5055` | any | rejected | more decimals than the currency allows, and not a group |
 | `１２，５０` | any | 12.50 | full-width digits are NFKC-normalised |
 
 The edit field shows the value in the locale (`12,50`), never grouped. The server still receives `1250`.
@@ -112,7 +113,7 @@ messages. In English it returns the text as received. Unknown text is shown as r
 ### 1.5 Pseudo-locales
 
 `?lang=en-XA` rewrites every translated string with accented look-alikes and doubles vowels (about 40% longer):
-`Save` → `Sááǿe`-style text. A string that stays plain ASCII is hard-coded. `?lang=ar-XB` is the same text with
+`Save` → `Šááṽéé`. A string that stays plain ASCII is hard-coded. `?lang=ar-XB` is the same text with
 `dir="rtl"`, to check the mirror. Neither is offered in the switcher.
 
 ### 1.6 What is deliberately English
@@ -236,7 +237,8 @@ Lingui (the library D34 names) was evaluated and not adopted for the interface y
   an extraction CLI; whether that plugin chain runs under Vite+ 1.0.0 (Rolldown and Oxc) is unverified and a
   Babel pass would add a second transform to every build.
 - **Size.** `@lingui/core` plus a runtime ICU parser costs roughly 7 to 10 kB gzipped before catalogues; the
-  runtime here (parser, plurals, formatters, React bindings) is about 5 kB gzipped.
+  runtime here is about 6.5 kB gzipped for the core (parser, plurals, Intl formatters, amount parsing, pseudo-locale)
+  plus about 1.5 kB of React bindings (measured with a minified library build).
 - **Surface.** The interface needs ICU plurals, placeholders, tags and context only; everything else (dates,
   lists, relative time, collation) is `Intl`.
 
@@ -251,7 +253,25 @@ carry over. Revisit when the macro chain is verified on Vite+ or when MessageFor
 - Brand book content and the module Guide are English by design (section 1.6).
 - Server messages without a stable pattern, package descriptions and marketplace texts are English until the
   server sends `labels`; `docs/MODULES.md` section 3.5 lists the patterns that are mapped.
+- A list the server pages (the default list) is sorted by the database, in its own collation; the browser's
+  `compareText` orders the lists, groups, pivots and kanban boards it builds itself.
 - Region does not yet pick a time zone or a calendar other than Gregorian; dates are plain accounting dates.
 - Right-to-left is verified with the `ar-XB` pseudo-locale only (logical CSS, mirrored chevrons); no Arabic or
   Hebrew catalogue ships. CJK needs `Intl.Segmenter` for search and an IME-aware key handling review.
 - Weblate, PO import/export and reviewer sign-off are not wired; the status files are the interim tracker.
+
+## 7 Review first
+
+The translators flagged these for native review (all other strings are equally unreviewed, these are the doubtful ones):
+
+- One key serves several modules, so a generic word was chosen: model `Move` (accounting entry and stock move), `Order`,
+  `Entry`, `Item`, option `Paid` (invoices and leave), option `Cash` (payment method and journal kind).
+- Lead stages and actions in Spanish agree with "oportunidad" (feminine), unlike the glossary's masculine
+  "ganado / perdido".
+- Reversal and cancel are separate words in the accounting actions (de "Storno buchen" / "Stornieren", pl
+  "Wystornuj" / "Anuluj", sv "Återför" / "Annullera"); confirm with an accountant of each market.
+- Short form labels with little context: `Shows`, `Records of`, `Combine by`, `Needs`, `Mode`, `Pair`.
+- Sentences that insert a model name use colon frames ("Neu: {model}") to avoid declension; native reviewers may
+  prefer a rewrite once the server can send the plural and case forms of model names.
+- The filter help text keeps `is empty` and `is set` in English because the dashboard filter parser accepts only
+  those words.
