@@ -1,0 +1,66 @@
+# One required check: every job must pass. Actions are pinned by commit SHA (docs/ENGINEERING.md 2.3).
+name: ci
+on:
+  push:
+    branches: [main, deploy]
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: obop-test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      OBOP_TEST_POSTGRES_URL: postgres://postgres:obop-test@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
+      - name: Install gate over every linked module
+        run: cargo run --locked -q -- modules check
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.21.2
+      - run: vp install --frozen-lockfile
+      - name: Check, lint and type-check every app
+        run: |
+          for app in backoffice platform landing; do
+            (cd web/apps/$app && vp check)
+          done
+      - name: Build every app
+        run: |
+          for app in backoffice platform landing; do
+            (cd web/apps/$app && vp build)
+          done
+
+  lockfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Only pnpm-lock.yaml may exist (CLAUDE.md, F2)
+        run: |
+          bad=$(git ls-files | grep -E '(^|/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?)$' || true)
+          if [ -n "$bad" ]; then echo "forbidden lockfiles:"; echo "$bad"; exit 1; fi
+
+  all:
+    if: always()
+    needs: [rust, web, lockfiles]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          test "${{ needs.rust.result }}" = success && test "${{ needs.web.result }}" = success && test "${{ needs.lockfiles.result }}" = success
