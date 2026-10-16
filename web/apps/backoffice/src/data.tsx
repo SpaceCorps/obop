@@ -17,8 +17,10 @@ import {
   type Reply,
   type Row,
 } from "./api.ts";
+import { t } from "@obop/ui";
 import type { App } from "./Chrome.tsx";
 import { isEmpty } from "./format.ts";
+import { registerMeta } from "./serverMessage.ts";
 import type { Lookup } from "./query.ts";
 
 const NO_STRINGS: string[] = [];
@@ -81,7 +83,7 @@ class RowStore {
     const running = this.pending.get(model);
     if (running) return running;
     if (!this.known(model)) {
-      this.errors.set(model, "unknown model");
+      this.errors.set(model, t("Unknown model"));
       return Promise.resolve();
     }
     const p = list(this.token, model).then((r) => {
@@ -169,6 +171,7 @@ export function DataProvider(props: {
       for (const model of module.models) m.set(model.name, { model, module });
     return m;
   }, [modules]);
+  registerMeta(modules);
   const modelsRef = useRef(models);
   modelsRef.current = models;
   const store = useMemo(() => new RowStore(token, (n) => modelsRef.current.get(n)?.model), [token]);

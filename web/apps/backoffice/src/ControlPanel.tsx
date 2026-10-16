@@ -1,9 +1,9 @@
 import { useId, useMemo, useRef, useState, type ReactNode } from "react";
-import type { IconName } from "@obop/ui";
+import { inSentence, t, type IconName } from "@obop/ui";
 import type { FieldMeta } from "./api.ts";
 import type { Favorite } from "./favorites.ts";
 import { FilterPanel } from "./FilterPanel.tsx";
-import { label } from "./format.ts";
+import { fieldTitleByName, fieldTitle } from "./labels.ts";
 import { describeCond, type Cond, type Lookup, type ViewState } from "./query.ts";
 import { Button, Icon, Segmented, useDismiss } from "./ui.tsx";
 
@@ -42,16 +42,20 @@ export function ControlPanel(p: Props) {
 
   const searchable = fields.filter((f) => ["text", "longtext", "select", "ref"].includes(f.kind));
   const options = useMemo(() => {
-    const t = text.trim();
-    if (!t) return [];
+    const q = text.trim();
+    if (!q) return [];
     const all: { key: string; label: string; cond: Cond }[] = [
-      { key: "all", label: `Search everywhere for: ${t}`, cond: { op: "search", v: t } },
+      {
+        key: "all",
+        label: t("Search everywhere for: {text}", { text: q }),
+        cond: { op: "search", v: q },
+      },
     ];
     for (const f of searchable)
       all.push({
         key: f.name,
-        label: `Search ${label(f.name)} for: ${t}`,
-        cond: { op: "contains", f: f.name, v: t },
+        label: t("Search {field} for: {text}", { field: fieldTitle(f), text: q }),
+        cond: { op: "contains", f: f.name, v: q },
       });
     return all;
   }, [text, searchable]);
@@ -93,7 +97,11 @@ export function ControlPanel(p: Props) {
   };
 
   return (
-    <div className="controlpanel" role="search" aria-label={`${p.title} search`}>
+    <div
+      className="controlpanel"
+      role="search"
+      aria-label={t("{model} search", { model: p.title })}
+    >
       <div className="cp-top">
         <div className="crumbs">
           <span>{p.appName}</span>
@@ -102,7 +110,7 @@ export function ControlPanel(p: Props) {
         </div>
         {p.canCreate && (
           <Button variant="primary" icon="plus" onClick={p.onNew}>
-            New
+            {t("New")}
           </Button>
         )}
       </div>
@@ -110,7 +118,7 @@ export function ControlPanel(p: Props) {
         <div className="searchwrap" ref={root}>
           <div className={`searchbox${open ? " open" : ""}`} onClick={() => input.current?.focus()}>
             <Icon name="search" size={15} />
-            <ul className="facets" aria-label="Active filters">
+            <ul className="facets" aria-label={t("Active filters")}>
               {state.facets.map((c, i) => (
                 <li key={`${i}-${JSON.stringify(c)}`} className="facet">
                   <span>{describeCond(c, fields, lookup)}</span>
@@ -120,7 +128,9 @@ export function ControlPanel(p: Props) {
                       e.stopPropagation();
                       removeAt(i);
                     }}
-                    aria-label={`Remove filter ${describeCond(c, fields, lookup)}`}
+                    aria-label={t("Remove filter {filter}", {
+                      filter: describeCond(c, fields, lookup),
+                    })}
                   >
                     <Icon name="close" size={11} />
                   </button>
@@ -128,14 +138,16 @@ export function ControlPanel(p: Props) {
               ))}
               {state.group.map((g) => (
                 <li key={`g-${g}`} className="facet group">
-                  <span>Group: {label(g)}</span>
+                  <span>{t("Group: {field}", { field: fieldTitleByName(g, fields) })}</span>
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setState({ ...state, group: state.group.filter((x) => x !== g) });
                     }}
-                    aria-label={`Remove grouping by ${label(g)}`}
+                    aria-label={t("Remove grouping by {field}", {
+                      field: fieldTitleByName(g, fields),
+                    })}
                   >
                     <Icon name="close" size={11} />
                   </button>
@@ -148,10 +160,12 @@ export function ControlPanel(p: Props) {
               aria-expanded={suggest && options.length > 0}
               aria-controls={listId}
               aria-autocomplete="list"
-              aria-label={`Search ${p.title.toLowerCase()}`}
+              aria-label={t("Search {model}", { model: inSentence(p.title) })}
               aria-activedescendant={suggest && options.length ? `${listId}-${active}` : undefined}
               placeholder={
-                state.facets.length + state.group.length ? "" : `Search ${p.title.toLowerCase()}…`
+                state.facets.length + state.group.length
+                  ? ""
+                  : t("Search {model}…", { model: inSentence(p.title) })
               }
               value={text}
               onChange={(e) => {
@@ -165,7 +179,7 @@ export function ControlPanel(p: Props) {
             <button
               type="button"
               className="icon-btn caretbtn"
-              aria-label="Filters, group by and favorites"
+              aria-label={t("Filters, group by and favorites")}
               aria-haspopup="true"
               aria-expanded={open}
               aria-controls={panelId}
@@ -178,7 +192,12 @@ export function ControlPanel(p: Props) {
             </button>
           </div>
           {suggest && options.length > 0 && (
-            <ul id={listId} role="listbox" className="suggest panel" aria-label="Search options">
+            <ul
+              id={listId}
+              role="listbox"
+              className="suggest panel"
+              aria-label={t("Search options")}
+            >
               {options.map((o, i) => (
                 <li
                   key={o.key}
@@ -215,15 +234,15 @@ export function ControlPanel(p: Props) {
         {p.extra}
         <span className="grow" />
         <span className="count" aria-live="polite">
-          {p.count} {p.count === 1 ? "record" : "records"}
+          {t("{count, plural, one {# record} other {# records}}", { count: p.count })}
         </span>
         <Segmented
           mode="toggle"
-          label="View"
+          label={t("View")}
           iconOnlyNarrow
           value={p.view}
           onChange={p.setView}
-          options={p.views.map((v) => ({ value: v.id, label: v.label, icon: v.icon }))}
+          options={p.views.map((v) => ({ value: v.id, label: t(v.label), icon: v.icon }))}
         />
       </div>
     </div>

@@ -1,9 +1,11 @@
 import { useMemo } from "react";
+import { t } from "@obop/ui";
 import type { FieldMeta, Row } from "../api.ts";
 import { useData } from "../data.tsx";
-import { label } from "../format.ts";
+import { fieldTitle } from "../labels.ts";
 import {
   condForKey,
+  currencyOf,
   formatSum,
   groupKey,
   groupLabel,
@@ -23,7 +25,12 @@ export function value(rows: Row[], m: FieldMeta | undefined): number {
   return m ? rows.reduce((n, r) => n + (Number(r[m.name]) || 0), 0) : rows.length;
 }
 
-export const fmt = (m: FieldMeta | undefined, n: number) => formatSum(m, n);
+export const fmt = (m: FieldMeta | undefined, n: number, currency?: string) =>
+  formatSum(m, n, currency);
+
+/** The English-free name of a measure: "Count" or "Sum of Expected revenue". */
+export const measureName = (m: FieldMeta | undefined) =>
+  m ? t("Sum of {field}", { field: fieldTitle(m) }) : t("Count");
 
 export function MeasurePicker(props: {
   fields: FieldMeta[];
@@ -32,12 +39,12 @@ export function MeasurePicker(props: {
 }) {
   return (
     <label className="inline-field">
-      <span>Measure</span>
+      <span>{t("Measure")}</span>
       <select value={props.value ?? "count"} onChange={(e) => props.onChange(e.target.value)}>
-        <option value="count">Count</option>
+        <option value="count">{t("Count")}</option>
         {measurable(props.fields).map((f) => (
           <option key={f.name} value={f.name}>
-            Sum of {label(f.name)}
+            {t("Sum of {field}", { field: fieldTitle(f) })}
           </option>
         ))}
       </select>
@@ -90,35 +97,36 @@ export function PivotView(p: ViewProps) {
       ...(rk === null ? [] : [condForKey(rowF, rk)]),
       ...(ck === null || !colF ? [] : [condForKey(colF, ck)]),
     ]);
-  const show = (n: number) => (n === 0 ? <span className="dim">–</span> : fmt(m, n));
+  const cur = currencyOf(rows);
+  const show = (n: number) => (n === 0 ? <span className="dim">–</span> : fmt(m, n, cur.currency));
 
   return (
     <div className="pivot">
       <div className="viewbar">
         <label className="inline-field">
-          <span>Rows</span>
+          <span>{t("Rows")}</span>
           <select value={rowF.name} onChange={(e) => set({ row: e.target.value })}>
             {gfs.map((f) => (
               <option key={f.name} value={f.name}>
-                {label(f.name)}
-                {f.kind === "date" ? " (month)" : ""}
+                {f.kind === "date" ? t("{field} (month)", { field: fieldTitle(f) }) : fieldTitle(f)}
               </option>
             ))}
           </select>
         </label>
         <label className="inline-field">
-          <span>Columns</span>
+          <span>{t("Columns")}</span>
           <select
             value={colF?.name ?? ""}
             onChange={(e) => set({ col: e.target.value || undefined })}
           >
-            <option value="">None</option>
+            <option value="">{t("None")}</option>
             {gfs
               .filter((f) => f.name !== rowF.name)
               .map((f) => (
                 <option key={f.name} value={f.name}>
-                  {label(f.name)}
-                  {f.kind === "date" ? " (month)" : ""}
+                  {f.kind === "date"
+                    ? t("{field} (month)", { field: fieldTitle(f) })
+                    : fieldTitle(f)}
                 </option>
               ))}
           </select>
@@ -129,15 +137,30 @@ export function PivotView(p: ViewProps) {
           onChange={(v) => set({ measure: v === "count" ? undefined : v })}
         />
       </div>
+      {cur.mixed && (
+        <p className="notice-bar" role="status">
+          {t(
+            "These records use more than one currency; the amounts are added up as if they were one.",
+          )}
+        </p>
+      )}
       <div className="tablewrap">
         <table className="table pivot-table">
           <caption className="sr-only">
-            {m ? `Sum of ${label(m.name)}` : "Count"} by {label(rowF.name)}
-            {colF ? ` and ${label(colF.name)}` : ""}. Select a cell to list its records.
+            {colF
+              ? t("{measure} by {rows} and {columns}. Select a cell to list its records.", {
+                  measure: measureName(m),
+                  rows: fieldTitle(rowF),
+                  columns: fieldTitle(colF),
+                })
+              : t("{measure} by {rows}. Select a cell to list its records.", {
+                  measure: measureName(m),
+                  rows: fieldTitle(rowF),
+                })}
           </caption>
           <thead>
             <tr>
-              <th scope="col">{label(rowF.name)}</th>
+              <th scope="col">{fieldTitle(rowF)}</th>
               {colF
                 ? data.ck.map((c) => (
                     <th key={c} scope="col" className="num">
@@ -146,7 +169,7 @@ export function PivotView(p: ViewProps) {
                   ))
                 : null}
               <th scope="col" className="num total">
-                {m ? `Sum of ${label(m.name)}` : "Count"}
+                {measureName(m)}
               </th>
             </tr>
           </thead>
@@ -166,7 +189,11 @@ export function PivotView(p: ViewProps) {
                         {cell.length ? (
                           <button
                             className="cellbtn"
-                            aria-label={`${groupLabel(rowF, r, d.lookup)}, ${groupLabel(colF, c, d.lookup)}: ${fmt(m, value(cell, m))}`}
+                            aria-label={t("{row}, {column}: {value}", {
+                              row: groupLabel(rowF, r, d.lookup),
+                              column: groupLabel(colF, c, d.lookup),
+                              value: fmt(m, value(cell, m), cur.currency),
+                            })}
                             onClick={() => drill(r, c)}
                           >
                             {show(value(cell, m))}
@@ -187,7 +214,7 @@ export function PivotView(p: ViewProps) {
           </tbody>
           <tfoot>
             <tr>
-              <th scope="row">Total</th>
+              <th scope="row">{t("Total")}</th>
               {colF &&
                 data.ck.map((c) => (
                   <td key={c} className="num total">

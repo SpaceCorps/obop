@@ -1,6 +1,9 @@
 import { useEffect, useId, useMemo, useState } from "react";
+import { inSentence, t } from "@obop/ui";
 import { useData } from "../data.tsx";
-import { integer, label } from "../format.ts";
+import { integer } from "../format.ts";
+import { fieldTitle } from "../labels.ts";
+import { serverMessage } from "../serverMessage.ts";
 import { condForKey, encodeState, formatSum } from "../query.ts";
 import { Cell } from "../fields.tsx";
 import { Button, EmptyState, Icon, IconButton, Notice, Skeleton, Stat } from "../ui.tsx";
@@ -74,24 +77,24 @@ export function WidgetCard({ widget: w, edit, first, last, onEdit, onRemove, onM
     body = (
       <div className="wstate" role="status">
         <Icon name="lock" size={22} />
-        <strong>No access</strong>
-        <span className="hint">You cannot see the data this tile reads.</span>
+        <strong>{t("No access")}</strong>
+        <span className="hint">{t("You cannot see the data this tile reads.")}</span>
       </div>
     );
   else if (state.state === "invalid")
     body = (
-      <Notice tone="warning" title="This tile is not set up correctly">
+      <Notice tone="warning" title={t("This tile is not set up correctly")}>
         {state.message}
       </Notice>
     );
   else if (state.state === "error")
     body = (
       <div className="wstate">
-        <Notice tone="danger" title="Could not load this tile">
-          {state.message}
+        <Notice tone="danger" title={t("Could not load this tile")}>
+          {serverMessage(state.message)}
         </Notice>
         <Button size="sm" onClick={retry}>
-          Try again
+          {t("Try again")}
         </Button>
       </div>
     );
@@ -109,30 +112,40 @@ export function WidgetCard({ widget: w, edit, first, last, onEdit, onRemove, onM
           <h3>{w.title}</h3>
           {r.ok && drillTo() && !edit && state !== "loading" && "data" in (state as object) && (
             <a className="wopen" href={drillTo()!}>
-              Open list
+              {t("Open list")}
             </a>
           )}
         </header>
       )}
       <div className="wbody">{body}</div>
       {edit && (
-        <div className="wtools" role="group" aria-label={`Edit ${w.title}`}>
+        <div className="wtools" role="group" aria-label={t("Edit {title}", { title: w.title })}>
           <IconButton
             icon="arrow-up"
-            label={`Move ${w.title} earlier`}
+            label={t("Move {title} earlier", { title: w.title })}
             size="sm"
             disabled={first}
             onClick={() => onMove(-1)}
           />
           <IconButton
             icon="arrow-down"
-            label={`Move ${w.title} later`}
+            label={t("Move {title} later", { title: w.title })}
             size="sm"
             disabled={last}
             onClick={() => onMove(1)}
           />
-          <IconButton icon="edit" label={`Edit ${w.title}`} size="sm" onClick={onEdit} />
-          <IconButton icon="trash" label={`Remove ${w.title}`} size="sm" onClick={onRemove} />
+          <IconButton
+            icon="edit"
+            label={t("Edit {title}", { title: w.title })}
+            size="sm"
+            onClick={onEdit}
+          />
+          <IconButton
+            icon="trash"
+            label={t("Remove {title}", { title: w.title })}
+            size="sm"
+            onClick={onRemove}
+          />
         </div>
       )}
     </article>
@@ -158,13 +171,19 @@ function Ready({
     const to = drillTo();
     const hint = (
       <>
-        {data.measure ? `Sum of ${label(data.measure.name).toLowerCase()}` : "Records"}
-        {r.conds.length > 0 && " (filtered)"}
-        {data.truncated && `, first 5,000 of ${integer(data.total)}`}
+        {data.measure
+          ? t("Sum of {field}", { field: inSentence(fieldTitle(data.measure)) })
+          : t("Records")}
+        {r.conds.length > 0 && ` ${t("(filtered)")}`}
+        {data.truncated && `, ${t("first 5,000 of {total}", { total: integer(data.total) })}`}
       </>
     );
     return to ? (
-      <a className="kpi-link" href={to} aria-label={`${w.title}: ${shown}. Open the list.`}>
+      <a
+        className="kpi-link"
+        href={to}
+        aria-label={t("{title}: {value}. Open the list.", { title: w.title, value: shown })}
+      >
         <Stat label={w.title} value={shown} hint={hint} />
       </a>
     ) : (
@@ -179,7 +198,7 @@ function Ready({
         (f) => f !== labelF && (f.kind === "money" || f.kind === "select" || f.kind === "date"),
       )
       .slice(0, 2);
-    if (data.rows.length === 0) return <p className="hint">No records yet.</p>;
+    if (data.rows.length === 0) return <p className="hint">{t("No records yet.")}</p>;
     return (
       <>
         <table className="table dense wtable">
@@ -203,7 +222,10 @@ function Ready({
         </table>
         {data.total > data.rows.length && (
           <p className="wnote">
-            Showing {data.rows.length} of {integer(data.total)}.
+            {t("Showing {shown} of {total}.", {
+              shown: data.rows.length,
+              total: integer(data.total),
+            })}
           </p>
         )}
       </>
@@ -238,9 +260,11 @@ function Series({
     if (to) location.hash = to;
   };
   const total = points.reduce((n, p) => n + Math.max(p.value, 0), 0);
-  const note = data.truncated && `Based on the first 5,000 of ${integer(data.total)} records.`;
+  const note =
+    data.truncated &&
+    t("Based on the first 5,000 of {total} records.", { total: integer(data.total) });
 
-  if (points.length === 0 || data.total === 0) return <p className="hint">No data yet.</p>;
+  if (points.length === 0 || data.total === 0) return <p className="hint">{t("No data yet.")}</p>;
 
   if (w.kind === "table")
     return (
@@ -249,9 +273,9 @@ function Series({
           <caption className="sr-only">{w.title}</caption>
           <thead>
             <tr>
-              <th scope="col">{label(dim.name)}</th>
+              <th scope="col">{fieldTitle(dim)}</th>
               <th scope="col" className="num">
-                {measure ? label(measure.name) : "Records"}
+                {measure ? fieldTitle(measure) : t("Records")}
               </th>
             </tr>
           </thead>
@@ -271,17 +295,29 @@ function Series({
       </>
     );
 
-  const summary = `${w.title}. ${points.map((p) => `${p.label} ${fmt(p.value)}`).join(", ")}.`;
+  const summary = t("{title}. {values}.", {
+    title: w.title,
+    values: points.map((p) => `${p.label} ${fmt(p.value)}`).join(", "),
+  });
   return (
     <figure className="chart wchart">
       {w.kind === "pie" ? (
-        <Pie data={points} m={measure} total={total} id={id} summary={summary} onPick={go} />
+        <Pie
+          data={points}
+          m={measure}
+          total={total}
+          id={id}
+          title={w.title}
+          summary={summary}
+          onPick={go}
+        />
       ) : (
         <Cartesian
           data={points}
           m={measure}
           type={w.kind === "line" ? "line" : "bar"}
           id={id}
+          title={w.title}
           summary={summary}
           onPick={go}
         />
@@ -295,15 +331,20 @@ export function NoDashboards(p: { onCreate?: () => void; busy: boolean }) {
   return (
     <EmptyState
       icon="graph"
-      title="No dashboards yet"
+      title={t("No dashboards yet")}
       hint={
         p.onCreate
-          ? "Start with a dashboard built from the apps you have installed: record counts and money totals you can change later."
-          : "Ask someone who manages dashboards to create one."
+          ? t(
+              "Start with a dashboard built from the apps you have installed: record counts and money totals you can change later.",
+            )
+          : t("Ask someone who manages dashboards to create one.")
       }
       action={
         p.onCreate
-          ? { label: p.busy ? "Creating…" : "Create a starter dashboard", onClick: p.onCreate }
+          ? {
+              label: p.busy ? t("Creating…") : t("Create a starter dashboard"),
+              onClick: p.onCreate,
+            }
           : undefined
       }
     />

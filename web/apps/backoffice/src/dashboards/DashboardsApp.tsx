@@ -11,12 +11,17 @@ import {
   Switch,
   Tabs,
   Textarea,
+  compareText,
+  inSentence,
   panelId,
+  rich,
+  t,
 } from "@obop/ui";
 import type { ModelMeta, Reply, Row } from "../api.ts";
 import type { App } from "../Chrome.tsx";
 import { useData, useRows } from "../data.tsx";
-import { label, modelLabel } from "../format.ts";
+import { fieldTitle, modelTitle } from "../labels.ts";
+import { serverMessage } from "../serverMessage.ts";
 import type { Go, Route } from "../route.ts";
 import { BOARD } from "./route.ts";
 import { NoDashboards, WidgetCard } from "./WidgetCard.tsx";
@@ -24,21 +29,21 @@ import { WidgetForm, type WidgetValues } from "./WidgetForm.tsx";
 import type { Dashboard, Widget } from "./widget.ts";
 
 const byPosition = <T extends { position?: number | null; title: string }>(a: T, b: T) =>
-  (a.position ?? 1e9) - (b.position ?? 1e9) || a.title.localeCompare(b.title);
+  (a.position ?? 1e9) - (b.position ?? 1e9) || compareText(a.title, b.title);
 
 /** A sensible first dashboard from what is installed: counts per model, money totals, one chart. */
 export function starterWidgets(apps: App[]): WidgetValues[] {
   const models: { app: App; model: ModelMeta }[] = apps
     .filter((a) => a.id !== "customize" && a.id !== "dashboards")
     .flatMap((app) => app.module.models.map((model) => ({ app, model })));
-  const name = (x: { app: App; model: ModelMeta }) => modelLabel(x.model.name, x.app.module.id);
+  const name = (x: { app: App; model: ModelMeta }) => modelTitle(x.model, x.app.module.id);
   const out: WidgetValues[] = [];
   const base = { aggregate: "count" as const, measure_field: null, group_by: null, filter: null };
   // One count per app's first model, at most four, so the top row stays readable.
   for (const x of models
     .filter((m, i, all) => all.findIndex((y) => y.app === m.app) === i)
     .slice(0, 4))
-    out.push({ ...base, title: `${name(x)}`, kind: "kpi", model_name: x.model.name });
+    out.push({ ...base, title: name(x), kind: "kpi", model_name: x.model.name });
   // Money totals of the first two models that hold an amount.
   for (const x of models
     .filter((m) => m.model.fields.some((f) => f.kind === "money"))
@@ -46,7 +51,7 @@ export function starterWidgets(apps: App[]): WidgetValues[] {
     const f = x.model.fields.find((g) => g.kind === "money")!;
     out.push({
       ...base,
-      title: `${label(f.name)} of ${name(x).toLowerCase()}`,
+      title: t("{field} of {model}", { field: fieldTitle(f), model: inSentence(name(x)) }),
       kind: "kpi",
       aggregate: "sum",
       measure_field: f.name,
@@ -62,7 +67,7 @@ export function starterWidgets(apps: App[]): WidgetValues[] {
     const g = stateOf(first.model);
     out.push({
       ...base,
-      title: `${name(first)} by ${label(g.name).toLowerCase()}`,
+      title: t("{model} by {field}", { model: name(first), field: inSentence(fieldTitle(g)) }),
       kind: "bar",
       model_name: first.model.name,
       group_by: g.name,
@@ -71,8 +76,11 @@ export function starterWidgets(apps: App[]): WidgetValues[] {
     out.push({
       ...base,
       title: money
-        ? `${label(money.name)} by ${label(g.name).toLowerCase()}`
-        : `Share by ${label(g.name).toLowerCase()}`,
+        ? t("{measure} by {field}", {
+            measure: fieldTitle(money),
+            field: inSentence(fieldTitle(g)),
+          })
+        : t("Share by {field}", { field: inSentence(fieldTitle(g)) }),
       kind: "pie",
       model_name: first.model.name,
       group_by: g.name,
@@ -84,7 +92,7 @@ export function starterWidgets(apps: App[]): WidgetValues[] {
     const g = stateOf(second.model);
     out.push({
       ...base,
-      title: `${name(second)} by ${label(g.name).toLowerCase()}`,
+      title: t("{model} by {field}", { model: name(second), field: inSentence(fieldTitle(g)) }),
       kind: "table",
       model_name: second.model.name,
       group_by: g.name,
@@ -104,7 +112,7 @@ function DashboardForm(p: {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function save() {
-    if (!title.trim()) return setErr("Give the dashboard a title");
+    if (!title.trim()) return setErr(t("Give the dashboard a title"));
     setBusy(true);
     const e = await p.onSave({ title: title.trim(), description: description.trim(), shared });
     setBusy(false);
@@ -112,13 +120,13 @@ function DashboardForm(p: {
   }
   return (
     <Dialog
-      title={p.initial ? "Dashboard details" : "New dashboard"}
+      title={p.initial ? t("Dashboard details") : t("New dashboard")}
       onClose={p.onClose}
       footer={
         <>
-          <Button onClick={p.onClose}>Cancel</Button>
+          <Button onClick={p.onClose}>{t("Cancel")}</Button>
           <Button variant="primary" loading={busy} onClick={() => void save()}>
-            {p.initial ? "Save" : "Create dashboard"}
+            {p.initial ? t("Save") : t("Create dashboard")}
           </Button>
         </>
       }
@@ -131,7 +139,7 @@ function DashboardForm(p: {
         }}
       >
         <Input
-          label="Title"
+          label={t("Title")}
           value={title}
           required
           onChange={(e) => {
@@ -140,18 +148,18 @@ function DashboardForm(p: {
           }}
         />
         <Textarea
-          label="Description"
+          label={t("Description")}
           value={description}
           rows={2}
           onChange={(e) => setDescription(e.target.value)}
         />
         <Switch
-          label="Shared with everyone who can open Dashboards"
+          label={t("Shared with everyone who can open Dashboards")}
           checked={shared}
           onChange={(e) => setShared(e.target.checked)}
         />
         {err && (
-          <Notice tone="danger" title="Could not save">
+          <Notice tone="danger" title={t("Could not save")}>
             {err}
           </Notice>
         )}
@@ -209,18 +217,23 @@ export function DashboardsApp({
     r.kind === "ok"
       ? null
       : r.kind === "approval"
-        ? `Approval needed: plan ${r.planId.slice(0, 8)} was proposed. Nothing changes until a human approves it.`
-        : r.message;
+        ? t(
+            "Approval needed: plan {plan} was proposed. Nothing changes until a human approves it.",
+            {
+              plan: r.planId.slice(0, 8),
+            },
+          )
+        : serverMessage(r.message);
 
   async function createStarter() {
     setBusy(true);
     setFailure(null);
     const made = await d.run("dashboards_dashboard.create", {
-      title: "Overview",
+      title: t("Overview"),
       owner,
       shared: true,
       position: 10,
-      description: "Counts and totals from the apps you have installed.",
+      description: t("Counts and totals from the apps you have installed."),
     });
     if (made.kind !== "ok") {
       setBusy(false);
@@ -244,7 +257,7 @@ export function DashboardsApp({
   }
 
   async function saveWidget(values: WidgetValues, existing?: Widget): Promise<string | null> {
-    if (!current) return "No dashboard to add to";
+    if (!current) return t("No dashboard to add to");
     const next = Math.max(0, ...widgets.map((w) => w.position ?? 0)) + 10;
     const r = existing
       ? await d.run("dashboards_widget.update", { id: existing.id, ...values })
@@ -255,7 +268,7 @@ export function DashboardsApp({
         });
     const m = message(r);
     if (!m) {
-      d.notify(existing ? "Tile saved" : "Tile added");
+      d.notify(existing ? t("Tile saved") : t("Tile added"));
       setForm(null);
     }
     return m;
@@ -272,7 +285,7 @@ export function DashboardsApp({
       const position = (k + 1) * 10;
       if (x.position !== position) {
         const r = await d.run("dashboards_widget.update", { id: x.id, position });
-        if (r.kind !== "ok") return d.notify(message(r) ?? "Could not move the tile", "error");
+        if (r.kind !== "ok") return d.notify(message(r) ?? t("Could not move the tile"), "error");
       }
     }
   }
@@ -285,7 +298,7 @@ export function DashboardsApp({
     const m = message(r);
     if (m) setFailure(m);
     else {
-      d.notify(`Removed “${removing.title}”`);
+      d.notify(t("Removed “{title}”", { title: removing.title }));
       setRemoving(null);
     }
   }
@@ -305,7 +318,7 @@ export function DashboardsApp({
     const m = message(r);
     if (!m) {
       setBoardForm(null);
-      d.notify(b ? "Dashboard saved" : "Dashboard created");
+      d.notify(b ? t("Dashboard saved") : t("Dashboard created"));
       if (!b && r.kind === "ok") open((r.value as Row).id, "edit");
     }
     return m;
@@ -329,7 +342,7 @@ export function DashboardsApp({
     setBusy(false);
     const m = message(r);
     if (m) return setFailure(m);
-    d.notify(`Deleted “${removingBoard.title}”`);
+    d.notify(t("Deleted “{title}”", { title: removingBoard.title }));
     setRemovingBoard(null);
     go({ app: app.id, model: BOARD });
   }
@@ -337,13 +350,13 @@ export function DashboardsApp({
   const loading = !boards.loaded || !tiles.loaded;
 
   return (
-    <section className="main panel dash" aria-label="Dashboards">
+    <section className="main panel dash" aria-label={t("Dashboards")}>
       <div className="controlpanel">
         <div className="cp-top">
           <div className="crumbs">
             <span>{app.name}</span>
             <Icon name="chevron-right" size={12} />
-            <strong>{current?.title ?? "Dashboards"}</strong>
+            <strong>{current?.title ?? t("Dashboards")}</strong>
           </div>
           <div className="actionrow">
             {canEdit && current && !edit && (
@@ -351,31 +364,31 @@ export function DashboardsApp({
                 icon="edit"
                 onClick={() => go({ app: app.id, model: BOARD, id: current.id, view: "edit" })}
               >
-                Edit dashboard
+                {t("Edit dashboard")}
               </Button>
             )}
             {edit && current && (
               <>
                 <Button icon="plus" variant="primary" onClick={() => setForm({})}>
-                  Add a tile
+                  {t("Add a tile")}
                 </Button>
-                <Button onClick={() => setBoardForm({})}>New dashboard</Button>
-                <Button onClick={() => setBoardForm({ board: current })}>Details</Button>
+                <Button onClick={() => setBoardForm({})}>{t("New dashboard")}</Button>
+                <Button onClick={() => setBoardForm({ board: current })}>{t("Details")}</Button>
                 <Button
                   className="danger-text"
                   variant="ghost"
                   onClick={() => setRemovingBoard(current)}
                 >
-                  Delete dashboard
+                  {t("Delete dashboard")}
                 </Button>
-                <Button onClick={() => open(current.id, "")}>Done</Button>
+                <Button onClick={() => open(current.id, "")}>{t("Done")}</Button>
               </>
             )}
           </div>
         </div>
         {visible.length > 1 && (
           <Tabs
-            label="Dashboards"
+            label={t("Dashboards")}
             idPrefix="db"
             value={current?.id ?? ""}
             onChange={(id) => open(id)}
@@ -390,12 +403,15 @@ export function DashboardsApp({
         aria-labelledby={visible.length > 1 && current ? `db-tab-${current.id}` : undefined}
       >
         {failure && (
-          <Notice tone="danger" title="Something did not work">
+          <Notice tone="danger" title={t("Something did not work")}>
             {failure}
           </Notice>
         )}
         {boards.error || tiles.error ? (
-          <EmptyState title="Could not load dashboards" hint={boards.error ?? tiles.error} />
+          <EmptyState
+            title={t("Could not load dashboards")}
+            hint={serverMessage(boards.error ?? tiles.error)}
+          />
         ) : loading ? (
           <Skeleton rows={6} cols={3} />
         ) : !current ? (
@@ -406,9 +422,15 @@ export function DashboardsApp({
             {widgets.length === 0 ? (
               <EmptyState
                 icon="graph"
-                title="This dashboard has no tiles"
-                hint={canEdit ? "Add a number, a chart or a table." : "Nothing has been added yet."}
-                action={canEdit ? { label: "Add a tile", onClick: () => setForm({}) } : undefined}
+                title={t("This dashboard has no tiles")}
+                hint={
+                  canEdit
+                    ? t("Add a number, a chart or a table.")
+                    : t("Nothing has been added yet.")
+                }
+                action={
+                  canEdit ? { label: t("Add a tile"), onClick: () => setForm({}) } : undefined
+                }
               />
             ) : (
               <div className="wgrid">
@@ -448,35 +470,42 @@ export function DashboardsApp({
       )}
       {removing && (
         <ConfirmDialog
-          title="Remove tile?"
-          confirmLabel="Remove tile"
+          title={t("Remove tile?")}
+          confirmLabel={t("Remove tile")}
           busy={busy}
           error={failure}
           onConfirm={() => void removeWidget()}
           onClose={() => setRemoving(null)}
         >
           <p>
-            Remove <strong>{removing.title}</strong> from this dashboard? The records it shows are
-            not touched.
+            {rich(
+              "Remove <b>{title}</b> from this dashboard? The records it shows are not touched.",
+              { title: removing.title },
+              { b: (c) => <strong>{c}</strong> },
+            )}
           </p>
         </ConfirmDialog>
       )}
       {removingBoard && (
         <ConfirmDialog
-          title="Delete dashboard?"
-          confirmLabel="Delete dashboard"
+          title={t("Delete dashboard?")}
+          confirmLabel={t("Delete dashboard")}
           busy={busy}
           error={failure}
           onConfirm={() => void removeBoard()}
           onClose={() => setRemovingBoard(null)}
         >
           <p>
-            Delete <strong>{removingBoard.title}</strong> and its{" "}
-            {
-              (tiles.rows as unknown as Widget[]).filter((x) => x.dashboard_id === removingBoard.id)
-                .length
-            }{" "}
-            tiles? This cannot be undone.
+            {rich(
+              "{count, plural, one {Delete <b>{title}</b> and its # tile? This cannot be undone.} other {Delete <b>{title}</b> and its # tiles? This cannot be undone.}}",
+              {
+                title: removingBoard.title,
+                count: (tiles.rows as unknown as Widget[]).filter(
+                  (x) => x.dashboard_id === removingBoard.id,
+                ).length,
+              },
+              { b: (c) => <strong>{c}</strong> },
+            )}
           </p>
         </ConfirmDialog>
       )}

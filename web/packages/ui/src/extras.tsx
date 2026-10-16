@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { highlight } from "./highlight.ts";
 import { Icon } from "./icons.tsx";
 import { Button, Dialog, IconButton } from "./primitives.tsx";
+import { fmt, t } from "./i18n/store.ts";
 
 const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
 
@@ -12,7 +13,7 @@ const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boo
 export function ConfirmDialog({
   title,
   confirmLabel,
-  cancelLabel = "Cancel",
+  cancelLabel,
   danger = true,
   busy,
   error,
@@ -44,7 +45,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button data-autofocus onClick={onClose} disabled={busy}>
-            {cancelLabel}
+            {cancelLabel ?? t("Cancel")}
           </Button>
           {confirmLabel && (
             <Button variant={danger ? "danger" : "primary"} loading={busy} onClick={onConfirm}>
@@ -74,7 +75,6 @@ export function Pager({
   onOffset,
   sizes = [25, 50, 100, 200],
   onSize,
-  noun = "records",
   busy,
 }: {
   offset: number;
@@ -83,21 +83,20 @@ export function Pager({
   onOffset: (offset: number) => void;
   sizes?: number[];
   onSize?: (size: number) => void;
-  noun?: string;
   busy?: boolean;
 }) {
   const id = useId();
-  const nf = new Intl.NumberFormat("en-US");
+  const nf = { format: (n: number) => fmt.integer(n) };
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(offset + limit, total);
   const last = Math.max(0, Math.floor((total - 1) / limit) * limit);
   const page = Math.floor(offset / limit) + 1;
   const pages = Math.max(1, Math.ceil(total / limit));
   return (
-    <nav className="pager" aria-label={`Pages of ${noun}`} aria-busy={busy || undefined}>
+    <nav className="pager" aria-label={t("Pages")} aria-busy={busy || undefined}>
       {onSize && (
         <label className="pager-size">
-          <span>Rows per page</span>
+          <span>{t("Rows per page")}</span>
           <select value={limit} onChange={(e) => onSize(Number(e.target.value))}>
             {sizes.map((s) => (
               <option key={s} value={s}>
@@ -108,22 +107,28 @@ export function Pager({
         </label>
       )}
       <span id={id} className="pager-range tabular" role="status" aria-live="polite">
-        {total === 0 ? `No ${noun}` : `${nf.format(from)}–${nf.format(to)} of ${nf.format(total)}`}
+        {total === 0
+          ? t("No results")
+          : t("{from}–{to} of {total}", {
+              from: nf.format(from),
+              to: nf.format(to),
+              total: nf.format(total),
+            })}
       </span>
       <span className="pager-page hint tabular">
-        Page {nf.format(page)} of {nf.format(pages)}
+        {t("Page {page} of {pages}", { page: nf.format(page), pages: nf.format(pages) })}
       </span>
       <div className="pager-btns">
         <IconButton
           icon="chevron-left"
-          label="Previous page"
+          label={t("Previous page")}
           size="sm"
           disabled={offset <= 0}
           onClick={() => onOffset(Math.max(0, offset - limit))}
         />
         <IconButton
           icon="chevron-right"
-          label="Next page"
+          label={t("Next page")}
           size="sm"
           disabled={offset + limit >= total}
           onClick={() => onOffset(Math.min(last, offset + limit))}
@@ -185,13 +190,13 @@ export function CodeBlock({ code, lang = "" }: { code: string; lang?: string }) 
   return (
     <div className="codeblock" data-lang={lang || undefined} ref={root}>
       <div className="codeblock-bar">
-        <span className="codeblock-lang">{lang || "text"}</span>
+        <span className="codeblock-lang">{lang || t("text")}</span>
         <button type="button" className="codeblock-copy" onClick={() => void copy()}>
           <Icon name={copied ? "check" : "copy"} size={14} />
-          <span>{copied ? "Copied" : "Copy"}</span>
+          <span>{copied ? t("Copied") : t("Copy")}</span>
         </button>
       </div>
-      <pre tabIndex={0} aria-label={`${lang || "Code"} example`}>
+      <pre tabIndex={0} aria-label={lang ? t("{lang} example", { lang }) : t("Code example")}>
         <code>
           {lines.map((toks, i) => (
             <span key={i} className="codeblock-line">
@@ -206,7 +211,7 @@ export function CodeBlock({ code, lang = "" }: { code: string; lang?: string }) 
         </code>
       </pre>
       <span className="sr-only" role="status" aria-live="polite">
-        {copied ? "Copied to the clipboard" : ""}
+        {copied ? t("Copied to the clipboard") : ""}
       </span>
     </div>
   );

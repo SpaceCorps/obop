@@ -1,15 +1,10 @@
 import { useState } from "react";
-import { ConfirmDialog } from "@obop/ui";
+import { ConfirmDialog, getLang, t } from "@obop/ui";
 import type { ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
-import { modelLabel } from "./format.ts";
-import {
-  deleteRecords,
-  plural as pluralOf,
-  summarize,
-  type DeleteResult,
-  type RefHit,
-} from "./remove.ts";
+import { modelTitle } from "./labels.ts";
+import { serverMessage } from "./serverMessage.ts";
+import { deleteRecords, nounFor, summarize, type DeleteResult, type RefHit } from "./remove.ts";
 
 type Props = {
   model: ModelMeta;
@@ -28,14 +23,15 @@ function Blockers({ hits, close }: { hits: RefHit[]; close: () => void }) {
     <ul className="blockers">
       {hits.map((h) => {
         const info = d.models.get(h.model);
-        const name = info ? modelLabel(h.model, info.module.id) : h.model;
+        const name = info ? modelTitle(info.model, info.module.id) : h.model;
         const visible = !!info && d.linkTo(h.model) !== null;
         return (
           <li key={h.model}>
             <strong>
-              {name} ({h.count})
-            </strong>
-            {visible ? ": " : ": you cannot open this app. "}
+              {visible
+                ? t("{name} ({count}):", { name, count: h.count })
+                : t("{name} ({count}): you cannot open this app.", { name, count: h.count })}
+            </strong>{" "}
             {h.ids.map((id, i) => {
               const to = visible ? d.linkTo(h.model, { id }) : null;
               return (
@@ -51,7 +47,8 @@ function Blockers({ hits, close }: { hits: RefHit[]; close: () => void }) {
                 </span>
               );
             })}
-            {h.count > h.ids.length && ` and ${h.count - h.ids.length} more`}
+            {h.count > h.ids.length &&
+              ` ${t("and {count} more", { count: h.count - h.ids.length })}`}
           </li>
         );
       })}
@@ -69,7 +66,8 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<DeleteResult[] | null>(null);
   const many = records.length > 1;
-  const plural = (n: number) => pluralOf(noun, n);
+  const plural = (n: number) => nounFor(noun, n);
+  const capitalNoun = noun.charAt(0).toLocaleUpperCase(getLang()) + noun.slice(1);
 
   async function run() {
     setBusy(true);
@@ -82,14 +80,23 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
     if (clean) {
       d.notify(
         many
-          ? `${out.length} ${plural(out.length)} deleted`
-          : `${noun.charAt(0).toUpperCase()}${noun.slice(1)} deleted`,
+          ? t("{count} {noun} deleted", { count: out.length, noun: plural(out.length) })
+          : t("{noun} deleted", { noun: capitalNoun }),
       );
       return onClose();
     }
     if (out.every((r) => r.status === "approval")) {
+      const plan = approvals[0]!.planId!.slice(0, 8);
       d.notify(
-        `Approval needed: deleting ${many ? `${out.length} ${plural(out.length)}` : `${noun} “${out[0]!.label}”`} was proposed as plan ${approvals[0]!.planId!.slice(0, 8)}. Nothing is deleted until a human approves it.`,
+        many
+          ? t(
+              "Approval needed: deleting {count} {noun} was proposed as plan {plan}. Nothing is deleted until a human approves it.",
+              { count: out.length, noun: plural(out.length), plan },
+            )
+          : t(
+              "Approval needed: deleting {noun} “{label}” was proposed as plan {plan}. Nothing is deleted until a human approves it.",
+              { noun, label: out[0]!.label, plan },
+            ),
         "info",
       );
       return onClose();
@@ -103,18 +110,22 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
   if (results)
     return (
       <ConfirmDialog
-        title={single ? `Could not delete ${noun}` : "Delete finished"}
-        cancelLabel="Close"
+        title={single ? t("Could not delete {noun}", { noun }) : t("Delete finished")}
+        cancelLabel={t("Close")}
         onClose={onClose}
         error={
           single ? (
             single.refs ? (
               <>
-                <p>“{single.label}” is still used by other records. Remove or change them first.</p>
+                <p>
+                  {t("“{label}” is still used by other records. Remove or change them first.", {
+                    label: single.label,
+                  })}
+                </p>
                 <Blockers hits={single.refs} close={onClose} />
               </>
             ) : (
-              <p>{single.message}</p>
+              <p>{serverMessage(single.message)}</p>
             )
           ) : undefined
         }
@@ -126,17 +137,23 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
               {results.map((r) => (
                 <li key={r.id} data-status={r.status}>
                   <strong>{r.label}</strong>{" "}
-                  {r.status === "deleted" && <span className="ok-text">deleted</span>}
+                  {r.status === "deleted" && <span className="ok-text">{t("deleted")}</span>}
                   {r.status === "approval" && (
-                    <span>waiting for approval (plan {r.planId?.slice(0, 8)})</span>
+                    <span>
+                      {t("waiting for approval (plan {plan})", {
+                        plan: r.planId?.slice(0, 8) ?? "",
+                      })}
+                    </span>
                   )}
                   {r.status === "referenced" && r.refs && (
                     <>
-                      <span className="bad-text">still in use</span>
+                      <span className="bad-text">{t("still in use")}</span>
                       <Blockers hits={r.refs} close={onClose} />
                     </>
                   )}
-                  {r.status === "failed" && <span className="bad-text">{r.message}</span>}
+                  {r.status === "failed" && (
+                    <span className="bad-text">{serverMessage(r.message)}</span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -147,8 +164,16 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
 
   return (
     <ConfirmDialog
-      title={many ? `Delete ${records.length} ${plural(records.length)}?` : `Delete ${noun}?`}
-      confirmLabel={many ? `Delete ${records.length} ${plural(records.length)}` : "Delete"}
+      title={
+        many
+          ? t("Delete {count} {noun}?", { count: records.length, noun: plural(records.length) })
+          : t("Delete {noun}?", { noun })
+      }
+      confirmLabel={
+        many
+          ? t("Delete {count} {noun}", { count: records.length, noun: plural(records.length) })
+          : t("Delete")
+      }
       busy={busy}
       onConfirm={() => void run()}
       onClose={onClose}
@@ -156,11 +181,17 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
       <p>
         {many ? (
           <>
-            Delete {records.length} {plural(records.length)}? This cannot be undone.
+            {t("Delete {count} {noun}? This cannot be undone.", {
+              count: records.length,
+              noun: plural(records.length),
+            })}
           </>
         ) : (
           <>
-            Delete {noun} “{records[0]?.label}”? This cannot be undone.
+            {t("Delete {noun} “{label}”? This cannot be undone.", {
+              noun,
+              label: records[0]?.label ?? "",
+            })}
           </>
         )}
       </p>
@@ -172,8 +203,9 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
         </ul>
       )}
       <p className="hint">
-        Records that other records still point at are kept, and you will see which ones. An agent
-        can only propose a delete; a human approves it.
+        {t(
+          "Records that other records still point at are kept, and you will see which ones. An agent can only propose a delete; a human approves it.",
+        )}
       </p>
     </ConfirmDialog>
   );

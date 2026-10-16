@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Button, Dialog, Input, Notice, Select, Textarea } from "@obop/ui";
+import { Button, Dialog, Input, Notice, Select, Textarea, msg, rich, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta } from "../api.ts";
 import { useData } from "../data.tsx";
-import { label, modelLabel } from "../format.ts";
+import { optionLabel } from "../format.ts";
+import { fieldTitle, modelTitle } from "../labels.ts";
 import { groupable, measurable } from "../query.ts";
 import {
   FILTER_HELP,
@@ -16,11 +17,11 @@ import {
 import { KINDS, type Widget, type WidgetKind } from "./widget.ts";
 
 const KIND_NAME: Record<WidgetKind, string> = {
-  kpi: "Number (KPI)",
-  bar: "Bar chart",
-  line: "Line chart",
-  pie: "Pie chart",
-  table: "Table",
+  kpi: msg("Number (KPI)"),
+  bar: msg("Bar chart"),
+  line: msg("Line chart"),
+  pie: msg("Pie chart"),
+  table: msg("Table"),
 };
 
 const OPS_BY_KIND: Record<FieldMeta["kind"], WidgetOp[]> = {
@@ -55,7 +56,7 @@ function useReadable() {
     for (const a of d.apps) {
       if (a.id === "customize" || a.id === "dashboards") continue;
       for (const m of a.module.models)
-        out.push({ model: m, text: `${a.name} › ${modelLabel(m.name, a.module.id)}` });
+        out.push({ model: m, text: `${a.name} › ${modelTitle(m, a.module.id)}` });
     }
     return out;
   }, [d.apps]);
@@ -99,10 +100,11 @@ export function WidgetForm(p: {
 
   async function save() {
     const errs: Record<string, string> = {};
-    if (!draft.title.trim()) errs.title = "Give the tile a title";
-    if (!model) errs.model = "Pick a model";
-    if (draft.aggregate === "sum" && !draft.measure_field) errs.measure = "Pick a field to add up";
-    if (chart && !draft.group_by) errs.group = "A chart needs a field to split by";
+    if (!draft.title.trim()) errs.title = t("Give the tile a title");
+    if (!model) errs.model = t("Pick a model");
+    if (draft.aggregate === "sum" && !draft.measure_field)
+      errs.measure = t("Pick a field to add up");
+    if (chart && !draft.group_by) errs.group = t("A chart needs a field to split by");
     let filterError: string | null = null;
     if (model) {
       const re = parseFilter(text);
@@ -110,7 +112,8 @@ export function WidgetForm(p: {
       else {
         const sf = toServerFilter(re.conds, model);
         if ("error" in sf) filterError = sf.error;
-        else if ("noAccess" in sf) filterError = `${sf.noAccess} is not a field of this model`;
+        else if ("noAccess" in sf)
+          filterError = t("{field} is not a field of this model", { field: sf.noAccess });
       }
     }
     if (filterError) errs.filter = filterError;
@@ -133,14 +136,14 @@ export function WidgetForm(p: {
 
   return (
     <Dialog
-      title={w ? "Edit tile" : "Add a tile"}
+      title={w ? t("Edit tile") : t("Add a tile")}
       size="lg"
       onClose={p.onClose}
       footer={
         <>
-          <Button onClick={p.onClose}>Cancel</Button>
+          <Button onClick={p.onClose}>{t("Cancel")}</Button>
           <Button variant="primary" loading={busy} onClick={() => void save()}>
-            {w ? "Save tile" : "Add tile"}
+            {w ? t("Save tile") : t("Add tile")}
           </Button>
         </>
       }
@@ -154,7 +157,7 @@ export function WidgetForm(p: {
         }}
       >
         <Input
-          label="Title"
+          label={t("Title")}
           value={draft.title}
           error={errors.title}
           required
@@ -162,23 +165,25 @@ export function WidgetForm(p: {
         />
         <div className="wform-row">
           <Select
-            label="Shows"
+            label={t("Shows")}
             value={draft.kind}
             onChange={(e) => set({ kind: e.target.value as WidgetKind })}
           >
             {KINDS.map((k) => (
               <option key={k} value={k}>
-                {KIND_NAME[k]}
+                {t(KIND_NAME[k])}
               </option>
             ))}
           </Select>
           <Select
-            label="Records of"
+            label={t("Records of")}
             value={draft.model_name}
             error={errors.model}
             onChange={(e) => changeModel(e.target.value)}
           >
-            {!model && draft.model_name && <option value={draft.model_name}>No access</option>}
+            {!model && draft.model_name && (
+              <option value={draft.model_name}>{t("No access")}</option>
+            )}
             {readable.map((r) => (
               <option key={r.model.name} value={r.model.name}>
                 {r.text}
@@ -188,64 +193,64 @@ export function WidgetForm(p: {
         </div>
         <div className="wform-row">
           <Select
-            label="Combine by"
+            label={t("Combine by")}
             value={draft.aggregate}
             onChange={(e) =>
               set({ aggregate: e.target.value as "count" | "sum", measure_field: "" })
             }
           >
-            <option value="count">Count of records</option>
+            <option value="count">{t("Count of records")}</option>
             <option value="sum" disabled={measures.length === 0}>
-              Sum of a field
+              {t("Sum of a field")}
             </option>
           </Select>
           {draft.aggregate === "sum" && (
             <Select
-              label="Field to add up"
+              label={t("Field to add up")}
               value={draft.measure_field}
               error={errors.measure}
               onChange={(e) => set({ measure_field: e.target.value })}
             >
-              <option value="">Choose a field</option>
+              <option value="">{t("Choose a field")}</option>
               {measures.map((f) => (
                 <option key={f.name} value={f.name}>
-                  {label(f.name)}
-                  {f.kind === "money" ? " (money)" : ""}
+                  {f.kind === "money"
+                    ? t("{field} (money)", { field: fieldTitle(f) })
+                    : fieldTitle(f)}
                 </option>
               ))}
             </Select>
           )}
         </div>
         <Select
-          label={chart ? "Split by" : "Split by (optional)"}
+          label={chart ? t("Split by") : t("Split by (optional)")}
           value={draft.group_by}
           error={errors.group}
           hint={
             draft.kind === "kpi"
-              ? "A number tile shows one value; leave this empty."
+              ? t("A number tile shows one value; leave this empty.")
               : draft.kind === "table"
-                ? "Empty shows the first records instead of totals."
+                ? t("Empty shows the first records instead of totals.")
                 : undefined
           }
           onChange={(e) => set({ group_by: e.target.value })}
         >
-          <option value="">{chart ? "Choose a field" : "Nothing"}</option>
+          <option value="">{chart ? t("Choose a field") : t("Nothing")}</option>
           {dims.map((f) => (
             <option key={f.name} value={f.name}>
-              {label(f.name)}
-              {f.kind === "date" ? " (month)" : ""}
+              {f.kind === "date" ? t("{field} (month)", { field: fieldTitle(f) }) : fieldTitle(f)}
             </option>
           ))}
         </Select>
 
         <fieldset className="wfilter">
-          <legend>Only records where</legend>
+          <legend>{t("Only records where")}</legend>
           {draft.raw !== null ? (
             <Textarea
-              label="Filter"
+              label={t("Filter")}
               value={draft.raw}
               error={errors.filter}
-              hint={FILTER_HELP}
+              hint={t(FILTER_HELP)}
               onChange={(e) => set({ raw: e.target.value })}
             />
           ) : (
@@ -261,7 +266,7 @@ export function WidgetForm(p: {
                   onRemove={() => set({ conds: draft.conds.filter((_, j) => j !== i) })}
                 />
               ))}
-              {draft.conds.length === 0 && <p className="hint">All records.</p>}
+              {draft.conds.length === 0 && <p className="hint">{t("All records.")}</p>}
               <div>
                 <Button
                   size="sm"
@@ -276,7 +281,7 @@ export function WidgetForm(p: {
                     })
                   }
                 >
-                  Add a condition
+                  {t("Add a condition")}
                 </Button>
               </div>
               {errors.filter && (
@@ -287,11 +292,18 @@ export function WidgetForm(p: {
             </>
           )}
           <p className="hint">
-            Saved as <code>{text || "(all records)"}</code>. {draft.raw === null && FILTER_HELP}
+            {rich(
+              "Saved as <code>{filter}</code>.",
+              {
+                filter: text || t("(all records)"),
+              },
+              { code: (c) => <code>{c}</code> },
+            )}{" "}
+            {draft.raw === null && t(FILTER_HELP)}
           </p>
         </fieldset>
         {error && (
-          <Notice tone="danger" title="Could not save the tile">
+          <Notice tone="danger" title={t("Could not save the tile")}>
             {error}
           </Notice>
         )}
@@ -310,11 +322,11 @@ function ConditionRow(p: {
   const f = p.fields.find((x) => x.name === p.cond.field);
   const ops = f ? OPS_BY_KIND[f.kind] : (["eq"] as WidgetOp[]);
   const needsValue = p.cond.op !== "empty" && p.cond.op !== "set";
-  const name = f ? label(f.name) : p.cond.field;
+  const name = f ? fieldTitle(f) : p.cond.field;
   return (
     <div className="wcond">
       <Select
-        label="Field"
+        label={t("Field")}
         value={p.cond.field}
         onChange={(e) => {
           const nf = p.fields.find((x) => x.name === e.target.value);
@@ -328,54 +340,54 @@ function ConditionRow(p: {
       >
         {p.fields.map((x) => (
           <option key={x.name} value={x.name}>
-            {label(x.name)}
+            {fieldTitle(x)}
           </option>
         ))}
       </Select>
       <Select
-        label="Condition"
+        label={t("Condition")}
         value={p.cond.op}
         onChange={(e) => p.onChange({ ...p.cond, op: e.target.value as WidgetOp })}
       >
         {ops.map((o) => (
           <option key={o} value={o}>
-            {OP_NAME[o]}
+            {t(OP_NAME[o])}
           </option>
         ))}
       </Select>
       {needsValue &&
         (f?.kind === "select" && p.cond.op !== "in" ? (
           <Select
-            label="Value"
+            label={t("Value")}
             value={p.cond.value}
             onChange={(e) => p.onChange({ ...p.cond, value: e.target.value })}
           >
-            <option value="">Choose</option>
+            <option value="">{t("Choose")}</option>
             {f.options?.map((o) => (
               <option key={o} value={o}>
-                {label(o)}
+                {optionLabel(o)}
               </option>
             ))}
           </Select>
         ) : f?.kind === "bool" ? (
           <Select
-            label="Value"
+            label={t("Value")}
             value={p.cond.value}
             onChange={(e) => p.onChange({ ...p.cond, value: e.target.value })}
           >
-            <option value="">Choose</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
+            <option value="">{t("Choose")}</option>
+            <option value="true">{t("Yes")}</option>
+            <option value="false">{t("No")}</option>
           </Select>
         ) : (
           <Input
-            label="Value"
+            label={t("Value")}
             value={p.cond.value}
             placeholder={
               p.cond.op === "in"
                 ? "a|b|c"
                 : f?.kind === "money"
-                  ? "Minor units, 1250 = 12.50"
+                  ? t("Minor units, 1250 = 12.50")
                   : f?.kind === "date"
                     ? "2026-01-31"
                     : ""
@@ -387,7 +399,7 @@ function ConditionRow(p: {
         variant="ghost"
         size="sm"
         icon="close"
-        aria-label={`Remove condition on ${name}`}
+        aria-label={t("Remove condition on {field}", { field: name })}
         onClick={p.onRemove}
       />
     </div>

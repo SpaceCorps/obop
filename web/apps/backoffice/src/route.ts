@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { t } from "@obop/ui";
 
 /**
  * The URL holds where you are, so links and the back button work:
@@ -70,7 +71,7 @@ export function useRoute(): [Route, Go] {
         const target = location.hash;
         // Put the old address back until the person decides.
         history.replaceState(null, "", last.current || "#/");
-        void nav.ask("You have unsaved changes. Leave and discard them?").then((leave) => {
+        void nav.ask(t("You have unsaved changes. Leave and discard them?")).then((leave) => {
           if (!leave) return;
           skip = true;
           location.hash = target;
@@ -94,7 +95,7 @@ export function useRoute(): [Route, Go] {
       setRoute(parse(h));
     };
     if (nav.dirty?.() && nav.ask) {
-      void nav.ask("You have unsaved changes. Leave and discard them?").then((leave) => {
+      void nav.ask(t("You have unsaved changes. Leave and discard them?")).then((leave) => {
         if (!leave) return;
         apply();
       });

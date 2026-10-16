@@ -17,6 +17,7 @@ import { createPortal } from "react-dom";
 import { rovingKeys, useDismiss, useFocusTrap } from "./hooks.ts";
 import { Icon } from "./icons.tsx";
 import type { IconName } from "./icon-data.ts";
+import { t } from "./i18n/store.ts";
 
 const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(" ");
 
@@ -286,7 +287,7 @@ export function Badge({
 export function Chip({
   children,
   onRemove,
-  removeLabel = "Remove",
+  removeLabel,
   tone,
   className,
   ...rest
@@ -299,7 +300,12 @@ export function Chip({
     <span className={cx("chip", tone === "accent" && "accent", className)} {...rest}>
       <span className="chip-text">{children}</span>
       {onRemove && (
-        <button type="button" className="chip-x" onClick={onRemove} aria-label={removeLabel}>
+        <button
+          type="button"
+          className="chip-x"
+          onClick={onRemove}
+          aria-label={removeLabel ?? t("Remove")}
+        >
           <Icon name="close" size={12} />
         </button>
       )}
@@ -409,7 +415,7 @@ export function Table({
 
 export function Skeleton({ rows = 6, cols = 5 }: { rows?: number; cols?: number }) {
   return (
-    <div className="skeleton" role="status" aria-label="Loading">
+    <div className="skeleton" role="status" aria-label={t("Loading")}>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="sk-row">
           {Array.from({ length: cols }, (_, j) => (
@@ -833,7 +839,7 @@ export function Dialog({
             <h2 id={titleId} className={hideTitle ? "sr-only" : undefined}>
               {title}
             </h2>
-            <IconButton icon="close" label="Close" size="sm" onClick={onClose} />
+            <IconButton icon="close" label={t("Close")} size="sm" onClick={onClose} />
           </header>
         )}
         <div className="dialog-body">{children}</div>
@@ -881,7 +887,12 @@ export function Toast({
       <Icon name={icon} size={18} className="toast-icon" />
       <span className="toast-text">{children}</span>
       {onDismiss && (
-        <button type="button" className="icon-btn small" onClick={onDismiss} aria-label="Dismiss">
+        <button
+          type="button"
+          className="icon-btn small"
+          onClick={onDismiss}
+          aria-label={t("Dismiss")}
+        >
           <Icon name="close" size={14} />
         </button>
       )}

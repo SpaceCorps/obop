@@ -1,15 +1,18 @@
+import { compareText, fmt, t } from "@obop/ui";
 import type { FieldMeta, Kind, Row } from "./api.ts";
 import {
+  decimalToMinor,
   formatDate,
   integer,
   isEmpty,
-  label,
   money,
   monthLabel,
   optionLabel,
   plainText,
+  rowCurrency,
   validDate,
 } from "./format.ts";
+import { fieldTitle } from "./labels.ts";
 
 /** One search condition. A list of them is the "facets"; the facets are ANDed. */
 export type Cond =
@@ -97,19 +100,18 @@ export function orderKeys(f: FieldMeta, keys: string[], lk: Lookup): string[] {
   return uniq.sort((a, b) => {
     const d = rank(a) - rank(b);
     if (d) return d;
-    if (f.kind === "ref" && f.to)
-      return lk.refText(f.to, a).localeCompare(lk.refText(f.to, b), undefined, { numeric: true });
-    return a.localeCompare(b);
+    if (f.kind === "ref" && f.to) return compareText(lk.refText(f.to, a), lk.refText(f.to, b));
+    return compareText(a, b);
   });
 }
 
 export function groupLabel(f: FieldMeta, key: string, lk: Lookup): string {
-  if (key === "") return "None";
+  if (key === "") return t("None");
   switch (f.kind) {
     case "select":
       return optionLabel(key);
     case "bool":
-      return key === "true" ? "Yes" : "No";
+      return key === "true" ? t("Yes") : t("No");
     case "date":
       return monthLabel(key);
     case "ref":
@@ -175,8 +177,35 @@ export function buildGroups(
 export const sumOf = (rows: Row[], field: string) =>
   rows.reduce((n, r) => n + (Number(r[field]) || 0), 0);
 
-export function formatSum(f: FieldMeta | undefined, n: number): string {
-  return f?.kind === "money" ? money(n) : integer(n);
+export function formatSum(f: FieldMeta | undefined, n: number, currency?: string): string {
+  return f?.kind === "money" ? money(n, currency) : integer(n);
+}
+
+/**
+ * The total of a column. Money in different currencies is never added together: each currency gets
+ * its own subtotal (docs/spec/ux.md 4.5).
+ */
+export function formatSumRows(f: FieldMeta | undefined, rows: Row[]): string {
+  if (!f) return "";
+  if (f.kind !== "money") return integer(sumOf(rows, f.name));
+  const byCurrency = new Map<string, number>();
+  for (const r of rows) {
+    const c = rowCurrency(r) ?? "";
+    byCurrency.set(c, (byCurrency.get(c) ?? 0) + (Number(r[f.name]) || 0));
+  }
+  return fmt.list(
+    [...byCurrency].map(([c, n]) => money(n, c || undefined)),
+    "conjunction",
+  );
+}
+
+/**
+ * The one currency of a set of records, for charts and pivots that add amounts up. `mixed` is true
+ * when the records use more than one, so the view can warn that the sums mix currencies.
+ */
+export function currencyOf(rows: Row[]): { currency?: string; mixed: boolean } {
+  const set = new Set(rows.map((r) => rowCurrency(r)).filter((c): c is string => !!c));
+  return { currency: set.size === 1 ? [...set][0] : undefined, mixed: set.size > 1 };
 }
 
 /** The condition that selects exactly the records of one group. */
@@ -210,11 +239,17 @@ export function toggleOption(facets: Cond[], f: string, value: string): Cond[] {
     : facets.filter((_, j) => j !== i);
 }
 
+/**
+ * A range bound is stored in the address as a canonical decimal ("12.50", a dot, no grouping), so a
+ * shared link means the same in every locale; this reads it (an older link may hold a comma).
+ */
 export function rangeNum(f: FieldMeta, s: string | undefined): number | undefined {
   if (s === undefined || s.trim() === "") return undefined;
-  const n = parseFloat(s.replace(",", "."));
-  if (!Number.isFinite(n)) return undefined;
-  return f.kind === "money" ? Math.round(n * 100) : n;
+  const canonical = s.trim().replace(",", ".");
+  if (!/^-?\d+(\.\d+)?$/.test(canonical)) return undefined;
+  return f.kind === "money"
+    ? (decimalToMinor(canonical, fmt.exponent()) ?? undefined)
+    : Number(canonical);
 }
 
 export function matchCond(c: Cond, row: Row, fields: FieldMeta[], lk: Lookup): boolean {
@@ -273,10 +308,7 @@ function compare(f: FieldMeta, a: Row, b: Row, lk: Lookup): number {
       return o.indexOf(String(x)) - o.indexOf(String(y));
     }
     default:
-      return plainText(f, x, lk.refText).localeCompare(plainText(f, y, lk.refText), undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
+      return compareText(plainText(f, x, lk.refText), plainText(f, y, lk.refText));
   }
 }
 
@@ -294,30 +326,39 @@ export function sortRows(rows: Row[], sort: Sort | undefined, fields: FieldMeta[
 
 /** Chip text for a facet: "Status is Open", "Amount 100 to 500". */
 export function describeCond(c: Cond, fields: FieldMeta[], lk: Lookup): string {
-  if (c.op === "search") return `Search: ${c.v}`;
+  if (c.op === "search") return t("Search: {text}", { text: c.v });
   const f = fields.find((x) => x.name === c.f);
-  const name = f ? label(f.name) : c.f;
+  const field = f ? fieldTitle(f) : c.f;
   const val = (k: string) => (f ? groupLabel(f, k, lk) : k);
   switch (c.op) {
     case "contains":
-      return `${name} contains “${c.v}”`;
+      return t("{field} contains “{text}”", { field, text: c.v });
     case "is":
-      return `${name}: ${c.v.map(val).join(" or ")}`;
+      return t("{field}: {values}", { field, values: fmt.list(c.v.map(val), "disjunction") });
     case "isnot":
-      return `${name} not ${c.v.map(val).join(" or ")}`;
+      return t("{field} not {values}", { field, values: fmt.list(c.v.map(val), "disjunction") });
     case "bool":
-      return `${name}: ${c.v ? "Yes" : "No"}`;
+      return t("{field}: {values}", { field, values: c.v ? t("Yes") : t("No") });
     case "month":
-      return `${name}: ${monthLabel(c.v)}`;
+      return t("{field}: {values}", { field, values: monthLabel(c.v) });
     case "empty":
-      return `${name} is empty`;
+      return t("{field} is empty", { field });
     case "range": {
-      const fmt = (s: string) => (f?.kind === "date" ? formatDate(s) : s);
-      if (c.min && c.max) return `${name}: ${fmt(c.min)} to ${fmt(c.max)}`;
-      if (c.min) return `${name} ≥ ${fmt(c.min)}`;
-      return `${name} ≤ ${fmt(c.max ?? "")}`;
+      const show = (s: string) => boundText(f, s);
+      if (c.min && c.max)
+        return t("{field}: {from} to {to}", { field, from: show(c.min), to: show(c.max) });
+      if (c.min) return t("{field} ≥ {from}", { field, from: show(c.min) });
+      return t("{field} ≤ {to}", { field, to: show(c.max ?? "") });
     }
   }
+}
+
+/** A stored range bound as the person reads it: a date in the locale, an amount with its currency. */
+export function boundText(f: FieldMeta | undefined, s: string): string {
+  if (f?.kind === "date") return formatDate(s);
+  const n = rangeNum(f ?? ({ kind: "number" } as FieldMeta), s);
+  if (n === undefined) return s;
+  return f?.kind === "money" ? money(n) : fmt.number(n, { maximumFractionDigits: 6 });
 }
 
 export function validRange(f: FieldMeta, c: Extract<Cond, { op: "range" }>): boolean {

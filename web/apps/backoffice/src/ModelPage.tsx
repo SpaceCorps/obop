@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { fmt, inSentence, msg, t } from "@obop/ui";
 import { LOAD_LIMIT, search, type ModelMeta, type Row } from "./api.ts";
 import type { App } from "./Chrome.tsx";
 import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
 import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
-import { isState, label, modelLabel, visibleFields } from "./format.ts";
+import { isState, visibleFields } from "./format.ts";
+import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { serverMessage } from "./serverMessage.ts";
 import {
   applyFacets,
   decodeState,
@@ -30,11 +33,11 @@ import { governedNames, moveRecord } from "./workflow.ts";
 type Props = { app: App; model: ModelMeta; route: Route; go: Go };
 
 const VIEWS: Record<string, ViewDef> = {
-  list: { id: "list", label: "List", icon: "list" },
-  kanban: { id: "kanban", label: "Kanban", icon: "kanban" },
-  calendar: { id: "calendar", label: "Calendar", icon: "calendar" },
-  pivot: { id: "pivot", label: "Pivot", icon: "pivot" },
-  graph: { id: "graph", label: "Graph", icon: "graph" },
+  list: { id: "list", label: msg("List"), icon: "list" },
+  kanban: { id: "kanban", label: msg("Kanban"), icon: "kanban" },
+  calendar: { id: "calendar", label: msg("Calendar"), icon: "calendar" },
+  pivot: { id: "pivot", label: msg("Pivot"), icon: "pivot" },
+  graph: { id: "graph", label: msg("Graph"), icon: "graph" },
 };
 
 const PAGE_SIZES = [25, 50, 100, 200];
@@ -49,7 +52,7 @@ function storedView(model: string): string {
 
 export function ModelPage({ app, model, route, go }: Props) {
   const d = useData();
-  const title = modelLabel(model.name, app.module.id);
+  const title = modelTitle(model, app.module.id);
   const state = useMemo(() => decodeState(route.st), [route.st]);
   const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
   const [pageSize, setPageSizeState] = useState(() => {
@@ -195,13 +198,23 @@ export function ModelPage({ app, model, route, go }: Props) {
   const selected = route.id === "new" ? "new" : found;
 
   const governed = useMemo(() => governedNames(model), [model]);
-  const approval = (what: string, planId: string) =>
-    `Approval needed: ${what} was proposed as plan ${planId.slice(0, 8)}. Nothing changes until a human approves it.`;
+  const approval = (what: "change" | "create", planId: string) => {
+    const plan = planId.slice(0, 8);
+    return what === "change"
+      ? t(
+          "Approval needed: the change was proposed as plan {plan}. Nothing changes until a human approves it.",
+          { plan },
+        )
+      : t(
+          "Approval needed: creating the record was proposed as plan {plan}. Nothing changes until a human approves it.",
+          { plan },
+        );
+  };
   const update: ViewProps["update"] = async (id, patch) => {
     const r = await d.run(`${model.name}.update`, { id, ...patch });
     if (r.kind === "ok") return null;
-    if (r.kind === "approval") return approval("the change", r.planId);
-    return r.message;
+    if (r.kind === "approval") return approval("change", r.planId);
+    return serverMessage(r.message);
   };
   const create: ViewProps["create"] = async (body) => {
     // A governed field starts at its first option; the server refuses anything else.
@@ -209,18 +222,18 @@ export function ModelPage({ app, model, route, go }: Props) {
     for (const g of governed) delete clean[g];
     const r = await d.run(`${model.name}.create`, clean);
     if (r.kind === "ok") {
-      d.notify(`${title} created`);
+      d.notify(t("{model} created", { model: title }));
       return null;
     }
-    if (r.kind === "approval") return approval("creating the record", r.planId);
-    return r.message;
+    if (r.kind === "approval") return approval("create", r.planId);
+    return serverMessage(r.message);
   };
   const moveState: ViewProps["moveState"] = async (id, field, to) => {
     const f = model.fields.find((x) => x.name === field);
     const row = (serverMode ? srv.rows : rows).find((r) => r.id === id);
-    if (!f || !row) return "Record not found";
+    if (!f || !row) return t("Record not found");
     const out = await moveRecord(d.run, model, f, row, to, title);
-    return out.kind === "ok" ? null : out.message;
+    return out.kind === "ok" ? null : serverMessage(out.message);
   };
   const drill = (conds: Cond[]) =>
     put({
@@ -286,7 +299,6 @@ export function ModelPage({ app, model, route, go }: Props) {
     ? srv.loaded && !srv.error && srv.total === 0 && plan.filter.length === 0
     : store.loaded && rows.length === 0;
   const truncated = !serverMode && store.loaded && store.total > rows.length;
-  const nf = new Intl.NumberFormat("en-US");
 
   return (
     <>
@@ -309,15 +321,16 @@ export function ModelPage({ app, model, route, go }: Props) {
           extra={
             kf && (
               <label className="inline-field">
-                <span>Group by</span>
+                <span>{t("Group by")}</span>
                 <select
                   value={kf.name}
                   onChange={(e) => setState({ ...state, group: [e.target.value] })}
                 >
                   {groupable(fields).map((f) => (
                     <option key={f.name} value={f.name}>
-                      {label(f.name)}
-                      {f.kind === "date" ? " (month)" : ""}
+                      {f.kind === "date"
+                        ? t("{field} (month)", { field: fieldTitle(f) })
+                        : fieldTitle(f)}
                     </option>
                   ))}
                 </select>
@@ -327,46 +340,55 @@ export function ModelPage({ app, model, route, go }: Props) {
         />
         {denied.length > 0 && (
           <p className="notice-bar">
-            Withheld from you: {denied.map((w) => label(w.split(".")[1] ?? w)).join(", ")}
+            {t("Withheld from you: {fields}", {
+              fields: denied
+                .map((w) => fieldTitleByName(w.split(".")[1] ?? w, model.fields))
+                .join(", "),
+            })}
           </p>
         )}
         {truncated && (
           <p className="notice-bar" role="status">
-            Showing the first {nf.format(rows.length)} of {nf.format(store.total)} records. Narrow
-            the search, or use the list, which pages through all of them.
+            {t(
+              "Showing the first {shown} of {total} records. Narrow the search, or use the list, which pages through all of them.",
+              { shown: fmt.integer(rows.length), total: fmt.integer(store.total) },
+            )}
           </p>
         )}
         <div className={`content view-${view}`}>
           {withheldError ? (
             <EmptyState
-              title="This search uses a field you cannot read"
-              hint={error}
+              title={t("This search uses a field you cannot read")}
+              hint={serverMessage(error)}
               action={{
-                label: "Clear filters and sorting",
+                label: t("Clear filters and sorting"),
                 onClick: () => put({ st: "", page: "" }),
               }}
             />
           ) : error ? (
-            <EmptyState title="Could not load records" hint={error} />
+            <EmptyState title={t("Could not load records")} hint={serverMessage(error)} />
           ) : !loaded ? (
             <Skeleton rows={8} cols={Math.min(fields.length, 5)} />
           ) : modelEmpty ? (
             <EmptyState
-              title={`No ${title.toLowerCase()} yet`}
-              hint="Records you create show up here."
+              title={t("No {model} yet", { model: inSentence(title) })}
+              hint={t("Records you create show up here.")}
               action={
                 model.can_create
-                  ? { label: `Create the first ${title.toLowerCase()}`, onClick: () => openNew() }
+                  ? {
+                      label: t("Create the first {model}", { model: inSentence(title) }),
+                      onClick: () => openNew(),
+                    }
                   : undefined
               }
             />
           ) : total === 0 && view !== "calendar" ? (
             <EmptyState
-              title="No matches"
-              hint="No record fits the current search."
+              title={t("No matches")}
+              hint={t("No record fits the current search.")}
               action={
                 filtering
-                  ? { label: "Clear filters", onClick: () => setState({ ...state, facets: [] }) }
+                  ? { label: t("Clear filters"), onClick: () => setState({ ...state, facets: [] }) }
                   : undefined
               }
             />

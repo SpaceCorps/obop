@@ -1,3 +1,4 @@
+import { t } from "@obop/ui";
 import {
   LOAD_LIMIT,
   search,
@@ -7,6 +8,7 @@ import {
   type ServerFilter,
 } from "../api.ts";
 import { isEmpty } from "../format.ts";
+import { fieldTitle } from "../labels.ts";
 import { groupDomain, groupKey, groupLabel, groupable, measurable, type Lookup } from "../query.ts";
 import { parseFilter, toServerFilter, type Condition } from "./filter.ts";
 
@@ -64,14 +66,14 @@ export function resolve(w: Widget, models: Map<string, { model: ModelMeta }>): R
   let measure: FieldMeta | undefined;
   if (w.aggregate === "sum") {
     if (isEmpty(w.measure_field))
-      return { ok: false, reason: "invalid", detail: "A sum needs a measure field" };
+      return { ok: false, reason: "invalid", detail: t("A sum needs a measure field") };
     measure = model.fields.find((f) => f.name === w.measure_field);
     if (!measure) return { ok: false, reason: "noaccess", detail: String(w.measure_field) };
     if (!measurable([measure]).length)
       return {
         ok: false,
         reason: "invalid",
-        detail: `${measure.name} is not a number or money field`,
+        detail: t("{field} is not a number or money field", { field: fieldTitle(measure) }),
       };
   }
   let dim: FieldMeta | undefined;
@@ -79,9 +81,13 @@ export function resolve(w: Widget, models: Map<string, { model: ModelMeta }>): R
     dim = model.fields.find((f) => f.name === w.group_by);
     if (!dim) return { ok: false, reason: "noaccess", detail: String(w.group_by) };
     if (!groupable([dim]).length)
-      return { ok: false, reason: "invalid", detail: `${dim.name} cannot be grouped by` };
+      return {
+        ok: false,
+        reason: "invalid",
+        detail: t("{field} cannot be grouped by", { field: fieldTitle(dim) }),
+      };
   } else if (w.kind !== "kpi" && w.kind !== "table")
-    return { ok: false, reason: "invalid", detail: "This chart needs a field to group by" };
+    return { ok: false, reason: "invalid", detail: t("This chart needs a field to group by") };
   return { ok: true, model, conds: parsed.conds, filter: sf.filter, measure, dim };
 }
 

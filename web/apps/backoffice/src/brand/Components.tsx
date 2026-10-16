@@ -719,7 +719,6 @@ function Listing() {
               setLimit(n);
               setOffset(0);
             }}
-            noun="leads"
           />
         </Panel>
         <Panel className="demo-pad stat-demo" style={{ alignSelf: "start" }}>

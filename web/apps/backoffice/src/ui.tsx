@@ -1,6 +1,6 @@
 import type { FieldMeta } from "./api.ts";
 import { optionLabel } from "./format.ts";
-import { Badge as UiBadge, Button, Dialog } from "@obop/ui";
+import { Badge as UiBadge, Button, Dialog, t } from "@obop/ui";
 
 // The primitives live in @obop/ui; this file holds the few pieces that know about obop metadata.
 export {
@@ -80,7 +80,7 @@ export function ConfirmDialog({ req }: { req: ConfirmRequest }) {
     <Dialog
       role="alertdialog"
       size="sm"
-      title="Confirm"
+      title={t("Confirm")}
       bare
       className="confirm"
       describedBy="confirm-msg"

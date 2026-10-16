@@ -62,6 +62,12 @@ export class Api {
   }
 }
 
+/** Test options: `test.use({ language: "de" })`; `null` leaves the choice to the browser's language. */
+type Options = {
+  /** The interface language every context starts with. The suite pins English unless a spec says otherwise. */
+  language: string | null;
+};
+
 type Fixtures = {
   api: Api;
   /** Sign in as a test user through the API and open the app (the sign-in form has its own spec). */
@@ -74,11 +80,31 @@ type Fixtures = {
   uid: (prefix: string) => string;
   /** Collects page errors and console errors and fails the test on any (auto fixture). */
   consoleGuard: void;
+  /** Stores the pinned interface language before any page script runs (auto fixture). */
+  pinLanguage: void;
 };
 
 let counter = 0;
 
-export const test = base.extend<Fixtures>({
+export const test = base.extend<Fixtures & Options>({
+  language: ["en", { option: true }],
+
+  pinLanguage: [
+    async ({ context, language }, use) => {
+      // A saved choice wins over the browser's language, so the suite never depends on the machine.
+      if (language)
+        await context.addInitScript((l) => {
+          try {
+            if (!localStorage.getItem("obop-lang")) localStorage.setItem("obop-lang", l);
+          } catch {
+            /* storage unavailable */
+          }
+        }, language);
+      await use();
+    },
+    { auto: true },
+  ],
+
   api: async ({ request }, use) => use(new Api(request)),
 
   // eslint-disable-next-line no-empty-pattern -- Playwright needs a destructured first argument

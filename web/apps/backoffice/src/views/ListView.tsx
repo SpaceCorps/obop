@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { describeFor, inSentence, t } from "@obop/ui";
 import type { FieldMeta, Row } from "../api.ts";
 import { Cell } from "../fields.tsx";
 import { useData } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
-import { csvCell, download, isState, label, optionLabel, plainText } from "../format.ts";
-import { buildGroups, formatSum, sumOf, type Group } from "../query.ts";
+import { csvCell, download, isState, optionLabel, plainText, rowCurrency } from "../format.ts";
+import { fieldTitle } from "../labels.ts";
+import { buildGroups, formatSumRows, type Group } from "../query.ts";
 import { DeleteDialog } from "../DeleteDialog.tsx";
 import { Pager, Popover, Icon } from "../ui.tsx";
 import { canMove, isGoverned } from "../workflow.ts";
@@ -99,7 +101,7 @@ export function ListView(p: ViewProps) {
     });
 
   function cellText(f: FieldMeta, r: Row) {
-    return plainText(f, r[f.name], d.refText);
+    return plainText(f, r[f.name], d.refText, rowCurrency(r));
   }
   async function exportCsv() {
     // Selected rows, else everything the search matches (not only the page on screen).
@@ -107,12 +109,17 @@ export function ListView(p: ViewProps) {
     if (!pick.length) {
       const all = await p.exportAll();
       pick = all.rows;
-      if (all.truncated) d.notify(`Exported the first ${pick.length} records only`, "info");
+      if (all.truncated)
+        d.notify(t("Exported the first {count} records only", { count: pick.length }), "info");
     }
-    const head = cols.map((f) => csvCell(label(f.name))).join(",");
+    const head = cols.map((f) => csvCell(fieldTitle(f))).join(",");
     const body = pick.map((r) => cols.map((f) => csvCell(cellText(f, r))).join(","));
     download(`${p.model.name}.csv`, [head, ...body].join("\r\n") + "\r\n");
-    d.notify(`Exported ${pick.length} ${pick.length === 1 ? "record" : "records"}`);
+    d.notify(
+      t("{count, plural, one {Exported # record} other {Exported # records}}", {
+        count: pick.length,
+      }),
+    );
   }
   async function bulkSet(f: FieldMeta, value: string | boolean) {
     const ids = [...live];
@@ -120,8 +127,15 @@ export function ListView(p: ViewProps) {
     const failed = results.filter(Boolean);
     d.notify(
       failed.length
-        ? `${ids.length - failed.length} updated, ${failed.length} failed: ${failed[0]}`
-        : `Set ${label(f.name)} on ${ids.length} ${ids.length === 1 ? "record" : "records"}`,
+        ? t("{ok} updated, {failed} failed: {reason}", {
+            ok: ids.length - failed.length,
+            failed: failed.length,
+            reason: failed[0] ?? "",
+          })
+        : t("{count, plural, one {Set {field} on # record} other {Set {field} on # records}}", {
+            count: ids.length,
+            field: fieldTitle(f),
+          }),
       failed.length ? "error" : "ok",
     );
   }
@@ -178,15 +192,15 @@ export function ListView(p: ViewProps) {
     <div className="listview">
       <div className="listbar">
         {live.size > 0 ? (
-          <div className="bulkbar" role="toolbar" aria-label="Bulk actions">
-            <strong>{live.size} selected</strong>
+          <div className="bulkbar" role="toolbar" aria-label={t("Bulk actions")}>
+            <strong>{t("{count} selected", { count: live.size })}</strong>
             {p.canUpdate && settableFields.length > 0 && (
-              <Popover label="Set…" ariaLabel="Set a field on the selected records">
+              <Popover label={t("Set…")} ariaLabel={t("Set a field on the selected records")}>
                 {(close) => (
                   <div className="menu-list">
                     {settableFields.map((f) => (
-                      <div key={f.name} role="group" aria-label={label(f.name)}>
-                        <h4>{label(f.name)}</h4>
+                      <div key={f.name} role="group" aria-label={fieldTitle(f)}>
+                        <h4>{fieldTitle(f)}</h4>
                         {(f.kind === "bool" ? ["true", "false"] : (f.options ?? [])).map((o) => (
                           <button
                             key={o}
@@ -195,7 +209,11 @@ export function ListView(p: ViewProps) {
                               void bulkSet(f, f.kind === "bool" ? o === "true" : o);
                             }}
                           >
-                            {f.kind === "bool" ? (o === "true" ? "Yes" : "No") : optionLabel(o)}
+                            {f.kind === "bool"
+                              ? o === "true"
+                                ? t("Yes")
+                                : t("No")
+                              : optionLabel(o)}
                           </button>
                         ))}
                       </div>
@@ -205,38 +223,38 @@ export function ListView(p: ViewProps) {
               </Popover>
             )}
             <button className="btn small" onClick={() => void exportCsv()}>
-              <Icon name="download" size={13} /> Export selected
+              <Icon name="download" size={13} /> {t("Export selected")}
             </button>
             {p.canDelete && (
               <button className="btn small danger-text" onClick={() => setDeleting(true)}>
-                <Icon name="trash" size={13} /> Delete
+                <Icon name="trash" size={13} /> {t("Delete")}
               </button>
             )}
             <button className="linkbtn" onClick={() => setSelected(new Set())}>
-              Clear
+              {t("Clear")}
             </button>
           </div>
         ) : (
           <span className="hint">
-            {p.canUpdate ? "Click a cell to edit it, the first column opens the record." : ""}
+            {p.canUpdate ? t("Click a cell to edit it, the first column opens the record.") : ""}
           </span>
         )}
         <span className="grow" />
         <button
           className="btn small"
           onClick={() => void exportCsv()}
-          aria-label="Export all as CSV"
+          aria-label={t("Export all as CSV")}
           hidden={live.size > 0}
         >
-          <Icon name="download" size={13} /> Export CSV
+          <Icon name="download" size={13} /> {t("Export CSV")}
         </button>
         <Popover
           label={
             <>
-              <Icon name="columns" size={14} /> Columns
+              <Icon name="columns" size={14} /> {t("Columns")}
             </>
           }
-          ariaLabel="Choose columns"
+          ariaLabel={t("Choose columns")}
           align="end"
           className="btn small"
         >
@@ -258,7 +276,7 @@ export function ListView(p: ViewProps) {
                       )
                     }
                   />
-                  <span>{label(f.name)}</span>
+                  <span>{fieldTitle(f)}</span>
                 </label>
               ))}
             </div>
@@ -269,7 +287,7 @@ export function ListView(p: ViewProps) {
         <table
           className="table list"
           role="grid"
-          aria-label={`${p.title} list`}
+          aria-label={t("{model} list", { model: p.title })}
           aria-rowcount={p.total + 1}
         >
           <thead>
@@ -277,7 +295,7 @@ export function ListView(p: ViewProps) {
               <th className="selcol" role="columnheader" scope="col">
                 <input
                   type="checkbox"
-                  aria-label="Select all records"
+                  aria-label={t("Select all records")}
                   checked={allOn}
                   ref={(el) => {
                     if (el) el.indeterminate = live.size > 0 && !allOn;
@@ -294,10 +312,10 @@ export function ListView(p: ViewProps) {
                     scope="col"
                     aria-sort={s === "asc" ? "ascending" : s === "desc" ? "descending" : "none"}
                     className={isAgg(f) ? "num" : ""}
-                    title={f.description}
+                    title={describeFor(f)}
                   >
                     <button className="thbtn" onClick={() => sortBy(f)}>
-                      {label(f.name)}
+                      {fieldTitle(f)}
                       {f.required && (
                         <span className="req" aria-hidden="true">
                           {" "}
@@ -312,7 +330,7 @@ export function ListView(p: ViewProps) {
                 );
               })}
               <th className="opencol" role="columnheader" scope="col">
-                <span className="sr-only">Open</span>
+                <span className="sr-only">{t("Open")}</span>
               </th>
             </tr>
           </thead>
@@ -353,7 +371,7 @@ export function ListView(p: ViewProps) {
                   {firstAgg >= 0 &&
                     cols.slice(firstAgg).map((f) => (
                       <td key={f.name} role="gridcell" className="num agg">
-                        {isAgg(f) ? formatSum(f, sumOf(it.g.rows, f.name)) : ""}
+                        {isAgg(f) ? formatSumRows(f, it.g.rows) : ""}
                       </td>
                     ))}
                   {firstAgg >= 0 && <td role="gridcell" />}
@@ -378,7 +396,7 @@ export function ListView(p: ViewProps) {
                     <input
                       type="checkbox"
                       tabIndex={-1}
-                      aria-label="Select record"
+                      aria-label={t("Select record")}
                       checked={live.has(it.row.id)}
                       onChange={() => toggle(it.row.id)}
                     />
@@ -428,7 +446,7 @@ export function ListView(p: ViewProps) {
                             }}
                           />
                         ) : (
-                          <Cell field={f} value={it.row[f.name]} />
+                          <Cell field={f} value={it.row[f.name]} currency={rowCurrency(it.row)} />
                         )}
                       </td>
                     );
@@ -444,7 +462,7 @@ export function ListView(p: ViewProps) {
                     <button
                       className="icon-btn"
                       tabIndex={-1}
-                      aria-label="Open record"
+                      aria-label={t("Open record")}
                       onClick={() => p.onOpen(it.row.id)}
                     >
                       <Icon name="external" size={14} />
@@ -459,13 +477,13 @@ export function ListView(p: ViewProps) {
               <tr role="row">
                 <td colSpan={span} role="gridcell">
                   <strong>
-                    {p.pager && p.total > rows.length ? "Total on this page" : "Total"}
+                    {p.pager && p.total > rows.length ? t("Total on this page") : t("Total")}
                   </strong>{" "}
                   <span className="hint">({rows.length})</span>
                 </td>
                 {cols.slice(firstAgg).map((f) => (
                   <td key={f.name} role="gridcell" className="num agg">
-                    {isAgg(f) ? formatSum(f, sumOf(rows, f.name)) : ""}
+                    {isAgg(f) ? formatSumRows(f, rows) : ""}
                   </td>
                 ))}
                 <td role="gridcell" />
@@ -482,13 +500,12 @@ export function ListView(p: ViewProps) {
           busy={p.pager.busy}
           onOffset={p.pager.setOffset}
           onSize={p.pager.setLimit}
-          noun={p.title.toLowerCase()}
         />
       )}
       {deleting && (
         <DeleteDialog
           model={p.model}
-          noun={p.title.toLowerCase()}
+          noun={inSentence(p.title)}
           records={selectedRecords}
           onClose={() => setDeleting(false)}
           onDone={() => setSelected(new Set())}

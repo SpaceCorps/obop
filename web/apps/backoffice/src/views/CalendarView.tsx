@@ -1,16 +1,17 @@
 import { useMemo, useState } from "react";
+import { fmt, inSentence, t } from "@obop/ui";
 import type { FieldMeta, Row } from "../api.ts";
 import { useData } from "../data.tsx";
-import { isoDate, label, validDate } from "../format.ts";
+import { isoDate, validDate } from "../format.ts";
+import { fieldTitle } from "../labels.ts";
 import { Icon, toneClass } from "../ui.tsx";
 import type { ViewProps } from "./types.ts";
 
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-/** Monday of the week containing `d`. */
+/** First day of the week containing `d` (Monday in most of Europe, Sunday in the US): from the format locale. */
 function weekStart(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  const first = fmt.firstDay() % 7; // 0 = Sunday ... 6 = Saturday
+  x.setDate(x.getDate() - ((x.getDay() - first + 7) % 7));
   return x;
 }
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
@@ -53,8 +54,11 @@ export function CalendarView(p: ViewProps) {
   const rowsInView = mode === "month" ? 6 : 1;
   const heading =
     mode === "month"
-      ? cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" })
-      : `${days[0]!.toLocaleDateString(undefined, { day: "numeric", month: "short" })} – ${days[6]!.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}`;
+      ? fmt.dateOf(cursor, { month: "long", year: "numeric" })
+      : t("{from} – {to}", {
+          from: fmt.dateOf(days[0]!, { day: "numeric", month: "short" }),
+          to: fmt.dateOf(days[6]!, { day: "numeric", month: "short", year: "numeric" }),
+        });
   const step = (dir: number) =>
     setCursor(
       mode === "month"
@@ -78,16 +82,14 @@ export function CalendarView(p: ViewProps) {
   return (
     <div className="calendar">
       <div className="viewbar">
-        <div className="calnav" role="group" aria-label="Navigate">
-          <button className="icon-btn" aria-label="Previous" onClick={() => step(-1)}>
-            <span style={{ transform: "scaleX(-1)", display: "inline-flex" }}>
-              <Icon name="chevron-right" size={16} />
-            </span>
+        <div className="calnav" role="group" aria-label={t("Navigate")}>
+          <button className="icon-btn" aria-label={t("Previous")} onClick={() => step(-1)}>
+            <Icon name="chevron-left" size={16} />
           </button>
           <button className="btn small" onClick={() => setCursor(new Date())}>
-            Today
+            {t("Today")}
           </button>
-          <button className="icon-btn" aria-label="Next" onClick={() => step(1)}>
+          <button className="icon-btn" aria-label={t("Next")} onClick={() => step(1)}>
             <Icon name="chevron-right" size={16} />
           </button>
         </div>
@@ -97,20 +99,20 @@ export function CalendarView(p: ViewProps) {
         <span className="grow" />
         {dfs.length > 1 && (
           <label className="inline-field">
-            <span>Date</span>
+            <span>{t("Date")}</span>
             <select value={df.name} onChange={(e) => setFname(e.target.value)}>
               {dfs.map((f) => (
                 <option key={f.name} value={f.name}>
-                  {label(f.name)}
+                  {fieldTitle(f)}
                 </option>
               ))}
             </select>
           </label>
         )}
-        <div className="switcher" role="group" aria-label="Calendar scale">
+        <div className="switcher" role="group" aria-label={t("Calendar scale")}>
           {(["month", "week"] as const).map((m) => (
             <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}>
-              {m === "month" ? "Month" : "Week"}
+              {m === "month" ? t("Month") : t("Week")}
             </button>
           ))}
         </div>
@@ -123,9 +125,9 @@ export function CalendarView(p: ViewProps) {
           style={{ gridTemplateRows: `auto repeat(${rowsInView}, minmax(5.5rem, 1fr))` }}
         >
           <div role="row" className="dayhead-row">
-            {DAY_NAMES.map((n) => (
-              <div key={n} role="columnheader" className="dayhead">
-                {n}
+            {days.slice(0, 7).map((day) => (
+              <div key={day.getDay()} role="columnheader" className="dayhead">
+                {fmt.dateOf(day, { weekday: "short" })}
               </div>
             ))}
           </div>
@@ -140,13 +142,19 @@ export function CalendarView(p: ViewProps) {
                     role="gridcell"
                     key={iso}
                     className={`daycell${out ? " out" : ""}${iso === today ? " today" : ""}`}
-                    aria-label={day.toLocaleDateString(undefined, { dateStyle: "full" })}
+                    aria-label={fmt.dateOf(day, { dateStyle: "full" })}
                   >
                     <button
                       className="daynum"
                       onClick={() => create(iso)}
                       disabled={!p.canCreate}
-                      aria-label={`${p.canCreate ? "New record on " : ""}${day.toLocaleDateString(undefined, { dateStyle: "full" })}`}
+                      aria-label={
+                        p.canCreate
+                          ? t("New record on {date}", {
+                              date: fmt.dateOf(day, { dateStyle: "full" }),
+                            })
+                          : fmt.dateOf(day, { dateStyle: "full" })
+                      }
                     >
                       {day.getDate()}
                     </button>
@@ -159,7 +167,7 @@ export function CalendarView(p: ViewProps) {
                           setMode("week");
                         }}
                       >
-                        +{evs.length - 3} more
+                        {t("+{count} more", { count: evs.length - 3 })}
                       </button>
                     )}
                   </div>
@@ -176,19 +184,17 @@ export function CalendarView(p: ViewProps) {
             return (
               <li key={iso} className={iso === today ? "today" : ""}>
                 <div className="wk-day">
-                  <strong>{day.toLocaleDateString(undefined, { weekday: "short" })}</strong>
-                  <span>
-                    {day.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                  </span>
+                  <strong>{fmt.dateOf(day, { weekday: "short" })}</strong>
+                  <span>{fmt.dateOf(day, { day: "numeric", month: "short" })}</span>
                 </div>
                 <div className="wk-evs">
                   {evs.map(chip)}
-                  {evs.length === 0 && <span className="dim">Nothing planned</span>}
+                  {evs.length === 0 && <span className="dim">{t("Nothing planned")}</span>}
                 </div>
                 {p.canCreate && (
                   <button
                     className="icon-btn"
-                    aria-label={`New record on ${iso}`}
+                    aria-label={t("New record on {date}", { date: fmt.date(iso) })}
                     onClick={() => create(iso)}
                   >
                     <Icon name="plus" size={14} />
@@ -201,8 +207,10 @@ export function CalendarView(p: ViewProps) {
       )}
       {undated > 0 && (
         <p className="hint pad">
-          {undated} {undated === 1 ? "record has" : "records have"} no{" "}
-          {label(df.name).toLowerCase()} and {undated === 1 ? "is" : "are"} not shown.
+          {t(
+            "{count, plural, one {# record has no {field} and is not shown.} other {# records have no {field} and are not shown.}}",
+            { count: undated, field: inSentence(fieldTitle(df)) },
+          )}
         </p>
       )}
     </div>

@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { inSentence, t } from "@obop/ui";
 import type { FieldMeta, Row } from "../api.ts";
 import { Cell } from "../fields.tsx";
 import { labelField, useData } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
-import { isEmpty, isMasked, isState, label, money } from "../format.ts";
-import { groupDomain, groupKey, groupLabel, groupable, sumOf } from "../query.ts";
+import { isEmpty, isMasked, isState, rowCurrency } from "../format.ts";
+import { fieldTitle } from "../labels.ts";
+import { formatSumRows, groupDomain, groupKey, groupLabel, groupable, sumOf } from "../query.ts";
 import { Icon } from "../ui.tsx";
 import { actionsOn, canMove, initialOption, isGoverned, moveRecord } from "../workflow.ts";
 import type { ViewProps } from "./types.ts";
@@ -79,7 +81,8 @@ export function KanbanView(p: ViewProps) {
     if (!gf) return;
     const row = rows.find((r) => r.id === id);
     if (!row || groupKey(gf, row) === key) return;
-    if (key === "" && gf.required) return d.notify(`${label(gf.name)} is required`, "error");
+    if (key === "" && gf.required)
+      return d.notify(t("{field} is required", { field: fieldTitle(gf) }), "error");
     if (governed) {
       const m = may(id, key);
       if (!m.ok) return d.notify(m.reason, "error");
@@ -140,7 +143,7 @@ export function KanbanView(p: ViewProps) {
       className="kanban"
       ref={board}
       role="group"
-      aria-label={`${p.title} board by ${label(gf.name)}`}
+      aria-label={t("{model} board by {field}", { model: p.title, field: fieldTitle(gf) })}
     >
       {keys.map((key, col) => {
         const cards = rows.filter((r) => groupKey(gf, r) === key);
@@ -154,7 +157,10 @@ export function KanbanView(p: ViewProps) {
             data-col={col}
             className={`kcol${over === key ? " over" : ""}${isFolded ? " folded" : ""}${dragging && !may(dragging, key).ok ? " blocked" : ""}`}
             title={dragging && !may(dragging, key).ok ? may(dragging, key).reason : undefined}
-            aria-label={`${name}, ${cards.length} ${cards.length === 1 ? "card" : "cards"}`}
+            aria-label={t("{name}, {count, plural, one {# card} other {# cards}}", {
+              name,
+              count: cards.length,
+            })}
             onDragOver={(e) => {
               if (!canDrag) return;
               if (!may(dragging, key).ok) {
@@ -171,7 +177,7 @@ export function KanbanView(p: ViewProps) {
               <button
                 className="foldbtn"
                 aria-expanded={!isFolded}
-                aria-label={`${isFolded ? "Unfold" : "Fold"} ${name}`}
+                aria-label={isFolded ? t("Unfold {name}", { name }) : t("Fold {name}", { name })}
                 onClick={() => setFold(key)}
               >
                 <Icon name={isFolded ? "chevron-right" : "chevron-down"} size={13} />
@@ -181,7 +187,7 @@ export function KanbanView(p: ViewProps) {
                   key ? (
                     <Cell field={gf} value={key} />
                   ) : (
-                    <span className="badge t-neutral">None</span>
+                    <span className="badge t-neutral">{t("None")}</span>
                   )
                 ) : (
                   name
@@ -189,14 +195,14 @@ export function KanbanView(p: ViewProps) {
               </b>
               <span className="count">{cards.length}</span>
               {!isFolded && total !== null && total > 0 && (
-                <span className="sum" title={`Total ${label(money1!.name)}`}>
-                  {money(total)}
+                <span className="sum" title={t("Total {field}", { field: fieldTitle(money1!) })}>
+                  {formatSumRows(money1, cards)}
                 </span>
               )}
               {p.canCreate && !isFolded && (!governed || key === initialOption(gf)) && (
                 <button
                   className="icon-btn"
-                  aria-label={`Add a card to ${name}`}
+                  aria-label={t("Add a card to {name}", { name })}
                   onClick={() => setQuick({ key, text: "" })}
                 >
                   <Icon name="plus" size={14} />
@@ -214,8 +220,8 @@ export function KanbanView(p: ViewProps) {
                 {titleField ? (
                   <input
                     autoFocus
-                    aria-label={`New ${label(titleField.name).toLowerCase()}`}
-                    placeholder={`${label(titleField.name)}…`}
+                    aria-label={t("New {field}", { field: inSentence(fieldTitle(titleField)) })}
+                    placeholder={t("{field}…", { field: fieldTitle(titleField) })}
                     value={quick.text}
                     onChange={(e) => setQuick({ key, text: e.target.value })}
                     onKeyDown={(e) => {
@@ -226,12 +232,12 @@ export function KanbanView(p: ViewProps) {
                     }}
                   />
                 ) : (
-                  <span className="hint">Open the full form to fill this card.</span>
+                  <span className="hint">{t("Open the full form to fill this card.")}</span>
                 )}
                 <div className="actionrow">
                   {titleField && (
                     <button type="submit" className="btn small primary">
-                      Add
+                      {t("Add")}
                     </button>
                   )}
                   <button
@@ -247,7 +253,7 @@ export function KanbanView(p: ViewProps) {
                       });
                     }}
                   >
-                    Edit
+                    {t("Edit")}
                   </button>
                 </div>
               </form>
@@ -278,9 +284,14 @@ export function KanbanView(p: ViewProps) {
                   {lines.map((f) =>
                     isEmpty(r[f.name]) ? null : (
                       <div key={f.name} className={`kline${f.kind === "money" ? " strong" : ""}`}>
-                        <span>{label(f.name)}</span>
+                        <span>{fieldTitle(f)}</span>
                         <span className={isMasked(r[f.name]) ? "" : "kval"}>
-                          <Cell field={f} value={r[f.name]} link={false} />
+                          <Cell
+                            field={f}
+                            value={r[f.name]}
+                            link={false}
+                            currency={rowCurrency(r)}
+                          />
                         </span>
                       </div>
                     ),
@@ -289,7 +300,7 @@ export function KanbanView(p: ViewProps) {
                   {canDrag && (
                     <select
                       className="moveto"
-                      aria-label={`Move ${d.recordLabel(model.name, r)} to`}
+                      aria-label={t("Move {name} to", { name: d.recordLabel(model.name, r) })}
                       value=""
                       onClick={(e) => e.stopPropagation()}
                       onKeyDown={(e) => e.stopPropagation()}
@@ -298,7 +309,7 @@ export function KanbanView(p: ViewProps) {
                         void move(r.id, e.target.value === "\u0000" ? "" : e.target.value)
                       }
                     >
-                      <option value="">Move to…</option>
+                      <option value="">{t("Move to…")}</option>
                       {keys
                         .filter((k) => k !== key && (k !== "" || !gf.required))
                         .map((k) => {
@@ -320,7 +331,9 @@ export function KanbanView(p: ViewProps) {
                 </article>
               ))}
             {!isFolded && cards.length === 0 && quick?.key !== key && (
-              <p className="kempty">Nothing here{canDrag ? ". Drop a card." : "."}</p>
+              <p className="kempty">
+                {canDrag ? t("Nothing here. Drop a card.") : t("Nothing here.")}
+              </p>
             )}
           </section>
         );

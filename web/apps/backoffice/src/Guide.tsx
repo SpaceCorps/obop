@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { CodeBlock, EmptyState, Icon, Kbd } from "@obop/ui";
+import { CodeBlock, EmptyState, Icon, Kbd, Notice, getLang, t } from "@obop/ui";
 import source from "../../../../docs/MODULES.md?raw";
 import { href } from "./route.ts";
 import {
@@ -107,7 +107,7 @@ function BlockView({
             <a
               className="guide-anchor"
               href={link(b.id)}
-              aria-label={`Link to ${b.text}`}
+              aria-label={t("Link to {section}", { section: b.text })}
               onClick={(e) => {
                 e.preventDefault();
                 copy(b.id);
@@ -226,8 +226,8 @@ export function Guide({ anchor, goAnchor, notify }: Props) {
   // "/" focuses the search box, like most documentation sites.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !t.isContentEditable) {
+      const el = e.target as HTMLElement;
+      if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) && !el.isContentEditable) {
         e.preventDefault();
         search.current?.focus();
       }
@@ -245,21 +245,28 @@ export function Guide({ anchor, goAnchor, notify }: Props) {
     goAnchor(id);
     const url = `${location.origin}${location.pathname}${link(id)}`;
     void navigator.clipboard?.writeText(url).then(
-      () => notify("Link to this section copied"),
+      () => notify(t("Link to this section copied")),
       () => {},
     );
   };
 
   return (
     <div className="guide" ref={root}>
+      {getLang() !== "en" && !getLang().startsWith("en-") && (
+        <Notice tone="info">
+          {t(
+            "The guide is written in English, like the module file format it describes. The rest of the screen is in your language.",
+          )}
+        </Notice>
+      )}
       <div className="guide-top">
         <label className="searchfield guide-search">
           <Icon name="search" size={16} />
           <input
             ref={search}
             type="search"
-            aria-label="Search the guide"
-            placeholder="Search the guide"
+            aria-label={t("Search the guide")}
+            placeholder={t("Search the guide")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -273,21 +280,21 @@ export function Guide({ anchor, goAnchor, notify }: Props) {
         </label>
       </div>
       <div className="guide-body">
-        <nav className="guide-toc" aria-label="Contents">
+        <nav className="guide-toc" aria-label={t("Contents")}>
           <details open={tocOpen} onToggle={(e) => setTocOpen(e.currentTarget.open)}>
-            <summary>Contents</summary>
-            <ol>
-              {TOC.map((t) => (
-                <li key={t.id} className={`lvl${t.level}`}>
+            <summary>{t("Contents")}</summary>
+            <ol lang="en">
+              {TOC.map((entry) => (
+                <li key={entry.id} className={`lvl${entry.level}`}>
                   <a
-                    href={link(t.id)}
-                    aria-current={active === t.id ? "location" : undefined}
+                    href={link(entry.id)}
+                    aria-current={active === entry.id ? "location" : undefined}
                     onClick={(e) => {
                       e.preventDefault();
-                      go(t.id);
+                      go(entry.id);
                     }}
                   >
-                    {t.text}
+                    {entry.text}
                   </a>
                 </li>
               ))}
@@ -296,20 +303,23 @@ export function Guide({ anchor, goAnchor, notify }: Props) {
         </nav>
         <article
           className="guide-text"
-          aria-label={title && title.t === "heading" ? title.text : "Guide"}
+          lang="en"
+          aria-label={title && title.t === "heading" ? title.text : t("Guide")}
         >
           {query.trim() ? (
-            <section aria-label="Search results">
+            <section aria-label={t("Search results")} lang={getLang()}>
               <h2 className="guide-h1">
-                {hits.length} {hits.length === 1 ? "section matches" : "sections match"} “
-                {query.trim()}”
+                {t(
+                  "{count, plural, one {# section matches “{query}”} other {# sections match “{query}”}}",
+                  { count: hits.length, query: query.trim() },
+                )}
               </h2>
               {hits.length === 0 ? (
                 <EmptyState
                   icon="search"
-                  title="Nothing matches"
-                  hint="Try a shorter word, such as approval, ref, state or filter."
-                  action={{ label: "Clear the search", onClick: () => setQuery("") }}
+                  title={t("Nothing matches")}
+                  hint={t("Try a shorter word, such as approval, ref, state or filter.")}
+                  action={{ label: t("Clear the search"), onClick: () => setQuery("") }}
                 />
               ) : (
                 <ul className="guide-hits">
