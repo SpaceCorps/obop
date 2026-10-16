@@ -14,11 +14,15 @@ const SNAPSHOT = join(SITE_ROOT, "data/changelog.snapshot.json");
 function fromGit(): Entry[] | null {
   if (!existsSync(join(REPO_ROOT, ".git"))) return null;
   try {
-    const out = execFileSync("git", ["log", "--no-merges", "--date=short", "--format=%h%x1f%ad%x1f%s"], {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-      maxBuffer: 16 * 1024 * 1024,
-    });
+    const out = execFileSync(
+      "git",
+      ["log", "--no-merges", "--date=short", "--format=%h%x1f%ad%x1f%s"],
+      {
+        cwd: REPO_ROOT,
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+      },
+    );
     return out
       .split("\n")
       .filter(Boolean)

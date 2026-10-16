@@ -43,17 +43,17 @@ const { m, href } = useSite();
               </div>
               <div class="mock-board">
                 <div class="mock-col">
-                  <h4><span class="dot n"></span>New <em>2</em></h4>
+                  <div class="mock-col-title"><span class="dot n"></span>New <em>2</em></div>
                   <div class="mock-card"><b>Office refit</b><span>€3,250.00</span></div>
                   <div class="mock-card"><b>Fleet telematics</b><span>€31,250.00</span></div>
                 </div>
                 <div class="mock-col">
-                  <h4><span class="dot q"></span>Qualified <em>2</em></h4>
+                  <div class="mock-col-title"><span class="dot q"></span>Qualified <em>2</em></div>
                   <div class="mock-card"><b>Support renewal</b><span>€10,250.00</span></div>
                   <div class="mock-card"><b>Training Q3</b><span>€38,250.00</span></div>
                 </div>
                 <div class="mock-col">
-                  <h4><span class="dot w"></span>Won <em>1</em></h4>
+                  <div class="mock-col-title"><span class="dot w"></span>Won <em>1</em></div>
                   <div class="mock-card"><b>Warehouse pilot</b><span>€17,250.00</span></div>
                 </div>
               </div>
@@ -122,9 +122,13 @@ const { m, href } = useSite();
           <h2>{{ m.home.marketTitle }}</h2>
           <p class="sub left">{{ m.home.marketBody }}</p>
           <ul class="ticks">
-            <li v-for="t in m.home.marketTicks" :key="t"><Icon name="check-circle" :size="20" />{{ t }}</li>
+            <li v-for="t in m.home.marketTicks" :key="t">
+              <Icon name="check-circle" :size="20" />{{ t }}
+            </li>
           </ul>
-          <p class="more-left"><a class="btn" :href="href('/marketplace/')">{{ m.home.marketCta }}</a></p>
+          <p class="more-left">
+            <a class="btn" :href="href('/marketplace/')">{{ m.home.marketCta }}</a>
+          </p>
         </div>
         <div class="codebox">
           <div class="codebar"><i></i><i></i><i></i><span>obop.toml</span></div>
@@ -161,7 +165,9 @@ const { m, href } = useSite();
             <p>{{ s.body }}</p>
           </li>
         </ol>
-        <p class="center"><a class="btn primary large" href="/app/">{{ m.home.stepsCta }}</a></p>
+        <p class="center">
+          <a class="btn primary large" href="/app/">{{ m.home.stepsCta }}</a>
+        </p>
       </div>
     </section>
 
@@ -185,12 +191,16 @@ const { m, href } = useSite();
         <div class="plans">
           <article v-for="p in m.pricing.plans" :key="p.name" :class="{ hl: p.highlight }">
             <h3>{{ p.name }}</h3>
-            <p class="price">{{ p.price }}<small>{{ p.period }}</small></p>
+            <p class="price">
+              {{ p.price }}<small>{{ p.period }}</small>
+            </p>
             <p>{{ p.blurb }}</p>
           </article>
         </div>
         <p class="fine center">{{ m.home.pricingFine }}</p>
-        <p class="center"><a class="btn" :href="href('/pricing/')">{{ m.home.pricingCta }}</a></p>
+        <p class="center">
+          <a class="btn" :href="href('/pricing/')">{{ m.home.pricingCta }}</a>
+        </p>
       </div>
     </section>
 

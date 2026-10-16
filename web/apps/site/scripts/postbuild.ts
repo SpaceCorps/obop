@@ -1,7 +1,15 @@
 // Everything that needs the finished pages: Markdown mirrors, search indexes, social cards,
 // sitemaps, robots.txt, llms.txt, security.txt. Runs after `vitepress build`.
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { DOCS_NAV } from "../data/docs-nav.ts";
 import { LOCALES, messages } from "../i18n/index.ts";
@@ -59,12 +67,18 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   for (const r of records) {
     const file = join(DIST, r.url === "/" ? "index.html" : `${r.url.slice(1)}index.html`);
     let html = readFileSync(file, "utf8");
-    html = html.replace(/<script id="check-mac-os">[\s\S]*?<\/script>\s*/g, "").replace(/\n\s*\n(\s*\n)+/g, "\n");
+    html = html
+      .replace(/<script id="check-mac-os">[\s\S]*?<\/script>\s*/g, "")
+      .replace(/\n\s*\n(\s*\n)+/g, "\n");
     writeFileSync(file, html);
   }
 
   // Static files (logos, client scripts): copied here so nothing depends on how the bundler treats public/.
   cpSync(join(SRC, "public"), DIST, { recursive: true });
+
+  // The friendly 404 page, rendered as a normal page, becomes 404.html (the server answers with it).
+  cpSync(join(DIST, "page-not-found/index.html"), join(DIST, "404.html"));
+  rmSync(join(DIST, "page-not-found"), { recursive: true, force: true });
 
   // 2. Markdown mirrors (made by assemble.ts) next to every page.
   cpSync(join(GEN, "mirror"), DIST, { recursive: true });
@@ -82,7 +96,11 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   const labelFor = (locale: (typeof LOCALES)[number], section: string) =>
     messages[locale].nav.find((n) => n.href === `/${section}/`)?.label ?? "obop";
   for (const r of real) {
-    const card = { title: r.title, description: r.description, label: labelFor(r.locale, r.section) };
+    const card = {
+      title: r.title,
+      description: r.description,
+      label: labelFor(r.locale, r.section),
+    };
     const key = createHash("sha1").update(JSON.stringify(card)).digest("hex");
     let png = seen.get(key);
     if (!png) {
@@ -91,7 +109,16 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
     }
     write(ogPath(r.locale, r.path), png);
   }
-  write("og/default.png", renderPng(cardSvg({ title: "One business. One platform.", description: messages.en.description, label: "obop" })));
+  write(
+    "og/default.png",
+    renderPng(
+      cardSvg({
+        title: "One business. One platform.",
+        description: messages.en.description,
+        label: "obop",
+      }),
+    ),
+  );
   write("apple-touch-icon.png", appleTouchIcon());
 
   // 5. Sitemaps: one per language with hreflang alternates, and an index that includes the forum's.
@@ -100,8 +127,13 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
     const urls = real
       .filter((r) => r.locale === l)
       .map((r) => {
-        const alts = r.alternates.map((a) => `    <xhtml:link rel="alternate" hreflang="${a.lang}" href="${xml(loc(a.url))}"/>`);
-        if (r.alternates.length) alts.push(`    <xhtml:link rel="alternate" hreflang="x-default" href="${xml(loc(r.path))}"/>`);
+        const alts = r.alternates.map(
+          (a) => `    <xhtml:link rel="alternate" hreflang="${a.lang}" href="${xml(loc(a.url))}"/>`,
+        );
+        if (r.alternates.length)
+          alts.push(
+            `    <xhtml:link rel="alternate" hreflang="x-default" href="${xml(loc(r.path))}"/>`,
+          );
         return `  <url>\n    <loc>${xml(loc(r.url))}</loc>\n    <lastmod>${lastmod}</lastmod>\n${alts.join("\n")}\n  </url>`;
       });
     write(
@@ -113,7 +145,10 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   write(
     "sitemap.xml",
     `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${index
-      .map((f) => `  <sitemap>\n    <loc>${loc(`/${f}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>`)
+      .map(
+        (f) =>
+          `  <sitemap>\n    <loc>${loc(`/${f}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>`,
+      )
       .join("\n")}\n</sitemapindex>\n`,
   );
 
@@ -139,7 +174,10 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   const section = (title: string, paths: string[]) => [
     `## ${title}`,
     "",
-    ...paths.map(by).filter((r): r is PageRecord => !!r).map(link),
+    ...paths
+      .map(by)
+      .filter((r): r is PageRecord => !!r)
+      .map(link),
     "",
   ];
   const groupTitle: Record<string, string> = {
@@ -156,15 +194,34 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
     "Each link below is the Markdown version of a page. Every page of the site also exists as Markdown at its address with .md instead of the trailing slash. Prices on the site are planned and not charged yet.",
     "",
     ...DOCS_NAV.flatMap((g) => section(groupTitle[g.group]!, g.pages)),
-    ...section("Product", ["/platform/", "/marketplace/", "/pricing/", "/apps/", "/roadmap/", "/changelog/"]),
+    ...section("Product", [
+      "/platform/",
+      "/marketplace/",
+      "/pricing/",
+      "/apps/",
+      "/roadmap/",
+      "/changelog/",
+    ]),
     "## Apps",
     "",
     ...en.filter((r) => /^\/apps\/[^/]+\/$/.test(r.path)).map(link),
     "",
-    ...section("Company and trust", ["/about/", "/security/", "/privacy/", "/terms/", "/contact/", "/brand/", "/about/community/", "/about/status/"]),
+    ...section("Company and trust", [
+      "/about/",
+      "/security/",
+      "/privacy/",
+      "/terms/",
+      "/contact/",
+      "/brand/",
+      "/about/community/",
+      "/about/status/",
+    ]),
     "## Optional",
     "",
-    ...LOCALES.filter((l) => l !== "en").map((l) => `- [${messages[l].langName}](${loc(`/${l}/index.md`)}): the site in ${messages[l].langName}`),
+    ...LOCALES.filter((l) => l !== "en").map(
+      (l) =>
+        `- [${messages[l].langName}](${loc(`/${l}/index.md`)}): the site in ${messages[l].langName}`,
+    ),
     `- [Source code](${GITHUB}): the repository`,
     `- [Full documentation in one file](${loc("/llms-full.txt")}): the text of every English page`,
     "",
@@ -173,13 +230,21 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
   const full = en
     .filter((r) => r.section !== "search")
     .map((r) => {
-      const md = readFileSync(join(GEN, "mirror", r.mdUrl), "utf8").replace(/^---[\s\S]*?---\n+/, "");
+      const md = readFileSync(join(GEN, "mirror", r.mdUrl), "utf8").replace(
+        /^---[\s\S]*?---\n+/,
+        "",
+      );
       return `${md.trim()}\n\nSource: ${loc(r.url)}`;
     });
-  write("llms-full.txt", `# obop: full text\n\n> ${messages.en.description}\n\n${full.join("\n\n---\n\n")}\n`);
+  write(
+    "llms-full.txt",
+    `# obop: full text\n\n> ${messages.en.description}\n\n${full.join("\n\n---\n\n")}\n`,
+  );
 
   // 8. Trust files.
-  const expires = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().replace(/\.\d+Z$/, "Z");
+  const expires = new Date(Date.now() + 365 * 24 * 3600 * 1000)
+    .toISOString()
+    .replace(/\.\d+Z$/, "Z");
   write(
     ".well-known/security.txt",
     [
@@ -191,10 +256,22 @@ export async function postbuild(records: PageRecord[]): Promise<void> {
       "",
     ].join("\n"),
   );
-  write("humans.txt", "/* obop */\nProject: obop, an open-source business platform\nSource: " + GITHUB + "\nStandards: HTML5, CSS3, WCAG 2.2 AA target\nSoftware: VitePress, Vite+, Rust\n");
+  write(
+    "humans.txt",
+    "/* obop */\nProject: obop, an open-source business platform\nSource: " +
+      GITHUB +
+      "\nStandards: HTML5, CSS3, WCAG 2.2 AA target\nSoftware: VitePress, Vite+, Rust\n",
+  );
 
   // 9. Sanity checks that a deploy depends on.
-  for (const f of ["404.html", "index.html", "sitemap.xml", "robots.txt", "llms.txt", "de/index.html"]) {
+  for (const f of [
+    "404.html",
+    "index.html",
+    "sitemap.xml",
+    "robots.txt",
+    "llms.txt",
+    "de/index.html",
+  ]) {
     if (!existsSync(join(DIST, f))) throw new Error(`build output lacks ${f}`);
   }
 }

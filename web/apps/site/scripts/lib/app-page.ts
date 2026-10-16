@@ -16,7 +16,13 @@ export function english(text: string, locale: string, m: Messages): string {
  * The Markdown body of one app page (no H1; the layout draws the title). `mirror` produces the
  * plain-Markdown variant for the .md copy and llms-full.txt.
  */
-export function appBody(app: App, locale: string, m: Messages, mirror: boolean, prefix: string): string {
+export function appBody(
+  app: App,
+  locale: string,
+  m: Messages,
+  mirror: boolean,
+  prefix: string,
+): string {
   const a = m.apps;
   const eng = (t: string) => (mirror ? t : english(t, locale, m));
   const out: string[] = [];
@@ -36,7 +42,12 @@ export function appBody(app: App, locale: string, m: Messages, mirror: boolean, 
       "|---|---|---|---|---|---|---|",
     );
     for (const f of model.fields) {
-      const kind = f.kind === "select" && f.options ? `select (${f.options.join(", ")})` : f.kind === "ref" ? `ref → ${f.to}` : f.kind;
+      const kind =
+        f.kind === "select" && f.options
+          ? `select (${f.options.join(", ")})`
+          : f.kind === "ref"
+            ? `ref → ${f.to}`
+            : f.kind;
       const view = agentView(f);
       out.push(
         `| ${code(f.name)} | ${esc(kind)} | ${code(f.class)} | ${f.personal_data ? a.yes : a.no} | ${code(f.group)} | ${a[view]} | ${esc(f.description)} |`,
@@ -50,10 +61,15 @@ export function appBody(app: App, locale: string, m: Messages, mirror: boolean, 
   if (withActions.length === 0) out.push(a.noWorkflow, "");
   for (const model of withActions) {
     out.push(`### ${code(model.name)}`, "");
-    out.push(`| ${a.th.action} | ${a.th.moves} | ${a.th.who} | ${a.th.approval} |`, "|---|---|---|---|");
+    out.push(
+      `| ${a.th.action} | ${a.th.moves} | ${a.th.who} | ${a.th.approval} |`,
+      "|---|---|---|---|",
+    );
     for (const act of model.actions) {
       const moves = act.field ? `${act.field}: ${act.from ?? "*"} → ${act.to}` : "-";
-      out.push(`| ${code(`${model.name}.${act.name}`)} | ${esc(moves)} | ${code(act.group)} | ${act.approval ? a.yes : a.no} |`);
+      out.push(
+        `| ${code(`${model.name}.${act.name}`)} | ${esc(moves)} | ${code(act.group)} | ${act.approval ? a.yes : a.no} |`,
+      );
     }
     out.push("");
   }
@@ -81,10 +97,14 @@ export function appBody(app: App, locale: string, m: Messages, mirror: boolean, 
   }
 
   const masked = app.models.flatMap((model) =>
-    model.fields.filter((f) => agentView(f) === "masked").map((f) => code(`${model.name}.${f.name}`)),
+    model.fields
+      .filter((f) => agentView(f) === "masked")
+      .map((f) => code(`${model.name}.${f.name}`)),
   );
   const withheld = app.models.flatMap((model) =>
-    model.fields.filter((f) => agentView(f) === "withheld").map((f) => code(`${model.name}.${f.name}`)),
+    model.fields
+      .filter((f) => agentView(f) === "withheld")
+      .map((f) => code(`${model.name}.${f.name}`)),
   );
   out.push(`## ${a.h.agents}`, "", a.agentsCan, "");
   const propose = [...approvals.map(code), ...app.models.map((x) => code(`${x.name}.delete`))];
@@ -93,13 +113,30 @@ export function appBody(app: App, locale: string, m: Messages, mirror: boolean, 
   if (withheld.length) out.push(fill(a.agentsWithheld, { list: withheld.join(", ") }), "");
 
   out.push(`## ${a.h.dependencies}`, "");
-  out.push(app.depends.length ? app.depends.map((d) => `- ${code(d)}`).join("\n") : a.noDependencies, "");
+  out.push(
+    app.depends.length ? app.depends.map((d) => `- ${code(d)}`).join("\n") : a.noDependencies,
+    "",
+  );
 
   out.push(`## ${a.h.install}`, "");
   if (app.builtin) out.push(a.installBuiltin, "");
   else {
-    out.push(a.installPackage, "", "```bash", `obop modules install-from ${app.id}`, "```", "", a.installNote, "");
+    out.push(
+      a.installPackage,
+      "",
+      "```bash",
+      `obop modules install-from ${app.id}`,
+      "```",
+      "",
+      a.installNote,
+      "",
+    );
   }
-  out.push(`## ${a.h.guide}`, "", `[${a.guideLink}](${prefix}/docs/reference/module-manifest/)`, "");
+  out.push(
+    `## ${a.h.guide}`,
+    "",
+    `[${a.guideLink}](${prefix}/docs/reference/module-manifest/)`,
+    "",
+  );
   return out.join("\n");
 }

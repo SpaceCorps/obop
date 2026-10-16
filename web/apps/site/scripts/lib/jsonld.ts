@@ -59,7 +59,10 @@ export function jsonLd(c: Ctx): object[] {
       publisher: { "@id": `${SITE_URL}/#organization` },
       potentialAction: {
         "@type": "SearchAction",
-        target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/search/?q={search_term_string}` },
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: `${SITE_URL}/search/?q={search_term_string}`,
+        },
         "query-input": "required name=search_term_string",
       },
     });
@@ -73,13 +76,23 @@ export function jsonLd(c: Ctx): object[] {
       operatingSystem: "Web, Linux, macOS",
       inLanguage: lang,
       codeRepository: GITHUB,
-      offers: { "@type": "Offer", price: "0", priceCurrency: "EUR", description: "Self-hosted open-source edition" },
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "EUR",
+        description: "Self-hosted open-source edition",
+      },
     });
     out.push(faq(m.home.faq));
   } else {
     const parts = c.path.split("/").filter(Boolean);
     const items: object[] = [
-      { "@type": "ListItem", position: 1, name: "obop", item: `${SITE_URL}${c.locale === "en" ? "" : `/${c.locale}`}/` },
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "obop",
+        item: `${SITE_URL}${c.locale === "en" ? "" : `/${c.locale}`}/`,
+      },
     ];
     let acc = "";
     parts.forEach((p, i) => {
@@ -109,7 +122,12 @@ export function jsonLd(c: Ctx): object[] {
       softwareVersion: c.fm["builtin"] ? undefined : String(c.fm["version"]),
       softwareRequirements: "obop",
       isPartOf: { "@id": `${SITE_URL}/#website` },
-      offers: { "@type": "Offer", price: "0", priceCurrency: "EUR", description: "Included in the open-source edition" },
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "EUR",
+        description: "Included in the open-source edition",
+      },
     });
   }
   if (section === "docs") {

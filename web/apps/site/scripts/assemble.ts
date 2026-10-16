@@ -1,7 +1,16 @@
 // Builds .src (the VitePress source tree) and .generated (data for the theme and the post-build step)
 // from: content/<locale>/**.md (authored), i18n/<locale>.ts (strings), packages/*.toml (apps),
 // docs/MODULES.md (single source of the manifest reference) and git log (changelog).
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { logoSvg } from "@obop/ui/static";
 import { DOCS_NAV } from "../data/docs-nav.ts";
@@ -48,7 +57,8 @@ function parseFm(src: string, file: string): Raw {
     else if (/^'.*'$/.test(v)) v = v.slice(1, -1);
     fm[kv[1]!] = v;
   }
-  if (!fm["title"] || !fm["description"]) throw new Error(`${file}: title and description are required`);
+  if (!fm["title"] || !fm["description"])
+    throw new Error(`${file}: title and description are required`);
   return { fm, body: m[2]!.replace(/^\n+/, ""), file };
 }
 
@@ -98,15 +108,23 @@ function moduleGuide(): string {
   const src = readFileSync(join(REPO_ROOT, "docs/MODULES.md"), "utf8");
   return src
     .replace(/^# .*\n+/, "")
-    .replace(/\]\((?!https?:|#|\/)([^)]+?\.md[^)]*)\)/g, (_m, href: string) => `](${ghLink(href)})`);
+    .replace(
+      /\]\((?!https?:|#|\/)([^)]+?\.md[^)]*)\)/g,
+      (_m, href: string) => `](${ghLink(href)})`,
+    );
 }
 
 const TOKENS: Record<string, (apps: App[]) => string> = {
   catalog: (apps) => {
     const rows = apps
       .filter((a) => !a.builtin)
-      .map((a) => `| [${a.name}](/apps/${a.slug}/) | \`${a.id}\` | ${a.version} | ${a.description.replace(/\|/g, "\\|")} |`);
-    return ["| App | Package id | Version | Description |", "|---|---|---|---|", ...rows].join("\n");
+      .map(
+        (a) =>
+          `| [${a.name}](/apps/${a.slug}/) | \`${a.id}\` | ${a.version} | ${a.description.replace(/\|/g, "\\|")} |`,
+      );
+    return ["| App | Package id | Version | Description |", "|---|---|---|---|", ...rows].join(
+      "\n",
+    );
   },
   changelog: () => {
     const { entries } = loadChangelog();
@@ -160,17 +178,28 @@ export function assemble(): PageRecord[] {
     const map = new Map<string, Raw>();
     for (const f of walk(dir)) {
       const rel = relative(dir, f).split("\\").join("/");
-      map.set(pathOf(rel), { ...parseFm(readFileSync(f, "utf8"), f), file: `web/apps/site/content/${l}/${rel}` });
+      map.set(pathOf(rel), {
+        ...parseFm(readFileSync(f, "utf8"), f),
+        file: `web/apps/site/content/${l}/${rel}`,
+      });
     }
     authored.set(l, map);
   }
   const en = authored.get("en")!;
 
-  const generatedPaths = ["/", "/apps/", "/pricing/", "/search/", ...apps.map((a) => `/apps/${a.slug}/`)];
+  const generatedPaths = [
+    "/",
+    "/apps/",
+    "/pricing/",
+    "/search/",
+    ...apps.map((a) => `/apps/${a.slug}/`),
+  ];
   const pagePaths = new Set<string>([...en.keys(), ...generatedPaths]);
-  for (const g of DOCS_NAV) for (const p of g.pages) if (!en.has(p)) throw new Error(`docs nav page missing: ${p}`);
+  for (const g of DOCS_NAV)
+    for (const p of g.pages) if (!en.has(p)) throw new Error(`docs nav page missing: ${p}`);
   for (const l of LOCALES) {
-    for (const p of authored.get(l)!.keys()) if (!en.has(p)) throw new Error(`${l}: ${p} has no English source`);
+    for (const p of authored.get(l)!.keys())
+      if (!en.has(p)) throw new Error(`${l}: ${p} has no English source`);
   }
 
   const records: PageRecord[] = [];
@@ -277,7 +306,10 @@ export function assemble(): PageRecord[] {
       add(locale, `/apps/${app.slug}/`, {
         title: app.name,
         seoTitle: `${app.name}: ${tagline}`,
-        description: `${tagline}. ${app.purpose.split(". ")[0]!.replace(/\.$/, "")}.`,
+        description:
+          locale === "en"
+            ? `${tagline}. ${app.purpose.split(". ")[0]!.replace(/\.$/, "")}.`
+            : `${tagline}. ${m.apps.lead.split(". ")[0]!.replace(/\.$/, "")}.`,
         layout: "app",
         section: "apps",
         body: appBody(app, locale, m, false, prefix),
@@ -290,6 +322,7 @@ export function assemble(): PageRecord[] {
           builtin: app.builtin,
           version: app.version,
           tagline,
+          lead: tagline,
         },
       });
     }
@@ -321,7 +354,9 @@ export function assemble(): PageRecord[] {
   for (const r of records) byPath.set(r.path, [...(byPath.get(r.path) ?? []), r]);
   for (const r of records) {
     const group = (byPath.get(r.path) ?? []).filter((x) => !x.fallback);
-    r.alternates = r.fallback ? [] : group.map((x) => ({ lang: messages[x.locale].htmlLang, url: x.url }));
+    r.alternates = r.fallback
+      ? []
+      : group.map((x) => ({ lang: messages[x.locale].htmlLang, url: x.url }));
   }
 
   // 5. Docs navigation per locale.
@@ -351,9 +386,17 @@ export function assemble(): PageRecord[] {
     );
   }
 
+  // The 404 page: VitePress renders its own 404.html as an empty shell, so the real one is a normal
+  // page that postbuild copies to 404.html.
+  write(
+    join(SRC, "page-not-found/index.md"),
+    `---\ntitle: "Page not found"\ndescription: "This page does not exist."\nlayout: "notfound"\nlocale: "en"\nnoindex: true\n---\n`,
+  );
+
   // 7. Static assets: logos, ASCII field, client scripts.
   const brandDir = join(SRC, "public/brand");
-  const svgDoc = (inner: string, color: string) => inner.replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" style="color:${color}" `);
+  const svgDoc = (inner: string, color: string) =>
+    inner.replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" style="color:${color}" `);
   write(join(brandDir, "obop-logo.svg"), svgDoc(logoSvg("full", 48, "obop"), "#1c1b22"));
   write(join(brandDir, "obop-logo-white.svg"), svgDoc(logoSvg("full", 48, "obop"), "#f2f1f7"));
   write(join(brandDir, "obop-logo-black.svg"), svgDoc(logoSvg("full", 48, "obop"), "#000000"));
@@ -391,11 +434,20 @@ export function assemble(): PageRecord[] {
     const file = join(SITE_ROOT, "content", l, "translation-status.json");
     if (!existsSync(file)) throw new Error(`missing ${relative(REPO_ROOT, file)}`);
     const status = JSON.parse(readFileSync(file, "utf8")) as Record<string, string>;
-    const expected = ["ui", "home", "apps", "pricing", ...[...authored.get(l)!.keys()].map((p) => p)];
-    for (const k of expected) if (!(k in status)) throw new Error(`${l}: translation-status.json lacks ${k}`);
+    const expected = [
+      "ui",
+      "home",
+      "apps",
+      "pricing",
+      ...[...authored.get(l)!.keys()].map((p) => p),
+    ];
+    for (const k of expected)
+      if (!(k in status)) throw new Error(`${l}: translation-status.json lacks ${k}`);
     for (const [k, v] of Object.entries(status)) {
-      if (!["machine-drafted", "reviewed"].includes(v)) throw new Error(`${l}: bad status for ${k}`);
-      if (!expected.includes(k)) throw new Error(`${l}: translation-status.json lists unknown page ${k}`);
+      if (!["machine-drafted", "reviewed"].includes(v))
+        throw new Error(`${l}: bad status for ${k}`);
+      if (!expected.includes(k))
+        throw new Error(`${l}: translation-status.json lists unknown page ${k}`);
     }
   }
   return records;

@@ -8,12 +8,16 @@ const { m } = useSite();
 <template>
   <div class="wrap page">
     <PageHeader>
-      <p class="planned-badge"><span class="pill warn">{{ m.pricing.plannedBadge }}</span></p>
+      <p class="planned-badge">
+        <span class="pill warn">{{ m.pricing.plannedBadge }}</span>
+      </p>
     </PageHeader>
     <div class="plans">
       <article v-for="p in m.pricing.plans" :key="p.name" :class="{ hl: p.highlight }">
         <h2>{{ p.name }}</h2>
-        <p class="price">{{ p.price }}<small>{{ p.period }}</small></p>
+        <p class="price">
+          {{ p.price }}<small>{{ p.period }}</small>
+        </p>
         <p class="blurb">{{ p.blurb }}</p>
         <ul class="plan-list">
           <li v-for="f in p.features" :key="f">{{ f }}</li>
@@ -31,7 +35,9 @@ const { m } = useSite();
           <p>{{ f.a }}</p>
         </details>
       </div>
-      <p><a class="btn primary large" href="/app/">{{ m.pricing.cta }}</a></p>
+      <p>
+        <a class="btn primary large" href="/app/">{{ m.pricing.cta }}</a>
+      </p>
     </div>
   </div>
 </template>

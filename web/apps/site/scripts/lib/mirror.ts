@@ -9,7 +9,9 @@ export function homeMirror(m: Messages, prefix: string, apps: App[]): string {
   out.push(`- [${h.ctaPrimary}](/app/)`, `- [${h.ctaSecondary}](${prefix}/apps/)`, "");
   out.push(`## ${h.appsTitle}`, "", h.appsSub, "");
   for (const a of apps) {
-    out.push(`- [${a.name}](${prefix}/apps/${a.slug}/): ${m.apps.taglines[a.id] ?? a.tagline} (${a.builtin ? m.apps.status.available : m.apps.status.marketplace})`);
+    out.push(
+      `- [${a.name}](${prefix}/apps/${a.slug}/): ${m.apps.taglines[a.id] ?? a.tagline} (${a.builtin ? m.apps.status.available : m.apps.status.marketplace})`,
+    );
   }
   out.push("", `## ${h.pillarsTitle}`, "", h.pillarsSub, "");
   for (const p of h.pillars) out.push(`### ${p.title}`, "", p.body, "", `*${p.tag}*`, "");

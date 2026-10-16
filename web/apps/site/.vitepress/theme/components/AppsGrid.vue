@@ -11,6 +11,7 @@ const live = apps.filter((a) => a.builtin).length;
 
 <template>
   <div class="apps-wrap">
+    <h2 v-if="categories" class="sr-only">{{ m.apps.title }}</h2>
     <div class="filters">
       <fieldset class="seg">
         <legend class="sr-only">{{ m.apps.filterLabel }}</legend>
@@ -41,7 +42,9 @@ const live = apps.filter((a) => a.builtin).length;
       >
         <div class="app-top">
           <Tile :id="a.id" :name="a.name" :size="44" />
-          <span class="status">{{ a.builtin ? m.apps.status.available : m.apps.status.marketplace }}</span>
+          <span class="status">{{
+            a.builtin ? m.apps.status.available : m.apps.status.marketplace
+          }}</span>
         </div>
         <h3>
           <a :href="href(`/apps/${a.slug}/`)">{{ a.name }}</a>

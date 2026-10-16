@@ -24,7 +24,9 @@ const flat = computed(() => groups.value.flatMap((g) => g.pages));
 const idx = computed(() => flat.value.findIndex((p) => p.path === fm.value["pagePath"]));
 const prev = computed(() => (idx.value > 0 ? flat.value[idx.value - 1] : undefined));
 const next = computed(() => (idx.value >= 0 ? flat.value[idx.value + 1] : undefined));
-const toc = computed(() => (page.value.headers ?? []).filter((h) => h.level === 2 || h.level === 3));
+const toc = computed(() =>
+  (page.value.headers ?? []).filter((h) => h.level === 2 || h.level === 3),
+);
 const edit = computed(() => `${GITHUB}/edit/main/${fm.value["editPath"]}`);
 </script>
 
@@ -32,29 +34,33 @@ const edit = computed(() => `${GITHUB}/edit/main/${fm.value["editPath"]}`);
   <div class="wrap docs">
     <details class="docs-menu">
       <summary>{{ m.ui.docsHome }}</summary>
-      <nav :aria-label="m.ui.docsNav">
+      <div class="docs-menu-body">
         <div v-for="g in groups" :key="g.group">
-          <h2>{{ g.title }}</h2>
+          <p class="side-title">{{ g.title }}</p>
           <ul>
             <li v-for="p in g.pages" :key="p.path">
-              <a :href="p.url" :aria-current="p.path === fm['pagePath'] ? 'page' : undefined">{{ p.title }}</a>
+              <a :href="p.url" :aria-current="p.path === fm['pagePath'] ? 'page' : undefined">{{
+                p.title
+              }}</a>
             </li>
           </ul>
         </div>
-      </nav>
+      </div>
     </details>
-    <aside class="docs-side">
+    <div class="docs-side">
       <nav :aria-label="m.ui.docsNav">
         <div v-for="g in groups" :key="g.group">
-          <h2>{{ g.title }}</h2>
+          <p class="side-title">{{ g.title }}</p>
           <ul>
             <li v-for="p in g.pages" :key="p.path">
-              <a :href="p.url" :aria-current="p.path === fm['pagePath'] ? 'page' : undefined">{{ p.title }}</a>
+              <a :href="p.url" :aria-current="p.path === fm['pagePath'] ? 'page' : undefined">{{
+                p.title
+              }}</a>
             </li>
           </ul>
         </div>
       </nav>
-    </aside>
+    </div>
     <article class="docs-main">
       <PageHeader />
       <UntranslatedBanner />
@@ -63,7 +69,7 @@ const edit = computed(() => `${GITHUB}/edit/main/${fm.value["editPath"]}`);
       </div>
       <footer class="doc-foot">
         <a class="edit" :href="edit"><Icon name="edit" :size="16" />{{ m.ui.editPage }}</a>
-        <nav v-if="prev || next" class="prev-next" :aria-label="m.ui.docsNav">
+        <nav v-if="prev || next" class="prev-next" :aria-label="`${m.ui.prev} / ${m.ui.next}`">
           <a v-if="prev" class="prev" :href="prev.url" rel="prev">
             <small>{{ m.ui.prev }}</small>
             <span>{{ prev.title }}</span>
@@ -75,15 +81,15 @@ const edit = computed(() => `${GITHUB}/edit/main/${fm.value["editPath"]}`);
         </nav>
       </footer>
     </article>
-    <aside v-if="toc.length > 1" class="docs-toc">
+    <div v-if="toc.length > 1" class="docs-toc">
       <nav :aria-label="m.ui.onThisPage">
-        <h2>{{ m.ui.onThisPage }}</h2>
+        <p class="side-title">{{ m.ui.onThisPage }}</p>
         <ul>
           <li v-for="h in toc" :key="h.link" :class="`l${h.level}`">
             <a :href="h.link">{{ h.title }}</a>
           </li>
         </ul>
       </nav>
-    </aside>
+    </div>
   </div>
 </template>

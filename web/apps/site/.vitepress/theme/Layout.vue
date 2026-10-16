@@ -20,6 +20,8 @@ const { fm, m } = useSite();
 const view = computed(() => {
   if (page.value.isNotFound) return NotFound;
   switch (fm.value["layout"]) {
+    case "notfound":
+      return NotFound;
     case "home":
       return HomePage;
     case "apps-index":

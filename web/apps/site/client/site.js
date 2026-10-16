@@ -9,7 +9,7 @@
     try {
       if (op === "get") return localStorage.getItem(key);
       if (op === "set") localStorage.setItem(key, value);
-    } catch (e) {
+    } catch {
       /* storage can be blocked; the page works without it */
     }
     return null;
@@ -31,15 +31,12 @@
 
   // ---- Strings for the page language (copy buttons, language hint) ----
   var hints = {};
-  var hintEl = doc.getElementById("lang-hints");
-  if (hintEl) {
-    try {
-      hints = JSON.parse(hintEl.textContent || "{}");
-    } catch (e) {
-      hints = {};
-    }
-  }
   var banner = doc.querySelector(".lang-banner");
+  try {
+    hints = banner ? JSON.parse(banner.getAttribute("data-hints") || "{}") : {};
+  } catch {
+    hints = {};
+  }
   var pageLang = banner ? banner.getAttribute("data-page-lang") : "en";
   var strings = hints[pageLang] || {};
 
@@ -62,10 +59,15 @@
 
   // ---- Language hint: a dismissible bubble, never a redirect ----
   if (banner && storage("get", "obop-lang-dismissed") !== "1") {
-    var prefs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+    var prefs =
+      navigator.languages && navigator.languages.length
+        ? navigator.languages
+        : [navigator.language];
     var target = null;
     for (var i = 0; i < prefs.length; i++) {
-      var base = String(prefs[i] || "").toLowerCase().split("-")[0];
+      var base = String(prefs[i] || "")
+        .toLowerCase()
+        .split("-")[0];
       if (base === pageLang) break;
       if (hints[base]) {
         target = base;
@@ -74,7 +76,11 @@
     }
     if (target) {
       var alt = doc.querySelector('link[rel="alternate"][hreflang="' + target + '"]');
-      var url = alt ? new URL(alt.getAttribute("href"), location.href).pathname : target === "en" ? "/" : "/" + target + "/";
+      var url = alt
+        ? new URL(alt.getAttribute("href"), location.href).pathname
+        : target === "en"
+          ? "/"
+          : "/" + target + "/";
       banner.querySelector(".lang-text").textContent = hints[target].text;
       var go = banner.querySelector(".lang-go");
       go.textContent = hints[target].go;
@@ -116,7 +122,10 @@
   }
 
   function find(index, query, limit) {
-    var terms = query.toLowerCase().split(/[^\p{L}\p{N}_.-]+/u).filter(Boolean);
+    var terms = query
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}_.-]+/u)
+      .filter(Boolean);
     if (!terms.length) return [];
     var hits = [];
     index.forEach(function (d) {

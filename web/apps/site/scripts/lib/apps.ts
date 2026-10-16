@@ -66,35 +66,32 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
       description: String(m["description"]),
       read_group: rg,
       write_group: String(m["write_group"]),
-      fields: ((m["field"] as Raw[] | undefined) ?? []).map(
-        (f): Field => ({
-          name: String(f["name"]),
-          description: String(f["description"]),
-          class: String(f["class"]),
-          personal_data: f["personal_data"] === true,
-          group: String(f["group"] ?? rg),
-          kind: String(f["kind"] ?? "text"),
-          options: f["options"] as string[] | undefined,
-          to: f["to"] as string | undefined,
-          required: f["required"] === true,
-        }),
-      ),
-      actions: ((m["action"] as Raw[] | undefined) ?? []).map(
-        (a): Action => ({
-          name: String(a["name"]),
-          description: String(a["description"]),
-          field: a["field"] as string | undefined,
-          from: a["from"] as string | undefined,
-          to: a["to"] as string | undefined,
-          group: String(a["group"] ?? m["write_group"]),
-          approval: a["approval"] === true,
-        }),
-      ),
+      fields: ((m["field"] as Raw[] | undefined) ?? []).map((f): Field => ({
+        name: String(f["name"]),
+        description: String(f["description"]),
+        class: String(f["class"]),
+        personal_data: f["personal_data"] === true,
+        group: String(f["group"] ?? rg),
+        kind: String(f["kind"] ?? "text"),
+        options: f["options"] as string[] | undefined,
+        to: f["to"] as string | undefined,
+        required: f["required"] === true,
+      })),
+      actions: ((m["action"] as Raw[] | undefined) ?? []).map((a): Action => ({
+        name: String(a["name"]),
+        description: String(a["description"]),
+        field: a["field"] as string | undefined,
+        from: a["from"] as string | undefined,
+        to: a["to"] as string | undefined,
+        group: String(a["group"] ?? m["write_group"]),
+        approval: a["approval"] === true,
+      })),
     };
   });
   return {
     id,
-    slug: copy.id === "base" ? "contacts" : copy.id === "product" ? "products" : id.replace(/_/g, "-"),
+    slug:
+      copy.id === "base" ? "contacts" : copy.id === "product" ? "products" : id.replace(/_/g, "-"),
     name: copy.name,
     category: copy.category,
     builtin,
@@ -112,13 +109,21 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
 export function loadApps(): App[] {
   const apps: App[] = [];
   for (const id of BUILTIN_IDS) {
-    apps.push(toApp(load(join(SITE_ROOT, "data/builtin", `${id}.toml`)), true, `crates/modules/${id}`));
+    apps.push(
+      toApp(load(join(SITE_ROOT, "data/builtin", `${id}.toml`)), true, `crates/modules/${id}`),
+    );
   }
   const bundled = new Set(APP_COPY.map((a) => a.id));
   for (const id of BUILTIN_IDS) bundled.delete(id);
   for (const copy of APP_COPY) {
     if (!bundled.has(copy.id)) continue;
-    apps.push(toApp(load(join(REPO_ROOT, "packages", `${copy.id}.toml`)), false, `packages/${copy.id}.toml`));
+    apps.push(
+      toApp(
+        load(join(REPO_ROOT, "packages", `${copy.id}.toml`)),
+        false,
+        `packages/${copy.id}.toml`,
+      ),
+    );
   }
   // Display order = APP_COPY order.
   const order = new Map(APP_COPY.map((a, i) => [a.id, i]));
@@ -130,7 +135,8 @@ export type AgentView = "clear" | "masked" | "withheld";
 
 /** What an agent token sees of a field (D40): sensitive classes are withheld, personal data masked. */
 export function agentView(f: Field): AgentView {
-  if (["confidential_hr", "special_category", "financial", "secret"].includes(f.class)) return "withheld";
+  if (["confidential_hr", "special_category", "financial", "secret"].includes(f.class))
+    return "withheld";
   if (f.personal_data) return "masked";
   return "clear";
 }

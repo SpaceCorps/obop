@@ -33,9 +33,14 @@ const other = ["de", "fr", "pl", "fi", "sv", "es"] as const;
       <li><a href="/llms.txt">llms.txt</a></li>
     </ul>
     <p class="langs">
-      <a v-for="l in other" :key="l" :href="`/${l}/`" :hreflang="messages[l].htmlLang" :lang="messages[l].htmlLang">{{
-        messages[l].langName
-      }}</a>
+      <a
+        v-for="l in other"
+        :key="l"
+        :href="`/${l}/`"
+        :hreflang="messages[l].htmlLang"
+        :lang="messages[l].htmlLang"
+        >{{ messages[l].langName }}</a
+      >
     </p>
   </div>
 </template>

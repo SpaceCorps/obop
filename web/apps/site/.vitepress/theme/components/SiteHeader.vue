@@ -26,6 +26,9 @@ function switchUrl(l: (typeof LOCALES)[number]): string {
         <a v-for="n in m.nav" :key="n.href" :href="href(n.href)">{{ n.label }}</a>
       </nav>
       <SearchBox class="header-search" />
+      <a class="icon-btn search-link" :href="href('/search/')" :aria-label="m.ui.search"
+        ><Icon name="search" :size="18"
+      /></a>
       <details class="lang">
         <summary :aria-label="m.ui.language">
           <span aria-hidden="true">{{ locale.toUpperCase() }}</span>
@@ -54,10 +57,10 @@ function switchUrl(l: (typeof LOCALES)[number]): string {
         <summary :aria-label="m.ui.menu"><Icon name="menu" :size="20" /></summary>
         <div class="menu-panel">
           <SearchBox id="q-menu" />
-          <nav :aria-label="m.ui.mainNav">
+          <div class="menu-links">
             <a v-for="n in m.nav" :key="n.href" :href="href(n.href)">{{ n.label }}</a>
             <a href="/app/">{{ m.ui.signIn }}</a>
-          </nav>
+          </div>
         </div>
       </details>
     </div>

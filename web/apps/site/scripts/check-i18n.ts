@@ -21,8 +21,15 @@ function shape(a: unknown, b: unknown, path: string, where: string) {
       problems.push(`${where}: ${path} should be an object`);
       return;
     }
-    for (const k of Object.keys(a)) shape((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], `${path}.${k}`, where);
-    for (const k of Object.keys(b)) if (!(k in a)) problems.push(`${where}: unexpected key ${path}.${k}`);
+    for (const k of Object.keys(a))
+      shape(
+        (a as Record<string, unknown>)[k],
+        (b as Record<string, unknown>)[k],
+        `${path}.${k}`,
+        where,
+      );
+    for (const k of Object.keys(b))
+      if (!(k in a)) problems.push(`${where}: unexpected key ${path}.${k}`);
   } else if (typeof a !== "string" || a === "") {
     if (a !== b) problems.push(`${where}: ${path} must stay ${JSON.stringify(a)}`);
   } else if (typeof b !== "string" || b.trim() === "") {
@@ -41,9 +48,17 @@ function walk(dir: string): string[] {
     return statSync(p).isDirectory() ? walk(p) : p.endsWith(".md") ? [p] : [];
   });
 }
-const links = (s: string) => [...s.matchAll(/\]\((\/[^)\s]*)\)/g)].map((m) => m[1]).sort().join(" ");
+const links = (s: string) =>
+  [...s.matchAll(/\]\((\/[^)\s]*)\)/g)]
+    .map((m) => m[1])
+    .sort()
+    .join(" ");
 const fences = (s: string) => [...s.matchAll(/```[\s\S]*?```/g)].map((m) => m[0]);
-const fmKeys = (s: string) => [...(/^---\n([\s\S]*?)\n---/.exec(s)?.[1] ?? "").matchAll(/^([\w-]+):/gm)].map((m) => m[1]).sort().join(",");
+const fmKeys = (s: string) =>
+  [...(/^---\n([\s\S]*?)\n---/.exec(s)?.[1] ?? "").matchAll(/^([\w-]+):/gm)]
+    .map((m) => m[1])
+    .sort()
+    .join(",");
 
 for (const l of LOCALES) {
   if (l === "en" || (only.length && !only.includes(l))) continue;
@@ -60,17 +75,26 @@ for (const l of LOCALES) {
     }
     const a = readFileSync(en, "utf8");
     const b = readFileSync(f, "utf8");
-    if (fmKeys(a) !== fmKeys(b)) problems.push(`${l}/${rel}: front matter keys differ (${fmKeys(a)} vs ${fmKeys(b)})`);
+    if (fmKeys(a) !== fmKeys(b))
+      problems.push(`${l}/${rel}: front matter keys differ (${fmKeys(a)} vs ${fmKeys(b)})`);
     if (links(a) !== links(b)) problems.push(`${l}/${rel}: internal link targets differ`);
     const fa = fences(a);
     const fb = fences(b);
-    if (fa.length !== fb.length) problems.push(`${l}/${rel}: ${fa.length} code blocks expected, found ${fb.length}`);
-    else fa.forEach((x, i) => {
-      // Comments inside code may be translated; the code lines may not change.
-      const strip = (s: string) => s.split("\n").filter((ln) => !/^\s*(#|\/\/)/.test(ln)).join("\n");
-      if (strip(x) !== strip(fb[i]!)) problems.push(`${l}/${rel}: code block ${i + 1} was changed`);
-    });
-    if (/\n#\s/.test(b.replace(/```[\s\S]*?```/g, ""))) problems.push(`${l}/${rel}: do not add an H1`);
+    if (fa.length !== fb.length)
+      problems.push(`${l}/${rel}: ${fa.length} code blocks expected, found ${fb.length}`);
+    else
+      fa.forEach((x, i) => {
+        // Comments inside code may be translated; the code lines may not change.
+        const strip = (s: string) =>
+          s
+            .split("\n")
+            .filter((ln) => !/^\s*(#|\/\/)/.test(ln))
+            .join("\n");
+        if (strip(x) !== strip(fb[i]!))
+          problems.push(`${l}/${rel}: code block ${i + 1} was changed`);
+      });
+    if (/\n#\s/.test(b.replace(/```[\s\S]*?```/g, "")))
+      problems.push(`${l}/${rel}: do not add an H1`);
   }
 }
 if (problems.length) {

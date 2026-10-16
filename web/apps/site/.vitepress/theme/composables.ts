@@ -11,6 +11,7 @@ export function useSite() {
   const locale = computed<Locale>(() => (fm.value["locale"] as Locale | undefined) ?? "en");
   const m = computed<Messages>(() => messages[locale.value]);
   const prefix = computed(() => (locale.value === "en" ? "" : `/${locale.value}`));
-  const href = (p: string) => (p.startsWith("/") && !/^\/(app|community|status)(\/|$)/.test(p) ? `${prefix.value}${p}` : p);
+  const href = (p: string) =>
+    p.startsWith("/") && !/^\/(app|community|status)(\/|$)/.test(p) ? `${prefix.value}${p}` : p;
   return { fm, page, locale, m, prefix, href };
 }

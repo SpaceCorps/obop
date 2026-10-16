@@ -12,34 +12,34 @@ description = "A person or organisation the business deals with"
 read_group = "base.user"
 write_group = "base.user"
 
-  [[model.field]]
-  name = "name"
-  description = "Display name"
-  class = "public_directory"
-  personal_data = true
-  required = true
+[[model.field]]
+name = "name"
+description = "Display name"
+class = "public_directory"
+personal_data = true
+required = true
 
-  [[model.field]]
-  name = "email"
-  description = "Work email address"
-  class = "public_directory"
-  personal_data = true
+[[model.field]]
+name = "email"
+description = "Work email address"
+class = "public_directory"
+personal_data = true
 
-  [[model.field]]
-  name = "tax_id"
-  description = "Tax identifier of a natural person"
-  class = "financial"
-  personal_data = true
+[[model.field]]
+name = "tax_id"
+description = "Tax identifier of a natural person"
+class = "financial"
+personal_data = true
 
-  [[model.field]]
-  name = "notes"
-  description = "Free-text internal notes"
-  class = "internal"
-  personal_data = true
-  kind = "longtext"
+[[model.field]]
+name = "notes"
+description = "Free-text internal notes"
+class = "internal"
+personal_data = true
+kind = "longtext"
 
-  [[model.action]]
-  name = "erase"
-  description = "Anonymise the party in place and record the erasure"
-  group = "privacy.officer"
-  approval = true
+[[model.action]]
+name = "erase"
+description = "Anonymise the party in place and record the erasure"
+group = "privacy.officer"
+approval = true

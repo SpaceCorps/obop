@@ -32,7 +32,11 @@ export default defineConfig({
   titleTemplate: false,
   // A broken internal link fails the build.
   ignoreDeadLinks: [/^\/app\//, /^\/community\//, /^\/status\/?$/],
-  markdown: { headers: { level: [2, 3] }, theme: { light: "github-light", dark: "github-dark" }, lineNumbers: false },
+  markdown: {
+    headers: { level: [2, 3] },
+    theme: { light: "github-light", dark: "github-dark" },
+    lineNumbers: false,
+  },
   vite: {
     root,
     server: { fs: { allow: [root, resolve(root, "../../..")] } },
@@ -48,10 +52,14 @@ export default defineConfig({
     const fm = pageData.frontmatter as Record<string, unknown>;
     const head: HeadConfig[] = [];
     const font = assets.find((a) => /geist-latin-wght-normal.*\.woff2$/.test(a));
-    if (font) head.push(["link", { rel: "preload", href: font, as: "font", type: "font/woff2", crossorigin: "" }]);
+    if (font)
+      head.push([
+        "link",
+        { rel: "preload", href: font, as: "font", type: "font/woff2", crossorigin: "" },
+      ]);
     head.push(["script", {}, THEME_SCRIPT]);
 
-    if (pageData.isNotFound) {
+    if (pageData.isNotFound || fm["noindex"] === true) {
       head.push(["meta", { name: "robots", content: "noindex" }]);
       return head;
     }
@@ -65,8 +73,10 @@ export default defineConfig({
     const mdUrl = fm["mdUrl"] as string | undefined;
 
     head.push(["link", { rel: "canonical", href: canonical }]);
-    for (const a of alts) head.push(["link", { rel: "alternate", hreflang: a.lang, href: `${SITE_URL}${a.url}` }]);
-    if (alts.length > 0) head.push(["link", { rel: "alternate", hreflang: "x-default", href: `${SITE_URL}${path}` }]);
+    for (const a of alts)
+      head.push(["link", { rel: "alternate", hreflang: a.lang, href: `${SITE_URL}${a.url}` }]);
+    if (alts.length > 0)
+      head.push(["link", { rel: "alternate", hreflang: "x-default", href: `${SITE_URL}${path}` }]);
     if (mdUrl) {
       const href = fallback ? `${path === "/" ? "/index" : path.slice(0, -1)}.md` : mdUrl;
       head.push(["link", { rel: "alternate", type: "text/markdown", href }]);
@@ -94,7 +104,15 @@ export default defineConfig({
       if (l !== locale && alts.some((a) => a.lang === messages[l].htmlLang))
         head.push(["meta", { property: "og:locale:alternate", content: messages[l].ogLocale }]);
     }
-    for (const data of jsonLd({ fm, locale, path, canonical, title, description, githubBlob: `${GITHUB}/blob/main/` })) {
+    for (const data of jsonLd({
+      fm,
+      locale,
+      path,
+      canonical,
+      title,
+      description,
+      githubBlob: `${GITHUB}/blob/main/`,
+    })) {
       head.push(["script", { type: "application/ld+json" }, JSON.stringify(data)]);
     }
     return head;
@@ -108,7 +126,10 @@ export default defineConfig({
       .replace(/<script type="module"[^>]*src="\/assets\/[^"]*"[^>]*><\/script>/g, "")
       .replace(/<script id="check-dark-mode">[\s\S]*?<\/script>/g, "")
       .replace(/<script>window\.__VP_[\s\S]*?<\/script>/g, "")
-      .replace(/<link rel="preload stylesheet" href="([^"]+)" as="style">/g, '<link rel="stylesheet" href="$1">')
+      .replace(
+        /<link rel="preload stylesheet" href="([^"]+)" as="style">/g,
+        '<link rel="stylesheet" href="$1">',
+      )
       .replace(/<link rel="preload" href="([^"]+\.css)" as="style">/g, "")
       .replace(/<meta name="generator"[^>]*>/g, "");
   },

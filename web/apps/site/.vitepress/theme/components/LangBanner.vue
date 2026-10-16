@@ -27,10 +27,10 @@ const hints = JSON.stringify(
     aria-label="Language"
     hidden
     :data-page-lang="messages[locale].htmlLang"
+    :data-hints="hints"
   >
     <p class="lang-text"></p>
     <a class="btn primary lang-go" href="/"></a>
     <button class="btn ghost lang-dismiss" type="button"></button>
-    <component :is="'script'" id="lang-hints" type="application/json" v-html="hints" />
   </div>
 </template>

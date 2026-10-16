@@ -96,16 +96,24 @@ export interface Card {
 }
 
 export function cardSvg(c: Card): string {
-  const logo = logoSvg("full", 44, "").replace("<svg ", '<svg x="72" y="64" ').replace(/currentColor/g, "#f2f1f7");
+  const logo = logoSvg("full", 44, "")
+    .replace("<svg ", '<svg x="72" y="64" ')
+    .replace(/currentColor/g, "#f2f1f7");
   const title = wrap(c.title, 74, 1000, 3);
   const desc = wrap(c.description, 30, 980, 2);
   const ty = 250;
   const titleLines = title
-    .map((l, i) => `<text x="72" y="${ty + i * 84}" font-size="74" font-weight="600" letter-spacing="-2" fill="#f7f6fb">${esc(l)}</text>`)
+    .map(
+      (l, i) =>
+        `<text x="72" y="${ty + i * 84}" font-size="74" font-weight="600" letter-spacing="-2" fill="#f7f6fb">${esc(l)}</text>`,
+    )
     .join("");
   const dy = ty + title.length * 84 + 24;
   const descLines = desc
-    .map((l, i) => `<text x="72" y="${dy + i * 42}" font-size="30" font-weight="400" fill="#b3b1c6">${esc(l)}</text>`)
+    .map(
+      (l, i) =>
+        `<text x="72" y="${dy + i * 42}" font-size="30" font-weight="400" fill="#b3b1c6">${esc(l)}</text>`,
+    )
     .join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Geist">
 <defs>
