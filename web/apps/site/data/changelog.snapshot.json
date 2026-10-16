@@ -1,0 +1,212 @@
+[
+  {
+    "hash": "7f9689d",
+    "date": "2026-10-16",
+    "subject": "Redesign the platform app and the landing page on @obop/ui; add brand and design-system docs"
+  },
+  {
+    "hash": "846e8b9",
+    "date": "2026-10-16",
+    "subject": "Add the Brand book to Customize: foundations, iconography, components, patterns, voice, accessibility"
+  },
+  {
+    "hash": "c067645",
+    "date": "2026-10-16",
+    "subject": "Migrate the backoffice onto @obop/ui: new shell, icons, tokens and primitives"
+  },
+  {
+    "hash": "89506f7",
+    "date": "2026-10-16",
+    "subject": "Document governed fields, delete and search (D48, D49, MODULES.md), CLI list options"
+  },
+  {
+    "hash": "9585e0c",
+    "date": "2026-10-16",
+    "subject": "Test governed fields, delete, search and modules check across modules, packages and REST"
+  },
+  {
+    "hash": "ece95b2",
+    "date": "2026-10-16",
+    "subject": "Run transition actions for implicit transitions, add modules check FILE, test governed fields, delete and search"
+  },
+  {
+    "hash": "d48d691",
+    "date": "2026-10-16",
+    "subject": "Add @obop/ui: design tokens, OKLCH colour system with AA check, icon set, logo and primitives"
+  },
+  {
+    "hash": "6c960bb",
+    "date": "2026-10-16",
+    "subject": "Governed fields, delete, search: registry transitions, dispatcher guards and generated commands"
+  },
+  {
+    "hash": "7895585",
+    "date": "2026-10-16",
+    "subject": "Add the ambient ASCII field hero effect (prototype, to be used by the main website)"
+  },
+  {
+    "hash": "df6424d",
+    "date": "2026-10-16",
+    "subject": "Write docs/MODULES.md and test the tutorial module and its documented errors"
+  },
+  {
+    "hash": "1ebe041",
+    "date": "2026-10-16",
+    "subject": "Add ten bundled apps: accounting, planning, field service, POS, eCommerce, website, email marketing, sign, dashboards, knowledge"
+  },
+  {
+    "hash": "0ace171",
+    "date": "2026-10-16",
+    "subject": "Provisioner: wait for the public address to resolve before reporting an instance running"
+  },
+  {
+    "hash": "2a50b21",
+    "date": "2026-10-16",
+    "subject": "Name each withheld field once per list; label the palette input; enable both regression tests"
+  },
+  {
+    "hash": "24a96f1",
+    "date": "2026-10-16",
+    "subject": "e2e: wait for saves before switching views; action timeout"
+  },
+  {
+    "hash": "e6f8ee3",
+    "date": "2026-10-16",
+    "subject": "e2e: filters, analysis, customize, permissions, agent, platform and a11y specs; README; CI job"
+  },
+  {
+    "hash": "67ebc65",
+    "date": "2026-10-16",
+    "subject": "Add Playwright e2e package: fixtures, servers, auth, navigation, records and kanban specs"
+  },
+  {
+    "hash": "f04a47b",
+    "date": "2026-10-16",
+    "subject": "Backoffice: Odoo-style control panel, five views and a richer record form"
+  },
+  {
+    "hash": "900a7a0",
+    "date": "2026-10-16",
+    "subject": "Backoffice: module builder emits typed fields and a status shortcut"
+  },
+  {
+    "hash": "071f315",
+    "date": "2026-10-16",
+    "subject": "Backoffice: typed field contract, shared data layer, client-side query engine"
+  },
+  {
+    "hash": "62c62a7",
+    "date": "2026-10-16",
+    "subject": "Test every bundled package end to end through the dispatcher"
+  },
+  {
+    "hash": "5f3dcb1",
+    "date": "2026-10-16",
+    "subject": "Bundle twelve declarative packages and upgrade fleet, helpdesk and projects to 0.2.0"
+  },
+  {
+    "hash": "37103b1",
+    "date": "2026-10-16",
+    "subject": "Typed fields: kinds, validation on write, typed manifests and /api/meta (D47)"
+  },
+  {
+    "hash": "e64eb36",
+    "date": "2026-10-16",
+    "subject": "Add CI: rust (fmt, clippy, tests incl. PostgreSQL), web (vp check and build), lockfile policy"
+  },
+  {
+    "hash": "c0fcbf2",
+    "date": "2026-10-16",
+    "subject": "New backoffice: registry-driven UI with floating panels and a Customize app"
+  },
+  {
+    "hash": "81f9e30",
+    "date": "2026-10-16",
+    "subject": "Sliplane: wait through a brief 'service not found' after create; short CLI errors"
+  },
+  {
+    "hash": "81da737",
+    "date": "2026-10-16",
+    "subject": "Instant delete and live job status"
+  },
+  {
+    "hash": "d70be7f",
+    "date": "2026-10-16",
+    "subject": "Fix: run HTTP handlers on the blocking pool so PostgreSQL works inside the runtime"
+  },
+  {
+    "hash": "cd22398",
+    "date": "2026-10-16",
+    "subject": "Fix frozen lockfile: landing app needs an importer entry"
+  },
+  {
+    "hash": "4aca328",
+    "date": "2026-10-16",
+    "subject": "Add the landing page; platform app moves under /app/"
+  },
+  {
+    "hash": "7a17464",
+    "date": "2026-10-16",
+    "subject": "docs: describe the Sliplane deployment as built"
+  },
+  {
+    "hash": "663f1cb",
+    "date": "2026-10-16",
+    "subject": "Sliplane: cell host split, no auto-deploy for instances, CLI and key entrypoint in the image"
+  },
+  {
+    "hash": "8bc8fc6",
+    "date": "2026-10-16",
+    "subject": "Dockerfile for both roles, deployment doc, decision D45"
+  },
+  {
+    "hash": "1d67f39",
+    "date": "2026-10-16",
+    "subject": "Add the control plane: sign up, get your own instance"
+  },
+  {
+    "hash": "a03e72d",
+    "date": "2026-10-16",
+    "subject": "Add declarative module packages, runtime install, marketplace and the Modules page"
+  },
+  {
+    "hash": "519b823",
+    "date": "2026-10-16",
+    "subject": "Add real authentication: obop-auth, login, scoped agent tokens, sign-in screen"
+  },
+  {
+    "hash": "308801b",
+    "date": "2026-10-16",
+    "subject": "Add obop-storage: SQLite locally, PostgreSQL for deployments (D44)"
+  },
+  {
+    "hash": "143caf9",
+    "date": "2026-10-16",
+    "subject": "Add backoffice UI over the REST surface and update CLAUDE.md status"
+  },
+  {
+    "hash": "b86a829",
+    "date": "2026-10-16",
+    "subject": "Add REST (obop-http), MCP (obop-mcp), generated CRUD, approval flow and four modules"
+  },
+  {
+    "hash": "d42116d",
+    "date": "2026-10-16",
+    "subject": "Add obop-commands: one dispatch path for REST, MCP and CLI"
+  },
+  {
+    "hash": "e13aae5",
+    "date": "2026-10-16",
+    "subject": "Add registry install gate, masking vault, base module and 'obop modules check'"
+  },
+  {
+    "hash": "1d30564",
+    "date": "2026-10-16",
+    "subject": "docs: propose D40-D43 (masking, agent-ready modules, agent safety timing, hosting)"
+  },
+  {
+    "hash": "87b7e12",
+    "date": "2026-10-16",
+    "subject": "Scaffold Cargo workspace and Vite+ web workspace"
+  }
+]

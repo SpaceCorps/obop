@@ -13,12 +13,17 @@ RUN corepack enable
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY web ./web
+# The website (web/apps/site) is generated from these: bundled packages, the module guide, the
+# ASCII hero. It has no .git here, so its changelog comes from data/changelog.snapshot.json.
+COPY packages ./packages
+COPY design ./design
+COPY docs/MODULES.md ./docs/MODULES.md
 RUN corepack prepare pnpm@12.6.0 --activate \
  && pnpm install --frozen-lockfile \
  && pnpm --filter @obop/backoffice exec vp build \
  && pnpm --filter @obop/platform exec vp build \
- && pnpm --filter @obop/landing exec vp build \
- && mkdir -p /site && cp -R web/apps/landing/dist/. /site/ && cp -R web/apps/platform/dist /site/app
+ && pnpm --filter @obop/site exec vp build \
+ && mkdir -p /site && cp -R web/apps/site/dist/. /site/ && cp -R web/apps/platform/dist /site/app
 
 FROM debian:stable-slim AS cli
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*

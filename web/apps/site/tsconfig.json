@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": [
+    "scripts",
+    "i18n",
+    "data",
+    ".vitepress",
+    "env.d.ts",
+    "vite.config.ts",
+    "../../config"
+  ],
+  "exclude": [".vitepress/cache", ".vitepress/dist"]
+}
