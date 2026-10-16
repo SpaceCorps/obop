@@ -24,23 +24,36 @@ Open http://127.0.0.1:8090, create an account, create an instance, follow its li
 
 ## Sliplane
 
-The SpaceCorps Sliplane account is `spacecorps`; the `obop` project (`project_2x9d8q51m9lt`) exists and is empty. The pieces the Sliplane provisioner needs:
+The SpaceCorps Sliplane account is `spacecorps`. The `obop` project (`project_2x9d8q51m9lt`) holds, on `spacecorps-main`:
+
+| Service | What | Network |
+|---|---|---|
+| `obop-postgres` | The `postgres:18` Docker image with volume `obop-pgdata`. The cell: one database and one role per business (D6). The superuser password lives in a secret env and in `~/.config/obop/cell.env` on the machine that created it. | internal only, `obop-postgres.internal:5432` |
+| `obop-platform` | The control plane, built from the `deploy` branch of this repository with the root `Dockerfile`; its own database is SQLite on volume `obop-platform-data`. | public, `obop-platform.sliplane.app` |
+| `obop-<slug>` | One per customer instance, created by the control plane from the same repository and branch, with auto-deploy off. | public, `*.sliplane.app` |
+
+The control plane provisions through the `sliplane` CLI bundled in the image (v1.0.0, pinned by checksum). **It needs one secret you must set**: `SLIPLANE_API_KEY`, a Sliplane API key with write access. The entrypoint registers it under `SLIPLANE_ACCOUNT` (a plaintext 0600 store inside the container, as the CLI allows) and then drops it from the environment. Without the key the control plane still serves signup and sign-in, but creating an instance fails with a clear error.
+
+```bash
+sliplane services set-env --project-id project_2x9d8q51m9lt --service-id <obop-platform id> -a spacecorps --key SLIPLANE_API_KEY --value <key> --secret
+sliplane services deploy --project-id project_2x9d8q51m9lt --service-id <obop-platform id> -a spacecorps
+```
+
+Settings read by `obop platform serve --provisioner sliplane`:
 
 | Variable | Meaning |
 |---|---|
-| `SLIPLANE_ACCOUNT` | Account name the `sliplane` CLI is configured with (`spacecorps`). |
-| `OBOP_SLIPLANE_PROJECT` | Project id for instance services (`project_2x9d8q51m9lt`). |
-| `OBOP_SLIPLANE_SERVER` | Server id the services run on. |
-| `OBOP_CELL_ADMIN_URL` | `postgres://` URL of a shared PostgreSQL with rights to create roles and databases (one database per business, D6). Create it with `sliplane postgres create`. |
-| `OBOP_IMAGE` or `OBOP_REPO` (+ `OBOP_BRANCH`) | Where instance services come from. The image built from the root `Dockerfile` serves both roles. |
-| `OBOP_MARKETPLACE_URL` | Optional extra catalog (`index.json` and `packages/<id>.toml`) for every instance. |
+| `SLIPLANE_ACCOUNT` | Account name the CLI is registered under. |
+| `OBOP_SLIPLANE_PROJECT`, `OBOP_SLIPLANE_SERVER` | Where instance services go. |
+| `OBOP_CELL_ADMIN_URL` | `postgres://` superuser URL of the cell, as the control plane reaches it. |
+| `OBOP_CELL_INSTANCE_HOST` | `host:port` instances use for the cell (`obop-postgres.internal:5432`). |
+| `OBOP_IMAGE` or `OBOP_REPO` (+ `OBOP_BRANCH`) | Where instance services come from. A repository means Sliplane builds each instance itself; an image (once a registry is in place) is much faster. |
+| `OBOP_MARKETPLACE_URL` | Optional extra catalog for every instance. |
 
-Deploy the control plane as one Sliplane service from the same image with the command `obop platform serve --addr 0.0.0.0:8080 --static /srv/platform --provisioner sliplane`, a persistent volume (or a PostgreSQL `--db`) for its own database, and the variables above.
+### Known limits
 
-### Before the first real deployment
-
-- **Server capacity.** `spacecorps-main` is 2 vCPU and 2 GB and already runs five services. A Rust release build and every extra instance compete with them. Use a separate server for obop, or build the image elsewhere and pull it with `OBOP_IMAGE`.
-- **Cost.** The cell PostgreSQL and any new server are billed resources; none has been created.
-- **TLS** terminates at Sliplane's proxy; the instance speaks plain HTTP behind it. Confirm that before relying on it.
+- **Build time and memory.** Every instance builds the Rust workspace on `spacecorps-main`. That is slow, and it competes with the other services; a registry image would remove it.
+- **TLS** terminates at Sliplane's proxy and the instance speaks plain HTTP behind it. Confirm before relying on it. The control plane reaches the cell over the internal network without TLS.
+- **Upgrading instances** is manual (auto-deploy is off): `sliplane services deploy` per instance.
 - **Migrations.** There is no schema manager yet: records are JSON documents, and installing a newer package version does not migrate existing records.
-- **Backups.** Nothing backs up the cell PostgreSQL yet.
+- **Backups.** Nothing backs up the cell yet.
