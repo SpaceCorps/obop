@@ -712,10 +712,13 @@ export function Tooltip({
   label,
   children,
   side = "bottom",
+  align = "center",
 }: {
   label: string;
   children: ReactElement<{ "aria-describedby"?: string }>;
   side?: "top" | "bottom";
+  /** `start` or `end` lines the tip up with that edge of its target, for controls near an edge. */
+  align?: "center" | "start" | "end";
 }) {
   const [show, setShow] = useState(false);
   const id = useId();
@@ -740,7 +743,7 @@ export function Tooltip({
     >
       {cloneElement(children, show ? { "aria-describedby": id } : {})}
       {show && (
-        <span role="tooltip" id={id} className={cx("tip-body", side)}>
+        <span role="tooltip" id={id} className={cx("tip-body", side, align !== "center" && align)}>
           {label}
         </span>
       )}

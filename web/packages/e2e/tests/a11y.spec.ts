@@ -66,7 +66,7 @@ test.describe("accessibility smoke", () => {
 
   test("every Customize tab has no unlabeled controls", async ({ page, signIn }) => {
     await signIn("root");
-    for (const tab of ["theme", "apps", "modules", "build"]) {
+    for (const tab of ["theme", "apps", "modules", "build", "guide"]) {
       await open(page, `/customize/${tab}?tab=${tab}`);
       await expect(page.getByRole("tab", { name: /./, selected: true })).toBeVisible();
       if (tab === "modules") await expect(page.locator("article.card").first()).toBeVisible();

@@ -254,7 +254,11 @@ export function RecordPanel({
             return (
               <li key={s}>
                 {mv.reason && !on ? (
-                  <Tooltip label={mv.reason} side="top">
+                  <Tooltip
+                    label={mv.reason}
+                    side="top"
+                    align={idx < all.length / 2 ? "start" : "end"}
+                  >
                     {btn}
                   </Tooltip>
                 ) : (
@@ -295,7 +299,7 @@ export function RecordPanel({
       )}
       {!creating && (model.actions.length > 0 || model.can_delete) && (
         <div className="actionrow">
-          {model.actions.map((a) => {
+          {model.actions.map((a, ai) => {
             const f = a.field ? fields.find((x) => x.name === a.field) : undefined;
             const at = f ? String(row[f.name] ?? "") : "";
             const why =
@@ -322,7 +326,12 @@ export function RecordPanel({
               </Button>
             );
             return why ? (
-              <Tooltip key={a.id} label={why} side="top">
+              <Tooltip
+                key={a.id}
+                label={why}
+                side="top"
+                align={ai < model.actions.length / 2 ? "start" : "end"}
+              >
                 {btn}
               </Tooltip>
             ) : (

@@ -60,10 +60,18 @@ export async function deleteRecords(
   return out;
 }
 
+/** "lead" to "leads", "party" to "parties". */
+export function plural(noun: string, n: number): string {
+  if (n === 1) return noun;
+  if (/[^aeiou]y$/.test(noun)) return `${noun.slice(0, -1)}ies`;
+  if (/(s|x|z|ch|sh)$/.test(noun)) return `${noun}es`;
+  return `${noun}s`;
+}
+
 /** The sentence a toast says about a batch of results. */
 export function summarize(results: DeleteResult[], noun: string): string {
   const n = (s: DeleteResult["status"]) => results.filter((r) => r.status === s).length;
-  const word = (k: number) => (k === 1 ? noun : `${noun}s`);
+  const word = (k: number) => plural(noun, k);
   const parts: string[] = [];
   if (n("deleted")) parts.push(`${n("deleted")} ${word(n("deleted"))} deleted`);
   if (n("approval"))

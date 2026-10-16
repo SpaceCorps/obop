@@ -3,7 +3,13 @@ import { ConfirmDialog } from "@obop/ui";
 import type { ModelMeta } from "./api.ts";
 import { useData } from "./data.tsx";
 import { modelLabel } from "./format.ts";
-import { deleteRecords, summarize, type DeleteResult, type RefHit } from "./remove.ts";
+import {
+  deleteRecords,
+  plural as pluralOf,
+  summarize,
+  type DeleteResult,
+  type RefHit,
+} from "./remove.ts";
 
 type Props = {
   model: ModelMeta;
@@ -63,7 +69,7 @@ export function DeleteDialog({ model, noun, records, onClose, onDone }: Props) {
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<DeleteResult[] | null>(null);
   const many = records.length > 1;
-  const plural = (n: number) => (n === 1 ? noun : `${noun}s`);
+  const plural = (n: number) => pluralOf(noun, n);
 
   async function run() {
     setBusy(true);
