@@ -1006,6 +1006,7 @@ fn delete_is_visible_in_meta_and_needs_the_write_group() {
 fn parties(r: &Rig) -> Vec<String> {
     let u = user();
     // name, city, age, born, vip, tier, salary
+    #[allow(clippy::type_complexity)]
     let rows: [(
         &str,
         Option<&str>,
@@ -1464,7 +1465,7 @@ fn ordering_is_typed_stable_and_puts_empty_values_last() {
         );
         // Several keys; dir defaults to asc.
         let two = names_of(
-            &r,
+            r,
             &user(),
             m(vec![(
                 "order",

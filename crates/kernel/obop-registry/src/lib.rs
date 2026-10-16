@@ -562,6 +562,79 @@ mod tests {
     }
 
     #[test]
+    fn generated_commands_include_search_and_an_approval_gated_delete() {
+        let m = module(ok_field());
+        let cmds = m.models[0].all_commands();
+        let names: Vec<_> = cmds.iter().map(|c| c.name).collect();
+        assert_eq!(
+            names,
+            ["get", "list", "search", "create", "update", "delete"]
+        );
+        assert!(
+            cmds.iter()
+                .find(|c| c.name == "delete")
+                .unwrap()
+                .needs_approval
+        );
+        assert!(
+            cmds.iter()
+                .filter(|c| c.name != "delete")
+                .all(|c| !c.needs_approval)
+        );
+    }
+
+    #[test]
+    fn transitions_make_governed_fields_and_are_gated() {
+        let mut m = module(ok_field().select(&["a", "b", "c"]));
+        m.models[0].fields[0].name = "state";
+        m.models[0].commands = vec![
+            CommandDef::new("go", "Go", "g").transition("state", Some("a"), "b"),
+            CommandDef::new("stop", "Stop", "g").transition("state", None, "c"),
+        ];
+        assert!(check_module(&m).is_empty());
+        assert_eq!(m.models[0].governed_fields(), ["state"]);
+        assert_eq!(m.models[0].transitions().count(), 2);
+        // Off-option values, a missing field and a non-select field are gate violations.
+        m.models[0].commands[0] =
+            CommandDef::new("go", "Go", "g").transition("state", Some("a"), "z");
+        assert!(check_module(&m)[0].problem.contains("not an option"));
+        m.models[0].commands[0] = CommandDef::new("go", "Go", "g").transition("ghost", None, "b");
+        assert!(
+            check_module(&m)[0]
+                .problem
+                .contains("declared select field")
+        );
+        let mut text = module(ok_field());
+        text.models[0].commands =
+            vec![CommandDef::new("go", "Go", "g").transition("email", None, "b")];
+        assert!(
+            check_module(&text)[0]
+                .problem
+                .contains("declared select field")
+        );
+    }
+
+    #[test]
+    fn custom_commands_cannot_reuse_generated_names_or_each_other() {
+        let mut m = module(ok_field());
+        m.models[0].commands = vec![CommandDef::new("delete", "x", "g")];
+        assert!(
+            check_module(&m)[0]
+                .problem
+                .contains("generated or declared twice")
+        );
+        m.models[0].commands = vec![
+            CommandDef::new("a", "x", "g"),
+            CommandDef::new("a", "x", "g"),
+        ];
+        assert!(
+            check_module(&m)[0]
+                .problem
+                .contains("generated or declared twice")
+        );
+    }
+
+    #[test]
     fn a_field_cannot_be_named_id() {
         let mut f = ok_field();
         f.name = "id";

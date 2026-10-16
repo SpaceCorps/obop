@@ -963,6 +963,193 @@ mod tests {
         );
     }
 
+    fn handler_error(r: Result<obop_commands::Response, CallError>) -> String {
+        match r {
+            Err(CallError::Handler(m)) => m,
+            other => panic!("expected a handler error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn installed_packages_govern_their_state_fields() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/helpdesk.toml"),
+            "marketplace",
+            "root",
+        )
+        .unwrap();
+        let agent = Principal::user("a", &["helpdesk.agent"]);
+        let manager = Principal::user("m", &["helpdesk.agent", "helpdesk.manager"]);
+        let bot = Principal::agent(
+            "bot",
+            &["helpdesk.agent", "helpdesk.manager"],
+            &["helpdesk.agent", "helpdesk.manager"],
+        );
+        // The state is required, yet may be left out: it defaults to the first option.
+        let id = id_of(
+            &call(
+                &d,
+                &agent,
+                "helpdesk_ticket.create",
+                Value::map([("subject", Value::text("printer"))]),
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            store.field("helpdesk_ticket", &id, "state"),
+            Some(Value::text("open"))
+        );
+        let e = handler_error(call(
+            &d,
+            &agent,
+            "helpdesk_ticket.create",
+            Value::map([
+                ("subject", Value::text("x")),
+                ("state", Value::text("closed")),
+            ]),
+        ));
+        assert!(e.contains("starts as \"open\""), "{e}");
+        let set = |p: &Principal, st: &str| {
+            call(
+                &d,
+                p,
+                "helpdesk_ticket.update",
+                Value::Map(
+                    [
+                        ("id".to_string(), Value::text(&id)),
+                        ("state".to_string(), Value::text(st)),
+                    ]
+                    .into(),
+                ),
+            )
+        };
+        // open -> closed skips two steps; the message names where it can go.
+        let e = handler_error(set(&agent, "closed"));
+        assert!(e.contains("it can only go to: in_progress"), "{e}");
+        set(&agent, "in_progress").unwrap();
+        set(&agent, "resolved").unwrap();
+        // Closing needs helpdesk.manager and, for an agent, an approval.
+        let e = handler_error(set(&agent, "closed"));
+        assert!(
+            e.contains("close action") && e.contains("helpdesk.manager"),
+            "{e}"
+        );
+        let Err(CallError::ApprovalRequired { plan_id }) = set(&bot, "closed") else {
+            panic!("an agent only proposes the implicit close")
+        };
+        assert_eq!(
+            store.field("helpdesk_ticket", &id, "state"),
+            Some(Value::text("resolved"))
+        );
+        d.approve(&manager, &mut Vault::new(), &plan_id).unwrap();
+        assert_eq!(
+            store.field("helpdesk_ticket", &id, "state"),
+            Some(Value::text("closed"))
+        );
+        // No update leaves a final state either.
+        let e = handler_error(set(&manager, "open"));
+        assert!(e.contains("no transition leaves \"closed\""), "{e}");
+    }
+
+    #[test]
+    fn an_action_refuses_a_record_with_an_empty_required_field() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/helpdesk.toml"),
+            "marketplace",
+            "root",
+        )
+        .unwrap();
+        let agent = Principal::user("a", &["helpdesk.agent"]);
+        // A record imported without its required subject.
+        let id = store
+            .insert(
+                "helpdesk_ticket",
+                [("state".to_string(), Value::text("open"))].into(),
+            )
+            .unwrap();
+        let e = handler_error(call(&d, &agent, "helpdesk_ticket.take", by_id(&id)));
+        assert!(e.contains("helpdesk_ticket.subject is required"), "{e}");
+        assert_eq!(
+            store.field("helpdesk_ticket", &id, "state"),
+            Some(Value::text("open"))
+        );
+        call(
+            &d,
+            &agent,
+            "helpdesk_ticket.update",
+            Value::map([("id", Value::text(&id)), ("subject", Value::text("fixed"))]),
+        )
+        .unwrap();
+        call(&d, &agent, "helpdesk_ticket.take", by_id(&id)).unwrap();
+    }
+
+    #[test]
+    fn installed_models_get_delete_and_search_and_the_ref_rule() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/helpdesk.toml"),
+            "marketplace",
+            "root",
+        )
+        .unwrap();
+        let manager = Principal::user("m", &["helpdesk.agent", "helpdesk.manager"]);
+        let sla = id_of(
+            &call(
+                &d,
+                &manager,
+                "helpdesk_sla.create",
+                Value::map([
+                    ("name", Value::text("Gold")),
+                    ("priority", Value::text("high")),
+                    ("first_response_minutes", Value::Int(10)),
+                    ("resolution_minutes", Value::Int(60)),
+                ]),
+            )
+            .unwrap(),
+        );
+        let ticket = id_of(
+            &call(
+                &d,
+                &manager,
+                "helpdesk_ticket.create",
+                Value::map([
+                    ("subject", Value::text("t1")),
+                    ("sla_id", Value::text(&sla)),
+                ]),
+            )
+            .unwrap(),
+        );
+        let e = handler_error(call(&d, &manager, "helpdesk_sla.delete", by_id(&sla)));
+        assert!(
+            e.contains("helpdesk_ticket (1)") && e.contains(&ticket),
+            "{e}"
+        );
+        // An agent only proposes the delete; it still needs a human.
+        let bot = Principal::agent("b", &["helpdesk.agent"], &["helpdesk.agent"]);
+        assert!(matches!(
+            call(&d, &bot, "helpdesk_ticket.delete", by_id(&ticket)),
+            Err(CallError::ApprovalRequired { .. })
+        ));
+        call(&d, &manager, "helpdesk_ticket.delete", by_id(&ticket)).unwrap();
+        call(&d, &manager, "helpdesk_sla.delete", by_id(&sla)).unwrap();
+        let r = call(
+            &d,
+            &manager,
+            "helpdesk_ticket.search",
+            Value::map([("limit", Value::Int(10))]),
+        )
+        .unwrap();
+        assert_eq!(
+            r.value,
+            Value::map([("rows", Value::List(vec![])), ("total", Value::Int(0))])
+        );
+    }
+
     #[test]
     fn refs_to_models_outside_the_package_need_them_installed() {
         let store = Store::new();

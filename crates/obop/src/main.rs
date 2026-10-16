@@ -960,6 +960,241 @@ mod tests {
         );
     }
 
+    async fn get_meta(r: &axum::Router, token: &str) -> J {
+        let resp = r
+            .clone()
+            .oneshot(
+                Request::get("/api/meta")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap()
+    }
+
+    /// The contract the UI builds on for D48 and D49: `can_delete`, the transition of each
+    /// action, the shape of `search`, implicit transitions over REST, delete and its errors.
+    #[tokio::test]
+    async fn workflow_governance_delete_and_search_over_rest() {
+        let r = dev();
+        let meta = get_meta(&r, "dev-sales").await;
+        let models: Vec<&J> = meta["modules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|m| m["models"].as_array().unwrap())
+            .collect();
+        let lead = models.iter().find(|m| m["name"] == "lead").unwrap();
+        assert_eq!(lead["can_delete"], true);
+        let action = |id: &str| {
+            lead["actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["id"] == id)
+                .unwrap_or_else(|| panic!("no action {id}"))
+                .clone()
+        };
+        let won = action("lead.mark_won");
+        assert_eq!(
+            (&won["field"], &won["from"], &won["to"]),
+            (&json!("stage"), &J::Null, &json!("won"))
+        );
+        let q = action("lead.qualify");
+        assert_eq!(
+            (&q["field"], &q["from"], &q["to"], &q["needs_approval"]),
+            (
+                &json!("stage"),
+                &json!("new"),
+                &json!("qualified"),
+                &json!(false)
+            )
+        );
+        // The generated commands are not listed as actions.
+        assert!(
+            lead["actions"].as_array().unwrap().iter().all(|a| !a["id"]
+                .as_str()
+                .unwrap()
+                .ends_with(".delete")
+                && !a["id"].as_str().unwrap().ends_with(".search"))
+        );
+        // A principal that may not write cannot delete: the invoice is not even visible.
+        assert!(models.iter().all(|m| m["name"] != "invoice"));
+
+        // A kanban drag is `update` with the new stage; it follows the transitions.
+        let (_, rows) = post(&r, Some("dev-sales"), "/api/lead/list", json!({})).await;
+        let id = rows["value"][0]["id"].as_str().unwrap().to_string();
+        let stage = rows["value"][0]["stage"].as_str().unwrap().to_string();
+        assert_eq!(stage, "qualified");
+        let (s, b) = post(
+            &r,
+            Some("dev-sales"),
+            "/api/lead/update",
+            json!({"id": id, "stage": "qualified", "title": "kept"}),
+        )
+        .await;
+        assert_eq!(s, 200, "unchanged stage is not a transition: {b}");
+        let (s, b) = post(
+            &r,
+            Some("dev-sales"),
+            "/api/lead/update",
+            json!({"id": id, "stage": "won"}),
+        )
+        .await;
+        assert_eq!((s, &b["value"]["stage"]), (200, &json!("won")), "{b}");
+        let (s, b) = post(
+            &r,
+            Some("dev-sales"),
+            "/api/lead/create",
+            json!({"title": "x", "stage": "won"}),
+        )
+        .await;
+        assert_eq!(s, 400);
+        assert!(
+            b["error"].as_str().unwrap().contains("starts as \"new\""),
+            "{b}"
+        );
+        let (s, b) = post(
+            &r,
+            Some("dev-sales"),
+            "/api/lead/update",
+            json!({"id": id, "stage": "zzz"}),
+        )
+        .await;
+        assert_eq!(s, 400);
+        assert!(
+            b["error"]
+                .as_str()
+                .unwrap()
+                .contains("one of: new, qualified, won, lost"),
+            "{b}"
+        );
+
+        // An agent proposing an implicit post gets the usual 202 plan; an admin approves it.
+        let (_, inv) = post(&r, Some("dev-admin"), "/api/invoice/list", json!({})).await;
+        let inv_id = inv["value"][0]["id"].as_str().unwrap().to_string();
+        let (s, b) = post(
+            &r,
+            Some("dev-agent"),
+            "/api/invoice/update",
+            json!({"id": inv_id, "state": "posted"}),
+        )
+        .await;
+        assert_eq!(s, 202, "{b}");
+        assert_eq!(b["approval_required"], true);
+        let plan = b["plan_id"].as_str().unwrap().to_string();
+        let (_, now) = post(
+            &r,
+            Some("dev-admin"),
+            "/api/invoice/get",
+            json!({"id": inv_id}),
+        )
+        .await;
+        assert_eq!(now["value"]["state"], "draft");
+        let (s, b) = post(
+            &r,
+            Some("dev-admin"),
+            &format!("/api/approve/{plan}"),
+            json!({}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+        assert_eq!(b["value"]["state"], "posted");
+        assert_eq!(
+            b["value"]["number"], "INV-00001",
+            "the post action ran: {b}"
+        );
+
+        // search: {rows, total}; list keeps returning a bare array.
+        let (s, b) = post(
+            &r,
+            Some("dev-sales"),
+            "/api/lead/search",
+            json!({"filter": [{"field": "title", "op": "contains", "value": "KEP"}], "limit": 1, "order": [{"field": "title", "dir": "desc"}]}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+        assert_eq!(b["value"]["total"], 1);
+        assert_eq!(b["value"]["rows"].as_array().unwrap().len(), 1);
+        let (_, l) = post(&r, Some("dev-sales"), "/api/lead/list", json!({"limit": 1})).await;
+        assert!(l["value"].is_array());
+        // The agent cannot filter on a masked field; the error is the unknown-field one.
+        let (s, b) = post(
+            &r,
+            Some("dev-agent"),
+            "/api/party/search",
+            json!({"filter": [{"field": "email", "op": "eq", "value": "ada@example.test"}]}),
+        )
+        .await;
+        assert_eq!(s, 400);
+        assert_eq!(b["error"], "unknown field party.email");
+        let (_, b2) = post(
+            &r,
+            Some("dev-agent"),
+            "/api/party/search",
+            json!({"filter": [{"field": "nonexistent", "op": "eq", "value": "x"}]}),
+        )
+        .await;
+        assert_eq!(b2["error"], "unknown field party.nonexistent");
+
+        // delete: referenced records are refused with the referrers named; an agent proposes.
+        let (_, ps) = post(&r, Some("dev-admin"), "/api/party/list", json!({})).await;
+        let pid = ps["value"][0]["id"].as_str().unwrap().to_string();
+        let (s, b) = post(
+            &r,
+            Some("dev-admin"),
+            "/api/party/delete",
+            json!({"id": pid}),
+        )
+        .await;
+        assert_eq!(s, 400);
+        assert!(
+            b["error"]
+                .as_str()
+                .unwrap()
+                .contains("still referenced by sale_order (1)"),
+            "{b}"
+        );
+        let (_, leads) = post(&r, Some("dev-admin"), "/api/lead/list", json!({})).await;
+        let lead_id = leads["value"][0]["id"].as_str().unwrap().to_string();
+        let (s, b) = post(
+            &r,
+            Some("dev-agent"),
+            "/api/lead/delete",
+            json!({"id": lead_id}),
+        )
+        .await;
+        assert_eq!((s, &b["approval_required"]), (202, &json!(true)));
+        let plan = b["plan_id"].as_str().unwrap().to_string();
+        let (s, _) = post(
+            &r,
+            Some("dev-admin"),
+            &format!("/api/approve/{plan}"),
+            json!({}),
+        )
+        .await;
+        assert_eq!(s, 200);
+        let (s, _) = post(
+            &r,
+            Some("dev-admin"),
+            "/api/lead/get",
+            json!({"id": lead_id}),
+        )
+        .await;
+        assert_eq!(s, 400, "the lead is gone");
+        // sam-like users who cannot write cannot delete: dev-sales has no invoicing groups.
+        let (s, _) = post(
+            &r,
+            Some("dev-sales"),
+            "/api/invoice/delete",
+            json!({"id": inv_id}),
+        )
+        .await;
+        assert_eq!(s, 404);
+    }
+
     #[tokio::test]
     async fn meta_exposes_field_kinds_and_bad_types_are_http_400() {
         let (r, _) = real();
@@ -1127,6 +1362,61 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
         assert_eq!(last, 404);
+    }
+
+    #[test]
+    fn modules_check_accepts_every_shipped_package_and_fails_on_a_bad_one() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut files = Vec::new();
+        for dir in ["packages", "docs/modules"] {
+            for e in std::fs::read_dir(root.join(dir)).unwrap() {
+                let p = e.unwrap().path();
+                if p.extension().is_some_and(|x| x == "toml") {
+                    files.push(p.to_string_lossy().to_string());
+                }
+            }
+        }
+        assert!(files.len() >= 23, "{files:?}");
+        let refs: Vec<&str> = files.iter().map(String::as_str).collect();
+        assert!(modules_check_files(&refs).is_ok());
+
+        let builtin = App::new().modules;
+        let fleet = std::fs::read_to_string(root.join("packages/fleet.toml")).unwrap();
+        for (broken, want) in [
+            (
+                fleet.replace("class = \"none\"", "class = \"bogus\""),
+                "unknown data class",
+            ),
+            (
+                std::fs::read_to_string(root.join("packages/accounting.toml"))
+                    .unwrap()
+                    .replace("depends = [\"base\"]", "depends = [\"ghost\"]"),
+                "needs module ghost",
+            ),
+            (format!("{fleet}\nbogus = 1"), "invalid obop.toml"),
+        ] {
+            let errors = obop_pkg::check_manifest(&broken, &builtin);
+            assert!(
+                errors.iter().any(|e| e.contains(want)),
+                "{want}: {errors:?}"
+            );
+        }
+        let dir = std::env::temp_dir().join(format!("obop-check-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let bad = dir.join("bad.toml");
+        std::fs::write(&bad, fleet.replace("0.2.0", "2")).unwrap();
+        let good = root.join("packages/fleet.toml");
+        let (bad_s, good_s) = (
+            bad.to_string_lossy().to_string(),
+            good.to_string_lossy().to_string(),
+        );
+        assert!(modules_check_files(&[&bad_s]).is_err(), "non-zero exit");
+        assert!(
+            modules_check_files(&[&good_s, &bad_s]).is_err(),
+            "one bad file fails the run"
+        );
+        assert!(modules_check_files(&["/no/such/file.toml"]).is_err());
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -1492,6 +1782,75 @@ mod bundled_packages {
                     .unwrap_or_else(|| panic!("no expected final state for {name}"))
                     .1;
                 assert_eq!(now, want, "{name} workflow ends in {want}");
+
+                // Governed state (D48): the same walk as a kanban drag, one `update` per step,
+                // lands in the same place.
+                let first = states.options[0].clone();
+                let by_update = mk.fresh(name, &first);
+                let mut now = first.clone();
+                let mut visited = BTreeSet::from([now.clone()]);
+                while let Some(a) = model
+                    .action
+                    .iter()
+                    .find(|a| a.from.as_deref() == Some(now.as_str()) && !visited.contains(&a.to))
+                {
+                    call(
+                        &app,
+                        &user,
+                        &format!("{name}.update"),
+                        Value::map([
+                            ("id", Value::text(&by_update)),
+                            ("state", Value::text(&a.to)),
+                        ]),
+                    )
+                    .unwrap_or_else(|e| panic!("{name}: update to {} failed: {e:?}", a.to));
+                    now = a.to.clone();
+                    visited.insert(now.clone());
+                    assert_eq!(state_of(&app, name, &by_update), now);
+                }
+                assert_eq!(now, want, "{name}: the walk by update ends in {want}");
+
+                // Bypass attempts: a late state on create, and a jump no action allows.
+                let late = states.options.last().unwrap().clone();
+                if late != first {
+                    let Value::Map(mut input) =
+                        mk.input(name, Some(&late), &mut vec![name.to_string()])
+                    else {
+                        unreachable!()
+                    };
+                    input.insert("state".into(), Value::text(&late));
+                    let e = call(&app, &user, &format!("{name}.create"), Value::Map(input))
+                        .unwrap_err();
+                    assert!(
+                        matches!(e, CallError::Handler(ref s) if s.contains("starts as")),
+                        "{name}: {e:?}"
+                    );
+                }
+                let reachable: BTreeSet<&str> = model
+                    .action
+                    .iter()
+                    .filter(|a| a.from.as_deref().is_none_or(|f| f == first))
+                    .map(|a| a.to.as_str())
+                    .collect();
+                if let Some(jump) = states
+                    .options
+                    .iter()
+                    .find(|o| **o != first && !reachable.contains(o.as_str()))
+                {
+                    let rec = mk.fresh(name, &first);
+                    let e = call(
+                        &app,
+                        &user,
+                        &format!("{name}.update"),
+                        Value::map([("id", Value::text(&rec)), ("state", Value::text(jump))]),
+                    )
+                    .unwrap_err();
+                    assert!(
+                        matches!(e, CallError::Handler(ref s) if s.contains("cannot change from")),
+                        "{name}: {e:?}"
+                    );
+                    assert_eq!(state_of(&app, name, &rec), first);
+                }
             }
         }
 

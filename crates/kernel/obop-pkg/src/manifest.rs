@@ -558,4 +558,72 @@ write_group = "fleet.manager"
         assert!(err(&bad_from).contains("not one of the options"));
         assert!(Manifest::parse(&typed()).is_ok());
     }
+
+    #[test]
+    fn duplicate_action_names_are_refused() {
+        let twice = format!(
+            "{FLEET}\n  [[model.action]]\n  name = \"dispatch\"\n  description = \"again\"\n  field = \"state\"\n  from = \"in_service\"\n  to = \"available\"\n"
+        );
+        assert!(err(&twice).contains("action \"dispatch\" is declared twice"));
+    }
+
+    #[test]
+    fn generated_command_names_cannot_be_actions() {
+        for name in ["get", "list", "search", "create", "update", "delete"] {
+            let bad = FLEET.replace("name = \"dispatch\"", &format!("name = \"{name}\""));
+            assert!(err(&bad).contains("bad action name"), "{name}");
+        }
+    }
+
+    #[test]
+    fn an_action_acts_on_any_select_field_not_only_state() {
+        let t = FLEET
+            .replace(
+                "name = \"plate\"",
+                "name = \"priority\"\n  kind = \"select\"\n  options = [\"low\", \"high\"]",
+            )
+            .replace("field = \"state\"", "field = \"priority\"")
+            .replace("from = \"available\"", "from = \"low\"")
+            .replace("to = \"in_service\"", "to = \"high\"");
+        let module = Manifest::parse(&t).unwrap().to_module().unwrap();
+        let model = &module.models[0];
+        assert_eq!(model.governed_fields(), ["priority"]);
+        let tr = model.commands[0].transition.unwrap();
+        assert_eq!(
+            (tr.field, tr.from, tr.to),
+            ("priority", Some("low"), "high")
+        );
+        // The governed field is not `state` any more, so `state` stays free.
+        assert!(!model.governed_fields().contains(&"state"));
+    }
+
+    #[test]
+    fn an_action_on_a_field_that_is_not_a_select_is_refused() {
+        let bad = FLEET.replace(
+            "kind = \"select\"\n  options = [\"available\", \"in_service\"]",
+            "",
+        );
+        let e = err(&bad);
+        assert!(
+            e.contains("acts on state, which is a text field") && e.contains("select"),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn an_action_must_change_the_state() {
+        let bad = FLEET.replace("to = \"in_service\"", "to = \"available\"");
+        assert!(err(&bad).contains("`from` and `to` are both"));
+    }
+
+    #[test]
+    fn transitions_reach_the_registry() {
+        let module = Manifest::parse(FLEET).unwrap().to_module().unwrap();
+        let (cmd, t) = module.models[0].transitions().next().unwrap();
+        assert_eq!(cmd.name, "dispatch");
+        assert_eq!(
+            (t.field, t.from, t.to),
+            ("state", Some("available"), "in_service")
+        );
+    }
 }

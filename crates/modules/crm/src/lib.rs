@@ -121,4 +121,90 @@ mod tests {
             .unwrap();
         assert_eq!(s.field("lead", &id, "stage"), Some(Value::text("won")));
     }
+
+    fn call(
+        d: &Dispatcher,
+        p: &Principal,
+        cmd: &str,
+        input: Value,
+    ) -> Result<obop_commands::Response, obop_commands::CallError> {
+        d.call(Surface::Rest, p, &mut Vault::new(), cmd, &input)
+    }
+
+    /// The pipeline is governed (D48): a lead is created `new` and moves through the actions,
+    /// which is also what a kanban drag does through `update`.
+    #[test]
+    fn stage_moves_only_along_the_declared_transitions() {
+        let (d, s) = (Dispatcher::new(), Store::new());
+        register(&d, &s);
+        let u = Principal::user("u", &["crm.user"]);
+        let made = |stage: Option<&str>| {
+            let mut v = vec![("title", Value::text("Deal"))];
+            if let Some(st) = stage {
+                v.push(("stage", Value::text(st)));
+            }
+            call(
+                &d,
+                &u,
+                "lead.create",
+                Value::Map(v.into_iter().map(|(k, x)| (k.to_string(), x)).collect()),
+            )
+        };
+        for late in ["qualified", "won", "lost"] {
+            assert!(
+                matches!(made(Some(late)), Err(obop_commands::CallError::Handler(m)) if m.contains("starts as \"new\"")),
+                "{late}"
+            );
+        }
+        let Value::Map(lead) = made(Option::None).unwrap().value else {
+            panic!()
+        };
+        let Value::Text(id) = lead["id"].clone() else {
+            panic!()
+        };
+        assert_eq!(s.field("lead", &id, "stage"), Some(Value::text("new")));
+        let set = |stage: &str| {
+            call(
+                &d,
+                &u,
+                "lead.update",
+                Value::map([("id", Value::text(&id)), ("stage", Value::text(stage))]),
+            )
+        };
+        // Kanban moves: new -> qualified -> won -> new (reopen) -> lost.
+        for stage in ["qualified", "won", "new", "lost"] {
+            set(stage).unwrap_or_else(|e| panic!("{stage}: {e:?}"));
+            assert_eq!(s.field("lead", &id, "stage"), Some(Value::text(stage)));
+        }
+        // qualified is only reachable from new.
+        let e = set("qualified");
+        assert!(
+            matches!(e, Err(obop_commands::CallError::Handler(m)) if m.contains("it can only go to: won, new")),
+        );
+        // Explicit actions agree with the implicit ones.
+        call(
+            &d,
+            &u,
+            "lead.reopen",
+            Value::map([("id", Value::text(&id))]),
+        )
+        .unwrap();
+        call(
+            &d,
+            &u,
+            "lead.qualify",
+            Value::map([("id", Value::text(&id))]),
+        )
+        .unwrap();
+        assert!(
+            call(
+                &d,
+                &u,
+                "lead.qualify",
+                Value::map([("id", Value::text(&id))])
+            )
+            .is_err(),
+            "qualify only from new"
+        );
+    }
 }

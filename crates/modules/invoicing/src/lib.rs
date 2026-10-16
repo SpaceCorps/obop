@@ -157,4 +157,85 @@ mod tests {
             Some(Value::text("INV-00001"))
         );
     }
+
+    fn msg(r: Result<obop_commands::Response, CallError>) -> String {
+        match r {
+            Err(CallError::Handler(m)) => m,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    /// A plain `invoicing.user` can edit invoices but cannot post one by setting `state`; the
+    /// manager can, and the update runs the real post action, so the legal number is assigned.
+    #[test]
+    fn posting_by_update_needs_the_manager_and_still_numbers_the_invoice() {
+        let (d, s) = (Dispatcher::new(), Store::new());
+        register(&d, &s);
+        let user = Principal::user("u", &["invoicing.user"]);
+        let manager = Principal::user("m", &["invoicing.user", "invoicing.manager"]);
+        let bot = Principal::agent(
+            "a",
+            &["invoicing.user", "invoicing.manager"],
+            &["invoicing.user", "invoicing.manager"],
+        );
+        let id = seed(&s, "o1");
+        let set = |p: &Principal, st: &str| {
+            d.call(
+                Surface::Rest,
+                p,
+                &mut Vault::new(),
+                "invoice.update",
+                &Value::map([("id", Value::text(&id)), ("state", Value::text(st))]),
+            )
+        };
+        let e = msg(set(&user, "posted"));
+        assert!(
+            e.contains("post action") && e.contains("invoicing.manager"),
+            "{e}"
+        );
+        assert_eq!(s.field("invoice", &id, "state"), Some(Value::text("draft")));
+        // Creating a posted invoice is refused outright.
+        let e = msg(d.call(
+            Surface::Rest,
+            &manager,
+            &mut Vault::new(),
+            "invoice.create",
+            &Value::map([("state", Value::text("posted"))]),
+        ));
+        assert!(e.contains("starts as \"draft\""), "{e}");
+        // An agent only proposes; the manager approves; the number is assigned.
+        let Err(CallError::ApprovalRequired { plan_id }) = set(&bot, "posted") else {
+            panic!("agent must only propose")
+        };
+        assert_eq!(s.field("invoice", &id, "state"), Some(Value::text("draft")));
+        d.approve(&manager, &mut Vault::new(), &plan_id).unwrap();
+        assert_eq!(
+            s.field("invoice", &id, "state"),
+            Some(Value::text("posted"))
+        );
+        assert_eq!(
+            s.field("invoice", &id, "number"),
+            Some(Value::text("INV-00001"))
+        );
+        // A posted invoice does not go back.
+        let e = msg(set(&manager, "draft"));
+        assert!(e.contains("no transition leaves \"posted\""), "{e}");
+        // Cancelling a draft is open to the user.
+        let id2 = seed(&s, "o2");
+        d.call(
+            Surface::Rest,
+            &user,
+            &mut Vault::new(),
+            "invoice.update",
+            &Value::map([
+                ("id", Value::text(&id2)),
+                ("state", Value::text("cancelled")),
+            ]),
+        )
+        .unwrap();
+        assert_eq!(
+            s.field("invoice", &id2, "state"),
+            Some(Value::text("cancelled"))
+        );
+    }
 }
