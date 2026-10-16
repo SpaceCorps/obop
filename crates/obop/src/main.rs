@@ -15,6 +15,11 @@ const USAGE: &str = "usage: obop <command>
   admin create USER [--groups a,b | --all-groups]
                                                 create a user; the password is read from stdin
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)
+  platform serve [--addr A] [--static DIR]      the control plane: sign up and get your own instance
+      --provisioner local|sliplane|fake         (default local: child processes on this machine)
+      --instance-static DIR                     backoffice build served by local instances
+      sliplane needs SLIPLANE_ACCOUNT, OBOP_SLIPLANE_PROJECT, OBOP_SLIPLANE_SERVER, OBOP_CELL_ADMIN_URL
+      and OBOP_IMAGE or OBOP_REPO (+ OBOP_BRANCH); optional OBOP_MARKETPLACE_URL
   serve [--addr 127.0.0.1:8080] [--static DIR]  REST API and the backoffice
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
   commands [--token TOKEN]                      list the commands visible to a token
@@ -42,6 +47,8 @@ fn main() -> ExitCode {
     let (label, args) = take_opt(&args, "--label");
     let (addr, args) = take_opt(&args, "--addr");
     let (static_dir, args) = take_opt(&args, "--static");
+    let (provisioner, args) = take_opt(&args, "--provisioner");
+    let (instance_static, args) = take_opt(&args, "--instance-static");
     let (flags, args): (Vec<&str>, Vec<&str>) = args
         .into_iter()
         .partition(|a| matches!(*a, "--demo" | "--dev-auth" | "--all-groups"));
@@ -70,6 +77,9 @@ fn main() -> ExitCode {
         ["admin", "create", user] => admin_create(&opts, user, groups, has("--all-groups")),
         ["agent-token", user] => agent_token(&opts, user, scopes, label),
         ["serve"] => serve(&opts, addr, static_dir),
+        ["platform", "serve"] => {
+            platform_serve(&opts, addr, static_dir, provisioner, instance_static)
+        }
         ["mcp"] => mcp(&opts),
         ["commands"] => commands(&opts),
         ["call", model, command, kv @ ..] => call(&opts, model, command, kv),
@@ -353,6 +363,78 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
             ""
         }
     );
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    rt.block_on(obop_http::serve(addr, router))
+        .map_err(|e| fail(&format!("error: {e}")))
+}
+
+/// Build the provisioner named on the command line. Sliplane settings come from the
+/// environment so no secret appears in the process list.
+fn make_provisioner(
+    kind: &str,
+    instance_static: Option<&str>,
+) -> Result<Arc<dyn obop_platform::provision::Provisioner>, String> {
+    use obop_platform::{provision, sliplane};
+    let env = |k: &str| std::env::var(k).map_err(|_| format!("{k} is not set"));
+    match kind {
+        "fake" => Ok(Arc::new(provision::Fake::default())),
+        "local" => {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            let dir = std::env::var("OBOP_DATA_DIR").unwrap_or_else(|_| "obop-instances".into());
+            Ok(Arc::new(provision::Local::new(
+                exe,
+                dir.into(),
+                instance_static.map(String::from),
+            )))
+        }
+        "sliplane" => {
+            let source = match (std::env::var("OBOP_IMAGE"), std::env::var("OBOP_REPO")) {
+                (Ok(i), _) => sliplane::Source::Image(i),
+                (_, Ok(url)) => sliplane::Source::Repo {
+                    url,
+                    branch: std::env::var("OBOP_BRANCH").unwrap_or_else(|_| "main".into()),
+                },
+                _ => return Err("set OBOP_IMAGE or OBOP_REPO".into()),
+            };
+            let cfg = sliplane::Config {
+                account: env("SLIPLANE_ACCOUNT")?,
+                project_id: env("OBOP_SLIPLANE_PROJECT")?,
+                server_id: env("OBOP_SLIPLANE_SERVER")?,
+                source,
+                marketplace_url: std::env::var("OBOP_MARKETPLACE_URL").ok(),
+            };
+            let cell = sliplane::PgCell {
+                admin_url: env("OBOP_CELL_ADMIN_URL")?,
+            };
+            Ok(Arc::new(sliplane::Sliplane::new(
+                cfg,
+                Arc::new(sliplane::Cli),
+                Arc::new(cell),
+            )))
+        }
+        other => Err(format!("unknown provisioner {other}")),
+    }
+}
+
+fn platform_serve(
+    o: &Opts,
+    addr: Option<&str>,
+    static_dir: Option<&str>,
+    provisioner: Option<&str>,
+    instance_static: Option<&str>,
+) -> Exit {
+    let addr = addr.unwrap_or("127.0.0.1:8090");
+    let url =
+        o.db.clone()
+            .unwrap_or_else(|| "sqlite://obop-platform.db".into());
+    let backend =
+        obop_storage::open(&url).map_err(|e| fail(&format!("cannot open database: {e}")))?;
+    let prov =
+        make_provisioner(provisioner.unwrap_or("local"), instance_static).map_err(|e| fail(&e))?;
+    let platform =
+        obop_platform::Platform::new(Arc::new(Auth::new(backend.clone())), backend, prov);
+    let router = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), static_dir);
+    eprintln!("obop platform listening on http://{addr}");
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     rt.block_on(obop_http::serve(addr, router))
         .map_err(|e| fail(&format!("error: {e}")))
@@ -720,6 +802,86 @@ mod tests {
             post(&r, Some(&admin), "/api/fleet_vehicle/list", json!({}))
                 .await
                 .0,
+            404
+        );
+    }
+
+    #[tokio::test]
+    async fn platform_signup_to_instance_over_http() {
+        let backend = obop_storage::open("memory:").unwrap();
+        let platform = obop_platform::Platform::new(
+            Arc::new(Auth::with_test_params(backend.clone())),
+            backend,
+            Arc::new(obop_platform::provision::Fake::default()),
+        );
+        let r = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), None);
+        let (s, b) = post(
+            &r,
+            None,
+            "/api/platform/signup",
+            json!({"email": "ada@example.test", "password": "correct horse battery"}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+        let tok = b["token"].as_str().unwrap().to_string();
+        assert_eq!(
+            post(&r, None, "/api/platform/instances", json!({"name": "acme"}))
+                .await
+                .0,
+            401
+        );
+        let (s, b) = post(
+            &r,
+            Some(&tok),
+            "/api/platform/instances",
+            json!({"name": "Acme Trading"}),
+        )
+        .await;
+        assert_eq!((s, b["slug"].as_str()), (202, Some("acme-trading")));
+        let id = b["id"].as_str().unwrap().to_string();
+        let mut status = String::new();
+        for _ in 0..100 {
+            let resp = r
+                .clone()
+                .oneshot(
+                    Request::get("/api/platform/instances")
+                        .header("authorization", format!("Bearer {tok}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let v: J =
+                serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes())
+                    .unwrap();
+            status = v["instances"][0]["status"].as_str().unwrap().to_string();
+            if status == "running" {
+                assert_eq!(v["instances"][0]["url"], "https://acme-trading.fake.test");
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert_eq!(status, "running");
+        assert_eq!(
+            post(
+                &r,
+                Some(&tok),
+                &format!("/api/platform/instances/{id}/delete"),
+                json!({})
+            )
+            .await
+            .0,
+            200
+        );
+        assert_eq!(
+            post(
+                &r,
+                Some(&tok),
+                &format!("/api/platform/instances/{id}/delete"),
+                json!({})
+            )
+            .await
+            .0,
             404
         );
     }

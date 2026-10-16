@@ -115,6 +115,38 @@ impl Auth {
         })
     }
 
+    /// Hash a password with this instance's parameters. For tests of provisioning code.
+    pub fn hash_for_test(&self, password: &str) -> String {
+        self.hash_password(password).expect("hashing")
+    }
+
+    /// Create a user from an existing Argon2 hash, so an instance can accept the credentials an
+    /// account was created with without ever seeing the password.
+    pub fn create_user_hashed(
+        &self,
+        username: &str,
+        password_hash: &str,
+        groups: &[String],
+    ) -> Result<(), String> {
+        let name = username.trim().to_lowercase();
+        if !password_hash.starts_with("$argon2id$") {
+            return Err("not an argon2id hash".into());
+        }
+        let mut f = Fields::new();
+        f.insert("password_hash".into(), J::from(password_hash));
+        f.insert("groups".into(), json!(groups));
+        self.backend.insert("auth_user", &name, &f)
+    }
+
+    /// The stored hash of a user, for provisioning that user elsewhere.
+    pub fn password_hash(&self, username: &str) -> Option<String> {
+        let u = self
+            .backend
+            .get("auth_user", &username.trim().to_lowercase())
+            .ok()??;
+        u["password_hash"].as_str().map(String::from)
+    }
+
     /// The principal of an existing user, for operator tooling that already has database access.
     pub fn principal(&self, name: &str) -> Option<Principal> {
         self.user_principal(&name.trim().to_lowercase())
@@ -333,6 +365,22 @@ mod tests {
         let t = a.login("ada", "correct horse battery").unwrap();
         assert!(a.revoke(&t));
         assert!(a.resolve(&t).is_none());
+    }
+
+    #[test]
+    fn a_hash_moves_between_databases_and_the_same_password_works() {
+        let a = auth();
+        a.create_user("ada@example.test", "correct horse battery", &[])
+            .unwrap();
+        let h = a.password_hash("ada@example.test").unwrap();
+        let b = Auth::with_test_params(obop_storage::open("memory:").unwrap());
+        b.create_user_hashed("ada@example.test", &h, &groups(&["platform.admin"]))
+            .unwrap();
+        let t = b
+            .login("ada@example.test", "correct horse battery")
+            .unwrap();
+        assert!(b.resolve(&t).unwrap().allows("anything"), "platform.admin");
+        assert!(b.create_user_hashed("x", "plain", &[]).is_err());
     }
 
     #[test]

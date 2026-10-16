@@ -674,7 +674,9 @@ dependencies = [
  "obop-masking",
  "obop-mcp",
  "obop-pkg",
+ "obop-platform",
  "obop-registry",
+ "obop-storage",
  "obop-types",
  "product",
  "sales",
@@ -747,6 +749,20 @@ dependencies = [
  "serde_json",
  "toml",
  "ureq",
+]
+
+[[package]]
+name = "obop-platform"
+version = "0.0.0"
+dependencies = [
+ "getrandom 0.4.3",
+ "obop-auth",
+ "obop-commands",
+ "obop-http",
+ "obop-storage",
+ "postgres",
+ "serde_json",
+ "uuid",
 ]
 
 [[package]]

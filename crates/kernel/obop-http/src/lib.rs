@@ -180,3 +180,95 @@ pub async fn serve(addr: &str, app: Router) -> std::io::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await
 }
+
+/// What the control-plane routes need from the platform (implemented by `obop-platform`).
+pub trait PlatformApi: Send + Sync {
+    fn signup(&self, email: &str, password: &str) -> Result<String, String>;
+    fn login(&self, email: &str, password: &str) -> Result<String, String>;
+    fn me(&self, token: &str) -> Result<String, String>;
+    fn list(&self, token: &str) -> Result<Vec<J>, String>;
+    fn create(&self, token: &str, name: &str) -> Result<J, String>;
+    fn delete(&self, token: &str, id: &str) -> Result<(), String>;
+}
+
+type Api = State<Arc<dyn PlatformApi>>;
+
+fn bearer(h: &HeaderMap) -> &str {
+    h.get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .unwrap_or("")
+}
+
+fn err(status: StatusCode, e: String) -> Response {
+    (status, Json(json!({"error": e}))).into_response()
+}
+
+/// Routes of the control plane: sign up, sign in and manage your instances.
+pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> Router {
+    let r = Router::new()
+        .route("/api/platform/signup", post(p_signup))
+        .route("/api/platform/login", post(p_login))
+        .route("/api/platform/me", get(p_me))
+        .route("/api/platform/instances", get(p_list).post(p_create))
+        .route("/api/platform/instances/{id}/delete", post(p_delete))
+        .with_state(api);
+    match static_dir {
+        Some(dir) => r.fallback_service(
+            ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html"))),
+        ),
+        None => r,
+    }
+}
+
+async fn p_signup(State(api): Api, Json(b): Json<J>) -> Response {
+    match api.signup(
+        b["email"].as_str().unwrap_or(""),
+        b["password"].as_str().unwrap_or(""),
+    ) {
+        Ok(t) => Json(json!({"token": t})).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+async fn p_login(State(api): Api, Json(b): Json<J>) -> Response {
+    match api.login(
+        b["email"].as_str().unwrap_or(""),
+        b["password"].as_str().unwrap_or(""),
+    ) {
+        Ok(t) => Json(json!({"token": t})).into_response(),
+        Err(e) if e.contains("too many") => err(StatusCode::TOO_MANY_REQUESTS, e),
+        Err(e) => err(StatusCode::UNAUTHORIZED, e),
+    }
+}
+
+async fn p_me(State(api): Api, h: HeaderMap) -> Response {
+    match api.me(bearer(&h)) {
+        Ok(email) => Json(json!({"email": email})).into_response(),
+        Err(e) => err(StatusCode::UNAUTHORIZED, e),
+    }
+}
+
+async fn p_list(State(api): Api, h: HeaderMap) -> Response {
+    match api.list(bearer(&h)) {
+        Ok(l) => Json(json!({"instances": l})).into_response(),
+        Err(e) => err(StatusCode::UNAUTHORIZED, e),
+    }
+}
+
+async fn p_create(State(api): Api, h: HeaderMap, Json(b): Json<J>) -> Response {
+    match api.create(bearer(&h), b["name"].as_str().unwrap_or("")) {
+        Ok(i) => (StatusCode::ACCEPTED, Json(i)).into_response(),
+        Err(e) if e == "not signed in" => err(StatusCode::UNAUTHORIZED, e),
+        Err(e) => err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+async fn p_delete(State(api): Api, h: HeaderMap, Path(id): Path<String>) -> Response {
+    match api.delete(bearer(&h), &id) {
+        Ok(()) => Json(json!({"deleted": true})).into_response(),
+        Err(e) if e == "not signed in" => err(StatusCode::UNAUTHORIZED, e),
+        Err(e) if e == "no such instance" => err(StatusCode::NOT_FOUND, e),
+        Err(e) => err(StatusCode::BAD_REQUEST, e),
+    }
+}

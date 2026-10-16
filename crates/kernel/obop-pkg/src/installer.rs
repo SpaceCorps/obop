@@ -358,6 +358,9 @@ pub fn admin_module() -> Module {
                     f("version", "Latest version"),
                     f("description", "What the module does"),
                     f("author", "Who publishes it"),
+                    f("source", "Where the install came from"),
+                    f("models", "Models the module adds"),
+                    f("groups", "Permission groups the module uses"),
                 ],
                 commands: vec![
                     CommandDef::new(
