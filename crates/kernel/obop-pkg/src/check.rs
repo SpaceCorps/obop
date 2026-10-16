@@ -98,6 +98,8 @@ mod tests {
                 commands: vec![],
             }],
             network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
         }
     }
 

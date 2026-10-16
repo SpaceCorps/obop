@@ -57,6 +57,8 @@ fn module() -> Module {
         name: "T".into(),
         models: vec![page, section, msg],
         network_destinations: vec![],
+        description: String::new(),
+        translations: Default::default(),
     }
 }
 

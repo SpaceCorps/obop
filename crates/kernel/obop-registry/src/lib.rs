@@ -4,6 +4,10 @@ use obop_types::DataClass;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
 
+pub mod labels;
+pub mod template;
+pub use labels::Translations;
+
 /// Registry metadata uses `&'static str`. Modules installed at runtime build their names from
 /// manifests, so those strings are interned: each distinct string is leaked once, which bounds
 /// the cost at the number of distinct names ever installed.
@@ -317,9 +321,13 @@ pub struct Module {
     pub id: String,
     /// Name shown in the app launcher.
     pub name: String,
+    /// What the module does, in English (empty for modules that declare none).
+    pub description: String,
     pub models: Vec<ModelDef>,
     /// Network destinations the module declares in `obop.toml` (D41).
     pub network_destinations: Vec<String>,
+    /// Names and descriptions in other languages (D52). English stays the source.
+    pub translations: Arc<Translations>,
 }
 
 impl Module {
@@ -487,6 +495,8 @@ mod tests {
                 commands: vec![],
             }],
             network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
         }
     }
 

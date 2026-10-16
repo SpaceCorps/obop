@@ -22,88 +22,88 @@ pub trait Marketplace: Send + Sync {
 /// Packages compiled into the binary from `packages/*.toml`.
 pub struct Bundled;
 
-const BUNDLED: &[(&str, &str)] = &[
-    (
-        "accounting",
-        include_str!("../../../../packages/accounting.toml"),
-    ),
-    (
-        "appointments",
-        include_str!("../../../../packages/appointments.toml"),
-    ),
-    (
-        "dashboards",
-        include_str!("../../../../packages/dashboards.toml"),
-    ),
-    (
-        "documents",
-        include_str!("../../../../packages/documents.toml"),
-    ),
-    (
-        "ecommerce",
-        include_str!("../../../../packages/ecommerce.toml"),
-    ),
-    (
-        "email_marketing",
-        include_str!("../../../../packages/email_marketing.toml"),
-    ),
-    (
-        "expenses",
-        include_str!("../../../../packages/expenses.toml"),
-    ),
-    (
-        "field_service",
-        include_str!("../../../../packages/field_service.toml"),
-    ),
-    ("fleet", include_str!("../../../../packages/fleet.toml")),
-    (
-        "helpdesk",
-        include_str!("../../../../packages/helpdesk.toml"),
-    ),
-    ("hr", include_str!("../../../../packages/hr.toml")),
-    (
-        "inventory",
-        include_str!("../../../../packages/inventory.toml"),
-    ),
-    (
-        "knowledge",
-        include_str!("../../../../packages/knowledge.toml"),
-    ),
-    (
-        "manufacturing",
-        include_str!("../../../../packages/manufacturing.toml"),
-    ),
-    (
-        "planning",
-        include_str!("../../../../packages/planning.toml"),
-    ),
-    ("pos", include_str!("../../../../packages/pos.toml")),
-    (
-        "projects",
-        include_str!("../../../../packages/projects.toml"),
-    ),
-    (
-        "purchase",
-        include_str!("../../../../packages/purchase.toml"),
-    ),
-    ("sign", include_str!("../../../../packages/sign.toml")),
-    (
-        "subscriptions",
-        include_str!("../../../../packages/subscriptions.toml"),
-    ),
-    (
-        "timesheets",
-        include_str!("../../../../packages/timesheets.toml"),
-    ),
-    ("website", include_str!("../../../../packages/website.toml")),
+/// A bundled package: its id, the English `obop.toml` and one labels document per language
+/// (`packages/labels/<lang>/<id>.toml`, D52).
+type Bundle = (&'static str, &'static str, [&'static str; 6]);
+
+macro_rules! bundle {
+    ($id:literal) => {
+        (
+            $id,
+            include_str!(concat!("../../../../packages/", $id, ".toml")),
+            [
+                include_str!(concat!("../../../../packages/labels/de/", $id, ".toml")),
+                include_str!(concat!("../../../../packages/labels/fr/", $id, ".toml")),
+                include_str!(concat!("../../../../packages/labels/pl/", $id, ".toml")),
+                include_str!(concat!("../../../../packages/labels/fi/", $id, ".toml")),
+                include_str!(concat!("../../../../packages/labels/sv/", $id, ".toml")),
+                include_str!(concat!("../../../../packages/labels/es/", $id, ".toml")),
+            ],
+        )
+    };
+}
+
+const BUNDLED: &[Bundle] = &[
+    bundle!("accounting"),
+    bundle!("appointments"),
+    bundle!("dashboards"),
+    bundle!("documents"),
+    bundle!("ecommerce"),
+    bundle!("email_marketing"),
+    bundle!("expenses"),
+    bundle!("field_service"),
+    bundle!("fleet"),
+    bundle!("helpdesk"),
+    bundle!("hr"),
+    bundle!("inventory"),
+    bundle!("knowledge"),
+    bundle!("manufacturing"),
+    bundle!("planning"),
+    bundle!("pos"),
+    bundle!("projects"),
+    bundle!("purchase"),
+    bundle!("sign"),
+    bundle!("subscriptions"),
+    bundle!("timesheets"),
+    bundle!("website"),
 ];
+
+/// The English manifest with its labels documents appended: one TOML document, which is what
+/// is installed, stored and served (an upload of the same text installs identically).
+fn combined((_, manifest, labels): &Bundle) -> String {
+    let mut text = manifest.trim_end().to_string();
+    for l in labels.iter().filter(|l| !l.trim().is_empty()) {
+        text.push_str("\n\n");
+        text.push_str(l.trim_end());
+    }
+    text.push('\n');
+    text
+}
+
+impl Bundled {
+    /// The labels documents of a bundled package, concatenated (empty when it has none).
+    pub fn labels_text(id: &str) -> String {
+        BUNDLED
+            .iter()
+            .find(|b| b.0 == id)
+            .map(|(_, _, labels)| {
+                labels
+                    .iter()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(|l| l.trim_end())
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            })
+            .unwrap_or_default()
+    }
+}
 
 impl Marketplace for Bundled {
     fn list(&self) -> Result<Vec<Listing>, String> {
         BUNDLED
             .iter()
-            .map(|(_, text)| {
-                let m = crate::manifest::Manifest::parse(text)?;
+            .map(|b| {
+                let m = crate::manifest::Manifest::parse(&combined(b))?;
                 Ok(Listing {
                     id: m.module.id,
                     name: m.module.name,
@@ -118,8 +118,8 @@ impl Marketplace for Bundled {
     fn fetch(&self, id: &str) -> Result<String, String> {
         BUNDLED
             .iter()
-            .find(|(i, _)| *i == id)
-            .map(|(_, t)| t.to_string())
+            .find(|b| b.0 == id)
+            .map(combined)
             .ok_or_else(|| format!("no package {id} in the bundled catalog"))
     }
 }

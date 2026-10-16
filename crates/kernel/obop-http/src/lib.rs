@@ -217,40 +217,72 @@ fn meta_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
         .meta(Surface::Rest, &p)
         .into_iter()
         .map(|m| {
-            json!({
+            let mut mo = json!({
                 "id": m.id,
                 "name": m.name,
-                "models": m.models.iter().map(|x| json!({
-                    "name": x.name,
-                    "description": x.description,
-                    "can_create": x.can_create,
-                    "can_update": x.can_update,
-                    "can_delete": x.can_delete,
-                    "fields": x.fields.iter().map(|f| {
-                        let mut o = json!({
-                            "name": f.name, "description": f.description,
-                            "class": f.class, "personal_data": f.personal_data,
-                            "kind": f.kind, "required": f.required,
-                        });
-                        if f.kind == "select" {
-                            o["options"] = json!(f.options);
-                        }
-                        if let Some(to) = f.to {
-                            o["to"] = json!(to);
-                        }
-                        o
-                    }).collect::<Vec<_>>(),
-                    "actions": x.actions.iter().map(|a| json!({
-                        "id": a.id, "description": a.description, "needs_approval": a.needs_approval,
-                        "field": a.transition.map(|t| t.field),
-                        "from": a.transition.and_then(|t| t.from),
-                        "to": a.transition.map(|t| t.to),
-                    })).collect::<Vec<_>>(),
-                })).collect::<Vec<_>>(),
-            })
+                "models": m.models.iter().map(|x| {
+                    let mut o = json!({
+                        "name": x.name,
+                        "description": x.description,
+                        "can_create": x.can_create,
+                        "can_update": x.can_update,
+                        "can_delete": x.can_delete,
+                        "fields": x.fields.iter().map(|f| {
+                            let mut o = json!({
+                                "name": f.name, "description": f.description,
+                                "class": f.class, "personal_data": f.personal_data,
+                                "kind": f.kind, "required": f.required,
+                            });
+                            if f.kind == "select" {
+                                o["options"] = json!(f.options);
+                            }
+                            if let Some(to) = f.to {
+                                o["to"] = json!(to);
+                            }
+                            translations(&mut o, &f.labels, &f.descriptions);
+                            if !f.option_labels.is_empty() {
+                                o["option_labels"] = json!(f.option_labels);
+                            }
+                            o
+                        }).collect::<Vec<_>>(),
+                        "actions": x.actions.iter().map(|a| {
+                            let mut o = json!({
+                                "id": a.id, "description": a.description,
+                                "needs_approval": a.needs_approval,
+                                "field": a.transition.map(|t| t.field),
+                                "from": a.transition.and_then(|t| t.from),
+                                "to": a.transition.map(|t| t.to),
+                            });
+                            translations(&mut o, &a.labels, &a.descriptions);
+                            o
+                        }).collect::<Vec<_>>(),
+                    });
+                    translations(&mut o, &x.labels, &x.descriptions);
+                    o
+                }).collect::<Vec<_>>(),
+            });
+            if !m.description.is_empty() {
+                mo["description"] = json!(m.description);
+            }
+            translations(&mut mo, &m.labels, &m.descriptions);
+            mo
         })
         .collect();
     Json(json!({"modules": modules})).into_response()
+}
+
+/// `labels` and `descriptions` (language -> text, D52), only when there is something to say.
+fn translations(
+    o: &mut J,
+    labels: &std::collections::BTreeMap<String, String>,
+    descriptions: &std::collections::BTreeMap<String, String>,
+) {
+    if !labels.is_empty() {
+        o["labels"] = json!(labels);
+    }
+    if !descriptions.is_empty() {
+        o["descriptions"] = json!(descriptions);
+    }
 }
 
 async fn commands(State(s): Shared, h: HeaderMap) -> Response {

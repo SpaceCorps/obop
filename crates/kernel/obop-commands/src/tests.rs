@@ -210,6 +210,8 @@ fn module(p: &str) -> Module {
             ),
         ],
         network_destinations: vec![],
+        description: String::new(),
+        translations: Default::default(),
     }
 }
 

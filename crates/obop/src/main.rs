@@ -11,7 +11,9 @@ use std::sync::Arc;
 
 const USAGE: &str = "usage: obop <command>
   --version
-  modules check [FILE...]                       the install gate over linked modules, or over package files (no database)
+  modules labels TARGET LANG                    a label template (every translatable text, English values) for a module, bundled package or FILE
+  modules check [--complete] [FILE...]          the install gate over linked modules, or over package files (no database);
+                                                --complete also demands every text translated in each language present
   modules list | install FILE | uninstall ID    manage packages in the database (operator tool)
   modules market                                list the marketplace; install with `modules install-from ID`
   admin create USER [--groups a,b | --all-groups]
@@ -76,7 +78,12 @@ fn main() -> ExitCode {
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
         matches!(
             *a,
-            "--demo" | "--dev-auth" | "--all-groups" | "--public-site" | "--trust-proxy"
+            "--demo"
+                | "--dev-auth"
+                | "--all-groups"
+                | "--public-site"
+                | "--trust-proxy"
+                | "--complete"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -102,7 +109,12 @@ fn main() -> ExitCode {
             Ok(())
         }
         ["modules", "check"] => modules_check(),
-        ["modules", "check", files @ ..] => modules_check_files(files),
+        ["modules", "check", files @ ..] => modules_check_files(files, has("--complete")),
+        ["modules", "labels", target, lang] => {
+            obop_pkg::files::template_for(target, lang, &App::new().modules)
+                .map(|t| print!("{t}"))
+                .map_err(|e| fail(&e))
+        }
         ["modules", "list"] => modules_list(&opts),
         ["modules", "market"] => modules_market(&opts),
         ["modules", "install", file] => modules_install(&opts, Some(file), None),
@@ -241,12 +253,25 @@ fn modules_check() -> Exit {
 
 /// `obop modules check FILE...`: the parser, the D41 gate and the install-time rules that need no
 /// database, for package files. Prints `ok` or the exact errors per file.
-fn modules_check_files(files: &[&str]) -> Exit {
+fn modules_check_files(files: &[&str], complete: bool) -> Exit {
     let builtin = App::new().modules;
     let mut failed = false;
     for f in files {
-        let errors = match std::fs::read_to_string(f) {
-            Ok(text) => obop_pkg::check_manifest(&text, &builtin),
+        let errors = match obop_pkg::files::read_source(std::path::Path::new(f)) {
+            Ok(obop_pkg::files::Source::Package(text)) => obop_pkg::check_manifest(&text, &builtin),
+            Ok(obop_pkg::files::Source::Labels {
+                stem,
+                text,
+                manifest,
+                allow,
+            }) => obop_pkg::files::check_labels_source(
+                &stem,
+                &text,
+                manifest.as_deref(),
+                &allow,
+                complete,
+                &builtin,
+            ),
             Err(e) => vec![format!("cannot read: {e}")],
         };
         if errors.is_empty() {
@@ -299,7 +324,7 @@ fn modules_install(o: &Opts, file: Option<&str>, market_id: Option<&str>) -> Exi
     let by = "operator";
     let r = match (file, market_id) {
         (Some(f), _) => app.installer.install(
-            &std::fs::read_to_string(f).map_err(|e| fail(&format!("{f}: {e}")))?,
+            &obop_pkg::files::read_package(std::path::Path::new(f)).map_err(|e| fail(&e))?,
             "upload",
             by,
         ),
@@ -1887,7 +1912,7 @@ mod tests {
         }
         assert!(files.len() >= 23, "{files:?}");
         let refs: Vec<&str> = files.iter().map(String::as_str).collect();
-        assert!(modules_check_files(&refs).is_ok());
+        assert!(modules_check_files(&refs, false).is_ok());
 
         let builtin = App::new().modules;
         let fleet = std::fs::read_to_string(root.join("packages/fleet.toml")).unwrap();
@@ -1919,12 +1944,15 @@ mod tests {
             bad.to_string_lossy().to_string(),
             good.to_string_lossy().to_string(),
         );
-        assert!(modules_check_files(&[&bad_s]).is_err(), "non-zero exit");
         assert!(
-            modules_check_files(&[&good_s, &bad_s]).is_err(),
+            modules_check_files(&[&bad_s], false).is_err(),
+            "non-zero exit"
+        );
+        assert!(
+            modules_check_files(&[&good_s, &bad_s], false).is_err(),
             "one bad file fails the run"
         );
-        assert!(modules_check_files(&["/no/such/file.toml"]).is_err());
+        assert!(modules_check_files(&["/no/such/file.toml"], false).is_err());
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -1956,6 +1984,178 @@ mod tests {
                 .modules
                 .iter()
                 .all(|m| obop_registry::check_module(m).is_empty())
+        );
+    }
+    /// D52 over HTTP: `/api/meta` carries `labels`, `descriptions` and `option_labels` exactly
+    /// where a translation exists, for built-in modules and for installed packages, and nothing
+    /// (not even an empty map) where there is none.
+    #[tokio::test]
+    async fn meta_endpoint_carries_server_labels_only_where_translated() {
+        let (r, auth) = real();
+        auth.create_user(
+            "root",
+            "an admin password!",
+            &["platform.admin".to_string()],
+        )
+        .unwrap();
+        let admin = &login(&r, "root", "an admin password!").await;
+        let partial = format!(
+            "{}\n\n{}",
+            include_str!("../../../packages/fleet.toml").replace("0.2.0", "0.3.0"),
+            r#"
+[labels.de.module]
+name = "Fuhrpark"
+description = "Fahrzeuge und Fahrer"
+
+[labels.de.model.fleet_vehicle]
+name = "Fahrzeug"
+
+[labels.de.model.fleet_vehicle.field.plate]
+label = "Kennzeichen"
+description = "Amtliches Kennzeichen"
+
+[labels.de.model.fleet_vehicle.field.fuel.options]
+diesel = "Diesel"
+electric = "Elektro"
+
+[labels.de.model.fleet_vehicle.action.dispatch]
+label = "In Betrieb nehmen"
+"#
+        );
+        let (s, b) = post(
+            &r,
+            Some(admin.as_str()),
+            "/api/module/install",
+            json!({"manifest": partial}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+
+        let meta = get_meta(&r, admin.as_str()).await;
+        let modules = meta["modules"].as_array().unwrap();
+        let fleet = modules.iter().find(|m| m["id"] == "fleet").unwrap();
+        assert_eq!(fleet["name"], "Fleet");
+        assert_eq!(fleet["labels"], json!({"de": "Fuhrpark"}));
+        assert_eq!(fleet["descriptions"], json!({"de": "Fahrzeuge und Fahrer"}));
+        assert!(
+            fleet["description"]
+                .as_str()
+                .unwrap()
+                .starts_with("Vehicles")
+        );
+        let vehicle = fleet["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["name"] == "fleet_vehicle")
+            .unwrap();
+        assert_eq!(vehicle["labels"], json!({"de": "Fahrzeug"}));
+        assert!(
+            vehicle.get("descriptions").is_none(),
+            "no description translated, so no key"
+        );
+        let field = |n: &str| {
+            vehicle["fields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|f| f["name"] == n)
+                .unwrap()
+                .clone()
+        };
+        let plate = field("plate");
+        assert_eq!(plate["labels"], json!({"de": "Kennzeichen"}));
+        assert_eq!(
+            plate["descriptions"],
+            json!({"de": "Amtliches Kennzeichen"})
+        );
+        assert!(plate.get("option_labels").is_none());
+        let fuel = field("fuel");
+        assert!(fuel.get("labels").is_none() && fuel.get("descriptions").is_none());
+        assert_eq!(
+            fuel["option_labels"],
+            json!({"diesel": {"de": "Diesel"}, "electric": {"de": "Elektro"}})
+        );
+        assert_eq!(
+            fuel["options"][0], "petrol",
+            "the options themselves stay English"
+        );
+        let vin = field("vin");
+        assert!(vin.get("labels").is_none() && vin.get("option_labels").is_none());
+        let action = |id: &str| {
+            vehicle["actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["id"] == id)
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(
+            action("fleet_vehicle.dispatch")["labels"],
+            json!({"de": "In Betrieb nehmen"})
+        );
+        assert!(
+            action("fleet_vehicle.return_to_pool")
+                .get("labels")
+                .is_none()
+        );
+
+        // Built-in modules ship all six languages, declared in their registry metadata.
+        let crm = modules.iter().find(|m| m["id"] == "crm").unwrap();
+        for lang in ["de", "fr", "pl", "fi", "sv", "es"] {
+            assert!(crm["labels"][lang].is_string(), "crm module {lang}");
+            let lead = &crm["models"][0];
+            assert!(lead["labels"][lang].is_string(), "lead {lang}");
+            let stage = lead["fields"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|f| f["name"] == "stage")
+                .unwrap();
+            assert!(stage["labels"][lang].is_string(), "stage {lang}");
+            for o in ["new", "qualified", "won", "lost"] {
+                assert!(stage["option_labels"][o][lang].is_string(), "{o} {lang}");
+            }
+            let qualify = lead["actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["id"] == "lead.qualify")
+                .unwrap();
+            assert!(qualify["labels"][lang].is_string(), "qualify {lang}");
+        }
+        let stage = crm["models"][0]["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["name"] == "stage")
+            .unwrap();
+        assert_ne!(
+            stage["option_labels"]["won"]["de"], "Won",
+            "translated, not copied"
+        );
+
+        // The admin app itself is translated too.
+        let platform = modules.iter().find(|m| m["id"] == "platform").unwrap();
+        assert!(platform["labels"]["fi"].is_string());
+
+        // Uninstalling removes the labels with the module.
+        let (s, _) = post(
+            &r,
+            Some(admin.as_str()),
+            "/api/module/uninstall",
+            json!({"id": "fleet"}),
+        )
+        .await;
+        assert_eq!(s, 200);
+        let meta = get_meta(&r, admin.as_str()).await;
+        assert!(
+            meta["modules"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|m| m["id"] != "fleet")
         );
     }
 }
@@ -2178,6 +2378,27 @@ mod bundled_packages {
                 assert_eq!(info.fields.len(), model.field.len(), "{}", model.name);
                 assert_eq!(info.actions.len(), model.action.len(), "{}", model.name);
                 assert!(info.can_create && info.can_update, "{}", model.name);
+                // D52: the metadata a client renders carries all six languages.
+                for lang in ["de", "fr", "pl", "fi", "sv", "es"] {
+                    assert!(info.labels.contains_key(lang), "{} {lang}", model.name);
+                    assert!(
+                        info.descriptions.contains_key(lang),
+                        "{} {lang}",
+                        model.name
+                    );
+                    for f in &info.fields {
+                        let at = format!("{}.{} {lang}", model.name, f.name);
+                        assert!(f.labels.contains_key(lang), "{at}");
+                        assert!(f.descriptions.contains_key(lang), "{at}");
+                        for o in &f.options {
+                            assert!(f.option_labels[*o].contains_key(lang), "{at} {o}");
+                        }
+                    }
+                    for a in &info.actions {
+                        assert!(a.labels.contains_key(lang), "{} {lang}", a.id);
+                        assert!(a.descriptions.contains_key(lang), "{} {lang}", a.id);
+                    }
+                }
                 for f in &info.fields {
                     assert!(
                         !f.description.trim().is_empty(),
@@ -2741,5 +2962,169 @@ mod bundled_packages {
             )
             .unwrap_err();
         assert!(!e.is_empty());
+    }
+
+    const LANGS: [&str; 6] = ["de", "fr", "pl", "fi", "sv", "es"];
+
+    fn labels_dir() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/labels")
+    }
+
+    /// D52 completeness: every bundled package and every built-in module has every name,
+    /// description, field label, option and action translated in all six languages. A value
+    /// identical to the English source fails unless allow-listed (`packages/labels/identical.json`
+    /// for acronyms and international words, `packages/labels/<lang>/identical.json` per language).
+    #[test]
+    fn every_bundled_package_and_builtin_module_is_translated_in_all_six_languages() {
+        let app = App::new();
+        let mut modules: Vec<obop_registry::Module> = app.modules.clone();
+        for m in all_manifests() {
+            modules.push(m.to_module().unwrap());
+        }
+        assert!(modules.len() >= 28, "{}", modules.len());
+        let mut problems = Vec::new();
+        for module in &modules {
+            for lang in LANGS {
+                let allow = obop_pkg::files::allow_list(&labels_dir(), lang);
+                for p in
+                    obop_registry::template::incomplete(module, &module.translations, lang, &allow)
+                {
+                    problems.push(format!("{}: {p}", module.id));
+                }
+            }
+        }
+        assert!(
+            problems.is_empty(),
+            "{} untranslated texts, first: {:#?}",
+            problems.len(),
+            &problems[..problems.len().min(25)]
+        );
+    }
+
+    /// The label files, status files and allow-lists form one consistent set: a file per module
+    /// and language, a status entry for each, no file for a module that does not exist, and a
+    /// bundled package that stays under the manifest size limit with all its labels.
+    #[test]
+    fn label_files_and_status_files_cover_exactly_the_shipped_modules() {
+        let app = App::new();
+        let mut ids: Vec<String> = app.modules.iter().map(|m| m.id.clone()).collect();
+        ids.extend(all_manifests().into_iter().map(|m| m.module.id));
+        ids.sort();
+        for lang in LANGS {
+            let dir = labels_dir().join(lang);
+            let mut files: Vec<String> = std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .filter_map(|e| {
+                    let n = e.file_name().to_string_lossy().to_string();
+                    n.strip_suffix(".toml").map(String::from)
+                })
+                .collect();
+            files.sort();
+            assert_eq!(files, ids, "{lang}: one labels file per module");
+            let status: BTreeMap<String, String> =
+                serde_json::from_str(&std::fs::read_to_string(dir.join("status.json")).unwrap())
+                    .unwrap();
+            assert_eq!(status.keys().cloned().collect::<Vec<_>>(), ids, "{lang}");
+            assert!(
+                status
+                    .values()
+                    .all(|v| v == "machine-drafted" || v == "reviewed"),
+                "{lang}: {status:?}"
+            );
+            let allow: Vec<String> =
+                serde_json::from_str(&std::fs::read_to_string(dir.join("identical.json")).unwrap())
+                    .unwrap();
+            let mut sorted = allow.clone();
+            sorted.sort();
+            sorted.dedup();
+            assert_eq!(allow, sorted, "{lang}: identical.json is sorted and unique");
+        }
+        for l in Bundled.list().unwrap() {
+            let text = Bundled.fetch(&l.id).unwrap();
+            assert!(
+                text.len() <= obop_pkg::manifest::MAX_BYTES,
+                "{} with all its labels is {} bytes",
+                l.id,
+                text.len()
+            );
+        }
+    }
+
+    /// Every language file validates on its own against its package, the way a translator runs
+    /// `obop modules check --complete packages/labels/<lang>/<id>.toml`.
+    #[test]
+    fn every_label_file_passes_the_check_command() {
+        let root = labels_dir();
+        let mut files = Vec::new();
+        for lang in LANGS {
+            for e in std::fs::read_dir(root.join(lang)).unwrap() {
+                let p = e.unwrap().path();
+                if p.extension().is_some_and(|x| x == "toml") {
+                    files.push(p.to_string_lossy().to_string());
+                }
+            }
+        }
+        assert_eq!(files.len(), 6 * 28);
+        let refs: Vec<&str> = files.iter().map(String::as_str).collect();
+        assert!(modules_check_files(&refs, true).is_ok());
+    }
+
+    #[test]
+    fn label_checks_report_missing_wrong_and_english_entries() {
+        let dir = std::env::temp_dir().join(format!("obop-labels-{}", std::process::id()));
+        let ldir = dir.join("labels").join("de");
+        std::fs::create_dir_all(&ldir).unwrap();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        std::fs::copy(root.join("packages/fleet.toml"), dir.join("fleet.toml")).unwrap();
+        let file = ldir.join("fleet.toml");
+        let path = file.to_string_lossy().to_string();
+        let builtin = App::new().modules;
+        let check = |text: &str, complete: bool| {
+            std::fs::write(&file, text).unwrap();
+            match obop_pkg::files::read_source(&file).unwrap() {
+                obop_pkg::files::Source::Labels {
+                    stem,
+                    text,
+                    manifest,
+                    allow,
+                } => obop_pkg::files::check_labels_source(
+                    &stem,
+                    &text,
+                    manifest.as_deref(),
+                    &allow,
+                    complete,
+                    &builtin,
+                ),
+                _ => panic!("not a labels file"),
+            }
+        };
+        // A partial file is fine until completeness is asked for.
+        let partial = "[labels.de.module]\nname = \"Fuhrpark\"\n";
+        assert!(check(partial, false).is_empty());
+        let incomplete = check(partial, true);
+        assert!(
+            incomplete
+                .iter()
+                .any(|e| e.contains("fleet_vehicle.plate.label (de): missing"))
+        );
+        // A typo in a key is an error with the path.
+        let typo = "[labels.de.model.fleet_vehicle.field.plat]\nlabel = \"Kennzeichen\"\n";
+        assert!(check(typo, false)[0].contains("no field \"plat\""));
+        // A value left in English is reported once complete.
+        let english = obop_pkg::files::template_for("fleet", "de", &builtin).unwrap();
+        let e = check(&english, true);
+        assert!(
+            e.iter().any(|x| x.contains("identical to English")),
+            "{e:?}"
+        );
+        // The shared allow-list is read from labels/identical.json next to the language folders.
+        std::fs::write(dir.join("labels").join("identical.json"), "[\"Fleet\"]").unwrap();
+        let e = check(&english, true);
+        assert!(!e.iter().any(|x| x.starts_with("module.name")), "{e:?}");
+        // Whole-file check through the CLI entry point reports a bad file as failure.
+        std::fs::write(&file, typo).unwrap();
+        assert!(modules_check_files(&[&path], false).is_err());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

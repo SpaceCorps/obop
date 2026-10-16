@@ -3,7 +3,7 @@
 //! to proposing).
 
 use crate::manifest::Manifest;
-use crate::marketplace::Marketplace;
+use crate::marketplace::{Bundled, Marketplace};
 use obop_commands::{ADMIN_GROUP, ANY_GROUP, Dispatcher, Store, Value};
 use obop_registry::{CommandDef, FieldDef, ModelDef, Module, intern};
 use obop_storage::{Backend, Fields};
@@ -113,6 +113,28 @@ impl Installer {
             }
         }
         v
+    }
+
+    /// A package installed from the marketplace before it carried translations has none stored.
+    /// When the bundled catalog offers the same version with labels, they are added in memory (the
+    /// stored text is left alone); a mismatch that fails validation keeps the stored manifest.
+    fn with_bundled_labels(text: &str, source: &str) -> Result<Manifest, String> {
+        let m = Manifest::parse(text)?;
+        if source == "marketplace" && m.labels.is_empty() {
+            let labels = crate::marketplace::Bundled::labels_text(&m.module.id);
+            let bundled_same = Bundled
+                .fetch(&m.module.id)
+                .ok()
+                .and_then(|t| Manifest::parse(&t).ok())
+                .is_some_and(|b| b.module.version == m.module.version);
+            if bundled_same
+                && !labels.is_empty()
+                && let Ok(with) = Manifest::parse(&Manifest::combine(text, &labels))
+            {
+                return Ok(with);
+            }
+        }
+        Ok(m)
     }
 
     fn register(&self, m: &Manifest, module: &Module) -> Result<(), String> {
@@ -262,11 +284,12 @@ impl Installer {
     pub fn load_installed(&self) -> Vec<(String, String)> {
         let mut failed = Vec::new();
         for (id, f) in self.stored() {
+            let source = f.get("source").and_then(J::as_str).unwrap_or("upload");
             let r = f
                 .get("manifest")
                 .and_then(J::as_str)
                 .ok_or_else(|| "no manifest".to_string())
-                .and_then(Manifest::parse)
+                .and_then(|t| Self::with_bundled_labels(t, source))
                 .and_then(|m| m.to_module().and_then(|module| self.register(&m, &module)));
             if let Err(e) = r {
                 failed.push((id, e));
@@ -317,7 +340,7 @@ fn pkg_row(p: &PackageInfo) -> Value {
 pub fn admin_module() -> Module {
     let f =
         |name, description| FieldDef::new(name, description, DataClass::None, false, ADMIN_GROUP);
-    Module {
+    let m = Module {
         id: "platform".into(),
         name: "Customize".into(),
         models: vec![
@@ -388,7 +411,17 @@ pub fn admin_module() -> Module {
             },
         ],
         network_destinations: vec![],
-    }
+        description: String::new(),
+        translations: Default::default(),
+    };
+    m.translated(&[
+        include_str!("../../../../packages/labels/de/platform.toml"),
+        include_str!("../../../../packages/labels/fr/platform.toml"),
+        include_str!("../../../../packages/labels/pl/platform.toml"),
+        include_str!("../../../../packages/labels/fi/platform.toml"),
+        include_str!("../../../../packages/labels/sv/platform.toml"),
+        include_str!("../../../../packages/labels/es/platform.toml"),
+    ])
 }
 
 /// Bind handlers for the admin commands. Called once at start-up.
@@ -1197,8 +1230,210 @@ write_group = "notes.user"
                 commands: vec![],
             }],
             network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
         };
         d.register_crud(&party, &store);
         inst.install(pkg, "upload", "root").unwrap();
+    }
+
+    /// Fleet with a few German and Finnish labels (a partial translation on purpose).
+    const FLEET_LABELS: &str = r#"
+[labels.de.module]
+name = "Fuhrpark"
+description = "Fahrzeuge und Fahrer"
+
+[labels.de.model.fleet_vehicle]
+name = "Fahrzeug"
+description = "Ein Fahrzeug des Unternehmens"
+
+[labels.de.model.fleet_vehicle.field.plate]
+label = "Kennzeichen"
+description = "Amtliches Kennzeichen"
+
+[labels.de.model.fleet_vehicle.field.state]
+label = "Verfügbarkeit"
+
+[labels.de.model.fleet_vehicle.field.state.options]
+available = "Verfügbar"
+in_service = "Im Einsatz"
+
+[labels.de.model.fleet_vehicle.action.dispatch]
+label = "In Betrieb nehmen"
+description = "Ein verfügbares Fahrzeug in Betrieb nehmen"
+
+[labels.fi.module]
+name = "Autokanta"
+
+[labels.fi.model.fleet_vehicle.action.dispatch]
+label = "Ota käyttöön"
+"#;
+
+    fn fleet_with_labels(version: &str, labels: &str) -> String {
+        Manifest::combine(
+            &include_str!("../../../../packages/fleet.toml").replace("0.2.0", version),
+            labels,
+        )
+    }
+
+    fn fleet_meta(d: &Dispatcher) -> obop_commands::ModuleInfo {
+        let manager = Principal::user("m", &["fleet.user", "fleet.manager"]);
+        d.meta(Surface::Rest, &manager)
+            .into_iter()
+            .find(|m| m.id == "fleet")
+            .unwrap()
+    }
+
+    #[test]
+    fn meta_carries_labels_only_where_translated() {
+        let (d, inst) = setup(&Store::new());
+        inst.install(
+            include_str!("../../../../packages/fleet.toml"),
+            "upload",
+            "root",
+        )
+        .unwrap();
+        let plain = fleet_meta(&d);
+        assert!(plain.labels.is_empty() && plain.descriptions.is_empty());
+        assert!(plain.models.iter().all(|m| m.labels.is_empty()));
+        assert!(
+            plain
+                .models
+                .iter()
+                .flat_map(|m| &m.fields)
+                .all(|f| f.labels.is_empty() && f.option_labels.is_empty())
+        );
+
+        inst.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
+            .unwrap();
+        let m = fleet_meta(&d);
+        assert_eq!(m.name, "Fleet", "the English name stays the source");
+        assert_eq!(m.labels["de"], "Fuhrpark");
+        assert_eq!(m.labels["fi"], "Autokanta");
+        assert_eq!(m.descriptions["de"], "Fahrzeuge und Fahrer");
+        assert!(m.description.starts_with("Vehicles, drivers"));
+        let v = m.models.iter().find(|x| x.name == "fleet_vehicle").unwrap();
+        assert_eq!(v.labels["de"], "Fahrzeug");
+        let plate = v.fields.iter().find(|f| f.name == "plate").unwrap();
+        assert_eq!(plate.labels["de"], "Kennzeichen");
+        assert_eq!(plate.descriptions["de"], "Amtliches Kennzeichen");
+        let state = v.fields.iter().find(|f| f.name == "state").unwrap();
+        assert_eq!(state.option_labels["in_service"]["de"], "Im Einsatz");
+        assert!(!state.option_labels.contains_key("maintenance"));
+        let vin = v.fields.iter().find(|f| f.name == "vin").unwrap();
+        assert!(vin.labels.is_empty() && vin.descriptions.is_empty());
+        let dispatch = v
+            .actions
+            .iter()
+            .find(|a| a.id == "fleet_vehicle.dispatch")
+            .unwrap();
+        assert_eq!(dispatch.labels["de"], "In Betrieb nehmen");
+        assert_eq!(dispatch.labels["fi"], "Ota käyttöön");
+        assert_eq!(
+            dispatch.descriptions["de"],
+            "Ein verfügbares Fahrzeug in Betrieb nehmen"
+        );
+        let back = v
+            .actions
+            .iter()
+            .find(|a| a.id == "fleet_vehicle.return_to_pool")
+            .unwrap();
+        assert!(back.labels.is_empty());
+        let driver = m
+            .models
+            .iter()
+            .find(|x| x.name == "fleet_vehicle_driver")
+            .unwrap();
+        assert!(driver.labels.is_empty(), "untranslated models stay bare");
+    }
+
+    #[test]
+    fn upgrades_replace_labels_and_a_restart_keeps_them() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
+            .unwrap();
+        let newer = FLEET_LABELS.replace("Fuhrpark", "Fahrzeugpark");
+        inst.install(&fleet_with_labels("0.4.0", &newer), "upload", "root")
+            .unwrap();
+        assert_eq!(fleet_meta(&d).labels["de"], "Fahrzeugpark");
+        // A new upload without labels is a package without translations.
+        inst.install(&fleet_with_labels("0.5.0", ""), "upload", "root")
+            .unwrap();
+        assert!(fleet_meta(&d).labels.is_empty());
+        inst.install(&fleet_with_labels("0.6.0", &newer), "upload", "root")
+            .unwrap();
+
+        // Restart: a new dispatcher over the same store loads the stored document.
+        let (d2, inst2) = setup(&store);
+        assert!(inst2.load_installed().is_empty());
+        let m = fleet_meta(&d2);
+        assert_eq!(m.labels["de"], "Fahrzeugpark");
+        let plate = m.models[0]
+            .fields
+            .iter()
+            .find(|f| f.name == "plate")
+            .unwrap();
+        assert_eq!(plate.labels["de"], "Kennzeichen");
+    }
+
+    #[test]
+    fn uninstall_removes_the_labels_and_reinstall_restores_them() {
+        let (d, inst) = setup(&Store::new());
+        inst.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
+            .unwrap();
+        let manager = Principal::user("m", &["fleet.user", "fleet.manager"]);
+        inst.uninstall("fleet").unwrap();
+        assert!(
+            d.meta(Surface::Rest, &manager)
+                .iter()
+                .all(|m| m.id != "fleet")
+        );
+        inst.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
+            .unwrap();
+        assert_eq!(fleet_meta(&d).labels["de"], "Fuhrpark");
+    }
+
+    #[test]
+    fn an_old_marketplace_install_gains_the_bundled_labels_on_load() {
+        let store = Store::new();
+        let (_d, inst) = setup(&store);
+        // As installed before packages carried translations: the English text, source marketplace.
+        inst.install(
+            include_str!("../../../../packages/fleet.toml"),
+            "marketplace",
+            "root",
+        )
+        .unwrap();
+        let (d2, inst2) = setup(&store);
+        assert!(inst2.load_installed().is_empty());
+        let m = fleet_meta(&d2);
+        for lang in ["de", "fr", "pl", "fi", "sv", "es"] {
+            assert!(m.labels.contains_key(lang), "{lang}");
+        }
+        // An upload of the same text is the author's own and is left alone.
+        let store = Store::new();
+        let (_d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/fleet.toml"),
+            "upload",
+            "root",
+        )
+        .unwrap();
+        let (d3, inst3) = setup(&store);
+        assert!(inst3.load_installed().is_empty());
+        assert!(fleet_meta(&d3).labels.is_empty());
+    }
+
+    #[test]
+    fn bad_labels_in_an_upload_refuse_the_install() {
+        let (d, inst) = setup(&Store::new());
+        let bad = fleet_with_labels(
+            "0.3.0",
+            "[labels.de.model.fleet_vehicle.field.kennzeichen]\nlabel = \"x\"",
+        );
+        let e = inst.install(&bad, "upload", "root").unwrap_err();
+        assert!(e.contains("no field \"kennzeichen\""), "{e}");
+        assert!(!d.has_model("fleet_vehicle"), "nothing was installed");
     }
 }

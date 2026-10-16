@@ -366,6 +366,8 @@ mod tests {
                 ),
             ],
             network_destinations: vec![],
+            description: String::new(),
+            translations: Default::default(),
         };
         let (d, s) = (Dispatcher::new(), Store::new());
         d.register_crud(&module, &s);
