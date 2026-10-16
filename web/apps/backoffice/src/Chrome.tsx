@@ -294,6 +294,7 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
         <input
           autoFocus
           placeholder="Type to search…"
+          aria-label="Search apps, records and actions"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => {

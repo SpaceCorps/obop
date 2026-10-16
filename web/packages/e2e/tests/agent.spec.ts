@@ -115,10 +115,7 @@ test.describe("agent tokens over the REST API", () => {
   // returns the same withheld field N times (and the UI banner reads "Withheld from you: Tax, Tax").
   // Reproduce: as an agent token scoped base.user, POST /api/party/list when two parties exist.
   // Cause: obop-commands/src/lib.rs, Dispatcher::shape pushes into `denied` for every row.
-  test.fixme("a list names each withheld field once, however many rows it has", async ({
-    api,
-    uid,
-  }) => {
+  test("a list names each withheld field once, however many rows it has", async ({ api, uid }) => {
     await api.create("sam", "party", { name: uid("Dup A") });
     await api.create("sam", "party", { name: uid("Dup B") });
     const sam = await api.token("sam");

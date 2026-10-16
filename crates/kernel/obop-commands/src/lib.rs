@@ -461,6 +461,9 @@ impl Dispatcher {
         let out = (c.handler)(&input).map_err(CallError::Handler)?;
         let mut denied = Vec::new();
         let value = self.shape(c.model, p, vault, out, &mut denied);
+        // A list shapes every row; name each withheld field once.
+        let mut seen = HashSet::new();
+        denied.retain(|d| seen.insert(d.clone()));
         Ok(Response { value, denied })
     }
 

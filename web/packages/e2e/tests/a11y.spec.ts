@@ -57,7 +57,7 @@ test.describe("accessibility smoke", () => {
   // BUG (not fixed here): the command palette input (Chrome.tsx, Palette) has only a placeholder, no
   // aria-label or label, so screen readers announce an unnamed edit field.
   // Reproduce: sign in, press Ctrl/Cmd+K, inspect the focused input.
-  test.fixme("the command palette input has an accessible name", async ({ page, signIn }) => {
+  test("the command palette input has an accessible name", async ({ page, signIn }) => {
     await signIn("root");
     await page.keyboard.press("ControlOrMeta+k");
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
