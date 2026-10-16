@@ -278,9 +278,13 @@ impl Site {
         };
         let products = if ctx.caps.shop {
             self.api
-                .list("ecommerce_listing", &[], Some(4), 0)
+                .list("ecommerce_listing", &[], None, 0)
                 .map(|(r, _)| r)
                 .unwrap_or_default()
+                .into_iter()
+                .filter(shop::in_stock)
+                .take(4)
+                .collect()
         } else {
             Vec::new()
         };

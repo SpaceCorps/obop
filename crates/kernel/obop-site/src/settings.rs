@@ -382,6 +382,34 @@ mod tests {
     }
 
     #[test]
+    fn site_set_validates_and_normalises_each_key() {
+        assert_eq!(parse_value("accent", "#E11D48").unwrap(), "#e11d48");
+        assert_eq!(parse_value("enabled", "off").unwrap(), false);
+        assert_eq!(parse_value("shop_page_size", "24").unwrap(), 24);
+        assert_eq!(parse_value("shop_currency", "sek").unwrap(), "SEK");
+        assert_eq!(parse_value("default_lang", "de-AT").unwrap(), "de");
+        assert_eq!(
+            parse_value("base_url", "https://a.example/").unwrap(),
+            "https://a.example"
+        );
+        for (k, v) in [
+            ("nope", "x"),
+            ("accent", "red"),
+            ("enabled", "maybe"),
+            ("shop_page_size", "3"),
+            ("default_lang", "xx"),
+            ("base_url", "https://a.example/p"),
+            ("logo_url", "javascript:x"),
+            ("security_contact", "nobody"),
+            ("social", "{\"a\":\"http://x\"}"),
+            ("title", &"x".repeat(81)),
+        ] {
+            assert!(parse_value(k, v).is_err(), "{k}={v}");
+        }
+        assert!(parse_value("social", "{\"M\":\"https://m.example/@me\"}").is_ok());
+    }
+
+    #[test]
     fn origins_are_origins_only() {
         assert!(origin_ok("https://a.example"));
         assert!(origin_ok("http://localhost:8080"));

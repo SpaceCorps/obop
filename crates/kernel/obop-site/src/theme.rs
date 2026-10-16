@@ -229,7 +229,7 @@ pub const DEFAULT_ACCENT: &str = "#0f766e";
 /// of the title), so cards differ but stay inside the palette. Returns (light, dark) hex.
 pub fn card_tints(chosen: &str, seed: u64) -> (String, String) {
     let base = hex_to_oklch(chosen);
-    let shift = (seed % 7) as f64 * 9.0 - 27.0;
+    let shift = (seed % 7) as f64 * 16.0 - 48.0;
     let h = (base.h + shift + 360.0) % 360.0;
     (
         oklch_to_hex(Oklch {

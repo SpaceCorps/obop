@@ -57,7 +57,10 @@ pub fn admin_prefix_ok(p: &str) -> bool {
     };
     !rest.is_empty()
         && rest.len() <= 32
-        && !matches!(rest, "api" | "assets" | "shop" | "blog" | "cart" | "contact")
+        && !matches!(
+            rest,
+            "api" | "assets" | "shop" | "blog" | "cart" | "contact"
+        )
         && rest
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
@@ -170,7 +173,9 @@ mod tests {
     fn admin_prefixes_are_one_safe_segment() {
         assert!(admin_prefix_ok("/admin"));
         assert!(admin_prefix_ok("/back-office_2"));
-        for bad in ["admin", "/", "", "/a/b", "/Admin", "/api", "/shop", "/a b", "/..", "//x"] {
+        for bad in [
+            "admin", "/", "", "/a/b", "/Admin", "/api", "/shop", "/a b", "/..", "//x",
+        ] {
             assert!(!admin_prefix_ok(bad), "{bad}");
         }
     }

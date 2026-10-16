@@ -27,8 +27,12 @@ async fn fixture(public: bool) -> Fixture {
     }
     obop_site::seed::seed(&app.store, &app.dispatcher).unwrap();
     let auth = Arc::new(Auth::with_test_params(app.store.backend()));
-    auth.create_user("owner", "a long enough password", &["platform.admin".into()])
-        .unwrap();
+    auth.create_user(
+        "owner",
+        "a long enough password",
+        &["platform.admin".into()],
+    )
+    .unwrap();
     let dir = std::env::temp_dir().join(format!(
         "obop-admin-{}-{}",
         std::process::id(),
@@ -78,15 +82,16 @@ async fn fixture(public: bool) -> Fixture {
     f
 }
 
-async fn send(
-    r: &axum::Router,
-    req: Request<Body>,
-) -> (u16, String, axum::http::HeaderMap) {
+async fn send(r: &axum::Router, req: Request<Body>) -> (u16, String, axum::http::HeaderMap) {
     let resp = r.clone().oneshot(req).await.unwrap();
     let status = resp.status().as_u16();
     let headers = resp.headers().clone();
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
-    (status, String::from_utf8_lossy(&bytes).into_owned(), headers)
+    (
+        status,
+        String::from_utf8_lossy(&bytes).into_owned(),
+        headers,
+    )
 }
 
 async fn get(r: &axum::Router, path: &str) -> (u16, String, axum::http::HeaderMap) {
@@ -111,11 +116,20 @@ async fn the_public_site_sits_at_the_root_and_the_backoffice_moves_to_admin() {
     let (s, home, h) = get(&f.router, "/").await;
     assert_eq!(s, 200);
     assert!(home.contains("Fernhill Goods") && !home.contains("BACKOFFICE-SHELL"));
-    assert!(h["content-security-policy"].to_str().unwrap().contains("default-src 'none'"));
+    assert!(
+        h["content-security-policy"]
+            .to_str()
+            .unwrap()
+            .contains("default-src 'none'")
+    );
     // The backoffice build is under /admin/, and unknown paths below it fall back to its index.
     for p in ["/admin/", "/admin", "/admin/shop/orders/42"] {
         let (s, body, _) = get(&f.router, p).await;
-        assert_eq!((s, body.as_str()), (200, "<html>BACKOFFICE-SHELL</html>"), "{p}");
+        assert_eq!(
+            (s, body.as_str()),
+            (200, "<html>BACKOFFICE-SHELL</html>"),
+            "{p}"
+        );
     }
     let (s, js, _) = get(&f.router, "/admin/assets/app.js").await;
     assert_eq!((s, js.as_str()), (200, "console.log('admin')"));
@@ -127,7 +141,15 @@ async fn the_public_site_sits_at_the_root_and_the_backoffice_moves_to_admin() {
     assert_eq!(h["content-type"], "application/json");
     assert!(body.contains("not found"));
     // Public pages that are not the REST API.
-    for p in ["/shop", "/blog", "/about", "/sitemap.xml", "/robots.txt", "/llms.txt", "/feed.xml"] {
+    for p in [
+        "/shop",
+        "/blog",
+        "/about",
+        "/sitemap.xml",
+        "/robots.txt",
+        "/llms.txt",
+        "/feed.xml",
+    ] {
         assert_eq!(get(&f.router, p).await.0, 200, "{p}");
     }
     assert_eq!(get(&f.router, "/nope").await.0, 404);
@@ -139,7 +161,11 @@ async fn without_the_public_site_the_backoffice_is_at_the_root_exactly_as_before
     let (s, body, _) = get(&f.router, "/").await;
     assert_eq!((s, body.as_str()), (200, "<html>BACKOFFICE-SHELL</html>"));
     let (s, body, _) = get(&f.router, "/shop").await;
-    assert_eq!((s, body.as_str()), (200, "<html>BACKOFFICE-SHELL</html>"), "SPA fallback");
+    assert_eq!(
+        (s, body.as_str()),
+        (200, "<html>BACKOFFICE-SHELL</html>"),
+        "SPA fallback"
+    );
     assert_eq!(get(&f.router, "/api/meta").await.0, 401);
 }
 
@@ -153,7 +179,13 @@ async fn an_order_placed_in_the_browser_shows_up_in_the_backoffice_api() {
     // The cart page hands out the CSRF cookie and the form tokens.
     let (s, cart, h) = get(&f.router, &format!("/cart?add={id}")).await;
     assert_eq!(s, 200);
-    let cookie = h["set-cookie"].to_str().unwrap().split(';').next().unwrap().to_string();
+    let cookie = h["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
     assert!(cookie.starts_with("obop_csrf="));
     let csrf = between(&cart, "name=\"csrf\" value=\"", "\"");
     let idem = between(&cart, "name=\"idem\" value=\"", "\"");
@@ -195,7 +227,10 @@ async fn an_order_placed_in_the_browser_shows_up_in_the_backoffice_api() {
     assert_eq!(rows.len(), 1, "{orders}");
     assert_eq!(rows[0]["state"], "pending");
     assert_eq!(rows[0]["customer_email"], "buyer@example.test");
-    assert!(rows[0].get("access_token").is_none(), "the link token is never readable");
+    assert!(
+        rows[0].get("access_token").is_none(),
+        "the link token is never readable"
+    );
     let lines = call("ecommerce_order_line").await;
     assert_eq!(lines["value"].as_array().unwrap().len(), 1);
     assert_eq!(lines["value"][0]["quantity"], 2);

@@ -77,7 +77,7 @@ nav.main a[aria-current="page"]{background:var(--soft);color:var(--ink);font-wei
 .cartlink .n{display:inline-block;min-width:22px;padding:1px 7px;border-radius:999px;background:var(--fill);color:var(--on-fill);font-size:.8rem;text-align:center}
 .cartlink .n:empty{display:none}
 
-main{flex:1;padding-top:32px;padding-bottom:56px}
+main.wrap{flex:1;padding-top:32px;padding-bottom:56px}
 h1{font-size:clamp(1.9rem,4vw,2.7rem);line-height:1.12;letter-spacing:-.02em;margin:0 0 .5em}
 h2{font-size:1.5rem;line-height:1.2;letter-spacing:-.01em;margin:1.8em 0 .6em}
 h3{font-size:1.2rem;margin:1.5em 0 .5em}
@@ -150,7 +150,8 @@ input[type=checkbox],input[type=radio]{width:20px;height:20px;accent-color:var(-
 @media (min-width:820px){.product{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}}
 .product .art{border-radius:var(--radius);border:1px solid var(--line);font-size:7rem}
 .product .buy{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:20px 0}
-.product .big{font-size:1.8rem}
+.product .big{font-size:1.8rem;margin:0 0 12px}
+.product h1{margin-bottom:.25em}
 .product .buy .field{margin:0}
 .formcard h2:first-child{margin-top:0}
 .meta{color:var(--muted);font-size:.92rem;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
@@ -219,7 +220,12 @@ footer.site h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;mar
 footer.site p{margin:0 0 8px}
 
 @media (max-width:600px){
-  main{padding-top:22px}
+  main.wrap{padding-top:22px}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .art{font-size:2.4rem;aspect-ratio:1/1}
+  .card .body{padding:10px 12px 14px}
+  .card h3{font-size:.98rem}
+  .card .sum{display:none}
   .hero{padding-top:16px}
   .line{grid-template-columns:1fr}
   .line .sum{text-align:left}
@@ -248,7 +254,7 @@ document.addEventListener("submit",function(e){
   var f=e.target;
   if(f.matches&&f.matches("form[data-add]")){
     e.preventDefault();
-    var q=parseInt((f.querySelector("[name=qty]")||{}).value||"1",10);if(!(q>=1&&q<=99))q=1;
+    var q=parseInt((f.querySelector("[name=addqty]")||{}).value||"1",10);if(!(q>=1&&q<=99))q=1;
     add(f.getAttribute("data-add"),q);
     var s=f.querySelector("[role=status]");if(s){s.textContent=f.getAttribute("data-added")||"OK"}
   }

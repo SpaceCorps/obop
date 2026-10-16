@@ -73,14 +73,12 @@ fn main() -> ExitCode {
     let (components, args) = take_opt(&args, "--components");
     let (message, args) = take_opt(&args, "--message");
     let (admin_prefix, args) = take_opt(&args, "--admin-prefix");
-    let (flags, args): (Vec<&str>, Vec<&str>) = args
-        .into_iter()
-        .partition(|a| {
-            matches!(
-                *a,
-                "--demo" | "--dev-auth" | "--all-groups" | "--public-site" | "--trust-proxy"
-            )
-        });
+    let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
+        matches!(
+            *a,
+            "--demo" | "--dev-auth" | "--all-groups" | "--public-site" | "--trust-proxy"
+        )
+    });
     let has = |f: &str| flags.contains(&f);
     let opts = Opts {
         db: db

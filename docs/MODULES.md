@@ -27,8 +27,8 @@ Built-in modules (Rust crates, not removable): `base` (model `party`), `product`
 | `planning` | hr | Roles, shift templates, shifts (open, published, confirmed) |
 | `field_service` | base, product, hr | Jobs with site, technician, parts used, signature flag |
 | `pos` | base, product | Point-of-sale config, cash-controlled sessions, orders, lines, payments; refunds and session close need approval |
-| `ecommerce` | base, product | Listings, shipping methods, discount codes, web orders and lines; refunds need approval |
-| `website` | none | Pages, menu items, blog posts, form submissions |
+| `ecommerce` | base, product | Categories, listings and translations, shipping methods, discount codes, web orders and lines; public shop and checkout when the site is enabled; refunds need approval |
+| `website` | none | Pages, menu items, blog posts, form submissions and translations; served publicly when the site is enabled (docs/STOREFRONT.md) |
 | `email_marketing` | none | Lists, contacts with consent, campaigns with statistics; sending needs approval |
 | `sign` | none | Templates and signature requests |
 | `dashboards` | none | Dashboards and widgets as data (schema in section 9) |
@@ -305,6 +305,27 @@ Install-time errors:
 | `model X already exists` | Another module owns a model of that name. |
 | `M.F refers to model T, which is not installed` | A `ref` into another package or built-in: install it and add it to `depends`. |
 | `another installed module depends on X` | On uninstall: remove the dependents first. |
+
+### 3.6 `[model.public]`: what visitors may see and send (D50)
+
+Optional, one per model, written right after the `[[model]]` keys. Without it nothing of the model is public. Needs the instance to run with `--public-site` (docs/STOREFRONT.md); the declaration itself is checked on every install.
+
+| Key | Type | Rules |
+|---|---|---|
+| `read` | bool | Anonymous visitors may read records. Needs `published_field` and `fields`. |
+| `published_field` | string | A `bool` field (public when true) or a `select` (public when it equals `published_value`). Records that are not public do not exist for visitors. |
+| `published_value` | string | Only with a `select` `published_field`: the public option, for example `published`. Using the workflow state keeps the approval on `publish` in charge of what is public. |
+| `gone_value` | string | Optional, a `select` option meaning "was public, retired" (for example `archived`): answered with 410 instead of 404. |
+| `fields` | array | The only fields a public read returns. Each must be class `none` or `public_directory`, not personal data, and not restricted to a stricter `group`. A `ref` is shown as the public fields of the target only if the target model is public-read and that record is published. |
+| `order_by`, `order_dir` | string | Sort of public lists; `asc` (default) or `desc`. |
+| `submit` | bool | Visitors may create records. Needs `submit_fields` and `rate_limit_per_hour`. |
+| `submit_fields` | array | The only fields a visitor may set. Class may be `none`, `public_directory` or `internal` (an order email is fine); never a governed state field. They are never readable publicly unless also in `fields`. `required` is still enforced. A `ref` must point at a published record of a public-read model. |
+| `rate_limit_per_hour` | number | Submissions per source and hour (50 times that across all sources). |
+| `receipt_token_field` | string | A `text` field of class `secret` holding an unguessable token; whoever holds it may read that one record back through `receipt_fields` (an order confirmation). Nobody can read the token itself. |
+| `receipt_parent` | string | On a child model: a `ref` to the model that has a token; the record is shown with its parent (order lines). |
+| `receipt_fields` | array | What the receipt shows; may include personal data the submitter gave, never `confidential_hr`, `special_category`, `financial` or `secret`. |
+
+Errors: `M.F: only fields of class none or public_directory can be public`, `M.F: personal data can never be public`, `M.public: read = true needs published_field, so only published records are public`, `M.F: a governed state field cannot be submitted; it starts at its first option`, `M.F: a public form cannot collect class C data`.
 
 ## 4. Field kinds and their JSON
 

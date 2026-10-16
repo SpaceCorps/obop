@@ -856,15 +856,6 @@ fn security_checkout_never_trusts_prices_totals_or_state_from_the_browser() {
     assert_eq!(line["unit_price"], 1250);
 }
 
-trait Leak {
-    fn leak(self) -> &'static str;
-}
-impl Leak for String {
-    fn leak(self) -> &'static str {
-        Box::leak(self.into_boxed_str())
-    }
-}
-
 #[test]
 fn security_checkout_refuses_unpublished_and_unknown_listings() {
     let s = shop();

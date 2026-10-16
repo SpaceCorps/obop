@@ -50,6 +50,11 @@ fn availability(rec: &PublicRecord) -> Avail {
     }
 }
 
+/// Whether a listing can be ordered right now (home page features only these).
+pub(crate) fn in_stock(rec: &PublicRecord) -> bool {
+    availability(rec) != Avail::OutOfStock
+}
+
 fn schema_availability(a: Avail) -> &'static str {
     match a {
         Avail::InStock => "https://schema.org/InStock",
@@ -760,7 +765,7 @@ impl Site {
                 "<details class=\"more\"><summary>{}</summary><form method=\"get\" action=\"/cart\">\
 <input type=\"hidden\" name=\"items\" value=\"{}\">{}\
 <div class=\"field\"><label for=\"add\">{}</label><select id=\"add\" name=\"add\">",
-                esc(ctx.t("cart.nojs")),
+                esc(ctx.t("cart.more")),
                 esc(&items_string(&live)),
                 if ctx.lang == ctx.s.default_lang { String::new() } else { format!("<input type=\"hidden\" name=\"lang\" value=\"{}\">", ctx.lang.code()) },
                 esc(ctx.t("cart.item")),
