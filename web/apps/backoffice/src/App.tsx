@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadSettings, login, meta, type ModuleMeta, type Settings } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, buildApps } from "./Chrome.tsx";
 import { Customize } from "./Customize.tsx";
+import { DataProvider, type Tone } from "./data.tsx";
 import { modelLabel } from "./format.ts";
 import { ModelPage } from "./ModelPage.tsx";
-import { href, useRoute } from "./route.ts";
+import { href, nav, useRoute } from "./route.ts";
+import { ConfirmDialog, Skeleton, Toasts, type ConfirmRequest, type ToastItem } from "./ui.tsx";
 import { applyTheme, resolveTheme } from "./theme.ts";
 
 function read(key: string): string {
@@ -79,7 +81,10 @@ export function App() {
   const [route, go] = useRoute();
   const [launcher, setLauncher] = useState(false);
   const [palette, setPalette] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [menu, setMenu] = useState(false);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
+  const toastId = useRef(0);
 
   const signOut = useCallback(() => {
     write("obop-token", "");
@@ -111,15 +116,54 @@ export function App() {
     return () => removeEventListener("keydown", on);
   }, []);
 
-  const notify = useCallback((t: string) => {
-    setToast(t);
-    setTimeout(() => setToast((c) => (c === t ? null : c)), 3500);
-  }, []);
+  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+  const notify = useCallback(
+    (text: string, tone: Tone = "ok") => {
+      const id = ++toastId.current;
+      setToasts((t) => [...t.slice(-3), { id, text, tone }]);
+      setTimeout(() => dismiss(id), tone === "ok" ? 3500 : 7000);
+    },
+    [dismiss],
+  );
+  const confirm = useCallback(
+    (message: string, confirmLabel = "Discard", cancelLabel = "Keep editing") =>
+      new Promise<boolean>((resolve) =>
+        setConfirmReq({
+          message,
+          confirmLabel,
+          cancelLabel,
+          resolve: (ok) => {
+            setConfirmReq(null);
+            resolve(ok);
+          },
+        }),
+      ),
+    [],
+  );
+  useEffect(() => {
+    nav.ask = (m) => confirm(m, "Leave and discard", "Keep editing");
+    return () => {
+      nav.ask = null;
+    };
+  }, [confirm]);
+
+  // The menu collapses on phones; picking something closes it.
+  useEffect(() => setMenu(false), [route.app, route.model]);
 
   const isAdmin = modules.some((m) => m.id === "platform");
   const apps = useMemo(() => buildApps(modules, settings, isAdmin), [modules, settings, isAdmin]);
   const app = apps.find((a) => a.id === route.app);
   const model = app?.module.models.find((m) => m.name === route.model) ?? app?.module.models[0];
+
+  const linkFor = useCallback(
+    (name: string, opts?: { id?: string; st?: string }) => {
+      const a = apps.find(
+        (x) => x.id !== "customize" && x.module.models.some((m) => m.name === name),
+      );
+      return a ? href({ app: a.id, model: name, id: opts?.id, st: opts?.st }) : null;
+    },
+    [apps],
+  );
 
   // Remember recently opened apps for the launcher.
   useEffect(() => {
@@ -145,77 +189,98 @@ export function App() {
         }}
       />
     );
-  if (!ready) return <p className="hint pad">Loading…</p>;
+  if (!ready)
+    return (
+      <div className="canvas">
+        <div className="topbar panel" />
+        <section className="main panel">
+          <Skeleton rows={8} cols={4} />
+        </section>
+      </div>
+    );
 
   return (
-    <div className="canvas">
-      <TopBar
-        apps={apps}
-        current={app}
-        email={email}
-        onLauncher={() => setLauncher(true)}
-        onPalette={() => setPalette(true)}
-        onSignOut={signOut}
-        onTheme={() => go({ app: "customize", model: "theme", tab: "theme" })}
-      />
-      <div className="workspace">
-        {app && app.id !== "customize" && (
-          <nav className="sidebar panel" aria-label={`${app.name} menu`}>
-            <div className="side-head">
-              <AppIcon app={app} size={32} />
-              <strong>{app.name}</strong>
-            </div>
-            {app.module.models.map((m) => (
-              <a
-                key={m.name}
-                href={href({ app: app.id, model: m.name })}
-                aria-current={model?.name === m.name}
-                title={m.description}
-              >
-                {modelLabel(m.name, app.module.id)}
-              </a>
-            ))}
-          </nav>
-        )}
-        {app?.id === "customize" ? (
-          <Customize
-            token={token}
-            tab={route.tab}
-            apps={apps}
-            settings={settings}
-            isAdmin={isAdmin}
-            go={(tab) => go({ app: "customize", model: tab, tab })}
-            onSettings={(s) => {
-              setSettings(s);
-              applyTheme(resolveTheme(s.theme));
-            }}
-            onModulesChanged={() => void refresh()}
-            notify={notify}
-          />
-        ) : app && model ? (
-          <ModelPage
-            key={model.name}
-            token={token}
-            app={app}
-            model={model}
-            route={{ ...route, model: model.name }}
-            go={go}
-            notify={notify}
-          />
-        ) : (
-          <Home apps={apps} />
-        )}
-      </div>
-      {launcher && (
-        <Launcher apps={apps} recent={recentApps()} onClose={() => setLauncher(false)} />
-      )}
-      {palette && <Palette apps={apps} onClose={() => setPalette(false)} />}
-      {toast && (
-        <div className="toast panel" role="status">
-          {toast}
+    <DataProvider
+      token={token}
+      modules={modules}
+      apps={apps}
+      notify={notify}
+      confirm={confirm}
+      linkFor={linkFor}
+    >
+      <div className="canvas">
+        <TopBar
+          apps={apps}
+          current={app}
+          email={email}
+          menuOpen={menu}
+          hasMenu={!!app && app.id !== "customize"}
+          onMenu={() => setMenu(!menu)}
+          onLauncher={() => setLauncher(true)}
+          onPalette={() => setPalette(true)}
+          onSignOut={signOut}
+          onTheme={() => go({ app: "customize", model: "theme", tab: "theme" })}
+        />
+        <div className="workspace">
+          {app && app.id !== "customize" && (
+            <nav
+              id="app-menu"
+              className={`sidebar panel${menu ? " open" : ""}`}
+              aria-label={`${app.name} menu`}
+              onClick={() => setMenu(false)}
+            >
+              <div className="side-head">
+                <AppIcon app={app} size={32} />
+                <strong>{app.name}</strong>
+              </div>
+              {app.module.models.map((m) => (
+                <a
+                  key={m.name}
+                  href={href({ app: app.id, model: m.name })}
+                  aria-current={model?.name === m.name ? "page" : undefined}
+                  title={m.description}
+                >
+                  {modelLabel(m.name, app.module.id)}
+                </a>
+              ))}
+            </nav>
+          )}
+          {app?.id === "customize" ? (
+            <Customize
+              token={token}
+              tab={route.tab}
+              apps={apps}
+              modules={modules}
+              settings={settings}
+              isAdmin={isAdmin}
+              go={(tab) => go({ app: "customize", model: tab, tab })}
+              onSettings={(s) => {
+                setSettings(s);
+                applyTheme(resolveTheme(s.theme));
+              }}
+              onModulesChanged={() => void refresh()}
+              notify={notify}
+            />
+          ) : app && model ? (
+            <ModelPage
+              key={model.name}
+              app={app}
+              model={model}
+              route={{ ...route, model: model.name }}
+              go={go}
+            />
+          ) : (
+            <Home apps={apps} />
+          )}
         </div>
-      )}
-    </div>
+        {launcher && (
+          <Launcher apps={apps} recent={recentApps()} onClose={() => setLauncher(false)} />
+        )}
+        {palette && <Palette apps={apps} onClose={() => setPalette(false)} />}
+        {confirmReq && <ConfirmDialog req={confirmReq} />}
+        <Toasts items={toasts} onDismiss={dismiss} />
+      </div>
+    </DataProvider>
   );
 }
 

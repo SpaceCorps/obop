@@ -8,7 +8,8 @@ export function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, cl
   useEffect(() => {
     if (!open) return;
     const down = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) close();
+      // composedPath is taken at dispatch, so an item that unmounts itself on click still counts as inside
+      if (ref.current && !e.composedPath().includes(ref.current)) close();
     };
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") {

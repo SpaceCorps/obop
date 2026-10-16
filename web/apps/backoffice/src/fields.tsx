@@ -220,7 +220,7 @@ export function RefPicker({
   useEffect(() => {
     if (!open) return;
     const on = (e: MouseEvent) => {
-      if (!box.current?.contains(e.target as Node)) setOpen(false);
+      if (box.current && !e.composedPath().includes(box.current)) setOpen(false);
     };
     addEventListener("mousedown", on);
     return () => removeEventListener("mousedown", on);
