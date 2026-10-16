@@ -174,6 +174,94 @@ impl Settings {
     }
 }
 
+/// Check and normalise one setting typed on the command line (`obop site set KEY VALUE`).
+/// Empty text clears optional settings.
+pub fn parse_value(key: &str, raw: &str) -> Result<J, String> {
+    if !KEYS.iter().any(|(k, _)| *k == key) {
+        let known: Vec<&str> = KEYS.iter().map(|(k, _)| *k).collect();
+        return Err(format!(
+            "unknown site setting {key:?}; the keys are {}",
+            known.join(", ")
+        ));
+    }
+    let raw = raw.trim();
+    let text_max = |max: usize| {
+        if raw.chars().count() > max {
+            Err(format!("{key} is longer than {max} characters"))
+        } else {
+            Ok(J::String(raw.to_string()))
+        }
+    };
+    match key {
+        "enabled" | "noindex" => match raw {
+            "true" | "1" | "yes" | "on" => Ok(J::Bool(true)),
+            "false" | "0" | "no" | "off" => Ok(J::Bool(false)),
+            _ => Err(format!("{key} must be true or false")),
+        },
+        "shop_page_size" => raw
+            .parse::<u64>()
+            .ok()
+            .filter(|n| (4..=48).contains(n))
+            .map(J::from)
+            .ok_or_else(|| "shop_page_size must be a number from 4 to 48".into()),
+        "accent" => theme::parse_hex(raw)
+            .map(|c| J::String(theme::to_hex(c)))
+            .ok_or_else(|| "accent must look like #2d6a4f".into()),
+        "default_lang" => Lang::parse(raw)
+            .map(|l| J::String(l.code().into()))
+            .ok_or_else(|| "default_lang must be en, de, fr, pl, fi, sv or es".into()),
+        "shop_currency" => {
+            let c = raw.to_ascii_uppercase();
+            if currency_ok(&c) {
+                Ok(J::String(c))
+            } else {
+                Err("shop_currency must be a three-letter code such as EUR".into())
+            }
+        }
+        "base_url" => {
+            let u = raw.trim_end_matches('/');
+            if origin_ok(u) {
+                Ok(J::String(u.into()))
+            } else {
+                Err("base_url must be an origin such as https://shop.example.com (no path)".into())
+            }
+        }
+        "logo_url" => {
+            if clean_url(raw)
+                && ((raw.starts_with("https://") && !raw.contains('@'))
+                    || (raw.starts_with('/') && !raw.starts_with("//")))
+            {
+                Ok(J::String(raw.into()))
+            } else {
+                Err("logo_url must be an https URL or a /path".into())
+            }
+        }
+        "security_contact" => {
+            let s = Settings::from_map(&Map::from_iter([(key.to_string(), J::String(raw.into()))]));
+            if s.security_contact.is_some() {
+                Ok(J::String(raw.into()))
+            } else {
+                Err("security_contact must be an email address or an https URL".into())
+            }
+        }
+        "social" => {
+            let v: J = serde_json::from_str(raw)
+                .map_err(|_| "social must be a JSON object of label to https URL".to_string())?;
+            let s = Settings::from_map(&Map::from_iter([(key.to_string(), v.clone())]));
+            let n = v.as_object().map_or(0, Map::len);
+            if n == 0 || s.social.len() != n || n > 8 {
+                Err("social needs 1 to 8 entries, each label mapped to an https URL".into())
+            } else {
+                Ok(v)
+            }
+        }
+        "title" | "logo_text" => text_max(if key == "title" { 80 } else { 40 }),
+        "tagline" => text_max(160),
+        "footer_text" | "checkout_note" => text_max(300),
+        _ => unreachable!("every key is handled above"),
+    }
+}
+
 /// The keys the site understands, with a one-line description (for `obop site set` and the docs).
 pub const KEYS: &[(&str, &str)] = &[
     (

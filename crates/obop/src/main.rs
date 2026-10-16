@@ -1,4 +1,6 @@
 mod app;
+#[cfg(test)]
+mod public_site_tests;
 
 use app::{App, DevAuth};
 use obop_auth::Auth;
@@ -32,6 +34,11 @@ const USAGE: &str = "usage: obop <command>
   status incident resolve ID [--message M] | status incident list
                                                 manage status-page incidents (--db as for platform serve)
   serve [--addr 127.0.0.1:8080] [--static DIR]  REST API and the backoffice
+      --public-site                             also serve the public website and shop at / (or OBOP_PUBLIC_SITE=1);
+                                                the backoffice then moves to --admin-prefix (default /admin)
+      --trust-proxy                             take the client address from X-Forwarded-For (OBOP_TRUST_PROXY=1)
+  site seed                                     fill an empty instance with an invented demo shop and blog
+  site set KEY VALUE | site show                set or list the site settings (title, accent, default_lang ...)
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
   commands [--token TOKEN]                      list the commands visible to a token
   call [--token TOKEN] <model> <command> [k=v...]
@@ -65,9 +72,15 @@ fn main() -> ExitCode {
     let (inc_status, args) = take_opt(&args, "--status");
     let (components, args) = take_opt(&args, "--components");
     let (message, args) = take_opt(&args, "--message");
+    let (admin_prefix, args) = take_opt(&args, "--admin-prefix");
     let (flags, args): (Vec<&str>, Vec<&str>) = args
         .into_iter()
-        .partition(|a| matches!(*a, "--demo" | "--dev-auth" | "--all-groups"));
+        .partition(|a| {
+            matches!(
+                *a,
+                "--demo" | "--dev-auth" | "--all-groups" | "--public-site" | "--trust-proxy"
+            )
+        });
     let has = |f: &str| flags.contains(&f);
     let opts = Opts {
         db: db
@@ -78,6 +91,12 @@ fn main() -> ExitCode {
             .or_else(|| std::env::var("OBOP_TOKEN").ok()),
         demo: has("--demo"),
         dev_auth: has("--dev-auth"),
+        public_site: has("--public-site") || env_flag("OBOP_PUBLIC_SITE"),
+        trust_proxy: has("--trust-proxy") || env_flag("OBOP_TRUST_PROXY"),
+        admin_prefix: admin_prefix
+            .map(String::from)
+            .or_else(|| std::env::var("OBOP_ADMIN_PREFIX").ok())
+            .unwrap_or_else(|| "/admin".into()),
     };
     let result = match args.as_slice() {
         [] | ["--version"] => {
@@ -114,6 +133,9 @@ fn main() -> ExitCode {
                 message,
             },
         ),
+        ["site", "seed"] => site_seed(&opts),
+        ["site", "show"] => site_show(&opts),
+        ["site", "set", key, value] => site_set(&opts, key, value),
         ["mcp"] => mcp(&opts),
         ["commands"] => commands(&opts),
         ["call", model, command, kv @ ..] => call(&opts, model, command, kv),
@@ -130,6 +152,14 @@ struct Opts {
     token: Option<String>,
     demo: bool,
     dev_auth: bool,
+    /// Serve the public website and shop at `/` and move the backoffice to `admin_prefix`.
+    public_site: bool,
+    trust_proxy: bool,
+    admin_prefix: String,
+}
+
+fn env_flag(name: &str) -> bool {
+    std::env::var(name).is_ok_and(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
 }
 
 /// Pull `--flag value` out of the argument list.
@@ -331,6 +361,9 @@ fn clone_opts(o: &Opts) -> Opts {
         token: o.token.clone(),
         demo: o.demo,
         dev_auth: o.dev_auth,
+        public_site: o.public_site,
+        trust_proxy: o.trust_proxy,
+        admin_prefix: o.admin_prefix.clone(),
     }
 }
 
@@ -447,7 +480,41 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
         );
     }
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
-    let router = obop_http::router(state, static_dir);
+    let router = if o.public_site {
+        if !obop_http::public::admin_prefix_ok(&o.admin_prefix) {
+            return Err(fail(&format!(
+                "--admin-prefix {:?} must be one path segment such as /admin (lowercase letters, digits, - and _)",
+                o.admin_prefix
+            )));
+        }
+        let site = Arc::new(obop_site::Site::new(
+            obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),
+            obop_site::Config {
+                admin_prefix: Some(o.admin_prefix.clone()),
+                ..obop_site::Config::from_env()
+            },
+        ));
+        if !site.has_public_models() {
+            eprintln!(
+                "the public site is on but no public content is installed yet: obop modules install-from website, install-from ecommerce, then obop site seed"
+            );
+        }
+        eprintln!(
+            "public site at http://{addr}/ ; backoffice at http://{addr}{}/",
+            o.admin_prefix
+        );
+        obop_http::public::router(
+            state,
+            static_dir,
+            site,
+            obop_http::public::PublicConfig {
+                admin_prefix: o.admin_prefix.clone(),
+                trust_proxy: o.trust_proxy,
+            },
+        )
+    } else {
+        obop_http::router(state, static_dir)
+    };
     eprintln!(
         "obop listening on http://{addr}{}",
         if o.dev_auth {
@@ -459,6 +526,53 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     rt.block_on(obop_http::serve(addr, router))
         .map_err(|e| fail(&format!("error: {e}")))
+}
+
+/// `obop site seed`: an invented demo shop and blog in an empty instance.
+fn site_seed(o: &Opts) -> Exit {
+    let app = open_app(o)?;
+    let summary = obop_site::seed::seed(&app.store, &app.dispatcher).map_err(|e| fail(&e))?;
+    for line in summary.0 {
+        println!("created {line}");
+    }
+    println!("serve it with: obop serve --public-site --static web/apps/backoffice/dist");
+    Ok(())
+}
+
+/// The `site` object of the instance settings, as stored.
+fn site_settings(app: &App) -> serde_json::Map<String, serde_json::Value> {
+    serde_json::from_str::<serde_json::Value>(&app.installer.settings())
+        .ok()
+        .and_then(|v| v.get("site").and_then(|s| s.as_object().cloned()))
+        .unwrap_or_default()
+}
+
+fn site_show(o: &Opts) -> Exit {
+    let app = open_app(o)?;
+    let set = site_settings(&app);
+    for (key, help) in obop_site::settings::KEYS {
+        match set.get(*key) {
+            Some(v) => println!("{key} = {v}"),
+            None => println!("{key} (not set)  {help}"),
+        }
+    }
+    Ok(())
+}
+
+/// `obop site set KEY VALUE`: validate and store one site setting.
+fn site_set(o: &Opts, key: &str, value: &str) -> Exit {
+    let value = obop_site::settings::parse_value(key, value).map_err(|e| fail(&e))?;
+    let app = open_app(o)?;
+    let mut all: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(&app.installer.settings()).unwrap_or_default();
+    let mut site = site_settings(&app);
+    site.insert(key.to_string(), value);
+    all.insert("site".into(), serde_json::Value::Object(site));
+    app.installer
+        .set_settings(&serde_json::Value::Object(all).to_string())
+        .map_err(|e| fail(&e))?;
+    println!("site.{key} set");
+    Ok(())
 }
 
 /// Build the provisioner named on the command line. Sliplane settings come from the
