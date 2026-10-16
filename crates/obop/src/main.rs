@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 const USAGE: &str = "usage: obop <command>
   --version
-  modules check                                 run the install gate over linked modules
+  modules check [FILE...]                       the install gate over linked modules, or over package files (no database)
   modules list | install FILE | uninstall ID    manage packages in the database (operator tool)
   modules market                                list the marketplace; install with `modules install-from ID`
   admin create USER [--groups a,b | --all-groups]
@@ -71,6 +71,7 @@ fn main() -> ExitCode {
             Ok(())
         }
         ["modules", "check"] => modules_check(),
+        ["modules", "check", files @ ..] => modules_check_files(files),
         ["modules", "list"] => modules_list(&opts),
         ["modules", "market"] => modules_market(&opts),
         ["modules", "install", file] => modules_install(&opts, Some(file), None),
@@ -169,6 +170,32 @@ fn modules_check() -> Exit {
             failed = true;
             for v in violations {
                 println!("FAIL  {}: {}", v.path, v.problem);
+            }
+        }
+    }
+    if failed {
+        Err(ExitCode::FAILURE)
+    } else {
+        Ok(())
+    }
+}
+
+/// `obop modules check FILE...`: the parser, the D41 gate and the install-time rules that need no
+/// database, for package files. Prints `ok` or the exact errors per file.
+fn modules_check_files(files: &[&str]) -> Exit {
+    let builtin = App::new().modules;
+    let mut failed = false;
+    for f in files {
+        let errors = match std::fs::read_to_string(f) {
+            Ok(text) => obop_pkg::check_manifest(&text, &builtin),
+            Err(e) => vec![format!("cannot read: {e}")],
+        };
+        if errors.is_empty() {
+            println!("ok    {f}");
+        } else {
+            failed = true;
+            for e in errors {
+                println!("FAIL  {f}: {e}");
             }
         }
     }

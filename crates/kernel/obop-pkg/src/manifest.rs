@@ -186,10 +186,7 @@ impl Manifest {
                     return Err(format!("{}: bad action name {:?}", m.name, a.name));
                 }
                 if !actions.insert(&a.name) {
-                    return Err(format!(
-                        "{}: action {:?} is declared twice",
-                        m.name, a.name
-                    ));
+                    return Err(format!("{}: action {:?} is declared twice", m.name, a.name));
                 }
                 let Some(f) = m.field.iter().find(|f| f.name == a.field) else {
                     return Err(format!(

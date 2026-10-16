@@ -52,8 +52,11 @@ pub fn module() -> Module {
                     Some("draft"),
                     "confirmed",
                 ),
-                CommandDef::new("cancel", "Cancel an order", "sales.user")
-                    .transition("state", None, "cancelled"),
+                CommandDef::new("cancel", "Cancel an order", "sales.user").transition(
+                    "state",
+                    None,
+                    "cancelled",
+                ),
                 CommandDef::new(
                     "reset_to_draft",
                     "Put a cancelled order back to draft",

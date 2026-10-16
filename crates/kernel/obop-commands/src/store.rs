@@ -101,7 +101,10 @@ pub(crate) fn id_of(input: &Value) -> Result<String, String> {
 }
 
 /// Reject fields the model does not declare, so nothing unclassified enters the store.
-fn declared_fields(def: &ModelDef, input: &Value) -> Result<BTreeMap<String, Value>, String> {
+pub(crate) fn declared_fields(
+    def: &ModelDef,
+    input: &Value,
+) -> Result<BTreeMap<String, Value>, String> {
     let Value::Map(m) = input else {
         return Err("expected an object".into());
     };

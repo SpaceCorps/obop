@@ -54,8 +54,12 @@ pub fn module() -> Module {
                 .select(&["new", "qualified", "won", "lost"]),
             ],
             commands: vec![
-                CommandDef::new("qualify", "Move a new lead to the qualified stage", "crm.user")
-                    .transition("stage", Some("new"), "qualified"),
+                CommandDef::new(
+                    "qualify",
+                    "Move a new lead to the qualified stage",
+                    "crm.user",
+                )
+                .transition("stage", Some("new"), "qualified"),
                 CommandDef::new("mark_won", "Move the lead to the won stage", "crm.user")
                     .transition("stage", Option::None, "won"),
                 CommandDef::new("mark_lost", "Move the lead to the lost stage", "crm.user")

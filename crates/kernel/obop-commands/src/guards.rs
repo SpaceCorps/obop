@@ -10,8 +10,8 @@
 //! - `delete`: refused while another record refers to the one being deleted.
 
 use crate::query::Query;
-use crate::store::{Store, id_of};
-use crate::{Dispatcher, Guard, ModelMeta, Value, Verdict};
+use crate::store::{Store, declared_fields, id_of, validate};
+use crate::{Dispatcher, Guard, ModelMeta, Pre, Value, Verdict};
 use obop_masking::mode_for;
 use obop_registry::{ModelDef, Module, Transition};
 use obop_storage::{Backend, Fields};
@@ -139,7 +139,8 @@ fn update_guard(def: &ModelDef, store: &Store) -> Option<Guard> {
                 _ => return Err(format!("{}.{field} must be {}", def.name, kind.describe())),
             };
             let cur_s = text_of(&cur);
-            let leaves_here = |x: &&T| x.t.field == field && x.t.from.is_none_or(|f| Some(f) == cur_s);
+            let leaves_here =
+                |x: &&T| x.t.field == field && x.t.from.is_none_or(|f| Some(f) == cur_s);
             let mut cands: Vec<&T> = trans
                 .iter()
                 .filter(leaves_here)
@@ -181,6 +182,11 @@ fn update_guard(def: &ModelDef, store: &Store) -> Option<Guard> {
             };
             verdict.requires.push(chosen.group);
             verdict.approval |= chosen.approval;
+            verdict.pre.push(Pre {
+                command: format!("{}.{}", def.name, chosen.command),
+                input: Value::map([("id", Value::text(&id))]),
+                field,
+            });
             moved.push((field, to.to_string()));
         }
         if let Some((field, to)) = moved.first() {
@@ -196,6 +202,9 @@ fn update_guard(def: &ModelDef, store: &Store) -> Option<Guard> {
                     def.name
                 ));
             }
+            // The actions run before the update does, so everything the update would refuse
+            // is refused now, before any of them has written.
+            validate(&def, &store, &declared_fields(&def, input)?, false)?;
         }
         Ok(verdict)
     }))
@@ -212,7 +221,10 @@ fn action_guard(def: &ModelDef, store: &Store, t: Transition) -> Guard {
             .get(def.name, &id)?
             .ok_or_else(|| format!("no {} {id}", def.name))?;
         if let Some(from) = t.from {
-            let cur = rec.get(t.field).map(Value::from_json).unwrap_or(Value::Null);
+            let cur = rec
+                .get(t.field)
+                .map(Value::from_json)
+                .unwrap_or(Value::Null);
             if cur != Value::text(from) {
                 return Err(format!(
                     "{} must be {from} to do this, it is {}",
@@ -245,8 +257,11 @@ fn query_guard(def: &ModelDef) -> Guard {
                 || def.fields.iter().any(|f| {
                     f.name == name
                         && p.allows(f.permission_group)
-                        && mode_for(p.kind, f.class.unwrap_or(DataClass::Secret), f.personal_data)
-                            == MaskMode::Allow
+                        && mode_for(
+                            p.kind,
+                            f.class.unwrap_or(DataClass::Secret),
+                            f.personal_data,
+                        ) == MaskMode::Allow
                 })
         };
         Query::parse(&def, input, &usable).map(|_| Verdict::default())

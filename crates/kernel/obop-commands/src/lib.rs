@@ -125,6 +125,20 @@ pub struct Verdict {
     pub requires: Vec<&'static str>,
     /// An agent may only propose this call, although the command itself needs no approval.
     pub approval: bool,
+    /// Transition actions to run before the command, so an implicit transition does everything
+    /// the action does (a number assigned on posting), not only set the field.
+    pub pre: Vec<Pre>,
+}
+
+/// An action the dispatcher runs ahead of an `update` that moves a governed field.
+#[derive(Debug)]
+pub struct Pre {
+    /// Command id, `model.action`.
+    pub command: String,
+    pub input: Value,
+    /// The governed field the action sets. When the action has a registered handler the field
+    /// is dropped from the update, which would only repeat the write.
+    pub field: &'static str,
 }
 
 /// A pre-hook on one command, run by the dispatcher after the permission check and before the
@@ -394,7 +408,10 @@ impl Dispatcher {
 
     /// Remove every command a module registered. Its data stays in the store.
     pub fn unregister_module(&self, module: &str) {
-        self.guards.write().unwrap().retain(|_, g| g.module != module);
+        self.guards
+            .write()
+            .unwrap()
+            .retain(|_, g| g.module != module);
         let mut cmds = self.commands.write().unwrap();
         let models: HashSet<&str> = cmds
             .values()
@@ -463,9 +480,11 @@ impl Dispatcher {
             .filter(|g| g.serialize)
             .map(|_| self.txn.lock().unwrap_or_else(|e| e.into_inner()));
         let mut guard_approval = false;
+        let mut pre = Vec::new();
         if let Some(g) = &guard {
             let v = (g.guard)(p, &input).map_err(CallError::Handler)?;
             guard_approval = v.approval;
+            pre = v.pre;
             if let Some(i) = v.input {
                 input = i;
             }
@@ -483,7 +502,7 @@ impl Dispatcher {
             );
             return Err(CallError::ApprovalRequired { plan_id });
         }
-        self.run(&c, p, vault, input)
+        self.run(&c, p, vault, input, pre)
     }
 
     /// A human approves a proposed plan. The command runs with the proposing agent's own
@@ -515,19 +534,21 @@ impl Dispatcher {
         // The record may have changed since the proposal, so the guard runs again, and the
         // approver must hold the groups of any transition the call implicitly runs (D48).
         let mut input = plan.input.clone();
+        let mut pre = Vec::new();
         let guard = self.guards.read().unwrap().get(&plan.id).cloned();
         if let Some(g) = guard {
             let v = (g.guard)(&plan.principal, &input).map_err(CallError::Handler)?;
             if v.requires.iter().any(|r| !approver.allows(r)) {
                 return Err(CallError::Forbidden(plan.id.clone()));
             }
+            pre = v.pre;
             if let Some(i) = v.input {
                 input = i;
             }
         }
         let plan = pending.remove(plan_id).expect("checked above");
         drop(pending);
-        self.run(&c, &plan.principal, vault, input)
+        self.run(&c, &plan.principal, vault, input, pre)
     }
 
     fn run(
@@ -536,10 +557,24 @@ impl Dispatcher {
         p: &Principal,
         vault: &mut Vault,
         input: Value,
+        pre: Vec<Pre>,
     ) -> Result<Response, CallError> {
+        let mut input = input;
+        for step in pre {
+            let action = self.commands.read().unwrap().get(&step.command).cloned();
+            if let Some(action) = action {
+                let mut i = step.input;
+                if let Value::Map(m) = &mut i {
+                    m.insert("_caller".into(), Value::text(&p.id));
+                }
+                (action.handler)(&i).map_err(CallError::Handler)?;
+                if let Value::Map(m) = &mut input {
+                    m.remove(step.field);
+                }
+            }
+        }
         // Handlers that need to know who is calling (audit trails) read `_caller`. The dispatcher
         // sets it after discarding anything a client sent under that name.
-        let mut input = input;
         if let Value::Map(m) = &mut input {
             m.insert("_caller".into(), Value::text(&p.id));
         }
@@ -549,7 +584,10 @@ impl Dispatcher {
             // `search`: shape the rows, keep the envelope.
             Value::Map(mut m) if c.envelope => {
                 if let Some(rows) = m.remove("rows") {
-                    m.insert("rows".into(), self.shape(c.model, p, vault, rows, &mut denied));
+                    m.insert(
+                        "rows".into(),
+                        self.shape(c.model, p, vault, rows, &mut denied),
+                    );
                 }
                 Value::Map(m)
             }
@@ -718,3 +756,6 @@ pub mod names {
         id.replacen('.', "__", 1)
     }
 }
+
+#[cfg(test)]
+mod tests;

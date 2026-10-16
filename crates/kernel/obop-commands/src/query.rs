@@ -98,7 +98,9 @@ fn stored_key(kind: &FieldKind, v: &J) -> Option<Key> {
         (FieldKind::Number | FieldKind::Money, J::Number(n)) => n.as_i64().map(Key::Int),
         (FieldKind::Date, J::String(s)) => date_key(s).map(Key::Int),
         (FieldKind::Bool, J::Bool(b)) => Some(Key::Int(i64::from(*b))),
-        (FieldKind::Select(o), J::String(s)) => o.iter().position(|x| x == s).map(|i| Key::Int(i as i64)),
+        (FieldKind::Select(o), J::String(s)) => {
+            o.iter().position(|x| x == s).map(|i| Key::Int(i as i64))
+        }
         (FieldKind::Text | FieldKind::LongText | FieldKind::Ref(_), J::String(s)) => {
             Some(Key::Str(s.clone()))
         }
@@ -108,7 +110,12 @@ fn stored_key(kind: &FieldKind, v: &J) -> Option<Key> {
 
 /// The key of a value in the query, which must have the field's type.
 fn operand(model: &str, field: &str, kind: &FieldKind, v: &Value) -> Result<Key, String> {
-    let bad = || format!("filter on {model}.{field}: value must be {}", kind.describe());
+    let bad = || {
+        format!(
+            "filter on {model}.{field}: value must be {}",
+            kind.describe()
+        )
+    };
     match (kind, v) {
         (FieldKind::Number | FieldKind::Money, Value::Int(i)) => Ok(Key::Int(*i)),
         (FieldKind::Date, Value::Text(t)) => date_key(t).map(Key::Int).ok_or_else(bad),
@@ -125,7 +132,10 @@ fn operand(model: &str, field: &str, kind: &FieldKind, v: &Value) -> Result<Key,
     }
 }
 
-fn int_option(m: &std::collections::BTreeMap<String, Value>, k: &str) -> Result<Option<i64>, String> {
+fn int_option(
+    m: &std::collections::BTreeMap<String, Value>,
+    k: &str,
+) -> Result<Option<i64>, String> {
     match m.get(k) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Int(i)) => Ok(Some(*i)),
@@ -225,12 +235,18 @@ impl Query {
 
     /// Filter, sort and page `rows`. Returns the page and the number of matches before paging.
     pub fn apply(&self, rows: Vec<(String, Fields)>) -> (Vec<(String, Fields)>, usize) {
-        let mut rows: Vec<_> = rows.into_iter().filter(|(id, f)| self.matches(id, f)).collect();
+        let mut rows: Vec<_> = rows
+            .into_iter()
+            .filter(|(id, f)| self.matches(id, f))
+            .collect();
         if !self.order.is_empty() {
             // `sort_by` is stable, so ties keep insertion order.
             rows.sort_by(|(ia, a), (ib, b)| {
                 for s in &self.order {
-                    let (ka, kb) = (sort_key(&s.field, &s.kind, ia, a), sort_key(&s.field, &s.kind, ib, b));
+                    let (ka, kb) = (
+                        sort_key(&s.field, &s.kind, ia, a),
+                        sort_key(&s.field, &s.kind, ib, b),
+                    );
                     // Empty values sort last in both directions.
                     let ord = match (ka, kb) {
                         (None, None) => Ordering::Equal,
@@ -291,7 +307,10 @@ fn sort_key(field: &str, kind: &FieldKind, id: &str, f: &Fields) -> Option<Key> 
 /// Text sorts case-insensitively, with the exact text as tie-breaker.
 fn cmp_sort(a: &Key, b: &Key) -> Ordering {
     match (a, b) {
-        (Key::Str(x), Key::Str(y)) => x.to_lowercase().cmp(&y.to_lowercase()).then_with(|| x.cmp(y)),
+        (Key::Str(x), Key::Str(y)) => x
+            .to_lowercase()
+            .cmp(&y.to_lowercase())
+            .then_with(|| x.cmp(y)),
         _ => a.cmp(b),
     }
 }
@@ -306,7 +325,9 @@ fn parse_cond(
     };
     for k in c.keys() {
         if !["field", "op", "value"].contains(&k.as_str()) {
-            return Err(format!("unknown filter key {k:?} (use field, op and value)"));
+            return Err(format!(
+                "unknown filter key {k:?} (use field, op and value)"
+            ));
         }
     }
     let Some(Value::Text(name)) = c.get("field") else {
@@ -332,7 +353,10 @@ fn parse_cond(
         "ne" => Op::Ne(one(value)?),
         "in" => {
             let Value::List(vs) = value else {
-                return Err(format!("filter on {}.{name}: `in` needs an array", def.name));
+                return Err(format!(
+                    "filter on {}.{name}: `in` needs an array",
+                    def.name
+                ));
             };
             if vs.len() > MAX_IN {
                 return Err(format!("`in` takes at most {MAX_IN} values"));
@@ -348,7 +372,12 @@ fn parse_cond(
             }
             match value {
                 Value::Text(t) => Op::Contains(t.to_lowercase()),
-                _ => return Err(format!("filter on {}.{name}: contains needs a string", def.name)),
+                _ => {
+                    return Err(format!(
+                        "filter on {}.{name}: contains needs a string",
+                        def.name
+                    ));
+                }
             }
         }
         "gt" | "gte" | "lt" | "lte" => {

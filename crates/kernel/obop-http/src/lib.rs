@@ -148,6 +148,7 @@ fn meta_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
                     "description": x.description,
                     "can_create": x.can_create,
                     "can_update": x.can_update,
+                    "can_delete": x.can_delete,
                     "fields": x.fields.iter().map(|f| {
                         let mut o = json!({
                             "name": f.name, "description": f.description,
@@ -164,6 +165,9 @@ fn meta_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
                     }).collect::<Vec<_>>(),
                     "actions": x.actions.iter().map(|a| json!({
                         "id": a.id, "description": a.description, "needs_approval": a.needs_approval,
+                        "field": a.transition.map(|t| t.field),
+                        "from": a.transition.and_then(|t| t.from),
+                        "to": a.transition.map(|t| t.to),
                     })).collect::<Vec<_>>(),
                 })).collect::<Vec<_>>(),
             })
