@@ -1,0 +1,356 @@
+/*
+ * obop design tokens.
+ *
+ * Three tiers: primitives (OKLCH ramps, scales), semantic (--bg, --surface, --text, --border...),
+ * and component tokens (--control-h, --row-pad-y). The root element carries data-theme
+ * (light|dark; absent = follow the system), data-density (comfortable|compact) and data-radius.
+ * Switching any of them is an attribute change, never a second bundle.
+ *
+ * The values below are mirrored in colors.ts (contrast maths); tokens.test.ts keeps them in step.
+ * Documentation: docs/brand/BRAND.md. Living demo: Customize > Brand book.
+ */
+@import "@fontsource-variable/geist/index.css";
+@import "@fontsource-variable/geist-mono/index.css";
+
+:root {
+  /* ---- Primitive: neutral (cool grey), 50 to 950 ---- */
+  --neutral-50: oklch(0.972 0.004 265);
+  --neutral-100: oklch(0.945 0.006 265);
+  --neutral-200: oklch(0.89 0.01 265);
+  --neutral-300: oklch(0.825 0.013 265);
+  --neutral-400: oklch(0.745 0.017 265);
+  --neutral-500: oklch(0.66 0.02 265);
+  --neutral-600: oklch(0.57 0.022 265);
+  --neutral-700: oklch(0.485 0.022 265);
+  --neutral-800: oklch(0.4 0.02 265);
+  --neutral-900: oklch(0.32 0.017 265);
+  --neutral-950: oklch(0.235 0.013 265);
+
+  /* ---- Primitive: signal ramps ---- */
+  --success-50: oklch(0.972 0.016 152);
+  --success-100: oklch(0.945 0.0352 152);
+  --success-200: oklch(0.89 0.0672 152);
+  --success-300: oklch(0.825 0.0992 152);
+  --success-400: oklch(0.745 0.1312 152);
+  --success-500: oklch(0.66 0.1568 152);
+  --success-600: oklch(0.57 0.16 152);
+  --success-700: oklch(0.485 0.144 152);
+  --success-800: oklch(0.4 0.1248 152);
+  --success-900: oklch(0.32 0.1024 152);
+  --success-950: oklch(0.235 0.08 152);
+  --warning-50: oklch(0.972 0.015 78);
+  --warning-100: oklch(0.945 0.033 78);
+  --warning-200: oklch(0.89 0.063 78);
+  --warning-300: oklch(0.825 0.093 78);
+  --warning-400: oklch(0.745 0.123 78);
+  --warning-500: oklch(0.66 0.147 78);
+  --warning-600: oklch(0.57 0.15 78);
+  --warning-700: oklch(0.485 0.135 78);
+  --warning-800: oklch(0.4 0.117 78);
+  --warning-900: oklch(0.32 0.096 78);
+  --warning-950: oklch(0.235 0.075 78);
+  --danger-50: oklch(0.972 0.02 22);
+  --danger-100: oklch(0.945 0.044 22);
+  --danger-200: oklch(0.89 0.084 22);
+  --danger-300: oklch(0.825 0.124 22);
+  --danger-400: oklch(0.745 0.164 22);
+  --danger-500: oklch(0.66 0.196 22);
+  --danger-600: oklch(0.57 0.2 22);
+  --danger-700: oklch(0.485 0.18 22);
+  --danger-800: oklch(0.4 0.156 22);
+  --danger-900: oklch(0.32 0.128 22);
+  --danger-950: oklch(0.235 0.1 22);
+  --info-50: oklch(0.972 0.015 245);
+  --info-100: oklch(0.945 0.033 245);
+  --info-200: oklch(0.89 0.063 245);
+  --info-300: oklch(0.825 0.093 245);
+  --info-400: oklch(0.745 0.123 245);
+  --info-500: oklch(0.66 0.147 245);
+  --info-600: oklch(0.57 0.15 245);
+  --info-700: oklch(0.485 0.135 245);
+  --info-800: oklch(0.4 0.117 245);
+  --info-900: oklch(0.32 0.096 245);
+  --info-950: oklch(0.235 0.075 245);
+
+  /* ---- Accent: the chosen colour. JS (accentVars) overrides these from the theme picker. ---- */
+  --accent: #6d3fd0;
+  --accent-h: 293;
+  --accent-50: #f6f4ff;
+  --accent-100: #edeaff;
+  --accent-200: #dbd5fe;
+  --accent-300: #c6bcfc;
+  --accent-400: #ae9aff;
+  --accent-500: #9775fc;
+  --accent-600: #7e54e6;
+  --accent-700: #653fbe;
+  --accent-800: #4d2c96;
+  --accent-900: #371d70;
+  --accent-950: #220d4a;
+  --accent-fill-l: #6d3fd0;
+  --accent-fill-d: #8c64f7;
+  --accent-ink-l: #6d3fd0;
+  --accent-ink-d: #926ff9;
+  --on-accent-l: #ffffff;
+  --on-accent-d: #0c0d12;
+
+  /* ---- Primitive scales ---- */
+  --font-sans:
+    "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.375rem;
+  --text-5xl: 3.25rem;
+  --text-display: 4.5rem;
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --tracking-tight: -0.022em;
+  --tracking-snug: -0.011em;
+  --tracking-caps: 0.06em;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+
+  /* Radius: one base value (sharp 4, soft 12, round 20) and a scale derived from it. */
+  --radius: 12px;
+  --radius-xs: 3px;
+  --radius-sm: max(4px, calc(var(--radius) * 0.5));
+  --radius-md: max(5px, calc(var(--radius) * 0.7));
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.5);
+  --radius-pill: 999px;
+
+  /* Motion */
+  --dur-1: 90ms;
+  --dur-2: 160ms;
+  --dur-3: 240ms;
+  --dur-4: 380ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+
+  --z-sticky: 20;
+  --z-popover: 40;
+  --z-overlay: 60;
+  --z-toast: 80;
+
+  /* ---- Component tokens (density) ---- */
+  --text-base: 0.9375rem;
+  --control-h: 2.25rem;
+  --control-h-sm: 1.875rem;
+  --control-h-lg: 2.75rem;
+  --row-pad-y: 0.55rem;
+  --card-pad: var(--space-5);
+
+  /* ---- Semantic: light ---- */
+  color-scheme: light dark;
+  --bg: oklch(0.962 0.005 265);
+  --surface: oklch(1 0 265);
+  --surface-2: oklch(0.978 0.003 265);
+  --surface-3: oklch(0.945 0.006 265);
+  --border: oklch(0.915 0.008 265);
+  --border-strong: oklch(0.84 0.012 265);
+  --border-control: oklch(0.62 0.016 265);
+  --text: oklch(0.2 0.02 265);
+  --text-muted: oklch(0.47 0.02 265);
+  --text-subtle: oklch(0.52 0.02 265);
+  --overlay: oklch(0.2 0.02 265 / 0.38);
+
+  --success: var(--success-600);
+  --success-ink: var(--success-700);
+  --warning: var(--warning-600);
+  --warning-ink: var(--warning-700);
+  --danger: var(--danger-600);
+  --danger-ink: var(--danger-700);
+  --info: var(--info-600);
+  --info-ink: var(--info-700);
+  --danger-fill: var(--danger-600);
+  --on-danger: #ffffff;
+
+  --accent-fill: var(--accent-fill-l);
+  --accent-ink: var(--accent-ink-l);
+  --on-accent: var(--on-accent-l);
+
+  --shadow-1: 0 1px 2px oklch(0.25 0.03 265 / 0.06), 0 0 0 1px oklch(0.25 0.03 265 / 0.02);
+  --shadow-2: 0 1px 2px oklch(0.25 0.03 265 / 0.06), 0 6px 16px -4px oklch(0.25 0.03 265 / 0.1);
+  --shadow-3: 0 2px 4px oklch(0.25 0.03 265 / 0.06), 0 14px 32px -8px oklch(0.25 0.03 265 / 0.18);
+  --shadow-4: 0 4px 8px oklch(0.25 0.03 265 / 0.08), 0 32px 72px -16px oklch(0.25 0.03 265 / 0.32);
+  --shadow: var(--shadow-1);
+  --edge: inset 0 1px 0 oklch(1 0 0 / 0.5);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: oklch(0.155 0.012 265);
+  --surface: oklch(0.2 0.013 265);
+  --surface-2: oklch(0.235 0.014 265);
+  --surface-3: oklch(0.275 0.015 265);
+  --border: oklch(0.3 0.015 265);
+  --border-control: oklch(0.56 0.02 265);
+  --border-strong: oklch(0.4 0.018 265);
+  --text: oklch(0.96 0.005 265);
+  --text-muted: oklch(0.74 0.018 265);
+  --text-subtle: oklch(0.66 0.02 265);
+  --overlay: oklch(0.08 0.01 265 / 0.6);
+
+  --success: var(--success-400);
+  --success-ink: var(--success-300);
+  --warning: var(--warning-400);
+  --warning-ink: var(--warning-300);
+  --danger: var(--danger-400);
+  --danger-ink: var(--danger-300);
+  --info: var(--info-400);
+  --info-ink: var(--info-300);
+  --danger-fill: var(--danger-400);
+  --on-danger: #0c0d12;
+
+  --accent-fill: var(--accent-fill-d);
+  --accent-ink: var(--accent-ink-d);
+  --on-accent: var(--on-accent-d);
+
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.4);
+  --shadow-2: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 20px -4px oklch(0 0 0 / 0.5);
+  --shadow-3: 0 2px 4px oklch(0 0 0 / 0.4), 0 18px 36px -8px oklch(0 0 0 / 0.65);
+  --shadow-4: 0 4px 8px oklch(0 0 0 / 0.5), 0 36px 80px -16px oklch(0 0 0 / 0.8);
+  --edge: inset 0 1px 0 oklch(1 0 0 / 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: oklch(0.155 0.012 265);
+    --surface: oklch(0.2 0.013 265);
+    --surface-2: oklch(0.235 0.014 265);
+    --surface-3: oklch(0.275 0.015 265);
+    --border: oklch(0.3 0.015 265);
+    --border-control: oklch(0.56 0.02 265);
+    --border-strong: oklch(0.4 0.018 265);
+    --text: oklch(0.96 0.005 265);
+    --text-muted: oklch(0.74 0.018 265);
+    --text-subtle: oklch(0.66 0.02 265);
+    --overlay: oklch(0.08 0.01 265 / 0.6);
+
+    --success: var(--success-400);
+    --success-ink: var(--success-300);
+    --warning: var(--warning-400);
+    --warning-ink: var(--warning-300);
+    --danger: var(--danger-400);
+    --danger-ink: var(--danger-300);
+    --info: var(--info-400);
+    --info-ink: var(--info-300);
+    --danger-fill: var(--danger-400);
+    --on-danger: #0c0d12;
+
+    --accent-fill: var(--accent-fill-d);
+    --accent-ink: var(--accent-ink-d);
+    --on-accent: var(--on-accent-d);
+
+    --shadow-1: 0 1px 2px oklch(0 0 0 / 0.4);
+    --shadow-2: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 20px -4px oklch(0 0 0 / 0.5);
+    --shadow-3: 0 2px 4px oklch(0 0 0 / 0.4), 0 18px 36px -8px oklch(0 0 0 / 0.65);
+    --shadow-4: 0 4px 8px oklch(0 0 0 / 0.5), 0 36px 80px -16px oklch(0 0 0 / 0.8);
+    --edge: inset 0 1px 0 oklch(1 0 0 / 0.05);
+  }
+}
+
+/* Derived tints and the categorical chart palette (they follow the accent hue). */
+:root {
+  --accent-soft: color-mix(in oklab, var(--accent-fill) 12%, var(--surface));
+  --accent-soft-strong: color-mix(in oklab, var(--accent-fill) 20%, var(--surface));
+  --accent-line: color-mix(in oklab, var(--accent-fill) 45%, var(--border));
+  --focus: var(--accent-ink);
+  --ring: 0 0 0 3px color-mix(in oklab, var(--accent-fill) 28%, transparent);
+
+  --success-soft: color-mix(in oklab, var(--success) 14%, var(--surface));
+  --warning-soft: color-mix(in oklab, var(--warning) 16%, var(--surface));
+  --danger-soft: color-mix(in oklab, var(--danger) 13%, var(--surface));
+  --info-soft: color-mix(in oklab, var(--info) 13%, var(--surface));
+  --neutral-soft: color-mix(in oklab, var(--text-muted) 12%, var(--surface));
+
+  --chart-1: var(--accent-fill);
+  --chart-2: oklch(0.64 0.14 calc(var(--accent-h) + 150));
+  --chart-3: oklch(0.6 0.12 calc(var(--accent-h) + 205));
+  --chart-4: oklch(0.7 0.14 calc(var(--accent-h) + 60));
+  --chart-5: oklch(0.58 0.13 calc(var(--accent-h) + 255));
+  --chart-6: oklch(0.72 0.13 calc(var(--accent-h) + 105));
+  --chart-7: oklch(0.6 0.12 calc(var(--accent-h) + 310));
+  --chart-8: oklch(0.62 0.05 calc(var(--accent-h) + 180));
+}
+
+:root[data-theme="dark"] {
+  --chart-2: oklch(0.74 0.13 calc(var(--accent-h) + 150));
+  --chart-3: oklch(0.72 0.11 calc(var(--accent-h) + 205));
+  --chart-4: oklch(0.8 0.12 calc(var(--accent-h) + 60));
+  --chart-5: oklch(0.7 0.12 calc(var(--accent-h) + 255));
+  --chart-6: oklch(0.8 0.12 calc(var(--accent-h) + 105));
+  --chart-7: oklch(0.72 0.11 calc(var(--accent-h) + 310));
+  --chart-8: oklch(0.74 0.05 calc(var(--accent-h) + 180));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --chart-2: oklch(0.74 0.13 calc(var(--accent-h) + 150));
+    --chart-3: oklch(0.72 0.11 calc(var(--accent-h) + 205));
+    --chart-4: oklch(0.8 0.12 calc(var(--accent-h) + 60));
+    --chart-5: oklch(0.7 0.12 calc(var(--accent-h) + 255));
+    --chart-6: oklch(0.8 0.12 calc(var(--accent-h) + 105));
+    --chart-7: oklch(0.72 0.11 calc(var(--accent-h) + 310));
+    --chart-8: oklch(0.74 0.05 calc(var(--accent-h) + 180));
+  }
+}
+
+/* ---- Density and radius ---- */
+:root[data-density="compact"] {
+  --text-base: 0.8125rem;
+  --control-h: 1.875rem;
+  --control-h-sm: 1.5rem;
+  --control-h-lg: 2.25rem;
+  --row-pad-y: 0.32rem;
+  --card-pad: var(--space-4);
+}
+:root[data-radius="sharp"] {
+  --radius: 4px;
+}
+:root[data-radius="soft"] {
+  --radius: 12px;
+}
+:root[data-radius="round"] {
+  --radius: 20px;
+}
+
+/* ---- Reduced motion: the durations collapse, so nothing animates but state still changes ---- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0.01ms;
+    --dur-2: 0.01ms;
+    --dur-3: 0.01ms;
+    --dur-4: 0.01ms;
+  }
+}

@@ -1,0 +1,182 @@
+/* obop base: reset, document defaults, typography and utilities. Logical properties only. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-block: 4.5rem 2rem;
+  accent-color: var(--accent-fill);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  font-optical-sizing: auto;
+  font-feature-settings:
+    "calt" 1,
+    "ss01" 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-snug);
+  text-wrap: balance;
+}
+h1 {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+}
+h2 {
+  font-size: var(--text-xl);
+}
+h3 {
+  font-size: var(--text-lg);
+  letter-spacing: var(--tracking-snug);
+}
+h4 {
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-snug);
+}
+
+p {
+  text-wrap: pretty;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+hr {
+  border: 0;
+  border-block-start: 1px solid var(--border);
+  margin: 0;
+}
+
+img,
+svg {
+  display: block;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent-fill) 30%, transparent);
+}
+
+::placeholder {
+  color: var(--text-subtle);
+  opacity: 1;
+}
+
+/* Numbers are sacred: tabular, lining figures wherever they sit in a column. */
+.num,
+.amount,
+.tabular {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.num {
+  text-align: end;
+}
+
+/* Utilities */
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.hint {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+.hint.block {
+  display: block;
+}
+.dim {
+  color: var(--text-muted);
+}
+.grow {
+  flex: 1;
+}
+.overline {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mono {
+  font-family: var(--font-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .btn,
+  .panel,
+  .badge,
+  .chip {
+    border: 1px solid CanvasText;
+  }
+  .switch .track {
+    border: 1px solid CanvasText;
+  }
+}

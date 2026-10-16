@@ -5,5 +5,8 @@
   "type": "module",
   "devDependencies": {
     "vite-plus": "1.0.0"
+  },
+  "dependencies": {
+    "@obop/ui": "workspace:*"
   }
 }
