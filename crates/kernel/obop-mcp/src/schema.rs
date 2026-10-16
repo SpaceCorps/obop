@@ -1,0 +1,350 @@
+//! Tool definitions generated from the registry for one caller (D31): one tool per visible
+//! command, named `<model>__<command>`, with a JSON Schema input, an output schema and
+//! annotations. Both transports list tools through this module, so they cannot diverge.
+
+use obop_commands::{CommandInfo, Dispatcher, FieldInfo, ModelInfo, Principal, Surface, names};
+use serde_json::{Value as J, json};
+use std::collections::HashMap;
+
+/// The extra read-only tool that returns what `GET /api/meta` returns.
+pub const META_TOOL: &str = "obop__meta";
+
+const OPS: [&str; 9] = [
+    "eq", "ne", "contains", "in", "gt", "gte", "lt", "lte", "is_null",
+];
+
+/// JSON Schema of one field kind (D47).
+pub fn field_schema(f: &FieldInfo) -> J {
+    let mut s = match f.kind {
+        "number" => json!({"type": "integer"}),
+        "money" => json!({"type": "integer"}),
+        "bool" => json!({"type": "boolean"}),
+        "date" => json!({"type": "string", "format": "date"}),
+        "select" => json!({"type": "string", "enum": f.options}),
+        _ => json!({"type": "string"}),
+    };
+    let mut desc = f.description.to_string();
+    match f.kind {
+        "money" => desc.push_str(" (integer, minor currency units such as cents; never a float)"),
+        "date" => desc.push_str(" (calendar date, YYYY-MM-DD)"),
+        "ref" => desc.push_str(&format!(
+            " (the id of a {} record)",
+            f.to.unwrap_or("referenced")
+        )),
+        _ => {}
+    }
+    if f.personal_data {
+        desc.push_str(
+            " (personal data: agents read it as a mask token and may send the token back)",
+        );
+    }
+    s["description"] = J::from(desc);
+    s
+}
+
+fn id_property(model: &str) -> J {
+    json!({"type": "string", "description": format!("The id of the {model} record.")})
+}
+
+fn query_properties() -> J {
+    json!({
+        "filter": {
+            "type": "array",
+            "description": "Conditions, all of which must hold. Fields you cannot read in clear are refused.",
+            "items": {
+                "type": "object",
+                "required": ["field", "op"],
+                "properties": {
+                    "field": {"type": "string"},
+                    "op": {"type": "string", "enum": OPS},
+                    "value": {"description": "Omit for is_null; an array for in."}
+                }
+            }
+        },
+        "order": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["field"],
+                "properties": {
+                    "field": {"type": "string"},
+                    "dir": {"type": "string", "enum": ["asc", "desc"]}
+                }
+            }
+        },
+        "limit": {"type": "integer", "minimum": 1, "maximum": 5000, "description": "Page size; ask for a small page."},
+        "offset": {"type": "integer", "minimum": 0}
+    })
+}
+
+fn object(properties: J, required: &[String]) -> J {
+    let mut s = json!({"type": "object", "properties": properties});
+    if !required.is_empty() {
+        s["required"] = json!(required);
+    }
+    s
+}
+
+fn field_properties(model: &ModelInfo, skip: &[&str]) -> serde_json::Map<String, J> {
+    model
+        .fields
+        .iter()
+        .filter(|f| !skip.contains(&f.name))
+        .map(|f| (f.name.to_string(), field_schema(f)))
+        .collect()
+}
+
+/// Input schema of command `cmd` of `model`.
+pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
+    // Select fields an action moves are governed (D48): they change only through the action.
+    let governed: Vec<&str> = model
+        .actions
+        .iter()
+        .filter_map(|a| a.transition.map(|t| t.field))
+        .collect();
+    match cmd {
+        "get" | "delete" => object(json!({"id": id_property(&model.name)}), &["id".to_string()]),
+        "list" | "search" => object(query_properties(), &[]),
+        "create" => {
+            let props = field_properties(model, &governed);
+            let required: Vec<String> = model
+                .fields
+                .iter()
+                .filter(|f| f.required && !governed.contains(&f.name))
+                .map(|f| f.name.to_string())
+                .collect();
+            object(J::Object(props), &required)
+        }
+        "update" => {
+            let mut props = field_properties(model, &[]);
+            props.insert("id".into(), id_property(&model.name));
+            object(J::Object(props), &["id".to_string()])
+        }
+        _ => {
+            // An action: the record to act on, and any fields the action needs filled.
+            let mut props = field_properties(model, &governed);
+            props.insert("id".into(), id_property(&model.name));
+            object(J::Object(props), &["id".to_string()])
+        }
+    }
+}
+
+/// Output schema: every result is an object so it can be structured content. `value` is typed
+/// by shape only, because masking replaces some fields with strings.
+pub fn output_schema(cmd: &str) -> J {
+    let value = match cmd {
+        "list" => json!({"type": "array", "items": {"type": "object"}}),
+        "search" => json!({
+            "type": "object",
+            "properties": {
+                "rows": {"type": "array", "items": {"type": "object"}},
+                "total": {"type": "integer", "description": "Matches before limit and offset."}
+            }
+        }),
+        _ => json!({"type": "object"}),
+    };
+    json!({
+        "type": "object",
+        "properties": {
+            "status": {"type": "string", "enum": ["ok", "approval_required"]},
+            "value": value,
+            "denied": {"type": "array", "items": {"type": "string"}, "description": "Fields withheld from this caller (model.field)."},
+            "plan_id": {"type": "string", "description": "With approval_required: the plan a human must approve."},
+            "instruction": {"type": "string"}
+        },
+        "required": ["status"]
+    })
+}
+
+fn annotations(cmd: &str, model: &str) -> J {
+    let read_only = matches!(cmd, "get" | "list" | "search");
+    json!({
+        "title": format!("{model} {cmd}"),
+        "readOnlyHint": read_only,
+        "destructiveHint": cmd == "delete",
+        "idempotentHint": read_only || cmd == "update",
+        "openWorldHint": false,
+    })
+}
+
+fn describe(c: &CommandInfo, cmd: &str) -> String {
+    let mut d = c.description.to_string();
+    if c.needs_approval {
+        d.push_str(
+            " Needs human approval: called with an agent token it does not run, it returns status \"approval_required\" and a plan_id; ask a human to approve the plan.",
+        );
+    }
+    if cmd == "update" {
+        d.push_str(
+            " A status field only moves through its action; moving it may need approval too.",
+        );
+    }
+    d
+}
+
+/// Everything `tools/list` shows this caller, sorted by name.
+pub fn tools(d: &Dispatcher, p: &Principal) -> Vec<J> {
+    let meta = d.meta(Surface::Mcp, p);
+    let models: HashMap<&str, &ModelInfo> = meta
+        .iter()
+        .flat_map(|m| m.models.iter())
+        .map(|m| (m.name.as_str(), m))
+        .collect();
+    let mut out = vec![json!({
+        "name": META_TOOL,
+        "title": "obop meta",
+        "description": "Describes this instance for the caller: modules, models, the fields the caller may read (with kind, required, select options and ref targets), and actions. Start here.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "annotations": {"title": "obop meta", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false},
+    })];
+    for c in d.catalog(Surface::Mcp, p) {
+        let Some((model, cmd)) = c.id.split_once('.') else {
+            continue;
+        };
+        let input = match models.get(model) {
+            Some(m) => input_schema(m, cmd),
+            None => {
+                json!({"type": "object", "additionalProperties": true, "description": "The same JSON object as the REST request body of this command."})
+            }
+        };
+        let ann = annotations(cmd, model);
+        out.push(json!({
+            "name": names::to_mcp(&c.id),
+            "title": ann["title"],
+            "description": describe(&c, cmd),
+            "inputSchema": input,
+            "outputSchema": output_schema(cmd),
+            "annotations": ann,
+        }));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn field(kind: &'static str) -> FieldInfo {
+        FieldInfo {
+            name: "x",
+            description: "a field",
+            class: "none",
+            personal_data: false,
+            kind,
+            required: false,
+            options: vec!["a", "b"],
+            to: Some("party"),
+        }
+    }
+
+    #[test]
+    fn each_kind_maps_to_json_schema() {
+        assert_eq!(field_schema(&field("money"))["type"], "integer");
+        assert_eq!(field_schema(&field("number"))["type"], "integer");
+        assert_eq!(field_schema(&field("bool"))["type"], "boolean");
+        assert_eq!(field_schema(&field("date"))["format"], "date");
+        assert_eq!(field_schema(&field("select"))["enum"], json!(["a", "b"]));
+        let r = field_schema(&field("ref"));
+        assert_eq!(r["type"], "string");
+        assert!(r["description"].as_str().unwrap().contains("party"));
+        assert_eq!(field_schema(&field("text"))["type"], "string");
+        assert_eq!(field_schema(&field("longtext"))["type"], "string");
+        let mut pd = field("text");
+        pd.personal_data = true;
+        assert!(
+            field_schema(&pd)["description"]
+                .as_str()
+                .unwrap()
+                .contains("mask")
+        );
+    }
+
+    fn model() -> ModelInfo {
+        let f = |name: &'static str, kind: &'static str, required: bool| FieldInfo {
+            name,
+            description: "d",
+            class: "none",
+            personal_data: false,
+            kind,
+            required,
+            options: vec!["draft", "posted"],
+            to: Some("party"),
+        };
+        ModelInfo {
+            name: "doc".into(),
+            description: "a doc",
+            fields: vec![
+                f("title", "text", true),
+                f("total", "money", true),
+                f("due", "date", false),
+                f("paid", "bool", false),
+                f("state", "select", true),
+                f("customer", "ref", false),
+            ],
+            actions: vec![CommandInfo {
+                id: "doc.post".into(),
+                description: "post it",
+                permission_group: "x",
+                needs_approval: true,
+                transition: Some(obop_registry::Transition {
+                    field: "state",
+                    from: Some("draft"),
+                    to: "posted",
+                }),
+            }],
+            can_create: true,
+            can_update: true,
+            can_delete: true,
+        }
+    }
+
+    #[test]
+    fn input_schemas_per_command() {
+        let m = model();
+        let create = input_schema(&m, "create");
+        assert_eq!(create["properties"]["due"]["format"], "date");
+        assert_eq!(create["properties"]["paid"]["type"], "boolean");
+        assert_eq!(create["properties"]["total"]["type"], "integer");
+        assert_eq!(create["properties"]["customer"]["type"], "string");
+        // The governed field is not set on create, and so is not required there.
+        assert!(create["properties"].get("state").is_none());
+        assert_eq!(create["required"], json!(["title", "total"]));
+        let update = input_schema(&m, "update");
+        assert_eq!(update["required"], json!(["id"]));
+        assert_eq!(
+            update["properties"]["state"]["enum"],
+            json!(["draft", "posted"])
+        );
+        for c in ["get", "delete", "post"] {
+            let s = input_schema(&m, c);
+            assert_eq!(s["required"], json!(["id"]), "{c}");
+            assert_eq!(s["properties"]["id"]["type"], "string");
+        }
+        assert!(
+            input_schema(&m, "post")["properties"]
+                .get("state")
+                .is_none()
+        );
+        for c in ["list", "search"] {
+            let s = input_schema(&m, c);
+            assert!(s.get("required").is_none());
+            assert_eq!(s["properties"]["limit"]["maximum"], 5000);
+            assert_eq!(
+                s["properties"]["order"]["items"]["properties"]["dir"]["enum"],
+                json!(["asc", "desc"])
+            );
+        }
+    }
+
+    #[test]
+    fn output_schemas_are_objects() {
+        for c in ["list", "search", "get", "post"] {
+            assert_eq!(output_schema(c)["type"], "object");
+        }
+        assert_eq!(
+            output_schema("list")["properties"]["value"]["type"],
+            "array"
+        );
+        assert!(output_schema("search")["properties"]["value"]["properties"]["total"].is_object());
+    }
+}

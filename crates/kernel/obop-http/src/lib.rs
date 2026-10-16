@@ -8,7 +8,7 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{any, get, post},
 };
 use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value, Vault};
 use serde_json::{Value as J, json};
@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use tower_http::services::{ServeDir, ServeFile};
 
 pub mod community;
+pub mod mcp;
 pub mod openapi;
 pub mod public;
 pub mod website;
@@ -27,14 +28,25 @@ pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
     auth: Arc<dyn Authenticator>,
     sessions: Mutex<HashMap<String, Session>>,
+    mcp: mcp::McpState,
 }
 
 impl HttpState {
     pub fn new(dispatcher: Arc<Dispatcher>, auth: Arc<dyn Authenticator>) -> Arc<Self> {
+        Self::with_mcp(dispatcher, auth, mcp::McpConfig::from_env())
+    }
+
+    /// As `new`, with explicit limits and origin allow-list for `/mcp` (tests, embedding).
+    pub fn with_mcp(
+        dispatcher: Arc<Dispatcher>,
+        auth: Arc<dyn Authenticator>,
+        mcp: mcp::McpConfig,
+    ) -> Arc<Self> {
         Arc::new(Self {
             dispatcher,
             auth,
             sessions: Mutex::new(HashMap::new()),
+            mcp: mcp::McpState::new(mcp),
         })
     }
 
@@ -78,6 +90,21 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
         .route("/api/openapi.json", get(instance_openapi))
         .route("/api/approve/{plan_id}", post(approve))
         .route("/api/{model}/{command}", post(call))
+        .route("/mcp", any(mcp::endpoint))
+        .route("/mcp/server-card", get(mcp::server_card_canonical))
+        .route(
+            "/.well-known/mcp/server-card.json",
+            get(mcp::server_card_json),
+        )
+        .route("/.well-known/ai-catalog.json", get(mcp::ai_catalog))
+        .route(
+            "/.well-known/oauth-protected-resource",
+            get(mcp::oauth_protected_resource),
+        )
+        .route(
+            "/.well-known/oauth-protected-resource/mcp",
+            get(mcp::oauth_protected_resource_mcp),
+        )
         .with_state(state)
 }
 
@@ -106,20 +133,7 @@ async fn instance_openapi(State(s): Shared, h: HeaderMap) -> Response {
 /// The instance's OpenAPI document for the caller: with a valid token it lists the commands that
 /// token may use; without one it lists only sign-in and the discovery endpoints.
 fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
-    let base = h
-        .get("host")
-        .and_then(|v| v.to_str().ok())
-        .map(|host| {
-            format!(
-                "{}://{host}",
-                if h.get("x-forwarded-proto").and_then(|v| v.to_str().ok()) == Some("https") {
-                    "https"
-                } else {
-                    "http"
-                }
-            )
-        })
-        .unwrap_or_default();
+    let base = s.mcp.base_url(&h);
     let modules = match s.auth(&h) {
         Ok((p, _)) => s.dispatcher.meta(Surface::Rest, &p),
         Err(_) => Vec::new(),
@@ -212,45 +226,14 @@ fn meta_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
         Ok(x) => x,
         Err(c) => return c.into_response(),
     };
-    let modules: Vec<J> = s
-        .dispatcher
-        .meta(Surface::Rest, &p)
-        .into_iter()
-        .map(|m| {
-            json!({
-                "id": m.id,
-                "name": m.name,
-                "models": m.models.iter().map(|x| json!({
-                    "name": x.name,
-                    "description": x.description,
-                    "can_create": x.can_create,
-                    "can_update": x.can_update,
-                    "can_delete": x.can_delete,
-                    "fields": x.fields.iter().map(|f| {
-                        let mut o = json!({
-                            "name": f.name, "description": f.description,
-                            "class": f.class, "personal_data": f.personal_data,
-                            "kind": f.kind, "required": f.required,
-                        });
-                        if f.kind == "select" {
-                            o["options"] = json!(f.options);
-                        }
-                        if let Some(to) = f.to {
-                            o["to"] = json!(to);
-                        }
-                        o
-                    }).collect::<Vec<_>>(),
-                    "actions": x.actions.iter().map(|a| json!({
-                        "id": a.id, "description": a.description, "needs_approval": a.needs_approval,
-                        "field": a.transition.map(|t| t.field),
-                        "from": a.transition.and_then(|t| t.from),
-                        "to": a.transition.map(|t| t.to),
-                    })).collect::<Vec<_>>(),
-                })).collect::<Vec<_>>(),
-            })
-        })
-        .collect();
-    Json(json!({"modules": modules})).into_response()
+    let mut r = Json(obop_mcp::meta_json(&s.dispatcher, Surface::Rest, &p)).into_response();
+    let base = s.mcp.base_url(&h);
+    if let Ok(v) = axum::http::HeaderValue::from_str(&format!(
+        "<{base}/mcp>; rel=\"mcp\", <{base}/.well-known/mcp/server-card.json>; rel=\"mcp-server-card\""
+    )) {
+        r.headers_mut().insert(axum::http::header::LINK, v);
+    }
+    r
 }
 
 async fn commands(State(s): Shared, h: HeaderMap) -> Response {

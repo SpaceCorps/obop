@@ -961,10 +961,12 @@ name = "obop-http"
 version = "0.0.0"
 dependencies = [
  "axum",
+ "getrandom 0.4.3",
  "http-body-util",
  "mime_guess",
  "obop-commands",
  "obop-community",
+ "obop-mcp",
  "obop-site",
  "serde_json",
  "tokio",
@@ -984,6 +986,7 @@ name = "obop-mcp"
 version = "0.0.0"
 dependencies = [
  "obop-commands",
+ "obop-registry",
  "serde_json",
 ]
 

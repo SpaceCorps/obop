@@ -245,6 +245,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             "description": "Every model has the same generated commands: list, search, get, create, update, delete and its own actions, all POST with a JSON body. Personal and financial fields are masked for agent tokens; irreversible steps answer 202 with a plan for a human to approve. Errors are JSON with error, code and hint. Sign in (or present a token) to see the commands your token may use; this document lists only those."
         },
         "servers": [{"url": base}],
+        "x-mcp": crate::mcp::x_mcp(base),
         "paths": paths,
         "components": {"securitySchemes": bearer(), "schemas": schemas}
     })

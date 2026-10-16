@@ -1,5 +1,7 @@
 mod app;
 #[cfg(test)]
+mod mcp_tests;
+#[cfg(test)]
 mod public_site_tests;
 
 use app::{App, DevAuth};
@@ -991,7 +993,7 @@ mod tests {
         let app = App::new();
         app.seed_demo();
         let p = app::dev_principal("dev-agent").unwrap();
-        let mut v = Vault::new();
+        let mut v = obop_mcp::Session::new();
         let list = obop_mcp::handle(
             &app.dispatcher,
             &p,
