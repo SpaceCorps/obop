@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { call, saveSettings, type Settings, type Theme } from "./api.ts";
+import { useCallback, useEffect, useState } from "react";
+import { call, saveSettings, type ModuleMeta, type Settings, type Theme } from "./api.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
 import {
   appColor,
@@ -9,18 +9,19 @@ import {
   resolveTheme,
   applyTheme,
 } from "./theme.ts";
-import { href } from "./route.ts";
+import { BuildTab } from "./ModuleBuilder.tsx";
 
 type Props = {
   token: string;
   tab: string;
   apps: App[];
+  modules: ModuleMeta[];
   settings: Settings;
   isAdmin: boolean;
   go: (tab: string) => void;
   onSettings: (s: Settings) => void;
   onModulesChanged: () => void;
-  notify: (t: string) => void;
+  notify: (t: string, tone?: "ok" | "error" | "info") => void;
 };
 
 const TABS = [
@@ -375,6 +376,7 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
       <input
         type="file"
         accept=".toml"
+        aria-label="Upload an obop.toml file"
         onChange={async (e) => {
           const file = e.target.files?.[0];
           if (file)
@@ -382,207 +384,6 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
           e.target.value = "";
         }}
       />
-    </div>
-  );
-}
-
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-const CLASSES = [
-  "none",
-  "internal",
-  "public_directory",
-  "confidential_hr",
-  "special_category",
-  "financial",
-];
-
-type DField = { name: string; description: string; class: string; personal: boolean };
-
-export function manifest(
-  name: string,
-  modelName: string,
-  fields: DField[],
-  statuses: string[],
-): string {
-  const id = slug(name);
-  const model = slug(modelName) === id ? id : `${id}_${slug(modelName)}`;
-  const q = (s: string) => JSON.stringify(s);
-  const lines = [
-    "[module]",
-    `id = ${q(id)}`,
-    `version = "0.1.0"`,
-    `name = ${q(name.trim())}`,
-    `description = ${q(`${name.trim()}: ${modelName.trim()} records`)}`,
-    `author = "Built in obop"`,
-    "",
-    "[[model]]",
-    `name = ${q(model)}`,
-    `description = ${q(modelName.trim())}`,
-    `read_group = ${q(`${id}.user`)}`,
-    `write_group = ${q(`${id}.manager`)}`,
-  ];
-  const all = [...fields];
-  if (statuses.length > 1 && !all.some((f) => f.name === "state"))
-    all.push({ name: "state", description: statuses.join(", "), class: "none", personal: false });
-  for (const f of all) {
-    lines.push(
-      "",
-      "  [[model.field]]",
-      `  name = ${q(slug(f.name))}`,
-      `  description = ${q(f.description || label(f.name))}`,
-      `  class = ${q(f.class)}`,
-    );
-    if (f.personal) lines.push("  personal_data = true");
-  }
-  for (let i = 1; i < statuses.length; i++) {
-    lines.push(
-      "",
-      "  [[model.action]]",
-      `  name = ${q(`to_${slug(statuses[i]!)}`)}`,
-      `  description = ${q(`Move from ${statuses[i - 1]} to ${statuses[i]}`)}`,
-      `  field = "state"`,
-      `  from = ${q(statuses[i - 1]!)}`,
-      `  to = ${q(statuses[i]!)}`,
-    );
-  }
-  return lines.join("\n") + "\n";
-}
-
-function label(n: string) {
-  const s = n.replace(/_/g, " ");
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function BuildTab({ token, onModulesChanged, notify }: Props) {
-  const [name, setName] = useState("Fleet check");
-  const [modelName, setModelName] = useState("Inspection");
-  const [fields, setFields] = useState<DField[]>([
-    { name: "title", description: "What was inspected", class: "none", personal: false },
-    { name: "inspector", description: "Who did it", class: "internal", personal: true },
-  ]);
-  const [statuses, setStatuses] = useState("open, done");
-  const [error, setError] = useState<string | null>(null);
-  const st = statuses
-    .split(",")
-    .map((s) => slug(s))
-    .filter(Boolean);
-  const text = useMemo(
-    () =>
-      manifest(
-        name || "My module",
-        modelName || "Record",
-        fields.filter((f) => f.name.trim()),
-        st,
-      ),
-    [name, modelName, fields, st],
-  );
-  const id = slug(name);
-  const upd = (i: number, patch: Partial<DField>) =>
-    setFields(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)));
-  return (
-    <div className="two">
-      <div className="stack">
-        <p className="hint">
-          Describe a model and install it as a module. It gets the API, agent tools, permissions and
-          privacy rules like every other app.
-        </p>
-        <label className="field">
-          <span className="flabel">Module name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="flabel">Record type</span>
-          <input value={modelName} onChange={(e) => setModelName(e.target.value)} />
-        </label>
-        <h3>Fields</h3>
-        <ul className="rows">
-          {fields.map((f, i) => (
-            <li key={i} className="row wrap">
-              <input
-                value={f.name}
-                onChange={(e) => upd(i, { name: e.target.value })}
-                placeholder="name"
-                aria-label="Field name"
-              />
-              <input
-                value={f.description}
-                onChange={(e) => upd(i, { description: e.target.value })}
-                placeholder="description"
-                aria-label="Field description"
-              />
-              <select
-                value={f.class}
-                onChange={(e) => upd(i, { class: e.target.value })}
-                aria-label="Data class"
-              >
-                {CLASSES.map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={f.personal}
-                  onChange={(e) => upd(i, { personal: e.target.checked })}
-                />
-                Personal
-              </label>
-              <button
-                className="icon-btn"
-                onClick={() => setFields(fields.filter((_, j) => j !== i))}
-                aria-label="Remove field"
-              >
-                ×
-              </button>
-            </li>
-          ))}
-        </ul>
-        <button
-          className="btn"
-          onClick={() =>
-            setFields([...fields, { name: "", description: "", class: "none", personal: false }])
-          }
-        >
-          Add field
-        </button>
-        <label className="field">
-          <span className="flabel">Statuses (optional, comma separated)</span>
-          <input
-            value={statuses}
-            onChange={(e) => setStatuses(e.target.value)}
-            placeholder="open, in progress, done"
-          />
-        </label>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
-        <div className="actionrow">
-          <button
-            className="btn primary"
-            onClick={async () => {
-              const r = await call(token, "module.install", { manifest: text });
-              if (r.kind === "ok") {
-                setError(null);
-                notify(`Installed ${name}`);
-                onModulesChanged();
-                location.hash = href({ app: id });
-              } else setError(r.kind === "error" ? r.message : "Waiting for a human to approve");
-            }}
-          >
-            Create and install
-          </button>
-        </div>
-      </div>
-      <div className="stack">
-        <h3>obop.toml</h3>
-        <pre className="code">{text}</pre>
-      </div>
     </div>
   );
 }
