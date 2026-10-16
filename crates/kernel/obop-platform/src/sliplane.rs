@@ -31,8 +31,10 @@ impl Runner for Cli {
 
 /// The shared PostgreSQL cluster that holds one database per business.
 pub trait CellDb: Send + Sync {
-    /// Create role and database for `slug`; returns the instance's connection URL.
-    fn create_database(&self, slug: &str) -> Result<String, String>;
+    /// Create role and database for `slug`. The instance connects with `instance` (a name that
+    /// resolves inside the hosting network); the control plane reaches the same database with
+    /// `control`. They differ only in host when the two sit on different networks.
+    fn create_database(&self, slug: &str) -> Result<DbUrls, String>;
     /// Create the first admin in the new database from an existing password hash.
     fn seed_admin(&self, url: &str, email: &str, hash: &str) -> Result<(), String>;
     fn drop_database(&self, slug: &str) -> Result<(), String>;
@@ -66,14 +68,23 @@ fn random_password() -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+#[derive(Debug, Clone)]
+pub struct DbUrls {
+    pub instance: String,
+    pub control: String,
+}
+
 pub struct PgCell {
     pub admin_url: String,
+    /// `host:port` instances use to reach the cell, when it differs from the admin URL's host.
+    pub instance_host: Option<String>,
 }
 
 impl CellDb for PgCell {
-    fn create_database(&self, slug: &str) -> Result<String, String> {
+    fn create_database(&self, slug: &str) -> Result<DbUrls, String> {
         let name = ident(slug)?;
         let (host, _) = split_url(&self.admin_url)?;
+        let instance_host = self.instance_host.clone().unwrap_or_else(|| host.clone());
         let pw = random_password();
         let mut c = postgres::Client::connect(&self.admin_url, postgres::NoTls)
             .map_err(|e| e.to_string())?;
@@ -84,7 +95,10 @@ impl CellDb for PgCell {
             let _ = c.batch_execute(&format!("DROP ROLE IF EXISTS {name}"));
             return Err(e.to_string());
         }
-        Ok(format!("postgres://{name}:{pw}@{host}/{name}"))
+        Ok(DbUrls {
+            instance: format!("postgres://{name}:{pw}@{instance_host}/{name}"),
+            control: format!("postgres://{name}:{pw}@{host}/{name}"),
+        })
     }
 
     fn seed_admin(&self, url: &str, email: &str, hash: &str) -> Result<(), String> {
@@ -154,10 +168,10 @@ impl Sliplane {
 
 impl Provisioner for Sliplane {
     fn create(&self, spec: &InstanceSpec) -> Result<Provisioned, String> {
-        let db_url = self.cell.create_database(&spec.slug)?;
+        let urls = self.cell.create_database(&spec.slug)?;
         let result = (|| {
             self.cell
-                .seed_admin(&db_url, &spec.owner_email, &spec.password_hash)?;
+                .seed_admin(&urls.control, &spec.owner_email, &spec.password_hash)?;
             let mut args = self.base(&["services", "create"]);
             args.extend([
                 "--name".into(),
@@ -170,14 +184,20 @@ impl Provisioner for Sliplane {
             ]);
             match &self.cfg.source {
                 Source::Image(i) => args.extend(["--image".into(), i.clone()]),
+                // Instances must not rebuild on every push: upgrades are deliberate.
                 Source::Repo { url, branch } => args.extend([
                     "--repo".into(),
                     url.clone(),
                     "--branch".into(),
                     branch.clone(),
+                    "--auto-deploy".into(),
+                    "false".into(),
                 ]),
             }
-            args.extend(["--secret-env".into(), format!("OBOP_DATABASE_URL={db_url}")]);
+            args.extend([
+                "--secret-env".into(),
+                format!("OBOP_DATABASE_URL={}", urls.instance),
+            ]);
             if let Some(m) = &self.cfg.marketplace_url {
                 args.extend(["--env".into(), format!("OBOP_MARKETPLACE_URL={m}")]);
             }
@@ -244,9 +264,12 @@ mod tests {
         log: Mutex<Vec<String>>,
     }
     impl CellDb for FakeCell {
-        fn create_database(&self, slug: &str) -> Result<String, String> {
+        fn create_database(&self, slug: &str) -> Result<DbUrls, String> {
             self.log.lock().unwrap().push(format!("create {slug}"));
-            Ok(format!("postgres://obop_{slug}:pw@db:5432/obop_{slug}"))
+            Ok(DbUrls {
+                instance: format!("postgres://obop_{slug}:pw@db.internal:5432/obop_{slug}"),
+                control: format!("postgres://obop_{slug}:pw@db:5432/obop_{slug}"),
+            })
         }
         fn seed_admin(&self, _: &str, email: &str, hash: &str) -> Result<(), String> {
             assert!(hash.starts_with("$argon2id$"));
@@ -309,7 +332,7 @@ mod tests {
             "--server-id server_1",
             "--public",
             "--image ghcr.io/x/obop:1",
-            "--secret-env OBOP_DATABASE_URL=postgres://obop_acme:pw@db:5432/obop_acme",
+            "--secret-env OBOP_DATABASE_URL=postgres://obop_acme:pw@db.internal:5432/obop_acme",
         ] {
             assert!(args.contains(want), "{want} missing from {args}");
         }
@@ -335,7 +358,9 @@ mod tests {
             .create(&spec())
             .unwrap();
         let args = runner.calls.lock().unwrap()[0].join(" ");
-        assert!(args.contains("--repo https://github.com/SpaceCorps/obop --branch deploy"));
+        assert!(args.contains(
+            "--repo https://github.com/SpaceCorps/obop --branch deploy --auto-deploy false"
+        ));
         assert!(args.contains("--env OBOP_MARKETPLACE_URL=https://market.example.test"));
     }
 
@@ -413,9 +438,12 @@ mod tests {
         let Ok(admin) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
             return;
         };
-        let cell = PgCell { admin_url: admin };
+        let cell = PgCell {
+            admin_url: admin,
+            instance_host: None,
+        };
         let slug = format!("t{}", std::process::id());
-        let url = cell.create_database(&slug).unwrap();
+        let url = cell.create_database(&slug).unwrap().control;
         let auth = Auth::with_test_params(obop_storage::open(&url).unwrap());
         auth.create_user_hashed(
             "a@b.test",

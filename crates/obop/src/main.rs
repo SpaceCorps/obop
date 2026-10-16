@@ -19,7 +19,9 @@ const USAGE: &str = "usage: obop <command>
       --provisioner local|sliplane|fake         (default local: child processes on this machine)
       --instance-static DIR                     backoffice build served by local instances
       sliplane needs SLIPLANE_ACCOUNT, OBOP_SLIPLANE_PROJECT, OBOP_SLIPLANE_SERVER, OBOP_CELL_ADMIN_URL
-      and OBOP_IMAGE or OBOP_REPO (+ OBOP_BRANCH); optional OBOP_MARKETPLACE_URL
+      and OBOP_IMAGE or OBOP_REPO (+ OBOP_BRANCH); optional OBOP_MARKETPLACE_URL and
+      OBOP_CELL_INSTANCE_HOST (host:port instances use for the cell, e.g. obop-postgres.internal:5432),
+      OBOP_CELL_INSTANCE_HOST (host:port instances use for the cell, e.g. obop-postgres.internal:5432)
   serve [--addr 127.0.0.1:8080] [--static DIR]  REST API and the backoffice
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
   commands [--token TOKEN]                      list the commands visible to a token
@@ -405,6 +407,7 @@ fn make_provisioner(
             };
             let cell = sliplane::PgCell {
                 admin_url: env("OBOP_CELL_ADMIN_URL")?,
+                instance_host: std::env::var("OBOP_CELL_INSTANCE_HOST").ok(),
             };
             Ok(Arc::new(sliplane::Sliplane::new(
                 cfg,
