@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tower_http::services::{ServeDir, ServeFile};
 
+pub mod community;
+
 type Session = Arc<Mutex<Vault>>;
 
 pub struct HttpState {
