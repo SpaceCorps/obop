@@ -204,7 +204,7 @@
 /* A tooltip that carries a sentence wraps instead of running off the screen. */
 .tip-body {
   inline-size: max-content;
-  max-inline-size: min(15rem, 80vw);
+  max-inline-size: min(13rem, 80vw);
   white-space: normal;
   text-align: start;
 }

@@ -243,7 +243,9 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
       to: href({ app: "customize", model: "guide", tab: "guide" }),
     });
     const needle = q.toLowerCase().trim();
-    return all.filter((h) => !needle || h.title.toLowerCase().includes(needle)).slice(0, 12);
+    // Every word has to match somewhere in the title, so "write module" finds "How to write a custom module".
+    const words = needle.split(/\s+/).filter(Boolean);
+    return all.filter((h) => words.every((w) => h.title.toLowerCase().includes(w))).slice(0, 12);
   }, [apps, q]);
   useEffect(() => setSel(0), [q]);
   const go = (h: Hit | undefined) => {

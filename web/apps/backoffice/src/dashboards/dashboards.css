@@ -26,9 +26,6 @@
   .wcard {
     padding: var(--space-3);
   }
-  .wcard .stat-value {
-    font-size: var(--text-2xl);
-  }
 }
 .wcard {
   position: relative;
@@ -84,12 +81,8 @@
   display: flex;
   gap: var(--space-1);
   justify-content: flex-end;
-  margin-block-start: calc(var(--space-1) * -1);
-}
-.wcard.kind-kpi .wtools {
-  position: absolute;
-  inset-block-start: var(--space-2);
-  inset-inline-end: var(--space-2);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px dashed var(--border);
 }
 .kpi-link {
   display: block;
@@ -121,7 +114,8 @@
   padding: 0;
 }
 .wchart .chartsvg {
-  max-block-size: 16rem;
+  max-block-size: 14rem;
+  margin-inline: auto;
 }
 .wchart .piewrap {
   padding: 0;
@@ -167,8 +161,11 @@
 .wcard.kind-kpi {
   align-self: start;
 }
+.wcard {
+  container-type: inline-size;
+}
 .wcard .stat-value {
-  font-size: var(--text-3xl);
+  font-size: clamp(1.05rem, 11cqi, var(--text-3xl));
 }
 .wchart .piesvg {
   inline-size: min(13rem, 100%);

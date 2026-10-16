@@ -114,6 +114,7 @@ export function WidgetCard({ widget: w, edit, first, last, onEdit, onRemove, onM
           )}
         </header>
       )}
+      <div className="wbody">{body}</div>
       {edit && (
         <div className="wtools" role="group" aria-label={`Edit ${w.title}`}>
           <IconButton
@@ -134,7 +135,6 @@ export function WidgetCard({ widget: w, edit, first, last, onEdit, onRemove, onM
           <IconButton icon="trash" label={`Remove ${w.title}`} size="sm" onClick={onRemove} />
         </div>
       )}
-      <div className="wbody">{body}</div>
     </article>
   );
 }

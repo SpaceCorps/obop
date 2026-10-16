@@ -80,7 +80,18 @@ export function parseInline(src: string): Inline[] {
     }
     if (c === "[") {
       const close = src.indexOf("](", i);
-      const end = close > 0 ? src.indexOf(")", close) : -1;
+      // The target ends at the parenthesis that balances the opening one.
+      let end = -1;
+      if (close > 0) {
+        let depth = 1;
+        for (let k = close + 2; k < src.length; k++) {
+          if (src[k] === "(") depth++;
+          else if (src[k] === ")" && --depth === 0) {
+            end = k;
+            break;
+          }
+        }
+      }
       if (close > 0 && end > close) {
         const href = safeHref(src.slice(close + 2, end));
         const inner = parseInline(src.slice(i + 1, close));

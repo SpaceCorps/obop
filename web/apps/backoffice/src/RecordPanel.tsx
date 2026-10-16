@@ -257,7 +257,7 @@ export function RecordPanel({
                   <Tooltip
                     label={mv.reason}
                     side="top"
-                    align={idx < all.length / 2 ? "start" : "end"}
+                    align={idx === 0 ? "start" : idx === all.length - 1 ? "end" : "center"}
                   >
                     {btn}
                   </Tooltip>
@@ -330,7 +330,7 @@ export function RecordPanel({
                 key={a.id}
                 label={why}
                 side="top"
-                align={ai < model.actions.length / 2 ? "start" : "end"}
+                align={ai === 0 ? "start" : ai === model.actions.length - 1 ? "end" : "center"}
               >
                 {btn}
               </Tooltip>

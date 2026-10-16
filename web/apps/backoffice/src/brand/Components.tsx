@@ -6,6 +6,8 @@ import {
   Card,
   Checkbox,
   Chip,
+  CodeBlock,
+  ConfirmDialog,
   Dialog,
   EmptyState,
   Icon,
@@ -14,12 +16,14 @@ import {
   Kbd,
   Menu,
   Notice,
+  Pager,
   Panel,
   Popover,
   Segmented,
   Select,
   Skeleton,
   Spinner,
+  Stat,
   Switch,
   Table,
   Tabs,
@@ -404,16 +408,29 @@ function Navigation() {
 function Overlays({ notify }: { notify: Notify }) {
   const [dialog, setDialog] = useState(false);
   const [sheet, setSheet] = useState(false);
+  const [confirm, setConfirm] = useState(false);
   return (
     <Specimen
       title="Menu, Popover, Tooltip"
       note="Menu is for actions, Popover for any floating content. Both close on Escape and return focus to the trigger."
       props={[
         [
+          "ConfirmDialog",
+          "title, confirmLabel, onConfirm, onClose, error?, busy?",
+          "none",
+          "The in-app replacement for window.confirm. It states the consequence, keeps focus on Cancel, and stays open to show a failure in its alert area.",
+        ],
+        [
           "Menu items",
           "MenuItem[]",
           "required",
           "Actions, separators and headings; arrow keys move focus.",
+        ],
+        [
+          "MenuItem description",
+          "string",
+          "none",
+          "A second line under the label and its tooltip. Say why an item is disabled, in a sentence.",
         ],
         [
           "Menu align",
@@ -431,7 +448,13 @@ function Overlays({ notify }: { notify: Notify }) {
           "Tooltip label",
           "string",
           "required",
-          "Shows after 350ms of hover or on keyboard focus; Escape hides it.",
+          "Shows after 350ms of hover or on keyboard focus; Escape hides it. A sentence wraps.",
+        ],
+        [
+          "Tooltip align",
+          '"center" | "start" | "end"',
+          '"center"',
+          "Line the tip up with an edge of its target, for controls near the edge of a panel. A control that is unavailable stays focusable (aria-disabled) so its tooltip can say why.",
         ],
       ]}
     >
@@ -446,6 +469,13 @@ function Overlays({ notify }: { notify: Notify }) {
             { heading: "Invoice INV-0042" },
             { label: "Duplicate", icon: "copy", onSelect: () => notify("Duplicated") },
             { label: "Download", icon: "download", onSelect: () => notify("Downloaded") },
+            {
+              label: "Post",
+              icon: "check",
+              disabled: true,
+              description: "No action moves an invoice from Paid to Posted",
+              onSelect: () => {},
+            },
             "separator",
             {
               label: "Delete",
@@ -472,7 +502,18 @@ function Overlays({ notify }: { notify: Notify }) {
         </Tooltip>
         <Button onClick={() => setDialog(true)}>Open dialog</Button>
         <Button onClick={() => setSheet(true)}>Open sheet</Button>
+        <Button onClick={() => setConfirm(true)}>Open confirmation</Button>
       </div>
+      {confirm && (
+        <ConfirmDialog
+          title="Delete lead?"
+          confirmLabel="Delete"
+          onClose={() => setConfirm(false)}
+          onConfirm={() => (setConfirm(false), notify("Lead deleted"))}
+        >
+          <p>Delete lead “Annual support renewal”? This cannot be undone.</p>
+        </ConfirmDialog>
+      )}
       <Dialog
         open={dialog}
         onClose={() => setDialog(false)}
@@ -632,6 +673,68 @@ function DataDisplay() {
   );
 }
 
+function Listing() {
+  const [offset, setOffset] = useState(50);
+  const [limit, setLimit] = useState(50);
+  return (
+    <Specimen
+      title="Pager, Stat, CodeBlock"
+      note="A list that pages says where you are (1–50 of 1,234) and keeps the pager in view. A stat is one big number with a label. Code is always a block with a copy button, highlighted from tokens, never from markup."
+      wide
+      props={[
+        [
+          "Pager offset / limit / total",
+          "number",
+          "required",
+          "Zero-based offset of the first row, page size and the number of matches before paging.",
+        ],
+        [
+          "Pager sizes",
+          "number[]",
+          "[25, 50, 100, 200]",
+          "The choices of the rows-per-page select.",
+        ],
+        [
+          "Stat label / value / hint",
+          "string, ReactNode, ReactNode",
+          "required, required, none",
+          "A KPI tile. Numbers are tabular; money is formatted by the caller.",
+        ],
+        [
+          "CodeBlock code / lang",
+          "string, string",
+          "required, plain text",
+          "Highlights toml, json and sh. The copy button announces “Copied”.",
+        ],
+      ]}
+    >
+      <div className="data-grid">
+        <Panel className="demo-pad" style={{ alignSelf: "start" }}>
+          <Pager
+            offset={offset}
+            limit={limit}
+            total={1234}
+            onOffset={setOffset}
+            onSize={(n) => {
+              setLimit(n);
+              setOffset(0);
+            }}
+            noun="leads"
+          />
+        </Panel>
+        <Panel className="demo-pad stat-demo" style={{ alignSelf: "start" }}>
+          <Stat label="Open leads" value="131" hint="Records" />
+          <Stat label="Expected revenue" value="€1,069,375.00" hint="Sum of expected revenue" />
+        </Panel>
+        <CodeBlock
+          lang="toml"
+          code={`[[model.action]]\nname = "post"\nfield = "state"\nfrom = "draft"\nto = "posted"\napproval = true`}
+        />
+      </div>
+    </Specimen>
+  );
+}
+
 export function Components({ notify }: { notify: Notify }) {
   return (
     <>
@@ -651,6 +754,7 @@ export function Components({ notify }: { notify: Notify }) {
           <Overlays notify={notify} />
           <Feedback notify={notify} />
           <DataDisplay />
+          <Listing />
         </div>
       </Block>
     </>

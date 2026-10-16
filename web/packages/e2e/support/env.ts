@@ -39,7 +39,7 @@ export const users = {
   dana: {
     name: "dana",
     password: "e2e dana password 1",
-    groups: "base.user,crm.user,dashboards.user",
+    groups: "base.user,crm.user,product.user,dashboards.user",
   },
   // Holds the groups of the fixed-id module "wfagent" (see the agent tests), so it can issue an agent
   // token that may read and write that module.
