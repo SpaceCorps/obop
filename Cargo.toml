@@ -12,8 +12,13 @@ obop-types = { path = "crates/kernel/obop-types" }
 obop-registry = { path = "crates/kernel/obop-registry" }
 obop-masking = { path = "crates/kernel/obop-masking" }
 obop-commands = { path = "crates/kernel/obop-commands" }
-base-api = { path = "crates/modules/base-api" }
+obop-http = { path = "crates/kernel/obop-http" }
+obop-mcp = { path = "crates/kernel/obop-mcp" }
 base = { path = "crates/modules/base" }
+invoicing = { path = "crates/modules/invoicing" }
+sales = { path = "crates/modules/sales" }
+crm = { path = "crates/modules/crm" }
+product = { path = "crates/modules/product" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

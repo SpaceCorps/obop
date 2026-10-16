@@ -1,0 +1,20 @@
+[package]
+name = "obop-http"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+obop-commands.workspace = true
+axum = "0.8.9"
+tokio = { version = "1.53", features = ["rt-multi-thread", "net", "macros"] }
+serde_json = "1"
+tower-http = { version = "0.6", features = ["fs"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[lints]
+workspace = true

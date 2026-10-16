@@ -8,7 +8,6 @@ publish.workspace = true
 [dependencies]
 obop-types.workspace = true
 obop-registry.workspace = true
-base-api.workspace = true
 obop-commands.workspace = true
 obop-masking.workspace = true
 

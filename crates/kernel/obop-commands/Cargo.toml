@@ -10,5 +10,8 @@ obop-types.workspace = true
 obop-registry.workspace = true
 obop-masking.workspace = true
 
+serde_json = "1"
+uuid = { version = "1", features = ["v7"] }
+
 [lints]
 workspace = true

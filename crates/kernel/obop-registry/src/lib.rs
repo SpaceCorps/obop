@@ -16,6 +16,9 @@ pub struct CommandDef {
     pub name: &'static str,
     pub description: &'static str,
     pub permission_group: &'static str,
+    /// Agents may only propose this command; a human approves it (D18, D42). Posting, paying
+    /// and destructive commands set this.
+    pub needs_approval: bool,
     /// Exposed through generated REST, MCP and CLI (D41: all or none, so this is not optional).
     pub surfaces: Surfaces,
 }
@@ -25,6 +28,45 @@ pub struct Surfaces {
     pub rest: bool,
     pub mcp: bool,
     pub cli: bool,
+}
+
+impl CommandDef {
+    pub fn new(
+        name: &'static str,
+        description: &'static str,
+        permission_group: &'static str,
+    ) -> Self {
+        Self {
+            name,
+            description,
+            permission_group,
+            needs_approval: false,
+            surfaces: Surfaces::ALL,
+        }
+    }
+
+    pub fn approval(mut self) -> Self {
+        self.needs_approval = true;
+        self
+    }
+}
+
+impl FieldDef {
+    pub fn new(
+        name: &'static str,
+        description: &'static str,
+        class: DataClass,
+        personal_data: bool,
+        permission_group: &'static str,
+    ) -> Self {
+        Self {
+            name,
+            description,
+            class: Some(class),
+            permission_group,
+            personal_data,
+        }
+    }
 }
 
 impl Surfaces {
@@ -43,8 +85,29 @@ impl Surfaces {
 pub struct ModelDef {
     pub name: &'static str,
     pub description: &'static str,
+    /// Group that may call the generated `get` and `list` commands.
+    pub read_group: &'static str,
+    /// Group that may call the generated `create` and `update` commands.
+    pub write_group: &'static str,
     pub fields: Vec<FieldDef>,
+    /// Custom commands beyond the generated CRUD set.
     pub commands: Vec<CommandDef>,
+}
+
+impl ModelDef {
+    /// Generated `get`, `list`, `create` and `update`, followed by the custom commands. The
+    /// REST, MCP and CLI surfaces are derived from this list (D29, D41).
+    pub fn all_commands(&self) -> Vec<CommandDef> {
+        let crud = CommandDef::new;
+        let mut v = vec![
+            crud("get", "Read one record by id", self.read_group),
+            crud("list", "List records", self.read_group),
+            crud("create", "Create a record", self.write_group),
+            crud("update", "Update fields of a record", self.write_group),
+        ];
+        v.extend(self.commands.iter().cloned());
+        v
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -76,6 +139,9 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
         if model.description.trim().is_empty() {
             bad(mp.clone(), "model has no description");
         }
+        if model.read_group.trim().is_empty() || model.write_group.trim().is_empty() {
+            bad(mp.clone(), "model has no read or write permission group");
+        }
         for f in &model.fields {
             let fp = format!("{mp}.{}", f.name);
             if f.description.trim().is_empty() {
@@ -95,7 +161,7 @@ pub fn check_module(m: &Module) -> Vec<Violation> {
                 _ => {}
             }
         }
-        for c in &model.commands {
+        for c in &model.all_commands() {
             let cp = format!("{mp}::{}", c.name);
             if c.description.trim().is_empty() {
                 bad(cp.clone(), "command has no description");
@@ -131,6 +197,8 @@ mod tests {
             models: vec![ModelDef {
                 name: "party",
                 description: "Party",
+                read_group: "g",
+                write_group: "g",
                 fields: vec![f],
                 commands: vec![],
             }],
@@ -165,6 +233,7 @@ mod tests {
             name: "merge",
             description: "Merge",
             permission_group: "base.admin",
+            needs_approval: false,
             surfaces: Surfaces {
                 rest: true,
                 mcp: false,

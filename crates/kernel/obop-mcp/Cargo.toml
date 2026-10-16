@@ -1,0 +1,13 @@
+[package]
+name = "obop-mcp"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+obop-commands.workspace = true
+serde_json = "1"
+
+[lints]
+workspace = true

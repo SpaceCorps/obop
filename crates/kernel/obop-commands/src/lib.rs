@@ -3,7 +3,8 @@
 //! with token scopes for agents), restores masked input tokens (D40), runs the handler and
 //! shapes the output through the masking policy.
 
-use obop_masking::{PrincipalKind, RestoreError, Vault, mode_for};
+use obop_masking::mode_for;
+pub use obop_masking::{PrincipalKind, RestoreError, Vault};
 use obop_registry::{FieldDef, Module};
 use obop_types::MaskMode;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -81,7 +82,20 @@ pub enum CallError {
     Forbidden(String),
     /// A masked token in the input could not be restored.
     Restore(RestoreError),
+    /// An agent proposed a command that needs human approval; approve `plan_id` to run it.
+    ApprovalRequired {
+        plan_id: String,
+    },
+    UnknownPlan(String),
     Handler(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommandInfo {
+    pub id: String,
+    pub description: &'static str,
+    pub permission_group: &'static str,
+    pub needs_approval: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -91,9 +105,17 @@ pub struct Response {
     pub denied: Vec<String>,
 }
 
-pub type Handler = Box<dyn Fn(&Value) -> Result<Value, String>>;
+pub type Handler = Box<dyn Fn(&Value) -> Result<Value, String> + Send + Sync>;
+
+struct Pending {
+    principal: Principal,
+    id: String,
+    input: Value,
+}
 
 struct Registered {
+    description: &'static str,
+    needs_approval: bool,
     model: &'static str,
     permission_group: &'static str,
     surfaces: obop_registry::Surfaces,
@@ -102,6 +124,7 @@ struct Registered {
 
 #[derive(Default)]
 pub struct Dispatcher {
+    pending: std::sync::Mutex<HashMap<String, Pending>>,
     commands: HashMap<String, Registered>,
     fields: HashMap<&'static str, Vec<FieldDef>>,
 }
@@ -109,6 +132,22 @@ pub struct Dispatcher {
 impl Dispatcher {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// What `tools/list`, `GET /api/commands` and CLI help show for this principal.
+    pub fn catalog(&self, surface: Surface, p: &Principal) -> Vec<CommandInfo> {
+        self.visible(surface, p)
+            .into_iter()
+            .map(|id| {
+                let c = &self.commands[&id];
+                CommandInfo {
+                    id,
+                    description: c.description,
+                    permission_group: c.permission_group,
+                    needs_approval: c.needs_approval,
+                }
+            })
+            .collect()
     }
 
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
@@ -120,14 +159,16 @@ impl Dispatcher {
             .find(|m| m.name == model)
             .unwrap_or_else(|| panic!("{}: no model {model}", module.id));
         let c = m
-            .commands
-            .iter()
+            .all_commands()
+            .into_iter()
             .find(|c| c.name == command)
             .unwrap_or_else(|| panic!("{}.{model}: command {command} is not declared", module.id));
         self.fields.insert(m.name, m.fields.clone());
         self.commands.insert(
             format!("{model}.{command}"),
             Registered {
+                description: c.description,
+                needs_approval: c.needs_approval,
                 model: m.name,
                 permission_group: c.permission_group,
                 surfaces: c.surfaces,
@@ -168,6 +209,53 @@ impl Dispatcher {
             return Err(CallError::Forbidden(id.into()));
         }
         let input = self.restore(p, vault, input)?;
+        if c.needs_approval && p.kind == PrincipalKind::Agent {
+            // Dry-run: keep the restored input, hand back a plan id (D18, D42).
+            let plan_id = uuid::Uuid::now_v7().to_string();
+            self.pending.lock().unwrap().insert(
+                plan_id.clone(),
+                Pending {
+                    principal: p.clone(),
+                    id: id.into(),
+                    input,
+                },
+            );
+            return Err(CallError::ApprovalRequired { plan_id });
+        }
+        self.run(c, p, vault, input)
+    }
+
+    /// A human approves a proposed plan. The command runs with the proposing agent's own
+    /// permissions (still checked) and the approver must hold the command's group too.
+    pub fn approve(
+        &self,
+        approver: &Principal,
+        vault: &mut Vault,
+        plan_id: &str,
+    ) -> Result<Response, CallError> {
+        if approver.kind != PrincipalKind::User {
+            return Err(CallError::Forbidden("approve".into()));
+        }
+        let mut pending = self.pending.lock().unwrap();
+        let plan = pending
+            .get(plan_id)
+            .ok_or_else(|| CallError::UnknownPlan(plan_id.into()))?;
+        let c = &self.commands[&plan.id];
+        if !approver.allows(c.permission_group) || !plan.principal.allows(c.permission_group) {
+            return Err(CallError::Forbidden(plan.id.clone()));
+        }
+        let plan = pending.remove(plan_id).expect("checked above");
+        drop(pending);
+        self.run(&self.commands[&plan.id], &plan.principal, vault, plan.input)
+    }
+
+    fn run(
+        &self,
+        c: &Registered,
+        p: &Principal,
+        vault: &mut Vault,
+        input: Value,
+    ) -> Result<Response, CallError> {
         let out = (c.handler)(&input).map_err(CallError::Handler)?;
         let mut denied = Vec::new();
         let value = self.shape(c.model, p, vault, out, &mut denied);
@@ -233,6 +321,10 @@ impl Dispatcher {
                         shaped.insert(k, v);
                         continue;
                     };
+                    if !p.allows(def.permission_group) {
+                        denied.push(format!("{model}.{k}"));
+                        continue;
+                    }
                     let class = def.class.unwrap_or(obop_types::DataClass::Secret);
                     match mode_for(p.kind, class, def.personal_data) {
                         MaskMode::Allow => {
@@ -279,6 +371,11 @@ fn on_surface(s: obop_registry::Surfaces, surface: Surface) -> bool {
 }
 
 /// Surface naming adapters. All three map to the same command id, so a call is the same call.
+pub mod json;
+pub mod store;
+
+pub use store::Store;
+
 pub mod names {
     /// `POST /api/party/get` -> `party.get`
     pub fn from_rest(method: &str, path: &str) -> Option<String> {

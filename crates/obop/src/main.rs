@@ -1,35 +1,61 @@
-use obop_commands::{Dispatcher, Principal, Surface, Value, names};
-use obop_masking::Vault;
+mod app;
+
+use app::{App, dev_principal};
+use obop_commands::{Surface, Value, Vault, names};
 use std::process::ExitCode;
+use std::sync::Arc;
+
+const USAGE: &str = "usage: obop <command>
+  --version
+  modules check                                  run the install gate over linked modules
+  commands [--as TOKEN]                          list commands visible to a dev principal
+  call [--as TOKEN] <model> <command> [k=v...]   run one command through the dispatcher
+  approve [--as TOKEN] <plan_id>                 (only useful inside `serve`; plans are per process)
+  serve [--addr 127.0.0.1:8080] [--static DIR]   REST API and the backoffice, with demo data
+  mcp [--as TOKEN]                               MCP server on stdio, with demo data
+dev tokens: dev-admin (default), dev-agent, dev-sales";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match args
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>()
-        .as_slice()
-    {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let (token, args) = take_opt(&args, "--as");
+    let token = token.unwrap_or("dev-admin");
+    match args.as_slice() {
         [] | ["--version"] => {
             println!("{} {}", obop_types::NAME, env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         ["modules", "check"] => modules_check(),
-        ["call", rest @ ..] => call(rest),
+        ["commands"] => commands(token),
+        ["call", model, command, kv @ ..] => call(token, model, command, kv),
+        ["serve", rest @ ..] => serve(rest),
+        ["mcp"] => mcp(token),
         _ => {
-            eprintln!(
-                "usage: obop [--version | modules check | call [--agent] <model> <command> [key=value...]]"
-            );
+            eprintln!("{USAGE}");
             ExitCode::from(2)
         }
     }
 }
 
+/// Pull `--flag value` out of the argument list.
+fn take_opt<'a>(args: &[&'a str], flag: &str) -> (Option<&'a str>, Vec<&'a str>) {
+    let mut rest = Vec::new();
+    let mut found = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if *a == flag {
+            found = it.next().copied();
+        } else {
+            rest.push(*a);
+        }
+    }
+    (found, rest)
+}
+
 /// The D41 install gate over every linked first-party module.
 fn modules_check() -> ExitCode {
-    let modules = [base::module()];
     let mut failed = false;
-    for m in &modules {
+    for m in &App::new().modules {
         let violations = obop_registry::check_module(m);
         if violations.is_empty() {
             println!("ok    {}", m.id);
@@ -47,16 +73,32 @@ fn modules_check() -> ExitCode {
     }
 }
 
-/// Demo of the one dispatch path over fake in-memory data (no database yet).
-fn call(args: &[&str]) -> ExitCode {
-    let (agent, args) = match args {
-        ["--agent", rest @ ..] => (true, rest),
-        rest => (false, rest),
+fn commands(token: &str) -> ExitCode {
+    let Some(p) = dev_principal(token) else {
+        return bad_token();
     };
-    let [model, command, kv @ ..] = args else {
-        eprintln!("usage: obop call [--agent] <model> <command> [key=value...]");
-        return ExitCode::from(2);
+    for c in App::new().dispatcher.catalog(Surface::Cli, &p) {
+        let note = if c.needs_approval {
+            "  [needs approval for agents]"
+        } else {
+            ""
+        };
+        println!("{:<24} {}{note}", c.id, c.description);
+    }
+    ExitCode::SUCCESS
+}
+
+fn bad_token() -> ExitCode {
+    eprintln!("unknown dev token");
+    ExitCode::from(2)
+}
+
+fn call(token: &str, model: &str, command: &str, kv: &[&str]) -> ExitCode {
+    let Some(p) = dev_principal(token) else {
+        return bad_token();
     };
+    let app = App::new();
+    app.seed_demo();
     let Some(id) = names::from_cli(&[model, command]) else {
         return ExitCode::from(2);
     };
@@ -66,18 +108,17 @@ fn call(args: &[&str]) -> ExitCode {
             .map(|(k, v)| (k.to_string(), Value::text(v)))
             .collect(),
     );
-    let principal = if agent {
-        Principal::agent("cli-agent", &["base.user"], &["base.user"])
-    } else {
-        Principal::user("cli-user", &["base.user", "privacy.officer"])
-    };
-    let mut d = Dispatcher::new();
-    base::register(&mut d, base::demo_store());
-    match d.call(Surface::Cli, &principal, &mut Vault::new(), &id, &input) {
+    match app
+        .dispatcher
+        .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
+    {
         Ok(r) => {
-            println!("{:#?}", r.value);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&r.value.to_json()).unwrap()
+            );
             if !r.denied.is_empty() {
-                println!("denied: {}", r.denied.join(", "));
+                println!("withheld: {}", r.denied.join(", "));
             }
             ExitCode::SUCCESS
         }
@@ -85,5 +126,162 @@ fn call(args: &[&str]) -> ExitCode {
             eprintln!("error: {e:?}");
             ExitCode::FAILURE
         }
+    }
+}
+
+fn serve(args: &[&str]) -> ExitCode {
+    let (addr, rest) = take_opt(args, "--addr");
+    let (static_dir, _) = take_opt(&rest, "--static");
+    let addr = addr.unwrap_or("127.0.0.1:8080");
+    let app = App::new();
+    app.seed_demo();
+    let state = obop_http::HttpState::new(Arc::new(app.dispatcher), Arc::new(dev_principal));
+    let router = obop_http::router(state, static_dir);
+    eprintln!("obop listening on http://{addr} (dev tokens: dev-admin, dev-agent, dev-sales)");
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    match rt.block_on(obop_http::serve(addr, router)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn mcp(token: &str) -> ExitCode {
+    let Some(p) = dev_principal(token) else {
+        return bad_token();
+    };
+    let app = App::new();
+    app.seed_demo();
+    match obop_mcp::serve_stdio(&app.dispatcher, &p) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{body::Body, http::Request};
+    use http_body_util::BodyExt;
+    use serde_json::{Value as J, json};
+    use tower::ServiceExt;
+
+    fn router() -> axum::Router {
+        let app = App::new();
+        app.seed_demo();
+        obop_http::router(
+            obop_http::HttpState::new(Arc::new(app.dispatcher), Arc::new(dev_principal)),
+            None,
+        )
+    }
+
+    async fn post(r: &axum::Router, token: &str, path: &str, body: J) -> (u16, J) {
+        let req = Request::post(path)
+            .header("authorization", format!("Bearer {token}"))
+            .header("content-type", "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap();
+        let resp = r.clone().oneshot(req).await.unwrap();
+        let status = resp.status().as_u16();
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        (status, serde_json::from_slice(&bytes).unwrap_or(J::Null))
+    }
+
+    #[tokio::test]
+    async fn rest_requires_a_token() {
+        let (s, _) = post(&router(), "nope", "/api/party/list", json!({})).await;
+        assert_eq!(s, 401);
+    }
+
+    #[tokio::test]
+    async fn agent_over_rest_is_masked_and_approval_gated() {
+        let r = router();
+        let (s, body) = post(&r, "dev-agent", "/api/party/list", json!({})).await;
+        assert_eq!(s, 200);
+        let party = &body["value"][0];
+        assert!(party["name"].as_str().unwrap().starts_with("NAME_"));
+        assert!(party.get("tax_id").is_none());
+        assert_eq!(body["denied"], json!(["party.tax_id"]));
+
+        let id = party["id"].as_str().unwrap();
+        let (s, body) = post(&r, "dev-agent", "/api/party/erase", json!({"id": id})).await;
+        assert_eq!(s, 202);
+        let plan = body["plan_id"].as_str().unwrap().to_string();
+        // The agent cannot approve its own plan; the admin can.
+        assert_eq!(
+            post(&r, "dev-agent", &format!("/api/approve/{plan}"), json!({}))
+                .await
+                .0,
+            404
+        );
+        assert_eq!(
+            post(&r, "dev-admin", &format!("/api/approve/{plan}"), json!({}))
+                .await
+                .0,
+            200
+        );
+    }
+
+    #[tokio::test]
+    async fn hidden_commands_look_unknown() {
+        // dev-sales holds no invoicing group: same 404 as a command that does not exist.
+        let (a, _) = post(&router(), "dev-sales", "/api/invoice/list", json!({})).await;
+        let (b, _) = post(&router(), "dev-sales", "/api/nothing/list", json!({})).await;
+        assert_eq!((a, b), (404, 404));
+    }
+
+    #[test]
+    fn mcp_lists_and_calls_tools() {
+        let app = App::new();
+        app.seed_demo();
+        let p = dev_principal("dev-agent").unwrap();
+        let mut v = Vault::new();
+        let list = obop_mcp::handle(
+            &app.dispatcher,
+            &p,
+            &mut v,
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+        )
+        .unwrap();
+        let list: J = serde_json::from_str(&list).unwrap();
+        let names: Vec<_> = list["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"party__get") && names.contains(&"invoice__post"));
+        let call = obop_mcp::handle(&app.dispatcher, &p, &mut v, r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"party__list","arguments":{}}}"#).unwrap();
+        let call: J = serde_json::from_str(&call).unwrap();
+        let text = call["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(
+            text.contains("NAME_")
+                && !text.contains("Ada Example")
+                && text.contains("party.tax_id")
+        );
+        assert!(
+            obop_mcp::handle(
+                &app.dispatcher,
+                &p,
+                &mut v,
+                r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn every_linked_module_passes_the_gate() {
+        assert!(
+            App::new()
+                .modules
+                .iter()
+                .all(|m| obop_registry::check_module(m).is_empty())
+        );
     }
 }
