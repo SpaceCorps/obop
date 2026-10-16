@@ -51,7 +51,8 @@
     transform var(--dur-1) var(--ease-out);
   user-select: none;
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled),
+.btn[data-state="hover"] {
   background: var(--surface-2);
   border-color: var(--text-subtle);
 }
@@ -83,7 +84,8 @@
     var(--edge),
     0 1px 2px color-mix(in oklab, var(--accent-fill) 40%, transparent);
 }
-.btn.primary:hover:not(:disabled) {
+.btn.primary:hover:not(:disabled),
+.btn.primary[data-state="hover"] {
   background: color-mix(in oklab, var(--accent-fill) 90%, var(--text));
   border-color: color-mix(in oklab, var(--accent-fill) 75%, var(--text));
 }
@@ -96,7 +98,8 @@
   box-shadow: none;
   color: var(--text-muted);
 }
-.btn.ghost:hover:not(:disabled) {
+.btn.ghost:hover:not(:disabled),
+.btn.ghost[data-state="hover"] {
   background: var(--surface-3);
   border-color: transparent;
   color: var(--text);
@@ -107,11 +110,15 @@
   color: var(--on-danger);
   box-shadow: var(--edge);
 }
-.btn.danger:hover:not(:disabled) {
+.btn.danger:hover:not(:disabled),
+.btn.danger[data-state="hover"] {
   background: color-mix(in oklab, var(--danger-fill) 90%, var(--text));
 }
 .btn.is-loading {
   cursor: progress;
+}
+.btn.is-loading:disabled {
+  opacity: 0.8;
 }
 
 .icon-btn {
@@ -135,7 +142,8 @@
   block-size: var(--control-h-sm);
   border-radius: var(--radius-sm);
 }
-.icon-btn:hover:not(:disabled) {
+.icon-btn:hover:not(:disabled),
+.icon-btn[data-state="hover"] {
   background: var(--surface-3);
   color: var(--text);
 }
@@ -232,12 +240,14 @@ textarea {
 }
 input:not([type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="range"]):hover,
 select:hover,
-textarea:hover {
+textarea:hover,
+[data-state="hover"]:is(input, select, textarea) {
   border-color: var(--text-muted);
 }
 input:not([type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="range"]):focus,
 select:focus,
-textarea:focus {
+textarea:focus,
+[data-state="focus"]:is(input, select, textarea) {
   outline: none;
   border-color: var(--accent-fill);
   box-shadow: var(--ring);
@@ -335,7 +345,8 @@ input[type="radio"] {
   border-radius: 50%;
 }
 input[type="checkbox"]:not([role="switch"]):hover,
-input[type="radio"]:hover {
+input[type="radio"]:hover,
+input[type="checkbox"][data-state="hover"] {
   border-color: var(--accent-fill);
 }
 input[type="checkbox"]:not([role="switch"]):checked,
@@ -377,7 +388,8 @@ input[type="radio"]:disabled {
   cursor: not-allowed;
 }
 input[type="checkbox"]:focus-visible,
-input[type="radio"]:focus-visible {
+input[type="radio"]:focus-visible,
+[data-state="focus"]:is(button, input[type="checkbox"], input[type="radio"], .btn, .icon-btn) {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -449,7 +461,8 @@ th > input[type="checkbox"] {
 :dir(rtl) .switch input:checked + .track::after {
   transform: translateX(-0.9375rem);
 }
-.switch input:focus-visible + .track {
+.switch input:focus-visible + .track,
+.switch input[data-state="focus"] + .track {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }

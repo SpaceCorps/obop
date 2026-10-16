@@ -10,7 +10,7 @@ test.describe("sign in and out", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page.getByRole("heading", { name: "Your apps" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Contacts" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "R", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
   });
 
   test("a wrong password is refused with a clear message and no session", async ({

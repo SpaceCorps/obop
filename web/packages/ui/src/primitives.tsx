@@ -798,7 +798,11 @@ export function Dialog({
   if (!open) return null;
   return createPortal(
     <div
-      className={cx("overlay", variant === "sheet" && "sheet-overlay", placement === "top" && "top")}
+      className={cx(
+        "overlay",
+        variant === "sheet" && "sheet-overlay",
+        placement === "top" && "top",
+      )}
       onMouseDown={onClose}
     >
       <div
