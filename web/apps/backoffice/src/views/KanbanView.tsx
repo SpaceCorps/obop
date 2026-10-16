@@ -6,6 +6,7 @@ import { readPref, writePref } from "../favorites.ts";
 import { isEmpty, isMasked, isState, label, money } from "../format.ts";
 import { groupDomain, groupKey, groupLabel, groupable, sumOf } from "../query.ts";
 import { Icon } from "../ui.tsx";
+import { actionsOn, canMove, initialOption, isGoverned, moveRecord } from "../workflow.ts";
 import type { ViewProps } from "./types.ts";
 
 /** The field the board is grouped by: the person's choice, else a status, else the first groupable. */
@@ -54,7 +55,19 @@ export function KanbanView(p: ViewProps) {
     .filter((f) => f.name !== gf.name && f.name !== titleField?.name)
     .sort((a, b) => weight(a) - weight(b))
     .slice(0, 3);
-  const canDrag = p.canUpdate && gf.kind !== "date";
+  // A governed board (D48) moves cards only along declared actions the person may run.
+  const governed = isGoverned(model, gf);
+  const canDrag =
+    gf.kind !== "date" && (governed ? actionsOn(model, gf.name).length > 0 : p.canUpdate);
+  const noun = p.title;
+  /** Whether the card being dragged (or the given one) may go to column `key`. */
+  const may = (id: string | null, key: string) => {
+    if (!governed || !id) return { ok: true, reason: "" };
+    const row = rows.find((r) => r.id === id);
+    if (!row) return { ok: true, reason: "" };
+    const m = canMove(model, gf, row[gf.name] as string, key, noun);
+    return { ok: m.allowed || m.current, reason: m.reason };
+  };
 
   const setFold = (key: string) => {
     const next = folded.includes(key) ? folded.filter((k) => k !== key) : [...folded, key];
@@ -67,6 +80,14 @@ export function KanbanView(p: ViewProps) {
     const row = rows.find((r) => r.id === id);
     if (!row || groupKey(gf, row) === key) return;
     if (key === "" && gf.required) return d.notify(`${label(gf.name)} is required`, "error");
+    if (governed) {
+      const m = may(id, key);
+      if (!m.ok) return d.notify(m.reason, "error");
+      const out = await moveRecord(d.run, model, gf, row, key, noun);
+      if (out.kind === "approval") d.notify(out.message, "info");
+      else if (out.kind === "error") d.notify(out.message, "error");
+      return;
+    }
     const value = key === "" ? null : gf.kind === "bool" ? key === "true" : key;
     const err = await p.update(id, { [gf.name]: value });
     if (err) d.notify(err, "error");
@@ -131,10 +152,15 @@ export function KanbanView(p: ViewProps) {
           <section
             key={key || "none"}
             data-col={col}
-            className={`kcol${over === key ? " over" : ""}${isFolded ? " folded" : ""}`}
+            className={`kcol${over === key ? " over" : ""}${isFolded ? " folded" : ""}${dragging && !may(dragging, key).ok ? " blocked" : ""}`}
+            title={dragging && !may(dragging, key).ok ? may(dragging, key).reason : undefined}
             aria-label={`${name}, ${cards.length} ${cards.length === 1 ? "card" : "cards"}`}
             onDragOver={(e) => {
               if (!canDrag) return;
+              if (!may(dragging, key).ok) {
+                e.dataTransfer.dropEffect = "none";
+                return;
+              }
               e.preventDefault();
               setOver(key);
             }}
@@ -167,7 +193,7 @@ export function KanbanView(p: ViewProps) {
                   {money(total)}
                 </span>
               )}
-              {p.canCreate && !isFolded && (
+              {p.canCreate && !isFolded && (!governed || key === initialOption(gf)) && (
                 <button
                   className="icon-btn"
                   aria-label={`Add a card to ${name}`}
@@ -260,7 +286,7 @@ export function KanbanView(p: ViewProps) {
                     ),
                   )}
                   {/* Keyboard and touch twin of dragging */}
-                  {p.canUpdate && gf.kind !== "date" && (
+                  {canDrag && (
                     <select
                       className="moveto"
                       aria-label={`Move ${d.recordLabel(model.name, r)} to`}
@@ -275,11 +301,20 @@ export function KanbanView(p: ViewProps) {
                       <option value="">Move to…</option>
                       {keys
                         .filter((k) => k !== key && (k !== "" || !gf.required))
-                        .map((k) => (
-                          <option key={k} value={k === "" ? "\u0000" : k}>
-                            {groupLabel(gf, k, d.lookup)}
-                          </option>
-                        ))}
+                        .map((k) => {
+                          const m = governed ? canMove(model, gf, key, k, noun) : null;
+                          return (
+                            <option
+                              key={k}
+                              value={k === "" ? "\u0000" : k}
+                              disabled={m ? !m.allowed : false}
+                              title={m && !m.allowed ? m.reason : undefined}
+                            >
+                              {groupLabel(gf, k, d.lookup)}
+                              {m?.allowed && m.needsApproval ? " *" : ""}
+                            </option>
+                          );
+                        })}
                     </select>
                   )}
                 </article>

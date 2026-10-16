@@ -40,6 +40,7 @@ const MODEL: ModelMeta = {
   description: "Sample deals for the brand book",
   can_create: true,
   can_update: true,
+  can_delete: true,
   actions: [],
   fields: [
     f("title", "text", { required: true }),
@@ -100,6 +101,10 @@ function useSample(notify: Notify) {
     },
     canCreate: true,
     canUpdate: true,
+    canDelete: false,
+    total: rows.length,
+    exportAll: async () => ({ rows, truncated: false }),
+    moveState: async (id, field, to) => update(id, { [field]: to }),
     update,
     create: async (body) => {
       setRows((r) => [...r, { id: `sample-${r.length}`, ...body } as Row]);

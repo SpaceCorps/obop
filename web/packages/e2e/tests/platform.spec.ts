@@ -91,10 +91,22 @@ test.describe("control plane (fake provisioner)", () => {
     const item = page.locator("ul.instances li", { hasText: name });
     await expect(item.getByRole("link", { name: /\.fake\.test$/ })).toBeVisible();
 
-    page.once("dialog", (d) => void d.accept());
+    // The confirmation is an in-app dialog, not window.confirm: it names the instance, Cancel keeps it.
+    await item.getByRole("button", { name: /Delete/ }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Delete instance?" });
+    await expect(dialog).toContainText(name);
+    await expect(dialog).toContainText("This cannot be undone");
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(item.getByRole("link", { name: /\.fake\.test$/ })).toBeVisible();
+
     const deleted = page.waitForResponse((r) => /\/instances\/[^/]+\/delete$/.test(r.url()));
     const started = Date.now();
     await item.getByRole("button", { name: /Delete/ }).click();
+    await page
+      .getByRole("alertdialog", { name: "Delete instance?" })
+      .getByRole("button", { name: "Delete instance" })
+      .click();
     const res = await deleted;
     expect(res.status()).toBe(202);
     expect((await res.json()).status).toBe("deleting");

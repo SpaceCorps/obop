@@ -1,5 +1,7 @@
 export * from "./app-colors.ts";
 export * from "./colors.ts";
+export * from "./extras.tsx";
+export * from "./highlight.ts";
 export * from "./hooks.ts";
 export * from "./icon-data.ts";
 export * from "./icons.tsx";

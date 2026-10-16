@@ -608,6 +608,8 @@ export type MenuItem =
       danger?: boolean;
       disabled?: boolean;
       hint?: string;
+      /** A second line under the label, for example why the item is disabled. Also the tooltip. */
+      description?: string;
     };
 
 /** An action menu: arrow keys move, Enter or Space picks, Escape closes and returns focus. */
@@ -683,14 +685,18 @@ export function Menu({
                 type="button"
                 role="menuitem"
                 disabled={it.disabled}
-                className={cx("menu-item", it.danger && "danger")}
+                title={it.description}
+                className={cx("menu-item", it.danger && "danger", it.description && "described")}
                 onClick={() => {
                   close();
                   it.onSelect();
                 }}
               >
                 {it.icon && <Icon name={it.icon} size={16} />}
-                <span>{it.label}</span>
+                <span>
+                  {it.label}
+                  {it.description && <small className="menu-why">{it.description}</small>}
+                </span>
                 {it.hint && <Kbd>{it.hint}</Kbd>}
               </button>
             ),

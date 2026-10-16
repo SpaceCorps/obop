@@ -24,7 +24,14 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await panel.getByLabel("Title").fill(title);
     await panel.getByLabel("Contact name").fill("Dana Example");
     await panel.getByLabel("Expected revenue").fill("1234.50");
-    await panel.getByRole("button", { name: "Qualified" }).click();
+    // The stage is governed (D48): a new lead starts as New and the form offers no other choice.
+    const bar = panel.getByRole("list", { name: "Stage" });
+    await expect(bar.getByRole("button", { name: "New" })).toHaveAttribute("aria-current", "step");
+    for (const other of ["Qualified", "Won", "Lost"])
+      await expect(bar.getByRole("button", { name: other })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
     await panel.getByRole("button", { name: "Create" }).click();
 
     await expect(page.locator(".toast").filter({ hasText: "Lead created" })).toBeVisible();
@@ -32,10 +39,18 @@ test.describe("records in a built-in module (CRM leads)", () => {
     await expect(row).toBeVisible();
     await expect(row).toContainText("Dana Example");
     await expect(row).toContainText("€1,234.50");
-    await expect(row).toContainText("Qualified");
+    await expect(row).toContainText("New");
     // The panel stays open on the saved record, now in edit mode.
     await expect(panel.getByRole("heading", { name: title })).toBeVisible();
     await expect(panel.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    // Then the lead moves on through the status bar, which runs the qualify action.
+    await panel
+      .getByRole("list", { name: "Stage" })
+      .getByRole("button", { name: "Qualified" })
+      .click();
+    await expect(page.locator(".toast").filter({ hasText: "Stage: Qualified" })).toBeVisible();
+    await expect(row).toContainText("Qualified");
   });
 
   test("a bad amount is caught in the form; a number the server refuses is shown inline from its 400", async ({

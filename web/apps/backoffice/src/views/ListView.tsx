@@ -5,7 +5,9 @@ import { useData } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
 import { csvCell, download, isState, label, optionLabel, plainText } from "../format.ts";
 import { buildGroups, formatSum, sumOf, type Group } from "../query.ts";
-import { Popover, Icon } from "../ui.tsx";
+import { DeleteDialog } from "../DeleteDialog.tsx";
+import { Pager, Popover, Icon } from "../ui.tsx";
+import { canMove, isGoverned } from "../workflow.ts";
 import { InlineEdit } from "./InlineEdit.tsx";
 import type { ViewProps } from "./types.ts";
 
@@ -43,6 +45,7 @@ export function ListView(p: ViewProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<{ id: string; field: string } | null>(null);
   const [pos, setPos] = useState({ r: 0, c: 1 });
+  const [deleting, setDeleting] = useState(false);
   const grid = useRef<HTMLTableSectionElement>(null);
 
   const live = useMemo(() => {
@@ -98,8 +101,14 @@ export function ListView(p: ViewProps) {
   function cellText(f: FieldMeta, r: Row) {
     return plainText(f, r[f.name], d.refText);
   }
-  function exportCsv() {
-    const pick = live.size ? rows.filter((r) => live.has(r.id)) : rows;
+  async function exportCsv() {
+    // Selected rows, else everything the search matches (not only the page on screen).
+    let pick = rows.filter((r) => live.has(r.id));
+    if (!pick.length) {
+      const all = await p.exportAll();
+      pick = all.rows;
+      if (all.truncated) d.notify(`Exported the first ${pick.length} records only`, "info");
+    }
     const head = cols.map((f) => csvCell(label(f.name))).join(",");
     const body = pick.map((r) => cols.map((f) => csvCell(cellText(f, r))).join(","));
     download(`${p.model.name}.csv`, [head, ...body].join("\r\n") + "\r\n");
@@ -157,7 +166,13 @@ export function ListView(p: ViewProps) {
     else p.onOpen(r.id);
   }
 
-  const settableFields = p.fields.filter((f) => f.kind === "select" || f.kind === "bool");
+  // A governed field moves through its actions, so it is not set in bulk.
+  const settableFields = p.fields.filter(
+    (f) => (f.kind === "select" || f.kind === "bool") && !isGoverned(p.model, f),
+  );
+  const selectedRecords = rows
+    .filter((r) => live.has(r.id))
+    .map((r) => ({ id: r.id, label: d.recordLabel(p.model.name, r) }));
 
   return (
     <div className="listview">
@@ -189,9 +204,14 @@ export function ListView(p: ViewProps) {
                 )}
               </Popover>
             )}
-            <button className="btn small" onClick={exportCsv}>
+            <button className="btn small" onClick={() => void exportCsv()}>
               <Icon name="download" size={13} /> Export selected
             </button>
+            {p.canDelete && (
+              <button className="btn small danger-text" onClick={() => setDeleting(true)}>
+                <Icon name="trash" size={13} /> Delete
+              </button>
+            )}
             <button className="linkbtn" onClick={() => setSelected(new Set())}>
               Clear
             </button>
@@ -204,7 +224,7 @@ export function ListView(p: ViewProps) {
         <span className="grow" />
         <button
           className="btn small"
-          onClick={exportCsv}
+          onClick={() => void exportCsv()}
           aria-label="Export all as CSV"
           hidden={live.size > 0}
         >
@@ -250,7 +270,7 @@ export function ListView(p: ViewProps) {
           className="table list"
           role="grid"
           aria-label={`${p.title} list`}
-          aria-rowcount={rows.length + 1}
+          aria-rowcount={p.total + 1}
         >
           <thead>
             <tr role="row">
@@ -380,7 +400,28 @@ export function ListView(p: ViewProps) {
                           <InlineEdit
                             field={f}
                             row={it.row}
-                            update={p.update}
+                            update={
+                              isGoverned(p.model, f)
+                                ? (id, patch) => p.moveState(id, f.name, String(patch[f.name]))
+                                : p.update
+                            }
+                            optionState={
+                              isGoverned(p.model, f)
+                                ? (o) => {
+                                    const m = canMove(
+                                      p.model,
+                                      f,
+                                      it.row[f.name] as string,
+                                      o,
+                                      p.title,
+                                    );
+                                    return {
+                                      disabled: !m.allowed && !m.current,
+                                      title: m.reason || undefined,
+                                    };
+                                  }
+                                : undefined
+                            }
                             done={() => {
                               setEditing(null);
                               focusCell(it.ri, ci + 1);
@@ -417,7 +458,10 @@ export function ListView(p: ViewProps) {
             <tfoot>
               <tr role="row">
                 <td colSpan={span} role="gridcell">
-                  <strong>Total</strong> <span className="hint">({rows.length})</span>
+                  <strong>
+                    {p.pager && p.total > rows.length ? "Total on this page" : "Total"}
+                  </strong>{" "}
+                  <span className="hint">({rows.length})</span>
                 </td>
                 {cols.slice(firstAgg).map((f) => (
                   <td key={f.name} role="gridcell" className="num agg">
@@ -430,6 +474,26 @@ export function ListView(p: ViewProps) {
           )}
         </table>
       </div>
+      {p.pager && (
+        <Pager
+          offset={p.pager.offset}
+          limit={p.pager.limit}
+          total={p.total}
+          busy={p.pager.busy}
+          onOffset={p.pager.setOffset}
+          onSize={p.pager.setLimit}
+          noun={p.title.toLowerCase()}
+        />
+      )}
+      {deleting && (
+        <DeleteDialog
+          model={p.model}
+          noun={p.title.toLowerCase()}
+          records={selectedRecords}
+          onClose={() => setDeleting(false)}
+          onDone={() => setSelected(new Set())}
+        />
+      )}
     </div>
   );
 }
