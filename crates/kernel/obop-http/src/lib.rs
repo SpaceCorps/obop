@@ -18,6 +18,7 @@ use tower_http::services::{ServeDir, ServeFile};
 
 pub mod community;
 pub mod public;
+pub mod website;
 
 type Session = Arc<Mutex<Vault>>;
 
@@ -314,9 +315,9 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         .route("/api/platform/instances/{id}/delete", post(p_delete))
         .with_state(api);
     match static_dir {
-        Some(dir) => r.fallback_service(
-            ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html"))),
-        ),
+        // The control plane serves the marketing site: real 404s, clean-URL redirects and
+        // Markdown for agents (docs/site/SITE.md, "Server requirements").
+        Some(dir) => r.fallback_service(website::service(dir.into())),
         None => r,
     }
 }

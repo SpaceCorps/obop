@@ -20,7 +20,7 @@ COPY design ./design
 COPY docs/MODULES.md ./docs/MODULES.md
 RUN corepack prepare pnpm@12.6.0 --activate \
  && pnpm install --frozen-lockfile \
- && pnpm --filter @obop/backoffice exec vp build \
+ && OBOP_ADMIN_BASE=/admin/ pnpm --filter @obop/backoffice exec vp build \
  && pnpm --filter @obop/platform exec vp build \
  && pnpm --filter @obop/site exec vp build \
  && mkdir -p /site && cp -R web/apps/site/dist/. /site/ && cp -R web/apps/platform/dist /site/app
@@ -41,4 +41,6 @@ COPY --from=web /src/web/apps/backoffice/dist /srv/backoffice
 COPY --from=web /site /srv/site
 EXPOSE 8080
 ENTRYPOINT ["obop-entrypoint"]
-CMD ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/backoffice"]
+# An instance serves its public site and shop at / (a friendly page until content exists) and the
+# private back office at /admin/. Sliplane terminates TLS and forwards the client address.
+CMD ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/backoffice", "--public-site", "--trust-proxy"]

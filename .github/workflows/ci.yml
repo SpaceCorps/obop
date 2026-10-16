@@ -39,7 +39,7 @@ jobs:
       - run: vp install --frozen-lockfile
       - name: Check, lint and type-check every app and the design system
         run: |
-          for app in apps/backoffice apps/platform apps/landing packages/ui; do
+          for app in apps/backoffice apps/platform apps/site packages/ui; do
             (cd web/$app && vp check)
           done
       - name: Unit tests (design system and back office)
@@ -49,7 +49,7 @@ jobs:
           done
       - name: Build every app
         run: |
-          for app in backoffice platform landing; do
+          for app in backoffice platform site; do
             (cd web/apps/$app && vp build)
           done
 

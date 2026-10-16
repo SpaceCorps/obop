@@ -293,9 +293,11 @@ test.describe("crawlers and agents", () => {
     const txt = await (await request.get(`${base()}/llms.txt`)).text();
     expect(txt.startsWith("# obop\n")).toBe(true);
     expect(txt).toMatch(/^> .+/m);
-    const links = [...txt.matchAll(/^- \[[^\]]+\]\((https?:\/\/[^)]+)\): .+$/gm)].map(
-      (m) => new URL(m[1]!).pathname,
-    );
+    // Only the site's own pages: external links (GitHub) are not served here.
+    const links = [...txt.matchAll(/^- \[[^\]]+\]\((https?:\/\/[^)]+)\): .+$/gm)]
+      .map((m) => new URL(m[1]!))
+      .filter((u) => u.host !== "github.com")
+      .map((u) => u.pathname);
     expect(links.length).toBeGreaterThan(40);
     for (const p of links.filter((_, i) => i % 6 === 0)) {
       const r = await request.get(`${base()}${p}`);

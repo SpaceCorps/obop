@@ -20,7 +20,7 @@ The owner's Argon2 hash is copied into the new instance as its first admin (`pla
 cargo run -- platform serve --static web/site --instance-static web/apps/backoffice/dist
 ```
 
-Open http://127.0.0.1:8090 (the landing page; the app is under `/app/`), create an account, create an instance, follow its link, sign in with the same credentials, then open Modules.
+Open http://127.0.0.1:8090 (the website; the sign-up app is under `/app/`), create an account, create an instance, follow its link, sign in with the same credentials, then open Modules.
 
 ## Sliplane
 

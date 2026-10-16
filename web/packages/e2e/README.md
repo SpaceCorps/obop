@@ -10,7 +10,7 @@ From the repository root, build what is under test once, then run the suite:
 ```sh
 cargo build                              # target/debug/obop (or point OBOP_BIN at another binary)
 (cd web/apps/backoffice && vp build)     # web/apps/backoffice/dist
-deploy/build-site.sh                     # web/site: landing page + sign-up app
+deploy/build-site.sh                     # web/site: the website + sign-up app
 cd web/packages/e2e && vp run e2e        # the suite (vp run e2e:ui for Playwright's UI mode)
 ```
 
