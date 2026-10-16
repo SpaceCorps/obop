@@ -1,5 +1,11 @@
+import { fmt, minorToDecimal, tx, t, validDate as validPlainDate } from "@obop/ui";
 import type { FieldMeta } from "./api.ts";
 
+/**
+ * The English, humanised form of a technical name: "expected_revenue_minor" -> "Expected revenue".
+ * It is the message id of the built-in label tables (metaLabels.ts) and the fallback for any name
+ * that has no translation. Use `fieldTitle` and friends from labels.ts to show a name.
+ */
 export function label(name: string): string {
   const s = name
     .replace(/_minor$/, "")
@@ -8,7 +14,7 @@ export function label(name: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** "fleet_vehicle" in module "fleet" reads as "Vehicle". */
+/** "fleet_vehicle" in module "fleet" reads as "Vehicle" (English; labels.ts translates it). */
 export function modelLabel(name: string, moduleId: string): string {
   return label(name.startsWith(`${moduleId}_`) ? name.slice(moduleId.length + 1) : name);
 }
@@ -16,61 +22,70 @@ export function modelLabel(name: string, moduleId: string): string {
 export const isStateName = (n: string) => n === "state" || n === "stage" || n === "status";
 export const isState = (f: FieldMeta) => f.kind === "select" && isStateName(f.name);
 
-/** Words used for select values, "in_service" reads as "In service". */
-export function optionLabel(v: string): string {
-  if (v === "") return "None";
+/** English words for a select value, "in_service" reads as "In service". */
+export function optionKey(v: string): string {
   const s = v.replace(/_/g, " ");
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-const eur = new Intl.NumberFormat(undefined, { style: "currency", currency: "EUR" });
-const plain = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+/** The select value in the active language; unknown values fall back to the English words. */
+export function optionLabel(v: string): string {
+  if (v === "") return t("None");
+  return tx("option", optionKey(v));
+}
 
-/** Money is an integer in minor units, shown as EUR. */
-export function money(minor: unknown): string {
-  const n = Number(minor);
-  return Number.isFinite(n) ? eur.format(n / 100) : "—";
+/** The currency of a record: its own `currency` field when it has a valid one, else the instance's. */
+export function rowCurrency(row: Record<string, unknown> | undefined): string | undefined {
+  const c = row?.currency;
+  return typeof c === "string" && /^[A-Z]{3}$/.test(c) ? c : undefined;
+}
+
+/** Money is an integer in minor units, shown in the record's (or the instance's) currency. */
+export function money(minor: unknown, currency?: string): string {
+  return fmt.money(minor, currency);
 }
 
 export function integer(n: unknown): string {
-  const v = Number(n);
-  return Number.isFinite(v) ? plain.format(v) : "—";
+  return fmt.integer(n);
 }
 
-/** "12.5" typed in major units becomes 1250; `null` when it is not a valid amount. */
-export function parseMoney(s: string): number | null {
-  const t = s.trim().replace(",", ".");
-  if (!/^-?\d+(\.\d{1,2})?$/.test(t)) return null;
-  return Math.round(parseFloat(t) * 100);
+/** "12,50" typed in a German locale becomes 1250; `null` when it is not a valid amount. */
+export function parseMoney(s: string, currency?: string): number | null {
+  return fmt.parseMoney(s, currency)?.minor ?? null;
 }
 
-export function majorString(minor: unknown): string {
+/** The amount as typed in an edit field, in the locale's own decimal mark. */
+export function majorString(minor: unknown, currency?: string): string {
+  return fmt.moneyInput(minor, currency);
+}
+
+/**
+ * A canonical decimal string ("12.50") as integer minor units (1250), by digits, never through
+ * floating point; `null` when it has more decimals than the currency allows or is not a number.
+ */
+export function decimalToMinor(s: string, exponent: number): number | null {
+  const m = /^(-?)(\d+)(?:\.(\d*))?$/.exec(s.trim());
+  if (!m) return null;
+  const frac = m[3] ?? "";
+  if (frac.length > exponent && /[1-9]/.test(frac.slice(exponent))) return null;
+  const n = Number(m[2]! + frac.slice(0, exponent).padEnd(exponent, "0"));
+  return Number.isSafeInteger(n) ? (m[1] ? -n : n) : null;
+}
+
+/** The amount with a dot, always two or more decimals as the currency needs: for CSV and sorting. */
+export function plainMajor(minor: unknown, currency?: string): string {
   const n = Number(minor);
-  if (!Number.isFinite(n)) return "";
-  return (n / 100).toFixed(2);
+  return Number.isFinite(n) ? minorToDecimal(Math.trunc(n), fmt.exponent(currency)) : "";
 }
 
-export function validDate(s: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const [y, m, d] = s.split("-").map(Number) as [number, number, number];
-  const dt = new Date(y, m - 1, d);
-  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
-}
+export const validDate = validPlainDate;
 
 export function formatDate(s: unknown): string {
-  if (typeof s !== "string" || !validDate(s)) return s ? String(s) : "—";
-  const [y, m, d] = s.split("-").map(Number) as [number, number, number];
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return fmt.date(s);
 }
 
 export function monthLabel(key: string): string {
-  const [y, m] = key.split("-").map(Number);
-  if (!y || !m) return "None";
-  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { year: "numeric", month: "long" });
+  return fmt.month(key) || t("None");
 }
 
 export const isoDate = (d: Date) =>
@@ -92,14 +107,15 @@ export function plainText(
   f: FieldMeta,
   v: unknown,
   refText: (model: string, id: string) => string,
+  currency?: string,
 ): string {
   if (isEmpty(v)) return "";
   if (isMasked(v)) return String(v);
   switch (f.kind) {
     case "money":
-      return majorString(v);
+      return plainMajor(v, currency);
     case "bool":
-      return v ? "Yes" : "No";
+      return v ? t("Yes") : t("No");
     case "date":
       return String(v);
     case "ref":

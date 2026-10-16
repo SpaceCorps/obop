@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
+import { msg, t } from "@obop/ui";
 import { call, type Kind, type ModuleMeta } from "./api.ts";
-import { label as labelOf, modelLabel } from "./format.ts";
+import { label as labelOf } from "./format.ts";
+import { appTitle, modelTitle } from "./labels.ts";
+import { serverMessage } from "./serverMessage.ts";
 import { href } from "./route.ts";
 
 type Props = {
@@ -24,14 +27,14 @@ const CLASSES = [
   "financial",
 ];
 const KINDS: [Kind, string][] = [
-  ["text", "Text"],
-  ["longtext", "Long text"],
-  ["number", "Number"],
-  ["money", "Money"],
-  ["date", "Date"],
-  ["bool", "Yes / No"],
-  ["select", "Choice"],
-  ["ref", "Link to a record"],
+  ["text", msg("Text")],
+  ["longtext", msg("Long text")],
+  ["number", msg("Number")],
+  ["money", msg("Money")],
+  ["date", msg("Date")],
+  ["bool", msg("Yes / No")],
+  ["select", msg("Choice")],
+  ["ref", msg("Link to a record")],
 ];
 
 export type DField = {
@@ -138,12 +141,18 @@ export function manifest(
 }
 
 export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
-  const [name, setName] = useState("Fleet check");
-  const [modelName, setModelName] = useState("Inspection");
-  const [fields, setFields] = useState<DField[]>([
-    { ...blank(), name: "title", description: "What was inspected", required: true },
-    { ...blank(), name: "inspector", description: "Who did it", class: "internal", personal: true },
-    { ...blank(), name: "due", description: "When it is due", kind: "date" },
+  const [name, setName] = useState(() => t("Fleet check"));
+  const [modelName, setModelName] = useState(() => t("Inspection"));
+  const [fields, setFields] = useState<DField[]>(() => [
+    { ...blank(), name: "title", description: t("What was inspected"), required: true },
+    {
+      ...blank(),
+      name: "inspector",
+      description: t("Who did it"),
+      class: "internal",
+      personal: true,
+    },
+    { ...blank(), name: "due", description: t("When it is due"), kind: "date" },
   ]);
   const [statuses, setStatuses] = useState("open, done");
   const [error, setError] = useState<string | null>(null);
@@ -154,7 +163,10 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
       modules
         .filter((m) => m.id !== "platform")
         .flatMap((m) =>
-          m.models.map((x) => ({ value: x.name, text: `${m.name}: ${modelLabel(x.name, m.id)}` })),
+          m.models.map((x) => ({
+            value: x.name,
+            text: `${appTitle(m)}: ${modelTitle(x, m.id)}`,
+          })),
         ),
     [modules],
   );
@@ -167,16 +179,17 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
     setFields(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)));
 
   function problem(): string | null {
-    if (!id) return "Give the module a name";
-    if (named.length === 0 && st.length < 2) return "Add at least one field";
+    if (!id) return t("Give the module a name");
+    if (named.length === 0 && st.length < 2) return t("Add at least one field");
     const names = named.map(fieldName);
     const dup = names.find((n, i) => names.indexOf(n) !== i);
-    if (dup) return `Two fields are called ${dup}`;
-    if (names.includes("id")) return "A field cannot be called id";
+    if (dup) return t("Two fields are called {name}", { name: dup });
+    if (names.includes("id")) return t("A field cannot be called id");
     for (const f of named) {
       if (f.kind === "select" && listOf(f.options).length === 0)
-        return `Choices for ${fieldName(f)} need at least one option`;
-      if (f.kind === "ref" && !f.to) return `Pick the record type that ${fieldName(f)} links to`;
+        return t("Choices for {name} need at least one option", { name: fieldName(f) });
+      if (f.kind === "ref" && !f.to)
+        return t("Pick the record type that {name} links to", { name: fieldName(f) });
     }
     return null;
   }
@@ -185,21 +198,22 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
     <div className="two">
       <div className="stack">
         <p className="hint">
-          Describe a model and install it as a module. It gets the API, agent tools, permissions and
-          privacy rules like every other app.{" "}
+          {t(
+            "Describe a model and install it as a module. It gets the API, agent tools, permissions and privacy rules like every other app.",
+          )}{" "}
           <a className="reflink" href={href({ app: "customize", model: "guide", tab: "guide" })}>
-            How to write a custom module?
+            {t("How to write a custom module?")}
           </a>
         </p>
         <label className="field">
-          <span className="flabel">Module name</span>
+          <span className="flabel">{t("Module name")}</span>
           <input value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
-          <span className="flabel">Record type</span>
+          <span className="flabel">{t("Record type")}</span>
           <input value={modelName} onChange={(e) => setModelName(e.target.value)} />
         </label>
-        <h3>Fields</h3>
+        <h3>{t("Fields")}</h3>
         <ul className="rows">
           {fields.map((f, i) => (
             <li key={i} className="row wrap fieldrow">
@@ -207,24 +221,24 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                 <input
                   value={f.name}
                   onChange={(e) => upd(i, { name: e.target.value })}
-                  placeholder="name"
-                  aria-label="Field name"
+                  placeholder={t("name")}
+                  aria-label={t("Field name")}
                 />
                 <select
                   value={f.kind}
                   onChange={(e) => upd(i, { kind: e.target.value as Kind })}
-                  aria-label="Field kind"
+                  aria-label={t("Field kind")}
                 >
                   {KINDS.map(([k, l]) => (
                     <option key={k} value={k}>
-                      {l}
+                      {t(l)}
                     </option>
                   ))}
                 </select>
                 <button
                   className="icon-btn"
                   onClick={() => setFields(fields.filter((_, j) => j !== i))}
-                  aria-label="Remove field"
+                  aria-label={t("Remove field")}
                 >
                   ×
                 </button>
@@ -233,20 +247,20 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                 <input
                   value={f.options}
                   onChange={(e) => upd(i, { options: e.target.value })}
-                  placeholder="options, comma separated"
-                  aria-label="Options"
+                  placeholder={t("options, comma separated")}
+                  aria-label={t("Options")}
                 />
               )}
               {f.kind === "ref" && (
                 <select
                   value={f.to}
                   onChange={(e) => upd(i, { to: e.target.value })}
-                  aria-label="Target model"
+                  aria-label={t("Target model")}
                 >
-                  <option value="">Links to…</option>
-                  {targets.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.text}
+                  <option value="">{t("Links to…")}</option>
+                  {targets.map((x) => (
+                    <option key={x.value} value={x.value}>
+                      {x.text}
                     </option>
                   ))}
                 </select>
@@ -255,13 +269,13 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                 <input
                   value={f.description}
                   onChange={(e) => upd(i, { description: e.target.value })}
-                  placeholder="description"
-                  aria-label="Field description"
+                  placeholder={t("description")}
+                  aria-label={t("Field description")}
                 />
                 <select
                   value={f.class}
                   onChange={(e) => upd(i, { class: e.target.value })}
-                  aria-label="Data class"
+                  aria-label={t("Data class")}
                 >
                   {CLASSES.map((c) => (
                     <option key={c}>{c}</option>
@@ -275,7 +289,7 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                     checked={f.required}
                     onChange={(e) => upd(i, { required: e.target.checked })}
                   />
-                  Required
+                  {t("Required")}
                 </label>
                 <label className="check">
                   <input
@@ -283,27 +297,29 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                     checked={f.personal}
                     onChange={(e) => upd(i, { personal: e.target.checked })}
                   />
-                  Personal data
+                  {t("Personal data")}
                 </label>
                 {fieldName(f) !== slug(f.name) && (
-                  <span className="hint">stored as {fieldName(f)}</span>
+                  <span className="hint">{t("stored as {name}", { name: fieldName(f) })}</span>
                 )}
               </div>
             </li>
           ))}
         </ul>
         <button className="btn" onClick={() => setFields([...fields, blank()])}>
-          Add field
+          {t("Add field")}
         </button>
         <label className="field">
-          <span className="flabel">Status field (optional, statuses comma separated)</span>
+          <span className="flabel">{t("Status field (optional, statuses comma separated)")}</span>
           <input
             value={statuses}
             onChange={(e) => setStatuses(e.target.value)}
-            placeholder="open, in progress, done"
+            placeholder={t("open, in progress, done")}
           />
           <span className="hint">
-            Adds a choice field called state, one action per step and a status bar on the form.
+            {t(
+              "Adds a choice field called state, one action per step and a status bar on the form.",
+            )}
           </span>
         </label>
         {error && (
@@ -320,13 +336,18 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
               const r = await call(token, "module.install", { manifest: text });
               if (r.kind === "ok") {
                 setError(null);
-                notify(`Installed ${name}`);
+                notify(t("Installed {name}", { name }));
                 onModulesChanged();
                 location.hash = href({ app: id });
-              } else setError(r.kind === "error" ? r.message : "Waiting for a human to approve");
+              } else
+                setError(
+                  r.kind === "error"
+                    ? serverMessage(r.message)
+                    : t("Waiting for a human to approve"),
+                );
             }}
           >
-            Create and install
+            {t("Create and install")}
           </button>
         </div>
       </div>

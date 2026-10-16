@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FieldMeta, Row } from "../api.ts";
 import { fromEdit, toEdit, type Edit } from "../edit.ts";
 import { FieldInput } from "../fields.tsx";
+import { rowCurrency } from "../format.ts";
 
 /** A cell turned into an input: Enter saves, Escape cancels, a select or switch saves when changed. */
 export function InlineEdit(props: {
@@ -12,14 +13,15 @@ export function InlineEdit(props: {
   optionState?: (option: string) => { disabled: boolean; title?: string };
 }) {
   const { field: f, row } = props;
-  const [value, setValue] = useState<Edit>(() => toEdit(f, row[f.name]));
+  const currency = rowCurrency(row);
+  const [value, setValue] = useState<Edit>(() => toEdit(f, row[f.name], currency));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function commit(v: Edit) {
-    const r = fromEdit(f, v);
+    const r = fromEdit(f, v, currency);
     if ("error" in r) return setError(r.error);
-    if (toEdit(f, row[f.name]) === v) return props.done();
+    if (toEdit(f, row[f.name], currency) === v) return props.done();
     setBusy(true);
     const err = await props.update(row.id, { [f.name]: r.value });
     setBusy(false);
@@ -40,6 +42,7 @@ export function InlineEdit(props: {
         value={value}
         autoFocus
         compact
+        currency={currency}
         optionState={props.optionState}
         invalid={!!error}
         readOnly={busy}

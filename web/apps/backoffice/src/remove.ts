@@ -1,3 +1,4 @@
+import { getLang, t } from "@obop/ui";
 import type { Reply } from "./api.ts";
 
 /** Who still points at a record: `sale_order (1): id4`. At most five ids are named per model. */
@@ -60,7 +61,7 @@ export async function deleteRecords(
   return out;
 }
 
-/** "lead" to "leads", "party" to "parties". */
+/** "lead" to "leads", "party" to "parties" (English only; see `nounFor`). */
 export function plural(noun: string, n: number): string {
   if (n === 1) return noun;
   if (/[^aeiou]y$/.test(noun)) return `${noun.slice(0, -1)}ies`;
@@ -68,15 +69,29 @@ export function plural(noun: string, n: number): string {
   return `${noun}s`;
 }
 
+/**
+ * The word for `n` records in a sentence. English inflects the model's own noun ("2 parties");
+ * other languages cannot be derived from a singular, so they say "record(s)" in the form the
+ * number needs (Polish and Finnish have different forms for 1, 2-4 and 5 or more).
+ */
+export function nounFor(noun: string, n: number): string {
+  if (getLang() === "en") return plural(noun, n);
+  return t("{count, plural, one {record} other {records}}", { count: n });
+}
+
 /** The sentence a toast says about a batch of results. */
 export function summarize(results: DeleteResult[], noun: string): string {
   const n = (s: DeleteResult["status"]) => results.filter((r) => r.status === s).length;
-  const word = (k: number) => plural(noun, k);
   const parts: string[] = [];
-  if (n("deleted")) parts.push(`${n("deleted")} ${word(n("deleted"))} deleted`);
+  if (n("deleted"))
+    parts.push(
+      t("{count} {noun} deleted", { count: n("deleted"), noun: nounFor(noun, n("deleted")) }),
+    );
   if (n("approval"))
-    parts.push(`${n("approval")} waiting for a human to approve (nothing deleted yet)`);
-  if (n("referenced")) parts.push(`${n("referenced")} still in use`);
-  if (n("failed")) parts.push(`${n("failed")} failed`);
+    parts.push(
+      t("{count} waiting for a human to approve (nothing deleted yet)", { count: n("approval") }),
+    );
+  if (n("referenced")) parts.push(t("{count} still in use", { count: n("referenced") }));
+  if (n("failed")) parts.push(t("{count} failed", { count: n("failed") }));
   return parts.join(", ");
 }

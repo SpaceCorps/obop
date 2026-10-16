@@ -1,4 +1,5 @@
 import { accentVars, hexToOklch } from "./colors.ts";
+import { msg } from "./i18n/store.ts";
 
 export type ThemeMode = "system" | "light" | "dark";
 export type ThemeDensity = "comfortable" | "compact";
@@ -12,13 +13,13 @@ export type ThemeSettings = {
 
 /** Preset accents offered in the theme picker. The default is the first. */
 export const ACCENTS = [
-  { name: "Violet", value: "#6d3fd0" },
-  { name: "Indigo", value: "#3b5bdb" },
-  { name: "Teal", value: "#0b8a8f" },
-  { name: "Green", value: "#2b8a3e" },
-  { name: "Amber", value: "#d9730d" },
-  { name: "Rose", value: "#d6336c" },
-  { name: "Slate", value: "#495670" },
+  { name: msg("Violet"), value: "#6d3fd0" },
+  { name: msg("Indigo"), value: "#3b5bdb" },
+  { name: msg("Teal"), value: "#0b8a8f" },
+  { name: msg("Green"), value: "#2b8a3e" },
+  { name: msg("Amber"), value: "#d9730d" },
+  { name: msg("Rose"), value: "#d6336c" },
+  { name: msg("Slate"), value: "#495670" },
 ];
 
 export const DEFAULT_THEME: ThemeSettings = {

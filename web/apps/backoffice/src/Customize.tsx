@@ -1,5 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useId, useState } from "react";
 import { call, saveSettings, type ModuleMeta, type Settings, type Theme } from "./api.ts";
+import { appTitle } from "./labels.ts";
+import { serverMessage } from "./serverMessage.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
 import { BuildTab } from "./ModuleBuilder.tsx";
 import { href } from "./route.ts";
@@ -19,11 +21,20 @@ import {
   Icon,
   Input,
   Notice,
+  LanguageSelect,
+  RegionSelect,
   Segmented,
+  Select,
   Skeleton,
   Switch,
   Tabs,
+  fmt,
+  isPseudo,
+  msg,
   panelId,
+  setInstanceDefaults,
+  t,
+  useI18n,
 } from "@obop/ui";
 
 const GuidePage = lazy(() => import("./Guide.tsx").then((m) => ({ default: m.Guide })));
@@ -52,37 +63,37 @@ type Props = {
 };
 
 const TABS = [
-  { id: "theme", label: "Theme", icon: "sun" },
-  { id: "apps", label: "Apps", icon: "grid" },
-  { id: "modules", label: "Modules", icon: "plug" },
-  { id: "build", label: "Build a module", icon: "edit" },
-  { id: "brand", label: "Brand book", icon: "sparkle" },
-  { id: "guide", label: "Guide", icon: "help" },
+  { id: "theme", label: msg("Theme"), icon: "sun" },
+  { id: "apps", label: msg("Apps"), icon: "grid" },
+  { id: "modules", label: msg("Modules"), icon: "plug" },
+  { id: "build", label: msg("Build a module"), icon: "edit" },
+  { id: "brand", label: msg("Brand book"), icon: "sparkle" },
+  { id: "guide", label: msg("Guide"), icon: "help" },
 ] as const;
 
 export function Customize(p: Props) {
   // Everyone gets their own theme and the read-only brand book; the rest changes the instance.
   const tabs = TABS.filter(
-    (t) => p.isAdmin || t.id === "theme" || t.id === "brand" || t.id === "guide",
+    (x) => p.isAdmin || x.id === "theme" || x.id === "brand" || x.id === "guide",
   );
-  const tab = tabs.some((t) => t.id === p.tab) ? p.tab : "theme";
-  const current = tabs.find((t) => t.id === tab)!;
+  const tab = tabs.some((x) => x.id === p.tab) ? p.tab : "theme";
+  const current = tabs.find((x) => x.id === tab)!;
   return (
-    <section className="main panel customize" aria-label="Customize">
+    <section className="main panel customize" aria-label={t("Customize")}>
       <div className="controlpanel">
         <div className="cp-top">
           <div className="crumbs">
-            <span>Customize</span>
+            <span>{t("Customize")}</span>
             <Icon name="chevron-right" size={12} />
-            <strong>{current.label}</strong>
+            <strong>{t(current.label)}</strong>
           </div>
         </div>
         <Tabs
-          label="Customize"
+          label={t("Customize")}
           idPrefix="cz"
           value={tab as (typeof TABS)[number]["id"]}
           onChange={(id) => p.go(id)}
-          tabs={tabs.map((t) => ({ id: t.id, label: t.label, icon: t.icon }))}
+          tabs={tabs.map((x) => ({ id: x.id, label: t(x.label), icon: x.icon }))}
         />
       </div>
       <div
@@ -110,7 +121,93 @@ export function Customize(p: Props) {
   );
 }
 
-function ThemeTab({ settings, isAdmin, token, onSettings, notify, go }: Props) {
+const CURRENCIES = [
+  "EUR",
+  "USD",
+  "GBP",
+  "CHF",
+  "PLN",
+  "SEK",
+  "DKK",
+  "NOK",
+  "CZK",
+  "HUF",
+  "CAD",
+  "AUD",
+  "JPY",
+];
+
+function LanguageSection({ settings, isAdmin, token, onSettings, notify }: Props) {
+  const i18n = useI18n();
+  const id = useId();
+  const [currency, setCurrency] = useState(settings.currency ?? "EUR");
+  const names = new Intl.DisplayNames([isPseudo(i18n.lang) ? "en" : i18n.lang], {
+    type: "currency",
+  });
+  return (
+    <section className="stack" aria-labelledby={`${id}-h`}>
+      <h3 id={`${id}-h`} className="overline">
+        {t("Language & region")}
+      </h3>
+      <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
+      <RegionSelect
+        value={i18n.region}
+        onChange={i18n.setRegion}
+        hint={t("Numbers, dates and money, independent of the language.")}
+      />
+      <p className="hint" aria-live="polite">
+        {t("Example: {number} · {date} · {money}", {
+          number: fmt.number(1234567.89),
+          date: fmt.date("2026-03-05"),
+          money: fmt.money(123450),
+        })}
+      </p>
+      {isAdmin && (
+        <Select
+          label={t("Currency of this instance")}
+          hint={t("Used for amounts unless a record has a currency of its own.")}
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value)}
+        >
+          {CURRENCIES.map((c) => (
+            <option key={c} value={c}>
+              {c} · {names.of(c)}
+            </option>
+          ))}
+        </Select>
+      )}
+      <div className="actionrow">
+        {i18n.personal && (
+          <Button variant="ghost" onClick={() => void i18n.resetLanguage()}>
+            {t("Use the instance default")}
+          </Button>
+        )}
+        {isAdmin && (
+          <Button
+            onClick={async () => {
+              const next: Settings = {
+                ...settings,
+                language: isPseudo(i18n.lang) ? settings.language : i18n.lang,
+                currency,
+              };
+              const r = await saveSettings(token, next);
+              if (r.kind === "ok") {
+                onSettings(next);
+                await setInstanceDefaults({ language: next.language, currency });
+                notify(t("Set as the default for everyone"));
+              } else notify(t("Could not save"), "error");
+            }}
+          >
+            {t("Set instance default")}
+          </Button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ThemeTab(props: Props) {
+  const { settings, isAdmin, token, onSettings, notify, go } = props;
   const [theme, setTheme] = useState(() => resolveTheme(settings.theme));
   const colorId = useId();
   const set = (patch: Theme) => {
@@ -123,7 +220,7 @@ function ThemeTab({ settings, isAdmin, token, onSettings, notify, go }: Props) {
       <div className="stack">
         <section className="stack" aria-labelledby={`${colorId}-h`}>
           <h3 id={`${colorId}-h`} className="overline">
-            Colour
+            {t("Colour")}
           </h3>
           <div className="swatches">
             {ACCENTS.map((a) => (
@@ -131,63 +228,67 @@ function ThemeTab({ settings, isAdmin, token, onSettings, notify, go }: Props) {
                 key={a.value}
                 className="swatch"
                 style={{ background: a.value }}
-                aria-label={a.name}
-                title={a.name}
+                aria-label={t(a.name)}
+                title={t(a.name)}
                 aria-pressed={theme.accent.toLowerCase() === a.value}
                 onClick={() => set({ accent: a.value })}
               />
             ))}
-            <label className="swatch custom" title="Custom colour">
+            <label className="swatch custom" title={t("Custom colour")}>
               <input
                 type="color"
                 value={theme.accent}
                 onChange={(e) => set({ accent: e.target.value })}
-                aria-label="Custom colour"
+                aria-label={t("Custom colour")}
               />
             </label>
           </div>
         </section>
         <section className="stack">
-          <h3 className="overline">Mode</h3>
+          <h3 className="overline">{t("Mode")}</h3>
           <Segmented
-            label="Mode"
+            label={t("Mode")}
             value={theme.mode}
             onChange={(mode) => set({ mode })}
             options={[
-              { value: "system", label: "System", icon: "settings" },
-              { value: "light", label: "Light", icon: "sun" },
-              { value: "dark", label: "Dark", icon: "moon" },
+              { value: "system", label: t("System"), icon: "settings" },
+              { value: "light", label: t("Light"), icon: "sun" },
+              { value: "dark", label: t("Dark"), icon: "moon" },
             ]}
           />
         </section>
         <section className="stack">
-          <h3 className="overline">Density</h3>
+          <h3 className="overline">{t("Density")}</h3>
           <Segmented
-            label="Density"
+            label={t("Density")}
             value={theme.density}
             onChange={(density) => set({ density })}
             options={[
-              { value: "comfortable", label: "Comfortable" },
-              { value: "compact", label: "Compact" },
+              { value: "comfortable", label: t("Comfortable") },
+              { value: "compact", label: t("Compact") },
             ]}
           />
         </section>
         <section className="stack">
-          <h3 className="overline">Corners</h3>
+          <h3 className="overline">{t("Corners")}</h3>
           <Segmented
-            label="Corners"
+            label={t("Corners")}
             value={theme.radius}
             onChange={(radius) => set({ radius })}
             options={[
-              { value: "sharp", label: "Sharp" },
-              { value: "soft", label: "Soft" },
-              { value: "round", label: "Round" },
+              { value: "sharp", label: t("Sharp") },
+              { value: "soft", label: t("Soft") },
+              { value: "round", label: t("Round") },
             ]}
           />
         </section>
+        <LanguageSection {...props} />
         <div className="actionrow">
-          <Button variant="primary" onClick={() => (rememberTheme(theme), notify("Saved for you"))}>
-            Save for me
+          <Button
+            variant="primary"
+            onClick={() => (rememberTheme(theme), notify(t("Saved for you")))}
+          >
+            {t("Save for me")}
           </Button>
           {isAdmin && (
             <Button
@@ -197,11 +298,11 @@ function ThemeTab({ settings, isAdmin, token, onSettings, notify, go }: Props) {
                 if (r.kind === "ok") {
                   onSettings(next);
                   rememberTheme(null);
-                  notify("Set as the default for everyone");
-                } else notify("Could not save", "error");
+                  notify(t("Set as the default for everyone"));
+                } else notify(t("Could not save"), "error");
               }}
             >
-              Set for everyone
+              {t("Set for everyone")}
             </Button>
           )}
           {hasPersonalTheme() && (
@@ -209,19 +310,19 @@ function ThemeTab({ settings, isAdmin, token, onSettings, notify, go }: Props) {
               variant="ghost"
               onClick={() => {
                 rememberTheme(null);
-                const t = resolveTheme(settings.theme);
-                setTheme(t);
-                applyTheme(t);
-                notify("Back to the instance default");
+                const next = resolveTheme(settings.theme);
+                setTheme(next);
+                applyTheme(next);
+                notify(t("Back to the instance default"));
               }}
             >
-              Reset mine
+              {t("Reset mine")}
             </Button>
           )}
         </div>
       </div>
       <div className="stack">
-        <div className="preview panel" aria-label="Preview">
+        <div className="preview panel" aria-label={t("Preview")}>
           <div className="mini-top">
             <span className="dot" />
             <span className="bar" />
@@ -236,31 +337,32 @@ function ThemeTab({ settings, isAdmin, token, onSettings, notify, go }: Props) {
             </div>
             <div className="mini-body">
               <div className="mini-card">
-                <b>Preview</b>
-                <Badge tone="accent">open</Badge>
+                <b>{t("Preview")}</b>
+                <Badge tone="accent">{t("open")}</Badge>
                 <Button variant="primary" size="sm">
-                  Primary
+                  {t("Primary")}
                 </Button>
               </div>
               <div className="mini-card">
-                <b>Another card</b>
-                <Button size="sm">Secondary</Button>
+                <b>{t("Another card")}</b>
+                <Button size="sm">{t("Secondary")}</Button>
               </div>
               <div className="mini-card">
-                <Chip tone="accent">Filter</Chip>
-                <Switch label="Switch" defaultChecked />
+                <Chip tone="accent">{t("Filter")}</Chip>
+                <Switch label={t("Switch")} defaultChecked />
               </div>
             </div>
           </div>
         </div>
         <ContrastReport accent={theme.accent} />
-        <Notice tone="info" title="Looking for the rules?">
-          The Brand book shows every colour, type size, icon and component in the theme you just
-          picked.
+        <Notice tone="info" title={t("Looking for the rules?")}>
+          {t(
+            "The Brand book shows every colour, type size, icon and component in the theme you just picked.",
+          )}
         </Notice>
         <div>
           <Button variant="ghost" iconEnd="arrow-right" onClick={() => go("brand")}>
-            Open the Brand book
+            {t("Open the Brand book")}
           </Button>
         </div>
       </div>
@@ -276,7 +378,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
     const s = { ...settings, apps: next };
     const r = await saveSettings(token, s);
     if (r.kind === "ok") onSettings(s);
-    else notify("Could not save", "error");
+    else notify(t("Could not save"), "error");
   };
   const move = (i: number, d: number) => {
     const ids = real.map((a) => a.id);
@@ -287,12 +389,14 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
   };
   if (!isAdmin)
     return (
-      <Notice tone="info">Only an administrator can change the app launcher for everyone.</Notice>
+      <Notice tone="info">
+        {t("Only an administrator can change the app launcher for everyone.")}
+      </Notice>
     );
   return (
     <div className="stack">
       <p className="hint">
-        Order, rename, recolour or hide the apps everyone sees in the launcher.
+        {t("Order, rename, recolour or hide the apps everyone sees in the launcher.")}
       </p>
       <ul className="rows">
         {real.map((a, i) => (
@@ -300,7 +404,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
             <AppIcon app={a} size={36} />
             <input
               defaultValue={a.name}
-              aria-label={`Name of ${a.name}`}
+              aria-label={t("Name of {name}", { name: a.name })}
               onBlur={(e) =>
                 e.target.value !== a.name &&
                 void save({ ...layout, names: { ...layout.names, [a.id]: e.target.value } })
@@ -309,7 +413,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
             <input
               type="color"
               value={a.color.startsWith("#") ? a.color : "#6d3fd0"}
-              aria-label={`Colour of ${a.name}`}
+              aria-label={t("Colour of {name}", { name: a.name })}
               onChange={(e) =>
                 void save({ ...layout, colors: { ...layout.colors, [a.id]: e.target.value } })
               }
@@ -327,7 +431,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
                   })
                 }
               />
-              Shown
+              {t("Shown")}
             </label>
             <span className="grow" />
             <Button
@@ -336,7 +440,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
               icon="arrow-up"
               onClick={() => move(i, -1)}
               disabled={i === 0}
-              aria-label={`Move ${a.name} up`}
+              aria-label={t("Move {name} up", { name: a.name })}
             />
             <Button
               variant="ghost"
@@ -344,13 +448,13 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
               icon="arrow-down"
               onClick={() => move(i, 1)}
               disabled={i === real.length - 1}
-              aria-label={`Move ${a.name} down`}
+              aria-label={t("Move {name} down", { name: a.name })}
             />
           </li>
         ))}
       </ul>
       <div>
-        <Button onClick={() => save({})}>Reset the launcher</Button>
+        <Button onClick={() => save({})}>{t("Reset the launcher")}</Button>
       </div>
     </div>
   );
@@ -373,7 +477,11 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
   async function act(id: string, body: object, done: string) {
     const r = await call(token, id, body);
     notify(
-      r.kind === "ok" ? done : r.kind === "error" ? r.message : "Waiting for a human to approve",
+      r.kind === "ok"
+        ? done
+        : r.kind === "error"
+          ? serverMessage(r.message)
+          : t("Waiting for a human to approve"),
       r.kind === "error" ? "error" : "ok",
     );
     await refresh();
@@ -383,13 +491,15 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
   return (
     <div className="stack gap-lg">
       <p className="hint">
-        A module adds an app: models, fields, permissions and workflow steps, in one text file.{" "}
+        {t(
+          "A module adds an app: models, fields, permissions and workflow steps, in one text file.",
+        )}{" "}
         <a className="reflink" href={GUIDE_LINK}>
-          How to write a custom module?
+          {t("How to write a custom module?")}
         </a>
       </p>
       <section className="stack">
-        <h3 className="overline">Marketplace</h3>
+        <h3 className="overline">{t("Marketplace")}</h3>
         <div className="cards3">
           {market.map((p) => (
             <article key={p.id} className="card">
@@ -398,7 +508,7 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
                 size={40}
               />
               <div>
-                <strong>{p.name}</strong>
+                <strong>{appTitle(p)}</strong>
                 <p className="hint">{p.description}</p>
               </div>
               <Button
@@ -407,21 +517,25 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
                 disabled={have.has(p.id)}
                 icon={have.has(p.id) ? "check" : undefined}
                 onClick={() =>
-                  act("marketplace_listing.install", { id: p.id }, `Installed ${p.name}`)
+                  act(
+                    "marketplace_listing.install",
+                    { id: p.id },
+                    t("Installed {name}", { name: appTitle(p) }),
+                  )
                 }
               >
-                {have.has(p.id) ? "Installed" : "Install"}
+                {have.has(p.id) ? t("Installed") : t("Install")}
               </Button>
             </article>
           ))}
         </div>
       </section>
       <section className="stack">
-        <h3 className="overline">Installed</h3>
+        <h3 className="overline">{t("Installed")}</h3>
         <ul className="rows">
           {installed.map((p) => (
             <li key={p.id} className="row">
-              <strong>{p.name}</strong>
+              <strong>{appTitle(p)}</strong>
               <span className="hint">{p.description}</span>
               <span className="grow" />
               <Chip>{p.source}</Chip>
@@ -429,9 +543,15 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
               {p.source !== "builtin" && (
                 <Button
                   size="sm"
-                  onClick={() => act("module.uninstall", { id: p.id }, `Removed ${p.name}`)}
+                  onClick={() =>
+                    act(
+                      "module.uninstall",
+                      { id: p.id },
+                      t("Removed {name}", { name: appTitle(p) }),
+                    )
+                  }
                 >
-                  Uninstall
+                  {t("Uninstall")}
                 </Button>
               )}
             </li>
@@ -439,22 +559,23 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
         </ul>
       </section>
       <section className="stack">
-        <h3 className="overline">Upload your own</h3>
+        <h3 className="overline">{t("Upload your own")}</h3>
         <p className="hint">
-          An obop.toml file: models, fields with data classes, permission groups and actions. Or
-          build one in the next tab.
+          {t(
+            "An obop.toml file: models, fields with data classes, permission groups and actions. Or build one in the next tab.",
+          )}
         </p>
         <Input
           type="file"
           accept=".toml"
-          aria-label="Upload an obop.toml file"
+          aria-label={t("Upload an obop.toml file")}
           onChange={async (e) => {
             const file = e.target.files?.[0];
             if (file)
               await act(
                 "module.install",
                 { manifest: await file.text() },
-                `Installed ${file.name}`,
+                t("Installed {name}", { name: file.name }),
               );
             e.target.value = "";
           }}

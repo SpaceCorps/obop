@@ -1,8 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { fmt, getCurrency, inSentence, t } from "@obop/ui";
 import type { FieldMeta, Row } from "./api.ts";
 import { useData, useRows } from "./data.tsx";
 import type { Edit } from "./edit.ts";
 import { formatDate, integer, isEmpty, isMasked, money, optionLabel } from "./format.ts";
+import { fieldTitle, modelTitle } from "./labels.ts";
 import { Badge, Icon } from "./ui.tsx";
 
 /** A value as it reads in a list, card or calendar chip. Principal-masked tokens keep their look. */
@@ -10,16 +12,19 @@ export function Cell({
   field,
   value,
   link = true,
+  currency,
 }: {
   field: FieldMeta;
   value: unknown;
   link?: boolean;
+  /** The record's currency when it has one of its own. */
+  currency?: string;
 }) {
   if (isEmpty(value)) return <span className="dim">—</span>;
   if (isMasked(value)) return <span className="masked">{String(value)}</span>;
   switch (field.kind) {
     case "money":
-      return <span className="amount">{money(value)}</span>;
+      return <span className="amount">{money(value, currency)}</span>;
     case "number":
       return <span className="amount">{integer(value)}</span>;
     case "date":
@@ -27,10 +32,10 @@ export function Cell({
     case "bool":
       return value ? (
         <span className="yes">
-          <Icon name="check" size={14} /> Yes
+          <Icon name="check" size={14} /> {t("Yes")}
         </span>
       ) : (
-        <span className="dim">No</span>
+        <span className="dim">{t("No")}</span>
       );
     case "select":
       return <Badge field={field} value={String(value)} />;
@@ -38,6 +43,23 @@ export function Cell({
       return <RefLabel field={field} id={String(value)} link={link} />;
     default:
       return <>{typeof value === "object" ? JSON.stringify(value) : String(value)}</>;
+  }
+}
+
+/** "€" for EUR, "$" for USD, "zł" for PLN in the active format locale. */
+function currencySymbol(currency: string): string {
+  try {
+    return (
+      new Intl.NumberFormat(fmt.locale, {
+        style: "currency",
+        currency,
+        currencyDisplay: "narrowSymbol",
+      })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value ?? currency
+    );
+  } catch {
+    return currency;
   }
 }
 
@@ -60,7 +82,7 @@ export function RefLabel({
     <a
       className="reflink"
       href={target}
-      title={`Open ${text}`}
+      title={t("Open {name}", { name: text })}
       onClick={(e) => e.stopPropagation()}
     >
       {text}
@@ -79,6 +101,8 @@ type InputProps = {
   describedBy?: string;
   onKeyDown?: (e: KeyboardEvent) => void;
   compact?: boolean;
+  /** The currency of a money field: the record's own, else the instance's. */
+  currency?: string;
   /** For a select: options that cannot be chosen now, with the reason (governed fields). */
   optionState?: (option: string) => { disabled: boolean; title?: string };
 };
@@ -106,7 +130,7 @@ export function FieldInput(p: InputProps) {
             onChange={(e) => onChange(e.target.checked)}
           />
           <span className="track" aria-hidden="true" />
-          <span>{value === true ? "Yes" : "No"}</span>
+          <span>{value === true ? t("Yes") : t("No")}</span>
         </label>
       );
     case "select":
@@ -140,22 +164,37 @@ export function FieldInput(p: InputProps) {
       );
     case "ref":
       return <RefPicker {...p} />;
-    case "money":
+    case "money": {
+      const cur = p.currency ?? getCurrency();
+      const read = String(value).trim() ? fmt.parseMoney(String(value), cur) : null;
+      const hintId = `${p.id ?? "money"}-read`;
       return (
-        <div className="moneyin">
-          <input
-            {...common}
-            type="text"
-            inputMode="decimal"
-            className="num"
-            placeholder="0.00"
-            value={String(value)}
-            readOnly={readOnly}
-            onChange={(e) => onChange(e.target.value)}
-          />
-          <span aria-hidden="true">€</span>
+        <div className="moneyfield">
+          <div className="moneyin">
+            <input
+              {...common}
+              aria-describedby={
+                [p.describedBy, read?.ambiguous ? hintId : ""].filter(Boolean).join(" ") ||
+                undefined
+              }
+              type="text"
+              inputMode="decimal"
+              className="num"
+              placeholder={fmt.moneyInput(0, cur)}
+              value={String(value)}
+              readOnly={readOnly}
+              onChange={(e) => onChange(e.target.value)}
+            />
+            <span aria-hidden="true">{currencySymbol(cur)}</span>
+          </div>
+          {read?.ambiguous && (
+            <small className="hint money-read" id={hintId} role="status">
+              {t("Read as {amount}", { amount: fmt.money(read.minor, cur) })}
+            </small>
+          )}
         </div>
       );
+    }
     case "number":
       return (
         <input
@@ -205,6 +244,8 @@ export function RefPicker({
 }: InputProps) {
   const d = useData();
   const to = field.to ?? "";
+  const target = d.models.get(to);
+  const targetTitle = target ? modelTitle(target.model, target.module.id) : to.replace(/_/g, " ");
   const { rows, loaded } = useRows(to);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -238,7 +279,7 @@ export function RefPicker({
         value={current}
         readOnly={readOnly}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={`${to} id`}
+        placeholder={t("{model} id", { model: to })}
       />
     );
 
@@ -284,7 +325,9 @@ export function RefPicker({
         autoComplete="off"
         readOnly={readOnly}
         value={shown}
-        placeholder={loaded ? `Search ${to.replace(/_/g, " ")}…` : "Loading…"}
+        placeholder={
+          loaded ? t("Search {model}…", { model: inSentence(targetTitle) }) : t("Loading…")
+        }
         onFocus={() => !readOnly && setOpen(true)}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -296,7 +339,7 @@ export function RefPicker({
         <button
           type="button"
           className="icon-btn clear"
-          aria-label={`Clear ${field.name}`}
+          aria-label={t("Clear {field}", { field: fieldTitle(field) })}
           onClick={() => pick("")}
         >
           <Icon name="close" size={12} />
@@ -307,7 +350,7 @@ export function RefPicker({
           id={listId}
           role="listbox"
           className="rp-list panel"
-          aria-label={`${field.name} options`}
+          aria-label={t("{field} options", { field: fieldTitle(field) })}
         >
           {!field.required && !query && (
             <li
@@ -316,7 +359,7 @@ export function RefPicker({
               className="dim"
               onMouseDown={() => pick("")}
             >
-              None
+              {t("None")}
             </li>
           )}
           {options.map((o, i) => (
@@ -334,7 +377,9 @@ export function RefPicker({
               {o.text}
             </li>
           ))}
-          {options.length === 0 && <li className="dim">{loaded ? "No match" : "Loading…"}</li>}
+          {options.length === 0 && (
+            <li className="dim">{loaded ? t("No match") : t("Loading…")}</li>
+          )}
         </ul>
       )}
     </div>

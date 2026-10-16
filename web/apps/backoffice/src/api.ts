@@ -1,6 +1,14 @@
+import { t } from "@obop/ui";
+
+/** Translations the server may add to metadata: language code -> text (D34; absent today). */
+export type Translations = Record<string, string>;
+
 export type Command = {
   id: string;
   description: string;
+  /** Display label per language; falls back to the client table, then the humanised name. */
+  labels?: Translations;
+  descriptions?: Translations;
   needs_approval: boolean;
   /** The select field this action moves (a transition), else null. */
   field?: string | null;
@@ -15,6 +23,8 @@ export type Kind = "text" | "longtext" | "number" | "money" | "date" | "bool" | 
 export type FieldMeta = {
   name: string;
   description: string;
+  labels?: Translations;
+  descriptions?: Translations;
   class: string;
   personal_data: boolean;
   kind: Kind;
@@ -27,6 +37,8 @@ export type FieldMeta = {
 export type ModelMeta = {
   name: string;
   description: string;
+  labels?: Translations;
+  descriptions?: Translations;
   can_create: boolean;
   can_update: boolean;
   /** Whether this principal may delete records of the model (its write group). */
@@ -34,7 +46,13 @@ export type ModelMeta = {
   fields: FieldMeta[];
   actions: Command[];
 };
-export type ModuleMeta = { id: string; name: string; models: ModelMeta[] };
+export type ModuleMeta = {
+  id: string;
+  name: string;
+  labels?: Translations;
+  descriptions?: Translations;
+  models: ModelMeta[];
+};
 
 export type Reply =
   | { kind: "ok"; value: unknown; denied: string[] }
@@ -99,7 +117,7 @@ export async function search(
   }
   return r.kind === "error"
     ? { error: r.message, status: r.status }
-    : { error: "Needs approval", status: 202 };
+    : { error: t("Needs approval"), status: 202 };
 }
 
 /** Rows of a model for the views that need all of them, up to `LOAD_LIMIT`, and the real total. */
@@ -169,4 +187,11 @@ export type AppLayout = {
   names?: Record<string, string>;
   colors?: Record<string, string>;
 };
-export type Settings = { theme?: Theme; apps?: AppLayout };
+export type Settings = {
+  theme?: Theme;
+  apps?: AppLayout;
+  /** Instance default language (a person's own choice wins). */
+  language?: string;
+  /** ISO 4217 code of the instance's currency; a record's own `currency` field wins. */
+  currency?: string;
+};

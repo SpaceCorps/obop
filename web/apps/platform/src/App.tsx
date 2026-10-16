@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppIcon, Badge, Button, ConfirmDialog, Icon, Input, Logo, Notice } from "@obop/ui";
+import {
+  AppIcon,
+  Badge,
+  Button,
+  ConfirmDialog,
+  Icon,
+  Input,
+  LanguageMenu,
+  Logo,
+  Notice,
+  msg,
+  rich,
+  t,
+} from "@obop/ui";
 import { create, list, login, remove, signup, type Instance } from "./api.ts";
+import { clock, phaseText, serverMessage } from "./serverMessage.ts";
 
 function stored(): string {
   try {
@@ -19,7 +33,7 @@ function remember(token: string) {
   }
 }
 
-function Auth({ onToken }: { onToken: (t: string) => void }) {
+function Auth({ onToken }: { onToken: (token: string) => void }) {
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -29,19 +43,20 @@ function Auth({ onToken }: { onToken: (t: string) => void }) {
         <h1 className="auth-logo-lg">
           <Logo variant="full" size={28} title="obop" />
         </h1>
-        <p className="auth-claim">One business, one platform.</p>
+        <p className="auth-claim">{t("One business, one platform.")}</p>
         <ul>
           <li>
-            <Icon name="website" size={18} /> Your own instance, with its own database and address
+            <Icon name="website" size={18} />{" "}
+            {t("Your own instance, with its own database and address")}
           </li>
           <li>
-            <Icon name="shield-check" size={18} /> Personal data masked unless you may see it
+            <Icon name="shield-check" size={18} /> {t("Personal data masked unless you may see it")}
           </li>
           <li>
-            <Icon name="sparkle" size={18} /> Agents that propose, humans that approve
+            <Icon name="sparkle" size={18} /> {t("Agents that propose, humans that approve")}
           </li>
         </ul>
-        <p className="hint">Free while in beta. No card needed.</p>
+        <p className="hint">{t("Free while in beta. No card needed.")}</p>
       </aside>
       <form
         className="auth"
@@ -54,29 +69,38 @@ function Auth({ onToken }: { onToken: (t: string) => void }) {
           const r = await go(String(f.get("email")), String(f.get("password")));
           setBusy(false);
           if (r.ok) onToken(r.value.token);
-          else setError(r.error);
+          else setError(serverMessage(r.error));
         }}
       >
         <h1 className="auth-logo">
           <Logo variant="full" size={30} title="obop" />
         </h1>
         <div className="auth-head">
-          <h2>{mode === "signup" ? "Create your account" : "Sign in"}</h2>
-          <p className="hint">One business, one platform. Sign up and get your own instance.</p>
+          <h2>{mode === "signup" ? t("Create your account") : t("Sign in")}</h2>
+          <p className="hint">
+            {t("One business, one platform. Sign up and get your own instance.")}
+          </p>
         </div>
-        <Input label="Email" name="email" type="email" autoComplete="email" required autoFocus />
         <Input
-          label="Password"
+          label={t("Email")}
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          autoFocus
+        />
+        <Input
+          label={t("Password")}
           name="password"
           type="password"
           autoComplete={mode === "signup" ? "new-password" : "current-password"}
           minLength={12}
           required
-          hint={mode === "signup" ? "At least 12 characters." : undefined}
+          hint={mode === "signup" ? t("At least 12 characters.") : undefined}
         />
         {error && <Notice tone="danger" title={error} />}
         <Button type="submit" variant="primary" size="lg" loading={busy}>
-          {mode === "signup" ? "Create account" : "Sign in"}
+          {mode === "signup" ? t("Create account") : t("Sign in")}
         </Button>
         <Button
           variant="ghost"
@@ -85,14 +109,22 @@ function Auth({ onToken }: { onToken: (t: string) => void }) {
             setMode(mode === "signup" ? "login" : "signup");
           }}
         >
-          {mode === "signup" ? "I already have an account" : "Create an account"}
+          {mode === "signup" ? t("I already have an account") : t("Create an account")}
         </Button>
+        <LanguageMenu align="start" />
       </form>
     </main>
   );
 }
 
-const STEPS = ["Database", "Admin account", "Service", "Build and start", "Address", "Ready"];
+const STEPS = [
+  msg("Database"),
+  msg("Admin account"),
+  msg("Service"),
+  msg("Build and start"),
+  msg("Address"),
+  msg("Ready"),
+];
 
 function stepOf(i: Instance): number {
   if (i.status === "running") return STEPS.length;
@@ -109,15 +141,15 @@ function Progress({ instance }: { instance: Instance }) {
   const started = useRef(Date.now());
   const [, tick] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
   }, []);
   const secs = Math.floor((Date.now() - started.current) / 1000);
-  const elapsed = `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, "0")}s`;
+  const elapsed = clock(String(Math.floor(secs / 60)), String(secs % 60).padStart(2, "0"));
   if (instance.status === "deleting") {
     return (
       <div className="progress" role="status">
-        <span className="spinner" aria-hidden="true" /> {instance.phase || "Deleting"}{" "}
+        <span className="spinner" aria-hidden="true" /> {phaseText(instance.phase || "Deleting")}{" "}
         <span className="hint">({elapsed})</span>
       </div>
     );
@@ -126,8 +158,8 @@ function Progress({ instance }: { instance: Instance }) {
   return (
     <div className="progress" role="status">
       <ol className="steps-live">
-        {STEPS.map((label, n) => (
-          <li key={label} className={n < step ? "done" : n === step ? "now" : ""}>
+        {STEPS.map((step_, n) => (
+          <li key={step_} className={n < step ? "done" : n === step ? "now" : ""}>
             <span className="step-mark" aria-hidden="true">
               {n < step ? (
                 <Icon name="check" size={12} strokeWidth={2.5} />
@@ -135,22 +167,25 @@ function Progress({ instance }: { instance: Instance }) {
                 <span className="spinner" />
               ) : null}
             </span>
-            {label}
+            {t(step_)}
           </li>
         ))}
       </ol>
       <p className="hint">
-        {instance.phase || "Queued"} · {elapsed} elapsed. A first build takes a few minutes.
+        {t("{phase} · {elapsed} elapsed. A first build takes a few minutes.", {
+          phase: phaseText(instance.phase || "Queued"),
+          elapsed,
+        })}
       </p>
     </div>
   );
 }
 
 const STATUS = {
-  running: ["success", "Running"],
-  provisioning: ["info", "Setting up"],
-  failed: ["danger", "Failed"],
-  deleting: ["warning", "Deleting"],
+  running: ["success", msg("Running")],
+  provisioning: ["info", msg("Setting up")],
+  failed: ["danger", msg("Failed")],
+  deleting: ["warning", msg("Deleting")],
 } as const;
 
 export function App() {
@@ -158,9 +193,9 @@ export function App() {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Instance | null>(null);
-  const setToken = useCallback((t: string) => {
-    remember(t);
-    setTokenState(t);
+  const setToken = useCallback((next: string) => {
+    remember(next);
+    setTokenState(next);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -178,8 +213,8 @@ export function App() {
   const busy = instances.some((i) => i.status === "provisioning" || i.status === "deleting");
   useEffect(() => {
     if (!busy) return;
-    const t = setInterval(() => void refresh(), 2000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => void refresh(), 2000);
+    return () => clearInterval(timer);
   }, [busy, refresh]);
 
   if (!token) return <Auth onToken={setToken} />;
@@ -193,22 +228,23 @@ export function App() {
           </a>
         </h1>
         <span className="grow" />
+        <LanguageMenu />
         <Button variant="ghost" icon="log-out" onClick={() => setToken("")}>
-          Sign out
+          {t("Sign out")}
         </Button>
       </header>
       <main className="platform">
         <div className="p-head">
-          <h2>Your instances</h2>
-          <p className="hint">Sign in to an instance with the same email and password.</p>
+          <h2>{t("Your instances")}</h2>
+          <p className="hint">{t("Sign in to an instance with the same email and password.")}</p>
         </div>
         {instances.length === 0 && (
           <div className="p-empty panel">
             <span className="empty-art" aria-hidden="true">
               <Icon name="website" size={26} />
             </span>
-            <p className="p-empty-title">You have no instances yet.</p>
-            <p className="hint">Name one below. It is ready in a few minutes.</p>
+            <p className="p-empty-title">{t("You have no instances yet.")}</p>
+            <p className="hint">{t("Name one below. It is ready in a few minutes.")}</p>
           </div>
         )}
         <ul className="instances">
@@ -222,7 +258,7 @@ export function App() {
                   <div className="inst-text">
                     <div className="inst-title">
                       <strong>{i.name}</strong>
-                      <Badge tone={tone}>{text}</Badge>
+                      <Badge tone={tone}>{t(text)}</Badge>
                     </div>
                     <div className="hint">
                       {i.status === "running" && (
@@ -230,11 +266,12 @@ export function App() {
                           {i.url}
                         </a>
                       )}
-                      {i.status === "failed" && `Failed: ${i.error}`}
+                      {i.status === "failed" &&
+                        t("Failed: {error}", { error: serverMessage(i.error) })}
                     </div>
                   </div>
                   <Button variant="ghost" disabled={working} onClick={() => setToDelete(i)}>
-                    {i.status === "deleting" ? "Deleting…" : "Delete"}
+                    {i.status === "deleting" ? t("Deleting…") : t("Delete")}
                   </Button>
                 </div>
                 {working && <Progress instance={i} />}
@@ -252,29 +289,29 @@ export function App() {
             if (r.ok) {
               setError(null);
               form.reset();
-            } else setError(r.error);
+            } else setError(serverMessage(r.error));
             await refresh();
           }}
         >
           <Input
-            label="New instance"
+            label={t("New instance")}
             name="name"
-            placeholder="Acme Trading"
+            placeholder={t("Acme Trading")}
             required
             minLength={3}
             maxLength={30}
-            hint="3 to 30 characters. It becomes part of the address."
+            hint={t("3 to 30 characters. It becomes part of the address.")}
           />
           <Button type="submit" variant="primary" icon="plus">
-            Create
+            {t("Create")}
           </Button>
         </form>
         {error && <Notice tone="danger" title={error} />}
       </main>
       {toDelete && (
         <ConfirmDialog
-          title="Delete instance?"
-          confirmLabel="Delete instance"
+          title={t("Delete instance?")}
+          confirmLabel={t("Delete instance")}
           onClose={() => setToDelete(null)}
           onConfirm={() => {
             const i = toDelete;
@@ -285,13 +322,17 @@ export function App() {
             );
             void (async () => {
               const r = await remove(token, i.id);
-              if (!r.ok) setError(r.error);
+              if (!r.ok) setError(serverMessage(r.error));
               await refresh();
             })();
           }}
         >
           <p>
-            Delete <strong>{toDelete.name}</strong> and all of its data? This cannot be undone.
+            {rich(
+              "Delete <b>{name}</b> and all of its data? This cannot be undone.",
+              { name: toDelete.name },
+              { b: (c) => <strong>{c}</strong> },
+            )}
           </p>
         </ConfirmDialog>
       )}

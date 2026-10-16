@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LanguageSelect, setInstanceDefaults, t, useI18n } from "@obop/ui";
 import { loadSettings, login, meta, type ModuleMeta, type Settings } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
 import { Customize } from "./Customize.tsx";
 import { DashboardsApp } from "./dashboards/DashboardsApp.tsx";
 import { BOARD, boardHref } from "./dashboards/route.ts";
 import { DataProvider, type Tone } from "./data.tsx";
-import { modelLabel } from "./format.ts";
+import { modelTitle } from "./labels.ts";
+import { serverMessage } from "./serverMessage.ts";
 import { ModelPage } from "./ModelPage.tsx";
 import { href, nav, useRoute } from "./route.ts";
 import {
@@ -50,22 +52,25 @@ function recentApps(): string[] {
 function SignIn({ onDone }: { onDone: (token: string, user: string) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const i18n = useI18n();
   return (
     <main className="signin-wrap">
       <aside className="signin-brand">
         <h1 className="signin-logo-lg">
           <Logo variant="full" size={28} title="obop" />
         </h1>
-        <p className="signin-claim">One business, one platform.</p>
+        <p className="signin-claim">{t("One business, one platform.")}</p>
         <ul>
           <li>
-            <Icon name="users" size={18} /> Every app shares one set of contacts and products
+            <Icon name="users" size={18} /> {t("Every app shares one set of contacts and products")}
           </li>
           <li>
-            <Icon name="shield-check" size={18} /> Personal data is masked unless you may see it
+            <Icon name="shield-check" size={18} />{" "}
+            {t("Personal data is masked unless you may see it")}
           </li>
           <li>
-            <Icon name="sparkle" size={18} /> Agents can do what you can, and ask before they act
+            <Icon name="sparkle" size={18} />{" "}
+            {t("Agents can do what you can, and ask before they act")}
           </li>
         </ul>
       </aside>
@@ -80,19 +85,19 @@ function SignIn({ onDone }: { onDone: (token: string, user: string) => void }) {
           const t = await login(user, String(f.get("password")));
           setBusy(false);
           if (t) onDone(t, user);
-          else setError("Invalid username or password");
+          else setError(serverMessage("invalid username or password"));
         }}
       >
         <h1 className="signin-logo">
           <Logo variant="full" size={30} title="obop" />
         </h1>
         <div className="signin-head">
-          <h2>Sign in</h2>
-          <p className="hint">Sign in to your instance.</p>
+          <h2>{t("Sign in")}</h2>
+          <p className="hint">{t("Sign in to your instance.")}</p>
         </div>
-        <Input label="Username" name="username" autoComplete="username" required autoFocus />
+        <Input label={t("Username")} name="username" autoComplete="username" required autoFocus />
         <Input
-          label="Password"
+          label={t("Password")}
           name="password"
           type="password"
           autoComplete="current-password"
@@ -100,8 +105,9 @@ function SignIn({ onDone }: { onDone: (token: string, user: string) => void }) {
         />
         {error && <Notice tone="danger" title={error} />}
         <Button type="submit" variant="primary" size="lg" loading={busy}>
-          Sign in
+          {t("Sign in")}
         </Button>
+        <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
       </form>
     </main>
   );
@@ -135,6 +141,7 @@ export function App() {
     setModules(m);
     setSettings(s);
     applyTheme(resolveTheme(s.theme));
+    void setInstanceDefaults({ language: s.language, currency: s.currency });
     setReady(true);
   }, [token, signOut]);
 
@@ -161,7 +168,7 @@ export function App() {
     [dismiss],
   );
   const confirm = useCallback(
-    (message: string, confirmLabel = "Discard", cancelLabel = "Keep editing") =>
+    (message: string, confirmLabel = t("Discard"), cancelLabel = t("Keep editing")) =>
       new Promise<boolean>((resolve) =>
         setConfirmReq({
           message,
@@ -176,7 +183,7 @@ export function App() {
     [],
   );
   useEffect(() => {
-    nav.ask = (m) => confirm(m, "Leave and discard", "Keep editing");
+    nav.ask = (m) => confirm(m, t("Leave and discard"), t("Keep editing"));
     return () => {
       nav.ask = null;
     };
@@ -272,7 +279,7 @@ export function App() {
             <nav
               id="app-menu"
               className={`sidebar${menu ? " open" : ""}`}
-              aria-label={`${app.name} menu`}
+              aria-label={t("{app} menu", { app: app.name })}
               onClick={() => setMenu(false)}
             >
               <div className="side-head">
@@ -283,13 +290,13 @@ export function App() {
                 <a
                   href={boardHref(app.id)}
                   aria-current={onBoard ? "page" : undefined}
-                  title="Tiles drawn from your dashboards"
+                  title={t("Tiles drawn from your dashboards")}
                 >
-                  Overview
+                  {t("Overview")}
                 </a>
               )}
               <span className="overline side-label" aria-hidden="true">
-                Records
+                {t("Records")}
               </span>
               {app.module.models.map((m) => (
                 <a
@@ -298,7 +305,7 @@ export function App() {
                   aria-current={!onBoard && model?.name === m.name ? "page" : undefined}
                   title={m.description}
                 >
-                  {modelLabel(m.name, app.module.id)}
+                  {modelTitle(m, app.module.id)}
                 </a>
               ))}
             </nav>
@@ -362,16 +369,16 @@ function Home({ apps }: { apps: ReturnType<typeof buildApps> }) {
     <section className="main panel home">
       <header className="home-head">
         <div>
-          <h1>Your apps</h1>
+          <h1>{t("Your apps")}</h1>
           <p className="hint">
-            Everything shares one database, one set of permissions and one API.
+            {t("Everything shares one database, one set of permissions and one API.")}
           </p>
         </div>
         <div className="searchfield">
           <Icon name="search" size={16} />
           <input
-            placeholder="Filter apps"
-            aria-label="Filter apps"
+            placeholder={t("Filter apps")}
+            aria-label={t("Filter apps")}
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -379,8 +386,8 @@ function Home({ apps }: { apps: ReturnType<typeof buildApps> }) {
       </header>
       <div className="home-body">
         {!q && recent.length > 0 && (
-          <section aria-label="Recently opened">
-            <h2 className="overline">Recently opened</h2>
+          <section aria-label={t("Recently opened")}>
+            <h2 className="overline">{t("Recently opened")}</h2>
             <div className="app-grid small">
               {recent.map((a) => (
                 <a key={a.id} className="app-tile row" href={first(a)}>
@@ -391,8 +398,8 @@ function Home({ apps }: { apps: ReturnType<typeof buildApps> }) {
             </div>
           </section>
         )}
-        <section aria-label="All apps">
-          <h2 className="overline">{q ? "Results" : "All apps"}</h2>
+        <section aria-label={t("All apps")}>
+          <h2 className="overline">{q ? t("Results") : t("All apps")}</h2>
           <div className="app-grid">
             {shown.map((a) => (
               <a key={a.id} className="app-tile card" href={first(a)}>
@@ -404,7 +411,7 @@ function Home({ apps }: { apps: ReturnType<typeof buildApps> }) {
               </a>
             ))}
           </div>
-          {shown.length === 0 && <p className="hint">No app matches.</p>}
+          {shown.length === 0 && <p className="hint">{t("No app matches.")}</p>}
         </section>
       </div>
     </section>

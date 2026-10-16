@@ -1,5 +1,8 @@
+import { inSentence, t } from "@obop/ui";
 import type { Command, FieldMeta, ModelMeta, Reply } from "./api.ts";
-import { isEmpty, label, optionLabel } from "./format.ts";
+import { isEmpty, optionLabel } from "./format.ts";
+import { actionTitle } from "./labels.ts";
+import { serverMessage } from "./serverMessage.ts";
 
 /**
  * Governed workflows (D48). A `select` field is governed when some action moves it. The server
@@ -72,17 +75,20 @@ export function canMove(
       needsApproval: action.needs_approval,
       current: false,
     };
-  const word = noun.toLowerCase();
   return {
     allowed: false,
-    reason: `No action moves a ${word} from ${cur ? optionLabel(cur) : "no state"} to ${optionLabel(to)}`,
+    reason: t("No action moves a {noun} from {from} to {to}", {
+      noun: inSentence(noun),
+      from: cur ? optionLabel(cur) : t("no state"),
+      to: optionLabel(to),
+    }),
     needsApproval: false,
     current: false,
   };
 }
 
 /** The label of an action button: "Mark won". */
-export const actionLabel = (a: Command) => label(a.id.split(".")[1] ?? a.id);
+export const actionLabel = (a: Command) => actionTitle(a);
 
 export type MoveOutcome =
   | { kind: "ok"; row: unknown }
@@ -90,8 +96,17 @@ export type MoveOutcome =
   | { kind: "error"; message: string };
 
 /** Text for the toast of a 202: names the plan and what it would do. */
-export function approvalMessage(what: string, planId: string): string {
-  return `Approval needed: ${what} was proposed as plan ${planId.slice(0, 8)}. Nothing changes until a human approves it.`;
+export function moveApproval(noun: string, to: string, planId: string, action?: Command): string {
+  const vars = { noun: inSentence(noun), state: optionLabel(to), plan: planId.slice(0, 8) };
+  return action
+    ? t(
+        "Approval needed: moving {noun} to {state} ({action}) was proposed as plan {plan}. Nothing changes until a human approves it.",
+        { ...vars, action: actionTitle(action) },
+      )
+    : t(
+        "Approval needed: moving {noun} to {state} was proposed as plan {plan}. Nothing changes until a human approves it.",
+        vars,
+      );
 }
 
 /**
@@ -113,8 +128,11 @@ export async function moveRecord(
     : await run(`${model.name}.update`, { id: row.id, [field.name]: to });
   if (r.kind === "ok") return { kind: "ok", row: r.value };
   if (r.kind === "approval") {
-    const what = `moving ${noun.toLowerCase()} to ${optionLabel(to)}${m.action ? ` (${actionLabel(m.action)})` : ""}`;
-    return { kind: "approval", planId: r.planId, message: approvalMessage(what, r.planId) };
+    return {
+      kind: "approval",
+      planId: r.planId,
+      message: moveApproval(noun, to, r.planId, m.action),
+    };
   }
-  return { kind: "error", message: r.message };
+  return { kind: "error", message: serverMessage(r.message) };
 }

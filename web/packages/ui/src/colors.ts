@@ -1,3 +1,4 @@
+import { msg } from "./i18n/store.ts";
 /**
  * Colour maths for the obop design system: sRGB hex <-> OKLCH, WCAG contrast, accent ramps and the
  * automatic AA check behind the theme picker. Pure functions, no DOM, so they are unit-tested.
@@ -237,37 +238,37 @@ function resolveMode(chosen: string, mode: Mode): ModeAccent {
   const checks: Check[] = [
     {
       id: "on-fill",
-      label: "Text on the accent fill",
+      label: msg("Text on the accent fill"),
       ratio: contrast(onFill, fill),
       min: AA_TEXT,
     },
     {
       id: "fill-panel",
-      label: "Accent fill against the panel",
+      label: msg("Accent fill against the panel"),
       ratio: contrast(fill, panel),
       min: AA_UI,
     },
     {
       id: "fill-canvas",
-      label: "Accent fill against the canvas",
+      label: msg("Accent fill against the canvas"),
       ratio: contrast(fill, canvas),
       min: AA_UI,
     },
     {
       id: "ink-panel",
-      label: "Accent text on the panel",
+      label: msg("Accent text on the panel"),
       ratio: contrast(ink, panel),
       min: AA_TEXT,
     },
     {
       id: "ink-canvas",
-      label: "Accent text on the canvas",
+      label: msg("Accent text on the canvas"),
       ratio: contrast(ink, canvas),
       min: AA_TEXT,
     },
     {
       id: "ink-tint",
-      label: "Accent text on a selected row",
+      label: msg("Accent text on a selected row"),
       ratio: contrast(ink, soft(fill)),
       min: AA_TEXT,
     },

@@ -1,5 +1,16 @@
 import { useState } from "react";
-import { ACCENTS, Badge, Icon, Segmented, applyTheme, type ThemeSettings } from "@obop/ui";
+import {
+  ACCENTS,
+  Badge,
+  Icon,
+  Notice,
+  Segmented,
+  applyTheme,
+  getLang,
+  rich,
+  t,
+  type ThemeSettings,
+} from "@obop/ui";
 import { href } from "../route.ts";
 import { Accessibility } from "./Accessibility.tsx";
 import { Components } from "./Components.tsx";
@@ -73,54 +84,58 @@ function liveTheme(): ThemeSettings {
 /** Try the theme without leaving the page. Nothing here is saved; Theme saves. */
 function ThemeStrip() {
   useThemeVersion();
-  const [t, setT] = useState(liveTheme);
+  const [theme, setT] = useState(liveTheme);
   const set = (patch: Partial<ThemeSettings>) => {
     const next = { ...liveTheme(), ...patch };
     setT(next);
     applyTheme(next);
   };
   return (
-    <div className="bb-strip" role="group" aria-label="Preview the brand book in another theme">
+    <div
+      className="bb-strip"
+      role="group"
+      aria-label={t("Preview the brand book in another theme")}
+    >
       <div className="swatches">
         {ACCENTS.map((a) => (
           <button
             key={a.value}
             className="swatch"
             style={{ background: a.value }}
-            aria-label={a.name}
-            title={a.name}
-            aria-pressed={t.accent.toLowerCase() === a.value}
+            aria-label={t(a.name)}
+            title={t(a.name)}
+            aria-pressed={theme.accent.toLowerCase() === a.value}
             onClick={() => set({ accent: a.value })}
           />
         ))}
       </div>
       <Segmented
-        label="Brand book mode"
-        value={t.mode}
+        label={t("Brand book mode")}
+        value={theme.mode}
         onChange={(mode) => set({ mode })}
         options={[
-          { value: "system", label: "System" },
-          { value: "light", label: "Light" },
-          { value: "dark", label: "Dark" },
+          { value: "system", label: t("System") },
+          { value: "light", label: t("Light") },
+          { value: "dark", label: t("Dark") },
         ]}
       />
       <Segmented
-        label="Brand book density"
-        value={t.density}
+        label={t("Brand book density")}
+        value={theme.density}
         onChange={(density) => set({ density })}
         options={[
-          { value: "comfortable", label: "Comfortable" },
-          { value: "compact", label: "Compact" },
+          { value: "comfortable", label: t("Comfortable") },
+          { value: "compact", label: t("Compact") },
         ]}
       />
       <Segmented
-        label="Brand book corners"
-        value={t.radius}
+        label={t("Brand book corners")}
+        value={theme.radius}
         onChange={(radius) => set({ radius })}
         options={[
-          { value: "sharp", label: "Sharp" },
-          { value: "soft", label: "Soft" },
-          { value: "round", label: "Round" },
+          { value: "sharp", label: t("Sharp") },
+          { value: "soft", label: t("Soft") },
+          { value: "round", label: t("Round") },
         ]}
       />
     </div>
@@ -142,20 +157,29 @@ export function BrandBook({
     <div className="bb">
       <header className="bb-intro">
         <div>
-          <h2 className="bb-title">Brand book</h2>
+          <h2 className="bb-title">{t("Brand book")}</h2>
           <p className="bb-lead">
-            The living style guide. Everything on these pages is rendered with the real components
-            in your current theme, so it is always accurate. The rules are written down in{" "}
-            <code>docs/brand/BRAND.md</code>.
+            {rich(
+              "The living style guide. Everything on these pages is rendered with the real components in your current theme, so it is always accurate. The rules are written down in <code>docs/brand/BRAND.md</code>.",
+              {},
+              { code: (c) => <code>{c}</code> },
+            )}
           </p>
         </div>
         <div className="bb-badges">
-          <Badge tone="accent">Read-only</Badge>
-          <Badge tone="info">Follows your theme</Badge>
+          <Badge tone="accent">{t("Read-only")}</Badge>
+          <Badge tone="info">{t("Follows your theme")}</Badge>
         </div>
       </header>
       <ThemeStrip />
-      <div className="bb-layout">
+      {getLang() !== "en" && !getLang().startsWith("en-") && (
+        <Notice tone="info">
+          {t(
+            "The Brand book documents the design rules and is written in English. The theme controls above are in your language.",
+          )}
+        </Notice>
+      )}
+      <div className="bb-layout" lang="en">
         <nav className="bb-nav" aria-label="Brand book sections">
           <ul>
             {SECTIONS.map((s) => (

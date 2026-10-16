@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { describeFor, inSentence, rich, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta, Row } from "./api.ts";
 import { useData } from "./data.tsx";
 import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
 import { FieldInput, RefLabel } from "./fields.tsx";
-import { isMasked, isState, label, modelLabel, optionLabel } from "./format.ts";
+import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
+import { actionTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
 import { encodeState } from "./query.ts";
 import { nav } from "./route.ts";
 import { Badge, Button, Icon, IconButton, Kbd, Menu, Tooltip } from "./ui.tsx";
-import { actionLabel, canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
+import { canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -45,8 +48,11 @@ export function RecordPanel({
 
   // A governed field (D48) starts at its first option and then moves only through actions.
   const governed = (f: FieldMeta) => isGoverned(model, f);
+  const currency = rowCurrency(row ?? (defaults as Record<string, unknown>));
   const baseline = (f: FieldMeta): Edit =>
-    creating && governed(f) ? initialOption(f) : toEdit(f, row ? row[f.name] : defaults[f.name]);
+    creating && governed(f)
+      ? initialOption(f)
+      : toEdit(f, row ? row[f.name] : defaults[f.name], currency);
   const value = (f: FieldMeta): Edit => (f.name in draft ? draft[f.name]! : baseline(f));
   const masked = (f: FieldMeta) => !!row && isMasked(row[f.name]) && !(f.name in draft);
   const changed = (f: FieldMeta) => f.name in draft && draft[f.name] !== baseline(f);
@@ -96,19 +102,25 @@ export function RecordPanel({
     const f = message.startsWith(prefix)
       ? fields.find((x) => message.startsWith(`${prefix}${x.name} `))
       : undefined;
-    if (f) setErrors((e) => ({ ...e, [f.name]: message }));
-    else setError(message);
+    // The server's English is matched first, then shown in the person's language.
+    if (f) setErrors((e) => ({ ...e, [f.name]: serverMessage(message) }));
+    else setError(serverMessage(message));
   }
 
   async function save() {
     setError(null);
     const editable = fields.filter((f) => !masked(f));
-    const errs = validate(editable, value, creating ? undefined : (f) => changed(f) || f.required);
+    const errs = validate(
+      editable,
+      value,
+      creating ? undefined : (f) => changed(f) || f.required,
+      currency,
+    );
     setErrors(errs);
-    if (Object.keys(errs).length) return d.notify("Fix the highlighted fields first", "error");
+    if (Object.keys(errs).length) return d.notify(t("Fix the highlighted fields first"), "error");
     const body: Record<string, unknown> = {};
     for (const f of editable) {
-      const r = fromEdit(f, value(f));
+      const r = fromEdit(f, value(f), currency);
       if ("error" in r) continue;
       if (creating) {
         if (governed(f)) continue; // the server starts it at the first option
@@ -122,13 +134,18 @@ export function RecordPanel({
       : await d.run(`${model.name}.update`, { id: row.id, ...body });
     setBusy(false);
     if (r.kind === "ok") {
-      d.notify(creating ? `${title} created` : "Saved");
+      d.notify(creating ? t("{model} created", { model: title }) : t("Saved"));
       setDraft({});
       dirtyRef.current = false;
       onSaved(String((r.value as Row).id ?? row?.id));
     } else if (r.kind === "approval") {
       d.notify(
-        `Approval needed: the change was proposed (plan ${r.planId.slice(0, 8)}). A human must approve it first.`,
+        t(
+          "Approval needed: the change was proposed (plan {plan}). A human must approve it first.",
+          {
+            plan: r.planId.slice(0, 8),
+          },
+        ),
         "info",
       );
     } else failure(r.message);
@@ -146,7 +163,7 @@ export function RecordPanel({
         const { [statusField.name]: _, ...rest } = x;
         return rest;
       });
-      d.notify(`${label(statusField.name)}: ${optionLabel(s)}`);
+      d.notify(t("{field}: {values}", { field: fieldTitle(statusField), values: optionLabel(s) }));
     } else if (out.kind === "approval") d.notify(out.message, "info");
     else {
       // The server's own words (D48), also inline so they stay readable.
@@ -161,16 +178,24 @@ export function RecordPanel({
     setError(null);
     const r = await d.run(id, { id: row.id });
     setBusy(false);
-    const name = label(id.split(".")[1] ?? id);
-    if (r.kind === "ok") d.notify(`${name} done`);
+    const act = model.actions.find((a) => a.id === id);
+    const name = act ? actionTitle(act) : actionTitle({ id });
+    if (r.kind === "ok") d.notify(t("{name} done", { name }));
     else if (r.kind === "approval")
       d.notify(
-        `Approval needed: "${name}" was proposed (plan ${r.planId.slice(0, 8)}). Nothing changes until a human approves it.`,
+        t(
+          "Approval needed: “{name}” was proposed (plan {plan}). Nothing changes until a human approves it.",
+          { name, plan: r.planId.slice(0, 8) },
+        ),
         "info",
       );
     else {
-      setError(r.message);
-      d.notify(needsApproval ? `${name} was refused: ${r.message}` : r.message, "error");
+      const message = serverMessage(r.message);
+      setError(message);
+      d.notify(
+        needsApproval ? t("{name} was refused: {reason}", { name, reason: message }) : message,
+        "error",
+      );
     }
   }
 
@@ -184,22 +209,31 @@ export function RecordPanel({
               model: name,
               module: info.module.id,
               field: f.name,
-              title: modelLabel(name, info.module.id),
+              title: modelTitle(info.model, info.module.id),
             });
     return out;
   }, [d.models, model.name]);
 
   return (
-    <aside className="record panel" aria-label={`${title} record`} ref={panel} tabIndex={-1}>
+    <aside
+      className="record panel"
+      aria-label={t("{model} record", { model: title })}
+      ref={panel}
+      tabIndex={-1}
+    >
       <header>
         <div>
-          <h2>{creating ? `New ${title.toLowerCase()}` : d.recordLabel(model.name, row)}</h2>
+          <h2>
+            {creating
+              ? t("New {model}", { model: inSentence(title) })
+              : d.recordLabel(model.name, row)}
+          </h2>
           {!creating && <span className="hint">{title}</span>}
         </div>
-        <IconButton icon="close" label="Close record" onClick={onClose} />
+        <IconButton icon="close" label={t("Close record")} onClick={onClose} />
       </header>
       {statusField && (
-        <ol className="statusbar" aria-label={label(statusField.name)}>
+        <ol className="statusbar" aria-label={fieldTitle(statusField)}>
           {statusField.options?.map((s, idx, all) => {
             const on = String(value(statusField)) === s;
             const current = all.indexOf(String(value(statusField)));
@@ -228,7 +262,10 @@ export function RecordPanel({
                   allowed: false,
                   current: on,
                   needsApproval: false,
-                  reason: `A new ${title.toLowerCase()} starts as ${optionLabel(initialOption(statusField))}; it moves on through actions`,
+                  reason: t("A new {noun} starts as {state}; it moves on through actions", {
+                    noun: inSentence(title),
+                    state: optionLabel(initialOption(statusField)),
+                  }),
                 }
               : canMove(model, statusField, row[statusField.name] as string, s, title);
             const blocked = !mv.allowed;
@@ -241,7 +278,7 @@ export function RecordPanel({
                 data-needs-approval={mv.needsApproval || undefined}
                 title={
                   mv.allowed && mv.needsApproval
-                    ? "Needs a human's approval when an agent does it"
+                    ? t("Needs a human's approval when an agent does it")
                     : undefined
                 }
                 onClick={() => {
@@ -270,7 +307,7 @@ export function RecordPanel({
         </ol>
       )}
       {!creating && related.length > 0 && (
-        <div className="smart" role="group" aria-label="Related records">
+        <div className="smart" role="group" aria-label={t("Related records")}>
           {related.map((r) => {
             const rows = d.store.peek(r.model);
             const n = rows?.filter((x) => x[r.field] === row.id).length;
@@ -285,7 +322,10 @@ export function RecordPanel({
                 key={`${r.model}.${r.field}`}
                 className="smartbtn"
                 href={to}
-                title={`${r.title} linked through ${label(r.field)}`}
+                title={t("{model} linked through {field}", {
+                  model: r.title,
+                  field: fieldTitleByName(r.field, d.models.get(r.model)?.model.fields),
+                })}
               >
                 {text}
               </a>
@@ -304,9 +344,12 @@ export function RecordPanel({
             const at = f ? String(row[f.name] ?? "") : "";
             const why =
               f && a.to && at === a.to
-                ? `Already ${optionLabel(a.to)}`
+                ? t("Already {state}", { state: optionLabel(a.to) })
                 : f && a.from && at !== a.from
-                  ? `Only available when ${label(f.name)} is ${optionLabel(a.from)}`
+                  ? t("Only available when {field} is {state}", {
+                      field: fieldTitle(f),
+                      state: optionLabel(a.from),
+                    })
                   : "";
             const btn = (
               <Button
@@ -314,14 +357,14 @@ export function RecordPanel({
                 title={
                   why
                     ? undefined
-                    : `${a.description}${a.needs_approval ? " (needs a human's approval when an agent runs it)" : ""}`
+                    : `${describeFor(a)}${a.needs_approval ? ` ${t("(needs a human's approval when an agent runs it)")}` : ""}`
                 }
                 aria-disabled={why || busy ? true : undefined}
                 onClick={() => {
                   if (!why && !busy) void act(a.id, a.needs_approval);
                 }}
               >
-                {actionLabel(a)}
+                {actionTitle(a)}
                 {a.needs_approval ? " *" : ""}
               </Button>
             );
@@ -346,7 +389,7 @@ export function RecordPanel({
               disabled={busy}
               onClick={() => setDeleting(true)}
             >
-              Delete
+              {t("Delete")}
             </Button>
           )}
         </div>
@@ -368,37 +411,39 @@ export function RecordPanel({
             return (
               <div key={f.name} className={`field${f.kind === "bool" ? " inline" : ""}`}>
                 <label className="flabel" htmlFor={fid}>
-                  {label(f.name)}
+                  {fieldTitle(f)}
                   {f.required && (
-                    <span className="req" title="Required" aria-hidden="true">
+                    <span className="req" title={t("Required")} aria-hidden="true">
                       *
                     </span>
                   )}
                   {f.personal_data && (
                     <span
                       className="shield"
-                      title={`Personal data (${f.class}). Agents see it masked.`}
+                      title={t("Personal data ({class}). Agents see it masked.", {
+                        class: f.class,
+                      })}
                       role="img"
-                      aria-label={`Personal data, ${f.class}`}
+                      aria-label={t("Personal data, {class}", { class: f.class })}
                     >
                       <Icon name="shield" size={13} />
                     </span>
                   )}
-                  {f.class === "financial" && <span className="chip">financial</span>}
+                  {f.class === "financial" && <span className="chip">{t("financial")}</span>}
                 </label>
                 {isMasked_ ? (
                   <div className="maskedfield">
                     <span className="masked" id={fid}>
                       {String(row?.[f.name])}
                     </span>
-                    <span className="hint">Masked for this session</span>
+                    <span className="hint">{t("Masked for this session")}</span>
                     {canEdit && (
                       <button
                         type="button"
                         className="linkbtn"
                         onClick={() => setDraft({ ...draft, [f.name]: "" })}
                       >
-                        Replace
+                        {t("Replace")}
                       </button>
                     )}
                   </div>
@@ -416,7 +461,10 @@ export function RecordPanel({
                       setError(null);
                       const out = await moveRecord(d.run, model, f, row, to, title);
                       setBusy(false);
-                      if (out.kind === "ok") d.notify(`${label(f.name)}: ${optionLabel(to)}`);
+                      if (out.kind === "ok")
+                        d.notify(
+                          t("{field}: {values}", { field: fieldTitle(f), values: optionLabel(to) }),
+                        );
                       else if (out.kind === "approval") d.notify(out.message, "info");
                       else {
                         setError(out.message);
@@ -430,6 +478,7 @@ export function RecordPanel({
                     id={fid}
                     value={value(f)}
                     readOnly={!canEdit}
+                    currency={currency}
                     invalid={!!err}
                     describedBy={err ? `${fid}-err` : undefined}
                     onChange={(v) => {
@@ -446,7 +495,9 @@ export function RecordPanel({
                       className="reflink small"
                       href={d.linkTo(f.to ?? "", { id: String(value(f)) })!}
                     >
-                      Open <RefLabel field={f} id={String(value(f))} link={false} />
+                      {rich("Open {name}", {
+                        name: <RefLabel field={f} id={String(value(f))} link={false} />,
+                      })}
                     </a>
                   )}
                 {err && (
@@ -459,8 +510,12 @@ export function RecordPanel({
           })}
         {withheld.length > 0 && (
           <p className="hint withheld">
-            <Icon name="shield" size={13} /> Withheld from you:{" "}
-            {withheld.map((w) => label(w.split(".")[1] ?? w)).join(", ")}
+            <Icon name="shield" size={13} />{" "}
+            {t("Withheld from you: {fields}", {
+              fields: withheld
+                .map((w) => fieldTitleByName(w.split(".")[1] ?? w, fields))
+                .join(", "),
+            })}
           </p>
         )}
         {error && (
@@ -475,7 +530,7 @@ export function RecordPanel({
             loading={busy}
             disabled={(!dirty && !creating) || !canEdit}
           >
-            {creating ? "Create" : "Save"}
+            {creating ? t("Create") : t("Save")}
           </Button>
           <Button
             onClick={() => {
@@ -486,19 +541,19 @@ export function RecordPanel({
               } else onClose();
             }}
           >
-            {dirty ? "Discard" : "Close"}
+            {dirty ? t("Discard") : t("Close")}
           </Button>
-          {!canEdit && <span className="hint">Read only for you</span>}
+          {!canEdit && <span className="hint">{t("Read only for you")}</span>}
           <span className="grow" />
           <span className="hint kbd-hint">
-            <Kbd>⌘S</Kbd> save <Kbd>Esc</Kbd> close
+            {rich("<kbd>⌘S</kbd> save <kbd>Esc</kbd> close", {}, { kbd: (c) => <Kbd>{c}</Kbd> })}
           </span>
         </footer>
       </form>
       {deleting && row && (
         <DeleteDialog
           model={model}
-          noun={title.toLowerCase()}
+          noun={inSentence(title)}
           records={[{ id: row.id, label: d.recordLabel(model.name, row) }]}
           onClose={() => setDeleting(false)}
           onDone={() => onClose()}
@@ -525,9 +580,9 @@ function GovernedValue(p: {
       {current ? <Badge field={f} value={current} /> : <span className="dim">—</span>}
       {row ? (
         <Menu
-          ariaLabel={`Move ${label(f.name).toLowerCase()}`}
+          ariaLabel={t("Move {field}", { field: fieldTitle(f) })}
           triggerClassName="btn small"
-          trigger={<>Move to…</>}
+          trigger={<>{t("Move to…")}</>}
           items={(f.options ?? [])
             .filter((o) => o !== current)
             .map((o) => {
@@ -542,7 +597,9 @@ function GovernedValue(p: {
         />
       ) : (
         <span className="hint">
-          Starts as {optionLabel(initialOption(f))}; it moves on through actions.
+          {t("Starts as {state}; it moves on through actions.", {
+            state: optionLabel(initialOption(f)),
+          })}
         </span>
       )}
     </div>

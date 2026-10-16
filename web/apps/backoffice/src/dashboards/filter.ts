@@ -1,5 +1,6 @@
+import { fmt, minorToDecimal, msg, t } from "@obop/ui";
 import type { FieldMeta, ModelMeta, ServerFilter } from "../api.ts";
-import { label } from "../format.ts";
+import { fieldTitle } from "../labels.ts";
 import type { Cond } from "../query.ts";
 
 /**
@@ -15,8 +16,10 @@ import type { Cond } from "../query.ts";
  * The package documentation also allows a JSON object of exact values, `{"state":"paid"}`, which
  * is read as `state = paid` for each key. Empty text means all records.
  */
-export const FILTER_HELP =
-  "One condition per semicolon: field operator value. Operators: = != ~ (contains, text only) > >= < <= in (values separated by |), and “is empty” or “is set”. Numbers and money use the stored integers (money in minor units: 12.50 is 1250). Example: state = paid; amount_minor >= 100000";
+/** Translate with `t(FILTER_HELP)`; the syntax itself (`=`, `in`, `is empty`) is not translated. */
+export const FILTER_HELP = msg(
+  "One condition per semicolon: field operator value. Operators: = != ~ (contains, text only) > >= < <= in (values separated by |), and “is empty” or “is set”. Numbers and money use the stored integers (money in minor units: 12.50 is 1250). Example: state = paid; amount_minor >= 100000",
+);
 
 export type WidgetOp =
   | "eq"
@@ -44,16 +47,16 @@ export const OP_SYMBOL: Record<WidgetOp, string> = {
   set: "is set",
 };
 export const OP_NAME: Record<WidgetOp, string> = {
-  eq: "is",
-  ne: "is not",
-  contains: "contains",
-  gt: "is greater than",
-  gte: "is at least",
-  lt: "is less than",
-  lte: "is at most",
-  in: "is one of",
-  empty: "is empty",
-  set: "is set",
+  eq: msg("is"),
+  ne: msg("is not"),
+  contains: msg("contains"),
+  gt: msg("is greater than"),
+  gte: msg("is at least"),
+  lt: msg("is less than"),
+  lte: msg("is at most"),
+  in: msg("is one of"),
+  empty: msg("is empty"),
+  set: msg("is set"),
 };
 
 const SYMBOLS: [string, WidgetOp][] = [
@@ -78,11 +81,11 @@ export function formatFilter(conds: Condition[]): string {
 
 /** Read the text of a widget's filter; an error names the part that was not understood. */
 export function parseFilter(text: string): { conds: Condition[] } | { error: string } {
-  const t = text.trim();
-  if (!t) return { conds: [] };
-  if (t.startsWith("{")) {
+  const src = text.trim();
+  if (!src) return { conds: [] };
+  if (src.startsWith("{")) {
     try {
-      const o = JSON.parse(t) as unknown;
+      const o = JSON.parse(src) as unknown;
       if (!o || typeof o !== "object" || Array.isArray(o)) throw new Error("not an object");
       return {
         conds: Object.entries(o as Record<string, unknown>).map(([field, v]) => ({
@@ -92,25 +95,26 @@ export function parseFilter(text: string): { conds: Condition[] } | { error: str
         })),
       };
     } catch {
-      return { error: "The filter looks like JSON but is not a valid object" };
+      return { error: t("The filter looks like JSON but is not a valid object") };
     }
   }
   const conds: Condition[] = [];
-  for (const part of t.split(";")) {
+  for (const part of src.split(";")) {
     const p = part.trim();
     if (!p) continue;
     const word = /^([A-Za-z_][A-Za-z0-9_]*)\s+(is\s+empty|is\s+set|in)(?:\s+(.*))?$/i.exec(p);
     if (word) {
       const kind = word[2]!.toLowerCase().replace(/\s+/g, " ");
       const op: WidgetOp = kind === "is empty" ? "empty" : kind === "is set" ? "set" : "in";
-      if (op === "in" && !word[3]?.trim()) return { error: `“${p}” needs values after in` };
+      if (op === "in" && !word[3]?.trim())
+        return { error: t("“{part}” needs values after in", { part: p }) };
       conds.push({ field: word[1]!, op, value: (word[3] ?? "").trim() });
       continue;
     }
     const sym = /^([A-Za-z_][A-Za-z0-9_]*)\s*(!=|>=|<=|=|>|<|~)\s*(.*)$/.exec(p);
-    if (!sym) return { error: `“${p}” is not field operator value` };
+    if (!sym) return { error: t("“{part}” is not field operator value", { part: p }) };
     const op = SYMBOLS.find(([s]) => s === sym[2])![1];
-    if (!sym[3]!.trim()) return { error: `“${p}” has no value` };
+    if (!sym[3]!.trim()) return { error: t("“{part}” has no value", { part: p }) };
     conds.push({ field: sym[1]!, op, value: sym[3]!.trim() });
   }
   return { conds };
@@ -123,20 +127,28 @@ function typed(f: FieldMeta, raw: string): unknown | { error: string } {
       return /^-?\d+$/.test(raw)
         ? parseInt(raw, 10)
         : {
-            error: `${label(f.name)} takes a whole number${f.kind === "money" ? " in minor units" : ""}`,
+            error:
+              f.kind === "money"
+                ? t("{field} takes a whole number in minor units", { field: fieldTitle(f) })
+                : t("{field} takes a whole number", { field: fieldTitle(f) }),
           };
     case "bool":
       return raw === "true" || raw === "false"
         ? raw === "true"
-        : { error: `${label(f.name)} is true or false` };
+        : { error: t("{field} is true or false", { field: fieldTitle(f) }) };
     case "date":
       return /^\d{4}-\d{2}-\d{2}$/.test(raw)
         ? raw
-        : { error: `${label(f.name)} takes a date like 2026-01-31` };
+        : { error: t("{field} takes a date like 2026-01-31", { field: fieldTitle(f) }) };
     case "select":
       return f.options?.includes(raw)
         ? raw
-        : { error: `${label(f.name)} must be one of: ${f.options?.join(", ")}` };
+        : {
+            error: t("{field} must be one of: {options}", {
+              field: fieldTitle(f),
+              options: (f.options ?? []).join(", "),
+            }),
+          };
     default:
       return raw;
   }
@@ -170,7 +182,11 @@ export function toServerFilter(
         break;
       case "contains":
         if (f.kind !== "text" && f.kind !== "longtext")
-          return { error: `${label(f.name)} is not a text field, so ~ (contains) does not apply` };
+          return {
+            error: t("{field} is not a text field, so ~ (contains) does not apply", {
+              field: fieldTitle(f),
+            }),
+          };
         filter.push({ field: f.name, op: "contains", value: c.value });
         break;
       case "in": {
@@ -188,7 +204,12 @@ export function toServerFilter(
       case "lt":
       case "lte": {
         if (f.kind === "bool" || f.kind === "ref")
-          return { error: `${label(f.name)} cannot be compared with ${OP_SYMBOL[c.op]}` };
+          return {
+            error: t("{field} cannot be compared with {operator}", {
+              field: fieldTitle(f),
+              operator: OP_SYMBOL[c.op],
+            }),
+          };
         const v = typed(f, c.value);
         if (isErr(v)) return v;
         filter.push({ field: f.name, op: c.op, value: v });
@@ -216,7 +237,8 @@ export function toFacets(conds: Condition[], model: ModelMeta): Cond[] {
   for (const c of conds) {
     const f = model.fields.find((x) => x.name === c.field);
     if (!f) continue;
-    const minor = (n: number) => (f.kind === "money" ? (n / 100).toFixed(2) : String(n));
+    const minor = (n: number) =>
+      f.kind === "money" ? minorToDecimal(n, fmt.exponent()) : String(n);
     switch (c.op) {
       case "empty":
         out.push({ op: "empty", f: f.name });
