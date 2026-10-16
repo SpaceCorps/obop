@@ -16,11 +16,11 @@ The owner's Argon2 hash is copied into the new instance as its first admin (`pla
 ## Try the whole thing on one machine
 
 ```bash
-(cd web/apps/backoffice && vp build) && (cd web/apps/platform && vp build)
-cargo run -- platform serve --static web/apps/platform/dist --instance-static web/apps/backoffice/dist
+(cd web/apps/backoffice && vp build) && deploy/build-site.sh
+cargo run -- platform serve --static web/site --instance-static web/apps/backoffice/dist
 ```
 
-Open http://127.0.0.1:8090, create an account, create an instance, follow its link, sign in with the same credentials, then open Modules.
+Open http://127.0.0.1:8090 (the landing page; the app is under `/app/`), create an account, create an instance, follow its link, sign in with the same credentials, then open Modules.
 
 ## Sliplane
 

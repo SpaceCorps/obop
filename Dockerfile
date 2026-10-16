@@ -1,5 +1,5 @@
 # One image for both roles. The default command runs an instance; the control plane overrides it:
-#   obop platform serve --addr 0.0.0.0:8080 --static /srv/platform --provisioner sliplane
+#   obop platform serve --addr 0.0.0.0:8080 --static /srv/site --provisioner sliplane
 FROM rust:1.99.0-slim AS build
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
@@ -16,7 +16,9 @@ COPY web ./web
 RUN corepack prepare pnpm@12.6.0 --activate \
  && pnpm install --frozen-lockfile \
  && pnpm --filter @obop/backoffice exec vp build \
- && pnpm --filter @obop/platform exec vp build
+ && pnpm --filter @obop/platform exec vp build \
+ && pnpm --filter @obop/landing exec vp build \
+ && mkdir -p /site && cp -R web/apps/landing/dist/. /site/ && cp -R web/apps/platform/dist /site/app
 
 FROM debian:stable-slim AS cli
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
@@ -31,7 +33,7 @@ COPY --from=cli /usr/local/bin/sliplane /usr/local/bin/sliplane
 COPY deploy/entrypoint.sh /usr/local/bin/obop-entrypoint
 COPY --from=build /src/target/release/obop /usr/local/bin/obop
 COPY --from=web /src/web/apps/backoffice/dist /srv/backoffice
-COPY --from=web /src/web/apps/platform/dist /srv/platform
+COPY --from=web /site /srv/site
 EXPOSE 8080
 ENTRYPOINT ["obop-entrypoint"]
 CMD ["obop", "serve", "--addr", "0.0.0.0:8080", "--static", "/srv/backoffice"]
