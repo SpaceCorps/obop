@@ -3,6 +3,7 @@ import { AppIcon as TileIcon, Avatar, Dialog, Icon, IconButton, Kbd, Logo, Menu 
 import type { ModuleMeta, Settings } from "./api.ts";
 import { appColor } from "./theme.ts";
 import { href } from "./route.ts";
+import { boardHref } from "./dashboards/route.ts";
 import { modelLabel } from "./format.ts";
 
 export type App = { id: string; name: string; color: string; module: ModuleMeta };
@@ -35,6 +36,13 @@ export function buildApps(modules: ModuleMeta[], settings: Settings, isAdmin: bo
       });
   }
   return apps;
+}
+
+/** Where an app opens: its first list, or for Dashboards the overview. */
+export function appHref(app: App): string {
+  return app.id === "dashboards" && app.module.models.some((m) => m.name === "dashboards_dashboard")
+    ? boardHref(app.id)
+    : href({ app: app.id, model: app.module.models[0]?.name });
 }
 
 export function AppIcon({
@@ -144,7 +152,7 @@ export function Launcher({
     .map((id) => apps.find((a) => a.id === id))
     .filter((a): a is App => !!a)
     .slice(0, 4);
-  const first = (a: App) => href({ app: a.id, model: a.module.models[0]?.name });
+  const first = appHref;
   return (
     <Dialog bare title="Apps" size="lg" className="launcher" onClose={onClose}>
       <div className="searchfield">
@@ -200,7 +208,7 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
         key: `app-${a.id}`,
         title: a.name,
         hint: "App",
-        to: href({ app: a.id, model: a.module.models[0]?.name }),
+        to: appHref(a),
         app: a,
       });
       for (const m of a.module.models) {
@@ -228,8 +236,16 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
       hint: "Customize",
       to: href({ app: "customize", model: "theme" }),
     });
+    all.push({
+      key: "guide",
+      title: "How to write a custom module",
+      hint: "Guide",
+      to: href({ app: "customize", model: "guide", tab: "guide" }),
+    });
     const needle = q.toLowerCase().trim();
-    return all.filter((h) => !needle || h.title.toLowerCase().includes(needle)).slice(0, 12);
+    // Every word has to match somewhere in the title, so "write module" finds "How to write a custom module".
+    const words = needle.split(/\s+/).filter(Boolean);
+    return all.filter((h) => words.every((w) => h.title.toLowerCase().includes(w))).slice(0, 12);
   }, [apps, q]);
   useEffect(() => setSel(0), [q]);
   const go = (h: Hit | undefined) => {

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadSettings, login, meta, type ModuleMeta, type Settings } from "./api.ts";
-import { AppIcon, Launcher, Palette, TopBar, appBlurb, buildApps } from "./Chrome.tsx";
+import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
 import { Customize } from "./Customize.tsx";
+import { DashboardsApp } from "./dashboards/DashboardsApp.tsx";
+import { BOARD, boardHref } from "./dashboards/route.ts";
 import { DataProvider, type Tone } from "./data.tsx";
 import { modelLabel } from "./format.ts";
 import { ModelPage } from "./ModelPage.tsx";
@@ -188,7 +190,12 @@ export function App() {
   const app = apps.find((a) => a.id === route.app);
   // Everyone may set their own theme and read the brand book; the rest of Customize is for admins.
   const personalCustomize =
-    route.app === "customize" && !isAdmin && ["theme", "brand"].includes(route.tab || route.model);
+    route.app === "customize" &&
+    !isAdmin &&
+    ["theme", "brand", "guide"].includes(route.tab || route.model);
+  const hasBoards = !!app?.module.models.some((m) => m.name === "dashboards_dashboard");
+  const onBoard =
+    app?.id === "dashboards" && hasBoards && (route.model === "" || route.model === BOARD);
   const model = app?.module.models.find((m) => m.name === route.model) ?? app?.module.models[0];
 
   const linkFor = useCallback(
@@ -272,6 +279,15 @@ export function App() {
                 <AppIcon app={app} size={32} />
                 <strong>{app.name}</strong>
               </div>
+              {hasBoards && app.id === "dashboards" && (
+                <a
+                  href={boardHref(app.id)}
+                  aria-current={onBoard ? "page" : undefined}
+                  title="Tiles drawn from your dashboards"
+                >
+                  Overview
+                </a>
+              )}
               <span className="overline side-label" aria-hidden="true">
                 Records
               </span>
@@ -279,7 +295,7 @@ export function App() {
                 <a
                   key={m.name}
                   href={href({ app: app.id, model: m.name })}
-                  aria-current={model?.name === m.name ? "page" : undefined}
+                  aria-current={!onBoard && model?.name === m.name ? "page" : undefined}
                   title={m.description}
                 >
                   {modelLabel(m.name, app.module.id)}
@@ -292,12 +308,16 @@ export function App() {
               token={token}
               tab={route.tab || route.model}
               section={route.view}
+              anchor={route.section}
               apps={apps}
               modules={modules}
               settings={settings}
               isAdmin={isAdmin}
               go={(tab) => go({ app: "customize", model: tab, tab })}
               goSection={(view) => go({ app: "customize", model: "brand", tab: "brand", view })}
+              goAnchor={(section) =>
+                go({ app: "customize", model: "guide", tab: "guide", section }, { replace: false })
+              }
               onSettings={(s) => {
                 setSettings(s);
                 applyTheme(resolveTheme(s.theme));
@@ -305,6 +325,8 @@ export function App() {
               onModulesChanged={() => void refresh()}
               notify={notify}
             />
+          ) : onBoard && app ? (
+            <DashboardsApp app={app} route={route} go={go} owner={email} />
           ) : app && model ? (
             <ModelPage
               key={model.name}
@@ -335,7 +357,7 @@ function Home({ apps }: { apps: ReturnType<typeof buildApps> }) {
     .filter((a): a is (typeof apps)[number] => !!a)
     .slice(0, 4);
   const shown = apps.filter((a) => a.name.toLowerCase().includes(q.trim().toLowerCase()));
-  const first = (a: (typeof apps)[number]) => href({ app: a.id, model: a.module.models[0]?.name });
+  const first = appHref;
   return (
     <section className="main panel home">
       <header className="home-head">

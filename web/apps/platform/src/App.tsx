@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AppIcon, Badge, Button, Icon, Input, Logo, Notice } from "@obop/ui";
+import { AppIcon, Badge, Button, ConfirmDialog, Icon, Input, Logo, Notice } from "@obop/ui";
 import { create, list, login, remove, signup, type Instance } from "./api.ts";
 
 function stored(): string {
@@ -157,6 +157,7 @@ export function App() {
   const [token, setTokenState] = useState(stored);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Instance | null>(null);
   const setToken = useCallback((t: string) => {
     remember(t);
     setTokenState(t);
@@ -232,22 +233,7 @@ export function App() {
                       {i.status === "failed" && `Failed: ${i.error}`}
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    disabled={working}
-                    onClick={async () => {
-                      if (!confirm(`Delete ${i.name} and all of its data?`)) return;
-                      // Show the change at once; the teardown continues in the background.
-                      setInstances((all) =>
-                        all.map((x) =>
-                          x.id === i.id ? { ...x, status: "deleting", phase: "Queued" } : x,
-                        ),
-                      );
-                      const r = await remove(token, i.id);
-                      if (!r.ok) setError(r.error);
-                      await refresh();
-                    }}
-                  >
+                  <Button variant="ghost" disabled={working} onClick={() => setToDelete(i)}>
                     {i.status === "deleting" ? "Deleting…" : "Delete"}
                   </Button>
                 </div>
@@ -285,6 +271,30 @@ export function App() {
         </form>
         {error && <Notice tone="danger" title={error} />}
       </main>
+      {toDelete && (
+        <ConfirmDialog
+          title="Delete instance?"
+          confirmLabel="Delete instance"
+          onClose={() => setToDelete(null)}
+          onConfirm={() => {
+            const i = toDelete;
+            setToDelete(null);
+            // Show the change at once; the teardown continues in the background.
+            setInstances((all) =>
+              all.map((x) => (x.id === i.id ? { ...x, status: "deleting", phase: "Queued" } : x)),
+            );
+            void (async () => {
+              const r = await remove(token, i.id);
+              if (!r.ok) setError(r.error);
+              await refresh();
+            })();
+          }}
+        >
+          <p>
+            Delete <strong>{toDelete.name}</strong> and all of its data? This cannot be undone.
+          </p>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

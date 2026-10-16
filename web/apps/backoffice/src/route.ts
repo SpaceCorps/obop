@@ -11,6 +11,10 @@ export type Route = {
   id: string;
   tab: string;
   st: string;
+  /** The page of a list, 1-based; empty is the first. */
+  page: string;
+  /** A section inside a Customize tab, for example a heading of the module guide. */
+  section: string;
 };
 
 export function parse(hash: string): Route {
@@ -24,6 +28,8 @@ export function parse(hash: string): Route {
     id: q.get("id") ?? "",
     tab: q.get("tab") ?? "",
     st: q.get("st") ?? "",
+    page: q.get("page") ?? "",
+    section: q.get("section") ?? "",
   };
 }
 
@@ -33,6 +39,8 @@ export function href(r: Partial<Route>): string {
   if (r.id) q.set("id", r.id);
   if (r.tab) q.set("tab", r.tab);
   if (r.st) q.set("st", r.st);
+  if (r.page && r.page !== "1") q.set("page", r.page);
+  if (r.section) q.set("section", r.section);
   const qs = q.toString();
   return `#/${[r.app, r.model].filter(Boolean).join("/")}${qs ? `?${qs}` : ""}`;
 }

@@ -1,0 +1,225 @@
+/* Confirm dialog, pager, stat tile and code block. Tokens only; logical properties only. */
+
+/* ---------- Confirm dialog ---------- */
+.confirm-dialog .dialog-body {
+  padding-block-start: var(--space-4);
+}
+.confirm-body {
+  display: grid;
+  gap: var(--space-3);
+}
+.confirm-body p {
+  margin: 0;
+}
+.confirm-error {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger-ink);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.confirm-error ul {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-5);
+}
+.confirm-error a {
+  color: inherit;
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.menu-item.described {
+  align-items: flex-start;
+}
+.menu-why {
+  display: block;
+  margin-block-start: 0.1rem;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+
+/* ---------- Pager ---------- */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-block-start: 1px solid var(--border);
+  background: var(--surface);
+  font-size: var(--text-sm);
+}
+.pager-size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+}
+.pager-size select {
+  inline-size: auto;
+  min-block-size: 0;
+  padding-block: 0.15rem;
+}
+.pager-range {
+  font-weight: var(--weight-medium);
+  color: var(--text);
+}
+.pager-btns {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+@media (max-width: 40rem) {
+  .pager {
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+  .pager-size > span {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .pager-page {
+    display: none;
+  }
+}
+
+/* ---------- Stat ---------- */
+.stat {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+.stat-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.stat-value {
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  overflow-wrap: break-word;
+}
+.stat-hint {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.stat-accent .stat-value {
+  color: var(--accent-ink);
+}
+.stat-success .stat-value {
+  color: var(--success-ink);
+}
+.stat-warning .stat-value {
+  color: var(--warning-ink);
+}
+.stat-danger .stat-value {
+  color: var(--danger-ink);
+}
+
+/* ---------- Code block ---------- */
+.codeblock {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.codeblock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border-block-end: 1px solid var(--border);
+  background: var(--surface-3);
+}
+.codeblock-lang {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: lowercase;
+}
+.codeblock-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: 1.5rem;
+  padding: 0.1rem 0.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.codeblock-copy:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.codeblock pre {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  tab-size: 2;
+}
+.codeblock pre code {
+  font: inherit;
+  background: none;
+  padding: 0;
+}
+.tok-comment {
+  color: var(--text-subtle);
+  font-style: italic;
+}
+.tok-string {
+  color: var(--success-ink);
+}
+.tok-number {
+  color: var(--info-ink);
+}
+.tok-keyword {
+  color: var(--warning-ink);
+}
+.tok-key {
+  color: var(--accent-ink);
+}
+.tok-table {
+  color: var(--accent-ink);
+  font-weight: var(--weight-semibold);
+}
+.tok-punct {
+  color: var(--text-muted);
+}
+
+/* A tooltip that carries a sentence wraps instead of running off the screen. */
+.tip-body {
+  inline-size: max-content;
+  max-inline-size: min(13rem, 80vw);
+  white-space: normal;
+  text-align: start;
+}
+.tip-body.start,
+.tip-body.end {
+  transform: none;
+}
+.tip-body.start {
+  inset-inline-start: 0;
+}
+.tip-body.end {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+}
+:dir(rtl) .tip-body.start,
+:dir(rtl) .tip-body.end {
+  transform: none;
+}

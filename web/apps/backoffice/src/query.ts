@@ -210,7 +210,7 @@ export function toggleOption(facets: Cond[], f: string, value: string): Cond[] {
     : facets.filter((_, j) => j !== i);
 }
 
-function rangeNum(f: FieldMeta, s: string | undefined): number | undefined {
+export function rangeNum(f: FieldMeta, s: string | undefined): number | undefined {
   if (s === undefined || s.trim() === "") return undefined;
   const n = parseFloat(s.replace(",", "."));
   if (!Number.isFinite(n)) return undefined;

@@ -35,6 +35,19 @@ export const users = {
     password: "e2e sam password 1",
     groups: "base.user,crm.user,sales.user,product.user",
   },
+  // Reads dashboards but not sales or invoicing, so a tile over those models shows "No access".
+  dana: {
+    name: "dana",
+    password: "e2e dana password 1",
+    groups: "base.user,crm.user,product.user,dashboards.user",
+  },
+  // Holds the groups of the fixed-id module "wfagent" (see the agent tests), so it can issue an agent
+  // token that may read and write that module.
+  ivy: {
+    name: "ivy",
+    password: "e2e ivy password 1",
+    groups: "wfagent.user,wfagent.manager",
+  },
 } as const;
 export type UserName = keyof typeof users;
 

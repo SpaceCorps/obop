@@ -1,0 +1,185 @@
+/* The Dashboards app: a responsive grid of tiles. Tokens only. */
+.dash .content.pad {
+  padding: var(--space-5);
+}
+.dash-desc {
+  margin: 0 0 var(--space-4);
+}
+.wgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(17rem, 100%), 1fr));
+  gap: var(--space-4);
+  align-items: stretch;
+  grid-auto-flow: dense;
+}
+@media (max-width: 40rem) {
+  .wgrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+  .wcard.kind-bar,
+  .wcard.kind-line,
+  .wcard.kind-pie,
+  .wcard.kind-table {
+    grid-column: span 2;
+  }
+  .wcard {
+    padding: var(--space-3);
+  }
+}
+.wcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.wcard.editing {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+@media (min-width: 56rem) {
+  .wcard.kind-bar,
+  .wcard.kind-line,
+  .wcard.kind-pie,
+  .wcard.kind-table {
+    grid-column: span 2;
+  }
+}
+.wcard > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.wcard h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+.wopen {
+  flex: none;
+  color: var(--accent-ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.wopen:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.wbody {
+  flex: 1;
+  min-block-size: 0;
+}
+.wtools {
+  display: flex;
+  gap: var(--space-1);
+  justify-content: flex-end;
+  padding-block-start: var(--space-2);
+  border-block-start: 1px dashed var(--border);
+}
+.kpi-link {
+  display: block;
+  padding: var(--space-1);
+  margin: calc(var(--space-1) * -1);
+  border-radius: var(--radius-md);
+  color: inherit;
+  text-decoration: none;
+}
+.kpi-link:hover .stat-value {
+  color: var(--accent-ink);
+}
+.wstate {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  color: var(--text-muted);
+}
+.wstate strong {
+  color: var(--text);
+}
+.wnote {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.wchart {
+  margin: 0;
+  padding: 0;
+}
+.wchart .chartsvg {
+  max-block-size: 14rem;
+  margin-inline: auto;
+}
+.wchart .piewrap {
+  padding: 0;
+}
+.wtable th[scope="row"] {
+  font-weight: var(--weight-medium);
+  text-align: start;
+}
+.wtable a {
+  color: var(--accent-ink);
+}
+
+/* ---------- Tile form ---------- */
+.wform {
+  display: grid;
+  gap: var(--space-4);
+}
+.wform-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+}
+.wfilter {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.wfilter legend {
+  padding-inline: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.wcond {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)) auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.wcard.kind-kpi {
+  align-self: start;
+}
+.wcard {
+  container-type: inline-size;
+}
+.wcard .stat-value {
+  font-size: clamp(1.05rem, 11cqi, var(--text-3xl));
+}
+.wchart .piesvg {
+  inline-size: min(13rem, 100%);
+}
+.wchart .piewrap {
+  gap: var(--space-4);
+}
+.wchart .legend {
+  min-inline-size: 10rem;
+  flex: 1;
+}
+.wtable .num {
+  text-align: end;
+}
+.wtable th[scope="row"] {
+  background: transparent;
+}

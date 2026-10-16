@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useId, useState } from "react";
 import { call, saveSettings, type ModuleMeta, type Settings, type Theme } from "./api.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
 import { BuildTab } from "./ModuleBuilder.tsx";
+import { href } from "./route.ts";
 import { ContrastReport } from "./brand/ContrastReport.tsx";
 import {
   ACCENTS,
@@ -25,6 +26,9 @@ import {
   panelId,
 } from "@obop/ui";
 
+const GuidePage = lazy(() => import("./Guide.tsx").then((m) => ({ default: m.Guide })));
+const GUIDE_LINK = href({ app: "customize", model: "guide", tab: "guide" });
+
 const BrandBook = lazy(() =>
   import("./brand/BrandBook.tsx").then((m) => ({ default: m.BrandBook })),
 );
@@ -33,12 +37,15 @@ type Props = {
   token: string;
   tab: string;
   section: string;
+  /** The heading of the guide that the address names. */
+  anchor: string;
   apps: App[];
   modules: ModuleMeta[];
   settings: Settings;
   isAdmin: boolean;
   go: (tab: string) => void;
   goSection: (section: string) => void;
+  goAnchor: (id: string) => void;
   onSettings: (s: Settings) => void;
   onModulesChanged: () => void;
   notify: (t: string, tone?: "ok" | "error" | "info") => void;
@@ -50,11 +57,14 @@ const TABS = [
   { id: "modules", label: "Modules", icon: "plug" },
   { id: "build", label: "Build a module", icon: "edit" },
   { id: "brand", label: "Brand book", icon: "sparkle" },
+  { id: "guide", label: "Guide", icon: "help" },
 ] as const;
 
 export function Customize(p: Props) {
   // Everyone gets their own theme and the read-only brand book; the rest changes the instance.
-  const tabs = TABS.filter((t) => p.isAdmin || t.id === "theme" || t.id === "brand");
+  const tabs = TABS.filter(
+    (t) => p.isAdmin || t.id === "theme" || t.id === "brand" || t.id === "guide",
+  );
   const tab = tabs.some((t) => t.id === p.tab) ? p.tab : "theme";
   const current = tabs.find((t) => t.id === tab)!;
   return (
@@ -85,6 +95,11 @@ export function Customize(p: Props) {
         {tab === "apps" && <AppsTab {...p} />}
         {tab === "modules" && <ModulesTab {...p} />}
         {tab === "build" && <BuildTab {...p} />}
+        {tab === "guide" && (
+          <Suspense fallback={<Skeleton rows={6} cols={3} />}>
+            <GuidePage anchor={p.anchor} goAnchor={p.goAnchor} notify={p.notify} />
+          </Suspense>
+        )}
         {tab === "brand" && (
           <Suspense fallback={<Skeleton rows={6} cols={3} />}>
             <BrandBook section={p.section} goSection={p.goSection} notify={p.notify} />
@@ -367,6 +382,12 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
   const have = new Set(installed.map((p) => p.id));
   return (
     <div className="stack gap-lg">
+      <p className="hint">
+        A module adds an app: models, fields, permissions and workflow steps, in one text file.{" "}
+        <a className="reflink" href={GUIDE_LINK}>
+          How to write a custom module?
+        </a>
+      </p>
       <section className="stack">
         <h3 className="overline">Marketplace</h3>
         <div className="cards3">

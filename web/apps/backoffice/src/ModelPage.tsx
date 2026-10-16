@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ModelMeta } from "./api.ts";
+import { LOAD_LIMIT, search, type ModelMeta, type Row } from "./api.ts";
 import type { App } from "./Chrome.tsx";
 import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
-import { loadFavorites, type Favorite } from "./favorites.ts";
+import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
 import { isState, label, modelLabel, visibleFields } from "./format.ts";
 import {
   applyFacets,
@@ -16,13 +16,16 @@ import {
 } from "./query.ts";
 import { RecordPanel } from "./RecordPanel.tsx";
 import type { Go, Route } from "./route.ts";
+import { isWithheldError, onServer, toServer } from "./serverQuery.ts";
 import { EmptyState, Skeleton } from "./ui.tsx";
+import { useRecord, useServerRows } from "./useServer.ts";
 import { CalendarView, dateFields } from "./views/CalendarView.tsx";
 import { GraphView } from "./views/GraphView.tsx";
 import { KanbanView, kanbanField } from "./views/KanbanView.tsx";
 import { ListView } from "./views/ListView.tsx";
 import { PivotView } from "./views/PivotView.tsx";
 import type { ViewProps } from "./views/types.ts";
+import { governedNames, moveRecord } from "./workflow.ts";
 
 type Props = { app: App; model: ModelMeta; route: Route; go: Go };
 
@@ -34,6 +37,8 @@ const VIEWS: Record<string, ViewDef> = {
   graph: { id: "graph", label: "Graph", icon: "graph" },
 };
 
+const PAGE_SIZES = [25, 50, 100, 200];
+
 function storedView(model: string): string {
   try {
     return localStorage.getItem(`obop-view-${model}`) ?? "";
@@ -44,15 +49,26 @@ function storedView(model: string): string {
 
 export function ModelPage({ app, model, route, go }: Props) {
   const d = useData();
-  const { rows, loaded, error, denied } = useRows(model.name);
+  const title = modelLabel(model.name, app.module.id);
+  const state = useMemo(() => decodeState(route.st), [route.st]);
+  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
+  const [pageSize, setPageSizeState] = useState(() => {
+    const n = readPref<number>("obop-pagesize", 100);
+    return PAGE_SIZES.includes(n) ? n : 100;
+  });
+
   // Fields withheld from this principal never come back, so they are left out of every view.
+  // They are learned from whichever answer arrives: a search page or the full load.
+  const [serverDenied, setServerDenied] = useState<string[]>([]);
+  const [cachedDenied, setCachedDenied] = useState<string[]>([]);
+  const denied = useMemo(
+    () => [...new Set([...serverDenied, ...cachedDenied])],
+    [serverDenied, cachedDenied],
+  );
   const fields = useMemo(
     () => visibleFields(model.fields).filter((f) => !denied.includes(`${model.name}.${f.name}`)),
     [model, denied],
   );
-  const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
-  const title = modelLabel(model.name, app.module.id);
-  const state = useMemo(() => decodeState(route.st), [route.st]);
 
   const available = useMemo(() => {
     const ids = ["list"];
@@ -69,21 +85,50 @@ export function ModelPage({ app, model, route, go }: Props) {
       ? "kanban"
       : "list";
 
+  // The list pages on the server (D49) whenever the server can answer the whole search. Anything
+  // else (an any-field search, grouping, a sort by a ref) loads the records, up to 5,000, and works
+  // in the browser, exactly like kanban, pivot, graph and calendar always do. See serverQuery.ts.
+  const plan = useMemo(() => toServer(state, fields), [state, fields]);
+  const grouped = state.group.length > 0;
+  const serverMode = view === "list" && onServer(plan, state);
+  const page = Math.max(1, parseInt(route.page, 10) || 1);
+  const offset = (page - 1) * pageSize;
+
+  const store = useRows(model.name, !serverMode);
+  const srv = useServerRows({
+    enabled: serverMode,
+    model: model.name,
+    filter: plan.filter,
+    order: plan.order,
+    offset,
+    limit: pageSize,
+  });
+  useEffect(() => {
+    if (srv.denied.length || serverDenied.length) setServerDenied(srv.denied);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [srv.denied]);
+  useEffect(() => {
+    if (store.denied.length || cachedDenied.length) setCachedDenied([...store.denied]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.denied]);
+
   const base = useMemo(() => ({ app: route.app, model: route.model }), [route.app, route.model]);
   const put = useCallback(
-    (patch: { view?: string; id?: string; st?: string }, replace = false) =>
+    (patch: { view?: string; id?: string; st?: string; page?: string }, replace = false) =>
       go(
         {
           ...base,
           view: patch.view ?? route.view,
           id: patch.id ?? route.id,
           st: patch.st ?? route.st,
+          page: patch.page ?? route.page,
         },
         { replace },
       ),
-    [go, base, route.view, route.id, route.st],
+    [go, base, route.view, route.id, route.st, route.page],
   );
-  const setState = useCallback((s: ViewState) => put({ st: encodeState(s) }), [put]);
+  // A new search starts on the first page.
+  const setState = useCallback((s: ViewState) => put({ st: encodeState(s), page: "" }), [put]);
 
   // A favorite marked default applies when the model opens without any search of its own.
   useEffect(() => {
@@ -100,15 +145,45 @@ export function ModelPage({ app, model, route, go }: Props) {
     } catch {
       /* ignore */
     }
-    put({ view: v });
+    put({ view: v, page: "" });
   };
 
+  const rows = store.rows;
   const filtered = useMemo(
-    () => sortRows(applyFacets(rows, state.facets, fields, d.lookup), state.sort, fields, d.lookup),
+    () =>
+      serverMode
+        ? []
+        : sortRows(applyFacets(rows, state.facets, fields, d.lookup), state.sort, fields, d.lookup),
     // lookup changes when ref labels load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, state.facets, state.sort, fields, d.version],
+    [serverMode, rows, state.facets, state.sort, fields, d.version],
   );
+  const paging = view === "list" && !grouped;
+  const shown: Row[] = serverMode
+    ? srv.rows
+    : paging
+      ? filtered.slice(offset, offset + pageSize)
+      : filtered;
+  const total = serverMode ? srv.total : filtered.length;
+
+  // Deleting the last record of a page leaves an empty page: go back to the last one.
+  useEffect(() => {
+    if (!paging || page === 1) return;
+    const settled = serverMode ? srv.loaded && !srv.loading : store.loaded;
+    if (settled && total > 0 && offset >= total)
+      put({ page: String(Math.max(1, Math.ceil(total / pageSize))) }, true);
+  }, [
+    paging,
+    page,
+    serverMode,
+    srv.loaded,
+    srv.loading,
+    store.loaded,
+    total,
+    offset,
+    pageSize,
+    put,
+  ]);
 
   const open = (id: string) => put({ id });
   const close = useCallback(() => put({ id: "" }), [put]);
@@ -116,50 +191,102 @@ export function ModelPage({ app, model, route, go }: Props) {
     setNewDefaults(defaults);
     put({ id: "new" });
   };
-  const selected = route.id === "new" ? "new" : rows.find((r) => r.id === route.id);
+  const found = useRecord(model.name, route.id, serverMode ? srv.rows : rows);
+  const selected = route.id === "new" ? "new" : found;
 
+  const governed = useMemo(() => governedNames(model), [model]);
+  const approval = (what: string, planId: string) =>
+    `Approval needed: ${what} was proposed as plan ${planId.slice(0, 8)}. Nothing changes until a human approves it.`;
   const update: ViewProps["update"] = async (id, patch) => {
     const r = await d.run(`${model.name}.update`, { id, ...patch });
     if (r.kind === "ok") return null;
-    if (r.kind === "approval")
-      return `Approval needed (plan ${r.planId.slice(0, 8)}); nothing changed yet`;
+    if (r.kind === "approval") return approval("the change", r.planId);
     return r.message;
   };
   const create: ViewProps["create"] = async (body) => {
-    const r = await d.run(`${model.name}.create`, body);
+    // A governed field starts at its first option; the server refuses anything else.
+    const clean = { ...body };
+    for (const g of governed) delete clean[g];
+    const r = await d.run(`${model.name}.create`, clean);
     if (r.kind === "ok") {
       d.notify(`${title} created`);
       return null;
     }
-    if (r.kind === "approval")
-      return `Approval needed (plan ${r.planId.slice(0, 8)}); nothing created yet`;
+    if (r.kind === "approval") return approval("creating the record", r.planId);
     return r.message;
   };
+  const moveState: ViewProps["moveState"] = async (id, field, to) => {
+    const f = model.fields.find((x) => x.name === field);
+    const row = (serverMode ? srv.rows : rows).find((r) => r.id === id);
+    if (!f || !row) return "Record not found";
+    const out = await moveRecord(d.run, model, f, row, to, title);
+    return out.kind === "ok" ? null : out.message;
+  };
   const drill = (conds: Cond[]) =>
-    put({ view: "list", st: encodeState({ ...state, facets: [...state.facets, ...conds] }) });
+    put({
+      view: "list",
+      st: encodeState({ ...state, facets: [...state.facets, ...conds] }),
+      page: "",
+    });
 
   const applyFavorite = (f: Favorite) =>
-    put({ st: encodeState(f.state), view: available.includes(f.view) ? f.view : view });
+    put({ st: encodeState(f.state), view: available.includes(f.view) ? f.view : view, page: "" });
+
+  /** Every record the search matches, up to the load limit. */
+  const exportAll: ViewProps["exportAll"] = async () => {
+    if (!serverMode) return { rows: filtered, truncated: false };
+    const q: Record<string, unknown> = { limit: LOAD_LIMIT };
+    if (plan.filter.length) q.filter = plan.filter;
+    if (plan.order.length) q.order = plan.order;
+    const r = await search(d.token, model.name, q);
+    if ("error" in r) return { rows: srv.rows, truncated: true };
+    return { rows: r.rows, truncated: r.total > r.rows.length };
+  };
 
   const vp: ViewProps = {
     model,
     title,
     fields,
-    rows: filtered,
+    rows: shown,
     state,
     setState,
     selectedId: route.id,
     onOpen: open,
     canCreate: model.can_create,
     canUpdate: model.can_update,
+    canDelete: model.can_delete,
     update,
     create,
+    moveState,
     newWith: openNew,
     drill,
+    total,
+    exportAll,
+    pager: paging
+      ? {
+          offset,
+          limit: pageSize,
+          busy: serverMode && srv.loading,
+          setOffset: (o) => put({ page: String(Math.floor(o / pageSize) + 1) }),
+          setLimit: (n) => {
+            setPageSizeState(n);
+            writePref("obop-pagesize", n);
+            put({ page: "" });
+          },
+        }
+      : undefined,
   };
 
   const filtering = state.facets.length > 0;
   const kf = view === "kanban" ? kanbanField(fields, state.group[0]) : undefined;
+  const loaded = serverMode ? srv.loaded : store.loaded;
+  const error = serverMode ? srv.error : store.error;
+  const withheldError = !!error && isWithheldError(error);
+  const modelEmpty = serverMode
+    ? srv.loaded && !srv.error && srv.total === 0 && plan.filter.length === 0
+    : store.loaded && rows.length === 0;
+  const truncated = !serverMode && store.loaded && store.total > rows.length;
+  const nf = new Intl.NumberFormat("en-US");
 
   return (
     <>
@@ -178,7 +305,7 @@ export function ModelPage({ app, model, route, go }: Props) {
           view={view}
           setView={setView}
           applyFavorite={applyFavorite}
-          count={filtered.length}
+          count={total}
           extra={
             kf && (
               <label className="inline-field">
@@ -203,12 +330,27 @@ export function ModelPage({ app, model, route, go }: Props) {
             Withheld from you: {denied.map((w) => label(w.split(".")[1] ?? w)).join(", ")}
           </p>
         )}
+        {truncated && (
+          <p className="notice-bar" role="status">
+            Showing the first {nf.format(rows.length)} of {nf.format(store.total)} records. Narrow
+            the search, or use the list, which pages through all of them.
+          </p>
+        )}
         <div className={`content view-${view}`}>
-          {error ? (
+          {withheldError ? (
+            <EmptyState
+              title="This search uses a field you cannot read"
+              hint={error}
+              action={{
+                label: "Clear filters and sorting",
+                onClick: () => put({ st: "", page: "" }),
+              }}
+            />
+          ) : error ? (
             <EmptyState title="Could not load records" hint={error} />
           ) : !loaded ? (
             <Skeleton rows={8} cols={Math.min(fields.length, 5)} />
-          ) : rows.length === 0 ? (
+          ) : modelEmpty ? (
             <EmptyState
               title={`No ${title.toLowerCase()} yet`}
               hint="Records you create show up here."
@@ -218,7 +360,7 @@ export function ModelPage({ app, model, route, go }: Props) {
                   : undefined
               }
             />
-          ) : filtered.length === 0 && view !== "calendar" ? (
+          ) : total === 0 && view !== "calendar" ? (
             <EmptyState
               title="No matches"
               hint="No record fits the current search."
@@ -251,7 +393,12 @@ export function ModelPage({ app, model, route, go }: Props) {
           withheld={denied}
           title={title}
           onClose={close}
-          onSaved={(id) => put({ id })}
+          onSaved={(id) =>
+            // A new record sits at the end of an unsorted list: show the page it is on.
+            route.id === "new" && paging && !state.sort
+              ? put({ id, page: String(Math.max(1, Math.ceil((total + 1) / pageSize))) })
+              : put({ id })
+          }
         />
       )}
     </>

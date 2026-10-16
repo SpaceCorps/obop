@@ -608,6 +608,8 @@ export type MenuItem =
       danger?: boolean;
       disabled?: boolean;
       hint?: string;
+      /** A second line under the label, for example why the item is disabled. Also the tooltip. */
+      description?: string;
     };
 
 /** An action menu: arrow keys move, Enter or Space picks, Escape closes and returns focus. */
@@ -683,14 +685,18 @@ export function Menu({
                 type="button"
                 role="menuitem"
                 disabled={it.disabled}
-                className={cx("menu-item", it.danger && "danger")}
+                title={it.description}
+                className={cx("menu-item", it.danger && "danger", it.description && "described")}
                 onClick={() => {
                   close();
                   it.onSelect();
                 }}
               >
                 {it.icon && <Icon name={it.icon} size={16} />}
-                <span>{it.label}</span>
+                <span>
+                  {it.label}
+                  {it.description && <small className="menu-why">{it.description}</small>}
+                </span>
                 {it.hint && <Kbd>{it.hint}</Kbd>}
               </button>
             ),
@@ -706,10 +712,13 @@ export function Tooltip({
   label,
   children,
   side = "bottom",
+  align = "center",
 }: {
   label: string;
   children: ReactElement<{ "aria-describedby"?: string }>;
   side?: "top" | "bottom";
+  /** `start` or `end` lines the tip up with that edge of its target, for controls near an edge. */
+  align?: "center" | "start" | "end";
 }) {
   const [show, setShow] = useState(false);
   const id = useId();
@@ -734,7 +743,7 @@ export function Tooltip({
     >
       {cloneElement(children, show ? { "aria-describedby": id } : {})}
       {show && (
-        <span role="tooltip" id={id} className={cx("tip-body", side)}>
+        <span role="tooltip" id={id} className={cx("tip-body", side, align !== "center" && align)}>
           {label}
         </span>
       )}

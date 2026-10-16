@@ -37,10 +37,15 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.21.2
       - run: vp install --frozen-lockfile
-      - name: Check, lint and type-check every app
+      - name: Check, lint and type-check every app and the design system
         run: |
-          for app in backoffice platform landing; do
-            (cd web/apps/$app && vp check)
+          for app in apps/backoffice apps/platform apps/landing packages/ui; do
+            (cd web/$app && vp check)
+          done
+      - name: Unit tests (design system and back office)
+        run: |
+          for app in packages/ui apps/backoffice; do
+            (cd web/$app && vp test)
           done
       - name: Build every app
         run: |

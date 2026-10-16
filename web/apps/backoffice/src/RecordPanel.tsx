@@ -4,9 +4,11 @@ import { useData } from "./data.tsx";
 import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
 import { FieldInput, RefLabel } from "./fields.tsx";
 import { isMasked, isState, label, modelLabel, optionLabel } from "./format.ts";
+import { DeleteDialog } from "./DeleteDialog.tsx";
 import { encodeState } from "./query.ts";
 import { nav } from "./route.ts";
-import { Button, Icon, IconButton, Kbd } from "./ui.tsx";
+import { Badge, Button, Icon, IconButton, Kbd, Menu, Tooltip } from "./ui.tsx";
+import { actionLabel, canMove, initialOption, isGoverned, moveRecord } from "./workflow.ts";
 
 type Props = {
   model: ModelMeta;
@@ -36,11 +38,15 @@ export function RecordPanel({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const panel = useRef<HTMLElement>(null);
   const statusField = fields.find(isState);
   const canEdit = creating ? model.can_create : model.can_update;
 
-  const baseline = (f: FieldMeta): Edit => toEdit(f, row ? row[f.name] : defaults[f.name]);
+  // A governed field (D48) starts at its first option and then moves only through actions.
+  const governed = (f: FieldMeta) => isGoverned(model, f);
+  const baseline = (f: FieldMeta): Edit =>
+    creating && governed(f) ? initialOption(f) : toEdit(f, row ? row[f.name] : defaults[f.name]);
   const value = (f: FieldMeta): Edit => (f.name in draft ? draft[f.name]! : baseline(f));
   const masked = (f: FieldMeta) => !!row && isMasked(row[f.name]) && !(f.name in draft);
   const changed = (f: FieldMeta) => f.name in draft && draft[f.name] !== baseline(f);
@@ -105,6 +111,7 @@ export function RecordPanel({
       const r = fromEdit(f, value(f));
       if ("error" in r) continue;
       if (creating) {
+        if (governed(f)) continue; // the server starts it at the first option
         if (r.value !== null && (f.kind !== "bool" || r.value === true || f.name in draft))
           body[f.name] = r.value;
       } else if (changed(f)) body[f.name] = r.value;
@@ -128,24 +135,24 @@ export function RecordPanel({
   }
 
   async function setStatus(s: string) {
-    if (!statusField) return;
-    if (creating) return setDraft({ ...draft, [statusField.name]: s });
-    if (!model.can_update || busy) return;
+    if (!statusField || creating || busy) return;
+    if (!governed(statusField) && !model.can_update) return;
     setBusy(true);
-    const r = await d.run(`${model.name}.update`, { id: row.id, [statusField.name]: s });
+    setError(null);
+    const out = await moveRecord(d.run, model, statusField, row, s, title);
     setBusy(false);
-    if (r.kind === "ok") {
+    if (out.kind === "ok") {
       setDraft((x) => {
         const { [statusField.name]: _, ...rest } = x;
         return rest;
       });
       d.notify(`${label(statusField.name)}: ${optionLabel(s)}`);
-    } else if (r.kind === "approval")
-      d.notify(
-        `Approval needed: moving to ${optionLabel(s)} was proposed (plan ${r.planId.slice(0, 8)}).`,
-        "info",
-      );
-    else d.notify(r.message, "error");
+    } else if (out.kind === "approval") d.notify(out.message, "info");
+    else {
+      // The server's own words (D48), also inline so they stay readable.
+      setError(out.message);
+      d.notify(out.message, "error");
+    }
   }
 
   async function act(id: string, needsApproval: boolean) {
@@ -196,17 +203,67 @@ export function RecordPanel({
           {statusField.options?.map((s, idx, all) => {
             const on = String(value(statusField)) === s;
             const current = all.indexOf(String(value(statusField)));
-            const click = creating || model.can_update;
+            const gov = governed(statusField);
+            const cls = on ? "on" : idx < current ? "done" : "";
+            if (!gov) {
+              const click = creating || model.can_update;
+              return (
+                <li key={s}>
+                  <button
+                    className={cls}
+                    aria-current={on ? "step" : undefined}
+                    disabled={!click || busy}
+                    onClick={() =>
+                      creating ? setDraft({ ...draft, [statusField.name]: s }) : void setStatus(s)
+                    }
+                  >
+                    {optionLabel(s)}
+                  </button>
+                </li>
+              );
+            }
+            // Governed: a step is a move, enabled only when an action the person may run leads there.
+            const mv = creating
+              ? {
+                  allowed: false,
+                  current: on,
+                  needsApproval: false,
+                  reason: `A new ${title.toLowerCase()} starts as ${optionLabel(initialOption(statusField))}; it moves on through actions`,
+                }
+              : canMove(model, statusField, row[statusField.name] as string, s, title);
+            const blocked = !mv.allowed;
+            const text = `${optionLabel(s)}${mv.allowed && mv.needsApproval ? " *" : ""}`;
+            const btn = (
+              <button
+                className={`${cls}${blocked && !on ? " blocked" : ""}`}
+                aria-current={on ? "step" : undefined}
+                aria-disabled={(blocked && !on) || busy || undefined}
+                data-needs-approval={mv.needsApproval || undefined}
+                title={
+                  mv.allowed && mv.needsApproval
+                    ? "Needs a human's approval when an agent does it"
+                    : undefined
+                }
+                onClick={() => {
+                  if (mv.allowed && !busy) void setStatus(s);
+                }}
+              >
+                {text}
+              </button>
+            );
             return (
               <li key={s}>
-                <button
-                  className={on ? "on" : idx < current ? "done" : ""}
-                  aria-current={on ? "step" : undefined}
-                  disabled={!click || busy}
-                  onClick={() => void setStatus(s)}
-                >
-                  {optionLabel(s)}
-                </button>
+                {mv.reason && !on ? (
+                  <Tooltip
+                    label={mv.reason}
+                    side="top"
+                    align={idx === 0 ? "start" : idx === all.length - 1 ? "end" : "center"}
+                  >
+                    {btn}
+                  </Tooltip>
+                ) : (
+                  btn
+                )}
               </li>
             );
           })}
@@ -240,19 +297,58 @@ export function RecordPanel({
           })}
         </div>
       )}
-      {!creating && model.actions.length > 0 && (
+      {!creating && (model.actions.length > 0 || model.can_delete) && (
         <div className="actionrow">
-          {model.actions.map((a) => (
+          {model.actions.map((a, ai) => {
+            const f = a.field ? fields.find((x) => x.name === a.field) : undefined;
+            const at = f ? String(row[f.name] ?? "") : "";
+            const why =
+              f && a.to && at === a.to
+                ? `Already ${optionLabel(a.to)}`
+                : f && a.from && at !== a.from
+                  ? `Only available when ${label(f.name)} is ${optionLabel(a.from)}`
+                  : "";
+            const btn = (
+              <Button
+                key={a.id}
+                title={
+                  why
+                    ? undefined
+                    : `${a.description}${a.needs_approval ? " (needs a human's approval when an agent runs it)" : ""}`
+                }
+                aria-disabled={why || busy ? true : undefined}
+                onClick={() => {
+                  if (!why && !busy) void act(a.id, a.needs_approval);
+                }}
+              >
+                {actionLabel(a)}
+                {a.needs_approval ? " *" : ""}
+              </Button>
+            );
+            return why ? (
+              <Tooltip
+                key={a.id}
+                label={why}
+                side="top"
+                align={ai === 0 ? "start" : ai === model.actions.length - 1 ? "end" : "center"}
+              >
+                {btn}
+              </Tooltip>
+            ) : (
+              btn
+            );
+          })}
+          {model.can_delete && (
             <Button
-              key={a.id}
-              title={`${a.description}${a.needs_approval ? " (needs a human's approval when an agent runs it)" : ""}`}
+              variant="ghost"
+              className="danger-text"
+              icon="trash"
               disabled={busy}
-              onClick={() => void act(a.id, a.needs_approval)}
+              onClick={() => setDeleting(true)}
             >
-              {label(a.id.split(".")[1] ?? a.id)}
-              {a.needs_approval ? " *" : ""}
+              Delete
             </Button>
-          ))}
+          )}
         </div>
       )}
       <form
@@ -306,6 +402,28 @@ export function RecordPanel({
                       </button>
                     )}
                   </div>
+                ) : governed(f) ? (
+                  <GovernedValue
+                    model={model}
+                    field={f}
+                    row={row}
+                    title={title}
+                    id={fid}
+                    busy={busy}
+                    onMove={async (to) => {
+                      if (!row) return;
+                      setBusy(true);
+                      setError(null);
+                      const out = await moveRecord(d.run, model, f, row, to, title);
+                      setBusy(false);
+                      if (out.kind === "ok") d.notify(`${label(f.name)}: ${optionLabel(to)}`);
+                      else if (out.kind === "approval") d.notify(out.message, "info");
+                      else {
+                        setError(out.message);
+                        d.notify(out.message, "error");
+                      }
+                    }}
+                  />
                 ) : (
                   <FieldInput
                     field={f}
@@ -377,6 +495,56 @@ export function RecordPanel({
           </span>
         </footer>
       </form>
+      {deleting && row && (
+        <DeleteDialog
+          model={model}
+          noun={title.toLowerCase()}
+          records={[{ id: row.id, label: d.recordLabel(model.name, row) }]}
+          onClose={() => setDeleting(false)}
+          onDone={() => onClose()}
+        />
+      )}
     </aside>
+  );
+}
+
+/** A governed field on the form: its value as a badge, and the moves the person may make. */
+function GovernedValue(p: {
+  model: ModelMeta;
+  field: FieldMeta;
+  row: Row | null;
+  title: string;
+  id: string;
+  busy: boolean;
+  onMove: (to: string) => void;
+}) {
+  const { model, field: f, row } = p;
+  const current = row ? String(row[f.name] ?? "") : initialOption(f);
+  return (
+    <div className="governed" id={p.id}>
+      {current ? <Badge field={f} value={current} /> : <span className="dim">—</span>}
+      {row ? (
+        <Menu
+          ariaLabel={`Move ${label(f.name).toLowerCase()}`}
+          triggerClassName="btn small"
+          trigger={<>Move to…</>}
+          items={(f.options ?? [])
+            .filter((o) => o !== current)
+            .map((o) => {
+              const mv = canMove(model, f, current, o, p.title);
+              return {
+                label: `${optionLabel(o)}${mv.needsApproval ? " *" : ""}`,
+                disabled: p.busy || !mv.allowed,
+                description: mv.reason || undefined,
+                onSelect: () => p.onMove(o),
+              };
+            })}
+        />
+      ) : (
+        <span className="hint">
+          Starts as {optionLabel(initialOption(f))}; it moves on through actions.
+        </span>
+      )}
+    </div>
   );
 }

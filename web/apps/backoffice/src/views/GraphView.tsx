@@ -16,12 +16,12 @@ import { fmt, MeasurePicker, measureOf, value } from "./PivotView.tsx";
 import { kanbanField } from "./KanbanView.tsx";
 import type { ViewProps } from "./types.ts";
 
-type Datum = { key: string; label: string; value: number };
+export type Datum = { key: string; label: string; value: number };
 
 const W = 640;
 const H = 340;
 const M = { l: 64, r: 16, t: 20, b: 64 };
-const color = (i: number) => `var(--c${(i % 8) + 1})`;
+const color = (i: number) => `var(--chart-${(i % 8) + 1})`;
 
 const compact = (m: FieldMeta | undefined, n: number) =>
   m?.kind === "money"
@@ -160,7 +160,7 @@ export function GraphView(p: ViewProps) {
   );
 }
 
-type ChartProps = {
+export type ChartProps = {
   data: Datum[];
   m: FieldMeta | undefined;
   id: string;
@@ -180,7 +180,14 @@ const activate = (fn: () => void) => ({
   },
 });
 
-function Cartesian({ data, m, type, id, summary, onPick }: ChartProps & { type: "bar" | "line" }) {
+export function Cartesian({
+  data,
+  m,
+  type,
+  id,
+  summary,
+  onPick,
+}: ChartProps & { type: "bar" | "line" }) {
   const max = Math.max(...data.map((x) => x.value), 0);
   const { top, ticks } = niceScale(max);
   const iw = W - M.l - M.r;
@@ -265,7 +272,7 @@ function arc(cx: number, cy: number, r0: number, r1: number, a0: number, a1: num
   return `M ${p(r1, a0)} A ${r1} ${r1} 0 ${large} 1 ${p(r1, a1)} L ${p(r0, a1)} A ${r0} ${r0} 0 ${large} 0 ${p(r0, a0)} Z`;
 }
 
-function Pie({ data, m, total, id, summary, onPick }: ChartProps & { total: number }) {
+export function Pie({ data, m, total, id, summary, onPick }: ChartProps & { total: number }) {
   const slices = data.map((x, i) => ({ ...x, i })).filter((x) => x.value > 0);
   let angle = -Math.PI / 2;
   return (

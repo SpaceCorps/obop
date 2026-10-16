@@ -1,4 +1,14 @@
-export type Command = { id: string; description: string; needs_approval: boolean };
+export type Command = {
+  id: string;
+  description: string;
+  needs_approval: boolean;
+  /** The select field this action moves (a transition), else null. */
+  field?: string | null;
+  /** The state the record must be in, or null for any state. */
+  from?: string | null;
+  /** The state the action moves the record to. */
+  to?: string | null;
+};
 export type Row = Record<string, unknown> & { id: string };
 
 export type Kind = "text" | "longtext" | "number" | "money" | "date" | "bool" | "select" | "ref";
@@ -19,6 +29,8 @@ export type ModelMeta = {
   description: string;
   can_create: boolean;
   can_update: boolean;
+  /** Whether this principal may delete records of the model (its write group). */
+  can_delete: boolean;
   fields: FieldMeta[];
   actions: Command[];
 };
@@ -51,17 +63,63 @@ export async function meta(token: string): Promise<ModuleMeta[] | null> {
         f.kind ??= f.name.endsWith("_minor") ? "money" : "text";
         f.required ??= false;
       }
+  for (const m of modules)
+    for (const model of m.models) {
+      model.can_delete ??= false;
+      model.actions ??= [];
+    }
   return modules;
 }
 
-/** Every principal-visible row of a model, plus the fields withheld from this principal. */
+/** The most rows any view that needs "all of them" (kanban, pivot, graph, calendar) loads. */
+export const LOAD_LIMIT = 5000;
+
+/** One server-side condition of `<model>.search` (D49). */
+export type ServerOp = "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
+export type ServerFilter = { field: string; op: ServerOp; value?: unknown };
+export type ServerOrder = { field: string; dir: "asc" | "desc" };
+export type SearchQuery = {
+  filter?: ServerFilter[];
+  order?: ServerOrder[];
+  limit?: number;
+  offset?: number;
+};
+export type SearchResult = { rows: Row[]; total: number; denied: string[] };
+
+/** One page of a model, filtered and ordered on the server. `error` carries the server's message. */
+export async function search(
+  token: string,
+  model: string,
+  query: SearchQuery,
+): Promise<SearchResult | { error: string; status: number }> {
+  const r = await call(token, `${model}.search`, query);
+  if (r.kind === "ok") {
+    const v = r.value as { rows: Row[]; total: number };
+    return { rows: v.rows, total: v.total, denied: r.denied };
+  }
+  return r.kind === "error"
+    ? { error: r.message, status: r.status }
+    : { error: "Needs approval", status: 202 };
+}
+
+/** Rows of a model for the views that need all of them, up to `LOAD_LIMIT`, and the real total. */
 export async function list(
   token: string,
   model: string,
-): Promise<{ rows: Row[]; denied: string[] } | { error: string }> {
-  const r = await call(token, `${model}.list`);
-  if (r.kind === "ok") return { rows: r.value as Row[], denied: r.denied };
-  return { error: r.kind === "error" ? r.message : "Needs approval" };
+): Promise<{ rows: Row[]; denied: string[]; total: number } | { error: string }> {
+  const r = await search(token, model, { limit: LOAD_LIMIT });
+  if ("error" in r) {
+    // Admin-only models outside the generated set have `list` but no `search`.
+    if (r.status === 404) {
+      const l = await call(token, `${model}.list`);
+      if (l.kind === "ok") {
+        const rows = l.value as Row[];
+        return { rows, denied: l.denied, total: rows.length };
+      }
+    }
+    return { error: r.error };
+  }
+  return { rows: r.rows, denied: r.denied, total: r.total };
 }
 
 async function send(token: string, path: string, body: object): Promise<Reply> {

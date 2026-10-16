@@ -9,6 +9,7 @@ export function InlineEdit(props: {
   row: Row;
   update: (id: string, patch: Record<string, unknown>) => Promise<string | null>;
   done: () => void;
+  optionState?: (option: string) => { disabled: boolean; title?: string };
 }) {
   const { field: f, row } = props;
   const [value, setValue] = useState<Edit>(() => toEdit(f, row[f.name]));
@@ -39,6 +40,7 @@ export function InlineEdit(props: {
         value={value}
         autoFocus
         compact
+        optionState={props.optionState}
         invalid={!!error}
         readOnly={busy}
         describedBy={error ? `ie-${row.id}-${f.name}` : undefined}

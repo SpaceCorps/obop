@@ -186,7 +186,10 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
       <div className="stack">
         <p className="hint">
           Describe a model and install it as a module. It gets the API, agent tools, permissions and
-          privacy rules like every other app.
+          privacy rules like every other app.{" "}
+          <a className="reflink" href={href({ app: "customize", model: "guide", tab: "guide" })}>
+            How to write a custom module?
+          </a>
         </p>
         <label className="field">
           <span className="flabel">Module name</span>

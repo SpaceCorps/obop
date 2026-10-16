@@ -49,7 +49,19 @@
 }
 .tablewrap {
   flex: 1;
-  overflow-x: auto;
+  min-block-size: 0;
+  overflow: auto;
+}
+/* The list scrolls inside, so the pager stays in view under it. */
+.content.view-list {
+  overflow: hidden;
+}
+.content.view-list > .listview {
+  block-size: 100%;
+  min-block-size: 0;
+}
+.listview > .pager {
+  flex: none;
 }
 .list {
   border-block-start: 1px solid var(--border);

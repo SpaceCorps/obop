@@ -79,6 +79,8 @@ type InputProps = {
   describedBy?: string;
   onKeyDown?: (e: KeyboardEvent) => void;
   compact?: boolean;
+  /** For a select: options that cannot be chosen now, with the reason (governed fields). */
+  optionState?: (option: string) => { disabled: boolean; title?: string };
 };
 
 /** The control for one field, chosen by its kind. */
@@ -116,11 +118,14 @@ export function FieldInput(p: InputProps) {
           onChange={(e) => onChange(e.target.value)}
         >
           {(!f.required || value === "") && <option value="">—</option>}
-          {f.options?.map((o) => (
-            <option key={o} value={o}>
-              {optionLabel(o)}
-            </option>
-          ))}
+          {f.options?.map((o) => {
+            const st = p.optionState?.(o);
+            return (
+              <option key={o} value={o} disabled={st?.disabled} title={st?.title}>
+                {optionLabel(o)}
+              </option>
+            );
+          })}
         </select>
       );
     case "longtext":

@@ -4,6 +4,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from "react";
@@ -30,6 +31,7 @@ class RowStore {
   private rows = new Map<string, Row[]>();
   private denied = new Map<string, string[]>();
   private errors = new Map<string, string>();
+  private totals = new Map<string, number>();
   private pending = new Map<string, Promise<void>>();
   private listeners = new Set<() => void>();
   version = 0;
@@ -49,6 +51,11 @@ class RowStore {
     for (const l of this.listeners) l();
   }
 
+  /** Cached rows without starting a load. */
+  cached(model: string): Row[] | undefined {
+    return this.rows.get(model);
+  }
+
   /** Cached rows; the first call starts the load and returns `undefined` until it lands. */
   peek(model: string): Row[] | undefined {
     if (!this.rows.has(model) && !this.pending.has(model) && !this.errors.has(model))
@@ -60,6 +67,14 @@ class RowStore {
   }
   errorOf(model: string): string | undefined {
     return this.errors.get(model);
+  }
+  /** How many records the model has in all; larger than the cached rows when it was capped. */
+  totalOf(model: string): number {
+    return this.totals.get(model) ?? this.rows.get(model)?.length ?? 0;
+  }
+  /** Reload a model only if some view already holds its rows. */
+  refresh(model: string): Promise<void> {
+    return this.rows.has(model) ? this.load(model) : Promise.resolve();
   }
 
   load(model: string): Promise<void> {
@@ -76,6 +91,7 @@ class RowStore {
         this.errors.delete(model);
         this.rows.set(model, r.rows);
         this.denied.set(model, r.denied);
+        this.totals.set(model, r.total);
       }
       this.bump();
     });
@@ -93,6 +109,8 @@ type Ctx = {
   models: Map<string, ModelInfo>;
   store: RowStore;
   version: number;
+  /** Counts successful writes, so server-side queries know when to ask again. */
+  mutations: number;
   notify: (text: string, tone?: Tone) => void;
   confirm: (message: string, confirmLabel?: string, cancelLabel?: string) => Promise<boolean>;
   /** The label of one record: the first text field, or the short id. */
@@ -114,15 +132,17 @@ export function useData(): Ctx {
 }
 
 /** The rows of a model, loaded on first use and refreshed after writes. */
-export function useRows(model: string) {
+export function useRows(model: string, enabled = true) {
   const d = useData();
-  const rows = d.store.peek(model);
+  const rows = enabled ? d.store.peek(model) : d.store.cached(model);
   return {
     rows: rows ?? NO_ROWS,
     loaded: rows !== undefined,
     error: d.store.errorOf(model),
     denied: d.store.deniedOf(model),
     reload: () => d.store.load(model),
+    /** All records of the model, which is more than `rows` when the load was capped. */
+    total: d.store.totalOf(model),
   };
 }
 
@@ -153,10 +173,11 @@ export function DataProvider(props: {
   modelsRef.current = models;
   const store = useMemo(() => new RowStore(token, (n) => modelsRef.current.get(n)?.model), [token]);
   const version = useSyncExternalStore(store.subscribe, store.getVersion);
+  const [mutations, setMutations] = useState(0);
 
   // A reloaded module list (install, uninstall) means the cached rows may be stale.
   useEffect(() => {
-    for (const name of models.keys()) if (store.peek(name) !== undefined) void store.load(name);
+    for (const name of models.keys()) if (store.cached(name) !== undefined) void store.load(name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [models]);
 
@@ -178,6 +199,7 @@ export function DataProvider(props: {
       models,
       store,
       version,
+      mutations,
       notify,
       confirm,
       recordLabel,
@@ -189,11 +211,15 @@ export function DataProvider(props: {
       linkTo: linkFor,
       run: async (id, body = {}) => {
         const r = await call(token, id, body);
-        if (r.kind === "ok") await store.load(id.split(".")[0]!);
+        if (r.kind === "ok") {
+          // Actions and writes change records of their own model, and a delete may free others.
+          await store.refresh(id.split(".")[0]!);
+          setMutations((n) => n + 1);
+        }
         return r;
       },
     };
-  }, [token, modules, apps, models, store, version, notify, confirm, linkFor]);
+  }, [token, modules, apps, models, store, version, mutations, notify, confirm, linkFor]);
 
   return <DataCtx.Provider value={value}>{props.children}</DataCtx.Provider>;
 }

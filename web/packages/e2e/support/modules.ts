@@ -12,11 +12,24 @@ export type FieldSpec = {
   description?: string;
 };
 
+/** A workflow step: `field := to` when the record is in `from` (any state when omitted). */
+export type ActionSpec = {
+  name: string;
+  field: string;
+  from?: string;
+  to: string;
+  /** Needs a human's approval when an agent runs it. */
+  approval?: boolean;
+  /** Group that may run it; defaults to the model's write group (`<id>.manager`). */
+  group?: string;
+};
+
 export type ModuleSpec = {
   /** Lower case letters, digits and underscores. Also the model name. */
   id: string;
   title: string;
   fields: FieldSpec[];
+  actions?: ActionSpec[];
 };
 
 const q = (s: string) => JSON.stringify(s);
@@ -49,6 +62,19 @@ export function manifest(m: ModuleSpec): string {
     if (f.kind && f.kind !== "text") lines.push(`  kind = ${q(f.kind)}`);
     if (f.kind === "select") lines.push(`  options = [${(f.options ?? []).map(q).join(", ")}]`);
     if (f.kind === "ref") lines.push(`  to = ${q(f.to ?? "")}`);
+  }
+  for (const a of m.actions ?? []) {
+    lines.push(
+      "",
+      "  [[model.action]]",
+      `  name = ${q(a.name)}`,
+      `  description = ${q(`${a.name} (end-to-end test action)`)}`,
+      `  field = ${q(a.field)}`,
+    );
+    if (a.from) lines.push(`  from = ${q(a.from)}`);
+    lines.push(`  to = ${q(a.to)}`);
+    if (a.group) lines.push(`  group = ${q(a.group)}`);
+    if (a.approval) lines.push("  approval = true");
   }
   return `${lines.join("\n")}\n`;
 }

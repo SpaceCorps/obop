@@ -258,3 +258,60 @@ a.smartbtn:hover {
     transform: translateY(24px);
   }
 }
+
+/* ---------- Governed workflows (D48) and delete (D49) ---------- */
+.statusbar button[aria-disabled="true"]:not(.on) {
+  cursor: not-allowed;
+  border-style: dashed;
+  background: transparent;
+  color: var(--text-subtle);
+}
+.statusbar button[aria-disabled="true"]:not(.on):hover {
+  border-color: var(--border-strong);
+  color: var(--text-subtle);
+}
+.statusbar li .tip {
+  display: inline-flex;
+}
+.governed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.btn.danger-text {
+  color: var(--danger-ink);
+}
+.actionrow .btn.ghost.danger-text {
+  margin-inline-start: auto;
+}
+.btn[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.blockers,
+.results {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-5);
+  display: grid;
+  gap: var(--space-1);
+}
+.results {
+  padding-inline-start: var(--space-4);
+  font-size: var(--text-sm);
+}
+.ok-text {
+  color: var(--success-ink);
+}
+.bad-text {
+  color: var(--danger-ink);
+}
+.kanban .kcol.blocked {
+  opacity: 0.55;
+}
+.kanban .kcol.blocked.over {
+  outline: 2px dashed var(--border-strong);
+}
+.moveto option:disabled {
+  color: var(--text-subtle);
+}

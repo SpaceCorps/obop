@@ -7,6 +7,8 @@ import "./controlpanel.css";
 import "./views.css";
 import "./record.css";
 import "./customize.css";
+import "./dashboards/dashboards.css";
+import "./guide.css";
 import "./brand/brand.css";
 
 createRoot(document.getElementById("root")!).render(
