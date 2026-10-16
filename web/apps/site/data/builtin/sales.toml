@@ -1,0 +1,59 @@
+# Snapshot of crates/modules/sales/src/lib.rs (built-in).
+[module]
+id = "sales"
+version = "builtin"
+name = "Sales"
+description = "Quotations and confirmed orders for customers."
+author = "obop"
+depends = ["base"]
+
+[[model]]
+name = "sale_order"
+description = "A quotation or confirmed order for a customer"
+read_group = "sales.user"
+write_group = "sales.user"
+
+  [[model.field]]
+  name = "party_id"
+  description = "Customer party id"
+  class = "none"
+  kind = "ref"
+  to = "party"
+
+  [[model.field]]
+  name = "state"
+  description = "Lifecycle: draft, confirmed or cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "confirmed", "cancelled"]
+
+  [[model.field]]
+  name = "total_minor"
+  description = "Order total in minor units"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code"
+  class = "none"
+
+  [[model.action]]
+  name = "confirm"
+  description = "Confirm a draft order"
+  field = "state"
+  from = "draft"
+  to = "confirmed"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel an order"
+  field = "state"
+  to = "cancelled"
+
+  [[model.action]]
+  name = "reset_to_draft"
+  description = "Put a cancelled order back to draft"
+  field = "state"
+  from = "cancelled"
+  to = "draft"

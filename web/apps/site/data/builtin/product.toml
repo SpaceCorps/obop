@@ -1,0 +1,37 @@
+# Snapshot of crates/modules/product/src/lib.rs (built-in).
+[module]
+id = "product"
+version = "builtin"
+name = "Products"
+description = "Goods and services the business sells, with SKU, list price and cost."
+author = "obop"
+
+[[model]]
+name = "product"
+description = "A good or service the business sells"
+read_group = "product.user"
+write_group = "product.manager"
+
+  [[model.field]]
+  name = "name"
+  description = "Product name"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "sku"
+  description = "Stock keeping unit"
+  class = "none"
+
+  [[model.field]]
+  name = "list_price_minor"
+  description = "List price in minor currency units"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "cost_minor"
+  description = "Unit cost in minor currency units"
+  class = "none"
+  kind = "money"
+  group = "product.cost_viewer"

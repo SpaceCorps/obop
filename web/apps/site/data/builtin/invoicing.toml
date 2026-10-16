@@ -1,0 +1,55 @@
+# Snapshot of crates/modules/invoicing/src/lib.rs (built-in).
+[module]
+id = "invoicing"
+version = "builtin"
+name = "Invoicing"
+description = "Customer invoices: drafts, posting with a gapless legal number, cancellation."
+author = "obop"
+depends = ["base", "sales"]
+
+[[model]]
+name = "invoice"
+description = "A customer invoice; posted invoices are corrected only by credit notes"
+read_group = "invoicing.user"
+write_group = "invoicing.user"
+
+  [[model.field]]
+  name = "sale_order_id"
+  description = "Source sale order id"
+  class = "none"
+  kind = "ref"
+  to = "sale_order"
+
+  [[model.field]]
+  name = "state"
+  description = "Lifecycle: draft, posted or cancelled"
+  class = "none"
+  kind = "select"
+  options = ["draft", "posted", "cancelled"]
+
+  [[model.field]]
+  name = "total_minor"
+  description = "Invoice total in minor units"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "number"
+  description = "Gapless legal number, set when posted"
+  class = "none"
+
+  [[model.action]]
+  name = "post"
+  description = "Post a draft invoice and assign its legal number"
+  field = "state"
+  from = "draft"
+  to = "posted"
+  group = "invoicing.manager"
+  approval = true
+
+  [[model.action]]
+  name = "cancel"
+  description = "Cancel a draft invoice"
+  field = "state"
+  from = "draft"
+  to = "cancelled"

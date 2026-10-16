@@ -1,0 +1,70 @@
+# Snapshot of crates/modules/crm/src/lib.rs (built-in).
+[module]
+id = "crm"
+version = "builtin"
+name = "CRM"
+description = "Leads and the sales pipeline."
+author = "obop"
+depends = ["base"]
+
+[[model]]
+name = "lead"
+description = "A prospective deal with a contact"
+read_group = "crm.user"
+write_group = "crm.user"
+
+  [[model.field]]
+  name = "title"
+  description = "Short description of the opportunity"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "contact_name"
+  description = "Name of the contact person"
+  class = "public_directory"
+  personal_data = true
+
+  [[model.field]]
+  name = "contact_email"
+  description = "Email of the contact person"
+  class = "public_directory"
+  personal_data = true
+
+  [[model.field]]
+  name = "expected_revenue_minor"
+  description = "Expected revenue in minor units"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "stage"
+  description = "Pipeline stage: new, qualified, won or lost"
+  class = "none"
+  kind = "select"
+  options = ["new", "qualified", "won", "lost"]
+
+  [[model.action]]
+  name = "qualify"
+  description = "Move a new lead to the qualified stage"
+  field = "stage"
+  from = "new"
+  to = "qualified"
+
+  [[model.action]]
+  name = "mark_won"
+  description = "Move the lead to the won stage"
+  field = "stage"
+  to = "won"
+
+  [[model.action]]
+  name = "mark_lost"
+  description = "Move the lead to the lost stage"
+  field = "stage"
+  to = "lost"
+
+  [[model.action]]
+  name = "reopen"
+  description = "Move the lead back to the new stage"
+  field = "stage"
+  to = "new"
