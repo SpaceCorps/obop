@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use tower_http::services::{ServeDir, ServeFile};
 
 pub mod community;
+pub mod openapi;
 pub mod public;
 pub mod website;
 
@@ -74,19 +75,86 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
         .route("/api/auth/agent-token", post(agent_token))
         .route("/api/commands", get(commands))
         .route("/api/meta", get(meta))
+        .route("/api/openapi.json", get(instance_openapi))
         .route("/api/approve/{plan_id}", post(approve))
         .route("/api/{model}/{command}", post(call))
         .with_state(state)
 }
 
+/// Unknown API paths answer JSON, never the HTML shell, so agents can parse the error.
+async fn api_not_found() -> Response {
+    api_error(
+        StatusCode::NOT_FOUND,
+        "not found",
+        "not_found",
+        "The API is described at /api/openapi.json.",
+    )
+}
+
+fn api_error(status: StatusCode, message: &str, code: &str, hint: &str) -> Response {
+    (
+        status,
+        Json(json!({"error": message, "code": code, "hint": hint})),
+    )
+        .into_response()
+}
+
+async fn instance_openapi(State(s): Shared, h: HeaderMap) -> Response {
+    blocking(move || instance_openapi_blocking(s, h)).await
+}
+
+/// The instance's OpenAPI document for the caller: with a valid token it lists the commands that
+/// token may use; without one it lists only sign-in and the discovery endpoints.
+fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
+    let base = h
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .map(|host| {
+            format!(
+                "{}://{host}",
+                if h.get("x-forwarded-proto").and_then(|v| v.to_str().ok()) == Some("https") {
+                    "https"
+                } else {
+                    "http"
+                }
+            )
+        })
+        .unwrap_or_default();
+    let modules = match s.auth(&h) {
+        Ok((p, _)) => s.dispatcher.meta(Surface::Rest, &p),
+        Err(_) => Vec::new(),
+    };
+    let doc = openapi::instance(&base, &modules);
+    let mut r = Json(doc).into_response();
+    r.headers_mut().insert(
+        axum::http::header::VARY,
+        axum::http::HeaderValue::from_static("Authorization"),
+    );
+    r
+}
+
 pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
     let api = api_routes(state);
     match static_dir {
-        Some(dir) => api.fallback_service(
-            ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html"))),
-        ),
-        None => api,
+        Some(dir) => api.fallback_service(spa_with_json_api_404(dir)),
+        None => api.fallback(api_not_found),
     }
+}
+
+/// The back office single-page app, except that an unknown `/api/...` path answers JSON (agents
+/// cannot parse the HTML shell) instead of falling through to it.
+fn spa_with_json_api_404(dir: &str) -> Router {
+    use tower::ServiceExt;
+    let files = ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html")));
+    Router::new().fallback(move |req: axum::extract::Request| {
+        let files = files.clone();
+        async move {
+            if req.uri().path().starts_with("/api/") {
+                return api_not_found().await;
+            }
+            files.oneshot(req).await.into_response()
+        }
+    })
 }
 
 async fn login(State(s): Shared, Json(body): Json<J>) -> Response {
@@ -302,7 +370,41 @@ fn bearer(h: &HeaderMap) -> &str {
 }
 
 fn err(status: StatusCode, e: String) -> Response {
-    (status, Json(json!({"error": e}))).into_response()
+    let (code, hint) = match status {
+        StatusCode::UNAUTHORIZED => ("unauthorized", "Sign in, or pass a valid bearer token."),
+        StatusCode::NOT_FOUND => (
+            "not_found",
+            "Check the id, or the API description at /openapi.json.",
+        ),
+        StatusCode::TOO_MANY_REQUESTS => ("rate_limited", "Wait a minute and try again."),
+        StatusCode::BAD_REQUEST => (
+            "invalid_input",
+            "Fix the input described in the error and retry.",
+        ),
+        _ => ("error", "See the API description at /openapi.json."),
+    };
+    (
+        status,
+        Json(json!({"error": e, "code": code, "hint": hint})),
+    )
+        .into_response()
+}
+
+async fn platform_openapi(headers: HeaderMap) -> Response {
+    let host = headers
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost");
+    let proto = if headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        == Some("https")
+    {
+        "https"
+    } else {
+        "http"
+    };
+    Json(openapi::platform(&format!("{proto}://{host}"))).into_response()
 }
 
 /// Routes of the control plane: sign up, sign in and manage your instances.
@@ -313,7 +415,9 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         .route("/api/platform/me", get(p_me))
         .route("/api/platform/instances", get(p_list).post(p_create))
         .route("/api/platform/instances/{id}/delete", post(p_delete))
-        .with_state(api);
+        .with_state(api)
+        .route("/openapi.json", get(platform_openapi))
+        .route("/api/openapi.json", get(platform_openapi));
     match static_dir {
         // The control plane serves the marketing site: real 404s, clean-URL redirects and
         // Markdown for agents (docs/site/SITE.md, "Server requirements").

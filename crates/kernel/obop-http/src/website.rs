@@ -197,6 +197,18 @@ async fn handle(
     let Some(segs) = segments(&uri) else {
         return StatusCode::BAD_REQUEST.into_response();
     };
+    // The API never answers with the site's HTML pages.
+    if segs.first().is_some_and(|s| s == "api") {
+        return (
+            StatusCode::NOT_FOUND,
+            axum::Json(serde_json::json!({
+                "error": "not found",
+                "code": "not_found",
+                "hint": "The control plane API is described at /openapi.json."
+            })),
+        )
+            .into_response();
+    }
     let trailing = uri.path().ends_with('/') || segs.is_empty();
     let mut base = root.as_ref().clone();
     for s in &segs {
@@ -256,6 +268,26 @@ async fn handle(
         )
         .await
     {
+        return r;
+    }
+    // Not found. Agents asking for Markdown get a Markdown error that says what to do next.
+    if wants_markdown(&headers) {
+        let body = format!(
+            "# Page not found\n\nNo page exists at `{}`. This is a real 404.\n\nWhere to go next:\n\n- [Documentation](/docs/): getting started, concepts, the agent setup guides and the API reference\n- [llms.txt](/llms.txt): the site map for AI agents, with a link to the Markdown version of every page\n- [Sitemap](/sitemap.xml): every page\n- [OpenAPI description of the control plane API](/openapi.json)\n",
+            uri.path().replace('`', "")
+        );
+        let mut r = (
+            StatusCode::NOT_FOUND,
+            if head { String::new() } else { body },
+        )
+            .into_response();
+        let h = r.headers_mut();
+        h.insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/markdown; charset=utf-8"),
+        );
+        h.insert(header::VARY, HeaderValue::from_static("Accept"));
+        h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
         return r;
     }
     // Not found: a real 404 with the site's own page.
@@ -399,6 +431,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn not_found_is_markdown_for_agents_and_json_under_api() {
+        let (_d, r) = site();
+        let (s, h, body) = get(&r, "/nope/", Some("text/markdown")).await;
+        assert_eq!(s, StatusCode::NOT_FOUND);
+        assert_eq!(h[header::CONTENT_TYPE], "text/markdown; charset=utf-8");
+        assert!(body.contains("/llms.txt") && body.contains("/docs/") && body.len() > 60);
+        let (s, h, body) = get(&r, "/api/whatever", None).await;
+        assert_eq!(s, StatusCode::NOT_FOUND);
+        assert_eq!(h[header::CONTENT_TYPE], "application/json");
+        assert!(body.contains("\"code\":\"not_found\""));
+    }
+
+    #[tokio::test]
     async fn etags_give_304_and_traversal_is_refused() {
         let (_d, r) = site();
         let (_, h, _) = get(&r, "/robots.txt", None).await;
@@ -457,11 +502,9 @@ mod tests {
                 let _ = std::fs::remove_dir_all(&self.0);
             }
         }
-        fn uuid_like() -> u128 {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+        fn uuid_like() -> u64 {
+            static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         }
     }
 }

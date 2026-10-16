@@ -1579,6 +1579,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn openapi_documents_are_served_and_unknown_api_paths_answer_json() {
+        let (r, _) = real();
+        let get = |r: axum::Router, path: &'static str, token: Option<String>| async move {
+            let mut b = Request::get(path).header("host", "inst.test");
+            if let Some(t) = token {
+                b = b.header("authorization", format!("Bearer {t}"));
+            }
+            let resp = r.oneshot(b.body(Body::empty()).unwrap()).await.unwrap();
+            let status = resp.status().as_u16();
+            let ct = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+            let body: J =
+                serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes())
+                    .unwrap_or(J::Null);
+            (status, ct, body)
+        };
+        // Anonymous: only sign-in and discovery; signed in: the commands this token may use.
+        let (s, _, anon) = get(r.clone(), "/api/openapi.json", None).await;
+        assert_eq!(s, 200);
+        assert_eq!(anon["openapi"], "3.1.0");
+        assert!(
+            anon["paths"]["/api/auth/login"].is_object()
+                && anon["paths"]["/api/party/list"].is_null()
+        );
+        let sam = login(&r, "sam", "another long password").await;
+        let (_, _, doc) = get(r.clone(), "/api/openapi.json", Some(sam)).await;
+        assert!(doc["paths"]["/api/party/list"]["post"]["operationId"].is_string());
+        assert!(
+            doc["paths"]["/api/invoice/list"].is_null(),
+            "sam holds no invoicing group"
+        );
+        assert_eq!(
+            doc["components"]["schemas"]["party"]["properties"]["name"]["type"],
+            "string"
+        );
+        // Unknown API paths are JSON with a code and a hint, never the HTML shell.
+        let (s, ct, body) = get(r.clone(), "/api/definitely/not/there", None).await;
+        assert_eq!((s, ct.as_str()), (404, "application/json"));
+        assert_eq!(body["code"], "not_found");
+        assert!(body["hint"].is_string());
+    }
+
+    #[tokio::test]
+    async fn the_control_plane_publishes_openapi_and_structured_errors() {
+        let backend = obop_storage::open("memory:").unwrap();
+        let platform = obop_platform::Platform::new(
+            Arc::new(Auth::with_test_params(backend.clone())),
+            backend,
+            Arc::new(obop_platform::provision::Fake::default()),
+        );
+        let r = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), None);
+        let resp = r
+            .clone()
+            .oneshot(
+                Request::get("/openapi.json")
+                    .header("host", "x.test")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+        let doc: J =
+            serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(
+            doc["paths"]["/api/platform/instances"]["post"]["operationId"],
+            "createInstance"
+        );
+        let (s, b) = post(&r, None, "/api/platform/instances", json!({"name": "acme"})).await;
+        assert_eq!((s, b["code"].as_str()), (401, Some("unauthorized")));
+        assert!(b["hint"].is_string());
+    }
+
+    #[tokio::test]
     async fn platform_signup_to_instance_over_http() {
         let backend = obop_storage::open("memory:").unwrap();
         let platform = obop_platform::Platform::new(

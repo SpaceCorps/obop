@@ -36,6 +36,20 @@ const ORG = {
   url: `${SITE_URL}/`,
   logo: `${SITE_URL}/apple-touch-icon.png`,
   sameAs: [GITHUB],
+  // No mailbox exists yet: people reach the project through GitHub.
+  contactPoint: [
+    {
+      "@type": "ContactPoint",
+      contactType: "customer support",
+      url: `${GITHUB}/issues`,
+      availableLanguage: ["en", "de", "fr", "pl", "fi", "sv", "es"],
+    },
+    {
+      "@type": "ContactPoint",
+      contactType: "security",
+      url: `${GITHUB}/security/advisories/new`,
+    },
+  ],
 };
 
 /** Structured data for one page: Organization and WebSite on the home page, breadcrumbs, and the type that fits. */
