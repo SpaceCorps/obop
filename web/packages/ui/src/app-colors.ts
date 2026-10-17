@@ -75,6 +75,7 @@ const TILE: Record<string, [number, number, number]> = {
   knowledge: [0.57, 0.11, 118],
   appointments: [0.55, 0.13, 215],
   expenses: [0.58, 0.12, 92],
+  connectors: [0.53, 0.12, 192],
   customize: [0.5, 0.04, 265],
   app: [0.5, 0.04, 265],
 };

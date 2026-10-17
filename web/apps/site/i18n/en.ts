@@ -109,7 +109,7 @@ export const en: Messages = {
     mockCaption: "Illustration with sample data",
     appsTitle: "All your business apps. One database.",
     appsSub:
-      "Every app shares the same contacts, products and permissions, so nothing needs gluing together. Five apps are built in; the other 22 install from the marketplace.",
+      "Every app shares the same contacts, products and permissions, so nothing needs gluing together. Six apps are built in; the other 22 install from the marketplace.",
     seeAllApps: "Browse all apps and their data models",
     pillarsTitle: "Built for the way work happens now",
     pillarsSub:
@@ -301,8 +301,8 @@ export const en: Messages = {
   apps: {
     title: "Apps",
     description:
-      "All 27 obop apps: 5 built in (CRM, Sales, Invoicing, Products, Contacts) and 22 installable from the marketplace. Each page lists models, fields, data classes, workflows and what agents can do.",
-    lead: "Every app is a module on one data model. Five are built in; the other 22 install from the marketplace in a click. Open an app to see its models, fields, workflows and what an AI agent may do with it.",
+      "All 28 obop apps: 6 built in (CRM, Sales, Invoicing, Products, Contacts, Connectors) and 22 installable from the marketplace. Each page lists models, fields, data classes, workflows and what agents can do.",
+    lead: "Every app is a module on one data model. Six are built in; the other 22 install from the marketplace in a click. Open an app to see its models, fields, workflows and what an AI agent may do with it.",
     filterLabel: "Filter apps",
     all: "All",
     available: "Available",

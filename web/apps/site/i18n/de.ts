@@ -111,7 +111,7 @@ export const de: Messages = {
     mockCaption: "Illustration mit Beispieldaten",
     appsTitle: "Alle Ihre Geschäfts-Apps. Eine Datenbank.",
     appsSub:
-      "Alle Apps teilen sich dieselben Kontakte, Produkte und Berechtigungen, sodass nichts zusammengeklebt werden muss. Fünf Apps sind integriert; die anderen 22 installieren Sie über den Marktplatz.",
+      "Alle Apps teilen sich dieselben Kontakte, Produkte und Berechtigungen, sodass nichts zusammengeklebt werden muss. Sechs Apps sind integriert; die anderen 22 installieren Sie über den Marktplatz.",
     seeAllApps: "Alle Apps und ihre Datenmodelle ansehen",
     pillarsTitle: "Gebaut für die heutige Arbeitsweise",
     pillarsSub:
@@ -319,8 +319,8 @@ export const de: Messages = {
   apps: {
     title: "Apps",
     description:
-      "Alle 27 obop-Apps: 5 integrierte (CRM, Sales, Invoicing, Products, Contacts) und 22 über den Marktplatz installierbare. Jede Seite listet Modelle, Felder, Datenklassen, Workflows und das, was Agenten tun können.",
-    lead: "Jede App ist ein Modul auf einem gemeinsamen Datenmodell. Fünf sind integriert; die anderen 22 installieren Sie mit einem Klick über den Marktplatz. Öffnen Sie eine App, um ihre Modelle, Felder, Workflows und das zu sehen, was ein KI-Agent damit tun darf.",
+      "Alle 28 obop-Apps: 6 integrierte (CRM, Sales, Invoicing, Products, Contacts, Connectors) und 22 über den Marktplatz installierbare. Jede Seite listet Modelle, Felder, Datenklassen, Workflows und das, was Agenten tun können.",
+    lead: "Jede App ist ein Modul auf einem gemeinsamen Datenmodell. Sechs sind integriert; die anderen 22 installieren Sie mit einem Klick über den Marktplatz. Öffnen Sie eine App, um ihre Modelle, Felder, Workflows und das zu sehen, was ein KI-Agent damit tun darf.",
     filterLabel: "Apps filtern",
     all: "Alle",
     available: "Verfügbar",
@@ -396,6 +396,7 @@ export const de: Messages = {
       crm: "Leads und Pipeline",
       sales: "Angebote und Aufträge",
       invoicing: "Entwürfe, Buchung, Nummerierung",
+      connectors: "Systeme verbinden, mit DSGVO-Kontrollen",
       product: "Preise, Artikelnummern, Kosten",
       base: "Personen und Firmen",
       projects: "Projekte und Aufgaben",

@@ -249,7 +249,7 @@ fn action_guard(def: &ModelDef, store: &Store, t: Transition) -> Guard {
 /// `list` and `search`: refuse a filter or order on a field the caller cannot read in clear
 /// (masked, withheld or not permitted). The error is the one for a field that does not exist, so
 /// the refusal is no oracle for the values behind it (D10).
-fn query_guard(def: &ModelDef) -> Guard {
+pub(crate) fn query_guard(def: &ModelDef) -> Guard {
     let def = def.clone();
     Box::new(move |p, input| {
         let usable = |name: &str| {

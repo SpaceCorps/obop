@@ -111,7 +111,7 @@ export const es: Messages = {
     mockCaption: "Ilustración con datos de ejemplo",
     appsTitle: "Todas las aplicaciones de tu negocio. Una sola base de datos.",
     appsSub:
-      "Todas las aplicaciones comparten los mismos contactos, productos y permisos, así que no hay nada que integrar a mano. Cinco aplicaciones vienen incluidas; las otras 22 se instalan desde el marketplace.",
+      "Todas las aplicaciones comparten los mismos contactos, productos y permisos, así que no hay nada que integrar a mano. Seis aplicaciones vienen incluidas; las otras 22 se instalan desde el marketplace.",
     seeAllApps: "Explora todas las aplicaciones y sus modelos de datos",
     pillarsTitle: "Hecha para la forma en que se trabaja hoy",
     pillarsSub:
@@ -319,8 +319,8 @@ export const es: Messages = {
   apps: {
     title: "Aplicaciones",
     description:
-      "Las 27 aplicaciones de obop: 5 incluidas (CRM, Ventas, Facturación, Productos y Contactos) y 22 instalables desde el marketplace. Cada página indica modelos, campos, clases de datos, flujos de trabajo y qué pueden hacer los agentes.",
-    lead: "Cada aplicación es un módulo sobre un único modelo de datos. Cinco vienen incluidas; las otras 22 se instalan desde el marketplace con un clic. Abre una aplicación para ver sus modelos, campos, flujos de trabajo y qué puede hacer con ella un agente de IA.",
+      "Las 28 aplicaciones de obop: 6 incluidas (CRM, Ventas, Facturación, Productos, Contactos y Conectores) y 22 instalables desde el marketplace. Cada página indica modelos, campos, clases de datos, flujos de trabajo y qué pueden hacer los agentes.",
+    lead: "Cada aplicación es un módulo sobre un único modelo de datos. Seis vienen incluidas; las otras 22 se instalan desde el marketplace con un clic. Abre una aplicación para ver sus modelos, campos, flujos de trabajo y qué puede hacer con ella un agente de IA.",
     filterLabel: "Filtrar aplicaciones",
     all: "Todas",
     available: "Disponibles",
@@ -393,6 +393,7 @@ export const es: Messages = {
       crm: "Oportunidades y embudo de ventas",
       sales: "Presupuestos y pedidos",
       invoicing: "Borradores, contabilización y numeración",
+      connectors: "Conectar sistemas, con controles RGPD",
       product: "Precios, SKU y costes",
       base: "Personas y empresas",
       projects: "Proyectos y tareas",

@@ -1,0 +1,696 @@
+[labels.pl.module]
+name = "Konektory"
+description = "Łącz systemy zewnętrzne i pozwalaj ludziom łączyć własne konta, z wbudowanymi mechanizmami wspierającymi zgodność z RODO: zapisana podstawa prawna, zgoda do wycofania, minimalizacja danych, pseudonimizacja według klasy, dziennik bez treści i rejestr czynności przetwarzania. Środki techniczne, nie porada prawna ani certyfikacja."
+
+[labels.pl.model.connector_provider]
+name = "Dostawca konektora"
+description = "Usługa lub protokół, z którego może korzystać połączenie, z katalogu dostarczanego z obop"
+
+[labels.pl.model.connector_provider.field.name]
+label = "Nazwa"
+description = "Nazwa dostawcy"
+
+[labels.pl.model.connector_provider.field.category]
+label = "Kategoria"
+description = "Rodzaj usługi"
+
+[labels.pl.model.connector_provider.field.category.options]
+generic = "Ogólne"
+messaging = "Komunikatory"
+payments = "Płatności"
+developer = "Programiści"
+calendar_contacts = "Kalendarz i kontakty"
+automation = "Automatyzacja"
+
+[labels.pl.model.connector_provider.field.maturity]
+label = "Dojrzałość"
+description = "Ile z tego istnieje: działa, adapter ogólny lub tylko definicja"
+
+[labels.pl.model.connector_provider.field.maturity.options]
+working = "Działa"
+generic_adapter = "Adapter ogólny"
+definition_only = "Tylko definicja"
+
+[labels.pl.model.connector_provider.field.engine]
+label = "Silnik"
+description = "Ogólny silnik, który go uruchamia"
+
+[labels.pl.model.connector_provider.field.engine.options]
+webhook_out = "Webhook wychodzący"
+webhook_in = "Webhook przychodzący"
+rest_pull = "Pobieranie przez REST"
+csv_export = "Eksport CSV"
+none = "Brak"
+
+[labels.pl.model.connector_provider.field.auth_kind]
+label = "Rodzaj uwierzytelniania"
+description = "Jak połączenie się uwierzytelnia"
+
+[labels.pl.model.connector_provider.field.auth_kind.options]
+api_key = "Klucz API"
+bearer_token = "Token okaziciela"
+basic = "Podstawowe"
+oauth2 = "OAuth 2"
+webhook_in = "Webhook przychodzący"
+webhook_out = "Webhook wychodzący"
+none = "Brak"
+
+[labels.pl.model.connector_provider.field.direction]
+label = "Kierunek"
+description = "Czy dane płyną do środka, na zewnątrz, czy w obu kierunkach"
+
+[labels.pl.model.connector_provider.field.direction.options]
+inbound = "Przychodzący"
+outbound = "Wychodzący"
+both = "Oba"
+
+[labels.pl.model.connector_provider.field.max_classes]
+label = "Maksymalne klasy"
+description = "Klasy danych, które dostawca może otrzymać najwyżej, oddzielone przecinkami"
+
+[labels.pl.model.connector_provider.field.purpose]
+label = "Cel"
+description = "Do czego służy dostawca"
+
+[labels.pl.model.connector_provider.field.description]
+label = "Opis"
+description = "Jak działa i co jest przetestowane"
+
+[labels.pl.model.connector_provider.field.legal_name]
+label = "Nazwa prawna"
+description = "Nazwa prawna odbiorcy (informacje o podprocesorze)"
+
+[labels.pl.model.connector_provider.field.country]
+label = "Kraj"
+description = "Kraj odbiorcy"
+
+[labels.pl.model.connector_provider.field.dpa_url]
+label = "Adres URL umowy powierzenia"
+description = "Gdzie dostawca publikuje umowę powierzenia przetwarzania danych"
+
+[labels.pl.model.connector_provider.field.eu_adequate]
+label = "Odpowiedni poziom ochrony w UE"
+description = "Czy przekazywanie opiera się na przetwarzaniu w UE lub kraju z odpowiednim poziomem ochrony: tak, nie lub zweryfikuj u dostawcy"
+
+[labels.pl.model.connector_provider.field.eu_adequate.options]
+yes = "Tak"
+no = "Nie"
+verify = "Zweryfikuj"
+
+[labels.pl.model.connector_provider.field.verify_note]
+label = "Uwaga do weryfikacji"
+description = "Co potwierdzić u dostawcy, zanim polegasz na tych informacjach"
+
+[labels.pl.model.connector_provider.field.allowed_hosts]
+label = "Dozwolone hosty"
+description = "Hosty, z którymi łączy się dostawca, oddzielone przecinkami; puste oznacza, że połączenie podaje własne"
+
+[labels.pl.model.connector_provider.field.config_fields]
+label = "Pola konfiguracji"
+description = "Ustawienia i dane uwierzytelniające potrzebne dostawcy, jako lista JSON"
+
+[labels.pl.model.connector_provider.field.setup]
+label = "Konfiguracja"
+description = "Instrukcja konfiguracji"
+
+[labels.pl.model.connector_provider.field.webhook_scheme]
+label = "Schemat webhooka"
+description = "Schemat podpisu przychodzących webhooków"
+
+[labels.pl.model.connector_provider.field.webhook_scheme.options]
+standard = "Standardowy"
+github = "GitHub"
+stripe = "Stripe"
+
+[labels.pl.model.connector_provider.field.oauth_scopes]
+label = "Zakresy OAuth"
+description = "Żądane zakresy OAuth, dla dostawców OAuth"
+
+[labels.pl.model.connector_provider.field.enabled]
+label = "Włączone"
+description = "Administrator włączył dostawcę"
+
+[labels.pl.model.connector_provider.field.users_may_use]
+label = "Dostępne dla użytkowników"
+description = "Użytkownicy mogą za jego pomocą łączyć własne konta"
+
+[labels.pl.model.connector_provider.field.dpa_recorded]
+label = "Umowa powierzenia zapisana"
+description = "Umowa z dostawcą jest zapisana"
+
+[labels.pl.model.connector_provider.field.legal_basis]
+label = "Podstawa prawna"
+description = "Podstawa prawna ustalona przez administratora dla tego dostawcy"
+
+[labels.pl.model.connector_provider.field.legal_basis.options]
+consent = "Zgoda"
+contract = "Umowa"
+legitimate_interest = "Prawnie uzasadniony interes"
+legal_obligation = "Obowiązek prawny"
+
+[labels.pl.model.connector_provider.field.legal_basis_text]
+label = "Tekst podstawy prawnej"
+description = "Tekst pokazywany użytkownikom, gdy są pytani o zgodę"
+
+[labels.pl.model.provider_policy]
+name = "Polityka dostawcy"
+description = "Co administrator zdecydował o jednym dostawcy: włączenie, dla kogo, podstawa prawna, umowa i klient OAuth"
+
+[labels.pl.model.provider_policy.field.provider]
+label = "Dostawca"
+description = "Identyfikator dostawcy, którego dotyczy ta polityka"
+
+[labels.pl.model.provider_policy.field.enabled]
+label = "Włączone"
+description = "Dostawcę w ogóle można połączyć"
+
+[labels.pl.model.provider_policy.field.users_may_use]
+label = "Dostępne dla użytkowników"
+description = "Osoby z grupą connectors.user mogą łączyć własne konta"
+
+[labels.pl.model.provider_policy.field.allowed_group]
+label = "Dozwolona grupa"
+description = "Grupa uprawnień, która może z niego korzystać; puste oznacza connectors.user"
+
+[labels.pl.model.provider_policy.field.legal_basis]
+label = "Podstawa prawna"
+description = "Zapisana podstawa prawna dla połączeń tego dostawcy"
+
+[labels.pl.model.provider_policy.field.legal_basis.options]
+consent = "Zgoda"
+contract = "Umowa"
+legitimate_interest = "Prawnie uzasadniony interes"
+legal_obligation = "Obowiązek prawny"
+
+[labels.pl.model.provider_policy.field.legal_basis_text]
+label = "Tekst podstawy prawnej"
+description = "Tekst pokazywany użytkownikom, gdy są pytani o zgodę"
+
+[labels.pl.model.provider_policy.field.dpa_recorded]
+label = "Umowa powierzenia zapisana"
+description = "Umowa powierzenia przetwarzania danych z dostawcą jest zawarta"
+
+[labels.pl.model.provider_policy.field.dpa_reference]
+label = "Odniesienie do umowy powierzenia"
+description = "Gdzie przechowywana jest umowa lub jej oznaczenie"
+
+[labels.pl.model.provider_policy.field.default_policy]
+label = "Polityka domyślna"
+description = "JSON polityki, z którym zaczynają nowe połączenia tego dostawcy"
+
+[labels.pl.model.provider_policy.field.oauth_client_id]
+label = "Klient OAuth"
+description = "Identyfikator klienta OAuth zarejestrowany u dostawcy"
+
+[labels.pl.model.provider_policy.field.oauth_client_secret]
+label = "Sekret klienta OAuth"
+description = "Sekret klienta OAuth; tylko do zapisu, przechowywany zaszyfrowany"
+
+[labels.pl.model.connection]
+name = "Połączenie"
+description = "Połączenie z jednym systemem zewnętrznym wraz z danymi uwierzytelniającymi, listą dozwolonych pól, polityką i stanem"
+
+[labels.pl.model.connection.field.name]
+label = "Nazwa"
+description = "Nazwa, która mówi, do czego służy połączenie"
+
+[labels.pl.model.connection.field.provider]
+label = "Dostawca"
+description = "Identyfikator dostawcy z katalogu"
+
+[labels.pl.model.connection.field.owner_scope]
+label = "Zakres właściciela"
+description = "Czy połączenie należy do instancji, czy do jednej osoby"
+
+[labels.pl.model.connection.field.owner_scope.options]
+instance = "Instancja"
+user = "Użytkownik"
+
+[labels.pl.model.connection.field.owner_user]
+label = "Właściciel"
+description = "Osoba, do której należy połączenie"
+
+[labels.pl.model.connection.field.owner_groups]
+label = "Grupy właściciela"
+description = "Grupy uprawnień właściciela w chwili ostatniej zmiany połączenia"
+
+[labels.pl.model.connection.field.state]
+label = "Stan"
+description = "Na jakim etapie jest połączenie: wersja robocza, połączone, wstrzymane, błąd lub odwołane"
+
+[labels.pl.model.connection.field.state.options]
+draft = "Wersja robocza"
+connected = "Połączone"
+paused = "Wstrzymane"
+error = "Błąd"
+revoked = "Odwołane"
+
+[labels.pl.model.connection.field.config]
+label = "Konfiguracja"
+description = "Ustawienia niejawne jako obiekt JSON"
+
+[labels.pl.model.connection.field.credentials]
+label = "Dane uwierzytelniające"
+description = "Dane uwierzytelniające jako obiekt JSON; tylko do zapisu, przechowywane zaszyfrowane, nigdy nie zwracane"
+
+[labels.pl.model.connection.field.credentials_hint]
+label = "Podpowiedź o danych uwierzytelniających"
+description = "Czy dane uwierzytelniające są ustawione, z co najwyżej czterema ostatnimi znakami"
+
+[labels.pl.model.connection.field.oauth_tokens]
+label = "Tokeny OAuth"
+description = "Tokeny OAuth; tylko do zapisu, przechowywane zaszyfrowane, nigdy nie zwracane"
+
+[labels.pl.model.connection.field.field_allowlist]
+label = "Lista dozwolonych pól"
+description = "Pola, które mogą wychodzić lub być przyjmowane, jako obiekt JSON model–nazwy pól; puste oznacza nic"
+
+[labels.pl.model.connection.field.policy]
+label = "Polityka"
+description = "Nadpisania traktowania według klasy lub pola oraz potwierdzenia ocen skutków, w JSON"
+
+[labels.pl.model.connection.field.rate_limit_per_hour]
+label = "Limit na godzinę"
+description = "Maksymalna liczba przepływów na godzinę"
+
+[labels.pl.model.connection.field.volume_cap_per_day]
+label = "Limit objętości na dobę"
+description = "Maksymalna liczba rekordów na dobę"
+
+[labels.pl.model.connection.field.retention_days]
+label = "Dni przechowywania"
+description = "Liczba dni przechowywania dzienników przepływu i uruchomień"
+
+[labels.pl.model.connection.field.created_at]
+label = "Utworzono"
+description = "Kiedy utworzono połączenie"
+
+[labels.pl.model.connection.field.last_sync_at]
+label = "Ostatnie uruchomienie"
+description = "Kiedy połączenie ostatnio działało"
+
+[labels.pl.model.connection.field.last_error]
+label = "Ostatni błąd"
+description = "Podsumowanie ostatniej awarii, bez treści"
+
+[labels.pl.model.connection.field.result]
+label = "Wynik"
+description = "Wynik ostatniego polecenia (test, uruchomienie, łącze autoryzacji); nigdy nie jest zapisywany"
+
+[labels.pl.model.connection.action.connect]
+label = "Połącz"
+description = "Uruchom przepływy: wymaga zapisanej podstawy prawnej i kompletnych ustawień"
+
+[labels.pl.model.connection.action.pause]
+label = "Wstrzymaj"
+description = "Zatrzymaj przepływy bez utraty ustawień"
+
+[labels.pl.model.connection.action.resume]
+label = "Wznów"
+description = "Uruchom przepływy ponownie po wstrzymaniu"
+
+[labels.pl.model.connection.action.retry]
+label = "Spróbuj ponownie"
+description = "Uruchom przepływy ponownie po błędzie"
+
+[labels.pl.model.connection.action.revoke]
+label = "Odwołaj"
+description = "Zakończ połączenie na stałe: dostęp ustaje, a dane uwierzytelniające, tokeny i mapy pseudonimów są usuwane"
+
+[labels.pl.model.connection.action.test]
+label = "Testuj"
+description = "Sprawdź ustawienia i adres bez wysyłania danych osobowych"
+
+[labels.pl.model.connection.action.sync]
+label = "Synchronizuj"
+description = "Uruchom połączenie teraz: wyślij, pobierz lub utwórz plik"
+
+[labels.pl.model.connection.action.oauth_start]
+label = "Rozpocznij OAuth"
+description = "Pobierz łącze, w którym osoba autoryzuje połączenie u dostawcy"
+
+[labels.pl.model.consent]
+name = "Zgoda"
+description = "Podstawa prawna zapisana dla połączenia: kto, dlaczego, jakie klasy danych i czy została wycofana"
+
+[labels.pl.model.consent.field.connection]
+label = "Połączenie"
+description = "Połączenie, którego dotyczy ta podstawa"
+
+[labels.pl.model.consent.field.owner_user]
+label = "Właściciel"
+description = "Właściciel połączenia"
+
+[labels.pl.model.consent.field.state]
+label = "Stan"
+description = "aktywna, wycofana lub zastąpiona nowszym zapisem"
+
+[labels.pl.model.consent.field.state.options]
+active = "Aktywna"
+withdrawn = "Wycofana"
+superseded = "Zastąpiona"
+
+[labels.pl.model.consent.field.subject_kind]
+label = "Rodzaj podmiotu"
+description = "Czyja to podstawa: użytkownika, kontaktu lub instancji"
+
+[labels.pl.model.consent.field.subject_kind.options]
+user = "Użytkownik"
+party = "Kontakt"
+instance = "Instancja"
+
+[labels.pl.model.consent.field.subject]
+label = "Podmiot"
+description = "Identyfikator kontaktu, gdy podmiotem jest kontakt"
+
+[labels.pl.model.consent.field.given_by]
+label = "Zapisane przez"
+description = "Kto to zapisał"
+
+[labels.pl.model.consent.field.purpose]
+label = "Cel"
+description = "Cel, w jakim dane są przetwarzane"
+
+[labels.pl.model.consent.field.legal_basis]
+label = "Podstawa prawna"
+description = "zgoda, umowa, prawnie uzasadniony interes lub obowiązek prawny"
+
+[labels.pl.model.consent.field.legal_basis.options]
+consent = "Zgoda"
+contract = "Umowa"
+legitimate_interest = "Prawnie uzasadniony interes"
+legal_obligation = "Obowiązek prawny"
+
+[labels.pl.model.consent.field.note]
+label = "Uwaga"
+description = "Wyjaśnienie; przy prawnie uzasadnionym interesie test równowagi interesów"
+
+[labels.pl.model.consent.field.classes]
+label = "Klasy"
+description = "Klasy danych, które mogą przepływać na podstawie tego zapisu, obliczone z połączenia"
+
+[labels.pl.model.consent.field.fields_summary]
+label = "Podsumowanie pól"
+description = "Modele i pola, które mogą przepływać, obliczone z połączenia"
+
+[labels.pl.model.consent.field.recorded_at]
+label = "Zapisano"
+description = "Kiedy zapisano"
+
+[labels.pl.model.consent.field.withdrawn_at]
+label = "Wycofano"
+description = "Kiedy została wycofana, jeśli została"
+
+[labels.pl.model.consent.field.withdrawn_by]
+label = "Wycofane przez"
+description = "Kto ją wycofał"
+
+[labels.pl.model.consent.action.withdraw]
+label = "Wycofaj"
+description = "Wycofaj podstawę: połączenie zostaje odwołane, a jego dane uwierzytelniające i tokeny usunięte"
+
+[labels.pl.model.sync_run]
+name = "Uruchomienie synchronizacji"
+description = "Jedno uruchomienie połączenia: kiedy, ile rekordów i jak się zakończyło; nigdy dane"
+
+[labels.pl.model.sync_run.field.connection]
+label = "Połączenie"
+description = "Połączenie, które działało"
+
+[labels.pl.model.sync_run.field.owner_user]
+label = "Właściciel"
+description = "Właściciel połączenia"
+
+[labels.pl.model.sync_run.field.direction]
+label = "Kierunek"
+description = "Czy dane wychodziły, czy przychodziły"
+
+[labels.pl.model.sync_run.field.direction.options]
+inbound = "Przychodzący"
+outbound = "Wychodzący"
+
+[labels.pl.model.sync_run.field.kind]
+label = "Rodzaj"
+description = "Co to uruchomiło"
+
+[labels.pl.model.sync_run.field.kind.options]
+manual = "Ręczne"
+event = "Zdarzenie"
+pull = "Pobieranie"
+webhook = "Webhook"
+test = "Testuj"
+
+[labels.pl.model.sync_run.field.started_at]
+label = "Rozpoczęto"
+description = "Kiedy się rozpoczęła"
+
+[labels.pl.model.sync_run.field.finished_at]
+label = "Zakończono"
+description = "Kiedy się zakończyła"
+
+[labels.pl.model.sync_run.field.status]
+label = "Status"
+description = "Jak się zakończyła"
+
+[labels.pl.model.sync_run.field.status.options]
+running = "W toku"
+succeeded = "Zakończona powodzeniem"
+partial = "Częściowa"
+failed = "Nieudana"
+retrying = "Ponawianie"
+dead_letter = "Utracona"
+
+[labels.pl.model.sync_run.field.records]
+label = "Rekordy"
+description = "Wysłane lub przyjęte rekordy"
+
+[labels.pl.model.sync_run.field.rejected]
+label = "Odrzucone"
+description = "Odrzucone rekordy"
+
+[labels.pl.model.sync_run.field.proposed]
+label = "Zaproponowane"
+description = "Zmiany oczekujące na zatwierdzenie"
+
+[labels.pl.model.sync_run.field.error_summary]
+label = "Podsumowanie błędu"
+description = "Dlaczego się nie powiodło, bez treści"
+
+[labels.pl.model.data_flow_log]
+name = "Dziennik przepływu danych"
+description = "Dziennik tylko do dopisywania każdego przepływu: kiedy, co, ile, jakie pola, jak potraktowane oraz skrót treści; nigdy sama treść"
+
+[labels.pl.model.data_flow_log.field.connection]
+label = "Połączenie"
+description = "Połączenie, do którego należy przepływ"
+
+[labels.pl.model.data_flow_log.field.owner_user]
+label = "Właściciel"
+description = "Właściciel połączenia"
+
+[labels.pl.model.data_flow_log.field.at]
+label = "Czas"
+description = "Kiedy to nastąpiło"
+
+[labels.pl.model.data_flow_log.field.direction]
+label = "Kierunek"
+description = "Czy dane wychodziły, czy przychodziły"
+
+[labels.pl.model.data_flow_log.field.direction.options]
+outbound = "Wychodzący"
+inbound = "Przychodzący"
+
+[labels.pl.model.data_flow_log.field.model]
+label = "Model"
+description = "Model, do którego należą rekordy"
+
+[labels.pl.model.data_flow_log.field.record_count]
+label = "Liczba rekordów"
+description = "Ile rekordów"
+
+[labels.pl.model.data_flow_log.field.fields_sent]
+label = "Wysłane pola"
+description = "Pola, które wyszły lub zostały przyjęte, oddzielone przecinkami"
+
+[labels.pl.model.data_flow_log.field.fields_denied]
+label = "Odrzucone pola"
+description = "Pola wstrzymane przez politykę, oddzielone przecinkami"
+
+[labels.pl.model.data_flow_log.field.masking_mode]
+label = "Tryb maskowania"
+description = "Zastosowane traktowanie, na przykład pseudonymise=2;allow=1"
+
+[labels.pl.model.data_flow_log.field.payload_hash]
+label = "Skrót treści"
+description = "SHA-256 treści po przetworzeniu"
+
+[labels.pl.model.data_flow_log.field.outcome]
+label = "Wynik"
+description = "wydane, odebrane, odmówione, odrzucone lub usunięte"
+
+[labels.pl.model.data_flow_log.field.outcome.options]
+released = "Wydane"
+received = "Odebrane"
+refused = "Odmówione"
+rejected = "Odrzucone"
+erased = "Usunięte"
+
+[labels.pl.model.data_flow_log.field.reason]
+label = "Powód"
+description = "Dlaczego przepływ odmówiono lub rekord odrzucono"
+
+[labels.pl.model.processing_register]
+name = "Rejestr czynności przetwarzania"
+description = "Rejestr czynności przetwarzania (art. 30 RODO) generowany z połączeń; można go wyeksportować jako CSV"
+
+[labels.pl.model.processing_register.field.connection]
+label = "Połączenie"
+description = "Połączenie opisane przez ten wiersz"
+
+[labels.pl.model.processing_register.field.name]
+label = "Nazwa"
+description = "Nazwa połączenia"
+
+[labels.pl.model.processing_register.field.state]
+label = "Stan"
+description = "Stan połączenia"
+
+[labels.pl.model.processing_register.field.owner_scope]
+label = "Zakres właściciela"
+description = "Instancja lub użytkownik"
+
+[labels.pl.model.processing_register.field.owner_user]
+label = "Właściciel"
+description = "Właściciel połączenia"
+
+[labels.pl.model.processing_register.field.provider]
+label = "Dostawca"
+description = "Identyfikator dostawcy"
+
+[labels.pl.model.processing_register.field.recipient]
+label = "Odbiorca"
+description = "Kto otrzymuje dane (nazwa prawna)"
+
+[labels.pl.model.processing_register.field.recipient_country]
+label = "Kraj odbiorcy"
+description = "Gdzie znajduje się odbiorca"
+
+[labels.pl.model.processing_register.field.purpose]
+label = "Cel"
+description = "Cel przetwarzania"
+
+[labels.pl.model.processing_register.field.legal_basis]
+label = "Podstawa prawna"
+description = "Zapisana podstawa prawna"
+
+[labels.pl.model.processing_register.field.consent_recorded_at]
+label = "Zgoda zapisana"
+description = "Kiedy zapisano podstawę"
+
+[labels.pl.model.processing_register.field.data_subjects]
+label = "Osoby, których dane dotyczą"
+description = "Kategorie osób, których dane dotyczą"
+
+[labels.pl.model.processing_register.field.personal_data_categories]
+label = "Kategorie danych osobowych"
+description = "Kategorie danych osobowych, z klasą i traktowaniem"
+
+[labels.pl.model.processing_register.field.transfer_basis]
+label = "Podstawa przekazania"
+description = "Podstawa przekazywania do krajów trzecich"
+
+[labels.pl.model.processing_register.field.agreement_recorded]
+label = "Umowa zapisana"
+description = "Czy umowa z odbiorcą jest zapisana"
+
+[labels.pl.model.processing_register.field.retention_days]
+label = "Dni przechowywania"
+description = "Przechowywanie dzienników, w dniach"
+
+[labels.pl.model.processing_register.field.safeguards]
+label = "Zabezpieczenia"
+description = "Środki techniczne i organizacyjne"
+
+[labels.pl.model.processing_register.field.csv]
+label = "CSV"
+description = "Rejestr jako CSV; wypełniany poleceniem eksportu, nigdy nie zapisywany"
+
+[labels.pl.model.processing_register.action.export_csv]
+label = "Eksportuj CSV"
+description = "Wyeksportuj rejestr jako CSV"
+
+[labels.pl.model.egress_policy]
+name = "Polityka wychodzących danych"
+description = "Przełączniki dla całej instancji: główny wyłącznik, tylko dostawcy z UE, wymóg umowy i lista dozwolonych hostów"
+
+[labels.pl.model.egress_policy.field.flows_enabled]
+label = "Przepływy włączone"
+description = "Główny wyłącznik: gdy wyłączony, nic nie wychodzi i nic nie jest przyjmowane"
+
+[labels.pl.model.egress_policy.field.eu_only]
+label = "Tylko UE"
+description = "Dane osobowe trafiają tylko do dostawców z podstawą UE lub odpowiedniego poziomu ochrony"
+
+[labels.pl.model.egress_policy.field.require_dpa]
+label = "Wymagaj umowy powierzenia"
+description = "Dane osobowe, nawet spseudonimizowane, trafiają tylko do dostawców, których umowa jest zapisana"
+
+[labels.pl.model.egress_policy.field.host_allowlist]
+label = "Lista dozwolonych hostów"
+description = "Hosty, z którymi połączenia mogą się łączyć, oddzielone przecinkami; puste oznacza brak dodatkowych ograniczeń"
+
+[labels.pl.model.egress_policy.field.default_retention_days]
+label = "Domyślne dni przechowywania"
+description = "Przechowywanie dzienników połączeń, które już nie istnieją"
+
+[labels.pl.model.egress_policy.field.result]
+label = "Wynik"
+description = "Wynik ostatniego polecenia (lista kontrolna, czyszczenie); nigdy nie jest zapisywany"
+
+[labels.pl.model.egress_policy.action.checklist]
+label = "Lista kontrolna"
+description = "Sprawdź, co jest skonfigurowane: umowy, przechowywanie, podstawy prawne, potwierdzenia"
+
+[labels.pl.model.egress_policy.action.purge]
+label = "Wyczyść"
+description = "Usuń dzienniki przepływu i uruchomienia starsze niż okres przechowywania"
+
+[labels.pl.model.privacy_preview]
+name = "Podgląd prywatności"
+description = "Jak wygląda przykładowy rekord wychodzący po zastosowaniu polityki: dokładna treść i traktowanie każdego pola"
+
+[labels.pl.model.privacy_preview.field.provider]
+label = "Dostawca"
+description = "Dostawca, którego dotyczy podgląd"
+
+[labels.pl.model.privacy_preview.field.connection]
+label = "Połączenie"
+description = "Istniejące połączenie do podglądu zamiast dostawcy"
+
+[labels.pl.model.privacy_preview.field.target_model]
+label = "Model docelowy"
+description = "Model do podglądu"
+
+[labels.pl.model.privacy_preview.field.record_id]
+label = "Rekord"
+description = "Rekord użyty jako przykład; puste oznacza pierwszy"
+
+[labels.pl.model.privacy_preview.field.field_allowlist]
+label = "Lista dozwolonych pól"
+description = "Pola do uwzględnienia, jako obiekt JSON model–nazwy pól"
+
+[labels.pl.model.privacy_preview.field.policy]
+label = "Polityka"
+description = "JSON polityki do podglądu"
+
+[labels.pl.model.privacy_preview.field.payload]
+label = "Treść"
+description = "Treść po przetworzeniu, jako JSON; nigdy nie jest zapisywana"
+
+[labels.pl.model.privacy_preview.field.treatments]
+label = "Traktowanie"
+description = "Każde pole z klasą i traktowaniem, jako JSON; nigdy nie jest zapisywane"
+
+[labels.pl.model.privacy_preview.action.render]
+label = "Renderuj"
+description = "Wyrenderuj przykładowy rekord po maskowaniu i pseudonimizacji"

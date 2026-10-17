@@ -268,6 +268,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e8ccc4ea9f6acc32d102c0f6d471d11d913ad15f20c04de743374861fa1d414"
 
 [[package]]
+name = "connectors"
+version = "0.0.0"
+dependencies = [
+ "base",
+ "crm",
+ "invoicing",
+ "obop-commands",
+ "obop-connectors",
+ "obop-registry",
+ "obop-storage",
+ "obop-types",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -947,12 +963,14 @@ version = "0.0.0"
 dependencies = [
  "axum",
  "base",
+ "connectors",
  "crm",
  "http-body-util",
  "invoicing",
  "obop-auth",
  "obop-commands",
  "obop-community",
+ "obop-connectors",
  "obop-http",
  "obop-masking",
  "obop-mcp",
@@ -967,6 +985,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower",
+ "url",
 ]
 
 [[package]]
@@ -1015,6 +1034,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "obop-connectors"
+version = "0.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "getrandom 0.4.3",
+ "hkdf",
+ "hmac",
+ "obop-commands",
+ "obop-masking",
+ "obop-registry",
+ "obop-storage",
+ "obop-types",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "ureq",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "obop-http"
 version = "0.0.0"
 dependencies = [
@@ -1024,6 +1065,7 @@ dependencies = [
  "mime_guess",
  "obop-commands",
  "obop-community",
+ "obop-connectors",
  "obop-mcp",
  "obop-site",
  "serde_json",

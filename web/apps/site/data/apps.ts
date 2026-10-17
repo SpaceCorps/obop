@@ -15,7 +15,7 @@ export interface AppCopy {
   purpose: string;
 }
 
-export const BUILTIN_IDS = ["base", "product", "crm", "sales", "invoicing"] as const;
+export const BUILTIN_IDS = ["base", "product", "crm", "sales", "invoicing", "connectors"] as const;
 
 export const APP_COPY: AppCopy[] = [
   {
@@ -57,6 +57,14 @@ export const APP_COPY: AppCopy[] = [
     tagline: "People and companies",
     purpose:
       "One record for every person and organisation you deal with, shared by all other apps. Names and emails are personal data and are masked for agents; the tax identifier is withheld from them entirely. A dedicated, approval-gated erase action anonymises a contact in place.",
+  },
+  {
+    id: "connectors",
+    category: "foundation",
+    name: "Connectors",
+    tagline: "Connect systems, with GDPR controls",
+    purpose:
+      "Connect other systems to the instance and let people connect their own accounts, with the controls that support GDPR compliance built in. Nothing leaves or enters without a recorded legal basis and a field allowlist; personal data goes out as keyed pseudonyms unless you decide otherwise, the sensitive classes stay withheld, every flow is logged without its payload, and withdrawing consent disconnects the service and purges its credentials. A processing register for Article 30 is generated from the connections. It provides technical controls; it is not legal advice or a certification, and the catalogue says for every service how much of it is implemented.",
   },
   {
     id: "projects",

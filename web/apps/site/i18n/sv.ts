@@ -111,7 +111,7 @@ export const sv: Messages = {
     mockCaption: "Illustration med exempeldata",
     appsTitle: "Alla företagets appar. En databas.",
     appsSub:
-      "Alla appar delar samma kontakter, produkter och behörigheter, så inget behöver kopplas ihop i efterhand. Fem appar är inbyggda; de övriga 22 installerar du från marknadsplatsen.",
+      "Alla appar delar samma kontakter, produkter och behörigheter, så inget behöver kopplas ihop i efterhand. Sex appar är inbyggda; de övriga 22 installerar du från marknadsplatsen.",
     seeAllApps: "Bläddra bland alla appar och deras datamodeller",
     pillarsTitle: "Byggd för hur man arbetar i dag",
     pillarsSub:
@@ -311,8 +311,8 @@ export const sv: Messages = {
   apps: {
     title: "Appar",
     description:
-      "Alla 27 appar i obop: 5 inbyggda (CRM, Sales, Invoicing, Products, Contacts) och 22 som kan installeras från marknadsplatsen. Varje sida visar modeller, fält, dataklasser, arbetsflöden och vad agenter kan göra.",
-    lead: "Varje app är en modul i en gemensam datamodell. Fem är inbyggda; de övriga 22 installerar du från marknadsplatsen med ett klick. Öppna en app för att se dess modeller, fält, arbetsflöden och vad en AI-agent får göra med den.",
+      "Alla 28 appar i obop: 6 inbyggda (CRM, Sales, Invoicing, Products, Contacts, Connectors) och 22 som kan installeras från marknadsplatsen. Varje sida visar modeller, fält, dataklasser, arbetsflöden och vad agenter kan göra.",
+    lead: "Varje app är en modul i en gemensam datamodell. Sex är inbyggda; de övriga 22 installerar du från marknadsplatsen med ett klick. Öppna en app för att se dess modeller, fält, arbetsflöden och vad en AI-agent får göra med den.",
     filterLabel: "Filtrera appar",
     all: "Alla",
     available: "Tillgängliga",
@@ -384,6 +384,7 @@ export const sv: Messages = {
       crm: "Leads och säljflöde",
       sales: "Offerter och ordrar",
       invoicing: "Utkast, bokföring, numrering",
+      connectors: "Anslut system, med GDPR-kontroller",
       product: "Priser, artikelnummer, kostnad",
       base: "Personer och företag",
       projects: "Projekt och uppgifter",

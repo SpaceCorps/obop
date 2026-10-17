@@ -4,7 +4,11 @@
   "Folder",
   "Helpdesk",
   "Lead",
+  "Model",
   "Plan",
   "Problem",
-  "Spam"
+  "Spam",
+  "Status",
+  "Stripe",
+  "Webhook"
 ]

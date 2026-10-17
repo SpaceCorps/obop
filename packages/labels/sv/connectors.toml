@@ -1,0 +1,696 @@
+[labels.sv.module]
+name = "Kopplingar"
+description = "Anslut externa system och låt personer ansluta sina egna konton, med inbyggda kontroller som stöder efterlevnad av GDPR: registrerad rättslig grund, samtycke som kan dras tillbaka, dataminimering, pseudonymisering efter dataklass, en logg utan innehåll och en förteckning över behandlingar. Tekniska kontroller, inte juridisk rådgivning eller certifiering."
+
+[labels.sv.model.connector_provider]
+name = "Kopplingsleverantör"
+description = "En tjänst eller ett protokoll som en anslutning kan använda, ur katalogen som levereras med obop"
+
+[labels.sv.model.connector_provider.field.name]
+label = "Namn"
+description = "Leverantörens namn"
+
+[labels.sv.model.connector_provider.field.category]
+label = "Kategori"
+description = "Typ av tjänst"
+
+[labels.sv.model.connector_provider.field.category.options]
+generic = "Generell"
+messaging = "Meddelanden"
+payments = "Betalningar"
+developer = "Utveckling"
+calendar_contacts = "Kalender och kontakter"
+automation = "Automatisering"
+
+[labels.sv.model.connector_provider.field.maturity]
+label = "Mognad"
+description = "Hur mycket som finns: fungerar, generisk adapter eller endast definition"
+
+[labels.sv.model.connector_provider.field.maturity.options]
+working = "Fungerar"
+generic_adapter = "Generisk adapter"
+definition_only = "Endast definition"
+
+[labels.sv.model.connector_provider.field.engine]
+label = "Motor"
+description = "Den generiska motor som kör den"
+
+[labels.sv.model.connector_provider.field.engine.options]
+webhook_out = "Utgående webhook"
+webhook_in = "Inkommande webhook"
+rest_pull = "REST-hämtning"
+csv_export = "CSV-export"
+none = "Ingen"
+
+[labels.sv.model.connector_provider.field.auth_kind]
+label = "Autentiseringstyp"
+description = "Hur anslutningen autentiseras"
+
+[labels.sv.model.connector_provider.field.auth_kind.options]
+api_key = "API-nyckel"
+bearer_token = "Bearer-token"
+basic = "Basic"
+oauth2 = "OAuth 2"
+webhook_in = "Inkommande webhook"
+webhook_out = "Utgående webhook"
+none = "Ingen"
+
+[labels.sv.model.connector_provider.field.direction]
+label = "Riktning"
+description = "Om data flödar in, ut eller åt båda hållen"
+
+[labels.sv.model.connector_provider.field.direction.options]
+inbound = "Inkommande"
+outbound = "Utgående"
+both = "Båda"
+
+[labels.sv.model.connector_provider.field.max_classes]
+label = "Högsta klasser"
+description = "Dataklasser som leverantören högst får ta emot, kommaseparerade"
+
+[labels.sv.model.connector_provider.field.purpose]
+label = "Ändamål"
+description = "Vad leverantören används till"
+
+[labels.sv.model.connector_provider.field.description]
+label = "Beskrivning"
+description = "Hur det fungerar och vad som är testat"
+
+[labels.sv.model.connector_provider.field.legal_name]
+label = "Juridiskt namn"
+description = "Mottagarens juridiska namn (uppgifter om underbiträde)"
+
+[labels.sv.model.connector_provider.field.country]
+label = "Land"
+description = "Mottagarens land"
+
+[labels.sv.model.connector_provider.field.dpa_url]
+label = "URL till personuppgiftsbiträdesavtal"
+description = "Var leverantören publicerar sitt personuppgiftsbiträdesavtal"
+
+[labels.sv.model.connector_provider.field.eu_adequate]
+label = "EU-adekvat"
+description = "Om överföringar grundas på behandling inom EU eller i ett land med adekvat skyddsnivå: ja, nej eller kontrollera med leverantören"
+
+[labels.sv.model.connector_provider.field.eu_adequate.options]
+yes = "Ja"
+no = "Nej"
+verify = "Kontrollera"
+
+[labels.sv.model.connector_provider.field.verify_note]
+label = "Kontrollanmärkning"
+description = "Vad som bör bekräftas med leverantören innan ni förlitar er på uppgifterna"
+
+[labels.sv.model.connector_provider.field.allowed_hosts]
+label = "Tillåtna värdar"
+description = "Värdar som leverantören ansluter till, kommaseparerade; tomt betyder att anslutningen anger egna"
+
+[labels.sv.model.connector_provider.field.config_fields]
+label = "Konfigurationsfält"
+description = "Inställningar och uppgifter som leverantören behöver, som JSON-lista"
+
+[labels.sv.model.connector_provider.field.setup]
+label = "Installation"
+description = "Installationsanvisningar"
+
+[labels.sv.model.connector_provider.field.webhook_scheme]
+label = "Webhook-schema"
+description = "Signaturschema för inkommande webhooks"
+
+[labels.sv.model.connector_provider.field.webhook_scheme.options]
+standard = "Standard"
+github = "GitHub"
+stripe = "Stripe"
+
+[labels.sv.model.connector_provider.field.oauth_scopes]
+label = "OAuth-omfång"
+description = "Begärda OAuth-omfång, för OAuth-leverantörer"
+
+[labels.sv.model.connector_provider.field.enabled]
+label = "Aktiverad"
+description = "En administratör har aktiverat leverantören"
+
+[labels.sv.model.connector_provider.field.users_may_use]
+label = "Personer får använda"
+description = "Personer får ansluta sina egna konton med den"
+
+[labels.sv.model.connector_provider.field.dpa_recorded]
+label = "Biträdesavtal registrerat"
+description = "Avtalet med leverantören är registrerat"
+
+[labels.sv.model.connector_provider.field.legal_basis]
+label = "Rättslig grund"
+description = "Rättslig grund som administratören har satt för den här leverantören"
+
+[labels.sv.model.connector_provider.field.legal_basis.options]
+consent = "Samtycke"
+contract = "Avtal"
+legitimate_interest = "Berättigat intresse"
+legal_obligation = "Rättslig förpliktelse"
+
+[labels.sv.model.connector_provider.field.legal_basis_text]
+label = "Text om rättslig grund"
+description = "Text som visas för personer när de tillfrågas om samtycke"
+
+[labels.sv.model.provider_policy]
+name = "Leverantörspolicy"
+description = "Vad en administratör har beslutat om en leverantör: aktiverad, för vem, rättslig grund, avtal och OAuth-klient"
+
+[labels.sv.model.provider_policy.field.provider]
+label = "Leverantör"
+description = "Id för den leverantör som policyn gäller"
+
+[labels.sv.model.provider_policy.field.enabled]
+label = "Aktiverad"
+description = "Leverantören får anslutas överhuvudtaget"
+
+[labels.sv.model.provider_policy.field.users_may_use]
+label = "Personer får använda"
+description = "Personer med connectors.user får ansluta sina egna konton"
+
+[labels.sv.model.provider_policy.field.allowed_group]
+label = "Tillåten grupp"
+description = "Behörighetsgrupp som får använda den; tomt betyder connectors.user"
+
+[labels.sv.model.provider_policy.field.legal_basis]
+label = "Rättslig grund"
+description = "Registrerad rättslig grund för anslutningar till den här leverantören"
+
+[labels.sv.model.provider_policy.field.legal_basis.options]
+consent = "Samtycke"
+contract = "Avtal"
+legitimate_interest = "Berättigat intresse"
+legal_obligation = "Rättslig förpliktelse"
+
+[labels.sv.model.provider_policy.field.legal_basis_text]
+label = "Text om rättslig grund"
+description = "Text som visas för personer när de tillfrågas om samtycke"
+
+[labels.sv.model.provider_policy.field.dpa_recorded]
+label = "Biträdesavtal registrerat"
+description = "Ett personuppgiftsbiträdesavtal med leverantören finns"
+
+[labels.sv.model.provider_policy.field.dpa_reference]
+label = "Referens till biträdesavtal"
+description = "Var avtalet förvaras eller dess referens"
+
+[labels.sv.model.provider_policy.field.default_policy]
+label = "Standardpolicy"
+description = "Policy-JSON som nya anslutningar till den här leverantören startar med"
+
+[labels.sv.model.provider_policy.field.oauth_client_id]
+label = "OAuth-klient"
+description = "OAuth-klient-id som ni registrerade hos leverantören"
+
+[labels.sv.model.provider_policy.field.oauth_client_secret]
+label = "OAuth-klienthemlighet"
+description = "OAuth-klienthemlighet; endast för inmatning, lagras krypterad"
+
+[labels.sv.model.connection]
+name = "Anslutning"
+description = "En koppling till ett externt system, med dess uppgifter, tillåtna fält, policy och tillstånd"
+
+[labels.sv.model.connection.field.name]
+label = "Namn"
+description = "Ett namn som säger vad anslutningen används till"
+
+[labels.sv.model.connection.field.provider]
+label = "Leverantör"
+description = "Leverantörens id i katalogen"
+
+[labels.sv.model.connection.field.owner_scope]
+label = "Ägarens omfång"
+description = "Om anslutningen tillhör instansen eller en person"
+
+[labels.sv.model.connection.field.owner_scope.options]
+instance = "Instans"
+user = "Person"
+
+[labels.sv.model.connection.field.owner_user]
+label = "Ägare"
+description = "Personen som äger anslutningen"
+
+[labels.sv.model.connection.field.owner_groups]
+label = "Ägarens grupper"
+description = "Behörighetsgrupper som ägaren hade när anslutningen senast ändrades"
+
+[labels.sv.model.connection.field.state]
+label = "Tillstånd"
+description = "Var anslutningen befinner sig: utkast, ansluten, pausad, fel eller återkallad"
+
+[labels.sv.model.connection.field.state.options]
+draft = "Utkast"
+connected = "Ansluten"
+paused = "Pausad"
+error = "Fel"
+revoked = "Återkallad"
+
+[labels.sv.model.connection.field.config]
+label = "Konfiguration"
+description = "Icke-hemliga inställningar som JSON-objekt"
+
+[labels.sv.model.connection.field.credentials]
+label = "Inloggningsuppgifter"
+description = "Uppgifter som JSON-objekt; endast för inmatning, lagras krypterade, returneras aldrig"
+
+[labels.sv.model.connection.field.credentials_hint]
+label = "Ledtråd om uppgifter"
+description = "Om uppgifter är satta, med högst de fyra sista tecknen"
+
+[labels.sv.model.connection.field.oauth_tokens]
+label = "OAuth-token"
+description = "OAuth-token; endast för inmatning, lagras krypterade, returneras aldrig"
+
+[labels.sv.model.connection.field.field_allowlist]
+label = "Lista över tillåtna fält"
+description = "Fält som får lämna eller tas emot, som JSON-objekt med modell till fältnamn; tomt betyder inget"
+
+[labels.sv.model.connection.field.policy]
+label = "Policy"
+description = "Avvikande behandling per klass eller fält och bekräftelser av konsekvensbedömningar, som JSON"
+
+[labels.sv.model.connection.field.rate_limit_per_hour]
+label = "Gräns per timme"
+description = "Högsta antal flöden per timme"
+
+[labels.sv.model.connection.field.volume_cap_per_day]
+label = "Volymtak per dag"
+description = "Högsta antal poster per dag"
+
+[labels.sv.model.connection.field.retention_days]
+label = "Lagringsdagar"
+description = "Antal dagar som flödesloggar och körningar sparas"
+
+[labels.sv.model.connection.field.created_at]
+label = "Skapad"
+description = "När anslutningen skapades"
+
+[labels.sv.model.connection.field.last_sync_at]
+label = "Senast körd"
+description = "När anslutningen senast kördes"
+
+[labels.sv.model.connection.field.last_error]
+label = "Senaste fel"
+description = "Sammanfattning av det senaste felet, utan innehåll"
+
+[labels.sv.model.connection.field.result]
+label = "Resultat"
+description = "Utdata från det senaste kommandot (test, körning, auktoriseringslänk); sparas aldrig"
+
+[labels.sv.model.connection.action.connect]
+label = "Anslut"
+description = "Starta flödena: kräver en registrerad rättslig grund och fullständiga inställningar"
+
+[labels.sv.model.connection.action.pause]
+label = "Pausa"
+description = "Stoppa flödena utan att förlora inställningarna"
+
+[labels.sv.model.connection.action.resume]
+label = "Återuppta"
+description = "Starta flödena igen efter en paus"
+
+[labels.sv.model.connection.action.retry]
+label = "Försök igen"
+description = "Starta flödena igen efter ett fel"
+
+[labels.sv.model.connection.action.revoke]
+label = "Återkalla"
+description = "Avsluta anslutningen för gott: åtkomsten upphör och uppgifter, token och pseudonymkartor rensas"
+
+[labels.sv.model.connection.action.test]
+label = "Testa"
+description = "Kontrollera inställningarna och adressen utan att skicka personuppgifter"
+
+[labels.sv.model.connection.action.sync]
+label = "Synkronisera"
+description = "Kör anslutningen nu: skicka, hämta eller skapa filen"
+
+[labels.sv.model.connection.action.oauth_start]
+label = "Starta OAuth"
+description = "Hämta länken där personen auktoriserar anslutningen hos leverantören"
+
+[labels.sv.model.consent]
+name = "Samtycke"
+description = "Den rättsliga grund som registrerats för en anslutning: vem, varför, vilka dataklasser och om den har dragits tillbaka"
+
+[labels.sv.model.consent.field.connection]
+label = "Anslutning"
+description = "Anslutningen som den här grunden gäller"
+
+[labels.sv.model.consent.field.owner_user]
+label = "Ägare"
+description = "Anslutningens ägare"
+
+[labels.sv.model.consent.field.state]
+label = "Tillstånd"
+description = "aktiv, tillbakadragen eller ersatt av en nyare post"
+
+[labels.sv.model.consent.field.state.options]
+active = "Aktiv"
+withdrawn = "Tillbakadragen"
+superseded = "Ersatt"
+
+[labels.sv.model.consent.field.subject_kind]
+label = "Typ av avsedd"
+description = "Vems grund det är: en persons, en kontakts eller instansens"
+
+[labels.sv.model.consent.field.subject_kind.options]
+user = "Person"
+party = "Kontakt"
+instance = "Instans"
+
+[labels.sv.model.consent.field.subject]
+label = "Avsedd"
+description = "Kontaktens id när den avsedda är en kontakt"
+
+[labels.sv.model.consent.field.given_by]
+label = "Registrerad av"
+description = "Vem som registrerade den"
+
+[labels.sv.model.consent.field.purpose]
+label = "Ändamål"
+description = "Ändamålet som uppgifterna behandlas för"
+
+[labels.sv.model.consent.field.legal_basis]
+label = "Rättslig grund"
+description = "samtycke, avtal, berättigat intresse eller rättslig förpliktelse"
+
+[labels.sv.model.consent.field.legal_basis.options]
+consent = "Samtycke"
+contract = "Avtal"
+legitimate_interest = "Berättigat intresse"
+legal_obligation = "Rättslig förpliktelse"
+
+[labels.sv.model.consent.field.note]
+label = "Anmärkning"
+description = "Förklaring; vid berättigat intresse intresseavvägningen"
+
+[labels.sv.model.consent.field.classes]
+label = "Klasser"
+description = "Dataklasser som får flöda enligt den här posten, beräknade från anslutningen"
+
+[labels.sv.model.consent.field.fields_summary]
+label = "Fältsammanfattning"
+description = "Modeller och fält som får flöda, beräknade från anslutningen"
+
+[labels.sv.model.consent.field.recorded_at]
+label = "Registrerad"
+description = "När den registrerades"
+
+[labels.sv.model.consent.field.withdrawn_at]
+label = "Tillbakadragen"
+description = "När den drogs tillbaka, om den gjorde det"
+
+[labels.sv.model.consent.field.withdrawn_by]
+label = "Tillbakadragen av"
+description = "Vem som drog tillbaka den"
+
+[labels.sv.model.consent.action.withdraw]
+label = "Dra tillbaka"
+description = "Dra tillbaka grunden: anslutningen återkallas och dess uppgifter och token rensas"
+
+[labels.sv.model.sync_run]
+name = "Synkroniseringskörning"
+description = "En körning av en anslutning: när, hur många poster och hur den slutade; aldrig data"
+
+[labels.sv.model.sync_run.field.connection]
+label = "Anslutning"
+description = "Anslutningen som kördes"
+
+[labels.sv.model.sync_run.field.owner_user]
+label = "Ägare"
+description = "Anslutningens ägare"
+
+[labels.sv.model.sync_run.field.direction]
+label = "Riktning"
+description = "Om data gick ut eller kom in"
+
+[labels.sv.model.sync_run.field.direction.options]
+inbound = "Inkommande"
+outbound = "Utgående"
+
+[labels.sv.model.sync_run.field.kind]
+label = "Typ"
+description = "Vad som startade den"
+
+[labels.sv.model.sync_run.field.kind.options]
+manual = "Manuell"
+event = "Händelse"
+pull = "Hämtning"
+webhook = "Webhook"
+test = "Testa"
+
+[labels.sv.model.sync_run.field.started_at]
+label = "Startad"
+description = "När den startade"
+
+[labels.sv.model.sync_run.field.finished_at]
+label = "Avslutad"
+description = "När den slutade"
+
+[labels.sv.model.sync_run.field.status]
+label = "Status"
+description = "Hur den slutade"
+
+[labels.sv.model.sync_run.field.status.options]
+running = "Pågår"
+succeeded = "Lyckades"
+partial = "Delvis"
+failed = "Misslyckades"
+retrying = "Försöker igen"
+dead_letter = "Död post"
+
+[labels.sv.model.sync_run.field.records]
+label = "Poster"
+description = "Skickade eller accepterade poster"
+
+[labels.sv.model.sync_run.field.rejected]
+label = "Avvisade"
+description = "Avvisade poster"
+
+[labels.sv.model.sync_run.field.proposed]
+label = "Föreslagna"
+description = "Ändringar som väntar på godkännande"
+
+[labels.sv.model.sync_run.field.error_summary]
+label = "Felsammanfattning"
+description = "Varför den misslyckades, utan innehåll"
+
+[labels.sv.model.data_flow_log]
+name = "Dataflödeslogg"
+description = "Logg som bara kan utökas över varje flöde: när, vad, hur många, vilka fält, hur behandlade och en hash av innehållet; aldrig innehållet"
+
+[labels.sv.model.data_flow_log.field.connection]
+label = "Anslutning"
+description = "Anslutningen som flödet tillhör"
+
+[labels.sv.model.data_flow_log.field.owner_user]
+label = "Ägare"
+description = "Anslutningens ägare"
+
+[labels.sv.model.data_flow_log.field.at]
+label = "Tidpunkt"
+description = "När det hände"
+
+[labels.sv.model.data_flow_log.field.direction]
+label = "Riktning"
+description = "Om data gick ut eller kom in"
+
+[labels.sv.model.data_flow_log.field.direction.options]
+outbound = "Utgående"
+inbound = "Inkommande"
+
+[labels.sv.model.data_flow_log.field.model]
+label = "Modell"
+description = "Modellen som posterna tillhör"
+
+[labels.sv.model.data_flow_log.field.record_count]
+label = "Antal poster"
+description = "Hur många poster"
+
+[labels.sv.model.data_flow_log.field.fields_sent]
+label = "Skickade fält"
+description = "Fält som lämnade eller accepterades, kommaseparerade"
+
+[labels.sv.model.data_flow_log.field.fields_denied]
+label = "Nekade fält"
+description = "Fält som policyn höll tillbaka, kommaseparerade"
+
+[labels.sv.model.data_flow_log.field.masking_mode]
+label = "Maskningsläge"
+description = "Tillämpade behandlingar, till exempel pseudonymise=2;allow=1"
+
+[labels.sv.model.data_flow_log.field.payload_hash]
+label = "Hash av innehållet"
+description = "SHA-256 av innehållet efter behandling"
+
+[labels.sv.model.data_flow_log.field.outcome]
+label = "Utfall"
+description = "släppt, mottagen, nekad, avvisad eller raderad"
+
+[labels.sv.model.data_flow_log.field.outcome.options]
+released = "Släppt"
+received = "Mottagen"
+refused = "Nekad"
+rejected = "Avvisade"
+erased = "Raderad"
+
+[labels.sv.model.data_flow_log.field.reason]
+label = "Orsak"
+description = "Varför ett flöde nekades eller en post avvisades"
+
+[labels.sv.model.processing_register]
+name = "Förteckning över behandlingar"
+description = "Förteckningen över behandlingar (GDPR artikel 30) genererad från anslutningarna; kan exporteras som CSV"
+
+[labels.sv.model.processing_register.field.connection]
+label = "Anslutning"
+description = "Anslutningen som raden beskriver"
+
+[labels.sv.model.processing_register.field.name]
+label = "Namn"
+description = "Anslutningens namn"
+
+[labels.sv.model.processing_register.field.state]
+label = "Tillstånd"
+description = "Anslutningens tillstånd"
+
+[labels.sv.model.processing_register.field.owner_scope]
+label = "Ägarens omfång"
+description = "Instans eller person"
+
+[labels.sv.model.processing_register.field.owner_user]
+label = "Ägare"
+description = "Anslutningens ägare"
+
+[labels.sv.model.processing_register.field.provider]
+label = "Leverantör"
+description = "Leverantörs-id"
+
+[labels.sv.model.processing_register.field.recipient]
+label = "Mottagare"
+description = "Vem som tar emot uppgifterna (juridiskt namn)"
+
+[labels.sv.model.processing_register.field.recipient_country]
+label = "Mottagarens land"
+description = "Var mottagaren finns"
+
+[labels.sv.model.processing_register.field.purpose]
+label = "Ändamål"
+description = "Behandlingens ändamål"
+
+[labels.sv.model.processing_register.field.legal_basis]
+label = "Rättslig grund"
+description = "Registrerad rättslig grund"
+
+[labels.sv.model.processing_register.field.consent_recorded_at]
+label = "Samtycke registrerat"
+description = "När grunden registrerades"
+
+[labels.sv.model.processing_register.field.data_subjects]
+label = "Registrerade"
+description = "Kategorier av registrerade"
+
+[labels.sv.model.processing_register.field.personal_data_categories]
+label = "Kategorier av personuppgifter"
+description = "Kategorier av personuppgifter, med klass och behandling"
+
+[labels.sv.model.processing_register.field.transfer_basis]
+label = "Överföringsgrund"
+description = "Grund för överföringar till tredjeländer"
+
+[labels.sv.model.processing_register.field.agreement_recorded]
+label = "Avtal registrerat"
+description = "Om avtalet med mottagaren är registrerat"
+
+[labels.sv.model.processing_register.field.retention_days]
+label = "Lagringsdagar"
+description = "Loggarnas lagringstid i dagar"
+
+[labels.sv.model.processing_register.field.safeguards]
+label = "Skyddsåtgärder"
+description = "Tekniska och organisatoriska åtgärder"
+
+[labels.sv.model.processing_register.field.csv]
+label = "CSV"
+description = "Förteckningen som CSV; fylls av exportkommandot, sparas aldrig"
+
+[labels.sv.model.processing_register.action.export_csv]
+label = "Exportera CSV"
+description = "Exportera förteckningen som CSV"
+
+[labels.sv.model.egress_policy]
+name = "Policy för utgående data"
+description = "Instansomfattande brytare för dataflöden: huvudbrytaren, endast EU-leverantörer, avtalskravet och listan över tillåtna värdar"
+
+[labels.sv.model.egress_policy.field.flows_enabled]
+label = "Flöden aktiverade"
+description = "Huvudbrytare: när den är av lämnar inget systemet och inget accepteras"
+
+[labels.sv.model.egress_policy.field.eu_only]
+label = "Endast EU"
+description = "Personuppgifter går bara till leverantörer med EU- eller adekvansgrund"
+
+[labels.sv.model.egress_policy.field.require_dpa]
+label = "Kräv biträdesavtal"
+description = "Personuppgifter, även pseudonymiserade, går bara till leverantörer vars avtal är registrerat"
+
+[labels.sv.model.egress_policy.field.host_allowlist]
+label = "Lista över tillåtna värdar"
+description = "Värdar som anslutningar får nå, kommaseparerade; tomt betyder ingen extra begränsning"
+
+[labels.sv.model.egress_policy.field.default_retention_days]
+label = "Standardlagringsdagar"
+description = "Lagringstid för loggar från anslutningar som inte längre finns"
+
+[labels.sv.model.egress_policy.field.result]
+label = "Resultat"
+description = "Utdata från det senaste kommandot (checklista, rensning); sparas aldrig"
+
+[labels.sv.model.egress_policy.action.checklist]
+label = "Checklista"
+description = "Kontrollera vad som är konfigurerat: avtal, lagringstid, rättsliga grunder, bekräftelser"
+
+[labels.sv.model.egress_policy.action.purge]
+label = "Rensa"
+description = "Ta bort flödesloggar och körningar som är äldre än sin lagringstid"
+
+[labels.sv.model.privacy_preview]
+name = "Integritetsförhandsgranskning"
+description = "Hur en exempelpost ser ut efter policyn: det exakta innehållet och behandlingen av varje fält"
+
+[labels.sv.model.privacy_preview.field.provider]
+label = "Leverantör"
+description = "Leverantör som förhandsgranskningen gäller"
+
+[labels.sv.model.privacy_preview.field.connection]
+label = "Anslutning"
+description = "En befintlig anslutning att förhandsgranska i stället för en leverantör"
+
+[labels.sv.model.privacy_preview.field.target_model]
+label = "Målmodell"
+description = "Modellen som ska förhandsgranskas"
+
+[labels.sv.model.privacy_preview.field.record_id]
+label = "Post"
+description = "En post att använda som exempel; tomt betyder den första"
+
+[labels.sv.model.privacy_preview.field.field_allowlist]
+label = "Lista över tillåtna fält"
+description = "Fält som ska ingå, som JSON-objekt med modell till fältnamn"
+
+[labels.sv.model.privacy_preview.field.policy]
+label = "Policy"
+description = "Policy-JSON att förhandsgranska"
+
+[labels.sv.model.privacy_preview.field.payload]
+label = "Innehåll"
+description = "Innehållet efter behandling, som JSON; sparas aldrig"
+
+[labels.sv.model.privacy_preview.field.treatments]
+label = "Behandlingar"
+description = "Varje fält med klass och behandling, som JSON; sparas aldrig"
+
+[labels.sv.model.privacy_preview.action.render]
+label = "Rendera"
+description = "Rendera en exempelpost efter maskering och pseudonymisering"

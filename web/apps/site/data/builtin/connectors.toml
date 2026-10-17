@@ -1,0 +1,866 @@
+# Snapshot of crates/modules/connectors/src/meta.rs (built-in).
+[module]
+id = "connectors"
+version = "builtin"
+name = "Connectors"
+description = "Connect external systems and let people connect their own accounts, with the controls that support GDPR compliance built in."
+author = "obop"
+depends = []
+
+[[model]]
+name = "connector_provider"
+description = "A service or protocol a connection can use, from the catalogue shipped with obop"
+read_group = "connectors.user"
+write_group = "connectors.admin"
+
+[[model.field]]
+name = "name"
+description = "Name of the provider"
+class = "none"
+required = true
+
+[[model.field]]
+name = "category"
+description = "Kind of service"
+class = "none"
+kind = "select"
+options = ["generic", "messaging", "payments", "developer", "calendar_contacts", "automation"]
+
+[[model.field]]
+name = "maturity"
+description = "How much of it exists: working, generic adapter or definition only"
+class = "none"
+kind = "select"
+options = ["working", "generic_adapter", "definition_only"]
+
+[[model.field]]
+name = "engine"
+description = "The generic engine that runs it"
+class = "none"
+kind = "select"
+options = ["webhook_out", "webhook_in", "rest_pull", "csv_export", "none"]
+
+[[model.field]]
+name = "auth_kind"
+description = "How the connection authenticates"
+class = "none"
+kind = "select"
+options = ["api_key", "bearer_token", "basic", "oauth2", "webhook_in", "webhook_out", "none"]
+
+[[model.field]]
+name = "direction"
+description = "Whether data flows in, out or both ways"
+class = "none"
+kind = "select"
+options = ["inbound", "outbound", "both"]
+
+[[model.field]]
+name = "max_classes"
+description = "Data classes the provider may receive at most, comma separated"
+class = "none"
+
+[[model.field]]
+name = "purpose"
+description = "What the provider is used for"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "description"
+description = "How it works and what is tested"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "legal_name"
+description = "Legal name of the recipient (sub-processor information)"
+class = "none"
+
+[[model.field]]
+name = "country"
+description = "Country of the recipient"
+class = "none"
+
+[[model.field]]
+name = "dpa_url"
+description = "Where the provider publishes its data processing agreement"
+class = "none"
+
+[[model.field]]
+name = "eu_adequate"
+description = "Whether transfers rest on EU or adequate-country processing: yes, no or verify with the provider"
+class = "none"
+kind = "select"
+options = ["yes", "no", "verify"]
+
+[[model.field]]
+name = "verify_note"
+description = "What to confirm with the provider before relying on these facts"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "allowed_hosts"
+description = "Hosts the provider connects to, comma separated; empty means the connection names its own"
+class = "none"
+
+[[model.field]]
+name = "config_fields"
+description = "Settings and credentials the provider needs, as a JSON list"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "setup"
+description = "Setup instructions"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "webhook_scheme"
+description = "Signature scheme of inbound webhooks"
+class = "none"
+kind = "select"
+options = ["standard", "github", "stripe"]
+
+[[model.field]]
+name = "oauth_scopes"
+description = "OAuth scopes requested, for OAuth providers"
+class = "none"
+
+[[model.field]]
+name = "enabled"
+description = "An administrator enabled the provider"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "users_may_use"
+description = "People may connect their own accounts with it"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "dpa_recorded"
+description = "The agreement with the provider is recorded"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "legal_basis"
+description = "Legal basis the administrator set for this provider"
+class = "none"
+kind = "select"
+options = ["consent", "contract", "legitimate_interest", "legal_obligation"]
+
+[[model.field]]
+name = "legal_basis_text"
+description = "Text shown to people when they are asked for consent"
+class = "none"
+kind = "longtext"
+
+[[model]]
+name = "provider_policy"
+description = "What an administrator decided about one provider: enabled, for whom, legal basis, agreement and OAuth client"
+read_group = "connectors.admin"
+write_group = "connectors.admin"
+
+[[model.field]]
+name = "provider"
+description = "Id of the provider this policy is for"
+class = "none"
+required = true
+
+[[model.field]]
+name = "enabled"
+description = "The provider may be connected at all"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "users_may_use"
+description = "People with connectors.user may connect their own accounts"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "allowed_group"
+description = "Permission group that may use it; empty means connectors.user"
+class = "none"
+
+[[model.field]]
+name = "legal_basis"
+description = "Legal basis recorded for connections of this provider"
+class = "none"
+kind = "select"
+options = ["consent", "contract", "legitimate_interest", "legal_obligation"]
+
+[[model.field]]
+name = "legal_basis_text"
+description = "Text shown to people when they are asked for consent"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "dpa_recorded"
+description = "A data processing agreement with the provider is in place"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "dpa_reference"
+description = "Where the agreement is kept or its reference"
+class = "none"
+
+[[model.field]]
+name = "default_policy"
+description = "Policy JSON that new connections of this provider start with"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "oauth_client_id"
+description = "OAuth client id you registered with the provider"
+class = "internal"
+
+[[model.field]]
+name = "oauth_client_secret"
+description = "OAuth client secret; write-only, stored encrypted"
+class = "secret"
+kind = "longtext"
+
+[[model]]
+name = "connection"
+description = "A link to one external system, with its credentials, field allowlist, policy and state"
+read_group = "connectors.user"
+write_group = "connectors.user"
+
+[[model.field]]
+name = "name"
+description = "A name that tells you what the connection is for"
+class = "none"
+required = true
+
+[[model.field]]
+name = "provider"
+description = "Id of the provider from the catalogue"
+class = "none"
+required = true
+
+[[model.field]]
+name = "owner_scope"
+description = "Whether the connection belongs to the instance or to one person"
+class = "none"
+kind = "select"
+options = ["instance", "user"]
+required = true
+
+[[model.field]]
+name = "owner_user"
+description = "The person who owns the connection"
+class = "internal"
+personal_data = true
+
+[[model.field]]
+name = "owner_groups"
+description = "Permission groups the owner held when the connection was last changed"
+class = "none"
+group = "connectors.admin"
+
+[[model.field]]
+name = "state"
+description = "Where the connection is: draft, connected, paused, error or revoked"
+class = "none"
+kind = "select"
+options = ["draft", "connected", "paused", "error", "revoked"]
+
+[[model.field]]
+name = "config"
+description = "Non-secret settings as a JSON object"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "credentials"
+description = "Credentials as a JSON object; write-only, stored encrypted, never returned"
+class = "secret"
+kind = "longtext"
+
+[[model.field]]
+name = "credentials_hint"
+description = "Whether credentials are set, with at most the last four characters"
+class = "none"
+
+[[model.field]]
+name = "oauth_tokens"
+description = "OAuth tokens; write-only, stored encrypted, never returned"
+class = "secret"
+kind = "longtext"
+
+[[model.field]]
+name = "field_allowlist"
+description = "Fields that may leave or be accepted, as a JSON object of model to field names; empty means nothing"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "policy"
+description = "Treatment overrides by class or field and impact-assessment acknowledgements, as JSON"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "rate_limit_per_hour"
+description = "Most flows per hour"
+class = "none"
+kind = "number"
+
+[[model.field]]
+name = "volume_cap_per_day"
+description = "Most records per day"
+class = "none"
+kind = "number"
+
+[[model.field]]
+name = "retention_days"
+description = "Days flow logs and runs are kept"
+class = "none"
+kind = "number"
+
+[[model.field]]
+name = "created_at"
+description = "When the connection was created"
+class = "none"
+
+[[model.field]]
+name = "last_sync_at"
+description = "When the connection last ran"
+class = "none"
+
+[[model.field]]
+name = "last_error"
+description = "Summary of the last failure, without payloads"
+class = "none"
+
+[[model.field]]
+name = "result"
+description = "Output of the last command (test, sync, authorisation link); never stored"
+class = "none"
+kind = "longtext"
+
+[[model.action]]
+name = "connect"
+description = "Start the flows: needs a recorded legal basis and complete settings"
+field = "state"
+from = "draft"
+to = "connected"
+approval = true
+
+[[model.action]]
+name = "pause"
+description = "Stop the flows without losing the settings"
+field = "state"
+from = "connected"
+to = "paused"
+approval = true
+
+[[model.action]]
+name = "resume"
+description = "Start the flows again after a pause"
+field = "state"
+from = "paused"
+to = "connected"
+approval = true
+
+[[model.action]]
+name = "retry"
+description = "Start the flows again after an error"
+field = "state"
+from = "error"
+to = "connected"
+approval = true
+
+[[model.action]]
+name = "revoke"
+description = "End the connection for good: access stops and credentials, tokens and pseudonym maps are purged"
+field = "state"
+to = "revoked"
+approval = true
+
+[[model.action]]
+name = "test"
+description = "Check the settings and the address without sending personal data"
+
+[[model.action]]
+name = "sync"
+description = "Run the connection now: send, pull or produce the file"
+approval = true
+
+[[model.action]]
+name = "oauth_start"
+description = "Get the link where the person authorises the connection with the provider"
+
+[[model]]
+name = "consent"
+description = "The legal basis recorded for a connection: who, why, which data classes, and whether it was withdrawn"
+read_group = "connectors.user"
+write_group = "connectors.user"
+
+[[model.field]]
+name = "connection"
+description = "The connection this basis is for"
+class = "none"
+kind = "ref"
+to = "connection"
+required = true
+
+[[model.field]]
+name = "owner_user"
+description = "Owner of the connection"
+class = "internal"
+personal_data = true
+
+[[model.field]]
+name = "state"
+description = "active, withdrawn, or superseded by a newer record"
+class = "none"
+kind = "select"
+options = ["active", "withdrawn", "superseded"]
+
+[[model.field]]
+name = "subject_kind"
+description = "Whose basis it is: a user, a party or the instance"
+class = "none"
+kind = "select"
+options = ["user", "party", "instance"]
+
+[[model.field]]
+name = "subject"
+description = "Id of the party when the subject is a party"
+class = "internal"
+personal_data = true
+
+[[model.field]]
+name = "given_by"
+description = "Who recorded it"
+class = "internal"
+personal_data = true
+
+[[model.field]]
+name = "purpose"
+description = "The purpose the data is processed for"
+class = "none"
+kind = "longtext"
+required = true
+
+[[model.field]]
+name = "legal_basis"
+description = "consent, contract, legitimate interest or legal obligation"
+class = "none"
+kind = "select"
+options = ["consent", "contract", "legitimate_interest", "legal_obligation"]
+required = true
+
+[[model.field]]
+name = "note"
+description = "Explanation; for legitimate interest the balancing test"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "classes"
+description = "Data classes that may flow under this record, computed from the connection"
+class = "none"
+
+[[model.field]]
+name = "fields_summary"
+description = "Models and fields that may flow, computed from the connection"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "recorded_at"
+description = "When it was recorded"
+class = "none"
+
+[[model.field]]
+name = "withdrawn_at"
+description = "When it was withdrawn, if it was"
+class = "none"
+
+[[model.field]]
+name = "withdrawn_by"
+description = "Who withdrew it"
+class = "internal"
+personal_data = true
+
+[[model.action]]
+name = "withdraw"
+description = "Withdraw the basis: the connection is revoked and its credentials and tokens are purged"
+field = "state"
+from = "active"
+to = "withdrawn"
+approval = true
+
+[[model]]
+name = "sync_run"
+description = "One run of a connection: when, how many records, and how it ended; never the data"
+read_group = "connectors.user"
+write_group = "connectors.admin"
+
+[[model.field]]
+name = "connection"
+description = "The connection that ran"
+class = "none"
+kind = "ref"
+to = "connection"
+required = true
+
+[[model.field]]
+name = "owner_user"
+description = "Owner of the connection"
+class = "internal"
+personal_data = true
+
+[[model.field]]
+name = "direction"
+description = "Whether data went out or came in"
+class = "none"
+kind = "select"
+options = ["inbound", "outbound"]
+
+[[model.field]]
+name = "kind"
+description = "What started it"
+class = "none"
+kind = "select"
+options = ["manual", "event", "pull", "webhook", "test"]
+
+[[model.field]]
+name = "started_at"
+description = "When it started"
+class = "none"
+
+[[model.field]]
+name = "finished_at"
+description = "When it ended"
+class = "none"
+
+[[model.field]]
+name = "status"
+description = "How it ended"
+class = "none"
+kind = "select"
+options = ["running", "succeeded", "partial", "failed", "retrying", "dead_letter"]
+
+[[model.field]]
+name = "records"
+description = "Records sent or accepted"
+class = "none"
+kind = "number"
+
+[[model.field]]
+name = "rejected"
+description = "Records refused"
+class = "none"
+kind = "number"
+
+[[model.field]]
+name = "proposed"
+description = "Changes held for approval"
+class = "none"
+kind = "number"
+
+[[model.field]]
+name = "error_summary"
+description = "Why it failed, without payloads"
+class = "none"
+
+[[model]]
+name = "data_flow_log"
+description = "Append-only record of every flow: when, what, how many, which fields, how treated, and a hash of the payload; never the payload"
+read_group = "connectors.user"
+write_group = "connectors.admin"
+
+[[model.field]]
+name = "connection"
+description = "The connection the flow belongs to"
+class = "none"
+kind = "ref"
+to = "connection"
+required = true
+
+[[model.field]]
+name = "owner_user"
+description = "Owner of the connection"
+class = "internal"
+personal_data = true
+
+[[model.field]]
+name = "at"
+description = "When it happened"
+class = "none"
+
+[[model.field]]
+name = "direction"
+description = "Whether data went out or came in"
+class = "none"
+kind = "select"
+options = ["outbound", "inbound"]
+
+[[model.field]]
+name = "model"
+description = "The model the records belong to"
+class = "none"
+
+[[model.field]]
+name = "record_count"
+description = "How many records"
+class = "none"
+kind = "number"
+
+[[model.field]]
+name = "fields_sent"
+description = "Fields that left or were accepted, comma separated"
+class = "none"
+
+[[model.field]]
+name = "fields_denied"
+description = "Fields the policy withheld, comma separated"
+class = "none"
+
+[[model.field]]
+name = "masking_mode"
+description = "Treatments applied, for example pseudonymise=2;allow=1"
+class = "none"
+
+[[model.field]]
+name = "payload_hash"
+description = "SHA-256 of the payload after treatment"
+class = "none"
+
+[[model.field]]
+name = "outcome"
+description = "released, received, refused, rejected or erased"
+class = "none"
+kind = "select"
+options = ["released", "received", "refused", "rejected", "erased"]
+
+[[model.field]]
+name = "reason"
+description = "Why a flow was refused or a record rejected"
+class = "none"
+
+[[model]]
+name = "processing_register"
+description = "The record of processing activities (GDPR Article 30) generated from the connections; exportable as CSV"
+read_group = "connectors.admin"
+write_group = "connectors.admin"
+
+[[model.field]]
+name = "connection"
+description = "The connection this row describes"
+class = "none"
+kind = "ref"
+to = "connection"
+
+[[model.field]]
+name = "name"
+description = "Name of the connection"
+class = "none"
+
+[[model.field]]
+name = "state"
+description = "State of the connection"
+class = "none"
+
+[[model.field]]
+name = "owner_scope"
+description = "Instance or user"
+class = "none"
+
+[[model.field]]
+name = "owner_user"
+description = "Owner of the connection"
+class = "internal"
+personal_data = true
+
+[[model.field]]
+name = "provider"
+description = "Provider id"
+class = "none"
+
+[[model.field]]
+name = "recipient"
+description = "Who receives the data (legal name)"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "recipient_country"
+description = "Where the recipient is"
+class = "none"
+
+[[model.field]]
+name = "purpose"
+description = "Purpose of the processing"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "legal_basis"
+description = "Recorded legal basis"
+class = "none"
+
+[[model.field]]
+name = "consent_recorded_at"
+description = "When the basis was recorded"
+class = "none"
+
+[[model.field]]
+name = "data_subjects"
+description = "Categories of data subjects"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "personal_data_categories"
+description = "Categories of personal data, with class and treatment"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "transfer_basis"
+description = "Basis for transfers to third countries"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "agreement_recorded"
+description = "Whether the agreement with the recipient is recorded"
+class = "none"
+
+[[model.field]]
+name = "retention_days"
+description = "Retention of logs, in days"
+class = "none"
+
+[[model.field]]
+name = "safeguards"
+description = "Technical and organisational measures"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "csv"
+description = "The register as CSV; filled by the export command, never stored"
+class = "none"
+kind = "longtext"
+
+[[model.action]]
+name = "export_csv"
+description = "Export the register as CSV"
+
+[[model]]
+name = "egress_policy"
+description = "Instance-wide switches for data flows: the master switch, EU-only providers, the agreement requirement and the host allow-list"
+read_group = "connectors.admin"
+write_group = "connectors.admin"
+
+[[model.field]]
+name = "flows_enabled"
+description = "Master switch: when off nothing leaves and nothing is accepted"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "eu_only"
+description = "Personal data only goes to providers with an EU or adequacy basis"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "require_dpa"
+description = "Personal data, even pseudonymised, only goes to providers whose agreement is recorded"
+class = "none"
+kind = "bool"
+
+[[model.field]]
+name = "host_allowlist"
+description = "Hosts connections may reach, comma separated; empty means no extra restriction"
+class = "none"
+
+[[model.field]]
+name = "default_retention_days"
+description = "Retention for logs of connections that no longer exist"
+class = "none"
+kind = "number"
+
+[[model.field]]
+name = "result"
+description = "Output of the last command (checklist, purge); never stored"
+class = "none"
+kind = "longtext"
+
+[[model.action]]
+name = "checklist"
+description = "Check what is configured: agreements, retention, legal bases, acknowledgements"
+
+[[model.action]]
+name = "purge"
+description = "Remove flow logs and runs older than their retention"
+approval = true
+
+[[model]]
+name = "privacy_preview"
+description = "What a sample outbound record looks like after the policy: the exact payload and the treatment of each field"
+read_group = "connectors.user"
+write_group = "connectors.user"
+
+[[model.field]]
+name = "provider"
+description = "Provider the preview is for"
+class = "none"
+
+[[model.field]]
+name = "connection"
+description = "An existing connection to preview, instead of a provider"
+class = "none"
+
+[[model.field]]
+name = "target_model"
+description = "The model to preview"
+class = "none"
+
+[[model.field]]
+name = "record_id"
+description = "A record to use as the sample; empty means the first one"
+class = "none"
+
+[[model.field]]
+name = "field_allowlist"
+description = "Fields to include, as a JSON object of model to field names"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "policy"
+description = "Policy JSON to preview"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "payload"
+description = "The payload after treatment, as JSON; never stored"
+class = "none"
+kind = "longtext"
+
+[[model.field]]
+name = "treatments"
+description = "Each field with its class and treatment, as JSON; never stored"
+class = "none"
+kind = "longtext"
+
+[[model.action]]
+name = "render"
+description = "Render a sample record after masking and pseudonymisation"

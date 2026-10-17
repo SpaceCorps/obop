@@ -1,5 +1,6 @@
 [
   "Bank",
+  "Basic",
   "Budget",
   "Diesel",
   "Filter",
@@ -14,5 +15,9 @@
   "Plan",
   "Policy",
   "Problem",
-  "Version"
+  "Standard",
+  "Status",
+  "Stripe",
+  "Version",
+  "Webhook"
 ]

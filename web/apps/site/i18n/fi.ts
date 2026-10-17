@@ -111,7 +111,7 @@ export const fi: Messages = {
     mockCaption: "Havainnekuva esimerkkitiedoilla",
     appsTitle: "Kaikki yrityksen sovellukset. Yksi tietokanta.",
     appsSub:
-      "Kaikki sovellukset käyttävät samoja yhteystietoja, tuotteita ja käyttöoikeuksia, joten mitään ei tarvitse liimata yhteen. Viisi sovellusta on sisäänrakennettuja, ja muut 22 asennetaan markkinapaikalta.",
+      "Kaikki sovellukset käyttävät samoja yhteystietoja, tuotteita ja käyttöoikeuksia, joten mitään ei tarvitse liimata yhteen. Kuusi sovellusta on sisäänrakennettuja, ja muut 22 asennetaan markkinapaikalta.",
     seeAllApps: "Selaa kaikkia sovelluksia ja niiden tietomalleja",
     pillarsTitle: "Tehty nykyiseen tapaan tehdä työtä",
     pillarsSub:
@@ -315,8 +315,8 @@ export const fi: Messages = {
   apps: {
     title: "Sovellukset",
     description:
-      "Kaikki 27 obop-sovellusta: 5 sisäänrakennettua (CRM, Sales, Invoicing, Products, Contacts) ja 22 markkinapaikalta asennettavaa. Jokaisella sivulla luetellaan mallit, kentät, tietoluokat, työnkulut ja se, mitä agentit voivat tehdä.",
-    lead: "Jokainen sovellus on moduuli samalla tietomallilla. Viisi on sisäänrakennettuja, ja muut 22 asennetaan markkinapaikalta yhdellä napsautuksella. Avaa sovellus nähdäksesi sen mallit, kentät, työnkulut ja sen, mitä tekoälyagentti saa sillä tehdä.",
+      "Kaikki 28 obop-sovellusta: 6 sisäänrakennettua (CRM, Sales, Invoicing, Products, Contacts, Connectors) ja 22 markkinapaikalta asennettavaa. Jokaisella sivulla luetellaan mallit, kentät, tietoluokat, työnkulut ja se, mitä agentit voivat tehdä.",
+    lead: "Jokainen sovellus on moduuli samalla tietomallilla. Kuusi on sisäänrakennettuja, ja muut 22 asennetaan markkinapaikalta yhdellä napsautuksella. Avaa sovellus nähdäksesi sen mallit, kentät, työnkulut ja sen, mitä tekoälyagentti saa sillä tehdä.",
     filterLabel: "Suodata sovelluksia",
     all: "Kaikki",
     available: "Saatavilla",
@@ -390,6 +390,7 @@ export const fi: Messages = {
       crm: "Liidit ja myyntiputki",
       sales: "Tarjoukset ja tilaukset",
       invoicing: "Luonnokset, kirjaus, numerointi",
+      connectors: "Yhdistä järjestelmiä GDPR-kontrollein",
       product: "Hinnat, tuotekoodit, kustannus",
       base: "Henkilöt ja yritykset",
       projects: "Projektit ja tehtävät",

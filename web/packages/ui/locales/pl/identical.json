@@ -1,17 +1,18 @@
 [
-  "{field} ≤ {to}",
-  "{field} ≥ {from}",
+  "Kanban",
+  "Marketplace",
+  "Status",
   "app\u0004CRM",
   "app\u0004Helpdesk",
   "field\u0004Folder",
   "field\u0004Plan",
-  "Kanban",
-  "Marketplace",
   "model\u0004Folder",
   "model\u0004Lead",
   "model\u0004Plan",
   "option\u0004Bank",
   "option\u0004Diesel",
   "option\u0004Problem",
-  "option\u0004Spam"
+  "option\u0004Spam",
+  "{field} ≤ {to}",
+  "{field} ≥ {from}"
 ]

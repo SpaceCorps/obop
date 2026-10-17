@@ -48,9 +48,17 @@ if (kind === "app") {
   ];
 } else throw new Error("usage: serve.ts app|platform");
 
+// Connectors: the specs run a receiver on loopback, which is refused unless the operator allows it.
+// The secret key is a 32-byte key in the form two-factor authentication and connectors both accept.
 const child = spawn(bin, args, {
   stdio: "inherit",
-  env: { ...process.env, OBOP_SECRET_KEY: secretKey, OBOP_REQUIRE_MFA_FOR_ADMINS: "0" },
+  env: {
+    ...process.env,
+    OBOP_SECRET_KEY: secretKey,
+    OBOP_REQUIRE_MFA_FOR_ADMINS: "0",
+    OBOP_CONNECTORS_ALLOW_LOOPBACK: "1",
+    OBOP_PUBLIC_URL: `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`,
+  },
 });
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => child.kill(sig));
 child.on("exit", (code) => process.exit(code ?? 0));

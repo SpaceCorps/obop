@@ -1,5 +1,7 @@
 mod app;
 #[cfg(test)]
+mod connectors_tests;
+#[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
@@ -45,6 +47,9 @@ const USAGE: &str = "usage: obop <command>
       --public-site                             also serve the public website and shop at / (or OBOP_PUBLIC_SITE=1);
                                                 the backoffice then moves to --admin-prefix (default /admin)
       --trust-proxy                             take the client address from X-Forwarded-For (OBOP_TRUST_PROXY=1)
+  connectors purge                              remove flow logs and runs older than their retention (also done daily by serve)
+                                                OBOP_SECRET_KEY encrypts connection credentials; OBOP_PUBLIC_URL is the address webhooks and
+                                                OAuth redirects use; OBOP_CONNECTORS_ALLOW_LOOPBACK=1 allows loopback targets (tests only)
   site seed                                     fill an empty instance with an invented demo shop and blog
   site set KEY VALUE | site show                set or list the site settings (title, accent, default_lang ...)
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
@@ -150,6 +155,7 @@ fn main() -> ExitCode {
                 message,
             },
         ),
+        ["connectors", "purge"] => connectors_purge(&opts),
         ["site", "seed"] => site_seed(&opts),
         ["site", "show"] => site_show(&opts),
         ["site", "set", key, value] => site_set(&opts, key, value),
@@ -526,6 +532,8 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
         );
     }
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+    state.set_connectors(app.connectors.clone());
+    app.connectors.start();
     let router = if o.public_site {
         if !obop_http::public::admin_prefix_ok(&o.admin_prefix) {
             return Err(fail(&format!(
@@ -572,6 +580,14 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
     rt.block_on(obop_http::serve(addr, router))
         .map_err(|e| fail(&format!("error: {e}")))
+}
+
+/// `obop connectors purge`: retention for flow logs, runs and expired webhook and OAuth entries.
+fn connectors_purge(o: &Opts) -> Exit {
+    let app = open_app(o)?;
+    let (logs, runs, other) = app.connectors.purge(obop_connectors::util::now());
+    println!("removed {logs} flow log rows, {runs} runs and {other} expired entries");
+    Ok(())
 }
 
 /// `obop site seed`: an invented demo shop and blog in an empty instance.
@@ -3004,7 +3020,7 @@ mod bundled_packages {
         for m in all_manifests() {
             modules.push(m.to_module().unwrap());
         }
-        assert!(modules.len() >= 28, "{}", modules.len());
+        assert!(modules.len() >= 29, "{}", modules.len());
         let mut problems = Vec::new();
         for module in &modules {
             for lang in LANGS {
@@ -3088,7 +3104,7 @@ mod bundled_packages {
                 }
             }
         }
-        assert_eq!(files.len(), 6 * 28);
+        assert_eq!(files.len(), 6 * 29);
         let refs: Vec<&str> = files.iter().map(String::as_str).collect();
         assert!(modules_check_files(&refs, true).is_ok());
     }

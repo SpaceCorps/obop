@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setInstanceDefaults, t } from "@obop/ui";
 import { loadSettings, meta, type ModuleMeta, type Settings } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
+import { ConnectorsApp, ConnectorsNav } from "./connectors/ConnectorsApp.tsx";
 import { Customize } from "./Customize.tsx";
 import { DashboardsApp } from "./dashboards/DashboardsApp.tsx";
 import { BOARD, boardHref } from "./dashboards/route.ts";
@@ -237,28 +238,34 @@ export function App() {
                 <AppIcon app={app} size={32} />
                 <strong>{app.name}</strong>
               </div>
-              {hasBoards && app.id === "dashboards" && (
-                <a
-                  href={boardHref(app.id)}
-                  aria-current={onBoard ? "page" : undefined}
-                  title={t("Tiles drawn from your dashboards")}
-                >
-                  {t("Overview")}
-                </a>
+              {app.id === "connectors" ? (
+                <ConnectorsNav app={app} route={route} />
+              ) : (
+                <>
+                  {hasBoards && app.id === "dashboards" && (
+                    <a
+                      href={boardHref(app.id)}
+                      aria-current={onBoard ? "page" : undefined}
+                      title={t("Tiles drawn from your dashboards")}
+                    >
+                      {t("Overview")}
+                    </a>
+                  )}
+                  <span className="overline side-label" aria-hidden="true">
+                    {t("Records")}
+                  </span>
+                  {app.module.models.map((m) => (
+                    <a
+                      key={m.name}
+                      href={href({ app: app.id, model: m.name })}
+                      aria-current={!onBoard && model?.name === m.name ? "page" : undefined}
+                      title={m.description}
+                    >
+                      {modelTitle(m, app.module.id)}
+                    </a>
+                  ))}
+                </>
               )}
-              <span className="overline side-label" aria-hidden="true">
-                {t("Records")}
-              </span>
-              {app.module.models.map((m) => (
-                <a
-                  key={m.name}
-                  href={href({ app: app.id, model: m.name })}
-                  aria-current={!onBoard && model?.name === m.name ? "page" : undefined}
-                  title={m.description}
-                >
-                  {modelTitle(m, app.module.id)}
-                </a>
-              ))}
             </nav>
           )}
           {app?.id === "customize" || personalCustomize ? (
@@ -283,6 +290,8 @@ export function App() {
               onModulesChanged={() => void refresh()}
               notify={notify}
             />
+          ) : app?.id === "connectors" ? (
+            <ConnectorsApp app={app} route={route} go={go} />
           ) : onBoard && app ? (
             <DashboardsApp app={app} route={route} go={go} owner={email} />
           ) : app && model ? (

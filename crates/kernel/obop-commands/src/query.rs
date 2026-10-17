@@ -21,6 +21,9 @@ const MAX_FILTERS: usize = 50;
 const MAX_ORDER: usize = 5;
 const MAX_IN: usize = 1000;
 
+/// Input keys with this prefix are placed by guards (who is calling); queries ignore them.
+pub const ACTOR_PREFIX: &str = "_actor";
+
 const OPS: &str = "eq, ne, contains, in, gt, gte, lt, lte, is_null";
 
 /// A comparable form of a stored or supplied value of one field. Both sides of a comparison come
@@ -160,7 +163,10 @@ impl Query {
             return Err("expected an object".into());
         };
         for k in m.keys() {
-            if !["filter", "order", "limit", "offset", "_caller"].contains(&k.as_str()) {
+            // `_caller` and `_actor*` are set by the dispatcher and by guards, never by a client.
+            if !["filter", "order", "limit", "offset", "_caller"].contains(&k.as_str())
+                && !k.starts_with(ACTOR_PREFIX)
+            {
                 return Err(format!(
                     "unknown option {k:?} (use filter, order, limit and offset)"
                 ));

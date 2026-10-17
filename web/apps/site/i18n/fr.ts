@@ -111,7 +111,7 @@ export const fr: Messages = {
     mockCaption: "Illustration avec des données d'exemple",
     appsTitle: "Toutes vos applications de gestion. Une seule base de données.",
     appsSub:
-      "Toutes les applications partagent les mêmes contacts, les mêmes produits et les mêmes permissions : rien à raccorder à la main. Cinq applications sont intégrées ; les 22 autres s'installent depuis la place de marché.",
+      "Toutes les applications partagent les mêmes contacts, les mêmes produits et les mêmes permissions : rien à raccorder à la main. Six applications sont intégrées ; les 22 autres s'installent depuis la place de marché.",
     seeAllApps: "Parcourir toutes les applications et leurs modèles de données",
     pillarsTitle: "Pensée pour la façon dont on travaille aujourd'hui",
     pillarsSub:
@@ -318,8 +318,8 @@ export const fr: Messages = {
   apps: {
     title: "Applications",
     description:
-      "Les 27 applications d'obop : 5 intégrées (CRM, Sales, Invoicing, Products, Contacts) et 22 installables depuis la place de marché. Chaque page présente les modèles, les champs, les classes de données, les flux de travail et ce que les agents peuvent faire.",
-    lead: "Chaque application est un module sur un même modèle de données. Cinq sont intégrées ; les 22 autres s'installent depuis la place de marché en un clic. Ouvrez une application pour voir ses modèles, ses champs, ses flux de travail et ce qu'un agent IA peut en faire.",
+      "Les 28 applications d'obop : 6 intégrées (CRM, Sales, Invoicing, Products, Contacts, Connectors) et 22 installables depuis la place de marché. Chaque page présente les modèles, les champs, les classes de données, les flux de travail et ce que les agents peuvent faire.",
+    lead: "Chaque application est un module sur un même modèle de données. Six sont intégrées ; les 22 autres s'installent depuis la place de marché en un clic. Ouvrez une application pour voir ses modèles, ses champs, ses flux de travail et ce qu'un agent IA peut en faire.",
     filterLabel: "Filtrer les applications",
     all: "Toutes",
     available: "Disponibles",
@@ -395,6 +395,7 @@ export const fr: Messages = {
       crm: "Pistes et pipeline",
       sales: "Devis et commandes",
       invoicing: "Brouillons, validation, numérotation",
+      connectors: "Connecter des systèmes, avec contrôles RGPD",
       product: "Prix, références, coûts",
       base: "Personnes et sociétés",
       projects: "Projets et tâches",

@@ -54,6 +54,13 @@ export const users = {
   lock: { name: "lock", password: "e2e lock password 1", groups: "base.user" },
   quinn: { name: "quinn", password: "e2e quinn password 1", groups: "base.user" },
   nova: { name: "nova", password: "e2e nova password 1", groups: "platform.admin" },
+  // Connects her own accounts (connectors.user) and nothing else: the connectors specs use her to
+  // check that a person sees only her own connections and may withdraw her consent.
+  cora: {
+    name: "cora",
+    password: "e2e cora password 1",
+    groups: "base.user,crm.user,connectors.user",
+  },
 } as const;
 export type UserName = keyof typeof users;
 

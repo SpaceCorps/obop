@@ -110,7 +110,7 @@ pub(crate) fn declared_fields(
     };
     let mut out = BTreeMap::new();
     for (k, v) in m {
-        if k == "id" || k == "_caller" {
+        if k == "id" || k == "_caller" || k.starts_with(crate::query::ACTOR_PREFIX) {
             continue;
         }
         if !def.fields.iter().any(|f| f.name == k) {
@@ -329,6 +329,60 @@ impl Dispatcher {
             );
         }
         self.register_guards(module, store);
+    }
+
+    /// Register only `get`, `list` and `search` for the named models of `module` (with the query
+    /// guard of `list` and `search`). For records that are written by the platform itself and
+    /// must not be created, changed or deleted through a command (logs, runs, computed views).
+    pub fn register_read_only_models(&self, module: &Module, store: &Store, models: &[&str]) {
+        for def in module.models.iter().filter(|d| models.contains(&d.name)) {
+            let name = def.name;
+            let s = store.clone();
+            self.register(
+                module,
+                name,
+                "get",
+                Box::new(move |input| {
+                    let id = id_of(input)?;
+                    let f = s
+                        .backend
+                        .get(name, &id)?
+                        .ok_or_else(|| format!("no {name} {id}"))?;
+                    Ok(to_row(&id, &f))
+                }),
+            );
+            let (s, d) = (store.clone(), def.clone());
+            self.register(
+                module,
+                name,
+                "list",
+                Box::new(move |input| {
+                    let (rows, _) = run_query(&s, &d, input)?;
+                    Ok(Value::List(rows))
+                }),
+            );
+            let (s, d) = (store.clone(), def.clone());
+            self.register(
+                module,
+                name,
+                "search",
+                Box::new(move |input| {
+                    let (rows, total) = run_query(&s, &d, input)?;
+                    Ok(Value::map([
+                        ("rows", Value::List(rows)),
+                        ("total", Value::Int(total as i64)),
+                    ]))
+                }),
+            );
+            for c in ["list", "search"] {
+                self.register_guard(
+                    &module.id,
+                    &format!("{name}.{c}"),
+                    false,
+                    guards::query_guard(def),
+                );
+            }
+        }
     }
 
     /// Bind the generic handler of a command declared as a transition (D48): it sets the field

@@ -1881,3 +1881,184 @@ fn a_big_table_pages_correctly() {
         assert_eq!(seen, sorted);
     });
 }
+
+// ---- hooks that modules build on: add_guard, observe, register_read_only ---------------------
+
+fn hooks_module() -> Module {
+    Module {
+        id: "hooks_t".into(),
+        name: "Hooks".into(),
+        models: vec![ModelDef {
+            name: "hooks_item",
+            description: "An item",
+            read_group: "g",
+            write_group: "g",
+            fields: vec![
+                F::new("name", "Name", DataClass::None, false, "g"),
+                F::new("owner", "Owner", DataClass::None, false, "g"),
+            ],
+            commands: vec![],
+        }],
+        network_destinations: vec![],
+        description: String::new(),
+        translations: Default::default(),
+    }
+}
+
+fn m_of(pairs: &[(&str, &str)]) -> Value {
+    Value::Map(
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), Value::text(v)))
+            .collect(),
+    )
+}
+
+#[test]
+fn add_guard_runs_after_the_generated_guard_and_sees_what_it_produced() {
+    use std::sync::{Arc, Mutex};
+    let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
+    d.register_crud(&m, &store);
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let log = seen.clone();
+    d.add_guard(
+        "hooks_t",
+        "hooks_item.list",
+        false,
+        Box::new(move |p, input| {
+            // The generated query guard already refused bad queries; this one adds the caller's scope.
+            log.lock().unwrap().push(p.id.clone());
+            let Value::Map(mut mm) = input.clone() else {
+                return Err("no".into());
+            };
+            mm.insert(
+                "filter".into(),
+                Value::List(vec![Value::map([
+                    ("field", Value::text("owner")),
+                    ("op", Value::text("eq")),
+                    ("value", Value::text(&p.id)),
+                ])]),
+            );
+            Ok(crate::Verdict {
+                input: Some(Value::Map(mm)),
+                ..Default::default()
+            })
+        }),
+    );
+    let u = Principal::user("ann", &["g"]);
+    let mk = |name: &str, owner: &str| {
+        d.call(
+            Surface::Rest,
+            &u,
+            &mut Vault::new(),
+            "hooks_item.create",
+            &m_of(&[("name", name), ("owner", owner)]),
+        )
+        .unwrap();
+    };
+    mk("mine", "ann");
+    mk("theirs", "bob");
+    let r = d
+        .call(
+            Surface::Rest,
+            &u,
+            &mut Vault::new(),
+            "hooks_item.list",
+            &Value::map([]),
+        )
+        .unwrap();
+    let Value::List(rows) = r.value else { panic!() };
+    assert_eq!(rows.len(), 1, "only the caller's record");
+    // The generated guard still runs first: a filter on an unknown field is refused before ours.
+    let bad = Value::map([(
+        "filter",
+        Value::List(vec![Value::map([
+            ("field", Value::text("nope")),
+            ("op", Value::text("eq")),
+            ("value", Value::text("x")),
+        ])]),
+    )]);
+    assert!(
+        matches!(d.call(Surface::Rest, &u, &mut Vault::new(), "hooks_item.list", &bad), Err(CallError::Handler(m)) if m.contains("unknown field"))
+    );
+    assert_eq!(
+        seen.lock().unwrap().len(),
+        1,
+        "our guard did not run for the refused query"
+    );
+}
+
+#[test]
+fn observers_hear_about_successful_commands_only_and_go_with_their_module() {
+    use std::sync::{Arc, Mutex};
+    let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
+    d.register_crud(&m, &store);
+    let heard = Arc::new(Mutex::new(Vec::<String>::new()));
+    let h = heard.clone();
+    d.observe(
+        "hooks_t",
+        Box::new(move |id, _p, _input, out| {
+            let Value::Map(o) = out else { return };
+            h.lock().unwrap().push(format!(
+                "{id}:{}",
+                matches!(o.get("id"), Some(Value::Text(_)))
+            ));
+        }),
+    );
+    let u = Principal::user("ann", &["g"]);
+    d.call(
+        Surface::Rest,
+        &u,
+        &mut Vault::new(),
+        "hooks_item.create",
+        &m_of(&[("name", "a")]),
+    )
+    .unwrap();
+    assert!(
+        d.call(
+            Surface::Rest,
+            &u,
+            &mut Vault::new(),
+            "hooks_item.create",
+            &m_of(&[("nope", "a")])
+        )
+        .is_err()
+    );
+    assert_eq!(heard.lock().unwrap().as_slice(), ["hooks_item.create:true"]);
+    d.unregister_module("hooks_t");
+    assert_eq!(heard.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn read_only_registration_exposes_get_list_and_search_and_ignores_actor_keys() {
+    let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
+    d.register_read_only_models(&m, &store, &["hooks_item"]);
+    let u = Principal::user("ann", &["g"]);
+    let id = store
+        .insert(
+            "hooks_item",
+            [("name".to_string(), Value::text("a"))].into(),
+        )
+        .unwrap();
+    let call = |c: &str, v: Value| {
+        d.call(
+            Surface::Rest,
+            &u,
+            &mut Vault::new(),
+            &format!("hooks_item.{c}"),
+            &v,
+        )
+    };
+    assert!(call("get", Value::map([("id", Value::text(&id))])).is_ok());
+    // Keys placed by guards (`_actor*`) are not options a client chose, so queries ignore them.
+    assert!(call("list", Value::map([("_actor", Value::text("ann"))])).is_ok());
+    assert!(call("search", Value::map([])).is_ok());
+    for c in ["create", "update", "delete"] {
+        assert!(
+            matches!(call(c, Value::map([])), Err(CallError::UnknownCommand(_))),
+            "{c} must not exist"
+        );
+    }
+    assert!(!d.meta(Surface::Rest, &u)[0].models[0].can_create);
+    assert!(d.model_fields("hooks_item").is_some() && d.model_def("hooks_item").is_some());
+}

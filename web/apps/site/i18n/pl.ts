@@ -111,7 +111,7 @@ export const pl: Messages = {
     mockCaption: "Ilustracja z przykładowymi danymi",
     appsTitle: "Wszystkie aplikacje dla firmy. Jedna baza danych.",
     appsSub:
-      "Każda aplikacja korzysta z tych samych kontaktów, produktów i uprawnień, więc niczego nie trzeba ze sobą łączyć. Pięć aplikacji jest wbudowanych; pozostałe 22 instalujesz z marketplace'u.",
+      "Każda aplikacja korzysta z tych samych kontaktów, produktów i uprawnień, więc niczego nie trzeba ze sobą łączyć. Sześć aplikacji jest wbudowanych; pozostałe 22 instalujesz z marketplace'u.",
     seeAllApps: "Przeglądaj wszystkie aplikacje i ich modele danych",
     pillarsTitle: "Stworzona do pracy tak, jak wygląda dziś",
     pillarsSub:
@@ -315,8 +315,8 @@ export const pl: Messages = {
   apps: {
     title: "Aplikacje",
     description:
-      "Wszystkie 27 aplikacji: 5 wbudowanych (CRM, Sales, Invoicing, Products, Contacts) i 22 do zainstalowania z marketplace'u. Każda strona opisuje modele, pola, klasy danych, przepływy pracy i to, co mogą robić agenci.",
-    lead: "Każda aplikacja jest modułem na jednym modelu danych. Pięć jest wbudowanych; pozostałe 22 instalujesz z marketplace'u jednym kliknięciem. Otwórz aplikację, aby zobaczyć jej modele, pola, przepływy pracy i to, co może z nią zrobić agent AI.",
+      "Wszystkie 28 aplikacji: 6 wbudowanych (CRM, Sales, Invoicing, Products, Contacts, Connectors) i 22 do zainstalowania z marketplace'u. Każda strona opisuje modele, pola, klasy danych, przepływy pracy i to, co mogą robić agenci.",
+    lead: "Każda aplikacja jest modułem na jednym modelu danych. Sześć jest wbudowanych; pozostałe 22 instalujesz z marketplace'u jednym kliknięciem. Otwórz aplikację, aby zobaczyć jej modele, pola, przepływy pracy i to, co może z nią zrobić agent AI.",
     filterLabel: "Filtruj aplikacje",
     all: "Wszystkie",
     available: "Dostępne",
@@ -388,6 +388,7 @@ export const pl: Messages = {
       crm: "Leady i lejek sprzedaży",
       sales: "Oferty i zamówienia",
       invoicing: "Wersje robocze, księgowanie, numeracja",
+      connectors: "Łączenie systemów, z mechanizmami RODO",
       product: "Ceny, SKU, koszty",
       base: "Osoby i firmy",
       projects: "Projekty i zadania",
