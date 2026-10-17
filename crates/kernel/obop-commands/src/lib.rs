@@ -175,6 +175,8 @@ struct Pending {
 }
 
 struct Registered {
+    /// `model.command`.
+    id: String,
     /// Id of the module that registered the command, for uninstall.
     module: String,
     description: &'static str,
@@ -205,7 +207,13 @@ pub struct Dispatcher {
     order: std::sync::RwLock<Vec<String>>,
     /// Public declarations by model name, with the module that registered them (D50).
     public: std::sync::RwLock<HashMap<String, (String, PublicSpec)>>,
+    /// Observers told about every command that succeeded (see `observe`).
+    observers: std::sync::RwLock<Vec<(String, Arc<Observer>)>>,
 }
+
+/// What an observer sees of a command that succeeded: its id, who ran it, the input the handler
+/// received and the raw output, before it was shaped for the caller.
+pub type Observer = dyn Fn(&str, &Principal, &Value, &Value) + Send + Sync;
 
 pub(crate) struct ModelMeta {
     pub(crate) def: obop_registry::ModelDef,
@@ -437,6 +445,7 @@ impl Dispatcher {
         self.commands.write().unwrap().insert(
             format!("{model}.{command}"),
             Arc::new(Registered {
+                id: format!("{model}.{command}"),
                 module: module.id.clone(),
                 description: c.description,
                 needs_approval: c.needs_approval,
@@ -463,9 +472,70 @@ impl Dispatcher {
         );
     }
 
+    /// Like `register_guard`, but keeps the guard already on the command (the generated one):
+    /// that one runs first, and `guard` then sees the input it produced. The verdicts combine.
+    /// A module uses this to add rules that need the caller (ownership of a record) without
+    /// replacing what the registry metadata implies.
+    pub fn add_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        let mut guards = self.guards.write().unwrap();
+        let inner = guards.get(id).cloned();
+        let combined: Guard = match inner {
+            None => guard,
+            Some(first) => Box::new(move |p, input| {
+                let mut v = (first.guard)(p, input)?;
+                let seen = v.input.take();
+                let second = guard(p, seen.as_ref().unwrap_or(input))?;
+                v.requires.extend(second.requires);
+                v.approval |= second.approval;
+                v.pre.extend(second.pre);
+                v.input = second.input.or(seen);
+                Ok(v)
+            }),
+        };
+        let serialize = serialize || guards.get(id).is_some_and(|g| g.serialize);
+        guards.insert(
+            id.to_string(),
+            Arc::new(Guarded {
+                module: module.into(),
+                serialize,
+                guard: combined,
+            }),
+        );
+    }
+
+    /// Be told about every command that succeeds, with the module that owns the observer (removed
+    /// with it). Observers run inside the call, under the dispatcher's locks: they must be quick
+    /// and must not call the dispatcher; hand the work to another thread.
+    pub fn observe(&self, module: &str, observer: Box<Observer>) {
+        self.observers
+            .write()
+            .unwrap()
+            .push((module.to_string(), Arc::from(observer)));
+    }
+
+    /// The field definitions of a registered model, including those a principal could not read.
+    /// For components that apply their own policy by data class (connectors).
+    pub fn model_fields(&self, model: &str) -> Option<Vec<FieldDef>> {
+        self.models
+            .read()
+            .unwrap()
+            .get(model)
+            .map(|m| m.fields.clone())
+    }
+
+    /// The definition of a registered model (fields, groups, commands).
+    pub fn model_def(&self, model: &str) -> Option<obop_registry::ModelDef> {
+        self.models
+            .read()
+            .unwrap()
+            .get(model)
+            .map(|m| m.def.clone())
+    }
+
     /// Remove every command a module registered. Its data stays in the store.
     pub fn unregister_module(&self, module: &str) {
         self.public.write().unwrap().retain(|_, (m, _)| m != module);
+        self.observers.write().unwrap().retain(|(m, _)| m != module);
         self.guards
             .write()
             .unwrap()
@@ -637,6 +707,16 @@ impl Dispatcher {
             m.insert("_caller".into(), Value::text(&p.id));
         }
         let out = (c.handler)(&input).map_err(CallError::Handler)?;
+        let observers: Vec<Arc<Observer>> = self
+            .observers
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(_, o)| o.clone())
+            .collect();
+        for o in observers {
+            o(&c.id, p, &input, &out);
+        }
         let mut denied = Vec::new();
         let value = match out {
             // `search`: shape the rows, keep the envelope.

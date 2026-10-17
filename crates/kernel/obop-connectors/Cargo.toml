@@ -1,0 +1,28 @@
+[package]
+name = "obop-connectors"
+version = "0.0.0"
+description = "Framework-neutral core of the connectors app: compliant data flows, egress policy, pseudonymisation, hardened outbound HTTP, signed webhooks and OAuth2"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+obop-types.workspace = true
+obop-registry.workspace = true
+obop-commands.workspace = true
+obop-masking.workspace = true
+obop-storage.workspace = true
+serde_json = "1"
+uuid = { version = "1", features = ["v7"] }
+getrandom = "0.4"
+ureq = "3"
+base64 = "0.22"
+chacha20poly1305 = "0.11.0"
+hkdf = "0.13.0"
+hmac = "0.13.0"
+sha2 = "0.11.1"
+subtle = "2.6.1"
+url = "2.5.8"
+
+[lints]
+workspace = true
