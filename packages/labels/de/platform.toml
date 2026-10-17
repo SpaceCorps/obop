@@ -332,3 +332,15 @@ description = "Was die Installation verhindert (eine Liste)"
 [labels.de.model.module_plan.field.warnings]
 label = "Warnungen"
 description = "Hinweise, die nichts verhindern, etwa eine proprietäre Lizenz (eine Liste)"
+
+[labels.de.model.module.field.steps]
+label = "Schritte"
+description = "Die zu installierenden oder zu aktualisierenden Module, Abhängigkeiten zuerst (eine Liste)"
+
+[labels.de.model.marketplace_listing.field.steps]
+label = "Schritte"
+description = "Die zu installierenden oder zu aktualisierenden Module, Abhängigkeiten zuerst (eine Liste)"
+
+[labels.de.model.marketplace_listing.field.warnings]
+label = "Warnungen"
+description = "Hinweise, die nichts verhindern, etwa eine proprietäre Lizenz (eine Liste)"

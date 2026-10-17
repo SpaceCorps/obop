@@ -332,3 +332,15 @@ description = "Vad som hindrar installationen (en lista)"
 [labels.sv.model.module_plan.field.warnings]
 label = "Varningar"
 description = "Anmärkningar som inte hindrar något, till exempel en proprietär licens (en lista)"
+
+[labels.sv.model.module.field.steps]
+label = "Steg"
+description = "Modulerna att installera eller uppgradera, beroenden först (en lista)"
+
+[labels.sv.model.marketplace_listing.field.steps]
+label = "Steg"
+description = "Modulerna att installera eller uppgradera, beroenden först (en lista)"
+
+[labels.sv.model.marketplace_listing.field.warnings]
+label = "Varningar"
+description = "Anmärkningar som inte hindrar något, till exempel en proprietär licens (en lista)"

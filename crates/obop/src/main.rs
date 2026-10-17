@@ -6,6 +6,8 @@ mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
 #[cfg(test)]
+mod modules_tests;
+#[cfg(test)]
 mod public_site_tests;
 
 use app::{App, DevAuth};

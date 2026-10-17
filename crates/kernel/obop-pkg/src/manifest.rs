@@ -849,6 +849,7 @@ impl Manifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::semver::Version;
 
     pub const FLEET: &str = r#"
 [module]
@@ -1233,5 +1234,145 @@ name = "Veículo"
             "y".repeat(MAX_BYTES)
         );
         assert!(err(&big).contains("larger"));
+    }
+
+    /// FLEET with extra `[module]` keys inserted after the description.
+    fn with_meta(extra: &str) -> String {
+        FLEET.replace(
+            "description = \"Vehicles and drivers\"\n",
+            &format!("description = \"Vehicles and drivers\"\n{extra}\n"),
+        )
+    }
+
+    fn ok_meta(extra: &str) -> Manifest {
+        Manifest::parse(&with_meta(extra)).unwrap_or_else(|e| panic!("{extra}: {e}"))
+    }
+
+    #[test]
+    fn every_new_key_parses_and_reaches_the_registry() {
+        let m = ok_meta(
+            r#"summary = "Vehicles in one line"
+authors = ["Ada Example", "Sam Example"]
+license = "AGPL-3.0-or-later"
+homepage = "https://example.com"
+repository = "https://github.com/SpaceCorps/obop"
+documentation = "https://example.com/docs?x=1#top"
+support = "https://example.com/support"
+keywords = ["fleet", "vehicles", "e-bike", "v2"]
+categories = ["supply-chain", "services"]
+icon = "fleet"
+requires_core = ">=0.2, <0.4"
+maturity = "beta"
+"#,
+        );
+        let meta = m.to_module().unwrap().meta;
+        assert_eq!(meta.version, "0.1.0");
+        assert_eq!(meta.summary, "Vehicles in one line");
+        assert_eq!(meta.authors, ["Ada Example", "Sam Example"]);
+        assert_eq!(meta.license, "AGPL-3.0-or-later");
+        assert_eq!(meta.documentation, "https://example.com/docs?x=1#top");
+        assert_eq!(meta.keywords.len(), 4);
+        assert_eq!(meta.categories, ["supply-chain", "services"]);
+        assert_eq!(meta.icon, "fleet");
+        assert_eq!(meta.requires_core, ">=0.2, <0.4");
+        assert_eq!(meta.maturity, "beta");
+        assert!(m.core_req().matches(&Version::new(0, 3, 9)));
+        assert!(!m.core_req().matches(&Version::new(0, 4, 0)));
+        assert!(m.catalog_problems().is_empty());
+    }
+
+    #[test]
+    fn every_new_key_is_optional_for_an_upload_and_warns() {
+        let m = Manifest::parse(FLEET).unwrap();
+        assert_eq!(m.module.license, "");
+        assert!(m.core_req().is_any(), "requires_core defaults to *");
+        let w = m.warnings();
+        assert!(
+            w.iter()
+                .any(|x| x.contains("requires_core is not declared")),
+            "{w:?}"
+        );
+        assert!(w.iter().any(|x| x.contains("no license")), "{w:?}");
+        let c = m.catalog_problems();
+        assert_eq!(c.len(), 2, "{c:?}");
+        assert!(c[0].contains("license is required") && c[1].contains("requires_core is required"));
+        // A proprietary or custom licence is allowed and flagged.
+        let w = ok_meta("license = \"proprietary\"").warnings();
+        assert!(w.iter().any(|x| x.contains("proprietary")), "{w:?}");
+        let w = ok_meta("license = \"LicenseRef-Acme\"").warnings();
+        assert!(w.iter().any(|x| x.contains("LicenseRef")), "{w:?}");
+        assert!(ok_meta("license = \"UNLICENSED\"").module.license == "UNLICENSED");
+    }
+
+    #[test]
+    fn each_new_key_has_its_own_error() {
+        let long = "x".repeat(141);
+        let cases: Vec<(String, &str)> = vec![
+            (format!("summary = \"{long}\""), "summary must be one line of at most 140"),
+            ("summary = \"a\\nb\"".into(), "summary must be one line"),
+            ("license = \"Apache\"".into(), "license: \"Apache\" is not a known SPDX"),
+            ("license = \"MIT OR\"".into(), "license:"),
+            ("homepage = \"http://example.com\"".into(), "homepage must be an https:// URL"),
+            ("repository = \"ftp://example.com\"".into(), "repository must be an https:// URL"),
+            ("documentation = \"https://\"".into(), "documentation must be an https:// URL"),
+            ("support = \"https://exa mple.com\"".into(), "support must be an https:// URL"),
+            ("support = \"https://nodot\"".into(), "support must be an https:// URL"),
+            ("keywords = [\"a\"]".into(), "keyword \"a\""),
+            ("keywords = [\"Fleet\"]".into(), "keyword \"Fleet\""),
+            ("keywords = [\"fleet\", \"fleet\"]".into(), "keyword \"fleet\""),
+            ("keywords = [\"aa\",\"bb\",\"cc\",\"dd\",\"ee\",\"ff\",\"gg\",\"hh\",\"ii\",\"jj\",\"kk\"]".into(), "at most 10"),
+            ("categories = [\"misc\"]".into(), "unknown category \"misc\""),
+            ("categories = [\"sales\", \"sales\"]".into(), "listed twice"),
+            ("categories = [\"sales\",\"finance\",\"people\",\"other\"]".into(), "at most 3"),
+            ("icon = \"Big Icon\"".into(), "icon \"Big Icon\""),
+            ("maturity = \"alpha\"".into(), "maturity must be one of stable, beta, experimental"),
+            ("requires_core = \"soon\"".into(), "requires_core:"),
+            ("authors = [\"\"]".into(), "authors takes at most 10"),
+            ("depends = [\"Bad-Id\"]".into(), "depends: \"Bad-Id\" is not a module id"),
+            ("depends = [\"base\", \"base\"]".into(), "depends lists base twice"),
+            ("depends = [\"fleet\"]".into(), "fleet depends on itself"),
+            ("depends = [\"hr\"]\n[module.dependencies]\nhr = \"*\"".into(), "both depends and [module.dependencies]"),
+            ("[module.dependencies]\nhr = \"nonsense\"".into(), "[module.dependencies] hr:"),
+            ("[module.dependencies]\nfleet = \"*\"".into(), "fleet depends on itself"),
+            ("[module.dependencies]\nBad = \"*\"".into(), "is not a module id"),
+        ];
+        for (extra, want) in cases {
+            // `depends` keys must come before the table header, which with_meta keeps in order.
+            let e = Manifest::parse(&with_meta(&extra)).unwrap_err();
+            assert!(e.contains(want), "{extra:?}: wanted {want:?}, got {e}");
+        }
+        // A dependency value that is not a string is a parse error, not silently accepted.
+        let e = Manifest::parse(&with_meta(
+            "[module.dependencies]\nhr = { version = \"*\", optional = true }",
+        ))
+        .unwrap_err();
+        assert!(e.contains("invalid obop.toml"), "{e}");
+        // Unknown keys stay refused.
+        let e = Manifest::parse(&with_meta("optional = true")).unwrap_err();
+        assert!(e.contains("unknown field"), "{e}");
+        // Prerelease versions are accepted; other shapes are not.
+        assert!(Manifest::parse(&FLEET.replace("0.1.0", "1.0.0-rc.1")).is_ok());
+        assert!(err(&FLEET.replace("0.1.0", "1.0")).contains("version"));
+    }
+
+    #[test]
+    fn both_dependency_forms_are_merged_and_the_old_one_means_any_version() {
+        let m = ok_meta("depends = [\"base\"]\n[module.dependencies]\nhr = \">=0.1, <1\"");
+        let r = m.requirements();
+        assert_eq!(r.len(), 2);
+        assert_eq!(
+            (r[0].id.as_str(), r[0].req.to_string()),
+            ("base", "*".to_string())
+        );
+        assert_eq!(
+            (r[1].id.as_str(), r[1].req.to_string()),
+            ("hr", ">=0.1, <1".to_string())
+        );
+        assert_eq!(m.dependency_ids(), ["base", "hr"]);
+        let meta = m.module_meta();
+        assert_eq!(
+            meta.dependencies[1],
+            ("hr".to_string(), ">=0.1, <1".to_string())
+        );
     }
 }

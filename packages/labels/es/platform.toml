@@ -332,3 +332,15 @@ description = "Qué impide la instalación (una lista)"
 [labels.es.model.module_plan.field.warnings]
 label = "Advertencias"
 description = "Notas que no impiden nada, por ejemplo una licencia propietaria (una lista)"
+
+[labels.es.model.module.field.steps]
+label = "Pasos"
+description = "Los módulos que instalar o actualizar, primero las dependencias (una lista)"
+
+[labels.es.model.marketplace_listing.field.steps]
+label = "Pasos"
+description = "Los módulos que instalar o actualizar, primero las dependencias (una lista)"
+
+[labels.es.model.marketplace_listing.field.warnings]
+label = "Advertencias"
+description = "Notas que no impiden nada, por ejemplo una licencia propietaria (una lista)"

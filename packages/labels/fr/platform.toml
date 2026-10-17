@@ -332,3 +332,15 @@ description = "Ce qui empêche l'installation (une liste)"
 [labels.fr.model.module_plan.field.warnings]
 label = "Avertissements"
 description = "Remarques qui n'empêchent rien, par exemple une licence propriétaire (une liste)"
+
+[labels.fr.model.module.field.steps]
+label = "Étapes"
+description = "Les modules à installer ou à mettre à jour, dépendances d'abord (une liste)"
+
+[labels.fr.model.marketplace_listing.field.steps]
+label = "Étapes"
+description = "Les modules à installer ou à mettre à jour, dépendances d'abord (une liste)"
+
+[labels.fr.model.marketplace_listing.field.warnings]
+label = "Avertissements"
+description = "Remarques qui n'empêchent rien, par exemple une licence propriétaire (une liste)"

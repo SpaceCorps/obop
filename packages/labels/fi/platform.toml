@@ -332,3 +332,15 @@ description = "Mikä estää asennuksen (luettelo)"
 [labels.fi.model.module_plan.field.warnings]
 label = "Varoitukset"
 description = "Huomautukset, jotka eivät estä mitään, esimerkiksi suljettu lisenssi (luettelo)"
+
+[labels.fi.model.module.field.steps]
+label = "Vaiheet"
+description = "Asennettavat tai päivitettävät moduulit, riippuvuudet ensin (luettelo)"
+
+[labels.fi.model.marketplace_listing.field.steps]
+label = "Vaiheet"
+description = "Asennettavat tai päivitettävät moduulit, riippuvuudet ensin (luettelo)"
+
+[labels.fi.model.marketplace_listing.field.warnings]
+label = "Varoitukset"
+description = "Huomautukset, jotka eivät estä mitään, esimerkiksi suljettu lisenssi (luettelo)"

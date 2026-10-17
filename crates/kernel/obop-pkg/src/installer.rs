@@ -1109,6 +1109,10 @@ pub fn admin_module() -> Module {
             "warnings",
             "Notes that do not stop anything, such as a proprietary licence (a list)",
         ),
+        list(
+            "steps",
+            "The modules to install or upgrade, dependencies first (a list)",
+        ),
     ]);
     let mut listing_fields = vec![
         f("name", "Display name"),
@@ -1129,6 +1133,14 @@ pub fn admin_module() -> Module {
         list("installed_version", "The installed version, if any"),
         f("installable", "Whether it can be installed here now").kind(FieldKind::Bool),
         list("blockers", "What stops it from being installed (a list)"),
+        list(
+            "warnings",
+            "Notes that do not stop anything, such as a proprietary licence (a list)",
+        ),
+        list(
+            "steps",
+            "The modules to install or upgrade, dependencies first (a list)",
+        ),
     ]);
     let m = Module {
         id: "platform".into(),

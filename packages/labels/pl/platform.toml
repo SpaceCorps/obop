@@ -332,3 +332,15 @@ description = "Co uniemożliwia instalację (lista)"
 [labels.pl.model.module_plan.field.warnings]
 label = "Ostrzeżenia"
 description = "Uwagi, które niczego nie blokują, na przykład licencja zastrzeżona (lista)"
+
+[labels.pl.model.module.field.steps]
+label = "Kroki"
+description = "Moduły do zainstalowania lub zaktualizowania, najpierw zależności (lista)"
+
+[labels.pl.model.marketplace_listing.field.steps]
+label = "Kroki"
+description = "Moduły do zainstalowania lub zaktualizowania, najpierw zależności (lista)"
+
+[labels.pl.model.marketplace_listing.field.warnings]
+label = "Ostrzeżenia"
+description = "Uwagi, które niczego nie blokują, na przykład licencja zastrzeżona (lista)"
