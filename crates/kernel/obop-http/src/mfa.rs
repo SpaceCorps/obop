@@ -78,6 +78,18 @@ fn mfa_error(e: MfaError) -> Response {
             "invalid_code",
             "Check the code, or use a recovery code.",
         ),
+        MfaError::BadPassword => api_error(
+            StatusCode::UNAUTHORIZED,
+            "the password is not right",
+            "invalid_password",
+            "Enter your current password.",
+        ),
+        MfaError::Expired => api_error(
+            StatusCode::UNAUTHORIZED,
+            "this sign-in has expired; enter your password again",
+            "mfa_expired",
+            "Start again with POST /api/auth/login.",
+        ),
         MfaError::Locked(m) => api_error(
             StatusCode::TOO_MANY_REQUESTS,
             &m,

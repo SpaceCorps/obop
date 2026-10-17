@@ -392,8 +392,7 @@ impl Auth {
     ) -> Result<LoginOutcome, MfaError> {
         let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
         let key = token_hash(mfa_token);
-        let expired =
-            || MfaError::Denied("this sign-in has expired; enter your password again".into());
+        let expired = || MfaError::Expired;
         let rec = self
             .backend
             .get(MFA_TOKEN_TABLE, &key)
@@ -586,7 +585,7 @@ impl MfaApi for Auth {
         }
         if !self.password_ok(name, password) {
             self.record_failure(name);
-            return Err(MfaError::Denied("the password is not right".into()));
+            return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;
         self.clear_factor(name)?;
@@ -609,7 +608,7 @@ impl MfaApi for Auth {
         }
         if !self.password_ok(name, password) {
             self.record_failure(name);
-            return Err(MfaError::Denied("the password is not right".into()));
+            return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;
         let (codes, f) = self.fresh_recovery(name)?;

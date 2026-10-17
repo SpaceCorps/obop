@@ -834,8 +834,12 @@ pub enum LoginOutcome {
 pub enum MfaError {
     /// Bad input or wrong state (already enrolled, nothing pending): 400.
     Invalid(String),
-    /// A wrong code or password: 401.
+    /// A wrong code: 401 `invalid_code`.
     Denied(String),
+    /// A wrong password: 401 `invalid_password`.
+    BadPassword,
+    /// The `mfa_token` is unknown, spent or older than five minutes: 401 `mfa_expired`.
+    Expired,
     /// Too many attempts: 429.
     Locked(String),
     /// The caller may not do this (not an admin): 404, like an unknown command.

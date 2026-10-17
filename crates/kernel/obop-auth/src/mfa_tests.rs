@@ -299,7 +299,7 @@ fn the_mfa_token_expires_and_survives_only_five_wrong_codes() {
     r.a.set_clock_for_test(T0 + 60 + crate::mfa::MFA_TOKEN_SECS + 1);
     assert!(matches!(
         r.a.login_mfa(&t, Some(&code_at(&secret, r.a.now())), None),
-        Err(MfaError::Denied(m)) if m.contains("expired")
+        Err(MfaError::Expired)
     ));
     // Four wrong codes leave the token usable; the fifth is the last it gets.
     let now = r.a.now();
@@ -467,7 +467,7 @@ fn disabling_needs_the_password_and_a_code_or_a_recovery_code() {
     r.a.set_clock_for_test(T0 + 90);
     assert!(matches!(
         r.a.disable(&p, "wrong password!!", Some(&c), None),
-        Err(MfaError::Denied(_))
+        Err(MfaError::BadPassword)
     ));
     assert!(matches!(
         r.a.disable(&p, PW, Some("000000"), None),
