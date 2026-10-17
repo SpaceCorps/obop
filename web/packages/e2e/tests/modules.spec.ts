@@ -328,7 +328,7 @@ test.describe("Customize > Modules", () => {
       const tree = panel.getByRole("list", { name: "Dependencies of Field Service" }).first();
       const hr = tree.getByRole("listitem").filter({ hasText: "Human Resources" }).first();
       await expect(hr).toContainText("≥0.2, <1");
-      await expect(hr).toContainText("installed 0.2.0");
+      await expect(hr).toContainText("installed 0.3.0");
       await expect(hr).toContainText("Satisfied");
       const base = tree.getByRole("listitem").filter({ hasText: "Contacts" }).first();
       await expect(base).toContainText("Built in");
