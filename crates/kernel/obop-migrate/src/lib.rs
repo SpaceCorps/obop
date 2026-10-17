@@ -71,6 +71,9 @@ pub fn steps() -> Vec<Step> {
 /// Step 2: values sealed before the key ring (`v1.` second-factor secrets, `obs1:` connector
 /// secrets) are re-sealed in the key ring's envelope with the key that opens them.
 fn seal_format(c: &Ctx) -> Result<String, String> {
+    if !reseal::has_legacy(&**c.backend)? {
+        return Ok("no secret in an older format".into());
+    }
     if c.ring.is_empty() {
         return Err(
             "the stored secrets need the server key to be upgraded: set OBOP_SECRET_KEY \

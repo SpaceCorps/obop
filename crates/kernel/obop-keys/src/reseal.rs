@@ -250,6 +250,16 @@ fn scan(
     Ok(())
 }
 
+/// Whether any sealed value in the database is still in one of the older formats.
+pub fn has_legacy(backend: &dyn Backend) -> Result<bool, String> {
+    let mut found = false;
+    scan(backend, |f| {
+        found |= legacy::is_legacy(&f.sealed);
+        Ok(())
+    })?;
+    Ok(found)
+}
+
 /// Re-seal everything the current key does not protect. `progress` gets one line per batch.
 pub fn run(
     backend: &Arc<dyn Backend>,
