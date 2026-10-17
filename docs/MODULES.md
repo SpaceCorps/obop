@@ -4,17 +4,17 @@ Audience: a developer or a business analyst who wants to add an app to obop with
 
 ## 1. What a module is
 
-A module (also called a package) is one text file, `obop.toml`. It declares **models** (record types), their **fields** (each with a kind, a data class, a description and a permission group) and **actions** (state transitions). Installing it registers the models with the one command dispatcher, so the same module is immediately available as REST endpoints, MCP tools for agents, CLI commands and backoffice screens (list, kanban, form, status bar, buttons), with masking, permission checks and agent approval applied for free (D29, D41, D45, D46).
+A module (also called a package) is one text file, `obop.toml`. It declares **models** (record types), their **fields** (each with a kind, a data class, a description and a permission group) and **actions** (state transitions that can also assert, create, change and adjust other records). Installing it registers the models with the one command dispatcher, so the same module is immediately available as REST endpoints, MCP tools for agents, CLI commands and backoffice screens (list, kanban, form, status bar, buttons), with masking, permission checks and agent approval applied for free (D29, D41, D45, D46).
 
 ### Tiers
 
 | Tier | What it can contain | Status |
 |---|---|---|
-| X1 declarative | Models, typed fields, data classes, permission groups, state-transition actions. No code. | Built (this document; D45, D47) |
-| X2 CEL | Expressions stored in data: computed fields, validation, conditions, modifiers, policies. | Not built (D11) |
+| X1 declarative | Models, typed fields, data classes, permission groups, state-transition actions with assertions and effects, computed fields, unique fields, sequences, row-level access. No code. | Built (this document; D45, D47, D56 to D58) |
+| X2 CEL | Richer expressions stored in data: modifiers, policies, date arithmetic, validation across records. The small expression language of section 3.8 is its first part. | Partly built (D56, D57) |
 | X3 Wasm | Sandboxed components for logic that expressions cannot express (connectors, side effects). | Not built (D11) |
 
-X1 packages cannot run anything, so an administrator can install one from an upload at runtime. When X2 and X3 arrive a package will gain sections for expressions and components; the X1 sections described here stay valid. Behaviour that needs code (computed totals, sequences, side effects, validation across fields) waits for those tiers (D45 consequences).
+X1 packages cannot run anything, so an administrator can install one from an upload at runtime. When X2 and X3 arrive a package will gain sections for expressions and components; the X1 sections described here stay valid. Behaviour that needs code (calling out, notifying, payments, anything outside the database) waits for those tiers.
 
 ### What ships
 
@@ -272,6 +272,7 @@ The core follows semantic versioning. While it is below 1.0, a **minor** bump (`
 | `write_group` | string | yes | `module.role`. Needed for `create`, `update`. |
 | `field` | array of tables | no | See 3.3. |
 | `action` | array of tables | no | See 3.4. |
+| `access` | table | no | Row-level access, see 3.9. |
 
 `[[model.field]]` and `[[model.action]]` are written after their model, indented by convention.
 
@@ -288,6 +289,12 @@ The core follows semantic versioning. While it is below 1.0, a **minor** bump (`
 | `options` | array of strings | none | Only for `select` (then required, non-empty, no blanks, no duplicates). |
 | `to` | string | none | Only for `ref` (then required). Model name. |
 | `required` | bool | `false` | Must be present and non-null on create; cannot be set to null on update. |
+| `computed` | string | none | An expression (3.8). The field is computed when the record is read and is read-only; `text`, `number`, `money` or `bool` only; not `required` or `unique`. |
+| `unique` | bool | `false` | No two records of the model may have the same non-empty value. |
+| `unique_with` | array of field names | `[]` | With `unique`: the value need only be unique among records equal in these fields (at most 4). |
+| `format`, `assign_on`, `gapless`, `reset` | | | Only for `kind = "sequence"`, see below. |
+
+`kind = "sequence"` is a text field numbered by the system (read-only, unique, never `required`): `format` is required, for example `"INV-{year}-{seq:05}"` (letters, digits and `- _ / . # space`, exactly one `{seq}` or `{seq:N}` with N from 1 to 12 for zero padding, optional `{year}` and `{month}`); `assign_on` names the action that numbers the record (default: numbered when it is created); `gapless = true` forbids deleting a record that holds a number; `reset` is `never` (default), `year` or `month` and needs `{year}` (and `{month}`) in the format. The counter is kept in a `sequence_counter` record per model, field and period and is committed in the same transaction as the record, so a failed action uses no number.
 
 ### 3.4 `[[model.action]]`
 
@@ -300,6 +307,8 @@ The core follows semantic versioning. While it is below 1.0, a **minor** bump (`
 | `to` | string | required | The value to set; one of the options. |
 | `group` | string | the model's `write_group` | `module.role`. |
 | `approval` | bool | `false` | Agents may only propose it (D18). |
+| `assert` | array | `[]` | Conditions that must hold before the action runs, each an expression (3.8) as a string, or `{ expr = "...", message = "..." }`. At most 8. |
+| `effect` | array of tables | `[]` | What the action does besides moving the state, `[[model.action.effect]]` (3.8). At most 12. |
 
 ### 3.5 Validation errors you can hit
 
@@ -344,6 +353,16 @@ Parse and gate errors (from `obop modules install`, the Customize upload or `mod
 | `M.A: acts on F, which is a text field; an action moves a select field between its options` | Make the field `kind = "select"` with `options`. |
 | `M.A: "V" is not one of the options of F (...)` | `from` or `to` is not in the select's options. |
 | `M.A: `from` and `to` are both "V"; an action must change the state` | An action that changes nothing is refused. |
+| `M.F: computed: ...` / `computed `E` is a number, but the field is text` | The expression does not parse or its type is not the field's. |
+| `computed `E` reads M.F (class C); the field must have class ...` / `give the computed field `group = "g"`` | A value computed from protected data is protected too: same group, same or stricter class, personal data if an input is. |
+| `computed fields depend on each other in a cycle: a -> b -> a` | Remove the loop. |
+| `M.F: format: ...` / `reset = "year" needs {year} in the format` / `assign_on: X is not an action of the model` | Fix the sequence. |
+| `M.F: unique_with: no field X` / `a computed field cannot be unique` | Fix the constraint. |
+| `M.A: assert "E": ...` / `assertion `E` is a number; it must be a comparison` | Assertions are true/false expressions over fields of the model and its children. |
+| `M.A effect N: ...` (`has no field`, `is required, so the effect must set it`, `must be an integer; that value does not fit`, `is a governed state field; use a set_state effect`, `for_each: ...`, `no earlier create effect is named X`, `has no action X`) | See 3.8. |
+| `effects form a cycle: a.x -> b.y -> a.x` / `more than 4 deep` | `set_state` effects may not loop. |
+| `X refers to model T, which no dependency of P provides` (for an effect on T) | Add the module that declares T to the dependencies. |
+| `access.own: no field F` / `must be a stored text or ref field` / `access.via: F is a cycle` / `[model.access] declares no rule` | See 3.9. |
 | `...: personal data cannot be classed `none`` | The D41 gate: choose a real class for a field with `personal_data = true`. |
 | `...: field has no description` / `command has no description` / `model has no description` | Descriptions are mandatory (they are what agents and the UI show). |
 
@@ -444,6 +463,73 @@ obop modules install assets.toml                          # installs the manifes
 
 **How the lookup and fallback work.** `GET /api/meta` carries, per module, model, field and action, `labels` (`{lang: text}`) and `descriptions`, and per select field `option_labels` (`{option: {lang: text}}`), each key present only when something is translated. The client picks `labels[lang]`, then `labels[base language]` (`de` for `de-AT`), then its own table for the built-in modules, then the humanised English name; descriptions fall back to the English `description`. The English `name` and `description` fields never change, and neither do commands, MCP tool names, the CLI, stored values or error messages. Upgrading replaces the labels with those of the new document; uninstalling removes them. An instance that installed a bundled package before it carried translations receives the bundled labels for the same version when it starts.
 
+### 3.8 Expressions, assertions and effects (D56, D57)
+
+**The expression language** is used by `computed`, `assert` and `when`. It has integers, text in double quotes (`\"` and `\\` escapes only), `true`, `false`; the fields of the record by name; `+ - * /` on integers (money and number fields; no floats exist: `/` rounds half away from zero, so `5 / 2` is 3 and `-5 / 2` is -3, and `a * b / 10000` is how a basis-point rate is applied); `== != < <= > >=` on two values of one type; `&&`, `||`, `!`; `if(condition, then, else)`; `concat(a, b, ...)` (numbers and booleans are written out); `is_set(field)`. An empty (null) value is `0` in arithmetic, `""` as text and false as a condition. Dividing by zero or leaving 64 bits is an error (a computed field then reads as empty; an assertion fails). Aggregates look at the child records: `sum(lines.amount)`, `min(...)`, `max(...)` (empty when there are no children) and `count(lines)`, optionally `where <condition on the child>`: `count(tasks where state == "done") * 100 / count(tasks)`. The child is named by its model, or by the part of the model name after this model's name, singular or plural (`lines` in `accounting_move` is `accounting_move_line`); it must have a `ref` to this model, and `lines[move_id]` picks the ref when there are several. At most 400 characters, 80 parts, 12 levels. Types are checked when the package is parsed and installed.
+
+**Computed fields** (`computed = "sum(lines.amount)"`) are evaluated when a record is read, from the current children, and are in `get`, `list`, `search` and every write response. They can be filtered and sorted on, may read other computed fields, are not stored, cannot be written (sending the current value back in an update is accepted, anything else is refused: `order.total is computed and read-only`), and are marked `computed: true` in `/api/meta`. Computing on read instead of keeping a cached value costs a look at the children per read (one indexed lookup for a record, one grouped scan for a list) and cannot drift. They are as protected as their inputs (3.5). Date arithmetic does not exist; `inventory_item.quantity` stays a stored number kept by `adjust` effects.
+
+**Assertions** are checked on the record as it is, before anything is written; the failure is the message, or `assertion failed: <expression>`. Example, on a journal entry: `assert = [{ expr = "total_debit == total_credit", message = "The entry does not balance" }]`.
+
+**Effects** run after the new state is set, in order, in one transaction with it: either the transition and every effect happen, or nothing does, sequence numbers included. They run with the caller's permissions and never more. Common keys: `kind`, `model` (what is written), `when` (an expression on the record after the transition; false skips the effect), `for_each` (repeat per child row of this record, with `$line.field` available; at most 500 in all), `as` (a `create` effect names its record for `$created.name`). Values (in `map`, `set`, `match`, `by`) are a constant (text, whole number, true/false) or `$self.field` (this record after the transition, computed fields included), `$self.id`, `$line.field`, `$line.id`, `$created.name`, `$now` (RFC 3339 UTC text), `$today` (a date), `$caller` (who ran the action); a text constant that starts with `$` is written `$$`. The kind of every value must fit its target field (numbers into number or money, a ref into a ref to that model, a select into a select with at least its options...) and a `create` must set every required field.
+
+| `kind` | Keys | Does |
+|---|---|---|
+| `create` | `map = { field = value }` | Creates a record of `model`; governed fields start at their first option, a sequence is numbered, `own` defaults to the caller. |
+| `update` | `set = { field = value }`, and `ref = "field"` or `children = true` (`via = "field"` if several) | Sets fields on the record a ref field of this record names, or on every `model` record that refers to this one. |
+| `adjust` | `field`, `op = "add"/"subtract"`, `by`, and `ref = "field"` or `match = { field = value }`; `create_missing`, `min` | Adds to or subtracts from a number or money field. `match` finds the one record whose fields equal the values (several is an error; none is an error unless `create_missing`, which creates it from the match values and the amount); `min` is a floor the result may not go below. |
+| `set_state` | `action`, and `ref` or `children` | Runs an action of `model` on the related records. That action's group, from-state, required fields, assertions, sequences, effects and the caller's visibility of the record all apply; a chain is at most 4 deep and may not loop. |
+
+```toml
+  [[model.action]]
+  name = "confirm"
+  description = "Confirm the order and prepare its invoice"
+  field = "state"
+  from = "draft"
+  to = "confirmed"
+
+    [[model.action.effect]]
+    kind = "create"
+    model = "invoice"
+    as = "invoice"
+    map = { sale_order_id = "$self.id", party_id = "$self.party_id" }
+
+    [[model.action.effect]]
+    kind = "create"
+    model = "invoice_line"
+    for_each = "lines"
+    map = { invoice_id = "$created.invoice", quantity = "$line.quantity", unit_price_minor = "$line.unit_price_minor" }
+```
+
+Rules the engine keeps: the caller needs the write group of every model an effect writes and the group of every action it starts, or the whole action is refused before it runs (`order.confirm also changes invoice records, which needs the invoicing.user group`); a record the caller cannot see (3.9) is not available to an effect; an agent that triggers an action reaching an `approval = true` action only proposes the whole operation, and the approver must hold all the groups; the 500-record cap, the effect count and the nesting depth are enforced with clear errors; a failure names the effect (`order.confirm: effect 3 (adjust) failed, nothing was changed: ...`). Seeds and direct store writes run no effects. Each bundled workflow is listed in section 12.
+
+### 3.9 `[model.access]`: row-level access (D58)
+
+Group checks decide which commands a person may call; access rules decide which *records* they see. Optional, one per model, written after the model keys.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `own` | string | A text (or ref) field holding the user id (login name) of the person the record belongs to. That person sees and edits it. On create it defaults to the creator. |
+| `via` | string | A ref field: the record is visible when the record it points at is (and that model's own rules apply, up to 4 hops, no cycle). Tasks follow their project, tiles their dashboard. |
+| `public_field` | string | A bool field (stored or computed): everyone who may read the model sees the record when it is true. |
+| `shared_with` | string | A text field of user ids separated by commas, spaces or semicolons: those people see the record. |
+| `see_all_group` | string or array | The holders of this group (or any of these groups) see every record. |
+
+A record is visible when **any** rule grants it; `platform.admin` sees everything; without `[model.access]` all records of a readable model are visible. Enforcement is in the command layer for every surface (REST, MCP, CLI): `get`, `list` and `search` (the filter is applied before the user's filter, order, page and count, so `total` counts only visible rows), `update`, `delete`, actions (and the actions effects start), the referrers a refused delete names, and ref validation: a record the caller cannot see answers **exactly like one that does not exist** (`no hr_leave_request <id>`; a ref to it fails as a ref to nothing). An agent has its owner's identity and the intersection of its owner's groups and its scopes. On create a person who cannot see the result is refused (`would not be visible to you (set employee to yourself)`), and an update cannot move a record out of the caller's own sight. `/api/meta` reports the rules under `access`, and the backoffice says so on an empty list.
+
+```toml
+[[model]]
+name = "hr_leave_request"
+read_group = "hr.user"
+write_group = "hr.user"
+
+  [model.access]
+  own = "requested_by"
+  see_all_group = "hr.manager"
+```
+
+Limits, stated plainly: the rules are about whole records, not fields (use `group` for columns); aggregates and computed totals ignore them, so give the children `via` the parent; uniqueness is global, so a refused duplicate reveals that some record holds the value; a record whose owner field is empty or is not a login is visible to the managers only; existing records get no owner when a model gains `own`.
+
 ## 4. Field kinds and their JSON
 
 Values travel as JSON on REST and MCP, and as `key=value` text on the CLI (which converts `number`, `money` and `bool` using the metadata). The server validates every create and update (HTTP 400, `<model>.<field> must be <description>`); existing records are not re-validated.
@@ -457,7 +543,8 @@ Values travel as JSON on REST and MCP, and as `key=value` text on the CLI (which
 | `date` | string `YYYY-MM-DD` | Must be a real calendar date (leap years honoured). `"2026-01-31"` |
 | `bool` | `true`/`false` | |
 | `select` | string | One of `options`. `"in_stock"` |
-| `ref` | string | The id of an existing record of model `to`; a dangling id is refused. `"9f3c..."` |
+| `ref` | string | The id of an existing record of model `to`; a dangling id (or one the caller cannot see, 3.9) is refused. `"9f3c..."` |
+| `sequence` | string | Assigned by the server, read-only. `"INV-2026-00042"` |
 
 ### 4.1 `list`, `search` and `delete`
 
@@ -480,7 +567,7 @@ Values travel as JSON on REST and MCP, and as `key=value` text on the CLI (which
 
 `<model>.delete` takes `{"id": ...}` and returns `{"id": ...}`. It needs the model's `write_group`; an agent only gets an approval plan. It is refused while another record has a `ref` to the record: `cannot delete party P: still referenced by accounting_move (3): id1, id2, id3; sale_order (1): id4` (the first five ids of each model).
 
-Conventions the bundled packages follow: refs are named `<thing>_id`; time of day is a `number` of minutes since midnight (540 is 09:00) next to a `date`; rates are `number`s in basis points (2000 is 20.00 percent); free-text codes such as invoice numbers are `text` because packages cannot generate sequences; yes/no with more than two states is a `select`.
+Conventions the bundled packages follow: refs are named `<thing>_id`; time of day is a `number` of minutes since midnight (540 is 09:00) next to a `date`; rates are `number`s in basis points (2000 is 20.00 percent); numbers such as invoice numbers are `sequence` fields; yes/no with more than two states is a `select`.
 
 ## 5. Data classes, personal data and permission groups
 
@@ -524,7 +611,7 @@ What the dispatcher does with `approval = true`:
 
 Mark `approval = true` on anything irreversible or money-moving: posting to a ledger, paying, refunding, sending to customers, publishing publicly, closing a period, retiring an asset. Reversible bookkeeping steps (assign, schedule, handle) normally do not need it.
 
-What actions cannot do: set more than one field, compute anything, create records, notify or call out. When an action runs it also checks that the record has every `required` field set (the error names the field, for example `helpdesk_ticket.subject is required and must be set before state can change to "in_progress"`).
+What actions cannot do: set more than one state field, notify or call out (effects, 3.8, change records in the same database only). When an action runs it also checks that the record has every `required` field set (the error names the field, for example `helpdesk_ticket.subject is required and must be set before state can change to "in_progress"`).
 
 ### 6.1 Governed fields: actions are the only way to move a state (D48)
 
@@ -599,15 +686,16 @@ The `dashboards` package stores dashboards as records so a UI can render them la
 
 Declarative X1 deliberately cannot do the following. Plan around them or wait for X2 and X3.
 
-- **No computed fields.** Totals, balances, ages, taxes and margins are entered by whoever creates the record. The accounting package does not check that debits equal credits.
-- **No sequences or unique constraints.** Numbers such as `INV/2026/0001` are free text; uniqueness and gaplessness are conventions the people entering them keep. Two records can have the same `tag` or `slug`.
-- **No row-level permissions.** Access is by model and field group only. Everyone holding `knowledge.user` reads every article regardless of its `visibility` field; that field is a label.
-- **No side effects.** Actions change one field. They do not send email, create invoices, post to a ledger, move stock or call a payment provider. The email, sign, eCommerce and POS packages record what happened or should happen; something else must do it.
-- **Governed state, but not locked records.** A state field is protected (section 6.1), but every other field of a posted or signed record can still be edited by anyone who holds the `write_group`; "immutable once posted" is not enforced. Keep such data in a model with a stricter `write_group`. Data written outside the commands bypasses the rules. Nothing stops two servers racing on one PostgreSQL database between the check and the write of a transition (one server serialises them).
-- **Delete is plain**: `delete` removes the record for good and refuses while another record refers to it through a `ref` (the error lists the referencing models, counts and up to five ids). There is no cascade, no soft delete and no tombstone; the check sees only models that are installed now. Personal-data erasure still uses the dedicated `erase` command of the owning module (`party.erase`), which anonymises in place and keeps the references valid; `delete` is not a substitute for it. There is no cross-record validation (dates in order, totals matching lines).
-- **No migrations**: see section 7.
-- **Search is evaluated in memory**: `list`/`search` filter, sort and page on the server (section 4.1), but the server reads the model's records from the store to do it, on all three backends, so a very large table is slow; there are no indexes, no full-text search and no grouping or aggregation on the server. Filtering and sorting on a field the caller cannot read in clear (not permitted, withheld, or masked for an agent) is refused.
-- Limits: 256 KiB for the whole document including its translations, 50 models, 200 fields per package; no floats; one field per action; at most 50 filter conditions, 5 order keys and 5000 rows per call.
+- **Computed fields are small on purpose.** Integers, text and booleans; sums, counts, minimums and maximums over child records; no floats, no date arithmetic (an SLA "elapsed" cannot be computed), no aggregate over grandchildren, no joins. They are computed when read, so they cost a look at the children, cannot be indexed, and sorting by one reads every row. They ignore row-level access (3.9).
+- **Sequences are per database and per process.** The counter is transactional, so numbers are gapless against failures and parallel calls inside one server (the dispatcher holds one lock for writes of models with rules). Two servers on one PostgreSQL database could still race on a counter; one process per database is the rule (D30). A gapless series can still have a hole if somebody edits the database by hand. Existing records are numbered only by `obop sequences backfill`.
+- **Uniqueness is global per model** (optionally scoped by `unique_with`); it is enforced on every command write and by a database index where one can be created, not on seeds or imports, and it reveals that a value exists. Case is significant.
+- **Row-level access is by whole record**, in the command layer; see 3.9. It does not hide a record from aggregates or from computed totals, does not apply to the public site layer (D50, its own whitelist), and does not apply to data written outside the commands.
+- **Effects change records in the same database only.** They do not send email, call a payment provider or run on a schedule; the email, sign, eCommerce and POS packages record what happened or should happen. Effects need the caller to hold the groups of everything they touch (so confirming a sale needs `invoicing.user`, receiving a purchase `inventory.user`); at most 12 per action, 500 records per operation, 4 nested actions; an effect cannot set a governed field except through its action, and plain create and update never run effects.
+- **Governed state, but not locked records.** A state field is protected (section 6.1), but every other field of a posted or signed record can still be edited by anyone who holds the `write_group`; "immutable once posted" is not enforced (a numbered record cannot be deleted, though, and a posted invoice keeps its lines only by convention). Data written outside the commands bypasses the rules. Nothing stops two servers racing on one PostgreSQL database between the check and the write of a transition (one server serialises them).
+- **Delete is plain**: `delete` removes the record for good and refuses while another record refers to it through a `ref` (the error lists the referencing models, counts and up to five ids of records the caller can see) or while it holds a gapless number. There is no cascade, no soft delete and no tombstone; the check sees only models that are installed now. Personal-data erasure still uses the dedicated `erase` command of the owning module (`party.erase`), which anonymises in place and keeps the references valid; `delete` is not a substitute for it. There is no validation across records beyond assertions on actions.
+- **No migrations**: see section 7. Turning a free text field into a `sequence`, or adding `own` to a model, does not touch old records.
+- **Search is evaluated in memory**: `list`/`search` filter, sort and page on the server (section 4.1), but the server reads the model's records from the store to do it, on all three backends, so a very large table is slow; there are no indexes beyond the unique ones, no full-text search and no grouping or aggregation on the server. Filtering and sorting on a field the caller cannot read in clear (not permitted, withheld, or masked for an agent) is refused.
+- Limits: 256 KiB for the whole document including its translations, 50 models, 200 fields per package; no floats; one state field per action; at most 50 filter conditions, 5 order keys and 5000 rows per call.
 
 ## 11. FAQ
 
@@ -633,4 +721,25 @@ Declarative X1 deliberately cannot do the following. Plan around them or wait fo
 
 **Can a module have no models?** The file parses with no `[[model]]`, but it adds nothing.
 
-**Where are decisions recorded?** D11 (tiers), D45 (packages and the admin), D46 (backoffice and Customize), D47 (typed fields), D48 (governed fields), D49 (delete and search) in `docs/DECISIONS.md`; data classes in `docs/CONVENTIONS.md` section 5.
+**Where are decisions recorded?** D11 (tiers), D45 (packages and the admin), D46 (backoffice and Customize), D47 (typed fields), D48 (governed fields), D49 (delete and search), D56 (effects and assertions), D57 (computed fields, uniqueness, sequences), D58 (row-level access) in `docs/DECISIONS.md`; data classes in `docs/CONVENTIONS.md` section 5.
+
+## 12. The bundled workflows
+
+What the bundled modules do with sections 3.8 and 3.9 (each is exercised by a test in `crates/obop/src/model_tests.rs`):
+
+| Module | Does |
+|---|---|
+| `sales` (built in) | `sale_order` has lines (`sale_order_line`); its `total_minor` is computed from them and `number` is `SO-00042`. `confirm` creates a draft `invoice` with a copy of every line (the caller needs `invoicing.user`). |
+| `invoicing` (built in) | `invoice_line`; `total_minor` computed; `post` is refused for a total of zero, needs `invoicing.manager` and approval, and assigns `INV-2026-00042` from a gapless yearly series. |
+| `product` (built in) | `sku` is unique. |
+| `accounting` | An entry shows `total_debit` and `total_credit`; `post` is refused unless they are equal and assigns `JE/2026/00042` (gapless, yearly). Account and journal codes are unique. |
+| `inventory` | `validate` (stock managers, approval) subtracts the quantity from the item at the source location and adds it to the item at the destination, creating missing items; one item per product, location and lot; moves are numbered `MV-00042`. |
+| `purchase` | Orders are numbered `PO-00042`; the total is the sum of the line amounts; `receive` creates a draft stock move per line to the receiving location (the caller needs `inventory.user`). |
+| `pos` | Subtotals and the order total are computed; `pay` is refused until the payments cover the total and creates draft stock moves from the order's stock location; receipts are numbered gapless per year. |
+| `expenses` | Claims are numbered `EXP-2026-0042`; an employee sees only their own, managers and finance see all. |
+| `hr` | Leave requests: employees see their own (`requested_by`), `hr.manager` sees all. |
+| `documents` | Confidential and restricted documents are visible to their owner and `documents.manager`; the rest to every reader (`open_to_all` is computed from `confidentiality`). |
+| `timesheets` | Entries are private to their worker; `timesheets.manager` sees all. |
+| `projects` | `progress` (percent of non-cancelled tasks that are done) and `estimate_minutes` are computed. |
+| `helpdesk` | Tickets are numbered `TCK-00042`. |
+| `dashboards` | A dashboard is visible to its owner, to `dashboards.manager` and, when `shared`, to every reader; its tiles follow it. |

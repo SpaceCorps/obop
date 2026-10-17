@@ -7,12 +7,12 @@ test found, or a limit the docs state.
 ## A. Data model completeness (Odoo-class workflows)
 | # | Issue | Status |
 |---|---|---|
-| A1 | Actions have no side effects: confirming an order cannot create an invoice, validating a stock move cannot change quantities, posting an invoice cannot write a journal entry | in progress |
-| A2 | No computed fields: totals, balances, quantities on hand, SLA times are typed in by hand | in progress |
-| A3 | No unique constraints or number sequences (invoice, order, receipt numbers are free text) | in progress |
-| A4 | No row-level permissions: nobody can be limited to their own records (leave requests, documents, tickets) | in progress |
-| A5 | `/api/meta` does not say which fields are governed, so a user without the action sees a plain field | in progress |
-| A6 | Dashboard "shared" flag is enforced only in the browser | in progress |
+| A1 | Actions have no side effects: confirming an order cannot create an invoice, validating a stock move cannot change quantities, posting an invoice cannot write a journal entry | done (D56). `[[model.action.effect]]` create, update, adjust and set_state plus `assert`, atomic with the transition on all three backends; used by sales confirm, invoicing post, accounting post, inventory validate, purchase receive, pos pay. Out of scope: expenses, manufacturing and subscriptions effects; effects never call out (X3) |
+| A2 | No computed fields: totals, balances, quantities on hand, SLA times are typed in by hand | done (D57). Computed on read (sum, min, max, count with `where`, arithmetic, if, concat); used for order, invoice, purchase and pos totals, accounting debit and credit totals, project progress. Not possible: SLA elapsed (no date arithmetic); `inventory_item.quantity` stays stored and is kept by `adjust` effects |
+| A3 | No unique constraints or number sequences (invoice, order, receipt numbers are free text) | done (D57). `unique`, `unique_with` (checked write plus database index) and `sequence` fields (transactional counters, gapless, yearly reset); invoice, journal entry, sale order, purchase order, expense, ticket, stock move and receipt numbers; SKU, account and journal codes. Existing records are numbered with `obop sequences backfill`; party email is deliberately not unique |
+| A4 | No row-level permissions: nobody can be limited to their own records (leave requests, documents, tickets) | done (D58). `[model.access]` own, via, public_field, shared_with, see_all_group enforced in every read and write path with an oracle test; applied to hr leave requests, expenses, timesheets, documents and dashboards. Not applied: helpdesk requester, project privacy; aggregates ignore the rules |
+| A5 | `/api/meta` does not say which fields are governed, so a user without the action sees a plain field | done. `/api/meta` fields carry governed, computed, unique, sequence; models carry `access`; MCP schemas and OpenAPI leave computed and numbered fields out of inputs |
+| A6 | Dashboard "shared" flag is enforced only in the browser | done. `dashboards_dashboard` and its widgets are filtered by the server (owner, shared, dashboards.manager) |
 
 ## B. Operations, scale and durability
 | # | Issue | Status |

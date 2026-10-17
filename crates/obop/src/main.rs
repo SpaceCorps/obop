@@ -2155,12 +2155,24 @@ mod tests {
 
     #[test]
     fn every_linked_module_passes_the_gate() {
+        let app = App::new();
         assert!(
-            App::new()
-                .modules
+            app.modules
                 .iter()
                 .all(|m| obop_registry::check_module(m).is_empty())
         );
+        // Effects reach across modules (a confirmed order creates an invoice): checked against
+        // all the linked modules together, where an unknown model is an error.
+        let all: Vec<std::sync::Arc<obop_registry::ModelDef>> = app
+            .modules
+            .iter()
+            .flat_map(|m| m.models.iter().cloned().map(std::sync::Arc::new))
+            .collect();
+        let look = |n: &str| all.iter().find(|m| m.name == n).cloned();
+        for m in &app.modules {
+            let v = obop_registry::check_module_in(m, &look);
+            assert!(v.is_empty(), "{}: {v:?}", m.id);
+        }
     }
     /// D52 over HTTP: `/api/meta` carries `labels`, `descriptions` and `option_labels` exactly
     /// where a translation exists, for built-in modules and for installed packages, and nothing
