@@ -112,6 +112,7 @@ function useSample(notify: Notify) {
     },
     newWith: () => notify("In the product this opens the full form"),
     drill: () => {},
+    setDialog: () => {},
   };
   return props;
 }

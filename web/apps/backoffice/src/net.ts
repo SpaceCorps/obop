@@ -84,7 +84,7 @@ export async function request(
 /** Ask the server once whether it answers; clears the banner when it does. */
 export async function probe(): Promise<boolean> {
   try {
-    await fetch("/", { method: "HEAD", cache: "no-store" });
+    await fetch("/", { cache: "no-store" });
     set({ unreachable: false, offline: typeof navigator !== "undefined" && !navigator.onLine });
     return true;
   } catch {

@@ -50,3 +50,9 @@ runs, and `locale` is `en-US`. `tests/i18n.spec.ts` opts out per test (`test.use
 opens a language with `?lang=de`. It reads the expected wording from the catalogues in
 `web/apps/*/locales/<lang>/messages.json`, so a reworded translation does not break it.
 `support/layout.ts` finds sideways scroll, controls outside the viewport and cut-off text from element boxes.
+
+## The QA sweep
+
+`tests/qa-sweep.spec.ts` is a manual-style pass, skipped unless `OBOP_QA=1`: it visits every screen at
+1440, 1024, 768 and 390 px, light and dark, in English and German, reports layout problems and saves a
+screenshot of each to `OBOP_QA_OUT` (default `/tmp/obop-qa`); the console guard fails it on any console or page error.

@@ -64,6 +64,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   const d = useData();
   const title = modelTitle(model, app.module.id);
   const state = useMemo(() => decodeState(route.st), [route.st]);
+  const [extraDialog, setExtraDialog] = useState<ReactNode>(null);
   const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
   const [pageSize, setPageSizeState] = useState(() => {
     const n = readPref<number>("obop-pagesize", 100);
@@ -292,6 +293,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     title,
     fields,
     rows: shown,
+    setDialog: setExtraDialog,
     server: aggMode ? { filter: plan.filter, order: plan.order } : undefined,
     state,
     setState,
@@ -441,6 +443,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
           )}
         </div>
       </section>
+      {extraDialog}
       {selected && (
         <RecordPanel
           key={route.id === "new" ? `new-${JSON.stringify(newDefaults)}` : route.id}

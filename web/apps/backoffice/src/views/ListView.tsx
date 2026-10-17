@@ -231,6 +231,73 @@ export function ListView(p: ViewProps) {
     .filter((r) => live.has(r.id))
     .map((r) => ({ id: r.id, label: d.recordLabel(p.model.name, r) }));
 
+  // The dialog lives in the model page: a bulk delete can empty the list, which replaces this view
+  // while the dialog still has its results to show.
+  const bulkDialog = bulk ? (
+    <BulkDialog
+      title={
+        bulk.kind === "delete"
+          ? t("Delete the matching records")
+          : t("Set {field} on the matching records", { field: fieldTitle(bulk.field) })
+      }
+      total={p.total}
+      question={(n) =>
+        bulk.kind === "delete"
+          ? t(
+              "{count, plural, one {Delete # record that matches this search? This cannot be undone.} other {Delete # records that match this search? This cannot be undone.}}",
+              { count: n },
+            )
+          : t(
+              "{count, plural, one {Set {field} to {value} on # record that matches this search?} other {Set {field} to {value} on # records that match this search?}}",
+              {
+                count: n,
+                field: fieldTitle(bulk.field),
+                value:
+                  bulk.field.kind === "bool"
+                    ? bulk.value
+                      ? t("Yes")
+                      : t("No")
+                    : optionLabel(String(bulk.value), bulk.field),
+              },
+            )
+      }
+      confirmLabel={(n) =>
+        bulk.kind === "delete"
+          ? t("{count, plural, one {Delete # record} other {Delete # records}}", { count: n })
+          : t("{count, plural, one {Change # record} other {Change # records}}", { count: n })
+      }
+      collect={(o) => p.fetchAll(o)}
+      labelOf={(row) => d.recordLabel(p.model.name, row)}
+      noun={(n) => nounFor(inSentence(p.title), n)}
+      apply={async (row) => {
+        const label = d.recordLabel(p.model.name, row);
+        const r =
+          bulk.kind === "delete"
+            ? await call(d.token, `${p.model.name}.delete`, { id: row.id })
+            : await call(d.token, `${p.model.name}.update`, {
+                id: row.id,
+                [bulk.field.name]: bulk.value,
+              });
+        return outcomeOf({ id: row.id, label }, r);
+      }}
+      onClose={() => {
+        setBulk(null);
+        p.setDialog(null);
+      }}
+      onDone={() => {
+        setSelected(new Set());
+        setAllMatching(false);
+        void d.changed(p.model.name);
+      }}
+    />
+  ) : null;
+  const showDialog = p.setDialog;
+  useEffect(() => {
+    showDialog(bulkDialog);
+    // The dialog's inputs are fixed when it opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulk]);
+
   return (
     <div className="listview">
       <div className="listbar">
@@ -587,61 +654,6 @@ export function ListView(p: ViewProps) {
           busy={p.pager.busy}
           onOffset={p.pager.setOffset}
           onSize={p.pager.setLimit}
-        />
-      )}
-      {bulk && (
-        <BulkDialog
-          title={
-            bulk.kind === "delete"
-              ? t("Delete the matching records")
-              : t("Set {field} on the matching records", { field: fieldTitle(bulk.field) })
-          }
-          total={p.total}
-          question={(n) =>
-            bulk.kind === "delete"
-              ? t(
-                  "{count, plural, one {Delete # record that matches this search? This cannot be undone.} other {Delete # records that match this search? This cannot be undone.}}",
-                  { count: n },
-                )
-              : t(
-                  "{count, plural, one {Set {field} to {value} on # record that matches this search?} other {Set {field} to {value} on # records that match this search?}}",
-                  {
-                    count: n,
-                    field: fieldTitle(bulk.field),
-                    value:
-                      bulk.field.kind === "bool"
-                        ? bulk.value
-                          ? t("Yes")
-                          : t("No")
-                        : optionLabel(String(bulk.value), bulk.field),
-                  },
-                )
-          }
-          confirmLabel={(n) =>
-            bulk.kind === "delete"
-              ? t("{count, plural, one {Delete # record} other {Delete # records}}", { count: n })
-              : t("{count, plural, one {Change # record} other {Change # records}}", { count: n })
-          }
-          collect={(o) => p.fetchAll(o)}
-          labelOf={(row) => d.recordLabel(p.model.name, row)}
-          noun={(n) => nounFor(inSentence(p.title), n)}
-          apply={async (row) => {
-            const label = d.recordLabel(p.model.name, row);
-            const r =
-              bulk.kind === "delete"
-                ? await call(d.token, `${p.model.name}.delete`, { id: row.id })
-                : await call(d.token, `${p.model.name}.update`, {
-                    id: row.id,
-                    [bulk.field.name]: bulk.value,
-                  });
-            return outcomeOf({ id: row.id, label }, r);
-          }}
-          onClose={() => setBulk(null)}
-          onDone={() => {
-            setSelected(new Set());
-            setAllMatching(false);
-            void d.changed(p.model.name);
-          }}
         />
       )}
       {deleting && (

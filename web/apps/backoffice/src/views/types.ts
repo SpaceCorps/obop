@@ -46,6 +46,8 @@ export type ViewProps = {
     onProgress?: (done: number, total: number) => void;
   }) => Promise<Collected>;
   canDelete: boolean;
+  /** Show a dialog above the page (kept when the view is replaced), or hide it with `null`. */
+  setDialog: (node: import("react").ReactNode) => void;
   /** Open the full form with some fields filled in. */
   newWith: (defaults: Record<string, unknown>) => void;
   /** Open the list narrowed to these conditions. */

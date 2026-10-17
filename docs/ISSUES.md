@@ -36,12 +36,12 @@ test found, or a limit the docs state.
 ## D. Interface and localisation
 | # | Issue | Status |
 |---|---|---|
-| D1 | List selection is per page; no "select all matching" | in progress |
-| D2 | Record panel stacks below the list at tablet and phone widths | in progress |
-| D3 | Server-paged lists sort bytewise, browser lists use the locale collator | in progress |
-| D4 | Browser-side views are capped at 5,000 rows (kanban, pivot, counts) | open |
-| D5 | Translated MCP and token docs pages (6 languages) are out of date; module card summaries and server blocker messages stay English | in progress |
-| D6 | Changing language remounts the app and drops open dialogs | in progress |
+| D1 | List selection is per page; no "select all matching" | done |
+| D2 | Record panel stacks below the list at tablet and phone widths | done |
+| D3 | Server-paged lists sort bytewise, browser lists use the locale collator | done |
+| D4 | Browser-side views are capped at 5,000 rows (kanban, pivot, counts) | done |
+| D5 | Translated MCP and token docs pages (6 languages) are out of date; module card summaries and server blocker messages stay English | done |
+| D6 | Changing language remounts the app and drops open dialogs | done |
 | D7 | No native review of any translation | open (needs people) |
 
 ## E. Platform, trust and discovery

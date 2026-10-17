@@ -74,6 +74,8 @@ type Fixtures = {
   signIn: (user: UserName, hash?: string) => Promise<void>;
   /** Declare the HTTP error statuses this test provokes on purpose; any others fail the test. */
   allowHttpErrors: (...statuses: number[]) => void;
+  /** Declare console errors this test provokes on purpose (a dropped connection, a crash caught by the error boundary). */
+  allowConsoleErrors: (...patterns: RegExp[]) => void;
   /** Install a throwaway module as root (removed after the test); returns its model name. */
   scratchModule: (spec: Omit<ModuleSpec, "id"> & { id?: string }) => Promise<string>;
   /** A name no other record has, so tests never depend on how much data earlier tests left. */
@@ -145,12 +147,21 @@ export const test = base.extend<Fixtures & Options>({
     await use((...statuses) => void allowed.push(...statuses));
   },
 
+  // eslint-disable-next-line no-empty-pattern -- Playwright needs a destructured first argument
+  allowConsoleErrors: async ({}, use) => {
+    await use((...patterns) => void allowedConsole.push(...patterns));
+  },
+
   consoleGuard: [
     async ({ page }, use, info) => {
       const problems: string[] = [];
       const failedLoads: { status: number; text: string }[] = [];
       allowed.length = 0;
-      page.on("pageerror", (e) => problems.push(`page error: ${e.message}`));
+      allowedConsole.length = 0;
+      page.on("pageerror", (e) => {
+        if (!allowedConsole.some((p) => p.test(e.message)))
+          problems.push(`page error: ${e.message}`);
+      });
       page.on("console", (m: ConsoleMessage) => {
         if (m.type() !== "error") return;
         // Chrome logs every 4xx/5xx response as a console error; the test declares the expected ones.
@@ -158,7 +169,8 @@ export const test = base.extend<Fixtures & Options>({
           m.text(),
         );
         if (http) failedLoads.push({ status: Number(http[1]), text: m.text() });
-        else problems.push(`console error: ${m.text()}`);
+        else if (!allowedConsole.some((p) => p.test(m.text())))
+          problems.push(`console error: ${m.text()}`);
       });
       await use();
       if (info.status !== info.expectedStatus) return; // the test already failed for its own reason
@@ -171,6 +183,7 @@ export const test = base.extend<Fixtures & Options>({
 });
 
 const allowed: number[] = [];
+const allowedConsole: RegExp[] = [];
 
 /** Open a hash route in the already signed-in app and wait for the page it names. */
 export async function open(page: Page, hash: string): Promise<void> {
