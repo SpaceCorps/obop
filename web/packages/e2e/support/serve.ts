@@ -48,6 +48,14 @@ if (kind === "app") {
   ];
 } else throw new Error("usage: serve.ts app|platform");
 
-const child = spawn(bin, args, { stdio: "inherit" });
+// Connectors: the specs run a receiver on loopback, which is refused unless the operator allows it;
+// the secret key is set the way a deployment sets it.
+const env = {
+  ...process.env,
+  OBOP_CONNECTORS_ALLOW_LOOPBACK: "1",
+  OBOP_SECRET_KEY: "e2e-secret-key-0123456789-abcdefghijklmnop",
+  OBOP_PUBLIC_URL: `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`,
+};
+const child = spawn(bin, args, { stdio: "inherit", env });
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => child.kill(sig));
 child.on("exit", (code) => process.exit(code ?? 0));

@@ -48,6 +48,13 @@ export const users = {
     password: "e2e ivy password 1",
     groups: "wfagent.user,wfagent.manager",
   },
+  // Connects her own accounts (connectors.user) and nothing else: the connectors specs use her to
+  // check that a person sees only her own connections and may withdraw her consent.
+  cora: {
+    name: "cora",
+    password: "e2e cora password 1",
+    groups: "base.user,crm.user,connectors.user",
+  },
 } as const;
 export type UserName = keyof typeof users;
 

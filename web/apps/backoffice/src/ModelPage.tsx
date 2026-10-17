@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fmt, inSentence, msg, t } from "@obop/ui";
 import { LOAD_LIMIT, search, type ModelMeta, type Row } from "./api.ts";
 import type { App } from "./Chrome.tsx";
@@ -30,7 +30,16 @@ import { PivotView } from "./views/PivotView.tsx";
 import type { ViewProps } from "./views/types.ts";
 import { governedNames, moveRecord } from "./workflow.ts";
 
-type Props = { app: App; model: ModelMeta; route: Route; go: Go };
+type Props = {
+  app: App;
+  model: ModelMeta;
+  route: Route;
+  go: Go;
+  /** Extra controls next to the search box (an app adds its own button). */
+  extra?: ReactNode;
+  /** Replaces the generic "New" form, for a record an app creates with its own guided flow. */
+  onNew?: () => void;
+};
 
 const VIEWS: Record<string, ViewDef> = {
   list: { id: "list", label: msg("List"), icon: "list" },
@@ -50,7 +59,7 @@ function storedView(model: string): string {
   }
 }
 
-export function ModelPage({ app, model, route, go }: Props) {
+export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Props) {
   const d = useData();
   const title = modelTitle(model, app.module.id);
   const state = useMemo(() => decodeState(route.st), [route.st]);
@@ -191,6 +200,7 @@ export function ModelPage({ app, model, route, go }: Props) {
   const open = (id: string) => put({ id });
   const close = useCallback(() => put({ id: "" }), [put]);
   const openNew = (defaults: Record<string, unknown> = {}) => {
+    if (onNew) return onNew();
     setNewDefaults(defaults);
     put({ id: "new" });
   };
@@ -319,23 +329,26 @@ export function ModelPage({ app, model, route, go }: Props) {
           applyFavorite={applyFavorite}
           count={total}
           extra={
-            kf && (
-              <label className="inline-field">
-                <span>{t("Group by")}</span>
-                <select
-                  value={kf.name}
-                  onChange={(e) => setState({ ...state, group: [e.target.value] })}
-                >
-                  {groupable(fields).map((f) => (
-                    <option key={f.name} value={f.name}>
-                      {f.kind === "date"
-                        ? t("{field} (month)", { field: fieldTitle(f) })
-                        : fieldTitle(f)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )
+            <>
+              {kf && (
+                <label className="inline-field">
+                  <span>{t("Group by")}</span>
+                  <select
+                    value={kf.name}
+                    onChange={(e) => setState({ ...state, group: [e.target.value] })}
+                  >
+                    {groupable(fields).map((f) => (
+                      <option key={f.name} value={f.name}>
+                        {f.kind === "date"
+                          ? t("{field} (month)", { field: fieldTitle(f) })
+                          : fieldTitle(f)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {appExtra}
+            </>
           }
         />
         {denied.length > 0 && (

@@ -1,0 +1,301 @@
+/* The Connectors app. Tokens only; nothing here hard-codes a colour. */
+.cx .content.pad {
+  padding: var(--space-5);
+}
+.cx-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-inline-size: 72rem;
+}
+.cx-page h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+.cx-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-end: var(--space-3);
+  flex-wrap: wrap;
+}
+.cx-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--space-3);
+}
+.cx-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+@media (max-width: 56rem) {
+  .cx-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Cards: the catalogue and the connection list. */
+.cx-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
+  gap: var(--space-4);
+}
+.cx-cards.compact {
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+}
+.cx-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.cx-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.cx-card h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+.cx-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.cx-card footer {
+  margin-block-start: auto;
+  padding-block-start: var(--space-2);
+}
+.cx-badges {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.cx-err {
+  color: var(--danger-ink);
+  font-size: var(--text-sm);
+}
+
+/* Definition lists of facts. */
+.cx-facts {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.cx-facts dt {
+  color: var(--text-muted);
+}
+.cx-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The wizard. */
+.cx-steps {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.cx-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.cx-steps li[aria-current="step"] {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+}
+.cx-step-n {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  font-size: var(--text-xs);
+}
+.cx-steps li[aria-current="step"] .cx-step-n {
+  background: var(--accent-fill);
+  border-color: transparent;
+  color: var(--on-accent);
+}
+.cx-steps li[data-done] .cx-step-n {
+  background: var(--surface-3);
+}
+.cx-disclaimer {
+  margin-block: 0 var(--space-3);
+}
+.cx-choices {
+  display: grid;
+  gap: var(--space-2);
+}
+.cx-choice {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.cx-choice[data-on] {
+  border-color: var(--accent-fill);
+  background: var(--surface-3);
+}
+.cx-choice:focus-within {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 2px;
+}
+.cx-choice input {
+  margin-block-start: 0.25rem;
+}
+.cx-choice .block,
+.hint.block {
+  display: block;
+}
+.cx-secret {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.cx-secret .field {
+  flex: 1 1 14rem;
+}
+.cx-url {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Field picker. */
+.cx-picker {
+  display: grid;
+  gap: var(--space-3);
+}
+.cx-model {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.cx-model legend {
+  padding-inline: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+.cx-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.cx-fields li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cx-field-meta {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.cx-ack {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-3);
+}
+.cx-ack legend {
+  padding-inline: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+
+/* Preview. */
+.cx-preview {
+  display: grid;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+.cx-preview h3,
+.cx-preview h4 {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+}
+.cx-treatments th[scope="row"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: start;
+}
+
+/* The checklist. */
+.cx-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.cx-checks li {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.cx-checks li p {
+  margin: var(--space-1) 0 0;
+}
+.cx-checks .badge {
+  flex: none;
+}
+
+.cx-detail {
+  display: grid;
+  gap: var(--space-4);
+}
+.cx-detail h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+.cx-recipient h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-md);
+}
