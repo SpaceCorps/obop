@@ -102,7 +102,36 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     let mut paths = serde_json::Map::new();
     paths.insert(
         "/api/auth/login".into(),
-        json!({"post": {"operationId": "login", "summary": "Sign in", "requestBody": json_body(json!({"type": "object", "required": ["username", "password"], "properties": {"username": {"type": "string"}, "password": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}}}), "A session token."), "401": error_responses()["401"].clone()}}}),
+        json!({"post": {"operationId": "login", "summary": "Sign in", "requestBody": json_body(json!({"type": "object", "required": ["username", "password"], "properties": {"username": {"type": "string"}, "password": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}, "mfa_required": {"type": "boolean", "description": "True when a second factor is needed: no token, post mfa_token and a code to /api/auth/login/mfa."}, "mfa_token": {"type": "string", "description": "Single purpose, valid 5 minutes, at most 5 attempts."}, "mfa_enrolment_required": {"type": "boolean", "description": "The session may only set up two-factor authentication."}}}), "A session token, or the demand for a second factor."), "401": error_responses()["401"].clone()}}}),
+    );
+    let code_body = json_body(json!({"type": "object", "properties": {"code": {"type": "string", "description": "The 6-digit code of the authenticator app."}, "recovery_code": {"type": "string", "description": "A single-use recovery code instead of the code."}}}));
+    paths.insert(
+        "/api/auth/login/mfa".into(),
+        json!({"post": {"operationId": "loginMfa", "summary": "Second sign-in step: exchange an mfa_token and a code for a session", "requestBody": json_body(json!({"type": "object", "required": ["mfa_token"], "properties": {"mfa_token": {"type": "string"}, "code": {"type": "string"}, "recovery_code": {"type": "string"}}})), "responses": {"200": ok(json!({"type": "object", "properties": {"token": {"type": "string"}}}), "A session token."), "401": error_responses()["401"].clone(), "429": {"description": "Too many wrong codes."}}}}),
+    );
+    paths.insert(
+        "/api/auth/mfa".into(),
+        json!({"get": {"operationId": "mfaStatus", "summary": "Two-factor status of the signed-in person (a human session only; an agent token gets 404)", "security": sec.clone(), "responses": {"200": {"description": "enabled, pending, recovery_remaining, limited, require_admins, require_all."}}}}),
+    );
+    paths.insert(
+        "/api/auth/mfa/begin".into(),
+        json!({"post": {"operationId": "mfaBegin", "summary": "Start enrolment: returns a base32 secret and an otpauth:// URI; nothing is active yet", "security": sec.clone(), "responses": {"200": {"description": "secret, uri."}, "503": {"description": "The server has no OBOP_SECRET_KEY."}}}}),
+    );
+    paths.insert(
+        "/api/auth/mfa/confirm".into(),
+        json!({"post": {"operationId": "mfaConfirm", "summary": "Activate two-factor with a valid code; returns 10 recovery codes, shown once", "security": sec.clone(), "requestBody": json_body(json!({"type": "object", "required": ["code"], "properties": {"code": {"type": "string"}}})), "responses": {"200": {"description": "recovery_codes."}, "401": error_responses()["401"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/mfa/disable".into(),
+        json!({"post": {"operationId": "mfaDisable", "summary": "Turn two-factor off: needs the password and a current code or a recovery code", "security": sec.clone(), "requestBody": code_body.clone(), "responses": {"200": {"description": "Turned off."}, "401": error_responses()["401"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/mfa/recovery".into(),
+        json!({"post": {"operationId": "mfaRecovery", "summary": "Replace the recovery codes: needs the password and a current code or a recovery code", "security": sec.clone(), "requestBody": code_body, "responses": {"200": {"description": "recovery_codes."}, "401": error_responses()["401"].clone()}}}),
+    );
+    paths.insert(
+        "/api/auth/mfa/reset".into(),
+        json!({"post": {"operationId": "mfaReset", "summary": "platform.admin removes another person's two-factor (audited; never your own)", "security": sec.clone(), "requestBody": json_body(json!({"type": "object", "required": ["user"], "properties": {"user": {"type": "string"}}})), "responses": {"200": {"description": "Reset."}, "404": error_responses()["404"].clone()}}}),
     );
     paths.insert(
         "/api/auth/agent-token".into(),

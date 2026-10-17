@@ -80,3 +80,27 @@ description = "Instanzweite Oberflächeneinstellungen: Erscheinungsbild und Anor
 [labels.de.model.setting.field.value]
 label = "Wert"
 description = "Die Einstellungen als JSON-Objekt"
+
+[labels.de.model.security_event]
+name = "Sicherheitsereignis"
+description = "Ein Sicherheitsereignis bei der Anmeldung: Einrichtung der Zwei-Faktor-Authentifizierung, Nutzung eines Wiederherstellungscodes, Zurücksetzen oder Sperrung. Nur anhängbar."
+
+[labels.de.model.security_event.field.user]
+label = "Benutzer"
+description = "Das Konto, um das es geht"
+
+[labels.de.model.security_event.field.kind]
+label = "Ereignis"
+description = "Was geschehen ist: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session"
+
+[labels.de.model.security_event.field.actor]
+label = "Ausgeführt von"
+description = "Wer es getan hat: der Benutzer, ein Administrator oder der Betreiber"
+
+[labels.de.model.security_event.field.detail]
+label = "Hinweis"
+description = "Eine kurze Notiz ohne Code und ohne Geheimnis"
+
+[labels.de.model.security_event.field.at]
+label = "Zeitpunkt"
+description = "Wann es geschah, in UTC (RFC 3339)"

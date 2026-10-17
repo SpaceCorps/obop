@@ -80,3 +80,27 @@ description = "Paramètres d’interface valables pour toute l’instance : th�
 [labels.fr.model.setting.field.value]
 label = "Valeur"
 description = "Les paramètres sous forme d’objet JSON"
+
+[labels.fr.model.security_event]
+name = "Événement de sécurité"
+description = "Un événement de sécurité à la connexion : activation de l'authentification à deux facteurs, utilisation d'un code de récupération, réinitialisation ou blocage. En ajout seul."
+
+[labels.fr.model.security_event.field.user]
+label = "Utilisateur"
+description = "Le compte concerné"
+
+[labels.fr.model.security_event.field.kind]
+label = "Événement"
+description = "Ce qui s'est passé : enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session"
+
+[labels.fr.model.security_event.field.actor]
+label = "Effectué par"
+description = "Qui l'a fait : l'utilisateur, un administrateur ou l'opérateur"
+
+[labels.fr.model.security_event.field.detail]
+label = "Détail"
+description = "Une courte note, sans code ni secret"
+
+[labels.fr.model.security_event.field.at]
+label = "Heure"
+description = "Quand cela s'est produit, en UTC (RFC 3339)"

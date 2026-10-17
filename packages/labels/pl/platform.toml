@@ -80,3 +80,27 @@ description = "Ustawienia interfejsu dla całej instancji: motyw i układ launch
 [labels.pl.model.setting.field.value]
 label = "Wartość"
 description = "Ustawienia w postaci obiektu JSON"
+
+[labels.pl.model.security_event]
+name = "Zdarzenie bezpieczeństwa"
+description = "Zdarzenie bezpieczeństwa przy logowaniu: włączenie uwierzytelniania dwuskładnikowego, użycie kodu odzyskiwania, reset lub blokada. Tylko dopisywanie."
+
+[labels.pl.model.security_event.field.user]
+label = "Użytkownik"
+description = "Konto, którego dotyczy zdarzenie"
+
+[labels.pl.model.security_event.field.kind]
+label = "Zdarzenie"
+description = "Co się stało: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session"
+
+[labels.pl.model.security_event.field.actor]
+label = "Wykonał"
+description = "Kto to zrobił: użytkownik, administrator lub operator"
+
+[labels.pl.model.security_event.field.detail]
+label = "Szczegóły"
+description = "Krótka notatka bez kodu i bez sekretu"
+
+[labels.pl.model.security_event.field.at]
+label = "Czas"
+description = "Kiedy to nastąpiło, w UTC (RFC 3339)"

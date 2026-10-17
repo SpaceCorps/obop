@@ -409,6 +409,27 @@ pub fn admin_module() -> Module {
                 )],
                 commands: vec![],
             },
+            // Written by obop-auth (D53), append-only: only get, list and search exist.
+            ModelDef {
+                name: "security_event",
+                description: "A sign-in security event: two-factor enrolment, use of a recovery code, reset or lockout. Append-only",
+                read_group: ADMIN_GROUP,
+                write_group: ADMIN_GROUP,
+                fields: vec![
+                    f("user", "The account the event is about"),
+                    f(
+                        "kind",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session",
+                    ),
+                    f(
+                        "actor",
+                        "Who did it: the user, an administrator or the operator",
+                    ),
+                    f("detail", "A short note without any code or secret"),
+                    f("at", "When it happened, in UTC (RFC 3339)"),
+                ],
+                commands: vec![],
+            },
         ],
         network_destinations: vec![],
         description: String::new(),
@@ -504,6 +525,7 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
             Ok(Value::map([("id", s("instance")), ("value", s(&v))]))
         }),
     );
+    d.register_read_only(&m, "security_event", &inst.store);
     let i = inst.clone();
     d.register(
         &m,
@@ -580,6 +602,40 @@ mod tests {
             },
             _ => panic!(),
         }
+    }
+
+    /// D53: the security event log is a model like any other for reading, and read-only.
+    #[test]
+    fn the_security_event_log_is_readable_by_admins_and_never_writable() {
+        let store = Store::new();
+        let (d, _) = setup(&store);
+        let mut f = Fields::new();
+        f.insert("user".into(), J::from("ada"));
+        f.insert("kind".into(), J::from("enrol_confirm"));
+        store.backend().insert("security_event", "001", &f).unwrap();
+        let rows = |p: &Principal| call(&d, p, "security_event.list", Value::Map(Default::default()));
+        let Ok(r) = rows(&admin()) else { panic!() };
+        let Value::List(l) = r.value else { panic!() };
+        assert_eq!(l.len(), 1);
+        assert!(matches!(
+            rows(&Principal::user("ada", &["base.user"])),
+            Err(CallError::Forbidden(_))
+        ));
+        assert!(
+            call(&d, &admin(), "security_event.get", by_id("001")).is_ok(),
+            "get works"
+        );
+        for c in ["create", "update", "delete"] {
+            assert!(
+                matches!(
+                    call(&d, &admin(), &format!("security_event.{c}"), by_id("001")),
+                    Err(CallError::UnknownCommand(_))
+                ),
+                "{c} must not exist"
+            );
+        }
+        let agent = Principal::agent("ada/agent", &[ADMIN_GROUP], &[ADMIN_GROUP]);
+        assert!(rows(&agent).is_ok(), "an agent scoped to the admin group may read it");
     }
 
     #[test]

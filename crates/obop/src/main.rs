@@ -2,6 +2,8 @@ mod app;
 #[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
+mod mfa_tests;
+#[cfg(test)]
 mod public_site_tests;
 
 use app::{App, DevAuth};
@@ -20,6 +22,8 @@ const USAGE: &str = "usage: obop <command>
   modules market                                list the marketplace; install with `modules install-from ID`
   admin create USER [--groups a,b | --all-groups]
                                                 create a user; the password is read from stdin
+  admin reset-mfa USER --db URL                 break-glass: remove USER's two-factor and sessions (needs database
+                                                access; writes an audit record); see docs/DEPLOY.md
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)
   platform serve [--addr A] [--static DIR]      the control plane: sign up and get your own instance
       --provisioner local|sliplane|fake         (default local: child processes on this machine)
@@ -122,6 +126,7 @@ fn main() -> ExitCode {
         ["modules", "install", file] => modules_install(&opts, Some(file), None),
         ["modules", "install-from", id] => modules_install(&opts, None, Some(id)),
         ["modules", "uninstall", id] => modules_uninstall(&opts, id),
+        ["admin", "reset-mfa", user] => admin_reset_mfa(&opts, user),
         ["admin", "create", user] => admin_create(&opts, user, groups, has("--all-groups")),
         ["agent-token", user] => agent_token(&opts, user, scopes, label),
         ["serve"] => serve(&opts, addr, static_dir),
@@ -377,6 +382,20 @@ fn admin_create(o: &Opts, user: &str, groups: Option<&str>, all: bool) -> Exit {
             groups.join(", ")
         }
     );
+    Ok(())
+}
+
+/// `obop admin reset-mfa USER`: the operator's way back in when a user lost both the device and
+/// the recovery codes. Needs direct database access, which is the proof of authority.
+fn admin_reset_mfa(o: &Opts, user: &str) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    Auth::new(app.store.backend())
+        .operator_reset_mfa(user)
+        .map_err(|e| fail(&e))?;
+    println!("two-factor removed for {user}; their sessions are revoked; the reset is in the security log");
     Ok(())
 }
 

@@ -346,6 +346,12 @@ fn gate(s: &HttpState, h: &HeaderMap) -> Gate {
     let Some(principal) = s.auth.resolve(token) else {
         return Gate::Stop(with_cors(unauthorized(&base, true), cors.as_deref()));
     };
+    if principal.mfa_limited {
+        return Gate::Stop(with_cors(
+            crate::mfa::enrolment_required(),
+            cors.as_deref(),
+        ));
+    }
     if let Err(retry) = m.rate_ok(token) {
         let mut r = rpc_error(StatusCode::TOO_MANY_REQUESTS, -32000, "rate limit exceeded");
         if let Ok(v) = HeaderValue::from_str(&retry.max(1).to_string()) {

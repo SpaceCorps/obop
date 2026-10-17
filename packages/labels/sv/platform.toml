@@ -80,3 +80,27 @@ description = "Inställningar för hela instansen: tema och appstartarens layout
 [labels.sv.model.setting.field.value]
 label = "Värde"
 description = "Inställningarna som ett JSON-objekt"
+
+[labels.sv.model.security_event]
+name = "Säkerhetshändelse"
+description = "En säkerhetshändelse vid inloggning: aktivering av tvåfaktorsautentisering, användning av en återställningskod, återställning eller spärr. Endast tillägg."
+
+[labels.sv.model.security_event.field.user]
+label = "Användare"
+description = "Kontot som händelsen gäller"
+
+[labels.sv.model.security_event.field.kind]
+label = "Händelse"
+description = "Vad som hände: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session"
+
+[labels.sv.model.security_event.field.actor]
+label = "Utförd av"
+description = "Vem som gjorde det: användaren, en administratör eller operatören"
+
+[labels.sv.model.security_event.field.detail]
+label = "Detalj"
+description = "En kort anteckning utan kod eller hemlighet"
+
+[labels.sv.model.security_event.field.at]
+label = "Tid"
+description = "När det hände, i UTC (RFC 3339)"

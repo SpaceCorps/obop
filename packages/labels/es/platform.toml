@@ -80,3 +80,27 @@ description = "Ajustes de interfaz de toda la instancia: tema y distribución de
 [labels.es.model.setting.field.value]
 label = "Valor"
 description = "Los ajustes como un objeto JSON"
+
+[labels.es.model.security_event]
+name = "Evento de seguridad"
+description = "Un evento de seguridad del inicio de sesión: activación de la autenticación en dos pasos, uso de un código de recuperación, restablecimiento o bloqueo. Solo se añade."
+
+[labels.es.model.security_event.field.user]
+label = "Usuario"
+description = "La cuenta a la que se refiere el evento"
+
+[labels.es.model.security_event.field.kind]
+label = "Evento"
+description = "Qué ocurrió: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session"
+
+[labels.es.model.security_event.field.actor]
+label = "Realizado por"
+description = "Quién lo hizo: el usuario, un administrador o el operador"
+
+[labels.es.model.security_event.field.detail]
+label = "Detalle"
+description = "Una nota breve, sin código ni secreto"
+
+[labels.es.model.security_event.field.at]
+label = "Hora"
+description = "Cuándo ocurrió, en UTC (RFC 3339)"

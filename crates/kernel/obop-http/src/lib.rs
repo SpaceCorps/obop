@@ -18,6 +18,7 @@ use tower_http::services::{ServeDir, ServeFile};
 
 pub mod community;
 pub mod mcp;
+pub mod mfa;
 pub mod openapi;
 pub mod public;
 pub mod website;
@@ -50,14 +51,21 @@ impl HttpState {
         })
     }
 
-    /// One vault per bearer token, so mask tokens are stable inside a session (D40).
-    fn auth(&self, h: &HeaderMap) -> Result<(Principal, Session), StatusCode> {
+    /// One vault per bearer token, so mask tokens are stable inside a session (D40). A session
+    /// limited to two-factor enrolment (D53) is refused here with 403 `mfa_enrolment_required`.
+    fn auth(&self, h: &HeaderMap) -> Result<(Principal, Session), AuthRejection> {
         let token = h
             .get("authorization")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer "))
-            .ok_or(StatusCode::UNAUTHORIZED)?;
-        let p = self.auth.resolve(token).ok_or(StatusCode::UNAUTHORIZED)?;
+            .ok_or(AuthRejection::Unauthorized)?;
+        let p = self
+            .auth
+            .resolve(token)
+            .ok_or(AuthRejection::Unauthorized)?;
+        if p.mfa_limited {
+            return Err(AuthRejection::MfaEnrolmentRequired);
+        }
         let s = self
             .sessions
             .lock()
@@ -70,6 +78,21 @@ impl HttpState {
 }
 
 type Shared = State<Arc<HttpState>>;
+
+/// Why a bearer token did not get through.
+pub(crate) enum AuthRejection {
+    Unauthorized,
+    MfaEnrolmentRequired,
+}
+
+impl IntoResponse for AuthRejection {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Unauthorized => StatusCode::UNAUTHORIZED.into_response(),
+            Self::MfaEnrolmentRequired => mfa::enrolment_required(),
+        }
+    }
+}
 
 /// Storage backends block (the PostgreSQL client runs its own runtime, which panics if used on an
 /// async worker), so every handler that touches the dispatcher, the authenticator or the platform
@@ -85,6 +108,7 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
     Router::new()
         .route("/api/auth/login", post(login))
         .route("/api/auth/agent-token", post(agent_token))
+        .merge(mfa::routes())
         .route("/api/commands", get(commands))
         .route("/api/meta", get(meta))
         .route("/api/openapi.json", get(instance_openapi))
@@ -180,8 +204,8 @@ fn login_blocking(s: Arc<HttpState>, body: J) -> Response {
         body["username"].as_str().unwrap_or(""),
         body["password"].as_str().unwrap_or(""),
     );
-    match s.auth.login(u, p) {
-        Ok(token) => Json(json!({"token": token})).into_response(),
+    match s.auth.login_step(u, p) {
+        Ok(out) => mfa::outcome(out),
         Err(e) if e.contains("too many") => {
             (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": e}))).into_response()
         }

@@ -80,3 +80,27 @@ description = "Koko instanssin käyttöliittymäasetukset: teema ja sovellusvali
 [labels.fi.model.setting.field.value]
 label = "Arvo"
 description = "Asetukset JSON-oliona"
+
+[labels.fi.model.security_event]
+name = "Tietoturvatapahtuma"
+description = "Kirjautumiseen liittyvä tietoturvatapahtuma: kaksivaiheisen tunnistautumisen käyttöönotto, palautuskoodin käyttö, nollaus tai lukitus. Vain lisäys."
+
+[labels.fi.model.security_event.field.user]
+label = "Käyttäjä"
+description = "Tili, jota tapahtuma koskee"
+
+[labels.fi.model.security_event.field.kind]
+label = "Tapahtuma"
+description = "Mitä tapahtui: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session"
+
+[labels.fi.model.security_event.field.actor]
+label = "Tekijä"
+description = "Kuka sen teki: käyttäjä, ylläpitäjä tai operaattori"
+
+[labels.fi.model.security_event.field.detail]
+label = "Lisätiedot"
+description = "Lyhyt huomautus ilman koodia tai salaisuutta"
+
+[labels.fi.model.security_event.field.at]
+label = "Aika"
+description = "Milloin se tapahtui, UTC-aikana (RFC 3339)"

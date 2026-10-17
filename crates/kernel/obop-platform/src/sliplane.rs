@@ -309,6 +309,13 @@ impl Sliplane {
     }
 }
 
+/// 32 random bytes as 64 hex digits, for `OBOP_SECRET_KEY`.
+fn new_secret_key() -> Result<String, String> {
+    let mut b = [0u8; 32];
+    getrandom::fill(&mut b).map_err(|e| format!("no operating system randomness: {e}"))?;
+    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
+}
+
 impl Provisioner for Sliplane {
     fn create(&self, spec: &InstanceSpec, progress: Progress) -> Result<Provisioned, String> {
         progress("Creating the database");
@@ -344,6 +351,13 @@ impl Provisioner for Sliplane {
             args.extend([
                 "--secret-env".into(),
                 format!("OBOP_DATABASE_URL={}", urls.instance),
+            ]);
+            // D53: every instance seals its two-factor secrets under its own random key. It
+            // exists only as this secret env var; it is never logged, stored by the control
+            // plane or put on the command line of anything but this one call.
+            args.extend([
+                "--secret-env".into(),
+                format!("OBOP_SECRET_KEY={}", new_secret_key()?),
             ]);
             if let Some(m) = &self.cfg.marketplace_url {
                 args.extend(["--env".into(), format!("OBOP_MARKETPLACE_URL={m}")]);
@@ -509,6 +523,41 @@ mod tests {
             !args.contains("--env OBOP_DATABASE_URL"),
             "the database URL is a secret env, never a plain one"
         );
+    }
+
+    /// D53: each instance gets its own 32-byte key, passed only as a secret env.
+    #[test]
+    fn every_instance_gets_its_own_secret_key_as_a_secret_env() {
+        let key_of = || {
+            let (runner, cell) = (
+                Arc::new(FakeRunner::default()),
+                Arc::new(FakeCell::default()),
+            );
+            runner
+                .reply
+                .lock()
+                .unwrap()
+                .extend([Ok(CREATED.into()), Ok(LIVE.into())]);
+            Sliplane::new(cfg(Source::Image("ghcr.io/x/obop:1".into())), runner.clone(), cell)
+                .create(&spec(), NOOP)
+                .unwrap();
+            let call = runner.calls.lock().unwrap()[0].clone();
+            assert!(
+                !call.join(" ").contains("--env OBOP_SECRET_KEY"),
+                "never a plain env"
+            );
+            let at = call
+                .iter()
+                .position(|a| a.starts_with("OBOP_SECRET_KEY="))
+                .expect("OBOP_SECRET_KEY passed");
+            assert_eq!(call[at - 1], "--secret-env");
+            call[at].trim_start_matches("OBOP_SECRET_KEY=").to_string()
+        };
+        let (a, b) = (key_of(), key_of());
+        assert_eq!(a.len(), 64);
+        assert!(a.bytes().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(a, b, "a fresh key per instance");
+        assert!(obop_auth::seal::parse_key(&a).is_ok(), "the instance accepts it");
     }
 
     #[test]
