@@ -280,7 +280,13 @@ impl Runner<'_> {
                     let mut f = Fields::new();
                     for (k, s) in map {
                         let v = vars.value(s)?;
-                        if !v.is_null() {
+                        // An empty ref is an unset ref.
+                        let unset_ref = v.as_str() == Some("")
+                            && target
+                                .fields
+                                .iter()
+                                .any(|d| d.name == *k && d.kind.target().is_some());
+                        if !v.is_null() && !unset_ref {
                             f.insert((*k).into(), v);
                         }
                     }

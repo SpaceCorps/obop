@@ -86,6 +86,7 @@
   "A chart needs a field to split by": "Ein Diagramm braucht ein Feld zum Aufteilen",
   "A field cannot be called id": "Ein Feld darf nicht id heißen",
   "A new {noun} starts as {state}; it moves on through actions": "{noun}: Neue Datensätze beginnen im Status {state} und wechseln ihn über Aktionen",
+  "A number the server assigns; it cannot be edited": "Eine Nummer, die der Server vergibt; sie kann nicht bearbeitet werden",
   "A number tile shows one value; leave this empty.": "Eine Kennzahl-Kachel zeigt einen einzelnen Wert; dieses Feld leer lassen.",
   "A sum needs a measure field": "Eine Summe braucht ein Kennzahlfeld",
   "Aa dark": "Aa dunkel",
@@ -223,6 +224,8 @@
   "Brand book mode": "Markenhandbuch: Modus",
   "Build a module": "Modul erstellen",
   "Bulk actions": "Massenaktionen",
+  "calculated": "berechnet",
+  "Calculated by the server; it cannot be edited": "Wird vom Server berechnet und kann nicht bearbeitet werden",
   "Calendar": "Kalender",
   "Calendar scale": "Kalenderzeitraum",
   "Cancel": "Abbrechen",
@@ -787,6 +790,7 @@
   "Nothing to group by in this model.": "In diesem Modell gibt es nichts zum Gruppieren.",
   "Number": "Zahl",
   "Number (KPI)": "Zahl (KPI)",
+  "numbered": "nummeriert",
   "Numbers, dates and money, independent of the language.": "Zahlen, Datumsangaben und Geldbeträge, unabhängig von der Sprache.",
   "One business, one platform.": "Ein Unternehmen, eine Plattform.",
   "One condition per semicolon: field operator value. Operators: = != ~ (contains, text only) > >= < <= in (values separated by |), and “is empty” or “is set”. Numbers and money use the stored integers (money in minor units: 12.50 is 1250). Example: state = paid; amount_minor >= 100000": "Eine Bedingung pro Semikolon: Feld Operator Wert. Operatoren: = != ~ (enthält, nur Text) > >= < <= in (Werte getrennt durch |) sowie „is empty“ oder „is set“. Zahlen und Beträge verwenden die gespeicherten Ganzzahlen (Beträge in der kleinsten Währungseinheit: 12,50 ist 1250). Beispiel: state = paid; amount_minor >= 100000",
@@ -1495,5 +1499,6 @@
   "Working out what this needs": "Es wird ermittelt, was dafür nötig ist",
   "Works with core {version}": "Funktioniert mit Kern {version}",
   "Worth knowing": "Gut zu wissen",
-  "you run {version}": "hier läuft {version}"
+  "you run {version}": "hier läuft {version}",
+  "You see only the records that are yours or shared with you.": "Sie sehen nur die Datensätze, die Ihnen gehören oder mit Ihnen geteilt wurden."
 }

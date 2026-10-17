@@ -122,6 +122,8 @@ export function RecordPanel({
     for (const f of editable) {
       const r = fromEdit(f, value(f), currency);
       if ("error" in r) continue;
+      // Computed values and numbers are the server's: they are shown, never sent.
+      if (f.computed || f.sequence) continue;
       if (creating) {
         if (governed(f)) continue; // the server starts it at the first option
         if (r.value !== null && (f.kind !== "bool" || r.value === true || f.name in draft))
@@ -408,7 +410,8 @@ export function RecordPanel({
         }}
       >
         {fields
-          .filter((f) => f !== statusField)
+          // A computed value or a number does not exist before the record is saved.
+          .filter((f) => f !== statusField && !(creating && (f.computed || f.sequence)))
           .map((f) => {
             const isMasked_ = masked(f);
             const fid = `f-${model.name}-${f.name}`;
@@ -435,6 +438,22 @@ export function RecordPanel({
                     </span>
                   )}
                   {f.class === "financial" && <span className="chip">{t("financial")}</span>}
+                  {f.computed && (
+                    <span
+                      className="chip"
+                      title={t("Calculated by the server; it cannot be edited")}
+                    >
+                      {t("calculated")}
+                    </span>
+                  )}
+                  {f.sequence && (
+                    <span
+                      className="chip"
+                      title={t("A number the server assigns; it cannot be edited")}
+                    >
+                      {t("numbered")}
+                    </span>
+                  )}
                 </label>
                 {isMasked_ ? (
                   <div className="maskedfield">
@@ -485,7 +504,7 @@ export function RecordPanel({
                     field={f}
                     id={fid}
                     value={value(f)}
-                    readOnly={!canEdit}
+                    readOnly={!canEdit || !!f.computed || !!f.sequence}
                     currency={currency}
                     invalid={!!err}
                     describedBy={err ? `${fid}-err` : undefined}

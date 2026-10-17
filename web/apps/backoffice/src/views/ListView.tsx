@@ -176,7 +176,8 @@ export function ListView(p: ViewProps) {
 
   function clickCell(r: Row, f: FieldMeta, ci: number) {
     // The first column opens the record; the other cells edit in place when allowed.
-    if (p.canUpdate && ci > 0 && !isMaskedVal(r[f.name])) setEditing({ id: r.id, field: f.name });
+    if (p.canUpdate && ci > 0 && !isMaskedVal(r[f.name]) && !f.computed && !f.sequence)
+      setEditing({ id: r.id, field: f.name });
     else p.onOpen(r.id);
   }
 

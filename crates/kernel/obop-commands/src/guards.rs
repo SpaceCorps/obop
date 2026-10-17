@@ -367,7 +367,10 @@ fn delete_guard(def: &ModelDef, eng: &Engine) -> Guard {
         let look = lookup_fn(&eng);
         let reads = Plain(eng.backend());
         let def = eng.def(name).ok_or_else(|| format!("no model {name}"))?;
-        Gate::new(&reads, &look, &actor).load(&def, &id)?;
+        let rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
+        if let Some(field) = crate::engine::seq::holds_gapless_number(&def, &rec) {
+            return Err(crate::engine::crud::gapless_message(&def, &id, field));
+        }
         match referrers(&eng, &actor, name, &id)? {
             Some(why) => Err(why),
             None => Ok(Verdict::default()),

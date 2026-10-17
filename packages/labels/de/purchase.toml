@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Einkauf"
-description = "Lieferanten, Bestellungen und Bestellpositionen mit dem Ablauf Entwurf, gesendet, bestätigt, eingegangen und storniert. Bestellsummen werden erfasst, nicht aus den Positionen summiert."
+description = "Lieferanten, Bestellungen und Bestellpositionen mit dem Ablauf Entwurf, gesendet, bestätigt, eingegangen und storniert. Eine Bestellung hat eine Nummer aus einer Serie, ihre Summe ist die Summe ihrer Positionen, und der Wareneingang erzeugt je Position eine Lagerbewegung als Entwurf am Wareneingangsort (das Lager validiert sie)."
 
 [labels.de.model.purchase_vendor]
 name = "Lieferant"
@@ -56,7 +56,7 @@ description = "Währungscode nach ISO 4217, zum Beispiel EUR"
 
 [labels.de.model.purchase_order.field.total]
 label = "Gesamt"
-description = "Bestellsumme wie mit dem Lieferanten vereinbart (kleinste Währungseinheit, z. B. Cent)"
+description = "Bestellsumme: die Summe der Positionsbeträge (kleinste Währungseinheit, z. B. Cent)"
 
 [labels.de.model.purchase_order.field.notes]
 label = "Notizen"
@@ -83,7 +83,7 @@ description = "Die Bestellung beim Lieferanten verbindlich machen (nur Führungs
 
 [labels.de.model.purchase_order.action.receive]
 label = "Eingang erfassen"
-description = "Festhalten, dass die Ware angekommen ist"
+description = "Erfassen, dass die Ware angekommen ist: je Position wird eine Lagerbewegung als Entwurf angelegt, die das Lager validiert (braucht die Gruppe inventory.user)"
 
 [labels.de.model.purchase_order.action.cancel]
 label = "Stornieren"
@@ -116,3 +116,15 @@ description = "Vereinbarter Preis pro Stück (kleinste Währungseinheit, z. B. C
 [labels.de.model.purchase_order_line.field.received_quantity]
 label = "Erhaltene Menge"
 description = "Bisher erhaltene Stückzahl"
+
+[labels.de.model.purchase_order.field.number]
+label = "Nummer"
+description = "Bestellnummer wie PO-00042, wird beim Anlegen der Bestellung vergeben"
+
+[labels.de.model.purchase_order.field.receive_location_id]
+label = "Wareneingangsort"
+description = "Wo die Ware eingehen soll; der Wareneingang der Bestellung erzeugt die Lagerbewegungen zu diesem Ort"
+
+[labels.de.model.purchase_order_line.field.amount]
+label = "Betrag"
+description = "Positionsbetrag: Menge mal Stückpreis (kleinste Währungseinheit)"

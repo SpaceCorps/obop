@@ -16,7 +16,14 @@ pub fn module() -> Module {
             access: None,
             fields: vec![
                 F::new("name", "Product name", NoClass, false, "product.user").required(),
-                F::new("sku", "Stock keeping unit", NoClass, false, "product.user"),
+                F::new(
+                    "sku",
+                    "Stock keeping unit; no two products share one",
+                    NoClass,
+                    false,
+                    "product.user",
+                )
+                .unique(),
                 F::new(
                     "list_price_minor",
                     "List price in minor currency units",

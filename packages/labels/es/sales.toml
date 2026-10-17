@@ -20,7 +20,7 @@ cancelled = "Cancelado"
 
 [labels.es.model.sale_order.field.total_minor]
 label = "Total"
-description = "Total del pedido en unidades menores"
+description = "Total del pedido en unidades menores, la suma de las líneas"
 
 [labels.es.model.sale_order.field.currency]
 label = "Moneda"
@@ -37,3 +37,35 @@ description = "Cancelar un pedido"
 [labels.es.model.sale_order.action.reset_to_draft]
 label = "Volver a borrador"
 description = "Devolver un pedido cancelado a borrador"
+
+[labels.es.model.sale_order.field.number]
+label = "Número"
+description = "Número de pedido como SO-00042, asignado al crear el pedido"
+
+[labels.es.model.sale_order_line]
+name = "Línea de pedido de venta"
+description = "Un producto o servicio de un pedido de venta"
+
+[labels.es.model.sale_order_line.field.order_id]
+label = "Pedido"
+description = "El pedido de venta al que pertenece la línea"
+
+[labels.es.model.sale_order_line.field.product_id]
+label = "Producto"
+description = "El producto vendido"
+
+[labels.es.model.sale_order_line.field.description]
+label = "Descripción"
+description = "Lo que se vende, tal como aparece en la factura"
+
+[labels.es.model.sale_order_line.field.quantity]
+label = "Cantidad"
+description = "Cantidad vendida"
+
+[labels.es.model.sale_order_line.field.unit_price_minor]
+label = "Precio unitario"
+description = "Precio de una unidad en unidades menores de la moneda"
+
+[labels.es.model.sale_order_line.field.amount_minor]
+label = "Importe"
+description = "Importe de la línea en unidades menores: cantidad por precio unitario"

@@ -26,6 +26,16 @@
 use crate::{FieldKind, ModelDef};
 use std::sync::Arc;
 
+/// One aggregate of an expression, as written.
+#[derive(Debug, Clone, Copy)]
+pub struct AggRef<'a> {
+    pub func: AggFn,
+    pub child: &'a str,
+    pub via: Option<&'a str>,
+    pub field: Option<&'a str>,
+    pub filter: Option<&'a Expr>,
+}
+
 /// The source of an expression is at most this many characters.
 pub const MAX_LEN: usize = 400;
 const MAX_NODES: usize = 80;
@@ -107,6 +117,8 @@ pub enum Expr {
         child: String,
         via: Option<String>,
         field: Option<String>,
+        /// `where <condition on the child>`: only children for which it holds count.
+        filter: Option<Box<Expr>>,
     },
     Neg(Box<Expr>),
     Not(Box<Expr>),
@@ -430,12 +442,19 @@ impl Parser {
                             self.expect_op(".")?;
                             Some(self.ident()?)
                         };
+                        let filter = if matches!(self.peek(), Some(Tok::Ident(w)) if w == "where") {
+                            self.pos += 1;
+                            Some(Box::new(self.or()?))
+                        } else {
+                            None
+                        };
                         self.expect_op(")")?;
                         Ok(Expr::Agg {
                             func,
                             child,
                             via,
                             field,
+                            filter,
                         })
                     }
                     "is_set" if matches!(self.peek(), Some(Tok::Op("("))) => {
@@ -462,9 +481,6 @@ impl Parser {
                         }
                         self.expect_op(")")?;
                         Ok(Expr::Concat(parts))
-                    }
-                    "sum" | "min" | "max" | "count" | "is_set" | "if" | "concat" => {
-                        Err(format!("`{name}` is a function: write {name}( ... )"))
                     }
                     _ => {
                         if matches!(self.peek(), Some(Tok::Op("("))) {
@@ -526,8 +542,8 @@ impl Expr {
         v
     }
 
-    /// Aggregates: function, child as written, `via`, child field.
-    pub fn aggregates(&self) -> Vec<(AggFn, &str, Option<&str>, Option<&str>)> {
+    /// The aggregates of the expression.
+    pub fn aggregates(&self) -> Vec<AggRef<'_>> {
         let mut v = Vec::new();
         self.walk(&mut |e| {
             if let Expr::Agg {
@@ -535,9 +551,16 @@ impl Expr {
                 child,
                 via,
                 field,
+                filter,
             } = e
             {
-                v.push((*func, child.as_str(), via.as_deref(), field.as_deref()));
+                v.push(AggRef {
+                    func: *func,
+                    child: child.as_str(),
+                    via: via.as_deref(),
+                    field: field.as_deref(),
+                    filter: filter.as_deref(),
+                });
             }
         });
         v
@@ -703,8 +726,19 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
             child,
             via,
             field,
+            filter,
         } => {
             let (cm, _) = resolve_child(scope.model, child, via.as_deref(), scope.lookup)?;
+            if let Some(w) = filter {
+                let inner = Scope {
+                    model: &cm,
+                    lookup: scope.lookup,
+                    allow_computed: scope.allow_computed,
+                };
+                if check(w, &inner).map_err(|e| format!("where: {e}"))? != Ty::Bool {
+                    return Err("where must be a comparison or other true/false expression".into());
+                }
+            }
             if let Some(f) = field {
                 let Some(def) = cm.fields.iter().find(|d| d.name == f) else {
                     return Err(format!("{} has no field `{f}`", cm.name));
@@ -769,6 +803,7 @@ pub trait Env {
         child: &str,
         via: Option<&str>,
         field: Option<&str>,
+        filter: Option<&Expr>,
     ) -> Result<V, String>;
 }
 
@@ -848,7 +883,14 @@ pub fn eval(e: &Expr, env: &dyn Env) -> Result<V, String> {
             child,
             via,
             field,
-        } => env.aggregate(*func, child, via.as_deref(), field.as_deref())?,
+            filter,
+        } => env.aggregate(
+            *func,
+            child,
+            via.as_deref(),
+            field.as_deref(),
+            filter.as_deref(),
+        )?,
     })
 }
 
@@ -870,6 +912,7 @@ mod tests {
             _: &str,
             _: Option<&str>,
             _: Option<&str>,
+            _: Option<&Expr>,
         ) -> Result<V, String> {
             let v = &self.1;
             Ok(match func {
@@ -954,7 +997,7 @@ mod tests {
                 .unwrap_err()
                 .contains("too large")
         );
-        assert_eq!(div_round(i64::MIN, -1).is_err(), true);
+        assert!(div_round(i64::MIN, -1).is_err());
         assert_eq!(div_round(-5, 2), Ok(-3));
         assert_eq!(div_round(5, -2), Ok(-3));
         assert_eq!(div_round(4, 3), Ok(1));
@@ -971,7 +1014,7 @@ mod tests {
             ("\"abc", "unterminated"),
             ("\"a\\n\"", "escaped"),
             ("foo(1)", "unknown function"),
-            ("sum", "is a function"),
+            ("sum(", "ends"),
             ("sum(lines)", "`.`"),
             ("@", "unexpected"),
             ("(1", "ends"),
@@ -1103,6 +1146,18 @@ mod tests {
         assert_eq!(e.fields(), ["qty"]);
         let a = e.aggregates();
         assert_eq!(a.len(), 2);
-        assert_eq!(a[1], (AggFn::Count, "rows", Some("r"), None));
+        assert_eq!(
+            (a[1].func, a[1].child, a[1].via),
+            (AggFn::Count, "rows", Some("r"))
+        );
+        let w = Expr::parse("count(lines where state == \"done\" && qty > 1) * 100 / count(lines)")
+            .unwrap();
+        let a = w.aggregates();
+        assert_eq!(a.len(), 2);
+        assert!(a[0].filter.is_some() && a[1].filter.is_none());
+        assert!(
+            w.fields().is_empty(),
+            "a child's fields are not fields of the record"
+        );
     }
 }

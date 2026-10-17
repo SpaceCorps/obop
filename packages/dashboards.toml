@@ -1,8 +1,8 @@
 [module]
 id = "dashboards"
-version = "0.2.0"
+version = "0.3.0"
 name = "Dashboards"
-description = "Dashboards and their widgets stored as data, for a UI to render. A dashboard has a title and an owner. A widget describes one tile with these fields: kind (kpi, bar, line, pie or table), model_name (the model to read, for example sale_order), measure_field (the field to aggregate; empty for count), aggregate (count or sum; sum needs a number or money measure_field), group_by (field to split by, for bar, line, pie and table; empty for a single kpi value), filter (a JSON object of field names to exact values, for example {\"state\":\"paid\"}; empty means all records) and position (order on the dashboard, lowest first). The package only stores the definition; it does not check that the model or fields exist and it computes nothing."
+description = "Dashboards and their widgets stored as data, for a UI to render. A dashboard has a title and an owner and is private to them (and to dashboards.manager) unless it is shared; its tiles follow it. A widget describes one tile with these fields: kind (kpi, bar, line, pie or table), model_name (the model to read, for example sale_order), measure_field (the field to aggregate; empty for count), aggregate (count or sum; sum needs a number or money measure_field), group_by (field to split by, for bar, line, pie and table; empty for a single kpi value), filter (a JSON object of field names to exact values, for example {\"state\":\"paid\"}; empty means all records) and position (order on the dashboard, lowest first). The package only stores the definition; it does not check that the model or fields exist and it computes nothing."
 author = "SpaceCorps"
 summary = "Dashboards and widgets stored as data, for the backoffice to render as KPIs, charts and tables."
 license = "AGPL-3.0-or-later"
@@ -19,6 +19,11 @@ description = "A dashboard: a titled, ordered collection of widgets"
 read_group = "dashboards.user"
 write_group = "dashboards.manager"
 
+  [model.access]
+  own = "owner"
+  public_field = "shared"
+  see_all_group = "dashboards.manager"
+
   [[model.field]]
   name = "title"
   description = "Dashboard title, for example Sales overview"
@@ -27,7 +32,7 @@ write_group = "dashboards.manager"
 
   [[model.field]]
   name = "owner"
-  description = "Name of the person who owns the dashboard"
+  description = "User name of the person who owns the dashboard; the person who creates it unless set otherwise"
   class = "internal"
   personal_data = true
   required = true
@@ -40,7 +45,7 @@ write_group = "dashboards.manager"
 
   [[model.field]]
   name = "shared"
-  description = "Whether everyone with access to the Dashboards app sees it, or only the owner"
+  description = "Whether everyone who may read dashboards sees it (and its tiles), or only the owner and dashboards.manager; the server enforces it"
   class = "none"
   kind = "bool"
 
@@ -55,6 +60,9 @@ name = "dashboards_widget"
 description = "One tile on a dashboard, defined by what to read and how to aggregate it"
 read_group = "dashboards.user"
 write_group = "dashboards.manager"
+
+  [model.access]
+  via = "dashboard_id"
 
   [[model.field]]
   name = "dashboard_id"

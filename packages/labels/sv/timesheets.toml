@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Tidrapporter"
-description = "Tid som lagts på projektuppgifter, angiven i minuter, med en markering för fakturerbar tid och ett godkännandesteg. Kräver paketet Projekt."
+description = "Tid som lagts på projektuppgifter, angiven i minuter, med en markering för fakturerbar tid och ett godkännandesteg. Kräver paketet Projekt. En medarbetare ser och ändrar bara sina egna poster; timesheets.manager ser alla."
 
 [labels.sv.model.timesheets_entry]
 name = "Tidsregistrering"
@@ -12,7 +12,7 @@ description = "Uppgiften som arbetet gäller"
 
 [labels.sv.model.timesheets_entry.field.worker]
 label = "Medarbetare"
-description = "Namn på personen som utförde arbetet"
+description = "Användarnamn för personen som utförde arbetet; den som skapar posten om inget annat anges"
 
 [labels.sv.model.timesheets_entry.field.worked_on]
 label = "Arbetat den"

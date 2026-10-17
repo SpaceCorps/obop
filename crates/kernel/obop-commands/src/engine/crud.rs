@@ -264,6 +264,13 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     row(eng, def, &id)
 }
 
+pub(crate) fn gapless_message(def: &ModelDef, id: &str, field: &str) -> String {
+    format!(
+        "cannot delete {} {id}: it holds the gapless number in {field}; cancel it instead, so the series keeps no hole",
+        def.name
+    )
+}
+
 pub(crate) fn delete(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Value> {
     let id = id_of(input)?;
     let actor = Actor::from_input(input);
@@ -272,10 +279,7 @@ pub(crate) fn delete(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     let rec = Gate::new(&unit, &look, &actor).load(def, &id)?;
     // Checked here, not only in the guard, so the rule holds for any caller of the handler.
     if let Some(field) = seq::holds_gapless_number(def, &rec) {
-        return Err(format!(
-            "cannot delete {} {id}: it holds the gapless number in {field}; cancel it instead, so the series keeps no hole",
-            def.name
-        ));
+        return Err(gapless_message(def, &id, field));
     }
     if let Some(why) = guards::referrers(eng, &actor, def.name, &id)? {
         return Err(why);

@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Projekt"
-description = "Projekt, milstolpar och uppgifter med ansvariga, tidsfrister och statusflöden. Framsteg följs via status och beräknas inte utifrån uppgifternas arbetsinsats."
+description = "Projekt, milstolpar och uppgifter med ansvariga, tidsfrister och statusflöden. Ett projekt visar sina framsteg, andelen av uppgifterna som är klara, och den tid som uppskattats för dem."
 
 [labels.sv.model.projects_project]
 name = "Projekt"
@@ -154,3 +154,11 @@ description = "Markera en pågående uppgift som klar"
 [labels.sv.model.projects_task.action.cancel]
 label = "Annullera"
 description = "Lägg ner en uppgift som aldrig påbörjades"
+
+[labels.sv.model.projects_project.field.estimate_minutes]
+label = "Uppskattning (minuter)"
+description = "Uppskattad tid för alla projektets uppgifter som inte är annullerade, i minuter"
+
+[labels.sv.model.projects_project.field.progress]
+label = "Framsteg"
+description = "Andel av projektets uppgifter som är klara, i procent; annullerade uppgifter räknas inte"

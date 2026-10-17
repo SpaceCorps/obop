@@ -20,7 +20,7 @@ cancelled = "Anulowane"
 
 [labels.pl.model.sale_order.field.total_minor]
 label = "Razem"
-description = "Suma zamówienia w jednostkach podrzędnych waluty"
+description = "Suma zamówienia w jednostkach podrzędnych waluty, czyli suma pozycji"
 
 [labels.pl.model.sale_order.field.currency]
 label = "Waluta"
@@ -37,3 +37,35 @@ description = "Anuluje zamówienie"
 [labels.pl.model.sale_order.action.reset_to_draft]
 label = "Przywróć wersję roboczą"
 description = "Przywraca anulowane zamówienie do wersji roboczej"
+
+[labels.pl.model.sale_order.field.number]
+label = "Numer"
+description = "Numer zamówienia, np. SO-00042, nadawany przy utworzeniu zamówienia"
+
+[labels.pl.model.sale_order_line]
+name = "Pozycja zamówienia sprzedaży"
+description = "Jeden produkt lub jedna usługa na zamówieniu sprzedaży"
+
+[labels.pl.model.sale_order_line.field.order_id]
+label = "Zamówienie"
+description = "Zamówienie sprzedaży, do którego należy pozycja"
+
+[labels.pl.model.sale_order_line.field.product_id]
+label = "Produkt"
+description = "Sprzedany produkt"
+
+[labels.pl.model.sale_order_line.field.description]
+label = "Opis"
+description = "Co jest sprzedawane, w brzmieniu widocznym na fakturze"
+
+[labels.pl.model.sale_order_line.field.quantity]
+label = "Ilość"
+description = "Sprzedana ilość"
+
+[labels.pl.model.sale_order_line.field.unit_price_minor]
+label = "Cena jednostkowa"
+description = "Cena jednej jednostki w jednostkach podrzędnych waluty"
+
+[labels.pl.model.sale_order_line.field.amount_minor]
+label = "Kwota"
+description = "Kwota pozycji w jednostkach podrzędnych waluty: ilość razy cena jednostkowa"

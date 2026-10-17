@@ -86,6 +86,7 @@
   "A chart needs a field to split by": "Ett diagram behöver ett fält att dela upp efter",
   "A field cannot be called id": "Ett fält kan inte heta id",
   "A new {noun} starts as {state}; it moves on through actions": "Nya poster av typen {noun} börjar som {state} och går vidare genom åtgärder",
+  "A number the server assigns; it cannot be edited": "Ett nummer som servern tilldelar och som inte kan redigeras",
   "A number tile shows one value; leave this empty.": "En nyckeltalsruta visar ett enda värde; lämna detta tomt.",
   "A sum needs a measure field": "En summa behöver ett måttfält",
   "Aa dark": "Aa mörk",
@@ -223,6 +224,8 @@
   "Brand book mode": "Läge i varumärkesmanualen",
   "Build a module": "Bygg en modul",
   "Bulk actions": "Massåtgärder",
+  "calculated": "beräknat",
+  "Calculated by the server; it cannot be edited": "Beräknas av servern och kan inte redigeras",
   "Calendar": "Kalender",
   "Calendar scale": "Kalenderskala",
   "Cancel": "Avbryt",
@@ -787,6 +790,7 @@
   "Nothing to group by in this model.": "Det finns inget att gruppera efter i den här modellen.",
   "Number": "Tal",
   "Number (KPI)": "Nyckeltal (KPI)",
+  "numbered": "numrerat",
   "Numbers, dates and money, independent of the language.": "Tal, datum och belopp, oberoende av språket.",
   "One business, one platform.": "Ett företag, en plattform.",
   "One condition per semicolon: field operator value. Operators: = != ~ (contains, text only) > >= < <= in (values separated by |), and “is empty” or “is set”. Numbers and money use the stored integers (money in minor units: 12.50 is 1250). Example: state = paid; amount_minor >= 100000": "Ett villkor per semikolon: fält operator värde. Operatorer: = != ~ (innehåller, bara text) > >= < <= in (värden åtskilda med |) samt ”is empty” eller ”is set”. Tal och belopp använder de lagrade heltalen (belopp i minsta valutaenhet: 12,50 är 1250). Exempel: state = paid; amount_minor >= 100000",
@@ -1495,5 +1499,6 @@
   "Working out what this needs": "Tar reda på vad det här kräver",
   "Works with core {version}": "Fungerar med kärna {version}",
   "Worth knowing": "Bra att veta",
-  "you run {version}": "du kör {version}"
+  "you run {version}": "du kör {version}",
+  "You see only the records that are yours or shared with you.": "Du ser bara de poster som är dina eller delade med dig."
 }

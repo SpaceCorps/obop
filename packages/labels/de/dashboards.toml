@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Dashboards"
-description = "Dashboards und ihre Kacheln, als Daten gespeichert und von einer Oberfläche darzustellen. Eine Kachel legt fest: Darstellung (kpi, bar, line, pie, table), zu lesendes Modell, Kennzahlfeld, Aggregation (Anzahl oder Summe), Gruppierung, Filter und Position. Das Paket speichert nur die Definition; es prüft nicht, ob Modell oder Felder existieren, und berechnet nichts."
+description = "Dashboards und ihre Kacheln, als Daten gespeichert und von einer Oberfläche darzustellen. Ein Dashboard ist privat für seinen Eigentümer und dashboards.manager, solange es nicht geteilt ist. Eine Kachel legt Darstellung, Modell, Kennzahlfeld, Aggregation, Gruppierung, Filter und Position fest. Das Paket speichert nur die Definition und berechnet nichts."
 
 [labels.de.model.dashboards_dashboard]
 name = "Dashboard"
@@ -12,7 +12,7 @@ description = "Titel des Dashboards, zum Beispiel Verkaufsübersicht"
 
 [labels.de.model.dashboards_dashboard.field.owner]
 label = "Eigentümer"
-description = "Name der Person, der das Dashboard gehört"
+description = "Benutzername der Person, der das Dashboard gehört; standardmäßig die Person, die es anlegt"
 
 [labels.de.model.dashboards_dashboard.field.description]
 label = "Beschreibung"
@@ -20,7 +20,7 @@ description = "Was das Dashboard zeigt und für wen"
 
 [labels.de.model.dashboards_dashboard.field.shared]
 label = "Geteilt"
-description = "Ob alle mit Zugriff auf die App Dashboards es sehen oder nur der Eigentümer"
+description = "Ob alle, die Dashboards lesen dürfen, es (und seine Kacheln) sehen, oder nur der Eigentümer und dashboards.manager; der Server setzt das durch"
 
 [labels.de.model.dashboards_dashboard.field.position]
 label = "Position"

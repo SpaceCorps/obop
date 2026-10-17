@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Comptabilité"
-description = "Plan comptable, journaux, taxes, écritures avec lignes de débit et de crédit, exercices fiscaux, périodes et lignes de relevé bancaire. Montants en plus petite unité monétaire, taux en points de base (2000 = 20,00 %). Rien n’est calculé : équilibre, taxes et numéros sont saisis. Comptabiliser et clôturer exigent une approbation humaine ; les agents peuvent seulement les proposer."
+description = "Plan comptable, journaux, taux de taxe, écritures avec lignes de débit et de crédit, exercices, périodes et lignes de relevé bancaire. Montants en plus petite unité. Une écriture n’est comptabilisée que si débit et crédit sont égaux, avec un numéro annuel sans rupture. Codes uniques. Comptabiliser et clôturer exigent une approbation humaine (accounting.approver) ; les agents proposent seulement."
 
 [labels.fr.model.accounting_account]
 name = "Compte"
@@ -8,7 +8,7 @@ description = "Un compte du plan comptable"
 
 [labels.fr.model.accounting_account.field.code]
 label = "Code"
-description = "Code du compte tel qu’utilisé dans le plan comptable, par exemple 400000"
+description = "Code du compte tel qu’il figure au plan comptable, par exemple 400000 ; deux comptes ne peuvent pas avoir le même code"
 
 [labels.fr.model.accounting_account.field.name]
 label = "Nom"
@@ -54,7 +54,7 @@ description = "Nom du journal, par exemple Factures clients"
 
 [labels.fr.model.accounting_journal.field.code]
 label = "Code"
-description = "Code court utilisé dans les numéros d’écriture, par exemple INV"
+description = "Code court du journal, par exemple INV ; deux journaux ne peuvent pas avoir le même code"
 
 [labels.fr.model.accounting_journal.field.kind]
 label = "Type"
@@ -194,7 +194,7 @@ description = "Date comptable de l’écriture (YYYY-MM-DD)"
 
 [labels.fr.model.accounting_move.field.number]
 label = "Numéro"
-description = "Numéro d’écriture tel que INV/2026/0001. Texte libre : les packages ne peuvent pas générer de séquences, donc la personne qui comptabilise attribue le numéro suivant à la main et garde la série sans rupture"
+description = "Numéro d’écriture tel que JE/2026/00042, attribué à la comptabilisation depuis une série sans rupture qui repart chaque année"
 
 [labels.fr.model.accounting_move.field.reference]
 label = "Référence"
@@ -220,7 +220,7 @@ reversed = "Extournée"
 
 [labels.fr.model.accounting_move.action.post]
 label = "Comptabiliser"
-description = "Comptabilise une écriture en brouillon au grand livre (approbateur uniquement ; l’équilibre des débits et des crédits n’est pas vérifié)"
+description = "Comptabilise une écriture en brouillon au grand livre et la numérote (approbateur uniquement ; refusé si le débit et le crédit ne sont pas égaux)"
 
 [labels.fr.model.accounting_move.action.cancel]
 label = "Annuler"
@@ -322,3 +322,11 @@ description = "Rapproche une ligne associée (responsable uniquement)"
 [labels.fr.model.accounting_bank_statement_line.action.unmatch]
 label = "Dissocier"
 description = "Annule une association erronée"
+
+[labels.fr.model.accounting_move.field.total_debit]
+label = "Total débit"
+description = "Somme des montants au débit des lignes de l’écriture (plus petite unité monétaire)"
+
+[labels.fr.model.accounting_move.field.total_credit]
+label = "Total crédit"
+description = "Somme des montants au crédit des lignes de l’écriture (plus petite unité monétaire)"

@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Dokumente"
-description = "Ein Verzeichnis von Geschäftsdokumenten: Ordner, Dokumentsätze mit Art, Eigentümer, Ablaufdatum und Vertraulichkeit sowie ein Ablauf aus Entwurf, veröffentlicht und archiviert. Es speichert Verweise, keine Dateiinhalte."
+description = "Ein Verzeichnis von Geschäftsdokumenten: Ordner, Dokumente mit Art, Eigentümer, Ablaufdatum und Vertraulichkeit sowie ein Ablauf aus Entwurf, veröffentlicht und archiviert. Es speichert Verweise, keine Dateiinhalte. Vertrauliche und eingeschränkte Dokumente sehen nur Eigentümer und documents.manager, öffentliche und interne alle Leseberechtigten."
 
 [labels.de.model.documents_folder]
 name = "Ordner"
@@ -44,7 +44,7 @@ other = "Sonstiges"
 
 [labels.de.model.documents_document.field.confidentiality]
 label = "Vertraulichkeit"
-description = "Wer es sehen soll, als Hinweis für Lesende: öffentlich, intern, vertraulich, eingeschränkt"
+description = "Wer es sehen darf: öffentliche und interne Dokumente alle, die Dokumente lesen dürfen, vertrauliche und eingeschränkte nur der Eigentümer und documents.manager"
 
 [labels.de.model.documents_document.field.confidentiality.options]
 public = "Öffentlich"
@@ -54,7 +54,7 @@ restricted = "Eingeschränkt"
 
 [labels.de.model.documents_document.field.owner]
 label = "Eigentümer"
-description = "Name der für das Dokument verantwortlichen Person"
+description = "Benutzername der für das Dokument verantwortlichen Person; standardmäßig die Person, die es anlegt. Eigentümer sehen ihre vertraulichen Dokumente"
 
 [labels.de.model.documents_document.field.reference]
 label = "Referenz"
@@ -88,3 +88,7 @@ description = "Einen Dokumententwurf zur aktuellen Version machen"
 [labels.de.model.documents_document.action.archive]
 label = "Archivieren"
 description = "Ein veröffentlichtes Dokument archivieren (nur Führungskräfte)"
+
+[labels.de.model.documents_document.field.open_to_all]
+label = "Für alle sichtbar"
+description = "Ob alle, die Dokumente lesen dürfen, dieses Dokument sehen können: wahr bei öffentlichen und internen Dokumenten"

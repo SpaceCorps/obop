@@ -289,7 +289,8 @@ pub struct AccessInfo {
     pub via: Option<&'static str>,
     pub public_field: Option<&'static str>,
     pub shared_with: Option<&'static str>,
-    pub see_all_group: Option<&'static str>,
+    /// The holders of any of these groups see every record.
+    pub see_all: Vec<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -446,7 +447,7 @@ impl Dispatcher {
                             via: a.via,
                             public_field: a.public_field,
                             shared_with: a.shared_with,
-                            see_all_group: a.see_all_group,
+                            see_all: a.see_all.clone(),
                         }),
                 });
             }
@@ -1110,5 +1111,7 @@ pub mod names {
     }
 }
 
+#[cfg(test)]
+mod engine_tests;
 #[cfg(test)]
 mod tests;

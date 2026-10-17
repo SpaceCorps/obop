@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Projets"
-description = "Projets, jalons et tâches avec responsables, échéances et flux de statuts. L’avancement est suivi par statut, pas calculé à partir de l’effort des tâches."
+description = "Projets, jalons et tâches avec responsables, échéances et flux de statuts. Un projet affiche son avancement, la part de ses tâches terminées, et le temps estimé pour celles-ci."
 
 [labels.fr.model.projects_project]
 name = "Projet"
@@ -154,3 +154,11 @@ description = "Marque une tâche en cours comme terminée"
 [labels.fr.model.projects_task.action.cancel]
 label = "Annuler"
 description = "Abandonne une tâche qui n’a jamais été commencée"
+
+[labels.fr.model.projects_project.field.estimate_minutes]
+label = "Minutes estimées"
+description = "Temps estimé, en minutes, pour toutes les tâches non annulées du projet"
+
+[labels.fr.model.projects_project.field.progress]
+label = "Avancement"
+description = "Part des tâches du projet qui sont terminées, en pourcentage ; les tâches annulées ne comptent pas"

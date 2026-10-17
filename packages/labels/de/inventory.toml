@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Lager"
-description = "Lager, Lagerorte, Bestände und Lagerbewegungen. Mengen werden von Menschen erfasst und geprüft; Bewegungen aktualisieren sie nicht automatisch."
+description = "Lager, Lagerorte, Bestände und Lagerbewegungen. Das Validieren einer Bewegung zieht die Menge vom Bestand am Quellort ab und addiert sie in einem Schritt zum Bestand am Zielort; ein noch nicht vorhandener Bestand wird angelegt. Es gibt einen Bestand je Produkt, Lagerort und Charge. Negative Mengen sind erlaubt, etwa bei virtuellen Orten wie Lieferanten."
 
 [labels.de.model.inventory_warehouse]
 name = "Lager"
@@ -55,7 +55,7 @@ description = "Die Menge eines Produkts an einem Lagerort"
 
 [labels.de.model.inventory_item.field.product_id]
 label = "Produkt"
-description = "Das gelagerte Produkt"
+description = "Das gelagerte Produkt; es gibt einen Bestand je Produkt, Lagerort und Charge"
 
 [labels.de.model.inventory_item.field.location_id]
 label = "Lagerort"
@@ -79,7 +79,7 @@ description = "Eine Bewegung eines Produkts zwischen Lagerorten oder in das Unte
 
 [labels.de.model.inventory_move.field.reference]
 label = "Referenz"
-description = "Referenz der Bewegung, zum Beispiel eine Liefer- oder Belegnummer"
+description = "Nummer der Bewegung wie MV-00042, wird beim Anlegen der Bewegung vergeben"
 
 [labels.de.model.inventory_move.field.product_id]
 label = "Produkt"
@@ -112,7 +112,7 @@ cancelled = "Storniert"
 
 [labels.de.model.inventory_move.action.validate]
 label = "Validieren"
-description = "Bestätigen, dass die Ware tatsächlich bewegt wurde; eine erledigte Bewegung lässt sich nicht rückgängig machen"
+description = "Bestätigen, dass die Ware wirklich bewegt wurde: die Menge verlässt den Bestand am Quellort und kommt beim Bestand am Zielort an (nur Lagerleiter); eine erledigte Bewegung lässt sich nicht rückgängig machen"
 
 [labels.de.model.inventory_move.action.cancel]
 label = "Stornieren"

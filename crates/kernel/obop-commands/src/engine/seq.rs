@@ -9,6 +9,8 @@
 
 use super::unit::{R, Reads, Unit};
 use super::{Civil, civil};
+use crate::Dispatcher;
+use crate::Store;
 use obop_registry::{FieldDef, ModelDef, Reset, SequenceSpec};
 use obop_storage::Fields;
 use serde_json::Value as J;
@@ -93,6 +95,108 @@ pub(crate) fn holds_gapless_number(def: &ModelDef, rec: &Fields) -> Option<&'sta
                 && matches!(rec.get(f.name), Some(J::String(s)) if !s.is_empty())
         })
         .map(|f| f.name)
+}
+
+// ---- backfill -----------------------------------------------------------------------------
+
+/// States a record is in once `to` has been reached: `to` itself and every state the declared
+/// transitions lead on to.
+fn states_from(def: &ModelDef, field: &str, to: &str) -> Vec<String> {
+    let mut seen = vec![to.to_string()];
+    let mut i = 0;
+    while i < seen.len() {
+        let cur = seen[i].clone();
+        for (_, t) in def.transitions() {
+            if t.field == field
+                && t.from.is_none_or(|f| f == cur)
+                && !seen.iter().any(|s| s == t.to)
+                && t.to != "cancelled"
+            {
+                seen.push(t.to.to_string());
+            }
+        }
+        i += 1;
+    }
+    seen
+}
+
+/// What `obop sequences backfill` did: the model, the field and how many records were numbered.
+pub type Backfilled = Vec<(String, String, usize)>;
+
+impl Dispatcher {
+    /// Number the records that were created before a sequence field existed (or were written
+    /// straight into the store): in the order they were created, from the current counter. A
+    /// sequence that numbers at creation numbers every record without a number; one that numbers
+    /// when an action runs numbers the records that have passed that action (are in its target
+    /// state or a state that follows it). Each field is one transaction: it all happens or none
+    /// of it does. `model` and `field` narrow the work.
+    pub fn backfill_sequences(
+        &self,
+        store: &Store,
+        model: Option<&str>,
+        field: Option<&str>,
+    ) -> Result<Backfilled, String> {
+        let _txn = self.txn.lock().unwrap_or_else(|e| e.into_inner());
+        let eng = self.engine(store);
+        let defs: Vec<Arc<ModelDef>> = {
+            let g = self.models.read().unwrap();
+            let mut v: Vec<_> = g.values().map(|m| m.def.clone()).collect();
+            v.sort_by_key(|d| d.name);
+            v
+        };
+        let mut out = Vec::new();
+        for def in defs {
+            if model.is_some_and(|m| m != def.name) {
+                continue;
+            }
+            for f in def.fields.iter().filter(|f| f.sequence.is_some()) {
+                if field.is_some_and(|x| x != f.name) {
+                    continue;
+                }
+                let Some(spec) = f.sequence.clone() else {
+                    continue;
+                };
+                let passed: Option<Vec<String>> = spec.assign_on.and_then(|a| {
+                    def.commands
+                        .iter()
+                        .find(|c| c.name == a)
+                        .and_then(|c| c.transition)
+                        .map(|t| states_from(&def, t.field, t.to))
+                });
+                let state_field = spec
+                    .assign_on
+                    .and_then(|a| def.commands.iter().find(|c| c.name == a))
+                    .and_then(|c| c.transition)
+                    .map(|t| t.field);
+                let mut unit = Unit::unbounded(eng.backend());
+                let mut n = 0;
+                for (id, rec) in eng.backend().list(def.name)? {
+                    if matches!(rec.get(f.name), Some(J::String(s)) if !s.is_empty()) {
+                        continue;
+                    }
+                    if let (Some(ok), Some(sf)) = (&passed, state_field) {
+                        let cur = rec.get(sf).and_then(J::as_str).unwrap_or_default();
+                        if !ok.iter().any(|s| s == cur) {
+                            continue;
+                        }
+                    }
+                    let number = next(&mut unit, def.name, f, &spec, eng.now())?;
+                    let mut patch = Fields::new();
+                    patch.insert(f.name.to_string(), J::from(number));
+                    unit.merge(def.name, &id, patch)?;
+                    n += 1;
+                }
+                if n > 0 {
+                    let touched = unit.touched();
+                    let look = |m: &str| eng.def(m);
+                    unit.commit()
+                        .map_err(|e| explain_db_error(e, &touched, &look))?;
+                }
+                out.push((def.name.to_string(), f.name.to_string(), n));
+            }
+        }
+        Ok(out)
+    }
 }
 
 // ---- uniqueness ---------------------------------------------------------------------------

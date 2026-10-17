@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Projekte"
-description = "Projekte, Meilensteine und Aufgaben mit Zuständigen, Fristen und Statusabläufen. Der Fortschritt wird über den Status verfolgt, nicht aus dem Aufwand der Aufgaben berechnet."
+description = "Projekte, Meilensteine und Aufgaben mit Zuständigen, Fristen und Statusabläufen. Ein Projekt zeigt seinen Fortschritt, den Anteil erledigter Aufgaben, und die dafür geschätzte Zeit."
 
 [labels.de.model.projects_project]
 name = "Projekt"
@@ -154,3 +154,11 @@ description = "Eine Aufgabe in Arbeit als erledigt markieren"
 [labels.de.model.projects_task.action.cancel]
 label = "Stornieren"
 description = "Eine Aufgabe verwerfen, die nie begonnen wurde"
+
+[labels.de.model.projects_project.field.estimate_minutes]
+label = "Geschätzte Minuten"
+description = "Für alle nicht stornierten Aufgaben des Projekts geschätzte Zeit in Minuten"
+
+[labels.de.model.projects_project.field.progress]
+label = "Fortschritt"
+description = "Anteil der erledigten Aufgaben des Projekts in Prozent; stornierte Aufgaben zählen nicht"

@@ -49,6 +49,7 @@ pub(crate) struct Unit<'a> {
     written: usize,
     /// Records inserted or merged, for the uniqueness check.
     touched: Vec<Key>,
+    cap: usize,
 }
 
 impl<'a> Unit<'a> {
@@ -60,13 +61,21 @@ impl<'a> Unit<'a> {
             ops: Vec::new(),
             written: 0,
             touched: Vec::new(),
+            cap: MAX_EFFECT_RECORDS,
         }
+    }
+
+    /// A unit for maintenance work that may touch any number of records (still one transaction).
+    pub fn unbounded(backend: &'a dyn Backend) -> Self {
+        let mut u = Self::new(backend);
+        u.cap = usize::MAX;
+        u
     }
 
     /// Count work against the cap.
     pub fn spend(&mut self, n: usize) -> R<()> {
         self.written += n;
-        if self.written > MAX_EFFECT_RECORDS {
+        if self.written > self.cap {
             return Err(format!(
                 "this action would touch more than {MAX_EFFECT_RECORDS} records; nothing was changed. Split the work into smaller parts"
             ));

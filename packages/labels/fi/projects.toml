@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Projektit"
-description = "Projektit, välitavoitteet ja tehtävät vastuuhenkilöineen, määräaikoineen ja tilakulkuineen. Edistymistä seurataan tilan mukaan, ei lasketa tehtävien työmäärästä."
+description = "Projektit, välitavoitteet ja tehtävät vastuuhenkilöineen, määräaikoineen ja tilakulkuineen. Projekti näyttää edistymisensä eli valmiiden tehtävien osuuden sekä tehtäviin arvioidun ajan."
 
 [labels.fi.model.projects_project]
 name = "Projekti"
@@ -154,3 +154,11 @@ description = "Merkitse työn alla oleva tehtävä valmiiksi"
 [labels.fi.model.projects_task.action.cancel]
 label = "Peruuta"
 description = "Hylkää tehtävä, jota ei koskaan aloitettu"
+
+[labels.fi.model.projects_project.field.estimate_minutes]
+label = "Arvioitu aika (min)"
+description = "Kaikkiin projektin peruuttamattomiin tehtäviin arvioitu aika minuutteina"
+
+[labels.fi.model.projects_project.field.progress]
+label = "Edistyminen"
+description = "Valmiiden tehtävien osuus projektin tehtävistä prosentteina; peruutettuja tehtäviä ei lasketa"

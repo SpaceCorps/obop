@@ -447,6 +447,7 @@ impl Module {
                     .into_iter()
                     .chain(m.fields.iter().map(|f| f.permission_group))
                     .chain(m.commands.iter().map(|c| c.permission_group))
+                    .chain(m.access.iter().flat_map(|a| a.see_all.iter().copied()))
             })
             .collect();
         g.sort_unstable();

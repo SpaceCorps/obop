@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Notes de frais"
-description = "Demandes de remboursement de frais des employés avec un flux brouillon, soumise, approuvée et payée. Le paiement est une permission distincte et exige une approbation humaine ; les justificatifs sont référencés par une note, pas stockés."
+description = "Demandes de remboursement de frais des employés avec un flux brouillon, soumise, approuvée et payée. Le paiement est une permission distincte et exige une approbation humaine ; les justificatifs sont référencés par une note, pas stockés. Une demande a un numéro issu d’une série annuelle ; un employé ne voit et ne modifie que ses propres demandes, les responsables et la finance voient toutes."
 
 [labels.fr.model.expenses_expense]
 name = "Dépense"
@@ -12,7 +12,7 @@ description = "Ce pour quoi l’argent a été dépensé"
 
 [labels.fr.model.expenses_expense.field.employee]
 label = "Employé"
-description = "Nom de la personne qui demande le remboursement"
+description = "Nom d’utilisateur de la personne qui demande le remboursement ; par défaut la personne qui crée la demande"
 
 [labels.fr.model.expenses_expense.field.spent_on]
 label = "Date de la dépense"
@@ -76,3 +76,7 @@ description = "Enregistre le remboursement comme payé (service financier unique
 [labels.fr.model.expenses_expense.action.refuse]
 label = "Refuser"
 description = "Refuse une demande soumise (responsable uniquement)"
+
+[labels.fr.model.expenses_expense.field.number]
+label = "Numéro"
+description = "Numéro de demande tel que EXP-2026-0042, attribué à la création ; la série repart chaque année"

@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Bokföring"
-description = "Kontoplan, verifikationsserier, skattesatser, verifikationer med debet- och kreditrader, räkenskapsår, perioder och kontoutdragsrader. Belopp anges i valutans minsta enhet, skattesatser i baspunkter (2000 är 20,00 procent). Inget beräknas automatiskt. Bokföring samt stängning av period eller räkenskapsår kräver mänskligt godkännande; agenter får bara föreslå."
+description = "Kontoplan, verifikationsserier, skattesatser, verifikationer med debet- och kreditrader, räkenskapsår, perioder och kontoutdragsrader. Belopp anges i valutans minsta enhet. Bokföring nekas om debet och kredit inte är lika och ger verifikationen nästa nummer i en årlig serie utan luckor. Bokföring och stängning av period eller år kräver mänskligt godkännande; agenter får bara föreslå."
 
 [labels.sv.model.accounting_account]
 name = "Konto"
@@ -8,7 +8,7 @@ description = "Ett konto i kontoplanen"
 
 [labels.sv.model.accounting_account.field.code]
 label = "Kod"
-description = "Kontonummer som det används i kontoplanen, till exempel 1510"
+description = "Kontonummer som det används i kontoplanen, till exempel 1510; inga två konton har samma kod"
 
 [labels.sv.model.accounting_account.field.name]
 label = "Namn"
@@ -54,7 +54,7 @@ description = "Seriens namn, till exempel Kundfakturor"
 
 [labels.sv.model.accounting_journal.field.code]
 label = "Kod"
-description = "Kort kod som används i verifikationsnummer, till exempel KF"
+description = "Seriens korta kod, till exempel KF; inga två serier har samma kod"
 
 [labels.sv.model.accounting_journal.field.kind]
 label = "Typ"
@@ -194,7 +194,7 @@ description = "Verifikationens bokföringsdatum (ÅÅÅÅ-MM-DD)"
 
 [labels.sv.model.accounting_move.field.number]
 label = "Nummer"
-description = "Verifikationsnummer som KF/2026/0001. Fritext: paket kan inte generera nummerserier, så den som bokför verifikationen anger nästa nummer manuellt och håller serien sammanhängande"
+description = "Verifikationsnummer som JE/2026/00042, tilldelas när verifikationen bokförs, ur en serie utan luckor som börjar om varje år"
 
 [labels.sv.model.accounting_move.field.reference]
 label = "Referens"
@@ -220,7 +220,7 @@ reversed = "Återförd"
 
 [labels.sv.model.accounting_move.action.post]
 label = "Bokför"
-description = "Bokför en verifikation i utkast i huvudboken (endast godkännare; balansen mellan debet och kredit kontrolleras inte)"
+description = "Bokför en verifikation i utkast i huvudboken och ge den ett nummer (endast godkännare; nekas om debet och kredit inte är lika)"
 
 [labels.sv.model.accounting_move.action.cancel]
 label = "Annullera"
@@ -322,3 +322,11 @@ description = "Stäm av en matchad rad (endast chef)"
 [labels.sv.model.accounting_bank_statement_line.action.unmatch]
 label = "Ta bort matchning"
 description = "Ångra en matchning som blev fel"
+
+[labels.sv.model.accounting_move.field.total_debit]
+label = "Totalt debet"
+description = "Summan av debetbeloppen på verifikationens rader (valutans minsta enhet)"
+
+[labels.sv.model.accounting_move.field.total_credit]
+label = "Totalt kredit"
+description = "Summan av kreditbeloppen på verifikationens rader (valutans minsta enhet)"

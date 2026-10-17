@@ -11,7 +11,7 @@ description = "Produktname"
 
 [labels.de.model.product.field.sku]
 label = "Artikelnummer"
-description = "Artikelnummer (SKU)"
+description = "Artikelnummer (SKU); keine zwei Produkte haben dieselbe"
 
 [labels.de.model.product.field.list_price_minor]
 label = "Listenpreis"

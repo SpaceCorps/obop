@@ -11,7 +11,7 @@ description = "Nombre del producto"
 
 [labels.es.model.product.field.sku]
 label = "SKU"
-description = "Código de artículo (SKU)"
+description = "Código de artículo (SKU); no hay dos productos con el mismo"
 
 [labels.es.model.product.field.list_price_minor]
 label = "Precio de tarifa"

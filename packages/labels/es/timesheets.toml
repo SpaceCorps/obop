@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Partes de horas"
-description = "Tiempo dedicado a tareas de proyecto, introducido en minutos, con un indicador de facturable y un paso de aprobación. Requiere el paquete Proyectos."
+description = "Tiempo dedicado a tareas de proyecto, introducido en minutos, con un indicador de facturable y un paso de aprobación. Requiere el paquete Proyectos. Cada trabajador ve y edita solo sus propios registros; timesheets.manager ve todos."
 
 [labels.es.model.timesheets_entry]
 name = "Registro de horas"
@@ -12,7 +12,7 @@ description = "La tarea en la que se trabajó"
 
 [labels.es.model.timesheets_entry.field.worker]
 label = "Trabajador"
-description = "Nombre de la persona que hizo el trabajo"
+description = "Nombre de usuario de la persona que hizo el trabajo; quien crea el registro, salvo que se indique otra"
 
 [labels.es.model.timesheets_entry.field.worked_on]
 label = "Fecha trabajada"

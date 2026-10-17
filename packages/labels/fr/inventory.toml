@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Inventaire"
-description = "Entrepôts, emplacements de stock, niveaux de stock et mouvements de stock. Les quantités sont saisies et validées par des personnes ; elles ne sont pas mises à jour automatiquement par les mouvements."
+description = "Entrepôts, emplacements, niveaux de stock et mouvements de stock. Valider un mouvement retire la quantité de l’article source et l’ajoute à l’article de destination en une étape ; un article manquant est créé. Un article par produit, emplacement et lot. Les quantités négatives sont admises, par exemple pour les fournisseurs."
 
 [labels.fr.model.inventory_warehouse]
 name = "Entrepôt"
@@ -55,7 +55,7 @@ description = "La quantité d’un produit conservée à un emplacement"
 
 [labels.fr.model.inventory_item.field.product_id]
 label = "Produit"
-description = "Le produit conservé"
+description = "Le produit détenu ; il y a un article par produit, emplacement et lot"
 
 [labels.fr.model.inventory_item.field.location_id]
 label = "Emplacement"
@@ -79,7 +79,7 @@ description = "Un déplacement de produit entre emplacements, ou vers l’entrep
 
 [labels.fr.model.inventory_move.field.reference]
 label = "Référence"
-description = "Référence du mouvement, par exemple un numéro de livraison ou de réception"
+description = "Numéro du mouvement tel que MV-00042, attribué à la création du mouvement"
 
 [labels.fr.model.inventory_move.field.product_id]
 label = "Produit"
@@ -112,7 +112,7 @@ cancelled = "Annulé"
 
 [labels.fr.model.inventory_move.action.validate]
 label = "Valider"
-description = "Confirme que la marchandise a bien été déplacée ; un mouvement terminé ne peut pas être annulé"
+description = "Confirme que les marchandises ont réellement bougé : la quantité quitte l’article source et arrive à l’article de destination (gestionnaires de stock uniquement) ; un mouvement terminé ne peut pas être annulé"
 
 [labels.fr.model.inventory_move.action.cancel]
 label = "Annuler"

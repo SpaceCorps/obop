@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Ressources humaines"
-description = "Employés, départements et demandes de congé. Les données personnelles sont classées strictement : la paie, la banque et l’identifiant national ne sont visibles que des responsables, et les données de santé et syndicales du groupe de lecture spécial."
+description = "Employés, départements et demandes de congé. Les données personnelles sont classées strictement : la paie, la banque et l’identifiant national ne sont visibles que des responsables, et les données de santé et syndicales du groupe de lecture spécial. Un employé ne voit et ne dépose que ses propres demandes de congé ; hr.manager les voit toutes."
 
 [labels.fr.model.hr_department]
 name = "Département"
@@ -185,3 +185,7 @@ description = "Approuve un congé demandé (responsable uniquement)"
 [labels.fr.model.hr_leave_request.action.refuse]
 label = "Refuser"
 description = "Refuse un congé demandé (responsable uniquement)"
+
+[labels.fr.model.hr_leave_request.field.requested_by]
+label = "Demandé par"
+description = "Nom d’utilisateur de la personne qui demande le congé ; par défaut la personne qui dépose la demande. Seuls elle et hr.manager voient la demande"

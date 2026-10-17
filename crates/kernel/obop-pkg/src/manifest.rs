@@ -117,8 +117,25 @@ pub struct AccessM {
     pub public_field: Option<String>,
     /// A text field of user ids separated by commas: those people see the record.
     pub shared_with: Option<String>,
-    /// The holders of this group see every record.
-    pub see_all_group: Option<String>,
+    /// The holders of this group (or of any of these groups) see every record.
+    pub see_all_group: Option<OneOrMany>,
+}
+
+/// A group name or a list of them.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrMany {
+    One(String),
+    Many(Vec<String>),
+}
+
+impl OneOrMany {
+    pub fn all(&self) -> Vec<&str> {
+        match self {
+            Self::One(s) => vec![s.as_str()],
+            Self::Many(v) => v.iter().map(String::as_str).collect(),
+        }
+    }
 }
 
 /// `[model.public]`: declarative public exposure (D50).
@@ -430,7 +447,7 @@ impl Manifest {
                 }
             }
             if let Some(a) = &m.access {
-                for g in a.see_all_group.iter() {
+                for g in a.see_all_group.iter().flat_map(OneOrMany::all) {
                     if !group_ok(g) {
                         return Err(format!(
                             "{}.access: see_all_group {g:?} must look like module.role",
@@ -881,6 +898,12 @@ impl Manifest {
                     .into_iter()
                     .chain(m.field.iter().filter_map(|f| f.group.clone()))
                     .chain(m.action.iter().filter_map(|a| a.group.clone()))
+                    .chain(
+                        m.access
+                            .iter()
+                            .flat_map(|a| a.see_all_group.iter().flat_map(OneOrMany::all))
+                            .map(String::from),
+                    )
             })
             .collect();
         g.sort();
@@ -916,7 +939,7 @@ impl Manifest {
 
     fn lit_or_src(v: &toml::Value, at: &str) -> Result<Src, String> {
         match v {
-            toml::Value::String(t) => Src::from_str(t).map_err(|e| format!("{at}: {e}")),
+            toml::Value::String(t) => Src::parse(t).map_err(|e| format!("{at}: {e}")),
             toml::Value::Integer(n) => Ok(Src::Const(Lit::Int(*n))),
             toml::Value::Boolean(b) => Ok(Src::Const(Lit::Bool(*b))),
             _ => Err(format!(
@@ -1247,7 +1270,12 @@ impl Manifest {
                 via: a.via.as_deref().map(intern),
                 public_field: a.public_field.as_deref().map(intern),
                 shared_with: a.shared_with.as_deref().map(intern),
-                see_all_group: a.see_all_group.as_deref().map(intern),
+                see_all: a
+                    .see_all_group
+                    .iter()
+                    .flat_map(OneOrMany::all)
+                    .map(intern)
+                    .collect(),
             });
             out.push(ModelDef {
                 name: intern(&m.name),

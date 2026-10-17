@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Dokumenty"
-description = "Rejestr dokumentów firmowych: foldery oraz dokumenty z rodzajem, właścicielem, terminem ważności i poufnością, z obiegiem wersja robocza, opublikowany, zarchiwizowany. Przechowuje odwołania, a nie zawartość plików."
+description = "Rejestr dokumentów firmowych: foldery oraz dokumenty z rodzajem, właścicielem, terminem ważności i poufnością, z obiegiem wersja robocza, opublikowany, zarchiwizowany. Przechowuje odwołania, nie pliki. Poufność jest egzekwowana: dokumenty poufne i zastrzeżone widzą tylko właściciel i documents.manager."
 
 [labels.pl.model.documents_folder]
 name = "Folder"
@@ -44,7 +44,7 @@ other = "Inne"
 
 [labels.pl.model.documents_document.field.confidentiality]
 label = "Poufność"
-description = "Kto powinien go widzieć, jako oznaczenie dla czytelników: publiczne, wewnętrzne, poufne, zastrzeżone"
+description = "Kto może go widzieć: dokumenty publiczne i wewnętrzne każdy z prawem odczytu dokumentów, poufne i zastrzeżone tylko właściciel i documents.manager"
 
 [labels.pl.model.documents_document.field.confidentiality.options]
 public = "Publiczne"
@@ -54,7 +54,7 @@ restricted = "Zastrzeżone"
 
 [labels.pl.model.documents_document.field.owner]
 label = "Właściciel"
-description = "Imię i nazwisko osoby odpowiedzialnej za dokument"
+description = "Nazwa użytkownika osoby odpowiedzialnej za dokument; domyślnie osoba tworząca. Właściciele widzą swoje dokumenty poufne"
 
 [labels.pl.model.documents_document.field.reference]
 label = "Referencja"
@@ -88,3 +88,7 @@ description = "Czyni dokument roboczy aktualną wersją"
 [labels.pl.model.documents_document.action.archive]
 label = "Archiwizuj"
 description = "Archiwizuje opublikowany dokument (tylko kierownik)"
+
+[labels.pl.model.documents_document.field.open_to_all]
+label = "Otwarty dla wszystkich"
+description = "Czy każdy z prawem odczytu dokumentów może go zobaczyć: prawda dla dokumentów publicznych i wewnętrznych"

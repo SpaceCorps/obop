@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Projekty"
-description = "Projekty, kamienie milowe i zadania z osobami przypisanymi, terminami i obiegiem statusów. Postęp śledzi się według statusu, a nie wylicza z nakładu pracy przy zadaniach."
+description = "Projekty, kamienie milowe i zadania z osobami przypisanymi, terminami i obiegiem statusów. Projekt pokazuje swój postęp, czyli odsetek wykonanych zadań, oraz czas oszacowany na zadania."
 
 [labels.pl.model.projects_project]
 name = "Projekt"
@@ -154,3 +154,11 @@ description = "Oznacza zadanie w toku jako wykonane"
 [labels.pl.model.projects_task.action.cancel]
 label = "Anuluj"
 description = "Odrzuca zadanie, którego nigdy nie rozpoczęto"
+
+[labels.pl.model.projects_project.field.estimate_minutes]
+label = "Szacowany czas (min)"
+description = "Czas oszacowany na wszystkie niepodlegające anulowaniu zadania projektu, w minutach"
+
+[labels.pl.model.projects_project.field.progress]
+label = "Postęp"
+description = "Odsetek zadań projektu, które są wykonane, w procentach; anulowane zadania nie są liczone"

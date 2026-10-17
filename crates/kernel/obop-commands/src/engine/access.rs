@@ -3,12 +3,14 @@
 //!
 //! A record is visible when any declared rule grants it: the caller is the `own` of the record,
 //! the record's `via` parent is visible, the `public_field` is true, or the caller is listed in
-//! `shared_with`. The holder of `see_all_group` and the instance administrator see every record.
+//! `shared_with`. The holders of the `see_all` groups and the instance administrator see every record.
 //! A model without `[model.access]` is not restricted. A record the caller cannot see is treated
 //! exactly like a record that does not exist, in every command and in every error message.
 
 use super::Actor;
+use super::computed::Computer;
 use super::unit::{R, Reads};
+use obop_registry::expr::V;
 use obop_registry::{Access, ModelDef};
 use obop_storage::Fields;
 use serde_json::Value as J;
@@ -53,9 +55,7 @@ impl<'a> Gate<'a> {
     }
 
     fn grants(&self, def: &ModelDef, a: &Access, rec: &Fields, hops: usize) -> bool {
-        if let Some(g) = a.see_all_group
-            && self.actor.holds(g)
-        {
+        if a.see_all.iter().any(|g| self.actor.holds(g)) {
             return true;
         }
         if let Some(f) = a.own
@@ -64,10 +64,25 @@ impl<'a> Gate<'a> {
         {
             return true;
         }
-        if let Some(f) = a.public_field
-            && rec.get(f) == Some(&J::Bool(true))
-        {
-            return true;
+        if let Some(f) = a.public_field {
+            // The flag may be a computed bool (a confidentiality level that is not secret).
+            let computed = def
+                .fields
+                .iter()
+                .find(|d| d.name == f)
+                .and_then(|d| d.computed.clone());
+            let open = match computed {
+                Some(c) => {
+                    Computer::new(self.reads, self.lookup, false)
+                        .evaluate(def, "", rec, &c.expr)
+                        .ok()
+                        == Some(V::Bool(true))
+                }
+                None => rec.get(f) == Some(&J::Bool(true)),
+            };
+            if open {
+                return true;
+            }
         }
         if let Some(f) = a.shared_with
             && !self.actor.id.is_empty()
@@ -190,7 +205,7 @@ mod tests {
                 own: Some("owner"),
                 public_field: Some("open"),
                 shared_with: Some("members"),
-                see_all_group: Some("t.manager"),
+                see_all: vec!["t.manager"],
                 via: None,
             }),
         });

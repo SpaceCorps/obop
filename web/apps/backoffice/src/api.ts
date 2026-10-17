@@ -35,6 +35,22 @@ export type FieldMeta = {
   options?: string[];
   /** Only for `ref`: the model the id points at. */
   to?: string;
+  /** Moves only through the model's actions, also for someone who can run none of them (D48). */
+  governed?: boolean;
+  /** Computed by the server when the record is read; never sent (D57). */
+  computed?: boolean;
+  /** No two records may share the value (D57). */
+  unique?: boolean;
+  /** A number the server assigns; never sent (D57). */
+  sequence?: boolean;
+};
+/** Row-level access rules of a model (D58): which records the person sees. */
+export type AccessMeta = {
+  own?: string | null;
+  via?: string | null;
+  public_field?: string | null;
+  shared_with?: string | null;
+  see_all_group?: string[];
 };
 export type ModelMeta = {
   name: string;
@@ -47,6 +63,8 @@ export type ModelMeta = {
   can_delete: boolean;
   fields: FieldMeta[];
   actions: Command[];
+  /** Present when the person sees only some of the records (D58). */
+  access?: AccessMeta;
 };
 export type ModuleMeta = {
   id: string;

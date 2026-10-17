@@ -86,6 +86,7 @@
   "A chart needs a field to split by": "Un graphique nécessite un champ de répartition",
   "A field cannot be called id": "Un champ ne peut pas s’appeler id",
   "A new {noun} starts as {state}; it moves on through actions": "Un nouvel enregistrement ({noun}) commence à l’état « {state} » ; il évolue ensuite par des actions",
+  "A number the server assigns; it cannot be edited": "Un numéro attribué par le serveur ; il ne peut pas être modifié",
   "A number tile shows one value; leave this empty.": "Une tuile numérique affiche une seule valeur ; laissez ce champ vide.",
   "A sum needs a measure field": "Une somme nécessite un champ de mesure",
   "Aa dark": "Aa sombre",
@@ -223,6 +224,8 @@
   "Brand book mode": "Mode de la charte graphique",
   "Build a module": "Créer un module",
   "Bulk actions": "Actions groupées",
+  "calculated": "calculé",
+  "Calculated by the server; it cannot be edited": "Calculé par le serveur ; ne peut pas être modifié",
   "Calendar": "Calendrier",
   "Calendar scale": "Échelle du calendrier",
   "Cancel": "Annuler",
@@ -787,6 +790,7 @@
   "Nothing to group by in this model.": "Aucun champ de regroupement dans ce modèle.",
   "Number": "Nombre",
   "Number (KPI)": "Nombre (indicateur)",
+  "numbered": "numéroté",
   "Numbers, dates and money, independent of the language.": "Nombres, dates et montants, indépendamment de la langue.",
   "One business, one platform.": "Une entreprise, une plateforme.",
   "One condition per semicolon: field operator value. Operators: = != ~ (contains, text only) > >= < <= in (values separated by |), and “is empty” or “is set”. Numbers and money use the stored integers (money in minor units: 12.50 is 1250). Example: state = paid; amount_minor >= 100000": "Une condition par point-virgule : champ opérateur valeur. Opérateurs : = != ~ (contient, texte uniquement) > >= < <= in (valeurs séparées par |), ainsi que « is empty » ou « is set ». Les nombres et les montants utilisent les entiers stockés (montants en unités mineures : 12,50 s’écrit 1250). Exemple : state = paid; amount_minor >= 100000",
@@ -1495,5 +1499,6 @@
   "Working out what this needs": "Détermination de ce qu’il faut",
   "Works with core {version}": "Fonctionne avec le noyau {version}",
   "Worth knowing": "À savoir",
-  "you run {version}": "vous utilisez {version}"
+  "you run {version}": "vous utilisez {version}",
+  "You see only the records that are yours or shared with you.": "Vous ne voyez que les enregistrements qui vous appartiennent ou qui sont partagés avec vous."
 }

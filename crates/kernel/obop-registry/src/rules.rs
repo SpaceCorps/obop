@@ -186,7 +186,7 @@ pub struct SequenceSpec {
 // ---- row-level access ---------------------------------------------------------------------
 
 /// `[model.access]` (D58): who may see and change which records, in addition to the groups of
-/// the model. A record is visible when any rule grants it; the holder of `see_all_group` and the
+/// the model. A record is visible when any rule grants it; the holders of the `see_all` groups and the
 /// instance administrator see every record.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Access {
@@ -194,7 +194,7 @@ pub struct Access {
     pub via: Option<&'static str>,
     pub public_field: Option<&'static str>,
     pub shared_with: Option<&'static str>,
-    pub see_all_group: Option<&'static str>,
+    pub see_all: Vec<&'static str>,
 }
 
 impl Access {
@@ -212,7 +212,7 @@ impl Access {
             && self.via.is_none()
             && self.public_field.is_none()
             && self.shared_with.is_none()
-            && self.see_all_group.is_none()
+            && self.see_all.is_empty()
     }
 }
 
@@ -252,7 +252,7 @@ pub enum Src {
 impl Src {
     /// Parse a value of a mapping: a string beginning with `$` is a variable (`$$` starts a
     /// literal dollar sign), anything else is a constant.
-    pub fn from_str(s: &str) -> Result<Self, String> {
+    pub fn parse(s: &str) -> Result<Self, String> {
         if let Some(lit) = s.strip_prefix("$$") {
             return Ok(Src::Const(Lit::Text(format!("${lit}"))));
         }
@@ -456,7 +456,122 @@ impl CommandDef {
     }
 }
 
+/// A value written in code: a `$variable`, a whole number, `true`/`false`, or text.
+pub fn src(s: &str) -> Src {
+    if s.starts_with('$') {
+        return Src::parse(s).unwrap_or_else(|e| panic!("{e}"));
+    }
+    if let Ok(n) = s.parse::<i64>() {
+        return Src::Const(Lit::Int(n));
+    }
+    match s {
+        "true" => Src::Const(Lit::Bool(true)),
+        "false" => Src::Const(Lit::Bool(false)),
+        t => Src::Const(Lit::Text(t.to_string())),
+    }
+}
+
+fn pairs(p: &[(&str, &str)]) -> Vec<(&'static str, Src)> {
+    p.iter().map(|(k, v)| (intern(k), src(v))).collect()
+}
+
+/// Constructors for effects of modules written in Rust. A package writes the same things in
+/// `[[model.action.effect]]`.
 impl Effect {
+    /// Create a `model` record from a mapping of field to value.
+    pub fn create(model: &str, map: &[(&str, &str)]) -> Self {
+        Self::new(EffectKind::Create {
+            model: intern(model),
+            map: pairs(map),
+            name: None,
+        })
+    }
+
+    /// Name the record this effect creates, for `$created.name`.
+    pub fn named(mut self, name: &str) -> Self {
+        if let EffectKind::Create { name: n, .. } = &mut self.kind {
+            *n = Some(name.to_string());
+        }
+        self
+    }
+
+    /// Set fields on the record that `ref_field` of this record refers to.
+    pub fn update_ref(model: &str, ref_field: &str, set: &[(&str, &str)]) -> Self {
+        Self::new(EffectKind::Update {
+            model: intern(model),
+            target: Target::Ref(intern(ref_field)),
+            set: pairs(set),
+        })
+    }
+
+    /// Set fields on every `model` record that refers to this record.
+    pub fn update_children(model: &str, set: &[(&str, &str)]) -> Self {
+        Self::new(EffectKind::Update {
+            model: intern(model),
+            target: Target::Children(None),
+            set: pairs(set),
+        })
+    }
+
+    /// Add to or subtract from a number field of the record `ref_field` refers to.
+    pub fn adjust_ref(model: &str, ref_field: &str, field: &str, subtract: bool, by: &str) -> Self {
+        Self::new(EffectKind::Adjust {
+            model: intern(model),
+            locator: Locator::Ref(intern(ref_field)),
+            field: intern(field),
+            subtract,
+            by: src(by),
+            create_missing: false,
+            min: None,
+        })
+    }
+
+    /// Add to or subtract from a number field of the one `model` record matching `matching`.
+    pub fn adjust_match(
+        model: &str,
+        matching: &[(&str, &str)],
+        field: &str,
+        subtract: bool,
+        by: &str,
+        create_missing: bool,
+    ) -> Self {
+        Self::new(EffectKind::Adjust {
+            model: intern(model),
+            locator: Locator::Match(pairs(matching)),
+            field: intern(field),
+            subtract,
+            by: src(by),
+            create_missing,
+            min: None,
+        })
+    }
+
+    /// The adjusted field may not end below `floor`.
+    pub fn at_least(mut self, floor: i64) -> Self {
+        if let EffectKind::Adjust { min, .. } = &mut self.kind {
+            *min = Some(floor);
+        }
+        self
+    }
+
+    /// Run `action` of `model` on the record `ref_field` refers to.
+    pub fn set_state_ref(model: &str, ref_field: &str, action: &str) -> Self {
+        Self::new(EffectKind::SetState {
+            model: intern(model),
+            target: Target::Ref(intern(ref_field)),
+            action: intern(action),
+        })
+    }
+
+    /// Run `action` of `model` on every record of `model` that refers to this record.
+    pub fn set_state_children(model: &str, action: &str) -> Self {
+        Self::new(EffectKind::SetState {
+            model: intern(model),
+            target: Target::Children(None),
+            action: intern(action),
+        })
+    }
+
     pub fn new(kind: EffectKind) -> Self {
         Self {
             kind,
@@ -930,12 +1045,18 @@ fn check_computed(
         }
     }
     let mut agg_inputs: Vec<(String, Arc<ModelDef>, &'static str)> = Vec::new();
-    for (_, child, via, field) in c.expr.aggregates() {
-        if let Ok((cm, _)) = expr::resolve_child(m, child, via, lookup)
-            && let Some(fname) = field
-            && let Some(d) = cm.fields.iter().find(|d| d.name == fname)
-        {
-            agg_inputs.push((format!("{}.{fname}", cm.name), cm.clone(), d.name));
+    for a in c.expr.aggregates() {
+        let Ok((cm, _)) = expr::resolve_child(m, a.child, a.via, lookup) else {
+            continue;
+        };
+        let mut names: Vec<&str> = a.field.into_iter().collect();
+        if let Some(w) = a.filter {
+            names.extend(w.fields());
+        }
+        for fname in names {
+            if let Some(d) = cm.fields.iter().find(|d| d.name == fname) {
+                agg_inputs.push((format!("{}.{fname}", cm.name), cm.clone(), d.name));
+            }
         }
     }
     let mut all: Vec<(String, FieldDef)> =
@@ -991,13 +1112,20 @@ fn computed_cycle(models: &[Arc<ModelDef>], lookup: Lookup<'_>) -> Option<String
                 out.push((m.clone(), d.name));
             }
         }
-        for (_, child, via, field) in c.expr.aggregates() {
-            if let Ok((cm, _)) = expr::resolve_child(m, child, via, lookup)
-                && let Some(fname) = field
-                && let Some(d) = cm.fields.iter().find(|d| d.name == fname)
-                && d.computed.is_some()
-            {
-                out.push((cm.clone(), d.name));
+        for a in c.expr.aggregates() {
+            let Ok((cm, _)) = expr::resolve_child(m, a.child, a.via, lookup) else {
+                continue;
+            };
+            let mut names: Vec<&str> = a.field.into_iter().collect();
+            if let Some(w) = a.filter {
+                names.extend(w.fields());
+            }
+            for fname in names {
+                if let Some(d) = cm.fields.iter().find(|d| d.name == fname)
+                    && d.computed.is_some()
+                {
+                    out.push((cm.clone(), d.name));
+                }
             }
         }
         out
@@ -1275,4 +1403,600 @@ pub fn external_models(module: &Module) -> Vec<(String, String)> {
         }
     }
     v
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{check_module, check_module_in};
+
+    fn f(name: &'static str) -> FieldDef {
+        FieldDef::new(name, "d", DataClass::None, false, "t.user")
+    }
+    fn model(name: &'static str, fields: Vec<FieldDef>, commands: Vec<CommandDef>) -> ModelDef {
+        ModelDef {
+            name,
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            access: None,
+            fields,
+            commands,
+        }
+    }
+    fn module(models: Vec<ModelDef>) -> Module {
+        Module {
+            id: "t".into(),
+            name: "T".into(),
+            models,
+            ..Module::default()
+        }
+    }
+    fn problems(m: &Module) -> Vec<String> {
+        check_module(m)
+            .into_iter()
+            .map(|v| format!("{}: {}", v.path, v.problem))
+            .collect()
+    }
+    fn has(m: &Module, want: &str) {
+        let p = problems(m);
+        assert!(p.iter().any(|x| x.contains(want)), "{want:?} not in {p:#?}");
+    }
+
+    /// An order with lines, and an item with a state.
+    fn base(cmds: Vec<CommandDef>) -> Module {
+        module(vec![
+            model(
+                "t_order",
+                vec![
+                    f("customer"),
+                    f("count").kind(FieldKind::Number),
+                    f("state").select(&["draft", "done"]),
+                    f("item_id").reference("t_item"),
+                ],
+                cmds,
+            ),
+            model(
+                "t_order_line",
+                vec![
+                    f("order_id").reference("t_order").required(),
+                    f("sku"),
+                    f("qty").kind(FieldKind::Number),
+                    f("price").kind(FieldKind::Money),
+                ],
+                vec![],
+            ),
+            model(
+                "t_item",
+                vec![
+                    f("sku").required(),
+                    f("qty").kind(FieldKind::Number),
+                    f("label"),
+                    f("state").select(&["new", "used", "gone"]),
+                    f("order_id").reference("t_order"),
+                ],
+                vec![
+                    CommandDef::new("use_it", "d", "t.user").transition(
+                        "state",
+                        Some("new"),
+                        "used",
+                    ),
+                    CommandDef::new("lose", "d", "t.user").transition("state", None, "gone"),
+                ],
+            ),
+        ])
+    }
+
+    fn act(effects: Vec<Effect>) -> Vec<CommandDef> {
+        let mut c =
+            CommandDef::new("finish", "d", "t.user").transition("state", Some("draft"), "done");
+        c.effects = effects;
+        vec![c]
+    }
+
+    #[test]
+    fn good_effects_pass_the_gate() {
+        let m = base(act(vec![
+            Effect::create(
+                "t_item",
+                &[("sku", "$self.customer"), ("order_id", "$self.id")],
+            )
+            .named("it"),
+            Effect::create(
+                "t_item",
+                &[
+                    ("sku", "$line.sku"),
+                    ("qty", "$line.qty"),
+                    ("order_id", "$self.id"),
+                ],
+            )
+            .for_each("lines"),
+            Effect::adjust_match(
+                "t_item",
+                &[("sku", "$line.sku")],
+                "qty",
+                true,
+                "$line.qty",
+                false,
+            )
+            .for_each("lines"),
+            Effect::adjust_ref("t_item", "item_id", "qty", false, "$self.count"),
+            Effect::update_children("t_item", &[("label", "done"), ("sku", "$self.customer")]),
+            Effect::update_ref("t_item", "item_id", &[("label", "$now")]),
+            Effect::set_state_ref("t_item", "item_id", "use_it")
+                .when("count > 0 && is_set(customer)"),
+            Effect::set_state_children("t_item", "lose"),
+        ]));
+        assert_eq!(problems(&m), Vec::<String>::new());
+    }
+
+    #[test]
+    fn effects_are_checked_against_the_models_they_touch() {
+        let one = |e: Effect| base(act(vec![e]));
+        has(
+            &one(Effect::create("t_item", &[("sku", "$self.nope")])),
+            "$self.nope",
+        );
+        has(
+            &one(Effect::create("t_item", &[("ghost", "x")])),
+            "has no field ghost",
+        );
+        has(
+            &one(Effect::create("t_item", &[("sku", "1")])),
+            "must be a string",
+        );
+        has(
+            &one(Effect::create("t_item", &[("qty", "text"), ("sku", "x")])),
+            "must be an integer",
+        );
+        has(
+            &one(Effect::create("t_item", &[("qty", "5")])),
+            "sku is required",
+        );
+        has(
+            &one(Effect::create("t_item", &[("sku", "x"), ("state", "used")])),
+            "governed state field",
+        );
+        has(
+            &one(Effect::create("t_item", &[("sku", "$line.sku")])),
+            "$line.sku needs for_each",
+        );
+        has(
+            &one(Effect::create("t_item", &[("sku", "$created.zip")])),
+            "no earlier create effect is named zip",
+        );
+        has(
+            &one(Effect::create(
+                "t_item",
+                &[("sku", "x"), ("order_id", "$self.count")],
+            )),
+            "does not fit",
+        );
+        has(
+            &one(Effect::create("t_item", &[("sku", "x")]).for_each("nothing")),
+            "for_each",
+        );
+        has(
+            &base(act(vec![
+                Effect::create("t_item", &[("sku", "x")])
+                    .named("a")
+                    .for_each("lines"),
+                Effect::create("t_item", &[("sku", "$created.a")]),
+            ])),
+            "once per child row",
+        );
+        has(
+            &base(act(vec![
+                Effect::create("t_item", &[("sku", "x")]).named("a"),
+                Effect::create("t_item", &[("sku", "x")]).named("a"),
+            ])),
+            "used twice",
+        );
+        // adjust
+        has(
+            &one(Effect::adjust_ref("t_item", "item_id", "label", false, "1")),
+            "number or money field",
+        );
+        has(
+            &one(Effect::adjust_ref(
+                "t_item",
+                "item_id",
+                "qty",
+                false,
+                "$self.customer",
+            )),
+            "by must be",
+        );
+        has(
+            &one(Effect::adjust_ref("t_item", "customer", "qty", false, "1")),
+            "not a ref to t_item",
+        );
+        has(
+            &one(Effect::adjust_ref("t_item", "item_id", "qty", false, "1").when("customer")),
+            "when must be",
+        );
+        has(
+            &one(Effect::adjust_match(
+                "t_item",
+                &[("qty", "1")],
+                "qty",
+                false,
+                "1",
+                true,
+            )),
+            "without its required field sku",
+        );
+        // update and set_state targets
+        has(
+            &one(Effect::update_ref("t_item", "item_id", &[])),
+            "set is empty",
+        );
+        has(
+            &one(Effect::update_ref(
+                "t_item",
+                "item_id",
+                &[("state", "used")],
+            )),
+            "governed state field",
+        );
+        has(
+            &one(Effect::set_state_ref("t_item", "item_id", "nope")),
+            "has no action nope",
+        );
+        has(
+            &one(Effect::set_state_ref("t_item", "customer", "use_it")),
+            "not a ref to t_item",
+        );
+    }
+
+    #[test]
+    fn computed_children_are_looked_up_by_suffix() {
+        let m = module(vec![
+            model(
+                "t_order",
+                vec![
+                    f("total")
+                        .kind(FieldKind::Money)
+                        .computed("sum(lines.price)"),
+                ],
+                vec![],
+            ),
+            model(
+                "t_order_line",
+                vec![
+                    f("order_id").reference("t_order"),
+                    f("price").kind(FieldKind::Money),
+                ],
+                vec![],
+            ),
+        ]);
+        assert_eq!(problems(&m), Vec::<String>::new());
+    }
+
+    fn chain(from: &'static str, to: &'static str, ref_field: &'static str) -> ModelDef {
+        let mut c = CommandDef::new("go", "d", "t.user").transition("state", None, "y");
+        c.effects = vec![Effect::set_state_ref(to, ref_field, "go")];
+        model(
+            from,
+            vec![f(ref_field).reference(to), f("state").select(&["x", "y"])],
+            vec![c],
+        )
+    }
+
+    #[test]
+    fn a_chain_of_set_state_effects_may_not_loop_or_run_too_deep() {
+        let ring = module(vec![
+            chain("t_a", "t_b", "b_id"),
+            chain("t_b", "t_a", "a_id"),
+        ]);
+        has(&ring, "effects form a cycle: t_a.go -> t_b.go -> t_a.go");
+        has(
+            &module(vec![chain("t_a", "t_a", "a_id")]),
+            "would start itself",
+        );
+        // A straight line of six models is deeper than the limit of four.
+        let names = ["t_m0", "t_m1", "t_m2", "t_m3", "t_m4", "t_m5"];
+        let mut models: Vec<ModelDef> = (0..5)
+            .map(|i| chain(names[i], names[i + 1], "next_id"))
+            .collect();
+        models.push(model(
+            names[5],
+            vec![f("state").select(&["x", "y"])],
+            vec![CommandDef::new("go", "d", "t.user").transition("state", None, "y")],
+        ));
+        has(&module(models), "more than 4 deep");
+    }
+
+    #[test]
+    fn unknown_models_are_a_violation_only_where_they_can_be_looked_up() {
+        let m = base(act(vec![Effect::create("t_elsewhere", &[("x", "y")])]));
+        assert!(problems(&m).is_empty(), "left to the install");
+        let none = |_: &str| None;
+        let strict = check_module_in(&m, &none);
+        assert!(
+            strict
+                .iter()
+                .any(|v| v.problem.contains("model t_elsewhere does not exist"))
+        );
+        assert_eq!(
+            external_models(&m),
+            [(
+                "t_order::finish effect 1".to_string(),
+                "t_elsewhere".to_string()
+            )]
+        );
+        // Found through the lookup, it is checked like any other.
+        let elsewhere = Arc::new(model(
+            "t_elsewhere",
+            vec![f("x").kind(FieldKind::Number)],
+            vec![],
+        ));
+        let look = |n: &str| (n == "t_elsewhere").then(|| elsewhere.clone());
+        let v = check_module_in(&m, &look);
+        assert!(
+            v.iter().any(|v| v.problem.contains("must be an integer")),
+            "{v:?}"
+        );
+    }
+
+    #[test]
+    fn assertions_must_be_true_false_over_real_fields() {
+        let mut c =
+            CommandDef::new("finish", "d", "t.user").transition("state", Some("draft"), "done");
+        c.asserts.push(Assertion::parse("count + 1", None).unwrap());
+        c.asserts.push(Assertion::parse("ghost > 1", None).unwrap());
+        c.asserts
+            .push(Assertion::parse("sum(lines.qty) == count", None).unwrap());
+        c.asserts
+            .push(Assertion::parse("sum(lines.sku) == 1", None).unwrap());
+        let p = problems(&base(vec![c]));
+        assert!(
+            p.iter().any(|x| x.contains("`count + 1` is a number")),
+            "{p:?}"
+        );
+        assert!(p.iter().any(|x| x.contains("no field `ghost`")), "{p:?}");
+        assert!(
+            p.iter()
+                .any(|x| x.contains("needs a number or money field")),
+            "{p:?}"
+        );
+        assert_eq!(p.len(), 3, "{p:?}");
+    }
+
+    #[test]
+    fn computed_fields_are_checked_for_type_class_group_and_cycles() {
+        let mk = |computed: &str, kind: FieldKind| {
+            module(vec![model(
+                "t_doc",
+                vec![
+                    f("n").kind(FieldKind::Number),
+                    f("x").kind(kind).computed(computed),
+                ],
+                vec![],
+            )])
+        };
+        assert!(problems(&mk("n * 2", FieldKind::Number)).is_empty());
+        has(
+            &mk("n * 2", FieldKind::Text),
+            "is a number, but the field is text",
+        );
+        has(&mk("n * 2", FieldKind::Date), "text, number, money or bool");
+        // Two computed fields that read each other.
+        let cyc = module(vec![model(
+            "t_doc",
+            vec![
+                f("a").kind(FieldKind::Number).computed("b + 1"),
+                f("b").kind(FieldKind::Number).computed("a + 1"),
+            ],
+            vec![],
+        )]);
+        has(&cyc, "in a cycle: t_doc.a -> t_doc.b -> t_doc.a");
+        // A total of financial amounts is financial, in the same group.
+        let fin = |class, group: &'static str, pd| {
+            module(vec![
+                model(
+                    "t_p",
+                    vec![
+                        FieldDef::new("total", "d", class, pd, group)
+                            .kind(FieldKind::Money)
+                            .computed("sum(lines.amount)"),
+                    ],
+                    vec![],
+                ),
+                model(
+                    "t_p_line",
+                    vec![
+                        f("p_id").reference("t_p"),
+                        FieldDef::new("amount", "d", DataClass::Financial, true, "t.user")
+                            .kind(FieldKind::Money),
+                    ],
+                    vec![],
+                ),
+            ])
+        };
+        assert!(problems(&fin(DataClass::Financial, "t.user", true)).is_empty());
+        has(
+            &fin(DataClass::None, "t.user", true),
+            "must have class financial",
+        );
+        has(
+            &fin(DataClass::Financial, "t.other", true),
+            "give the computed field `group = \"t.user\"`",
+        );
+        has(
+            &fin(DataClass::Financial, "t.user", false),
+            "must be personal data too",
+        );
+    }
+
+    #[test]
+    fn sequences_and_uniqueness_are_checked() {
+        let seq = |field: FieldDef| {
+            module(vec![model(
+                "t_doc",
+                vec![field, f("state").select(&["a", "b"])],
+                vec![CommandDef::new("post", "d", "t.user").transition("state", None, "b")],
+            )])
+        };
+        assert!(problems(&seq(f("no").sequence("N-{seq:04}", true, Reset::Never))).is_empty());
+        assert!(
+            problems(&seq(f("no")
+                .sequence("{year}/{seq}", true, Reset::Year)
+                .assign_on("post")))
+            .is_empty()
+        );
+        has(
+            &seq(f("no").sequence("N-{seq}", true, Reset::Year)),
+            "reset = \"year\" needs {year}",
+        );
+        has(
+            &seq(f("no").sequence("{year}-{seq}", true, Reset::Month)),
+            "{year} and {month}",
+        );
+        has(
+            &seq(f("no")
+                .sequence("N-{seq}", true, Reset::Never)
+                .assign_on("zip")),
+            "assign_on: zip",
+        );
+        has(
+            &seq(f("no")
+                .kind(FieldKind::Number)
+                .sequence("N-{seq}", true, Reset::Never)),
+            "text field",
+        );
+        has(
+            &seq(f("no").sequence("N-{seq}", true, Reset::Never).required()),
+            "cannot be required",
+        );
+        has(
+            &seq(f("a").unique_with(&["ghost"])),
+            "unique_with: no field ghost",
+        );
+        has(&seq(f("a").unique_with(&["a"])), "lists the field itself");
+        has(&seq(f("a").kind(FieldKind::Bool).unique()), "unique needs");
+        has(
+            &seq(f("a").kind(FieldKind::Number).computed("1").unique()),
+            "cannot be unique",
+        );
+    }
+
+    fn with_access(mut m: Module, model: &str, a: Access) -> Module {
+        for x in &mut m.models {
+            if x.name == model {
+                x.access = Some(a.clone());
+            }
+        }
+        m
+    }
+
+    #[test]
+    fn access_rules_name_real_fields_of_the_right_kind() {
+        let acc = |a: Access| {
+            with_access(
+                module(vec![
+                    model(
+                        "t_doc",
+                        vec![
+                            f("owner"),
+                            f("open").kind(FieldKind::Bool),
+                            f("members").kind(FieldKind::LongText),
+                            f("n").kind(FieldKind::Number),
+                            f("parent_id").reference("t_parent"),
+                        ],
+                        vec![],
+                    ),
+                    model("t_parent", vec![f("up_id").reference("t_doc")], vec![]),
+                ]),
+                "t_doc",
+                a,
+            )
+        };
+        assert!(
+            problems(&acc(Access {
+                own: Some("owner"),
+                via: Some("parent_id"),
+                public_field: Some("open"),
+                shared_with: Some("members"),
+                see_all: vec!["t.hr"],
+            }))
+            .is_empty()
+        );
+        has(&acc(Access::default()), "declares no rule");
+        has(
+            &acc(Access {
+                own: Some("ghost"),
+                ..Access::default()
+            }),
+            "access.own: no field ghost",
+        );
+        has(
+            &acc(Access {
+                own: Some("n"),
+                ..Access::default()
+            }),
+            "stored text or ref",
+        );
+        has(
+            &acc(Access {
+                via: Some("owner"),
+                ..Access::default()
+            }),
+            "must be a ref",
+        );
+        has(
+            &acc(Access {
+                public_field: Some("owner"),
+                ..Access::default()
+            }),
+            "must be a bool",
+        );
+        has(
+            &acc(Access {
+                shared_with: Some("n"),
+                ..Access::default()
+            }),
+            "must be a text field",
+        );
+        // Two models that take their visibility from each other: a cycle.
+        let m = with_access(
+            acc(Access {
+                via: Some("parent_id"),
+                ..Access::default()
+            }),
+            "t_parent",
+            Access {
+                via: Some("up_id"),
+                ..Access::default()
+            },
+        );
+        has(&m, "is a cycle");
+    }
+
+    #[test]
+    fn effect_values_parse() {
+        assert_eq!(
+            Src::parse("$self.total").unwrap(),
+            Src::SelfField("total".into())
+        );
+        assert_eq!(Src::parse("$self.id").unwrap(), Src::SelfId);
+        assert_eq!(Src::parse("$line.id").unwrap(), Src::LineId);
+        assert_eq!(
+            Src::parse("$created.inv").unwrap(),
+            Src::Created("inv".into())
+        );
+        assert_eq!(
+            Src::parse("$$5").unwrap(),
+            Src::Const(Lit::Text("$5".into()))
+        );
+        assert_eq!(
+            Src::parse("plain").unwrap(),
+            Src::Const(Lit::Text("plain".into()))
+        );
+        for bad in [
+            "$", "$self", "$self.", "$self.A", "$nope.x", "$now.x", "$line",
+        ] {
+            assert!(Src::parse(bad).is_err(), "{bad}");
+        }
+    }
 }

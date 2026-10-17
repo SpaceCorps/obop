@@ -42,13 +42,15 @@ pub(crate) fn from_v(v: V) -> J {
     }
 }
 
+type Groups = HashMap<String, Vec<Fields>>;
+
 pub(crate) struct Computer<'a> {
     reads: &'a dyn Reads,
     lookup: Lookup<'a>,
     preload: bool,
     depth: RefCell<usize>,
     /// (child model, via) -> parent id -> child rows with their computed fields filled.
-    grouped: RefCell<HashMap<(String, String), Rc<HashMap<String, Vec<Fields>>>>>,
+    grouped: RefCell<HashMap<(String, String), Rc<Groups>>>,
 }
 
 struct RecEnv<'a, 'b> {
@@ -95,9 +97,31 @@ impl Env for RecEnv<'_, '_> {
         child: &str,
         via: Option<&str>,
         field: Option<&str>,
+        filter: Option<&Expr>,
     ) -> Result<V, String> {
         let (cm, via) = expr::resolve_child(self.def, child, via, self.c.lookup)?;
         let rows = self.c.children(&cm, via, self.id)?;
+        // `where`: keep the children for which the condition holds.
+        let rows: Vec<&Fields> = match filter {
+            None => rows.iter().collect(),
+            Some(w) => {
+                let mut keep = Vec::new();
+                for r in rows.iter() {
+                    let env = RecEnv {
+                        c: self.c,
+                        def: &cm,
+                        id: "",
+                        rec: r,
+                        memo: RefCell::new(HashMap::new()),
+                        busy: RefCell::new(Vec::new()),
+                    };
+                    if expr::eval(w, &env)? == V::Bool(true) {
+                        keep.push(r);
+                    }
+                }
+                keep
+            }
+        };
         if func == AggFn::Count {
             return Ok(V::Int(rows.len() as i64));
         }
@@ -106,7 +130,7 @@ impl Env for RecEnv<'_, '_> {
         };
         let mut sum: i128 = 0;
         let (mut min, mut max): (Option<i64>, Option<i64>) = (None, None);
-        for r in rows.iter() {
+        for r in rows {
             let n = match r.get(field) {
                 Some(J::Number(n)) => n.as_i64().unwrap_or(0),
                 _ => continue,

@@ -353,7 +353,7 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                     if let Some(a) = &x.access {
                         o["access"] = json!({
                             "own": a.own, "via": a.via, "public_field": a.public_field,
-                            "shared_with": a.shared_with, "see_all_group": a.see_all_group,
+                            "shared_with": a.shared_with, "see_all_group": a.see_all,
                         });
                     }
                     o

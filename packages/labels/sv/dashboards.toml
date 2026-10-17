@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Instrumentpaneler"
-description = "Instrumentpaneler och deras rutor lagrade som data för ett gränssnitt att visa. En ruta anger typ (nyckeltal, stapel, linje, cirkel eller tabell), modell, måttfält, beräkning (antal eller summa), gruppering, filter och placering. Paketet lagrar bara definitionen, kontrollerar inte att modell eller fält finns och beräknar ingenting."
+description = "Instrumentpaneler och deras rutor lagrade som data för ett gränssnitt att visa. En panel är privat för ägaren (och dashboards.manager) om den inte delas. En ruta anger typ, modell, måttfält, beräkning (antal eller summa), gruppering, filter och placering. Paketet lagrar bara definitionen, kontrollerar inte att modell eller fält finns och beräknar ingenting."
 
 [labels.sv.model.dashboards_dashboard]
 name = "Instrumentpanel"
@@ -12,7 +12,7 @@ description = "Panelens titel, till exempel Försäljningsöversikt"
 
 [labels.sv.model.dashboards_dashboard.field.owner]
 label = "Ägare"
-description = "Namn på personen som äger panelen"
+description = "Användarnamn för personen som äger panelen; den som skapar den om inget annat anges"
 
 [labels.sv.model.dashboards_dashboard.field.description]
 label = "Beskrivning"
@@ -20,7 +20,7 @@ description = "Vad panelen visar och för vem"
 
 [labels.sv.model.dashboards_dashboard.field.shared]
 label = "Delad"
-description = "Om alla med åtkomst till appen Instrumentpaneler ser den, eller bara ägaren"
+description = "Om alla som får läsa instrumentpaneler ser den (och dess rutor), eller bara ägaren och dashboards.manager; servern upprätthåller det"
 
 [labels.sv.model.dashboards_dashboard.field.position]
 label = "Placering"

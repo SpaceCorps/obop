@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Servicio de asistencia"
-description = "Tickets de soporte con prioridad, gravedad, objetivos de nivel de servicio y un flujo de abierto, en curso, resuelto y cerrado. Los objetivos se registran, no se aplican ni se miden automáticamente."
+description = "Tickets de soporte con prioridad, gravedad, objetivos de nivel de servicio y un flujo de abierto, en curso, resuelto y cerrado. Los objetivos se registran, no se aplican ni se miden automáticamente. Cada ticket recibe un número de una serie al crearse."
 
 [labels.es.model.helpdesk_sla]
 name = "SLA"
@@ -134,3 +134,7 @@ description = "Cerrar definitivamente un ticket resuelto (solo responsables)"
 [labels.es.model.helpdesk_ticket.action.reopen]
 label = "Reabrir"
 description = "Reabrir un ticket resuelto cuando el problema ha vuelto"
+
+[labels.es.model.helpdesk_ticket.field.number]
+label = "Número"
+description = "Número de ticket como TCK-00042, asignado al crear el ticket"

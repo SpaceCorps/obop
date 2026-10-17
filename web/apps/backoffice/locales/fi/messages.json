@@ -86,6 +86,7 @@
   "A chart needs a field to split by": "Kaavio tarvitsee kentän, jonka mukaan jaetaan",
   "A field cannot be called id": "Kentän nimi ei voi olla id",
   "A new {noun} starts as {state}; it moves on through actions": "Uusi {noun} on aluksi tilassa {state}; se etenee toimintojen kautta",
+  "A number the server assigns; it cannot be edited": "Palvelimen antama numero; sitä ei voi muokata",
   "A number tile shows one value; leave this empty.": "Lukuruutu näyttää yhden arvon; jätä tämä tyhjäksi.",
   "A sum needs a measure field": "Summaan tarvitaan mittarikenttä",
   "Aa dark": "Aa tumma",
@@ -223,6 +224,8 @@
   "Brand book mode": "Brändikirjan tila",
   "Build a module": "Rakenna moduuli",
   "Bulk actions": "Joukkotoiminnot",
+  "calculated": "laskettu",
+  "Calculated by the server; it cannot be edited": "Palvelin laskee arvon; sitä ei voi muokata",
   "Calendar": "Kalenteri",
   "Calendar scale": "Kalenterin näkymä",
   "Cancel": "Peruuta",
@@ -787,6 +790,7 @@
   "Nothing to group by in this model.": "Tässä tietuetyypissä ei ole mitään, minkä mukaan ryhmitellä.",
   "Number": "Numero",
   "Number (KPI)": "Luku (KPI)",
+  "numbered": "numeroitu",
   "Numbers, dates and money, independent of the language.": "Numerot, päivämäärät ja rahamäärät kielestä riippumatta.",
   "One business, one platform.": "Yksi yritys, yksi alusta.",
   "One condition per semicolon: field operator value. Operators: = != ~ (contains, text only) > >= < <= in (values separated by |), and “is empty” or “is set”. Numbers and money use the stored integers (money in minor units: 12.50 is 1250). Example: state = paid; amount_minor >= 100000": "Yksi ehto kutakin puolipistettä kohden: kenttä operaattori arvo. Operaattorit: = != ~ (sisältää, vain teksti) > >= < <= in (arvot erotettuina merkillä |) sekä ”is empty” (on tyhjä) tai ”is set” (on asetettu). Numeroissa ja rahamäärissä käytetään tallennettuja kokonaislukuja (rahamäärät sentteinä: 12,50 on 1250). Esimerkki: state = paid; amount_minor >= 100000",
@@ -1495,5 +1499,6 @@
   "Working out what this needs": "Selvitetään, mitä tämä vaatii",
   "Works with core {version}": "Toimii ytimen {version} kanssa",
   "Worth knowing": "Hyvä tietää",
-  "you run {version}": "käytössäsi on {version}"
+  "you run {version}": "käytössäsi on {version}",
+  "You see only the records that are yours or shared with you.": "Näet vain ne tietueet, jotka ovat sinun tai jaettu sinulle."
 }

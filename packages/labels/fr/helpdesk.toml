@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Assistance"
-description = "Tickets d’assistance avec priorité, gravité, objectifs de niveau de service et un flux ouvert, en cours, résolu et clôturé. Les objectifs sont enregistrés, ni appliqués ni chronométrés automatiquement."
+description = "Tickets d’assistance avec priorité, gravité, objectifs de niveau de service et un flux ouvert, en cours, résolu et clôturé. Les objectifs sont enregistrés, ni appliqués ni chronométrés automatiquement. Chaque ticket reçoit un numéro d’une série à sa création."
 
 [labels.fr.model.helpdesk_sla]
 name = "SLA"
@@ -134,3 +134,7 @@ description = "Clôture définitivement un ticket résolu (responsable uniquemen
 [labels.fr.model.helpdesk_ticket.action.reopen]
 label = "Rouvrir"
 description = "Rouvre un ticket résolu lorsque le problème est revenu"
+
+[labels.fr.model.helpdesk_ticket.field.number]
+label = "Numéro"
+description = "Numéro de ticket tel que TCK-00042, attribué à la création du ticket"

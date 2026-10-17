@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Contabilidad"
-description = "Plan de cuentas, diarios, impuestos, asientos con líneas de debe y haber, ejercicios fiscales, periodos y extractos bancarios. Importes en la unidad menor de la moneda y tipos en puntos básicos (2000 es 20,00 %). No se calcula nada: cuadre, impuestos y numeración los introduce una persona. Contabilizar y cerrar periodos o ejercicios requiere aprobación humana; los agentes solo pueden proponerlo."
+description = "Plan de cuentas, diarios, impuestos, asientos con líneas de debe y haber, ejercicios fiscales, periodos y extractos bancarios. Contabilizar se rechaza si el debe y el haber no son iguales y da al asiento el siguiente número de una serie anual sin huecos. Contabilizar y cerrar periodos o ejercicios requiere aprobación humana; los agentes solo pueden proponerlo."
 
 [labels.es.model.accounting_account]
 name = "Cuenta"
@@ -8,7 +8,7 @@ description = "Una cuenta del plan de cuentas"
 
 [labels.es.model.accounting_account.field.code]
 label = "Código"
-description = "Código de la cuenta tal como figura en el plan, por ejemplo 400000"
+description = "Código de la cuenta tal como figura en el plan, por ejemplo 400000; no hay dos cuentas con el mismo código"
 
 [labels.es.model.accounting_account.field.name]
 label = "Nombre"
@@ -54,7 +54,7 @@ description = "Nombre del diario, por ejemplo Facturas de clientes"
 
 [labels.es.model.accounting_journal.field.code]
 label = "Código"
-description = "Código corto usado en los números de asiento, por ejemplo INV"
+description = "Código corto del diario, por ejemplo INV; no hay dos diarios con el mismo código"
 
 [labels.es.model.accounting_journal.field.kind]
 label = "Tipo"
@@ -194,7 +194,7 @@ description = "Fecha contable del asiento (YYYY-MM-DD)"
 
 [labels.es.model.accounting_move.field.number]
 label = "Número"
-description = "Número de asiento, como INV/2026/0001. Texto libre: los paquetes no pueden generar secuencias, así que quien contabiliza el asiento asigna a mano el siguiente número y mantiene la serie sin huecos"
+description = "Número de asiento como JE/2026/00042, asignado al contabilizar el asiento desde una serie sin huecos que empieza de nuevo cada año"
 
 [labels.es.model.accounting_move.field.reference]
 label = "Referencia"
@@ -220,7 +220,7 @@ reversed = "Revertido"
 
 [labels.es.model.accounting_move.action.post]
 label = "Contabilizar"
-description = "Contabilizar un asiento en borrador en el libro mayor (solo aprobadores; no se comprueba el cuadre de debe y haber)"
+description = "Contabilizar un asiento en borrador en el libro mayor y numerarlo (solo aprobadores; se rechaza si el debe y el haber no son iguales)"
 
 [labels.es.model.accounting_move.action.cancel]
 label = "Cancelar"
@@ -322,3 +322,11 @@ description = "Conciliar una línea cruzada (solo responsables)"
 [labels.es.model.accounting_bank_statement_line.action.unmatch]
 label = "Desemparejar"
 description = "Deshacer un cruce que era erróneo"
+
+[labels.es.model.accounting_move.field.total_debit]
+label = "Total debe"
+description = "Suma de los importes del debe de las líneas del asiento (unidad menor de la moneda)"
+
+[labels.es.model.accounting_move.field.total_credit]
+label = "Total haber"
+description = "Suma de los importes del haber de las líneas del asiento (unidad menor de la moneda)"

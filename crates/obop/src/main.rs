@@ -6,6 +6,8 @@ mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
 #[cfg(test)]
+mod model_tests;
+#[cfg(test)]
 mod modules_tests;
 #[cfg(test)]
 mod public_site_tests;
@@ -31,6 +33,7 @@ const USAGE: &str = "usage: obop <command>
   modules plan FILE|ID                          what installing a file or marketplace package would do, without doing it
   modules install FILE | uninstall ID           manage packages in the database (operator tool); an install brings its dependencies
   modules market                                list the marketplace; install with `modules install-from ID`
+  sequences backfill [MODEL [FIELD]]            number the records that were created before their sequence field existed
   admin create USER [--groups a,b | --all-groups]
                                                 create a user; the password is read from stdin
   admin reset-mfa USER --db URL                 break-glass: remove USER's two-factor and sessions (needs database
@@ -146,6 +149,11 @@ fn main() -> ExitCode {
         ["modules", "install", file] => modules_install(&opts, Some(file), None),
         ["modules", "install-from", id] => modules_install(&opts, None, Some(id)),
         ["modules", "uninstall", id] => modules_uninstall(&opts, id),
+        ["sequences", "backfill"] => sequences_backfill(&opts, None, None),
+        ["sequences", "backfill", model] => sequences_backfill(&opts, Some(model), None),
+        ["sequences", "backfill", model, field] => {
+            sequences_backfill(&opts, Some(model), Some(field))
+        }
         ["admin", "reset-mfa", user] => admin_reset_mfa(&opts, user),
         ["admin", "create", user] => admin_create(&opts, user, groups, has("--all-groups")),
         ["agent-token", user] => agent_token(&opts, user, scopes, label),
@@ -450,6 +458,24 @@ fn modules_uninstall(o: &Opts, id: &str) -> Exit {
     })?;
     app.installer.uninstall(id).map_err(|e| fail(&e))?;
     println!("uninstalled {id}; its data stays in the database");
+    Ok(())
+}
+
+fn sequences_backfill(o: &Opts, model: Option<&str>, field: Option<&str>) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    let done = app
+        .dispatcher
+        .backfill_sequences(&app.store, model, field)
+        .map_err(|e| fail(&e))?;
+    for (m, f, n) in &done {
+        println!("{m}.{f}: numbered {n} record(s)");
+    }
+    if done.is_empty() {
+        println!("no sequence field matches");
+    }
     Ok(())
 }
 
@@ -1543,8 +1569,9 @@ mod tests {
         .await;
         assert_eq!(s, 200, "{b}");
         assert_eq!(b["value"]["state"], "posted");
-        assert_eq!(
-            b["value"]["number"], "INV-00001",
+        let number = b["value"]["number"].as_str().unwrap_or_default();
+        assert!(
+            number.starts_with("INV-") && number.ends_with("-00001"),
             "the post action ran: {b}"
         );
 
@@ -1689,14 +1716,36 @@ mod tests {
         let (s, e) = post(
             &r,
             Some(&ada),
-            "/api/sale_order/create",
-            json!({"total_minor": 12.5}),
+            "/api/lead/create",
+            json!({"title": "x", "expected_revenue_minor": 12.5}),
         )
         .await;
         assert_eq!(s, 400, "{e}");
         assert!(
             e.to_string()
-                .contains("sale_order.total_minor must be an integer in minor currency units"),
+                .contains("lead.expected_revenue_minor must be an integer in minor currency units"),
+            "{e}"
+        );
+        // D56/D57/D58 flags: the total of an order is computed, an invoice number is a sequence,
+        // the stage of a lead is governed, and every field says so.
+        assert_eq!(total["computed"], true);
+        assert_eq!(field("sale_order", "number")["sequence"], true);
+        assert_eq!(field("sale_order", "number")["unique"], true);
+        assert_eq!(field("invoice", "number")["sequence"], true);
+        assert_eq!(stage["governed"], true);
+        assert_eq!(field("sale_order", "currency")["computed"], false);
+        assert_eq!(field("product", "sku")["unique"], true);
+        let (s, e) = post(
+            &r,
+            Some(&ada),
+            "/api/sale_order/create",
+            json!({"total_minor": 12}),
+        )
+        .await;
+        assert_eq!(s, 400, "{e}");
+        assert!(
+            e.to_string()
+                .contains("total_minor is computed and read-only"),
             "{e}"
         );
         let (s, e) = post(
@@ -2392,6 +2441,8 @@ mod bundled_packages {
             .collect()
     }
 
+    static UNIQUE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
+
     /// Builds sample records from field metadata, creating referenced records first.
     struct Maker<'a> {
         app: &'a App,
@@ -2407,7 +2458,16 @@ mod bundled_packages {
             let fields: Vec<FieldInfo> = self.meta[model].fields.clone();
             let mut m = BTreeMap::new();
             for f in fields {
+                // Computed values and numbers are the system's to give.
+                if f.computed || f.sequence {
+                    continue;
+                }
                 let v = match f.kind {
+                    // A unique field gets a value no earlier record has.
+                    "text" if f.unique => {
+                        let n = UNIQUE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        Value::Text(format!("sample-{n}"))
+                    }
                     "text" => Value::text("sample"),
                     "longtext" => Value::text("a longer sample text"),
                     "number" => Value::Int(1),
@@ -2490,7 +2550,14 @@ mod bundled_packages {
                 .install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
                 .unwrap_or_else(|e| panic!("{id} did not install: {e}"));
 
-            let groups = m.groups();
+            // The groups of the package and of the packages its effects reach into (a sale that
+            // creates stock moves needs the right to make them; effects never elevate).
+            let mut groups = m.groups();
+            for other in &manifests {
+                groups.extend(other.groups());
+            }
+            groups.sort();
+            groups.dedup();
             let group_refs: Vec<&str> = groups.iter().map(String::as_str).collect();
             let user = Principal::user("tester", &group_refs);
             let visible = models_of(&app, &user);

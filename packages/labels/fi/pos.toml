@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Kassa"
-description = "Myymälän kassat: kassapisteen asetukset, avattavat ja suljettavat kassavuorot kassan täsmäytyksellä, myynnit riveineen ja maksurivit maksutavoittain. Hyvitys ja kassavuoron sulkeminen vaativat esihenkilön hyväksynnän; agentit voivat vain ehdottaa niitä. Summat, vaihtorahat ja kassaerot syötetään, niitä ei lasketa. Korttinumeroita ei saa tallentaa. Vaatii Tuotteet-paketin."
+description = "Myymälän kassat: kassapisteen asetukset, kassavuorot kassan täsmäytyksellä, myynnit riveineen ja maksurivit maksutavoittain. Hyvitys ja vuoron sulkeminen vaativat esihenkilön hyväksynnän. Rivien välisummat ja summa lasketaan, kuiteilla on katkeamaton vuosinumero, ja maksu luo rivikohtaisen luonnossiirron. Korttinumeroita ei saa tallentaa. Vaatii Tuotteet-paketin."
 
 [labels.fi.model.pos_config]
 name = "Kassapiste"
@@ -96,7 +96,7 @@ description = "Kassavuoro, jossa myynti tehtiin"
 
 [labels.fi.model.pos_order.field.receipt_number]
 label = "Kuitin numero"
-description = "Kuittiin tulostettava numero. Vapaa teksti: paketit eivät voi luoda numerosarjoja"
+description = "Kuitin numero, esimerkiksi R-2026-000042: katkeamaton sarja, joka alkaa alusta joka vuosi, annetaan myyntiä luotaessa"
 
 [labels.fi.model.pos_order.field.ordered_on]
 label = "Tilattu"
@@ -112,7 +112,7 @@ description = "Kokonaissummaan sisältyvä vero (valuutan pienin yksikkö)"
 
 [labels.fi.model.pos_order.field.total]
 label = "Yhteensä"
-description = "Asiakkaan maksama kokonaissumma veroineen (valuutan pienin yksikkö, syötetty eikä laskettu)"
+description = "Asiakkaan maksama kokonaissumma veroineen: rivien välisummien summa (valuutan pienin yksikkö)"
 
 [labels.fi.model.pos_order.field.note]
 label = "Huomautus"
@@ -130,7 +130,7 @@ cancelled = "Peruutettu"
 
 [labels.fi.model.pos_order.action.pay]
 label = "Maksa"
-description = "Myynti on maksettu kokonaan"
+description = "Myynti on maksettu kokonaan: evätään, kunnes maksut kattavat summan; luo rivikohtaisen luonnossiirron (vaatii inventory.user-ryhmän)"
 
 [labels.fi.model.pos_order.action.cancel]
 label = "Peruuta"
@@ -170,7 +170,7 @@ description = "Alennus peruspisteinä: 1000 tarkoittaa 10,00 prosenttia"
 
 [labels.fi.model.pos_order_line.field.subtotal]
 label = "Välisumma"
-description = "Rivin summa alennuksen jälkeen (valuutan pienin yksikkö, syötetty eikä laskettu)"
+description = "Rivin summa alennuksen jälkeen: määrä kertaa yksikköhinta miinus alennus (valuutan pienin yksikkö)"
 
 [labels.fi.model.pos_payment]
 name = "Maksu"
@@ -202,3 +202,7 @@ description = "Maksupäivä (YYYY-MM-DD)"
 [labels.fi.model.pos_payment.field.provider_reference]
 label = "Palveluntarjoajan viite"
 description = "Korttipäätteen tai maksupalvelun viite; ei koskaan korttinumero"
+
+[labels.fi.model.pos_order.field.stock_location_id]
+label = "Varastopaikka"
+description = "Mistä tavarat poistuvat varastosta; maksu luo varastosiirrot tästä paikasta"

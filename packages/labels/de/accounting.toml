@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Buchhaltung"
-description = "Kontenplan, Journale, Steuersätze, Buchungen mit Soll- und Haben-Zeilen, Geschäftsjahre, Perioden und Kontoauszugszeilen. Beträge stehen in der kleinsten Währungseinheit, Steuersätze in Basispunkten (2000 = 20,00 Prozent). Es wird nichts berechnet. Buchen und Abschließen brauchen eine menschliche Genehmigung (Gruppe accounting.approver); Agenten dürfen nur vorschlagen."
+description = "Kontenplan, Journale, Steuersätze, Buchungen mit Soll- und Haben-Zeilen, Geschäftsjahre, Perioden und Kontoauszugszeilen. Beträge in der kleinsten Währungseinheit. Gebucht wird nur bei gleicher Summe Soll und Haben, mit lückenloser Jahresnummer. Codes sind eindeutig. Buchen und Abschließen brauchen eine menschliche Genehmigung (accounting.approver); Agenten dürfen nur vorschlagen."
 
 [labels.de.model.accounting_account]
 name = "Konto"
@@ -8,7 +8,7 @@ description = "Ein Konto des Kontenplans"
 
 [labels.de.model.accounting_account.field.code]
 label = "Code"
-description = "Kontonummer wie im Kontenplan, zum Beispiel 400000"
+description = "Kontonummer wie im Kontenplan, zum Beispiel 400000; keine zwei Konten haben dieselbe"
 
 [labels.de.model.accounting_account.field.name]
 label = "Name"
@@ -54,7 +54,7 @@ description = "Name des Journals, zum Beispiel Kundenrechnungen"
 
 [labels.de.model.accounting_journal.field.code]
 label = "Code"
-description = "Kurzcode in den Buchungsnummern, zum Beispiel INV"
+description = "Kurzcode des Journals, zum Beispiel INV; keine zwei Journale haben denselben"
 
 [labels.de.model.accounting_journal.field.kind]
 label = "Art"
@@ -194,7 +194,7 @@ description = "Buchungsdatum (YYYY-MM-DD)"
 
 [labels.de.model.accounting_move.field.number]
 label = "Nummer"
-description = "Buchungsnummer wie INV/2026/0001. Freitext: Pakete können keine Nummernkreise erzeugen, daher vergibt die buchende Person die nächste Nummer von Hand und hält die Reihe lückenlos"
+description = "Buchungsnummer wie JE/2026/00042, wird beim Buchen aus einer lückenlosen Serie vergeben, die jedes Jahr neu beginnt"
 
 [labels.de.model.accounting_move.field.reference]
 label = "Referenz"
@@ -220,7 +220,7 @@ reversed = "Storno gebucht"
 
 [labels.de.model.accounting_move.action.post]
 label = "Buchen"
-description = "Eine Buchung im Entwurf ins Hauptbuch buchen (nur Genehmigende; der Ausgleich von Soll und Haben wird nicht geprüft)"
+description = "Eine Buchung ins Hauptbuch buchen und nummerieren (nur Genehmiger; abgelehnt, wenn Soll und Haben nicht gleich sind)"
 
 [labels.de.model.accounting_move.action.cancel]
 label = "Stornieren"
@@ -322,3 +322,11 @@ description = "Eine zugeordnete Zeile abgleichen (nur Führungskräfte)"
 [labels.de.model.accounting_bank_statement_line.action.unmatch]
 label = "Zuordnung aufheben"
 description = "Eine falsche Zuordnung rückgängig machen"
+
+[labels.de.model.accounting_move.field.total_debit]
+label = "Summe Soll"
+description = "Summe der Sollbeträge der Buchungszeilen (kleinste Währungseinheit)"
+
+[labels.de.model.accounting_move.field.total_credit]
+label = "Summe Haben"
+description = "Summe der Habenbeträge der Buchungszeilen (kleinste Währungseinheit)"

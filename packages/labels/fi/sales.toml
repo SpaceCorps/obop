@@ -20,7 +20,7 @@ cancelled = "Peruutettu"
 
 [labels.fi.model.sale_order.field.total_minor]
 label = "Yhteensä"
-description = "Tilauksen loppusumma valuutan pienimmässä yksikössä"
+description = "Tilauksen loppusumma valuutan pienimmässä yksikössä, rivien summa"
 
 [labels.fi.model.sale_order.field.currency]
 label = "Valuutta"
@@ -37,3 +37,35 @@ description = "Peruuta tilaus"
 [labels.fi.model.sale_order.action.reset_to_draft]
 label = "Palauta luonnokseksi"
 description = "Palauta peruutettu tilaus luonnokseksi"
+
+[labels.fi.model.sale_order.field.number]
+label = "Numero"
+description = "Tilausnumero, esimerkiksi SO-00042, annetaan tilausta luotaessa"
+
+[labels.fi.model.sale_order_line]
+name = "Myyntitilauksen rivi"
+description = "Yksi tuote tai palvelu myyntitilauksella"
+
+[labels.fi.model.sale_order_line.field.order_id]
+label = "Tilaus"
+description = "Myyntitilaus, johon rivi kuuluu"
+
+[labels.fi.model.sale_order_line.field.product_id]
+label = "Tuote"
+description = "Myyty tuote"
+
+[labels.fi.model.sale_order_line.field.description]
+label = "Kuvaus"
+description = "Mitä myydään, sellaisena kuin se näkyy laskulla"
+
+[labels.fi.model.sale_order_line.field.quantity]
+label = "Määrä"
+description = "Myyty määrä"
+
+[labels.fi.model.sale_order_line.field.unit_price_minor]
+label = "Yksikköhinta"
+description = "Yhden yksikön hinta valuutan pienimmässä yksikössä"
+
+[labels.fi.model.sale_order_line.field.amount_minor]
+label = "Summa"
+description = "Rivin summa valuutan pienimmässä yksikössä: määrä kertaa yksikköhinta"

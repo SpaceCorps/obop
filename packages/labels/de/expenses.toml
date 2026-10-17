@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Spesen"
-description = "Spesenabrechnungen von Mitarbeitern mit dem Ablauf Entwurf, eingereicht, genehmigt und bezahlt. Das Bezahlen ist eine eigene Berechtigung und braucht eine menschliche Genehmigung; Belege werden per Notiz referenziert, nicht gespeichert."
+description = "Spesenabrechnungen von Mitarbeitern mit dem Ablauf Entwurf, eingereicht, genehmigt und bezahlt. Das Bezahlen braucht eine eigene Berechtigung und eine menschliche Genehmigung; Belege werden per Notiz referenziert. Nummer aus einer Jahresserie; Mitarbeiter sehen nur ihre eigenen Abrechnungen, Führungskräfte und Finanzen alle."
 
 [labels.de.model.expenses_expense]
 name = "Ausgabe"
@@ -12,7 +12,7 @@ description = "Wofür das Geld ausgegeben wurde"
 
 [labels.de.model.expenses_expense.field.employee]
 label = "Mitarbeiter"
-description = "Name der Person, die die Ausgabe einreicht"
+description = "Benutzername der Person, die die Spesen geltend macht; standardmäßig die Person, die die Abrechnung anlegt"
 
 [labels.de.model.expenses_expense.field.spent_on]
 label = "Ausgegeben am"
@@ -76,3 +76,7 @@ description = "Die Erstattung als bezahlt erfassen (nur Finanzen)"
 [labels.de.model.expenses_expense.action.refuse]
 label = "Ablehnen"
 description = "Eine eingereichte Abrechnung ablehnen (nur Führungskräfte)"
+
+[labels.de.model.expenses_expense.field.number]
+label = "Nummer"
+description = "Abrechnungsnummer wie EXP-2026-0042, wird beim Anlegen vergeben; die Serie beginnt jedes Jahr neu"

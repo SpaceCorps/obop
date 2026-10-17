@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Magazyn"
-description = "Magazyny, lokalizacje magazynowe, stany magazynowe i operacje magazynowe. Ilości wprowadzają i zatwierdzają ludzie; operacje nie aktualizują ich automatycznie."
+description = "Magazyny, lokalizacje, stany i operacje magazynowe. Zrealizowanie operacji zdejmuje ilość ze stanu w lokalizacji źródłowej i dodaje ją w docelowej, w jednym kroku; brakująca pozycja jest tworzona. Jest jedna pozycja na produkt, lokalizację i partię; ilości ujemne są dozwolone."
 
 [labels.pl.model.inventory_warehouse]
 name = "Magazyn"
@@ -55,7 +55,7 @@ description = "Ilość jednego produktu przechowywana w jednej lokalizacji"
 
 [labels.pl.model.inventory_item.field.product_id]
 label = "Produkt"
-description = "Przechowywany produkt"
+description = "Przechowywany produkt; jest jedna pozycja na produkt, lokalizację i partię"
 
 [labels.pl.model.inventory_item.field.location_id]
 label = "Lokalizacja"
@@ -79,7 +79,7 @@ description = "Przemieszczenie produktu między lokalizacjami albo do firmy lub 
 
 [labels.pl.model.inventory_move.field.reference]
 label = "Referencja"
-description = "Referencja operacji, na przykład numer dostawy lub przyjęcia"
+description = "Numer operacji, np. MV-00042, nadawany przy utworzeniu operacji"
 
 [labels.pl.model.inventory_move.field.product_id]
 label = "Produkt"
@@ -112,7 +112,7 @@ cancelled = "Anulowane"
 
 [labels.pl.model.inventory_move.action.validate]
 label = "Zrealizuj"
-description = "Potwierdza, że towar faktycznie został przemieszczony; wykonanej operacji nie można cofnąć"
+description = "Potwierdza, że towar faktycznie został przemieszczony: ilość opuszcza pozycję źródłową i trafia na docelową (tylko magazynierzy); wykonanej operacji nie można cofnąć"
 
 [labels.pl.model.inventory_move.action.cancel]
 label = "Anuluj"
