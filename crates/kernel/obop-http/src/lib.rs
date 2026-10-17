@@ -108,7 +108,6 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
     Router::new()
         .route("/api/auth/login", post(login))
         .route("/api/auth/agent-token", post(agent_token))
-        .merge(mfa::routes())
         .route("/api/commands", get(commands))
         .route("/api/meta", get(meta))
         .route("/api/openapi.json", get(instance_openapi))
@@ -129,7 +128,8 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             "/.well-known/oauth-protected-resource/mcp",
             get(mcp::oauth_protected_resource_mcp),
         )
-        .with_state(state)
+        .with_state(state.clone())
+        .merge(mfa::routes("/api/auth", state.auth.clone()))
 }
 
 /// Unknown API paths answer JSON, never the HTML shell, so agents can parse the error.
@@ -361,6 +361,22 @@ pub async fn serve(addr: &str, app: Router) -> std::io::Result<()> {
 pub trait PlatformApi: Send + Sync {
     fn signup(&self, email: &str, password: &str) -> Result<String, String>;
     fn login(&self, email: &str, password: &str) -> Result<String, String>;
+    /// First sign-in step; a second factor may be demanded (D53).
+    fn login_step(
+        &self,
+        email: &str,
+        password: &str,
+    ) -> Result<obop_commands::LoginOutcome, String> {
+        self.login(email, password)
+            .map(|token| obop_commands::LoginOutcome::Session {
+                token,
+                mfa_enrolment_required: false,
+            })
+    }
+    /// The authenticator behind the accounts, for the optional two-factor routes (D53).
+    fn authenticator(&self) -> Option<Arc<dyn Authenticator>> {
+        None
+    }
     fn me(&self, token: &str) -> Result<String, String>;
     fn list(&self, token: &str) -> Result<Vec<J>, String>;
     fn create(&self, token: &str, name: &str) -> Result<J, String>;
@@ -422,9 +438,14 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         .route("/api/platform/me", get(p_me))
         .route("/api/platform/instances", get(p_list).post(p_create))
         .route("/api/platform/instances/{id}/delete", post(p_delete))
-        .with_state(api)
+        .with_state(api.clone())
         .route("/openapi.json", get(platform_openapi))
         .route("/api/openapi.json", get(platform_openapi));
+    // Optional TOTP for the owner's own account (D53): same routes as an instance, not enforced.
+    let r = match api.authenticator() {
+        Some(a) => r.merge(mfa::routes("/api/platform", a)),
+        None => r,
+    };
     match static_dir {
         // The control plane serves the marketing site: real 404s, clean-URL redirects and
         // Markdown for agents (docs/site/SITE.md, "Server requirements").
@@ -452,11 +473,11 @@ async fn p_login(State(api): Api, Json(b): Json<J>) -> Response {
 }
 
 fn p_login_blocking(api: Arc<dyn PlatformApi>, b: J) -> Response {
-    match api.login(
+    match api.login_step(
         b["email"].as_str().unwrap_or(""),
         b["password"].as_str().unwrap_or(""),
     ) {
-        Ok(t) => Json(json!({"token": t})).into_response(),
+        Ok(out) => mfa::outcome(out),
         Err(e) if e.contains("too many") => err(StatusCode::TOO_MANY_REQUESTS, e),
         Err(e) => err(StatusCode::UNAUTHORIZED, e),
     }

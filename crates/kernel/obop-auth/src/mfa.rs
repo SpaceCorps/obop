@@ -65,7 +65,10 @@ impl AuthConfig {
         Self {
             secret_key,
             default_require_admins: !flag("OBOP_REQUIRE_MFA_FOR_ADMINS").is_some_and(|v| {
-                matches!(v.trim().to_lowercase().as_str(), "0" | "false" | "no" | "off")
+                matches!(
+                    v.trim().to_lowercase().as_str(),
+                    "0" | "false" | "no" | "off"
+                )
             }),
             issuer: flag("OBOP_MFA_ISSUER")
                 .filter(|s| !s.trim().is_empty())
@@ -148,7 +151,8 @@ impl Auth {
 
     /// `security.require_mfa_for_all` (off by default).
     pub fn require_mfa_for_all(&self) -> bool {
-        self.security_setting("require_mfa_for_all").unwrap_or(false)
+        self.security_setting("require_mfa_for_all")
+            .unwrap_or(false)
     }
 
     fn enrolment_required_for(&self, groups: &[String]) -> bool {
@@ -186,7 +190,9 @@ impl Auth {
 
     fn failed_code_event(&self, user: &str) {
         let mut g = self.event_throttle.lock().unwrap();
-        if g.get(user).is_none_or(|t| t.elapsed() >= FAILED_EVENT_EVERY) {
+        if g.get(user)
+            .is_none_or(|t| t.elapsed() >= FAILED_EVENT_EVERY)
+        {
             g.insert(user.into(), Instant::now());
             drop(g);
             self.event(user, "code_failed", user, "wrong second-factor code");
@@ -227,8 +233,15 @@ impl Auth {
 
     fn password_ok(&self, name: &str, password: &str) -> bool {
         use argon2::password_hash::{PasswordVerifier, phc::PasswordHash};
-        let stored = self.backend.get("auth_user", name).ok().flatten().map(J::Object);
-        let dummy = self.hash_password("dummy-password-for-timing").unwrap_or_default();
+        let stored = self
+            .backend
+            .get("auth_user", name)
+            .ok()
+            .flatten()
+            .map(J::Object);
+        let dummy = self
+            .hash_password("dummy-password-for-timing")
+            .unwrap_or_default();
         let hash = stored
             .as_ref()
             .and_then(|u| u["password_hash"].as_str().map(String::from))
@@ -312,7 +325,12 @@ impl Auth {
         let mut p = Fields::new();
         p.insert(
             "recovery".into(),
-            json!(codes.iter().map(|c| recovery_hash(name, c)).collect::<Vec<_>>()),
+            json!(
+                codes
+                    .iter()
+                    .map(|c| recovery_hash(name, c))
+                    .collect::<Vec<_>>()
+            ),
         );
         Ok((codes, p))
     }
@@ -374,7 +392,8 @@ impl Auth {
     ) -> Result<LoginOutcome, MfaError> {
         let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
         let key = token_hash(mfa_token);
-        let expired = || MfaError::Denied("this sign-in has expired; enter your password again".into());
+        let expired =
+            || MfaError::Denied("this sign-in has expired; enter your password again".into());
         let rec = self
             .backend
             .get(MFA_TOKEN_TABLE, &key)

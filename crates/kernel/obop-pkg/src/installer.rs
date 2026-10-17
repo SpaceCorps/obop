@@ -613,7 +613,8 @@ mod tests {
         f.insert("user".into(), J::from("ada"));
         f.insert("kind".into(), J::from("enrol_confirm"));
         store.backend().insert("security_event", "001", &f).unwrap();
-        let rows = |p: &Principal| call(&d, p, "security_event.list", Value::Map(Default::default()));
+        let rows =
+            |p: &Principal| call(&d, p, "security_event.list", Value::Map(Default::default()));
         let Ok(r) = rows(&admin()) else { panic!() };
         let Value::List(l) = r.value else { panic!() };
         assert_eq!(l.len(), 1);
@@ -635,7 +636,10 @@ mod tests {
             );
         }
         let agent = Principal::agent("ada/agent", &[ADMIN_GROUP], &[ADMIN_GROUP]);
-        assert!(rows(&agent).is_ok(), "an agent scoped to the admin group may read it");
+        assert!(
+            rows(&agent).is_ok(),
+            "an agent scoped to the admin group may read it"
+        );
     }
 
     #[test]

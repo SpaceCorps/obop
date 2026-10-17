@@ -79,25 +79,45 @@ fn enrolment_is_two_steps_and_nothing_is_active_until_confirmed() {
     let (token, p) = session(&r.a, "ada");
     let begun = r.a.begin(&p).unwrap();
     let secret_b32 = begun["secret"].as_str().unwrap();
-    assert!(begun["uri"].as_str().unwrap().starts_with("otpauth://totp/obop:ada?secret="));
+    assert!(
+        begun["uri"]
+            .as_str()
+            .unwrap()
+            .starts_with("otpauth://totp/obop:ada?secret=")
+    );
     assert!(begun["uri"].as_str().unwrap().contains(secret_b32));
-    assert_eq!(totp::base32_decode(secret_b32).unwrap().len(), totp::SECRET_LEN);
+    assert_eq!(
+        totp::base32_decode(secret_b32).unwrap().len(),
+        totp::SECRET_LEN
+    );
     // Still a plain password sign-in.
     assert!(matches!(
         r.a.login_step("ada", PW).unwrap(),
         LoginOutcome::Session { .. }
     ));
     let st = r.a.status(&p).unwrap();
-    assert_eq!((st["enabled"].clone(), st["pending"].clone()), (json!(false), json!(true)));
+    assert_eq!(
+        (st["enabled"].clone(), st["pending"].clone()),
+        (json!(false), json!(true))
+    );
     // A wrong code does not activate it.
-    assert!(matches!(r.a.confirm(&p, &token, "000000"), Err(MfaError::Denied(_))));
+    assert!(matches!(
+        r.a.confirm(&p, &token, "000000"),
+        Err(MfaError::Denied(_))
+    ));
     assert!(!r.a.mfa_enabled("ada"));
     // The right one does, and returns ten recovery codes once.
     let secret = totp::base32_decode(secret_b32).unwrap();
     let done = r.a.confirm(&p, &token, &code_at(&secret, T0)).unwrap();
-    assert_eq!(done["recovery_codes"].as_array().unwrap().len(), RECOVERY_CODES_FOR_TEST);
+    assert_eq!(
+        done["recovery_codes"].as_array().unwrap().len(),
+        RECOVERY_CODES_FOR_TEST
+    );
     assert!(r.a.mfa_enabled("ada"));
-    assert!(matches!(r.a.begin(&p), Err(MfaError::Invalid(_))), "already on");
+    assert!(
+        matches!(r.a.begin(&p), Err(MfaError::Invalid(_))),
+        "already on"
+    );
     assert_eq!(r.a.status(&p).unwrap()["recovery_remaining"], json!(10));
 }
 
@@ -112,15 +132,27 @@ fn sign_in_needs_the_second_step_and_the_token_is_not_a_session() {
     // The password alone never yields a session, and the legacy one-step login refuses.
     assert!(r.a.login("ada", PW).is_err());
     let t = mfa_token(&r.a, "ada");
-    assert!(r.a.resolve(&t).is_none(), "an mfa_token is not a bearer token");
-    let out = r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None).unwrap();
-    let LoginOutcome::Session { token, mfa_enrolment_required } = out else {
+    assert!(
+        r.a.resolve(&t).is_none(),
+        "an mfa_token is not a bearer token"
+    );
+    let out =
+        r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None)
+            .unwrap();
+    let LoginOutcome::Session {
+        token,
+        mfa_enrolment_required,
+    } = out
+    else {
         panic!()
     };
     assert!(!mfa_enrolment_required);
     assert!(r.a.resolve(&token).unwrap().allows("base.user"));
     // Single purpose, single use.
-    assert!(r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 90)), None).is_err());
+    assert!(
+        r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 90)), None)
+            .is_err()
+    );
     // The token is stored hashed.
     assert!(r.b.get("auth_mfa_token", &t).unwrap().is_none());
 }
@@ -159,7 +191,11 @@ fn the_secret_is_sealed_at_rest_and_bound_to_the_user() {
     let sealed = rec["totp_secret"].as_str().unwrap().to_string();
     assert!(sealed.starts_with("v1."));
     assert!(!sealed.contains(&totp::base32_encode(&secret)));
-    assert!(!serde_json::to_string(&rec).unwrap().contains(&totp::base32_encode(&secret)));
+    assert!(
+        !serde_json::to_string(&rec)
+            .unwrap()
+            .contains(&totp::base32_encode(&secret))
+    );
     // Copying the sealed secret to another user does not open.
     let mut p = Fields::new();
     p.insert("totp_secret".into(), J::from(sealed.clone()));
@@ -175,7 +211,10 @@ fn the_secret_is_sealed_at_rest_and_bound_to_the_user() {
     let mut flipped = sealed.into_bytes();
     let n = flipped.len() - 1;
     flipped[n] = if flipped[n] == b'a' { b'b' } else { b'a' };
-    bad.insert("totp_secret".into(), J::from(String::from_utf8(flipped).unwrap()));
+    bad.insert(
+        "totp_secret".into(),
+        J::from(String::from_utf8(flipped).unwrap()),
+    );
     r.b.update("auth_user", "ada", &bad).unwrap();
     r.a.set_clock_for_test(T0 + 60);
     let t = mfa_token(&r.a, "ada");
@@ -192,13 +231,19 @@ fn without_a_server_key_two_factor_cannot_be_enabled() {
         ..enforcing()
     });
     user_with(&r.a, "root", &[ADMIN_GROUP]);
-    let LoginOutcome::Session { token, mfa_enrolment_required } = r.a.login_step("root", PW).unwrap() else {
+    let LoginOutcome::Session {
+        token,
+        mfa_enrolment_required,
+    } = r.a.login_step("root", PW).unwrap()
+    else {
         panic!()
     };
     // No key: the policy cannot lock the admin out of an instance that cannot enrol.
     assert!(!mfa_enrolment_required);
     let p = r.a.resolve(&token).unwrap();
-    assert!(matches!(r.a.begin(&p), Err(MfaError::Unavailable(m)) if m.contains("OBOP_SECRET_KEY")));
+    assert!(
+        matches!(r.a.begin(&p), Err(MfaError::Unavailable(m)) if m.contains("OBOP_SECRET_KEY"))
+    );
     assert_eq!(r.a.status(&p).unwrap()["available"], json!(false));
 }
 
@@ -208,13 +253,24 @@ fn recovery_codes_are_single_use_and_stored_hashed() {
     user_with(&r.a, "ada", &[]);
     let (_, codes) = enrol(&r.a, "ada");
     assert_eq!(codes.len(), 10);
-    assert!(codes.iter().all(|c| c.len() == 19 && c.matches('-').count() == 3));
+    assert!(
+        codes
+            .iter()
+            .all(|c| c.len() == 19 && c.matches('-').count() == 3)
+    );
     let stored = serde_json::to_string(&r.b.get("auth_user", "ada").unwrap().unwrap()).unwrap();
     for c in &codes {
-        assert!(!stored.contains(c.as_str()), "plain recovery code in the record");
+        assert!(
+            !stored.contains(c.as_str()),
+            "plain recovery code in the record"
+        );
     }
     let t = mfa_token(&r.a, "ada");
-    assert!(r.a.login_mfa(&t, None, Some(&codes[0].to_lowercase())).is_ok(), "case and dashes are forgiving");
+    assert!(
+        r.a.login_mfa(&t, None, Some(&codes[0].to_lowercase()))
+            .is_ok(),
+        "case and dashes are forgiving"
+    );
     let t = mfa_token(&r.a, "ada");
     assert!(matches!(
         r.a.login_mfa(&t, None, Some(&codes[0])),
@@ -224,7 +280,8 @@ fn recovery_codes_are_single_use_and_stored_hashed() {
     assert!(r.a.login_mfa(&t, None, Some(&codes[1])).is_ok());
     let (_, p) = {
         let t = mfa_token(&r.a, "ada");
-        let LoginOutcome::Session { token, .. } = r.a.login_mfa(&t, None, Some(&codes[2])).unwrap() else {
+        let LoginOutcome::Session { token, .. } = r.a.login_mfa(&t, None, Some(&codes[2])).unwrap()
+        else {
             panic!()
         };
         (token.clone(), r.a.resolve(&token).unwrap())
@@ -248,19 +305,26 @@ fn the_mfa_token_expires_and_survives_only_five_wrong_codes() {
     let now = r.a.now();
     let t = mfa_token(&r.a, "ada");
     for _ in 0..4 {
-        assert!(matches!(r.a.login_mfa(&t, Some("000000"), None), Err(MfaError::Denied(_))));
+        assert!(matches!(
+            r.a.login_mfa(&t, Some("000000"), None),
+            Err(MfaError::Denied(_))
+        ));
     }
     // Lift the per-user lockout to see the per-token cap on its own.
     r.a.failures.lock().unwrap().clear();
-    assert!(matches!(r.a.login_mfa(&t, Some("000000"), None), Err(MfaError::Denied(_))));
-    r.a.failures.lock().unwrap().clear();
     assert!(matches!(
-        r.a.login_mfa(&t, Some(&code_at(&secret, now)), None),
-        Err(MfaError::Locked(_))
-    ), "five misses burn the token even for the right code");
+        r.a.login_mfa(&t, Some("000000"), None),
+        Err(MfaError::Denied(_))
+    ));
+    r.a.failures.lock().unwrap().clear();
+    assert!(
+        matches!(
+            r.a.login_mfa(&t, Some(&code_at(&secret, now)), None),
+            Err(MfaError::Locked(_))
+        ),
+        "five misses burn the token even for the right code"
+    );
 }
-
-
 
 #[test]
 fn wrong_codes_count_toward_the_same_lockout_as_wrong_passwords() {
@@ -289,12 +353,20 @@ fn admins_without_two_factor_get_a_limited_session_until_they_enrol() {
     user_with(&r.a, "root", &[ADMIN_GROUP]);
     user_with(&r.a, "ada", &["base.user"]);
     // A non-admin is untouched.
-    let LoginOutcome::Session { mfa_enrolment_required, .. } = r.a.login_step("ada", PW).unwrap() else {
+    let LoginOutcome::Session {
+        mfa_enrolment_required,
+        ..
+    } = r.a.login_step("ada", PW).unwrap()
+    else {
         panic!()
     };
     assert!(!mfa_enrolment_required);
     // The admin is limited: the principal holds nothing, not even `*`.
-    let LoginOutcome::Session { token, mfa_enrolment_required } = r.a.login_step("root", PW).unwrap() else {
+    let LoginOutcome::Session {
+        token,
+        mfa_enrolment_required,
+    } = r.a.login_step("root", PW).unwrap()
+    else {
         panic!()
     };
     assert!(mfa_enrolment_required);
@@ -309,7 +381,10 @@ fn admins_without_two_factor_get_a_limited_session_until_they_enrol() {
     assert!(!after.mfa_limited && after.allows("base.user"));
     // Next sign-in is two-step.
     r.a.set_clock_for_test(T0 + 60);
-    assert!(matches!(r.a.login_step("root", PW).unwrap(), LoginOutcome::MfaRequired { .. }));
+    assert!(matches!(
+        r.a.login_step("root", PW).unwrap(),
+        LoginOutcome::MfaRequired { .. }
+    ));
 }
 
 #[test]
@@ -325,7 +400,10 @@ fn the_policy_follows_the_instance_setting_and_can_cover_everyone() {
         }
     };
     let limited = |u: &str| match r.a.login_step(u, PW).unwrap() {
-        LoginOutcome::Session { mfa_enrolment_required, .. } => mfa_enrolment_required,
+        LoginOutcome::Session {
+            mfa_enrolment_required,
+            ..
+        } => mfa_enrolment_required,
         _ => false,
     };
     assert!(limited("root") && !limited("ada"));
@@ -334,7 +412,10 @@ fn the_policy_follows_the_instance_setting_and_can_cover_everyone() {
     set(json!({"security": {"require_mfa_for_admins": true, "require_mfa_for_all": true}}));
     assert!(limited("root") && limited("ada"));
     set(json!({"theme": {}}));
-    assert!(limited("root") && !limited("ada"), "no stored value: the default applies");
+    assert!(
+        limited("root") && !limited("ada"),
+        "no stored value: the default applies"
+    );
 }
 
 #[test]
@@ -344,14 +425,22 @@ fn agents_cannot_enrol_disable_or_reset() {
     user_with(&r.a, "ada", &["base.user"]);
     enrol(&r.a, "ada");
     let (_, human) = session_after_enrol(&r, "root");
-    let t = r.a.issue_agent_token(&human, &groups(&[ADMIN_GROUP]), "bot").unwrap();
+    let t =
+        r.a.issue_agent_token(&human, &groups(&[ADMIN_GROUP]), "bot")
+            .unwrap();
     let agent = r.a.resolve(&t).unwrap();
     assert_eq!(agent.kind, PrincipalKind::Agent);
     assert_eq!(r.a.begin(&agent), Err(MfaError::NotFound));
     assert_eq!(r.a.status(&agent), Err(MfaError::NotFound));
     assert_eq!(r.a.confirm(&agent, &t, "123456"), Err(MfaError::NotFound));
-    assert_eq!(r.a.disable(&agent, PW, Some("123456"), None), Err(MfaError::NotFound));
-    assert_eq!(r.a.regenerate_recovery(&agent, PW, Some("1"), None), Err(MfaError::NotFound));
+    assert_eq!(
+        r.a.disable(&agent, PW, Some("123456"), None),
+        Err(MfaError::NotFound)
+    );
+    assert_eq!(
+        r.a.regenerate_recovery(&agent, PW, Some("1"), None),
+        Err(MfaError::NotFound)
+    );
     assert_eq!(r.a.admin_reset(&agent, "ada"), Err(MfaError::NotFound));
     assert!(r.a.mfa_enabled("ada"));
 }
@@ -367,20 +456,35 @@ fn disabling_needs_the_password_and_a_code_or_a_recovery_code() {
     let (secret, codes) = enrol(&r.a, "ada");
     r.a.set_clock_for_test(T0 + 60);
     let t = mfa_token(&r.a, "ada");
-    let LoginOutcome::Session { token, .. } = r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None).unwrap() else {
+    let LoginOutcome::Session { token, .. } =
+        r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None)
+            .unwrap()
+    else {
         panic!()
     };
     let p = r.a.resolve(&token).unwrap();
     let c = code_at(&secret, T0 + 90);
     r.a.set_clock_for_test(T0 + 90);
-    assert!(matches!(r.a.disable(&p, "wrong password!!", Some(&c), None), Err(MfaError::Denied(_))));
-    assert!(matches!(r.a.disable(&p, PW, Some("000000"), None), Err(MfaError::Denied(_))));
-    assert!(matches!(r.a.disable(&p, PW, None, None), Err(MfaError::Invalid(_))));
+    assert!(matches!(
+        r.a.disable(&p, "wrong password!!", Some(&c), None),
+        Err(MfaError::Denied(_))
+    ));
+    assert!(matches!(
+        r.a.disable(&p, PW, Some("000000"), None),
+        Err(MfaError::Denied(_))
+    ));
+    assert!(matches!(
+        r.a.disable(&p, PW, None, None),
+        Err(MfaError::Invalid(_))
+    ));
     assert!(r.a.mfa_enabled("ada"));
     // A recovery code stands in for the code.
     r.a.disable(&p, PW, None, Some(&codes[3])).unwrap();
     assert!(!r.a.mfa_enabled("ada"));
-    assert!(matches!(r.a.login_step("ada", PW).unwrap(), LoginOutcome::Session { .. }));
+    assert!(matches!(
+        r.a.login_step("ada", PW).unwrap(),
+        LoginOutcome::Session { .. }
+    ));
     let rec = r.b.get("auth_user", "ada").unwrap().unwrap();
     assert!(rec["totp_secret"].is_null() && rec["recovery"].is_null());
 }
@@ -392,19 +496,29 @@ fn regenerating_replaces_all_recovery_codes() {
     let (secret, old) = enrol(&r.a, "ada");
     r.a.set_clock_for_test(T0 + 60);
     let t = mfa_token(&r.a, "ada");
-    let LoginOutcome::Session { token, .. } = r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None).unwrap() else {
+    let LoginOutcome::Session { token, .. } =
+        r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None)
+            .unwrap()
+    else {
         panic!()
     };
     let p = r.a.resolve(&token).unwrap();
     r.a.set_clock_for_test(T0 + 90);
-    let new = r
-        .a
-        .regenerate_recovery(&p, PW, Some(&code_at(&secret, T0 + 90)), None)
-        .unwrap();
-    let new: Vec<String> = new["recovery_codes"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().into()).collect();
+    let new =
+        r.a.regenerate_recovery(&p, PW, Some(&code_at(&secret, T0 + 90)), None)
+            .unwrap();
+    let new: Vec<String> = new["recovery_codes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_str().unwrap().into())
+        .collect();
     assert_eq!(new.len(), 10);
     let t = mfa_token(&r.a, "ada");
-    assert!(r.a.login_mfa(&t, None, Some(&old[0])).is_err(), "old codes are void");
+    assert!(
+        r.a.login_mfa(&t, None, Some(&old[0])).is_err(),
+        "old codes are void"
+    );
     let t = mfa_token(&r.a, "ada");
     assert!(r.a.login_mfa(&t, None, Some(&new[0])).is_ok());
 }
@@ -421,15 +535,27 @@ fn an_admin_can_reset_another_user_but_not_themselves() {
     // Not an admin.
     assert_eq!(r.a.admin_reset(&ada, "ada"), Err(MfaError::NotFound));
     // Not oneself.
-    assert!(matches!(r.a.admin_reset(&admin, "root"), Err(MfaError::Invalid(_))));
+    assert!(matches!(
+        r.a.admin_reset(&admin, "root"),
+        Err(MfaError::Invalid(_))
+    ));
     // Unknown user, user without a factor.
-    assert!(matches!(r.a.admin_reset(&admin, "ghost"), Err(MfaError::Invalid(_))));
+    assert!(matches!(
+        r.a.admin_reset(&admin, "ghost"),
+        Err(MfaError::Invalid(_))
+    ));
     r.a.admin_reset(&admin, "ada").unwrap();
     assert!(!r.a.mfa_enabled("ada"));
-    assert!(matches!(r.a.admin_reset(&admin, "ada"), Err(MfaError::Invalid(_))));
+    assert!(matches!(
+        r.a.admin_reset(&admin, "ada"),
+        Err(MfaError::Invalid(_))
+    ));
     let ev = events(&r);
     let reset = ev.iter().find(|e| e["kind"] == "reset").unwrap();
-    assert_eq!((reset["user"].as_str(), reset["actor"].as_str()), (Some("ada"), Some("root")));
+    assert_eq!(
+        (reset["user"].as_str(), reset["actor"].as_str()),
+        (Some("ada"), Some("root"))
+    );
 }
 
 #[test]
@@ -439,7 +565,10 @@ fn the_break_glass_reset_clears_the_factor_revokes_sessions_and_is_audited() {
     let (secret, _) = enrol(&r.a, "ada");
     r.a.set_clock_for_test(T0 + 60);
     let t = mfa_token(&r.a, "ada");
-    let LoginOutcome::Session { token, .. } = r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None).unwrap() else {
+    let LoginOutcome::Session { token, .. } =
+        r.a.login_mfa(&t, Some(&code_at(&secret, T0 + 60)), None)
+            .unwrap()
+    else {
         panic!()
     };
     assert!(r.a.resolve(&token).is_some());
@@ -450,11 +579,18 @@ fn the_break_glass_reset_clears_the_factor_revokes_sessions_and_is_audited() {
     let ev = events(&r);
     let reset = ev.iter().find(|e| e["kind"] == "reset").unwrap();
     assert_eq!(reset["actor"], "operator");
-    assert!(matches!(r.a.login_step("ada", PW).unwrap(), LoginOutcome::Session { .. }));
+    assert!(matches!(
+        r.a.login_step("ada", PW).unwrap(),
+        LoginOutcome::Session { .. }
+    ));
 }
 
 fn events(r: &Rig) -> Vec<Fields> {
-    r.b.list(EVENT_TABLE).unwrap().into_iter().map(|(_, f)| f).collect()
+    r.b.list(EVENT_TABLE)
+        .unwrap()
+        .into_iter()
+        .map(|(_, f)| f)
+        .collect()
 }
 
 #[test]
@@ -473,18 +609,33 @@ fn the_event_log_records_what_happened_and_never_a_secret() {
     r.a.failures.lock().unwrap().clear();
     let good = code_at(&secret, T0);
     let done = r.a.confirm(&p, &token, &good).unwrap();
-    let codes: Vec<String> = done["recovery_codes"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().into()).collect();
+    let codes: Vec<String> = done["recovery_codes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c.as_str().unwrap().into())
+        .collect();
     r.a.set_clock_for_test(T0 + 60);
     let t = mfa_token(&r.a, "ada");
     r.a.login_mfa(&t, None, Some(&codes[0])).unwrap();
     let ev = events(&r);
     let kinds: Vec<&str> = ev.iter().map(|e| e["kind"].as_str().unwrap()).collect();
-    assert_eq!(kinds.iter().filter(|k| **k == "code_failed").count(), 1, "rate limited: {kinds:?}");
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "code_failed").count(),
+        1,
+        "rate limited: {kinds:?}"
+    );
     for want in ["enrol_begin", "enrol_confirm", "recovery_used"] {
         assert!(kinds.contains(&want), "{want} missing in {kinds:?}");
     }
     let all = serde_json::to_string(&ev).unwrap();
-    for secret in [b32.as_str(), good.as_str(), "999999", codes[0].as_str(), begun["uri"].as_str().unwrap()] {
+    for secret in [
+        b32.as_str(),
+        good.as_str(),
+        "999999",
+        codes[0].as_str(),
+        begun["uri"].as_str().unwrap(),
+    ] {
         assert!(!all.contains(secret), "{secret} leaked into the event log");
     }
     assert!(ev.iter().all(|e| e["at"].as_str().unwrap().ends_with('Z')));

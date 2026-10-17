@@ -395,7 +395,9 @@ fn admin_reset_mfa(o: &Opts, user: &str) -> Exit {
     Auth::new(app.store.backend())
         .operator_reset_mfa(user)
         .map_err(|e| fail(&e))?;
-    println!("two-factor removed for {user}; their sessions are revoked; the reset is in the security log");
+    println!(
+        "two-factor removed for {user}; their sessions are revoked; the reset is in the security log"
+    );
     Ok(())
 }
 

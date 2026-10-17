@@ -201,11 +201,16 @@ mod tests {
     #[test]
     fn base32_round_trips_and_matches_rfc_4648() {
         assert_eq!(base32_encode(b"foobar"), "MZXW6YTBOI");
-        assert_eq!(base32_encode(RFC_SECRET), "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+        assert_eq!(
+            base32_encode(RFC_SECRET),
+            "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        );
         assert_eq!(base32_decode("MZXW6YTBOI").unwrap(), b"foobar");
         assert_eq!(base32_decode("mzxw 6ytb-oi").unwrap(), b"foobar");
         assert!(base32_decode("not base32!").is_none());
-        let s = [0xde, 0xad, 0xbe, 0xef, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let s = [
+            0xde, 0xad, 0xbe, 0xef, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        ];
         assert_eq!(base32_decode(&base32_encode(&s)).unwrap(), s);
     }
 

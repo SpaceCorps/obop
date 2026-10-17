@@ -269,6 +269,16 @@ impl obop_http::PlatformApi for Api {
     fn login(&self, email: &str, password: &str) -> Result<String, String> {
         Platform::login(&self.0, email, password)
     }
+    fn login_step(
+        &self,
+        email: &str,
+        password: &str,
+    ) -> Result<obop_commands::LoginOutcome, String> {
+        self.0.auth.login_step(email, password)
+    }
+    fn authenticator(&self) -> Option<Arc<dyn Authenticator>> {
+        Some(self.0.authenticator())
+    }
     fn me(&self, token: &str) -> Result<String, String> {
         Platform::me(&self.0, token)
     }

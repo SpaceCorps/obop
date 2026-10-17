@@ -5,9 +5,7 @@
 
 use argon2::password_hash::{PasswordHasher, phc::PasswordHash};
 use argon2::{Argon2, Params};
-use obop_commands::{
-    Authenticator, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind,
-};
+use obop_commands::{Authenticator, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind};
 use obop_storage::{Backend, Fields};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};

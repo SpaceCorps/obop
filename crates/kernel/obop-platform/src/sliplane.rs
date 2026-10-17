@@ -538,9 +538,13 @@ mod tests {
                 .lock()
                 .unwrap()
                 .extend([Ok(CREATED.into()), Ok(LIVE.into())]);
-            Sliplane::new(cfg(Source::Image("ghcr.io/x/obop:1".into())), runner.clone(), cell)
-                .create(&spec(), NOOP)
-                .unwrap();
+            Sliplane::new(
+                cfg(Source::Image("ghcr.io/x/obop:1".into())),
+                runner.clone(),
+                cell,
+            )
+            .create(&spec(), NOOP)
+            .unwrap();
             let call = runner.calls.lock().unwrap()[0].clone();
             assert!(
                 !call.join(" ").contains("--env OBOP_SECRET_KEY"),
@@ -557,7 +561,10 @@ mod tests {
         assert_eq!(a.len(), 64);
         assert!(a.bytes().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b, "a fresh key per instance");
-        assert!(obop_auth::seal::parse_key(&a).is_ok(), "the instance accepts it");
+        assert!(
+            obop_auth::seal::parse_key(&a).is_ok(),
+            "the instance accepts it"
+        );
     }
 
     #[test]
