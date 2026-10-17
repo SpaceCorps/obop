@@ -151,12 +151,12 @@ test.describe("two-factor authentication", () => {
     await page.goto(SECURITY);
     await expect(page.getByText("8 recovery codes left.")).toBeVisible();
     await page.getByRole("button", { name: "Turn off two-factor" }).click();
-    await page.getByLabel("Password", { exact: true }).fill("not the right password");
+    await page.getByLabel(/^Password/).fill("not the right password");
     await page.getByRole("button", { name: "Use a recovery code" }).click();
     await page.getByLabel("Recovery code").fill(codes[2]!);
     await page.getByRole("button", { name: "Turn off", exact: true }).click();
     await expect(page.getByText("That password is not right.")).toBeVisible();
-    await page.getByLabel("Password", { exact: true }).fill(users.tess.password);
+    await page.getByLabel(/^Password/).fill(users.tess.password);
     await page.getByRole("button", { name: "Turn off", exact: true }).click();
     await expect(page.getByText("Two-factor authentication is off")).toBeVisible();
     await expect(page.getByRole("button", { name: "Set up two-factor" })).toBeVisible();
