@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useSite, GITHUB } from "../composables.ts";
+import core from "../../../.generated/core.json";
 import Logo from "./Logo.vue";
 
 const { m, href, fm } = useSite();
@@ -35,6 +36,7 @@ const md = computed(() => {
       </div>
       <div class="foot-bottom">
         <a :href="GITHUB">{{ m.ui.sourceCode }}</a>
+        <a :href="href('/changelog/')" class="core-version">obop {{ core.version }}</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="/sitemap.xml">sitemap.xml</a>
         <a v-if="md" :href="md" type="text/markdown">{{ m.ui.markdownVersion }}</a>

@@ -1,5 +1,6 @@
 import type { Messages } from "../../i18n/types.ts";
 import { agentView, type App } from "./apps.ts";
+import { CORE_VERSION } from "./paths.ts";
 
 const esc = (s: string) => s.replace(/\|/g, "\\|");
 const code = (s: string) => `\`${s}\``;
@@ -22,6 +23,7 @@ export function appBody(
   m: Messages,
   mirror: boolean,
   prefix: string,
+  all: App[] = [],
 ): string {
   const a = m.apps;
   const eng = (t: string) => (mirror ? t : english(t, locale, m));
@@ -29,6 +31,32 @@ export function appBody(
 
   out.push(`## ${a.h.purpose}`, "", eng(app.purpose), "");
   out.push(`## ${a.h.package}`, "", eng(app.description), "");
+
+  // Version, author, licence, core requirement, maturity: what the manifest declares (D55).
+  const meta = app.meta;
+  const spdx = /^[A-Za-z0-9.+-]+$/.test(meta.license)
+    ? `[${meta.license}](https://spdx.org/licenses/${meta.license}.html)`
+    : meta.license;
+  const rows: [string, string][] = [
+    [
+      a.meta.version,
+      app.builtin ? fill(a.meta.builtinVersion, { version: code(app.version) }) : code(app.version),
+    ],
+    [a.meta.author, esc([meta.author, ...meta.authors].filter(Boolean).join(", "))],
+    [a.meta.license, spdx],
+    [
+      a.meta.core,
+      `${code(meta.requiresCore)} (${fill(a.meta.coreNow, { version: CORE_VERSION })})`,
+    ],
+    [
+      a.meta.maturity,
+      a.meta.maturities[meta.maturity as keyof typeof a.meta.maturities] ?? meta.maturity,
+    ],
+    [a.meta.categories, meta.categories.map((c) => a.meta.categoryNames[c] ?? c).join(", ")],
+  ].filter((r): r is [string, string] => !!r[1]);
+  out.push(`## ${a.h.details}`, "");
+  for (const [k, v] of rows) out.push(`- **${k}:** ${v}`);
+  out.push("");
 
   out.push(`## ${a.h.models}`, "");
   for (const model of app.models) {
@@ -113,10 +141,19 @@ export function appBody(
   if (withheld.length) out.push(fill(a.agentsWithheld, { list: withheld.join(", ") }), "");
 
   out.push(`## ${a.h.dependencies}`, "");
-  out.push(
-    app.depends.length ? app.depends.map((d) => `- ${code(d)}`).join("\n") : a.noDependencies,
-    "",
-  );
+  if (app.dependencies.length === 0) out.push(a.noDependencies, "");
+  else {
+    out.push(a.depLead, "");
+    for (const d of app.dependencies) {
+      const dep = all.find((x) => x.id === d.id);
+      const name = dep ? `[${dep.name}](${prefix}/apps/${dep.slug}/)` : code(d.id);
+      out.push(
+        `- ${name}: ${code(d.requirement)}${dep?.builtin ? ` (${a.meta.builtinWord})` : ""}`,
+      );
+    }
+    out.push("");
+    if (!app.builtin) out.push(a.depInstalled, "");
+  }
 
   out.push(`## ${a.h.install}`, "");
   if (app.builtin) out.push(a.installBuiltin, "");

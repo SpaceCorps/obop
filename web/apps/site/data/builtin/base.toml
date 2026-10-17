@@ -1,10 +1,18 @@
 # Snapshot of crates/modules/base/src/lib.rs (built-in, not removable). Keep in sync by hand.
 [module]
 id = "base"
-version = "builtin"
+version = "0.2.0"
 name = "Contacts"
 description = "People and organisations the business deals with: the shared party record that CRM, Sales and Invoicing refer to."
-author = "obop"
+summary = "Contacts and companies: the people and organisations the business deals with."
+author = "SpaceCorps"
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["contacts", "people", "companies", "gdpr"]
+categories = ["platform", "sales"]
+maturity = "stable"
+requires_core = "^0.2"
 
 [[model]]
 name = "party"

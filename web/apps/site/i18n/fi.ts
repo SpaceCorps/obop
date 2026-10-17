@@ -340,6 +340,7 @@ export const fi: Messages = {
       permissions: "Käyttöoikeusryhmät",
       approvals: "Hyväksyntävaiheet",
       agents: "Mitä agentit voivat ja eivät voi tehdä",
+      details: "Moduulin tiedot",
       dependencies: "Riippuvuudet",
       install: "Asennus",
       guide: "Tee oma",
@@ -371,6 +372,33 @@ export const fi: Messages = {
     noApproval:
       "Mikään tämän sovelluksen vaihe ei vaadi hyväksyntää tietueiden poistamista lukuun ottamatta.",
     noDependencies: "Ei ole.",
+    depLead:
+      "Jokainen riippuvuus kertoo hyväksymänsä versiot. Sisäänrakennetut sovellukset versioituvat ytimen mukana, joten niitä koskeva vaatimus tarkistetaan ytimen versiota vasten.",
+    depInstalled:
+      "Kun tämä sovellus asennetaan moduulikaupasta, myös puuttuvat riippuvuudet asennetaan yhdessä suunnitelmassa, jonka vahvistat kerran.",
+    meta: {
+      version: "Versio",
+      builtinVersion: "{version}, versioituu ytimen mukana",
+      author: "Tekijä",
+      license: "Lisenssi",
+      core: "Vaatii ytimen",
+      coreNow: "nykyinen ydin on {version}",
+      maturity: "Kypsyys",
+      maturities: { stable: "Vakaa", beta: "Beta", experimental: "Kokeellinen" },
+      categories: "Luokat",
+      categoryNames: {
+        finance: "Talous",
+        sales: "Myynti",
+        "supply-chain": "Toimitusketju",
+        people: "Ihmiset",
+        services: "Palvelut",
+        marketing: "Markkinointi",
+        productivity: "Tuottavuus",
+        platform: "Alusta",
+        other: "Muu",
+      },
+      builtinWord: "sisäänrakennettu",
+    },
     installBuiltin:
       "Sisäänrakennettu. Se on käytettävissä jokaisessa instanssissa, eikä sitä voi poistaa.",
     installPackage: "Asenna se Customize-sovelluksesta (Marketplace) tai komentoriviltä:",

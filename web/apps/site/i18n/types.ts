@@ -136,6 +136,7 @@ export interface Messages {
       permissions: string;
       approvals: string;
       agents: string;
+      details: string;
       dependencies: string;
       install: string;
       guide: string;
@@ -165,6 +166,21 @@ export interface Messages {
     noWorkflow: string;
     noApproval: string;
     noDependencies: string;
+    depLead: string;
+    depInstalled: string;
+    meta: {
+      version: string;
+      builtinVersion: string;
+      author: string;
+      license: string;
+      core: string;
+      coreNow: string;
+      maturity: string;
+      maturities: Record<"stable" | "beta" | "experimental", string>;
+      categories: string;
+      categoryNames: Record<string, string>;
+      builtinWord: string;
+    };
     installBuiltin: string;
     installPackage: string;
     installNote: string;

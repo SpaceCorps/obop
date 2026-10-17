@@ -32,15 +32,38 @@ export interface Model {
   fields: Field[];
   actions: Action[];
 }
+/** The `[module]` metadata of D55 as the manifest declares it. */
+export interface Meta {
+  summary: string;
+  author: string;
+  authors: string[];
+  license: string;
+  homepage: string;
+  repository: string;
+  documentation: string;
+  support: string;
+  keywords: string[];
+  /** Module categories (finance, sales, supply-chain, ...), not the site's own `Category`. */
+  categories: string[];
+  maturity: string;
+  requiresCore: string;
+}
+export interface Dependency {
+  id: string;
+  /** A semver requirement, `*` when the manifest does not say. */
+  requirement: string;
+}
 export interface App {
   id: string;
   slug: string;
   name: string;
   category: Category;
   builtin: boolean;
+  /** The module's version; a built-in module versions with the core. */
   version: string;
   description: string;
-  depends: string[];
+  meta: Meta;
+  dependencies: Dependency[];
   tagline: string;
   purpose: string;
   models: Model[];
@@ -52,6 +75,17 @@ type Raw = Record<string, unknown>;
 
 function load(file: string): Raw {
   return parse(readFileSync(file, "utf8")) as Raw;
+}
+
+/** `depends = [...]` (any version) and `[module.dependencies]` (a requirement each), in that order. */
+function dependenciesOf(mod: Raw): Dependency[] {
+  const out: Dependency[] = ((mod["depends"] as string[] | undefined) ?? []).map((id) => ({
+    id,
+    requirement: "*",
+  }));
+  const table = (mod["dependencies"] as Record<string, string> | undefined) ?? {};
+  for (const id of Object.keys(table).sort()) out.push({ id, requirement: String(table[id]) });
+  return out;
 }
 
 function toApp(raw: Raw, builtin: boolean, source: string): App {
@@ -95,9 +129,23 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
     name: copy.name,
     category: copy.category,
     builtin,
-    version: builtin ? "built in" : String(mod["version"]),
+    version: String(mod["version"]),
     description: String(mod["description"]),
-    depends: (mod["depends"] as string[] | undefined) ?? [],
+    meta: {
+      summary: String(mod["summary"] ?? ""),
+      author: String(mod["author"] ?? ""),
+      authors: (mod["authors"] as string[] | undefined) ?? [],
+      license: String(mod["license"] ?? ""),
+      homepage: String(mod["homepage"] ?? ""),
+      repository: String(mod["repository"] ?? ""),
+      documentation: String(mod["documentation"] ?? ""),
+      support: String(mod["support"] ?? ""),
+      keywords: (mod["keywords"] as string[] | undefined) ?? [],
+      categories: (mod["categories"] as string[] | undefined) ?? [],
+      maturity: String(mod["maturity"] ?? ""),
+      requiresCore: String(mod["requires_core"] ?? "*"),
+    },
+    dependencies: dependenciesOf(mod),
     tagline: copy.tagline,
     purpose: copy.purpose,
     models,

@@ -133,7 +133,7 @@ export function jsonLd(c: Ctx): object[] {
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       inLanguage: lang,
-      softwareVersion: c.fm["builtin"] ? undefined : String(c.fm["version"]),
+      softwareVersion: String(c.fm["version"]),
       softwareRequirements: "obop",
       isPartOf: { "@id": `${SITE_URL}/#website` },
       offers: {

@@ -1,11 +1,22 @@
 # Snapshot of crates/modules/invoicing/src/lib.rs (built-in).
 [module]
 id = "invoicing"
-version = "builtin"
+version = "0.2.0"
 name = "Invoicing"
 description = "Customer invoices: drafts, posting with a gapless legal number, cancellation."
-author = "obop"
-depends = ["base", "sales"]
+summary = "Customer invoices with a draft, posted and paid life cycle."
+author = "SpaceCorps"
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["invoices", "billing"]
+categories = ["finance"]
+maturity = "stable"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "*"
+sales = "*"
 
 [[model]]
 name = "invoice"

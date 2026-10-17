@@ -343,6 +343,7 @@ export const fr: Messages = {
       permissions: "Groupes de permissions",
       approvals: "Étapes d'approbation",
       agents: "Ce que les agents peuvent et ne peuvent pas faire",
+      details: "Détails du module",
       dependencies: "Dépendances",
       install: "Installation",
       guide: "Créer la vôtre",
@@ -374,6 +375,33 @@ export const fr: Messages = {
     noApproval:
       "Aucune étape de cette application ne requiert d'approbation, hormis la suppression d'enregistrements.",
     noDependencies: "Aucune.",
+    depLead:
+      "Chaque dépendance indique les versions qu’elle accepte. Les applications intégrées suivent les versions du noyau : une exigence à leur égard est donc vérifiée par rapport à la version du noyau.",
+    depInstalled:
+      "Installer cette application depuis la place de marché installe aussi les dépendances manquantes, dans un seul plan à confirmer une fois.",
+    meta: {
+      version: "Version",
+      builtinVersion: "{version}, suit les versions du noyau",
+      author: "Auteur",
+      license: "Licence",
+      core: "Noyau requis",
+      coreNow: "le noyau actuel est {version}",
+      maturity: "Maturité",
+      maturities: { stable: "Stable", beta: "Bêta", experimental: "Expérimental" },
+      categories: "Catégories",
+      categoryNames: {
+        finance: "Finance",
+        sales: "Ventes",
+        "supply-chain": "Chaîne logistique",
+        people: "Personnes",
+        services: "Services",
+        marketing: "Marketing",
+        productivity: "Productivité",
+        platform: "Plateforme",
+        other: "Autre",
+      },
+      builtinWord: "intégré",
+    },
     installBuiltin:
       "Intégrée. Elle est disponible dans chaque instance et ne peut pas être supprimée.",
     installPackage:

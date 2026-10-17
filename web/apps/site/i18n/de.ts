@@ -344,6 +344,7 @@ export const de: Messages = {
       permissions: "Berechtigungsgruppen",
       approvals: "Freigabeschritte",
       agents: "Was Agenten tun können und was nicht",
+      details: "Moduldetails",
       dependencies: "Abhängigkeiten",
       install: "Installation",
       guide: "Selbst bauen",
@@ -375,6 +376,33 @@ export const de: Messages = {
     noApproval:
       "Kein Schritt dieser App braucht eine Freigabe, abgesehen vom Löschen von Datensätzen.",
     noDependencies: "Keine.",
+    depLead:
+      "Jede Abhängigkeit nennt die Versionen, die sie akzeptiert. Integrierte Apps werden mit dem Kern versioniert; eine Anforderung an sie wird daher gegen die Kernversion geprüft.",
+    depInstalled:
+      "Beim Installieren dieser App aus dem Marktplatz werden fehlende Abhängigkeiten mitinstalliert, in einem Plan, der einmal bestätigt wird.",
+    meta: {
+      version: "Version",
+      builtinVersion: "{version}, wird mit dem Kern versioniert",
+      author: "Autor",
+      license: "Lizenz",
+      core: "Benötigt Kern",
+      coreNow: "aktuell ist Kern {version}",
+      maturity: "Reifegrad",
+      maturities: { stable: "Stabil", beta: "Beta", experimental: "Experimentell" },
+      categories: "Kategorien",
+      categoryNames: {
+        finance: "Finanzen",
+        sales: "Vertrieb",
+        "supply-chain": "Lieferkette",
+        people: "Personal",
+        services: "Dienstleistungen",
+        marketing: "Marketing",
+        productivity: "Produktivität",
+        platform: "Plattform",
+        other: "Sonstiges",
+      },
+      builtinWord: "integriert",
+    },
     installBuiltin:
       "Integriert. Sie ist in jeder Instanz verfügbar und kann nicht entfernt werden.",
     installPackage:

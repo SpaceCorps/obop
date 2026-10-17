@@ -1,11 +1,21 @@
 # Snapshot of crates/modules/crm/src/lib.rs (built-in).
 [module]
 id = "crm"
-version = "builtin"
+version = "0.2.0"
 name = "CRM"
 description = "Leads and the sales pipeline."
-author = "obop"
-depends = ["base"]
+summary = "Leads and opportunities through a pipeline from first contact to won or lost."
+author = "SpaceCorps"
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["crm", "leads", "pipeline"]
+categories = ["sales"]
+maturity = "stable"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "*"
 
 [[model]]
 name = "lead"

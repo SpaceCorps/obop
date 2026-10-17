@@ -99,6 +99,7 @@ Tooltip, Table, Skeleton, EmptyState, Kbd, Avatar, Spinner, Notice. Rules:
 - A visible label on every field; errors say what to do and sit under the field.
 - Panels are the one framed surface; records open beside the list.
 - Density: comfortable (36 px controls), compact (30 px, never below 24 px targets), touch (44 to 48 px).
+- Module facts (D55) are badges with a word and, where colour carries a meaning, an icon: licence (neutral; warning for a proprietary or custom licence), maturity (stable success, beta info, experimental warning), core compatibility (success "Works with core 0.2"; danger with both versions when it does not), source (neutral). Red is kept for what cannot be installed. A dependency chip is satisfied, built in, will be installed, will be upgraded, missing or conflict. Dependencies are drawn as nested lists with connecting lines, never as colour alone. Specimens: Brand book, Components.
 
 ## 8. Voice and tone
 

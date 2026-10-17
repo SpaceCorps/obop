@@ -18,7 +18,7 @@ X1 packages cannot run anything, so an administrator can install one from an upl
 
 ### What ships
 
-Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`):
+Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`). Built-in modules version with the core (`0.2.0`, D55); every bundled package declares `license = "AGPL-3.0-or-later"`, `requires_core = "^0.2"`, its own version and its dependencies with ranges:
 
 | Package | Needs | What it holds |
 |---|---|---|
@@ -45,12 +45,21 @@ We build `assets`: categories of equipment and the individual assets, with a hol
 id = "assets"
 version = "0.1.0"
 name = "Assets"
+summary = "A register of company equipment with a holder and a life cycle from stock to retired."
 description = "A register of company equipment: categories, individual assets with a holder, and a stock, assigned, in repair, retired life cycle. Purchase prices are visible to managers only; retiring an asset needs a human approval."
 author = "Example Ltd"
-depends = ["base"]
+license = "Apache-2.0"
+homepage = "https://example.com/assets"
+keywords = ["assets", "equipment"]
+categories = ["productivity"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
 ```
 
-`id` names the module and prefixes everything it owns: every model must be called `assets` or `assets_<something>`, and by convention permission groups are `assets.<role>`. `version` is three numbers (`0.1.0`); a later install of the same id must have a higher version. `name` is what the app launcher shows. `description` is shown in the marketplace and Installed list, and is required. `depends` lists modules that must already be installed; because `assets_asset` has a ref to `party` (a built-in model of `base`), we depend on `base`.
+`id` names the module and prefixes everything it owns: every model must be called `assets` or `assets_<something>`, and by convention permission groups are `assets.<role>`. `version` is a semantic version (`0.1.0`, or `0.2.0-beta.1`); a later install of the same id must have a higher version. `name` is what the app launcher shows. `description` is shown in the module panel and is required; `summary` is the one line (at most 140 characters) on the module's card. `license` is an SPDX expression and `requires_core` says which core versions the module runs on (section 3.1). `[module.dependencies]` lists the modules that must be installed, each with the versions it accepts; because `assets_asset` has a ref to `party` (a built-in model of `base`), we depend on `base`. Built-in modules version with the core, so `base = "^0.2"` is checked against the core version.
 
 ### 2.2 A simple model
 
@@ -156,7 +165,7 @@ write_group = "assets.user"
 
 Things to notice:
 
-- `category_id` refs a model of the same package (`assets_category`); it is checked when the file is parsed. `supplier_id` refs `party`, which belongs to `base`: that is why `depends = ["base"]`, and the installer also checks at install time that `party` is registered. `replaces_id` points at its own model, which is allowed (a ref to itself is optional here; it could not be `required`, because the first record could never be created).
+- `category_id` refs a model of the same package (`assets_category`); it is checked when the file is parsed. `supplier_id` refs `party`, which belongs to `base`: that is why `base` is in `[module.dependencies]`, and the installer also checks at install time that `party` is registered. `replaces_id` points at its own model, which is allowed (a ref to itself is optional here; it could not be `required`, because the first record could never be created).
 - `purchase_price` has `group = "assets.manager"`. A person who holds only `assets.user` does not see this field at all (it is absent from `/api/meta` and from reads). The default group of a field is the model's `read_group`.
 - `holder` is a person's name, so `personal_data = true` and the class cannot be `none`. `internal` ("non-public business data about people and work") fits.
 - `state` is the conventional status field. For a `select` called `state` the options are the status order, and the UI draws them as a status bar and kanban columns.
@@ -205,7 +214,7 @@ cargo run -- modules install docs/modules/assets.toml --db sqlite:///tmp/x.db
 cargo run -- modules list --db sqlite:///tmp/x.db
 ```
 
-Installing it again fails with `assets 0.1.0 is installed; installing 0.1.0 is not an upgrade`. Edit `version` to `0.2.0` and it upgrades in place. In the backoffice open Customize, Modules, "Upload your own" and pick the file, then find "Assets" in the app launcher. Note that `platform.admin` holds every group, so an admin sees all of it; create a user with `--groups assets.user` to see what an ordinary employee sees.
+Installing it again fails with `assets 0.1.0 is already installed`. Edit `version` to `0.2.0` and it upgrades in place. In the backoffice open Customize, Modules, Marketplace, "Upload your own package" and pick the file: the page checks it and shows what installing it would do before anything happens. Then find "Assets" in the app launcher. Note that `platform.admin` holds every group, so an admin sees all of it; create a user with `--groups assets.user` to see what an ordinary employee sees.
 
 ## 3. Manifest reference
 
@@ -216,12 +225,42 @@ The file is TOML, at most **256 KiB**, with at most **50 models** and **200 fiel
 | Key | Type | Required | Rules |
 |---|---|---|---|
 | `id` | string | yes | Identifier. Must not equal a built-in module id. |
-| `version` | string | yes | `major.minor.patch`, three numbers of at most six digits each. |
+| `version` | string | yes | A semantic version: `major.minor.patch`, optionally with a pre-release (`1.0.0-rc.1`). Numbers have no leading zeros. |
 | `name` | string | yes | Not blank. |
 | `description` | string | yes | Not blank. |
-| `author` | string | no | Default empty. Shown in listings. |
-| `depends` | array of module ids | no | Default `[]`. Each must be installed (built-in or package) when installing; a module that others depend on cannot be uninstalled. |
+| `summary` | string | no | One line, at most 140 characters: the text of the module's card. Without one the card shows the first sentence of the description. |
+| `author` | string | no | At most 100 characters. Shown in listings. |
+| `authors` | array of strings | no | At most 10 names. Shown with `author`. |
+| `license` | string | **catalogue: yes** | An SPDX expression (`Apache-2.0`, `AGPL-3.0-or-later`, `MIT OR Apache-2.0`, `GPL-3.0-only WITH Classpath-exception-2.0`), `LicenseRef-<name>` for your own terms, or `proprietary` / `UNLICENSED`, which are allowed and flagged on the card. Required for packages in the bundled catalogue and the marketplace; optional (with a warning) for an upload. |
+| `homepage`, `repository`, `documentation`, `support` | string | no | `https://` URLs only, at most 200 characters, no spaces. |
+| `keywords` | array of strings | no | At most 10; each 2 to 24 characters of lowercase letters, digits and `-`; unique. Searchable. |
+| `categories` | array of strings | no | At most 3 of `finance`, `sales`, `supply-chain`, `people`, `services`, `marketing`, `productivity`, `platform`, `other`. |
+| `icon` | string | no | The name of a built-in icon (lowercase letters, digits, `-`). An unknown name falls back to a generic icon; by default the icon follows the module id. |
+| `maturity` | string | no | `stable`, `beta` or `experimental`. Nothing is shown when absent. |
+| `requires_core` | string | **catalogue: yes** | A semver requirement on the core version, for example `"^0.2"` or `">=0.2, <0.4"`. Required for bundled and marketplace packages; an upload without it is assumed to run on every core (`*`) with a warning. An install on a core that does not satisfy it is refused. |
+| `depends` | array of module ids | no | Default `[]`. Shorthand for "any version": `depends = ["base"]` equals `base = "*"` in `[module.dependencies]`. |
 | `network_destinations` | array | no | Must be empty or absent: declarative packages may not reach the network. The key exists so later tiers share the contract. |
+
+Every new key is optional when a package is parsed, so manifests written before D55 still install. Unknown keys are still errors.
+
+#### `[module.dependencies]`: other modules, with versions
+
+```toml
+[module.dependencies]
+base = "^0.2"           # a built-in module: checked against the CORE version
+projects = ">=0.3, <1"  # a package: checked against its installed version
+hr = "*"                # any version
+```
+
+The table maps a module id to a version requirement string. The shape is a table of strings on purpose (no inline tables, no flags): optional dependencies are not offered, because a `ref` to a model whose module is not installed cannot work, so a dependency that may be absent would be a promise the registry cannot keep. `depends = [...]` and the table may be used together for different modules, but naming the same module in both is an error. A module may not depend on itself and may declare at most 20 dependencies.
+
+**Requirement syntax** (the rules of Cargo, so a Rust developer already knows them): `*` any release; `1.2.3` or `^1.2.3` compatible with 1.2.3 (below 2.0.0; for `0.y.z` the minor is the breaking part, so `^0.2` is `>=0.2.0, <0.3.0`); `~1.2.3` patch updates only (`>=1.2.3, <1.3.0`); `>=1.2`, `>1.2`, `<=1.2`, `<1.2`, `=1.2.3`; partial versions and wildcards (`1.*`, `=1.2`); comma-separated comparators are ANDed (`>=0.2, <0.4`). A pre-release such as `0.3.0-beta.1` satisfies a requirement only when that requirement names a pre-release of the same `major.minor.patch`; otherwise only releases match.
+
+**Built-in modules version with the core.** `base`, `product`, `crm`, `sales`, `invoicing`, `connectors` and `platform` have the version of the running core (`GET /api/meta` says which). A requirement on one of them is therefore a requirement on the core: `base = "^0.2"` holds on core 0.2.x and fails on 0.3.0.
+
+#### Compatibility policy
+
+The core follows semantic versioning. While it is below 1.0, a **minor** bump (`0.2` to `0.3`) may break manifests, commands or the API and a **patch** bump never does; from 1.0 only a major bump may. A package therefore writes `requires_core = "^0.2"` (runs on 0.2.x), widens it to `">=0.2, <0.4"` after testing on 0.3, and bumps its own version by the same rule. A package that depends on another package picks a range it has tested, for example `projects = ">=0.3, <1"`, so a breaking release of `projects` (a new major version, or a new minor while it is below 1.0) is caught by the resolver before anything is installed.
 
 ### 3.2 `[[model]]` (any number)
 
@@ -271,7 +310,20 @@ Parse and gate errors (from `obop modules install`, the Customize upload or `mod
 | `invalid obop.toml: ...` | Not valid TOML, a missing required key, a value of the wrong type (for example `required = "yes"`), or an unknown key. Read the line and column in the message. |
 | `manifest is larger than 256 KiB` | Split the module. |
 | `module id "X" must be lowercase letters, digits and _, starting with a letter` | Fix the id. |
-| `version must look like 1.2.3` | Three dot-separated numbers. |
+| `version must look like 1.2.3` | Three dot-separated numbers without leading zeros; a pre-release may follow (`1.2.3-beta.1`). |
+| `summary must be one line of at most 140 characters` | Shorten it; no line breaks. |
+| `author is longer than 100 characters` / `authors takes at most 10 names of 1 to 100 characters` | Shorten the names or list fewer. |
+| `license: "X" is not a known SPDX licence identifier (...)` / `license: ...` | Use an SPDX identifier or expression (`Apache-2.0`, `MIT OR Apache-2.0`), `LicenseRef-<name>` for your own terms, `proprietary` or `UNLICENSED`. The check is case-insensitive for identifiers but `AND`, `OR` and `WITH` are upper case. |
+| `homepage must be an https:// URL (got "...")` (also `repository`, `documentation`, `support`) | Use https; other schemes and plain http are refused. |
+| `keyword "X" must be unique, 2 to 24 lowercase letters, digits or -` / `keywords takes at most 10 entries` | Fix or drop the keyword. |
+| `unknown category "X" (use finance, sales, ...)` / `categories takes at most 3 entries` / `category "X" is listed twice` | Pick from the fixed list. |
+| `icon "X" must be a lowercase icon name such as "project"` | Letters, digits and `-`, starting with a letter. |
+| `maturity must be one of stable, beta, experimental (got "X")` | Use one of the three. |
+| `requires_core: "X" is not a version requirement (...); examples: "*", "^0.2", ">=0.2, <0.4"` | Fix the requirement; separate comparators with commas. |
+| `depends: "X" is not a module id` / `depends lists X twice` / `X depends on itself` | Fix `depends`. |
+| `[module.dependencies]: "X" is not a module id` / `[module.dependencies] X: ...` | A requirement is a string such as `">=0.2, <1"`; an inline table (`{ version = ..., optional = true }`) is a parse error. |
+| `X is declared in both depends and [module.dependencies]; use one of them` | Keep the table entry, which carries the range. |
+| `a module may declare at most 20 dependencies` | Split the module. |
 | `module needs a name and a description` | Fill them in. |
 | `declarative packages run no code and may not declare network destinations` | Remove `network_destinations`. |
 | `package is too large` | More than 50 models or 200 fields. |
@@ -299,12 +351,21 @@ Install-time errors:
 
 | Message | Cause and fix |
 |---|---|
-| `X needs module Y, which is not installed` | Install the dependency first (or fix `depends`). |
-| `X is a built-in module` | Your id clashes with `base`, `product`, `crm`, `sales`, `invoicing`, `connectors` or `platform`. |
-| `X 0.1.0 is installed; installing 0.1.0 is not an upgrade` | Raise `version`. |
+| `X needs Y R, which is not installed and not offered by the marketplace` | Nothing provides `Y`: fix the id, or install a package that is. Dependencies the marketplace offers are installed for you. |
+| `X needs Y R, but the marketplace offers Y V` | The marketplace's version of `Y` does not satisfy `R`: loosen `R` or publish a fitting `Y`. |
+| `X V needs core R, you run C` | The package says it needs another core than the one running; nothing is installed. Use a package version for this core or upgrade the instance. |
+| `X needs Y R, a built-in module that versions with the core; you run core C` | Built-ins version with the core, so the requirement is a core requirement. |
+| `dependency cycle: a -> b -> a` | Two packages need each other: remove one edge. |
+| `Y V is installed but X needs ...` / `... which does not satisfy: ...` | An installed dependency is too old (or new) and the marketplace has nothing that fits. |
+| `upgrading Y to V would break X, which needs Y R` | An installed module needs a `Y` that `V` is not. Upgrade `X` first or choose another version. |
+| `X V is already installed` / `... would be a downgrade, which is refused` | Raise `version`; an installed module is never moved to an older or the same version. |
+| `X is a built-in module` / `X is a built-in module and is part of the core` | Your id clashes with `base`, `product`, `crm`, `sales`, `invoicing`, `connectors` or `platform`. |
 | `model X already exists` | Another module owns a model of that name. |
-| `M.F refers to model T, which is not installed` | A `ref` into another package or built-in: install it and add it to `depends`. |
-| `another installed module depends on X` | On uninstall: remove the dependents first. |
+| `M.F refers to model T, which no dependency of X provides` | A `ref` into another package or built-in: add the module that declares `T` to the dependencies. |
+| `marketplace package X: license is required for marketplace and bundled packages ...` | A catalogue package must declare `license` and `requires_core`. |
+| `X: ...; the N step(s) before it were rolled back and nothing was installed` | A step of a multi-module install failed; the earlier steps were undone. |
+| `required dependencies cannot be skipped ...` | `without_dependencies` may only be false. |
+| `X is required by Y (and, through them, Z); uninstall those first` | On uninstall: remove the dependents first. |
 
 ### 3.6 `[model.public]`: what visitors may see and send (D50)
 
@@ -478,12 +539,15 @@ A field that is the `field` of at least one action is *governed*. The generic `c
 
 The built-in modules follow the same rule: `lead.stage` (actions `qualify`, `mark_won`, `mark_lost`, `reopen`), `sale_order.state` (`confirm`, `cancel`, `reset_to_draft`) and `invoice.state` (`post`, needing `invoicing.manager` and approval, and `cancel`).
 
-## 7. Refs, `depends`, installing, upgrading, removing
+## 7. Refs, dependencies, installing, upgrading, removing
 
-- A `ref` to a model in your own package is verified when the file is parsed. A ref to any other model (built-in `party`, `product`, `sale_order`, `invoice`; or another package's) needs that model to exist at install time and the module that owns it in `depends`. Built-in module ids to use: `base` (party), `product`, `sales` (sale_order), `invoicing` (invoice), `crm`. Packages: their own id (`hr` for `hr_employee`).
-- **Install** validates the file, runs the gate, checks `depends`, refuses name collisions, registers the models, and stores the manifest. Order matters only through `depends`: install dependencies first.
-- **Upgrade**: install a file with the same `id` and a **higher** `version` (compared as three numbers). The module is unregistered and registered again from the new file. The stored records are not touched. There are **no migrations**: if you rename or remove a field or model, old records keep their old data in the store but the new definition no longer exposes it; if you add a `required` field, old records are not re-validated. Prefer adding optional fields.
-- **Uninstall** (`obop modules uninstall ID`, Customize, or `module.uninstall`; an administrator only) removes the commands and the models from the app; the **data stays** in the database, and installing the module again brings every record back. A module cannot be uninstalled while another installed package lists it in `depends`.
+- A `ref` to a model in your own package is verified when the file is parsed. A ref to any other model (built-in `party`, `product`, `sale_order`, `invoice`; or another package's) needs that model to exist at install time and the module that owns it among your dependencies. Built-in module ids to use: `base` (party), `product`, `sales` (sale_order), `invoicing` (invoice), `crm`. Packages: their own id (`hr` for `hr_employee`).
+- **A plan comes first (D55).** Every install and upgrade computes a plan before it changes anything: is the core right, is every dependency present at a version that satisfies its requirement (built-ins against the core, installed packages, marketplace packages), in what order must modules be installed. `module_plan.preview` returns it (give `id` for a marketplace package or `manifest` for an uploaded file); the Modules page shows it in a dialog; `obop modules plan FILE|ID` prints it. It is read-only and an agent may call it.
+- **Dependencies come with the module.** A dependency that is not installed but is in the marketplace is installed first, transitively, in dependency order; one that is installed at a version that fits is skipped; one that is installed but too old is upgraded when the marketplace has a version that fits. Cycles, a missing dependency, a core mismatch or a conflict are **blockers**: the plan lists them and nothing is installed.
+- **Install** (`marketplace_listing.install`, `module.install`, `obop modules install`) applies the plan as one operation: validate, run the gate, check collisions, register, store. Every step records who installed it and when. If a step fails the earlier steps are undone and the error says so. An agent proposes the whole plan; one human approval runs it once. `without_dependencies: true` is refused.
+- **Upgrade**: install a file with the same `id` and a **higher** `version` (semver order, pre-releases below their release). The module is unregistered and registered again from the new file. The stored records are not touched. There are **no migrations**: if you rename or remove a field or model, old records keep their old data in the store but the new definition no longer exposes it; if you add a `required` field, old records are not re-validated. Prefer adding optional fields. An upgrade is blocked when an installed module requires a version of this one that the new version is not (`projects` 2.0.0 while `timesheets` needs `<1`).
+- **Uninstall** (`obop modules uninstall ID`, Customize, or `module.uninstall`; an administrator only) removes the commands and the models from the app; the **data stays** in the database, and installing the module again brings every record back. A module cannot be uninstalled while another installed package depends on it; the error names the dependents, directly and through others.
+- A package that no longer fits the running core (after the instance was upgraded) still loads, so its data stays reachable; the Modules page marks it incompatible.
 - Install, upgrade and uninstall are `platform.admin` commands that agents may only propose.
 
 ## 8. Testing and publishing
@@ -491,8 +555,9 @@ The built-in modules follow the same rule: `lead.stage` (actions `qualify`, `mar
 ### Test a package
 
 - `cargo run -- modules install FILE --db sqlite:///path/x.db` runs exactly the checks of an upload: parse, validation, the D41 gate, dependencies, refs. It prints the models and groups it created, or the error. Use a throwaway database; install dependencies first with `modules install-from ID` (for bundled packages).
-- `cargo run -- modules check FILE...` needs no database: it parses each file, runs the D41 gate, and applies the install rules that need no database (the id is not a built-in module, every `depends` entry is a built-in module or a bundled package, every `ref` to a model outside the package points at a model of the dependencies). It prints `ok  FILE`, or `FAIL  FILE: <error>` for each problem, and exits non-zero if any file fails. `cargo run -- modules check` without files runs the gate over the linked built-in modules.
-- Customize app, **Module builder**: define models, fields (name, description, kind, options, target), and actions in a form; it writes the `obop.toml` for you and installs it. Customize, **Upload your own** accepts any `.toml` file and shows the error text on failure.
+- `cargo run -- modules check [--catalog] FILE...` needs no database: it parses each file (every key of section 3.1), runs the D41 gate, and applies the install rules that need no database: the id is not a built-in module, every dependency is a built-in module or a bundled package, every range is satisfiable by what exists (built-ins against the core version, bundled packages against their versions), no cycle, and every `ref` to a model outside the package points at a model of the dependencies. A `requires_core` the running core does not meet is a warning for a file you are preparing and an error with `--catalog`, which also demands what the bundled catalogue and the marketplace require (`license`, `requires_core`). It prints `ok  FILE`, `warn  FILE: ...` and `FAIL  FILE: <error>`, and exits non-zero if any file fails. `cargo run -- modules check` without files runs the gate over the linked built-in modules.
+- `cargo run -- modules list` shows every module with version, licence, core requirement and source; `modules tree [ID]` prints the dependency tree of a module (a marketplace id works too) or of every installed package; `modules plan FILE|ID` prints the install plan without installing.
+- Customize app, **Module builder**: define models, fields (name, description, kind, options, target), and actions in a form; it writes the `obop.toml` for you and installs it. Customize, Modules, Marketplace, **Upload your own package** accepts any `.toml` file (or pasted text), shows the error or the plan as you go, and installs through the same plan dialog as the marketplace.
 - To exercise a package like the bundled ones, copy the pattern of the `bundled_packages` tests in `crates/obop/src/main.rs`: install through the real installer, create a record per model from the metadata, run every action in and out of order, check agents are only given a proposal for approval actions.
 - Try as an ordinary user: `echo "a-long-password" | cargo run -- admin create alice --groups assets.user --db sqlite:///path/x.db`, then log in and see which fields and buttons appear.
 
@@ -501,11 +566,14 @@ The built-in modules follow the same rule: `lead.stage` (actions `qualify`, `mar
 The marketplace is a static host. Serve over HTTP or HTTPS:
 
 ```
-index.json                 [{"id":"assets","name":"Assets","version":"0.1.0","description":"...","author":"Example Ltd"}, ...]
+index.json                 [{"id":"assets","name":"Assets","version":"0.1.0","description":"...","author":"Example Ltd",
+                             "summary":"...","license":"Apache-2.0","requires_core":"^0.2","maturity":"beta",
+                             "categories":["productivity"],"keywords":["assets"],
+                             "dependencies":{"base":"^0.2"}}, ...]
 packages/assets.toml       the obop.toml of each package listed
 ```
 
-`index.json` is an array of objects with `id`, `name`, `version`, `description` and optional `author`. Package ids may contain only lowercase letters, digits and `_` (anything else is refused before a request is made). Point an instance at it with the environment variable `OBOP_MARKETPLACE_URL=https://host/path` (no trailing slash needed). The instance shows the bundled catalogue first and your host after it; if the same id exists in both, the bundled one wins. Every download is validated exactly like an upload, and responses are limited to 1 MiB. The bundled catalogue itself is `packages/*.toml`, compiled into the binary by `crates/kernel/obop-pkg/src/marketplace.rs`. Package signing and paid listings are not built (D45).
+`index.json` is an array of objects with `id`, `name`, `version`, `description` and optional `author`. Since D55 a listing may also carry the catalogue metadata of the manifest, so the Modules page can show cards, badges, compatibility and dependencies without fetching every manifest: `summary`, `authors` (array), `license`, `homepage`, `repository`, `documentation`, `support`, `keywords` (array), `categories` (array), `icon`, `requires_core`, `maturity` and `dependencies` (an object, module id to requirement). Every key after `author` is optional and unknown keys are ignored, so an index written before D55 keeps working (its modules show without badges). An entry whose `id`, `version` or any requirement does not parse is left out rather than failing the whole catalogue. The manifest remains the authority: an install fetches it and checks it exactly as an upload, and for a marketplace package `license` and `requires_core` must be declared in the manifest itself. Package ids may contain only lowercase letters, digits and `_` (anything else is refused before a request is made). Point an instance at it with the environment variable `OBOP_MARKETPLACE_URL=https://host/path` (no trailing slash needed). The instance shows the bundled catalogue first and your host after it; if the same id exists in both, the bundled one wins. Every download is validated exactly like an upload, and responses are limited to 1 MiB. The bundled catalogue itself is `packages/*.toml`, compiled into the binary by `crates/kernel/obop-pkg/src/marketplace.rs`. Package signing and paid listings are not built (D45).
 
 ## 9. Packages as data: the dashboards widget schema
 
@@ -561,7 +629,7 @@ Declarative X1 deliberately cannot do the following. Plan around them or wait fo
 
 **How do I add a field to an installed module?** Add it to the file, raise `version`, and install the file again. Old records have no value for it.
 
-**Where do I put a model that belongs to two apps?** Models are named after the module that owns them. Add the module that owns the model to `depends` and `ref` to it.
+**Where do I put a model that belongs to two apps?** Models are named after the module that owns them. Add the module that owns the model to `[module.dependencies]` (with the versions you tested) and `ref` to it.
 
 **Can a module have no models?** The file parses with no `[[model]]`, but it adds nothing.
 

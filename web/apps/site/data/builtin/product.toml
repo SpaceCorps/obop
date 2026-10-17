@@ -1,10 +1,21 @@
 # Snapshot of crates/modules/product/src/lib.rs (built-in).
 [module]
 id = "product"
-version = "builtin"
+version = "0.2.0"
 name = "Products"
 description = "Goods and services the business sells, with SKU, list price and cost."
-author = "obop"
+summary = "Products and services with prices and cost, shared by sales, invoicing and stock."
+author = "SpaceCorps"
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["products", "catalogue", "pricing"]
+categories = ["sales", "supply-chain"]
+maturity = "stable"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "*"
 
 [[model]]
 name = "product"

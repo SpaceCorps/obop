@@ -1,11 +1,21 @@
 # Snapshot of crates/modules/connectors/src/meta.rs (built-in).
 [module]
 id = "connectors"
-version = "builtin"
+version = "0.2.0"
 name = "Connectors"
 description = "Connect external systems and let people connect their own accounts, with the controls that support GDPR compliance built in."
-author = "obop"
-depends = []
+summary = "Connect other systems with a recorded legal basis, field allowlists, signed webhooks and OAuth."
+author = "SpaceCorps"
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["integrations", "webhooks", "oauth", "gdpr"]
+categories = ["platform"]
+maturity = "stable"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "*"
 
 [[model]]
 name = "connector_provider"

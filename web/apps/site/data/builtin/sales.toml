@@ -1,11 +1,22 @@
 # Snapshot of crates/modules/sales/src/lib.rs (built-in).
 [module]
 id = "sales"
-version = "builtin"
+version = "0.2.0"
 name = "Sales"
 description = "Quotations and confirmed orders for customers."
-author = "obop"
-depends = ["base"]
+summary = "Quotations and sales orders for your customers."
+author = "SpaceCorps"
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["quotations", "orders"]
+categories = ["sales"]
+maturity = "stable"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "*"
+product = "*"
 
 [[model]]
 name = "sale_order"

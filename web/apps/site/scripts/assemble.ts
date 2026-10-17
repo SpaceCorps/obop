@@ -19,7 +19,7 @@ import { appBody } from "./lib/app-page.ts";
 import { loadApps, type App } from "./lib/apps.ts";
 import { changelogMarkdown, loadChangelog } from "./lib/changelog.ts";
 import { appsIndexMirror, homeMirror, pricingMirror } from "./lib/mirror.ts";
-import { GEN, GITHUB, REPO_ROOT, SITE_ROOT, SITE_URL, SRC } from "./lib/paths.ts";
+import { CORE_VERSION, GEN, GITHUB, REPO_ROOT, SITE_ROOT, SITE_URL, SRC } from "./lib/paths.ts";
 
 export interface PageRecord {
   locale: Locale;
@@ -312,8 +312,8 @@ export function assemble(): PageRecord[] {
             : `${tagline}. ${m.apps.lead.split(". ")[0]!.replace(/\.$/, "")}.`,
         layout: "app",
         section: "apps",
-        body: appBody(app, locale, m, false, prefix),
-        mirror: appBody(app, locale, m, true, prefix),
+        body: appBody(app, locale, m, false, prefix, apps),
+        mirror: appBody(app, locale, m, true, prefix, apps),
         editPath: app.builtin ? `web/apps/site/data/builtin/${app.id}.toml` : app.source,
         extra: {
           appId: app.id,
@@ -321,6 +321,8 @@ export function assemble(): PageRecord[] {
           category: app.category,
           builtin: app.builtin,
           version: app.version,
+          license: app.meta.license,
+          requiresCore: app.meta.requiresCore,
           tagline,
           lead: tagline,
         },
@@ -421,6 +423,7 @@ export function assemble(): PageRecord[] {
       })),
     ),
   );
+  write(join(GEN, "core.json"), JSON.stringify({ version: CORE_VERSION }));
   write(join(GEN, "docs-nav.json"), JSON.stringify(docsNav));
   write(join(GEN, "pages.json"), JSON.stringify(records));
   const titles: Record<string, Record<string, string>> = {};

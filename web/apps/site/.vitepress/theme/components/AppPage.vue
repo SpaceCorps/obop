@@ -24,9 +24,8 @@ const edit = computed(() => `${GITHUB}/blob/main/${fm.value["editPath"]}`);
         <span class="chip">{{
           m.apps.categories[fm["category"] as keyof typeof m.apps.categories]
         }}</span>
-        <span v-if="!fm['builtin']" class="chip"
-          >{{ m.apps.versionLabel }} {{ fm["version"] }}</span
-        >
+        <span class="chip">{{ m.apps.versionLabel }} {{ fm["version"] }}</span>
+        <span v-if="fm['license']" class="chip">{{ fm["license"] }}</span>
         <a class="chip link" :href="edit">manifest</a>
       </div>
     </PageHeader>

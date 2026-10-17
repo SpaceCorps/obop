@@ -1542,10 +1542,27 @@ fn event_and_catalogue_metadata_is_honest() {
 fn site_snapshot() -> String {
     let m = module();
     let mut out = String::from("# Snapshot of crates/modules/connectors/src/meta.rs (built-in).\n");
+    let me = &m.meta;
     out.push_str(&format!(
-        "[module]\nid = \"connectors\"\nversion = \"builtin\"\nname = \"Connectors\"\ndescription = {:?}\nauthor = \"obop\"\ndepends = []\n",
-        "Connect external systems and let people connect their own accounts, with the controls that support GDPR compliance built in."
+        "[module]\nid = \"connectors\"\nversion = {:?}\nname = \"Connectors\"\ndescription = {:?}\nsummary = {:?}\nauthor = {:?}\nlicense = {:?}\nhomepage = {:?}\nrepository = {:?}\nkeywords = {:?}\ncategories = {:?}\nmaturity = {:?}\nrequires_core = {:?}\n",
+        me.version,
+        "Connect external systems and let people connect their own accounts, with the controls that support GDPR compliance built in.",
+        me.summary,
+        me.author,
+        me.license,
+        me.homepage,
+        me.repository,
+        me.keywords,
+        me.categories,
+        me.maturity,
+        me.requires_core,
     ));
+    if !me.dependencies.is_empty() {
+        out.push_str("\n[module.dependencies]\n");
+        for (d, r) in &me.dependencies {
+            out.push_str(&format!("{d} = {r:?}\n"));
+        }
+    }
     for model in &m.models {
         out.push_str(&format!(
             "\n[[model]]\nname = {:?}\ndescription = {:?}\nread_group = {:?}\nwrite_group = {:?}\n",
