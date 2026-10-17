@@ -21,7 +21,10 @@ struct Env {
 }
 
 fn env() -> Env {
-    let s = Store::new();
+    env_on(Store::new())
+}
+
+fn env_on(s: Store) -> Env {
     let d = Arc::new(Dispatcher::new());
     base::register(&d, &s);
     crm::register(&d, &s);
@@ -1610,4 +1613,75 @@ fn the_website_snapshot_matches_the_module() {
         have, want,
         "web/apps/site/data/builtin/connectors.toml is stale: run the connectors tests with OBOP_UPDATE_SNAPSHOT=1"
     );
+}
+
+// ---- the same flow on every storage backend ----------------------------------------------------------
+
+/// Outbound with pseudonyms, the log, withdrawal and the purge of what the connection held.
+fn flow_on(e: &Env) {
+    let b = e.s.backend();
+    // A shared database may hold earlier runs: start from nothing.
+    for table in [
+        "connection",
+        "consent",
+        "provider_policy",
+        "sync_run",
+        "data_flow_log",
+        "egress_policy",
+        "connector_pseudonym",
+        "connector_vault",
+        "connector_extmap",
+        "connector_origin",
+        "connector_seen",
+        "party",
+    ] {
+        for (id, _) in b.list(table).unwrap() {
+            b.delete(table, &id).unwrap();
+        }
+    }
+    let party = seed_party(e);
+    let r = Receiver::new(200);
+    enable(e, "webhook_out", true);
+    let id = ready(e, &sam(), &r);
+    ok(e, &sam(), "connection.sync", json!({"id": id}));
+    let rec = &r.body()["records"][0];
+    assert!(rec["name"].as_str().unwrap().starts_with("psn_") && rec.get("tax_id").is_none());
+    assert!(!r.last().contains("Ada Example") && !r.last().contains(&party));
+    assert!(!b.list("connector_pseudonym").unwrap().is_empty());
+    let k = ok(e, &sam(), "consent.list", json!({}))[0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    ok(e, &sam(), "consent.withdraw", json!({"id": k}));
+    assert!(b.list("connector_pseudonym").unwrap().is_empty());
+    assert_eq!(
+        b.get("connection", &id).unwrap().unwrap()["credentials"],
+        ""
+    );
+    // Replay protection and the purge use the same primitives on every backend.
+    assert!(obop_connectors::webhook::Seen::claim(&*b, "c", "evt", 1).is_ok());
+    assert!(obop_connectors::webhook::Seen::claim(&*b, "c", "evt", 1).is_err());
+    assert_eq!(e.rt.purge(obop_connectors::util::now() + 400 * 86_400).0, 1);
+}
+
+#[test]
+fn the_flow_works_on_sqlite() {
+    let path = std::env::temp_dir().join(format!(
+        "obop-connectors-flow-{}.sqlite",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+    flow_on(&env_on(
+        Store::open(&format!("sqlite://{}", path.display())).unwrap(),
+    ));
+    let _ = std::fs::remove_file(&path);
+}
+
+/// Runs only when `OBOP_TEST_POSTGRES_URL` is set (a throwaway database).
+#[test]
+fn the_flow_works_on_postgres() {
+    let Ok(url) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+        return;
+    };
+    flow_on(&env_on(Store::open(&url).unwrap()));
 }
