@@ -40,6 +40,134 @@ pub trait Backend: Send + Sync {
     }
     /// Short name for logs: `memory`, `sqlite` or `postgres`.
     fn kind(&self) -> &'static str;
+
+    // ---- shared state for several server processes on one database (B1, D59) ---------------
+
+    /// Take the cross-process lock `key` and hold it until the guard is dropped. Blocks up to
+    /// `LOCK_WAIT`. PostgreSQL uses a session advisory lock (released by the server when a
+    /// process dies), SQLite an operating-system file lock next to the database file, memory a
+    /// process-local lock. Not re-entrant: do not take the same key twice on one thread.
+    fn lock(&self, key: &str) -> Result<LockGuard>;
+
+    /// Add one to the counter `key` and return the new value. A counter lives `ttl_ms` from its
+    /// first hit (a fixed window; `0` means it never expires); when `extend` is set every hit
+    /// pushes the expiry out to `ttl_ms` from now. An expired counter starts again at 1.
+    fn counter_add(&self, key: &str, ttl_ms: u64, extend: bool) -> Result<u64>;
+    /// The live value of a counter (0 when absent or expired).
+    fn counter_get(&self, key: &str) -> Result<u64>;
+    /// Milliseconds until a live counter expires (`None` when absent, expired or never).
+    fn counter_ttl_ms(&self, key: &str) -> Result<Option<u64>>;
+    fn counter_reset(&self, key: &str) -> Result<()>;
+
+    /// Short-lived text values with an expiry, shared by every process: sessions, idempotency
+    /// keys, vaults. `ttl_ms` of `None` means no expiry. Overwrites.
+    fn kv_put(&self, key: &str, value: &str, ttl_ms: Option<u64>) -> Result<()>;
+    /// Store only if the key is absent or expired; `true` when stored.
+    fn kv_put_new(&self, key: &str, value: &str, ttl_ms: Option<u64>) -> Result<bool>;
+    fn kv_get(&self, key: &str) -> Result<Option<String>>;
+    fn kv_delete(&self, key: &str) -> Result<bool>;
+    /// Live entries whose key starts with `prefix`, oldest key first.
+    fn kv_scan(&self, prefix: &str) -> Result<Vec<(String, String)>>;
+    /// Remove expired entries and counters; returns how many.
+    fn purge_expired(&self) -> Result<usize>;
+
+    /// Every record, in insertion order, in batches of at most `batch` rows, from one consistent
+    /// snapshot (a repeatable-read transaction on PostgreSQL, a read transaction on SQLite).
+    /// Memory is bounded by the batch. For `obop backup`.
+    fn export(&self, batch: usize, sink: &mut RowSink<'_>) -> Result<()>;
+    /// Number of records of every model.
+    fn total(&self) -> Result<usize>;
+}
+
+/// One stored record: model, id, fields.
+pub type Row = (String, String, Fields);
+/// Receives the batches of `Backend::export`.
+pub type RowSink<'a> = dyn FnMut(&[Row]) -> Result<()> + 'a;
+
+/// How long `Backend::lock` waits before giving up.
+pub const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Held while a `Backend::lock` is taken; dropping it releases the lock.
+pub type LockGuard = Box<dyn std::any::Any + Send>;
+
+impl dyn Backend {
+    /// Run `f` while holding the cross-process lock `key`.
+    pub fn with_lock<T>(&self, key: &str, f: impl FnOnce() -> T) -> Result<T> {
+        let _g = self.lock(key)?;
+        Ok(f())
+    }
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
+/// A key as a safe file-name part.
+fn lock_file_part(key: &str) -> String {
+    let ok = !key.is_empty()
+        && key.len() <= 48
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.');
+    if ok {
+        key.to_string()
+    } else {
+        // A stable, collision-resistant name for any other key (FNV-1a, 64 bit, twice).
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for b in key.bytes() {
+            h ^= u64::from(b);
+            h = h.wrapping_mul(0x100_0000_01b3);
+        }
+        format!("k{h:016x}")
+    }
+}
+
+/// Process-local locks by key, for memory databases and as the first step everywhere.
+#[derive(Default)]
+struct LocalLocks {
+    held: Mutex<std::collections::HashSet<String>>,
+    cv: std::sync::Condvar,
+}
+
+struct LocalGuard {
+    locks: Arc<LocalLocks>,
+    key: String,
+}
+
+impl Drop for LocalGuard {
+    fn drop(&mut self) {
+        self.locks
+            .held
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.key);
+        self.locks.cv.notify_all();
+    }
+}
+
+impl LocalLocks {
+    fn take(self: &Arc<Self>, key: &str) -> Result<LocalGuard> {
+        let deadline = std::time::Instant::now() + LOCK_WAIT;
+        let mut g = self.held.lock().unwrap_or_else(|e| e.into_inner());
+        while g.contains(key) {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() {
+                return Err(format!("timed out waiting for lock {key}"));
+            }
+            g = self
+                .cv
+                .wait_timeout(g, left)
+                .unwrap_or_else(|e| e.into_inner())
+                .0;
+        }
+        g.insert(key.to_string());
+        Ok(LocalGuard {
+            locks: self.clone(),
+            key: key.to_string(),
+        })
+    }
 }
 
 pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
@@ -71,357 +199,15 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
     base
 }
 
-// ---- memory -------------------------------------------------------------------------------
+mod memory;
+mod pg;
+#[cfg(test)]
+mod shared_tests;
+mod sqlite;
 
-#[derive(Default)]
-struct Memory {
-    rows: Mutex<BTreeMap<String, Vec<(String, Fields)>>>,
-}
-
-impl Backend for Memory {
-    fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
-        let mut g = self.rows.lock().unwrap();
-        let rows = g.entry(model.into()).or_default();
-        if rows.iter().any(|(i, _)| i == id) {
-            return Err(format!("duplicate {model} {id}"));
-        }
-        rows.push((id.into(), fields.clone()));
-        Ok(())
-    }
-    fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
-        let g = self.rows.lock().unwrap();
-        Ok(g.get(model)
-            .and_then(|r| r.iter().find(|(i, _)| i == id))
-            .map(|(_, f)| f.clone()))
-    }
-    fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
-        Ok(self
-            .rows
-            .lock()
-            .unwrap()
-            .get(model)
-            .cloned()
-            .unwrap_or_default())
-    }
-    fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
-        let mut g = self.rows.lock().unwrap();
-        match g
-            .get_mut(model)
-            .and_then(|r| r.iter_mut().find(|(i, _)| i == id))
-        {
-            Some((_, f)) => {
-                f.extend(patch.clone());
-                Ok(true)
-            }
-            None => Ok(false),
-        }
-    }
-    fn count(&self, model: &str) -> Result<usize> {
-        Ok(self.rows.lock().unwrap().get(model).map_or(0, Vec::len))
-    }
-    fn delete(&self, model: &str, id: &str) -> Result<bool> {
-        let mut g = self.rows.lock().unwrap();
-        let Some(rows) = g.get_mut(model) else {
-            return Ok(false);
-        };
-        let before = rows.len();
-        rows.retain(|(i, _)| i != id);
-        Ok(rows.len() < before)
-    }
-    fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
-        let mut g = self.rows.lock().unwrap();
-        for (n, (model, id, _)) in rows.iter().enumerate() {
-            let dup_in_batch = rows[..n].iter().any(|(m, i, _)| m == model && i == id);
-            if dup_in_batch || g.get(model).is_some_and(|r| r.iter().any(|(i, _)| i == id)) {
-                return Err(format!("duplicate {model} {id}"));
-            }
-        }
-        for (model, id, fields) in rows {
-            g.entry(model.clone())
-                .or_default()
-                .push((id.clone(), fields.clone()));
-        }
-        Ok(())
-    }
-    fn kind(&self) -> &'static str {
-        "memory"
-    }
-}
-
-// ---- sqlite -------------------------------------------------------------------------------
-
-struct Sqlite {
-    conn: Mutex<rusqlite::Connection>,
-}
-
-impl Sqlite {
-    fn open(path: &str) -> Result<Self> {
-        let conn = if path == ":memory:" || path.is_empty() {
-            rusqlite::Connection::open_in_memory()
-        } else {
-            rusqlite::Connection::open(path)
-        }
-        .map_err(|e| e.to_string())?;
-        conn.execute_batch(
-            "PRAGMA journal_mode = WAL;
-             PRAGMA foreign_keys = ON;
-             CREATE TABLE IF NOT EXISTS obop_record (
-                 seq   INTEGER PRIMARY KEY AUTOINCREMENT,
-                 model TEXT NOT NULL,
-                 id    TEXT NOT NULL,
-                 data  TEXT NOT NULL CHECK (json_valid(data)),
-                 UNIQUE (model, id)
-             );",
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(Self {
-            conn: Mutex::new(conn),
-        })
-    }
-}
-
-impl Backend for Sqlite {
-    fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
-        let data = J::Object(fields.clone()).to_string();
-        self.conn
-            .lock()
-            .unwrap()
-            .execute(
-                "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)",
-                (model, id, data),
-            )
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
-    fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
-        let g = self.conn.lock().unwrap();
-        let mut st = g
-            .prepare("SELECT data FROM obop_record WHERE model = ?1 AND id = ?2")
-            .map_err(|e| e.to_string())?;
-        let mut rows = st.query((model, id)).map_err(|e| e.to_string())?;
-        match rows.next().map_err(|e| e.to_string())? {
-            Some(r) => Ok(Some(parse(
-                &r.get::<_, String>(0).map_err(|e| e.to_string())?,
-            )?)),
-            None => Ok(None),
-        }
-    }
-    fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
-        let g = self.conn.lock().unwrap();
-        let mut st = g
-            .prepare("SELECT id, data FROM obop_record WHERE model = ?1 ORDER BY seq")
-            .map_err(|e| e.to_string())?;
-        let rows = st
-            .query_map((model,), |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
-            })
-            .map_err(|e| e.to_string())?;
-        rows.map(|r| {
-            let (id, data) = r.map_err(|e| e.to_string())?;
-            Ok((id, parse(&data)?))
-        })
-        .collect()
-    }
-    fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
-        let mut g = self.conn.lock().unwrap();
-        let tx = g
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(|e| e.to_string())?;
-        let current: Option<String> = tx
-            .query_row(
-                "SELECT data FROM obop_record WHERE model = ?1 AND id = ?2",
-                (model, id),
-                |r| r.get(0),
-            )
-            .map(Some)
-            .or_else(|e| {
-                if e == rusqlite::Error::QueryReturnedNoRows {
-                    Ok(None)
-                } else {
-                    Err(e)
-                }
-            })
-            .map_err(|e| e.to_string())?;
-        let Some(current) = current else {
-            return Ok(false);
-        };
-        let data = J::Object(merged(parse(&current)?, patch)).to_string();
-        tx.execute(
-            "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
-            (model, id, data),
-        )
-        .map_err(|e| e.to_string())?;
-        tx.commit().map_err(|e| e.to_string())?;
-        Ok(true)
-    }
-    fn count(&self, model: &str) -> Result<usize> {
-        self.conn
-            .lock()
-            .unwrap()
-            .query_row(
-                "SELECT COUNT(*) FROM obop_record WHERE model = ?1",
-                (model,),
-                |r| r.get::<_, i64>(0),
-            )
-            .map(|n| n as usize)
-            .map_err(|e| e.to_string())
-    }
-    fn delete(&self, model: &str, id: &str) -> Result<bool> {
-        self.conn
-            .lock()
-            .unwrap()
-            .execute(
-                "DELETE FROM obop_record WHERE model = ?1 AND id = ?2",
-                (model, id),
-            )
-            .map(|n| n > 0)
-            .map_err(|e| e.to_string())
-    }
-    fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
-        let mut g = self.conn.lock().unwrap();
-        let tx = g.transaction().map_err(|e| e.to_string())?;
-        for (model, id, fields) in rows {
-            tx.execute(
-                "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)",
-                (model, id, J::Object(fields.clone()).to_string()),
-            )
-            .map_err(|e| e.to_string())?;
-        }
-        tx.commit().map_err(|e| e.to_string())
-    }
-    fn kind(&self) -> &'static str {
-        "sqlite"
-    }
-}
-
-// ---- postgres -----------------------------------------------------------------------------
-
-struct Pg {
-    client: Mutex<postgres::Client>,
-}
-
-impl Pg {
-    fn connect(url: &str) -> Result<Self> {
-        let mut client =
-            postgres::Client::connect(url, postgres::NoTls).map_err(|e| e.to_string())?;
-        client
-            .batch_execute(
-                "CREATE TABLE IF NOT EXISTS obop_record (
-                     seq   BIGINT GENERATED ALWAYS AS IDENTITY,
-                     model TEXT NOT NULL,
-                     id    TEXT NOT NULL,
-                     data  JSONB NOT NULL CHECK (jsonb_typeof(data) = 'object'),
-                     PRIMARY KEY (model, id)
-                 );
-                 CREATE INDEX IF NOT EXISTS obop_record_seq ON obop_record (model, seq);",
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(Self {
-            client: Mutex::new(client),
-        })
-    }
-}
-
-fn pg_fields(v: J) -> Result<Fields> {
-    match v {
-        J::Object(m) => Ok(m),
-        _ => Err("stored record is not an object".into()),
-    }
-}
-
-impl Backend for Pg {
-    fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
-        let data = J::Object(fields.clone());
-        self.client
-            .lock()
-            .unwrap()
-            .execute(
-                "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
-                &[&model, &id, &data],
-            )
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    }
-    fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
-        let row = self
-            .client
-            .lock()
-            .unwrap()
-            .query_opt(
-                "SELECT data FROM obop_record WHERE model = $1 AND id = $2",
-                &[&model, &id],
-            )
-            .map_err(|e| e.to_string())?;
-        row.map(|r| pg_fields(r.get::<_, J>(0))).transpose()
-    }
-    fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
-        let rows = self
-            .client
-            .lock()
-            .unwrap()
-            .query(
-                "SELECT id, data FROM obop_record WHERE model = $1 ORDER BY seq",
-                &[&model],
-            )
-            .map_err(|e| e.to_string())?;
-        rows.into_iter()
-            .map(|r| Ok((r.get::<_, String>(0), pg_fields(r.get::<_, J>(1))?)))
-            .collect()
-    }
-    fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
-        let patch = J::Object(patch.clone());
-        let n = self
-            .client
-            .lock()
-            .unwrap()
-            .execute(
-                "UPDATE obop_record SET data = data || $3 WHERE model = $1 AND id = $2",
-                &[&model, &id, &patch],
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(n > 0)
-    }
-    fn count(&self, model: &str) -> Result<usize> {
-        let r = self
-            .client
-            .lock()
-            .unwrap()
-            .query_one(
-                "SELECT COUNT(*) FROM obop_record WHERE model = $1",
-                &[&model],
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(r.get::<_, i64>(0) as usize)
-    }
-    fn delete(&self, model: &str, id: &str) -> Result<bool> {
-        let n = self
-            .client
-            .lock()
-            .unwrap()
-            .execute(
-                "DELETE FROM obop_record WHERE model = $1 AND id = $2",
-                &[&model, &id],
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(n > 0)
-    }
-    fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
-        let mut g = self.client.lock().unwrap();
-        let mut tx = g.transaction().map_err(|e| e.to_string())?;
-        for (model, id, fields) in rows {
-            let data = J::Object(fields.clone());
-            tx.execute(
-                "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
-                &[model, id, &data],
-            )
-            .map_err(|e| e.to_string())?;
-        }
-        tx.commit().map_err(|e| e.to_string())
-    }
-    fn kind(&self) -> &'static str {
-        "postgres"
-    }
-}
+use memory::Memory;
+use pg::Pg;
+use sqlite::Sqlite;
 
 #[cfg(test)]
 mod tests {

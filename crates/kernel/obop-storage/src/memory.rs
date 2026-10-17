@@ -1,0 +1,226 @@
+//! The in-memory backend: tests, `memory:` databases and the contract's reference.
+
+use super::*;
+
+#[derive(Default)]
+pub(crate) struct Memory {
+    rows: Mutex<BTreeMap<String, Vec<(String, Fields)>>>,
+    /// Insertion order across models, for `export`.
+    order: Mutex<Vec<(String, String)>>,
+    locks: Arc<LocalLocks>,
+    /// key -> (value, expiry in ms; 0 = never)
+    counters: Mutex<BTreeMap<String, (u64, u64)>>,
+    kv: Mutex<BTreeMap<String, (String, u64)>>,
+}
+
+impl Memory {
+    fn note(&self, model: &str, id: &str) {
+        self.order.lock().unwrap().push((model.into(), id.into()));
+    }
+}
+
+fn live(expiry: u64, now: u64) -> bool {
+    expiry == 0 || expiry > now
+}
+
+impl Backend for Memory {
+    fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+        let mut g = self.rows.lock().unwrap();
+        let rows = g.entry(model.into()).or_default();
+        if rows.iter().any(|(i, _)| i == id) {
+            return Err(format!("duplicate {model} {id}"));
+        }
+        rows.push((id.into(), fields.clone()));
+        drop(g);
+        self.note(model, id);
+        Ok(())
+    }
+    fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
+        let g = self.rows.lock().unwrap();
+        Ok(g.get(model)
+            .and_then(|r| r.iter().find(|(i, _)| i == id))
+            .map(|(_, f)| f.clone()))
+    }
+    fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
+        Ok(self
+            .rows
+            .lock()
+            .unwrap()
+            .get(model)
+            .cloned()
+            .unwrap_or_default())
+    }
+    fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
+        let mut g = self.rows.lock().unwrap();
+        match g
+            .get_mut(model)
+            .and_then(|r| r.iter_mut().find(|(i, _)| i == id))
+        {
+            Some((_, f)) => {
+                f.extend(patch.clone());
+                Ok(true)
+            }
+            None => Ok(false),
+        }
+    }
+    fn count(&self, model: &str) -> Result<usize> {
+        Ok(self.rows.lock().unwrap().get(model).map_or(0, Vec::len))
+    }
+    fn delete(&self, model: &str, id: &str) -> Result<bool> {
+        let mut g = self.rows.lock().unwrap();
+        let Some(rows) = g.get_mut(model) else {
+            return Ok(false);
+        };
+        let before = rows.len();
+        rows.retain(|(i, _)| i != id);
+        let removed = rows.len() < before;
+        drop(g);
+        if removed {
+            self.order
+                .lock()
+                .unwrap()
+                .retain(|(m, i)| !(m == model && i == id));
+        }
+        Ok(removed)
+    }
+    fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
+        let mut g = self.rows.lock().unwrap();
+        for (n, (model, id, _)) in rows.iter().enumerate() {
+            let dup_in_batch = rows[..n].iter().any(|(m, i, _)| m == model && i == id);
+            if dup_in_batch || g.get(model).is_some_and(|r| r.iter().any(|(i, _)| i == id)) {
+                return Err(format!("duplicate {model} {id}"));
+            }
+        }
+        for (model, id, fields) in rows {
+            g.entry(model.clone())
+                .or_default()
+                .push((id.clone(), fields.clone()));
+            self.note(model, id);
+        }
+        Ok(())
+    }
+    fn kind(&self) -> &'static str {
+        "memory"
+    }
+
+    fn lock(&self, key: &str) -> Result<LockGuard> {
+        Ok(Box::new(self.locks.take(key)?))
+    }
+
+    fn counter_add(&self, key: &str, ttl_ms: u64, extend: bool) -> Result<u64> {
+        let now = now_ms();
+        let expiry = if ttl_ms == 0 { 0 } else { now + ttl_ms };
+        let mut g = self.counters.lock().unwrap();
+        let e = g.entry(key.to_string()).or_insert((0, expiry));
+        if !live(e.1, now) {
+            *e = (0, expiry);
+        } else if extend {
+            e.1 = expiry;
+        }
+        e.0 += 1;
+        Ok(e.0)
+    }
+    fn counter_get(&self, key: &str) -> Result<u64> {
+        let now = now_ms();
+        Ok(self
+            .counters
+            .lock()
+            .unwrap()
+            .get(key)
+            .filter(|(_, x)| live(*x, now))
+            .map_or(0, |(n, _)| *n))
+    }
+    fn counter_ttl_ms(&self, key: &str) -> Result<Option<u64>> {
+        let now = now_ms();
+        Ok(self
+            .counters
+            .lock()
+            .unwrap()
+            .get(key)
+            .filter(|(_, x)| *x > now)
+            .map(|(_, x)| x - now))
+    }
+    fn counter_reset(&self, key: &str) -> Result<()> {
+        self.counters.lock().unwrap().remove(key);
+        Ok(())
+    }
+
+    fn kv_put(&self, key: &str, value: &str, ttl_ms: Option<u64>) -> Result<()> {
+        let exp = ttl_ms.map_or(0, |t| now_ms() + t.max(1));
+        self.kv
+            .lock()
+            .unwrap()
+            .insert(key.to_string(), (value.to_string(), exp));
+        Ok(())
+    }
+    fn kv_put_new(&self, key: &str, value: &str, ttl_ms: Option<u64>) -> Result<bool> {
+        let now = now_ms();
+        let mut g = self.kv.lock().unwrap();
+        if g.get(key).is_some_and(|(_, x)| live(*x, now)) {
+            return Ok(false);
+        }
+        let exp = ttl_ms.map_or(0, |t| now + t.max(1));
+        g.insert(key.to_string(), (value.to_string(), exp));
+        Ok(true)
+    }
+    fn kv_get(&self, key: &str) -> Result<Option<String>> {
+        let now = now_ms();
+        Ok(self
+            .kv
+            .lock()
+            .unwrap()
+            .get(key)
+            .filter(|(_, x)| live(*x, now))
+            .map(|(v, _)| v.clone()))
+    }
+    fn kv_delete(&self, key: &str) -> Result<bool> {
+        Ok(self.kv.lock().unwrap().remove(key).is_some())
+    }
+    fn kv_scan(&self, prefix: &str) -> Result<Vec<(String, String)>> {
+        let now = now_ms();
+        Ok(self
+            .kv
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(k, (_, x))| k.starts_with(prefix) && live(*x, now))
+            .map(|(k, (v, _))| (k.clone(), v.clone()))
+            .collect())
+    }
+    fn purge_expired(&self) -> Result<usize> {
+        let now = now_ms();
+        let mut kv = self.kv.lock().unwrap();
+        let before = kv.len();
+        kv.retain(|_, (_, x)| live(*x, now));
+        let mut n = before - kv.len();
+        let mut c = self.counters.lock().unwrap();
+        let before = c.len();
+        c.retain(|_, (_, x)| live(*x, now));
+        n += before - c.len();
+        Ok(n)
+    }
+
+    fn export(&self, batch: usize, sink: &mut RowSink<'_>) -> Result<()> {
+        // One consistent snapshot: copy under both locks, then hand it out in batches.
+        let all: Vec<(String, String, Fields)> = {
+            let rows = self.rows.lock().unwrap();
+            let order = self.order.lock().unwrap();
+            order
+                .iter()
+                .filter_map(|(m, i)| {
+                    rows.get(m)?
+                        .iter()
+                        .find(|(x, _)| x == i)
+                        .map(|(_, f)| (m.clone(), i.clone(), f.clone()))
+                })
+                .collect()
+        };
+        for chunk in all.chunks(batch.max(1)) {
+            sink(chunk)?;
+        }
+        Ok(())
+    }
+    fn total(&self) -> Result<usize> {
+        Ok(self.rows.lock().unwrap().values().map(Vec::len).sum())
+    }
+}
