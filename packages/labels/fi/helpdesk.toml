@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Asiakastuki"
 description = "Asiakastukitiketit prioriteetin, vakavuuden ja palvelutasotavoitteiden kanssa sekä avoin-, käynnissä-, ratkaistu- ja suljettu-kulussa. Tavoitteet kirjataan, mutta niitä ei valvota eikä ajasteta automaattisesti."
+summary = "Asiakastukitiketit prioriteetin, vakavuuden ja palvelutasotavoitteiden kanssa sekä avoimesta suljettuun -kulku."
 
 [labels.fi.model.helpdesk_sla]
 name = "SLA"

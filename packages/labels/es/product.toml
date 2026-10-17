@@ -1,5 +1,6 @@
 [labels.es.module]
 name = "Productos"
+summary = "Productos y servicios con precios y costes, compartidos por ventas, facturación y stock."
 
 [labels.es.model.product]
 name = "Producto"

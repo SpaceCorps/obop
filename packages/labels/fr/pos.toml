@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Point de vente"
 description = "Caisses de magasin : configuration de point de vente, sessions avec contrôle de caisse, commandes avec lignes et paiements par mode. Un remboursement et la clôture d’une session exigent l’approbation d’un responsable ; les agents peuvent seulement les proposer. Totaux et écarts de caisse sont saisis, pas calculés. Ne stockez jamais de numéro de carte. Nécessite le package Produits."
+summary = "Caisses de magasin : sessions avec contrôle de caisse, commandes et paiements. Remboursements et clôture exigent une approbation."
 
 [labels.fr.model.pos_config]
 name = "Configuration"

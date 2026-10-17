@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Helpdesk"
 description = "Zgłoszenia pomocy technicznej z priorytetem, istotnością, celami poziomu usług oraz obiegiem otwarte, w toku, rozwiązane i zamknięte. Cele są rejestrowane, a nie egzekwowane ani automatycznie mierzone."
+summary = "Zgłoszenia pomocy technicznej z priorytetem, istotnością, celami poziomu usług i obiegiem od otwartego do zamkniętego."
 
 [labels.pl.model.helpdesk_sla]
 name = "SLA"

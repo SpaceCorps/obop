@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Asiakirjat"
 description = "Yrityksen asiakirjarekisteri: kansiot, asiakirjat lajin, omistajan, voimassaolon ja luottamuksellisuuden kanssa sekä luonnos-, julkaistu- ja arkistoitu-kulku. Tallentaa viitteitä, ei tiedostojen sisältöä."
+summary = "Yrityksen asiakirjarekisteri omistajan, voimassaolon ja luottamuksellisuuden kanssa sekä luonnos-, julkaistu- ja arkistoitu-kulku."
 
 [labels.fi.model.documents_folder]
 name = "Kansio"

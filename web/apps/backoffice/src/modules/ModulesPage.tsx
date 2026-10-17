@@ -192,7 +192,7 @@ export function ModulesPage({
                   row={r}
                   kind={cardKind}
                   title={view.nameOf(r.id)}
-                  summary={cardText(r, view.descriptionOf(r))}
+                  summary={cardText(r, view.descriptionOf(r), view.summaryOf(r))}
                   core={core}
                   nameOf={view.nameOf}
                   href={modulesHref({ tab, id: r.id })}

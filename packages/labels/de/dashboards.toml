@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Dashboards"
 description = "Dashboards und ihre Kacheln, als Daten gespeichert und von einer Oberfläche darzustellen. Eine Kachel legt fest: Darstellung (kpi, bar, line, pie, table), zu lesendes Modell, Kennzahlfeld, Aggregation (Anzahl oder Summe), Gruppierung, Filter und Position. Das Paket speichert nur die Definition; es prüft nicht, ob Modell oder Felder existieren, und berechnet nichts."
+summary = "Dashboards und Kacheln als Daten gespeichert, damit das Backoffice sie als Kennzahlen, Diagramme und Tabellen darstellt."
 
 [labels.de.model.dashboards_dashboard]
 name = "Dashboard"

@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Verkkokauppa"
 description = "Verkkokauppa: luokat, käännetyt tuotesivut, toimitustavat, alennuskoodit ja verkkotilaukset riveineen. Julkisella sivustolla kävijät tilaavat ilman tiliä; palvelin hinnoittelee tilauksen aina julkaistun tuotesivun mukaan. Maksupalvelua ei ole. Hyvitykset vaativat esihenkilön hyväksynnän. Asiakkaan tiedot ovat henkilötietoja. Vaatii Tuotteet-paketin."
+summary = "Verkkokauppa: tuotesivut, toimitus, alennuskoodit ja verkkotilaukset sekä julkinen kauppa, kun sivusto on käytössä."
 
 [labels.fi.model.ecommerce_category]
 name = "Luokka"

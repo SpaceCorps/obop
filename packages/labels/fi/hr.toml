@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Henkilöstö"
 description = "Työntekijät, osastot ja poissaolopyynnöt. Henkilötiedot on luokiteltu tiukasti: palkka, pankkitili ja henkilötunnus näkyvät vain esihenkilöille, terveys- ja ammattiliittotiedot vain erityisryhmälle."
+summary = "Työntekijät, osastot ja poissaolopyynnöt; palkka- ja terveystiedot näkyvät vain oikeille ryhmille."
 
 [labels.fi.model.hr_department]
 name = "Osasto"

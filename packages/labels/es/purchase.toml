@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Compras"
 description = "Proveedores, pedidos de compra y líneas de pedido con un flujo de borrador, enviado, confirmado, recibido y cancelado. Los totales de los pedidos se introducen, no se suman a partir de las líneas."
+summary = "Proveedores, pedidos de compra y líneas de pedido con un flujo de borrador, enviado, confirmado y recibido."
 
 [labels.es.model.purchase_vendor]
 name = "Proveedor"

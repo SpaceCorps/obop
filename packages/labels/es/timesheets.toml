@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Partes de horas"
 description = "Tiempo dedicado a tareas de proyecto, introducido en minutos, con un indicador de facturable y un paso de aprobación. Requiere el paquete Proyectos."
+summary = "Tiempo dedicado a tareas de proyecto, en minutos, con un indicador de facturable y un paso de aprobación."
 
 [labels.es.model.timesheets_entry]
 name = "Registro de horas"

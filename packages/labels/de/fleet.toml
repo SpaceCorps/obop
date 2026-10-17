@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Fuhrpark"
 description = "Fahrzeuge, Fahrer und Servicehistorie für einen kleinen Fuhrpark. Erfasst Status und Serviceeinträge; Betriebskosten und Kraftstoffverbrauch werden nicht berechnet."
+summary = "Fahrzeuge, Fahrer und Servicehistorie für einen kleinen Fuhrpark."
 
 [labels.de.model.fleet_vehicle]
 name = "Fahrzeug"

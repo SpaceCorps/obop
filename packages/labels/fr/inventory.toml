@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Inventaire"
 description = "Entrepôts, emplacements de stock, niveaux de stock et mouvements de stock. Les quantités sont saisies et validées par des personnes ; elles ne sont pas mises à jour automatiquement par les mouvements."
+summary = "Entrepôts, emplacements de stock, niveaux de stock et mouvements de stock."
 
 [labels.fr.model.inventory_warehouse]
 name = "Entrepôt"

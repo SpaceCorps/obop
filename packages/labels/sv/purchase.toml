@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Inköp"
 description = "Leverantörer, inköpsorder och orderrader med flödet utkast, skickad, bekräftad, mottagen och annullerad. Orderns totalbelopp anges och summeras inte från raderna."
+summary = "Leverantörer, inköpsorder och orderrader med flödet utkast, skickad, bekräftad, mottagen."
 
 [labels.sv.model.purchase_vendor]
 name = "Leverantör"

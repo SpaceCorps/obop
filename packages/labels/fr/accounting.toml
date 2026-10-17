@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Comptabilité"
 description = "Plan comptable, journaux, taxes, écritures avec lignes de débit et de crédit, exercices fiscaux, périodes et lignes de relevé bancaire. Montants en plus petite unité monétaire, taux en points de base (2000 = 20,00 %). Rien n’est calculé : équilibre, taxes et numéros sont saisis. Comptabiliser et clôturer exigent une approbation humaine ; les agents peuvent seulement les proposer."
+summary = "Plan comptable, journaux, taxes, périodes fiscales et écritures. Comptabiliser et clôturer exigent une approbation humaine."
 
 [labels.fr.model.accounting_account]
 name = "Compte"

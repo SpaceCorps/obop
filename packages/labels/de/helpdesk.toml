@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Helpdesk"
 description = "Support-Tickets mit Priorität, Schweregrad, Service-Level-Zielen und einem Ablauf aus offen, in Bearbeitung, gelöst und abgeschlossen. Ziele werden erfasst, aber nicht automatisch durchgesetzt oder zeitlich überwacht."
+summary = "Support-Tickets mit Priorität, Schweregrad, Service-Level-Zielen und einem Ablauf von offen bis abgeschlossen."
 
 [labels.de.model.helpdesk_sla]
 name = "SLA"

@@ -54,6 +54,8 @@ export type ModuleMeta = {
   name: string;
   labels?: Translations;
   descriptions?: Translations;
+  /** The one-line card text per language (D52); absent when untranslated. */
+  summaries?: Translations;
   models: ModelMeta[];
 };
 

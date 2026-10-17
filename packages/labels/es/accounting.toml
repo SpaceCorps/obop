@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Contabilidad"
 description = "Plan de cuentas, diarios, impuestos, asientos con líneas de debe y haber, ejercicios fiscales, periodos y extractos bancarios. Importes en la unidad menor de la moneda y tipos en puntos básicos (2000 es 20,00 %). No se calcula nada: cuadre, impuestos y numeración los introduce una persona. Contabilizar y cerrar periodos o ejercicios requiere aprobación humana; los agentes solo pueden proponerlo."
+summary = "Plan de cuentas, diarios, impuestos, periodos fiscales y asientos. Contabilizar y cerrar requieren aprobación humana."
 
 [labels.es.model.accounting_account]
 name = "Cuenta"

@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Wydatki"
 description = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone i opłacone. Wypłata to osobne uprawnienie i wymaga zatwierdzenia przez człowieka; paragony są wskazywane w notatce, nie przechowywane."
+summary = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone, opłacone."
 
 [labels.pl.model.expenses_expense]
 name = "Wydatek"

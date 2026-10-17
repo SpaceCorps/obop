@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Koontinäytöt"
 description = "Koontinäytöt ja niiden ruudut tallennettuna tietona käyttöliittymän piirrettäväksi. Ruutu määrittelee lajin (KPI, pylväs, viiva, piirakka, taulukko), luettavan tietuetyypin, mittarikentän, yhdistämistavan (lukumäärä tai summa), ryhmittelyn, suodattimen ja järjestyksen. Paketti vain tallentaa määrityksen: se ei tarkista, että tietuetyyppi tai kentät ovat olemassa, eikä se laske mitään."
+summary = "Koontinäytöt ja ruudut tallennettuna tietona, jotka käyttöliittymä piirtää KPI-lukuina, kaavioina ja taulukoina."
 
 [labels.fi.model.dashboards_dashboard]
 name = "Koontinäyttö"

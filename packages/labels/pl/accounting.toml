@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Księgowość"
 description = "Plan kont, dzienniki, stawki podatku, operacje księgowe z pozycjami winien i ma, lata obrotowe, okresy oraz pozycje wyciągów bankowych. Kwoty są w jednostkach podrzędnych waluty, stawki podatku w punktach bazowych. Nic nie jest obliczane. Księgowanie i zamykanie okresów wymaga zatwierdzenia przez człowieka; agenci mogą je tylko zaproponować."
+summary = "Plan kont, dzienniki, podatki, okresy obrotowe i operacje księgowe. Księgowanie i zamykanie wymaga zatwierdzenia przez człowieka."
 
 [labels.pl.model.accounting_account]
 name = "Konto"

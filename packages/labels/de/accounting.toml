@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Buchhaltung"
 description = "Kontenplan, Journale, Steuersätze, Buchungen mit Soll- und Haben-Zeilen, Geschäftsjahre, Perioden und Kontoauszugszeilen. Beträge stehen in der kleinsten Währungseinheit, Steuersätze in Basispunkten (2000 = 20,00 Prozent). Es wird nichts berechnet. Buchen und Abschließen brauchen eine menschliche Genehmigung (Gruppe accounting.approver); Agenten dürfen nur vorschlagen."
+summary = "Kontenplan, Journale, Steuern, Perioden und Buchungen. Buchen und Abschließen brauchen eine menschliche Genehmigung."
 
 [labels.de.model.accounting_account]
 name = "Konto"

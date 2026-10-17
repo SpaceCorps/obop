@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Lager"
 description = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser. Antal anges och kontrolleras av människor; de uppdateras inte automatiskt av rörelser."
+summary = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser."
 
 [labels.sv.model.inventory_warehouse]
 name = "Lagerställe"

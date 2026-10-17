@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Varastonhallinta"
 description = "Varastot, varastopaikat, varastosaldot ja varastosiirrot. Ihmiset syöttävät ja vahvistavat määrät; siirrot eivät päivitä niitä automaattisesti."
+summary = "Varastot, varastopaikat, varastosaldot ja varastosiirrot."
 
 [labels.fi.model.inventory_warehouse]
 name = "Varasto"

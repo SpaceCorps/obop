@@ -1,5 +1,6 @@
 [labels.es.module]
 name = "Contactos"
+summary = "Contactos y empresas: las personas y organizaciones con las que trata el negocio."
 
 [labels.es.model.party]
 name = "Tercero"

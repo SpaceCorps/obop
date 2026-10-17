@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Projets"
 description = "Projets, jalons et tâches avec responsables, échéances et flux de statuts. L’avancement est suivi par statut, pas calculé à partir de l’effort des tâches."
+summary = "Projets, jalons et tâches avec responsables, échéances et flux de statuts."
 
 [labels.fr.model.projects_project]
 name = "Projet"

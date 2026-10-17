@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Verkkosivusto"
 description = "Julkisen verkkosivuston sisältö: sivut, valikkokohdat, blogikirjoitukset, niiden käännökset ja kävijöiden lähettämät lomakeviestit. Kun julkinen sivusto on käytössä, julkaistu sisältö tarjoillaan kävijöille hakukoneystävällisenä ilman kirjautumista; vain julkiseksi merkityt kentät näkyvät. Julkaisu vaatii ihmisen hyväksynnän. Lähettäjät ovat henkilötietoja."
+summary = "Sivut, valikot, blogikirjoitukset ja lomakeviestit, jotka tarjoillaan julkisena sivustona, kun sivusto on käytössä."
 
 [labels.fi.model.website_page]
 name = "Sivu"

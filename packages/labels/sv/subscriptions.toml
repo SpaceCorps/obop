@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Abonnemang"
 description = "Återkommande planer och kundabonnemang med flödet provperiod, aktivt, förfallet och annullerat. Det registrerar nästa fakturadatum men skapar inga fakturor på egen hand."
+summary = "Återkommande planer och kundabonnemang med flödet provperiod, aktivt, förfallet och annullerat."
 
 [labels.sv.model.subscriptions_plan]
 name = "Plan"

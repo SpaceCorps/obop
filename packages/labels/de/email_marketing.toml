@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "E-Mail-Marketing"
 description = "Verteilerlisten, Kontakte darauf mit Einwilligungsstatus und -datum sowie Kampagnen (Entwurf, terminiert, gesendet). Der Versand ist unumkehrbar und braucht die Genehmigung einer Führungskraft; Agenten dürfen ihn nur vorschlagen. Statistiken sind erfasste Zahlen. Kontakte sind personenbezogene Daten: Einwilligung aktuell halten und nie Kontakte anschreiben, die nicht eingewilligt haben."
+summary = "Verteilerlisten, Kontakte mit Einwilligung und Kampagnen. Der Versand braucht eine menschliche Genehmigung."
 
 [labels.de.model.email_marketing_list]
 name = "Liste"

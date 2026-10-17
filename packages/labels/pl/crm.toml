@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "CRM"
+summary = "Leady i szanse sprzedaży w lejku, od pierwszego kontaktu do wygranej lub przegranej."
 
 [labels.pl.model.lead]
 name = "Lead"

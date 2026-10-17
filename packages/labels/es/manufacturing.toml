@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Fabricación"
 description = "Listas de materiales y órdenes de fabricación con un flujo de borrador, confirmada, en curso y hecha. El stock de componentes no se consume automáticamente."
+summary = "Listas de materiales y órdenes de fabricación con un flujo de borrador, confirmada, en curso y hecha."
 
 [labels.es.model.manufacturing_bom]
 name = "Lista de materiales"

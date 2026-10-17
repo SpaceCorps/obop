@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Lager"
 description = "Lager, Lagerorte, Bestände und Lagerbewegungen. Mengen werden von Menschen erfasst und geprüft; Bewegungen aktualisieren sie nicht automatisch."
+summary = "Lager, Lagerorte, Bestände und Lagerbewegungen."
 
 [labels.de.model.inventory_warehouse]
 name = "Lager"

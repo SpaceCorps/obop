@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Projekte"
 description = "Projekte, Meilensteine und Aufgaben mit Zuständigen, Fristen und Statusabläufen. Der Fortschritt wird über den Status verfolgt, nicht aus dem Aufwand der Aufgaben berechnet."
+summary = "Projekte, Meilensteine und Aufgaben mit Zuständigen, Fristen und Statusabläufen."
 
 [labels.de.model.projects_project]
 name = "Projekt"

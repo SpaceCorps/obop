@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Projekt"
 description = "Projekt, milstolpar och uppgifter med ansvariga, tidsfrister och statusflöden. Framsteg följs via status och beräknas inte utifrån uppgifternas arbetsinsats."
+summary = "Projekt, milstolpar och uppgifter med ansvariga, tidsfrister och statusflöden."
 
 [labels.sv.model.projects_project]
 name = "Projekt"

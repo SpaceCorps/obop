@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Kassa"
 description = "Butikskassor: en kassakonfiguration, kassapass med kassakontroll som öppnas och stängs, order med rader och betalningsrader per betalsätt. Återbetalning och stängning av kassapass kräver en chefs godkännande; agenter får bara föreslå dem. Totaler, växel och kassadifferenser anges, de beräknas inte. Kortnummer får aldrig lagras; spara bara betaltjänstens referens. Kräver paketet Produkter."
+summary = "Butikskassor: kassapass med kassakontroll, order med rader och betalningar. Återbetalning och stängning kräver godkännande."
 
 [labels.sv.model.pos_config]
 name = "Kassa"

@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Comercio electrónico"
 description = "Tienda online: categorías, fichas de producto con traducciones, métodos de envío, códigos de descuento y pedidos web. Con el sitio público activado, los visitantes piden sin cuenta y el servidor calcula siempre los precios. No hay pasarela de pago. Los reembolsos requieren aprobación humana de un responsable; los datos del cliente son personales y nunca públicos. Requiere Productos."
+summary = "Una tienda online: fichas, envíos, códigos de descuento y pedidos web, con tienda pública cuando el sitio está activado."
 
 [labels.es.model.ecommerce_category]
 name = "Categoría"

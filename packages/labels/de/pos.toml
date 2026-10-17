@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Kassensystem"
 description = "Kassen im Laden: Kassenkonfiguration, kassengeprüfte Sitzungen, Aufträge mit Positionen und Zahlungen je Zahlungsart. Erstattungen und der Abschluss einer Sitzung brauchen die Genehmigung einer Führungskraft; Agenten dürfen sie nur vorschlagen. Summen und Kassendifferenzen werden erfasst, nicht berechnet. Keine Kartennummern speichern. Benötigt das Paket Produkte."
+summary = "Ladenkassen: kassengeprüfte Sitzungen, Aufträge mit Positionen und Zahlungen. Erstattungen und Abschluss brauchen Genehmigung."
 
 [labels.de.model.pos_config]
 name = "Kasse"

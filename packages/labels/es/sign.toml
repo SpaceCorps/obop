@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Firma"
 description = "Plantillas de documentos y solicitudes de firma con flujo de borrador, enviada, firmada, rechazada y caducada. Una solicitud indica quién firma (dato personal) y guarda las pruebas como referencias. Una solicitud firmada es inmutable solo por convención y el hash del documento registra lo firmado. Enviar y registrar una firma requieren aprobación humana; los agentes solo pueden proponerlos."
+summary = "Plantillas de documentos y solicitudes de firma. Enviar y registrar una firma requieren aprobación humana."
 
 [labels.es.model.sign_template]
 name = "Plantilla"

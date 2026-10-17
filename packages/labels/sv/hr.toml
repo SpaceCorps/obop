@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Personal"
 description = "Anställda, avdelningar och ledighetsansökningar. Personuppgifter klassas strikt: lön, bank och personnummer syns bara för chefer, och hälso- och fackuppgifter för den särskilda läsargruppen."
+summary = "Anställda, avdelningar och ledighetsansökningar, där lön- och hälsouppgifter är begränsade till rätt grupper."
 
 [labels.sv.model.hr_department]
 name = "Avdelning"

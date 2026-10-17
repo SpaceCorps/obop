@@ -1,5 +1,6 @@
 [labels.fi.module]
 name = "Yhteystiedot"
+summary = "Yhteystiedot ja yritykset: ihmiset ja organisaatiot, joiden kanssa liiketoimintaa tehdään."
 
 [labels.fi.model.party]
 name = "Osapuoli"

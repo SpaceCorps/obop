@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Punto de venta"
 description = "Cajas de tienda: punto de venta, sesiones con control de efectivo, pedidos con líneas y pagos por método. Un reembolso y el cierre de una sesión requieren aprobación humana de un responsable; los agentes solo pueden proponerlos. Totales, cambio y diferencias se introducen, no se calculan. Nunca se guardan números de tarjeta, solo la referencia de la pasarela. Requiere Productos."
+summary = "Cajas de tienda: sesiones con control de efectivo, pedidos con líneas y pagos. Reembolsos y cierre requieren aprobación."
 
 [labels.es.model.pos_config]
 name = "Configuración"

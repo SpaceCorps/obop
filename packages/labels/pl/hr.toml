@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Kadry"
 description = "Pracownicy, działy i wnioski urlopowe. Dane osobowe są ściśle klasyfikowane: wynagrodzenie, rachunek bankowy i numer identyfikacyjny widzą tylko kierownicy, a dane o zdrowiu i związkach zawodowych tylko specjalna grupa czytelników."
+summary = "Pracownicy, działy i wnioski urlopowe; dane o wynagrodzeniu i zdrowiu dostępne tylko dla odpowiednich grup."
 
 [labels.pl.model.hr_department]
 name = "Dział"

@@ -1,5 +1,6 @@
 [labels.fi.module]
 name = "Laskutus"
+summary = "Asiakaslaskut luonnos-, kirjattu- ja maksettu-elinkaarella."
 
 [labels.fi.model.invoice]
 name = "Lasku"

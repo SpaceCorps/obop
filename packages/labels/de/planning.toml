@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Planung"
 description = "Schichten für Mitarbeiter, mit Rollen und wiederverwendbaren Vorlagen. Eine Schicht hat einen Tag sowie Beginn und Ende in Minuten seit Mitternacht (0 bis 1439; 540 ist 09:00). Eine Schicht ohne Mitarbeiter ist eine offene Schicht. Ablauf: offen, veröffentlicht, vom Mitarbeiter bestätigt. Benötigt das Paket Personal."
+summary = "Schichten für Mitarbeiter mit Rollen und wiederverwendbaren Vorlagen; offene Schichten werden veröffentlicht und bestätigt."
 
 [labels.de.model.planning_role]
 name = "Rolle"

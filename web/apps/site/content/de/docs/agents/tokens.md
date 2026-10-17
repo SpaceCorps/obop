@@ -67,6 +67,15 @@ shown once; store it like a password
 
 Fügen Sie `--db postgres://...` hinzu (oder setzen Sie `OBOP_DATABASE_URL`), wenn die Instanz nicht die Standarddatenbank `sqlite://obop.db` verwendet.
 
+## Das Token für MCP verwenden
+
+Dasselbe Token verbindet einen MCP-Client mit dem entfernten MCP-Server der Instanz, `https://YOUR-INSTANCE/mcp`: Senden Sie es als `Authorization: Bearer obop_...` (Clients haben dafür ein Feld `headers` oder eine Bearer-Token-Variable). Ein mit der CLI oder über REST erstelltes Token funktioniert für beides; es ist nichts MCP-Spezifisches zu erstellen. Beachten Sie dabei:
+
+- Erstellen Sie pro Client ein eigenes Token und geben Sie ihm nur die Scopes, die dieser Client braucht. Die MCP-Tool-Liste besteht genau aus den Befehlen, die die Scopes erlauben.
+- Ein Sitzungs-Token aus der Anmeldung funktioniert ebenfalls, läuft aber nach 12 Stunden ab; ein Agent-Token nicht.
+- Das Token muss bei jeder Anfrage gesendet werden, nicht nur bei der ersten; Clients tun das, sobald es in ihrer Konfiguration steht.
+- Eine OAuth-Anmeldung für MCP gibt es noch nicht, daher können sich Clients, die nur eine Browser-Anmeldung anbieten, nicht verbinden. Siehe [Über MCP verbinden](/docs/agents/mcp/).
+
 ## Sicher aufbewahren
 
 - Legen Sie es in einer Umgebungsvariablen oder einem Secret-Store ab, nicht in einem Repository.

@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Valmistus"
 description = "Osaluettelot ja valmistustilaukset luonnos-, vahvistettu-, käynnissä- ja valmis-kulussa. Komponenttien varastosaldoa ei kuluteta automaattisesti."
+summary = "Osaluettelot ja valmistustilaukset luonnos-, vahvistettu-, käynnissä- ja valmis-kulussa."
 
 [labels.fi.model.manufacturing_bom]
 name = "Osaluettelo"

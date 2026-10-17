@@ -1,5 +1,6 @@
 [labels.fi.module]
 name = "Tuotteet"
+summary = "Tuotteet ja palvelut hintoineen ja kustannuksineen, jaettuna myynnin, laskutuksen ja varaston kesken."
 
 [labels.fi.model.product]
 name = "Tuote"

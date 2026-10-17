@@ -355,6 +355,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                 mo["description"] = json!(m.description);
             }
             translations(&mut mo, &m.labels, &m.descriptions);
+            if !m.summaries.is_empty() {
+                mo["summaries"] = json!(m.summaries);
+            }
             mo
         })
         .collect();

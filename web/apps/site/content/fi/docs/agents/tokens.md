@@ -67,6 +67,15 @@ shown once; store it like a password
 
 Lisää `--db postgres://...` (tai aseta `OBOP_DATABASE_URL`), jos instanssi ei käytä oletusta `sqlite://obop.db`.
 
+## Käytä tunnistetta MCP:ssä
+
+Sama tunniste yhdistää MCP-asiakkaan instanssin etä-MCP-palvelimeen `https://YOUR-INSTANCE/mcp`: lähetä se muodossa `Authorization: Bearer obop_...` (asiakkailla on sitä varten `headers`-kenttä tai Bearer-tunnisteen muuttuja). CLI:llä tai REST-rajapinnan kautta luotu tunniste toimii molempiin; mitään MCP-kohtaista ei tarvitse luoda. Pidä mielessä nämä asiat:
+
+- Luo erillinen tunniste jokaista asiakasta varten ja anna sille vain ne rajaukset, joita asiakas tarvitsee. MCP-työkalulista on täsmälleen ne komennot, jotka rajaukset sallivat.
+- Myös sisäänkirjautumisen istuntotunniste toimii, mutta se vanhenee 12 tunnissa; agenttitunniste ei vanhene.
+- Tunniste on lähetettävä jokaisessa pyynnössä, ei vain ensimmäisessä; asiakkaat tekevät tämän, kun tunniste on niiden asetuksissa.
+- MCP:lle ei ole vielä OAuth-kirjautumista, joten asiakkaat, jotka tarjoavat vain selainkirjautumisen, eivät voi yhdistää. Katso [Yhdistä MCP:n kautta](/docs/agents/mcp/).
+
 ## Säilytä se turvallisesti
 
 - Tallenna se ympäristömuuttujaan tai salaisuuksien hallintaan, älä repositorioon.

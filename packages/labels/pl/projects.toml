@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Projekty"
 description = "Projekty, kamienie milowe i zadania z osobami przypisanymi, terminami i obiegiem statusów. Postęp śledzi się według statusu, a nie wylicza z nakładu pracy przy zadaniach."
+summary = "Projekty, kamienie milowe i zadania z osobami przypisanymi, terminami i obiegiem statusów."
 
 [labels.pl.model.projects_project]
 name = "Projekt"

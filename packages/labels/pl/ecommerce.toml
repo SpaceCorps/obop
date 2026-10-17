@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Sklep internetowy"
 description = "Sklep internetowy: kategorie, pozycje produktów z tłumaczeniami, metody dostawy, kody rabatowe oraz zamówienia z pozycjami i obiegiem: oczekujące, opłacone, nadane, dostarczone, anulowane, zwrócone. Zamówienia wycenia serwer na podstawie opublikowanej pozycji. Brak operatora płatności. Zwroty wymagają zatwierdzenia kierownika. Dane klienta są danymi osobowymi. Wymaga pakietu Produkty."
+summary = "Sklep internetowy: oferty, dostawa, kody rabatowe i zamówienia z witryny, z publiczną witryną sklepu przy włączonej stronie."
 
 [labels.pl.model.ecommerce_category]
 name = "Kategoria"

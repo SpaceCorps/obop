@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "eCommerce"
 description = "Une boutique en ligne : catégories, fiches produit traduisibles, modes de livraison, codes de réduction et commandes web (en attente, payée, expédiée, livrée, annulée, remboursée). Avec le site public activé, les visiteurs commandent sans compte et le serveur recalcule chaque prix. Pas de prestataire de paiement. Les remboursements exigent un responsable. Nécessite le package Produits."
+summary = "Une boutique en ligne : fiches produit, livraison, codes de réduction et commandes web, avec une vitrine publique si le site est activé."
 
 [labels.fr.model.ecommerce_category]
 name = "Catégorie"

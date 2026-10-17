@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Servicio de asistencia"
 description = "Tickets de soporte con prioridad, gravedad, objetivos de nivel de servicio y un flujo de abierto, en curso, resuelto y cerrado. Los objetivos se registran, no se aplican ni se miden automáticamente."
+summary = "Tickets de soporte con prioridad, gravedad, objetivos de nivel de servicio y un flujo de abierto a cerrado."
 
 [labels.es.model.helpdesk_sla]
 name = "SLA"

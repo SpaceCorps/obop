@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Tillverkning"
 description = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar. Komponenternas lagersaldo förbrukas inte automatiskt."
+summary = "Stycklistor och tillverkningsorder med flödet utkast, bekräftad, pågår och klar."
 
 [labels.sv.model.manufacturing_bom]
 name = "Stycklista"

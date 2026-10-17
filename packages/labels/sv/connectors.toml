@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Kopplingar"
 description = "Anslut externa system och låt personer ansluta sina egna konton, med inbyggda kontroller som stöder efterlevnad av GDPR: registrerad rättslig grund, samtycke som kan dras tillbaka, dataminimering, pseudonymisering efter dataklass, en logg utan innehåll och en förteckning över behandlingar. Tekniska kontroller, inte juridisk rådgivning eller certifiering."
+summary = "Anslut andra system med registrerad rättslig grund, tillåtlistor för fält, signerade webhooks och OAuth."
 
 [labels.sv.model.connector_provider]
 name = "Kopplingsleverantör"

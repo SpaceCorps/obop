@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Sitio web"
 description = "Contenido de un sitio web público: páginas con flujo de borrador, publicada y archivada, menú, entradas de blog, traducciones y formularios de los visitantes. Con el sitio público activado, sirve lo publicado sin inicio de sesión y con SEO; solo se ven los campos públicos. Publicar requiere aprobación humana; los agentes solo pueden proponerlo. Los remitentes son datos personales."
+summary = "Páginas, menús, entradas de blog y formularios, servidos como sitio web público cuando el sitio está activado."
 
 [labels.es.model.website_page]
 name = "Página"

@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "Produkty"
+summary = "Produkty i usługi z cenami i kosztem, wspólne dla sprzedaży, fakturowania i magazynu."
 
 [labels.pl.model.product]
 name = "Produkt"

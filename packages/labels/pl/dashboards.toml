@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Pulpity"
 description = "Pulpity i ich kafelki zapisane jako dane do wyświetlenia w interfejsie. Pulpit ma tytuł i właściciela. Kafelek określa rodzaj (KPI, słupkowy, liniowy, kołowy, tabela), czytany model, agregowane pole miary, agregację (liczba lub suma), grupowanie, filtr (obiekt JSON) i kolejność. Pakiet tylko przechowuje definicję: nie sprawdza modelu ani pól i niczego nie oblicza."
+summary = "Pulpity i kafelki zapisane jako dane, które interfejs wyświetla jako KPI, wykresy i tabele."
 
 [labels.pl.model.dashboards_dashboard]
 name = "Pulpit"

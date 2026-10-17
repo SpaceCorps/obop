@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Kulut"
 description = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa. Maksaminen on oma käyttöoikeutensa ja vaatii ihmisen hyväksynnän; kuitteihin viitataan huomautuksella, niitä ei tallenneta."
+summary = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa."
 
 [labels.fi.model.expenses_expense]
 name = "Kulu"

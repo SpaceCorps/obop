@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Instrumentpaneler"
 description = "Instrumentpaneler och deras rutor lagrade som data för ett gränssnitt att visa. En ruta anger typ (nyckeltal, stapel, linje, cirkel eller tabell), modell, måttfält, beräkning (antal eller summa), gruppering, filter och placering. Paketet lagrar bara definitionen, kontrollerar inte att modell eller fält finns och beräknar ingenting."
+summary = "Instrumentpaneler och rutor lagrade som data, som backoffice visar som nyckeltal, diagram och tabeller."
 
 [labels.sv.model.dashboards_dashboard]
 name = "Instrumentpanel"

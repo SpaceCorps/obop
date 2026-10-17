@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Suscripciones"
 description = "Planes recurrentes y suscripciones de clientes con un flujo de prueba, activa, vencida y cancelada. Registra la fecha de la próxima factura; no crea facturas por sí sola."
+summary = "Planes recurrentes y suscripciones de clientes con un flujo de prueba, activa, vencida y cancelada."
 
 [labels.es.model.subscriptions_plan]
 name = "Plan"

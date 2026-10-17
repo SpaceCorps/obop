@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Connecteurs"
 description = "Connecter des systèmes externes et laisser chacun connecter ses propres comptes, avec des contrôles intégrés qui aident à respecter le RGPD : base juridique enregistrée, consentement retirable, minimisation, pseudonymisation par classe de données, journal sans contenu et registre des traitements. Des contrôles techniques, ni conseil juridique ni certification."
+summary = "Connecter d’autres systèmes avec une base juridique enregistrée, des listes de champs autorisés, des webhooks signés et OAuth."
 
 [labels.fr.model.connector_provider]
 name = "Fournisseur de connecteur"

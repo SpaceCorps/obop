@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Termine"
 description = "Buchbare Ressourcen (Personen, Räume, Ausstattung) und Termine mit Datum, Start- und Endzeit sowie einem Statusablauf. Überschneidungen werden nicht automatisch verhindert."
+summary = "Buchbare Personen, Räume und Ausstattung sowie Termine mit Start, Ende und Statusablauf."
 
 [labels.de.model.appointments_resource]
 name = "Ressource"

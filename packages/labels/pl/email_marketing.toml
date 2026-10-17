@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Marketing e-mailowy"
 description = "Listy mailingowe, kontakty na nich ze statusem i datą zgody oraz kampanie z obiegiem wersja robocza, zaplanowane, wysłane. Wysyłka jest nieodwracalna i dociera do realnych osób, więc wymaga zatwierdzenia przez kierownika; agenci mogą ją tylko zaproponować. Statystyki kampanii są wpisywane lub importowane, nie obliczane. Kontakty to dane osobowe: nie wysyłaj do kontaktu bez wyrażonej zgody."
+summary = "Listy mailingowe, kontakty ze zgodą i kampanie. Wysyłka wymaga zatwierdzenia przez człowieka."
 
 [labels.pl.model.email_marketing_list]
 name = "Lista"

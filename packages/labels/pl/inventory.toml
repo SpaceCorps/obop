@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Magazyn"
 description = "Magazyny, lokalizacje magazynowe, stany magazynowe i operacje magazynowe. Ilości wprowadzają i zatwierdzają ludzie; operacje nie aktualizują ich automatycznie."
+summary = "Magazyny, lokalizacje magazynowe, stany magazynowe i operacje magazynowe."
 
 [labels.pl.model.inventory_warehouse]
 name = "Magazyn"

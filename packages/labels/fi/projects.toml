@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Projektit"
 description = "Projektit, välitavoitteet ja tehtävät vastuuhenkilöineen, määräaikoineen ja tilakulkuineen. Edistymistä seurataan tilan mukaan, ei lasketa tehtävien työmäärästä."
+summary = "Projektit, välitavoitteet ja tehtävät vastuuhenkilöineen, määräaikoineen ja tilakulkuineen."
 
 [labels.fi.model.projects_project]
 name = "Projekti"

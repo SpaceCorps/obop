@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Rendez-vous"
 description = "Ressources réservables (personnes, salles, équipements) et rendez-vous avec une date, une heure de début et de fin et un flux de statuts. Les chevauchements ne sont pas empêchés automatiquement."
+summary = "Personnes, salles et équipements réservables, et rendez-vous avec un début, une fin et un flux de statuts."
 
 [labels.fr.model.appointments_resource]
 name = "Ressource"

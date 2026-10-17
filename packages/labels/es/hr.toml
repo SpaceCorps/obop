@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Recursos humanos"
 description = "Empleados, departamentos y solicitudes de ausencia. Los datos personales se clasifican de forma estricta: el salario, los datos bancarios y el documento de identidad solo los ven los responsables, y los datos de salud y sindicales, el grupo especial de lectores."
+summary = "Empleados, departamentos y solicitudes de ausencia, con salario y datos de salud restringidos a los grupos adecuados."
 
 [labels.es.model.hr_department]
 name = "Departamento"

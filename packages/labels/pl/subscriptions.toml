@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Subskrypcje"
 description = "Plany cykliczne i subskrypcje klientów z obiegiem okres próbny, aktywne, zaległe i anulowane. Zapisuje datę następnej faktury; sam nie tworzy faktur."
+summary = "Plany cykliczne i subskrypcje klientów z obiegiem okres próbny, aktywne, zaległe, anulowane."
 
 [labels.pl.model.subscriptions_plan]
 name = "Plan"

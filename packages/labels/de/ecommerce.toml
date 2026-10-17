@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "E-Commerce"
 description = "Ein Onlineshop: Kategorien, Shop-Einträge mit Übersetzungen, Versandarten, Rabattcodes und Webbestellungen mit Positionen. Besucher bestellen ohne Konto; der Server berechnet jeden Preis aus dem veröffentlichten Eintrag. Erstattungen brauchen die Genehmigung einer Führungskraft; Agenten dürfen sie nur vorschlagen. Benötigt das Paket Produkte."
+summary = "Ein Onlineshop: Einträge, Versand, Rabattcodes und Webbestellungen, mit öffentlichem Shop, wenn die Website aktiv ist."
 
 [labels.de.model.ecommerce_category]
 name = "Kategorie"

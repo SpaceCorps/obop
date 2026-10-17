@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Osto"
 description = "Toimittajat, ostotilaukset ja tilausrivit luonnos-, lähetetty-, vahvistettu-, vastaanotettu- ja peruutettu-kulussa. Tilauksen loppusumma syötetään, sitä ei lasketa riveistä."
+summary = "Toimittajat, ostotilaukset ja tilausrivit luonnos-, lähetetty-, vahvistettu- ja vastaanotettu-kulussa."
 
 [labels.fi.model.purchase_vendor]
 name = "Toimittaja"

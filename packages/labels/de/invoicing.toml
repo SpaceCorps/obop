@@ -1,5 +1,6 @@
 [labels.de.module]
 name = "Rechnungsstellung"
+summary = "Kundenrechnungen mit dem Lebenszyklus Entwurf, gebucht und bezahlt."
 
 [labels.de.model.invoice]
 name = "Rechnung"

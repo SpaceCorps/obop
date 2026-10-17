@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Zakupy"
 description = "Dostawcy, zamówienia zakupu i ich pozycje z obiegiem wersja robocza, wysłane, potwierdzone, przyjęte i anulowane. Sumy zamówień są wpisywane, a nie sumowane z pozycji."
+summary = "Dostawcy, zamówienia zakupu i ich pozycje z obiegiem wersja robocza, wysłane, potwierdzone, przyjęte."
 
 [labels.pl.model.purchase_vendor]
 name = "Dostawca"

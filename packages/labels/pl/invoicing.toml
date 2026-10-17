@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "Fakturowanie"
+summary = "Faktury klientów z cyklem życia wersja robocza, zaksięgowana, opłacona."
 
 [labels.pl.model.invoice]
 name = "Faktura"

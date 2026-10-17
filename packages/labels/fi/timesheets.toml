@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Tuntiseuranta"
 description = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe. Vaatii Projektit-paketin."
+summary = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe."
 
 [labels.fi.model.timesheets_entry]
 name = "Tuntikirjaus"

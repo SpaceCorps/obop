@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Suunnittelu"
 description = "Työntekijöiden työvuorot rooleineen ja uudelleenkäytettävine malleineen. Vuorolla on päivä sekä alku- ja loppuaika minuutteina keskiyöstä (0-1439; 540 tarkoittaa kello 9.00). Vuoro ilman työntekijää on avoin vuoro. Kulku: avoin, julkaistu, työntekijän vahvistama. Vaatii Henkilöstö-paketin."
+summary = "Työntekijöiden työvuorot rooleineen ja uudelleenkäytettävine malleineen; avoimet vuorot julkaistaan ja vahvistetaan."
 
 [labels.fi.model.planning_role]
 name = "Rooli"

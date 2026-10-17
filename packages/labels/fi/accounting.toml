@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Kirjanpito"
 description = "Tilikartta, päiväkirjat, verokannat, kirjaukset debet- ja kredit-riveineen, tilikaudet, jaksot ja tiliotteen rivit. Summat ovat valuutan pienimmässä yksikössä ja verokannat peruspisteinä. Mitään ei lasketa: tasapaino, verot ja numerot syöttää käyttäjä. Kirjaaminen sekä jakson tai tilikauden sulkeminen vaativat ihmisen hyväksynnän (accounting.approver); agentit voivat vain ehdottaa niitä."
+summary = "Tilikartta, päiväkirjat, verokannat, tilikaudet ja kirjaukset. Kirjaaminen ja sulkeminen vaativat ihmisen hyväksynnän."
 
 [labels.fi.model.accounting_account]
 name = "Tili"

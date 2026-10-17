@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Liittimet"
 description = "Yhdistä ulkoisia järjestelmiä ja anna ihmisten yhdistää omia tilejään. Mukana GDPR:ää tukevat kontrollit: kirjattu oikeusperuste, peruutettava suostumus, tietojen minimointi, pseudonymisointi tietoluokan mukaan, sisällötön loki ja käsittelytoimien seloste. Teknisiä kontrolleja, ei oikeudellista neuvontaa eikä sertifiointi."
+summary = "Yhdistä muita järjestelmiä kirjatulla oikeusperusteella, kenttälistoilla, allekirjoitetuilla webhookeilla ja OAuthilla."
 
 [labels.fi.model.connector_provider]
 name = "Liittimen tarjoaja"

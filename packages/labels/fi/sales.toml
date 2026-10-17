@@ -1,5 +1,6 @@
 [labels.fi.module]
 name = "Myynti"
+summary = "Tarjoukset ja myyntitilaukset asiakkaillesi."
 
 [labels.fi.model.sale_order]
 name = "Myyntitilaus"

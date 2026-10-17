@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Parc automobile"
 description = "Véhicules, conducteurs et historique d’entretien pour un petit parc. Suit les statuts et les interventions ; ne calcule ni les coûts d’exploitation ni la consommation de carburant."
+summary = "Véhicules, conducteurs et historique d’entretien pour un petit parc."
 
 [labels.fr.model.fleet_vehicle]
 name = "Véhicule"

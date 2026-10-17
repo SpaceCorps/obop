@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Inventario"
 description = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock. Las cantidades las introducen y validan personas; los movimientos no las actualizan automáticamente."
+summary = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock."
 
 [labels.es.model.inventory_warehouse]
 name = "Almacén"

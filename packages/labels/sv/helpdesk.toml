@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Kundtjänst"
 description = "Supportärenden med prioritet, allvarlighetsgrad, servicenivåmål och flödet öppen, pågår, löst och stängd. Målen registreras men tillämpas och tidtas inte automatiskt."
+summary = "Supportärenden med prioritet, allvarlighetsgrad, servicenivåmål och flödet från öppen till stängd."
 
 [labels.sv.model.helpdesk_sla]
 name = "SLA"

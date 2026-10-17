@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Tableaux de bord"
 description = "Tableaux de bord et leurs tuiles, stockés comme données pour qu’une interface les affiche. Une tuile définit son type (kpi, bar, line, pie ou table), le modèle lu, le champ de mesure, l’agrégation (count ou sum), le regroupement, un filtre JSON et une position. Le package ne stocke que la définition ; il ne vérifie rien et ne calcule rien."
+summary = "Tableaux de bord et tuiles stockés comme données, que le back-office affiche en indicateurs, graphiques et tableaux."
 
 [labels.fr.model.dashboards_dashboard]
 name = "Tableau de bord"

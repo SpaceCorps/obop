@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Bokföring"
 description = "Kontoplan, verifikationsserier, skattesatser, verifikationer med debet- och kreditrader, räkenskapsår, perioder och kontoutdragsrader. Belopp anges i valutans minsta enhet, skattesatser i baspunkter (2000 är 20,00 procent). Inget beräknas automatiskt. Bokföring samt stängning av period eller räkenskapsår kräver mänskligt godkännande; agenter får bara föreslå."
+summary = "Kontoplan, verifikationsserier, skatter, perioder och verifikationer. Bokföring och stängning kräver mänskligt godkännande."
 
 [labels.sv.model.accounting_account]
 name = "Konto"

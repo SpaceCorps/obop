@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Paneles de control"
 description = "Paneles de control y sus widgets guardados como datos, para que una interfaz los muestre. Un widget es una tarjeta con tipo (kpi, barras, líneas, circular o tabla), modelo, campo de medida, agregación (contar o sumar), agrupación, filtro y posición. El paquete solo guarda la definición; no comprueba que el modelo o los campos existan y no calcula nada."
+summary = "Paneles y widgets guardados como datos, para que el backoffice los muestre como KPI, gráficos y tablas."
 
 [labels.es.model.dashboards_dashboard]
 name = "Panel de control"

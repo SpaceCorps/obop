@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Website"
 description = "Inhalte für eine öffentliche Website: Seiten, Menüeinträge, Blogbeiträge, deren Übersetzungen und Formulareingänge von Besuchern. Veröffentlichte Inhalte werden ohne Anmeldung serverseitig ausgeliefert, sichtbar sind nur öffentliche Felder. Veröffentlichen braucht eine menschliche Genehmigung; Agenten dürfen nur vorschlagen. Absender sind personenbezogene Daten und nie öffentlich."
+summary = "Seiten, Menüs, Blogbeiträge und Formulareingänge, als öffentliche Website ausgeliefert, wenn die Website aktiv ist."
 
 [labels.de.model.website_page]
 name = "Seite"

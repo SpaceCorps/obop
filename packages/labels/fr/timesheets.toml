@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Feuilles de temps"
 description = "Temps passé sur les tâches de projet, saisi en minutes, avec un indicateur facturable et une étape d’approbation. Nécessite le package Projets."
+summary = "Temps passé sur les tâches de projet, en minutes, avec un indicateur facturable et une étape d’approbation."
 
 [labels.fr.model.timesheets_entry]
 name = "Saisie de temps"

@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Produkter"
+summary = "Produkter och tjänster med pris och kostnad, delade av försäljning, fakturering och lager."
 
 [labels.sv.model.product]
 name = "Produkt"

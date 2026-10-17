@@ -277,6 +277,8 @@ pub struct ModuleInfo {
     pub description: String,
     pub labels: Texts,
     pub descriptions: Texts,
+    /// The card summary per language (D52); empty when untranslated.
+    pub summaries: Texts,
     pub models: Vec<ModelInfo>,
 }
 
@@ -399,12 +401,13 @@ impl Dispatcher {
                 let name = first
                     .map(|m| m.module_name.clone())
                     .unwrap_or_else(|| module.clone());
-                let (description, labels, descriptions) =
+                let (description, labels, descriptions, summaries) =
                     first.map_or_else(Default::default, |m| {
                         (
                             m.module_description.clone(),
                             m.translations.module.labels.clone(),
                             m.translations.module.descriptions.clone(),
+                            m.translations.summaries.clone(),
                         )
                     });
                 out.push(ModuleInfo {
@@ -413,6 +416,7 @@ impl Dispatcher {
                     description,
                     labels,
                     descriptions,
+                    summaries,
                     models: infos,
                 });
             }

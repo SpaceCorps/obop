@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Connaissances"
 description = "Un wiki : des articles organisés en arborescence grâce à un article parent, avec un flux brouillon, publié, archivé, un réglage de visibilité et des étiquettes. La visibilité est une indication pour l’interface et pour les personnes, à respecter ; la plateforme n’a pas encore de droits au niveau de la ligne, donc toute personne appartenant aux groupes Connaissances peut lire chaque article."
+summary = "Un wiki : des articles en arborescence avec un flux brouillon, publié, archivé, une visibilité et des étiquettes."
 
 [labels.fr.model.knowledge_article]
 name = "Article"

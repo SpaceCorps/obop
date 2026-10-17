@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Punkt sprzedaży"
 description = "Kasy sklepowe: punkt sprzedaży, sesje z kontrolą gotówki, zamówienia z pozycjami i płatności według metody. Zwrot środków i zamknięcie sesji zatwierdza kierownik; agenci mogą je tylko zaproponować. Sumy i różnice kasowe są wpisywane, nie wyliczane. Nie przechowuje numerów kart, tylko referencję operatora płatności. Wymaga pakietu Produkty."
+summary = "Kasy sklepowe: sesje z kontrolą gotówki, zamówienia z pozycjami i płatnościami. Zwroty i zamknięcie wymagają zatwierdzenia."
 
 [labels.pl.model.pos_config]
 name = "Kasa"

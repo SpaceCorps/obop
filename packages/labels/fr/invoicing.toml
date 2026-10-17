@@ -1,5 +1,6 @@
 [labels.fr.module]
 name = "Facturation"
+summary = "Factures clients avec un cycle de vie brouillon, comptabilisée et payée."
 
 [labels.fr.model.invoice]
 name = "Facture"

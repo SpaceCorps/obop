@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Documents"
 description = "Un registre des documents de l’entreprise : dossiers, documents avec type, propriétaire, expiration et confidentialité, et un flux brouillon, publié, archivé. Il stocke des références, pas le contenu des fichiers."
+summary = "Un registre des documents de l’entreprise avec propriétaire, expiration et confidentialité, et un flux brouillon, publié, archivé."
 
 [labels.fr.model.documents_folder]
 name = "Dossier"

@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Fertigung"
 description = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt. Der Bestand der Komponenten wird nicht automatisch verbraucht."
+summary = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt."
 
 [labels.de.model.manufacturing_bom]
 name = "Stückliste"

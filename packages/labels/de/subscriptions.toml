@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Abonnements"
 description = "Wiederkehrende Tarife und Kundenabonnements mit dem Ablauf Testphase, aktiv, überfällig und storniert. Das Datum der nächsten Rechnung wird erfasst; Rechnungen werden nicht selbstständig erstellt."
+summary = "Wiederkehrende Tarife und Kundenabonnements mit dem Ablauf Testphase, aktiv, überfällig und storniert."
 
 [labels.de.model.subscriptions_plan]
 name = "Tarif"

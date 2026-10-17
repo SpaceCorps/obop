@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Achats"
 description = "Fournisseurs, commandes d’achat et lignes de commande avec un flux brouillon, envoyée, confirmée, reçue et annulée. Les totaux de commande sont saisis, pas additionnés à partir des lignes."
+summary = "Fournisseurs, commandes d’achat et lignes de commande avec un flux brouillon, envoyée, confirmée, reçue."
 
 [labels.fr.model.purchase_vendor]
 name = "Fournisseur"

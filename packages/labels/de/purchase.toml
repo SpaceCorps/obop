@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Einkauf"
 description = "Lieferanten, Bestellungen und Bestellpositionen mit dem Ablauf Entwurf, gesendet, bestätigt, eingegangen und storniert. Bestellsummen werden erfasst, nicht aus den Positionen summiert."
+summary = "Lieferanten, Bestellungen und Bestellpositionen mit dem Ablauf Entwurf, gesendet, bestätigt, eingegangen."
 
 [labels.de.model.purchase_vendor]
 name = "Lieferant"

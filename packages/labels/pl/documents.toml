@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Dokumenty"
 description = "Rejestr dokumentów firmowych: foldery oraz dokumenty z rodzajem, właścicielem, terminem ważności i poufnością, z obiegiem wersja robocza, opublikowany, zarchiwizowany. Przechowuje odwołania, a nie zawartość plików."
+summary = "Rejestr dokumentów firmowych z właścicielem, terminem ważności i poufnością oraz obiegiem wersja robocza, opublikowany, zarchiwizowany."
 
 [labels.pl.model.documents_folder]
 name = "Folder"

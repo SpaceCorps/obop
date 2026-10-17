@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Försäljning"
+summary = "Offerter och försäljningsorder för dina kunder."
 
 [labels.sv.model.sale_order]
 name = "Försäljningsorder"

@@ -1,5 +1,6 @@
 [labels.es.module]
 name = "Facturación"
+summary = "Facturas de cliente con un ciclo de vida de borrador, contabilizada y pagada."
 
 [labels.es.model.invoice]
 name = "Factura"

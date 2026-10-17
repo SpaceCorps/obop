@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Documentos"
 description = "Un registro de documentos de empresa: carpetas y documentos con tipo, propietario, caducidad y confidencialidad, y un flujo de borrador, publicado y archivado. Guarda referencias, no el contenido de los archivos."
+summary = "Un registro de documentos de empresa con propietario, caducidad y confidencialidad, y un flujo de borrador, publicado y archivado."
 
 [labels.es.model.documents_folder]
 name = "Carpeta"

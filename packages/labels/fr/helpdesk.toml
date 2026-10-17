@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Assistance"
 description = "Tickets d’assistance avec priorité, gravité, objectifs de niveau de service et un flux ouvert, en cours, résolu et clôturé. Les objectifs sont enregistrés, ni appliqués ni chronométrés automatiquement."
+summary = "Tickets d’assistance avec priorité, gravité, objectifs de niveau de service et un flux de l’ouverture à la clôture."
 
 [labels.fr.model.helpdesk_sla]
 name = "SLA"

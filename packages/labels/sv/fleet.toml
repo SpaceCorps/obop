@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Fordonsflotta"
 description = "Fordon, förare och servicehistorik för en mindre fordonsflotta. Håller reda på status och servicetillfällen; den beräknar inte driftskostnader eller bränsleförbrukning."
+summary = "Fordon, förare och servicehistorik för en mindre fordonsflotta."
 
 [labels.sv.model.fleet_vehicle]
 name = "Fordon"

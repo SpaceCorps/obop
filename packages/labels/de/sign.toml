@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Signatur"
 description = "Dokumentvorlagen und Signaturanfragen (Entwurf, gesendet, unterzeichnet, abgelehnt, abgelaufen). Eine Anfrage nennt den Unterzeichner (personenbezogene Daten) und hält Belege fest. Eine unterzeichnete Anfrage ist nur per Konvention unveränderlich; der Dokument-Hash hält fest, was unterzeichnet wurde. Senden und Unterzeichnen brauchen eine menschliche Genehmigung."
+summary = "Dokumentvorlagen und Signaturanfragen. Senden und Erfassen einer Unterschrift brauchen eine menschliche Genehmigung."
 
 [labels.de.model.sign_template]
 name = "Vorlage"

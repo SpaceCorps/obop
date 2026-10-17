@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "Sprzedaż"
+summary = "Oferty i zamówienia sprzedaży dla Twoich klientów."
 
 [labels.pl.model.sale_order]
 name = "Zamówienie sprzedaży"

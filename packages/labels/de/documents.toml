@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Dokumente"
 description = "Ein Verzeichnis von Geschäftsdokumenten: Ordner, Dokumentsätze mit Art, Eigentümer, Ablaufdatum und Vertraulichkeit sowie ein Ablauf aus Entwurf, veröffentlicht und archiviert. Es speichert Verweise, keine Dateiinhalte."
+summary = "Ein Verzeichnis von Geschäftsdokumenten mit Eigentümer, Ablauf und Vertraulichkeit sowie Ablauf aus Entwurf, veröffentlicht, archiviert."
 
 [labels.de.model.documents_folder]
 name = "Ordner"

@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "E-handel"
 description = "En webbutik: kategorier, butiksartiklar med översättningar, leveranssätt, rabattkoder och webborder med rader. Besökare kan lägga order utan konto; servern prissätter varje order utifrån den publicerade artikeln. Ingen betaltjänst ingår: en order börjar som väntande. Återbetalningar kräver en chefs godkännande; agenter får bara föreslå dem. Kräver paketet Produkter."
+summary = "En webbutik: artiklar, leverans, rabattkoder och webborder, med en publik butik när webbplatsen är på."
 
 [labels.sv.model.ecommerce_category]
 name = "Kategori"

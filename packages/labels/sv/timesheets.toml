@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Tidrapporter"
 description = "Tid som lagts på projektuppgifter, angiven i minuter, med en markering för fakturerbar tid och ett godkännandesteg. Kräver paketet Projekt."
+summary = "Tid som lagts på projektuppgifter, i minuter, med en markering för fakturerbar tid och ett godkännandesteg."
 
 [labels.sv.model.timesheets_entry]
 name = "Tidsregistrering"

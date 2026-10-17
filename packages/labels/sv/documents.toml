@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Dokument"
 description = "Ett register över affärsdokument: mappar, dokument med typ, ägare, utgångsdatum och sekretess samt ett flöde med utkast, publicerad och arkiverad. Det lagrar referenser, inte filinnehåll."
+summary = "Ett register över affärsdokument med ägare, utgångsdatum och sekretess samt ett flöde med utkast, publicerad och arkiverad."
 
 [labels.sv.model.documents_folder]
 name = "Mapp"

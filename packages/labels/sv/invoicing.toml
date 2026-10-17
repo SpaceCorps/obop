@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Fakturering"
+summary = "Kundfakturor med livscykeln utkast, bokförd och betald."
 
 [labels.sv.model.invoice]
 name = "Faktura"

@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Kassa"
 description = "Myymälän kassat: kassapisteen asetukset, avattavat ja suljettavat kassavuorot kassan täsmäytyksellä, myynnit riveineen ja maksurivit maksutavoittain. Hyvitys ja kassavuoron sulkeminen vaativat esihenkilön hyväksynnän; agentit voivat vain ehdottaa niitä. Summat, vaihtorahat ja kassaerot syötetään, niitä ei lasketa. Korttinumeroita ei saa tallentaa. Vaatii Tuotteet-paketin."
+summary = "Myymälän kassat: kassavuorot, myynnit riveineen ja maksut. Hyvitys ja sulkeminen vaativat hyväksynnän."
 
 [labels.fi.model.pos_config]
 name = "Kassapiste"
