@@ -511,6 +511,7 @@ impl MfaApi for Auth {
             "pending": u["totp_pending"].is_string(),
             "recovery_remaining": str_list(&u["recovery"]).len(),
             "limited": p.mfa_limited,
+            "password_change_required": u["must_change_password"].as_bool() == Some(true),
             "is_admin": p.groups.contains(ADMIN_GROUP),
             "require_admins": self.require_mfa_for_admins(),
             "require_all": self.require_mfa_for_all(),

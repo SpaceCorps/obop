@@ -41,6 +41,8 @@ const BrandBook = lazy(() =>
 
 type Props = {
   token: string;
+  /** Ends this browser's session (after "sign out everywhere"). */
+  onSignOut?: () => void;
   tab: string;
   section: string;
   /** The heading of the guide that the address names. */

@@ -55,6 +55,21 @@ impl HttpState {
         })
     }
 
+    /// Why a limited session is refused: it owes a new password (an administrator reset it) or
+    /// two-factor enrolment.
+    pub(crate) fn limited_rejection(&self, p: &Principal) -> AuthRejection {
+        let owes_password = self
+            .auth
+            .mfa()
+            .and_then(|m| m.status(p).ok())
+            .is_some_and(|s| s["password_change_required"] == true);
+        if owes_password {
+            AuthRejection::PasswordChangeRequired
+        } else {
+            AuthRejection::MfaEnrolmentRequired
+        }
+    }
+
     /// Serve the connectors' public doors (`/hooks/in/{id}`, `/oauth/callback`).
     pub fn set_connectors(&self, rt: Arc<obop_connectors::Runtime>) {
         let _ = self.connectors.set(rt);
@@ -74,7 +89,7 @@ impl HttpState {
             .resolve(token)
             .ok_or(AuthRejection::Unauthorized)?;
         if p.mfa_limited {
-            return Err(AuthRejection::MfaEnrolmentRequired);
+            return Err(self.limited_rejection(&p));
         }
         let agent = p.kind == obop_commands::PrincipalKind::Agent;
         Ok((p, self.shared.vault(token, agent)))
@@ -87,6 +102,7 @@ type Shared = State<Arc<HttpState>>;
 pub(crate) enum AuthRejection {
     Unauthorized,
     MfaEnrolmentRequired,
+    PasswordChangeRequired,
 }
 
 impl IntoResponse for AuthRejection {
@@ -94,6 +110,7 @@ impl IntoResponse for AuthRejection {
         match self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED.into_response(),
             Self::MfaEnrolmentRequired => mfa::enrolment_required(),
+            Self::PasswordChangeRequired => mfa::password_change_required(),
         }
     }
 }

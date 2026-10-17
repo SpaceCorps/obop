@@ -1,5 +1,6 @@
 [
   "Acme Trading",
+  "Actions",
   "Administration",
   "Condition",
   "Date",
@@ -21,6 +22,7 @@
   "Secret",
   "Service",
   "Services",
+  "Sessions",
   "Source",
   "Stable",
   "Total",

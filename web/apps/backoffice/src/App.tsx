@@ -12,6 +12,7 @@ import { ModelPage } from "./ModelPage.tsx";
 import { parseModulesRoute } from "./modules/route.ts";
 import { href, nav, useRoute } from "./route.ts";
 import { EnrolmentGate } from "./Security.tsx";
+import { PasswordGate } from "./SecurityAccount.tsx";
 import { SignIn } from "./SignIn.tsx";
 import {
   ConfirmDialog,
@@ -56,6 +57,8 @@ export function App() {
   const [ready, setReady] = useState(false);
   // The session may only set up two-factor authentication (an administrator policy, D53).
   const [limited, setLimited] = useState(false);
+  // The session may only choose a new password (an administrator reset it, B7).
+  const [mustChange, setMustChange] = useState(false);
   const [route, go] = useRoute();
   const [launcher, setLauncher] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -70,6 +73,7 @@ export function App() {
     setTokenState("");
     setReady(false);
     setLimited(false);
+    setMustChange(false);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -77,7 +81,8 @@ export function App() {
     const [m, s] = await Promise.all([meta(token), loadSettings(token)]);
     if (m === null) return signOut();
     setLimited(m === "enrolment");
-    if (m === "enrolment") return setReady(true);
+    setMustChange(m === "password");
+    if (m === "enrolment" || m === "password") return setReady(true);
     setModules(m);
     setSettings(s);
     applyTheme(resolveTheme(s.theme));
@@ -179,6 +184,18 @@ export function App() {
         }}
       />
     );
+  if (ready && mustChange)
+    return (
+      <PasswordGate
+        token={token}
+        user={email}
+        onDone={() => {
+          setReady(false);
+          void refresh();
+        }}
+        onSignOut={signOut}
+      />
+    );
   if (ready && limited)
     return (
       <EnrolmentGate
@@ -272,6 +289,7 @@ export function App() {
           {app?.id === "customize" || personalCustomize ? (
             <Customize
               token={token}
+              onSignOut={signOut}
               tab={route.tab || route.model}
               section={route.view}
               anchor={route.section}

@@ -57,6 +57,16 @@ pub(crate) fn enrolment_required() -> Response {
     )
 }
 
+/// 403 for a session that may only change the password an administrator reset.
+pub(crate) fn password_change_required() -> Response {
+    api_error(
+        StatusCode::FORBIDDEN,
+        "you must choose a new password before you can continue",
+        "password_change_required",
+        "An administrator set a temporary password. Call POST /api/auth/password with current_password (the temporary one) and new_password, then use the session again.",
+    )
+}
+
 /// The JSON of a sign-in step.
 pub(crate) fn outcome(out: LoginOutcome) -> Response {
     match out {

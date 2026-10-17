@@ -80,12 +80,13 @@ export async function approve(token: string, planId: string): Promise<Reply> {
  * `null` means the token was rejected: the caller signs out. `"enrolment"` means the session may
  * only set up two-factor authentication, which an administrator policy requires (D53).
  */
-export async function meta(token: string): Promise<ModuleMeta[] | null | "enrolment"> {
+export async function meta(token: string): Promise<ModuleMeta[] | null | "enrolment" | "password"> {
   const res = await fetch("/api/meta", { headers: { authorization: `Bearer ${token}` } });
   if (res.status === 401) return null;
   if (res.status === 403) {
     const body = (await res.json().catch(() => ({}))) as { code?: string };
     if (body.code === "mfa_enrolment_required") return "enrolment";
+    if (body.code === "password_change_required") return "password";
   }
   if (!res.ok) return [];
   const body = (await res.json()) as { modules: ModuleMeta[]; core_version?: string };

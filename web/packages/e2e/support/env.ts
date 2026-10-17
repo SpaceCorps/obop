@@ -56,6 +56,10 @@ export const users = {
   nova: { name: "nova", password: "e2e nova password 1", groups: "platform.admin" },
   // Connects her own accounts (connectors.user) and nothing else: the connectors specs use her to
   // check that a person sees only her own connections and may withdraw her consent.
+  // Account specs (tests/security.spec.ts): one changes her own password and ends sessions, the
+  // other is disabled, enabled and given a temporary password by the administrator.
+  jo: { name: "jo", password: "e2e jo password 1!", groups: "base.user" },
+  pat: { name: "pat", password: "e2e pat password 1!", groups: "base.user" },
   cora: {
     name: "cora",
     password: "e2e cora password 1",

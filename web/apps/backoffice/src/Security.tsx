@@ -15,6 +15,7 @@ import {
 } from "@obop/ui";
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
 import { Icon, Logo } from "./ui.tsx";
+import { PasswordSection, PeopleSection, SessionsSection } from "./SecurityAccount.tsx";
 
 type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
 
@@ -29,6 +30,14 @@ const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   code_failed: msg("Wrong code"),
   lockout: msg("Locked out"),
   limited_session: msg("Signed in without a second factor"),
+  login_refused: msg("Sign-in refused"),
+  password_change: msg("Password changed"),
+  password_change_failed: msg("Wrong password when changing it"),
+  password_reset: msg("Password reset by an administrator"),
+  sessions_revoked: msg("Sessions signed out"),
+  user_disable: msg("Account disabled"),
+  user_enable: msg("Account enabled"),
+  settings_change: msg("Security setting changed"),
 };
 
 /**
@@ -41,12 +50,14 @@ export function SecurityTab({
   isAdmin,
   onSettings,
   notify,
+  onSignOut,
 }: {
   token: string;
   settings: Settings;
   isAdmin: boolean;
   onSettings: (s: Settings) => void;
   notify: Notify;
+  onSignOut?: () => void;
 }) {
   const api = useMemo(() => createTwoFactorApi("/api/auth", token), [token]);
   const [policy, setPolicy] = useState<TwoFactorStatus | null>(null);
@@ -61,8 +72,15 @@ export function SecurityTab({
   return (
     <div className="stack gap-lg security-tab">
       <TwoFactorPanel api={api} notify={notify} onChanged={() => setRefreshKey((k) => k + 1)} />
+      <PasswordSection token={token} twoFactor={!!policy?.enabled} notify={notify} />
+      <SessionsSection
+        token={token}
+        notify={notify}
+        onSignOut={onSignOut ?? (() => location.reload())}
+      />
       {isAdmin && (
         <>
+          <PeopleSection token={token} notify={notify} />
           <PolicySection
             token={token}
             settings={settings}
@@ -232,6 +250,7 @@ function EventLog({ token, refreshKey }: { token: string; refreshKey: number }) 
               <th scope="col">{t("Person")}</th>
               <th scope="col">{t("Event")}</th>
               <th scope="col">{t("Done by")}</th>
+              <th scope="col">{t("Note")}</th>
             </tr>
           </thead>
           <tbody>
@@ -243,6 +262,7 @@ function EventLog({ token, refreshKey }: { token: string; refreshKey: number }) 
                   {EVENT_KINDS[String(r.kind)] ? t(EVENT_KINDS[String(r.kind)]!) : String(r.kind)}
                 </td>
                 <td>{String(r.actor)}</td>
+                <td>{String(r.detail ?? "")}</td>
               </tr>
             ))}
           </tbody>
