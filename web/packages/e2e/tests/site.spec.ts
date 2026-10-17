@@ -27,7 +27,7 @@ test.describe("website without JavaScript", () => {
     await page.goto(`${base()}/`);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("One platform.");
     await expect(page.locator("#apps .app")).toHaveCount(28);
-    await expect(page.locator("#apps .app.live")).toHaveCount(5);
+    await expect(page.locator("#apps .app.live")).toHaveCount(6);
     await expect(page.locator("#apps .app.market")).toHaveCount(22);
     await expect(
       page.getByText("Planned prices, billed yearly, excluding VAT. Not yet charged."),
@@ -41,7 +41,7 @@ test.describe("website without JavaScript", () => {
     await page.goto(`${base()}/apps/`);
     await expect(page.locator(".apps .app")).toHaveCount(28);
     await page.locator('label[for="st-live"]').click();
-    await expect(page.locator(".apps .app:visible")).toHaveCount(5);
+    await expect(page.locator(".apps .app:visible")).toHaveCount(6);
     await page.locator('label[for="st-all"]').click();
     await page.locator('label[for="cat-finance"]').click();
     const names = await page.locator(".apps .app:visible h3").allTextContents();
