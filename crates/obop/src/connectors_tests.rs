@@ -525,12 +525,12 @@ async fn the_oauth_flow_runs_against_a_local_fake_provider_and_tokens_stay_seale
         stored["oauth_client_secret"]
             .as_str()
             .unwrap()
-            .starts_with("obs1:")
+            .starts_with("e2.")
     );
     let pol = r
         .api("dev-admin", "provider_policy.get", json!({"id": pid}))
         .await;
-    assert!(!pol.body.contains(CLIENT_SECRET) && !pol.body.contains("obs1:"));
+    assert!(!pol.body.contains(CLIENT_SECRET) && !pol.body.contains("e2."));
 
     let start = r
         .ok("dev-admin", "connection.oauth_start", json!({"id": id}))
@@ -584,7 +584,7 @@ async fn the_oauth_flow_runs_against_a_local_fake_provider_and_tokens_stay_seale
         stored["oauth_tokens"]
             .as_str()
             .unwrap()
-            .starts_with("obs1:")
+            .starts_with("e2.")
     );
     let (conn, _) = r.rt.connection(&id).unwrap();
     assert_eq!(

@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 obop-commands.workspace = true
 obop-storage.workspace = true
+obop-keys.workspace = true
 argon2 = "0.6"
 sha2 = "0.11"
 getrandom = "0.4"

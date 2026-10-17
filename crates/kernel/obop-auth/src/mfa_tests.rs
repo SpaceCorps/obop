@@ -189,7 +189,7 @@ fn the_secret_is_sealed_at_rest_and_bound_to_the_user() {
     let (secret, _) = enrol(&r.a, "ada");
     let rec = r.b.get("auth_user", "ada").unwrap().unwrap();
     let sealed = rec["totp_secret"].as_str().unwrap().to_string();
-    assert!(sealed.starts_with("v1."));
+    assert!(sealed.starts_with("e2."));
     assert!(!sealed.contains(&totp::base32_encode(&secret)));
     assert!(
         !serde_json::to_string(&rec)
@@ -227,7 +227,7 @@ fn the_secret_is_sealed_at_rest_and_bound_to_the_user() {
 #[test]
 fn without_a_server_key_two_factor_cannot_be_enabled() {
     let r = rig_with(AuthConfig {
-        secret_key: None,
+        keys: obop_keys::KeyRing::default(),
         ..enforcing()
     });
     user_with(&r.a, "root", &[ADMIN_GROUP]);
@@ -311,12 +311,12 @@ fn the_mfa_token_expires_and_survives_only_five_wrong_codes() {
         ));
     }
     // Lift the per-user lockout to see the per-token cap on its own.
-    r.a.failures.lock().unwrap().clear();
+    r.a.clear_failures_for_test("ada");
     assert!(matches!(
         r.a.login_mfa(&t, Some("000000"), None),
         Err(MfaError::Denied(_))
     ));
-    r.a.failures.lock().unwrap().clear();
+    r.a.clear_failures_for_test("ada");
     assert!(
         matches!(
             r.a.login_mfa(&t, Some(&code_at(&secret, now)), None),
@@ -606,7 +606,7 @@ fn the_event_log_records_what_happened_and_never_a_secret() {
     for _ in 0..4 {
         let _ = r.a.confirm(&p, &token, "999999");
     }
-    r.a.failures.lock().unwrap().clear();
+    r.a.clear_failures_for_test("ada");
     let good = code_at(&secret, T0);
     let done = r.a.confirm(&p, &token, &good).unwrap();
     let codes: Vec<String> = done["recovery_codes"]

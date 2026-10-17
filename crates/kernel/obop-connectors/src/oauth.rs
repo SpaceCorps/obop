@@ -354,7 +354,7 @@ mod tests {
         assert_eq!(q["redirect_uri"], c.redirect_uri);
         // The verifier is stored sealed, never in the URL.
         let stored = backend.get(STATE_MODEL, &q["state"]).unwrap().unwrap();
-        assert!(stored["verifier"].as_str().unwrap().starts_with("obs1:"));
+        assert!(stored["verifier"].as_str().unwrap().starts_with("e2."));
         assert!(!url.contains(stored["verifier"].as_str().unwrap()));
 
         // The user agrees; the provider hands the browser a code bound to the challenge.

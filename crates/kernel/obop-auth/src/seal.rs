@@ -1,6 +1,10 @@
 //! Envelope for secrets at rest (D53): ChaCha20-Poly1305 under a key derived with HKDF-SHA-256
 //! from the server secret `OBOP_SECRET_KEY`. The user name is bound in as associated data, so a
 //! sealed secret copied onto another user's record does not open.
+//!
+//! New values use the key ring's envelope (`obop-keys`, B3): it names the key that sealed it, so
+//! a rotation can find and re-seal what an old key still protects. The first format (`v1.`, no
+//! key id) is still opened, by trying every key of the ring that parses as 32 bytes.
 
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
@@ -9,8 +13,38 @@ use sha2::Sha256;
 
 const VERSION: &str = "v1";
 
+/// The purpose a user's second-factor secret is sealed for.
+pub fn purpose(user: &str) -> String {
+    format!("totp:{user}")
+}
+
+/// Seal a second-factor secret with the current key of the ring.
+pub fn seal_new(ring: &obop_keys::KeyRing, user: &str, plain: &[u8]) -> Result<String, String> {
+    ring.seal(&purpose(user), plain).map_err(String::from)
+}
+
+/// Open a second-factor secret in either format.
+pub fn open_any(ring: &obop_keys::KeyRing, user: &str, sealed: &str) -> Result<Vec<u8>, String> {
+    if sealed.starts_with("v1.") {
+        for k in ring.keys() {
+            if let Ok(master) = parse_key(k.expose())
+                && let Ok(plain) = open(&master, user, sealed)
+            {
+                return Ok(plain);
+            }
+        }
+        return Err("the secret does not open: wrong OBOP_SECRET_KEY or tampered record".into());
+    }
+    ring.open(&purpose(user), sealed).map_err(String::from)
+}
+
+/// Which key sealed `sealed`, when the format says (`None` for the first format).
+pub fn key_id(sealed: &str) -> Option<String> {
+    obop_keys::sealed_key_id(sealed)
+}
+
 /// The fixed key dev and test setups may opt into. It is public knowledge: never for real data.
-pub const INSECURE_DEV_KEY: [u8; 32] = *b"obop-insecure-dev-key-0123456789";
+pub use obop_keys::INSECURE_DEV_KEY;
 
 /// Parse a 32-byte key given as 64 hex digits or as base64 (standard or URL-safe alphabet).
 pub fn parse_key(text: &str) -> Result<[u8; 32], String> {
@@ -57,6 +91,7 @@ fn cipher(master: &[u8; 32]) -> ChaCha20Poly1305 {
     ChaCha20Poly1305::new((&key).into())
 }
 
+#[cfg(test)]
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
@@ -70,7 +105,8 @@ fn unhex(s: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
-pub fn seal(master: &[u8; 32], aad: &str, plain: &[u8]) -> Result<String, String> {
+#[cfg(test)]
+pub(crate) fn seal(master: &[u8; 32], aad: &str, plain: &[u8]) -> Result<String, String> {
     let mut nonce = [0u8; 12];
     getrandom::fill(&mut nonce).map_err(|e| e.to_string())?;
     let ct = cipher(master)

@@ -85,7 +85,7 @@ fn err(e: &Env, p: &Principal, id: &str, v: J) -> String {
 /// Everything a response may not contain.
 fn assert_clean(v: &J) {
     let text = v.to_string();
-    for needle in [SECRET, "obs1:", "sk_live"] {
+    for needle in [SECRET, "e2.", "sk_live"] {
         assert!(!text.contains(needle), "{needle} leaked in {text}");
     }
 }
@@ -322,7 +322,7 @@ fn credentials_are_encrypted_at_rest_and_never_returned() {
     // At rest: sealed, not the secret.
     let stored = e.s.backend().get("connection", &id).unwrap().unwrap();
     let c = stored["credentials"].as_str().unwrap();
-    assert!(c.starts_with("obs1:") && !c.contains(SECRET));
+    assert!(c.starts_with("e2.") && !c.contains(SECRET));
     // Over every surface, for every kind of caller.
     for p in [admin(), sam_agent()] {
         for (cmd, input) in [

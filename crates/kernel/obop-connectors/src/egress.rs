@@ -62,7 +62,7 @@ pub fn pseudonym(secrets: &SecretBox, connection: &str, value: &J) -> String {
         J::String(s) => s.clone(),
         other => other.to_string(),
     };
-    let mut m = HmacSha256::new_from_slice(&secrets.subkey(&format!("pseudonym:{connection}")))
+    let mut m = HmacSha256::new_from_slice(&secrets.pseudonym_key(&format!("pseudonym:{connection}")))
         .expect("HMAC takes any key length");
     m.update(b"v1|");
     m.update(text.as_bytes());
@@ -581,6 +581,7 @@ impl Egress {
                 }
             }
         }
+        self.secrets.forget_pseudonym_keys(connection);
         n
     }
 

@@ -6,10 +6,11 @@
 use crate::{Auth, hex, now_system, random_bytes, str_list, token_hash};
 use crate::{seal, totp};
 use obop_commands::{ADMIN_GROUP, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind};
+use obop_keys::KeyRing;
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// How long the password step stays valid for the code step.
 pub const MFA_TOKEN_SECS: u64 = 5 * 60;
@@ -26,9 +27,10 @@ const MFA_TOKEN_TABLE: &str = "auth_mfa_token";
 
 #[derive(Debug, Clone)]
 pub struct AuthConfig {
-    /// The 32-byte server secret that seals TOTP secrets. `None`: two-factor cannot be enabled
-    /// and the admin policy is not applied (nobody could enrol).
-    pub secret_key: Option<[u8; 32]>,
+    /// The server key ring (`OBOP_SECRET_KEY`, then `OBOP_SECRET_KEY_PREVIOUS`) that seals TOTP
+    /// secrets. Empty: two-factor cannot be enabled and the admin policy is not applied (nobody
+    /// could enrol).
+    pub keys: KeyRing,
     /// The default of `security.require_mfa_for_admins` until an admin stores a value.
     pub default_require_admins: bool,
     /// Shown in the authenticator app next to the account.
@@ -36,34 +38,29 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
-    /// `OBOP_SECRET_KEY` (64 hex digits or base64 of 32 bytes), `OBOP_DEV_INSECURE_KEY=1` for an
+    /// `OBOP_SECRET_KEY` (64 hex digits recommended), `OBOP_SECRET_KEY_PREVIOUS`, `OBOP_DEV_INSECURE_KEY=1` for an
     /// explicit, logged development fallback, `OBOP_REQUIRE_MFA_FOR_ADMINS=0` to change the
     /// default of the admin policy, `OBOP_MFA_ISSUER`.
     pub fn from_env() -> Self {
         let flag = |n: &str| std::env::var(n).ok();
-        let secret_key = match flag("OBOP_SECRET_KEY") {
-            Some(k) if !k.trim().is_empty() => match seal::parse_key(&k) {
-                Ok(k) => Some(k),
-                Err(e) => {
-                    eprintln!("two-factor authentication is off: {e}");
-                    None
-                }
-            },
-            _ => {
-                if flag("OBOP_DEV_INSECURE_KEY")
-                    .is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes" | "on"))
+        let keys = match KeyRing::from_env() {
+            Ok(k) => {
+                if k.current()
+                    .is_some_and(|c| c.source() == obop_keys::KeySource::Development)
                 {
                     eprintln!(
                         "WARNING: OBOP_DEV_INSECURE_KEY is set: two-factor secrets are sealed with a public key. Development only."
                     );
-                    Some(seal::INSECURE_DEV_KEY)
-                } else {
-                    None
                 }
+                k
+            }
+            Err(e) => {
+                eprintln!("two-factor authentication is off: {e}");
+                KeyRing::default()
             }
         };
         Self {
-            secret_key,
+            keys,
             default_require_admins: !flag("OBOP_REQUIRE_MFA_FOR_ADMINS").is_some_and(|v| {
                 matches!(
                     v.trim().to_lowercase().as_str(),
@@ -79,7 +76,7 @@ impl AuthConfig {
     /// The public development key and no admin policy, for tests.
     pub fn insecure_dev() -> Self {
         Self {
-            secret_key: Some(seal::INSECURE_DEV_KEY),
+            keys: KeyRing::from_vars(None, None, true).unwrap_or_default(),
             default_require_admins: false,
             issuer: "obop".into(),
         }
@@ -157,7 +154,7 @@ impl Auth {
 
     fn enrolment_required_for(&self, groups: &[String]) -> bool {
         // Without a server key nobody could enrol, so the policy cannot be applied.
-        self.config.secret_key.is_some()
+        !self.config.keys.is_empty()
             && (self.require_mfa_for_all()
                 || (self.require_mfa_for_admins() && groups.iter().any(|g| g == ADMIN_GROUP)))
     }
@@ -189,28 +186,33 @@ impl Auth {
     }
 
     fn failed_code_event(&self, user: &str) {
-        let mut g = self.event_throttle.lock().unwrap();
-        if g.get(user)
-            .is_none_or(|t| t.elapsed() >= FAILED_EVENT_EVERY)
-        {
-            g.insert(user.into(), Instant::now());
-            drop(g);
+        // At most one event per user and window, whichever process sees the failure first.
+        let first = self
+            .backend
+            .counter_add(
+                &format!("auth.evt:code_failed:{user}"),
+                FAILED_EVENT_EVERY.as_millis() as u64,
+                false,
+            )
+            .map_or(true, |n| n == 1);
+        if first {
             self.event(user, "code_failed", user, "wrong second-factor code");
         }
     }
 
     // ---- secrets ------------------------------------------------------------------------
 
-    fn key(&self) -> Result<&[u8; 32], MfaError> {
-        self.config.secret_key.as_ref().ok_or_else(|| {
-            MfaError::Unavailable(
+    fn ring(&self) -> Result<&KeyRing, MfaError> {
+        if self.config.keys.is_empty() {
+            return Err(MfaError::Unavailable(
                 "two-factor authentication needs the server secret OBOP_SECRET_KEY (32 bytes, hex or base64); it is not set".into(),
-            )
-        })
+            ));
+        }
+        Ok(&self.config.keys)
     }
 
     fn open_secret(&self, user: &str, sealed: &str) -> Result<Vec<u8>, MfaError> {
-        seal::open(self.key()?, user, sealed).map_err(MfaError::Unavailable)
+        seal::open_any(self.ring()?, user, sealed).map_err(MfaError::Unavailable)
     }
 
     /// The stored user as a JSON object (a missing key reads as null, unlike `Fields`).
@@ -390,7 +392,7 @@ impl Auth {
         code: Option<&str>,
         recovery: Option<&str>,
     ) -> Result<LoginOutcome, MfaError> {
-        let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = self.mfa_guard()?;
         let key = token_hash(mfa_token);
         let expired = || MfaError::Expired;
         let rec = self
@@ -461,7 +463,7 @@ impl Auth {
     /// reset-mfa USER --db URL`). Revokes the user's sessions and writes an audit record.
     pub fn operator_reset_mfa(&self, username: &str) -> Result<(), String> {
         let name = username.trim().to_lowercase();
-        let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = self.backend.lock("auth.mfa")?;
         self.user_record(&name)
             .map_err(|_| format!("no user {name}"))?;
         self.clear_factor(&name).map_err(|e| format!("{e:?}"))?;
@@ -488,7 +490,7 @@ impl MfaApi for Auth {
     fn status(&self, p: &Principal) -> Result<J, MfaError> {
         let name = person(p)?;
         let u = self.user_record(name)?;
-        let key = self.config.secret_key.is_some();
+        let key = !self.config.keys.is_empty();
         Ok(json!({
             "user": name,
             "available": key,
@@ -504,8 +506,8 @@ impl MfaApi for Auth {
 
     fn begin(&self, p: &Principal) -> Result<J, MfaError> {
         let name = person(p)?;
-        let key = self.key()?;
-        let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let ring = self.ring()?;
+        let _g = self.mfa_guard()?;
         let u = self.user_record(name)?;
         if u["mfa_enabled"].as_bool() == Some(true) {
             return Err(MfaError::Invalid(
@@ -517,7 +519,7 @@ impl MfaApi for Auth {
         let mut f = Fields::new();
         f.insert(
             "totp_pending".into(),
-            J::from(seal::seal(key, name, &secret).map_err(MfaError::Unavailable)?),
+            J::from(seal::seal_new(ring, name, &secret).map_err(MfaError::Unavailable)?),
         );
         self.put(name, &f)?;
         self.event(name, "enrol_begin", name, "secret issued, not active");
@@ -533,7 +535,7 @@ impl MfaApi for Auth {
 
     fn confirm(&self, p: &Principal, session: &str, code: &str) -> Result<J, MfaError> {
         let name = person(p)?;
-        let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = self.mfa_guard()?;
         if self.locked_out(name) {
             return Err(MfaError::Locked(
                 "too many attempts, try again in a minute".into(),
@@ -578,7 +580,7 @@ impl MfaApi for Auth {
         recovery: Option<&str>,
     ) -> Result<(), MfaError> {
         let name = person(p)?;
-        let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = self.mfa_guard()?;
         let u = self.user_record(name)?;
         if u["mfa_enabled"].as_bool() != Some(true) {
             return Err(MfaError::Invalid("two-factor is not on".into()));
@@ -601,7 +603,7 @@ impl MfaApi for Auth {
         recovery: Option<&str>,
     ) -> Result<J, MfaError> {
         let name = person(p)?;
-        let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = self.mfa_guard()?;
         let u = self.user_record(name)?;
         if u["mfa_enabled"].as_bool() != Some(true) {
             return Err(MfaError::Invalid("two-factor is not on".into()));
@@ -629,7 +631,7 @@ impl MfaApi for Auth {
                     .into(),
             ));
         }
-        let _g = self.mfa_lock.lock().unwrap_or_else(|e| e.into_inner());
+        let _g = self.mfa_guard()?;
         let u = self
             .backend
             .get("auth_user", &target)

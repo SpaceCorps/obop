@@ -9,10 +9,9 @@ use obop_commands::{Authenticator, LoginOutcome, MfaApi, MfaError, Principal, Pr
 use obop_storage::{Backend, Fields};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod mfa;
 pub mod seal;
@@ -27,11 +26,7 @@ const LOCKOUT: Duration = Duration::from_secs(60);
 pub struct Auth {
     backend: Arc<dyn Backend>,
     hasher: Argon2<'static>,
-    failures: Mutex<HashMap<String, (u32, Instant)>>,
     config: AuthConfig,
-    /// Serialises read-modify-write of two-factor state (one server process).
-    mfa_lock: Mutex<()>,
-    event_throttle: Mutex<HashMap<String, Instant>>,
     fake_now: AtomicU64,
 }
 
@@ -75,10 +70,7 @@ impl Auth {
         Self {
             backend,
             hasher: Argon2::default(),
-            failures: Mutex::new(HashMap::new()),
             config,
-            mfa_lock: Mutex::new(()),
-            event_throttle: Mutex::new(HashMap::new()),
             fake_now: AtomicU64::new(0),
         }
     }
@@ -235,19 +227,36 @@ impl Auth {
             .unwrap_or(false)
     }
 
+    /// Failed attempts per user live in the storage backend (an atomic expiring counter), so
+    /// the lockout holds across server processes and restarts (B1).
+    fn failure_key(name: &str) -> String {
+        format!("auth.fail:{name}")
+    }
+
     fn locked_out(&self, name: &str) -> bool {
-        let g = self.failures.lock().unwrap();
-        g.get(name)
-            .is_some_and(|(n, at)| *n >= MAX_FAILURES && at.elapsed() < LOCKOUT)
+        self.backend
+            .counter_get(&Self::failure_key(name))
+            .unwrap_or(0)
+            >= u64::from(MAX_FAILURES)
     }
 
     fn record_failure(&self, name: &str) {
-        let mut g = self.failures.lock().unwrap();
-        let e = g.entry(name.into()).or_insert((0, Instant::now()));
-        if e.1.elapsed() >= LOCKOUT {
-            *e = (0, Instant::now());
-        }
-        *e = (e.0 + 1, Instant::now());
+        let _ = self.backend.counter_add(
+            &Self::failure_key(name),
+            LOCKOUT.as_millis() as u64,
+            true,
+        );
+    }
+
+    /// For tests: lift every lockout of `name`.
+    #[cfg(test)]
+    pub(crate) fn clear_failures_for_test(&self, name: &str) {
+        let _ = self.backend.counter_reset(&Self::failure_key(name));
+    }
+
+    /// Serialises read-modify-write of two-factor state across server processes.
+    fn mfa_guard(&self) -> Result<obop_storage::LockGuard, MfaError> {
+        self.backend.lock("auth.mfa").map_err(MfaError::Unavailable)
     }
 }
 
