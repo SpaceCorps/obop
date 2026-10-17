@@ -231,13 +231,7 @@ impl Dispatcher {
             module,
             name,
             "search",
-            Box::new(move |input| {
-                let (rows, total) = run_query(&s, &d, input)?;
-                Ok(Value::map([
-                    ("rows", Value::List(rows)),
-                    ("total", Value::Int(total as i64)),
-                ]))
-            }),
+            Box::new(move |input| run_search(&s, &d, input)),
         );
     }
 
@@ -274,13 +268,7 @@ impl Dispatcher {
                 module,
                 name,
                 "search",
-                Box::new(move |input| {
-                    let (rows, total) = run_query(&s, &d, input)?;
-                    Ok(Value::map([
-                        ("rows", Value::List(rows)),
-                        ("total", Value::Int(total as i64)),
-                    ]))
-                }),
+                Box::new(move |input| run_search(&s, &d, input)),
             );
             let (s, models) = (store.clone(), self.models.clone());
             self.register(
@@ -366,13 +354,7 @@ impl Dispatcher {
                 module,
                 name,
                 "search",
-                Box::new(move |input| {
-                    let (rows, total) = run_query(&s, &d, input)?;
-                    Ok(Value::map([
-                        ("rows", Value::List(rows)),
-                        ("total", Value::Int(total as i64)),
-                    ]))
-                }),
+                Box::new(move |input| run_search(&s, &d, input)),
             );
             for c in ["list", "search"] {
                 self.register_guard(
@@ -423,9 +405,29 @@ fn run_query(s: &Store, d: &ModelDef, input: &Value) -> Result<(Vec<Value>, usiz
     // The dispatcher's guard has already refused fields the caller cannot read; the handler
     // only needs the structure.
     let q = Query::parse(d, input, &|_| true)?;
+    q.no_aggregate()?;
     let all = s.backend.list(d.name)?;
     let (page, total) = q.apply(all);
     Ok((page.iter().map(|(id, f)| to_row(id, f)).collect(), total))
+}
+
+/// `search`: a page of records and the total, or, with `aggregate`, the groups computed over
+/// every matching record without collecting them.
+fn run_search(s: &Store, d: &ModelDef, input: &Value) -> Result<Value, String> {
+    let q = Query::parse(d, input, &|_| true)?;
+    if let Some(r) = q.run_aggregate(&*s.backend, d.name) {
+        let (groups, total) = r?;
+        return Ok(Value::map([
+            ("rows", Value::List(Vec::new())),
+            ("total", Value::Int(total as i64)),
+            ("groups", Value::List(groups)),
+        ]));
+    }
+    let (rows, total) = run_query(s, d, input)?;
+    Ok(Value::map([
+        ("rows", Value::List(rows)),
+        ("total", Value::Int(total as i64)),
+    ]))
 }
 
 #[cfg(test)]

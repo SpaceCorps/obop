@@ -486,6 +486,7 @@ impl PublicApi {
             input.insert("offset".into(), Value::Int(offset as i64));
         }
         let q = crate::query::Query::parse(&def, &Value::Map(input), &|_| true)?;
+        q.no_aggregate()?;
         let (page, total) = q.apply(self.store.backend.list(model)?);
         Ok((
             page.iter()

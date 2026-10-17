@@ -960,6 +960,8 @@ pub trait MfaApi: Send + Sync {
     fn admin_reset(&self, admin: &Principal, target: &str) -> Result<(), MfaError>;
 }
 
+pub mod aggregate;
+pub mod collate;
 mod guards;
 pub mod json;
 pub mod public;

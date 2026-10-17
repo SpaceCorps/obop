@@ -77,6 +77,35 @@ fn query_properties() -> J {
     })
 }
 
+/// The `aggregate` input of `search`: groups and measures computed on the server (D4).
+fn aggregate_schema() -> J {
+    json!({
+        "type": "object",
+        "description": "Instead of rows, return groups with counts and sums over every matching record. Takes filter (not order, limit or offset).",
+        "properties": {
+            "group_by": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {"oneOf": [
+                    {"type": "string", "description": "A field name."},
+                    {"type": "object", "required": ["field"], "properties": {
+                        "field": {"type": "string"},
+                        "bucket": {"type": "string", "enum": ["day", "week", "month"], "description": "Required for date fields."}
+                    }}
+                ]}
+            },
+            "measures": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {"type": "object", "required": ["op"], "properties": {
+                    "op": {"type": "string", "enum": ["count", "sum", "min", "max"]},
+                    "field": {"type": "string", "description": "A number or money field; omit for count."}
+                }}
+            }
+        }
+    })
+}
+
 fn object(properties: J, required: &[String]) -> J {
     let mut s = json!({"type": "object", "properties": properties});
     if !required.is_empty() {
@@ -104,7 +133,13 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
         .collect();
     match cmd {
         "get" | "delete" => object(json!({"id": id_property(&model.name)}), &["id".to_string()]),
-        "list" | "search" => object(query_properties(), &[]),
+        "list" => object(query_properties(), &[]),
+        "search" => {
+            let mut props = query_properties();
+            props["lang"] = json!({"type": "string", "description": "BCP-47 tag (sv, de-AT) choosing how text is ordered; default is the language-neutral order."});
+            props["aggregate"] = aggregate_schema();
+            object(props, &[])
+        }
         "create" => {
             let props = field_properties(model, &governed);
             let required: Vec<String> = model
@@ -138,7 +173,8 @@ pub fn output_schema(cmd: &str) -> J {
             "type": "object",
             "properties": {
                 "rows": {"type": "array", "items": {"type": "object"}},
-                "total": {"type": "integer", "description": "Matches before limit and offset."}
+                "total": {"type": "integer", "description": "Matches before limit and offset."},
+                "groups": {"type": "array", "description": "With aggregate: {key, count, measures} per group.", "items": {"type": "object"}}
             }
         }),
         _ => json!({"type": "object"}),

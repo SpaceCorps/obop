@@ -1,0 +1,44 @@
+[
+  {
+    "name": "german umlauts sort with their base letter",
+    "lang": "de",
+    "input": ["Zebra", "Olle", "Ödla", "Åsa", "Ärlig", "Apfel", "Äpfel", "Udo", "Über"],
+    "expected": ["Apfel", "Äpfel", "Ärlig", "Åsa", "Ödla", "Olle", "Über", "Udo", "Zebra"]
+  },
+  {
+    "name": "swedish å ä ö come after z",
+    "lang": "sv",
+    "input": ["Ödla", "Zebra", "Åsa", "Olle", "Ärlig", "Anna"],
+    "expected": ["Anna", "Olle", "Zebra", "Åsa", "Ärlig", "Ödla"]
+  },
+  {
+    "name": "finnish å ä ö come after z",
+    "lang": "fi",
+    "input": ["Ödla", "Zeta", "Äiti", "Olli", "Åsa", "Aino"],
+    "expected": ["Aino", "Olli", "Zeta", "Åsa", "Äiti", "Ödla"]
+  },
+  {
+    "name": "polish ł follows l and ą follows a",
+    "lang": "pl",
+    "input": ["Mak", "Łaa", "Lzz", "Ąbc", "Acz", "Zeta", "Ćma", "Cyk", "Dom"],
+    "expected": ["Acz", "Ąbc", "Cyk", "Ćma", "Dom", "Lzz", "Łaa", "Mak", "Zeta"]
+  },
+  {
+    "name": "root order ignores accents at the first level",
+    "lang": "",
+    "input": ["Zebra", "Äpfel", "Apfel", "Apple", "apple", "Aaa"],
+    "expected": ["Aaa", "Apfel", "Äpfel", "Apple", "apple", "Zebra"]
+  },
+  {
+    "name": "digits sort by value",
+    "lang": "en",
+    "input": ["item 10", "item 2", "Item 1", "item 1b", "item 20", "item 3"],
+    "expected": ["Item 1", "item 1b", "item 2", "item 3", "item 10", "item 20"]
+  },
+  {
+    "name": "case differences only break exact ties",
+    "lang": "en",
+    "input": ["b", "B", "a", "A"],
+    "expected": ["A", "a", "B", "b"]
+  }
+]

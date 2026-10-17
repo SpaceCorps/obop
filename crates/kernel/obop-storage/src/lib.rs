@@ -20,6 +20,22 @@ pub trait Backend: Send + Sync {
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>>;
     /// Records of a model in insertion order.
     fn list(&self, model: &str) -> Result<Vec<(String, Fields)>>;
+    /// Visit the records of a model in insertion order without collecting them, so a caller that
+    /// only folds them (an aggregate) holds one record at a time. `visit` returns `Ok(false)` to
+    /// stop early. It runs while the backend holds its connection or lock, so it must not call
+    /// the backend. The default collects with `list`; the shipped backends stream.
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        for (id, f) in self.list(model)? {
+            if !visit(&id, &f)? {
+                break;
+            }
+        }
+        Ok(())
+    }
     /// Merge `patch` into an existing record atomically. `false` if it does not exist.
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool>;
     fn count(&self, model: &str) -> Result<usize>;
@@ -102,6 +118,19 @@ impl Backend for Memory {
             .get(model)
             .cloned()
             .unwrap_or_default())
+    }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        let g = self.rows.lock().unwrap();
+        for (id, f) in g.get(model).into_iter().flatten() {
+            if !visit(id, f)? {
+                break;
+            }
+        }
+        Ok(())
     }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         let mut g = self.rows.lock().unwrap();
@@ -221,6 +250,25 @@ impl Backend for Sqlite {
             Ok((id, parse(&data)?))
         })
         .collect()
+    }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare("SELECT id, data FROM obop_record WHERE model = ?1 ORDER BY seq")
+            .map_err(|e| e.to_string())?;
+        let mut rows = st.query((model,)).map_err(|e| e.to_string())?;
+        while let Some(r) = rows.next().map_err(|e| e.to_string())? {
+            let id: String = r.get(0).map_err(|e| e.to_string())?;
+            let data: String = r.get(1).map_err(|e| e.to_string())?;
+            if !visit(&id, &parse(&data)?)? {
+                break;
+            }
+        }
+        Ok(())
     }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         let mut g = self.conn.lock().unwrap();
@@ -367,6 +415,28 @@ impl Backend for Pg {
         rows.into_iter()
             .map(|r| Ok((r.get::<_, String>(0), pg_fields(r.get::<_, J>(1))?)))
             .collect()
+    }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        use postgres::fallible_iterator::FallibleIterator;
+        let mut client = self.client.lock().unwrap();
+        let mut rows = client
+            .query_raw(
+                "SELECT id, data FROM obop_record WHERE model = $1 ORDER BY seq",
+                [&model as &(dyn postgres::types::ToSql + Sync)],
+            )
+            .map_err(|e| e.to_string())?;
+        while let Some(r) = rows.next().map_err(|e| e.to_string())? {
+            let id: String = r.get(0);
+            if !visit(&id, &pg_fields(r.get::<_, J>(1))?)? {
+                // Dropping the iterator early leaves the portal unread; the client discards it.
+                break;
+            }
+        }
+        Ok(())
     }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         let patch = J::Object(patch.clone());
