@@ -7,6 +7,7 @@ mod mcp_tests;
 mod mfa_tests;
 #[cfg(test)]
 mod modules_tests;
+mod ops;
 #[cfg(test)]
 mod public_site_tests;
 
@@ -56,6 +57,18 @@ const USAGE: &str = "usage: obop <command>
       --public-site                             also serve the public website and shop at / (or OBOP_PUBLIC_SITE=1);
                                                 the backoffice then moves to --admin-prefix (default /admin)
       --trust-proxy                             take the client address from X-Forwarded-For (OBOP_TRUST_PROXY=1)
+  migrate status | plan | run [--dry-run] [--db URL]
+                                                schema version of a database and the steps that upgrade it; `run` applies them
+                                                (take a backup first). `serve` refuses a database that needs steps unless started
+                                                with --auto-migrate (default: on for SQLite, off for PostgreSQL; OBOP_AUTO_MIGRATE=0|1)
+  backup --db URL --out DIR|FILE                consistent logical backup (gzip JSON lines + checksum manifest), streamed
+  backup verify FILE                            check a backup's checksums, format and counts
+  restore --db URL --from FILE [--force] [--dry-run]
+                                                restore into an empty database (--force replaces what is there)
+  secrets status [--db URL]                     which key seals how many stored secrets
+  secrets rotate [--db URL] [--dry-run] [--batch N] [--max-batches N] [--skip-unopenable]
+                                                re-seal every secret with the current OBOP_SECRET_KEY (earlier keys in
+                                                OBOP_SECRET_KEY_PREVIOUS); safe while serving, resumable
   connectors purge                              remove flow logs and runs older than their retention (also done daily by serve)
                                                 OBOP_SECRET_KEY encrypts connection credentials; OBOP_PUBLIC_URL is the address webhooks and
                                                 OAuth redirects use; OBOP_CONNECTORS_ALLOW_LOOPBACK=1 allows loopback targets (tests only)
@@ -79,6 +92,11 @@ fn fail(msg: &str) -> ExitCode {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Operator commands that work on a whole database: migrate, backup, restore, secrets.
+    if let Some(code) = ops::dispatch(&args) {
+        return code;
+    }
+    let args = ops::take_migrate_flags(args);
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let (db, args) = take_opt(&args, "--db");
     let (token, args) = take_opt(&args, "--token");
@@ -232,6 +250,9 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     let url = o.db.clone().unwrap_or_else(|| "sqlite://obop.db".into());
     let store = obop_commands::Store::open(&url)
         .map_err(|e| fail(&format!("cannot open database: {e}")))?;
+    // An empty database is stamped with the schema version; one from the future is refused; one
+    // that needs migration steps gets them (--auto-migrate) or the command to run them.
+    ops::guard_database(&store.backend(), &url)?;
     eprintln!("database: {}", store.backend_kind());
     let seed = o.demo || store.backend_kind() == "sqlite";
     let app = App::with_store(store);
@@ -790,6 +811,7 @@ fn platform_serve(
             .unwrap_or_else(|| "sqlite://obop-platform.db".into());
     let backend =
         obop_storage::open(&url).map_err(|e| fail(&format!("cannot open database: {e}")))?;
+    ops::guard_database(&backend, &url)?;
     let prov =
         make_provisioner(provisioner.unwrap_or("local"), instance_static).map_err(|e| fail(&e))?;
     let auth = Arc::new(Auth::new(backend.clone()));

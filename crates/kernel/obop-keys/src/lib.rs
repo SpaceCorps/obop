@@ -230,6 +230,15 @@ impl KeyRing {
     /// the ring as a previous key when `OBOP_SECRET_KEY` is later set, so what it sealed still
     /// opens until `obop secrets rotate` has re-sealed it.
     pub fn for_backend(backend: &Arc<dyn Backend>) -> Result<KeyRing, String> {
+        Self::for_backend_inner(backend, true)
+    }
+
+    /// As `for_backend`, but never writes: when there is no key at all the ring is empty.
+    pub fn for_backend_read_only(backend: &Arc<dyn Backend>) -> Result<KeyRing, String> {
+        Self::for_backend_inner(backend, false)
+    }
+
+    fn for_backend_inner(backend: &Arc<dyn Backend>, create: bool) -> Result<KeyRing, String> {
         let mut r = Self::from_vars(
             env("OBOP_SECRET_KEY").as_deref(),
             env("OBOP_SECRET_KEY_PREVIOUS").as_deref(),
@@ -239,6 +248,7 @@ impl KeyRing {
         if r.is_empty() {
             let k = match stored {
                 Some(k) => k,
+                None if !create => return Ok(r),
                 None => {
                     let raw = hex(&random::<32>());
                     let mut f = Fields::new();

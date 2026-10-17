@@ -213,10 +213,10 @@ impl std::ops::DerefMut for ForumWrite<'_> {
 
 impl Drop for ForumWrite<'_> {
     fn drop(&mut self) {
-        if self.changed {
-            if let Ok(v) = self.forum.backend.counter_add(VERSION, 0, false) {
-                self.forum.seen.store(v, Ordering::Release);
-            }
+        if self.changed
+            && let Ok(v) = self.forum.backend.counter_add(VERSION, 0, false)
+        {
+            self.forum.seen.store(v, Ordering::Release);
         }
         // Release the memory copy before the cross-process lock.
         self.d.take();

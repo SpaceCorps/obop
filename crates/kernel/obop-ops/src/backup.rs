@@ -113,7 +113,7 @@ impl Manifest {
             "records": self.records,
             "models": self.models,
             "not_included": ["short-lived values: sessions, pending approvals, rate-limit counters"],
-            "secrets": "sealed values are stored exactly as they are in the database; the server key is not in this backup",
+            "secrets": "sealed values are stored exactly as they are in the database; OBOP_SECRET_KEY is not in this backup (an instance without it keeps a generated key in the database, and that key is in the backup)",
         })
     }
 
@@ -164,9 +164,10 @@ fn manifest_path_for(data: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
-/// Where the backup goes: a directory gets a timestamped name; anything else is the data file.
+/// Where the backup goes: a path ending in `.gz` is the data file; anything else is a directory
+/// (created if needed) that gets a timestamped file name.
 fn resolve_out(out: &Path) -> PathBuf {
-    if out.is_dir() || out.to_string_lossy().ends_with('/') {
+    if out.is_dir() || !out.to_string_lossy().ends_with(".gz") {
         let stamp = rfc3339(now_secs()).replace(['-', ':'], "");
         out.join(format!("obop-backup-{stamp}.jsonl.gz"))
     } else {

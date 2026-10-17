@@ -32,11 +32,14 @@ pub enum KeySource {
     Generated,
 }
 
+/// Pseudonym keys already opened, with when.
+type KeyCache = HashMap<String, ([u8; 32], Instant)>;
+
 #[derive(Clone)]
 pub struct SecretBox {
     ring: KeyRing,
     store: Option<Arc<dyn Backend>>,
-    cache: Arc<Mutex<HashMap<String, ([u8; 32], Instant)>>>,
+    cache: Arc<Mutex<KeyCache>>,
 }
 
 impl std::fmt::Debug for SecretBox {

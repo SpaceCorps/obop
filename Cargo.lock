@@ -975,6 +975,8 @@ dependencies = [
  "obop-keys",
  "obop-masking",
  "obop-mcp",
+ "obop-migrate",
+ "obop-ops",
  "obop-pkg",
  "obop-platform",
  "obop-registry",
