@@ -1308,6 +1308,55 @@ fn a_failing_receiver_is_retried_then_dead_lettered_and_a_withdrawal_stops_the_r
     assert_eq!(r.count(), before);
 }
 
+/// A second `Runtime` over the same store, as a restarted or a second server process has.
+fn another_process(e: &Env) -> Arc<Runtime> {
+    Runtime::with_providers(
+        e.s.backend(),
+        e.d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: Some("http://127.0.0.1:8080".into()),
+        },
+        providers(),
+        None,
+    )
+}
+
+#[test]
+fn queued_deliveries_survive_a_restart_and_two_processes_never_send_one_twice() {
+    let e = env();
+    seed_party(&e);
+    let r = Receiver::new(503);
+    enable(&e, "webhook_out", true);
+    let id = ready(&e, &admin(), &r);
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert_eq!(e.rt.queue.len(), 1);
+    let first_attempts = r.count();
+    // The process dies; its replacement finds the retry in the database.
+    let second = another_process(&e);
+    assert_eq!(second.queue.len(), 1, "the retry queue was not lost");
+    let mut at = obop_connectors::util::now() + 10;
+    // Both processes wake at the same moment: only one of them takes the delivery.
+    let (a, b) = (e.rt.process_queue(at), second.process_queue(at));
+    assert_eq!(a + b, 1, "one delivery attempt in total ({a} + {b})");
+    assert_eq!(r.count(), first_attempts + 1);
+    // The survivor carries it through the remaining backoffs to the dead letters.
+    for _ in 0..8 {
+        at += 8000;
+        second.process_queue(at);
+    }
+    assert!(second.queue.is_empty() && e.rt.queue.is_empty());
+    let dead = e.rt.queue.dead();
+    assert_eq!(dead.len(), 1);
+    assert!(dead[0].reason.contains("503"), "{}", dead[0].reason);
+    let run = ok(&e, &admin(), "sync_run.list", json!({}))[0].clone();
+    assert_eq!(run["status"], "dead_letter");
+    // An operator can send the dead letter again.
+    assert!(e.rt.queue.revive(&dead[0].id, at));
+    assert_eq!(second.queue.len(), 1);
+}
+
 #[test]
 fn the_instance_switches_stop_flows_and_restrict_hosts() {
     let e = env();

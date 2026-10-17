@@ -68,8 +68,6 @@ pub struct Runtime {
     pub queue: Queue,
     pub cfg: Config,
     providers: Vec<Provider>,
-    last_purge: Mutex<u64>,
-    last_pull: Mutex<std::collections::HashMap<String, u64>>,
 }
 
 /// Purposes the sealed values are bound to (see `secretbox`).
@@ -114,6 +112,7 @@ impl Runtime {
                 ..ClientConfig::default()
             })
         });
+        let queue = Queue::new(backend.clone(), secrets.clone());
         Arc::new(Self {
             ingress: Ingress::new(backend.clone(), egress.clone(), dispatcher.clone()),
             backend,
@@ -121,11 +120,9 @@ impl Runtime {
             secrets,
             egress,
             client,
-            queue: Queue::default(),
+            queue,
             cfg,
             providers,
-            last_purge: Mutex::new(0),
-            last_pull: Mutex::default(),
         })
     }
 
@@ -668,6 +665,8 @@ impl Runtime {
 
     /// Try the deliveries that are due. Returns how many were attempted.
     pub fn process_queue(&self, at: u64) -> usize {
+        // The queue lives in the database: this claims the jobs that are due and leased to no
+        // other process, so several server processes share the work (B2).
         let jobs = self.queue.take_due(at);
         let n = jobs.len();
         for job in jobs {
@@ -680,6 +679,7 @@ impl Runtime {
                     0,
                     "the connection no longer exists",
                 );
+                self.queue.complete(&job);
                 continue;
             };
             let allowed = c.is_connected()
@@ -689,11 +689,13 @@ impl Runtime {
                 && InstancePolicy::load(&*self.backend).flows_enabled;
             if !allowed {
                 self.finish_run(&job.run, "dead_letter", 0, 0, 0, "delivery stopped: the connection is no longer connected or its legal basis was withdrawn");
+                self.queue.complete(&job);
                 continue;
             }
             let err = match self.deliver(&c, &p, &job) {
                 Ok(s) if (200..300).contains(&s) => {
                     self.finish_run(&job.run, "succeeded", 1, 0, 0, "");
+                    self.queue.complete(&job);
                     continue;
                 }
                 Ok(s) if !Self::retryable(s) => {
@@ -705,12 +707,13 @@ impl Runtime {
                         0,
                         &format!("the receiver refused the delivery with status {s}"),
                     );
+                    self.queue.complete(&job);
                     continue;
                 }
                 Ok(s) => format!("the receiver answered {s}"),
                 Err(e) => e.to_string(),
             };
-            match self.queue.requeue(job.clone(), at, 100) {
+            match self.queue.requeue_because(job.clone(), at, 100, &err) {
                 Requeued::At(_) => {}
                 Requeued::Dead => self.finish_run(
                     &job.run,
@@ -1151,6 +1154,19 @@ impl Runtime {
         if retried > 0 {
             did.push(format!("{retried} retried"));
         }
+        // Which pulls and the daily purge are due is decided under a lock and recorded in the
+        // database, so with several server processes each pull and purge happens once.
+        let Ok(_tick) = self.backend.lock("connectors.tick") else {
+            return did.join("; ");
+        };
+        let last_of = |key: &str| -> u64 {
+            self.backend
+                .kv_get(key)
+                .ok()
+                .flatten()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0)
+        };
         let due: Vec<String> = self
             .backend
             .list(CONNECTION)
@@ -1167,26 +1183,23 @@ impl Runtime {
                 let engine = self.provider(str_of(&f, "provider")).map(|p| p.engine);
                 (mins > 0 && engine == Some(Engine::RestPull)).then_some((id, mins))
             })
-            .filter(|(id, mins)| {
-                let last = self.last_pull.lock().unwrap().get(id).copied().unwrap_or(0);
-                last + mins * 60 <= at
-            })
+            .filter(|(id, mins)| last_of(&format!("connectors.pull:{id}")) + mins * 60 <= at)
             .map(|(id, _)| id)
             .collect();
+        for id in &due {
+            let _ = self
+                .backend
+                .kv_put(&format!("connectors.pull:{id}"), &at.to_string(), None);
+        }
+        let purge_due = last_of("connectors.purge") + 86_400 <= at;
+        if purge_due {
+            let _ = self.backend.kv_put("connectors.purge", &at.to_string(), None);
+        }
+        drop(_tick);
         for id in due {
-            self.last_pull.lock().unwrap().insert(id.clone(), at);
             let _ = self.pull(&id);
             did.push(format!("pulled {id}"));
         }
-        let purge_due = {
-            let mut g = self.last_purge.lock().unwrap();
-            if *g + 86_400 <= at {
-                *g = at;
-                true
-            } else {
-                false
-            }
-        };
         if purge_due {
             let (a, b, c) = self.purge(at);
             did.push(format!(
