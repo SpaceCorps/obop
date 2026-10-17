@@ -29,7 +29,7 @@ An administrator can change the policy under Customize > Security: **Require 2FA
 
 ## Lost phone and codes
 
-- An **administrator** can reset another person's two-factor under Customize > Security > *Reset someone's two-factor*. The person is signed out and sets it up again. An administrator cannot reset their own that way.
+- An **administrator** can reset another person's two-factor under Customize > Security > _Reset someone's two-factor_. The person is signed out and sets it up again. An administrator cannot reset their own that way.
 - If **no administrator** can sign in, the operator uses the break-glass command with access to the database:
 
 ```bash
@@ -44,11 +44,11 @@ Every setup step, wrong code, recovery-code use, reset, lockout and limited sign
 
 ## For the REST API
 
-| Request | What it does |
-|---|---|
-| `POST /api/auth/login` | With a password and two-factor on, answers `{"mfa_required": true, "mfa_token": "…"}` instead of a session. The token is valid for 5 minutes, allows 5 wrong codes and is not a bearer token. |
-| `POST /api/auth/login/mfa` | `{mfa_token, code}` or `{mfa_token, recovery_code}` answers `{"token": "…"}`. Wrong codes count toward the same lockout as wrong passwords. |
-| `GET /api/auth/mfa`, `POST /api/auth/mfa/begin`, `/confirm`, `/disable`, `/recovery`, `/reset` | Status, setup, activation, turning off, new recovery codes and the administrator reset. A person's session only. |
+| Request                                                                                        | What it does                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/auth/login`                                                                         | With a password and two-factor on, answers `{"mfa_required": true, "mfa_token": "…"}` instead of a session. The token is valid for 5 minutes, allows 5 wrong codes and is not a bearer token. |
+| `POST /api/auth/login/mfa`                                                                     | `{mfa_token, code}` or `{mfa_token, recovery_code}` answers `{"token": "…"}`. Wrong codes count toward the same lockout as wrong passwords.                                                   |
+| `GET /api/auth/mfa`, `POST /api/auth/mfa/begin`, `/confirm`, `/disable`, `/recovery`, `/reset` | Status, setup, activation, turning off, new recovery codes and the administrator reset. A person's session only.                                                                              |
 
 ## Security of the secrets
 

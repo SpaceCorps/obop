@@ -647,3 +647,49 @@ fn timestamps_are_rfc3339() {
     assert_eq!(crate::mfa::rfc3339(1_700_000_010), "2023-11-14T22:13:30Z");
     assert_eq!(crate::mfa::rfc3339(951_782_400), "2000-02-29T00:00:00Z");
 }
+
+/// The same flow on a real PostgreSQL (JSONB merge of null fields, event inserts):
+/// `OBOP_TEST_POSTGRES_URL=postgres://... cargo test -p obop-auth`.
+#[test]
+fn the_whole_flow_works_on_postgres_when_available() {
+    let Ok(url) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+        eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
+        return;
+    };
+    let b = obop_storage::open(&url).unwrap();
+    let a = Auth::with_test_config(b.clone(), AuthConfig::insecure_dev());
+    a.set_clock_for_test(T0);
+    let user = format!("pgmfa{}", std::process::id());
+    a.create_user(&user, PW, &groups(&["base.user"])).unwrap();
+    let (secret, codes) = enrol(&a, &user);
+    a.set_clock_for_test(T0 + 30);
+    let t = mfa_token(&a, &user);
+    assert!(
+        a.login_mfa(&t, Some(&code_at(&secret, T0 + 30)), None)
+            .is_ok()
+    );
+    let t = mfa_token(&a, &user);
+    assert!(matches!(
+        a.login_mfa(&t, Some(&code_at(&secret, T0 + 30)), None),
+        Err(MfaError::Denied(_))
+    ));
+    let t = mfa_token(&a, &user);
+    let LoginOutcome::Session { token, .. } = a.login_mfa(&t, None, Some(&codes[0])).unwrap()
+    else {
+        panic!()
+    };
+    let p = a.resolve(&token).unwrap();
+    assert_eq!(a.status(&p).unwrap()["recovery_remaining"], json!(9));
+    a.disable(&p, PW, None, Some(&codes[1])).unwrap();
+    assert!(!a.mfa_enabled(&user));
+    let kinds: Vec<String> = b
+        .list(EVENT_TABLE)
+        .unwrap()
+        .into_iter()
+        .filter(|(_, f)| f["user"] == user.as_str())
+        .map(|(_, f)| f["kind"].as_str().unwrap().to_string())
+        .collect();
+    for want in ["enrol_confirm", "recovery_used", "disable"] {
+        assert!(kinds.iter().any(|k| k == want), "{want} in {kinds:?}");
+    }
+}
