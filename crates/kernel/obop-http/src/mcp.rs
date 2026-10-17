@@ -96,10 +96,21 @@ pub(crate) struct Entry {
     _lock: obop_storage::LockGuard,
 }
 
+/// Milliseconds since the epoch, never repeated within the process: sessions opened in the same
+/// millisecond still have an order, so the cap drops the one that really is the oldest.
 fn now_ms() -> u128 {
-    std::time::SystemTime::now()
+    static LAST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis())
+        .map_or(0, |d| d.as_millis() as u64);
+    let prev = LAST
+        .try_update(
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+            |last| Some(now.max(last + 1)),
+        )
+        .unwrap_or(0);
+    u128::from(now.max(prev + 1))
 }
 
 fn session_key(id: &str) -> String {
