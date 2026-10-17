@@ -983,6 +983,7 @@ dependencies = [
  "obop-site",
  "obop-storage",
  "obop-types",
+ "postgres",
  "product",
  "sales",
  "serde_json",

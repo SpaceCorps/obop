@@ -38,5 +38,6 @@ workspace = true
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+postgres = "0.19"
 axum = "0.8.9"
 url = "2"
