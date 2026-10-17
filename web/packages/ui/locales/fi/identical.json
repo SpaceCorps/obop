@@ -1,1 +1,9 @@
-["{field} ≤ {to}", "{field} ≥ {from}", "Indigo", "Kanban", "app\u0004CRM", "option\u0004Diesel"]
+[
+  "Beta",
+  "Indigo",
+  "Kanban",
+  "app\u0004CRM",
+  "option\u0004Diesel",
+  "{field} ≤ {to}",
+  "{field} ≥ {from}"
+]

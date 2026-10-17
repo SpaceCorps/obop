@@ -223,7 +223,12 @@ export type TreeNode = {
  * The dependency tree under `rootId`: each dependency with its own, transitively. `index` holds
  * the modules whose dependencies are known (installed ones win over marketplace listings).
  */
-export function buildTree(rootId: string, index: Map<string, Row>, maxDepth = 8): TreeNode[] {
+export function buildTree(
+  rootId: string,
+  index: Map<string, Row>,
+  nameOf?: (id: string) => string,
+  maxDepth = 8,
+): TreeNode[] {
   const walk = (id: string, path: string[]): TreeNode[] => {
     const row = index.get(id);
     if (!row || path.length > maxDepth) return [];
@@ -231,7 +236,7 @@ export function buildTree(rootId: string, index: Map<string, Row>, maxDepth = 8)
       const cycle = path.includes(d.id);
       return {
         id: d.id,
-        name: index.get(d.id)?.name ?? d.name,
+        name: nameOf?.(d.id) ?? index.get(d.id)?.name ?? d.name,
         requirement: d.requirement,
         status: dependencyStatus(d),
         installedVersion: d.installed_version,

@@ -9,10 +9,14 @@ test.describe("Customize: marketplace, module builder and theme", () => {
   }) => {
     const plate = uid("PL").replace(/ /g, "-");
     try {
-      await signIn("root", "/customize/modules?tab=modules");
-      const card = page.locator("article.card", { has: page.getByText("Fleet", { exact: true }) });
+      await signIn("root", "/customize/modules?tab=modules&view=marketplace");
+      const card = page.getByRole("article", { name: "Fleet", exact: true });
       await expect(card.getByRole("button", { name: "Install" })).toBeEnabled();
       await card.getByRole("button", { name: "Install" }).click();
+      // The plan dialog says what will be installed; one confirmation applies it.
+      const plan = page.getByRole("dialog", { name: "Install Fleet" });
+      await expect(plan.getByRole("listitem").first()).toContainText("Fleet");
+      await plan.getByRole("button", { name: "Install", exact: true }).click();
       await expect(page.locator(".toast").filter({ hasText: "Installed Fleet" })).toBeVisible();
       await expect(card.getByRole("button", { name: "Installed" })).toBeDisabled();
 
@@ -35,10 +39,12 @@ test.describe("Customize: marketplace, module builder and theme", () => {
 
       // Uninstall from the Installed list; the app leaves the launcher.
       await page.goto("/#/customize/modules?tab=modules");
-      const row = page.locator("li.row", { has: page.getByText("Fleet", { exact: true }) });
+      const row = page.getByRole("article", { name: "Fleet", exact: true });
       await row.getByRole("button", { name: "Uninstall" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Uninstall" }).click();
       await expect(page.locator(".toast").filter({ hasText: "Removed Fleet" })).toBeVisible();
       await expect(row).toHaveCount(0);
+      await page.getByRole("tab", { name: /^Marketplace/ }).click();
       await expect(card.getByRole("button", { name: "Install" })).toBeEnabled();
       await page.getByRole("button", { name: "Open the app launcher" }).click();
       await expect(

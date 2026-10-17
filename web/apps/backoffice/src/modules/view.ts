@@ -123,9 +123,10 @@ export function useModulesView(opts: {
 
   const finished = useCallback(
     async (text: string, tone: "ok" | "info" = "ok") => {
+      // The toast comes after the lists have caught up, so what it says is what the page shows.
+      await data.reload();
       setDialog(null);
       notify(text, tone);
-      await data.reload();
       onChanged();
     },
     [data, notify, onChanged],

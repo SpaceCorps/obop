@@ -282,7 +282,11 @@ function Dependencies({
   index: Map<string, Row>;
   hrefFor: (id: string) => string | null;
 }) {
-  const tree = buildTree(row.id, index.has(row.id) ? index : new Map(index).set(row.id, row));
+  const tree = buildTree(
+    row.id,
+    index.has(row.id) ? index : new Map(index).set(row.id, row),
+    nameOf,
+  );
   const coming = flattenTree(tree).filter(
     (n) => n.status === "will_install" || n.status === "will_upgrade",
   );

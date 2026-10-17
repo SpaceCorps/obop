@@ -95,13 +95,21 @@ impl Ctx<'_> {
         ])
     }
 
-    /// Ids of the installed packages that name `id` as a dependency.
+    /// Ids of the modules that name `id` as a dependency: installed packages and built-in modules.
     fn dependents(&self, id: &str) -> Vec<String> {
-        self.installed
+        let mut out: Vec<String> = self
+            .builtin
             .iter()
-            .filter(|(pid, m)| pid.as_str() != id && m.dependency_ids().iter().any(|d| d == id))
-            .map(|(pid, _)| pid.clone())
-            .collect()
+            .filter(|m| m.id != id && m.meta.dependencies.iter().any(|(d, _)| d == id))
+            .map(|m| m.id.clone())
+            .collect();
+        out.extend(
+            self.installed
+                .iter()
+                .filter(|(pid, m)| pid.as_str() != id && m.dependency_ids().iter().any(|d| d == id))
+                .map(|(pid, _)| pid.clone()),
+        );
+        out
     }
 }
 
