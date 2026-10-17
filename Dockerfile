@@ -1,8 +1,23 @@
 # One image for both roles. The default command runs an instance; the control plane overrides it:
 #   obop platform serve --addr 0.0.0.0:8080 --static /srv/site --provisioner sliplane
-FROM rust:1.99.0-slim AS build
+# The Rust build is split in three so the dependencies, which change rarely and take most of the
+# time, are a cached layer of their own (cargo-chef): `planner` writes a recipe of every
+# dependency from the manifests alone, `build` cooks the recipe (cached until a manifest or the
+# lockfile changes) and then compiles the workspace.
+FROM rust:1.99.0-slim AS chef
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-chef --locked --version 0.1.78
 WORKDIR /src
+
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+COPY packages ./packages
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS build
+COPY --from=planner /src/recipe.json recipe.json
+RUN cargo chef cook --release --locked --recipe-path recipe.json -p obop
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 COPY packages ./packages
@@ -18,6 +33,8 @@ COPY web ./web
 COPY packages ./packages
 COPY design ./design
 COPY docs/MODULES.md ./docs/MODULES.md
+# The website reports the core version, which is the workspace version in Cargo.toml (D55).
+COPY Cargo.toml ./Cargo.toml
 RUN corepack prepare pnpm@12.6.0 --activate \
  && pnpm install --frozen-lockfile \
  && OBOP_ADMIN_BASE=/admin/ pnpm --filter @obop/backoffice exec vp build \

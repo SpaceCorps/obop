@@ -43,7 +43,8 @@ const USAGE: &str = "usage: obop <command>
       --provisioner local|sliplane|fake         (default local: child processes on this machine)
       --instance-static DIR                     backoffice build served by local instances
       sliplane needs SLIPLANE_ACCOUNT, OBOP_SLIPLANE_PROJECT, OBOP_SLIPLANE_SERVER, OBOP_CELL_ADMIN_URL
-      and OBOP_IMAGE or OBOP_REPO (+ OBOP_BRANCH); optional OBOP_MARKETPLACE_URL and
+      and OBOP_IMAGE (preferred: a published image) or OBOP_REPO (+ OBOP_BRANCH: Sliplane builds each
+      instance); optional OBOP_REGISTRY_CREDENTIAL (a private image), OBOP_MARKETPLACE_URL and
       OBOP_CELL_INSTANCE_HOST (host:port instances use for the cell, e.g. obop-postgres.internal:5432),
       OBOP_CELL_INSTANCE_HOST (host:port instances use for the cell, e.g. obop-postgres.internal:5432)
       the control plane also serves /community (forum) and /status (status page); settings:
@@ -67,6 +68,11 @@ const USAGE: &str = "usage: obop <command>
   backup verify FILE                            check a backup's checksums, format and counts
   restore --db URL --from FILE [--force] [--dry-run]
                                                 restore into an empty database (--force replaces what is there)
+  platform upgrade-instances --image TAG [--only SLUG] [--dry-run] [--db URL] [--provisioner sliplane]
+                                                move every running instance to a published image, one at a time, each after the
+                                                previous one is healthy; stops at the first failure. TAG is a commit tag
+                                                (ghcr.io/spacecorps/obop:TAG) or a full image reference; --only picks one instance
+                                                (a try-out, or a rollback). Needs the same settings as platform serve
   secrets status [--db URL]                     which key seals how many stored secrets
   secrets rotate [--db URL] [--dry-run] [--batch N] [--max-batches N] [--skip-unopenable]
                                                 re-seal every secret with the current OBOP_SECRET_KEY (earlier keys in
@@ -750,7 +756,7 @@ fn site_set(o: &Opts, key: &str, value: &str) -> Exit {
 
 /// Build the provisioner named on the command line. Sliplane settings come from the
 /// environment so no secret appears in the process list.
-fn make_provisioner(
+pub(crate) fn make_provisioner(
     kind: &str,
     instance_static: Option<&str>,
 ) -> Result<Arc<dyn obop_platform::provision::Provisioner>, String> {
@@ -785,6 +791,16 @@ fn make_provisioner(
                 poll: sliplane::Config::DEFAULT_POLL,
                 timeout: sliplane::Config::DEFAULT_TIMEOUT,
                 check_reachable: true,
+                // A private image needs a registry credential made with `sliplane credentials`.
+                registry_credential: std::env::var("OBOP_REGISTRY_CREDENTIAL")
+                    .ok()
+                    .filter(|c| !c.trim().is_empty()),
+                settle: std::time::Duration::from_secs(
+                    std::env::var("OBOP_UPGRADE_SETTLE_SECS")
+                        .ok()
+                        .and_then(|v| v.trim().parse().ok())
+                        .unwrap_or(30),
+                ),
             };
             let cell = sliplane::PgCell {
                 admin_url: env("OBOP_CELL_ADMIN_URL")?,

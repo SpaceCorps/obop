@@ -28,6 +28,8 @@ pub struct Instance {
     pub error: String,
     /// What the background job is doing right now, e.g. "Building the service (1m 20s)".
     pub phase: String,
+    /// The image the instance runs, when its provisioner runs images (empty otherwise).
+    pub image: String,
 }
 
 impl Instance {
@@ -46,6 +48,7 @@ impl Instance {
             url: g("url"),
             error: g("error"),
             phase: g("phase"),
+            image: g("image"),
         }
     }
 }
@@ -169,6 +172,10 @@ impl Platform {
         ] {
             f.insert(k.into(), J::from(v));
         }
+        f.insert(
+            "image".into(),
+            J::from(self.provisioner.image().unwrap_or_default()),
+        );
         f.insert("created_at".into(), J::from(now()));
         self.backend.insert(TABLE, &id, &f)?;
         let me = self.clone();
@@ -197,6 +204,98 @@ impl Platform {
             let _ = me.backend.update(TABLE, &rec, &patch);
         });
         Ok(Instance::from_fields(&id, &f))
+    }
+
+    /// Move every running instance to `image`, one at a time, oldest first, each only after the
+    /// previous one answers its health check; the first failure stops the run and leaves the
+    /// rest untouched. With `only`, just that instance (for a try-out, or a rollback to an
+    /// older image). With `dry_run`, say what would happen and change nothing.
+    pub fn upgrade_instances(
+        &self,
+        image: &str,
+        only: Option<&str>,
+        dry_run: bool,
+        progress: provision::Progress,
+    ) -> Result<UpgradeReport, String> {
+        if image.is_empty() || image.chars().any(|c| c.is_whitespace() || c.is_control()) {
+            return Err(
+                "the image must be a reference such as ghcr.io/spacecorps/obop:<commit>".into(),
+            );
+        }
+        let mut all: Vec<(String, u64, Fields)> = self
+            .backend
+            .list(TABLE)?
+            .into_iter()
+            .filter(|(_, f)| f.get("status").and_then(J::as_str) != Some("deleted"))
+            .map(|(id, f)| {
+                let at = f.get("created_at").and_then(J::as_u64).unwrap_or(0);
+                (id, at, f)
+            })
+            .collect();
+        all.sort_by_key(|(id, at, _)| (*at, id.clone()));
+        if let Some(slug) = only
+            && !all
+                .iter()
+                .any(|(_, _, f)| f.get("slug").and_then(J::as_str) == Some(slug))
+        {
+            return Err(format!("no instance {slug}"));
+        }
+        let mut report = UpgradeReport::default();
+        for (id, _, f) in all {
+            let i = Instance::from_fields(&id, &f);
+            if only.is_some_and(|s| s != i.slug) {
+                continue;
+            }
+            let ext = f
+                .get("external_id")
+                .and_then(J::as_str)
+                .unwrap_or("")
+                .to_string();
+            let step = |outcome| UpgradeStep {
+                slug: i.slug.clone(),
+                from: i.image.clone(),
+                to: image.to_string(),
+                outcome,
+            };
+            if report.stopped {
+                report.steps.push(step(UpgradeOutcome::NotAttempted));
+            } else if i.status != "running" || ext.is_empty() {
+                report
+                    .steps
+                    .push(step(UpgradeOutcome::Skipped(format!("it is {}", i.status))));
+            } else if i.image == image {
+                report.steps.push(step(UpgradeOutcome::Skipped(
+                    "already on this image".into(),
+                )));
+            } else if dry_run {
+                report.steps.push(step(UpgradeOutcome::WouldUpgrade));
+            } else {
+                progress(&format!("{}: upgrading to {image}", i.slug));
+                let phase = |ph: &str| {
+                    self.set_phase(&id, ph);
+                    progress(&format!("{}: {ph}", i.slug));
+                };
+                let result = self.provisioner.upgrade(&i.slug, &ext, image, &phase);
+                let mut patch = Fields::new();
+                patch.insert("phase".into(), J::from(""));
+                match result {
+                    Ok(()) => {
+                        patch.insert("image".into(), J::from(image));
+                        report.steps.push(step(UpgradeOutcome::Upgraded));
+                    }
+                    Err(e) => {
+                        patch.insert(
+                            "error".into(),
+                            J::from(format!("upgrade to {image} failed: {e}")),
+                        );
+                        report.steps.push(step(UpgradeOutcome::Failed(e)));
+                        report.stopped = true;
+                    }
+                }
+                let _ = self.backend.update(TABLE, &id, &patch);
+            }
+        }
+        Ok(report)
     }
 
     fn set_phase(&self, id: &str, phase: &str) {
@@ -257,6 +356,51 @@ impl Platform {
         });
         Ok(i)
     }
+}
+
+/// What happened to one instance in `upgrade_instances`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UpgradeOutcome {
+    Upgraded,
+    WouldUpgrade,
+    Skipped(String),
+    Failed(String),
+    /// An earlier instance failed, so this one was left alone.
+    NotAttempted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeStep {
+    pub slug: String,
+    pub from: String,
+    pub to: String,
+    pub outcome: UpgradeOutcome,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UpgradeReport {
+    pub steps: Vec<UpgradeStep>,
+    /// A step failed; the ones after it were not attempted.
+    pub stopped: bool,
+}
+
+/// The image reference for an upgrade: `arg` as it is when it names a registry path, else the
+/// repository of `current` (the image new instances use) with `arg` as the tag.
+pub fn resolve_image(arg: &str, current: Option<&str>) -> String {
+    if arg.contains('/') {
+        return arg.to_string();
+    }
+    let repo = current
+        .map(|c| {
+            // Keep a registry port (`host:5000/x`), drop only a trailing tag.
+            match c.rsplit_once(':') {
+                Some((r, tag)) if !tag.contains('/') => r.to_string(),
+                _ => c.to_string(),
+            }
+        })
+        .filter(|r| !r.is_empty())
+        .unwrap_or_else(|| "ghcr.io/spacecorps/obop".to_string());
+    format!("{repo}:{}", arg.trim_start_matches(':'))
 }
 
 /// Adapter that lets the HTTP layer drive the platform.
@@ -477,6 +621,204 @@ mod tests {
             p.signup("A@example.test", "correct horse battery")
                 .unwrap_err()
                 .contains("exists")
+        );
+    }
+    fn running_instances(p: &Arc<Platform>, names: &[&str]) -> String {
+        let tok = p
+            .signup("ops@example.test", "correct horse battery")
+            .unwrap();
+        for name in names {
+            let i = p.create_instance(&tok, name).unwrap();
+            wait_for(p, &tok, &i.id, "running");
+            // Creation order is what the upgrade follows: keep the timestamps apart.
+            std::thread::sleep(std::time::Duration::from_millis(1100));
+        }
+        tok
+    }
+
+    #[test]
+    fn upgrades_go_one_by_one_oldest_first_and_record_the_image() {
+        let (p, fake) = platform();
+        *fake.image.lock().unwrap() = Some("ghcr.io/spacecorps/obop:old".into());
+        running_instances(&p, &["alpha-one", "alpha-two", "alpha-three"]);
+        let seen = std::sync::Mutex::new(Vec::<String>::new());
+        let r = p
+            .upgrade_instances("ghcr.io/spacecorps/obop:new", None, false, &|l| {
+                seen.lock().unwrap().push(l.into())
+            })
+            .unwrap();
+        assert!(!r.stopped);
+        let slugs: Vec<_> = r.steps.iter().map(|s| s.slug.as_str()).collect();
+        assert_eq!(slugs, ["alpha-one", "alpha-two", "alpha-three"]);
+        assert!(
+            r.steps.iter().all(|s| s.outcome == UpgradeOutcome::Upgraded
+                && s.from == "ghcr.io/spacecorps/obop:old")
+        );
+        assert_eq!(
+            *fake.upgraded.lock().unwrap(),
+            [
+                (
+                    "alpha-one".to_string(),
+                    "ghcr.io/spacecorps/obop:new".to_string()
+                ),
+                ("alpha-two".into(), "ghcr.io/spacecorps/obop:new".into()),
+                ("alpha-three".into(), "ghcr.io/spacecorps/obop:new".into()),
+            ]
+        );
+        assert!(
+            seen.lock()
+                .unwrap()
+                .iter()
+                .any(|l| l.contains("alpha-two: upgrading"))
+        );
+        // A second run has nothing to do: they are on it.
+        let again = p
+            .upgrade_instances("ghcr.io/spacecorps/obop:new", None, false, &|_| {})
+            .unwrap();
+        assert!(
+            again
+                .steps
+                .iter()
+                .all(|s| matches!(&s.outcome, UpgradeOutcome::Skipped(w) if w.contains("already")))
+        );
+        assert_eq!(fake.upgraded.lock().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn the_first_failure_stops_the_run_and_leaves_the_rest_untouched() {
+        let (p, fake) = platform();
+        *fake.image.lock().unwrap() = Some("ghcr.io/spacecorps/obop:old".into());
+        let tok = running_instances(&p, &["alpha-one", "alpha-two", "alpha-three"]);
+        *fake.upgrade_fail_for.lock().unwrap() = Some("alpha-two".into());
+        let r = p
+            .upgrade_instances("ghcr.io/spacecorps/obop:new", None, false, &|_| {})
+            .unwrap();
+        assert!(r.stopped);
+        let outcomes: Vec<_> = r.steps.iter().map(|s| s.outcome.clone()).collect();
+        assert_eq!(outcomes[0], UpgradeOutcome::Upgraded);
+        assert!(matches!(&outcomes[1], UpgradeOutcome::Failed(e) if e.contains("health check")));
+        assert_eq!(outcomes[2], UpgradeOutcome::NotAttempted);
+        assert_eq!(
+            fake.upgraded.lock().unwrap().len(),
+            1,
+            "alpha-three was not touched"
+        );
+        // The record keeps what each instance runs, and says what failed.
+        let list = p.list(&tok).unwrap();
+        let img = |slug: &str| list.iter().find(|i| i.slug == slug).unwrap().image.clone();
+        assert_eq!(img("alpha-one"), "ghcr.io/spacecorps/obop:new");
+        assert_eq!(img("alpha-two"), "ghcr.io/spacecorps/obop:old");
+        assert_eq!(img("alpha-three"), "ghcr.io/spacecorps/obop:old");
+        assert!(
+            list.iter()
+                .find(|i| i.slug == "alpha-two")
+                .unwrap()
+                .error
+                .contains("upgrade to")
+        );
+        // After the fault is fixed, the same command carries on where it stopped.
+        *fake.upgrade_fail_for.lock().unwrap() = None;
+        let r = p
+            .upgrade_instances("ghcr.io/spacecorps/obop:new", None, false, &|_| {})
+            .unwrap();
+        assert!(!r.stopped);
+        assert!(matches!(&r.steps[0].outcome, UpgradeOutcome::Skipped(_)));
+        assert_eq!(fake.upgraded.lock().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn a_dry_run_changes_nothing_and_only_picks_one_instance() {
+        let (p, fake) = platform();
+        *fake.image.lock().unwrap() = Some("ghcr.io/spacecorps/obop:old".into());
+        running_instances(&p, &["alpha-one", "alpha-two"]);
+        let r = p
+            .upgrade_instances("ghcr.io/spacecorps/obop:new", None, true, &|_| {})
+            .unwrap();
+        assert!(
+            r.steps
+                .iter()
+                .all(|s| s.outcome == UpgradeOutcome::WouldUpgrade)
+        );
+        assert!(fake.upgraded.lock().unwrap().is_empty());
+        let r = p
+            .upgrade_instances(
+                "ghcr.io/spacecorps/obop:old2",
+                Some("alpha-two"),
+                false,
+                &|_| {},
+            )
+            .unwrap();
+        assert_eq!(r.steps.len(), 1);
+        assert_eq!(r.steps[0].slug, "alpha-two");
+        assert_eq!(fake.upgraded.lock().unwrap().len(), 1);
+        assert!(
+            p.upgrade_instances("x:y", Some("nobody"), false, &|_| {})
+                .unwrap_err()
+                .contains("no instance")
+        );
+        assert!(
+            p.upgrade_instances("bad image", None, false, &|_| {})
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn instances_that_are_not_running_are_skipped_and_a_provisioner_without_upgrades_says_so() {
+        let (p, fake) = platform();
+        let tok = running_instances(&p, &["alpha-one"]);
+        let id = p.list(&tok).unwrap()[0].id.clone();
+        *fake.delete_delay.lock().unwrap() = std::time::Duration::from_millis(800);
+        p.delete_instance(&tok, &id).unwrap();
+        let r = p.upgrade_instances("x/y:z", None, false, &|_| {}).unwrap();
+        assert!(
+            matches!(&r.steps[0].outcome, UpgradeOutcome::Skipped(w) if w.contains("deleting")),
+            "{r:?}"
+        );
+        // The default provisioner cannot upgrade in place.
+        struct Bare;
+        impl Provisioner for Bare {
+            fn create(
+                &self,
+                _: &InstanceSpec,
+                _: provision::Progress,
+            ) -> Result<provision::Provisioned, String> {
+                Ok(provision::Provisioned {
+                    external_id: "1".into(),
+                    url: "u".into(),
+                })
+            }
+            fn delete(&self, _: &str, _: &str, _: provision::Progress) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        assert!(
+            Bare.upgrade("a", "1", "i", &|_| {})
+                .unwrap_err()
+                .contains("cannot upgrade")
+        );
+    }
+
+    #[test]
+    fn a_short_tag_is_resolved_against_the_repository_of_the_current_image() {
+        assert_eq!(
+            resolve_image("abc123", Some("ghcr.io/spacecorps/obop:old")),
+            "ghcr.io/spacecorps/obop:abc123"
+        );
+        assert_eq!(
+            resolve_image("abc123", Some("ghcr.io/spacecorps/obop")),
+            "ghcr.io/spacecorps/obop:abc123"
+        );
+        assert_eq!(
+            resolve_image("abc123", Some("localhost:5000/obop")),
+            "localhost:5000/obop:abc123"
+        );
+        assert_eq!(
+            resolve_image("abc123", None),
+            "ghcr.io/spacecorps/obop:abc123"
+        );
+        assert_eq!(
+            resolve_image("ghcr.io/other/obop:1", Some("ghcr.io/x/y:2")),
+            "ghcr.io/other/obop:1"
         );
     }
 }

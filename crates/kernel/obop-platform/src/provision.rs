@@ -23,6 +23,24 @@ pub type Progress<'a> = &'a (dyn Fn(&str) + Sync);
 pub trait Provisioner: Send + Sync {
     fn create(&self, spec: &InstanceSpec, progress: Progress) -> Result<Provisioned, String>;
     fn delete(&self, slug: &str, external_id: &str, progress: Progress) -> Result<(), String>;
+    /// The image new instances start from, when the provisioner runs images (recorded with each
+    /// instance, so an upgrade knows what it replaces).
+    fn image(&self) -> Option<String> {
+        None
+    }
+    /// Move a running instance to `image` (a full reference such as
+    /// `ghcr.io/spacecorps/obop:<commit>`): redeploy it and return only when the new version
+    /// answers its health check. An error means the instance may be down or on either version;
+    /// the caller stops and tells an operator.
+    fn upgrade(
+        &self,
+        _slug: &str,
+        _external_id: &str,
+        _image: &str,
+        _progress: Progress,
+    ) -> Result<(), String> {
+        Err("this provisioner cannot upgrade instances in place".into())
+    }
 }
 
 /// Records what it was asked to do. For tests.
@@ -33,6 +51,12 @@ pub struct Fake {
     pub fail_with: Mutex<Option<String>>,
     pub delete_delay: Mutex<std::time::Duration>,
     pub delete_fail: Mutex<Option<String>>,
+    /// `(slug, image)` of each upgrade, in order.
+    pub upgraded: Mutex<Vec<(String, String)>>,
+    /// Fail the upgrade of this slug.
+    pub upgrade_fail_for: Mutex<Option<String>>,
+    /// The image reported for new instances.
+    pub image: Mutex<Option<String>>,
 }
 
 impl Provisioner for Fake {
@@ -46,6 +70,22 @@ impl Provisioner for Fake {
             external_id: format!("fake-{}", spec.slug),
             url: format!("https://{}.fake.test", spec.slug),
         })
+    }
+
+    fn image(&self) -> Option<String> {
+        self.image.lock().unwrap().clone()
+    }
+
+    fn upgrade(&self, slug: &str, _: &str, image: &str, progress: Progress) -> Result<(), String> {
+        progress("Redeploying the instance");
+        if self.upgrade_fail_for.lock().unwrap().as_deref() == Some(slug) {
+            return Err("the new version did not answer its health check".into());
+        }
+        self.upgraded
+            .lock()
+            .unwrap()
+            .push((slug.into(), image.into()));
+        Ok(())
     }
 
     fn delete(&self, slug: &str, _: &str, progress: Progress) -> Result<(), String> {

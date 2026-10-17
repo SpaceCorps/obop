@@ -1163,6 +1163,7 @@ dependencies = [
  "obop-storage",
  "postgres",
  "serde_json",
+ "ureq",
  "uuid",
 ]
 

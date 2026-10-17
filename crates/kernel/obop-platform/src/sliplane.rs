@@ -170,6 +170,12 @@ pub struct Config {
     /// accepts connections before calling the instance running. New names reach public DNS a
     /// while after the service is live, and a browser that asks too early caches "not found".
     pub check_reachable: bool,
+    /// A Sliplane registry credential id for a private image (`sliplane credentials`), passed
+    /// as `--registry-credential-id` when a service is created or moved to an image.
+    pub registry_credential: Option<String>,
+    /// How long to let a redeploy settle before asking whether the service is live: a service
+    /// still reports the old deployment as live for a moment after `deploy`.
+    pub settle: std::time::Duration,
 }
 
 impl Config {
@@ -177,15 +183,58 @@ impl Config {
     pub const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20 * 60);
 }
 
+/// Asks a running instance whether it is healthy (after an upgrade).
+pub trait Health: Send + Sync {
+    /// `Ok` when `GET {base}/api/openapi.json` answers 200: the server is up and has opened its
+    /// database (a version that cannot read the schema, or a failed migration, never listens).
+    fn check(&self, base: &str) -> Result<(), String>;
+}
+
+/// The health check over HTTPS, retried for up to a minute while the new version starts.
+pub struct HttpHealth;
+
+impl Health for HttpHealth {
+    fn check(&self, base: &str) -> Result<(), String> {
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(10)))
+            .http_status_as_error(false)
+            .build()
+            .into();
+        let url = format!("{}/api/openapi.json", base.trim_end_matches('/'));
+        let mut last = String::new();
+        for _ in 0..20 {
+            match agent.get(&url).call() {
+                Ok(r) if r.status() == 200 => return Ok(()),
+                Ok(r) => last = format!("answered {}", r.status()),
+                Err(e) => last = e.to_string(),
+            }
+            std::thread::sleep(Duration::from_secs(3));
+        }
+        Err(format!("{url} did not answer 200 within a minute ({last})"))
+    }
+}
+
 pub struct Sliplane {
     cfg: Config,
     runner: Arc<dyn Runner>,
     cell: Arc<dyn CellDb>,
+    health: Arc<dyn Health>,
 }
 
 impl Sliplane {
     pub fn new(cfg: Config, runner: Arc<dyn Runner>, cell: Arc<dyn CellDb>) -> Self {
-        Self { cfg, runner, cell }
+        Self {
+            cfg,
+            runner,
+            cell,
+            health: Arc::new(HttpHealth),
+        }
+    }
+
+    /// Replace the health check (tests).
+    pub fn with_health(mut self, health: Arc<dyn Health>) -> Self {
+        self.health = health;
+        self
     }
 
     fn service_name(slug: &str) -> String {
@@ -337,7 +386,12 @@ impl Provisioner for Sliplane {
                 "http".into(),
             ]);
             match &self.cfg.source {
-                Source::Image(i) => args.extend(["--image".into(), i.clone()]),
+                Source::Image(i) => {
+                    args.extend(["--image".into(), i.clone()]);
+                    if let Some(c) = &self.cfg.registry_credential {
+                        args.extend(["--registry-credential-id".into(), c.clone()]);
+                    }
+                }
                 // Instances must not rebuild on every push: upgrades are deliberate.
                 Source::Repo { url, branch } => args.extend([
                     "--repo".into(),
@@ -362,6 +416,9 @@ impl Provisioner for Sliplane {
             if let Some(m) = &self.cfg.marketplace_url {
                 args.extend(["--env".into(), format!("OBOP_MARKETPLACE_URL={m}")]);
             }
+            // One process per instance, so it may run its own schema migrations when a new
+            // version starts (docs/DEPLOY.md, "Upgrades"): an upgrade is then one redeploy.
+            args.extend(["--env".into(), "OBOP_AUTO_MIGRATE=1".into()]);
             let out = self.runner.run(&args)?;
             let j: J = serde_json::from_str(&out)
                 .map_err(|e| format!("unexpected sliplane output: {e}"))?;
@@ -391,6 +448,71 @@ impl Provisioner for Sliplane {
             let _ = self.cell.drop_database(&spec.slug);
         }
         result
+    }
+
+    fn image(&self) -> Option<String> {
+        match &self.cfg.source {
+            Source::Image(i) => Some(i.clone()),
+            Source::Repo { .. } => None,
+        }
+    }
+
+    fn upgrade(
+        &self,
+        slug: &str,
+        external_id: &str,
+        image: &str,
+        progress: Progress,
+    ) -> Result<(), String> {
+        // Only ever touch a service that is ours.
+        let mut get = self.base(&["services", "get"]);
+        get.extend(["--service-id".into(), external_id.into()]);
+        let j: J = serde_json::from_str(&self.runner.run(&get)?).map_err(|e| e.to_string())?;
+        if j["name"].as_str() != Some(&Self::service_name(slug)) {
+            return Err(
+                "refusing to upgrade: the service name does not match this instance".into(),
+            );
+        }
+        let domain = j["network"]["managedDomain"]
+            .as_str()
+            .ok_or("sliplane returned no domain")?
+            .to_string();
+        progress(&format!("Pointing the service at {image}"));
+        let mut upd = self.base(&["services", "update"]);
+        upd.extend([
+            "--service-id".into(),
+            external_id.into(),
+            "--image".into(),
+            image.into(),
+            // Add to the environment, never replace it: the secrets stay as they are.
+            "--env".into(),
+            "OBOP_AUTO_MIGRATE=1".into(),
+            "--merge-env".into(),
+        ]);
+        if let Some(c) = &self.cfg.registry_credential {
+            upd.extend(["--registry-credential-id".into(), c.clone()]);
+        }
+        self.runner.run(&upd)?;
+        progress("Deploying the new version");
+        let mut dep = self.base(&["services", "deploy"]);
+        dep.extend(["--service-id".into(), external_id.into()]);
+        self.runner.run(&dep)?;
+        std::thread::sleep(self.cfg.settle);
+        self.wait_live(external_id, progress)?;
+        // The service must report the image we asked for, when it says which it runs.
+        let mut again = self.base(&["services", "get"]);
+        again.extend(["--service-id".into(), external_id.into()]);
+        if let Ok(out) = self.runner.run(&again)
+            && let Ok(now) = serde_json::from_str::<J>(&out)
+            && let Some(running) = now["image"].as_str().or(now["source"]["image"].as_str())
+            && running != image
+        {
+            return Err(format!(
+                "the service is live but runs {running}, not {image}"
+            ));
+        }
+        progress("Waiting for the new version to answer");
+        self.health.check(&format!("https://{domain}"))
     }
 
     fn delete(&self, slug: &str, external_id: &str, progress: Progress) -> Result<(), String> {
@@ -453,6 +575,8 @@ mod tests {
             poll: std::time::Duration::ZERO,
             timeout: std::time::Duration::from_secs(5),
             check_reachable: false,
+            registry_credential: None,
+            settle: std::time::Duration::ZERO,
         }
     }
 
@@ -812,5 +936,179 @@ mod tests {
         assert_eq!(auth.user_count(), 1);
         cell.drop_database(&slug).unwrap();
         assert!(obop_storage::open(&url).is_err(), "the database is gone");
+    }
+    struct Healthy(Mutex<Vec<String>>, Result<(), String>);
+    impl Health for Healthy {
+        fn check(&self, base: &str) -> Result<(), String> {
+            self.0.lock().unwrap().push(base.into());
+            self.1.clone()
+        }
+    }
+
+    const IMG: &str = "ghcr.io/spacecorps/obop:abc123";
+
+    fn upgrader(
+        replies: Vec<Result<String, String>>,
+        health: Result<(), String>,
+    ) -> (Sliplane, Arc<FakeRunner>, Arc<Healthy>) {
+        let runner = Arc::new(FakeRunner::default());
+        runner.reply.lock().unwrap().extend(replies);
+        let h = Arc::new(Healthy(Mutex::default(), health));
+        let mut c = cfg(Source::Image("ghcr.io/spacecorps/obop:old".into()));
+        c.registry_credential = Some("cred_1".into());
+        let s =
+            Sliplane::new(c, runner.clone(), Arc::new(FakeCell::default())).with_health(h.clone());
+        (s, runner, h)
+    }
+
+    #[test]
+    fn an_upgrade_points_the_service_at_the_image_redeploys_and_checks_health() {
+        let live = format!(r#"{{"status":"live","image":"{IMG}"}}"#);
+        let (s, runner, health) = upgrader(
+            vec![
+                Ok(CREATED.into()),
+                Ok("{}".into()),
+                Ok("{}".into()),
+                Ok(LIVE.into()),
+                Ok(live),
+            ],
+            Ok(()),
+        );
+        let seen = Mutex::new(Vec::<String>::new());
+        s.upgrade("acme", "service_9", IMG, &|p| {
+            seen.lock().unwrap().push(p.into())
+        })
+        .unwrap();
+        let calls: Vec<String> = runner
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|c| c.join(" "))
+            .collect();
+        assert!(
+            calls[0].starts_with("services get") && calls[0].contains("--service-id service_9")
+        );
+        let update = &calls[1];
+        for want in [
+            "services update",
+            "-a acct",
+            "--project-id project_1",
+            "--service-id service_9",
+            "--image ghcr.io/spacecorps/obop:abc123",
+            "--env OBOP_AUTO_MIGRATE=1",
+            "--merge-env",
+            "--registry-credential-id cred_1",
+        ] {
+            assert!(update.contains(want), "{want} missing from {update}");
+        }
+        // The environment is only ever merged: no secret is dropped.
+        assert!(!update.contains("--replace-env") && !update.contains("OBOP_SECRET_KEY"));
+        assert!(calls[2].starts_with("services deploy") && calls[2].contains("service_9"));
+        assert_eq!(
+            *health.0.lock().unwrap(),
+            ["https://obop-acme.sliplane.app"]
+        );
+        let seen = seen.lock().unwrap();
+        assert!(
+            seen[0].contains(IMG) && seen.last().unwrap().contains("answer"),
+            "{seen:?}"
+        );
+    }
+
+    #[test]
+    fn an_upgrade_refuses_a_service_that_is_not_the_instances_own() {
+        let (s, runner, health) = upgrader(
+            vec![Ok(r#"{"id":"service_9","name":"someone-else"}"#.into())],
+            Ok(()),
+        );
+        let e = s.upgrade("acme", "service_9", IMG, NOOP).unwrap_err();
+        assert!(e.contains("does not match"), "{e}");
+        assert_eq!(runner.calls.lock().unwrap().len(), 1, "nothing was changed");
+        assert!(health.0.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_upgrade_fails_when_the_service_does_not_come_up_or_runs_another_image_or_is_unhealthy() {
+        // The deploy fails: the events say why.
+        let (s, _, _) = upgrader(
+            vec![
+                Ok(CREATED.into()),
+                Ok("{}".into()),
+                Ok("{}".into()),
+                Ok(r#"{"status":"deploying"}"#.into()),
+                Ok(r#"[{"type":"deploy_failed","message":"image not found"}]"#.into()),
+            ],
+            Ok(()),
+        );
+        let e = s.upgrade("acme", "service_9", IMG, NOOP).unwrap_err();
+        assert!(
+            e.contains("did not start") && e.contains("image not found"),
+            "{e}"
+        );
+        // Live, but on the old image.
+        let (s, _, h) = upgrader(
+            vec![
+                Ok(CREATED.into()),
+                Ok("{}".into()),
+                Ok("{}".into()),
+                Ok(LIVE.into()),
+                Ok(r#"{"status":"live","image":"ghcr.io/spacecorps/obop:old"}"#.into()),
+            ],
+            Ok(()),
+        );
+        let e = s.upgrade("acme", "service_9", IMG, NOOP).unwrap_err();
+        assert!(e.contains("runs ghcr.io/spacecorps/obop:old"), "{e}");
+        assert!(
+            h.0.lock().unwrap().is_empty(),
+            "no health check on the wrong version"
+        );
+        // Live on the new image but the health check fails.
+        let live = format!(r#"{{"status":"live","image":"{IMG}"}}"#);
+        let (s, _, _) = upgrader(
+            vec![
+                Ok(CREATED.into()),
+                Ok("{}".into()),
+                Ok("{}".into()),
+                Ok(LIVE.into()),
+                Ok(live),
+            ],
+            Err("did not answer 200".into()),
+        );
+        assert_eq!(
+            s.upgrade("acme", "service_9", IMG, NOOP).unwrap_err(),
+            "did not answer 200"
+        );
+    }
+
+    #[test]
+    fn instances_created_from_an_image_report_it_and_start_with_auto_migrate() {
+        let (runner, cell) = (
+            Arc::new(FakeRunner::default()),
+            Arc::new(FakeCell::default()),
+        );
+        runner
+            .reply
+            .lock()
+            .unwrap()
+            .extend([Ok(CREATED.into()), Ok(LIVE.into())]);
+        let mut c = cfg(Source::Image("ghcr.io/spacecorps/obop:old".into()));
+        c.registry_credential = Some("cred_1".into());
+        let s = Sliplane::new(c, runner.clone(), cell);
+        assert_eq!(s.image().as_deref(), Some("ghcr.io/spacecorps/obop:old"));
+        s.create(&spec(), NOOP).unwrap();
+        let args = runner.calls.lock().unwrap()[0].join(" ");
+        assert!(args.contains("--env OBOP_AUTO_MIGRATE=1"), "{args}");
+        assert!(args.contains("--registry-credential-id cred_1"), "{args}");
+        // A repository source has no image.
+        let repo = Sliplane::new(
+            cfg(Source::Repo {
+                url: "https://x/y".into(),
+                branch: "deploy".into(),
+            }),
+            Arc::new(FakeRunner::default()),
+            Arc::new(FakeCell::default()),
+        );
+        assert_eq!(repo.image(), None);
     }
 }

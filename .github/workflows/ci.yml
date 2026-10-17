@@ -30,6 +30,18 @@ jobs:
       - run: cargo test --locked
       - name: Install gate over every linked module
         run: cargo run --locked -q -- modules check
+      - name: Restore drill (B4): back up a PostgreSQL database, restore it into a scratch one, serve it
+        env:
+          DRILL_ADMIN_URL: postgres://postgres:obop-test@127.0.0.1:5432/postgres
+          OBOP: target/debug/obop
+          OBOP_SECRET_KEY: "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+          OBOP_REQUIRE_MFA_FOR_ADMINS: "0"
+        run: |
+          src=postgres://postgres:obop-test@127.0.0.1:5432/drill_src
+          psql "$DRILL_ADMIN_URL" -c "CREATE DATABASE drill_src"
+          echo "ci drill password 12" | "$OBOP" admin create ada --all-groups --db "$src"
+          "$OBOP" backup --db "$src" --out "$RUNNER_TEMP/backup"
+          deploy/restore-drill.sh "$RUNNER_TEMP"/backup/*.jsonl.gz
 
   web:
     runs-on: ubuntu-latest

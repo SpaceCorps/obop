@@ -133,6 +133,10 @@ fn number(v: Option<String>, flag: &str) -> Result<Option<usize>, ExitCode> {
 /// Handle `migrate`, `backup`, `restore` and `secrets`; `None` for any other command.
 pub fn dispatch(args: &[String]) -> Option<ExitCode> {
     let first = args.first()?.as_str();
+    if first == "platform" && args.get(1).map(String::as_str) == Some("upgrade-instances") {
+        let mut rest: Vec<String> = args[2..].to_vec();
+        return Some(upgrade_instances(&mut rest).map_or_else(|c| c, |()| ExitCode::SUCCESS));
+    }
     if !matches!(first, "migrate" | "backup" | "restore" | "secrets") {
         return None;
     }
@@ -144,6 +148,75 @@ pub fn dispatch(args: &[String]) -> Option<ExitCode> {
         _ => secrets_cmd(&mut rest),
     };
     Some(r.map_or_else(|c| c, |()| ExitCode::SUCCESS))
+}
+
+/// `obop platform upgrade-instances`: the control plane's rolling upgrade (B6).
+fn upgrade_instances(args: &mut Vec<String>) -> Exit {
+    use obop_platform::{UpgradeOutcome, resolve_image};
+    let url = take(args, "--db")
+        .or_else(|| std::env::var("OBOP_DATABASE_URL").ok())
+        .unwrap_or_else(|| "sqlite://obop-platform.db".into());
+    let image_arg = take(args, "--image").ok_or_else(usage)?;
+    let only = take(args, "--only");
+    let provisioner = take(args, "--provisioner").unwrap_or_else(|| "sliplane".into());
+    let dry_run = has(args, "--dry-run");
+    if !args.is_empty() {
+        return Err(usage());
+    }
+    let backend = open_existing(&url)?;
+    guard_database(&backend, &url)?;
+    let prov =
+        crate::make_provisioner(&provisioner, None).map_err(|e| fail(&format!("error: {e}")))?;
+    let image = resolve_image(&image_arg, std::env::var("OBOP_IMAGE").ok().as_deref());
+    let auth = Arc::new(obop_auth::Auth::new(backend.clone()));
+    let platform = obop_platform::Platform::new(auth, backend, prov);
+    eprintln!(
+        "{} to {image}",
+        if dry_run {
+            "planning the upgrade"
+        } else {
+            "upgrading"
+        }
+    );
+    let report = platform
+        .upgrade_instances(&image, only.as_deref(), dry_run, &|l| eprintln!("  {l}"))
+        .map_err(|e| fail(&format!("error: {e}")))?;
+    for s in &report.steps {
+        let from = if s.from.is_empty() {
+            "an unknown image".to_string()
+        } else {
+            s.from.clone()
+        };
+        let what = match &s.outcome {
+            UpgradeOutcome::Upgraded => format!("upgraded (was {from})"),
+            UpgradeOutcome::WouldUpgrade => format!("would be upgraded (is on {from})"),
+            UpgradeOutcome::Skipped(w) => format!("skipped: {w}"),
+            UpgradeOutcome::Failed(e) => format!("FAILED: {e}"),
+            UpgradeOutcome::NotAttempted => "not attempted: an earlier instance failed".to_string(),
+        };
+        println!("{}: {what}", s.slug);
+    }
+    if report.steps.is_empty() {
+        println!("no instances");
+    }
+    if let Some(f) = report
+        .steps
+        .iter()
+        .find(|s| matches!(s.outcome, UpgradeOutcome::Failed(_)))
+    {
+        eprintln!(
+            "stopped at {}. To go back: obop platform upgrade-instances --image {} --only {} (a schema migration that already ran is not undone: restore a backup if the older version refuses the database; docs/DEPLOY.md)",
+            f.slug,
+            if f.from.is_empty() {
+                "<previous image>"
+            } else {
+                &f.from
+            },
+            f.slug
+        );
+        return Err(ExitCode::FAILURE);
+    }
+    Ok(())
 }
 
 fn migrate(args: &mut Vec<String>) -> Exit {
@@ -392,5 +465,81 @@ fn secrets_cmd(args: &mut Vec<String>) -> Exit {
             }
         }
         _ => Err(usage()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(a: &[&str]) -> Vec<String> {
+        a.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// A platform database with one running instance, as `platform serve --provisioner fake`
+    /// leaves it.
+    fn platform_db() -> (std::path::PathBuf, String) {
+        let path = std::env::temp_dir().join(format!("obop-ops-{}.db", std::process::id()));
+        let url = format!("sqlite://{}", path.display());
+        let backend = obop_storage::open(&url).unwrap();
+        let auth = Arc::new(obop_auth::Auth::with_test_params(backend.clone()));
+        let p = obop_platform::Platform::new(
+            auth,
+            backend,
+            Arc::new(obop_platform::provision::Fake::default()),
+        );
+        let t = p
+            .signup("ops@example.test", "correct horse battery")
+            .unwrap();
+        let i = p.create_instance(&t, "alpha-one").unwrap();
+        for _ in 0..200 {
+            if p.get(&t, &i.id).unwrap().status == "running" {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        (path, url)
+    }
+
+    #[test]
+    fn upgrade_instances_runs_through_the_cli_and_checks_its_arguments() {
+        let (path, url) = platform_db();
+        let base = [
+            "platform",
+            "upgrade-instances",
+            "--provisioner",
+            "fake",
+            "--db",
+            url.as_str(),
+        ];
+        let run = |extra: &[&str]| {
+            let mut v = args(&base);
+            v.extend(extra.iter().map(|s| s.to_string()));
+            dispatch(&v).unwrap()
+        };
+        assert_eq!(run(&["--image", "abc123", "--dry-run"]), ExitCode::SUCCESS);
+        assert_eq!(run(&["--image", "abc123"]), ExitCode::SUCCESS);
+        // Without an image, or for an instance that does not exist: no success.
+        assert_ne!(run(&[]), ExitCode::SUCCESS);
+        assert_ne!(
+            run(&["--image", "x", "--only", "nobody"]),
+            ExitCode::SUCCESS
+        );
+        assert!(
+            dispatch(&args(&["platform", "serve"])).is_none(),
+            "the rest of platform is main's"
+        );
+        for ext in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{ext}", path.display()));
+        }
+    }
+
+    #[test]
+    fn urls_in_messages_carry_no_password() {
+        assert_eq!(
+            redact("postgres://u:secret@host:5432/db"),
+            "postgres://***@host:5432/db"
+        );
+        assert_eq!(redact("sqlite://obop.db"), "sqlite://obop.db");
     }
 }
