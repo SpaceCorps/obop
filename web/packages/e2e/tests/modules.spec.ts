@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
 import { repoRoot } from "../support/env.ts";
-import { expect, open, test, type Api } from "../support/fixtures.ts";
+import { expect, open, test, unnamedControls, type Api } from "../support/fixtures.ts";
 import { layoutProblems } from "../support/layout.ts";
 
 // D55: the Modules page. Every module declares its version, licence, core requirement and
@@ -320,6 +320,7 @@ test.describe("Customize > Modules", () => {
       await expect(panel).toContainText("SpaceCorps");
       await expect(panel).toContainText("field-service");
 
+      expect(await unnamedControls(page), "module panel").toEqual([]);
       await panel.getByRole("tab", { name: "Dependencies" }).click();
       await expect(page).toHaveURL(/section=dependencies/);
       await expect(panel.getByText("Field Service needs core ^0.2")).toBeVisible();
@@ -365,6 +366,7 @@ test.describe("Customize > Modules", () => {
       });
       await expect(overview).toBeVisible();
       await page.getByText("Show the same as a table").click();
+      expect(await unnamedControls(page), "overview").toEqual([]);
       const row = page.getByRole("row", { name: /^Timesheets Projects/ });
       await expect(row).toContainText("≥0.3, <1");
       await expect(page.getByRole("row", { name: /^Projects Nothing Timesheets/ })).toBeVisible();

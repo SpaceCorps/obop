@@ -238,7 +238,7 @@ export function PlanDialog({
                 {plan.warnings.join(" ")}
               </Notice>
             )}
-            {plan.ok && root && (
+            {plan.ok && root && work.length > 1 && (
               <p className="hint plan-foot">
                 {t(
                   "Dependencies are installed together with the module, in one operation; if a step fails nothing is left half installed.",

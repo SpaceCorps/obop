@@ -292,15 +292,32 @@ export function graphOf(rows: Row[]): { nodes: GraphNode[]; edges: GraphEdge[]; 
     return l;
   };
   const nodes: GraphNode[] = [];
-  const perLayer = new Map<number, number>();
   const ids = rows.filter((r) => linked.has(r.id) || r.source !== "builtin").map((r) => r.id);
-  ids.sort((a, b) => layer(a) - layer(b) || a.localeCompare(b));
-  for (const id of ids) {
-    const l = layer(id);
-    const row = perLayer.get(l) ?? 0;
-    perLayer.set(l, row + 1);
-    const r = byId.get(id)!;
-    nodes.push({ id, name: r.name, layer: l, row, builtin: r.source === "builtin" });
+  const top = Math.max(0, ...ids.map((id) => layer(id)));
+  // Within a column, sit each module near what it needs (the mean row of its dependencies in the
+  // columns before), so lines cross less; the first column is alphabetical.
+  const rowOf = new Map<string, number>();
+  for (let l = 0; l <= top; l++) {
+    const inLayer = ids.filter((id) => layer(id) === l);
+    const mean = (id: string) => {
+      const deps = (byId.get(id)?.dependencies ?? [])
+        .map((d) => rowOf.get(d.id))
+        .filter((x) => x !== undefined);
+      return deps.length
+        ? deps.reduce((a, b) => a! + b!, 0)! / deps.length
+        : Number.MAX_SAFE_INTEGER;
+    };
+    inLayer.sort((a, b) => mean(a) - mean(b) || a.localeCompare(b));
+    inLayer.forEach((id, i) => {
+      rowOf.set(id, i);
+      nodes.push({
+        id,
+        name: byId.get(id)!.name,
+        layer: l,
+        row: i,
+        builtin: byId.get(id)!.source === "builtin",
+      });
+    });
   }
   return { nodes, edges, layers: Math.max(0, ...nodes.map((n) => n.layer)) + 1 };
 }

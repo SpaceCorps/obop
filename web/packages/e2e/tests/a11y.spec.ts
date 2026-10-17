@@ -68,7 +68,8 @@ test.describe("accessibility smoke", () => {
     await signIn("root");
     for (const tab of ["theme", "apps", "modules", "build", "guide"]) {
       await open(page, `/customize/${tab}?tab=${tab}`);
-      await expect(page.getByRole("tab", { name: /./, selected: true })).toBeVisible();
+      // The Modules tab has tabs of its own (Installed, Marketplace, Updates): the first is Customize's.
+      await expect(page.getByRole("tab", { name: /./, selected: true }).first()).toBeVisible();
       if (tab === "modules") await expect(page.locator("article.card").first()).toBeVisible();
       expect(await unnamedControls(page), `customize ${tab}`).toEqual([]);
     }

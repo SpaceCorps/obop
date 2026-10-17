@@ -48,7 +48,7 @@ Settings read by `obop platform serve --provisioner sliplane`:
 | `OBOP_CELL_ADMIN_URL` | `postgres://` superuser URL of the cell, as the control plane reaches it. |
 | `OBOP_CELL_INSTANCE_HOST` | `host:port` instances use for the cell (`obop-postgres.internal:5432`). |
 | `OBOP_IMAGE` or `OBOP_REPO` (+ `OBOP_BRANCH`) | Where instance services come from. A repository means Sliplane builds each instance itself; an image (once a registry is in place) is much faster. |
-| `OBOP_MARKETPLACE_URL` | Optional extra catalog for every instance. |
+| `OBOP_MARKETPLACE_URL` | Optional extra catalog for every instance: `index.json` plus `packages/<id>.toml` (format and the D55 metadata a listing may carry: docs/MODULES.md section 8). |
 
 ### Two-factor authentication and `OBOP_SECRET_KEY` (D53)
 
