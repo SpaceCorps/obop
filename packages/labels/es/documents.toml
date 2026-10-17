@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Documentos"
-description = "Un registro de documentos de empresa: carpetas y documentos con tipo, propietario, caducidad y confidencialidad, y un flujo de borrador, publicado y archivado. Guarda referencias, no el contenido de los archivos."
+description = "Un registro de documentos de empresa: carpetas y documentos con tipo, propietario, caducidad y confidencialidad, y un flujo de borrador, publicado y archivado. Guarda referencias, no el contenido de los archivos. La confidencialidad se aplica: los documentos confidenciales y restringidos solo los ven su propietario y documents.manager; los públicos e internos, todos los que pueden leer documentos."
 summary = "Un registro de documentos de empresa con propietario, caducidad y confidencialidad, y un flujo de borrador, publicado y archivado."
 
 [labels.es.model.documents_folder]
@@ -45,7 +45,7 @@ other = "Otro"
 
 [labels.es.model.documents_document.field.confidentiality]
 label = "Confidencialidad"
-description = "Quién debe verlo, como etiqueta para los lectores: público, interno, confidencial, restringido"
+description = "Quién puede verlo: los documentos públicos e internos, todos los que pueden leer documentos; los confidenciales y restringidos, solo el propietario y documents.manager"
 
 [labels.es.model.documents_document.field.confidentiality.options]
 public = "Público"
@@ -55,7 +55,7 @@ restricted = "Restringido"
 
 [labels.es.model.documents_document.field.owner]
 label = "Propietario"
-description = "Nombre de la persona responsable del documento"
+description = "Nombre de usuario de la persona responsable del documento; quien lo crea, salvo que se indique otra. Los propietarios ven sus documentos confidenciales"
 
 [labels.es.model.documents_document.field.reference]
 label = "Referencia"
@@ -89,3 +89,7 @@ description = "Convertir un documento en borrador en la versión vigente"
 [labels.es.model.documents_document.action.archive]
 label = "Archivar"
 description = "Archivar un documento publicado (solo responsables)"
+
+[labels.es.model.documents_document.field.open_to_all]
+label = "Abierto a todos"
+description = "Indica si todo el que puede leer documentos puede ver este: verdadero para documentos públicos e internos"

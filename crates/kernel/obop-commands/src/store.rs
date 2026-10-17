@@ -2,7 +2,7 @@
 //! (memory, SQLite or PostgreSQL); it implements the command contract, so modules do not change
 //! when the backend does.
 
-use crate::query::Query;
+use crate::engine::{Engine, crud, seq};
 use crate::{Dispatcher, Value, guards};
 use obop_registry::{FieldKind, ModelDef, Module, is_valid_date};
 use obop_storage::{Backend, Fields};
@@ -22,15 +22,6 @@ impl Default for Store {
 
 fn to_fields(m: &BTreeMap<String, Value>) -> Fields {
     m.iter().map(|(k, v)| (k.clone(), v.to_json())).collect()
-}
-
-fn to_row(id: &str, f: &Fields) -> Value {
-    let mut m: BTreeMap<String, Value> = f
-        .iter()
-        .map(|(k, v)| (k.clone(), Value::from_json(v)))
-        .collect();
-    m.insert("id".into(), Value::text(id));
-    Value::Map(m)
 }
 
 impl Store {
@@ -193,6 +184,50 @@ pub fn validate_with(
 }
 
 impl Dispatcher {
+    pub(crate) fn engine(&self, store: &Store) -> Engine {
+        Engine {
+            store: store.clone(),
+            models: self.models.clone(),
+            clock: self.clock.0.clone(),
+        }
+    }
+
+    /// Register `get`, `list` and `search` of one model (the reads of the model engine).
+    fn register_reads(&self, module: &Module, def: &ModelDef, eng: &Engine) {
+        let name = def.name;
+        let e = eng.clone();
+        self.register_generic(
+            module,
+            name,
+            "get",
+            Box::new(move |input| {
+                let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
+                crud::get(&e, &def, input)
+            }),
+        );
+        let e = eng.clone();
+        self.register_generic(
+            module,
+            name,
+            "list",
+            Box::new(move |input| {
+                let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
+                let (rows, _) = crud::query(&e, &def, input)?;
+                Ok(Value::List(rows))
+            }),
+        );
+        let e = eng.clone();
+        self.register_generic(
+            module,
+            name,
+            "search",
+            Box::new(move |input| {
+                let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
+                crud::search(&e, &def, input)
+            }),
+        );
+    }
+
     /// Register only `get`, `list` and `search` for one model, so records that other code writes
     /// (the security event log, D53) can be read on every surface and never changed through it.
     pub fn register_read_only(&self, module: &Module, model: &str, store: &Store) {
@@ -201,165 +236,65 @@ impl Dispatcher {
             .iter()
             .find(|m| m.name == model)
             .unwrap_or_else(|| panic!("{}: no model {model}", module.id));
-        let name = def.name;
-        let s = store.clone();
-        self.register(
-            module,
-            name,
-            "get",
-            Box::new(move |input| {
-                let id = id_of(input)?;
-                let f = s
-                    .backend
-                    .get(name, &id)?
-                    .ok_or_else(|| format!("no {name} {id}"))?;
-                Ok(to_row(&id, &f))
-            }),
-        );
-        let (s, d) = (store.clone(), def.clone());
-        self.register(
-            module,
-            name,
-            "list",
-            Box::new(move |input| {
-                let (rows, _) = run_query(&s, &d, input)?;
-                Ok(Value::List(rows))
-            }),
-        );
-        let (s, d) = (store.clone(), def.clone());
-        self.register(
-            module,
-            name,
-            "search",
-            Box::new(move |input| run_search(&s, &d, input)),
-        );
+        let eng = self.engine(store);
+        self.register_reads(module, def, &eng);
     }
 
-    /// Register `get`, `list`, `create` and `update` for every model of `module` against `store`.
+    /// Register `get`, `list`, `search`, `create`, `update` and `delete` for every model of
+    /// `module` against `store`, and the guards the registry metadata implies.
     pub fn register_crud(&self, module: &Module, store: &Store) {
+        let eng = self.engine(store);
         for def in &module.models {
             let name = def.name;
-            let s = store.clone();
-            self.register(
-                module,
-                name,
-                "get",
-                Box::new(move |input| {
-                    let id = id_of(input)?;
-                    let f = s
-                        .backend
-                        .get(name, &id)?
-                        .ok_or_else(|| format!("no {name} {id}"))?;
-                    Ok(to_row(&id, &f))
-                }),
-            );
-            let (s, d) = (store.clone(), def.clone());
-            self.register(
-                module,
-                name,
-                "list",
-                Box::new(move |input| {
-                    let (rows, _) = run_query(&s, &d, input)?;
-                    Ok(Value::List(rows))
-                }),
-            );
-            let (s, d) = (store.clone(), def.clone());
-            self.register(
-                module,
-                name,
-                "search",
-                Box::new(move |input| run_search(&s, &d, input)),
-            );
-            let (s, models) = (store.clone(), self.models.clone());
-            self.register(
+            self.register_reads(module, def, &eng);
+            let e = eng.clone();
+            self.register_generic(
                 module,
                 name,
                 "delete",
                 Box::new(move |input| {
-                    let id = id_of(input)?;
-                    // Checked again here, not only in the guard, so the rule holds for any caller
-                    // of the handler.
-                    if let Some(why) = guards::referrers(&models, &*s.backend, name, &id)? {
-                        return Err(why);
-                    }
-                    if !s.backend.delete(name, &id)? {
-                        return Err(format!("no {name} {id}"));
-                    }
-                    Ok(Value::map([("id", Value::text(&id))]))
+                    let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
+                    crud::delete(&e, &def, input)
                 }),
             );
-            let (s, d) = (store.clone(), def.clone());
-            self.register(
+            let e = eng.clone();
+            self.register_generic(
                 module,
                 name,
                 "create",
                 Box::new(move |input| {
-                    let fields = declared_fields(&d, input)?;
-                    validate(&d, &s, &fields, true)?;
-                    let id = s.insert(name, fields)?;
-                    let f = s.backend.get(name, &id)?.ok_or("record vanished")?;
-                    Ok(to_row(&id, &f))
+                    let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
+                    crud::create(&e, &def, input)
                 }),
             );
-            let (s, d) = (store.clone(), def.clone());
-            self.register(
+            let e = eng.clone();
+            self.register_generic(
                 module,
                 name,
                 "update",
                 Box::new(move |input| {
-                    let id = id_of(input)?;
-                    let fields = declared_fields(&d, input)?;
-                    validate(&d, &s, &fields, false)?;
-                    s.update(name, &id, fields)?;
-                    let f = s.backend.get(name, &id)?.ok_or("record vanished")?;
-                    Ok(to_row(&id, &f))
+                    let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
+                    crud::update(&e, &def, input)
                 }),
             );
+            // Database constraints for the unique fields (D57); a write is checked either way.
+            seq::ensure_indexes(&*store.backend, def);
         }
         self.register_guards(module, store);
+        self.refresh_lock_models();
     }
 
     /// Register only `get`, `list` and `search` for the named models of `module` (with the query
     /// guard of `list` and `search`). For records that are written by the platform itself and
     /// must not be created, changed or deleted through a command (logs, runs, computed views).
     pub fn register_read_only_models(&self, module: &Module, store: &Store, models: &[&str]) {
+        let eng = self.engine(store);
         for def in module.models.iter().filter(|d| models.contains(&d.name)) {
-            let name = def.name;
-            let s = store.clone();
-            self.register(
-                module,
-                name,
-                "get",
-                Box::new(move |input| {
-                    let id = id_of(input)?;
-                    let f = s
-                        .backend
-                        .get(name, &id)?
-                        .ok_or_else(|| format!("no {name} {id}"))?;
-                    Ok(to_row(&id, &f))
-                }),
-            );
-            let (s, d) = (store.clone(), def.clone());
-            self.register(
-                module,
-                name,
-                "list",
-                Box::new(move |input| {
-                    let (rows, _) = run_query(&s, &d, input)?;
-                    Ok(Value::List(rows))
-                }),
-            );
-            let (s, d) = (store.clone(), def.clone());
-            self.register(
-                module,
-                name,
-                "search",
-                Box::new(move |input| run_search(&s, &d, input)),
-            );
+            self.register_reads(module, def, &eng);
             for c in ["list", "search"] {
                 self.register_guard(
                     &module.id,
-                    &format!("{name}.{c}"),
+                    &format!("{}.{c}", def.name),
                     false,
                     guards::query_guard(def),
                 );
@@ -367,67 +302,35 @@ impl Dispatcher {
         }
     }
 
-    /// Bind the generic handler of a command declared as a transition (D48): it sets the field
-    /// to the declared value. Its checks (current state, required fields) are the command's
-    /// guard, registered by `register_crud`.
+    /// Bind the generic handler of a command declared as a transition (D48): it checks the
+    /// declared assertions, sets the field to the declared value, numbers the record where a
+    /// sequence says so, and runs the declared effects, all as one unit of work (D56). Its
+    /// checks (current state, required fields) are the command's guard, registered by
+    /// `register_crud`.
     pub fn register_transition(&self, module: &Module, model: &str, command: &str, store: &Store) {
-        let t = module
+        module
             .models
             .iter()
             .find(|m| m.name == model)
             .and_then(|m| m.commands.iter().find(|c| c.name == command))
             .and_then(|c| c.transition)
             .unwrap_or_else(|| panic!("{model}.{command} is not declared as a transition"));
-        let (s, name) = (store.clone(), obop_registry::intern(model));
-        self.register(
+        let (e, name, cmd) = (
+            self.engine(store),
+            obop_registry::intern(model),
+            obop_registry::intern(command),
+        );
+        self.register_generic(
             module,
             model,
             command,
             Box::new(move |input| {
-                let id = id_of(input)?;
-                s.update(
-                    name,
-                    &id,
-                    BTreeMap::from([(t.field.to_string(), Value::text(t.to))]),
-                )?;
-                Ok(Value::map([
-                    ("id", Value::text(&id)),
-                    (t.field, Value::text(t.to)),
-                ]))
+                let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
+                crud::transition(&e, &def, cmd, input)
             }),
         );
+        self.refresh_lock_models();
     }
-}
-
-/// Run the optional filter, order, limit and offset of `list` and `search` over the records of a
-/// model. Returns the rows of the page and the number of matches before paging.
-fn run_query(s: &Store, d: &ModelDef, input: &Value) -> Result<(Vec<Value>, usize), String> {
-    // The dispatcher's guard has already refused fields the caller cannot read; the handler
-    // only needs the structure.
-    let q = Query::parse(d, input, &|_| true)?;
-    q.no_aggregate()?;
-    let all = s.backend.list(d.name)?;
-    let (page, total) = q.apply(all);
-    Ok((page.iter().map(|(id, f)| to_row(id, f)).collect(), total))
-}
-
-/// `search`: a page of records and the total, or, with `aggregate`, the groups computed over
-/// every matching record without collecting them.
-fn run_search(s: &Store, d: &ModelDef, input: &Value) -> Result<Value, String> {
-    let q = Query::parse(d, input, &|_| true)?;
-    if let Some(r) = q.run_aggregate(&*s.backend, d.name) {
-        let (groups, total) = r?;
-        return Ok(Value::map([
-            ("rows", Value::List(Vec::new())),
-            ("total", Value::Int(total as i64)),
-            ("groups", Value::List(groups)),
-        ]));
-    }
-    let (rows, total) = run_query(s, d, input)?;
-    Ok(Value::map([
-        ("rows", Value::List(rows)),
-        ("total", Value::Int(total as i64)),
-    ]))
 }
 
 #[cfg(test)]
@@ -447,6 +350,7 @@ mod tests {
             description: "d",
             read_group: "t.user",
             write_group: "t.user",
+            access: None,
             fields,
             commands: vec![],
         };

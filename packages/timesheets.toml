@@ -1,8 +1,8 @@
 [module]
 id = "timesheets"
-version = "0.2.0"
+version = "0.3.0"
 name = "Timesheets"
-description = "Time spent on project tasks, entered in minutes, with a billable flag and an approval step. Needs the Projects package."
+description = "Time spent on project tasks, entered in minutes, with a billable flag and an approval step. Needs the Projects package. A worker sees and edits only their own entries; timesheets.manager sees all."
 author = "SpaceCorps"
 summary = "Time spent on project tasks in minutes, with a billable flag and an approval step."
 license = "AGPL-3.0-or-later"
@@ -22,6 +22,10 @@ description = "Time one person spent on one task on one day"
 read_group = "timesheets.user"
 write_group = "timesheets.user"
 
+  [model.access]
+  own = "worker"
+  see_all_group = "timesheets.manager"
+
   [[model.field]]
   name = "task_id"
   description = "The task worked on"
@@ -32,7 +36,7 @@ write_group = "timesheets.user"
 
   [[model.field]]
   name = "worker"
-  description = "Name of the person who did the work"
+  description = "User name of the person who did the work; the person who creates the entry unless set otherwise"
   class = "internal"
   personal_data = true
   required = true

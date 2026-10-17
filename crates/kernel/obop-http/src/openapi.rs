@@ -172,14 +172,35 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 } else {
                     f.description.to_string()
                 };
+                let mut desc = desc;
+                if f.computed {
+                    desc.push_str(" (computed when read; read-only)");
+                    sch["readOnly"] = J::from(true);
+                }
+                if f.sequence {
+                    desc.push_str(" (a number the system assigns; read-only)");
+                    sch["readOnly"] = J::from(true);
+                }
+                if f.unique && !f.sequence {
+                    desc.push_str(" (unique)");
+                }
+                if f.governed {
+                    desc.push_str(" (moves only through the model's actions)");
+                }
                 sch["description"] = J::from(desc);
                 props.insert(f.name.to_string(), sch);
-                if f.required {
+                if f.required && !f.computed {
                     required.push(f.name.to_string());
                 }
             }
             let rec =
                 json!({"type": "object", "properties": props, "description": model.description});
+            // Computed and numbered fields appear in records but are not accepted as input.
+            let input_props: serde_json::Map<String, J> = props
+                .iter()
+                .filter(|(_, v)| v.get("readOnly") != Some(&J::from(true)))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
             schemas.insert(name.clone(), rec.clone());
             let op = |id: &str, summary: &str, body: Option<J>, resp: J| {
                 let mut o = json!({"operationId": format!("{name}.{id}"), "summary": summary, "tags": [m.name.clone()], "security": sec.clone(), "responses": {"200": resp, "202": ok(json!({"$ref": "#/components/schemas/ApprovalRequired"}), "Proposed; needs a human to approve."), "400": error_responses()["400"].clone(), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}});
@@ -199,8 +220,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             let id_body = json_body(
                 json!({"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}),
             );
-            let mut create_schema =
-                json!({"type": "object", "properties": rec["properties"].clone()});
+            let mut create_schema = json!({"type": "object", "properties": input_props.clone()});
             if !required.is_empty() {
                 create_schema["required"] = json!(required);
             }
@@ -233,7 +253,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 );
             }
             if model.can_update {
-                let mut upd = json!({"type": "object", "required": ["id"], "properties": rec["properties"].clone()});
+                let mut upd = json!({"type": "object", "required": ["id"], "properties": input_props.clone()});
                 upd["properties"]["id"] = json!({"type": "string"});
                 paths.insert(
                     format!("/api/{name}/update"),

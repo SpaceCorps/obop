@@ -71,6 +71,8 @@ struct Measure {
     name: String,
 }
 
+type Visit<'a> = dyn FnMut(&str, &Fields) -> obop_storage::Result<bool> + 'a;
+
 #[derive(Debug)]
 pub struct Aggregate {
     group_by: Vec<GroupBy>,
@@ -246,6 +248,20 @@ impl Aggregate {
         Ok(Aggregate { group_by, measures })
     }
 
+    /// Fields the aggregate groups on or measures.
+    pub(crate) fn fields(&self) -> Vec<String> {
+        self.group_by
+            .iter()
+            .map(|g| g.field.clone())
+            .chain(
+                self.measures
+                    .iter()
+                    .filter(|m| m.f != Agg::Count)
+                    .map(|m| m.field.clone()),
+            )
+            .collect()
+    }
+
     /// Evaluate over the records of `model`, streaming. Returns the groups (ordered) and the
     /// number of matching records.
     pub(crate) fn run(
@@ -253,12 +269,26 @@ impl Aggregate {
         q: &Query,
         backend: &dyn Backend,
         model: &str,
+        visible: &dyn Fn(&Fields) -> bool,
+    ) -> Result<(Vec<Value>, usize), String> {
+        self.run_with(q, &mut |v| backend.scan(model, v), visible)
+    }
+
+    /// `run` over any source of records: the streaming scan of a backend, or rows already loaded
+    /// (when computed fields had to be evaluated first).
+    pub(crate) fn run_with(
+        &self,
+        q: &Query,
+        scan: &mut dyn FnMut(&mut Visit<'_>) -> obop_storage::Result<()>,
+        visible: &dyn Fn(&Fields) -> bool,
     ) -> Result<(Vec<Value>, usize), String> {
         let mut groups: BTreeMap<GKey, Acc> = BTreeMap::new();
         let mut total = 0usize;
         let measured: Vec<&Measure> = self.measures.iter().filter(|m| m.f != Agg::Count).collect();
-        backend.scan(model, &mut |id, f| {
-            if !q.matches(id, f) {
+        scan(&mut |id, f| {
+            // Row-level access (D58): a record the caller may not see is not counted, summed or
+            // grouped, so an aggregate never reveals what a list would hide.
+            if !visible(f) || !q.matches(id, f) {
                 return Ok(true);
             }
             total += 1;

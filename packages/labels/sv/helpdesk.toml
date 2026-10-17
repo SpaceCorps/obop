@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Kundtjänst"
-description = "Supportärenden med prioritet, allvarlighetsgrad, servicenivåmål och flödet öppen, pågår, löst och stängd. Målen registreras men tillämpas och tidtas inte automatiskt."
+description = "Supportärenden med prioritet, allvarlighetsgrad, servicenivåmål och flödet öppen, pågår, löst och stängd. Målen registreras men tillämpas och tidtas inte automatiskt. Varje ärende får ett nummer ur en serie när det skapas."
 summary = "Supportärenden med prioritet, allvarlighetsgrad, servicenivåmål och flödet från öppen till stängd."
 
 [labels.sv.model.helpdesk_sla]
@@ -135,3 +135,7 @@ description = "Stäng ett löst ärende för gott (endast chef)"
 [labels.sv.model.helpdesk_ticket.action.reopen]
 label = "Öppna igen"
 description = "Öppna ett löst ärende igen när problemet kom tillbaka"
+
+[labels.sv.model.helpdesk_ticket.field.number]
+label = "Nummer"
+description = "Ärendenummer som TCK-00042, tilldelas när ärendet skapas"

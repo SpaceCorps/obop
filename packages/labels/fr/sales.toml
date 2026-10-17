@@ -21,7 +21,7 @@ cancelled = "Annulée"
 
 [labels.fr.model.sale_order.field.total_minor]
 label = "Total"
-description = "Total de la commande en plus petite unité monétaire"
+description = "Total de la commande en plus petite unité monétaire, somme des lignes"
 
 [labels.fr.model.sale_order.field.currency]
 label = "Devise"
@@ -38,3 +38,35 @@ description = "Annule une commande"
 [labels.fr.model.sale_order.action.reset_to_draft]
 label = "Remettre en brouillon"
 description = "Remet en brouillon une commande annulée"
+
+[labels.fr.model.sale_order.field.number]
+label = "Numéro"
+description = "Numéro de commande tel que SO-00042, attribué à la création de la commande"
+
+[labels.fr.model.sale_order_line]
+name = "Ligne de commande client"
+description = "Un produit ou un service d’une commande client"
+
+[labels.fr.model.sale_order_line.field.order_id]
+label = "Commande"
+description = "La commande client à laquelle appartient la ligne"
+
+[labels.fr.model.sale_order_line.field.product_id]
+label = "Produit"
+description = "Le produit vendu"
+
+[labels.fr.model.sale_order_line.field.description]
+label = "Description"
+description = "Ce qui est vendu, tel qu’il apparaît sur la facture"
+
+[labels.fr.model.sale_order_line.field.quantity]
+label = "Quantité"
+description = "Quantité vendue"
+
+[labels.fr.model.sale_order_line.field.unit_price_minor]
+label = "Prix unitaire"
+description = "Prix d’une unité en plus petite unité monétaire"
+
+[labels.fr.model.sale_order_line.field.amount_minor]
+label = "Montant"
+description = "Montant de la ligne en plus petite unité monétaire : quantité multipliée par le prix unitaire"

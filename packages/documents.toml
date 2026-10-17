@@ -1,8 +1,8 @@
 [module]
 id = "documents"
-version = "0.2.0"
+version = "0.3.0"
 name = "Documents"
-description = "A register of business documents: folders, document records with kind, owner, expiry and confidentiality, and a draft, published and archived flow. It stores references, not file contents."
+description = "A register of business documents: folders, document records with kind, owner, expiry and confidentiality, and a draft, published and archived flow. It stores references, not file contents. Confidentiality is enforced: confidential and restricted documents are visible only to their owner and to documents.manager; public and internal ones to everyone who may read documents."
 author = "SpaceCorps"
 summary = "A register of business documents with owner, expiry and confidentiality, and a draft, published, archived flow."
 license = "AGPL-3.0-or-later"
@@ -44,6 +44,11 @@ description = "A contract, policy, certificate or other document on record"
 read_group = "documents.user"
 write_group = "documents.user"
 
+  [model.access]
+  own = "owner"
+  public_field = "open_to_all"
+  see_all_group = "documents.manager"
+
   [[model.field]]
   name = "title"
   description = "Document title"
@@ -67,15 +72,22 @@ write_group = "documents.user"
 
   [[model.field]]
   name = "confidentiality"
-  description = "Who should see it, as a label for readers: public, internal, confidential, restricted"
+  description = "Who may see it: public and internal documents everyone who may read documents, confidential and restricted ones only the owner and documents.manager"
   class = "none"
   kind = "select"
   options = ["public", "internal", "confidential", "restricted"]
   required = true
 
   [[model.field]]
+  name = "open_to_all"
+  description = "Whether everyone who may read documents can see this one: true for public and internal documents"
+  class = "none"
+  kind = "bool"
+  computed = 'confidentiality == "public" || confidentiality == "internal"'
+
+  [[model.field]]
   name = "owner"
-  description = "Name of the person responsible for the document"
+  description = "User name of the person responsible for the document; the person who creates it unless set otherwise. Owners see their confidential documents"
   class = "internal"
   personal_data = true
 

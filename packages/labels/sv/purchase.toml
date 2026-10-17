@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Inköp"
-description = "Leverantörer, inköpsorder och orderrader med flödet utkast, skickad, bekräftad, mottagen och annullerad. Orderns totalbelopp anges och summeras inte från raderna."
+description = "Leverantörer, inköpsorder och orderrader med flödet utkast, skickad, bekräftad, mottagen och annullerad. En order har ett nummer ur en serie, dess totalbelopp är summan av raderna, och när varorna tas emot skapas ett lagerrörelseutkast per rad på mottagningsplatsen (lagret validerar dem)."
 summary = "Leverantörer, inköpsorder och orderrader med flödet utkast, skickad, bekräftad, mottagen."
 
 [labels.sv.model.purchase_vendor]
@@ -57,7 +57,7 @@ description = "Valutakod enligt ISO 4217, till exempel SEK"
 
 [labels.sv.model.purchase_order.field.total]
 label = "Totalt"
-description = "Orderns totalbelopp som överenskommet med leverantören (valutans minsta enhet, till exempel ören)"
+description = "Orderns totalbelopp: summan av radbeloppen (valutans minsta enhet, till exempel ören)"
 
 [labels.sv.model.purchase_order.field.notes]
 label = "Anteckningar"
@@ -84,7 +84,7 @@ description = "Förbinda sig till ordern hos leverantören (endast chef)"
 
 [labels.sv.model.purchase_order.action.receive]
 label = "Ta emot"
-description = "Registrera att varorna har kommit"
+description = "Registrera att varorna har kommit: ett lagerrörelseutkast skapas per rad för lagret att validera (kräver gruppen inventory.user)"
 
 [labels.sv.model.purchase_order.action.cancel]
 label = "Annullera"
@@ -117,3 +117,15 @@ description = "Överenskommet pris per enhet (valutans minsta enhet, till exempe
 [labels.sv.model.purchase_order_line.field.received_quantity]
 label = "Mottaget antal"
 description = "Antal enheter som mottagits hittills"
+
+[labels.sv.model.purchase_order.field.number]
+label = "Nummer"
+description = "Inköpsordernummer som PO-00042, tilldelas när ordern skapas"
+
+[labels.sv.model.purchase_order.field.receive_location_id]
+label = "Mottagningsplats"
+description = "Var varorna ska tas emot; när ordern tas emot skapas lagerrörelserna till denna plats"
+
+[labels.sv.model.purchase_order_line.field.amount]
+label = "Belopp"
+description = "Radbelopp: antal gånger styckpris (valutans minsta enhet)"

@@ -1576,5 +1576,10 @@
   "Your apps": "machine-drafted",
   "Your colour {chosen} is too light or too dark for text. Buttons, links and selected states use {light} in light mode and {dark} in dark mode so they pass AA.": "machine-drafted",
   "Your colour passes as chosen. Dark mode uses a lighter step of the same hue ({fill}) so it stands out on dark surfaces.": "machine-drafted",
-  "Your connections": "machine-drafted"
+  "Your connections": "machine-drafted",
+  "A number the server assigns; it cannot be edited": "machine-drafted",
+  "calculated": "machine-drafted",
+  "Calculated by the server; it cannot be edited": "machine-drafted",
+  "numbered": "machine-drafted",
+  "You see only the records that are yours or shared with you.": "machine-drafted"
 }

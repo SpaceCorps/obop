@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Tuntiseuranta"
-description = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe. Vaatii Projektit-paketin."
+description = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe. Vaatii Projektit-paketin. Tekijä näkee ja muokkaa vain omia kirjauksiaan; timesheets.manager näkee kaikki."
 summary = "Projektitehtäviin käytetty aika minuutteina, laskutettavuusmerkintä ja hyväksyntävaihe."
 
 [labels.fi.model.timesheets_entry]
@@ -13,7 +13,7 @@ description = "Tehtävä, jota työstettiin"
 
 [labels.fi.model.timesheets_entry.field.worker]
 label = "Tekijä"
-description = "Työn tehneen henkilön nimi"
+description = "Työn tehneen henkilön käyttäjänimi; kirjauksen luova henkilö, ellei toisin määritetä"
 
 [labels.fi.model.timesheets_entry.field.worked_on]
 label = "Työpäivä"

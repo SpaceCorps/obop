@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Inventario"
-description = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock. Las cantidades las introducen y validan personas; los movimientos no las actualizan automáticamente."
+description = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock. Al validar un movimiento, la cantidad sale del artículo de stock de la ubicación de origen y se suma al de destino, en un solo paso; si el artículo aún no existe, se crea. Hay un artículo por producto, ubicación y lote. Se permiten cantidades negativas, como en ubicaciones virtuales como los proveedores."
 summary = "Almacenes, ubicaciones de stock, niveles de stock y movimientos de stock."
 
 [labels.es.model.inventory_warehouse]
@@ -56,7 +56,7 @@ description = "La cantidad de un producto que hay en una ubicación"
 
 [labels.es.model.inventory_item.field.product_id]
 label = "Producto"
-description = "El producto almacenado"
+description = "El producto almacenado; hay un artículo por producto, ubicación y lote"
 
 [labels.es.model.inventory_item.field.location_id]
 label = "Ubicación"
@@ -80,7 +80,7 @@ description = "Un movimiento de un producto entre ubicaciones, o hacia dentro o 
 
 [labels.es.model.inventory_move.field.reference]
 label = "Referencia"
-description = "Referencia del movimiento, por ejemplo un número de entrega o de recepción"
+description = "Número del movimiento, como MV-00042, asignado al crear el movimiento"
 
 [labels.es.model.inventory_move.field.product_id]
 label = "Producto"
@@ -113,7 +113,7 @@ cancelled = "Cancelado"
 
 [labels.es.model.inventory_move.action.validate]
 label = "Validar"
-description = "Confirmar que la mercancía se movió de verdad; un movimiento hecho no se puede deshacer"
+description = "Confirmar que la mercancía se movió de verdad: la cantidad sale del artículo de origen y llega al de destino (solo responsables de stock); un movimiento hecho no se puede deshacer"
 
 [labels.es.model.inventory_move.action.cancel]
 label = "Cancelar"

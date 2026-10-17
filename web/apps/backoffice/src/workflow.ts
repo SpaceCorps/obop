@@ -19,7 +19,9 @@ export function actionsOn(model: ModelMeta, field: string): Command[] {
 }
 
 export function isGoverned(model: ModelMeta, field: FieldMeta): boolean {
-  return field.kind === "select" && actionsOn(model, field.name).length > 0;
+  return (
+    field.kind === "select" && (field.governed === true || actionsOn(model, field.name).length > 0)
+  );
 }
 
 /**

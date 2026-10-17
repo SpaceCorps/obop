@@ -13,6 +13,7 @@ pub fn module() -> Module {
             description: "A prospective deal with a contact",
             read_group: "crm.user",
             write_group: "crm.user",
+            access: Option::None,
             fields: vec![
                 F::new(
                     "title",

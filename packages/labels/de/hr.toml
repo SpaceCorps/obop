@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Personal"
-description = "Mitarbeiter, Abteilungen und Abwesenheitsanträge. Personenbezogene Daten sind streng klassifiziert: Gehalt, Bankverbindung und Ausweisnummer sind nur für Führungskräfte sichtbar, Gesundheits- und Gewerkschaftsdaten nur für die Sonderlesegruppe."
+description = "Mitarbeiter, Abteilungen und Abwesenheitsanträge. Personenbezogene Daten sind streng klassifiziert: Gehalt, Bankverbindung und Ausweisnummer sind nur für Führungskräfte sichtbar, Gesundheits- und Gewerkschaftsdaten nur für die Sonderlesegruppe. Mitarbeiter sehen und stellen nur ihre eigenen Abwesenheitsanträge; hr.manager sieht alle."
 summary = "Mitarbeiter, Abteilungen und Abwesenheitsanträge; Gehalts- und Gesundheitsdaten sind auf die richtigen Gruppen beschränkt."
 
 [labels.de.model.hr_department]
@@ -186,3 +186,7 @@ description = "Eine beantragte Abwesenheit genehmigen (nur Führungskräfte)"
 [labels.de.model.hr_leave_request.action.refuse]
 label = "Ablehnen"
 description = "Eine beantragte Abwesenheit ablehnen (nur Führungskräfte)"
+
+[labels.de.model.hr_leave_request.field.requested_by]
+label = "Beantragt von"
+description = "Benutzername der Person, die die Abwesenheit beantragt; standardmäßig die Person, die den Antrag stellt. Nur sie und hr.manager sehen den Antrag"

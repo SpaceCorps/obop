@@ -1,6 +1,6 @@
 [labels.de.module]
 name = "Kassensystem"
-description = "Kassen im Laden: Kassenkonfiguration, kassengeprüfte Sitzungen, Aufträge mit Positionen und Zahlungen je Zahlungsart. Erstattungen und der Abschluss einer Sitzung brauchen die Genehmigung einer Führungskraft; Agenten dürfen sie nur vorschlagen. Summen und Kassendifferenzen werden erfasst, nicht berechnet. Keine Kartennummern speichern. Benötigt das Paket Produkte."
+description = "Kassen im Laden: Kassenkonfiguration, kassengeprüfte Sitzungen, Aufträge mit Positionen und Zahlungen je Zahlungsart. Erstattungen und Sitzungsabschluss brauchen die Genehmigung einer Führungskraft. Summen werden berechnet, Belege lückenlos nummeriert, und das Bezahlen erzeugt Lagerbewegungen als Entwurf. Keine Kartennummern speichern. Benötigt das Paket Produkte."
 summary = "Ladenkassen: kassengeprüfte Sitzungen, Aufträge mit Positionen und Zahlungen. Erstattungen und Abschluss brauchen Genehmigung."
 
 [labels.de.model.pos_config]
@@ -97,7 +97,7 @@ description = "Die Sitzung, in der der Verkauf erfolgte"
 
 [labels.de.model.pos_order.field.receipt_number]
 label = "Belegnummer"
-description = "Auf dem Beleg gedruckte Nummer. Freitext: Pakete können keine Nummernkreise erzeugen"
+description = "Auf dem Beleg gedruckte Nummer wie R-2026-000042: eine lückenlose Serie, die jedes Jahr neu beginnt, wird beim Anlegen des Verkaufs vergeben"
 
 [labels.de.model.pos_order.field.ordered_on]
 label = "Bestellt am"
@@ -113,7 +113,7 @@ description = "In der Gesamtsumme enthaltene Steuer (kleinste Währungseinheit)"
 
 [labels.de.model.pos_order.field.total]
 label = "Gesamt"
-description = "Vom Kunden gezahlte Gesamtsumme inklusive Steuer (kleinste Währungseinheit, erfasst, nicht berechnet)"
+description = "Vom Kunden gezahlte Gesamtsumme inklusive Steuer: die Summe der Positionssummen (kleinste Währungseinheit)"
 
 [labels.de.model.pos_order.field.note]
 label = "Notiz"
@@ -131,7 +131,7 @@ cancelled = "Storniert"
 
 [labels.de.model.pos_order.action.pay]
 label = "Bezahlen"
-description = "Der Verkauf ist vollständig bezahlt"
+description = "Der Verkauf ist vollständig bezahlt: abgelehnt, bis die Zahlungen die Summe decken; erzeugt je Position eine Lagerbewegung als Entwurf (braucht die Gruppe inventory.user)"
 
 [labels.de.model.pos_order.action.cancel]
 label = "Stornieren"
@@ -171,7 +171,7 @@ description = "Rabatt in Basispunkten: 1000 bedeutet 10,00 Prozent"
 
 [labels.de.model.pos_order_line.field.subtotal]
 label = "Zwischensumme"
-description = "Positionssumme nach Rabatt (kleinste Währungseinheit, erfasst, nicht berechnet)"
+description = "Positionssumme nach Rabatt: Menge mal Stückpreis abzüglich Rabatt (kleinste Währungseinheit)"
 
 [labels.de.model.pos_payment]
 name = "Zahlung"
@@ -203,3 +203,7 @@ description = "Tag der Zahlung (YYYY-MM-DD)"
 [labels.de.model.pos_payment.field.provider_reference]
 label = "Anbieterreferenz"
 description = "Referenz des Kartenterminals oder Zahlungsanbieters; nie eine Kartennummer"
+
+[labels.de.model.pos_order.field.stock_location_id]
+label = "Lagerort"
+description = "Woher die Ware den Bestand verlässt; das Bezahlen erzeugt die Lagerbewegungen von diesem Ort"

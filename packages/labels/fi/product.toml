@@ -12,7 +12,7 @@ description = "Tuotteen nimi"
 
 [labels.fi.model.product.field.sku]
 label = "SKU"
-description = "Varastonimike (SKU)"
+description = "Varastonimike (SKU); kahdella tuotteella ei voi olla samaa"
 
 [labels.fi.model.product.field.list_price_minor]
 label = "Listahinta"

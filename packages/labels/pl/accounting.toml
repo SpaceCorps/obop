@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Księgowość"
-description = "Plan kont, dzienniki, stawki podatku, operacje księgowe z pozycjami winien i ma, lata obrotowe, okresy oraz pozycje wyciągów bankowych. Kwoty są w jednostkach podrzędnych waluty, stawki podatku w punktach bazowych. Nic nie jest obliczane. Księgowanie i zamykanie okresów wymaga zatwierdzenia przez człowieka; agenci mogą je tylko zaproponować."
+description = "Plan kont, dzienniki, stawki podatku, operacje księgowe z pozycjami winien i ma, lata obrotowe, okresy i wyciągi bankowe. Operacja pokazuje sumy winien i ma, a księgowanie jest odrzucane, gdy się różnią; numer nadawany jest z ciągłej serii rocznej. Księgowanie i zamykanie okresów wymaga zatwierdzenia przez człowieka; agenci mogą je tylko zaproponować."
 summary = "Plan kont, dzienniki, podatki, okresy obrotowe i operacje księgowe. Księgowanie i zamykanie wymaga zatwierdzenia przez człowieka."
 
 [labels.pl.model.accounting_account]
@@ -9,7 +9,7 @@ description = "Konto planu kont"
 
 [labels.pl.model.accounting_account.field.code]
 label = "Kod"
-description = "Kod konta używany w planie kont, na przykład 400000"
+description = "Kod konta używany w planie kont, na przykład 400000; dwa konta nie mogą mieć tego samego kodu"
 
 [labels.pl.model.accounting_account.field.name]
 label = "Nazwa"
@@ -55,7 +55,7 @@ description = "Nazwa dziennika, na przykład Faktury sprzedaży"
 
 [labels.pl.model.accounting_journal.field.code]
 label = "Kod"
-description = "Krótki kod używany w numerach operacji, na przykład FS"
+description = "Krótki kod dziennika, na przykład FS; dwa dzienniki nie mogą mieć tego samego kodu"
 
 [labels.pl.model.accounting_journal.field.kind]
 label = "Rodzaj"
@@ -195,7 +195,7 @@ description = "Data księgowania operacji (YYYY-MM-DD)"
 
 [labels.pl.model.accounting_move.field.number]
 label = "Numer"
-description = "Numer operacji, np. FS/2026/0001. Dowolny tekst: pakiety nie generują numeracji, więc osoba księgująca nadaje kolejny numer ręcznie i dba o ciągłość serii"
+description = "Numer operacji, np. JE/2026/00042, nadawany przy księgowaniu z ciągłej serii, która zaczyna się od nowa każdego roku"
 
 [labels.pl.model.accounting_move.field.reference]
 label = "Referencja"
@@ -221,7 +221,7 @@ reversed = "Wystornowane"
 
 [labels.pl.model.accounting_move.action.post]
 label = "Zaksięguj"
-description = "Księguje roboczą operację w księdze (tylko osoba zatwierdzająca; zgodność winien i ma nie jest sprawdzana)"
+description = "Księguje roboczą operację w księdze i nadaje jej numer (tylko osoba zatwierdzająca; odrzucane, gdy winien nie równa się ma)"
 
 [labels.pl.model.accounting_move.action.cancel]
 label = "Anuluj"
@@ -323,3 +323,11 @@ description = "Uzgadnia dopasowaną pozycję (tylko kierownik)"
 [labels.pl.model.accounting_bank_statement_line.action.unmatch]
 label = "Cofnij dopasowanie"
 description = "Cofa błędne dopasowanie"
+
+[labels.pl.model.accounting_move.field.total_debit]
+label = "Suma winien"
+description = "Suma kwot po stronie winien pozycji operacji (w jednostkach podrzędnych waluty)"
+
+[labels.pl.model.accounting_move.field.total_credit]
+label = "Suma ma"
+description = "Suma kwot po stronie ma pozycji operacji (w jednostkach podrzędnych waluty)"

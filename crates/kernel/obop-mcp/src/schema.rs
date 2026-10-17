@@ -38,6 +38,18 @@ pub fn field_schema(f: &FieldInfo) -> J {
             " (personal data: agents read it as a mask token and may send the token back)",
         );
     }
+    if f.computed {
+        desc.push_str(" (computed from other data when read; read-only, never send it)");
+    }
+    if f.sequence {
+        desc.push_str(" (a number the system assigns; read-only, never send it)");
+    }
+    if f.unique && !f.sequence {
+        desc.push_str(" (must be unique: no other record may have the same value)");
+    }
+    if f.governed {
+        desc.push_str(" (moves only through the model's actions)");
+    }
     s["description"] = J::from(desc);
     s
 }
@@ -118,7 +130,8 @@ fn field_properties(model: &ModelInfo, skip: &[&str]) -> serde_json::Map<String,
     model
         .fields
         .iter()
-        .filter(|f| !skip.contains(&f.name))
+        // Computed and numbered fields are outputs only.
+        .filter(|f| !skip.contains(&f.name) && !f.computed && !f.sequence)
         .map(|f| (f.name.to_string(), field_schema(f)))
         .collect()
 }
@@ -145,7 +158,7 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
             let required: Vec<String> = model
                 .fields
                 .iter()
-                .filter(|f| f.required && !governed.contains(&f.name))
+                .filter(|f| f.required && !governed.contains(&f.name) && !f.computed)
                 .map(|f| f.name.to_string())
                 .collect();
             object(J::Object(props), &required)
@@ -273,6 +286,10 @@ mod tests {
             labels: Default::default(),
             descriptions: Default::default(),
             option_labels: Default::default(),
+            governed: false,
+            computed: false,
+            unique: false,
+            sequence: false,
         }
     }
 
@@ -311,6 +328,10 @@ mod tests {
             labels: Default::default(),
             descriptions: Default::default(),
             option_labels: Default::default(),
+            governed: false,
+            computed: false,
+            unique: false,
+            sequence: false,
         };
         ModelInfo {
             name: "doc".into(),
@@ -341,6 +362,7 @@ mod tests {
             can_delete: true,
             labels: Default::default(),
             descriptions: Default::default(),
+            access: None,
         }
     }
 

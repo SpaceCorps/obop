@@ -1,6 +1,6 @@
 [labels.es.module]
 name = "Compras"
-description = "Proveedores, pedidos de compra y líneas de pedido con un flujo de borrador, enviado, confirmado, recibido y cancelado. Los totales de los pedidos se introducen, no se suman a partir de las líneas."
+description = "Proveedores, pedidos de compra y líneas de pedido con un flujo de borrador, enviado, confirmado, recibido y cancelado. Un pedido tiene un número de una serie, su total es la suma de sus líneas, y al recibir la mercancía se crea un movimiento de stock en borrador por línea en la ubicación de recepción (el almacén los valida)."
 summary = "Proveedores, pedidos de compra y líneas de pedido con un flujo de borrador, enviado, confirmado y recibido."
 
 [labels.es.model.purchase_vendor]
@@ -57,7 +57,7 @@ description = "Código de moneda ISO 4217, por ejemplo EUR"
 
 [labels.es.model.purchase_order.field.total]
 label = "Total"
-description = "Total del pedido acordado con el proveedor (unidad menor de la moneda, por ejemplo céntimos)"
+description = "Total del pedido: la suma de los importes de las líneas (unidad menor de la moneda, por ejemplo céntimos)"
 
 [labels.es.model.purchase_order.field.notes]
 label = "Notas"
@@ -84,7 +84,7 @@ description = "Comprometer el pedido con el proveedor (solo responsables)"
 
 [labels.es.model.purchase_order.action.receive]
 label = "Recibir"
-description = "Registrar que llegó la mercancía"
+description = "Registrar que llegó la mercancía: se crea un movimiento de stock en borrador por línea para que el almacén lo valide (requiere el grupo inventory.user)"
 
 [labels.es.model.purchase_order.action.cancel]
 label = "Cancelar"
@@ -117,3 +117,15 @@ description = "Precio acordado por unidad (unidad menor de la moneda, por ejempl
 [labels.es.model.purchase_order_line.field.received_quantity]
 label = "Cantidad recibida"
 description = "Unidades recibidas hasta ahora"
+
+[labels.es.model.purchase_order.field.number]
+label = "Número"
+description = "Número de pedido de compra como PO-00042, asignado al crear el pedido"
+
+[labels.es.model.purchase_order.field.receive_location_id]
+label = "Ubicación de recepción"
+description = "Dónde se van a recibir las mercancías; al recibir el pedido se crean los movimientos de stock hacia esta ubicación"
+
+[labels.es.model.purchase_order_line.field.amount]
+label = "Importe"
+description = "Importe de la línea: cantidad por precio unitario (unidad menor de la moneda)"

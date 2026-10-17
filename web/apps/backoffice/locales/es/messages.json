@@ -106,6 +106,7 @@
   "A field cannot be called id": "Un campo no puede llamarse id",
   "A module made of data runs no code and may not declare network destinations": "Un módulo hecho de datos no ejecuta código y no puede declarar destinos de red",
   "A new {noun} starts as {state}; it moves on through actions": "Un registro nuevo de tipo {noun} empieza en {state}; avanza mediante acciones",
+  "A number the server assigns; it cannot be edited": "Un número que asigna el servidor; no se puede editar",
   "A number tile shows one value; leave this empty.": "Una tarjeta numérica muestra un único valor; deja esto vacío.",
   "A sum needs a measure field": "Una suma necesita un campo de medida",
   "Aa dark": "Aa oscuro",
@@ -250,6 +251,8 @@
   "Build a module": "Crear un módulo",
   "Bulk action finished": "Acción masiva terminada",
   "Bulk actions": "Acciones masivas",
+  "calculated": "calculado",
+  "Calculated by the server; it cannot be edited": "Lo calcula el servidor; no se puede editar",
   "Calendar": "Calendario",
   "Calendar scale": "Escala del calendario",
   "Cancel": "Cancelar",
@@ -834,6 +837,7 @@
   "Nothing was lost or changed by this error. Try again, or reload the page. If it keeps happening, tell whoever runs this system what you were doing.": "Este error no ha perdido ni cambiado nada. Inténtalo de nuevo o recarga la página. Si sigue ocurriendo, cuenta a quien administra este sistema qué estabas haciendo.",
   "Number": "Número",
   "Number (KPI)": "Número (KPI)",
+  "numbered": "numerado",
   "Numbers, dates and money, independent of the language.": "Números, fechas e importes, con independencia del idioma.",
   "One business, one platform.": "Una empresa, una plataforma.",
   "One condition per semicolon: field operator value. Operators: = != ~ (contains, text only) > >= < <= in (values separated by |), and “is empty” or “is set”. Numbers and money use the stored integers (money in minor units: 12.50 is 1250). Example: state = paid; amount_minor >= 100000": "Una condición por cada punto y coma: campo operador valor. Operadores: = != ~ (contiene, solo texto) > >= < <= in (valores separados por |), y «is empty» o «is set». Los números y los importes usan los enteros almacenados (importes en unidades menores: 12,50 es 1250). Ejemplo: state = paid; amount_minor >= 100000",
@@ -1576,5 +1580,6 @@
   "Working out what this needs": "Averiguando lo que necesita",
   "Works with core {version}": "Funciona con el núcleo {version}",
   "Worth knowing": "Conviene saber",
-  "you run {version}": "ejecutas {version}"
+  "you run {version}": "ejecutas {version}",
+  "You see only the records that are yours or shared with you.": "Solo ves los registros que son tuyos o que se han compartido contigo."
 }

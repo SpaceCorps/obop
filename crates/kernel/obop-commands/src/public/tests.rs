@@ -11,6 +11,7 @@ fn module() -> Module {
         description: "d",
         read_group: "t.user",
         write_group: "t.user",
+        access: None,
         fields: vec![
             f("title").required(),
             f("slug"),
@@ -31,6 +32,7 @@ fn module() -> Module {
         description: "d",
         read_group: "t.user",
         write_group: "t.user",
+        access: None,
         fields: vec![f("name"), f("visible").kind(FieldKind::Bool)],
         commands: vec![],
     };
@@ -39,6 +41,7 @@ fn module() -> Module {
         description: "d",
         read_group: "t.user",
         write_group: "t.user",
+        access: None,
         fields: vec![
             FieldDef::new("email", "d", DataClass::Internal, true, "t.user").required(),
             f("body"),

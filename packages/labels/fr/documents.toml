@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Documents"
-description = "Un registre des documents de l’entreprise : dossiers, documents avec type, propriétaire, expiration et confidentialité, et un flux brouillon, publié, archivé. Il stocke des références, pas le contenu des fichiers."
+description = "Un registre des documents de l’entreprise : dossiers, documents avec type, propriétaire, expiration et confidentialité, et un flux brouillon, publié, archivé. Il stocke des références, pas le contenu des fichiers. Les documents confidentiels et restreints ne sont visibles que du propriétaire et de documents.manager, les autres de tous les lecteurs."
 summary = "Un registre des documents de l’entreprise avec propriétaire, expiration et confidentialité, et un flux brouillon, publié, archivé."
 
 [labels.fr.model.documents_folder]
@@ -45,7 +45,7 @@ other = "Autre"
 
 [labels.fr.model.documents_document.field.confidentiality]
 label = "Confidentialité"
-description = "Qui doit le voir, sous forme d’indication pour les lecteurs : public, interne, confidentiel, restreint"
+description = "Qui peut le voir : les documents publics et internes, toute personne autorisée à lire les documents ; les confidentiels et restreints, seulement le propriétaire et documents.manager"
 
 [labels.fr.model.documents_document.field.confidentiality.options]
 public = "Public"
@@ -55,7 +55,7 @@ restricted = "Restreint"
 
 [labels.fr.model.documents_document.field.owner]
 label = "Propriétaire"
-description = "Nom de la personne responsable du document"
+description = "Nom d’utilisateur de la personne responsable du document ; par défaut la personne qui le crée. Les propriétaires voient leurs documents confidentiels"
 
 [labels.fr.model.documents_document.field.reference]
 label = "Référence"
@@ -89,3 +89,7 @@ description = "Fait d’un document en brouillon la version en vigueur"
 [labels.fr.model.documents_document.action.archive]
 label = "Archiver"
 description = "Archive un document publié (responsable uniquement)"
+
+[labels.fr.model.documents_document.field.open_to_all]
+label = "Visible par tous"
+description = "Indique si toute personne autorisée à lire les documents peut voir celui-ci : vrai pour les documents publics et internes"

@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Wydatki"
-description = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone i opłacone. Wypłata to osobne uprawnienie i wymaga zatwierdzenia przez człowieka; paragony są wskazywane w notatce, nie przechowywane."
+description = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone i opłacone. Wypłata to osobne uprawnienie i wymaga zatwierdzenia przez człowieka. Wniosek ma numer z serii rocznej, a pracownik widzi i edytuje tylko własne wnioski; kierownicy i finanse widzą wszystkie."
 summary = "Wnioski o zwrot wydatków pracowników z obiegiem wersja robocza, przesłane, zatwierdzone, opłacone."
 
 [labels.pl.model.expenses_expense]
@@ -13,7 +13,7 @@ description = "Na co wydano pieniądze"
 
 [labels.pl.model.expenses_expense.field.employee]
 label = "Pracownik"
-description = "Imię i nazwisko osoby składającej wniosek o zwrot wydatku"
+description = "Nazwa użytkownika osoby składającej wniosek o zwrot wydatku; domyślnie osoba tworząca wniosek"
 
 [labels.pl.model.expenses_expense.field.spent_on]
 label = "Data wydatku"
@@ -77,3 +77,7 @@ description = "Rejestruje zwrot jako opłacony (tylko dział finansów)"
 [labels.pl.model.expenses_expense.action.refuse]
 label = "Odrzuć"
 description = "Odrzuca przesłany wniosek (tylko kierownik)"
+
+[labels.pl.model.expenses_expense.field.number]
+label = "Numer"
+description = "Numer wniosku, np. EXP-2026-0042, nadawany przy utworzeniu wniosku; seria zaczyna się od nowa każdego roku"

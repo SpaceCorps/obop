@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Kadry"
-description = "Pracownicy, działy i wnioski urlopowe. Dane osobowe są ściśle klasyfikowane: wynagrodzenie, rachunek bankowy i numer identyfikacyjny widzą tylko kierownicy, a dane o zdrowiu i związkach zawodowych tylko specjalna grupa czytelników."
+description = "Pracownicy, działy i wnioski urlopowe. Dane osobowe są ściśle klasyfikowane: wynagrodzenie, rachunek bankowy i numer identyfikacyjny widzą tylko kierownicy, a dane o zdrowiu i związkach zawodowych tylko specjalna grupa. Pracownik widzi i składa tylko własne wnioski urlopowe; hr.manager widzi wszystkie."
 summary = "Pracownicy, działy i wnioski urlopowe; dane o wynagrodzeniu i zdrowiu dostępne tylko dla odpowiednich grup."
 
 [labels.pl.model.hr_department]
@@ -186,3 +186,7 @@ description = "Zatwierdza złożony wniosek urlopowy (tylko kierownik)"
 [labels.pl.model.hr_leave_request.action.refuse]
 label = "Odrzuć"
 description = "Odrzuca złożony wniosek urlopowy (tylko kierownik)"
+
+[labels.pl.model.hr_leave_request.field.requested_by]
+label = "Wnioskujący"
+description = "Nazwa użytkownika osoby, która prosi o urlop; domyślnie osoba składająca wniosek. Widzą go tylko ona i hr.manager"

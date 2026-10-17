@@ -472,6 +472,17 @@ impl Installer {
                 return Err(format!("{at} refers to model {to}, which is not installed"));
             }
         }
+        // The rules of the models (effects, computed fields, access) are checked against the
+        // models they use, now that the dependencies are registered.
+        let look = |n: &str| d.model_def(n).map(Arc::new);
+        let problems = obop_registry::check_module_in(&module, &look);
+        if !problems.is_empty() {
+            return Err(problems
+                .iter()
+                .map(|v| format!("{}: {}", v.path, v.problem))
+                .collect::<Vec<_>>()
+                .join("; "));
+        }
         if existing.is_some() {
             d.unregister_module(&id);
         }
@@ -1151,6 +1162,7 @@ pub fn admin_module() -> Module {
                 description: "An installed module: built in, uploaded or from the marketplace",
                 read_group: ADMIN_GROUP,
                 write_group: ADMIN_GROUP,
+                access: None,
                 fields: module_fields,
                 commands: vec![
                     CommandDef::new(
@@ -1172,6 +1184,7 @@ pub fn admin_module() -> Module {
                 description: "A module offered by the marketplace",
                 read_group: ADMIN_GROUP,
                 write_group: ADMIN_GROUP,
+                access: None,
                 fields: listing_fields,
                 commands: vec![
                     CommandDef::new(
@@ -1187,6 +1200,7 @@ pub fn admin_module() -> Module {
                 description: "What installing a module would do here: the steps in order, blockers and warnings",
                 read_group: ADMIN_GROUP,
                 write_group: ADMIN_GROUP,
+                access: None,
                 fields: vec![
                     list("manifest", "Input: the text of an obop.toml to plan (or give id for a marketplace package)"),
                     f("ok", "Whether the plan has no blockers").kind(FieldKind::Bool),
@@ -1207,6 +1221,7 @@ pub fn admin_module() -> Module {
                 description: "Instance-wide interface settings: theme and the app launcher layout",
                 read_group: ANY_GROUP,
                 write_group: ADMIN_GROUP,
+                access: None,
                 fields: vec![FieldDef::new(
                     "value",
                     "The settings as a JSON object",
@@ -1222,6 +1237,7 @@ pub fn admin_module() -> Module {
                 description: "A sign-in security event: two-factor enrolment, use of a recovery code, reset or lockout. Append-only",
                 read_group: ADMIN_GROUP,
                 write_group: ADMIN_GROUP,
+                access: None,
                 fields: vec![
                     f("user", "The account the event is about"),
                     f(
@@ -2101,6 +2117,7 @@ write_group = "notes.user"
                 description: "p",
                 read_group: "base.user",
                 write_group: "base.user",
+                access: None,
                 fields: vec![],
                 commands: vec![],
             }],

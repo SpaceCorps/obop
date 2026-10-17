@@ -1576,5 +1576,10 @@
   "Your apps": "Ihre Apps",
   "Your colour {chosen} is too light or too dark for text. Buttons, links and selected states use {light} in light mode and {dark} in dark mode so they pass AA.": "Die Farbe {chosen} ist für Text zu hell oder zu dunkel. Schaltflächen, Links und Auswahlzustände verwenden im hellen Modus {light} und im dunklen Modus {dark}, damit sie AA erfüllen.",
   "Your colour passes as chosen. Dark mode uses a lighter step of the same hue ({fill}) so it stands out on dark surfaces.": "Die Farbe besteht wie gewählt. Der dunkle Modus verwendet eine hellere Stufe desselben Farbtons ({fill}), damit sie sich von dunklen Flächen abhebt.",
-  "Your connections": "Ihre Verbindungen"
+  "Your connections": "Ihre Verbindungen",
+  "A number the server assigns; it cannot be edited": "Eine Nummer, die der Server vergibt; sie kann nicht bearbeitet werden",
+  "calculated": "berechnet",
+  "Calculated by the server; it cannot be edited": "Wird vom Server berechnet und kann nicht bearbeitet werden",
+  "numbered": "nummeriert",
+  "You see only the records that are yours or shared with you.": "Sie sehen nur die Datensätze, die Ihnen gehören oder mit Ihnen geteilt wurden."
 }

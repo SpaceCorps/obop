@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Kulut"
-description = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa. Maksaminen on oma käyttöoikeutensa ja vaatii ihmisen hyväksynnän; kuitteihin viitataan huomautuksella, niitä ei tallenneta."
+description = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa. Maksaminen on oma käyttöoikeutensa ja vaatii ihmisen hyväksynnän. Korvauksella on vuosisarjan numero, ja työntekijä näkee ja muokkaa vain omia korvauksiaan; esihenkilöt ja talous näkevät kaikki."
 summary = "Työntekijöiden kulukorvaukset luonnos-, lähetetty-, hyväksytty- ja maksettu-kulussa."
 
 [labels.fi.model.expenses_expense]
@@ -13,7 +13,7 @@ description = "Mihin rahat käytettiin"
 
 [labels.fi.model.expenses_expense.field.employee]
 label = "Työntekijä"
-description = "Kulun hakevan henkilön nimi"
+description = "Kulun hakevan henkilön käyttäjänimi; korvauksen luova henkilö, ellei toisin määritetä"
 
 [labels.fi.model.expenses_expense.field.spent_on]
 label = "Ostopäivä"
@@ -77,3 +77,7 @@ description = "Kirjaa korvaus maksetuksi (vain talous)"
 [labels.fi.model.expenses_expense.action.refuse]
 label = "Hylkää"
 description = "Hylkää lähetetty kulukorvaus (vain esihenkilö)"
+
+[labels.fi.model.expenses_expense.field.number]
+label = "Numero"
+description = "Korvauksen numero, esimerkiksi EXP-2026-0042, annetaan korvausta luotaessa; sarja alkaa alusta joka vuosi"

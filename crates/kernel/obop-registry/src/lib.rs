@@ -4,9 +4,15 @@ use obop_types::DataClass;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
 
+pub mod expr;
 pub mod labels;
+pub mod rules;
 pub mod template;
 pub use labels::Translations;
+pub use rules::{
+    Access, Assertion, Computed, Effect, EffectKind, Lit, Locator, Reset, SeqFormat, SequenceSpec,
+    Src, Target, Unique,
+};
 
 /// Registry metadata uses `&'static str`. Modules installed at runtime build their names from
 /// manifests, so those strings are interned: each distinct string is leaked once, which bounds
@@ -135,6 +141,12 @@ pub struct FieldDef {
     pub personal_data: bool,
     pub kind: FieldKind,
     pub required: bool,
+    /// Computed on read from the record and its children; never stored or written (D57).
+    pub computed: Option<Arc<Computed>>,
+    /// No two records may share this value (D57).
+    pub unique: Option<Unique>,
+    /// Numbered by the system (D57).
+    pub sequence: Option<Arc<SequenceSpec>>,
 }
 
 #[derive(Debug, Clone)]
@@ -150,6 +162,10 @@ pub struct CommandDef {
     /// Set when the command is a state transition (D48): it moves a `select` field to a new
     /// value. The field is then governed: generic `create` and `update` may not set it freely.
     pub transition: Option<Transition>,
+    /// What the action does besides moving the state, in the same operation (D56).
+    pub effects: Vec<Effect>,
+    /// Conditions that must hold before the action runs (D56).
+    pub asserts: Vec<Assertion>,
 }
 
 /// A declared state transition: set `field` to `to`, only when it currently equals `from` (if
@@ -181,6 +197,8 @@ impl CommandDef {
             needs_approval: false,
             surfaces: Surfaces::ALL,
             transition: None,
+            effects: Vec::new(),
+            asserts: Vec::new(),
         }
     }
 
@@ -217,6 +235,9 @@ impl FieldDef {
             personal_data,
             kind: FieldKind::Text,
             required: false,
+            computed: None,
+            unique: None,
+            sequence: None,
         }
     }
 
@@ -265,6 +286,8 @@ pub struct ModelDef {
     pub fields: Vec<FieldDef>,
     /// Custom commands beyond the generated CRUD set.
     pub commands: Vec<CommandDef>,
+    /// Row-level access rules (D58); none: the groups decide alone.
+    pub access: Option<Access>,
 }
 
 impl ModelDef {
@@ -424,6 +447,7 @@ impl Module {
                     .into_iter()
                     .chain(m.fields.iter().map(|f| f.permission_group))
                     .chain(m.commands.iter().map(|c| c.permission_group))
+                    .chain(m.access.iter().flat_map(|a| a.see_all.iter().copied()))
             })
             .collect();
         g.sort_unstable();
@@ -441,6 +465,25 @@ pub struct Violation {
 /// The D41 install gate: every model, field and command carries a description, a permission
 /// group and a data class; personal data cannot be classed `none`; surfaces are all or none.
 pub fn check_module(m: &Module) -> Vec<Violation> {
+    let mut v = check_basics(m);
+    // Rules (D56 to D58). Effects on models outside the module cannot be resolved here; the
+    // install checks them against the dependencies (`check_module_in`).
+    v.extend(rules::check_rules(m, &|_| None, false));
+    v
+}
+
+/// Like `check_module`, with `lookup` finding the models of the dependencies, so an effect on a
+/// model outside the module is checked too, and an unknown one is a violation.
+pub fn check_module_in(
+    m: &Module,
+    lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
+) -> Vec<Violation> {
+    let mut v = check_basics(m);
+    v.extend(rules::check_rules(m, lookup, true));
+    v
+}
+
+fn check_basics(m: &Module) -> Vec<Violation> {
     let mut v = Vec::new();
     let mut bad = |path: String, problem: &str| {
         v.push(Violation {
@@ -562,6 +605,9 @@ mod tests {
             personal_data: personal,
             kind: FieldKind::Text,
             required: false,
+            computed: None,
+            unique: None,
+            sequence: None,
         }
     }
 
@@ -574,6 +620,7 @@ mod tests {
                 description: "Party",
                 read_group: "g",
                 write_group: "g",
+                access: None,
                 fields: vec![f],
                 commands: vec![],
             }],
@@ -618,6 +665,8 @@ mod tests {
                 cli: true,
             },
             transition: None,
+            effects: vec![],
+            asserts: vec![],
         });
         assert_eq!(check_module(&m).len(), 1);
     }

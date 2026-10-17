@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Asiakastuki"
-description = "Asiakastukitiketit prioriteetin, vakavuuden ja palvelutasotavoitteiden kanssa sekä avoin-, käynnissä-, ratkaistu- ja suljettu-kulussa. Tavoitteet kirjataan, mutta niitä ei valvota eikä ajasteta automaattisesti."
+description = "Asiakastukitiketit prioriteetin, vakavuuden ja palvelutasotavoitteiden kanssa sekä avoin-, käynnissä-, ratkaistu- ja suljettu-kulussa. Tavoitteet kirjataan, mutta niitä ei valvota. Jokainen tiketti saa numeron sarjasta luotaessa."
 summary = "Asiakastukitiketit prioriteetin, vakavuuden ja palvelutasotavoitteiden kanssa sekä avoimesta suljettuun -kulku."
 
 [labels.fi.model.helpdesk_sla]
@@ -135,3 +135,7 @@ description = "Sulje ratkaistu tiketti lopullisesti (vain esihenkilö)"
 [labels.fi.model.helpdesk_ticket.action.reopen]
 label = "Avaa uudelleen"
 description = "Avaa ratkaistu tiketti uudelleen, kun ongelma palasi"
+
+[labels.fi.model.helpdesk_ticket.field.number]
+label = "Numero"
+description = "Tiketin numero, esimerkiksi TCK-00042, annetaan tikettiä luotaessa"

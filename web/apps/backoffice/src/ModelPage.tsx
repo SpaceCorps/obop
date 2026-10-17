@@ -230,7 +230,9 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
         );
   };
   const update: ViewProps["update"] = async (id, patch) => {
-    const r = await d.run(`${model.name}.update`, { id, ...patch });
+    const body = { ...patch };
+    for (const f of model.fields) if (f.computed || f.sequence) delete body[f.name];
+    const r = await d.run(`${model.name}.update`, { id, ...body });
     if (r.kind === "ok") return null;
     if (r.kind === "approval") return approval("change", r.planId);
     return serverMessage(r.message);
@@ -239,6 +241,8 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     // A governed field starts at its first option; the server refuses anything else.
     const clean = { ...body };
     for (const g of governed) delete clean[g];
+    // Computed values and numbers are the server's.
+    for (const f of model.fields) if (f.computed || f.sequence) delete clean[f.name];
     const r = await d.run(`${model.name}.create`, clean);
     if (r.kind === "ok") {
       d.notify(t("{model} created", { model: title }));
@@ -410,7 +414,11 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
           ) : modelEmpty ? (
             <EmptyState
               title={t("No {model} yet", { model: inSentence(title) })}
-              hint={t("Records you create show up here.")}
+              hint={
+                model.access
+                  ? t("You see only the records that are yours or shared with you.")
+                  : t("Records you create show up here.")
+              }
               action={
                 model.can_create
                   ? {

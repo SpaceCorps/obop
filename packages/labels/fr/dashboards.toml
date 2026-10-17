@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "Tableaux de bord"
-description = "Tableaux de bord et leurs tuiles, stockés comme données pour qu’une interface les affiche. Une tuile définit son type (kpi, bar, line, pie ou table), le modèle lu, le champ de mesure, l’agrégation (count ou sum), le regroupement, un filtre JSON et une position. Le package ne stocke que la définition ; il ne vérifie rien et ne calcule rien."
+description = "Tableaux de bord et leurs tuiles, stockés comme données pour qu’une interface les affiche. Un tableau de bord reste privé à son propriétaire et à dashboards.manager tant qu’il n’est pas partagé. Une tuile définit son type, le modèle lu, le champ de mesure, l’agrégation, le regroupement, un filtre et une position. Le package ne stocke que la définition et ne calcule rien."
 summary = "Tableaux de bord et tuiles stockés comme données, que le back-office affiche en indicateurs, graphiques et tableaux."
 
 [labels.fr.model.dashboards_dashboard]
@@ -13,7 +13,7 @@ description = "Titre du tableau de bord, par exemple Vue d’ensemble des ventes
 
 [labels.fr.model.dashboards_dashboard.field.owner]
 label = "Propriétaire"
-description = "Nom de la personne à qui appartient le tableau de bord"
+description = "Nom d’utilisateur de la personne à qui appartient le tableau de bord ; par défaut la personne qui le crée"
 
 [labels.fr.model.dashboards_dashboard.field.description]
 label = "Description"
@@ -21,7 +21,7 @@ description = "Ce que montre le tableau de bord et pour qui"
 
 [labels.fr.model.dashboards_dashboard.field.shared]
 label = "Partagé"
-description = "Indique si toute personne ayant accès à l’application Tableaux de bord le voit, ou seulement le propriétaire"
+description = "Indique si toute personne autorisée à lire les tableaux de bord le voit (avec ses tuiles), ou seulement le propriétaire et dashboards.manager ; le serveur l’applique"
 
 [labels.fr.model.dashboards_dashboard.field.position]
 label = "Position"

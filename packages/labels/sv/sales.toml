@@ -21,7 +21,7 @@ cancelled = "Annullerad"
 
 [labels.sv.model.sale_order.field.total_minor]
 label = "Totalt"
-description = "Orderns totalbelopp i valutans minsta enhet"
+description = "Orderns totalbelopp i valutans minsta enhet, summan av raderna"
 
 [labels.sv.model.sale_order.field.currency]
 label = "Valuta"
@@ -38,3 +38,35 @@ description = "Annullera en order"
 [labels.sv.model.sale_order.action.reset_to_draft]
 label = "Återställ till utkast"
 description = "Sätt en annullerad order tillbaka till utkast"
+
+[labels.sv.model.sale_order.field.number]
+label = "Nummer"
+description = "Ordernummer som SO-00042, tilldelas när ordern skapas"
+
+[labels.sv.model.sale_order_line]
+name = "Försäljningsorderrad"
+description = "En produkt eller tjänst på en försäljningsorder"
+
+[labels.sv.model.sale_order_line.field.order_id]
+label = "Order"
+description = "Försäljningsordern som raden tillhör"
+
+[labels.sv.model.sale_order_line.field.product_id]
+label = "Produkt"
+description = "Produkten som säljs"
+
+[labels.sv.model.sale_order_line.field.description]
+label = "Beskrivning"
+description = "Det som säljs, så som det står på fakturan"
+
+[labels.sv.model.sale_order_line.field.quantity]
+label = "Antal"
+description = "Såld mängd"
+
+[labels.sv.model.sale_order_line.field.unit_price_minor]
+label = "Enhetspris"
+description = "Pris för en enhet i valutans minsta enhet"
+
+[labels.sv.model.sale_order_line.field.amount_minor]
+label = "Belopp"
+description = "Radbelopp i minsta enhet: antal gånger enhetspris"

@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Utlägg"
-description = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald. Utbetalning är en separat behörighet och kräver mänskligt godkännande; kvitton anges i en anteckning och lagras inte."
+description = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald. Utbetalning är en separat behörighet och kräver mänskligt godkännande; kvitton anges i en anteckning och lagras inte. Ett utlägg har ett nummer ur en årlig serie, och en anställd ser och ändrar bara sina egna utlägg; chefer och ekonomi ser alla."
 summary = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald."
 
 [labels.sv.model.expenses_expense]
@@ -13,7 +13,7 @@ description = "Vad pengarna användes till"
 
 [labels.sv.model.expenses_expense.field.employee]
 label = "Anställd"
-description = "Namn på personen som begär ersättning"
+description = "Användarnamn för personen som begär ersättning; den som skapar utlägget om inget annat anges"
 
 [labels.sv.model.expenses_expense.field.spent_on]
 label = "Utfört den"
@@ -77,3 +77,7 @@ description = "Registrera ersättningen som utbetald (endast ekonomi)"
 [labels.sv.model.expenses_expense.action.refuse]
 label = "Avslå"
 description = "Avslå en inskickad ansökan (endast chef)"
+
+[labels.sv.model.expenses_expense.field.number]
+label = "Nummer"
+description = "Utläggsnummer som EXP-2026-0042, tilldelas när utlägget skapas; serien börjar om varje år"

@@ -1,8 +1,8 @@
 [module]
 id = "pos"
-version = "0.2.0"
+version = "0.3.0"
 name = "Point of Sale"
-description = "Shop tills: a point-of-sale configuration, cash-controlled sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Totals, change and cash differences are entered, not computed. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
+description = "Shop tills: a point-of-sale configuration, cash-controlled sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Line subtotals and the order total are computed from the lines, receipts get a gapless yearly number, and paying is refused until the payments cover the total; change and cash differences are still entered. Paying also creates a draft stock move per line from the order's stock location, for the warehouse to validate. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
 author = "SpaceCorps"
 summary = "Shop tills: cash-controlled sessions, orders with lines and payments. Refunds and closing need approval."
 license = "AGPL-3.0-or-later"
@@ -16,6 +16,7 @@ requires_core = "^0.2"
 [module.dependencies]
 base = "^0.2"
 product = "^0.2"
+inventory = ">=0.3, <1"
 
 [[model]]
 name = "pos_config"
@@ -162,8 +163,19 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "receipt_number"
-  description = "Number printed on the receipt. Free text: packages cannot generate sequences"
+  description = "Number printed on the receipt, such as R-2026-000042: a gapless series that starts again each year, assigned when the sale is created"
   class = "none"
+  kind = "sequence"
+  format = "R-{year}-{seq:06}"
+  gapless = true
+  reset = "year"
+
+  [[model.field]]
+  name = "stock_location_id"
+  description = "Where the goods leave stock; paying creates the stock moves from this location"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
 
   [[model.field]]
   name = "ordered_on"
@@ -186,10 +198,10 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "total"
-  description = "Total paid by the customer including tax (minor currency units, entered not computed)"
+  description = "Total paid by the customer including tax: the sum of the line subtotals (minor currency units)"
   class = "none"
   kind = "money"
-  required = true
+  computed = "sum(lines.subtotal)"
 
   [[model.field]]
   name = "note"
@@ -207,10 +219,18 @@ write_group = "pos.user"
 
   [[model.action]]
   name = "pay"
-  description = "The sale is fully paid"
+  description = "The sale is fully paid: refused until the payments cover the total; creates a draft stock move per line (needs the inventory.user group)"
   field = "state"
   from = "draft"
   to = "paid"
+  assert = [{ expr = "sum(pos_payment.amount) >= total", message = "The payments do not cover the total of the sale" }]
+
+    [[model.action.effect]]
+    kind = "create"
+    model = "inventory_move"
+    for_each = "lines"
+    when = "is_set(stock_location_id)"
+    map = { product_id = "$line.product_id", from_location_id = "$self.stock_location_id", quantity = "$line.quantity", scheduled_on = "$self.ordered_on" }
 
   [[model.action]]
   name = "cancel"
@@ -277,9 +297,10 @@ write_group = "pos.user"
 
   [[model.field]]
   name = "subtotal"
-  description = "Line total after discount (minor currency units, entered not computed)"
+  description = "Line total after discount: quantity times unit price, less the discount (minor currency units)"
   class = "none"
   kind = "money"
+  computed = "quantity * unit_price * (10000 - discount_bp) / 10000"
 
 [[model]]
 name = "pos_payment"

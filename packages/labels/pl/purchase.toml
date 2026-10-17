@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Zakupy"
-description = "Dostawcy, zamówienia zakupu i ich pozycje z obiegiem wersja robocza, wysłane, potwierdzone, przyjęte i anulowane. Sumy zamówień są wpisywane, a nie sumowane z pozycji."
+description = "Dostawcy, zamówienia zakupu i ich pozycje z obiegiem wersja robocza, wysłane, potwierdzone, przyjęte i anulowane. Zamówienie ma numer z serii, jego suma to suma pozycji, a przyjęcie towaru tworzy roboczą operację magazynową na pozycję w lokalizacji przyjęcia."
 summary = "Dostawcy, zamówienia zakupu i ich pozycje z obiegiem wersja robocza, wysłane, potwierdzone, przyjęte."
 
 [labels.pl.model.purchase_vendor]
@@ -57,7 +57,7 @@ description = "Kod waluty ISO 4217, na przykład PLN"
 
 [labels.pl.model.purchase_order.field.total]
 label = "Razem"
-description = "Suma zamówienia uzgodniona z dostawcą (w jednostkach podrzędnych waluty, np. groszach)"
+description = "Suma zamówienia: suma kwot pozycji (w jednostkach podrzędnych waluty, np. groszach)"
 
 [labels.pl.model.purchase_order.field.notes]
 label = "Notatki"
@@ -84,7 +84,7 @@ description = "Zobowiązuje do zamówienia u dostawcy (tylko kierownik)"
 
 [labels.pl.model.purchase_order.action.receive]
 label = "Przyjmij"
-description = "Rejestruje, że towar dotarł"
+description = "Rejestruje, że towar dotarł: tworzona jest robocza operacja magazynowa na pozycję do zatwierdzenia przez magazyn (wymaga grupy inventory.user)"
 
 [labels.pl.model.purchase_order.action.cancel]
 label = "Anuluj"
@@ -117,3 +117,15 @@ description = "Uzgodniona cena za sztukę (w jednostkach podrzędnych waluty, np
 [labels.pl.model.purchase_order_line.field.received_quantity]
 label = "Ilość przyjęta"
 description = "Liczba dotychczas przyjętych sztuk"
+
+[labels.pl.model.purchase_order.field.number]
+label = "Numer"
+description = "Numer zamówienia zakupu, np. PO-00042, nadawany przy utworzeniu zamówienia"
+
+[labels.pl.model.purchase_order.field.receive_location_id]
+label = "Lokalizacja przyjęcia"
+description = "Gdzie towar ma zostać przyjęty; przyjęcie zamówienia tworzy operacje magazynowe do tej lokalizacji"
+
+[labels.pl.model.purchase_order_line.field.amount]
+label = "Kwota"
+description = "Kwota pozycji: ilość razy cena jednostkowa (w jednostkach podrzędnych waluty)"

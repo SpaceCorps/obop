@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Helpdesk"
-description = "Zgłoszenia pomocy technicznej z priorytetem, istotnością, celami poziomu usług oraz obiegiem otwarte, w toku, rozwiązane i zamknięte. Cele są rejestrowane, a nie egzekwowane ani automatycznie mierzone."
+description = "Zgłoszenia pomocy technicznej z priorytetem, istotnością, celami poziomu usług oraz obiegiem otwarte, w toku, rozwiązane i zamknięte. Cele są rejestrowane, a nie egzekwowane. Każde zgłoszenie dostaje numer z serii przy utworzeniu."
 summary = "Zgłoszenia pomocy technicznej z priorytetem, istotnością, celami poziomu usług i obiegiem od otwartego do zamkniętego."
 
 [labels.pl.model.helpdesk_sla]
@@ -135,3 +135,7 @@ description = "Zamyka rozwiązane zgłoszenie na stałe (tylko kierownik)"
 [labels.pl.model.helpdesk_ticket.action.reopen]
 label = "Otwórz ponownie"
 description = "Otwiera ponownie rozwiązane zgłoszenie, gdy problem wrócił"
+
+[labels.pl.model.helpdesk_ticket.field.number]
+label = "Numer"
+description = "Numer zgłoszenia, np. TCK-00042, nadawany przy utworzeniu zgłoszenia"

@@ -106,6 +106,7 @@
   "A field cannot be called id": "machine-drafted",
   "A module made of data runs no code and may not declare network destinations": "machine-drafted",
   "A new {noun} starts as {state}; it moves on through actions": "machine-drafted",
+  "A number the server assigns; it cannot be edited": "machine-drafted",
   "A number tile shows one value; leave this empty.": "machine-drafted",
   "A sum needs a measure field": "machine-drafted",
   "Aa dark": "machine-drafted",
@@ -250,6 +251,8 @@
   "Build a module": "machine-drafted",
   "Bulk action finished": "machine-drafted",
   "Bulk actions": "machine-drafted",
+  "calculated": "machine-drafted",
+  "Calculated by the server; it cannot be edited": "machine-drafted",
   "Calendar": "machine-drafted",
   "Calendar scale": "machine-drafted",
   "Cancel": "machine-drafted",
@@ -834,6 +837,7 @@
   "Nothing was lost or changed by this error. Try again, or reload the page. If it keeps happening, tell whoever runs this system what you were doing.": "machine-drafted",
   "Number": "machine-drafted",
   "Number (KPI)": "machine-drafted",
+  "numbered": "machine-drafted",
   "Numbers, dates and money, independent of the language.": "machine-drafted",
   "One business, one platform.": "machine-drafted",
   "One condition per semicolon: field operator value. Operators: = != ~ (contains, text only) > >= < <= in (values separated by |), and “is empty” or “is set”. Numbers and money use the stored integers (money in minor units: 12.50 is 1250). Example: state = paid; amount_minor >= 100000": "machine-drafted",
@@ -1576,5 +1580,6 @@
   "Working out what this needs": "machine-drafted",
   "Works with core {version}": "machine-drafted",
   "Worth knowing": "machine-drafted",
-  "you run {version}": "machine-drafted"
+  "you run {version}": "machine-drafted",
+  "You see only the records that are yours or shared with you.": "machine-drafted"
 }

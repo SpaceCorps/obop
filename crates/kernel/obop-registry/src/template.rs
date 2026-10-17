@@ -247,6 +247,7 @@ mod tests {
                 description: "Something for sale",
                 read_group: "shop.user",
                 write_group: "shop.user",
+                access: None,
                 fields: vec![
                     FieldDef::new("title", "What it is", DataClass::None, false, "shop.user"),
                     FieldDef::new("state", "Where it is", DataClass::None, false, "shop.user")

@@ -21,7 +21,7 @@ cancelled = "Storniert"
 
 [labels.de.model.invoice.field.total_minor]
 label = "Gesamt"
-description = "Rechnungssumme in der kleinsten Währungseinheit"
+description = "Rechnungssumme in der kleinsten Währungseinheit, die Summe der Positionen"
 
 [labels.de.model.invoice.field.number]
 label = "Nummer"
@@ -34,3 +34,39 @@ description = "Einen Rechnungsentwurf buchen und die gesetzliche Nummer vergeben
 [labels.de.model.invoice.action.cancel]
 label = "Stornieren"
 description = "Einen Rechnungsentwurf stornieren"
+
+[labels.de.model.invoice.field.party_id]
+label = "Geschäftspartner"
+description = "ID des Geschäftspartners (Kunde)"
+
+[labels.de.model.invoice.field.currency]
+label = "Währung"
+description = "Währungscode nach ISO 4217"
+
+[labels.de.model.invoice_line]
+name = "Rechnungsposition"
+description = "Ein Produkt oder eine Dienstleistung auf einer Rechnung"
+
+[labels.de.model.invoice_line.field.invoice_id]
+label = "Rechnung"
+description = "Die Rechnung, zu der die Position gehört"
+
+[labels.de.model.invoice_line.field.product_id]
+label = "Produkt"
+description = "Das abgerechnete Produkt"
+
+[labels.de.model.invoice_line.field.description]
+label = "Beschreibung"
+description = "Was in Rechnung gestellt wird"
+
+[labels.de.model.invoice_line.field.quantity]
+label = "Menge"
+description = "Abgerechnete Menge"
+
+[labels.de.model.invoice_line.field.unit_price_minor]
+label = "Stückpreis"
+description = "Preis einer Einheit in der kleinsten Währungseinheit"
+
+[labels.de.model.invoice_line.field.amount_minor]
+label = "Betrag"
+description = "Positionsbetrag in der kleinsten Währungseinheit: Menge mal Stückpreis"

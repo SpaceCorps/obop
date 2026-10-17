@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "Dokument"
-description = "Ett register över affärsdokument: mappar, dokument med typ, ägare, utgångsdatum och sekretess samt ett flöde med utkast, publicerad och arkiverad. Det lagrar referenser, inte filinnehåll."
+description = "Ett register över affärsdokument: mappar, dokument med typ, ägare, utgångsdatum och sekretess samt ett flöde med utkast, publicerad och arkiverad. Det lagrar referenser, inte filinnehåll. Sekretessen upprätthålls: konfidentiella och begränsade dokument syns bara för sin ägare och documents.manager; offentliga och interna för alla som får läsa dokument."
 summary = "Ett register över affärsdokument med ägare, utgångsdatum och sekretess samt ett flöde med utkast, publicerad och arkiverad."
 
 [labels.sv.model.documents_folder]
@@ -45,7 +45,7 @@ other = "Övrigt"
 
 [labels.sv.model.documents_document.field.confidentiality]
 label = "Sekretess"
-description = "Vem som bör se det, som vägledning för läsare: offentlig, intern, konfidentiell, begränsad"
+description = "Vem som får se det: offentliga och interna dokument alla som får läsa dokument, konfidentiella och begränsade bara ägaren och documents.manager"
 
 [labels.sv.model.documents_document.field.confidentiality.options]
 public = "Offentlig"
@@ -55,7 +55,7 @@ restricted = "Begränsad"
 
 [labels.sv.model.documents_document.field.owner]
 label = "Ägare"
-description = "Namn på personen som ansvarar för dokumentet"
+description = "Användarnamn för personen som ansvarar för dokumentet; den som skapar det om inget annat anges. Ägare ser sina konfidentiella dokument"
 
 [labels.sv.model.documents_document.field.reference]
 label = "Referens"
@@ -89,3 +89,7 @@ description = "Gör ett dokument i utkast till gällande version"
 [labels.sv.model.documents_document.action.archive]
 label = "Arkivera"
 description = "Arkivera ett publicerat dokument (endast chef)"
+
+[labels.sv.model.documents_document.field.open_to_all]
+label = "Öppen för alla"
+description = "Om alla som får läsa dokument kan se detta: sant för offentliga och interna dokument"

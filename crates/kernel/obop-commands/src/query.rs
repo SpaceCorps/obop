@@ -152,6 +152,11 @@ fn int_option(
 }
 
 impl Query {
+    /// Whether a filter or order key is a field for which `is` says yes.
+    pub fn touches(&self, is: &dyn Fn(&str) -> bool) -> bool {
+        self.conds.iter().any(|c| is(&c.field)) || self.order.iter().any(|s| is(&s.field))
+    }
+
     /// Whether the input asks for anything beyond "every record".
     pub fn is_plain(&self) -> bool {
         self.conds.is_empty() && self.order.is_empty() && self.limit.is_none() && self.offset == 0
@@ -289,8 +294,46 @@ impl Query {
         &self,
         backend: &dyn obop_storage::Backend,
         model: &str,
+        visible: &dyn Fn(&Fields) -> bool,
     ) -> Option<Result<(Vec<Value>, usize), String>> {
-        self.aggregate.as_ref().map(|a| a.run(self, backend, model))
+        self.aggregate
+            .as_ref()
+            .map(|a| a.run(self, backend, model, visible))
+    }
+
+    /// `run_aggregate` over rows already in memory (computed fields filled in).
+    pub(crate) fn run_aggregate_rows(
+        &self,
+        rows: &[(String, Fields)],
+        visible: &dyn Fn(&Fields) -> bool,
+    ) -> Option<Result<(Vec<Value>, usize), String>> {
+        self.aggregate.as_ref().map(|a| {
+            a.run_with(
+                self,
+                &mut |v| {
+                    for (id, f) in rows {
+                        if !v(id, f)? {
+                            break;
+                        }
+                    }
+                    Ok(())
+                },
+                visible,
+            )
+        })
+    }
+
+    /// Whether the input asked for an aggregate.
+    pub(crate) fn has_aggregate(&self) -> bool {
+        self.aggregate.is_some()
+    }
+
+    /// Names of the fields the aggregate groups or measures.
+    pub(crate) fn aggregate_fields(&self) -> Vec<String> {
+        self.aggregate
+            .as_ref()
+            .map(|a| a.fields())
+            .unwrap_or_default()
     }
 
     /// Filter, sort and page `rows`. Returns the page and the number of matches before paging.

@@ -1,6 +1,6 @@
 [labels.fi.module]
 name = "Osto"
-description = "Toimittajat, ostotilaukset ja tilausrivit luonnos-, lähetetty-, vahvistettu-, vastaanotettu- ja peruutettu-kulussa. Tilauksen loppusumma syötetään, sitä ei lasketa riveistä."
+description = "Toimittajat, ostotilaukset ja tilausrivit luonnos-, lähetetty-, vahvistettu-, vastaanotettu- ja peruutettu-kulussa. Tilauksella on sarjasta numero, sen loppusumma on rivien summa, ja tavaroiden vastaanotto luo rivikohtaisen luonnossiirron vastaanottopaikkaan."
 summary = "Toimittajat, ostotilaukset ja tilausrivit luonnos-, lähetetty-, vahvistettu- ja vastaanotettu-kulussa."
 
 [labels.fi.model.purchase_vendor]
@@ -57,7 +57,7 @@ description = "ISO 4217 -valuuttakoodi, esimerkiksi EUR"
 
 [labels.fi.model.purchase_order.field.total]
 label = "Yhteensä"
-description = "Toimittajan kanssa sovittu tilauksen loppusumma (valuutan pienin yksikkö, esimerkiksi sentit)"
+description = "Tilauksen loppusumma: rivien summien summa (valuutan pienin yksikkö, esimerkiksi sentit)"
 
 [labels.fi.model.purchase_order.field.notes]
 label = "Muistiinpanot"
@@ -84,7 +84,7 @@ description = "Sitoudu tilaukseen toimittajan kanssa (vain esihenkilö)"
 
 [labels.fi.model.purchase_order.action.receive]
 label = "Vastaanota"
-description = "Kirjaa, että tavarat saapuivat"
+description = "Kirjaa, että tavarat saapuivat: jokaisesta rivistä luodaan luonnossiirto varaston vahvistettavaksi (vaatii inventory.user-ryhmän)"
 
 [labels.fi.model.purchase_order.action.cancel]
 label = "Peruuta"
@@ -117,3 +117,15 @@ description = "Sovittu yksikköhinta (valuutan pienin yksikkö, esimerkiksi sent
 [labels.fi.model.purchase_order_line.field.received_quantity]
 label = "Vastaanotettu määrä"
 description = "Tähän mennessä vastaanotetut yksiköt"
+
+[labels.fi.model.purchase_order.field.number]
+label = "Numero"
+description = "Ostotilauksen numero, esimerkiksi PO-00042, annetaan tilausta luotaessa"
+
+[labels.fi.model.purchase_order.field.receive_location_id]
+label = "Vastaanottopaikka"
+description = "Mihin tavarat vastaanotetaan; tilauksen vastaanotto luo varastosiirrot tähän paikkaan"
+
+[labels.fi.model.purchase_order_line.field.amount]
+label = "Summa"
+description = "Rivin summa: määrä kertaa yksikköhinta (valuutan pienin yksikkö)"

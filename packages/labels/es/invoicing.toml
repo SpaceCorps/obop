@@ -21,11 +21,11 @@ cancelled = "Cancelado"
 
 [labels.es.model.invoice.field.total_minor]
 label = "Total"
-description = "Total de la factura en unidades menores"
+description = "Total de la factura en unidades menores, la suma de las líneas"
 
 [labels.es.model.invoice.field.number]
 label = "Número"
-description = "Número legal sin huecos, asignado al contabilizar"
+description = "Número legal sin huecos, como INV-2026-00042, asignado al contabilizar"
 
 [labels.es.model.invoice.action.post]
 label = "Contabilizar"
@@ -34,3 +34,39 @@ description = "Contabilizar una factura en borrador y asignarle su número legal
 [labels.es.model.invoice.action.cancel]
 label = "Cancelar"
 description = "Cancelar una factura en borrador"
+
+[labels.es.model.invoice.field.party_id]
+label = "Tercero"
+description = "Identificador del tercero cliente"
+
+[labels.es.model.invoice.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217"
+
+[labels.es.model.invoice_line]
+name = "Línea de factura"
+description = "Un producto o servicio de una factura"
+
+[labels.es.model.invoice_line.field.invoice_id]
+label = "Factura"
+description = "La factura a la que pertenece la línea"
+
+[labels.es.model.invoice_line.field.product_id]
+label = "Producto"
+description = "El producto facturado"
+
+[labels.es.model.invoice_line.field.description]
+label = "Descripción"
+description = "Lo que se factura"
+
+[labels.es.model.invoice_line.field.quantity]
+label = "Cantidad"
+description = "Cantidad facturada"
+
+[labels.es.model.invoice_line.field.unit_price_minor]
+label = "Precio unitario"
+description = "Precio de una unidad en unidades menores de la moneda"
+
+[labels.es.model.invoice_line.field.amount_minor]
+label = "Importe"
+description = "Importe de la línea en unidades menores: cantidad por precio unitario"
