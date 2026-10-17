@@ -110,6 +110,8 @@ impl App {
         crm::seed(&self.store);
         let order = sales::seed(&self.store, &party);
         invoicing::seed(&self.store, &order);
+        // The seeds write straight to the store, so number what has a sequence field (SO-00001).
+        let _ = self.dispatcher.backfill_sequences(&self.store, None, None);
     }
 }
 

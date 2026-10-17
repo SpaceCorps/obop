@@ -758,7 +758,10 @@ fn site_seed(o: &Opts) -> Exit {
     for line in summary.0 {
         println!("created {line}");
     }
-    println!("serve it with: obop serve --public-site --static web/apps/backoffice/dist");
+    println!(
+        "serve it with: obop serve --public-site --static web/apps/backoffice/dist\n\
+         (build the backoffice for /admin/ first: cd web/apps/backoffice && OBOP_ADMIN_BASE=/admin/ vp build)"
+    );
     Ok(())
 }
 
@@ -1085,6 +1088,21 @@ mod tests {
         .await;
         assert_eq!(s, 200, "{b}");
         b["token"].as_str().unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn demo_records_get_their_sequence_numbers() {
+        let r = dev();
+        let (s, b) = post(&r, Some("dev-admin"), "/api/sale_order/list", json!({})).await;
+        assert_eq!(s, 200, "{b}");
+        let rows = b["value"].as_array().unwrap();
+        assert!(!rows.is_empty());
+        for row in rows {
+            assert!(
+                row["number"].as_str().is_some_and(|n| n.starts_with("SO-")),
+                "a seeded order has no number: {row}"
+            );
+        }
     }
 
     #[tokio::test]

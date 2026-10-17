@@ -294,8 +294,26 @@ export function t<S extends string>(id: S, ...args: VarsArg<S>): string {
 
 /** Translate with a context ("field", "model", "app", "option") when one English word has several senses. */
 export function tx<S extends string>(ctx: string, id: S, ...args: VarsArg<S>): string {
-  return translate(id, ctx, args[0] as Record<string, unknown> | undefined);
+  const text = translate(id, ctx, args[0] as Record<string, unknown> | undefined);
+  // The humanised English of a technical name ("Sla") keeps its acronyms upper case ("SLA").
+  return text === id && (ctx === "model" || ctx === "field") ? upperAcronyms(text) : text;
 }
+
+const ACRONYMS = new Set([
+  "sla",
+  "bom",
+  "sku",
+  "iban",
+  "url",
+  "vat",
+  "uom",
+  "pos",
+  "hr",
+  "gps",
+  "api",
+]);
+const upperAcronyms = (s: string) =>
+  s.replace(/\b[A-Za-z]+\b/g, (w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w));
 
 export function translate(id: string, ctx?: string, vars?: Record<string, unknown>): string {
   const hit = S.messages[keyOf(id, ctx)];

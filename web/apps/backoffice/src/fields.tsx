@@ -132,6 +132,7 @@ export function FieldInput(p: InputProps) {
           <input
             {...common}
             type="checkbox"
+            role="switch"
             checked={value === true}
             disabled={readOnly}
             onChange={(e) => onChange(e.target.checked)}

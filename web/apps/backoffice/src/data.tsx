@@ -163,6 +163,8 @@ export function useRows(model: string, enabled = true) {
 export function labelField(model: ModelMeta): FieldMeta | undefined {
   return (
     model.fields.find((f) => f.kind === "text" && f.required) ??
+    // A numbered record (an invoice) is known by its number, not by whichever text field comes first.
+    model.fields.find((f) => f.kind === "text" && f.sequence) ??
     model.fields.find((f) => f.kind === "text" || f.kind === "longtext")
   );
 }

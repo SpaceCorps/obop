@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { t } from "@obop/ui";
 import type { App } from "../Chrome.tsx";
 import { useData, useRows } from "../data.tsx";
@@ -105,6 +105,12 @@ export function ConnectorsApp({ app, route, go }: { app: App; route: Route; go: 
     !(adminOnly.includes(route.model) && !isAdmin)
       ? route.model
       : "overview";
+
+  // Going to another page of the app (the back button, the search) closes the dialogs.
+  useEffect(() => {
+    setWizard(null);
+    setDetail(null);
+  }, [section]);
 
   const openWizard = (initial?: string) => setWizard({ initial });
   const wizardEl = wizard && (

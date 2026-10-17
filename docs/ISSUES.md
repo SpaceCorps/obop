@@ -58,5 +58,33 @@ test found, or a limit the docs state.
 ## F. Quality gate
 | # | Issue | Status |
 |---|---|---|
-| F1 | No fresh-eyes product QA pass over the whole product | queued after A to D |
+| F1 | No fresh-eyes product QA pass over the whole product | done (section G) |
 | F2 | The live signup, instance, sign-in, 2FA and install flow has only run locally and against fakes | open (needs the owner's go-ahead to create a test account) |
+
+## G. Fresh-eyes QA pass (F1)
+
+A first-time-user pass over the running product (all 29 installed modules, 91 models, headless Chrome screenshots at 1280, 768 and 390 px, light and dark, the seven languages; the public shop with demo payments; the sign-up app on the fake provisioner; the website's 506 pages; REST parity with a restricted user; backup, restore, migrate and secrets on a fresh SQLite database; environment variables named in the docs).
+
+| # | Defect | Fix |
+|---|---|---|
+| G1 | Every yes/no field in the record panel showed two controls: a native checkbox and the switch (the generic checkbox style beat the rule that hides the native one, because the input had no `role="switch"`) | `fields.tsx`: the input is a real switch |
+| G2 | A record with a number field was titled by whichever text field came first: an invoice card read "EUR", and a draft invoice its id | `labelField` prefers the required text field, then the sequence field, then any text field |
+| G3 | The demo sale order had no number (the seeds write straight to the store, so the sequence never ran); anything that pointed at it showed `01a14b33` | `App::seed_demo` numbers the seeded records; test `demo_records_get_their_sequence_numbers` |
+| G4 | A plain text field named `tax_id` was labelled "Tax" (the `_id` suffix is meant for references only) | `fieldTitle` keeps "Tax ID" for non-reference fields |
+| G5 | "Order (0)", "Order (0)" in the related-record buttons of a contact: two apps, one name | the button names the app when two related models share a name ("eCommerce: Order") |
+| G6 | Model and field names like `sla`, `bom`, `sku` were shown as "Sla", "Bom", "Sku" in English | `tx` upper-cases known acronyms in the humanised English fallback |
+| G7 | Connectors: the guided "Connect" dialog stayed open when the address changed to another page of the app (back button, search) | `ConnectorsApp` closes its dialogs on a page change |
+| G8 | `obop site seed` printed a serve command without saying the backoffice must be built for `/admin/` | message and the build step spelled out |
+
+Checked and found sound: all 91 models list, open, create and edit through REST; actions run and refuse wrong states; no console or network errors on any backoffice page in seven languages; no English leaks in the generated UI (only the items below); no horizontal scroll at 390 px; the shop from product to demo payment in en, de and pl; the sign-up app; website links, anchors and assets (0 broken); environment variables in the docs all exist in the code; a restricted user cannot list, create, read or delete 12 sampled models outside their groups (404, no leak); backup, verify, restore (empty, refused, `--force`), `migrate status|plan|run --dry-run` and `secrets status|rotate --dry-run` on a fresh SQLite database.
+
+Not fixed (left open):
+
+| # | Issue | Why |
+|---|---|---|
+| G9 | The Guide tab (module author's guide) and module card summaries stay English in every language | known (D5); needs translation work, not a code fix |
+| G10 | Order lines keep the product name at the time of the order, so a German buyer sees English names for products that have no German listing translation | by design (the order records what was sold); the listing translation is the remedy |
+| G11 | The totals row of a list sums fields with no value as `0` (Dashboards "Position") | cosmetic, no data is wrong |
+| G12 | The design documents name commands that are marked Proposed and do not exist yet (`obop upgrade`, `obop ext`, `obop diag`, `obop ledger verify`) | these are roadmap items, flagged Proposed where they appear |
+| G13 | `obop-community`'s `both_stay_consistent_on_postgres_when_available` fails when it runs twice within about a minute against the same PostgreSQL database (the status leader lease from the first run is still held) | test hygiene only; use a fresh database per run, as CI does |
+

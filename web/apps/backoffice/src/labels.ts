@@ -16,8 +16,13 @@ export function modelTitle(m: Pick<ModelMeta, "name" | "labels">, moduleId: stri
 }
 
 /** A field's label for column headers, forms, filters and group-by. */
-export function fieldTitle(f: Pick<FieldMeta, "name" | "labels">): string {
-  return labelFor(f, getLang(), tx("field", label(f.name)));
+export function fieldTitle(f: Pick<FieldMeta, "name" | "labels"> & { kind?: string }): string {
+  const en = label(f.name);
+  const own = tx("field", en);
+  // A text field called tax_id is an identifier, not a reference: "Tax ID", not "Tax".
+  const fallback =
+    f.kind && f.kind !== "ref" && f.name.endsWith("_id") && own === en ? `${en} ID` : own;
+  return labelFor(f, getLang(), fallback);
 }
 
 /** The label of a field known only by its technical name (a saved search, a widget, a CSV header). */

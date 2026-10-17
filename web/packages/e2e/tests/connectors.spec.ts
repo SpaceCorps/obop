@@ -96,11 +96,11 @@ test.describe("Connectors", () => {
       await dialog.getByLabel("Add a model").selectOption("party");
       const fieldRow = (field: string) =>
         dialog.locator(".cx-fields li", { hasText: new RegExp(`^\\s*${field}`, "i") });
-      for (const f of ["Name", "Email", "Tax"])
+      for (const f of ["Name", "Email", "Tax ID"])
         await dialog.getByLabel(new RegExp(`^${f}$`, "i")).check();
       await expect(fieldRow("Name")).toContainText("Sent as a pseudonym");
-      await expect(fieldRow("Tax")).toContainText("Never sent");
-      await expect(fieldRow("Tax")).toContainText("Financial");
+      await expect(fieldRow("Tax ID")).toContainText("Never sent");
+      await expect(fieldRow("Tax ID")).toContainText("Financial");
       // The privacy preview shows a real record after the policy.
       const preview = dialog.getByRole("region", { name: "Privacy preview" });
       await expect(preview.locator("pre, code").first()).toContainText("psn_");
@@ -313,7 +313,7 @@ test.describe("Connectors", () => {
 
     await page.goto("/#/connectors/preview");
     await page.getByLabel("Add a model").selectOption("party");
-    for (const f of ["Name", "Email", "Notes", "Tax"])
+    for (const f of ["Name", "Email", "Notes", "Tax ID"])
       await page.getByLabel(new RegExp(`^${f}$`, "i")).check();
     const preview = page.getByRole("region", { name: "Privacy preview" });
     await expect(preview.locator("pre, code").first()).toContainText("psn_");

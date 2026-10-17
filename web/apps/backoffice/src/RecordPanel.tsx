@@ -5,7 +5,7 @@ import { useData } from "./data.tsx";
 import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
 import { FieldInput, RefLabel } from "./fields.tsx";
 import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
-import { actionTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
+import { actionTitle, appTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
 import { encodeState } from "./query.ts";
@@ -270,7 +270,7 @@ export function RecordPanel({
   }
 
   const related = useMemo(() => {
-    const out: { model: string; module: string; field: string; title: string }[] = [];
+    const out: { model: string; module: string; field: string; title: string; app: string }[] = [];
     for (const [name, info] of d.models)
       if (name !== model.name)
         for (const f of info.model.fields)
@@ -280,8 +280,14 @@ export function RecordPanel({
               module: info.module.id,
               field: f.name,
               title: modelTitle(info.model, info.module.id),
+              app: appTitle(info.module),
             });
-    return out;
+    // Two apps can both have an "Order": say which one.
+    const models = new Map<string, Set<string>>();
+    for (const r of out) models.set(r.title, (models.get(r.title) ?? new Set()).add(r.model));
+    return out.map((r) =>
+      (models.get(r.title)?.size ?? 0) > 1 ? { ...r, title: `${r.app}: ${r.title}` } : r,
+    );
   }, [d.models, model.name]);
 
   return (
