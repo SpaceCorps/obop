@@ -1271,6 +1271,65 @@ fn a_bank_transfer_refund_is_recorded_for_staff_to_make_by_hand() {
     assert_eq!(e.stock("sencha-green-tea"), 40);
 }
 
+fn cookie_of(r: &Resp) -> Option<String> {
+    r.headers
+        .iter()
+        .filter(|(k, _)| k.eq_ignore_ascii_case("set-cookie"))
+        .find_map(|(_, v)| {
+            v.strip_prefix("obop_csrf=")
+                .map(|c| c.split(';').next().unwrap().to_string())
+        })
+}
+
+#[test]
+fn the_hosted_page_form_carries_the_token_of_the_cookie_the_browser_already_has() {
+    let e = env_with(false, true, "fake");
+    // First visit: the cart sets the cookie and puts the same token in its form.
+    let l = e.listing("sencha-green-tea");
+    let cart = e.get(&format!("/cart?items={l}.1"));
+    let token = cookie_of(&cart).expect("the cart sets the csrf cookie");
+    assert!(cart.body_str().contains(&format!("name=\"csrf\" value=\"{token}\"")));
+    // The order is placed with that cookie; the demo page is opened with it and must reuse it.
+    let ship = e.shipping();
+    let body = format!(
+        "csrf={token}&idem=00112233445566778899aabbccddee01&customer_name=A&customer_email=a%40example.test&shipping_address=1+Example+Street&id={l}&qty=1&shipping_method_id={ship}&payment_method=fake"
+    );
+    let mut r = e
+        .req("POST", "/shop/checkout")
+        .with_header("cookie", &format!("obop_csrf={token}"))
+        .with_header("origin", "http://shop.test")
+        .with_header("content-type", "application/x-www-form-urlencoded")
+        .with_body(&body);
+    r.client = "10.77.0.1".into();
+    let placed = e.site.handle(&r);
+    assert_eq!(placed.status, 303, "{}", placed.body_str());
+    let page = location(&placed);
+    let hosted = e
+        .site
+        .handle(&e.req("GET", &page).with_header("cookie", &format!("obop_csrf={token}")));
+    assert_eq!(hosted.status, 200);
+    assert!(cookie_of(&hosted).is_none(), "the cookie is kept, not replaced");
+    // `no-referrer` would make the browser send `Origin: null` with the form, which is refused.
+    assert_eq!(hosted.get_header("referrer-policy"), Some("same-origin"));
+    assert!(
+        hosted
+            .body_str()
+            .contains(&format!("name=\"csrf\" value=\"{token}\"")),
+        "{}",
+        hosted.body_str()
+    );
+    // Posting the form with the cookie works, with the same Origin and Host a browser sends.
+    let mut p = e
+        .req("POST", &page)
+        .with_header("cookie", &format!("obop_csrf={token}"))
+        .with_header("origin", "http://shop.test")
+        .with_header("content-type", "application/x-www-form-urlencoded")
+        .with_body(&format!("csrf={token}&outcome=paid"));
+    p.client = "10.77.0.1".into();
+    let done = e.site.handle(&p);
+    assert_eq!(done.status, 303, "{}", done.body_str());
+}
+
 // ---- the secrets ------------------------------------------------------------------------------
 
 #[test]

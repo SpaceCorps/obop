@@ -5,7 +5,15 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { backofficeDist, obopBinary, secretKey, siteDir, users } from "./env.ts";
+import {
+  backofficeAdminDist,
+  backofficeDist,
+  obopBinary,
+  secretKey,
+  shopOwner,
+  siteDir,
+  users,
+} from "./env.ts";
 
 const [kind] = process.argv.slice(2);
 const dir = process.env.OBOP_E2E_DIR;
@@ -32,6 +40,38 @@ if (kind === "app") {
     "--static",
     backofficeDist,
   ];
+} else if (kind === "shop") {
+  // A web shop: public site at /, back office at /admin/, the two shop packages, demo content
+  // with generated pictures, and the demo payment provider (no money moves, no card is asked).
+  const db = `sqlite://${join(dir, "shop.sqlite")}`;
+  run(["modules", "install-from", "website", "--db", db]);
+  run(["modules", "install-from", "ecommerce", "--db", db]);
+  run(["site", "seed", "--db", db]);
+  run(["site", "set", "payment_methods", "fake,manual", "--db", db]);
+  run([
+    "site",
+    "set",
+    "payment_instructions",
+    "Pay by bank transfer to the shop account.",
+    "--db",
+    db,
+  ]);
+  run(
+    ["admin", "create", shopOwner.name, "--groups", shopOwner.groups, "--db", db],
+    `${shopOwner.password}\n`,
+  );
+  args = [
+    "serve",
+    "--public-site",
+    "--admin-prefix",
+    "/admin",
+    "--addr",
+    `127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`,
+    "--db",
+    db,
+    "--static",
+    backofficeAdminDist,
+  ];
 } else if (kind === "platform") {
   const db = `sqlite://${join(dir, "platform.sqlite")}`;
   args = [
@@ -46,7 +86,7 @@ if (kind === "app") {
     "--static",
     siteDir,
   ];
-} else throw new Error("usage: serve.ts app|platform");
+} else throw new Error("usage: serve.ts app|shop|platform");
 
 // Connectors: the specs run a receiver on loopback, which is refused unless the operator allows it.
 // The secret key is a 32-byte key in the form two-factor authentication and connectors both accept.
@@ -57,7 +97,11 @@ const child = spawn(bin, args, {
     OBOP_SECRET_KEY: secretKey,
     OBOP_REQUIRE_MFA_FOR_ADMINS: "0",
     OBOP_CONNECTORS_ALLOW_LOOPBACK: "1",
-    OBOP_PUBLIC_URL: `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`,
+    OBOP_DEMO_PAYMENTS: "1",
+    OBOP_PUBLIC_URL:
+      kind === "shop"
+        ? `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`
+        : `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`,
   },
 });
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => child.kill(sig));

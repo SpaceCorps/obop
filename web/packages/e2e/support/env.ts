@@ -16,11 +16,17 @@ export function obopBinary(): string {
 }
 
 export const backofficeDist = resolve(repoRoot, "web/apps/backoffice/dist");
+/** The same app built for /admin/ (`OBOP_ADMIN_BASE=/admin/ vp build --outDir dist-admin`): the shop instance serves it. */
+export const backofficeAdminDist = resolve(repoRoot, "web/apps/backoffice/dist-admin");
 export const siteDir = resolve(repoRoot, "web/site");
 
 export function requireBuilt(): void {
   for (const [dir, how] of [
     [backofficeDist, "(cd web/apps/backoffice && vp build)"],
+    [
+      backofficeAdminDist,
+      "(cd web/apps/backoffice && OBOP_ADMIN_BASE=/admin/ vp build --outDir dist-admin)",
+    ],
     [siteDir, "deploy/build-site.sh"],
   ] as const)
     if (!existsSync(resolve(dir, "index.html")))
@@ -64,7 +70,15 @@ export const users = {
 } as const;
 export type UserName = keyof typeof users;
 
+/**
+ * The web shop instance (tests/shop.spec.ts): a second server with the public site on, the website
+ * and ecommerce packages installed, demo content seeded and the demo payment provider switched on.
+ * Its own database and its own owner account.
+ */
+export const shopOwner = { name: "owner", password: "e2e shop owner 1", groups: "platform.admin" };
+
 export const appUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
+export const shopUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
 export const platformUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
 
 /**

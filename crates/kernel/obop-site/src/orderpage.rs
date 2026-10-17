@@ -490,7 +490,7 @@ impl Site {
         ));
         p.body = h;
         p.md = format!("{}\n", ctx.t("pay.fake_banner"));
-        layout::render(ctx, p).header("referrer-policy", "no-referrer")
+        layout::render(ctx, p).header("referrer-policy", "same-origin")
     }
 
     /// `POST /shop/fake-pay/{session}`.
