@@ -1,0 +1,118 @@
+[labels.fi.module]
+name = "Osto"
+description = "Toimittajat, ostotilaukset ja tilausrivit luonnos-, lähetetty-, vahvistettu-, vastaanotettu- ja peruutettu-kulussa. Tilauksen loppusumma syötetään, sitä ei lasketa riveistä."
+
+[labels.fi.model.purchase_vendor]
+name = "Toimittaja"
+description = "Ostoehdot yhteystiedolle, jolta ostat"
+
+[labels.fi.model.purchase_vendor.field.party_id]
+label = "Osapuoli"
+description = "Toimittajan yhteystietotietue"
+
+[labels.fi.model.purchase_vendor.field.vendor_reference]
+label = "Toimittajan viite"
+description = "Asiakasnumerosi tällä toimittajalla"
+
+[labels.fi.model.purchase_vendor.field.payment_terms_days]
+label = "Maksuehto (pv)"
+description = "Päivät, jotka laskun maksamiseen on aikaa"
+
+[labels.fi.model.purchase_vendor.field.lead_time_days]
+label = "Toimitusaika (pv)"
+description = "Tavallinen aika tilauksesta toimitukseen päivinä"
+
+[labels.fi.model.purchase_vendor.field.iban]
+label = "IBAN"
+description = "Pankkitili, jolle toimittajalle maksetaan"
+
+[labels.fi.model.purchase_vendor.field.active]
+label = "Aktiivinen"
+description = "Ostatko edelleen tältä toimittajalta"
+
+[labels.fi.model.purchase_order]
+name = "Ostotilaus"
+description = "Pyyntö toimittajalle toimittaa tavaroita tai palveluja"
+
+[labels.fi.model.purchase_order.field.reference]
+label = "Viite"
+description = "Asiakirjaan tulostettava tilausnumero"
+
+[labels.fi.model.purchase_order.field.vendor_id]
+label = "Toimittaja"
+description = "Toimittaja, jolta tilataan"
+
+[labels.fi.model.purchase_order.field.ordered_on]
+label = "Tilattu"
+description = "Päivä, jona tilaus tehtiin (YYYY-MM-DD)"
+
+[labels.fi.model.purchase_order.field.expected_on]
+label = "Odotettu päivä"
+description = "Päivä, jona tavaroiden odotetaan saapuvan (YYYY-MM-DD)"
+
+[labels.fi.model.purchase_order.field.currency]
+label = "Valuutta"
+description = "ISO 4217 -valuuttakoodi, esimerkiksi EUR"
+
+[labels.fi.model.purchase_order.field.total]
+label = "Yhteensä"
+description = "Toimittajan kanssa sovittu tilauksen loppusumma (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.purchase_order.field.notes]
+label = "Muistiinpanot"
+description = "Toimitusohjeet ja huomautukset toimittajalle"
+
+[labels.fi.model.purchase_order.field.state]
+label = "Tila"
+description = "Tilauksen tila: luonnos, lähetetty, vahvistettu, vastaanotettu, peruutettu"
+
+[labels.fi.model.purchase_order.field.state.options]
+draft = "Luonnos"
+sent = "Lähetetty"
+confirmed = "Vahvistettu"
+received = "Vastaanotettu"
+cancelled = "Peruutettu"
+
+[labels.fi.model.purchase_order.action.send]
+label = "Lähetä"
+description = "Lähetä luonnostilaus toimittajalle tarjouspyyntönä"
+
+[labels.fi.model.purchase_order.action.confirm]
+label = "Vahvista"
+description = "Sitoudu tilaukseen toimittajan kanssa (vain esihenkilö)"
+
+[labels.fi.model.purchase_order.action.receive]
+label = "Vastaanota"
+description = "Kirjaa, että tavarat saapuivat"
+
+[labels.fi.model.purchase_order.action.cancel]
+label = "Peruuta"
+description = "Peruuta tilaus, jota ei ole vielä lähetetty"
+
+[labels.fi.model.purchase_order_line]
+name = "Ostotilauksen rivi"
+description = "Ostotilauksen yksi tuote tai palvelu"
+
+[labels.fi.model.purchase_order_line.field.order_id]
+label = "Ostotilaus"
+description = "Tilaus, johon rivi kuuluu"
+
+[labels.fi.model.purchase_order_line.field.product_id]
+label = "Tuote"
+description = "Tilattu tuote"
+
+[labels.fi.model.purchase_order_line.field.description]
+label = "Kuvaus"
+description = "Toimittajalle näytettävä sanamuoto, jos se poikkeaa tuotteen nimestä"
+
+[labels.fi.model.purchase_order_line.field.quantity]
+label = "Määrä"
+description = "Tilatut yksiköt"
+
+[labels.fi.model.purchase_order_line.field.unit_price]
+label = "Yksikköhinta"
+description = "Sovittu yksikköhinta (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.purchase_order_line.field.received_quantity]
+label = "Vastaanotettu määrä"
+description = "Tähän mennessä vastaanotetut yksiköt"

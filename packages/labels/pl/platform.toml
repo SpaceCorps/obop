@@ -1,0 +1,82 @@
+[labels.pl.module]
+name = "Dostosowanie"
+
+[labels.pl.model.module]
+name = "Moduł"
+description = "Zainstalowany moduł: wbudowany, przesłany lub z marketplace"
+
+[labels.pl.model.module.field.name]
+label = "Nazwa"
+description = "Nazwa wyświetlana"
+
+[labels.pl.model.module.field.version]
+label = "Wersja"
+description = "Zainstalowana wersja"
+
+[labels.pl.model.module.field.description]
+label = "Opis"
+description = "Do czego służy moduł"
+
+[labels.pl.model.module.field.source]
+label = "Źródło"
+description = "builtin, upload lub marketplace"
+
+[labels.pl.model.module.field.models]
+label = "Modele"
+description = "Modele dodawane przez moduł"
+
+[labels.pl.model.module.field.groups]
+label = "Grupy"
+description = "Grupy uprawnień używane przez moduł"
+
+[labels.pl.model.module.action.install]
+label = "Zainstaluj"
+description = "Instaluje lub aktualizuje moduł na podstawie tekstu jego pliku obop.toml"
+
+[labels.pl.model.module.action.uninstall]
+label = "Odinstaluj"
+description = "Usuwa moduł; jego dane pozostają w bazie danych"
+
+[labels.pl.model.marketplace_listing]
+name = "Pozycja w marketplace"
+description = "Moduł oferowany w marketplace"
+
+[labels.pl.model.marketplace_listing.field.name]
+label = "Nazwa"
+description = "Nazwa wyświetlana"
+
+[labels.pl.model.marketplace_listing.field.version]
+label = "Wersja"
+description = "Najnowsza wersja"
+
+[labels.pl.model.marketplace_listing.field.description]
+label = "Opis"
+description = "Do czego służy moduł"
+
+[labels.pl.model.marketplace_listing.field.author]
+label = "Autor"
+description = "Kto go publikuje"
+
+[labels.pl.model.marketplace_listing.field.source]
+label = "Źródło"
+description = "Skąd pochodzi instalacja"
+
+[labels.pl.model.marketplace_listing.field.models]
+label = "Modele"
+description = "Modele dodawane przez moduł"
+
+[labels.pl.model.marketplace_listing.field.groups]
+label = "Grupy"
+description = "Grupy uprawnień używane przez moduł"
+
+[labels.pl.model.marketplace_listing.action.install]
+label = "Zainstaluj"
+description = "Instaluje moduł z marketplace na podstawie identyfikatora"
+
+[labels.pl.model.setting]
+name = "Ustawienie"
+description = "Ustawienia interfejsu dla całej instancji: motyw i układ launchera aplikacji"
+
+[labels.pl.model.setting.field.value]
+label = "Wartość"
+description = "Ustawienia w postaci obiektu JSON"

@@ -1,0 +1,187 @@
+[labels.pl.module]
+name = "Kadry"
+description = "Pracownicy, działy i wnioski urlopowe. Dane osobowe są ściśle klasyfikowane: wynagrodzenie, rachunek bankowy i numer identyfikacyjny widzą tylko kierownicy, a dane o zdrowiu i związkach zawodowych tylko specjalna grupa czytelników."
+
+[labels.pl.model.hr_department]
+name = "Dział"
+description = "Zespół lub dział firmy"
+
+[labels.pl.model.hr_department.field.name]
+label = "Nazwa"
+description = "Nazwa działu"
+
+[labels.pl.model.hr_department.field.head]
+label = "Kierownik"
+description = "Imię i nazwisko kierownika działu"
+
+[labels.pl.model.hr_department.field.cost_centre]
+label = "Centrum kosztów"
+description = "Kod centrum kosztów używany przez dział finansów"
+
+[labels.pl.model.hr_employee]
+name = "Pracownik"
+description = "Osoba zatrudniona w firmie"
+
+[labels.pl.model.hr_employee.field.name]
+label = "Nazwa"
+description = "Imię i nazwisko"
+
+[labels.pl.model.hr_employee.field.job_title]
+label = "Stanowisko"
+description = "Nazwa stanowiska"
+
+[labels.pl.model.hr_employee.field.work_email]
+label = "Służbowy e-mail"
+description = "Służbowy adres e-mail"
+
+[labels.pl.model.hr_employee.field.work_phone]
+label = "Telefon służbowy"
+description = "Służbowy numer telefonu"
+
+[labels.pl.model.hr_employee.field.department_id]
+label = "Dział"
+description = "Dział, do którego należy osoba"
+
+[labels.pl.model.hr_employee.field.reports_to_id]
+label = "Przełożony"
+description = "Bezpośredni przełożony pracownika"
+
+[labels.pl.model.hr_employee.field.hired_on]
+label = "Data zatrudnienia"
+description = "Pierwszy dzień zatrudnienia (YYYY-MM-DD)"
+
+[labels.pl.model.hr_employee.field.contract_type]
+label = "Rodzaj umowy"
+description = "Rodzaj umowy o pracę: na czas nieokreślony, na czas określony, współpracownik, stażysta"
+
+[labels.pl.model.hr_employee.field.contract_type.options]
+permanent = "Na czas nieokreślony"
+fixed_term = "Na czas określony"
+contractor = "Współpracownik"
+intern = "Stażysta"
+
+[labels.pl.model.hr_employee.field.private_email]
+label = "Prywatny e-mail"
+description = "Prywatny adres e-mail"
+
+[labels.pl.model.hr_employee.field.private_phone]
+label = "Prywatny telefon"
+description = "Prywatny numer telefonu"
+
+[labels.pl.model.hr_employee.field.home_address]
+label = "Adres domowy"
+description = "Prywatny adres zamieszkania"
+
+[labels.pl.model.hr_employee.field.birth_date]
+label = "Data urodzenia"
+description = "Data urodzenia (YYYY-MM-DD)"
+
+[labels.pl.model.hr_employee.field.national_id]
+label = "Nr identyfikacyjny"
+description = "Krajowy numer identyfikacyjny lub numer ubezpieczenia społecznego"
+
+[labels.pl.model.hr_employee.field.emergency_contact]
+label = "Kontakt w nagłych wypadkach"
+description = "Imię, nazwisko i telefon osoby, do której dzwonić w nagłym wypadku"
+
+[labels.pl.model.hr_employee.field.salary]
+label = "Wynagrodzenie"
+description = "Roczne wynagrodzenie brutto (w jednostkach podrzędnych waluty, np. grosze)"
+
+[labels.pl.model.hr_employee.field.bank_iban]
+label = "Rachunek bankowy (IBAN)"
+description = "Rachunek bankowy, na który wypłacane jest wynagrodzenie"
+
+[labels.pl.model.hr_employee.field.union_member]
+label = "Członek związku zawodowego"
+description = "Czy osoba należy do związku zawodowego"
+
+[labels.pl.model.hr_employee.field.work_permit_expiry]
+label = "Ważność pozwolenia na pracę"
+description = "Data wygaśnięcia pozwolenia na pracę, dla cudzoziemców (YYYY-MM-DD)"
+
+[labels.pl.model.hr_employee.field.health_note]
+label = "Informacje o zdrowiu"
+description = "Stan zdrowia lub niepełnosprawność istotne w miejscu pracy"
+
+[labels.pl.model.hr_employee.field.state]
+label = "Status"
+description = "Status zatrudnienia: wdrażanie, aktywny, zatrudnienie zakończone"
+
+[labels.pl.model.hr_employee.field.state.options]
+onboarding = "Wdrażanie"
+active = "Aktywne"
+offboarded = "Zatrudnienie zakończone"
+
+[labels.pl.model.hr_employee.action.activate]
+label = "Aktywuj"
+description = "Kończy wdrażanie i oznacza pracownika jako aktywnego"
+
+[labels.pl.model.hr_employee.action.offboard]
+label = "Zakończ zatrudnienie"
+description = "Kończy kartotekę zatrudnienia; cofnąć można tylko decyzją działu kadr"
+
+[labels.pl.model.hr_leave_request]
+name = "Wniosek urlopowy"
+description = "Wniosek o czas wolny od pracy"
+
+[labels.pl.model.hr_leave_request.field.employee_id]
+label = "Pracownik"
+description = "Pracownik ubiegający się o urlop"
+
+[labels.pl.model.hr_leave_request.field.leave_kind]
+label = "Rodzaj urlopu"
+description = "Rodzaj urlopu: płatny, bezpłatny, rodzicielski, szkoleniowy, inny"
+
+[labels.pl.model.hr_leave_request.field.leave_kind.options]
+paid = "Płatny"
+unpaid = "Bezpłatny"
+parental = "Rodzicielski"
+study = "Szkoleniowy"
+other = "Inny"
+
+[labels.pl.model.hr_leave_request.field.start_on]
+label = "Data rozpoczęcia"
+description = "Pierwszy dzień nieobecności (YYYY-MM-DD)"
+
+[labels.pl.model.hr_leave_request.field.end_on]
+label = "Data zakończenia"
+description = "Ostatni dzień nieobecności (YYYY-MM-DD)"
+
+[labels.pl.model.hr_leave_request.field.days]
+label = "Dni"
+description = "Liczba wnioskowanych dni roboczych"
+
+[labels.pl.model.hr_leave_request.field.reason]
+label = "Powód"
+description = "Powód wnioskowania o urlop"
+
+[labels.pl.model.hr_leave_request.field.is_sick_leave]
+label = "Zwolnienie lekarskie"
+description = "Czy nieobecność wynika z choroby"
+
+[labels.pl.model.hr_leave_request.field.medical_note]
+label = "Zaświadczenie lekarskie"
+description = "Odwołanie do zaświadczenia lekarskiego, jeśli istnieje"
+
+[labels.pl.model.hr_leave_request.field.state]
+label = "Status"
+description = "Status wniosku: wersja robocza, złożone, zatwierdzone, odrzucone"
+
+[labels.pl.model.hr_leave_request.field.state.options]
+draft = "Wersja robocza"
+requested = "Złożone"
+approved = "Zatwierdzone"
+refused = "Odrzucone"
+
+[labels.pl.model.hr_leave_request.action.request]
+label = "Złóż wniosek"
+description = "Przekazuje wniosek przełożonemu"
+
+[labels.pl.model.hr_leave_request.action.approve]
+label = "Zatwierdź"
+description = "Zatwierdza złożony wniosek urlopowy (tylko kierownik)"
+
+[labels.pl.model.hr_leave_request.action.refuse]
+label = "Odrzuć"
+description = "Odrzuca złożony wniosek urlopowy (tylko kierownik)"

@@ -1,0 +1,82 @@
+[labels.fi.module]
+name = "Mukauta"
+
+[labels.fi.model.module]
+name = "Moduuli"
+description = "Asennettu moduuli: sisäänrakennettu, ladattu tai moduulikaupasta"
+
+[labels.fi.model.module.field.name]
+label = "Nimi"
+description = "Näyttönimi"
+
+[labels.fi.model.module.field.version]
+label = "Versio"
+description = "Asennettu versio"
+
+[labels.fi.model.module.field.description]
+label = "Kuvaus"
+description = "Mitä moduuli tekee"
+
+[labels.fi.model.module.field.source]
+label = "Lähde"
+description = "builtin, upload tai marketplace"
+
+[labels.fi.model.module.field.models]
+label = "Tietuetyypit"
+description = "Moduulin lisäämät tietuetyypit"
+
+[labels.fi.model.module.field.groups]
+label = "Käyttöoikeusryhmät"
+description = "Käyttöoikeusryhmät, joita moduuli käyttää"
+
+[labels.fi.model.module.action.install]
+label = "Asenna"
+description = "Asenna tai päivitä moduuli sen obop.toml-tiedoston tekstistä"
+
+[labels.fi.model.module.action.uninstall]
+label = "Poista asennus"
+description = "Poista moduuli; sen tiedot säilyvät tietokannassa"
+
+[labels.fi.model.marketplace_listing]
+name = "Moduulikaupan moduuli"
+description = "Moduulikaupassa tarjolla oleva moduuli"
+
+[labels.fi.model.marketplace_listing.field.name]
+label = "Nimi"
+description = "Näyttönimi"
+
+[labels.fi.model.marketplace_listing.field.version]
+label = "Versio"
+description = "Uusin versio"
+
+[labels.fi.model.marketplace_listing.field.description]
+label = "Kuvaus"
+description = "Mitä moduuli tekee"
+
+[labels.fi.model.marketplace_listing.field.author]
+label = "Julkaisija"
+description = "Kuka sen julkaisee"
+
+[labels.fi.model.marketplace_listing.field.source]
+label = "Lähde"
+description = "Mistä asennus tuli"
+
+[labels.fi.model.marketplace_listing.field.models]
+label = "Tietuetyypit"
+description = "Moduulin lisäämät tietuetyypit"
+
+[labels.fi.model.marketplace_listing.field.groups]
+label = "Käyttöoikeusryhmät"
+description = "Käyttöoikeusryhmät, joita moduuli käyttää"
+
+[labels.fi.model.marketplace_listing.action.install]
+label = "Asenna"
+description = "Asenna moduuli moduulikaupasta tunnisteen perusteella"
+
+[labels.fi.model.setting]
+name = "Asetus"
+description = "Koko instanssin käyttöliittymäasetukset: teema ja sovellusvalikon asettelu"
+
+[labels.fi.model.setting.field.value]
+label = "Arvo"
+description = "Asetukset JSON-oliona"

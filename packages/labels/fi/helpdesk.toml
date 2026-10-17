@@ -1,0 +1,136 @@
+[labels.fi.module]
+name = "Asiakastuki"
+description = "Asiakastukitiketit prioriteetin, vakavuuden ja palvelutasotavoitteiden kanssa sekä avoin-, käynnissä-, ratkaistu- ja suljettu-kulussa. Tavoitteet kirjataan, mutta niitä ei valvota eikä ajasteta automaattisesti."
+
+[labels.fi.model.helpdesk_sla]
+name = "SLA"
+description = "Palvelutasosopimus: kuinka nopeasti tietyn prioriteetin tiketteihin pitää vastata ja ne ratkaista"
+
+[labels.fi.model.helpdesk_sla.field.name]
+label = "Nimi"
+description = "Sopimuksen nimi, esimerkiksi Kiireellinen 4 tunnissa"
+
+[labels.fi.model.helpdesk_sla.field.priority]
+label = "Prioriteetti"
+description = "Tiketin prioriteetti, jota sopimus koskee: matala, normaali, korkea, kiireellinen"
+
+[labels.fi.model.helpdesk_sla.field.priority.options]
+low = "Matala"
+normal = "Normaali"
+high = "Korkea"
+urgent = "Kiireellinen"
+
+[labels.fi.model.helpdesk_sla.field.first_response_minutes]
+label = "Ensivastaus (min)"
+description = "Tavoiteaika ensimmäiseen vastaukseen minuutteina"
+
+[labels.fi.model.helpdesk_sla.field.resolution_minutes]
+label = "Ratkaisuaika (min)"
+description = "Tavoiteaika tiketin ratkaisuun minuutteina"
+
+[labels.fi.model.helpdesk_sla.field.active]
+label = "Aktiivinen"
+description = "Voiko sopimuksen liittää uusiin tiketteihin"
+
+[labels.fi.model.helpdesk_ticket]
+name = "Tiketti"
+description = "Asiakastukipyyntö"
+
+[labels.fi.model.helpdesk_ticket.field.subject]
+label = "Aihe"
+description = "Yhden rivin yhteenveto ongelmasta"
+
+[labels.fi.model.helpdesk_ticket.field.description]
+label = "Kuvaus"
+description = "Täysi kuvaus ongelmasta ja siitä, mitä asiakas yritti"
+
+[labels.fi.model.helpdesk_ticket.field.requester_name]
+label = "Pyytäjän nimi"
+description = "Apua pyytävän henkilön nimi"
+
+[labels.fi.model.helpdesk_ticket.field.requester_email]
+label = "Pyytäjän sähköposti"
+description = "Apua pyytävän henkilön sähköpostiosoite"
+
+[labels.fi.model.helpdesk_ticket.field.category]
+label = "Luokka"
+description = "Pyynnön laji: kysymys, häiriö, ongelma, kehitysehdotus"
+
+[labels.fi.model.helpdesk_ticket.field.category.options]
+question = "Kysymys"
+incident = "Häiriö"
+problem = "Ongelma"
+feature_request = "Kehitysehdotus"
+
+[labels.fi.model.helpdesk_ticket.field.priority]
+label = "Prioriteetti"
+description = "Kuinka pian pyyntö pitää käsitellä: matala, normaali, korkea, kiireellinen"
+
+[labels.fi.model.helpdesk_ticket.field.priority.options]
+low = "Matala"
+normal = "Normaali"
+high = "Korkea"
+urgent = "Kiireellinen"
+
+[labels.fi.model.helpdesk_ticket.field.severity]
+label = "Vakavuus"
+description = "Kuinka pahasti asiakas kärsii: vähäinen, merkittävä, kriittinen"
+
+[labels.fi.model.helpdesk_ticket.field.severity.options]
+minor = "Vähäinen"
+major = "Merkittävä"
+critical = "Kriittinen"
+
+[labels.fi.model.helpdesk_ticket.field.assignee]
+label = "Vastuuhenkilö"
+description = "Tikettiä hoitavan tukihenkilön nimi"
+
+[labels.fi.model.helpdesk_ticket.field.sla_id]
+label = "SLA"
+description = "Palvelutasosopimus, jota vasten tikettiä mitataan"
+
+[labels.fi.model.helpdesk_ticket.field.opened_on]
+label = "Avattu"
+description = "Päivä, jona tiketti vastaanotettiin (YYYY-MM-DD)"
+
+[labels.fi.model.helpdesk_ticket.field.first_response_on]
+label = "Ensivastaus"
+description = "Ensimmäisen asiakkaalle annetun vastauksen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.helpdesk_ticket.field.due_on]
+label = "Eräpäivä"
+description = "Päivä, johon mennessä tiketti pitäisi sopimuksen mukaan ratkaista (YYYY-MM-DD)"
+
+[labels.fi.model.helpdesk_ticket.field.resolved_on]
+label = "Ratkaistu"
+description = "Päivä, jona ongelma ratkaistiin (YYYY-MM-DD)"
+
+[labels.fi.model.helpdesk_ticket.field.resolution]
+label = "Ratkaisu"
+description = "Miten ongelma ratkaistiin"
+
+[labels.fi.model.helpdesk_ticket.field.state]
+label = "Tila"
+description = "Tiketin tila: avoin, käynnissä, ratkaistu, suljettu"
+
+[labels.fi.model.helpdesk_ticket.field.state.options]
+open = "Avoin"
+in_progress = "Käynnissä"
+resolved = "Ratkaistu"
+closed = "Suljettu"
+
+[labels.fi.model.helpdesk_ticket.action.take]
+label = "Ota itselle"
+description = "Ryhdy käsittelemään avointa tikettiä"
+
+[labels.fi.model.helpdesk_ticket.action.resolve]
+label = "Ratkaise"
+description = "Merkitse käynnissä oleva tiketti ratkaistuksi"
+
+[labels.fi.model.helpdesk_ticket.action.close]
+label = "Sulje"
+description = "Sulje ratkaistu tiketti lopullisesti (vain esihenkilö)"
+
+[labels.fi.model.helpdesk_ticket.action.reopen]
+label = "Avaa uudelleen"
+description = "Avaa ratkaistu tiketti uudelleen, kun ongelma palasi"

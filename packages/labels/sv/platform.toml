@@ -1,0 +1,82 @@
+[labels.sv.module]
+name = "Anpassa"
+
+[labels.sv.model.module]
+name = "Modul"
+description = "En installerad modul: inbyggd, uppladdad eller från marknadsplatsen"
+
+[labels.sv.model.module.field.name]
+label = "Namn"
+description = "Visningsnamn"
+
+[labels.sv.model.module.field.version]
+label = "Version"
+description = "Installerad version"
+
+[labels.sv.model.module.field.description]
+label = "Beskrivning"
+description = "Vad modulen gör"
+
+[labels.sv.model.module.field.source]
+label = "Källa"
+description = "builtin (inbyggd), upload (uppladdad) eller marketplace (marknadsplats)"
+
+[labels.sv.model.module.field.models]
+label = "Modeller"
+description = "Modeller som modulen lägger till"
+
+[labels.sv.model.module.field.groups]
+label = "Grupper"
+description = "Behörighetsgrupper som modulen använder"
+
+[labels.sv.model.module.action.install]
+label = "Installera"
+description = "Installera eller uppgradera en modul utifrån texten i dess obop.toml"
+
+[labels.sv.model.module.action.uninstall]
+label = "Avinstallera"
+description = "Ta bort en modul; dess data finns kvar i databasen"
+
+[labels.sv.model.marketplace_listing]
+name = "Modul på marknadsplatsen"
+description = "En modul som erbjuds på marknadsplatsen"
+
+[labels.sv.model.marketplace_listing.field.name]
+label = "Namn"
+description = "Visningsnamn"
+
+[labels.sv.model.marketplace_listing.field.version]
+label = "Version"
+description = "Senaste version"
+
+[labels.sv.model.marketplace_listing.field.description]
+label = "Beskrivning"
+description = "Vad modulen gör"
+
+[labels.sv.model.marketplace_listing.field.author]
+label = "Utgivare"
+description = "Vem som publicerar den"
+
+[labels.sv.model.marketplace_listing.field.source]
+label = "Källa"
+description = "Varifrån installationen kom"
+
+[labels.sv.model.marketplace_listing.field.models]
+label = "Modeller"
+description = "Modeller som modulen lägger till"
+
+[labels.sv.model.marketplace_listing.field.groups]
+label = "Grupper"
+description = "Behörighetsgrupper som modulen använder"
+
+[labels.sv.model.marketplace_listing.action.install]
+label = "Installera"
+description = "Installera en modul från marknadsplatsen med dess id"
+
+[labels.sv.model.setting]
+name = "Inställning"
+description = "Inställningar för hela instansen: tema och appstartarens layout"
+
+[labels.sv.model.setting.field.value]
+label = "Värde"
+description = "Inställningarna som ett JSON-objekt"

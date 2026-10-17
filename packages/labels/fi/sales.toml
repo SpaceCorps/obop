@@ -1,0 +1,39 @@
+[labels.fi.module]
+name = "Myynti"
+
+[labels.fi.model.sale_order]
+name = "Myyntitilaus"
+description = "Asiakkaalle tehty tarjous tai vahvistettu tilaus"
+
+[labels.fi.model.sale_order.field.party_id]
+label = "Osapuoli"
+description = "Asiakasosapuolen tunniste"
+
+[labels.fi.model.sale_order.field.state]
+label = "Tila"
+description = "Elinkaari: luonnos, vahvistettu tai peruutettu"
+
+[labels.fi.model.sale_order.field.state.options]
+draft = "Luonnos"
+confirmed = "Vahvistettu"
+cancelled = "Peruutettu"
+
+[labels.fi.model.sale_order.field.total_minor]
+label = "Yhteensä"
+description = "Tilauksen loppusumma valuutan pienimmässä yksikössä"
+
+[labels.fi.model.sale_order.field.currency]
+label = "Valuutta"
+description = "ISO 4217 -valuuttakoodi"
+
+[labels.fi.model.sale_order.action.confirm]
+label = "Vahvista"
+description = "Vahvista luonnostilaus"
+
+[labels.fi.model.sale_order.action.cancel]
+label = "Peruuta"
+description = "Peruuta tilaus"
+
+[labels.fi.model.sale_order.action.reset_to_draft]
+label = "Palauta luonnokseksi"
+description = "Palauta peruutettu tilaus luonnokseksi"

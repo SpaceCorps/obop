@@ -1,0 +1,65 @@
+[labels.es.module]
+name = "Conocimiento"
+description = "Una wiki: artículos organizados en árbol mediante un artículo superior, con un flujo de borrador, publicado y archivado, un ajuste de visibilidad y etiquetas. La visibilidad es una indicación para la interfaz y para que las personas la respeten; la plataforma aún no tiene permisos por fila, así que todos los miembros de los grupos de Conocimiento pueden leer cualquier artículo."
+
+[labels.es.model.knowledge_article]
+name = "Artículo"
+description = "Un artículo de la base de conocimiento"
+
+[labels.es.model.knowledge_article.field.title]
+label = "Título"
+description = "Título del artículo"
+
+[labels.es.model.knowledge_article.field.parent_id]
+label = "Padre"
+description = "El artículo bajo el que está anidado este; vacío para un artículo de primer nivel"
+
+[labels.es.model.knowledge_article.field.body]
+label = "Cuerpo"
+description = "Contenido del artículo (Markdown)"
+
+[labels.es.model.knowledge_article.field.visibility]
+label = "Visibilidad"
+description = "Para quién es el artículo: privado, espacio de trabajo, público"
+
+[labels.es.model.knowledge_article.field.visibility.options]
+private = "Privado"
+workspace = "Espacio de trabajo"
+public = "Público"
+
+[labels.es.model.knowledge_article.field.tags]
+label = "Etiquetas"
+description = "Etiquetas separadas por comas, por ejemplo incorporacion,rrhh"
+
+[labels.es.model.knowledge_article.field.author_name]
+label = "Nombre del autor"
+description = "Nombre del autor"
+
+[labels.es.model.knowledge_article.field.sequence]
+label = "Secuencia"
+description = "Orden entre artículos del mismo nivel, de menor a mayor"
+
+[labels.es.model.knowledge_article.field.published_on]
+label = "Fecha de publicación"
+description = "Día en que se publicó el artículo (YYYY-MM-DD)"
+
+[labels.es.model.knowledge_article.field.state]
+label = "Estado"
+description = "Estado del artículo: borrador, publicado, archivado"
+
+[labels.es.model.knowledge_article.field.state.options]
+draft = "Borrador"
+published = "Publicado"
+archived = "Archivado"
+
+[labels.es.model.knowledge_article.action.publish]
+label = "Publicar"
+description = "Publicar el artículo (solo responsables)"
+
+[labels.es.model.knowledge_article.action.unpublish]
+label = "Despublicar"
+description = "Devolver el artículo a borrador"
+
+[labels.es.model.knowledge_article.action.archive]
+label = "Archivar"
+description = "Archivar un artículo desfasado"

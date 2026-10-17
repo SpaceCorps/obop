@@ -1,0 +1,95 @@
+[labels.fr.module]
+name = "Rendez-vous"
+description = "Ressources réservables (personnes, salles, équipements) et rendez-vous avec une date, une heure de début et de fin et un flux de statuts. Les chevauchements ne sont pas empêchés automatiquement."
+
+[labels.fr.model.appointments_resource]
+name = "Ressource"
+description = "Quelque chose ou quelqu’un qui peut être réservé"
+
+[labels.fr.model.appointments_resource.field.name]
+label = "Nom"
+description = "Nom de la ressource, par exemple Salle de réunion 2"
+
+[labels.fr.model.appointments_resource.field.kind]
+label = "Type"
+description = "Type de ressource : personne, salle, équipement"
+
+[labels.fr.model.appointments_resource.field.kind.options]
+person = "Personne"
+room = "Salle"
+equipment = "Équipement"
+
+[labels.fr.model.appointments_resource.field.capacity]
+label = "Capacité"
+description = "Nombre de personnes pouvant être accueillies en même temps"
+
+[labels.fr.model.appointments_resource.field.active]
+label = "Active"
+description = "Indique si la ressource peut être réservée"
+
+[labels.fr.model.appointments_appointment]
+name = "Rendez-vous"
+description = "La réservation d’une ressource à un moment donné"
+
+[labels.fr.model.appointments_appointment.field.resource_id]
+label = "Ressource"
+description = "La ressource réservée"
+
+[labels.fr.model.appointments_appointment.field.title]
+label = "Titre"
+description = "Objet du rendez-vous"
+
+[labels.fr.model.appointments_appointment.field.day]
+label = "Jour"
+description = "Date du rendez-vous (YYYY-MM-DD)"
+
+[labels.fr.model.appointments_appointment.field.start_minute]
+label = "Minute de début"
+description = "Heure de début en minutes depuis minuit, par exemple 540 pour 09:00"
+
+[labels.fr.model.appointments_appointment.field.end_minute]
+label = "Minute de fin"
+description = "Heure de fin en minutes depuis minuit, par exemple 600 pour 10:00"
+
+[labels.fr.model.appointments_appointment.field.attendee_name]
+label = "Nom du participant"
+description = "Nom de la personne qui vient au rendez-vous"
+
+[labels.fr.model.appointments_appointment.field.attendee_email]
+label = "E-mail du participant"
+description = "Adresse e-mail du participant"
+
+[labels.fr.model.appointments_appointment.field.attendee_phone]
+label = "Téléphone du participant"
+description = "Numéro de téléphone du participant"
+
+[labels.fr.model.appointments_appointment.field.notes]
+label = "Notes"
+description = "Tout ce que l’hôte doit savoir au préalable"
+
+[labels.fr.model.appointments_appointment.field.state]
+label = "Statut"
+description = "Statut de la réservation : planifié, confirmé, terminé, annulé, absent"
+
+[labels.fr.model.appointments_appointment.field.state.options]
+scheduled = "Planifié"
+confirmed = "Confirmé"
+done = "Terminé"
+cancelled = "Annulé"
+no_show = "Absent"
+
+[labels.fr.model.appointments_appointment.action.confirm]
+label = "Confirmer"
+description = "Confirme un rendez-vous planifié"
+
+[labels.fr.model.appointments_appointment.action.complete]
+label = "Terminer"
+description = "Marque un rendez-vous confirmé comme tenu"
+
+[labels.fr.model.appointments_appointment.action.cancel]
+label = "Annuler"
+description = "Annule un rendez-vous planifié"
+
+[labels.fr.model.appointments_appointment.action.mark_no_show]
+label = "Marquer absent"
+description = "Enregistre que le participant ne s’est pas présenté"

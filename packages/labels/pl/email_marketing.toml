@@ -1,0 +1,147 @@
+[labels.pl.module]
+name = "Marketing e-mailowy"
+description = "Listy mailingowe, kontakty na nich ze statusem i datą zgody oraz kampanie z obiegiem wersja robocza, zaplanowane, wysłane. Wysyłka jest nieodwracalna i dociera do realnych osób, więc wymaga zatwierdzenia przez kierownika; agenci mogą ją tylko zaproponować. Statystyki kampanii są wpisywane lub importowane, nie obliczane. Kontakty to dane osobowe: nie wysyłaj do kontaktu bez wyrażonej zgody."
+
+[labels.pl.model.email_marketing_list]
+name = "Lista"
+description = "Lista mailingowa, do której mogą należeć kontakty"
+
+[labels.pl.model.email_marketing_list.field.name]
+label = "Nazwa"
+description = "Nazwa listy, na przykład Newsletter"
+
+[labels.pl.model.email_marketing_list.field.description]
+label = "Opis"
+description = "Co otrzymują subskrybenci"
+
+[labels.pl.model.email_marketing_list.field.is_public]
+label = "Publiczna"
+description = "Czy odwiedzający mogą sami się zapisać"
+
+[labels.pl.model.email_marketing_contact]
+name = "Kontakt"
+description = "Osoba na liście mailingowej"
+
+[labels.pl.model.email_marketing_contact.field.list_id]
+label = "Lista"
+description = "Lista, na której jest kontakt"
+
+[labels.pl.model.email_marketing_contact.field.email]
+label = "E-mail"
+description = "Adres e-mail"
+
+[labels.pl.model.email_marketing_contact.field.name]
+label = "Nazwa"
+description = "Imię i nazwisko kontaktu"
+
+[labels.pl.model.email_marketing_contact.field.consent_status]
+label = "Status zgody"
+description = "Zgoda na wysyłkę: oczekująca, zgoda wyrażona, zgoda wycofana, niedoręczalne"
+
+[labels.pl.model.email_marketing_contact.field.consent_status.options]
+pending = "Oczekujące"
+opted_in = "Zgoda wyrażona"
+opted_out = "Zgoda wycofana"
+bounced = "Niedoręczalne"
+
+[labels.pl.model.email_marketing_contact.field.consent_date]
+label = "Data zgody"
+description = "Dzień wyrażenia lub wycofania zgody przez kontakt (YYYY-MM-DD)"
+
+[labels.pl.model.email_marketing_contact.field.consent_source]
+label = "Źródło zgody"
+description = "Skąd pozyskano zgodę, na przykład formularz zapisu na stronie"
+
+[labels.pl.model.email_marketing_campaign]
+name = "Kampania"
+description = "Jedna wysyłka mailingowa do listy"
+
+[labels.pl.model.email_marketing_campaign.field.name]
+label = "Nazwa"
+description = "Wewnętrzna nazwa kampanii"
+
+[labels.pl.model.email_marketing_campaign.field.subject]
+label = "Temat"
+description = "Temat wiadomości e-mail"
+
+[labels.pl.model.email_marketing_campaign.field.preview_text]
+label = "Tekst podglądu"
+description = "Krótki tekst widoczny po temacie w skrzynce odbiorczej"
+
+[labels.pl.model.email_marketing_campaign.field.from_name]
+label = "Nazwa nadawcy"
+description = "Nazwa nadawcy widoczna dla odbiorców"
+
+[labels.pl.model.email_marketing_campaign.field.from_email]
+label = "E-mail nadawcy"
+description = "Adres nadawcy widoczny dla odbiorców"
+
+[labels.pl.model.email_marketing_campaign.field.list_id]
+label = "Lista"
+description = "Lista, do której trafia kampania"
+
+[labels.pl.model.email_marketing_campaign.field.body]
+label = "Treść"
+description = "Treść wiadomości (HTML lub Markdown, zgodnie z oczekiwaniem nadawcy)"
+
+[labels.pl.model.email_marketing_campaign.field.scheduled_for]
+label = "Zaplanowane na"
+description = "Dzień planowanej wysyłki kampanii (YYYY-MM-DD)"
+
+[labels.pl.model.email_marketing_campaign.field.sent_on]
+label = "Data wysłania"
+description = "Dzień wysłania kampanii (YYYY-MM-DD)"
+
+[labels.pl.model.email_marketing_campaign.field.sent_count]
+label = "Wysłane"
+description = "Wiadomości przekazane serwerowi pocztowemu"
+
+[labels.pl.model.email_marketing_campaign.field.delivered_count]
+label = "Dostarczone"
+description = "Wiadomości przyjęte przez serwery odbiorców"
+
+[labels.pl.model.email_marketing_campaign.field.opened_count]
+label = "Otwarcia"
+description = "Odbiorcy, którzy otworzyli wiadomość"
+
+[labels.pl.model.email_marketing_campaign.field.clicked_count]
+label = "Kliknięcia"
+description = "Odbiorcy, którzy kliknęli link"
+
+[labels.pl.model.email_marketing_campaign.field.bounced_count]
+label = "Niedoręczone"
+description = "Wiadomości, które nie zostały doręczone"
+
+[labels.pl.model.email_marketing_campaign.field.unsubscribed_count]
+label = "Wypisania"
+description = "Odbiorcy, którzy wypisali się z powodu tej kampanii"
+
+[labels.pl.model.email_marketing_campaign.field.state]
+label = "Status"
+description = "Status kampanii: wersja robocza, zaplanowane, wysłane, anulowane"
+
+[labels.pl.model.email_marketing_campaign.field.state.options]
+draft = "Wersja robocza"
+scheduled = "Zaplanowane"
+sent = "Wysłane"
+cancelled = "Anulowane"
+
+[labels.pl.model.email_marketing_campaign.action.schedule]
+label = "Zaplanuj"
+description = "Kolejkuje kampanię na zaplanowany dzień"
+
+[labels.pl.model.email_marketing_campaign.action.send]
+label = "Wyślij"
+description = "Wysyła zaplanowaną kampanię do całej listy (tylko kierownik)"
+
+[labels.pl.model.email_marketing_campaign.action.send_now]
+label = "Wyślij teraz"
+description = "Wysyła roboczą kampanię natychmiast (tylko kierownik)"
+
+[labels.pl.model.email_marketing_campaign.action.unschedule]
+label = "Cofnij planowanie"
+description = "Przywraca zaplanowaną kampanię do wersji roboczej"
+
+[labels.pl.model.email_marketing_campaign.action.cancel]
+label = "Anuluj"
+description = "Anuluje zaplanowaną kampanię"

@@ -1,0 +1,65 @@
+[labels.fr.module]
+name = "Connaissances"
+description = "Un wiki : des articles organisés en arborescence grâce à un article parent, avec un flux brouillon, publié, archivé, un réglage de visibilité et des étiquettes. La visibilité est une indication pour l’interface et pour les personnes, à respecter ; la plateforme n’a pas encore de droits au niveau de la ligne, donc toute personne appartenant aux groupes Connaissances peut lire chaque article."
+
+[labels.fr.model.knowledge_article]
+name = "Article"
+description = "Un article de la base de connaissances"
+
+[labels.fr.model.knowledge_article.field.title]
+label = "Titre"
+description = "Titre de l’article"
+
+[labels.fr.model.knowledge_article.field.parent_id]
+label = "Parent"
+description = "L’article sous lequel celui-ci est imbriqué ; vide pour un article de premier niveau"
+
+[labels.fr.model.knowledge_article.field.body]
+label = "Contenu"
+description = "Contenu de l’article (Markdown)"
+
+[labels.fr.model.knowledge_article.field.visibility]
+label = "Visibilité"
+description = "À qui l’article est destiné : privé, espace de travail, public"
+
+[labels.fr.model.knowledge_article.field.visibility.options]
+private = "Privé"
+workspace = "Espace de travail"
+public = "Public"
+
+[labels.fr.model.knowledge_article.field.tags]
+label = "Étiquettes"
+description = "Étiquettes séparées par des virgules, par exemple integration,rh"
+
+[labels.fr.model.knowledge_article.field.author_name]
+label = "Nom de l’auteur"
+description = "Nom de l’auteur"
+
+[labels.fr.model.knowledge_article.field.sequence]
+label = "Séquence"
+description = "Ordre parmi les articles de même niveau, le plus petit d’abord"
+
+[labels.fr.model.knowledge_article.field.published_on]
+label = "Publié le"
+description = "Jour où l’article a été publié (YYYY-MM-DD)"
+
+[labels.fr.model.knowledge_article.field.state]
+label = "Statut"
+description = "Statut de l’article : brouillon, publié, archivé"
+
+[labels.fr.model.knowledge_article.field.state.options]
+draft = "Brouillon"
+published = "Publié"
+archived = "Archivé"
+
+[labels.fr.model.knowledge_article.action.publish]
+label = "Publier"
+description = "Publie l’article (responsable uniquement)"
+
+[labels.fr.model.knowledge_article.action.unpublish]
+label = "Dépublier"
+description = "Remet l’article en brouillon"
+
+[labels.fr.model.knowledge_article.action.archive]
+label = "Archiver"
+description = "Archive un article devenu obsolète"

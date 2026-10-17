@@ -1,0 +1,119 @@
+[labels.fi.module]
+name = "Varastonhallinta"
+description = "Varastot, varastopaikat, varastosaldot ja varastosiirrot. Ihmiset syöttävät ja vahvistavat määrät; siirrot eivät päivitä niitä automaattisesti."
+
+[labels.fi.model.inventory_warehouse]
+name = "Varasto"
+description = "Rakennus tai toimipaikka, jossa tavaraa säilytetään"
+
+[labels.fi.model.inventory_warehouse.field.name]
+label = "Nimi"
+description = "Varaston nimi"
+
+[labels.fi.model.inventory_warehouse.field.code]
+label = "Koodi"
+description = "Asiakirjoihin tulostettava lyhyt koodi, esimerkiksi VARASTO1"
+
+[labels.fi.model.inventory_warehouse.field.address]
+label = "Osoite"
+description = "Toimipaikan postiosoite"
+
+[labels.fi.model.inventory_warehouse.field.active]
+label = "Aktiivinen"
+description = "Onko varasto käytössä"
+
+[labels.fi.model.inventory_location]
+name = "Sijainti"
+description = "Varaston sisäinen paikka, jossa tavaraa voi olla"
+
+[labels.fi.model.inventory_location.field.name]
+label = "Nimi"
+description = "Varastopaikan nimi, esimerkiksi Hylly A3"
+
+[labels.fi.model.inventory_location.field.warehouse_id]
+label = "Varasto"
+description = "Varasto, johon paikka kuuluu"
+
+[labels.fi.model.inventory_location.field.kind]
+label = "Laji"
+description = "Paikan käyttötarkoitus: sisäinen, vastaanotto, lähetys, kuljetus, romutus"
+
+[labels.fi.model.inventory_location.field.kind.options]
+internal = "Sisäinen"
+receiving = "Vastaanotto"
+shipping = "Lähetys"
+transit = "Kuljetus"
+scrap = "Romutus"
+
+[labels.fi.model.inventory_location.field.active]
+label = "Aktiivinen"
+description = "Onko varastopaikka käytössä"
+
+[labels.fi.model.inventory_item]
+name = "Varastosaldo"
+description = "Yhden tuotteen määrä yhdessä varastopaikassa"
+
+[labels.fi.model.inventory_item.field.product_id]
+label = "Tuote"
+description = "Varastoitu tuote"
+
+[labels.fi.model.inventory_item.field.location_id]
+label = "Sijainti"
+description = "Missä tuotetta säilytetään"
+
+[labels.fi.model.inventory_item.field.quantity]
+label = "Määrä"
+description = "Käsillä olevat yksiköt"
+
+[labels.fi.model.inventory_item.field.reorder_level]
+label = "Tilauspiste"
+description = "Määrä, jolla tai jonka alle mentäessä tuotetta pitää täydentää"
+
+[labels.fi.model.inventory_item.field.lot]
+label = "Erä"
+description = "Erän tai eränumero, jos sitä seurataan"
+
+[labels.fi.model.inventory_move]
+name = "Varastosiirto"
+description = "Tuotteen siirto varastopaikkojen välillä tai yritykseen tai sieltä pois"
+
+[labels.fi.model.inventory_move.field.reference]
+label = "Viite"
+description = "Siirron viite, esimerkiksi toimitus- tai vastaanottonumero"
+
+[labels.fi.model.inventory_move.field.product_id]
+label = "Tuote"
+description = "Siirretty tuote"
+
+[labels.fi.model.inventory_move.field.from_location_id]
+label = "Lähtösijainti"
+description = "Mistä tuote lähtee; tyhjä toimittajalta tulevassa vastaanotossa"
+
+[labels.fi.model.inventory_move.field.to_location_id]
+label = "Kohdesijainti"
+description = "Minne tuote saapuu; tyhjä asiakkaalle menevässä toimituksessa"
+
+[labels.fi.model.inventory_move.field.quantity]
+label = "Määrä"
+description = "Siirretyt yksiköt"
+
+[labels.fi.model.inventory_move.field.scheduled_on]
+label = "Ajoitettu päivä"
+description = "Päivä, jolle siirto on suunniteltu (YYYY-MM-DD)"
+
+[labels.fi.model.inventory_move.field.state]
+label = "Tila"
+description = "Siirron tila: luonnos, valmis, peruutettu"
+
+[labels.fi.model.inventory_move.field.state.options]
+draft = "Luonnos"
+done = "Valmis"
+cancelled = "Peruutettu"
+
+[labels.fi.model.inventory_move.action.validate]
+label = "Vahvista"
+description = "Vahvista, että tavara todella siirtyi; valmista siirtoa ei voi perua"
+
+[labels.fi.model.inventory_move.action.cancel]
+label = "Peruuta"
+description = "Peruuta luonnossiirto"

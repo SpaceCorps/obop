@@ -1,0 +1,204 @@
+[labels.fr.module]
+name = "Point de vente"
+description = "Caisses de magasin : configuration de point de vente, sessions avec contrôle de caisse, commandes avec lignes et paiements par mode. Un remboursement et la clôture d’une session exigent l’approbation d’un responsable ; les agents peuvent seulement les proposer. Totaux et écarts de caisse sont saisis, pas calculés. Ne stockez jamais de numéro de carte. Nécessite le package Produits."
+
+[labels.fr.model.pos_config]
+name = "Configuration"
+description = "Un point de vente (une caisse ou un magasin) et ses règles"
+
+[labels.fr.model.pos_config.field.name]
+label = "Nom"
+description = "Nom de la caisse ou du magasin, par exemple Boutique de la rue principale"
+
+[labels.fr.model.pos_config.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217, par exemple EUR"
+
+[labels.fr.model.pos_config.field.receipt_header]
+label = "En-tête du ticket"
+description = "Texte imprimé en haut des tickets"
+
+[labels.fr.model.pos_config.field.cash_control]
+label = "Contrôle de caisse"
+description = "Indique si les sessions doivent compter l’argent du tiroir-caisse à l’ouverture et à la clôture"
+
+[labels.fr.model.pos_config.field.default_opening_cash]
+label = "Fond de caisse par défaut"
+description = "Espèces normalement laissées dans le tiroir pendant la nuit (plus petite unité monétaire)"
+
+[labels.fr.model.pos_config.field.allow_refunds]
+label = "Autoriser les remboursements"
+description = "Indique si les caissiers peuvent proposer des remboursements à ce point de vente"
+
+[labels.fr.model.pos_config.field.active]
+label = "Actif"
+description = "Indique si le point de vente est utilisé"
+
+[labels.fr.model.pos_session]
+name = "Session"
+description = "Une période de vente à un point de vente, de l’ouverture à la fermeture du tiroir-caisse"
+
+[labels.fr.model.pos_session.field.config_id]
+label = "Configuration"
+description = "Le point de vente auquel appartient la session"
+
+[labels.fr.model.pos_session.field.cashier]
+label = "Caissier"
+description = "Nom du caissier qui a ouvert la session"
+
+[labels.fr.model.pos_session.field.opened_on]
+label = "Ouvert le"
+description = "Jour d’ouverture de la session (YYYY-MM-DD)"
+
+[labels.fr.model.pos_session.field.closed_on]
+label = "Date de clôture"
+description = "Jour de clôture de la session (YYYY-MM-DD)"
+
+[labels.fr.model.pos_session.field.opening_cash]
+label = "Fond de caisse"
+description = "Espèces comptées dans le tiroir à l’ouverture (plus petite unité monétaire)"
+
+[labels.fr.model.pos_session.field.expected_cash]
+label = "Caisse théorique"
+description = "Espèces que le tiroir devrait contenir à la clôture : fond de caisse plus paiements en espèces (saisi, pas calculé)"
+
+[labels.fr.model.pos_session.field.closing_cash]
+label = "Caisse à la clôture"
+description = "Espèces réellement comptées dans le tiroir à la clôture"
+
+[labels.fr.model.pos_session.field.cash_difference]
+label = "Écart de caisse"
+description = "Caisse à la clôture moins caisse théorique ; négatif signifie qu’il manque de l’argent"
+
+[labels.fr.model.pos_session.field.note]
+label = "Note"
+description = "Explication d’un éventuel écart de caisse"
+
+[labels.fr.model.pos_session.field.state]
+label = "Statut"
+description = "Statut de la session : ouverte, clôturée"
+
+[labels.fr.model.pos_session.field.state.options]
+open = "Ouverte"
+closed = "Clôturée"
+
+[labels.fr.model.pos_session.action.close]
+label = "Clôturer"
+description = "Clôture la session une fois le tiroir compté (responsable uniquement)"
+
+[labels.fr.model.pos_order]
+name = "Commande"
+description = "Une vente enregistrée à un point de vente"
+
+[labels.fr.model.pos_order.field.session_id]
+label = "Session"
+description = "La session pendant laquelle la vente a été faite"
+
+[labels.fr.model.pos_order.field.receipt_number]
+label = "Numéro de ticket"
+description = "Numéro imprimé sur le ticket. Texte libre : les packages ne peuvent pas générer de séquences"
+
+[labels.fr.model.pos_order.field.ordered_on]
+label = "Commandé le"
+description = "Jour de la vente (YYYY-MM-DD)"
+
+[labels.fr.model.pos_order.field.customer_id]
+label = "Client"
+description = "Le client, lorsqu’il a été identifié"
+
+[labels.fr.model.pos_order.field.tax_total]
+label = "Total des taxes"
+description = "Taxes comprises dans le total (plus petite unité monétaire)"
+
+[labels.fr.model.pos_order.field.total]
+label = "Total"
+description = "Total payé par le client toutes taxes comprises (plus petite unité monétaire, saisi et non calculé)"
+
+[labels.fr.model.pos_order.field.note]
+label = "Note"
+description = "Remarque sur la vente"
+
+[labels.fr.model.pos_order.field.state]
+label = "Statut"
+description = "Statut de la vente : brouillon, payée, remboursée, annulée"
+
+[labels.fr.model.pos_order.field.state.options]
+draft = "Brouillon"
+paid = "Payée"
+refunded = "Remboursée"
+cancelled = "Annulée"
+
+[labels.fr.model.pos_order.action.pay]
+label = "Payer"
+description = "La vente est entièrement payée"
+
+[labels.fr.model.pos_order.action.cancel]
+label = "Annuler"
+description = "Annule une vente qui n’a jamais été payée"
+
+[labels.fr.model.pos_order.action.refund]
+label = "Rembourser"
+description = "Rembourse une vente payée au client (responsable uniquement)"
+
+[labels.fr.model.pos_order_line]
+name = "Ligne de commande"
+description = "Une ligne de produit d’une vente"
+
+[labels.fr.model.pos_order_line.field.order_id]
+label = "Commande"
+description = "La vente à laquelle appartient la ligne"
+
+[labels.fr.model.pos_order_line.field.product_id]
+label = "Produit"
+description = "Le produit vendu"
+
+[labels.fr.model.pos_order_line.field.description]
+label = "Description"
+description = "Texte affiché sur le ticket"
+
+[labels.fr.model.pos_order_line.field.quantity]
+label = "Quantité"
+description = "Unités vendues"
+
+[labels.fr.model.pos_order_line.field.unit_price]
+label = "Prix unitaire"
+description = "Prix par unité toutes taxes comprises (plus petite unité monétaire)"
+
+[labels.fr.model.pos_order_line.field.discount_bp]
+label = "Remise (pb)"
+description = "Remise en points de base : 1000 correspond à 10,00 %"
+
+[labels.fr.model.pos_order_line.field.subtotal]
+label = "Sous-total"
+description = "Total de la ligne après remise (plus petite unité monétaire, saisi et non calculé)"
+
+[labels.fr.model.pos_payment]
+name = "Paiement"
+description = "Un paiement reçu pour une vente ; une vente peut être réglée avec plusieurs modes de paiement"
+
+[labels.fr.model.pos_payment.field.order_id]
+label = "Commande"
+description = "La vente concernée par le paiement"
+
+[labels.fr.model.pos_payment.field.method]
+label = "Méthode"
+description = "Mode de paiement du client : espèces, carte, virement bancaire, bon d’achat, autre"
+
+[labels.fr.model.pos_payment.field.method.options]
+cash = "Espèces"
+card = "Carte"
+bank_transfer = "Virement bancaire"
+voucher = "Bon d’achat"
+other = "Autre"
+
+[labels.fr.model.pos_payment.field.amount]
+label = "Montant"
+description = "Montant payé avec ce mode de paiement (plus petite unité monétaire)"
+
+[labels.fr.model.pos_payment.field.paid_on]
+label = "Payé le"
+description = "Jour du paiement (YYYY-MM-DD)"
+
+[labels.fr.model.pos_payment.field.provider_reference]
+label = "Référence du prestataire"
+description = "Référence du terminal de paiement ou du prestataire de paiement ; jamais un numéro de carte"

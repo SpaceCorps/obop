@@ -1,0 +1,39 @@
+[labels.sv.module]
+name = "Försäljning"
+
+[labels.sv.model.sale_order]
+name = "Försäljningsorder"
+description = "En offert eller bekräftad order till en kund"
+
+[labels.sv.model.sale_order.field.party_id]
+label = "Part"
+description = "Kundens part-id"
+
+[labels.sv.model.sale_order.field.state]
+label = "Status"
+description = "Livscykel: utkast, bekräftad eller annullerad"
+
+[labels.sv.model.sale_order.field.state.options]
+draft = "Utkast"
+confirmed = "Bekräftad"
+cancelled = "Annullerad"
+
+[labels.sv.model.sale_order.field.total_minor]
+label = "Totalt"
+description = "Orderns totalbelopp i valutans minsta enhet"
+
+[labels.sv.model.sale_order.field.currency]
+label = "Valuta"
+description = "Valutakod enligt ISO 4217"
+
+[labels.sv.model.sale_order.action.confirm]
+label = "Bekräfta"
+description = "Bekräfta en order i utkast"
+
+[labels.sv.model.sale_order.action.cancel]
+label = "Annullera"
+description = "Annullera en order"
+
+[labels.sv.model.sale_order.action.reset_to_draft]
+label = "Återställ till utkast"
+description = "Sätt en annullerad order tillbaka till utkast"

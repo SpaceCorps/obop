@@ -1,0 +1,119 @@
+[labels.pl.module]
+name = "Magazyn"
+description = "Magazyny, lokalizacje magazynowe, stany magazynowe i operacje magazynowe. Ilości wprowadzają i zatwierdzają ludzie; operacje nie aktualizują ich automatycznie."
+
+[labels.pl.model.inventory_warehouse]
+name = "Magazyn"
+description = "Budynek lub miejsce, w którym przechowywane są towary"
+
+[labels.pl.model.inventory_warehouse.field.name]
+label = "Nazwa"
+description = "Nazwa magazynu"
+
+[labels.pl.model.inventory_warehouse.field.code]
+label = "Kod"
+description = "Krótki kod drukowany na dokumentach, na przykład WH1"
+
+[labels.pl.model.inventory_warehouse.field.address]
+label = "Adres"
+description = "Adres pocztowy obiektu"
+
+[labels.pl.model.inventory_warehouse.field.active]
+label = "Aktywny"
+description = "Czy magazyn jest używany"
+
+[labels.pl.model.inventory_location]
+name = "Lokalizacja"
+description = "Miejsce wewnątrz magazynu, w którym mogą znajdować się towary"
+
+[labels.pl.model.inventory_location.field.name]
+label = "Nazwa"
+description = "Nazwa lokalizacji, na przykład Regał A3"
+
+[labels.pl.model.inventory_location.field.warehouse_id]
+label = "Magazyn"
+description = "Magazyn, do którego należy lokalizacja"
+
+[labels.pl.model.inventory_location.field.kind]
+label = "Rodzaj"
+description = "Do czego służy lokalizacja: wewnętrzna, przyjęcie, wysyłka, tranzyt, złom"
+
+[labels.pl.model.inventory_location.field.kind.options]
+internal = "Wewnętrzne"
+receiving = "Przyjęcie"
+shipping = "Wysyłka"
+transit = "Tranzyt"
+scrap = "Złom"
+
+[labels.pl.model.inventory_location.field.active]
+label = "Aktywny"
+description = "Czy lokalizacja jest używana"
+
+[labels.pl.model.inventory_item]
+name = "Stan magazynowy"
+description = "Ilość jednego produktu przechowywana w jednej lokalizacji"
+
+[labels.pl.model.inventory_item.field.product_id]
+label = "Produkt"
+description = "Przechowywany produkt"
+
+[labels.pl.model.inventory_item.field.location_id]
+label = "Lokalizacja"
+description = "Gdzie jest przechowywany"
+
+[labels.pl.model.inventory_item.field.quantity]
+label = "Ilość"
+description = "Liczba sztuk na stanie"
+
+[labels.pl.model.inventory_item.field.reorder_level]
+label = "Minimalny stan"
+description = "Ilość, przy której lub poniżej której należy uzupełnić zapas produktu"
+
+[labels.pl.model.inventory_item.field.lot]
+label = "Partia"
+description = "Numer partii, jeśli jest śledzona"
+
+[labels.pl.model.inventory_move]
+name = "Operacja magazynowa"
+description = "Przemieszczenie produktu między lokalizacjami albo do firmy lub z firmy"
+
+[labels.pl.model.inventory_move.field.reference]
+label = "Referencja"
+description = "Referencja operacji, na przykład numer dostawy lub przyjęcia"
+
+[labels.pl.model.inventory_move.field.product_id]
+label = "Produkt"
+description = "Przemieszczany produkt"
+
+[labels.pl.model.inventory_move.field.from_location_id]
+label = "Lokalizacja źródłowa"
+description = "Skąd towar wychodzi; puste przy przyjęciu od dostawcy"
+
+[labels.pl.model.inventory_move.field.to_location_id]
+label = "Lokalizacja docelowa"
+description = "Dokąd towar trafia; puste przy dostawie do klienta"
+
+[labels.pl.model.inventory_move.field.quantity]
+label = "Ilość"
+description = "Liczba przemieszczonych sztuk"
+
+[labels.pl.model.inventory_move.field.scheduled_on]
+label = "Data planowana"
+description = "Data, na którą zaplanowano operację (YYYY-MM-DD)"
+
+[labels.pl.model.inventory_move.field.state]
+label = "Status"
+description = "Status operacji: wersja robocza, wykonane, anulowane"
+
+[labels.pl.model.inventory_move.field.state.options]
+draft = "Wersja robocza"
+done = "Wykonane"
+cancelled = "Anulowane"
+
+[labels.pl.model.inventory_move.action.validate]
+label = "Zrealizuj"
+description = "Potwierdza, że towar faktycznie został przemieszczony; wykonanej operacji nie można cofnąć"
+
+[labels.pl.model.inventory_move.action.cancel]
+label = "Anuluj"
+description = "Anuluje roboczą operację"

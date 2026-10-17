@@ -1,0 +1,48 @@
+[labels.pl.module]
+name = "CRM"
+
+[labels.pl.model.lead]
+name = "Lead"
+description = "Potencjalna transakcja z kontaktem"
+
+[labels.pl.model.lead.field.title]
+label = "Tytuł"
+description = "Krótki opis szansy sprzedaży"
+
+[labels.pl.model.lead.field.contact_name]
+label = "Osoba kontaktowa"
+description = "Imię i nazwisko osoby kontaktowej"
+
+[labels.pl.model.lead.field.contact_email]
+label = "E-mail kontaktowy"
+description = "Adres e-mail osoby kontaktowej"
+
+[labels.pl.model.lead.field.expected_revenue_minor]
+label = "Oczekiwany przychód"
+description = "Oczekiwany przychód w jednostkach podrzędnych waluty (np. grosze)"
+
+[labels.pl.model.lead.field.stage]
+label = "Etap"
+description = "Etap lejka sprzedaży: nowe, zakwalifikowane, wygrane lub przegrane"
+
+[labels.pl.model.lead.field.stage.options]
+new = "Nowe"
+qualified = "Zakwalifikowane"
+won = "Wygrane"
+lost = "Przegrane"
+
+[labels.pl.model.lead.action.qualify]
+label = "Zakwalifikuj"
+description = "Przenosi nowy lead do etapu zakwalifikowanych"
+
+[labels.pl.model.lead.action.mark_won]
+label = "Oznacz jako wygrane"
+description = "Przenosi lead do etapu wygranych"
+
+[labels.pl.model.lead.action.mark_lost]
+label = "Oznacz jako przegrane"
+description = "Przenosi lead do etapu przegranych"
+
+[labels.pl.model.lead.action.reopen]
+label = "Otwórz ponownie"
+description = "Przenosi lead z powrotem do etapu nowych"

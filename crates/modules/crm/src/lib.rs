@@ -5,7 +5,7 @@ use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
 use obop_types::DataClass::*;
 
 pub fn module() -> Module {
-    Module {
+    let m = Module {
         id: "crm".into(),
         name: "CRM".into(),
         models: vec![ModelDef {
@@ -69,7 +69,17 @@ pub fn module() -> Module {
             ],
         }],
         network_destinations: vec![],
-    }
+        description: String::new(),
+        translations: Default::default(),
+    };
+    m.translated(&[
+        include_str!("../../../../packages/labels/de/crm.toml"),
+        include_str!("../../../../packages/labels/fr/crm.toml"),
+        include_str!("../../../../packages/labels/pl/crm.toml"),
+        include_str!("../../../../packages/labels/fi/crm.toml"),
+        include_str!("../../../../packages/labels/sv/crm.toml"),
+        include_str!("../../../../packages/labels/es/crm.toml"),
+    ])
 }
 
 pub fn register(d: &Dispatcher, store: &Store) {

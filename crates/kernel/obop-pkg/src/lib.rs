@@ -2,6 +2,7 @@
 //! marketplace, and the admin commands that drive them.
 
 pub mod check;
+pub mod files;
 pub mod installer;
 pub mod manifest;
 pub mod marketplace;

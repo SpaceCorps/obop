@@ -1,0 +1,35 @@
+[labels.fr.module]
+name = "Facturation"
+
+[labels.fr.model.invoice]
+name = "Facture"
+description = "Une facture client ; une facture comptabilisée ne se corrige que par un avoir"
+
+[labels.fr.model.invoice.field.sale_order_id]
+label = "Commande client"
+description = "Identifiant de la commande client d’origine"
+
+[labels.fr.model.invoice.field.state]
+label = "Statut"
+description = "Cycle de vie : brouillon, comptabilisée ou annulée"
+
+[labels.fr.model.invoice.field.state.options]
+draft = "Brouillon"
+posted = "Comptabilisée"
+cancelled = "Annulée"
+
+[labels.fr.model.invoice.field.total_minor]
+label = "Total"
+description = "Total de la facture en plus petite unité monétaire"
+
+[labels.fr.model.invoice.field.number]
+label = "Numéro"
+description = "Numéro légal sans rupture de séquence, attribué à la comptabilisation"
+
+[labels.fr.model.invoice.action.post]
+label = "Comptabiliser"
+description = "Comptabilise une facture en brouillon et lui attribue son numéro légal"
+
+[labels.fr.model.invoice.action.cancel]
+label = "Annuler"
+description = "Annule une facture en brouillon"

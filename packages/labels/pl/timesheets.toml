@@ -1,0 +1,56 @@
+[labels.pl.module]
+name = "Ewidencja czasu pracy"
+description = "Czas poświęcony na zadania projektowe, wpisywany w minutach, ze znacznikiem do fakturowania i krokiem zatwierdzenia. Wymaga pakietu Projekty."
+
+[labels.pl.model.timesheets_entry]
+name = "Wpis"
+description = "Czas, który jedna osoba poświęciła na jedno zadanie w jednym dniu"
+
+[labels.pl.model.timesheets_entry.field.task_id]
+label = "Zadanie"
+description = "Zadanie, nad którym pracowano"
+
+[labels.pl.model.timesheets_entry.field.worker]
+label = "Wykonawca"
+description = "Imię i nazwisko osoby, która wykonała pracę"
+
+[labels.pl.model.timesheets_entry.field.worked_on]
+label = "Data pracy"
+description = "Dzień wykonania pracy (YYYY-MM-DD)"
+
+[labels.pl.model.timesheets_entry.field.minutes]
+label = "Minuty"
+description = "Poświęcony czas w minutach"
+
+[labels.pl.model.timesheets_entry.field.billable]
+label = "Do fakturowania"
+description = "Czy czas można przypisać do rozliczenia z klientem"
+
+[labels.pl.model.timesheets_entry.field.description]
+label = "Opis"
+description = "Co zostało zrobione"
+
+[labels.pl.model.timesheets_entry.field.cost_rate]
+label = "Stawka kosztowa"
+description = "Wewnętrzny koszt godziny pracy wykonawcy w chwili wpisu (w jednostkach podrzędnych waluty, np. groszach)"
+
+[labels.pl.model.timesheets_entry.field.state]
+label = "Status"
+description = "Status wpisu: wersja robocza, przesłane, zatwierdzone"
+
+[labels.pl.model.timesheets_entry.field.state.options]
+draft = "Wersja robocza"
+submitted = "Przesłane"
+approved = "Zatwierdzone"
+
+[labels.pl.model.timesheets_entry.action.submit]
+label = "Prześlij"
+description = "Przesyła wpis do zatwierdzenia"
+
+[labels.pl.model.timesheets_entry.action.approve]
+label = "Zatwierdź"
+description = "Zatwierdza przesłany wpis, aby można go było rozliczyć (tylko kierownik)"
+
+[labels.pl.model.timesheets_entry.action.reject]
+label = "Zwróć do poprawy"
+description = "Zwraca przesłany wpis do wersji roboczej (tylko kierownik)"

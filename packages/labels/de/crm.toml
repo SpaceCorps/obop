@@ -1,0 +1,48 @@
+[labels.de.module]
+name = "CRM"
+
+[labels.de.model.lead]
+name = "Lead"
+description = "Ein potenzielles Geschäft mit einem Kontakt"
+
+[labels.de.model.lead.field.title]
+label = "Titel"
+description = "Kurzbeschreibung der Verkaufschance"
+
+[labels.de.model.lead.field.contact_name]
+label = "Kontaktname"
+description = "Name der Kontaktperson"
+
+[labels.de.model.lead.field.contact_email]
+label = "Kontakt-E-Mail"
+description = "E-Mail-Adresse der Kontaktperson"
+
+[labels.de.model.lead.field.expected_revenue_minor]
+label = "Erwarteter Umsatz"
+description = "Erwarteter Umsatz in der kleinsten Währungseinheit"
+
+[labels.de.model.lead.field.stage]
+label = "Phase"
+description = "Phase in der Pipeline: neu, qualifiziert, gewonnen oder verloren"
+
+[labels.de.model.lead.field.stage.options]
+new = "Neu"
+qualified = "Qualifiziert"
+won = "Gewonnen"
+lost = "Verloren"
+
+[labels.de.model.lead.action.qualify]
+label = "Qualifizieren"
+description = "Einen neuen Lead in die Phase „Qualifiziert“ verschieben"
+
+[labels.de.model.lead.action.mark_won]
+label = "Als gewonnen markieren"
+description = "Den Lead in die Phase „Gewonnen“ verschieben"
+
+[labels.de.model.lead.action.mark_lost]
+label = "Als verloren markieren"
+description = "Den Lead in die Phase „Verloren“ verschieben"
+
+[labels.de.model.lead.action.reopen]
+label = "Wieder öffnen"
+description = "Den Lead zurück in die Phase „Neu“ verschieben"

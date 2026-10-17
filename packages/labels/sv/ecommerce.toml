@@ -1,0 +1,341 @@
+[labels.sv.module]
+name = "E-handel"
+description = "En webbutik: kategorier, butiksartiklar med översättningar, leveranssätt, rabattkoder och webborder med rader. Besökare kan lägga order utan konto; servern prissätter varje order utifrån den publicerade artikeln. Ingen betaltjänst ingår: en order börjar som väntande. Återbetalningar kräver en chefs godkännande; agenter får bara föreslå dem. Kräver paketet Produkter."
+
+[labels.sv.model.ecommerce_category]
+name = "Kategori"
+description = "En grupp av artiklar som visas tillsammans i butiken"
+
+[labels.sv.model.ecommerce_category.field.name]
+label = "Namn"
+description = "Kategorinamn som visas i butiken"
+
+[labels.sv.model.ecommerce_category.field.slug]
+label = "URL-slug"
+description = "Kategorins del av webbadressen, gemener med bindestreck"
+
+[labels.sv.model.ecommerce_category.field.description]
+label = "Beskrivning"
+description = "Kort text om kategorin"
+
+[labels.sv.model.ecommerce_category.field.sequence]
+label = "Ordningsföljd"
+description = "Ordning bland kategorierna, lägst först"
+
+[labels.sv.model.ecommerce_category.field.published]
+label = "Publicerad"
+description = "Om kategorin syns för kunderna"
+
+[labels.sv.model.ecommerce_listing]
+name = "Butiksartikel"
+description = "En produkt så som den visas i webbutiken"
+
+[labels.sv.model.ecommerce_listing.field.product_id]
+label = "Produkt"
+description = "Produkten som säljs online"
+
+[labels.sv.model.ecommerce_listing.field.title]
+label = "Titel"
+description = "Titeln som visas i butiken"
+
+[labels.sv.model.ecommerce_listing.field.slug]
+label = "URL-slug"
+description = "Produktsidans del av webbadressen, gemener med bindestreck"
+
+[labels.sv.model.ecommerce_listing.field.summary]
+label = "Sammanfattning"
+description = "En eller två meningar som visas på produktkorten"
+
+[labels.sv.model.ecommerce_listing.field.description]
+label = "Beskrivning"
+description = "Beskrivning som visas på produktsidan, i Markdown"
+
+[labels.sv.model.ecommerce_listing.field.category_id]
+label = "Kategori"
+description = "Kategorin som artikeln visas under"
+
+[labels.sv.model.ecommerce_listing.field.price]
+label = "Pris"
+description = "Butikspris inklusive skatt (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.ecommerce_listing.field.compare_at_price]
+label = "Jämförpris"
+description = "Tidigare pris som visas överstruket (valutans minsta enhet)"
+
+[labels.sv.model.ecommerce_listing.field.currency]
+label = "Valuta"
+description = "Valutakod enligt ISO 4217 för priserna, till exempel SEK; tomt betyder butikens valuta från instansens inställningar"
+
+[labels.sv.model.ecommerce_listing.field.sku]
+label = "Artikelnummer (SKU)"
+description = "Artikelnummer som visas på produktsidan"
+
+[labels.sv.model.ecommerce_listing.field.stock_policy]
+label = "Lagerpolicy"
+description = "Vad som händer när lagret är slut: always_available (alltid tillgänglig), block_when_out (spärra vid slut), allow_backorder (tillåt restorder)"
+
+[labels.sv.model.ecommerce_listing.field.stock_policy.options]
+always_available = "Alltid tillgänglig"
+block_when_out = "Spärra vid slut i lager"
+allow_backorder = "Tillåt restorder"
+
+[labels.sv.model.ecommerce_listing.field.stock_quantity]
+label = "Lagersaldo"
+description = "Antal enheter i lager, används med lagerpolicyn. Ordrar minskar det inte: justera det manuellt"
+
+[labels.sv.model.ecommerce_listing.field.published]
+label = "Publicerad"
+description = "Om artikeln syns för kunderna"
+
+[labels.sv.model.ecommerce_listing_translation]
+name = "Översättning av butiksartikel"
+description = "En butiksartikel översatt till ett annat språk"
+
+[labels.sv.model.ecommerce_listing_translation.field.listing_id]
+label = "Butiksartikel"
+description = "Artikeln som översättningen gäller"
+
+[labels.sv.model.ecommerce_listing_translation.field.lang]
+label = "Språk"
+description = "Översättningens språk: en, de, fr, pl, fi, sv eller es"
+
+[labels.sv.model.ecommerce_listing_translation.field.lang.options]
+en = "Engelska"
+de = "Tyska"
+fr = "Franska"
+pl = "Polska"
+fi = "Finska"
+sv = "Svenska"
+es = "Spanska"
+
+[labels.sv.model.ecommerce_listing_translation.field.title]
+label = "Titel"
+description = "Översatt titel"
+
+[labels.sv.model.ecommerce_listing_translation.field.summary]
+label = "Sammanfattning"
+description = "Översatt korttext"
+
+[labels.sv.model.ecommerce_listing_translation.field.description]
+label = "Beskrivning"
+description = "Översatt beskrivning i Markdown"
+
+[labels.sv.model.ecommerce_listing_translation.field.published]
+label = "Publicerad"
+description = "Om översättningen visas; den nås bara medan dess artikel är publicerad"
+
+[labels.sv.model.ecommerce_shipping_method]
+name = "Leveranssätt"
+description = "Ett sätt att leverera ordrar, med pris"
+
+[labels.sv.model.ecommerce_shipping_method.field.name]
+label = "Namn"
+description = "Namn som visas i kassan, till exempel Standardleverans"
+
+[labels.sv.model.ecommerce_shipping_method.field.carrier]
+label = "Transportör"
+description = "Transportören som levererar, till exempel DHL"
+
+[labels.sv.model.ecommerce_shipping_method.field.price]
+label = "Pris"
+description = "Leveranspris (valutans minsta enhet)"
+
+[labels.sv.model.ecommerce_shipping_method.field.free_over]
+label = "Fri frakt över"
+description = "Ordertotal över vilken leveransen är gratis (valutans minsta enhet); tomt betyder aldrig"
+
+[labels.sv.model.ecommerce_shipping_method.field.delivery_days]
+label = "Leveranstid (dagar)"
+description = "Vanligt antal dagar till leverans"
+
+[labels.sv.model.ecommerce_shipping_method.field.active]
+label = "Aktiv"
+description = "Om kunderna kan välja det"
+
+[labels.sv.model.ecommerce_discount_code]
+name = "Rabattkod"
+description = "En kod som kunden anger i kassan för att få avdrag"
+
+[labels.sv.model.ecommerce_discount_code.field.code]
+label = "Kod"
+description = "Koden som kunderna skriver in, till exempel VAR10"
+
+[labels.sv.model.ecommerce_discount_code.field.kind]
+label = "Typ"
+description = "Typ av avdrag: procent eller fast belopp"
+
+[labels.sv.model.ecommerce_discount_code.field.kind.options]
+percent = "Procent"
+fixed = "Fast belopp"
+
+[labels.sv.model.ecommerce_discount_code.field.value]
+label = "Värde"
+description = "Avdrag: baspunkter för procent (1000 är 10,00 procent), valutans minsta enhet för fast belopp"
+
+[labels.sv.model.ecommerce_discount_code.field.starts_on]
+label = "Börjar den"
+description = "Första dagen koden fungerar (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.ecommerce_discount_code.field.ends_on]
+label = "Slutar den"
+description = "Sista dagen koden fungerar (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.ecommerce_discount_code.field.max_uses]
+label = "Max antal användningar"
+description = "Hur många gånger koden får användas totalt; tomt betyder obegränsat"
+
+[labels.sv.model.ecommerce_discount_code.field.used_count]
+label = "Antal användningar"
+description = "Hur många gånger den har använts (uppdateras manuellt)"
+
+[labels.sv.model.ecommerce_discount_code.field.minimum_order]
+label = "Minsta ordervärde"
+description = "Minsta ordertotal som koden gäller för (valutans minsta enhet)"
+
+[labels.sv.model.ecommerce_discount_code.field.active]
+label = "Aktiv"
+description = "Om koden kan användas"
+
+[labels.sv.model.ecommerce_order]
+name = "Order"
+description = "En order som lagts online"
+
+[labels.sv.model.ecommerce_order.field.number]
+label = "Nummer"
+description = "Ordernummer som visas för kunden. Fritext: paket kan inte generera nummerserier; den publika kassan skapar ett slumpmässigt nummer"
+
+[labels.sv.model.ecommerce_order.field.customer_email]
+label = "Kundens e-post"
+description = "Kundens e-postadress"
+
+[labels.sv.model.ecommerce_order.field.customer_name]
+label = "Kundens namn"
+description = "Kundens namn"
+
+[labels.sv.model.ecommerce_order.field.customer_id]
+label = "Kund"
+description = "Motsvarande kontakt, när kunden är känd"
+
+[labels.sv.model.ecommerce_order.field.shipping_address]
+label = "Leveransadress"
+description = "Adress dit ordern levereras"
+
+[labels.sv.model.ecommerce_order.field.billing_address]
+label = "Fakturaadress"
+description = "Fakturaadress när den skiljer sig från leveransadressen"
+
+[labels.sv.model.ecommerce_order.field.shipping_method_id]
+label = "Leveranssätt"
+description = "Det valda leveranssättet"
+
+[labels.sv.model.ecommerce_order.field.discount_code_id]
+label = "Rabattkod"
+description = "Rabattkoden som användes, om någon"
+
+[labels.sv.model.ecommerce_order.field.placed_on]
+label = "Lagd den"
+description = "Dagen då ordern lades (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.ecommerce_order.field.currency]
+label = "Valuta"
+description = "Valutakod enligt ISO 4217, till exempel SEK"
+
+[labels.sv.model.ecommerce_order.field.subtotal]
+label = "Delsumma"
+description = "Summan av raderna (valutans minsta enhet, anges och beräknas inte)"
+
+[labels.sv.model.ecommerce_order.field.discount_total]
+label = "Rabatt totalt"
+description = "Avdrag från rabattkoden (valutans minsta enhet)"
+
+[labels.sv.model.ecommerce_order.field.shipping_total]
+label = "Frakt totalt"
+description = "Fraktavgift (valutans minsta enhet)"
+
+[labels.sv.model.ecommerce_order.field.tax_total]
+label = "Skatt totalt"
+description = "Skatt som ingår i totalbeloppet (valutans minsta enhet)"
+
+[labels.sv.model.ecommerce_order.field.total]
+label = "Totalt"
+description = "Belopp som kunden betalar (valutans minsta enhet)"
+
+[labels.sv.model.ecommerce_order.field.payment_reference]
+label = "Betalningsreferens"
+description = "Referens från betaltjänsten; aldrig ett kortnummer"
+
+[labels.sv.model.ecommerce_order.field.tracking_reference]
+label = "Spårningsnummer"
+description = "Transportörens spårningsnummer"
+
+[labels.sv.model.ecommerce_order.field.access_token]
+label = "Åtkomsttoken"
+description = "Hemlig länktoken som låter kunden som lade en publik order se bekräftelsesidan. Ingen kan läsa tillbaka den"
+
+[labels.sv.model.ecommerce_order.field.state]
+label = "Status"
+description = "Orderstatus: väntande, betald, skickad, levererad, annullerad, återbetald"
+
+[labels.sv.model.ecommerce_order.field.state.options]
+pending = "Väntande"
+paid = "Betald"
+shipped = "Skickad"
+delivered = "Levererad"
+cancelled = "Annullerad"
+refunded = "Återbetald"
+
+[labels.sv.model.ecommerce_order.action.mark_paid]
+label = "Markera som betald"
+description = "Betalningen har kommit in"
+
+[labels.sv.model.ecommerce_order.action.ship]
+label = "Skicka"
+description = "Paketet lämnades till transportören"
+
+[labels.sv.model.ecommerce_order.action.deliver]
+label = "Leverera"
+description = "Paketet nådde kunden"
+
+[labels.sv.model.ecommerce_order.action.cancel]
+label = "Annullera"
+description = "Annullera en order som aldrig betalades"
+
+[labels.sv.model.ecommerce_order.action.refund]
+label = "Återbetala"
+description = "Betala tillbaka en betald order som inte levererats (endast chef)"
+
+[labels.sv.model.ecommerce_order.action.refund_delivered]
+label = "Återbetala efter leverans"
+description = "Betala tillbaka en levererad order, till exempel efter en retur (endast chef)"
+
+[labels.sv.model.ecommerce_order_line]
+name = "Orderrad"
+description = "En produktrad i en webborder"
+
+[labels.sv.model.ecommerce_order_line.field.order_id]
+label = "Order"
+description = "Ordern som raden tillhör"
+
+[labels.sv.model.ecommerce_order_line.field.product_id]
+label = "Produkt"
+description = "Den beställda produkten"
+
+[labels.sv.model.ecommerce_order_line.field.listing_id]
+label = "Butiksartikel"
+description = "Butiksartikeln som raden beställdes från"
+
+[labels.sv.model.ecommerce_order_line.field.description]
+label = "Beskrivning"
+description = "Produkttext så som den var vid beställningen"
+
+[labels.sv.model.ecommerce_order_line.field.quantity]
+label = "Antal"
+description = "Antal beställda enheter"
+
+[labels.sv.model.ecommerce_order_line.field.unit_price]
+label = "Styckpris"
+description = "Pris per enhet inklusive skatt (valutans minsta enhet)"
+
+[labels.sv.model.ecommerce_order_line.field.subtotal]
+label = "Delsumma"
+description = "Radsumma (valutans minsta enhet, anges och beräknas inte)"

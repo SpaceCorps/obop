@@ -1,0 +1,26 @@
+[labels.de.module]
+name = "Kontakte"
+
+[labels.de.model.party]
+name = "Geschäftspartner"
+description = "Eine Person oder Organisation, mit der das Unternehmen Geschäfte macht"
+
+[labels.de.model.party.field.name]
+label = "Name"
+description = "Anzeigename"
+
+[labels.de.model.party.field.email]
+label = "E-Mail"
+description = "Geschäftliche E-Mail-Adresse"
+
+[labels.de.model.party.field.tax_id]
+label = "Steuer-ID"
+description = "Steuerliche Identifikationsnummer einer natürlichen Person"
+
+[labels.de.model.party.field.notes]
+label = "Notizen"
+description = "Interne Notizen als Freitext"
+
+[labels.de.model.party.action.erase]
+label = "Anonymisieren"
+description = "Den Geschäftspartner an Ort und Stelle anonymisieren und die Löschung protokollieren"

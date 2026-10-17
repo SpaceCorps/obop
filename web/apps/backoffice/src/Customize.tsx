@@ -28,6 +28,7 @@ import {
   Skeleton,
   Switch,
   Tabs,
+  describeFor,
   fmt,
   isPseudo,
   msg,
@@ -462,7 +463,7 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
 
 type Pkg = { id: string; name: string; version: string; description: string; source: string };
 
-function ModulesTab({ token, onModulesChanged, notify }: Props) {
+function ModulesTab({ token, modules, onModulesChanged, notify }: Props) {
   const [installed, setInstalled] = useState<Pkg[]>([]);
   const [market, setMarket] = useState<Pkg[]>([]);
   const refresh = useCallback(async () => {
@@ -488,6 +489,16 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
     onModulesChanged();
   }
   const have = new Set(installed.map((p) => p.id));
+  // An installed module brings its own names and descriptions per language (D52); a package that is
+  // only offered is shown from the client table and the English listing.
+  const titleOf = (p: Pkg) => {
+    const m = modules.find((x) => x.id === p.id);
+    return m ? appTitle(m) : appTitle(p);
+  };
+  const describe = (p: Pkg) => {
+    const m = modules.find((x) => x.id === p.id);
+    return (m && describeFor(m)) || p.description;
+  };
   return (
     <div className="stack gap-lg">
       <p className="hint">
@@ -508,8 +519,8 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
                 size={40}
               />
               <div>
-                <strong>{appTitle(p)}</strong>
-                <p className="hint">{p.description}</p>
+                <strong>{titleOf(p)}</strong>
+                <p className="hint">{describe(p)}</p>
               </div>
               <Button
                 variant={have.has(p.id) ? "secondary" : "primary"}
@@ -520,7 +531,7 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
                   act(
                     "marketplace_listing.install",
                     { id: p.id },
-                    t("Installed {name}", { name: appTitle(p) }),
+                    t("Installed {name}", { name: titleOf(p) }),
                   )
                 }
               >
@@ -535,8 +546,8 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
         <ul className="rows">
           {installed.map((p) => (
             <li key={p.id} className="row">
-              <strong>{appTitle(p)}</strong>
-              <span className="hint">{p.description}</span>
+              <strong>{titleOf(p)}</strong>
+              <span className="hint">{describe(p)}</span>
               <span className="grow" />
               <Chip>{p.source}</Chip>
               <span className="hint tabular">{p.version}</span>
@@ -544,11 +555,7 @@ function ModulesTab({ token, onModulesChanged, notify }: Props) {
                 <Button
                   size="sm"
                   onClick={() =>
-                    act(
-                      "module.uninstall",
-                      { id: p.id },
-                      t("Removed {name}", { name: appTitle(p) }),
-                    )
+                    act("module.uninstall", { id: p.id }, t("Removed {name}", { name: titleOf(p) }))
                   }
                 >
                   {t("Uninstall")}

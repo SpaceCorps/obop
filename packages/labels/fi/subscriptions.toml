@@ -1,0 +1,110 @@
+[labels.fi.module]
+name = "Kestotilaukset"
+description = "Toistuvat paketit ja asiakkaiden kestotilaukset kokeilu-, aktiivinen-, erääntynyt- ja peruutettu-kulussa. Kirjaa seuraavan laskun päivän; ei luo laskuja itsestään."
+
+[labels.fi.model.subscriptions_plan]
+name = "Paketti"
+description = "Toistuva tarjous, jonka asiakkaat voivat tilata"
+
+[labels.fi.model.subscriptions_plan.field.name]
+label = "Nimi"
+description = "Paketin nimi, esimerkiksi Tiimi vuosittain"
+
+[labels.fi.model.subscriptions_plan.field.code]
+label = "Koodi"
+description = "Paketin lyhyt koodi"
+
+[labels.fi.model.subscriptions_plan.field.interval]
+label = "Laskutusväli"
+description = "Kuinka usein asiakasta laskutetaan: kuukausittain, neljännesvuosittain, vuosittain"
+
+[labels.fi.model.subscriptions_plan.field.interval.options]
+monthly = "Kuukausittain"
+quarterly = "Neljännesvuosittain"
+yearly = "Vuosittain"
+
+[labels.fi.model.subscriptions_plan.field.price]
+label = "Hinta"
+description = "Vakiohinta laskutusvälille (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.subscriptions_plan.field.trial_days]
+label = "Kokeilupäivät"
+description = "Ilmaisen kokeilun pituus päivinä"
+
+[labels.fi.model.subscriptions_plan.field.active]
+label = "Aktiivinen"
+description = "Voivatko uudet asiakkaat valita paketin"
+
+[labels.fi.model.subscriptions_subscription]
+name = "Kestotilaus"
+description = "Asiakkaan toistuva tilaus pakettiin"
+
+[labels.fi.model.subscriptions_subscription.field.customer_id]
+label = "Asiakas"
+description = "Tilauksen tehnyt asiakas"
+
+[labels.fi.model.subscriptions_subscription.field.plan_id]
+label = "Paketti"
+description = "Tilattu paketti"
+
+[labels.fi.model.subscriptions_subscription.field.started_on]
+label = "Aloitettu"
+description = "Päivä, jona kestotilaus alkoi (YYYY-MM-DD)"
+
+[labels.fi.model.subscriptions_subscription.field.trial_ends_on]
+label = "Kokeilu päättyy"
+description = "Päivä, jona ilmainen kokeilu päättyy (YYYY-MM-DD)"
+
+[labels.fi.model.subscriptions_subscription.field.next_invoice_on]
+label = "Seuraava lasku"
+description = "Päivä, jona seuraava lasku erääntyy laskutettavaksi (YYYY-MM-DD)"
+
+[labels.fi.model.subscriptions_subscription.field.recurring_amount]
+label = "Toistuva summa"
+description = "Alennusten jälkeen joka jaksolla laskutettava summa (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.subscriptions_subscription.field.currency]
+label = "Valuutta"
+description = "ISO 4217 -valuuttakoodi, esimerkiksi EUR"
+
+[labels.fi.model.subscriptions_subscription.field.seats]
+label = "Käyttäjäpaikat"
+description = "Katettujen lisenssien tai käyttäjien määrä"
+
+[labels.fi.model.subscriptions_subscription.field.cancel_reason]
+label = "Peruutuksen syy"
+description = "Miksi asiakas peruutti"
+
+[labels.fi.model.subscriptions_subscription.field.state]
+label = "Tila"
+description = "Kestotilauksen tila: kokeilu, aktiivinen, erääntynyt, peruutettu"
+
+[labels.fi.model.subscriptions_subscription.field.state.options]
+trial = "Kokeilu"
+active = "Aktiivinen"
+past_due = "Erääntynyt"
+cancelled = "Peruutettu"
+
+[labels.fi.model.subscriptions_subscription.action.activate]
+label = "Aktivoi"
+description = "Aloita laskutus kokeilun päättyessä"
+
+[labels.fi.model.subscriptions_subscription.action.mark_past_due]
+label = "Merkitse erääntyneeksi"
+description = "Merkitse aktiivinen kestotilaus, jonka maksu epäonnistui"
+
+[labels.fi.model.subscriptions_subscription.action.recover]
+label = "Palauta voimaan"
+description = "Palauta erääntynyt kestotilaus aktiiviseksi maksun jälkeen"
+
+[labels.fi.model.subscriptions_subscription.action.cancel_trial]
+label = "Peruuta kokeilu"
+description = "Peruuta kestotilaus kokeilun aikana"
+
+[labels.fi.model.subscriptions_subscription.action.cancel]
+label = "Peruuta"
+description = "Peruuta aktiivinen kestotilaus"
+
+[labels.fi.model.subscriptions_subscription.action.cancel_overdue]
+label = "Peruuta erääntynyt"
+description = "Peruuta erääntynyt kestotilaus"

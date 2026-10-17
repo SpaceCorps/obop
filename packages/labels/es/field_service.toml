@@ -1,0 +1,140 @@
+[labels.es.module]
+name = "Servicio de campo"
+description = "Trabajos in situ para clientes, hechos por un técnico: programado, en camino, en curso, hecho o cancelado. Un trabajo registra el cliente, el lugar, el técnico, el día y la hora de inicio previstos (minutos desde la medianoche), las piezas usadas y si el cliente debe dar su conformidad. La dirección del lugar y los datos de contacto son datos personales. Requiere Recursos humanos y Productos."
+
+[labels.es.model.field_service_job]
+name = "Trabajo"
+description = "Un trabajo in situ para un cliente"
+
+[labels.es.model.field_service_job.field.name]
+label = "Nombre"
+description = "Título breve del trabajo, por ejemplo Cambiar la bomba de la caldera"
+
+[labels.es.model.field_service_job.field.customer_id]
+label = "Cliente"
+description = "El cliente para el que es el trabajo"
+
+[labels.es.model.field_service_job.field.site_name]
+label = "Nombre del emplazamiento"
+description = "Nombre del lugar, por ejemplo Almacén principal"
+
+[labels.es.model.field_service_job.field.site_address]
+label = "Dirección del emplazamiento"
+description = "Dirección donde se hace el trabajo; a menudo el domicilio de una persona"
+
+[labels.es.model.field_service_job.field.site_city]
+label = "Ciudad del emplazamiento"
+description = "Ciudad del lugar"
+
+[labels.es.model.field_service_job.field.site_postcode]
+label = "Código postal del emplazamiento"
+description = "Código postal del lugar"
+
+[labels.es.model.field_service_job.field.site_country]
+label = "País del emplazamiento"
+description = "País del lugar"
+
+[labels.es.model.field_service_job.field.site_contact_name]
+label = "Nombre del contacto en el emplazamiento"
+description = "Nombre de la persona con quien reunirse en el lugar"
+
+[labels.es.model.field_service_job.field.site_contact_phone]
+label = "Teléfono del contacto en el emplazamiento"
+description = "Teléfono de la persona con quien reunirse en el lugar"
+
+[labels.es.model.field_service_job.field.technician_id]
+label = "Técnico"
+description = "Técnico asignado al trabajo"
+
+[labels.es.model.field_service_job.field.priority]
+label = "Prioridad"
+description = "Urgencia del trabajo: baja, normal, alta, urgente"
+
+[labels.es.model.field_service_job.field.priority.options]
+low = "Baja"
+normal = "Normal"
+high = "Alta"
+urgent = "Urgente"
+
+[labels.es.model.field_service_job.field.description]
+label = "Descripción"
+description = "Qué hay que hacer y qué comunicó el cliente"
+
+[labels.es.model.field_service_job.field.scheduled_on]
+label = "Fecha programada"
+description = "Día previsto de la visita (YYYY-MM-DD)"
+
+[labels.es.model.field_service_job.field.scheduled_start_minute]
+label = "Minuto de inicio programado"
+description = "Inicio previsto en minutos desde la medianoche (540 son las 09:00)"
+
+[labels.es.model.field_service_job.field.planned_minutes]
+label = "Minutos planificados"
+description = "Duración prevista en minutos"
+
+[labels.es.model.field_service_job.field.signature_required]
+label = "Firma obligatoria"
+description = "Indica si el cliente debe dar su conformidad al trabajo antes de que se considere hecho"
+
+[labels.es.model.field_service_job.field.signed_by]
+label = "Firmado por"
+description = "Nombre de la persona que dio su conformidad al trabajo"
+
+[labels.es.model.field_service_job.field.signed_on]
+label = "Fecha de firma"
+description = "Día en que el cliente dio su conformidad (YYYY-MM-DD)"
+
+[labels.es.model.field_service_job.field.work_report]
+label = "Informe de trabajo"
+description = "Qué se hizo, redactado por el técnico"
+
+[labels.es.model.field_service_job.field.state]
+label = "Estado"
+description = "Estado del trabajo: programado, en camino, en curso, hecho, cancelado"
+
+[labels.es.model.field_service_job.field.state.options]
+scheduled = "Programado"
+en_route = "En camino"
+in_progress = "En curso"
+done = "Hecho"
+cancelled = "Cancelado"
+
+[labels.es.model.field_service_job.action.depart]
+label = "Ponerse en camino"
+description = "El técnico está de camino"
+
+[labels.es.model.field_service_job.action.start]
+label = "Iniciar"
+description = "El técnico ha llegado y ha empezado el trabajo"
+
+[labels.es.model.field_service_job.action.complete]
+label = "Completar"
+description = "Terminar el trabajo; si se requiere firma, registra antes quién firmó y cuándo"
+
+[labels.es.model.field_service_job.action.cancel]
+label = "Cancelar"
+description = "Cancelar un trabajo que no ha empezado"
+
+[labels.es.model.field_service_part]
+name = "Pieza"
+description = "Una pieza o producto usado en un trabajo"
+
+[labels.es.model.field_service_part.field.job_id]
+label = "Trabajo"
+description = "El trabajo en el que se usó la pieza"
+
+[labels.es.model.field_service_part.field.product_id]
+label = "Producto"
+description = "El producto que se usó"
+
+[labels.es.model.field_service_part.field.quantity]
+label = "Cantidad"
+description = "Cuántas unidades se usaron"
+
+[labels.es.model.field_service_part.field.unit_price]
+label = "Precio unitario"
+description = "Precio por unidad cobrado al cliente (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.field_service_part.field.note]
+label = "Nota"
+description = "Observación sobre la pieza, por ejemplo el número de serie"

@@ -1,0 +1,268 @@
+[labels.fr.module]
+name = "Site web"
+description = "Contenu d’un site web public : pages avec slug, menus, articles de blog, traductions et formulaires envoyés par les visiteurs. Avec le site public activé, le contenu publié est servi sans connexion ; seuls les champs publics sont visibles. La publication exige une approbation humaine ; les agents peuvent seulement la proposer. Les expéditeurs sont des données personnelles, jamais publiques."
+
+[labels.fr.model.website_page]
+name = "Page"
+description = "Une page du site web"
+
+[labels.fr.model.website_page.field.title]
+label = "Titre"
+description = "Titre de la page"
+
+[labels.fr.model.website_page.field.slug]
+label = "Slug"
+description = "Chemin d’URL de la page sans barre oblique aux extrémités, en minuscules avec des tirets, par exemple a-propos. La page dont le slug est home est la page d’accueil"
+
+[labels.fr.model.website_page.field.body]
+label = "Contenu"
+description = "Contenu de la page en Markdown (un sous-ensemble sûr : titres, listes, liens, emphase, code, citations, tableaux)"
+
+[labels.fr.model.website_page.field.seo_title]
+label = "Titre SEO"
+description = "Titre affiché dans les résultats de recherche ; vide signifie le titre de la page"
+
+[labels.fr.model.website_page.field.seo_description]
+label = "Description SEO"
+description = "Description affichée dans les résultats de recherche"
+
+[labels.fr.model.website_page.field.published_on]
+label = "Publié le"
+description = "Jour où la page est devenue publique (YYYY-MM-DD)"
+
+[labels.fr.model.website_page.field.state]
+label = "Statut"
+description = "Statut de la page : brouillon, publiée, archivée"
+
+[labels.fr.model.website_page.field.state.options]
+draft = "Brouillon"
+published = "Publiée"
+archived = "Archivée"
+
+[labels.fr.model.website_page.action.publish]
+label = "Publier"
+description = "Rend la page publique (responsable uniquement)"
+
+[labels.fr.model.website_page.action.unpublish]
+label = "Dépublier"
+description = "Met la page hors ligne et la remet en brouillon"
+
+[labels.fr.model.website_page.action.archive]
+label = "Archiver"
+description = "Retire définitivement une page publiée"
+
+[labels.fr.model.website_menu_item]
+name = "Élément de menu"
+description = "Une entrée de la navigation du site"
+
+[labels.fr.model.website_menu_item.field.label]
+label = "Libellé"
+description = "Texte affiché dans le menu"
+
+[labels.fr.model.website_menu_item.field.url]
+label = "URL"
+description = "Destination de l’entrée : un slug de page commençant par une barre oblique ou une adresse complète"
+
+[labels.fr.model.website_menu_item.field.parent_id]
+label = "Parent"
+description = "L’entrée sous laquelle celle-ci est imbriquée ; vide pour une entrée de premier niveau"
+
+[labels.fr.model.website_menu_item.field.sequence]
+label = "Séquence"
+description = "Ordre parmi les entrées de même niveau, le plus petit d’abord"
+
+[labels.fr.model.website_menu_item.field.visible]
+label = "Visible"
+description = "Indique si l’entrée est affichée"
+
+[labels.fr.model.website_menu_item.field.new_window]
+label = "Nouvelle fenêtre"
+description = "Indique si le lien s’ouvre dans une nouvelle fenêtre"
+
+[labels.fr.model.website_blog_post]
+name = "Article de blog"
+description = "Un article de blog"
+
+[labels.fr.model.website_blog_post.field.title]
+label = "Titre"
+description = "Titre de l’article"
+
+[labels.fr.model.website_blog_post.field.slug]
+label = "Slug"
+description = "Partie d’URL de l’article, en minuscules avec des tirets"
+
+[labels.fr.model.website_blog_post.field.author_name]
+label = "Nom de l’auteur"
+description = "Nom de l’auteur, pour les dossiers internes de l’équipe"
+
+[labels.fr.model.website_blog_post.field.byline]
+label = "Signature"
+description = "Ligne d’auteur affichée publiquement, par exemple le nom de l’équipe ou de la marque ; n’indiquez un nom de personne que si elle y a consenti"
+
+[labels.fr.model.website_blog_post.field.summary]
+label = "Résumé"
+description = "Accroche affichée dans les listes"
+
+[labels.fr.model.website_blog_post.field.body]
+label = "Contenu"
+description = "Contenu de l’article en Markdown (un sous-ensemble sûr : titres, listes, liens, emphase, code, citations, tableaux)"
+
+[labels.fr.model.website_blog_post.field.tags]
+label = "Étiquettes"
+description = "Étiquettes séparées par des virgules, par exemple actualites,produit"
+
+[labels.fr.model.website_blog_post.field.published_on]
+label = "Publié le"
+description = "Jour de datation de l’article (YYYY-MM-DD)"
+
+[labels.fr.model.website_blog_post.field.state]
+label = "Statut"
+description = "Statut de l’article : brouillon, publié, archivé"
+
+[labels.fr.model.website_blog_post.field.state.options]
+draft = "Brouillon"
+published = "Publié"
+archived = "Archivé"
+
+[labels.fr.model.website_blog_post.action.publish]
+label = "Publier"
+description = "Rend l’article public (responsable uniquement)"
+
+[labels.fr.model.website_blog_post.action.unpublish]
+label = "Dépublier"
+description = "Met l’article hors ligne et le remet en brouillon"
+
+[labels.fr.model.website_blog_post.action.archive]
+label = "Archiver"
+description = "Retire un article publié"
+
+[labels.fr.model.website_form_submission]
+name = "Envoi de formulaire"
+description = "Un message qu’un visiteur a envoyé par un formulaire du site"
+
+[labels.fr.model.website_form_submission.field.form_name]
+label = "Nom du formulaire"
+description = "Formulaire d’origine, par exemple contact"
+
+[labels.fr.model.website_form_submission.field.sender_name]
+label = "Nom de l’expéditeur"
+description = "Nom indiqué par le visiteur"
+
+[labels.fr.model.website_form_submission.field.sender_email]
+label = "E-mail de l’expéditeur"
+description = "Adresse e-mail indiquée par le visiteur"
+
+[labels.fr.model.website_form_submission.field.sender_phone]
+label = "Téléphone de l’expéditeur"
+description = "Numéro de téléphone indiqué par le visiteur"
+
+[labels.fr.model.website_form_submission.field.message]
+label = "Message"
+description = "Ce que le visiteur a écrit"
+
+[labels.fr.model.website_form_submission.field.source_page]
+label = "Page d’origine"
+description = "Slug de la page où se trouvait le formulaire"
+
+[labels.fr.model.website_form_submission.field.submitted_on]
+label = "Envoyé le"
+description = "Jour de l’envoi (YYYY-MM-DD)"
+
+[labels.fr.model.website_form_submission.field.consent_given]
+label = "Consentement donné"
+description = "Indique si le visiteur a coché la case de consentement pour être contacté"
+
+[labels.fr.model.website_form_submission.field.state]
+label = "Statut"
+description = "Statut de traitement : nouveau, traité, spam"
+
+[labels.fr.model.website_form_submission.field.state.options]
+new = "Nouveau"
+handled = "Traité"
+spam = "Spam"
+
+[labels.fr.model.website_form_submission.action.handle]
+label = "Traiter"
+description = "Marque le message comme répondu ou traité"
+
+[labels.fr.model.website_form_submission.action.mark_spam]
+label = "Marquer spam"
+description = "Marque le message comme spam"
+
+[labels.fr.model.website_page_translation]
+name = "Traduction de page"
+description = "Une page traduite dans une autre langue ; le site public la montre aux visiteurs qui lisent cette langue"
+
+[labels.fr.model.website_page_translation.field.page_id]
+label = "Page"
+description = "La page que cette traduction traduit"
+
+[labels.fr.model.website_page_translation.field.lang]
+label = "Langue"
+description = "Langue de la traduction : en, de, fr, pl, fi, sv ou es"
+
+[labels.fr.model.website_page_translation.field.lang.options]
+en = "Anglais"
+de = "Allemand"
+fr = "Français"
+pl = "Polonais"
+fi = "Finnois"
+sv = "Suédois"
+es = "Espagnol"
+
+[labels.fr.model.website_page_translation.field.title]
+label = "Titre"
+description = "Titre de page traduit"
+
+[labels.fr.model.website_page_translation.field.body]
+label = "Contenu"
+description = "Contenu de page traduit en Markdown"
+
+[labels.fr.model.website_page_translation.field.seo_title]
+label = "Titre SEO"
+description = "Titre traduit affiché dans les résultats de recherche"
+
+[labels.fr.model.website_page_translation.field.seo_description]
+label = "Description SEO"
+description = "Description traduite affichée dans les résultats de recherche"
+
+[labels.fr.model.website_page_translation.field.published]
+label = "Publiée"
+description = "Indique si la traduction est affichée ; elle n’est accessible que tant que sa page est publiée"
+
+[labels.fr.model.website_blog_post_translation]
+name = "Traduction d’article de blog"
+description = "Un article de blog traduit dans une autre langue"
+
+[labels.fr.model.website_blog_post_translation.field.post_id]
+label = "Article"
+description = "L’article que cette traduction traduit"
+
+[labels.fr.model.website_blog_post_translation.field.lang]
+label = "Langue"
+description = "Langue de la traduction : en, de, fr, pl, fi, sv ou es"
+
+[labels.fr.model.website_blog_post_translation.field.lang.options]
+en = "Anglais"
+de = "Allemand"
+fr = "Français"
+pl = "Polonais"
+fi = "Finnois"
+sv = "Suédois"
+es = "Espagnol"
+
+[labels.fr.model.website_blog_post_translation.field.title]
+label = "Titre"
+description = "Titre d’article traduit"
+
+[labels.fr.model.website_blog_post_translation.field.summary]
+label = "Résumé"
+description = "Accroche traduite"
+
+[labels.fr.model.website_blog_post_translation.field.body]
+label = "Contenu"
+description = "Contenu d’article traduit en Markdown"
+
+[labels.fr.model.website_blog_post_translation.field.published]
+label = "Publiée"
+description = "Indique si la traduction est affichée ; elle n’est accessible que tant que son article est publié"

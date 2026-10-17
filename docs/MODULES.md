@@ -327,6 +327,62 @@ Optional, one per model, written right after the `[[model]]` keys. Without it no
 
 Errors: `M.F: only fields of class none or public_directory can be public`, `M.F: personal data can never be public`, `M.public: read = true needs published_field, so only published records are public`, `M.F: a governed state field cannot be submitted; it starts at its first option`, `M.F: a public form cannot collect class C data`.
 
+### 3.7 `[labels.<lang>...]`: translations (D52)
+
+English is the manifest itself. Every other language is an optional set of `[labels.<lang>]` tables in the same document, so one text installs, upgrades, is stored and served as one unit. A package without them works exactly as before.
+
+```toml
+[labels.de.module]
+name = "Fuhrpark"                        # app name (launcher, sidebar, palette)
+description = "Fahrzeuge, Fahrer und Wartungshistorie."
+
+[labels.de.model.fleet_vehicle]
+name = "Fahrzeug"                        # the record type, singular, nominative
+description = "Ein Fahrzeug des Unternehmens"
+
+[labels.de.model.fleet_vehicle.field.plate]
+label = "Kennzeichen"                    # column header, form label, filter and group-by name
+description = "Amtliches Kennzeichen"    # tooltip
+
+[labels.de.model.fleet_vehicle.field.fuel.options]   # select options: value = label
+petrol = "Benzin"
+electric = "Elektro"
+
+[labels.de.model.fleet_vehicle.action.dispatch]
+label = "In Betrieb nehmen"              # button
+description = "Ein verfügbares Fahrzeug in Betrieb nehmen"
+```
+
+| Table | Keys | Shown as |
+|---|---|---|
+| `labels.<lang>.module` | `name`, `description` | app name; module description in Customize |
+| `labels.<lang>.model.<model>` | `name`, `description` | sidebar entry, titles, "New ..." |
+| `labels.<lang>.model.<model>.field.<field>` | `label`, `description` | column and form label; tooltip |
+| `labels.<lang>.model.<model>.field.<field>.options` | `<option> = "label"` | select values, badges, status bar, filters, groups |
+| `labels.<lang>.model.<model>.action.<action>` | `label`, `description` | action button; tooltip |
+
+- **Label versus description.** A label is the short name (at most 80 characters) a person scans: a column header, a button. A description is a sentence (at most 400) that explains it. English has no `label`: the interface derives it from the technical name (`odometer_km` is "Odometer km"); a `[labels.en...]` table overrides that when the derived English reads badly ("Odometer (km)").
+- **Language codes** are two or three lowercase letters with an optional region: `de`, `fi`, `pt-BR`. The seven the interface ships are en, de, fr, pl, fi, sv, es. Anything else matching the pattern is stored and delivered; the client uses it when the active language is that code, or its base language.
+- **Every key must name something that exists**: a model of the package, one of its fields, an option of that select field, an action. A typo is a refused install, not an ignored line (`labels.de.model.fleet_vehicle.field.platte: fleet_vehicle has no field "platte"`). An unknown table or key name is refused by the schema. Option keys are the stored values and stay English.
+- **Values** are plain text: not empty, no leading or trailing spaces, one line, no control characters, no placeholders or markup (`{ } < >`), at most 80 characters (400 for descriptions). They count toward the 256 KiB limit of the whole document.
+- **Partial translations are fine.** Missing entries fall back (below). The bundled packages are complete in six languages, which a test enforces.
+- **Permission group names** are not translatable (they are identifiers).
+
+**Keeping the translations in a separate file.** The format is plain TOML, so the labels can live next to the manifest and be concatenated. For `assets.toml`, `obop modules check|install assets.toml` appends `assets.labels.toml` and every `labels/<lang>/assets.toml` found beside it. To publish one document, concatenate yourself: `cat assets.toml assets.labels.toml > dist/assets.toml`. A marketplace serves the combined document at `packages/<id>.toml`; the bundled catalogue does this at build time from `packages/<id>.toml` and `packages/labels/<lang>/<id>.toml`. A labels-only file can be checked on its own: `obop modules check packages/labels/de/fleet.toml`.
+
+**How to translate your own module.**
+
+```sh
+obop modules labels assets.toml de > assets.labels.toml   # every text, English values, ready to fill in
+$EDITOR assets.labels.toml                                # replace the values, keep the table headers
+obop modules check --complete assets.labels.toml          # none missing, none left in English
+obop modules install assets.toml                          # installs the manifest with its labels
+```
+
+`obop modules labels TARGET LANG` accepts a package file, a bundled package id (`fleet`) or a built-in module id (`crm`). `--complete` is for authors who want every text translated; without it a partial file passes. Words that are legitimately the same in your language (SKU, Hybrid) belong in `labels/identical.json` next to the language folders.
+
+**How the lookup and fallback work.** `GET /api/meta` carries, per module, model, field and action, `labels` (`{lang: text}`) and `descriptions`, and per select field `option_labels` (`{option: {lang: text}}`), each key present only when something is translated. The client picks `labels[lang]`, then `labels[base language]` (`de` for `de-AT`), then its own table for the built-in modules, then the humanised English name; descriptions fall back to the English `description`. The English `name` and `description` fields never change, and neither do commands, MCP tool names, the CLI, stored values or error messages. Upgrading replaces the labels with those of the new document; uninstalling removes them. An instance that installed a bundled package before it carried translations receives the bundled labels for the same version when it starts.
+
 ## 4. Field kinds and their JSON
 
 Values travel as JSON on REST and MCP, and as `key=value` text on the CLI (which converts `number`, `money` and `bool` using the metadata). The server validates every create and update (HTTP 400, `<model>.<field> must be <description>`); existing records are not re-validated.
@@ -483,7 +539,7 @@ Declarative X1 deliberately cannot do the following. Plan around them or wait fo
 - **Delete is plain**: `delete` removes the record for good and refuses while another record refers to it through a `ref` (the error lists the referencing models, counts and up to five ids). There is no cascade, no soft delete and no tombstone; the check sees only models that are installed now. Personal-data erasure still uses the dedicated `erase` command of the owning module (`party.erase`), which anonymises in place and keeps the references valid; `delete` is not a substitute for it. There is no cross-record validation (dates in order, totals matching lines).
 - **No migrations**: see section 7.
 - **Search is evaluated in memory**: `list`/`search` filter, sort and page on the server (section 4.1), but the server reads the model's records from the store to do it, on all three backends, so a very large table is slow; there are no indexes, no full-text search and no grouping or aggregation on the server. Filtering and sorting on a field the caller cannot read in clear (not permitted, withheld, or masked for an agent) is refused.
-- Limits: 256 KiB, 50 models, 200 fields per package; no floats; one field per action; at most 50 filter conditions, 5 order keys and 5000 rows per call.
+- Limits: 256 KiB for the whole document including its translations, 50 models, 200 fields per package; no floats; one field per action; at most 50 filter conditions, 5 order keys and 5000 rows per call.
 
 ## 11. FAQ
 

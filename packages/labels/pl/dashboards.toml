@@ -1,0 +1,78 @@
+[labels.pl.module]
+name = "Pulpity"
+description = "Pulpity i ich kafelki zapisane jako dane do wyświetlenia w interfejsie. Pulpit ma tytuł i właściciela. Kafelek określa rodzaj (KPI, słupkowy, liniowy, kołowy, tabela), czytany model, agregowane pole miary, agregację (liczba lub suma), grupowanie, filtr (obiekt JSON) i kolejność. Pakiet tylko przechowuje definicję: nie sprawdza modelu ani pól i niczego nie oblicza."
+
+[labels.pl.model.dashboards_dashboard]
+name = "Pulpit"
+description = "Pulpit: uporządkowany zbiór kafelków z tytułem"
+
+[labels.pl.model.dashboards_dashboard.field.title]
+label = "Tytuł"
+description = "Tytuł pulpitu, na przykład Przegląd sprzedaży"
+
+[labels.pl.model.dashboards_dashboard.field.owner]
+label = "Właściciel"
+description = "Imię i nazwisko właściciela pulpitu"
+
+[labels.pl.model.dashboards_dashboard.field.description]
+label = "Opis"
+description = "Co pokazuje pulpit i dla kogo"
+
+[labels.pl.model.dashboards_dashboard.field.shared]
+label = "Udostępniony"
+description = "Czy widzą go wszyscy z dostępem do aplikacji Pulpity, czy tylko właściciel"
+
+[labels.pl.model.dashboards_dashboard.field.position]
+label = "Kolejność"
+description = "Kolejność wśród pulpitów, od najniższej"
+
+[labels.pl.model.dashboards_widget]
+name = "Kafelek"
+description = "Jeden kafelek pulpitu, określony tym, co czytać i jak to agregować"
+
+[labels.pl.model.dashboards_widget.field.dashboard_id]
+label = "Pulpit"
+description = "Pulpit, na którym jest kafelek"
+
+[labels.pl.model.dashboards_widget.field.title]
+label = "Tytuł"
+description = "Tytuł kafelka, na przykład Opłacone zamówienia"
+
+[labels.pl.model.dashboards_widget.field.kind]
+label = "Rodzaj"
+description = "Sposób rysowania kafelka: KPI, słupkowy, liniowy, kołowy, tabela"
+
+[labels.pl.model.dashboards_widget.field.kind.options]
+kpi = "KPI"
+bar = "Słupkowy"
+line = "Liniowy"
+pie = "Kołowy"
+table = "Tabela"
+
+[labels.pl.model.dashboards_widget.field.model_name]
+label = "Nazwa modelu"
+description = "Model czytany przez kafelek, na przykład sale_order"
+
+[labels.pl.model.dashboards_widget.field.measure_field]
+label = "Pole miary"
+description = "Agregowane pole: liczbowe lub kwotowe pole modelu; puste przy zliczaniu"
+
+[labels.pl.model.dashboards_widget.field.aggregate]
+label = "Agregacja"
+description = "Sposób łączenia rekordów: liczba lub suma"
+
+[labels.pl.model.dashboards_widget.field.aggregate.options]
+count = "Liczba"
+sum = "Suma"
+
+[labels.pl.model.dashboards_widget.field.group_by]
+label = "Grupuj według"
+description = "Pole podziału wyniku (wybór, odwołanie lub data); puste dla jednej wartości"
+
+[labels.pl.model.dashboards_widget.field.filter]
+label = "Filtr"
+description = "Obiekt JSON z nazwami pól i dokładnymi wartościami, które muszą spełniać rekordy, np. pole state o wartości paid; puste oznacza wszystkie rekordy"
+
+[labels.pl.model.dashboards_widget.field.position]
+label = "Kolejność"
+description = "Kolejność kafelka na pulpicie, od najniższej"

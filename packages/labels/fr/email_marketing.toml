@@ -1,0 +1,147 @@
+[labels.fr.module]
+name = "Marketing par e-mail"
+description = "Listes de diffusion, contacts avec statut et date de consentement, et campagnes (brouillon, planifiée, envoyée). L’envoi est irréversible et exige l’approbation d’un responsable ; les agents peuvent seulement le proposer. Les statistiques sont saisies, pas calculées. Les contacts sont des données personnelles : n’écrivez jamais à un contact qui n’est pas opted_in."
+
+[labels.fr.model.email_marketing_list]
+name = "Liste"
+description = "Une liste de diffusion à laquelle des contacts peuvent appartenir"
+
+[labels.fr.model.email_marketing_list.field.name]
+label = "Nom"
+description = "Nom de la liste, par exemple Newsletter"
+
+[labels.fr.model.email_marketing_list.field.description]
+label = "Description"
+description = "Ce que reçoivent les abonnés"
+
+[labels.fr.model.email_marketing_list.field.is_public]
+label = "Publique"
+description = "Indique si les visiteurs peuvent s’abonner eux-mêmes"
+
+[labels.fr.model.email_marketing_contact]
+name = "Contact"
+description = "Une personne figurant sur une liste de diffusion"
+
+[labels.fr.model.email_marketing_contact.field.list_id]
+label = "Liste"
+description = "La liste sur laquelle figure le contact"
+
+[labels.fr.model.email_marketing_contact.field.email]
+label = "E-mail"
+description = "Adresse e-mail"
+
+[labels.fr.model.email_marketing_contact.field.name]
+label = "Nom"
+description = "Nom du contact"
+
+[labels.fr.model.email_marketing_contact.field.consent_status]
+label = "Statut du consentement"
+description = "Autorisation d’envoi : en attente, inscrit, désinscrit, non distribué"
+
+[labels.fr.model.email_marketing_contact.field.consent_status.options]
+pending = "En attente"
+opted_in = "Inscrit"
+opted_out = "Désinscrit"
+bounced = "Non distribué"
+
+[labels.fr.model.email_marketing_contact.field.consent_date]
+label = "Date du consentement"
+description = "Jour où le contact a donné ou retiré son autorisation (YYYY-MM-DD)"
+
+[labels.fr.model.email_marketing_contact.field.consent_source]
+label = "Source du consentement"
+description = "Où le consentement a été recueilli, par exemple formulaire d’inscription du site web"
+
+[labels.fr.model.email_marketing_campaign]
+name = "Campagne"
+description = "Un envoi adressé à une liste"
+
+[labels.fr.model.email_marketing_campaign.field.name]
+label = "Nom"
+description = "Nom interne de la campagne"
+
+[labels.fr.model.email_marketing_campaign.field.subject]
+label = "Objet"
+description = "Objet de l’e-mail"
+
+[labels.fr.model.email_marketing_campaign.field.preview_text]
+label = "Texte d’aperçu"
+description = "Court texte affiché après l’objet dans les boîtes de réception"
+
+[labels.fr.model.email_marketing_campaign.field.from_name]
+label = "Nom de l’expéditeur"
+description = "Nom de l’expéditeur affiché aux destinataires"
+
+[labels.fr.model.email_marketing_campaign.field.from_email]
+label = "E-mail de l’expéditeur"
+description = "Adresse de l’expéditeur affichée aux destinataires"
+
+[labels.fr.model.email_marketing_campaign.field.list_id]
+label = "Liste"
+description = "La liste à laquelle la campagne est adressée"
+
+[labels.fr.model.email_marketing_campaign.field.body]
+label = "Contenu"
+description = "Contenu de l’e-mail (HTML ou Markdown, selon ce qu’attend l’expéditeur)"
+
+[labels.fr.model.email_marketing_campaign.field.scheduled_for]
+label = "Prévu pour"
+description = "Jour où la campagne doit être envoyée (YYYY-MM-DD)"
+
+[labels.fr.model.email_marketing_campaign.field.sent_on]
+label = "Envoyé le"
+description = "Jour où la campagne a été envoyée (YYYY-MM-DD)"
+
+[labels.fr.model.email_marketing_campaign.field.sent_count]
+label = "Envoyés"
+description = "E-mails remis au serveur de messagerie"
+
+[labels.fr.model.email_marketing_campaign.field.delivered_count]
+label = "Distribués"
+description = "E-mails acceptés par les serveurs des destinataires"
+
+[labels.fr.model.email_marketing_campaign.field.opened_count]
+label = "Ouvertures"
+description = "Destinataires qui ont ouvert l’e-mail"
+
+[labels.fr.model.email_marketing_campaign.field.clicked_count]
+label = "Clics"
+description = "Destinataires qui ont cliqué sur un lien"
+
+[labels.fr.model.email_marketing_campaign.field.bounced_count]
+label = "Non distribués"
+description = "E-mails qui n’ont pas pu être distribués"
+
+[labels.fr.model.email_marketing_campaign.field.unsubscribed_count]
+label = "Désabonnements"
+description = "Destinataires qui se sont désabonnés à cause de cette campagne"
+
+[labels.fr.model.email_marketing_campaign.field.state]
+label = "Statut"
+description = "Statut de la campagne : brouillon, planifiée, envoyée, annulée"
+
+[labels.fr.model.email_marketing_campaign.field.state.options]
+draft = "Brouillon"
+scheduled = "Planifiée"
+sent = "Envoyée"
+cancelled = "Annulée"
+
+[labels.fr.model.email_marketing_campaign.action.schedule]
+label = "Planifier"
+description = "Met la campagne en file d’attente pour le jour prévu"
+
+[labels.fr.model.email_marketing_campaign.action.send]
+label = "Envoyer"
+description = "Envoie la campagne planifiée à toute la liste (responsable uniquement)"
+
+[labels.fr.model.email_marketing_campaign.action.send_now]
+label = "Envoyer maintenant"
+description = "Envoie immédiatement une campagne en brouillon (responsable uniquement)"
+
+[labels.fr.model.email_marketing_campaign.action.unschedule]
+label = "Déplanifier"
+description = "Remet une campagne planifiée en brouillon"
+
+[labels.fr.model.email_marketing_campaign.action.cancel]
+label = "Annuler"
+description = "Annule une campagne planifiée"

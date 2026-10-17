@@ -1,0 +1,88 @@
+[labels.fi.module]
+name = "Suunnittelu"
+description = "Työntekijöiden työvuorot rooleineen ja uudelleenkäytettävine malleineen. Vuorolla on päivä sekä alku- ja loppuaika minuutteina keskiyöstä (0-1439; 540 tarkoittaa kello 9.00). Vuoro ilman työntekijää on avoin vuoro. Kulku: avoin, julkaistu, työntekijän vahvistama. Vaatii Henkilöstö-paketin."
+
+[labels.fi.model.planning_role]
+name = "Rooli"
+description = "Rooli, jolle vuoro suunnitellaan, esimerkiksi kassanhoitaja tai sähköasentaja"
+
+[labels.fi.model.planning_role.field.name]
+label = "Nimi"
+description = "Roolin nimi"
+
+[labels.fi.model.planning_role.field.note]
+label = "Huomautus"
+description = "Mitä rooliin kuuluu"
+
+[labels.fi.model.planning_template]
+name = "Vuoromalli"
+description = "Uudelleenkäytettävä vuoromalli, josta kopioidaan vuoroja"
+
+[labels.fi.model.planning_template.field.name]
+label = "Nimi"
+description = "Mallin nimi, esimerkiksi Aamuvuoro"
+
+[labels.fi.model.planning_template.field.role_id]
+label = "Rooli"
+description = "Rooli, jolle malli on tarkoitettu"
+
+[labels.fi.model.planning_template.field.start_minute]
+label = "Alkuminuutti"
+description = "Alkamisaika minuutteina keskiyöstä (540 tarkoittaa kello 9.00)"
+
+[labels.fi.model.planning_template.field.end_minute]
+label = "Loppuminuutti"
+description = "Päättymisaika minuutteina keskiyöstä (1020 tarkoittaa kello 17.00)"
+
+[labels.fi.model.planning_shift]
+name = "Vuoro"
+description = "Yhden päivän työjakso yhdelle roolille, tarvittaessa työntekijälle määrättynä"
+
+[labels.fi.model.planning_shift.field.name]
+label = "Nimi"
+description = "Lyhyt otsikko, esimerkiksi Avausvuoro"
+
+[labels.fi.model.planning_shift.field.role_id]
+label = "Rooli"
+description = "Tarvittava rooli"
+
+[labels.fi.model.planning_shift.field.employee_id]
+label = "Työntekijä"
+description = "Työntekijä, jolle vuoro on määrätty; tyhjä avoimelle vuorolle"
+
+[labels.fi.model.planning_shift.field.work_date]
+label = "Työpäivä"
+description = "Vuoron päivä (YYYY-MM-DD)"
+
+[labels.fi.model.planning_shift.field.start_minute]
+label = "Alkuminuutti"
+description = "Alkamisaika minuutteina keskiyöstä, 0-1439 (540 tarkoittaa kello 9.00)"
+
+[labels.fi.model.planning_shift.field.end_minute]
+label = "Loppuminuutti"
+description = "Päättymisaika minuutteina keskiyöstä, 0-1439 (1020 tarkoittaa kello 17.00)"
+
+[labels.fi.model.planning_shift.field.note]
+label = "Huomautus"
+description = "Ohjeita vuoroa työskentelevälle"
+
+[labels.fi.model.planning_shift.field.state]
+label = "Tila"
+description = "Vuoron tila: avoin, julkaistu, vahvistettu"
+
+[labels.fi.model.planning_shift.field.state.options]
+open = "Avoin"
+published = "Julkaistu"
+confirmed = "Vahvistettu"
+
+[labels.fi.model.planning_shift.action.publish]
+label = "Julkaise"
+description = "Julkaise vuoro määrätylle työntekijälle tai kaikille, kun vuoro on avoin"
+
+[labels.fi.model.planning_shift.action.unpublish]
+label = "Peru julkaisu"
+description = "Palauta julkaistu vuoro avoimeksi"
+
+[labels.fi.model.planning_shift.action.confirm]
+label = "Vahvista"
+description = "Työntekijä vahvistaa tekevänsä vuoron"

@@ -1,0 +1,88 @@
+[labels.fr.module]
+name = "Planification"
+description = "Créneaux de travail pour les employés, avec rôles et modèles réutilisables. Un créneau a un jour et un début et une fin en minutes depuis minuit (0 à 1439 ; 540 correspond à 09:00). Un créneau sans employé est un créneau ouvert. Flux : ouvert, publié, confirmé par l’employé. Nécessite le package Ressources humaines."
+
+[labels.fr.model.planning_role]
+name = "Rôle"
+description = "Un rôle pour lequel un créneau est planifié, par exemple caissier ou électricien"
+
+[labels.fr.model.planning_role.field.name]
+label = "Nom"
+description = "Nom du rôle"
+
+[labels.fr.model.planning_role.field.note]
+label = "Note"
+description = "Ce que le rôle implique"
+
+[labels.fr.model.planning_template]
+name = "Modèle"
+description = "Un schéma de créneau réutilisable à copier dans des créneaux"
+
+[labels.fr.model.planning_template.field.name]
+label = "Nom"
+description = "Nom du modèle, par exemple Créneau du matin"
+
+[labels.fr.model.planning_template.field.role_id]
+label = "Rôle"
+description = "Le rôle auquel le modèle est destiné"
+
+[labels.fr.model.planning_template.field.start_minute]
+label = "Minute de début"
+description = "Début en minutes depuis minuit (540 correspond à 09:00)"
+
+[labels.fr.model.planning_template.field.end_minute]
+label = "Minute de fin"
+description = "Fin en minutes depuis minuit (1020 correspond à 17:00)"
+
+[labels.fr.model.planning_shift]
+name = "Créneau"
+description = "Une plage de travail sur un jour pour un rôle, éventuellement affectée à un employé"
+
+[labels.fr.model.planning_shift.field.name]
+label = "Nom"
+description = "Titre court, par exemple Ouverture"
+
+[labels.fr.model.planning_shift.field.role_id]
+label = "Rôle"
+description = "Le rôle requis"
+
+[labels.fr.model.planning_shift.field.employee_id]
+label = "Employé"
+description = "Employé auquel le créneau est affecté ; vide pour un créneau ouvert"
+
+[labels.fr.model.planning_shift.field.work_date]
+label = "Date de travail"
+description = "Jour du créneau (YYYY-MM-DD)"
+
+[labels.fr.model.planning_shift.field.start_minute]
+label = "Minute de début"
+description = "Début en minutes depuis minuit, de 0 à 1439 (540 correspond à 09:00)"
+
+[labels.fr.model.planning_shift.field.end_minute]
+label = "Minute de fin"
+description = "Fin en minutes depuis minuit, de 0 à 1439 (1020 correspond à 17:00)"
+
+[labels.fr.model.planning_shift.field.note]
+label = "Note"
+description = "Consignes pour la personne qui assure le créneau"
+
+[labels.fr.model.planning_shift.field.state]
+label = "Statut"
+description = "Statut du créneau : ouvert, publié, confirmé"
+
+[labels.fr.model.planning_shift.field.state.options]
+open = "Ouvert"
+published = "Publié"
+confirmed = "Confirmé"
+
+[labels.fr.model.planning_shift.action.publish]
+label = "Publier"
+description = "Publie le créneau auprès de l’employé affecté, ou de tout le monde s’il est ouvert"
+
+[labels.fr.model.planning_shift.action.unpublish]
+label = "Dépublier"
+description = "Remet un créneau publié à l’état ouvert"
+
+[labels.fr.model.planning_shift.action.confirm]
+label = "Confirmer"
+description = "L’employé confirme qu’il assurera le créneau"

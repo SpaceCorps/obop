@@ -1,0 +1,22 @@
+[labels.de.module]
+name = "Produkte"
+
+[labels.de.model.product]
+name = "Produkt"
+description = "Eine Ware oder Dienstleistung, die das Unternehmen verkauft"
+
+[labels.de.model.product.field.name]
+label = "Name"
+description = "Produktname"
+
+[labels.de.model.product.field.sku]
+label = "Artikelnummer"
+description = "Artikelnummer (SKU)"
+
+[labels.de.model.product.field.list_price_minor]
+label = "Listenpreis"
+description = "Listenpreis in der kleinsten Währungseinheit"
+
+[labels.de.model.product.field.cost_minor]
+label = "Kosten"
+description = "Stückkosten in der kleinsten Währungseinheit"

@@ -1,0 +1,156 @@
+[labels.fr.module]
+name = "Projets"
+description = "Projets, jalons et tâches avec responsables, échéances et flux de statuts. L’avancement est suivi par statut, pas calculé à partir de l’effort des tâches."
+
+[labels.fr.model.projects_project]
+name = "Projet"
+description = "Un ensemble de travaux avec un objectif"
+
+[labels.fr.model.projects_project.field.name]
+label = "Nom"
+description = "Nom du projet"
+
+[labels.fr.model.projects_project.field.code]
+label = "Code"
+description = "Référence courte utilisée dans les rapports, par exemple WEB-24"
+
+[labels.fr.model.projects_project.field.project_manager]
+label = "Chef de projet"
+description = "Nom de la personne responsable du projet"
+
+[labels.fr.model.projects_project.field.start_on]
+label = "Date de début"
+description = "Date de début prévue (YYYY-MM-DD)"
+
+[labels.fr.model.projects_project.field.deadline]
+label = "Échéance"
+description = "Date à laquelle le projet doit être terminé (YYYY-MM-DD)"
+
+[labels.fr.model.projects_project.field.budget]
+label = "Budget"
+description = "Budget convenu pour le projet (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.projects_project.field.description]
+label = "Description"
+description = "Objectif et périmètre du projet"
+
+[labels.fr.model.projects_project.field.state]
+label = "Statut"
+description = "Statut du projet : prévu, actif, terminé"
+
+[labels.fr.model.projects_project.field.state.options]
+planned = "Prévu"
+active = "Actif"
+done = "Terminé"
+
+[labels.fr.model.projects_project.action.start]
+label = "Démarrer"
+description = "Fait passer un projet prévu à actif"
+
+[labels.fr.model.projects_project.action.finish]
+label = "Achever"
+description = "Marque un projet actif comme terminé"
+
+[labels.fr.model.projects_project.action.reopen]
+label = "Rouvrir"
+description = "Rouvre un projet terminé"
+
+[labels.fr.model.projects_milestone]
+name = "Jalon"
+description = "Un point de contrôle d’un projet"
+
+[labels.fr.model.projects_milestone.field.project_id]
+label = "Projet"
+description = "Le projet auquel appartient le jalon"
+
+[labels.fr.model.projects_milestone.field.name]
+label = "Nom"
+description = "Nom du jalon, par exemple Maquette validée"
+
+[labels.fr.model.projects_milestone.field.due_on]
+label = "Date d’échéance"
+description = "Date d’échéance du jalon (YYYY-MM-DD)"
+
+[labels.fr.model.projects_milestone.field.description]
+label = "Description"
+description = "Ce qui doit être vrai pour que le jalon soit considéré comme atteint"
+
+[labels.fr.model.projects_milestone.field.state]
+label = "Statut"
+description = "Statut du jalon : en attente, atteint, manqué"
+
+[labels.fr.model.projects_milestone.field.state.options]
+pending = "En attente"
+reached = "Atteint"
+missed = "Manqué"
+
+[labels.fr.model.projects_milestone.action.reach]
+label = "Marquer atteint"
+description = "Marque un jalon en attente comme atteint"
+
+[labels.fr.model.projects_milestone.action.miss]
+label = "Marquer manqué"
+description = "Enregistre qu’un jalon en attente a été manqué"
+
+[labels.fr.model.projects_task]
+name = "Tâche"
+description = "Une unité de travail au sein d’un projet"
+
+[labels.fr.model.projects_task.field.title]
+label = "Titre"
+description = "Ce qu’il faut faire"
+
+[labels.fr.model.projects_task.field.project_id]
+label = "Projet"
+description = "Le projet auquel appartient cette tâche ; vide pour une tâche privée"
+
+[labels.fr.model.projects_task.field.milestone_id]
+label = "Jalon"
+description = "Le jalon auquel contribue cette tâche"
+
+[labels.fr.model.projects_task.field.assignee]
+label = "Assigné à"
+description = "Nom de la personne responsable"
+
+[labels.fr.model.projects_task.field.priority]
+label = "Priorité"
+description = "Importance de la tâche : basse, normale, haute"
+
+[labels.fr.model.projects_task.field.priority.options]
+low = "Basse"
+normal = "Normale"
+high = "Haute"
+
+[labels.fr.model.projects_task.field.due_on]
+label = "Date d’échéance"
+description = "Date d’échéance de la tâche (YYYY-MM-DD)"
+
+[labels.fr.model.projects_task.field.estimate_minutes]
+label = "Estimation (minutes)"
+description = "Effort prévu en minutes"
+
+[labels.fr.model.projects_task.field.description]
+label = "Description"
+description = "Détails, critères d’acceptation et liens"
+
+[labels.fr.model.projects_task.field.state]
+label = "Statut"
+description = "Statut de la tâche : à faire, en cours, terminée, annulée"
+
+[labels.fr.model.projects_task.field.state.options]
+todo = "À faire"
+doing = "En cours"
+done = "Terminée"
+cancelled = "Annulée"
+
+[labels.fr.model.projects_task.action.begin]
+label = "Commencer"
+description = "Commence à travailler sur une tâche à faire"
+
+[labels.fr.model.projects_task.action.complete]
+label = "Terminer"
+description = "Marque une tâche en cours comme terminée"
+
+[labels.fr.model.projects_task.action.cancel]
+label = "Annuler"
+description = "Abandonne une tâche qui n’a jamais été commencée"

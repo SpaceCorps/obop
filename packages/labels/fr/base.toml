@@ -1,0 +1,26 @@
+[labels.fr.module]
+name = "Contacts"
+
+[labels.fr.model.party]
+name = "Tiers"
+description = "Une personne ou une organisation avec laquelle l’entreprise est en relation"
+
+[labels.fr.model.party.field.name]
+label = "Nom"
+description = "Nom affiché"
+
+[labels.fr.model.party.field.email]
+label = "E-mail"
+description = "Adresse e-mail professionnelle"
+
+[labels.fr.model.party.field.tax_id]
+label = "Taxe"
+description = "Identifiant fiscal d’une personne physique"
+
+[labels.fr.model.party.field.notes]
+label = "Notes"
+description = "Notes internes en texte libre"
+
+[labels.fr.model.party.action.erase]
+label = "Effacer"
+description = "Anonymise le tiers sur place et enregistre l’effacement"

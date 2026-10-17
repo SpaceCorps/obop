@@ -1,0 +1,78 @@
+[labels.es.module]
+name = "Gastos"
+description = "Notas de gastos de empleados con un flujo de borrador, enviada, aprobada y pagada. Pagar es un permiso aparte y requiere aprobación humana; los justificantes se referencian por nota, no se guardan."
+
+[labels.es.model.expenses_expense]
+name = "Gasto"
+description = "Un importe que un empleado gastó por la empresa y quiere que se le reembolse"
+
+[labels.es.model.expenses_expense.field.description]
+label = "Descripción"
+description = "En qué se gastó el dinero"
+
+[labels.es.model.expenses_expense.field.employee]
+label = "Empleado"
+description = "Nombre de la persona que solicita el gasto"
+
+[labels.es.model.expenses_expense.field.spent_on]
+label = "Fecha del gasto"
+description = "Fecha de la compra (YYYY-MM-DD)"
+
+[labels.es.model.expenses_expense.field.category]
+label = "Categoría"
+description = "Categoría del gasto: viaje, comidas, alojamiento, suministros, software, otro"
+
+[labels.es.model.expenses_expense.field.category.options]
+travel = "Viajes"
+meals = "Comidas"
+lodging = "Alojamiento"
+supplies = "Suministros"
+software = "Software"
+other = "Otro"
+
+[labels.es.model.expenses_expense.field.amount]
+label = "Importe"
+description = "Importe que se debe al empleado (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.expenses_expense.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217, por ejemplo EUR"
+
+[labels.es.model.expenses_expense.field.receipt_note]
+label = "Nota del tique"
+description = "Dónde se guarda el justificante y qué muestra"
+
+[labels.es.model.expenses_expense.field.paid_on]
+label = "Fecha de pago"
+description = "Fecha en que se reembolsó al empleado (YYYY-MM-DD)"
+
+[labels.es.model.expenses_expense.field.payment_reference]
+label = "Referencia de pago"
+description = "Referencia de la transferencia bancaria del reembolso"
+
+[labels.es.model.expenses_expense.field.state]
+label = "Estado"
+description = "Estado de la solicitud: borrador, enviada, aprobada, pagada, rechazada"
+
+[labels.es.model.expenses_expense.field.state.options]
+draft = "Borrador"
+submitted = "Presentado"
+approved = "Aprobado"
+paid = "Pagado"
+refused = "Rechazado"
+
+[labels.es.model.expenses_expense.action.submit]
+label = "Presentar"
+description = "Enviar la solicitud para su aprobación"
+
+[labels.es.model.expenses_expense.action.approve]
+label = "Aprobar"
+description = "Aprobar una solicitud enviada (solo responsables)"
+
+[labels.es.model.expenses_expense.action.pay]
+label = "Pagar"
+description = "Registrar el reembolso como pagado (solo finanzas)"
+
+[labels.es.model.expenses_expense.action.refuse]
+label = "Rechazar"
+description = "Rechazar una solicitud enviada (solo responsables)"

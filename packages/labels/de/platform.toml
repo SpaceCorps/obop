@@ -1,0 +1,82 @@
+[labels.de.module]
+name = "Anpassen"
+
+[labels.de.model.module]
+name = "Modul"
+description = "Ein installiertes Modul: integriert, hochgeladen oder aus dem Marktplatz"
+
+[labels.de.model.module.field.name]
+label = "Name"
+description = "Anzeigename"
+
+[labels.de.model.module.field.version]
+label = "Version"
+description = "Installierte Version"
+
+[labels.de.model.module.field.description]
+label = "Beschreibung"
+description = "Was das Modul leistet"
+
+[labels.de.model.module.field.source]
+label = "Quelle"
+description = "builtin (integriert), upload (hochgeladen) oder marketplace (Marktplatz)"
+
+[labels.de.model.module.field.models]
+label = "Modelle"
+description = "Modelle, die das Modul hinzufügt"
+
+[labels.de.model.module.field.groups]
+label = "Gruppen"
+description = "Berechtigungsgruppen, die das Modul verwendet"
+
+[labels.de.model.module.action.install]
+label = "Installieren"
+description = "Ein Modul anhand des Texts seiner obop.toml installieren oder aktualisieren"
+
+[labels.de.model.module.action.uninstall]
+label = "Deinstallieren"
+description = "Ein Modul entfernen; seine Daten bleiben in der Datenbank erhalten"
+
+[labels.de.model.marketplace_listing]
+name = "Marktplatz-Eintrag"
+description = "Ein Modul, das der Marktplatz anbietet"
+
+[labels.de.model.marketplace_listing.field.name]
+label = "Name"
+description = "Anzeigename"
+
+[labels.de.model.marketplace_listing.field.version]
+label = "Version"
+description = "Neueste Version"
+
+[labels.de.model.marketplace_listing.field.description]
+label = "Beschreibung"
+description = "Was das Modul leistet"
+
+[labels.de.model.marketplace_listing.field.author]
+label = "Autor"
+description = "Wer es veröffentlicht"
+
+[labels.de.model.marketplace_listing.field.source]
+label = "Quelle"
+description = "Woher die Installation stammt"
+
+[labels.de.model.marketplace_listing.field.models]
+label = "Modelle"
+description = "Modelle, die das Modul hinzufügt"
+
+[labels.de.model.marketplace_listing.field.groups]
+label = "Gruppen"
+description = "Berechtigungsgruppen, die das Modul verwendet"
+
+[labels.de.model.marketplace_listing.action.install]
+label = "Installieren"
+description = "Ein Modul anhand seiner ID aus dem Marktplatz installieren"
+
+[labels.de.model.setting]
+name = "Einstellung"
+description = "Instanzweite Oberflächeneinstellungen: Erscheinungsbild und Anordnung des App-Launchers"
+
+[labels.de.model.setting.field.value]
+label = "Wert"
+description = "Die Einstellungen als JSON-Objekt"

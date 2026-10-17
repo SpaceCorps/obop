@@ -1,0 +1,78 @@
+[labels.fi.module]
+name = "Koontinäytöt"
+description = "Koontinäytöt ja niiden ruudut tallennettuna tietona käyttöliittymän piirrettäväksi. Ruutu määrittelee lajin (KPI, pylväs, viiva, piirakka, taulukko), luettavan tietuetyypin, mittarikentän, yhdistämistavan (lukumäärä tai summa), ryhmittelyn, suodattimen ja järjestyksen. Paketti vain tallentaa määrityksen: se ei tarkista, että tietuetyyppi tai kentät ovat olemassa, eikä se laske mitään."
+
+[labels.fi.model.dashboards_dashboard]
+name = "Koontinäyttö"
+description = "Koontinäyttö: otsikoitu ja järjestetty ruutujen kokoelma"
+
+[labels.fi.model.dashboards_dashboard.field.title]
+label = "Otsikko"
+description = "Koontinäytön otsikko, esimerkiksi Myynnin yleiskatsaus"
+
+[labels.fi.model.dashboards_dashboard.field.owner]
+label = "Omistaja"
+description = "Koontinäytön omistajan nimi"
+
+[labels.fi.model.dashboards_dashboard.field.description]
+label = "Kuvaus"
+description = "Mitä koontinäyttö näyttää ja kenelle"
+
+[labels.fi.model.dashboards_dashboard.field.shared]
+label = "Jaettu"
+description = "Näkevätkö kaikki, joilla on pääsy Koontinäytöt-sovellukseen, tämän vai vain omistaja"
+
+[labels.fi.model.dashboards_dashboard.field.position]
+label = "Järjestys"
+description = "Koontinäyttöjen järjestys, pienin ensin"
+
+[labels.fi.model.dashboards_widget]
+name = "Ruutu"
+description = "Yksi koontinäytön ruutu, joka määritellään sillä, mitä luetaan ja miten tiedot yhdistetään"
+
+[labels.fi.model.dashboards_widget.field.dashboard_id]
+label = "Koontinäyttö"
+description = "Koontinäyttö, jolla ruutu on"
+
+[labels.fi.model.dashboards_widget.field.title]
+label = "Otsikko"
+description = "Ruudun otsikko, esimerkiksi Maksetut tilaukset"
+
+[labels.fi.model.dashboards_widget.field.kind]
+label = "Laji"
+description = "Miten ruutu piirretään: KPI, pylväs, viiva, piirakka, taulukko"
+
+[labels.fi.model.dashboards_widget.field.kind.options]
+kpi = "KPI"
+bar = "Pylväs"
+line = "Viiva"
+pie = "Piirakka"
+table = "Taulukko"
+
+[labels.fi.model.dashboards_widget.field.model_name]
+label = "Tietuetyypin nimi"
+description = "Tietuetyyppi, jota ruutu lukee, esimerkiksi sale_order"
+
+[labels.fi.model.dashboards_widget.field.measure_field]
+label = "Mittarikenttä"
+description = "Yhdistettävä kenttä: tietuetyypin luku- tai rahakenttä; tyhjä laskettaessa lukumäärää"
+
+[labels.fi.model.dashboards_widget.field.aggregate]
+label = "Yhdistämistapa"
+description = "Miten tietueet yhdistetään: lukumäärä tai summa"
+
+[labels.fi.model.dashboards_widget.field.aggregate.options]
+count = "Lukumäärä"
+sum = "Summa"
+
+[labels.fi.model.dashboards_widget.field.group_by]
+label = "Ryhmittely"
+description = "Kenttä, jolla tulos jaetaan (valinta-, viite- tai päivämääräkenttä); tyhjä yhdelle arvolle"
+
+[labels.fi.model.dashboards_widget.field.filter]
+label = "Suodatin"
+description = "JSON-olio, jossa kentän nimi on yhdistetty tarkkaan arvoon, jota tietueiden on vastattava, esimerkiksi state = paid; tyhjä tarkoittaa kaikkia tietueita"
+
+[labels.fi.model.dashboards_widget.field.position]
+label = "Järjestys"
+description = "Ruudun paikka koontinäytöllä, pienin ensin"

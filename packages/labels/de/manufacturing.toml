@@ -1,0 +1,98 @@
+[labels.de.module]
+name = "Fertigung"
+description = "Stücklisten und Fertigungsaufträge mit dem Ablauf Entwurf, bestätigt, in Bearbeitung und erledigt. Der Bestand der Komponenten wird nicht automatisch verbraucht."
+
+[labels.de.model.manufacturing_bom]
+name = "Stückliste"
+description = "Eine Rezeptur: die Komponenten, die zur Herstellung eines Produkts nötig sind"
+
+[labels.de.model.manufacturing_bom.field.product_id]
+label = "Produkt"
+description = "Das Fertigprodukt, das die Stückliste herstellt"
+
+[labels.de.model.manufacturing_bom.field.name]
+label = "Name"
+description = "Name der Stückliste, zum Beispiel Standardmontage"
+
+[labels.de.model.manufacturing_bom.field.quantity]
+label = "Menge"
+description = "Stückzahl des Fertigprodukts, die ein Durchlauf erzeugt"
+
+[labels.de.model.manufacturing_bom.field.instructions]
+label = "Anweisungen"
+description = "Montagehinweise für die Werkstatt"
+
+[labels.de.model.manufacturing_bom.field.active]
+label = "Aktiv"
+description = "Ob die Stückliste für neue Aufträge verwendet werden kann"
+
+[labels.de.model.manufacturing_bom_line]
+name = "Stücklistenposition"
+description = "Eine Komponente einer Stückliste"
+
+[labels.de.model.manufacturing_bom_line.field.bom_id]
+label = "Stückliste"
+description = "Die Stückliste, zu der die Komponente gehört"
+
+[labels.de.model.manufacturing_bom_line.field.component_id]
+label = "Komponente"
+description = "Das verbrauchte Produkt"
+
+[labels.de.model.manufacturing_bom_line.field.quantity]
+label = "Menge"
+description = "Stückzahl der Komponente pro Durchlauf"
+
+[labels.de.model.manufacturing_order]
+name = "Fertigungsauftrag"
+description = "Eine Anweisung, eine Menge eines Produkts herzustellen"
+
+[labels.de.model.manufacturing_order.field.reference]
+label = "Referenz"
+description = "Auftragsnummer, zum Beispiel MO-0042"
+
+[labels.de.model.manufacturing_order.field.bom_id]
+label = "Stückliste"
+description = "Die Stückliste, nach der gefertigt wird"
+
+[labels.de.model.manufacturing_order.field.quantity]
+label = "Menge"
+description = "Stückzahl des herzustellenden Fertigprodukts"
+
+[labels.de.model.manufacturing_order.field.planned_on]
+label = "Geplant am"
+description = "Datum, an dem die Produktion beginnen soll (YYYY-MM-DD)"
+
+[labels.de.model.manufacturing_order.field.deadline]
+label = "Frist"
+description = "Datum, an dem die Ware benötigt wird (YYYY-MM-DD)"
+
+[labels.de.model.manufacturing_order.field.responsible]
+label = "Verantwortlich"
+description = "Name der Person, die den Durchlauf verantwortet"
+
+[labels.de.model.manufacturing_order.field.state]
+label = "Status"
+description = "Auftragsstatus: Entwurf, bestätigt, in Bearbeitung, erledigt, storniert"
+
+[labels.de.model.manufacturing_order.field.state.options]
+draft = "Entwurf"
+confirmed = "Bestätigt"
+in_progress = "In Bearbeitung"
+done = "Erledigt"
+cancelled = "Storniert"
+
+[labels.de.model.manufacturing_order.action.confirm]
+label = "Bestätigen"
+description = "Einen Auftragsentwurf bestätigen, damit die Produktion geplant werden kann"
+
+[labels.de.model.manufacturing_order.action.start]
+label = "Starten"
+description = "Die Produktion eines bestätigten Auftrags starten"
+
+[labels.de.model.manufacturing_order.action.finish]
+label = "Fertigstellen"
+description = "Die Produktion als abgeschlossen markieren"
+
+[labels.de.model.manufacturing_order.action.cancel]
+label = "Stornieren"
+description = "Einen Auftrag stornieren, der noch nicht bestätigt wurde"

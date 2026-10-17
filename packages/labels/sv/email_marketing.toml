@@ -1,0 +1,147 @@
+[labels.sv.module]
+name = "E-postmarknadsföring"
+description = "Utskickslistor, kontakterna på dem med samtyckesstatus och datum samt kampanjer med flödet utkast, schemalagd, skickad. Utskick kan inte ångras och kräver en chefs godkännande; agenter får bara föreslå dem. Kampanjstatistik anges eller importeras. Kontakter är personuppgifter: håll samtycket korrekt och skicka aldrig till en kontakt som inte är anmäld."
+
+[labels.sv.model.email_marketing_list]
+name = "Utskickslista"
+description = "En utskickslista som kontakter kan tillhöra"
+
+[labels.sv.model.email_marketing_list.field.name]
+label = "Namn"
+description = "Listans namn, till exempel Nyhetsbrev"
+
+[labels.sv.model.email_marketing_list.field.description]
+label = "Beskrivning"
+description = "Vad prenumeranterna får"
+
+[labels.sv.model.email_marketing_list.field.is_public]
+label = "Offentlig"
+description = "Om besökare kan prenumerera själva"
+
+[labels.sv.model.email_marketing_contact]
+name = "Kontakt"
+description = "En person på en utskickslista"
+
+[labels.sv.model.email_marketing_contact.field.list_id]
+label = "Utskickslista"
+description = "Listan som kontakten finns på"
+
+[labels.sv.model.email_marketing_contact.field.email]
+label = "E-post"
+description = "E-postadress"
+
+[labels.sv.model.email_marketing_contact.field.name]
+label = "Namn"
+description = "Kontaktens namn"
+
+[labels.sv.model.email_marketing_contact.field.consent_status]
+label = "Samtyckesstatus"
+description = "Tillstånd att skicka e-post: väntande, anmäld, avanmäld, studsad"
+
+[labels.sv.model.email_marketing_contact.field.consent_status.options]
+pending = "Väntande"
+opted_in = "Anmäld"
+opted_out = "Avanmäld"
+bounced = "Studsad"
+
+[labels.sv.model.email_marketing_contact.field.consent_date]
+label = "Samtyckesdatum"
+description = "Dagen då kontakten gav eller drog tillbaka sitt samtycke (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.email_marketing_contact.field.consent_source]
+label = "Samtyckeskälla"
+description = "Var samtycket inhämtades, till exempel anmälningsformulär på webbplatsen"
+
+[labels.sv.model.email_marketing_campaign]
+name = "Kampanj"
+description = "Ett utskick till en lista"
+
+[labels.sv.model.email_marketing_campaign.field.name]
+label = "Namn"
+description = "Kampanjens interna namn"
+
+[labels.sv.model.email_marketing_campaign.field.subject]
+label = "Ämne"
+description = "E-postmeddelandets ämnesrad"
+
+[labels.sv.model.email_marketing_campaign.field.preview_text]
+label = "Förhandsvisningstext"
+description = "Kort text som visas efter ämnet i inkorgen"
+
+[labels.sv.model.email_marketing_campaign.field.from_name]
+label = "Avsändarnamn"
+description = "Avsändarnamn som mottagarna ser"
+
+[labels.sv.model.email_marketing_campaign.field.from_email]
+label = "Avsändaradress"
+description = "Avsändaradress som mottagarna ser"
+
+[labels.sv.model.email_marketing_campaign.field.list_id]
+label = "Utskickslista"
+description = "Listan som kampanjen skickas till"
+
+[labels.sv.model.email_marketing_campaign.field.body]
+label = "Brödtext"
+description = "E-postens innehåll (HTML eller Markdown, som avsändaren förväntar sig)"
+
+[labels.sv.model.email_marketing_campaign.field.scheduled_for]
+label = "Schemalagd till"
+description = "Dagen då kampanjen ska skickas (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.email_marketing_campaign.field.sent_on]
+label = "Skickad den"
+description = "Dagen då kampanjen skickades (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.email_marketing_campaign.field.sent_count]
+label = "Antal skickade"
+description = "E-postmeddelanden som överlämnats till e-postservern"
+
+[labels.sv.model.email_marketing_campaign.field.delivered_count]
+label = "Antal levererade"
+description = "E-postmeddelanden som mottagarnas servrar tagit emot"
+
+[labels.sv.model.email_marketing_campaign.field.opened_count]
+label = "Antal öppnade"
+description = "Mottagare som öppnade e-postmeddelandet"
+
+[labels.sv.model.email_marketing_campaign.field.clicked_count]
+label = "Antal klick"
+description = "Mottagare som klickade på en länk"
+
+[labels.sv.model.email_marketing_campaign.field.bounced_count]
+label = "Antal studsade"
+description = "E-postmeddelanden som studsade"
+
+[labels.sv.model.email_marketing_campaign.field.unsubscribed_count]
+label = "Antal avregistrerade"
+description = "Mottagare som avregistrerade sig på grund av kampanjen"
+
+[labels.sv.model.email_marketing_campaign.field.state]
+label = "Status"
+description = "Kampanjens status: utkast, schemalagd, skickad, annullerad"
+
+[labels.sv.model.email_marketing_campaign.field.state.options]
+draft = "Utkast"
+scheduled = "Schemalagd"
+sent = "Skickad"
+cancelled = "Annullerad"
+
+[labels.sv.model.email_marketing_campaign.action.schedule]
+label = "Schemalägg"
+description = "Köa kampanjen till dess schemalagda dag"
+
+[labels.sv.model.email_marketing_campaign.action.send]
+label = "Skicka"
+description = "Skicka den schemalagda kampanjen till hela listan (endast chef)"
+
+[labels.sv.model.email_marketing_campaign.action.send_now]
+label = "Skicka nu"
+description = "Skicka en kampanj i utkast direkt (endast chef)"
+
+[labels.sv.model.email_marketing_campaign.action.unschedule]
+label = "Avbryt schemaläggning"
+description = "Flytta en schemalagd kampanj tillbaka till utkast"
+
+[labels.sv.model.email_marketing_campaign.action.cancel]
+label = "Annullera"
+description = "Annullera en schemalagd kampanj"

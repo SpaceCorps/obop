@@ -1,0 +1,118 @@
+[labels.pl.module]
+name = "Zakupy"
+description = "Dostawcy, zamówienia zakupu i ich pozycje z obiegiem wersja robocza, wysłane, potwierdzone, przyjęte i anulowane. Sumy zamówień są wpisywane, a nie sumowane z pozycji."
+
+[labels.pl.model.purchase_vendor]
+name = "Dostawca"
+description = "Warunki zakupu od kontaktu, u którego firma kupuje"
+
+[labels.pl.model.purchase_vendor.field.party_id]
+label = "Kontrahent"
+description = "Rekord kontaktu dostawcy"
+
+[labels.pl.model.purchase_vendor.field.vendor_reference]
+label = "Nr klienta u dostawcy"
+description = "Numer klienta Twojej firmy u tego dostawcy"
+
+[labels.pl.model.purchase_vendor.field.payment_terms_days]
+label = "Termin płatności (dni)"
+description = "Liczba dni na zapłatę faktury"
+
+[labels.pl.model.purchase_vendor.field.lead_time_days]
+label = "Czas realizacji (dni)"
+description = "Zwykła liczba dni od zamówienia do dostawy"
+
+[labels.pl.model.purchase_vendor.field.iban]
+label = "IBAN"
+description = "Rachunek bankowy, na który płaci się dostawcy"
+
+[labels.pl.model.purchase_vendor.field.active]
+label = "Aktywny"
+description = "Czy nadal kupujesz od tego dostawcy"
+
+[labels.pl.model.purchase_order]
+name = "Zamówienie zakupu"
+description = "Zlecenie dla dostawcy na dostarczenie towarów lub usług"
+
+[labels.pl.model.purchase_order.field.reference]
+label = "Referencja"
+description = "Numer zamówienia drukowany na dokumencie"
+
+[labels.pl.model.purchase_order.field.vendor_id]
+label = "Dostawca"
+description = "Dostawca, u którego złożono zamówienie"
+
+[labels.pl.model.purchase_order.field.ordered_on]
+label = "Data zamówienia"
+description = "Data złożenia zamówienia (YYYY-MM-DD)"
+
+[labels.pl.model.purchase_order.field.expected_on]
+label = "Oczekiwana data"
+description = "Data, w której oczekuje się dostawy towarów (YYYY-MM-DD)"
+
+[labels.pl.model.purchase_order.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217, na przykład PLN"
+
+[labels.pl.model.purchase_order.field.total]
+label = "Razem"
+description = "Suma zamówienia uzgodniona z dostawcą (w jednostkach podrzędnych waluty, np. groszach)"
+
+[labels.pl.model.purchase_order.field.notes]
+label = "Notatki"
+description = "Instrukcje dostawy i uwagi dla dostawcy"
+
+[labels.pl.model.purchase_order.field.state]
+label = "Status"
+description = "Status zamówienia: wersja robocza, wysłane, potwierdzone, przyjęte, anulowane"
+
+[labels.pl.model.purchase_order.field.state.options]
+draft = "Wersja robocza"
+sent = "Wysłane"
+confirmed = "Potwierdzone"
+received = "Przyjęte"
+cancelled = "Anulowane"
+
+[labels.pl.model.purchase_order.action.send]
+label = "Wyślij"
+description = "Wysyła zamówienie robocze do dostawcy jako zapytanie ofertowe"
+
+[labels.pl.model.purchase_order.action.confirm]
+label = "Potwierdź"
+description = "Zobowiązuje do zamówienia u dostawcy (tylko kierownik)"
+
+[labels.pl.model.purchase_order.action.receive]
+label = "Przyjmij"
+description = "Rejestruje, że towar dotarł"
+
+[labels.pl.model.purchase_order.action.cancel]
+label = "Anuluj"
+description = "Anuluje zamówienie, które nie zostało jeszcze wysłane"
+
+[labels.pl.model.purchase_order_line]
+name = "Pozycja zamówienia"
+description = "Jeden produkt lub usługa w zamówieniu zakupu"
+
+[labels.pl.model.purchase_order_line.field.order_id]
+label = "Zamówienie"
+description = "Zamówienie, do którego należy pozycja"
+
+[labels.pl.model.purchase_order_line.field.product_id]
+label = "Produkt"
+description = "Zamawiany produkt"
+
+[labels.pl.model.purchase_order_line.field.description]
+label = "Opis"
+description = "Sformułowanie dla dostawcy, jeśli różni się od nazwy produktu"
+
+[labels.pl.model.purchase_order_line.field.quantity]
+label = "Ilość"
+description = "Liczba zamówionych sztuk"
+
+[labels.pl.model.purchase_order_line.field.unit_price]
+label = "Cena jednostkowa"
+description = "Uzgodniona cena za sztukę (w jednostkach podrzędnych waluty, np. groszach)"
+
+[labels.pl.model.purchase_order_line.field.received_quantity]
+label = "Ilość przyjęta"
+description = "Liczba dotychczas przyjętych sztuk"

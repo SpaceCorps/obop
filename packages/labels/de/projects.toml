@@ -1,0 +1,156 @@
+[labels.de.module]
+name = "Projekte"
+description = "Projekte, Meilensteine und Aufgaben mit Zuständigen, Fristen und Statusabläufen. Der Fortschritt wird über den Status verfolgt, nicht aus dem Aufwand der Aufgaben berechnet."
+
+[labels.de.model.projects_project]
+name = "Projekt"
+description = "Ein Arbeitspaket mit einem Ziel"
+
+[labels.de.model.projects_project.field.name]
+label = "Name"
+description = "Projektname"
+
+[labels.de.model.projects_project.field.code]
+label = "Code"
+description = "Kurzreferenz in Berichten, zum Beispiel WEB-24"
+
+[labels.de.model.projects_project.field.project_manager]
+label = "Projektleitung"
+description = "Name der für das Projekt verantwortlichen Person"
+
+[labels.de.model.projects_project.field.start_on]
+label = "Beginn"
+description = "Geplantes Startdatum (YYYY-MM-DD)"
+
+[labels.de.model.projects_project.field.deadline]
+label = "Frist"
+description = "Datum, bis zu dem das Projekt fertig sein muss (YYYY-MM-DD)"
+
+[labels.de.model.projects_project.field.budget]
+label = "Budget"
+description = "Vereinbartes Budget für das Projekt (kleinste Währungseinheit, z. B. Cent)"
+
+[labels.de.model.projects_project.field.description]
+label = "Beschreibung"
+description = "Ziel und Umfang des Projekts"
+
+[labels.de.model.projects_project.field.state]
+label = "Status"
+description = "Projektstatus: geplant, aktiv, erledigt"
+
+[labels.de.model.projects_project.field.state.options]
+planned = "Geplant"
+active = "Aktiv"
+done = "Erledigt"
+
+[labels.de.model.projects_project.action.start]
+label = "Starten"
+description = "Ein geplantes Projekt auf aktiv setzen"
+
+[labels.de.model.projects_project.action.finish]
+label = "Fertigstellen"
+description = "Ein aktives Projekt als erledigt markieren"
+
+[labels.de.model.projects_project.action.reopen]
+label = "Wieder öffnen"
+description = "Ein abgeschlossenes Projekt wieder öffnen"
+
+[labels.de.model.projects_milestone]
+name = "Meilenstein"
+description = "Ein Kontrollpunkt in einem Projekt"
+
+[labels.de.model.projects_milestone.field.project_id]
+label = "Projekt"
+description = "Das Projekt, zu dem der Meilenstein gehört"
+
+[labels.de.model.projects_milestone.field.name]
+label = "Name"
+description = "Name des Meilensteins, zum Beispiel Design freigegeben"
+
+[labels.de.model.projects_milestone.field.due_on]
+label = "Fällig am"
+description = "Datum, an dem der Meilenstein fällig ist (YYYY-MM-DD)"
+
+[labels.de.model.projects_milestone.field.description]
+label = "Beschreibung"
+description = "Was gelten muss, damit der Meilenstein als erreicht zählt"
+
+[labels.de.model.projects_milestone.field.state]
+label = "Status"
+description = "Meilensteinstatus: ausstehend, erreicht, verfehlt"
+
+[labels.de.model.projects_milestone.field.state.options]
+pending = "Ausstehend"
+reached = "Erreicht"
+missed = "Verfehlt"
+
+[labels.de.model.projects_milestone.action.reach]
+label = "Als erreicht markieren"
+description = "Einen ausstehenden Meilenstein als erreicht markieren"
+
+[labels.de.model.projects_milestone.action.miss]
+label = "Als verfehlt markieren"
+description = "Festhalten, dass ein ausstehender Meilenstein verfehlt wurde"
+
+[labels.de.model.projects_task]
+name = "Aufgabe"
+description = "Eine Arbeitseinheit innerhalb eines Projekts"
+
+[labels.de.model.projects_task.field.title]
+label = "Titel"
+description = "Was zu tun ist"
+
+[labels.de.model.projects_task.field.project_id]
+label = "Projekt"
+description = "Das Projekt, zu dem die Aufgabe gehört; leer bei einer privaten Aufgabe"
+
+[labels.de.model.projects_task.field.milestone_id]
+label = "Meilenstein"
+description = "Der Meilenstein, zu dem die Aufgabe beiträgt"
+
+[labels.de.model.projects_task.field.assignee]
+label = "Zuständig"
+description = "Name der verantwortlichen Person"
+
+[labels.de.model.projects_task.field.priority]
+label = "Priorität"
+description = "Wie wichtig die Aufgabe ist: niedrig, normal, hoch"
+
+[labels.de.model.projects_task.field.priority.options]
+low = "Niedrig"
+normal = "Normal"
+high = "Hoch"
+
+[labels.de.model.projects_task.field.due_on]
+label = "Fällig am"
+description = "Datum, an dem die Aufgabe fällig ist (YYYY-MM-DD)"
+
+[labels.de.model.projects_task.field.estimate_minutes]
+label = "Schätzung (Min.)"
+description = "Geplanter Aufwand in Minuten"
+
+[labels.de.model.projects_task.field.description]
+label = "Beschreibung"
+description = "Details, Abnahmekriterien und Links"
+
+[labels.de.model.projects_task.field.state]
+label = "Status"
+description = "Aufgabenstatus: zu erledigen, in Arbeit, erledigt, storniert"
+
+[labels.de.model.projects_task.field.state.options]
+todo = "Zu erledigen"
+doing = "In Arbeit"
+done = "Erledigt"
+cancelled = "Storniert"
+
+[labels.de.model.projects_task.action.begin]
+label = "Beginnen"
+description = "Die Arbeit an einer Aufgabe beginnen, die zu erledigen ist"
+
+[labels.de.model.projects_task.action.complete]
+label = "Erledigen"
+description = "Eine Aufgabe in Arbeit als erledigt markieren"
+
+[labels.de.model.projects_task.action.cancel]
+label = "Stornieren"
+description = "Eine Aufgabe verwerfen, die nie begonnen wurde"

@@ -1,0 +1,35 @@
+[labels.sv.module]
+name = "Fakturering"
+
+[labels.sv.model.invoice]
+name = "Faktura"
+description = "En kundfaktura; bokförda fakturor korrigeras endast genom kreditfakturor"
+
+[labels.sv.model.invoice.field.sale_order_id]
+label = "Försäljningsorder"
+description = "Id för den ursprungliga försäljningsordern"
+
+[labels.sv.model.invoice.field.state]
+label = "Status"
+description = "Livscykel: utkast, bokförd eller annullerad"
+
+[labels.sv.model.invoice.field.state.options]
+draft = "Utkast"
+posted = "Bokförd"
+cancelled = "Annullerad"
+
+[labels.sv.model.invoice.field.total_minor]
+label = "Totalt"
+description = "Fakturans totalbelopp i valutans minsta enhet"
+
+[labels.sv.model.invoice.field.number]
+label = "Nummer"
+description = "Lagstadgat löpnummer utan luckor, tilldelas vid bokföring"
+
+[labels.sv.model.invoice.action.post]
+label = "Bokför"
+description = "Bokför en faktura i utkast och tilldela dess lagstadgade nummer"
+
+[labels.sv.model.invoice.action.cancel]
+label = "Annullera"
+description = "Annullera en faktura i utkast"

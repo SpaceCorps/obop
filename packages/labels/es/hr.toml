@@ -1,0 +1,187 @@
+[labels.es.module]
+name = "Recursos humanos"
+description = "Empleados, departamentos y solicitudes de ausencia. Los datos personales se clasifican de forma estricta: el salario, los datos bancarios y el documento de identidad solo los ven los responsables, y los datos de salud y sindicales, el grupo especial de lectores."
+
+[labels.es.model.hr_department]
+name = "Departamento"
+description = "Un equipo o departamento de la empresa"
+
+[labels.es.model.hr_department.field.name]
+label = "Nombre"
+description = "Nombre del departamento"
+
+[labels.es.model.hr_department.field.head]
+label = "Responsable del departamento"
+description = "Nombre del responsable del departamento"
+
+[labels.es.model.hr_department.field.cost_centre]
+label = "Centro de coste"
+description = "Código del centro de coste que usa finanzas"
+
+[labels.es.model.hr_employee]
+name = "Empleado"
+description = "Una persona empleada por la empresa"
+
+[labels.es.model.hr_employee.field.name]
+label = "Nombre"
+description = "Nombre completo"
+
+[labels.es.model.hr_employee.field.job_title]
+label = "Cargo"
+description = "Puesto"
+
+[labels.es.model.hr_employee.field.work_email]
+label = "Correo electrónico de trabajo"
+description = "Correo electrónico de trabajo"
+
+[labels.es.model.hr_employee.field.work_phone]
+label = "Teléfono de trabajo"
+description = "Teléfono de trabajo"
+
+[labels.es.model.hr_employee.field.department_id]
+label = "Departamento"
+description = "El departamento al que pertenece la persona"
+
+[labels.es.model.hr_employee.field.reports_to_id]
+label = "Responde ante"
+description = "El responsable directo de la persona"
+
+[labels.es.model.hr_employee.field.hired_on]
+label = "Fecha de contratación"
+description = "Primer día de empleo (YYYY-MM-DD)"
+
+[labels.es.model.hr_employee.field.contract_type]
+label = "Tipo de contrato"
+description = "Tipo de contrato: indefinido, temporal, autónomo, becario"
+
+[labels.es.model.hr_employee.field.contract_type.options]
+permanent = "Indefinido"
+fixed_term = "Temporal"
+contractor = "Contratista"
+intern = "Becario"
+
+[labels.es.model.hr_employee.field.private_email]
+label = "Correo electrónico personal"
+description = "Correo electrónico personal"
+
+[labels.es.model.hr_employee.field.private_phone]
+label = "Teléfono personal"
+description = "Teléfono personal"
+
+[labels.es.model.hr_employee.field.home_address]
+label = "Domicilio particular"
+description = "Domicilio particular"
+
+[labels.es.model.hr_employee.field.birth_date]
+label = "Fecha de nacimiento"
+description = "Fecha de nacimiento (YYYY-MM-DD)"
+
+[labels.es.model.hr_employee.field.national_id]
+label = "Documento nacional de identidad"
+description = "Documento nacional de identidad o número de la seguridad social"
+
+[labels.es.model.hr_employee.field.emergency_contact]
+label = "Contacto de emergencia"
+description = "Nombre y teléfono de la persona a la que llamar en caso de emergencia"
+
+[labels.es.model.hr_employee.field.salary]
+label = "Salario"
+description = "Salario bruto anual (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.hr_employee.field.bank_iban]
+label = "IBAN bancario"
+description = "Cuenta bancaria en la que se ingresa el salario"
+
+[labels.es.model.hr_employee.field.union_member]
+label = "Afiliado a un sindicato"
+description = "Indica si la persona está afiliada a un sindicato"
+
+[labels.es.model.hr_employee.field.work_permit_expiry]
+label = "Caducidad del permiso de trabajo"
+description = "Fecha de caducidad del permiso de trabajo, para extranjeros (YYYY-MM-DD)"
+
+[labels.es.model.hr_employee.field.health_note]
+label = "Nota de salud"
+description = "Condición de salud o discapacidad relevante en el lugar de trabajo"
+
+[labels.es.model.hr_employee.field.state]
+label = "Estado"
+description = "Estado laboral: incorporación, activo, baja definitiva"
+
+[labels.es.model.hr_employee.field.state.options]
+onboarding = "Incorporación"
+active = "Activo"
+offboarded = "Desvinculado"
+
+[labels.es.model.hr_employee.action.activate]
+label = "Activar"
+description = "Completar la incorporación y marcar al empleado como activo"
+
+[labels.es.model.hr_employee.action.offboard]
+label = "Desvincular"
+description = "Cerrar el registro laboral; solo se revierte con una decisión de RR. HH."
+
+[labels.es.model.hr_leave_request]
+name = "Solicitud de ausencia"
+description = "Una solicitud de tiempo libre"
+
+[labels.es.model.hr_leave_request.field.employee_id]
+label = "Empleado"
+description = "El empleado que pide tiempo libre"
+
+[labels.es.model.hr_leave_request.field.leave_kind]
+label = "Tipo de ausencia"
+description = "Tipo de ausencia: retribuida, no retribuida, parental, estudios, otra"
+
+[labels.es.model.hr_leave_request.field.leave_kind.options]
+paid = "Pagado"
+unpaid = "No retribuido"
+parental = "Parental"
+study = "Estudios"
+other = "Otro"
+
+[labels.es.model.hr_leave_request.field.start_on]
+label = "Fecha de inicio"
+description = "Primer día de ausencia (YYYY-MM-DD)"
+
+[labels.es.model.hr_leave_request.field.end_on]
+label = "Fecha de fin"
+description = "Último día de ausencia (YYYY-MM-DD)"
+
+[labels.es.model.hr_leave_request.field.days]
+label = "Días"
+description = "Días laborables solicitados"
+
+[labels.es.model.hr_leave_request.field.reason]
+label = "Motivo"
+description = "Motivo de la solicitud de ausencia"
+
+[labels.es.model.hr_leave_request.field.is_sick_leave]
+label = "Baja por enfermedad"
+description = "Indica si la ausencia se debe a una enfermedad"
+
+[labels.es.model.hr_leave_request.field.medical_note]
+label = "Nota médica"
+description = "Referencia del certificado médico, si lo hay"
+
+[labels.es.model.hr_leave_request.field.state]
+label = "Estado"
+description = "Estado de la solicitud: borrador, solicitada, aprobada, rechazada"
+
+[labels.es.model.hr_leave_request.field.state.options]
+draft = "Borrador"
+requested = "Solicitado"
+approved = "Aprobado"
+refused = "Rechazado"
+
+[labels.es.model.hr_leave_request.action.request]
+label = "Solicitar"
+description = "Enviar la solicitud al responsable"
+
+[labels.es.model.hr_leave_request.action.approve]
+label = "Aprobar"
+description = "Aprobar una ausencia solicitada (solo responsables)"
+
+[labels.es.model.hr_leave_request.action.refuse]
+label = "Rechazar"
+description = "Rechazar una ausencia solicitada (solo responsables)"

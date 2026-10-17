@@ -1,0 +1,118 @@
+[labels.fr.module]
+name = "Achats"
+description = "Fournisseurs, commandes d’achat et lignes de commande avec un flux brouillon, envoyée, confirmée, reçue et annulée. Les totaux de commande sont saisis, pas additionnés à partir des lignes."
+
+[labels.fr.model.purchase_vendor]
+name = "Fournisseur"
+description = "Les conditions d’achat d’un contact chez qui vous achetez"
+
+[labels.fr.model.purchase_vendor.field.party_id]
+label = "Tiers"
+description = "La fiche contact du fournisseur"
+
+[labels.fr.model.purchase_vendor.field.vendor_reference]
+label = "Référence fournisseur"
+description = "Votre numéro de client chez ce fournisseur"
+
+[labels.fr.model.purchase_vendor.field.payment_terms_days]
+label = "Délai de paiement (jours)"
+description = "Nombre de jours accordés pour payer une facture"
+
+[labels.fr.model.purchase_vendor.field.lead_time_days]
+label = "Délai d’approvisionnement (jours)"
+description = "Nombre habituel de jours entre la commande et la livraison"
+
+[labels.fr.model.purchase_vendor.field.iban]
+label = "IBAN"
+description = "Compte bancaire sur lequel le fournisseur est payé"
+
+[labels.fr.model.purchase_vendor.field.active]
+label = "Actif"
+description = "Indique si vous achetez toujours chez ce fournisseur"
+
+[labels.fr.model.purchase_order]
+name = "Commande"
+description = "Une demande faite à un fournisseur de livrer des biens ou des services"
+
+[labels.fr.model.purchase_order.field.reference]
+label = "Référence"
+description = "Numéro de commande imprimé sur le document"
+
+[labels.fr.model.purchase_order.field.vendor_id]
+label = "Fournisseur"
+description = "Le fournisseur auprès duquel on commande"
+
+[labels.fr.model.purchase_order.field.ordered_on]
+label = "Commandé le"
+description = "Date à laquelle la commande a été passée (YYYY-MM-DD)"
+
+[labels.fr.model.purchase_order.field.expected_on]
+label = "Prévu le"
+description = "Date à laquelle la marchandise est attendue (YYYY-MM-DD)"
+
+[labels.fr.model.purchase_order.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217, par exemple EUR"
+
+[labels.fr.model.purchase_order.field.total]
+label = "Total"
+description = "Total de la commande tel que convenu avec le fournisseur (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.purchase_order.field.notes]
+label = "Notes"
+description = "Instructions de livraison et remarques pour le fournisseur"
+
+[labels.fr.model.purchase_order.field.state]
+label = "Statut"
+description = "Statut de la commande : brouillon, envoyée, confirmée, reçue, annulée"
+
+[labels.fr.model.purchase_order.field.state.options]
+draft = "Brouillon"
+sent = "Envoyée"
+confirmed = "Confirmée"
+received = "Reçue"
+cancelled = "Annulée"
+
+[labels.fr.model.purchase_order.action.send]
+label = "Envoyer"
+description = "Envoie une commande en brouillon au fournisseur comme demande de prix"
+
+[labels.fr.model.purchase_order.action.confirm]
+label = "Confirmer"
+description = "Engage la commande auprès du fournisseur (responsable uniquement)"
+
+[labels.fr.model.purchase_order.action.receive]
+label = "Réceptionner"
+description = "Enregistre que la marchandise est arrivée"
+
+[labels.fr.model.purchase_order.action.cancel]
+label = "Annuler"
+description = "Annule une commande qui n’a pas encore été envoyée"
+
+[labels.fr.model.purchase_order_line]
+name = "Ligne de commande"
+description = "Un produit ou un service d’une commande d’achat"
+
+[labels.fr.model.purchase_order_line.field.order_id]
+label = "Commande"
+description = "La commande à laquelle appartient la ligne"
+
+[labels.fr.model.purchase_order_line.field.product_id]
+label = "Produit"
+description = "Le produit commandé"
+
+[labels.fr.model.purchase_order_line.field.description]
+label = "Description"
+description = "Libellé à l’attention du fournisseur s’il diffère du nom du produit"
+
+[labels.fr.model.purchase_order_line.field.quantity]
+label = "Quantité"
+description = "Unités commandées"
+
+[labels.fr.model.purchase_order_line.field.unit_price]
+label = "Prix unitaire"
+description = "Prix convenu par unité (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.purchase_order_line.field.received_quantity]
+label = "Quantité reçue"
+description = "Unités reçues jusqu’à présent"

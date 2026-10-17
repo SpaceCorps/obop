@@ -1,0 +1,56 @@
+[labels.sv.module]
+name = "Tidrapporter"
+description = "Tid som lagts på projektuppgifter, angiven i minuter, med en markering för fakturerbar tid och ett godkännandesteg. Kräver paketet Projekt."
+
+[labels.sv.model.timesheets_entry]
+name = "Tidsregistrering"
+description = "Tid som en person lagt på en uppgift en dag"
+
+[labels.sv.model.timesheets_entry.field.task_id]
+label = "Uppgift"
+description = "Uppgiften som arbetet gäller"
+
+[labels.sv.model.timesheets_entry.field.worker]
+label = "Medarbetare"
+description = "Namn på personen som utförde arbetet"
+
+[labels.sv.model.timesheets_entry.field.worked_on]
+label = "Arbetat den"
+description = "Dagen då arbetet utfördes (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.timesheets_entry.field.minutes]
+label = "Minuter"
+description = "Nedlagd tid, i minuter"
+
+[labels.sv.model.timesheets_entry.field.billable]
+label = "Fakturerbar"
+description = "Om tiden kan debiteras kunden"
+
+[labels.sv.model.timesheets_entry.field.description]
+label = "Beskrivning"
+description = "Vad som gjordes"
+
+[labels.sv.model.timesheets_entry.field.cost_rate]
+label = "Kostnadssats"
+description = "Medarbetarens interna timkostnad vid registreringen (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.timesheets_entry.field.state]
+label = "Status"
+description = "Registreringens status: utkast, inskickad, godkänd"
+
+[labels.sv.model.timesheets_entry.field.state.options]
+draft = "Utkast"
+submitted = "Inskickad"
+approved = "Godkänd"
+
+[labels.sv.model.timesheets_entry.action.submit]
+label = "Skicka in"
+description = "Skicka in registreringen för godkännande"
+
+[labels.sv.model.timesheets_entry.action.approve]
+label = "Godkänn"
+description = "Godkänn en inskickad registrering så att den kan faktureras (endast chef)"
+
+[labels.sv.model.timesheets_entry.action.reject]
+label = "Avvisa"
+description = "Skicka tillbaka en inskickad registrering till utkast (endast chef)"

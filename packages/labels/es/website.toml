@@ -1,0 +1,268 @@
+[labels.es.module]
+name = "Sitio web"
+description = "Contenido de un sitio web público: páginas con flujo de borrador, publicada y archivada, menú, entradas de blog, traducciones y formularios de los visitantes. Con el sitio público activado, sirve lo publicado sin inicio de sesión y con SEO; solo se ven los campos públicos. Publicar requiere aprobación humana; los agentes solo pueden proponerlo. Los remitentes son datos personales."
+
+[labels.es.model.website_page]
+name = "Página"
+description = "Una página del sitio web"
+
+[labels.es.model.website_page.field.title]
+label = "Título"
+description = "Título de la página"
+
+[labels.es.model.website_page.field.slug]
+label = "Slug"
+description = "Ruta URL de la página sin barras en los extremos, en minúsculas y con guiones, por ejemplo sobre-nosotros. La página con slug home es la portada"
+
+[labels.es.model.website_page.field.body]
+label = "Cuerpo"
+description = "Contenido de la página en Markdown (un subconjunto seguro: títulos, listas, enlaces, énfasis, código, citas, tablas)"
+
+[labels.es.model.website_page.field.seo_title]
+label = "Título SEO"
+description = "Título que se muestra en los resultados de búsqueda; vacío significa el título de la página"
+
+[labels.es.model.website_page.field.seo_description]
+label = "Descripción SEO"
+description = "Descripción que se muestra en los resultados de búsqueda"
+
+[labels.es.model.website_page.field.published_on]
+label = "Fecha de publicación"
+description = "Día en que la página se hizo pública (YYYY-MM-DD)"
+
+[labels.es.model.website_page.field.state]
+label = "Estado"
+description = "Estado de la página: borrador, publicada, archivada"
+
+[labels.es.model.website_page.field.state.options]
+draft = "Borrador"
+published = "Publicado"
+archived = "Archivado"
+
+[labels.es.model.website_page.action.publish]
+label = "Publicar"
+description = "Hacer pública la página (solo responsables)"
+
+[labels.es.model.website_page.action.unpublish]
+label = "Despublicar"
+description = "Retirar la página y devolverla a borrador"
+
+[labels.es.model.website_page.action.archive]
+label = "Archivar"
+description = "Retirar definitivamente una página publicada"
+
+[labels.es.model.website_menu_item]
+name = "Elemento de menú"
+description = "Un elemento de la navegación del sitio"
+
+[labels.es.model.website_menu_item.field.label]
+label = "Etiqueta"
+description = "Texto que se muestra en el menú"
+
+[labels.es.model.website_menu_item.field.url]
+label = "URL"
+description = "A dónde lleva el elemento: un slug de página que empieza con una barra o una dirección completa"
+
+[labels.es.model.website_menu_item.field.parent_id]
+label = "Padre"
+description = "El elemento bajo el que está anidado este; vacío para un elemento de primer nivel"
+
+[labels.es.model.website_menu_item.field.sequence]
+label = "Secuencia"
+description = "Orden entre artículos del mismo nivel, de menor a mayor"
+
+[labels.es.model.website_menu_item.field.visible]
+label = "Visible"
+description = "Indica si el elemento se muestra"
+
+[labels.es.model.website_menu_item.field.new_window]
+label = "Nueva ventana"
+description = "Indica si el enlace se abre en una ventana nueva"
+
+[labels.es.model.website_blog_post]
+name = "Entrada de blog"
+description = "Una entrada de blog"
+
+[labels.es.model.website_blog_post.field.title]
+label = "Título"
+description = "Título de la entrada"
+
+[labels.es.model.website_blog_post.field.slug]
+label = "Slug"
+description = "Parte de la URL de la entrada, en minúsculas y con guiones"
+
+[labels.es.model.website_blog_post.field.author_name]
+label = "Nombre del autor"
+description = "Nombre del autor, para los registros propios del equipo"
+
+[labels.es.model.website_blog_post.field.byline]
+label = "Firma"
+description = "Línea de autoría que se muestra públicamente, por ejemplo el nombre del equipo o de la marca; usa un nombre de persona solo si esta lo ha aceptado"
+
+[labels.es.model.website_blog_post.field.summary]
+label = "Resumen"
+description = "Avance que se muestra en los listados"
+
+[labels.es.model.website_blog_post.field.body]
+label = "Cuerpo"
+description = "Contenido de la entrada en Markdown (un subconjunto seguro: títulos, listas, enlaces, énfasis, código, citas, tablas)"
+
+[labels.es.model.website_blog_post.field.tags]
+label = "Etiquetas"
+description = "Etiquetas separadas por comas, por ejemplo novedades,producto"
+
+[labels.es.model.website_blog_post.field.published_on]
+label = "Fecha de publicación"
+description = "Día con el que se fecha la entrada (YYYY-MM-DD)"
+
+[labels.es.model.website_blog_post.field.state]
+label = "Estado"
+description = "Estado de la entrada: borrador, publicada, archivada"
+
+[labels.es.model.website_blog_post.field.state.options]
+draft = "Borrador"
+published = "Publicado"
+archived = "Archivado"
+
+[labels.es.model.website_blog_post.action.publish]
+label = "Publicar"
+description = "Hacer pública la entrada (solo responsables)"
+
+[labels.es.model.website_blog_post.action.unpublish]
+label = "Despublicar"
+description = "Retirar la entrada y devolverla a borrador"
+
+[labels.es.model.website_blog_post.action.archive]
+label = "Archivar"
+description = "Retirar una entrada publicada"
+
+[labels.es.model.website_form_submission]
+name = "Envío de formulario"
+description = "Un mensaje que un visitante envió mediante un formulario del sitio"
+
+[labels.es.model.website_form_submission.field.form_name]
+label = "Nombre del formulario"
+description = "De qué formulario procede, por ejemplo contacto"
+
+[labels.es.model.website_form_submission.field.sender_name]
+label = "Nombre del remitente"
+description = "Nombre que indicó el visitante"
+
+[labels.es.model.website_form_submission.field.sender_email]
+label = "Correo electrónico del remitente"
+description = "Correo electrónico que indicó el visitante"
+
+[labels.es.model.website_form_submission.field.sender_phone]
+label = "Teléfono del remitente"
+description = "Teléfono que indicó el visitante"
+
+[labels.es.model.website_form_submission.field.message]
+label = "Mensaje"
+description = "Lo que escribió el visitante"
+
+[labels.es.model.website_form_submission.field.source_page]
+label = "Página de origen"
+description = "Slug de la página en la que estaba el formulario"
+
+[labels.es.model.website_form_submission.field.submitted_on]
+label = "Fecha de presentación"
+description = "Día del envío (YYYY-MM-DD)"
+
+[labels.es.model.website_form_submission.field.consent_given]
+label = "Consentimiento otorgado"
+description = "Indica si el visitante marcó la casilla de consentimiento para ser contactado"
+
+[labels.es.model.website_form_submission.field.state]
+label = "Estado"
+description = "Estado de gestión: nuevo, gestionado, spam"
+
+[labels.es.model.website_form_submission.field.state.options]
+new = "Nuevo"
+handled = "Atendido"
+spam = "Spam"
+
+[labels.es.model.website_form_submission.action.handle]
+label = "Atender"
+description = "Marcar el mensaje como respondido o resuelto"
+
+[labels.es.model.website_form_submission.action.mark_spam]
+label = "Marcar como spam"
+description = "Marcar el mensaje como spam"
+
+[labels.es.model.website_page_translation]
+name = "Traducción de la página"
+description = "Una página traducida a otro idioma; el sitio público la muestra a los visitantes que leen ese idioma"
+
+[labels.es.model.website_page_translation.field.page_id]
+label = "Página"
+description = "La página que traduce esta traducción"
+
+[labels.es.model.website_page_translation.field.lang]
+label = "Idioma"
+description = "Idioma de la traducción: en, de, fr, pl, fi, sv o es"
+
+[labels.es.model.website_page_translation.field.lang.options]
+en = "Inglés"
+de = "Alemán"
+fr = "Francés"
+pl = "Polaco"
+fi = "Finés"
+sv = "Sueco"
+es = "Español"
+
+[labels.es.model.website_page_translation.field.title]
+label = "Título"
+description = "Título de la página traducido"
+
+[labels.es.model.website_page_translation.field.body]
+label = "Cuerpo"
+description = "Contenido de la página traducido en Markdown"
+
+[labels.es.model.website_page_translation.field.seo_title]
+label = "Título SEO"
+description = "Título traducido que se muestra en los resultados de búsqueda"
+
+[labels.es.model.website_page_translation.field.seo_description]
+label = "Descripción SEO"
+description = "Descripción traducida que se muestra en los resultados de búsqueda"
+
+[labels.es.model.website_page_translation.field.published]
+label = "Publicado"
+description = "Indica si la traducción se muestra; solo es accesible mientras su página esté publicada"
+
+[labels.es.model.website_blog_post_translation]
+name = "Traducción de la entrada"
+description = "Una entrada de blog traducida a otro idioma"
+
+[labels.es.model.website_blog_post_translation.field.post_id]
+label = "Entrada"
+description = "La entrada que traduce esta traducción"
+
+[labels.es.model.website_blog_post_translation.field.lang]
+label = "Idioma"
+description = "Idioma de la traducción: en, de, fr, pl, fi, sv o es"
+
+[labels.es.model.website_blog_post_translation.field.lang.options]
+en = "Inglés"
+de = "Alemán"
+fr = "Francés"
+pl = "Polaco"
+fi = "Finés"
+sv = "Sueco"
+es = "Español"
+
+[labels.es.model.website_blog_post_translation.field.title]
+label = "Título"
+description = "Título de la entrada traducido"
+
+[labels.es.model.website_blog_post_translation.field.summary]
+label = "Resumen"
+description = "Avance traducido"
+
+[labels.es.model.website_blog_post_translation.field.body]
+label = "Cuerpo"
+description = "Contenido de la entrada traducido en Markdown"
+
+[labels.es.model.website_blog_post_translation.field.published]
+label = "Publicado"
+description = "Indica si la traducción se muestra; solo es accesible mientras su entrada esté publicada"

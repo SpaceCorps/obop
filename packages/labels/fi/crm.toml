@@ -1,0 +1,48 @@
+[labels.fi.module]
+name = "CRM"
+
+[labels.fi.model.lead]
+name = "Liidi"
+description = "Mahdollinen kauppa yhteyshenkilön kanssa"
+
+[labels.fi.model.lead.field.title]
+label = "Otsikko"
+description = "Lyhyt kuvaus myyntimahdollisuudesta"
+
+[labels.fi.model.lead.field.contact_name]
+label = "Yhteyshenkilön nimi"
+description = "Yhteyshenkilön nimi"
+
+[labels.fi.model.lead.field.contact_email]
+label = "Yhteyshenkilön sähköposti"
+description = "Yhteyshenkilön sähköpostiosoite"
+
+[labels.fi.model.lead.field.expected_revenue_minor]
+label = "Odotettu tuotto"
+description = "Odotettu tuotto valuutan pienimmässä yksikössä"
+
+[labels.fi.model.lead.field.stage]
+label = "Vaihe"
+description = "Myyntiputken vaihe: uusi, kvalifioitu, voitettu tai hävitty"
+
+[labels.fi.model.lead.field.stage.options]
+new = "Uusi"
+qualified = "Kvalifioitu"
+won = "Voitettu"
+lost = "Hävitty"
+
+[labels.fi.model.lead.action.qualify]
+label = "Kvalifioi"
+description = "Siirrä uusi liidi kvalifioituun vaiheeseen"
+
+[labels.fi.model.lead.action.mark_won]
+label = "Merkitse voitetuksi"
+description = "Siirrä liidi voitettuun vaiheeseen"
+
+[labels.fi.model.lead.action.mark_lost]
+label = "Merkitse hävityksi"
+description = "Siirrä liidi hävittyyn vaiheeseen"
+
+[labels.fi.model.lead.action.reopen]
+label = "Avaa uudelleen"
+description = "Siirrä liidi takaisin uuteen vaiheeseen"

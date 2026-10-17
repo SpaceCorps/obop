@@ -1,0 +1,140 @@
+[labels.fi.module]
+name = "Kenttähuolto"
+description = "Asiakkaiden luona tehtävät työtehtävät asentajan hoitamina: ajoitettu, matkalla, käynnissä, valmis tai peruutettu. Tehtävään kirjataan asiakas, kohde, asentaja, suunniteltu päivä ja alkuaika, käytetyt osat ja tarvitseeko asiakas kuitata työ. Kohteen osoite ja yhteystiedot ovat henkilötietoja. Vaatii Henkilöstö- ja Tuotteet-paketit."
+
+[labels.fi.model.field_service_job]
+name = "Työtehtävä"
+description = "Asiakkaan luona tehtävä työtehtävä"
+
+[labels.fi.model.field_service_job.field.name]
+label = "Nimi"
+description = "Työtehtävän lyhyt otsikko, esimerkiksi Vaihda lämmityskattilan pumppu"
+
+[labels.fi.model.field_service_job.field.customer_id]
+label = "Asiakas"
+description = "Asiakas, jolle työ tehdään"
+
+[labels.fi.model.field_service_job.field.site_name]
+label = "Kohteen nimi"
+description = "Kohteen nimi, esimerkiksi Päävarasto"
+
+[labels.fi.model.field_service_job.field.site_address]
+label = "Kohteen osoite"
+description = "Katuosoite, jossa työ tehdään; usein yksityishenkilön koti"
+
+[labels.fi.model.field_service_job.field.site_city]
+label = "Kohteen kaupunki"
+description = "Kohteen kaupunki"
+
+[labels.fi.model.field_service_job.field.site_postcode]
+label = "Kohteen postinumero"
+description = "Kohteen postinumero"
+
+[labels.fi.model.field_service_job.field.site_country]
+label = "Kohteen maa"
+description = "Kohteen maa"
+
+[labels.fi.model.field_service_job.field.site_contact_name]
+label = "Kohteen yhteyshenkilö"
+description = "Kohteessa tavattavan henkilön nimi"
+
+[labels.fi.model.field_service_job.field.site_contact_phone]
+label = "Kohteen yhteyspuhelin"
+description = "Kohteessa tavattavan henkilön puhelinnumero"
+
+[labels.fi.model.field_service_job.field.technician_id]
+label = "Asentaja"
+description = "Työtehtävään määrätty asentaja"
+
+[labels.fi.model.field_service_job.field.priority]
+label = "Prioriteetti"
+description = "Työtehtävän kiireellisyys: matala, normaali, korkea, kiireellinen"
+
+[labels.fi.model.field_service_job.field.priority.options]
+low = "Matala"
+normal = "Normaali"
+high = "Korkea"
+urgent = "Kiireellinen"
+
+[labels.fi.model.field_service_job.field.description]
+label = "Kuvaus"
+description = "Mitä on tehtävä ja mitä asiakas ilmoitti"
+
+[labels.fi.model.field_service_job.field.scheduled_on]
+label = "Ajoitettu päivä"
+description = "Käynnin suunniteltu päivä (YYYY-MM-DD)"
+
+[labels.fi.model.field_service_job.field.scheduled_start_minute]
+label = "Suunniteltu alkuminuutti"
+description = "Suunniteltu alkamisaika minuutteina keskiyöstä (540 tarkoittaa kello 9.00)"
+
+[labels.fi.model.field_service_job.field.planned_minutes]
+label = "Suunnitellut minuutit"
+description = "Suunniteltu kesto minuutteina"
+
+[labels.fi.model.field_service_job.field.signature_required]
+label = "Allekirjoitus vaaditaan"
+description = "Pitääkö asiakkaan kuitata työ, ennen kuin se katsotaan valmiiksi"
+
+[labels.fi.model.field_service_job.field.signed_by]
+label = "Allekirjoittanut"
+description = "Työn kuitanneen henkilön nimi"
+
+[labels.fi.model.field_service_job.field.signed_on]
+label = "Allekirjoitettu"
+description = "Päivä, jona asiakas kuittasi työn (YYYY-MM-DD)"
+
+[labels.fi.model.field_service_job.field.work_report]
+label = "Työraportti"
+description = "Mitä tehtiin, asentajan kirjoittamana"
+
+[labels.fi.model.field_service_job.field.state]
+label = "Tila"
+description = "Työtehtävän tila: ajoitettu, matkalla, käynnissä, valmis, peruutettu"
+
+[labels.fi.model.field_service_job.field.state.options]
+scheduled = "Ajoitettu"
+en_route = "Matkalla"
+in_progress = "Käynnissä"
+done = "Valmis"
+cancelled = "Peruutettu"
+
+[labels.fi.model.field_service_job.action.depart]
+label = "Lähde matkaan"
+description = "Asentaja on matkalla kohteeseen"
+
+[labels.fi.model.field_service_job.action.start]
+label = "Aloita"
+description = "Asentaja on saapunut ja aloittanut työn"
+
+[labels.fi.model.field_service_job.action.complete]
+label = "Merkitse valmiiksi"
+description = "Päätä työtehtävä; jos allekirjoitus vaaditaan, kirjaa ensin allekirjoittaja ja allekirjoituspäivä"
+
+[labels.fi.model.field_service_job.action.cancel]
+label = "Peruuta"
+description = "Peruuta työtehtävä, jota ei ole aloitettu"
+
+[labels.fi.model.field_service_part]
+name = "Varaosa"
+description = "Työtehtävässä käytetty osa tai tuote"
+
+[labels.fi.model.field_service_part.field.job_id]
+label = "Työtehtävä"
+description = "Työtehtävä, jossa osaa käytettiin"
+
+[labels.fi.model.field_service_part.field.product_id]
+label = "Tuote"
+description = "Käytetty tuote"
+
+[labels.fi.model.field_service_part.field.quantity]
+label = "Määrä"
+description = "Käytettyjen yksiköiden määrä"
+
+[labels.fi.model.field_service_part.field.unit_price]
+label = "Yksikköhinta"
+description = "Asiakkaalta veloitettava yksikköhinta (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.field_service_part.field.note]
+label = "Huomautus"
+description = "Huomautus osasta, esimerkiksi sarjanumero"

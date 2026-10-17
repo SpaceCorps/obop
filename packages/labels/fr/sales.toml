@@ -1,0 +1,39 @@
+[labels.fr.module]
+name = "Ventes"
+
+[labels.fr.model.sale_order]
+name = "Commande client"
+description = "Un devis ou une commande confirmée pour un client"
+
+[labels.fr.model.sale_order.field.party_id]
+label = "Tiers"
+description = "Identifiant du tiers client"
+
+[labels.fr.model.sale_order.field.state]
+label = "Statut"
+description = "Cycle de vie : brouillon, confirmée ou annulée"
+
+[labels.fr.model.sale_order.field.state.options]
+draft = "Brouillon"
+confirmed = "Confirmée"
+cancelled = "Annulée"
+
+[labels.fr.model.sale_order.field.total_minor]
+label = "Total"
+description = "Total de la commande en plus petite unité monétaire"
+
+[labels.fr.model.sale_order.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217"
+
+[labels.fr.model.sale_order.action.confirm]
+label = "Confirmer"
+description = "Confirme une commande en brouillon"
+
+[labels.fr.model.sale_order.action.cancel]
+label = "Annuler"
+description = "Annule une commande"
+
+[labels.fr.model.sale_order.action.reset_to_draft]
+label = "Remettre en brouillon"
+description = "Remet en brouillon une commande annulée"

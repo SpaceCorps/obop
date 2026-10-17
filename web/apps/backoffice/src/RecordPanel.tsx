@@ -163,7 +163,12 @@ export function RecordPanel({
         const { [statusField.name]: _, ...rest } = x;
         return rest;
       });
-      d.notify(t("{field}: {values}", { field: fieldTitle(statusField), values: optionLabel(s) }));
+      d.notify(
+        t("{field}: {values}", {
+          field: fieldTitle(statusField),
+          values: optionLabel(s, statusField),
+        }),
+      );
     } else if (out.kind === "approval") d.notify(out.message, "info");
     else {
       // The server's own words (D48), also inline so they stay readable.
@@ -251,7 +256,7 @@ export function RecordPanel({
                       creating ? setDraft({ ...draft, [statusField.name]: s }) : void setStatus(s)
                     }
                   >
-                    {optionLabel(s)}
+                    {optionLabel(s, statusField)}
                   </button>
                 </li>
               );
@@ -264,12 +269,12 @@ export function RecordPanel({
                   needsApproval: false,
                   reason: t("A new {noun} starts as {state}; it moves on through actions", {
                     noun: inSentence(title),
-                    state: optionLabel(initialOption(statusField)),
+                    state: optionLabel(initialOption(statusField), statusField),
                   }),
                 }
               : canMove(model, statusField, row[statusField.name] as string, s, title);
             const blocked = !mv.allowed;
-            const text = `${optionLabel(s)}${mv.allowed && mv.needsApproval ? " *" : ""}`;
+            const text = `${optionLabel(s, statusField)}${mv.allowed && mv.needsApproval ? " *" : ""}`;
             const btn = (
               <button
                 className={`${cls}${blocked && !on ? " blocked" : ""}`}
@@ -344,11 +349,11 @@ export function RecordPanel({
             const at = f ? String(row[f.name] ?? "") : "";
             const why =
               f && a.to && at === a.to
-                ? t("Already {state}", { state: optionLabel(a.to) })
+                ? t("Already {state}", { state: optionLabel(a.to, f) })
                 : f && a.from && at !== a.from
                   ? t("Only available when {field} is {state}", {
                       field: fieldTitle(f),
-                      state: optionLabel(a.from),
+                      state: optionLabel(a.from, f),
                     })
                   : "";
             const btn = (
@@ -463,7 +468,10 @@ export function RecordPanel({
                       setBusy(false);
                       if (out.kind === "ok")
                         d.notify(
-                          t("{field}: {values}", { field: fieldTitle(f), values: optionLabel(to) }),
+                          t("{field}: {values}", {
+                            field: fieldTitle(f),
+                            values: optionLabel(to, f),
+                          }),
                         );
                       else if (out.kind === "approval") d.notify(out.message, "info");
                       else {
@@ -588,7 +596,7 @@ function GovernedValue(p: {
             .map((o) => {
               const mv = canMove(model, f, current, o, p.title);
               return {
-                label: `${optionLabel(o)}${mv.needsApproval ? " *" : ""}`,
+                label: `${optionLabel(o, f)}${mv.needsApproval ? " *" : ""}`,
                 disabled: p.busy || !mv.allowed,
                 description: mv.reason || undefined,
                 onSelect: () => p.onMove(o),
@@ -598,7 +606,7 @@ function GovernedValue(p: {
       ) : (
         <span className="hint">
           {t("Starts as {state}; it moves on through actions.", {
-            state: optionLabel(initialOption(f)),
+            state: optionLabel(initialOption(f), f),
           })}
         </span>
       )}

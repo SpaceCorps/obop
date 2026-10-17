@@ -1,0 +1,324 @@
+[labels.es.module]
+name = "Contabilidad"
+description = "Plan de cuentas, diarios, impuestos, asientos con líneas de debe y haber, ejercicios fiscales, periodos y extractos bancarios. Importes en la unidad menor de la moneda y tipos en puntos básicos (2000 es 20,00 %). No se calcula nada: cuadre, impuestos y numeración los introduce una persona. Contabilizar y cerrar periodos o ejercicios requiere aprobación humana; los agentes solo pueden proponerlo."
+
+[labels.es.model.accounting_account]
+name = "Cuenta"
+description = "Una cuenta del plan de cuentas"
+
+[labels.es.model.accounting_account.field.code]
+label = "Código"
+description = "Código de la cuenta tal como figura en el plan, por ejemplo 400000"
+
+[labels.es.model.accounting_account.field.name]
+label = "Nombre"
+description = "Nombre de la cuenta, por ejemplo Clientes"
+
+[labels.es.model.accounting_account.field.account_type]
+label = "Tipo de cuenta"
+description = "Tipo de cuenta: activo a cobrar, efectivo, activo corriente, activo fijo, pasivo a pagar, pasivo corriente, pasivo no corriente, patrimonio, ingresos, otros ingresos, gastos, costes directos"
+
+[labels.es.model.accounting_account.field.account_type.options]
+asset_receivable = "Activo: cuentas a cobrar"
+asset_cash = "Activo: efectivo y bancos"
+asset_current = "Activo corriente"
+asset_fixed = "Activo fijo"
+liability_payable = "Pasivo: cuentas a pagar"
+liability_current = "Pasivo corriente"
+liability_non_current = "Pasivo no corriente"
+equity = "Patrimonio neto"
+income = "Ingresos"
+income_other = "Otros ingresos"
+expense = "Gastos"
+expense_direct_cost = "Costes directos"
+
+[labels.es.model.accounting_account.field.reconcile]
+label = "Permite conciliación"
+description = "Indica si las partidas abiertas de esta cuenta se pueden conciliar (cobros, pagos, compensación bancaria)"
+
+[labels.es.model.accounting_account.field.deprecated]
+label = "En desuso"
+description = "Indica si la cuenta está cerrada a nuevas contabilizaciones"
+
+[labels.es.model.accounting_account.field.note]
+label = "Nota"
+description = "Observaciones internas sobre el uso de la cuenta"
+
+[labels.es.model.accounting_journal]
+name = "Diario"
+description = "Un diario que agrupa asientos de un mismo tipo (ventas, compras, banco, caja, varios)"
+
+[labels.es.model.accounting_journal.field.name]
+label = "Nombre"
+description = "Nombre del diario, por ejemplo Facturas de clientes"
+
+[labels.es.model.accounting_journal.field.code]
+label = "Código"
+description = "Código corto usado en los números de asiento, por ejemplo INV"
+
+[labels.es.model.accounting_journal.field.kind]
+label = "Tipo"
+description = "Qué registra el diario: ventas, compras, caja, banco, general"
+
+[labels.es.model.accounting_journal.field.kind.options]
+sale = "Venta"
+purchase = "Compra"
+cash = "Efectivo"
+bank = "Banco"
+general = "General"
+
+[labels.es.model.accounting_journal.field.default_account_id]
+label = "Cuenta predeterminada"
+description = "Cuenta por defecto para los asientos de este diario (la cuenta bancaria en un diario de banco)"
+
+[labels.es.model.accounting_journal.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217 del diario, por ejemplo EUR; vacío significa la moneda de la empresa"
+
+[labels.es.model.accounting_journal.field.active]
+label = "Activo"
+description = "Indica si el diario todavía puede recibir asientos"
+
+[labels.es.model.accounting_tax]
+name = "Impuesto"
+description = "Un tipo de impuesto al que pueden hacer referencia las líneas de asiento"
+
+[labels.es.model.accounting_tax.field.name]
+label = "Nombre"
+description = "Nombre del impuesto, por ejemplo IVA 20 % ventas"
+
+[labels.es.model.accounting_tax.field.rate_bp]
+label = "Tipo (pb)"
+description = "Tipo en puntos básicos: 2000 significa 20,00 % y 550 significa 5,50 %"
+
+[labels.es.model.accounting_tax.field.scope]
+label = "Ámbito"
+description = "Dónde se aplica el impuesto: ventas, compras, ninguno"
+
+[labels.es.model.accounting_tax.field.scope.options]
+sales = "Ventas"
+purchases = "Compras"
+none = "Ninguno"
+
+[labels.es.model.accounting_tax.field.price_included]
+label = "Impuesto incluido en el precio"
+description = "Indica si los precios ya incluyen este impuesto"
+
+[labels.es.model.accounting_tax.field.tax_account_id]
+label = "Cuenta de impuestos"
+description = "Cuenta en la que se contabiliza el importe del impuesto"
+
+[labels.es.model.accounting_tax.field.active]
+label = "Activo"
+description = "Indica si el impuesto todavía se puede elegir en líneas nuevas"
+
+[labels.es.model.accounting_fiscal_year]
+name = "Ejercicio fiscal"
+description = "Un ejercicio fiscal, que se abre y se cierra como un todo"
+
+[labels.es.model.accounting_fiscal_year.field.name]
+label = "Nombre"
+description = "Nombre del ejercicio fiscal, por ejemplo EF2026"
+
+[labels.es.model.accounting_fiscal_year.field.start_on]
+label = "Fecha de inicio"
+description = "Primer día del ejercicio fiscal (YYYY-MM-DD)"
+
+[labels.es.model.accounting_fiscal_year.field.end_on]
+label = "Fecha de fin"
+description = "Último día del ejercicio fiscal (YYYY-MM-DD)"
+
+[labels.es.model.accounting_fiscal_year.field.state]
+label = "Estado"
+description = "Estado del ejercicio fiscal: abierto, cerrado"
+
+[labels.es.model.accounting_fiscal_year.field.state.options]
+open = "Abierto"
+closed = "Cerrado"
+
+[labels.es.model.accounting_fiscal_year.action.close]
+label = "Cerrar"
+description = "Cerrar el ejercicio fiscal para que no se contabilice nada más en él (solo aprobadores)"
+
+[labels.es.model.accounting_fiscal_year.action.reopen]
+label = "Reabrir"
+description = "Reabrir un ejercicio fiscal cerrado para corregirlo (solo aprobadores)"
+
+[labels.es.model.accounting_period]
+name = "Periodo"
+description = "Un periodo contable (normalmente un mes) dentro de un ejercicio fiscal"
+
+[labels.es.model.accounting_period.field.fiscal_year_id]
+label = "Ejercicio fiscal"
+description = "El ejercicio fiscal al que pertenece el periodo"
+
+[labels.es.model.accounting_period.field.name]
+label = "Nombre"
+description = "Nombre del periodo, por ejemplo 2026-03"
+
+[labels.es.model.accounting_period.field.start_on]
+label = "Fecha de inicio"
+description = "Primer día del periodo (YYYY-MM-DD)"
+
+[labels.es.model.accounting_period.field.end_on]
+label = "Fecha de fin"
+description = "Último día del periodo (YYYY-MM-DD)"
+
+[labels.es.model.accounting_period.field.state]
+label = "Estado"
+description = "Estado del periodo: abierto, cerrado"
+
+[labels.es.model.accounting_period.field.state.options]
+open = "Abierto"
+closed = "Cerrado"
+
+[labels.es.model.accounting_period.action.close]
+label = "Cerrar"
+description = "Cerrar el periodo a nuevas contabilizaciones (solo aprobadores)"
+
+[labels.es.model.accounting_period.action.reopen]
+label = "Reabrir"
+description = "Reabrir un periodo cerrado (solo aprobadores)"
+
+[labels.es.model.accounting_move]
+name = "Movimiento"
+description = "Un asiento contable: un conjunto fechado de líneas de debe y haber en un diario"
+
+[labels.es.model.accounting_move.field.journal_id]
+label = "Diario"
+description = "El diario al que pertenece el asiento"
+
+[labels.es.model.accounting_move.field.date]
+label = "Fecha"
+description = "Fecha contable del asiento (YYYY-MM-DD)"
+
+[labels.es.model.accounting_move.field.number]
+label = "Número"
+description = "Número de asiento, como INV/2026/0001. Texto libre: los paquetes no pueden generar secuencias, así que quien contabiliza el asiento asigna a mano el siguiente número y mantiene la serie sin huecos"
+
+[labels.es.model.accounting_move.field.reference]
+label = "Referencia"
+description = "Referencia externa, por ejemplo el número de factura del proveedor"
+
+[labels.es.model.accounting_move.field.partner_id]
+label = "Socio comercial"
+description = "El contacto al que se refiere el asiento"
+
+[labels.es.model.accounting_move.field.narration]
+label = "Concepto"
+description = "Nota de texto libre sobre el asiento"
+
+[labels.es.model.accounting_move.field.state]
+label = "Estado"
+description = "Estado del asiento: borrador, contabilizado, cancelado, revertido"
+
+[labels.es.model.accounting_move.field.state.options]
+draft = "Borrador"
+posted = "Contabilizado"
+cancelled = "Cancelado"
+reversed = "Revertido"
+
+[labels.es.model.accounting_move.action.post]
+label = "Contabilizar"
+description = "Contabilizar un asiento en borrador en el libro mayor (solo aprobadores; no se comprueba el cuadre de debe y haber)"
+
+[labels.es.model.accounting_move.action.cancel]
+label = "Cancelar"
+description = "Cancelar un asiento en borrador que nunca se contabilizó"
+
+[labels.es.model.accounting_move.action.reverse]
+label = "Revertir"
+description = "Marcar un asiento contabilizado como revertido; el asiento contrario se registra aparte (solo aprobadores)"
+
+[labels.es.model.accounting_move_line]
+name = "Línea de movimiento"
+description = "Una línea de debe o de haber de un asiento contable"
+
+[labels.es.model.accounting_move_line.field.move_id]
+label = "Movimiento"
+description = "El asiento al que pertenece la línea"
+
+[labels.es.model.accounting_move_line.field.account_id]
+label = "Cuenta"
+description = "La cuenta en la que se contabiliza la línea"
+
+[labels.es.model.accounting_move_line.field.partner_id]
+label = "Socio comercial"
+description = "El contacto al que se refiere la línea"
+
+[labels.es.model.accounting_move_line.field.label]
+label = "Etiqueta"
+description = "Descripción de la línea"
+
+[labels.es.model.accounting_move_line.field.debit]
+label = "Debe"
+description = "Importe del debe en la unidad menor de la moneda; 0 si la línea es de haber"
+
+[labels.es.model.accounting_move_line.field.credit]
+label = "Haber"
+description = "Importe del haber en la unidad menor de la moneda; 0 si la línea es de debe"
+
+[labels.es.model.accounting_move_line.field.tax_id]
+label = "Impuesto"
+description = "Impuesto que lleva la línea, si lo hay"
+
+[labels.es.model.accounting_move_line.field.due_on]
+label = "Fecha de vencimiento"
+description = "Fecha de vencimiento de las líneas a cobrar y a pagar (YYYY-MM-DD)"
+
+[labels.es.model.accounting_move_line.field.reconciled]
+label = "Conciliado"
+description = "Indica si la línea se ha cruzado con un pago"
+
+[labels.es.model.accounting_bank_statement_line]
+name = "Línea de extracto bancario"
+description = "Una línea de extracto bancario pendiente de cruzar con asientos"
+
+[labels.es.model.accounting_bank_statement_line.field.journal_id]
+label = "Diario"
+description = "El diario de banco al que pertenece el extracto"
+
+[labels.es.model.accounting_bank_statement_line.field.date]
+label = "Fecha"
+description = "Fecha de contabilización en el banco (YYYY-MM-DD)"
+
+[labels.es.model.accounting_bank_statement_line.field.label]
+label = "Etiqueta"
+description = "Referencia o concepto del pago tal como lo informa el banco"
+
+[labels.es.model.accounting_bank_statement_line.field.amount]
+label = "Importe"
+description = "Importe en la unidad menor de la moneda; positivo para entradas de dinero, negativo para salidas"
+
+[labels.es.model.accounting_bank_statement_line.field.counterparty_name]
+label = "Nombre de la contraparte"
+description = "Nombre del ordenante o del beneficiario tal como lo informa el banco"
+
+[labels.es.model.accounting_bank_statement_line.field.counterparty_iban]
+label = "IBAN de la contraparte"
+description = "Cuenta bancaria del ordenante o del beneficiario"
+
+[labels.es.model.accounting_bank_statement_line.field.move_line_id]
+label = "Línea de movimiento"
+description = "La línea de asiento con la que se cruzó esta línea de extracto"
+
+[labels.es.model.accounting_bank_statement_line.field.state]
+label = "Estado"
+description = "Estado del cruce: sin cruzar, cruzada, conciliada"
+
+[labels.es.model.accounting_bank_statement_line.field.state.options]
+unmatched = "Sin emparejar"
+matched = "Emparejado"
+reconciled = "Conciliado"
+
+[labels.es.model.accounting_bank_statement_line.action.match]
+label = "Emparejar"
+description = "Registrar que la línea corresponde a una línea de asiento"
+
+[labels.es.model.accounting_bank_statement_line.action.reconcile]
+label = "Conciliar"
+description = "Conciliar una línea cruzada (solo responsables)"
+
+[labels.es.model.accounting_bank_statement_line.action.unmatch]
+label = "Desemparejar"
+description = "Deshacer un cruce que era erróneo"

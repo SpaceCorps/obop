@@ -3,6 +3,7 @@
 //! one cannot run anything the registry does not already control.
 
 use obop_commands::{PublicRead, PublicReceipt, PublicSpec, PublicSubmit};
+use obop_registry::labels::{LangLabels, ModelShape, Shape, Translations, check_labels};
 use obop_registry::{
     CommandDef, FieldDef, FieldKind, GENERATED_COMMANDS, ModelDef, Module, check_module, intern,
 };
@@ -19,6 +20,10 @@ pub struct Manifest {
     pub module: Meta,
     #[serde(default)]
     pub model: Vec<ModelM>,
+    /// Translations (D52): `[labels.<lang>.module]`, `.model.<m>`, `.model.<m>.field.<f>`
+    /// (with `.options`) and `.model.<m>.action.<a>`. Optional; English is the manifest itself.
+    #[serde(default)]
+    pub labels: std::collections::BTreeMap<String, LangLabels>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -160,6 +165,45 @@ impl Manifest {
         Ok(m)
     }
 
+    /// The manifest `text` joined with a sibling labels document (`<id>.labels.toml`, only
+    /// `[labels.<lang>...]` tables). Both are plain TOML, so the combined document is their
+    /// concatenation; that text is what is stored, installed and served.
+    pub fn combine(text: &str, labels: &str) -> String {
+        if labels.trim().is_empty() {
+            return text.to_string();
+        }
+        format!("{}\n\n{labels}", text.trim_end())
+    }
+
+    /// The structure labels may refer to.
+    pub fn shape(&self) -> Shape {
+        Shape {
+            models: self
+                .model
+                .iter()
+                .map(|m| {
+                    (
+                        m.name.clone(),
+                        ModelShape {
+                            fields: m
+                                .field
+                                .iter()
+                                .map(|f| {
+                                    (
+                                        f.name.clone(),
+                                        (f.kind == "select")
+                                            .then(|| f.options.iter().cloned().collect()),
+                                    )
+                                })
+                                .collect(),
+                            actions: m.action.iter().map(|a| a.name.clone()).collect(),
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
     /// Structural rules that need no knowledge of what is already installed.
     fn validate(&self) -> Result<(), String> {
         let id = &self.module.id;
@@ -257,7 +301,13 @@ impl Manifest {
             }
         }
         self.public_specs()?;
+        check_labels(&self.labels, &self.shape())?;
         Ok(())
+    }
+
+    /// The languages the package ships labels for.
+    pub fn label_languages(&self) -> Vec<String> {
+        self.labels.keys().cloned().collect()
     }
 
     /// The public declarations of the package (D50), checked for shape. The field-level gate
@@ -484,8 +534,10 @@ impl Manifest {
         let module = Module {
             id: self.module.id.clone(),
             name: self.module.name.clone(),
+            description: self.module.description.clone(),
             models,
             network_destinations: vec![],
+            translations: std::sync::Arc::new(Translations::from_labels(&self.labels)),
         };
         let mut public_problems = Vec::new();
         for spec in self.public_specs()? {
@@ -758,5 +810,145 @@ write_group = "fleet.manager"
             (t.field, t.from, t.to),
             ("state", Some("available"), "in_service")
         );
+    }
+
+    const LABELS: &str = r#"
+[labels.de.module]
+name = "Fuhrpark"
+description = "Fahrzeuge und Fahrer"
+
+[labels.de.model.fleet_vehicle]
+name = "Fahrzeug"
+description = "Ein Fahrzeug des Unternehmens"
+
+[labels.de.model.fleet_vehicle.field.plate]
+label = "Kennzeichen"
+description = "Amtliches Kennzeichen"
+
+[labels.de.model.fleet_vehicle.field.state]
+label = "Status"
+
+[labels.de.model.fleet_vehicle.field.state.options]
+available = "Verfügbar"
+in_service = "Im Einsatz"
+
+[labels.de.model.fleet_vehicle.action.dispatch]
+label = "In Betrieb nehmen"
+description = "Ein verfügbares Fahrzeug in Betrieb nehmen"
+
+[labels.fi.module]
+name = "Autokanta"
+
+[labels.pt-BR.model.fleet_vehicle]
+name = "Veículo"
+"#;
+
+    fn with_labels(extra: &str) -> String {
+        format!("{FLEET}\n{LABELS}\n{extra}")
+    }
+
+    #[test]
+    fn labels_reach_the_registry_per_language() {
+        let m = Manifest::parse(&with_labels("")).unwrap();
+        assert_eq!(m.label_languages(), ["de", "fi", "pt-BR"]);
+        let module = m.to_module().unwrap();
+        let t = &module.translations;
+        assert_eq!(t.module.labels["de"], "Fuhrpark");
+        assert_eq!(t.module.labels["fi"], "Autokanta");
+        assert_eq!(t.module.descriptions["de"], "Fahrzeuge und Fahrer");
+        assert_eq!(module.description, "Vehicles and drivers");
+        let v = &t.models["fleet_vehicle"];
+        assert_eq!(v.entry.labels["de"], "Fahrzeug");
+        assert_eq!(v.entry.labels["pt-BR"], "Veículo");
+        assert_eq!(v.fields["plate"].entry.labels["de"], "Kennzeichen");
+        assert_eq!(
+            v.fields["plate"].entry.descriptions["de"],
+            "Amtliches Kennzeichen"
+        );
+        assert_eq!(v.fields["state"].options["in_service"]["de"], "Im Einsatz");
+        assert_eq!(v.actions["dispatch"].labels["de"], "In Betrieb nehmen");
+        // A package without labels has none.
+        assert!(
+            Manifest::parse(FLEET)
+                .unwrap()
+                .to_module()
+                .unwrap()
+                .translations
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn combine_joins_a_sibling_labels_document() {
+        let text = Manifest::combine(FLEET, LABELS);
+        let m = Manifest::parse(&text).unwrap();
+        assert_eq!(m.label_languages(), ["de", "fi", "pt-BR"]);
+        assert_eq!(Manifest::combine(FLEET, "  \n"), FLEET);
+    }
+
+    #[test]
+    fn bad_labels_are_refused_with_the_path_of_the_mistake() {
+        let bad = |extra: &str| err(&format!("{FLEET}\n{extra}"));
+        // language code
+        assert!(bad("[labels.DE.module]\nname = \"x\"").contains("not a language code"));
+        assert!(bad("[labels.deu1.module]\nname = \"x\"").contains("not a language code"));
+        assert!(bad("[labels.de_DE.module]\nname = \"x\"").contains("not a language code"));
+        // keys must exist (a typo is an error)
+        assert!(
+            bad("[labels.de.model.fleet_vehikel]\nname = \"x\"")
+                .contains("no model \"fleet_vehikel\"")
+        );
+        assert!(
+            bad("[labels.de.model.fleet_vehicle.field.platte]\nlabel = \"x\"")
+                .contains("no field \"platte\"")
+        );
+        assert!(
+            bad("[labels.de.model.fleet_vehicle.action.dispach]\nlabel = \"x\"")
+                .contains("no action \"dispach\"")
+        );
+        assert!(
+            bad("[labels.de.model.fleet_vehicle.field.state.options]\nretired = \"x\"")
+                .contains("no option \"retired\"")
+        );
+        assert!(
+            bad("[labels.de.model.fleet_vehicle.field.plate.options]\na = \"x\"")
+                .contains("not a select field")
+        );
+        // unknown table or key names are refused by the schema, not ignored
+        assert!(
+            bad("[labels.de.models.fleet_vehicle]\nname = \"x\"").contains("invalid obop.toml")
+        );
+        assert!(
+            bad("[labels.de.model.fleet_vehicle.field.plate]\ntitle = \"x\"")
+                .contains("invalid obop.toml")
+        );
+        // values
+        let v = |val: &str| bad(&format!("[labels.de.module]\nname = {val}"));
+        assert!(v("\"\"").contains("is empty"));
+        assert!(v("\"   \"").contains("is empty"));
+        assert!(v("\" padded \"").contains("whitespace"));
+        assert!(v("\"two\\nlines\"").contains("control character"));
+        assert!(v("\"bell\\u0007\"").contains("control character"));
+        assert!(v("\"Hallo {name}\"").contains("placeholder"));
+        assert!(v("\"<b>fett</b>\"").contains("placeholder or markup"));
+        assert!(v(&format!("\"{}\"", "x".repeat(81))).contains("too long"));
+        assert!(
+            bad(&format!(
+                "[labels.de.module]\ndescription = \"{}\"",
+                "x".repeat(401)
+            ))
+            .contains("too long")
+        );
+        // a value must be a string
+        assert!(v("3").contains("invalid obop.toml"));
+    }
+
+    #[test]
+    fn labels_count_against_the_size_limit() {
+        let big = format!(
+            "{FLEET}\n[labels.de.module]\nname = \"x\"\n# {}",
+            "y".repeat(MAX_BYTES)
+        );
+        assert!(err(&big).contains("larger"));
     }
 }

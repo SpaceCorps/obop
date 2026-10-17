@@ -1,0 +1,22 @@
+[labels.fr.module]
+name = "Produits"
+
+[labels.fr.model.product]
+name = "Produit"
+description = "Un bien ou un service vendu par l’entreprise"
+
+[labels.fr.model.product.field.name]
+label = "Nom"
+description = "Nom du produit"
+
+[labels.fr.model.product.field.sku]
+label = "SKU"
+description = "Référence de gestion de stock (SKU)"
+
+[labels.fr.model.product.field.list_price_minor]
+label = "Prix catalogue"
+description = "Prix catalogue en plus petite unité monétaire"
+
+[labels.fr.model.product.field.cost_minor]
+label = "Coût"
+description = "Coût unitaire en plus petite unité monétaire"

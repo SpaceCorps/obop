@@ -1,0 +1,39 @@
+[labels.de.module]
+name = "Verkauf"
+
+[labels.de.model.sale_order]
+name = "Verkaufsauftrag"
+description = "Ein Angebot oder bestätigter Auftrag für einen Kunden"
+
+[labels.de.model.sale_order.field.party_id]
+label = "Geschäftspartner"
+description = "ID des Geschäftspartners (Kunde)"
+
+[labels.de.model.sale_order.field.state]
+label = "Status"
+description = "Lebenszyklus: Entwurf, bestätigt oder storniert"
+
+[labels.de.model.sale_order.field.state.options]
+draft = "Entwurf"
+confirmed = "Bestätigt"
+cancelled = "Storniert"
+
+[labels.de.model.sale_order.field.total_minor]
+label = "Gesamt"
+description = "Auftragssumme in der kleinsten Währungseinheit"
+
+[labels.de.model.sale_order.field.currency]
+label = "Währung"
+description = "Währungscode nach ISO 4217"
+
+[labels.de.model.sale_order.action.confirm]
+label = "Bestätigen"
+description = "Einen Auftragsentwurf bestätigen"
+
+[labels.de.model.sale_order.action.cancel]
+label = "Stornieren"
+description = "Einen Auftrag stornieren"
+
+[labels.de.model.sale_order.action.reset_to_draft]
+label = "Auf Entwurf zurücksetzen"
+description = "Einen stornierten Auftrag wieder auf Entwurf setzen"

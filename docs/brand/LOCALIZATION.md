@@ -15,7 +15,7 @@ downloaded.
 | Runtime (messages, plurals, rich text, Intl formatters, locale-aware amounts) | `web/packages/ui/src/i18n/` |
 | Catalogues | `locales/<lang>/messages.json` + `status.json` in `web/packages/ui`, `web/apps/backoffice`, `web/apps/platform` |
 | Tooling (extract, check, status, sync) | `web/packages/ui/scripts/i18n.ts` |
-| Server metadata labels (module, model, field, option, action names) | `web/apps/backoffice/src/labels.ts`, `metaLabels.ts` |
+| Server metadata labels (module, model, field, option, action names) | `web/apps/backoffice/src/labels.ts`, `metaLabels.ts`; the texts themselves: `packages/labels/<lang>/<id>.toml` (section 8) |
 | Server message patterns | `web/apps/backoffice/src/serverMessage.ts`, `web/apps/platform/src/serverMessage.ts` |
 
 ### 1.1 Message ids are the English text
@@ -98,13 +98,16 @@ The edit field shows the value in the locale (`12,50`), never grouped. The serve
 
 ### 1.4 Server metadata and server messages
 
-`/api/meta` may carry `labels` (and `descriptions`) objects per module, model, field and action, mapping a
-language code to text. `labelFor(obj, lang, fallback)` uses `labels[lang]`, then `labels[base language]`, then
-the fallback. The fallback for the built-in modules is the client table: the contexts `app`, `model`, `field`,
-`option` and `action` in the backoffice catalogue, keyed by the humanised English name (`expected_revenue_minor`
-→ `field␄Expected revenue`). `metaLabels.ts` lists the names so the extractor sees them; it is generated from
-the bundled packages and the five built-in modules. Anything else (a custom module) shows its humanised English
-name until the server sends labels. Descriptions and the marketplace package texts stay as the server sends them.
+`/api/meta` carries `labels` and `descriptions` (language code to text) on every module, model, field and
+action, and `option_labels` (option to language to text) on every select field, each only where something is
+translated (D52, docs/MODULES.md section 3.7). `labelFor(obj, lang, fallback)` uses `labels[lang]`, then
+`labels[base language]`, then the fallback; `describeFor` does the same for descriptions and falls back to the
+English `description`; `optionLabel(value, field)` reads `field.option_labels`. The fallback is the client table:
+the contexts `app`, `model`, `field`, `option` and `action` in the backoffice catalogue, keyed by the humanised
+English name (`expected_revenue_minor` -> `field␄Expected revenue`). `metaLabels.ts` lists the names so the
+extractor sees them. The five built-in modules and the 22 bundled packages now send their own labels in all six
+languages (section 8), so the client table is the fallback for them and the only source for a module without
+labels. Marketplace listings of packages that are not installed still show the English description.
 
 `serverMessage()` maps the stable patterns of docs/MODULES.md 3.5 and the D47/D48/D49 error shapes (`x.y is
 required`, `must be one of: …`, `cannot delete …: still referenced by …`, transition refusals) to translatable
@@ -221,6 +224,22 @@ reference for the ERP vocabulary of each market; where it differs from everyday 
 | 49 | password | Passwort | mot de passe | hasło | salasana | lösenord | contraseña |
 | 50 | save / discard / delete | speichern / verwerfen / löschen | enregistrer / annuler les modifications / supprimer | zapisz / odrzuć / usuń | tallenna / hylkää / poista | spara / förkasta / ta bort | guardar / descartar / eliminar |
 
+| 51 | ticket (helpdesk) | Ticket | ticket | zgłoszenie | tiketti | ärende | ticket |
+| 52 | warehouse | Lager | entrepôt | magazyn | varasto | lagerställe | almacén |
+| 53 | employee | Mitarbeiter | employé | pracownik | työntekijä | anställd | empleado |
+| 54 | task | Aufgabe | tâche | zadanie | tehtävä | uppgift | tarea |
+| 55 | time entry | Zeiteintrag | saisie de temps | wpis | tuntikirjaus | tidsregistrering | registro de horas |
+| 56 | manufacturing order | Fertigungsauftrag | ordre de fabrication | zlecenie produkcyjne | valmistustilaus | tillverkningsorder | orden de fabricación (labelled "Pedido" where the client table is shared) |
+| 57 | purchase order | Bestellung | commande | zamówienie zakupu | ostotilaus | inköpsorder | pedido |
+| 58 | subscription | Abonnement | abonnement | subskrypcja | kestotilaus | abonnemang | suscripción |
+| 59 | journal (accounting) | Journal | journal | dziennik | päiväkirja | verifikationsserie | diario |
+| 60 | expense | Ausgabe | dépense | wydatek | kulu | utlägg | gasto |
+| 61 | vehicle | Fahrzeug | véhicule | pojazd | ajoneuvo | fordon | vehículo |
+| 62 | signature request | Signaturanfrage | demande de signature | wniosek o podpis | allekirjoituspyyntö | signeringsbegäran | solicitud de firma |
+
+Rows 51 to 62 are the concepts the bundled packages added (D52); the package files in `packages/labels` are the
+authority for every other model, field and option name.
+
 Notes. German keeps "Lead" (CRM usage; "Verkaufschance" is the opportunity). French "piste" is a lead,
 "opportunité" an opportunity. Finnish "liidi" is the common sales word; "tarjous" is both quote and offer.
 Swedish "offert" is a quote, "faktura" an invoice (not "räkning"). Spanish uses "factura", "presupuesto" for a
@@ -251,8 +270,8 @@ carry over. Revisit when the macro chain is verified on Vite+ or when MessageFor
 ## 6 Known gaps
 
 - Brand book content and the module Guide are English by design (section 1.6).
-- Server messages without a stable pattern, package descriptions and marketplace texts are English until the
-  server sends `labels`; `docs/MODULES.md` section 3.5 lists the patterns that are mapped.
+- Server messages without a stable pattern and the marketplace listing of a package that is not installed are
+  English; `docs/MODULES.md` section 3.5 lists the patterns that are mapped.
 - A list the server pages (the default list) is sorted by the database, in its own collation; the browser's
   `compareText` orders the lists, groups, pivots and kanban boards it builds itself.
 - Region does not yet pick a time zone or a calendar other than Gregorian; dates are plain accounting dates.
@@ -275,3 +294,57 @@ The translators flagged these for native review (all other strings are equally u
   prefer a rewrite once the server can send the plural and case forms of model names.
 - The filter help text keeps `is empty` and `is set` in English because the dashboard filter parser accepts only
   those words.
+
+## 8 Server labels of modules and packages (D52)
+
+The names and descriptions of the five built-in modules, the admin module and the 22 bundled packages are
+translated in `packages/labels/<lang>/<id>.toml` (28 files per language, six languages). A file is the
+`[labels.<lang>...]` document of docs/MODULES.md section 3.7; the built-in modules embed theirs with
+`Module::translated`, the bundled packages get theirs appended by the catalogue.
+
+```sh
+obop modules labels crm fi > packages/labels/fi/crm.toml   # the template: every text, English values
+obop modules check --complete packages/labels/fi/*.toml    # none missing, none still English, no typo'd key
+```
+
+- **Terms.** The glossary of section 4 applies. The labels of fields, models, options and actions reuse the
+  client catalogue for the same humanised name, so the server and the client table never disagree for a
+  built-in module; descriptions are written fresh. New concepts that appear in the packages follow the same
+  rule: one word per concept in a language, in every package.
+- **Capitalisation and mood** as in section 3: German nouns are capitalised, buttons are verbs (imperative; infinitive
+  in French and Spanish), Finnish and the Romance languages use sentence case.
+- **Identical to English.** A value equal to the English source fails the completeness test unless allow-listed
+  in `packages/labels/identical.json` (acronyms such as SKU, IBAN, VIN) or `packages/labels/<lang>/identical.json`
+  (words that are the same in that language, for example "Diesel").
+- **Status.** `packages/labels/<lang>/status.json` maps each file id to `machine-drafted` or `reviewed`. All
+  168 files (28 per language) are `machine-drafted`: written by a language model against the glossary and the
+  existing catalogues, not read by a native speaker. A reviewer fixes the file and sets it to `reviewed`.
+  Statutory vocabulary (the accounting, expenses, HR and invoicing packages) must be reviewed before release.
+- **Tests.** The Rust test `every_bundled_package_and_builtin_module_is_translated_in_all_six_languages` fails on any
+  missing or untranslated text; `label_files_and_status_files_cover_exactly_the_shipped_modules` keeps the files,
+  status and allow-lists consistent; `web/packages/e2e/tests/labels.spec.ts` checks the launcher, sidebar,
+  column headers, select options and action buttons of an installed package in German and Finnish.
+
+### 8.1 Review list
+
+Collected from the translators (term, file, doubt); all other texts are equally unreviewed.
+
+- **All languages.** Module descriptions of accounting, dashboards, ecommerce, email_marketing, pos, sign and
+  website were shortened to the 400-character limit (details such as the `accounting.approver` group name and the
+  widget filter example were dropped); JSON examples in descriptions were reworded because `{ }` are not allowed.
+- **Account types and bookkeeping terms** (accounting `account_type` options, journals, moves) are the translators'
+  own wording in every language and need an accountant per market. Move is "Verifikation" (sv), "Kirjaus" (fi),
+  "Operacja" (pl); the UI client table says otherwise in places ("Tapahtuma" in fi, "Transaktion" in sv).
+- **de.** "Auftrag" (ecommerce, pos) against "Bestellung" (purchase); "Shop-Eintrag" for Listing; "Autorenzeile".
+- **fr.** "CDI" and "CDD" for contract types are French terms; Belgium and Switzerland say "durée indéterminée /
+  déterminée". Tax id is "Taxe" (should read "Identifiant fiscal"). "Intervenant" for worker in timesheets.
+  Gender agreement of state options ("Planifiée", "Associée") follows each model.
+- **pl.** "Kontrahent" for party and partner; "Folder" against "Katalog"; "Lokalizacja" for stock location; the VAT
+  example was localised to 23 % and Polish sample codes; "Pozycja w marketplace" and "Podpis autora" are coined.
+- **fi.** Coined compounds: "Kassamyynti", "Ostotilaus", "Valmistustilaus", "Vuoromalli", "Asiakirjamalli",
+  "Käyttötunniste", "Moduulikaupan moduuli". "Päätä" for Finish reads oddly for manufacturing and projects.
+  The first draft of six files (accounting to documents) was rebuilt from the template: spot-check for stray English.
+- **sv.** "Order" for the POS sale (maybe "Försäljning"); "Skatte-ID"; "hen" in one planning description;
+  "Författarrad".
+- **es.** "Slug" kept; "coste" (Spain) against "costo" (Latin America); "Cajas de tienda" for shop tills in pos;
+  "Ficha" for Listing in ecommerce and platform; "Pedido" is used for both manufacturing and purchase orders.

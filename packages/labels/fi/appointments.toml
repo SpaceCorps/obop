@@ -1,0 +1,95 @@
+[labels.fi.module]
+name = "Ajanvaraukset"
+description = "Varattavat resurssit (henkilöt, tilat, laitteet) ja ajanvaraukset, joissa on päivä, alkamis- ja päättymisaika sekä tilakulku. Päällekkäisyyksiä ei estetä automaattisesti."
+
+[labels.fi.model.appointments_resource]
+name = "Resurssi"
+description = "Jotain tai joku, joka voidaan varata"
+
+[labels.fi.model.appointments_resource.field.name]
+label = "Nimi"
+description = "Resurssin nimi, esimerkiksi Neuvotteluhuone 2"
+
+[labels.fi.model.appointments_resource.field.kind]
+label = "Laji"
+description = "Resurssin laji: henkilö, tila, laite"
+
+[labels.fi.model.appointments_resource.field.kind.options]
+person = "Henkilö"
+room = "Tila"
+equipment = "Laite"
+
+[labels.fi.model.appointments_resource.field.capacity]
+label = "Kapasiteetti"
+description = "Kuinka monta henkilöä resurssi voi palvella yhtä aikaa"
+
+[labels.fi.model.appointments_resource.field.active]
+label = "Aktiivinen"
+description = "Voiko resurssin varata"
+
+[labels.fi.model.appointments_appointment]
+name = "Ajanvaraus"
+description = "Resurssin varaus tiettyyn aikaan"
+
+[labels.fi.model.appointments_appointment.field.resource_id]
+label = "Resurssi"
+description = "Varattu resurssi"
+
+[labels.fi.model.appointments_appointment.field.title]
+label = "Otsikko"
+description = "Mihin ajanvarausta tarvitaan"
+
+[labels.fi.model.appointments_appointment.field.day]
+label = "Päivä"
+description = "Ajanvarauksen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.appointments_appointment.field.start_minute]
+label = "Alkuminuutti"
+description = "Alkamisaika minuutteina keskiyöstä, esimerkiksi 540 tarkoittaa kello 9.00"
+
+[labels.fi.model.appointments_appointment.field.end_minute]
+label = "Loppuminuutti"
+description = "Päättymisaika minuutteina keskiyöstä, esimerkiksi 600 tarkoittaa kello 10.00"
+
+[labels.fi.model.appointments_appointment.field.attendee_name]
+label = "Osallistujan nimi"
+description = "Osallistuvan henkilön nimi"
+
+[labels.fi.model.appointments_appointment.field.attendee_email]
+label = "Osallistujan sähköposti"
+description = "Osallistujan sähköpostiosoite"
+
+[labels.fi.model.appointments_appointment.field.attendee_phone]
+label = "Osallistujan puhelin"
+description = "Osallistujan puhelinnumero"
+
+[labels.fi.model.appointments_appointment.field.notes]
+label = "Muistiinpanot"
+description = "Kaikki, mitä isännän pitää tietää etukäteen"
+
+[labels.fi.model.appointments_appointment.field.state]
+label = "Tila"
+description = "Varauksen tila: ajoitettu, vahvistettu, valmis, peruutettu, ei saapunut"
+
+[labels.fi.model.appointments_appointment.field.state.options]
+scheduled = "Ajoitettu"
+confirmed = "Vahvistettu"
+done = "Valmis"
+cancelled = "Peruutettu"
+no_show = "Ei saapunut"
+
+[labels.fi.model.appointments_appointment.action.confirm]
+label = "Vahvista"
+description = "Vahvista ajoitettu ajanvaraus"
+
+[labels.fi.model.appointments_appointment.action.complete]
+label = "Merkitse valmiiksi"
+description = "Merkitse vahvistettu ajanvaraus pidetyksi"
+
+[labels.fi.model.appointments_appointment.action.cancel]
+label = "Peruuta"
+description = "Peruuta ajoitettu ajanvaraus"
+
+[labels.fi.model.appointments_appointment.action.mark_no_show]
+label = "Merkitse: ei saapunut"
+description = "Kirjaa, ettei osallistuja saapunut"

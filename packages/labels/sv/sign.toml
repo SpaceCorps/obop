@@ -1,0 +1,106 @@
+[labels.sv.module]
+name = "Signering"
+description = "Dokumentmallar och signeringsbegäranden med flödet utkast, skickad, signerad, avböjd, utgången. En begäran anger undertecknaren (personuppgift) och sparar signaturbevisen som referenser. En signerad begäran får inte ändras; dokumentets hashvärde visar vad som signerades. Att skicka och registrera en signatur kräver mänskligt godkännande; agenter får bara föreslå."
+
+[labels.sv.model.sign_template]
+name = "Mall"
+description = "Ett dokument som kan skickas ut för signering"
+
+[labels.sv.model.sign_template.field.name]
+label = "Namn"
+description = "Mallens namn, till exempel Anställningsavtal"
+
+[labels.sv.model.sign_template.field.description]
+label = "Beskrivning"
+description = "Vad dokumentet är till för och vem som signerar"
+
+[labels.sv.model.sign_template.field.body]
+label = "Brödtext"
+description = "Dokumenttexten, eller en hänvisning till var filen förvaras"
+
+[labels.sv.model.sign_template.field.signer_role]
+label = "Undertecknarens roll"
+description = "Rollen för personen som signerar, till exempel Kund"
+
+[labels.sv.model.sign_template.field.active]
+label = "Aktiv"
+description = "Om nya begäranden kan använda mallen"
+
+[labels.sv.model.sign_request]
+name = "Signeringsbegäran"
+description = "En begäran om att en person ska signera ett dokument"
+
+[labels.sv.model.sign_request.field.template_id]
+label = "Mall"
+description = "Dokumentet som ska signeras"
+
+[labels.sv.model.sign_request.field.title]
+label = "Titel"
+description = "Ämne som visas för undertecknaren"
+
+[labels.sv.model.sign_request.field.message]
+label = "Meddelande"
+description = "Meddelande som visas för undertecknaren i begäran"
+
+[labels.sv.model.sign_request.field.signer_name]
+label = "Undertecknarens namn"
+description = "Namn på personen som ska signera"
+
+[labels.sv.model.sign_request.field.signer_email]
+label = "Undertecknarens e-post"
+description = "E-postadress som begäran skickas till"
+
+[labels.sv.model.sign_request.field.sent_on]
+label = "Skickad den"
+description = "Dagen då begäran skickades (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.sign_request.field.expires_on]
+label = "Utgångsdatum"
+description = "Sista dagen begäran kan signeras (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.sign_request.field.signed_on]
+label = "Signerad den"
+description = "Dagen då dokumentet signerades (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.sign_request.field.signer_ip]
+label = "Undertecknarens IP-adress"
+description = "IP-adress som signaturen kom från (bevis)"
+
+[labels.sv.model.sign_request.field.signer_user_agent]
+label = "Undertecknarens webbläsare"
+description = "Webbläsare som signaturen gjordes med (bevis)"
+
+[labels.sv.model.sign_request.field.signature_reference]
+label = "Signaturreferens"
+description = "Var signaturbilden eller certifikatet lagras"
+
+[labels.sv.model.sign_request.field.document_hash]
+label = "Dokumentets hashvärde"
+description = "SHA-256-hashvärde (hex) för det signerade dokumentet, som bevis för att det inte ändrats efteråt"
+
+[labels.sv.model.sign_request.field.state]
+label = "Status"
+description = "Begärans status: utkast, skickad, signerad, avböjd, utgången"
+
+[labels.sv.model.sign_request.field.state.options]
+draft = "Utkast"
+sent = "Skickad"
+signed = "Signerad"
+declined = "Avböjd"
+expired = "Utgången"
+
+[labels.sv.model.sign_request.action.send]
+label = "Skicka"
+description = "Skicka begäran till undertecknaren"
+
+[labels.sv.model.sign_request.action.sign]
+label = "Signera"
+description = "Registrera att undertecknaren har signerat; posten är därefter oföränderlig enligt konvention"
+
+[labels.sv.model.sign_request.action.decline]
+label = "Avböj"
+description = "Registrera att undertecknaren avböjde"
+
+[labels.sv.model.sign_request.action.expire]
+label = "Markera som utgången"
+description = "Registrera att begäran gick ut utan signatur"

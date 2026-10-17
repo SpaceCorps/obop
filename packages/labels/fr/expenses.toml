@@ -1,0 +1,78 @@
+[labels.fr.module]
+name = "Notes de frais"
+description = "Demandes de remboursement de frais des employés avec un flux brouillon, soumise, approuvée et payée. Le paiement est une permission distincte et exige une approbation humaine ; les justificatifs sont référencés par une note, pas stockés."
+
+[labels.fr.model.expenses_expense]
+name = "Dépense"
+description = "Un montant qu’un employé a dépensé pour l’entreprise et dont il demande le remboursement"
+
+[labels.fr.model.expenses_expense.field.description]
+label = "Description"
+description = "Ce pour quoi l’argent a été dépensé"
+
+[labels.fr.model.expenses_expense.field.employee]
+label = "Employé"
+description = "Nom de la personne qui demande le remboursement"
+
+[labels.fr.model.expenses_expense.field.spent_on]
+label = "Date de la dépense"
+description = "Date de l’achat (YYYY-MM-DD)"
+
+[labels.fr.model.expenses_expense.field.category]
+label = "Catégorie"
+description = "Catégorie de dépense : déplacement, repas, hébergement, fournitures, logiciel, autre"
+
+[labels.fr.model.expenses_expense.field.category.options]
+travel = "Déplacement"
+meals = "Repas"
+lodging = "Hébergement"
+supplies = "Fournitures"
+software = "Logiciel"
+other = "Autre"
+
+[labels.fr.model.expenses_expense.field.amount]
+label = "Montant"
+description = "Montant dû à l’employé (plus petite unité monétaire, par exemple en centimes)"
+
+[labels.fr.model.expenses_expense.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217, par exemple EUR"
+
+[labels.fr.model.expenses_expense.field.receipt_note]
+label = "Note du justificatif"
+description = "Où le justificatif est conservé et ce qu’il montre"
+
+[labels.fr.model.expenses_expense.field.paid_on]
+label = "Payé le"
+description = "Date à laquelle l’employé a été remboursé (YYYY-MM-DD)"
+
+[labels.fr.model.expenses_expense.field.payment_reference]
+label = "Référence de paiement"
+description = "Référence du virement bancaire du remboursement"
+
+[labels.fr.model.expenses_expense.field.state]
+label = "Statut"
+description = "Statut de la demande : brouillon, soumise, approuvée, payée, refusée"
+
+[labels.fr.model.expenses_expense.field.state.options]
+draft = "Brouillon"
+submitted = "Soumise"
+approved = "Approuvée"
+paid = "Payée"
+refused = "Refusée"
+
+[labels.fr.model.expenses_expense.action.submit]
+label = "Soumettre"
+description = "Soumet la demande pour approbation"
+
+[labels.fr.model.expenses_expense.action.approve]
+label = "Approuver"
+description = "Approuve une demande soumise (responsable uniquement)"
+
+[labels.fr.model.expenses_expense.action.pay]
+label = "Payer"
+description = "Enregistre le remboursement comme payé (service financier uniquement)"
+
+[labels.fr.model.expenses_expense.action.refuse]
+label = "Refuser"
+description = "Refuse une demande soumise (responsable uniquement)"

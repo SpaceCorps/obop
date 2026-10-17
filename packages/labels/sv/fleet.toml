@@ -1,0 +1,160 @@
+[labels.sv.module]
+name = "Fordonsflotta"
+description = "Fordon, förare och servicehistorik för en mindre fordonsflotta. Håller reda på status och servicetillfällen; den beräknar inte driftskostnader eller bränsleförbrukning."
+
+[labels.sv.model.fleet_vehicle]
+name = "Fordon"
+description = "Ett fordon som företaget använder"
+
+[labels.sv.model.fleet_vehicle.field.plate]
+label = "Registreringsnummer"
+description = "Fordonets registreringsnummer"
+
+[labels.sv.model.fleet_vehicle.field.model]
+label = "Modell"
+description = "Märke och modell, till exempel Renault Master"
+
+[labels.sv.model.fleet_vehicle.field.vin]
+label = "Chassinummer (VIN)"
+description = "Fordonets identifikationsnummer (chassinummer)"
+
+[labels.sv.model.fleet_vehicle.field.fuel]
+label = "Bränsle"
+description = "Bränsle eller drivlina: bensin, diesel, hybrid, el, övrigt"
+
+[labels.sv.model.fleet_vehicle.field.fuel.options]
+petrol = "Bensin"
+diesel = "Diesel"
+hybrid = "Hybrid"
+electric = "El"
+other = "Övrigt"
+
+[labels.sv.model.fleet_vehicle.field.odometer_km]
+label = "Mätarställning (km)"
+description = "Senast kända mätarställning i kilometer"
+
+[labels.sv.model.fleet_vehicle.field.acquired_on]
+label = "Anskaffad den"
+description = "Datum då fordonet kom in i flottan (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.fleet_vehicle.field.driver]
+label = "Förare"
+description = "Namn på föraren som just nu använder fordonet, som fritext"
+
+[labels.sv.model.fleet_vehicle.field.driver_id]
+label = "Förare"
+description = "Förarposten som just nu är tilldelad fordonet"
+
+[labels.sv.model.fleet_vehicle.field.state]
+label = "Status"
+description = "Tillgänglighet: tillgängligt, i bruk, underhåll, ur drift"
+
+[labels.sv.model.fleet_vehicle.field.state.options]
+available = "Tillgängligt"
+in_service = "I bruk"
+maintenance = "Underhåll"
+retired = "Ur drift"
+
+[labels.sv.model.fleet_vehicle.action.dispatch]
+label = "Skicka ut"
+description = "Ta ett tillgängligt fordon i bruk"
+
+[labels.sv.model.fleet_vehicle.action.return_to_pool]
+label = "Återför till poolen"
+description = "Återför ett fordon i bruk till gruppen av tillgängliga fordon"
+
+[labels.sv.model.fleet_vehicle.action.retire]
+label = "Ta ur drift"
+description = "Ta bort ett tillgängligt fordon ur flottan för gott (kräver godkännare)"
+
+[labels.sv.model.fleet_vehicle_driver]
+name = "Förare"
+description = "En person som får köra flottans fordon"
+
+[labels.sv.model.fleet_vehicle_driver.field.name]
+label = "Namn"
+description = "Förarens fullständiga namn"
+
+[labels.sv.model.fleet_vehicle_driver.field.phone]
+label = "Telefon"
+description = "Förarens arbetstelefonnummer"
+
+[labels.sv.model.fleet_vehicle_driver.field.licence_number]
+label = "Körkortsnummer"
+description = "Körkortsnummer"
+
+[labels.sv.model.fleet_vehicle_driver.field.licence_expiry]
+label = "Körkortet giltigt till"
+description = "Datum då körkortet går ut (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.fleet_vehicle_driver.field.state]
+label = "Status"
+description = "Förarens status: aktiv, avstängd"
+
+[labels.sv.model.fleet_vehicle_driver.field.state.options]
+active = "Aktiv"
+suspended = "Avstängd"
+
+[labels.sv.model.fleet_vehicle_driver.action.suspend]
+label = "Stäng av"
+description = "Stäng av en förare, till exempel efter ett utgånget körkort"
+
+[labels.sv.model.fleet_vehicle_driver.action.reactivate]
+label = "Återaktivera"
+description = "Låt en avstängd förare köra igen"
+
+[labels.sv.model.fleet_vehicle_service]
+name = "Fordonsservice"
+description = "Ett underhålls-, reparations- eller besiktningsuppdrag för ett fordon"
+
+[labels.sv.model.fleet_vehicle_service.field.vehicle_id]
+label = "Fordon"
+description = "Fordonet som servas"
+
+[labels.sv.model.fleet_vehicle_service.field.kind]
+label = "Typ"
+description = "Typ av uppdrag: underhåll, reparation, besiktning, däck, övrigt"
+
+[labels.sv.model.fleet_vehicle_service.field.kind.options]
+maintenance = "Underhåll"
+repair = "Reparation"
+inspection = "Besiktning"
+tyres = "Däck"
+other = "Övrigt"
+
+[labels.sv.model.fleet_vehicle_service.field.service_on]
+label = "Servicedatum"
+description = "Uppdragets datum (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.fleet_vehicle_service.field.odometer_km]
+label = "Mätarställning (km)"
+description = "Mätarställning i kilometer vid servicen"
+
+[labels.sv.model.fleet_vehicle_service.field.cost]
+label = "Kostnad"
+description = "Totalt fakturerat av verkstaden (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.fleet_vehicle_service.field.workshop]
+label = "Verkstad"
+description = "Verkstadens namn"
+
+[labels.sv.model.fleet_vehicle_service.field.notes]
+label = "Anteckningar"
+description = "Vad som gjordes eller upptäcktes"
+
+[labels.sv.model.fleet_vehicle_service.field.state]
+label = "Status"
+description = "Uppdragets status: planerad, klar, annullerad"
+
+[labels.sv.model.fleet_vehicle_service.field.state.options]
+planned = "Planerad"
+done = "Klar"
+cancelled = "Annullerad"
+
+[labels.sv.model.fleet_vehicle_service.action.complete]
+label = "Slutför"
+description = "Markera ett planerat uppdrag som klart"
+
+[labels.sv.model.fleet_vehicle_service.action.cancel]
+label = "Annullera"
+description = "Annullera ett planerat uppdrag"

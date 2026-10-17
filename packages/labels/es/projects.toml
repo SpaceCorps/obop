@@ -1,0 +1,156 @@
+[labels.es.module]
+name = "Proyectos"
+description = "Proyectos, hitos y tareas con responsables, plazos y flujos de estados. El avance se sigue por estado, no se calcula a partir del esfuerzo de las tareas."
+
+[labels.es.model.projects_project]
+name = "Proyecto"
+description = "Un conjunto de trabajo con un objetivo"
+
+[labels.es.model.projects_project.field.name]
+label = "Nombre"
+description = "Nombre del proyecto"
+
+[labels.es.model.projects_project.field.code]
+label = "Código"
+description = "Referencia corta usada en los informes, por ejemplo WEB-24"
+
+[labels.es.model.projects_project.field.project_manager]
+label = "Jefe de proyecto"
+description = "Nombre de la persona responsable del proyecto"
+
+[labels.es.model.projects_project.field.start_on]
+label = "Fecha de inicio"
+description = "Fecha de inicio prevista (YYYY-MM-DD)"
+
+[labels.es.model.projects_project.field.deadline]
+label = "Fecha límite"
+description = "Fecha en que debe terminar el proyecto (YYYY-MM-DD)"
+
+[labels.es.model.projects_project.field.budget]
+label = "Presupuesto"
+description = "Presupuesto acordado del proyecto (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.projects_project.field.description]
+label = "Descripción"
+description = "Objetivo y alcance del proyecto"
+
+[labels.es.model.projects_project.field.state]
+label = "Estado"
+description = "Estado del proyecto: planificado, activo, hecho"
+
+[labels.es.model.projects_project.field.state.options]
+planned = "Planificado"
+active = "Activo"
+done = "Hecho"
+
+[labels.es.model.projects_project.action.start]
+label = "Iniciar"
+description = "Pasar un proyecto planificado a activo"
+
+[labels.es.model.projects_project.action.finish]
+label = "Terminar"
+description = "Marcar un proyecto activo como hecho"
+
+[labels.es.model.projects_project.action.reopen]
+label = "Reabrir"
+description = "Reabrir un proyecto terminado"
+
+[labels.es.model.projects_milestone]
+name = "Hito"
+description = "Un punto de control de un proyecto"
+
+[labels.es.model.projects_milestone.field.project_id]
+label = "Proyecto"
+description = "El proyecto al que pertenece el hito"
+
+[labels.es.model.projects_milestone.field.name]
+label = "Nombre"
+description = "Nombre del hito, por ejemplo Diseño aprobado"
+
+[labels.es.model.projects_milestone.field.due_on]
+label = "Fecha de vencimiento"
+description = "Fecha en que vence el hito (YYYY-MM-DD)"
+
+[labels.es.model.projects_milestone.field.description]
+label = "Descripción"
+description = "Qué debe cumplirse para considerar alcanzado el hito"
+
+[labels.es.model.projects_milestone.field.state]
+label = "Estado"
+description = "Estado del hito: pendiente, alcanzado, incumplido"
+
+[labels.es.model.projects_milestone.field.state.options]
+pending = "Pendiente"
+reached = "Alcanzado"
+missed = "No alcanzado"
+
+[labels.es.model.projects_milestone.action.reach]
+label = "Marcar como alcanzado"
+description = "Marcar un hito pendiente como alcanzado"
+
+[labels.es.model.projects_milestone.action.miss]
+label = "Marcar como no alcanzado"
+description = "Registrar que un hito pendiente se incumplió"
+
+[labels.es.model.projects_task]
+name = "Tarea"
+description = "Una unidad de trabajo dentro de un proyecto"
+
+[labels.es.model.projects_task.field.title]
+label = "Título"
+description = "Lo que hay que hacer"
+
+[labels.es.model.projects_task.field.project_id]
+label = "Proyecto"
+description = "El proyecto al que pertenece la tarea; vacío para una tarea privada"
+
+[labels.es.model.projects_task.field.milestone_id]
+label = "Hito"
+description = "El hito al que contribuye la tarea"
+
+[labels.es.model.projects_task.field.assignee]
+label = "Asignado a"
+description = "Nombre de la persona responsable"
+
+[labels.es.model.projects_task.field.priority]
+label = "Prioridad"
+description = "Importancia de la tarea: baja, normal, alta"
+
+[labels.es.model.projects_task.field.priority.options]
+low = "Baja"
+normal = "Normal"
+high = "Alta"
+
+[labels.es.model.projects_task.field.due_on]
+label = "Fecha de vencimiento"
+description = "Fecha en que vence la tarea (YYYY-MM-DD)"
+
+[labels.es.model.projects_task.field.estimate_minutes]
+label = "Minutos estimados"
+description = "Esfuerzo previsto en minutos"
+
+[labels.es.model.projects_task.field.description]
+label = "Descripción"
+description = "Detalles, criterios de aceptación y enlaces"
+
+[labels.es.model.projects_task.field.state]
+label = "Estado"
+description = "Estado de la tarea: por hacer, en curso, hecha, cancelada"
+
+[labels.es.model.projects_task.field.state.options]
+todo = "Por hacer"
+doing = "En curso"
+done = "Hecho"
+cancelled = "Cancelado"
+
+[labels.es.model.projects_task.action.begin]
+label = "Empezar"
+description = "Empezar a trabajar en una tarea por hacer"
+
+[labels.es.model.projects_task.action.complete]
+label = "Completar"
+description = "Marcar como hecha una tarea en curso"
+
+[labels.es.model.projects_task.action.cancel]
+label = "Cancelar"
+description = "Descartar una tarea que nunca se empezó"

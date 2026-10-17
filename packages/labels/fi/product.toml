@@ -1,0 +1,22 @@
+[labels.fi.module]
+name = "Tuotteet"
+
+[labels.fi.model.product]
+name = "Tuote"
+description = "Tavara tai palvelu, jota yritys myy"
+
+[labels.fi.model.product.field.name]
+label = "Nimi"
+description = "Tuotteen nimi"
+
+[labels.fi.model.product.field.sku]
+label = "SKU"
+description = "Varastonimike (SKU)"
+
+[labels.fi.model.product.field.list_price_minor]
+label = "Listahinta"
+description = "Listahinta valuutan pienimmässä yksikössä"
+
+[labels.fi.model.product.field.cost_minor]
+label = "Kustannus"
+description = "Yksikkökustannus valuutan pienimmässä yksikössä"

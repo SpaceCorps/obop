@@ -1,0 +1,90 @@
+[labels.fi.module]
+name = "Asiakirjat"
+description = "Yrityksen asiakirjarekisteri: kansiot, asiakirjat lajin, omistajan, voimassaolon ja luottamuksellisuuden kanssa sekä luonnos-, julkaistu- ja arkistoitu-kulku. Tallentaa viitteitä, ei tiedostojen sisältöä."
+
+[labels.fi.model.documents_folder]
+name = "Kansio"
+description = "Kansio, johon asiakirjat ryhmitellään"
+
+[labels.fi.model.documents_folder.field.name]
+label = "Nimi"
+description = "Kansion nimi"
+
+[labels.fi.model.documents_folder.field.parent_id]
+label = "Ylätaso"
+description = "Kansio, jonka sisällä tämä on"
+
+[labels.fi.model.documents_folder.field.description]
+label = "Kuvaus"
+description = "Mitä kansioon kuuluu"
+
+[labels.fi.model.documents_document]
+name = "Asiakirja"
+description = "Sopimus, ohjeistus, todistus tai muu rekisteröity asiakirja"
+
+[labels.fi.model.documents_document.field.title]
+label = "Otsikko"
+description = "Asiakirjan otsikko"
+
+[labels.fi.model.documents_document.field.folder_id]
+label = "Kansio"
+description = "Kansio, johon asiakirja on arkistoitu"
+
+[labels.fi.model.documents_document.field.kind]
+label = "Laji"
+description = "Asiakirjan laji: sopimus, lasku, ohjeistus, raportti, todistus, muu"
+
+[labels.fi.model.documents_document.field.kind.options]
+contract = "Sopimus"
+invoice = "Lasku"
+policy = "Ohjeistus"
+report = "Raportti"
+certificate = "Todistus"
+other = "Muu"
+
+[labels.fi.model.documents_document.field.confidentiality]
+label = "Luottamuksellisuus"
+description = "Kenen pitäisi nähdä se, lukijoille tarkoitettuna merkintänä: julkinen, sisäinen, luottamuksellinen, rajoitettu"
+
+[labels.fi.model.documents_document.field.confidentiality.options]
+public = "Julkinen"
+internal = "Sisäinen"
+confidential = "Luottamuksellinen"
+restricted = "Rajoitettu"
+
+[labels.fi.model.documents_document.field.owner]
+label = "Omistaja"
+description = "Asiakirjasta vastaavan henkilön nimi"
+
+[labels.fi.model.documents_document.field.reference]
+label = "Viite"
+description = "Viitenumero, esimerkiksi sopimusnumero"
+
+[labels.fi.model.documents_document.field.location]
+label = "Sijainti"
+description = "Missä tiedosto säilytetään, esimerkiksi linkki tai arkistolaatikko"
+
+[labels.fi.model.documents_document.field.expires_on]
+label = "Vanhenee"
+description = "Päivä, jonka jälkeen asiakirja ei ole enää voimassa (YYYY-MM-DD)"
+
+[labels.fi.model.documents_document.field.summary]
+label = "Yhteenveto"
+description = "Mitä asiakirja sisältää, muutamalla rivillä"
+
+[labels.fi.model.documents_document.field.state]
+label = "Tila"
+description = "Asiakirjan tila: luonnos, julkaistu, arkistoitu"
+
+[labels.fi.model.documents_document.field.state.options]
+draft = "Luonnos"
+published = "Julkaistu"
+archived = "Arkistoitu"
+
+[labels.fi.model.documents_document.action.publish]
+label = "Julkaise"
+description = "Tee luonnoksesta voimassa oleva versio"
+
+[labels.fi.model.documents_document.action.archive]
+label = "Arkistoi"
+description = "Arkistoi julkaistu asiakirja (vain esihenkilö)"

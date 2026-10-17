@@ -1,0 +1,95 @@
+[labels.pl.module]
+name = "Spotkania"
+description = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z datą, godziną rozpoczęcia i zakończenia oraz obiegiem statusów. Nakładanie się terminów nie jest blokowane automatycznie."
+
+[labels.pl.model.appointments_resource]
+name = "Zasób"
+description = "Coś lub ktoś, kogo można zarezerwować"
+
+[labels.pl.model.appointments_resource.field.name]
+label = "Nazwa"
+description = "Nazwa zasobu, na przykład Sala konferencyjna 2"
+
+[labels.pl.model.appointments_resource.field.kind]
+label = "Rodzaj"
+description = "Rodzaj zasobu: osoba, sala, sprzęt"
+
+[labels.pl.model.appointments_resource.field.kind.options]
+person = "Osoba"
+room = "Sala"
+equipment = "Sprzęt"
+
+[labels.pl.model.appointments_resource.field.capacity]
+label = "Pojemność"
+description = "Ile osób zasób może obsłużyć jednocześnie"
+
+[labels.pl.model.appointments_resource.field.active]
+label = "Aktywny"
+description = "Czy zasób można rezerwować"
+
+[labels.pl.model.appointments_appointment]
+name = "Spotkanie"
+description = "Rezerwacja zasobu na określony czas"
+
+[labels.pl.model.appointments_appointment.field.resource_id]
+label = "Zasób"
+description = "Zarezerwowany zasób"
+
+[labels.pl.model.appointments_appointment.field.title]
+label = "Tytuł"
+description = "Czego dotyczy spotkanie"
+
+[labels.pl.model.appointments_appointment.field.day]
+label = "Dzień"
+description = "Data spotkania (YYYY-MM-DD)"
+
+[labels.pl.model.appointments_appointment.field.start_minute]
+label = "Początek (min)"
+description = "Godzina rozpoczęcia jako liczba minut od północy, np. 540 oznacza 09:00"
+
+[labels.pl.model.appointments_appointment.field.end_minute]
+label = "Koniec (min)"
+description = "Godzina zakończenia jako liczba minut od północy, np. 600 oznacza 10:00"
+
+[labels.pl.model.appointments_appointment.field.attendee_name]
+label = "Imię i nazwisko uczestnika"
+description = "Imię i nazwisko uczestniczącej osoby"
+
+[labels.pl.model.appointments_appointment.field.attendee_email]
+label = "E-mail uczestnika"
+description = "Adres e-mail uczestnika"
+
+[labels.pl.model.appointments_appointment.field.attendee_phone]
+label = "Telefon uczestnika"
+description = "Numer telefonu uczestnika"
+
+[labels.pl.model.appointments_appointment.field.notes]
+label = "Notatki"
+description = "Wszystko, co gospodarz powinien wiedzieć wcześniej"
+
+[labels.pl.model.appointments_appointment.field.state]
+label = "Status"
+description = "Status rezerwacji: zaplanowane, potwierdzone, wykonane, anulowane, nieobecność"
+
+[labels.pl.model.appointments_appointment.field.state.options]
+scheduled = "Zaplanowane"
+confirmed = "Potwierdzone"
+done = "Wykonane"
+cancelled = "Anulowane"
+no_show = "Nieobecność"
+
+[labels.pl.model.appointments_appointment.action.confirm]
+label = "Potwierdź"
+description = "Potwierdza zaplanowane spotkanie"
+
+[labels.pl.model.appointments_appointment.action.complete]
+label = "Zakończ"
+description = "Oznacza potwierdzone spotkanie jako odbyte"
+
+[labels.pl.model.appointments_appointment.action.cancel]
+label = "Anuluj"
+description = "Anuluje zaplanowane spotkanie"
+
+[labels.pl.model.appointments_appointment.action.mark_no_show]
+label = "Oznacz nieobecność"
+description = "Rejestruje, że uczestnik nie przyszedł"

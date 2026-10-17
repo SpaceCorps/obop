@@ -95,6 +95,24 @@ describe("labels", () => {
     expect(optionLabel("in_service")).toBe("In Betrieb");
     expect(actionTitle({ id: "lead.mark_won" })).toBe("Als gewonnen markieren");
   });
+
+  it("show the server's option labels of the field in the active language", async () => {
+    const fuel = field("fuel", "select", {
+      options: ["petrol", "electric"],
+      option_labels: { electric: { de: "Elektro", fi: "Sähkö" } },
+    });
+    await use("de", { "option\u0004Petrol": "Benzin" });
+    expect(optionLabel("electric", fuel)).toBe("Elektro");
+    // No server label for this option: the client table, then the English words.
+    expect(optionLabel("petrol", fuel)).toBe("Benzin");
+    expect(optionLabel("hybrid", fuel)).toBe("Hybrid");
+    expect(plainText(fuel, "electric", () => "")).toBe("Elektro");
+    expect(optionLabel("electric")).toBe("Electric");
+    await use("fr");
+    expect(optionLabel("electric", fuel)).toBe("Electric");
+    await use("fi");
+    expect(optionLabel("electric", fuel)).toBe("Sähkö");
+  });
 });
 
 describe("amounts and sentences", () => {

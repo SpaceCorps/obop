@@ -1,0 +1,324 @@
+[labels.fr.module]
+name = "Comptabilité"
+description = "Plan comptable, journaux, taxes, écritures avec lignes de débit et de crédit, exercices fiscaux, périodes et lignes de relevé bancaire. Montants en plus petite unité monétaire, taux en points de base (2000 = 20,00 %). Rien n’est calculé : équilibre, taxes et numéros sont saisis. Comptabiliser et clôturer exigent une approbation humaine ; les agents peuvent seulement les proposer."
+
+[labels.fr.model.accounting_account]
+name = "Compte"
+description = "Un compte du plan comptable"
+
+[labels.fr.model.accounting_account.field.code]
+label = "Code"
+description = "Code du compte tel qu’utilisé dans le plan comptable, par exemple 400000"
+
+[labels.fr.model.accounting_account.field.name]
+label = "Nom"
+description = "Nom du compte, par exemple Clients"
+
+[labels.fr.model.accounting_account.field.account_type]
+label = "Type de compte"
+description = "Type de compte : asset_receivable, asset_cash, asset_current, asset_fixed, liability_payable, liability_current, liability_non_current, equity, income, income_other, expense, expense_direct_cost"
+
+[labels.fr.model.accounting_account.field.account_type.options]
+asset_receivable = "Créances"
+asset_cash = "Trésorerie"
+asset_current = "Actif circulant"
+asset_fixed = "Immobilisations"
+liability_payable = "Dettes"
+liability_current = "Passif circulant"
+liability_non_current = "Passif non courant"
+equity = "Capitaux propres"
+income = "Produits"
+income_other = "Autres produits"
+expense = "Charges"
+expense_direct_cost = "Coûts directs"
+
+[labels.fr.model.accounting_account.field.reconcile]
+label = "Lettrable"
+description = "Indique si les éléments ouverts de ce compte peuvent être lettrés (clients, fournisseurs, compte d’attente bancaire)"
+
+[labels.fr.model.accounting_account.field.deprecated]
+label = "Obsolète"
+description = "Indique si le compte est fermé à toute nouvelle écriture"
+
+[labels.fr.model.accounting_account.field.note]
+label = "Note"
+description = "Remarques internes sur l’utilisation du compte"
+
+[labels.fr.model.accounting_journal]
+name = "Journal"
+description = "Un journal qui regroupe les écritures d’un même type (ventes, achats, banque, caisse, opérations diverses)"
+
+[labels.fr.model.accounting_journal.field.name]
+label = "Nom"
+description = "Nom du journal, par exemple Factures clients"
+
+[labels.fr.model.accounting_journal.field.code]
+label = "Code"
+description = "Code court utilisé dans les numéros d’écriture, par exemple INV"
+
+[labels.fr.model.accounting_journal.field.kind]
+label = "Type"
+description = "Ce que le journal enregistre : vente, achat, caisse, banque, général"
+
+[labels.fr.model.accounting_journal.field.kind.options]
+sale = "Vente"
+purchase = "Achat"
+cash = "Caisse"
+bank = "Banque"
+general = "Opérations diverses"
+
+[labels.fr.model.accounting_journal.field.default_account_id]
+label = "Compte par défaut"
+description = "Compte par défaut des écritures de ce journal (le compte bancaire pour un journal de banque)"
+
+[labels.fr.model.accounting_journal.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217 du journal, par exemple EUR ; vide signifie la devise de la société"
+
+[labels.fr.model.accounting_journal.field.active]
+label = "Actif"
+description = "Indique si le journal peut encore recevoir des écritures"
+
+[labels.fr.model.accounting_tax]
+name = "Taxe"
+description = "Un taux de taxe auquel les lignes d’écriture peuvent faire référence"
+
+[labels.fr.model.accounting_tax.field.name]
+label = "Nom"
+description = "Nom de la taxe, par exemple TVA 20 % ventes"
+
+[labels.fr.model.accounting_tax.field.rate_bp]
+label = "Taux (pb)"
+description = "Taux en points de base : 2000 correspond à 20,00 %, 550 à 5,50 %"
+
+[labels.fr.model.accounting_tax.field.scope]
+label = "Portée"
+description = "Où la taxe s’applique : ventes, achats, aucune"
+
+[labels.fr.model.accounting_tax.field.scope.options]
+sales = "Ventes"
+purchases = "Achats"
+none = "Aucune"
+
+[labels.fr.model.accounting_tax.field.price_included]
+label = "Incluse dans le prix"
+description = "Indique si les prix incluent déjà cette taxe"
+
+[labels.fr.model.accounting_tax.field.tax_account_id]
+label = "Compte de taxe"
+description = "Compte sur lequel le montant de la taxe est comptabilisé"
+
+[labels.fr.model.accounting_tax.field.active]
+label = "Active"
+description = "Indique si la taxe peut encore être choisie sur de nouvelles lignes"
+
+[labels.fr.model.accounting_fiscal_year]
+name = "Exercice fiscal"
+description = "Un exercice fiscal, ouvert et clôturé dans son ensemble"
+
+[labels.fr.model.accounting_fiscal_year.field.name]
+label = "Nom"
+description = "Nom de l’exercice fiscal, par exemple EF2026"
+
+[labels.fr.model.accounting_fiscal_year.field.start_on]
+label = "Début le"
+description = "Premier jour de l’exercice fiscal (YYYY-MM-DD)"
+
+[labels.fr.model.accounting_fiscal_year.field.end_on]
+label = "Fin le"
+description = "Dernier jour de l’exercice fiscal (YYYY-MM-DD)"
+
+[labels.fr.model.accounting_fiscal_year.field.state]
+label = "Statut"
+description = "Statut de l’exercice fiscal : ouvert, clôturé"
+
+[labels.fr.model.accounting_fiscal_year.field.state.options]
+open = "Ouvert"
+closed = "Clôturé"
+
+[labels.fr.model.accounting_fiscal_year.action.close]
+label = "Clôturer"
+description = "Clôture l’exercice fiscal : plus aucune écriture n’y sera comptabilisée (approbateur uniquement)"
+
+[labels.fr.model.accounting_fiscal_year.action.reopen]
+label = "Rouvrir"
+description = "Rouvre un exercice fiscal clôturé pour le corriger (approbateur uniquement)"
+
+[labels.fr.model.accounting_period]
+name = "Période"
+description = "Une période comptable (en général un mois) à l’intérieur d’un exercice fiscal"
+
+[labels.fr.model.accounting_period.field.fiscal_year_id]
+label = "Exercice fiscal"
+description = "L’exercice fiscal auquel appartient la période"
+
+[labels.fr.model.accounting_period.field.name]
+label = "Nom"
+description = "Nom de la période, par exemple 2026-03"
+
+[labels.fr.model.accounting_period.field.start_on]
+label = "Début le"
+description = "Premier jour de la période (YYYY-MM-DD)"
+
+[labels.fr.model.accounting_period.field.end_on]
+label = "Fin le"
+description = "Dernier jour de la période (YYYY-MM-DD)"
+
+[labels.fr.model.accounting_period.field.state]
+label = "Statut"
+description = "Statut de la période : ouverte, clôturée"
+
+[labels.fr.model.accounting_period.field.state.options]
+open = "Ouverte"
+closed = "Clôturée"
+
+[labels.fr.model.accounting_period.action.close]
+label = "Clôturer"
+description = "Clôture la période : plus aucune comptabilisation (approbateur uniquement)"
+
+[labels.fr.model.accounting_period.action.reopen]
+label = "Rouvrir"
+description = "Rouvre une période clôturée (approbateur uniquement)"
+
+[labels.fr.model.accounting_move]
+name = "Écriture"
+description = "Une écriture comptable : un ensemble daté de lignes de débit et de crédit dans un journal"
+
+[labels.fr.model.accounting_move.field.journal_id]
+label = "Journal"
+description = "Le journal auquel appartient l’écriture"
+
+[labels.fr.model.accounting_move.field.date]
+label = "Date"
+description = "Date comptable de l’écriture (YYYY-MM-DD)"
+
+[labels.fr.model.accounting_move.field.number]
+label = "Numéro"
+description = "Numéro d’écriture tel que INV/2026/0001. Texte libre : les packages ne peuvent pas générer de séquences, donc la personne qui comptabilise attribue le numéro suivant à la main et garde la série sans rupture"
+
+[labels.fr.model.accounting_move.field.reference]
+label = "Référence"
+description = "Référence externe, par exemple le numéro de facture du fournisseur"
+
+[labels.fr.model.accounting_move.field.partner_id]
+label = "Partenaire"
+description = "Le contact concerné par l’écriture"
+
+[labels.fr.model.accounting_move.field.narration]
+label = "Commentaire"
+description = "Note en texte libre sur l’écriture"
+
+[labels.fr.model.accounting_move.field.state]
+label = "Statut"
+description = "Statut de l’écriture : brouillon, comptabilisée, annulée, extournée"
+
+[labels.fr.model.accounting_move.field.state.options]
+draft = "Brouillon"
+posted = "Comptabilisée"
+cancelled = "Annulée"
+reversed = "Extournée"
+
+[labels.fr.model.accounting_move.action.post]
+label = "Comptabiliser"
+description = "Comptabilise une écriture en brouillon au grand livre (approbateur uniquement ; l’équilibre des débits et des crédits n’est pas vérifié)"
+
+[labels.fr.model.accounting_move.action.cancel]
+label = "Annuler"
+description = "Annule une écriture en brouillon qui n’a jamais été comptabilisée"
+
+[labels.fr.model.accounting_move.action.reverse]
+label = "Extourner"
+description = "Marque une écriture comptabilisée comme extournée ; l’écriture inverse est saisie séparément (approbateur uniquement)"
+
+[labels.fr.model.accounting_move_line]
+name = "Ligne d’écriture"
+description = "Une ligne de débit ou de crédit d’une écriture comptable"
+
+[labels.fr.model.accounting_move_line.field.move_id]
+label = "Écriture"
+description = "L’écriture comptable à laquelle appartient la ligne"
+
+[labels.fr.model.accounting_move_line.field.account_id]
+label = "Compte"
+description = "Le compte sur lequel la ligne est comptabilisée"
+
+[labels.fr.model.accounting_move_line.field.partner_id]
+label = "Partenaire"
+description = "Le contact concerné par la ligne"
+
+[labels.fr.model.accounting_move_line.field.label]
+label = "Libellé"
+description = "Description de la ligne"
+
+[labels.fr.model.accounting_move_line.field.debit]
+label = "Débit"
+description = "Montant au débit en plus petite unité monétaire ; 0 si la ligne est un crédit"
+
+[labels.fr.model.accounting_move_line.field.credit]
+label = "Crédit"
+description = "Montant au crédit en plus petite unité monétaire ; 0 si la ligne est un débit"
+
+[labels.fr.model.accounting_move_line.field.tax_id]
+label = "Taxe"
+description = "Taxe portée par la ligne, le cas échéant"
+
+[labels.fr.model.accounting_move_line.field.due_on]
+label = "Date d’échéance"
+description = "Date d’échéance des lignes clients et fournisseurs (YYYY-MM-DD)"
+
+[labels.fr.model.accounting_move_line.field.reconciled]
+label = "Lettrée"
+description = "Indique si la ligne a été rapprochée d’un paiement"
+
+[labels.fr.model.accounting_bank_statement_line]
+name = "Ligne de relevé bancaire"
+description = "Une ligne de relevé bancaire en attente d’association à des écritures"
+
+[labels.fr.model.accounting_bank_statement_line.field.journal_id]
+label = "Journal"
+description = "Le journal de banque auquel appartient le relevé"
+
+[labels.fr.model.accounting_bank_statement_line.field.date]
+label = "Date"
+description = "Date d’enregistrement à la banque (YYYY-MM-DD)"
+
+[labels.fr.model.accounting_bank_statement_line.field.label]
+label = "Libellé"
+description = "Référence de paiement ou description telle que la banque la transmet"
+
+[labels.fr.model.accounting_bank_statement_line.field.amount]
+label = "Montant"
+description = "Montant en plus petite unité monétaire ; positif pour une entrée d’argent, négatif pour une sortie"
+
+[labels.fr.model.accounting_bank_statement_line.field.counterparty_name]
+label = "Nom de la contrepartie"
+description = "Nom du payeur ou du bénéficiaire tel que la banque le transmet"
+
+[labels.fr.model.accounting_bank_statement_line.field.counterparty_iban]
+label = "IBAN de la contrepartie"
+description = "Compte bancaire du payeur ou du bénéficiaire"
+
+[labels.fr.model.accounting_bank_statement_line.field.move_line_id]
+label = "Ligne d’écriture"
+description = "La ligne d’écriture à laquelle cette ligne de relevé a été associée"
+
+[labels.fr.model.accounting_bank_statement_line.field.state]
+label = "Statut"
+description = "Statut de rapprochement : non rapprochée, associée, rapprochée"
+
+[labels.fr.model.accounting_bank_statement_line.field.state.options]
+unmatched = "Non rapprochée"
+matched = "Associée"
+reconciled = "Rapprochée"
+
+[labels.fr.model.accounting_bank_statement_line.action.match]
+label = "Associer"
+description = "Enregistre que la ligne correspond à une ligne d’écriture"
+
+[labels.fr.model.accounting_bank_statement_line.action.reconcile]
+label = "Rapprocher"
+description = "Rapproche une ligne associée (responsable uniquement)"
+
+[labels.fr.model.accounting_bank_statement_line.action.unmatch]
+label = "Dissocier"
+description = "Annule une association erronée"

@@ -1,0 +1,160 @@
+[labels.de.module]
+name = "Fuhrpark"
+description = "Fahrzeuge, Fahrer und Servicehistorie für einen kleinen Fuhrpark. Erfasst Status und Serviceeinträge; Betriebskosten und Kraftstoffverbrauch werden nicht berechnet."
+
+[labels.de.model.fleet_vehicle]
+name = "Fahrzeug"
+description = "Ein Fahrzeug, das das Unternehmen betreibt"
+
+[labels.de.model.fleet_vehicle.field.plate]
+label = "Kennzeichen"
+description = "Amtliches Kennzeichen"
+
+[labels.de.model.fleet_vehicle.field.model]
+label = "Modell"
+description = "Marke und Modell, zum Beispiel Renault Master"
+
+[labels.de.model.fleet_vehicle.field.vin]
+label = "FIN"
+description = "Fahrzeug-Identifizierungsnummer (Fahrgestellnummer)"
+
+[labels.de.model.fleet_vehicle.field.fuel]
+label = "Kraftstoff"
+description = "Kraftstoff- oder Antriebsart: Benzin, Diesel, Hybrid, Elektro, Sonstiges"
+
+[labels.de.model.fleet_vehicle.field.fuel.options]
+petrol = "Benzin"
+diesel = "Diesel"
+hybrid = "Hybrid"
+electric = "Elektro"
+other = "Sonstiges"
+
+[labels.de.model.fleet_vehicle.field.odometer_km]
+label = "Kilometerstand"
+description = "Zuletzt bekannter Kilometerstand"
+
+[labels.de.model.fleet_vehicle.field.acquired_on]
+label = "Angeschafft am"
+description = "Datum, an dem das Fahrzeug in den Fuhrpark kam (YYYY-MM-DD)"
+
+[labels.de.model.fleet_vehicle.field.driver]
+label = "Fahrer"
+description = "Name des Fahrers, der das Fahrzeug aktuell nutzt, als Freitext"
+
+[labels.de.model.fleet_vehicle.field.driver_id]
+label = "Fahrer"
+description = "Dem Fahrzeug aktuell zugewiesener Fahrerdatensatz"
+
+[labels.de.model.fleet_vehicle.field.state]
+label = "Status"
+description = "Verfügbarkeit: verfügbar, im Einsatz, Wartung, ausgemustert"
+
+[labels.de.model.fleet_vehicle.field.state.options]
+available = "Verfügbar"
+in_service = "Im Einsatz"
+maintenance = "Wartung"
+retired = "Ausgemustert"
+
+[labels.de.model.fleet_vehicle.action.dispatch]
+label = "In Einsatz nehmen"
+description = "Ein verfügbares Fahrzeug in Einsatz nehmen"
+
+[labels.de.model.fleet_vehicle.action.return_to_pool]
+label = "Zurück in den Pool"
+description = "Ein Fahrzeug im Einsatz zurück in den Pool der verfügbaren Fahrzeuge geben"
+
+[labels.de.model.fleet_vehicle.action.retire]
+label = "Ausmustern"
+description = "Ein verfügbares Fahrzeug endgültig aus dem Fuhrpark nehmen (braucht die genehmigende Person)"
+
+[labels.de.model.fleet_vehicle_driver]
+name = "Fahrer"
+description = "Eine Person, die Fuhrparkfahrzeuge fahren darf"
+
+[labels.de.model.fleet_vehicle_driver.field.name]
+label = "Name"
+description = "Vollständiger Name des Fahrers"
+
+[labels.de.model.fleet_vehicle_driver.field.phone]
+label = "Telefon"
+description = "Dienstliche Telefonnummer des Fahrers"
+
+[labels.de.model.fleet_vehicle_driver.field.licence_number]
+label = "Führerscheinnummer"
+description = "Nummer des Führerscheins"
+
+[labels.de.model.fleet_vehicle_driver.field.licence_expiry]
+label = "Führerschein gültig bis"
+description = "Datum, an dem der Führerschein abläuft (YYYY-MM-DD)"
+
+[labels.de.model.fleet_vehicle_driver.field.state]
+label = "Status"
+description = "Fahrerstatus: aktiv, gesperrt"
+
+[labels.de.model.fleet_vehicle_driver.field.state.options]
+active = "Aktiv"
+suspended = "Gesperrt"
+
+[labels.de.model.fleet_vehicle_driver.action.suspend]
+label = "Sperren"
+description = "Einen Fahrer sperren, zum Beispiel nach Ablauf des Führerscheins"
+
+[labels.de.model.fleet_vehicle_driver.action.reactivate]
+label = "Reaktivieren"
+description = "Einem gesperrten Fahrer das Fahren wieder erlauben"
+
+[labels.de.model.fleet_vehicle_service]
+name = "Fahrzeugservice"
+description = "Eine Wartung, Reparatur oder Inspektion an einem Fahrzeug"
+
+[labels.de.model.fleet_vehicle_service.field.vehicle_id]
+label = "Fahrzeug"
+description = "Das gewartete Fahrzeug"
+
+[labels.de.model.fleet_vehicle_service.field.kind]
+label = "Art"
+description = "Art des Auftrags: Wartung, Reparatur, Inspektion, Reifen, Sonstiges"
+
+[labels.de.model.fleet_vehicle_service.field.kind.options]
+maintenance = "Wartung"
+repair = "Reparatur"
+inspection = "Inspektion"
+tyres = "Reifen"
+other = "Sonstiges"
+
+[labels.de.model.fleet_vehicle_service.field.service_on]
+label = "Servicedatum"
+description = "Datum des Auftrags (YYYY-MM-DD)"
+
+[labels.de.model.fleet_vehicle_service.field.odometer_km]
+label = "Kilometerstand"
+description = "Kilometerstand zum Zeitpunkt des Services"
+
+[labels.de.model.fleet_vehicle_service.field.cost]
+label = "Kosten"
+description = "Von der Werkstatt berechnete Gesamtsumme (kleinste Währungseinheit, z. B. Cent)"
+
+[labels.de.model.fleet_vehicle_service.field.workshop]
+label = "Werkstatt"
+description = "Name der Werkstatt"
+
+[labels.de.model.fleet_vehicle_service.field.notes]
+label = "Notizen"
+description = "Was getan oder festgestellt wurde"
+
+[labels.de.model.fleet_vehicle_service.field.state]
+label = "Status"
+description = "Auftragsstatus: geplant, erledigt, storniert"
+
+[labels.de.model.fleet_vehicle_service.field.state.options]
+planned = "Geplant"
+done = "Erledigt"
+cancelled = "Storniert"
+
+[labels.de.model.fleet_vehicle_service.action.complete]
+label = "Erledigen"
+description = "Einen geplanten Auftrag als erledigt markieren"
+
+[labels.de.model.fleet_vehicle_service.action.cancel]
+label = "Stornieren"
+description = "Einen geplanten Auftrag stornieren"

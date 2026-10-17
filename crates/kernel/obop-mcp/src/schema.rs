@@ -234,6 +234,9 @@ mod tests {
             required: false,
             options: vec!["a", "b"],
             to: Some("party"),
+            labels: Default::default(),
+            descriptions: Default::default(),
+            option_labels: Default::default(),
         }
     }
 
@@ -269,6 +272,9 @@ mod tests {
             required,
             options: vec!["draft", "posted"],
             to: Some("party"),
+            labels: Default::default(),
+            descriptions: Default::default(),
+            option_labels: Default::default(),
         };
         ModelInfo {
             name: "doc".into(),
@@ -291,10 +297,14 @@ mod tests {
                     from: Some("draft"),
                     to: "posted",
                 }),
+                labels: Default::default(),
+                descriptions: Default::default(),
             }],
             can_create: true,
             can_update: true,
             can_delete: true,
+            labels: Default::default(),
+            descriptions: Default::default(),
         }
     }
 

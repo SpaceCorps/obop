@@ -1,0 +1,26 @@
+[labels.pl.module]
+name = "Kontakty"
+
+[labels.pl.model.party]
+name = "Kontrahent"
+description = "Osoba lub organizacja, z którą firma prowadzi interesy"
+
+[labels.pl.model.party.field.name]
+label = "Nazwa"
+description = "Nazwa wyświetlana"
+
+[labels.pl.model.party.field.email]
+label = "E-mail"
+description = "Służbowy adres e-mail"
+
+[labels.pl.model.party.field.tax_id]
+label = "Numer podatkowy"
+description = "Numer identyfikacji podatkowej osoby fizycznej"
+
+[labels.pl.model.party.field.notes]
+label = "Notatki"
+description = "Wewnętrzne notatki w dowolnej formie"
+
+[labels.pl.model.party.action.erase]
+label = "Wymaż"
+description = "Anonimizuje kontrahenta w miejscu i zapisuje informację o wymazaniu"

@@ -1,0 +1,187 @@
+[labels.fi.module]
+name = "Henkilöstö"
+description = "Työntekijät, osastot ja poissaolopyynnöt. Henkilötiedot on luokiteltu tiukasti: palkka, pankkitili ja henkilötunnus näkyvät vain esihenkilöille, terveys- ja ammattiliittotiedot vain erityisryhmälle."
+
+[labels.fi.model.hr_department]
+name = "Osasto"
+description = "Yrityksen tiimi tai osasto"
+
+[labels.fi.model.hr_department.field.name]
+label = "Nimi"
+description = "Osaston nimi"
+
+[labels.fi.model.hr_department.field.head]
+label = "Osastonjohtaja"
+description = "Osastonjohtajan nimi"
+
+[labels.fi.model.hr_department.field.cost_centre]
+label = "Kustannuspaikka"
+description = "Talouden käyttämä kustannuspaikan koodi"
+
+[labels.fi.model.hr_employee]
+name = "Työntekijä"
+description = "Yrityksen palveluksessa oleva henkilö"
+
+[labels.fi.model.hr_employee.field.name]
+label = "Nimi"
+description = "Koko nimi"
+
+[labels.fi.model.hr_employee.field.job_title]
+label = "Tehtävänimike"
+description = "Tehtävänimike"
+
+[labels.fi.model.hr_employee.field.work_email]
+label = "Työsähköposti"
+description = "Työsähköpostiosoite"
+
+[labels.fi.model.hr_employee.field.work_phone]
+label = "Työpuhelin"
+description = "Työpuhelinnumero"
+
+[labels.fi.model.hr_employee.field.department_id]
+label = "Osasto"
+description = "Osasto, johon henkilö kuuluu"
+
+[labels.fi.model.hr_employee.field.reports_to_id]
+label = "Esihenkilö"
+description = "Henkilön esihenkilö"
+
+[labels.fi.model.hr_employee.field.hired_on]
+label = "Palkattu"
+description = "Työsuhteen ensimmäinen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.hr_employee.field.contract_type]
+label = "Sopimustyyppi"
+description = "Työsopimuksen tyyppi: vakituinen, määräaikainen, urakoitsija, harjoittelija"
+
+[labels.fi.model.hr_employee.field.contract_type.options]
+permanent = "Vakituinen"
+fixed_term = "Määräaikainen"
+contractor = "Urakoitsija"
+intern = "Harjoittelija"
+
+[labels.fi.model.hr_employee.field.private_email]
+label = "Yksityinen sähköposti"
+description = "Yksityinen sähköpostiosoite"
+
+[labels.fi.model.hr_employee.field.private_phone]
+label = "Yksityinen puhelin"
+description = "Yksityinen puhelinnumero"
+
+[labels.fi.model.hr_employee.field.home_address]
+label = "Kotiosoite"
+description = "Yksityinen kotiosoite"
+
+[labels.fi.model.hr_employee.field.birth_date]
+label = "Syntymäaika"
+description = "Syntymäaika (YYYY-MM-DD)"
+
+[labels.fi.model.hr_employee.field.national_id]
+label = "Henkilötunnus"
+description = "Henkilötunnus tai muu kansallinen henkilötunniste"
+
+[labels.fi.model.hr_employee.field.emergency_contact]
+label = "Hätäyhteyshenkilö"
+description = "Hätätilanteessa soitettavan henkilön nimi ja puhelinnumero"
+
+[labels.fi.model.hr_employee.field.salary]
+label = "Palkka"
+description = "Bruttovuosipalkka (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.hr_employee.field.bank_iban]
+label = "Pankkitilin IBAN"
+description = "Pankkitili, jolle palkka maksetaan"
+
+[labels.fi.model.hr_employee.field.union_member]
+label = "Ammattiliiton jäsen"
+description = "Onko henkilö ammattiliiton jäsen"
+
+[labels.fi.model.hr_employee.field.work_permit_expiry]
+label = "Työlupa voimassa"
+description = "Työluvan voimassaolon päättymispäivä, ei-kansalaisille (YYYY-MM-DD)"
+
+[labels.fi.model.hr_employee.field.health_note]
+label = "Terveystieto"
+description = "Työpaikan kannalta merkityksellinen terveydentila tai vamma"
+
+[labels.fi.model.hr_employee.field.state]
+label = "Tila"
+description = "Työsuhteen tila: perehdytys, aktiivinen, työsuhde päättynyt"
+
+[labels.fi.model.hr_employee.field.state.options]
+onboarding = "Perehdytys"
+active = "Aktiivinen"
+offboarded = "Työsuhde päättynyt"
+
+[labels.fi.model.hr_employee.action.activate]
+label = "Aktivoi"
+description = "Päätä perehdytys ja merkitse työntekijä aktiiviseksi"
+
+[labels.fi.model.hr_employee.action.offboard]
+label = "Päätä työsuhde"
+description = "Päätä työsuhdetietue; peruttavissa vain henkilöstöhallinnon päätöksellä"
+
+[labels.fi.model.hr_leave_request]
+name = "Poissaolopyyntö"
+description = "Pyyntö saada vapaata"
+
+[labels.fi.model.hr_leave_request.field.employee_id]
+label = "Työntekijä"
+description = "Vapaata pyytävä työntekijä"
+
+[labels.fi.model.hr_leave_request.field.leave_kind]
+label = "Poissaolon laji"
+description = "Poissaolon laji: palkallinen, palkaton, perhevapaa, opintovapaa, muu"
+
+[labels.fi.model.hr_leave_request.field.leave_kind.options]
+paid = "Palkallinen"
+unpaid = "Palkaton"
+parental = "Perhevapaa"
+study = "Opintovapaa"
+other = "Muu"
+
+[labels.fi.model.hr_leave_request.field.start_on]
+label = "Alkaa"
+description = "Poissaolon ensimmäinen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.hr_leave_request.field.end_on]
+label = "Päättyy"
+description = "Poissaolon viimeinen päivä (YYYY-MM-DD)"
+
+[labels.fi.model.hr_leave_request.field.days]
+label = "Päivät"
+description = "Pyydetyt työpäivät"
+
+[labels.fi.model.hr_leave_request.field.reason]
+label = "Syy"
+description = "Miksi vapaata pyydetään"
+
+[labels.fi.model.hr_leave_request.field.is_sick_leave]
+label = "Sairauspoissaolo"
+description = "Johtuuko poissaolo sairaudesta"
+
+[labels.fi.model.hr_leave_request.field.medical_note]
+label = "Lääkärintodistus"
+description = "Viite lääkärintodistukseen, jos sellainen on"
+
+[labels.fi.model.hr_leave_request.field.state]
+label = "Tila"
+description = "Pyynnön tila: luonnos, pyydetty, hyväksytty, hylätty"
+
+[labels.fi.model.hr_leave_request.field.state.options]
+draft = "Luonnos"
+requested = "Pyydetty"
+approved = "Hyväksytty"
+refused = "Hylätty"
+
+[labels.fi.model.hr_leave_request.action.request]
+label = "Pyydä"
+description = "Lähetä pyyntö esihenkilölle"
+
+[labels.fi.model.hr_leave_request.action.approve]
+label = "Hyväksy"
+description = "Hyväksy pyydetty vapaa (vain esihenkilö)"
+
+[labels.fi.model.hr_leave_request.action.refuse]
+label = "Hylkää"
+description = "Hylkää pyydetty vapaa (vain esihenkilö)"

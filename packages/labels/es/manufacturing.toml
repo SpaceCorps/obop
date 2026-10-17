@@ -1,0 +1,98 @@
+[labels.es.module]
+name = "Fabricación"
+description = "Listas de materiales y órdenes de fabricación con un flujo de borrador, confirmada, en curso y hecha. El stock de componentes no se consume automáticamente."
+
+[labels.es.model.manufacturing_bom]
+name = "Lista de materiales"
+description = "Una receta: los componentes necesarios para fabricar un producto"
+
+[labels.es.model.manufacturing_bom.field.product_id]
+label = "Producto"
+description = "El producto terminado que produce la receta"
+
+[labels.es.model.manufacturing_bom.field.name]
+label = "Nombre"
+description = "Nombre de la receta, por ejemplo Montaje estándar"
+
+[labels.es.model.manufacturing_bom.field.quantity]
+label = "Cantidad"
+description = "Unidades de producto terminado que produce cada ejecución"
+
+[labels.es.model.manufacturing_bom.field.instructions]
+label = "Instrucciones"
+description = "Notas de montaje para el taller"
+
+[labels.es.model.manufacturing_bom.field.active]
+label = "Activo"
+description = "Indica si la receta se puede usar en órdenes nuevas"
+
+[labels.es.model.manufacturing_bom_line]
+name = "Línea de lista de materiales"
+description = "Un componente de una lista de materiales"
+
+[labels.es.model.manufacturing_bom_line.field.bom_id]
+label = "Lista de materiales"
+description = "La receta a la que pertenece el componente"
+
+[labels.es.model.manufacturing_bom_line.field.component_id]
+label = "Componente"
+description = "El producto que se consume"
+
+[labels.es.model.manufacturing_bom_line.field.quantity]
+label = "Cantidad"
+description = "Unidades del componente usadas por ejecución"
+
+[labels.es.model.manufacturing_order]
+name = "Pedido"
+description = "Una instrucción para producir una cantidad de un producto"
+
+[labels.es.model.manufacturing_order.field.reference]
+label = "Referencia"
+description = "Número de orden, por ejemplo OF-0042"
+
+[labels.es.model.manufacturing_order.field.bom_id]
+label = "Lista de materiales"
+description = "La receta que se debe seguir"
+
+[labels.es.model.manufacturing_order.field.quantity]
+label = "Cantidad"
+description = "Unidades de producto terminado que se deben fabricar"
+
+[labels.es.model.manufacturing_order.field.planned_on]
+label = "Fecha planificada"
+description = "Fecha en que debe empezar la producción (YYYY-MM-DD)"
+
+[labels.es.model.manufacturing_order.field.deadline]
+label = "Fecha límite"
+description = "Fecha en que se necesita la mercancía (YYYY-MM-DD)"
+
+[labels.es.model.manufacturing_order.field.responsible]
+label = "Responsable"
+description = "Nombre de la persona a cargo de la ejecución"
+
+[labels.es.model.manufacturing_order.field.state]
+label = "Estado"
+description = "Estado de la orden: borrador, confirmada, en curso, hecha, cancelada"
+
+[labels.es.model.manufacturing_order.field.state.options]
+draft = "Borrador"
+confirmed = "Confirmado"
+in_progress = "En curso"
+done = "Hecho"
+cancelled = "Cancelado"
+
+[labels.es.model.manufacturing_order.action.confirm]
+label = "Confirmar"
+description = "Confirmar una orden en borrador para poder planificar la producción"
+
+[labels.es.model.manufacturing_order.action.start]
+label = "Iniciar"
+description = "Iniciar la producción de una orden confirmada"
+
+[labels.es.model.manufacturing_order.action.finish]
+label = "Terminar"
+description = "Marcar la producción como terminada"
+
+[labels.es.model.manufacturing_order.action.cancel]
+label = "Cancelar"
+description = "Cancelar una orden que no se ha confirmado"

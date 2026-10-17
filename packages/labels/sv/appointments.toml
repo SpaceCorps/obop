@@ -1,0 +1,95 @@
+[labels.sv.module]
+name = "Tidsbokning"
+description = "Bokningsbara resurser (personer, rum, utrustning) och bokningar med datum, start- och sluttid och ett statusflöde. Överlappningar förhindras inte automatiskt."
+
+[labels.sv.model.appointments_resource]
+name = "Resurs"
+description = "Något eller någon som kan bokas"
+
+[labels.sv.model.appointments_resource.field.name]
+label = "Namn"
+description = "Resursens namn, till exempel Mötesrum 2"
+
+[labels.sv.model.appointments_resource.field.kind]
+label = "Typ"
+description = "Vilken typ av resurs det är: person, rum, utrustning"
+
+[labels.sv.model.appointments_resource.field.kind.options]
+person = "Person"
+room = "Rum"
+equipment = "Utrustning"
+
+[labels.sv.model.appointments_resource.field.capacity]
+label = "Kapacitet"
+description = "Hur många personer den kan hantera samtidigt"
+
+[labels.sv.model.appointments_resource.field.active]
+label = "Aktiv"
+description = "Om resursen kan bokas"
+
+[labels.sv.model.appointments_appointment]
+name = "Bokning"
+description = "En bokning av en resurs vid en viss tid"
+
+[labels.sv.model.appointments_appointment.field.resource_id]
+label = "Resurs"
+description = "Den bokade resursen"
+
+[labels.sv.model.appointments_appointment.field.title]
+label = "Titel"
+description = "Vad bokningen gäller"
+
+[labels.sv.model.appointments_appointment.field.day]
+label = "Dag"
+description = "Bokningens datum (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.appointments_appointment.field.start_minute]
+label = "Startminut"
+description = "Starttid i minuter efter midnatt, till exempel 540 för 09:00"
+
+[labels.sv.model.appointments_appointment.field.end_minute]
+label = "Slutminut"
+description = "Sluttid i minuter efter midnatt, till exempel 600 för 10:00"
+
+[labels.sv.model.appointments_appointment.field.attendee_name]
+label = "Deltagarens namn"
+description = "Namn på personen som deltar"
+
+[labels.sv.model.appointments_appointment.field.attendee_email]
+label = "Deltagarens e-post"
+description = "Deltagarens e-postadress"
+
+[labels.sv.model.appointments_appointment.field.attendee_phone]
+label = "Deltagarens telefon"
+description = "Deltagarens telefonnummer"
+
+[labels.sv.model.appointments_appointment.field.notes]
+label = "Anteckningar"
+description = "Sådant som värden bör känna till i förväg"
+
+[labels.sv.model.appointments_appointment.field.state]
+label = "Status"
+description = "Bokningens status: schemalagd, bekräftad, klar, annullerad, utebliven"
+
+[labels.sv.model.appointments_appointment.field.state.options]
+scheduled = "Schemalagd"
+confirmed = "Bekräftad"
+done = "Klar"
+cancelled = "Annullerad"
+no_show = "Utebliven"
+
+[labels.sv.model.appointments_appointment.action.confirm]
+label = "Bekräfta"
+description = "Bekräfta en schemalagd bokning"
+
+[labels.sv.model.appointments_appointment.action.complete]
+label = "Slutför"
+description = "Markera en bekräftad bokning som genomförd"
+
+[labels.sv.model.appointments_appointment.action.cancel]
+label = "Annullera"
+description = "Annullera en schemalagd bokning"
+
+[labels.sv.model.appointments_appointment.action.mark_no_show]
+label = "Markera som utebliven"
+description = "Registrera att deltagaren inte kom"

@@ -1,0 +1,56 @@
+[labels.es.module]
+name = "Partes de horas"
+description = "Tiempo dedicado a tareas de proyecto, introducido en minutos, con un indicador de facturable y un paso de aprobación. Requiere el paquete Proyectos."
+
+[labels.es.model.timesheets_entry]
+name = "Registro de horas"
+description = "Tiempo que una persona dedicó a una tarea en un día"
+
+[labels.es.model.timesheets_entry.field.task_id]
+label = "Tarea"
+description = "La tarea en la que se trabajó"
+
+[labels.es.model.timesheets_entry.field.worker]
+label = "Trabajador"
+description = "Nombre de la persona que hizo el trabajo"
+
+[labels.es.model.timesheets_entry.field.worked_on]
+label = "Fecha trabajada"
+description = "Día en que se hizo el trabajo (YYYY-MM-DD)"
+
+[labels.es.model.timesheets_entry.field.minutes]
+label = "Minutos"
+description = "Tiempo dedicado, en minutos"
+
+[labels.es.model.timesheets_entry.field.billable]
+label = "Facturable"
+description = "Indica si el tiempo se puede cobrar al cliente"
+
+[labels.es.model.timesheets_entry.field.description]
+label = "Descripción"
+description = "Lo que se hizo"
+
+[labels.es.model.timesheets_entry.field.cost_rate]
+label = "Coste por hora"
+description = "Coste interno por hora de la persona en el momento del registro (unidad menor de la moneda, por ejemplo céntimos)"
+
+[labels.es.model.timesheets_entry.field.state]
+label = "Estado"
+description = "Estado del registro: borrador, enviado, aprobado"
+
+[labels.es.model.timesheets_entry.field.state.options]
+draft = "Borrador"
+submitted = "Presentado"
+approved = "Aprobado"
+
+[labels.es.model.timesheets_entry.action.submit]
+label = "Presentar"
+description = "Enviar el registro para su aprobación"
+
+[labels.es.model.timesheets_entry.action.approve]
+label = "Aprobar"
+description = "Aprobar un registro enviado para que se pueda facturar (solo responsables)"
+
+[labels.es.model.timesheets_entry.action.reject]
+label = "Rechazar"
+description = "Devolver a borrador un registro enviado (solo responsables)"

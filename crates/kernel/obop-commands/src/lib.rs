@@ -5,7 +5,8 @@
 
 use obop_masking::mode_for;
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
-use obop_registry::{FieldDef, GENERATED_COMMANDS, Module, Transition};
+use obop_registry::labels::Texts;
+use obop_registry::{FieldDef, GENERATED_COMMANDS, Module, Transition, Translations};
 use obop_types::MaskMode;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -112,6 +113,9 @@ pub struct CommandInfo {
     pub needs_approval: bool,
     /// For a state transition (D48): the governed field and the values it moves between.
     pub transition: Option<Transition>,
+    /// Display name per language (D52); empty in the command catalog, set in `meta`.
+    pub labels: Texts,
+    pub descriptions: Texts,
 }
 
 /// What a guard decides about one call (D48).
@@ -209,6 +213,8 @@ pub(crate) struct ModelMeta {
     module_name: String,
     description: &'static str,
     pub(crate) fields: Vec<FieldDef>,
+    module_description: String,
+    translations: Arc<Translations>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,6 +230,11 @@ pub struct FieldInfo {
     pub options: Vec<&'static str>,
     /// Target model of a `ref`.
     pub to: Option<&'static str>,
+    /// Label and description per language (D52); empty maps when untranslated.
+    pub labels: Texts,
+    pub descriptions: Texts,
+    /// Select option -> language -> label.
+    pub option_labels: BTreeMap<String, Texts>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,12 +248,18 @@ pub struct ModelInfo {
     pub can_create: bool,
     pub can_update: bool,
     pub can_delete: bool,
+    pub labels: Texts,
+    pub descriptions: Texts,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleInfo {
     pub id: String,
     pub name: String,
+    /// English description; empty when the module declares none.
+    pub description: String,
+    pub labels: Texts,
+    pub descriptions: Texts,
     pub models: Vec<ModelInfo>,
 }
 
@@ -263,6 +280,8 @@ impl Dispatcher {
                     permission_group: c.permission_group,
                     needs_approval: c.needs_approval,
                     transition: c.transition,
+                    labels: Texts::new(),
+                    descriptions: Texts::new(),
                 }
             })
             .collect()
@@ -303,31 +322,53 @@ impl Dispatcher {
                             && !GENERATED_COMMANDS.contains(&&id[name.len() + 1..])
                             && visible(c)
                     })
-                    .map(|(id, c)| CommandInfo {
-                        id: id.clone(),
-                        description: c.description,
-                        permission_group: c.permission_group,
-                        needs_approval: c.needs_approval,
-                        transition: c.transition,
+                    .map(|(id, c)| {
+                        let tr = m
+                            .translations
+                            .models
+                            .get(name.as_str())
+                            .and_then(|t| t.actions.get(&id[name.len() + 1..]));
+                        CommandInfo {
+                            id: id.clone(),
+                            description: c.description,
+                            permission_group: c.permission_group,
+                            needs_approval: c.needs_approval,
+                            transition: c.transition,
+                            labels: tr.map(|t| t.labels.clone()).unwrap_or_default(),
+                            descriptions: tr.map(|t| t.descriptions.clone()).unwrap_or_default(),
+                        }
                     })
                     .collect();
                 actions.sort_by(|a, b| a.id.cmp(&b.id));
+                let mtr = m.translations.models.get(name.as_str());
                 infos.push(ModelInfo {
                     name: name.clone(),
                     description: m.description,
+                    labels: mtr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
+                    descriptions: mtr
+                        .map(|t| t.entry.descriptions.clone())
+                        .unwrap_or_default(),
                     fields: m
                         .fields
                         .iter()
                         .filter(|f| p.allows(f.permission_group))
-                        .map(|f| FieldInfo {
-                            name: f.name,
-                            description: f.description,
-                            class: f.class.map_or("none", |c| c.as_str()),
-                            personal_data: f.personal_data,
-                            kind: f.kind.name(),
-                            required: f.required,
-                            options: f.kind.options().to_vec(),
-                            to: f.kind.target(),
+                        .map(|f| {
+                            let ftr = mtr.and_then(|t| t.fields.get(f.name));
+                            FieldInfo {
+                                name: f.name,
+                                description: f.description,
+                                class: f.class.map_or("none", |c| c.as_str()),
+                                personal_data: f.personal_data,
+                                kind: f.kind.name(),
+                                required: f.required,
+                                options: f.kind.options().to_vec(),
+                                to: f.kind.target(),
+                                labels: ftr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
+                                descriptions: ftr
+                                    .map(|t| t.entry.descriptions.clone())
+                                    .unwrap_or_default(),
+                                option_labels: ftr.map(|t| t.options.clone()).unwrap_or_default(),
+                            }
                         })
                         .collect(),
                     actions,
@@ -337,14 +378,24 @@ impl Dispatcher {
                 });
             }
             if !infos.is_empty() {
-                let name = models
-                    .values()
-                    .find(|m| &m.module == module)
+                let first = models.values().find(|m| &m.module == module);
+                let name = first
                     .map(|m| m.module_name.clone())
                     .unwrap_or_else(|| module.clone());
+                let (description, labels, descriptions) =
+                    first.map_or_else(Default::default, |m| {
+                        (
+                            m.module_description.clone(),
+                            m.translations.module.labels.clone(),
+                            m.translations.module.descriptions.clone(),
+                        )
+                    });
                 out.push(ModuleInfo {
                     id: module.clone(),
                     name,
+                    description,
+                    labels,
+                    descriptions,
                     models: infos,
                 });
             }
@@ -371,6 +422,8 @@ impl Dispatcher {
                 def: m.clone(),
                 module: module.id.clone(),
                 module_name: module.name.clone(),
+                module_description: module.description.clone(),
+                translations: module.translations.clone(),
                 description: m.description,
                 fields: m.fields.clone(),
             },

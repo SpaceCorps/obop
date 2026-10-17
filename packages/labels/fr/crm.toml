@@ -1,0 +1,48 @@
+[labels.fr.module]
+name = "CRM"
+
+[labels.fr.model.lead]
+name = "Piste"
+description = "Une affaire potentielle avec un contact"
+
+[labels.fr.model.lead.field.title]
+label = "Titre"
+description = "Brève description de l’opportunité"
+
+[labels.fr.model.lead.field.contact_name]
+label = "Nom du contact"
+description = "Nom de la personne à contacter"
+
+[labels.fr.model.lead.field.contact_email]
+label = "E-mail du contact"
+description = "Adresse e-mail de la personne à contacter"
+
+[labels.fr.model.lead.field.expected_revenue_minor]
+label = "Revenu attendu"
+description = "Revenu attendu en plus petite unité monétaire"
+
+[labels.fr.model.lead.field.stage]
+label = "Étape"
+description = "Étape du pipeline : nouveau, qualifié, gagné ou perdu"
+
+[labels.fr.model.lead.field.stage.options]
+new = "Nouveau"
+qualified = "Qualifié"
+won = "Gagné"
+lost = "Perdu"
+
+[labels.fr.model.lead.action.qualify]
+label = "Qualifier"
+description = "Fait passer une nouvelle piste à l’étape qualifié"
+
+[labels.fr.model.lead.action.mark_won]
+label = "Marquer gagné"
+description = "Fait passer la piste à l’étape gagné"
+
+[labels.fr.model.lead.action.mark_lost]
+label = "Marquer perdu"
+description = "Fait passer la piste à l’étape perdu"
+
+[labels.fr.model.lead.action.reopen]
+label = "Rouvrir"
+description = "Remet la piste à l’étape nouveau"

@@ -1,0 +1,35 @@
+[labels.es.module]
+name = "Facturación"
+
+[labels.es.model.invoice]
+name = "Factura"
+description = "Una factura de cliente; las facturas contabilizadas solo se corrigen con notas de crédito"
+
+[labels.es.model.invoice.field.sale_order_id]
+label = "Pedido de venta"
+description = "Identificador del pedido de venta de origen"
+
+[labels.es.model.invoice.field.state]
+label = "Estado"
+description = "Ciclo de vida: borrador, contabilizada o cancelada"
+
+[labels.es.model.invoice.field.state.options]
+draft = "Borrador"
+posted = "Contabilizado"
+cancelled = "Cancelado"
+
+[labels.es.model.invoice.field.total_minor]
+label = "Total"
+description = "Total de la factura en unidades menores"
+
+[labels.es.model.invoice.field.number]
+label = "Número"
+description = "Número legal sin huecos, asignado al contabilizar"
+
+[labels.es.model.invoice.action.post]
+label = "Contabilizar"
+description = "Contabilizar una factura en borrador y asignarle su número legal"
+
+[labels.es.model.invoice.action.cancel]
+label = "Cancelar"
+description = "Cancelar una factura en borrador"

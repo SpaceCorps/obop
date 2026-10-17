@@ -1,0 +1,110 @@
+[labels.pl.module]
+name = "Subskrypcje"
+description = "Plany cykliczne i subskrypcje klientów z obiegiem okres próbny, aktywne, zaległe i anulowane. Zapisuje datę następnej faktury; sam nie tworzy faktur."
+
+[labels.pl.model.subscriptions_plan]
+name = "Plan"
+description = "Oferta cykliczna, na którą klienci mogą się subskrybować"
+
+[labels.pl.model.subscriptions_plan.field.name]
+label = "Nazwa"
+description = "Nazwa planu, na przykład Zespół roczny"
+
+[labels.pl.model.subscriptions_plan.field.code]
+label = "Kod"
+description = "Krótki kod planu"
+
+[labels.pl.model.subscriptions_plan.field.interval]
+label = "Okres rozliczeniowy"
+description = "Jak często klient jest rozliczany: miesięcznie, kwartalnie, rocznie"
+
+[labels.pl.model.subscriptions_plan.field.interval.options]
+monthly = "Miesięcznie"
+quarterly = "Kwartalnie"
+yearly = "Rocznie"
+
+[labels.pl.model.subscriptions_plan.field.price]
+label = "Cena"
+description = "Standardowa cena za okres rozliczeniowy (w jednostkach podrzędnych waluty, np. groszach)"
+
+[labels.pl.model.subscriptions_plan.field.trial_days]
+label = "Dni okresu próbnego"
+description = "Długość bezpłatnego okresu próbnego w dniach"
+
+[labels.pl.model.subscriptions_plan.field.active]
+label = "Aktywny"
+description = "Czy nowi klienci mogą wybrać ten plan"
+
+[labels.pl.model.subscriptions_subscription]
+name = "Subskrypcja"
+description = "Cykliczna subskrypcja planu przez klienta"
+
+[labels.pl.model.subscriptions_subscription.field.customer_id]
+label = "Klient"
+description = "Klient, który zawarł subskrypcję"
+
+[labels.pl.model.subscriptions_subscription.field.plan_id]
+label = "Plan"
+description = "Wybrany plan subskrypcji"
+
+[labels.pl.model.subscriptions_subscription.field.started_on]
+label = "Data rozpoczęcia"
+description = "Data rozpoczęcia subskrypcji (YYYY-MM-DD)"
+
+[labels.pl.model.subscriptions_subscription.field.trial_ends_on]
+label = "Koniec okresu próbnego"
+description = "Data zakończenia bezpłatnego okresu próbnego (YYYY-MM-DD)"
+
+[labels.pl.model.subscriptions_subscription.field.next_invoice_on]
+label = "Data następnej faktury"
+description = "Data wystawienia następnej faktury (YYYY-MM-DD)"
+
+[labels.pl.model.subscriptions_subscription.field.recurring_amount]
+label = "Kwota cykliczna"
+description = "Kwota naliczana w każdym okresie po rabatach (w jednostkach podrzędnych waluty, np. groszach)"
+
+[labels.pl.model.subscriptions_subscription.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217, na przykład PLN"
+
+[labels.pl.model.subscriptions_subscription.field.seats]
+label = "Liczba licencji"
+description = "Liczba objętych licencji lub użytkowników"
+
+[labels.pl.model.subscriptions_subscription.field.cancel_reason]
+label = "Powód anulowania"
+description = "Dlaczego klient zrezygnował"
+
+[labels.pl.model.subscriptions_subscription.field.state]
+label = "Status"
+description = "Status subskrypcji: okres próbny, aktywne, zaległe, anulowane"
+
+[labels.pl.model.subscriptions_subscription.field.state.options]
+trial = "Okres próbny"
+active = "Aktywne"
+past_due = "Zaległe"
+cancelled = "Anulowane"
+
+[labels.pl.model.subscriptions_subscription.action.activate]
+label = "Aktywuj"
+description = "Rozpoczyna rozliczanie po zakończeniu okresu próbnego"
+
+[labels.pl.model.subscriptions_subscription.action.mark_past_due]
+label = "Oznacz jako zaległe"
+description = "Oznacza aktywną subskrypcję, której płatność się nie powiodła"
+
+[labels.pl.model.subscriptions_subscription.action.recover]
+label = "Przywróć"
+description = "Przywraca zaległą subskrypcję do statusu aktywnej po zapłacie"
+
+[labels.pl.model.subscriptions_subscription.action.cancel_trial]
+label = "Anuluj okres próbny"
+description = "Anuluje subskrypcję w trakcie okresu próbnego"
+
+[labels.pl.model.subscriptions_subscription.action.cancel]
+label = "Anuluj"
+description = "Anuluje aktywną subskrypcję"
+
+[labels.pl.model.subscriptions_subscription.action.cancel_overdue]
+label = "Anuluj zaległą"
+description = "Anuluje zaległą subskrypcję"

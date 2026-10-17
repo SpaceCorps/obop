@@ -1,0 +1,140 @@
+[labels.sv.module]
+name = "Fältservice"
+description = "Uppdrag hos kunder som utförs av en tekniker: schemalagt, på väg, pågår, klart eller annullerat. Ett uppdrag registrerar kund, arbetsplats, tekniker, planerad dag och starttid (minuter efter midnatt), använda reservdelar och om kunden måste signera. Adress och kontaktuppgifter till arbetsplatsen är personuppgifter. Kräver paketen Personal och Produkter."
+
+[labels.sv.model.field_service_job]
+name = "Uppdrag"
+description = "Ett uppdrag hos en kund"
+
+[labels.sv.model.field_service_job.field.name]
+label = "Namn"
+description = "Uppdragets korta titel, till exempel Byte av pannpump"
+
+[labels.sv.model.field_service_job.field.customer_id]
+label = "Kund"
+description = "Kunden som uppdraget gäller"
+
+[labels.sv.model.field_service_job.field.site_name]
+label = "Arbetsplatsens namn"
+description = "Arbetsplatsens namn, till exempel Huvudlagret"
+
+[labels.sv.model.field_service_job.field.site_address]
+label = "Arbetsplatsens adress"
+description = "Gatuadress där arbetet utförs; ofta en privatbostad"
+
+[labels.sv.model.field_service_job.field.site_city]
+label = "Arbetsplatsens ort"
+description = "Arbetsplatsens ort"
+
+[labels.sv.model.field_service_job.field.site_postcode]
+label = "Arbetsplatsens postnummer"
+description = "Arbetsplatsens postnummer"
+
+[labels.sv.model.field_service_job.field.site_country]
+label = "Arbetsplatsens land"
+description = "Arbetsplatsens land"
+
+[labels.sv.model.field_service_job.field.site_contact_name]
+label = "Kontaktperson på plats"
+description = "Namn på personen som ska träffas på plats"
+
+[labels.sv.model.field_service_job.field.site_contact_phone]
+label = "Telefon till kontaktperson på plats"
+description = "Telefonnummer till personen som ska träffas på plats"
+
+[labels.sv.model.field_service_job.field.technician_id]
+label = "Tekniker"
+description = "Teknikern som tilldelats uppdraget"
+
+[labels.sv.model.field_service_job.field.priority]
+label = "Prioritet"
+description = "Hur brådskande uppdraget är: låg, normal, hög, brådskande"
+
+[labels.sv.model.field_service_job.field.priority.options]
+low = "Låg"
+normal = "Normal"
+high = "Hög"
+urgent = "Brådskande"
+
+[labels.sv.model.field_service_job.field.description]
+label = "Beskrivning"
+description = "Vad som ska göras och vad kunden har anmält"
+
+[labels.sv.model.field_service_job.field.scheduled_on]
+label = "Planerat datum"
+description = "Planerad dag för besöket (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.field_service_job.field.scheduled_start_minute]
+label = "Schemalagd startminut"
+description = "Planerad start i minuter efter midnatt (540 är 09:00)"
+
+[labels.sv.model.field_service_job.field.planned_minutes]
+label = "Planerade minuter"
+description = "Planerad varaktighet i minuter"
+
+[labels.sv.model.field_service_job.field.signature_required]
+label = "Signatur krävs"
+description = "Om kunden måste godkänna arbetet med sin signatur innan det räknas som klart"
+
+[labels.sv.model.field_service_job.field.signed_by]
+label = "Signerad av"
+description = "Namn på personen som signerade arbetet"
+
+[labels.sv.model.field_service_job.field.signed_on]
+label = "Signerad den"
+description = "Dagen då kunden signerade (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.field_service_job.field.work_report]
+label = "Arbetsrapport"
+description = "Vad som gjordes, skrivet av teknikern"
+
+[labels.sv.model.field_service_job.field.state]
+label = "Status"
+description = "Uppdragets status: schemalagt, på väg, pågår, klart, annullerat"
+
+[labels.sv.model.field_service_job.field.state.options]
+scheduled = "Schemalagd"
+en_route = "På väg"
+in_progress = "Pågår"
+done = "Klar"
+cancelled = "Annullerad"
+
+[labels.sv.model.field_service_job.action.depart]
+label = "Åk iväg"
+description = "Teknikern är på väg"
+
+[labels.sv.model.field_service_job.action.start]
+label = "Starta"
+description = "Teknikern har kommit fram och påbörjat arbetet"
+
+[labels.sv.model.field_service_job.action.complete]
+label = "Slutför"
+description = "Avsluta uppdraget; om signatur krävs, registrera först vem som signerat och när"
+
+[labels.sv.model.field_service_job.action.cancel]
+label = "Annullera"
+description = "Annullera ett uppdrag som inte har påbörjats"
+
+[labels.sv.model.field_service_part]
+name = "Reservdel"
+description = "En reservdel eller produkt som använts i ett uppdrag"
+
+[labels.sv.model.field_service_part.field.job_id]
+label = "Uppdrag"
+description = "Uppdraget som delen användes i"
+
+[labels.sv.model.field_service_part.field.product_id]
+label = "Produkt"
+description = "Produkten som användes"
+
+[labels.sv.model.field_service_part.field.quantity]
+label = "Antal"
+description = "Hur många enheter som användes"
+
+[labels.sv.model.field_service_part.field.unit_price]
+label = "Styckpris"
+description = "Pris per enhet som debiteras kunden (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.field_service_part.field.note]
+label = "Anteckning"
+description = "Kommentar om delen, till exempel serienummer"

@@ -1,0 +1,78 @@
+[labels.es.module]
+name = "Paneles de control"
+description = "Paneles de control y sus widgets guardados como datos, para que una interfaz los muestre. Un widget es una tarjeta con tipo (kpi, barras, líneas, circular o tabla), modelo, campo de medida, agregación (contar o sumar), agrupación, filtro y posición. El paquete solo guarda la definición; no comprueba que el modelo o los campos existan y no calcula nada."
+
+[labels.es.model.dashboards_dashboard]
+name = "Panel de control"
+description = "Un panel de control: una colección ordenada de widgets con título"
+
+[labels.es.model.dashboards_dashboard.field.title]
+label = "Título"
+description = "Título del panel, por ejemplo Resumen de ventas"
+
+[labels.es.model.dashboards_dashboard.field.owner]
+label = "Propietario"
+description = "Nombre de la persona propietaria del panel"
+
+[labels.es.model.dashboards_dashboard.field.description]
+label = "Descripción"
+description = "Qué muestra el panel y para quién"
+
+[labels.es.model.dashboards_dashboard.field.shared]
+label = "Compartido"
+description = "Indica si lo ve todo el que tiene acceso a la aplicación Paneles de control o solo el propietario"
+
+[labels.es.model.dashboards_dashboard.field.position]
+label = "Posición"
+description = "Orden entre paneles, de menor a mayor"
+
+[labels.es.model.dashboards_widget]
+name = "Tarjeta"
+description = "Una tarjeta de un panel, definida por lo que lee y cómo lo agrega"
+
+[labels.es.model.dashboards_widget.field.dashboard_id]
+label = "Panel de control"
+description = "El panel en el que está el widget"
+
+[labels.es.model.dashboards_widget.field.title]
+label = "Título"
+description = "Título de la tarjeta, por ejemplo Pedidos pagados"
+
+[labels.es.model.dashboards_widget.field.kind]
+label = "Tipo"
+description = "Cómo se dibuja la tarjeta: kpi, barras, líneas, circular, tabla"
+
+[labels.es.model.dashboards_widget.field.kind.options]
+kpi = "KPI"
+bar = "Barras"
+line = "Líneas"
+pie = "Circular"
+table = "Tabla"
+
+[labels.es.model.dashboards_widget.field.model_name]
+label = "Nombre del modelo"
+description = "Modelo que lee la tarjeta, por ejemplo sale_order"
+
+[labels.es.model.dashboards_widget.field.measure_field]
+label = "Campo de medida"
+description = "Campo que se agrega: un campo numérico o de dinero del modelo; vacío al contar"
+
+[labels.es.model.dashboards_widget.field.aggregate]
+label = "Agregación"
+description = "Cómo se combinan los registros: contar o sumar"
+
+[labels.es.model.dashboards_widget.field.aggregate.options]
+count = "Recuento"
+sum = "Suma"
+
+[labels.es.model.dashboards_widget.field.group_by]
+label = "Agrupar por"
+description = "Campo por el que dividir el resultado (selección, referencia o fecha); vacío para un único valor"
+
+[labels.es.model.dashboards_widget.field.filter]
+label = "Filtro"
+description = "Objeto JSON de nombres de campo con los valores exactos que deben cumplir los registros, por ejemplo state = paid; vacío significa todos los registros"
+
+[labels.es.model.dashboards_widget.field.position]
+label = "Posición"
+description = "Orden de la tarjeta en el panel, de menor a mayor"

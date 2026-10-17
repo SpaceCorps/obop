@@ -1,0 +1,204 @@
+[labels.fi.module]
+name = "Kassa"
+description = "Myymälän kassat: kassapisteen asetukset, avattavat ja suljettavat kassavuorot kassan täsmäytyksellä, myynnit riveineen ja maksurivit maksutavoittain. Hyvitys ja kassavuoron sulkeminen vaativat esihenkilön hyväksynnän; agentit voivat vain ehdottaa niitä. Summat, vaihtorahat ja kassaerot syötetään, niitä ei lasketa. Korttinumeroita ei saa tallentaa. Vaatii Tuotteet-paketin."
+
+[labels.fi.model.pos_config]
+name = "Kassapiste"
+description = "Kassapiste (kassa tai myymälä) ja sen säännöt"
+
+[labels.fi.model.pos_config.field.name]
+label = "Nimi"
+description = "Kassan tai myymälän nimi, esimerkiksi Pääkadun myymälä"
+
+[labels.fi.model.pos_config.field.currency]
+label = "Valuutta"
+description = "ISO 4217 -valuuttakoodi, esimerkiksi EUR"
+
+[labels.fi.model.pos_config.field.receipt_header]
+label = "Kuitin ylätunniste"
+description = "Kuittien yläreunaan tulostettava teksti"
+
+[labels.fi.model.pos_config.field.cash_control]
+label = "Kassan täsmäytys"
+description = "Pitääkö kassavuoron laskea kassalaatikon käteinen avattaessa ja suljettaessa"
+
+[labels.fi.model.pos_config.field.default_opening_cash]
+label = "Oletusalkukassa"
+description = "Käteinen, joka tavallisesti jätetään laatikkoon yöksi (valuutan pienin yksikkö)"
+
+[labels.fi.model.pos_config.field.allow_refunds]
+label = "Salli hyvitykset"
+description = "Saavatko kassanhoitajat ehdottaa hyvityksiä tässä kassapisteessä"
+
+[labels.fi.model.pos_config.field.active]
+label = "Aktiivinen"
+description = "Onko kassapiste käytössä"
+
+[labels.fi.model.pos_session]
+name = "Kassavuoro"
+description = "Yksi myyntivuoro kassapisteessä, kassalaatikon avaamisesta sulkemiseen"
+
+[labels.fi.model.pos_session.field.config_id]
+label = "Kassapiste"
+description = "Kassapiste, johon kassavuoro kuuluu"
+
+[labels.fi.model.pos_session.field.cashier]
+label = "Kassanhoitaja"
+description = "Kassavuoron avanneen kassanhoitajan nimi"
+
+[labels.fi.model.pos_session.field.opened_on]
+label = "Avattu"
+description = "Päivä, jona kassavuoro avattiin (YYYY-MM-DD)"
+
+[labels.fi.model.pos_session.field.closed_on]
+label = "Suljettu"
+description = "Päivä, jona kassavuoro suljettiin (YYYY-MM-DD)"
+
+[labels.fi.model.pos_session.field.opening_cash]
+label = "Alkukassa"
+description = "Laatikosta avattaessa laskettu käteinen (valuutan pienin yksikkö)"
+
+[labels.fi.model.pos_session.field.expected_cash]
+label = "Odotettu kassa"
+description = "Käteinen, joka laatikossa pitäisi olla suljettaessa: alkukassa lisättynä käteismaksuilla (syötetty, ei laskettu)"
+
+[labels.fi.model.pos_session.field.closing_cash]
+label = "Loppukassa"
+description = "Laatikosta suljettaessa todella laskettu käteinen"
+
+[labels.fi.model.pos_session.field.cash_difference]
+label = "Kassaero"
+description = "Loppukassa vähennettynä odotetulla kassalla; negatiivinen tarkoittaa rahan puuttuvan"
+
+[labels.fi.model.pos_session.field.note]
+label = "Huomautus"
+description = "Selitys mahdolliselle kassaerolle"
+
+[labels.fi.model.pos_session.field.state]
+label = "Tila"
+description = "Kassavuoron tila: avoin, suljettu"
+
+[labels.fi.model.pos_session.field.state.options]
+open = "Avoin"
+closed = "Suljettu"
+
+[labels.fi.model.pos_session.action.close]
+label = "Sulje"
+description = "Sulje kassavuoro, kun laatikko on laskettu (vain esihenkilö)"
+
+[labels.fi.model.pos_order]
+name = "Kassamyynti"
+description = "Kassapisteessä tehty myynti"
+
+[labels.fi.model.pos_order.field.session_id]
+label = "Kassavuoro"
+description = "Kassavuoro, jossa myynti tehtiin"
+
+[labels.fi.model.pos_order.field.receipt_number]
+label = "Kuitin numero"
+description = "Kuittiin tulostettava numero. Vapaa teksti: paketit eivät voi luoda numerosarjoja"
+
+[labels.fi.model.pos_order.field.ordered_on]
+label = "Tilattu"
+description = "Myyntipäivä (YYYY-MM-DD)"
+
+[labels.fi.model.pos_order.field.customer_id]
+label = "Asiakas"
+description = "Asiakas, kun hänet tunnistettiin"
+
+[labels.fi.model.pos_order.field.tax_total]
+label = "Verot yhteensä"
+description = "Kokonaissummaan sisältyvä vero (valuutan pienin yksikkö)"
+
+[labels.fi.model.pos_order.field.total]
+label = "Yhteensä"
+description = "Asiakkaan maksama kokonaissumma veroineen (valuutan pienin yksikkö, syötetty eikä laskettu)"
+
+[labels.fi.model.pos_order.field.note]
+label = "Huomautus"
+description = "Huomautus myynnistä"
+
+[labels.fi.model.pos_order.field.state]
+label = "Tila"
+description = "Myynnin tila: luonnos, maksettu, hyvitetty, peruutettu"
+
+[labels.fi.model.pos_order.field.state.options]
+draft = "Luonnos"
+paid = "Maksettu"
+refunded = "Hyvitetty"
+cancelled = "Peruutettu"
+
+[labels.fi.model.pos_order.action.pay]
+label = "Maksa"
+description = "Myynti on maksettu kokonaan"
+
+[labels.fi.model.pos_order.action.cancel]
+label = "Peruuta"
+description = "Peruuta myynti, jota ei ole maksettu"
+
+[labels.fi.model.pos_order.action.refund]
+label = "Hyvitä"
+description = "Hyvitä maksettu myynti asiakkaalle (vain esihenkilö)"
+
+[labels.fi.model.pos_order_line]
+name = "Kassamyynnin rivi"
+description = "Myynnin yksi tuoterivi"
+
+[labels.fi.model.pos_order_line.field.order_id]
+label = "Kassamyynti"
+description = "Myynti, johon rivi kuuluu"
+
+[labels.fi.model.pos_order_line.field.product_id]
+label = "Tuote"
+description = "Myyty tuote"
+
+[labels.fi.model.pos_order_line.field.description]
+label = "Kuvaus"
+description = "Kuitissa näytettävä teksti"
+
+[labels.fi.model.pos_order_line.field.quantity]
+label = "Määrä"
+description = "Myydyt yksiköt"
+
+[labels.fi.model.pos_order_line.field.unit_price]
+label = "Yksikköhinta"
+description = "Yksikköhinta verokanta mukaan lukien (valuutan pienin yksikkö)"
+
+[labels.fi.model.pos_order_line.field.discount_bp]
+label = "Alennus (bp)"
+description = "Alennus peruspisteinä: 1000 tarkoittaa 10,00 prosenttia"
+
+[labels.fi.model.pos_order_line.field.subtotal]
+label = "Välisumma"
+description = "Rivin summa alennuksen jälkeen (valuutan pienin yksikkö, syötetty eikä laskettu)"
+
+[labels.fi.model.pos_payment]
+name = "Maksu"
+description = "Myynnistä saatu maksu; myynti voidaan maksaa usealla maksutavalla"
+
+[labels.fi.model.pos_payment.field.order_id]
+label = "Kassamyynti"
+description = "Myynti, jota maksu koskee"
+
+[labels.fi.model.pos_payment.field.method]
+label = "Maksutapa"
+description = "Miten asiakas maksoi: käteinen, kortti, tilisiirto, lahjakortti, muu"
+
+[labels.fi.model.pos_payment.field.method.options]
+cash = "Käteinen"
+card = "Kortti"
+bank_transfer = "Tilisiirto"
+voucher = "Lahjakortti"
+other = "Muu"
+
+[labels.fi.model.pos_payment.field.amount]
+label = "Summa"
+description = "Tällä maksutavalla maksettu summa (valuutan pienin yksikkö)"
+
+[labels.fi.model.pos_payment.field.paid_on]
+label = "Maksettu"
+description = "Maksupäivä (YYYY-MM-DD)"
+
+[labels.fi.model.pos_payment.field.provider_reference]
+label = "Palveluntarjoajan viite"
+description = "Korttipäätteen tai maksupalvelun viite; ei koskaan korttinumero"

@@ -1,0 +1,26 @@
+[labels.fi.module]
+name = "Yhteystiedot"
+
+[labels.fi.model.party]
+name = "Osapuoli"
+description = "Henkilö tai organisaatio, jonka kanssa yritys asioi"
+
+[labels.fi.model.party.field.name]
+label = "Nimi"
+description = "Näyttönimi"
+
+[labels.fi.model.party.field.email]
+label = "Sähköposti"
+description = "Työsähköpostiosoite"
+
+[labels.fi.model.party.field.tax_id]
+label = "Veronumero"
+description = "Luonnollisen henkilön veroteknillinen tunniste"
+
+[labels.fi.model.party.field.notes]
+label = "Muistiinpanot"
+description = "Vapaamuotoiset sisäiset muistiinpanot"
+
+[labels.fi.model.party.action.erase]
+label = "Poista tiedot"
+description = "Anonymisoi osapuoli paikallaan ja kirjaa poiston"

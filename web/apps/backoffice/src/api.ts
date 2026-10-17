@@ -25,6 +25,8 @@ export type FieldMeta = {
   description: string;
   labels?: Translations;
   descriptions?: Translations;
+  /** Only for `select`: option value -> language -> label (D52); absent when untranslated. */
+  option_labels?: Record<string, Translations>;
   class: string;
   personal_data: boolean;
   kind: Kind;

@@ -1,0 +1,156 @@
+[labels.fi.module]
+name = "Projektit"
+description = "Projektit, välitavoitteet ja tehtävät vastuuhenkilöineen, määräaikoineen ja tilakulkuineen. Edistymistä seurataan tilan mukaan, ei lasketa tehtävien työmäärästä."
+
+[labels.fi.model.projects_project]
+name = "Projekti"
+description = "Tavoitteellinen työkokonaisuus"
+
+[labels.fi.model.projects_project.field.name]
+label = "Nimi"
+description = "Projektin nimi"
+
+[labels.fi.model.projects_project.field.code]
+label = "Koodi"
+description = "Raporteissa käytettävä lyhyt viite, esimerkiksi WEB-24"
+
+[labels.fi.model.projects_project.field.project_manager]
+label = "Projektipäällikkö"
+description = "Projektista vastaavan henkilön nimi"
+
+[labels.fi.model.projects_project.field.start_on]
+label = "Alkaa"
+description = "Suunniteltu aloituspäivä (YYYY-MM-DD)"
+
+[labels.fi.model.projects_project.field.deadline]
+label = "Määräaika"
+description = "Päivä, johon mennessä projektin on valmistuttava (YYYY-MM-DD)"
+
+[labels.fi.model.projects_project.field.budget]
+label = "Budjetti"
+description = "Projektin sovittu budjetti (valuutan pienin yksikkö, esimerkiksi sentit)"
+
+[labels.fi.model.projects_project.field.description]
+label = "Kuvaus"
+description = "Projektin tavoite ja laajuus"
+
+[labels.fi.model.projects_project.field.state]
+label = "Tila"
+description = "Projektin tila: suunniteltu, aktiivinen, valmis"
+
+[labels.fi.model.projects_project.field.state.options]
+planned = "Suunniteltu"
+active = "Aktiivinen"
+done = "Valmis"
+
+[labels.fi.model.projects_project.action.start]
+label = "Aloita"
+description = "Siirrä suunniteltu projekti aktiiviseksi"
+
+[labels.fi.model.projects_project.action.finish]
+label = "Päätä"
+description = "Merkitse aktiivinen projekti valmiiksi"
+
+[labels.fi.model.projects_project.action.reopen]
+label = "Avaa uudelleen"
+description = "Avaa päättynyt projekti uudelleen"
+
+[labels.fi.model.projects_milestone]
+name = "Välitavoite"
+description = "Projektin tarkistuspiste"
+
+[labels.fi.model.projects_milestone.field.project_id]
+label = "Projekti"
+description = "Projekti, johon välitavoite kuuluu"
+
+[labels.fi.model.projects_milestone.field.name]
+label = "Nimi"
+description = "Välitavoitteen nimi, esimerkiksi Suunnittelu hyväksytty"
+
+[labels.fi.model.projects_milestone.field.due_on]
+label = "Eräpäivä"
+description = "Välitavoitteen eräpäivä (YYYY-MM-DD)"
+
+[labels.fi.model.projects_milestone.field.description]
+label = "Kuvaus"
+description = "Mitä pitää toteutua, jotta välitavoite katsotaan saavutetuksi"
+
+[labels.fi.model.projects_milestone.field.state]
+label = "Tila"
+description = "Välitavoitteen tila: odottaa, saavutettu, myöhästynyt"
+
+[labels.fi.model.projects_milestone.field.state.options]
+pending = "Odottaa"
+reached = "Saavutettu"
+missed = "Myöhästynyt"
+
+[labels.fi.model.projects_milestone.action.reach]
+label = "Merkitse saavutetuksi"
+description = "Merkitse odottava välitavoite saavutetuksi"
+
+[labels.fi.model.projects_milestone.action.miss]
+label = "Merkitse myöhästyneeksi"
+description = "Kirjaa, että odottava välitavoite myöhästyi"
+
+[labels.fi.model.projects_task]
+name = "Tehtävä"
+description = "Projektin sisäinen työyksikkö"
+
+[labels.fi.model.projects_task.field.title]
+label = "Otsikko"
+description = "Mitä pitää tehdä"
+
+[labels.fi.model.projects_task.field.project_id]
+label = "Projekti"
+description = "Projekti, johon tehtävä kuuluu; tyhjä yksityiselle tehtävälle"
+
+[labels.fi.model.projects_task.field.milestone_id]
+label = "Välitavoite"
+description = "Välitavoite, jota tehtävä edistää"
+
+[labels.fi.model.projects_task.field.assignee]
+label = "Vastuuhenkilö"
+description = "Vastuuhenkilön nimi"
+
+[labels.fi.model.projects_task.field.priority]
+label = "Prioriteetti"
+description = "Tehtävän tärkeys: matala, normaali, korkea"
+
+[labels.fi.model.projects_task.field.priority.options]
+low = "Matala"
+normal = "Normaali"
+high = "Korkea"
+
+[labels.fi.model.projects_task.field.due_on]
+label = "Eräpäivä"
+description = "Tehtävän eräpäivä (YYYY-MM-DD)"
+
+[labels.fi.model.projects_task.field.estimate_minutes]
+label = "Arvio (min)"
+description = "Suunniteltu työmäärä minuutteina"
+
+[labels.fi.model.projects_task.field.description]
+label = "Kuvaus"
+description = "Lisätiedot, hyväksymiskriteerit ja linkit"
+
+[labels.fi.model.projects_task.field.state]
+label = "Tila"
+description = "Tehtävän tila: tehtävänä, työn alla, valmis, peruutettu"
+
+[labels.fi.model.projects_task.field.state.options]
+todo = "Tehtävänä"
+doing = "Työn alla"
+done = "Valmis"
+cancelled = "Peruutettu"
+
+[labels.fi.model.projects_task.action.begin]
+label = "Aloita"
+description = "Ryhdy tekemään tehtävänä olevaa tehtävää"
+
+[labels.fi.model.projects_task.action.complete]
+label = "Merkitse valmiiksi"
+description = "Merkitse työn alla oleva tehtävä valmiiksi"
+
+[labels.fi.model.projects_task.action.cancel]
+label = "Peruuta"
+description = "Hylkää tehtävä, jota ei koskaan aloitettu"

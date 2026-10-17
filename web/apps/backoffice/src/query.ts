@@ -109,7 +109,7 @@ export function groupLabel(f: FieldMeta, key: string, lk: Lookup): string {
   if (key === "") return t("None");
   switch (f.kind) {
     case "select":
-      return optionLabel(key);
+      return optionLabel(key, f);
     case "bool":
       return key === "true" ? t("Yes") : t("No");
     case "date":

@@ -1,0 +1,78 @@
+[labels.sv.module]
+name = "Utlägg"
+description = "Anställdas utläggsansökningar med flödet utkast, inskickad, godkänd och betald. Utbetalning är en separat behörighet och kräver mänskligt godkännande; kvitton anges i en anteckning och lagras inte."
+
+[labels.sv.model.expenses_expense]
+name = "Utlägg"
+description = "Ett belopp som en anställd lagt ut för företaget och vill få ersatt"
+
+[labels.sv.model.expenses_expense.field.description]
+label = "Beskrivning"
+description = "Vad pengarna användes till"
+
+[labels.sv.model.expenses_expense.field.employee]
+label = "Anställd"
+description = "Namn på personen som begär ersättning"
+
+[labels.sv.model.expenses_expense.field.spent_on]
+label = "Utfört den"
+description = "Inköpsdatum (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.expenses_expense.field.category]
+label = "Kategori"
+description = "Utläggskategori: resor, måltider, logi, förbrukningsmaterial, programvara, övrigt"
+
+[labels.sv.model.expenses_expense.field.category.options]
+travel = "Resor"
+meals = "Måltider"
+lodging = "Logi"
+supplies = "Förbrukningsmaterial"
+software = "Programvara"
+other = "Övrigt"
+
+[labels.sv.model.expenses_expense.field.amount]
+label = "Belopp"
+description = "Belopp som den anställde ska ha tillbaka (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.expenses_expense.field.currency]
+label = "Valuta"
+description = "Valutakod enligt ISO 4217, till exempel SEK"
+
+[labels.sv.model.expenses_expense.field.receipt_note]
+label = "Kvittotext"
+description = "Var kvittot förvaras och vad det visar"
+
+[labels.sv.model.expenses_expense.field.paid_on]
+label = "Betaldatum"
+description = "Dagen då den anställde fick ersättning (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.expenses_expense.field.payment_reference]
+label = "Betalningsreferens"
+description = "Banköverföringens referens för ersättningen"
+
+[labels.sv.model.expenses_expense.field.state]
+label = "Status"
+description = "Ansökans status: utkast, inskickad, godkänd, betald, avslagen"
+
+[labels.sv.model.expenses_expense.field.state.options]
+draft = "Utkast"
+submitted = "Inskickad"
+approved = "Godkänd"
+paid = "Betald"
+refused = "Avslagen"
+
+[labels.sv.model.expenses_expense.action.submit]
+label = "Skicka in"
+description = "Skicka in ansökan för godkännande"
+
+[labels.sv.model.expenses_expense.action.approve]
+label = "Godkänn"
+description = "Godkänn en inskickad ansökan (endast chef)"
+
+[labels.sv.model.expenses_expense.action.pay]
+label = "Betala"
+description = "Registrera ersättningen som utbetald (endast ekonomi)"
+
+[labels.sv.model.expenses_expense.action.refuse]
+label = "Avslå"
+description = "Avslå en inskickad ansökan (endast chef)"

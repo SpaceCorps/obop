@@ -1,0 +1,156 @@
+[labels.sv.module]
+name = "Projekt"
+description = "Projekt, milstolpar och uppgifter med ansvariga, tidsfrister och statusflöden. Framsteg följs via status och beräknas inte utifrån uppgifternas arbetsinsats."
+
+[labels.sv.model.projects_project]
+name = "Projekt"
+description = "Ett arbete med ett mål"
+
+[labels.sv.model.projects_project.field.name]
+label = "Namn"
+description = "Projektets namn"
+
+[labels.sv.model.projects_project.field.code]
+label = "Kod"
+description = "Kort referens som används i rapporter, till exempel WEB-24"
+
+[labels.sv.model.projects_project.field.project_manager]
+label = "Projektledare"
+description = "Namn på personen som ansvarar för projektet"
+
+[labels.sv.model.projects_project.field.start_on]
+label = "Startdatum"
+description = "Planerat startdatum (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.projects_project.field.deadline]
+label = "Tidsfrist"
+description = "Datum då projektet måste vara klart (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.projects_project.field.budget]
+label = "Budget"
+description = "Överenskommen budget för projektet (valutans minsta enhet, till exempel ören)"
+
+[labels.sv.model.projects_project.field.description]
+label = "Beskrivning"
+description = "Projektets mål och omfattning"
+
+[labels.sv.model.projects_project.field.state]
+label = "Status"
+description = "Projektets status: planerat, aktivt, klart"
+
+[labels.sv.model.projects_project.field.state.options]
+planned = "Planerat"
+active = "Aktivt"
+done = "Klart"
+
+[labels.sv.model.projects_project.action.start]
+label = "Starta"
+description = "Gör ett planerat projekt aktivt"
+
+[labels.sv.model.projects_project.action.finish]
+label = "Avsluta"
+description = "Markera ett aktivt projekt som klart"
+
+[labels.sv.model.projects_project.action.reopen]
+label = "Öppna igen"
+description = "Öppna ett avslutat projekt igen"
+
+[labels.sv.model.projects_milestone]
+name = "Milstolpe"
+description = "En kontrollpunkt i ett projekt"
+
+[labels.sv.model.projects_milestone.field.project_id]
+label = "Projekt"
+description = "Projektet som milstolpen tillhör"
+
+[labels.sv.model.projects_milestone.field.name]
+label = "Namn"
+description = "Milstolpens namn, till exempel Design godkänd"
+
+[labels.sv.model.projects_milestone.field.due_on]
+label = "Förfallodatum"
+description = "Datum då milstolpen ska vara nådd (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.projects_milestone.field.description]
+label = "Beskrivning"
+description = "Vad som måste gälla för att milstolpen ska räknas som nådd"
+
+[labels.sv.model.projects_milestone.field.state]
+label = "Status"
+description = "Milstolpens status: väntande, nådd, missad"
+
+[labels.sv.model.projects_milestone.field.state.options]
+pending = "Väntande"
+reached = "Nådd"
+missed = "Missad"
+
+[labels.sv.model.projects_milestone.action.reach]
+label = "Markera som nådd"
+description = "Markera en väntande milstolpe som nådd"
+
+[labels.sv.model.projects_milestone.action.miss]
+label = "Markera som missad"
+description = "Registrera att en väntande milstolpe missades"
+
+[labels.sv.model.projects_task]
+name = "Uppgift"
+description = "En arbetsuppgift inom ett projekt"
+
+[labels.sv.model.projects_task.field.title]
+label = "Titel"
+description = "Vad som behöver göras"
+
+[labels.sv.model.projects_task.field.project_id]
+label = "Projekt"
+description = "Projektet som uppgiften tillhör; tomt för en privat uppgift"
+
+[labels.sv.model.projects_task.field.milestone_id]
+label = "Milstolpe"
+description = "Milstolpen som uppgiften bidrar till"
+
+[labels.sv.model.projects_task.field.assignee]
+label = "Tilldelad"
+description = "Namn på den ansvariga personen"
+
+[labels.sv.model.projects_task.field.priority]
+label = "Prioritet"
+description = "Hur viktig uppgiften är: låg, normal, hög"
+
+[labels.sv.model.projects_task.field.priority.options]
+low = "Låg"
+normal = "Normal"
+high = "Hög"
+
+[labels.sv.model.projects_task.field.due_on]
+label = "Förfallodatum"
+description = "Datum då uppgiften ska vara klar (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.projects_task.field.estimate_minutes]
+label = "Uppskattning (minuter)"
+description = "Planerad arbetsinsats i minuter"
+
+[labels.sv.model.projects_task.field.description]
+label = "Beskrivning"
+description = "Detaljer, acceptanskriterier och länkar"
+
+[labels.sv.model.projects_task.field.state]
+label = "Status"
+description = "Uppgiftens status: att göra, pågår, klar, annullerad"
+
+[labels.sv.model.projects_task.field.state.options]
+todo = "Att göra"
+doing = "Pågår"
+done = "Klar"
+cancelled = "Annullerad"
+
+[labels.sv.model.projects_task.action.begin]
+label = "Påbörja"
+description = "Börja arbeta med en uppgift som ska göras"
+
+[labels.sv.model.projects_task.action.complete]
+label = "Slutför"
+description = "Markera en pågående uppgift som klar"
+
+[labels.sv.model.projects_task.action.cancel]
+label = "Annullera"
+description = "Lägg ner en uppgift som aldrig påbörjades"

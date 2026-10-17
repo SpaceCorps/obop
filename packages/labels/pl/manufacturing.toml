@@ -1,0 +1,98 @@
+[labels.pl.module]
+name = "Produkcja"
+description = "Zestawienia materiałów i zlecenia produkcyjne z obiegiem wersja robocza, potwierdzone, w toku i wykonane. Zużycie składników z magazynu nie jest księgowane automatycznie."
+
+[labels.pl.model.manufacturing_bom]
+name = "Zestawienie materiałów"
+description = "Receptura: składniki potrzebne do wytworzenia produktu"
+
+[labels.pl.model.manufacturing_bom.field.product_id]
+label = "Produkt"
+description = "Wyrób gotowy, który powstaje według receptury"
+
+[labels.pl.model.manufacturing_bom.field.name]
+label = "Nazwa"
+description = "Nazwa receptury, na przykład Montaż standardowy"
+
+[labels.pl.model.manufacturing_bom.field.quantity]
+label = "Ilość"
+description = "Liczba sztuk wyrobu gotowego powstająca w jednym cyklu"
+
+[labels.pl.model.manufacturing_bom.field.instructions]
+label = "Instrukcje"
+description = "Uwagi montażowe dla hali produkcyjnej"
+
+[labels.pl.model.manufacturing_bom.field.active]
+label = "Aktywny"
+description = "Czy recepturę można stosować w nowych zleceniach"
+
+[labels.pl.model.manufacturing_bom_line]
+name = "Pozycja zestawienia materiałów"
+description = "Jeden składnik zestawienia materiałów"
+
+[labels.pl.model.manufacturing_bom_line.field.bom_id]
+label = "Zestawienie materiałów"
+description = "Receptura, do której należy składnik"
+
+[labels.pl.model.manufacturing_bom_line.field.component_id]
+label = "Składnik"
+description = "Zużywany produkt"
+
+[labels.pl.model.manufacturing_bom_line.field.quantity]
+label = "Ilość"
+description = "Liczba sztuk składnika zużywana w jednym cyklu"
+
+[labels.pl.model.manufacturing_order]
+name = "Zlecenie produkcyjne"
+description = "Polecenie wyprodukowania określonej ilości produktu"
+
+[labels.pl.model.manufacturing_order.field.reference]
+label = "Referencja"
+description = "Numer zlecenia, na przykład MO-0042"
+
+[labels.pl.model.manufacturing_order.field.bom_id]
+label = "Zestawienie materiałów"
+description = "Receptura, według której wykonuje się zlecenie"
+
+[labels.pl.model.manufacturing_order.field.quantity]
+label = "Ilość"
+description = "Liczba sztuk wyrobu gotowego do wyprodukowania"
+
+[labels.pl.model.manufacturing_order.field.planned_on]
+label = "Data planowana"
+description = "Data rozpoczęcia produkcji (YYYY-MM-DD)"
+
+[labels.pl.model.manufacturing_order.field.deadline]
+label = "Ostateczny termin"
+description = "Data, do której potrzebne są wyroby (YYYY-MM-DD)"
+
+[labels.pl.model.manufacturing_order.field.responsible]
+label = "Osoba odpowiedzialna"
+description = "Imię i nazwisko osoby odpowiedzialnej za cykl produkcyjny"
+
+[labels.pl.model.manufacturing_order.field.state]
+label = "Status"
+description = "Status zlecenia: wersja robocza, potwierdzone, w toku, wykonane, anulowane"
+
+[labels.pl.model.manufacturing_order.field.state.options]
+draft = "Wersja robocza"
+confirmed = "Potwierdzone"
+in_progress = "W toku"
+done = "Wykonane"
+cancelled = "Anulowane"
+
+[labels.pl.model.manufacturing_order.action.confirm]
+label = "Potwierdź"
+description = "Potwierdza zlecenie robocze, aby można było zaplanować produkcję"
+
+[labels.pl.model.manufacturing_order.action.start]
+label = "Rozpocznij"
+description = "Rozpoczyna produkcję dla potwierdzonego zlecenia"
+
+[labels.pl.model.manufacturing_order.action.finish]
+label = "Zakończ"
+description = "Oznacza produkcję jako zakończoną"
+
+[labels.pl.model.manufacturing_order.action.cancel]
+label = "Anuluj"
+description = "Anuluje zlecenie, które nie zostało potwierdzone"

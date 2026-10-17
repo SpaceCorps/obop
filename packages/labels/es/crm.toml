@@ -1,0 +1,48 @@
+[labels.es.module]
+name = "CRM"
+
+[labels.es.model.lead]
+name = "Oportunidad"
+description = "Un posible negocio con un contacto"
+
+[labels.es.model.lead.field.title]
+label = "Título"
+description = "Descripción breve de la oportunidad"
+
+[labels.es.model.lead.field.contact_name]
+label = "Nombre de contacto"
+description = "Nombre de la persona de contacto"
+
+[labels.es.model.lead.field.contact_email]
+label = "Correo electrónico de contacto"
+description = "Correo electrónico de la persona de contacto"
+
+[labels.es.model.lead.field.expected_revenue_minor]
+label = "Ingresos previstos"
+description = "Ingresos esperados en unidades menores"
+
+[labels.es.model.lead.field.stage]
+label = "Etapa"
+description = "Etapa del embudo: nueva, cualificada, ganada o perdida"
+
+[labels.es.model.lead.field.stage.options]
+new = "Nuevo"
+qualified = "Cualificada"
+won = "Ganada"
+lost = "Perdida"
+
+[labels.es.model.lead.action.qualify]
+label = "Cualificar"
+description = "Pasar una oportunidad nueva a la etapa cualificada"
+
+[labels.es.model.lead.action.mark_won]
+label = "Marcar como ganada"
+description = "Pasar la oportunidad a la etapa ganada"
+
+[labels.es.model.lead.action.mark_lost]
+label = "Marcar como perdida"
+description = "Pasar la oportunidad a la etapa perdida"
+
+[labels.es.model.lead.action.reopen]
+label = "Reabrir"
+description = "Devolver la oportunidad a la etapa nueva"

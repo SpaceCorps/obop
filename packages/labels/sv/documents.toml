@@ -1,0 +1,90 @@
+[labels.sv.module]
+name = "Dokument"
+description = "Ett register över affärsdokument: mappar, dokument med typ, ägare, utgångsdatum och sekretess samt ett flöde med utkast, publicerad och arkiverad. Det lagrar referenser, inte filinnehåll."
+
+[labels.sv.model.documents_folder]
+name = "Mapp"
+description = "En mapp som samlar dokument"
+
+[labels.sv.model.documents_folder.field.name]
+label = "Namn"
+description = "Mappens namn"
+
+[labels.sv.model.documents_folder.field.parent_id]
+label = "Överordnad"
+description = "Mappen som den här ligger i"
+
+[labels.sv.model.documents_folder.field.description]
+label = "Beskrivning"
+description = "Vad som hör hemma i mappen"
+
+[labels.sv.model.documents_document]
+name = "Dokument"
+description = "Ett avtal, en policy, ett certifikat eller annat dokument i arkivet"
+
+[labels.sv.model.documents_document.field.title]
+label = "Titel"
+description = "Dokumentets titel"
+
+[labels.sv.model.documents_document.field.folder_id]
+label = "Mapp"
+description = "Mappen som dokumentet är arkiverat i"
+
+[labels.sv.model.documents_document.field.kind]
+label = "Typ"
+description = "Typ av dokument: avtal, faktura, policy, rapport, certifikat, övrigt"
+
+[labels.sv.model.documents_document.field.kind.options]
+contract = "Avtal"
+invoice = "Faktura"
+policy = "Policy"
+report = "Rapport"
+certificate = "Certifikat"
+other = "Övrigt"
+
+[labels.sv.model.documents_document.field.confidentiality]
+label = "Sekretess"
+description = "Vem som bör se det, som vägledning för läsare: offentlig, intern, konfidentiell, begränsad"
+
+[labels.sv.model.documents_document.field.confidentiality.options]
+public = "Offentlig"
+internal = "Intern"
+confidential = "Konfidentiell"
+restricted = "Begränsad"
+
+[labels.sv.model.documents_document.field.owner]
+label = "Ägare"
+description = "Namn på personen som ansvarar för dokumentet"
+
+[labels.sv.model.documents_document.field.reference]
+label = "Referens"
+description = "Referensnummer, till exempel ett avtalsnummer"
+
+[labels.sv.model.documents_document.field.location]
+label = "Plats"
+description = "Var filen förvaras, till exempel en länk eller en arkivlåda"
+
+[labels.sv.model.documents_document.field.expires_on]
+label = "Utgångsdatum"
+description = "Datum efter vilket dokumentet inte längre gäller (ÅÅÅÅ-MM-DD)"
+
+[labels.sv.model.documents_document.field.summary]
+label = "Sammanfattning"
+description = "Vad dokumentet säger, på några rader"
+
+[labels.sv.model.documents_document.field.state]
+label = "Status"
+description = "Dokumentets status: utkast, publicerat, arkiverat"
+
+[labels.sv.model.documents_document.field.state.options]
+draft = "Utkast"
+published = "Publicerat"
+archived = "Arkiverat"
+
+[labels.sv.model.documents_document.action.publish]
+label = "Publicera"
+description = "Gör ett dokument i utkast till gällande version"
+
+[labels.sv.model.documents_document.action.archive]
+label = "Arkivera"
+description = "Arkivera ett publicerat dokument (endast chef)"
