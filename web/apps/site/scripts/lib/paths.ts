@@ -10,7 +10,5 @@ export const GEN = resolve(SITE_ROOT, ".generated");
 export const DIST = resolve(SITE_ROOT, "dist");
 
 /** Public origin used for canonical URLs, the sitemap and social cards. */
-export const SITE_URL = (
-  process.env["OBOP_SITE_URL"] ?? "https://obop-platform.sliplane.app"
-).replace(/\/$/, "");
+export const SITE_URL = (process.env["OBOP_SITE_URL"] ?? "https://obop.dev").replace(/\/$/, "");
 export const GITHUB = "https://github.com/SpaceCorps/obop";

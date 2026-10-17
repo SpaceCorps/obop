@@ -101,7 +101,7 @@ The control plane serves `web/site` with a plain static file server. The site wo
 6. **Compression.** gzip or brotli for HTML, CSS, JS, JSON, XML, SVG and text.
 7. **Reserved paths.** The forum (`/community/*`) and the status page (`/status*`) are mounted by the control plane before the static files. The website therefore keeps its own pages for them at `/about/community/` and `/about/status/`, which link to the live ones. `/community/sitemap.xml` must exist for the sitemap index. Do not serve `/app/*` from the website.
 8. **Security headers** (optional, good practice): `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, a `Content-Security-Policy` of `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; base-uri 'self'; frame-ancestors 'none'`. The site uses two small inline scripts (the theme setter in `<head>`, the language-hint data block) and inline `style` attributes on app tiles.
-9. **Origin.** Canonical links, the sitemap and social cards need the public origin. Set `OBOP_SITE_URL` when building (default `https://obop-platform.sliplane.app`, the known Sliplane address); a custom domain needs a rebuild with that variable.
+9. **Origin.** Canonical links, the sitemap and social cards need the public origin. Set `OBOP_SITE_URL` when building (default `https://obop.dev`, the known Sliplane address); a custom domain needs a rebuild with that variable.
 
 ## Build integration
 

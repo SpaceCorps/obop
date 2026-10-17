@@ -42,7 +42,7 @@ Used by `obop platform serve`.
 
 | Variable        | Meaning                                                                                                                                         |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OBOP_SITE_URL` | Public origin used for canonical links, the sitemap and social cards when building this website. Default: `https://obop-platform.sliplane.app`. |
+| `OBOP_SITE_URL` | Public origin used for canonical links, the sitemap and social cards when building this website. Default: `https://obop.dev`. |
 
 ## Tests
 
