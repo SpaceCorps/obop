@@ -73,6 +73,9 @@ impl App {
         for (id, why) in installer.load_installed() {
             eprintln!("could not load installed module {id}: {why}");
         }
+        // A module installed through another server process on this database appears here too.
+        let syncing = installer.clone();
+        d.set_sync_hook(Box::new(move || syncing.sync_modules()));
         Self {
             modules,
             dispatcher: d,

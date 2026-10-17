@@ -29,6 +29,10 @@ bun.lockb
 *.sqlite
 *.sqlite3
 *.db
+*.db-wal
+*.db-shm
+# Cross-process lock files next to a SQLite database (docs/DEPLOY.md)
+*.db.lock-*
 /.data/
 
 # Editors / OS

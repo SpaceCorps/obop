@@ -139,6 +139,9 @@ impl Platform {
     pub fn create_instance(self: &Arc<Self>, token: &str, name: &str) -> Result<Instance, String> {
         let owner = self.owner(token)?;
         let slug = slugify(name).ok_or("name must be 3 to 30 letters, digits or hyphens")?;
+        // Several control-plane processes may share the database: the name check and the insert
+        // are one step, or two of them could both take the same name (B1).
+        let _names = self.backend.lock("platform.instances")?;
         let all: Vec<Instance> = self
             .backend
             .list(TABLE)?

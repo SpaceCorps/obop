@@ -717,3 +717,56 @@ fn two_control_plane_processes_share_accounts_the_forum_and_the_status_page() {
         std::thread::sleep(Duration::from_millis(500));
     }
 }
+
+#[test]
+fn a_module_installed_through_one_process_appears_on_the_other_and_goes_with_its_removal() {
+    let Some(p) = pair(&[]) else { return };
+    let t = token_of(&login(p.a.port, "ada", PASSWORD));
+    let has = |port: u16| {
+        let meta = http(port, "GET", "/api/meta", Some(&t), &[], None).json();
+        meta["modules"]
+            .as_array()
+            .is_some_and(|m| m.iter().any(|m| m["id"] == "appointments"))
+    };
+    assert!(!has(p.a.port) && !has(p.b.port));
+    let done = http(
+        p.a.port,
+        "POST",
+        "/api/marketplace_listing/install",
+        Some(&t),
+        &[],
+        Some(&json!({"id": "appointments"})),
+    );
+    assert_eq!(done.status, 200, "{}", done.body);
+    assert!(
+        has(p.a.port),
+        "the process that installed it has it at once"
+    );
+    // The other process looks at most once a second.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !has(p.b.port) {
+        assert!(
+            Instant::now() < deadline,
+            "the module never appeared on the other process"
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    // And its removal follows too.
+    let gone = http(
+        p.b.port,
+        "POST",
+        "/api/module/uninstall",
+        Some(&t),
+        &[],
+        Some(&json!({"id": "appointments"})),
+    );
+    assert_eq!(gone.status, 200, "{}", gone.body);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while has(p.a.port) {
+        assert!(
+            Instant::now() < deadline,
+            "the removal never reached the other process"
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}

@@ -80,6 +80,7 @@ What is shared through the database, and how:
 | Proposed approval plans | Sealed records kept 7 days; any process can approve a plan any process proposed; a plan is approved once. |
 | Login lockout, second-factor attempts | Atomic counters in the database: five wrong passwords across any processes lock the account. |
 | Rate limits (MCP, public site, checkout, webhooks) | Fixed-window counters in the database, counted on the database's clock. (The forum's posting limit is computed from the stored posts, so it is shared too.) |
+| Installed modules | The packages are records; every install, upgrade or removal bumps a shared version number, and each process compares it (at most once a second, whenever it handles a call or builds the metadata) and registers, replaces or unregisters the commands to match. A module installed through one process is on the others within about a second. |
 | Order idempotency keys | Put-if-absent records, so a double submit that lands on two processes makes one order. |
 | Governed writes | One database lock around the guard and the write of every mutating call, so two processes cannot race between check and write. |
 | Forum and status page | The database is the truth; each process keeps a copy that it reloads when a shared version number moves (checked at most every 250 ms). A post made on one process shows on the others within that. Writes take a database lock first, so ids are never handed out twice. One process per interval runs the status checks. |

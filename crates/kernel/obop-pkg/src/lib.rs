@@ -9,6 +9,7 @@ pub mod marketplace;
 pub mod resolve;
 pub mod semver;
 pub mod spdx;
+mod sync;
 pub mod views;
 
 pub use check::{Report, check_manifest, check_package};

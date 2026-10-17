@@ -204,6 +204,9 @@ struct Registered {
 pub struct Dispatcher {
     /// Proposed calls waiting for approval: in memory, or shared between processes (B1).
     plans: Plans,
+    /// Run before commands, the catalogue and the metadata are looked up: lets the installer
+    /// bring this process's modules in line with what another process installed (B1).
+    sync_hook: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>>,
     shared: std::sync::OnceLock<Shared>,
     commands: std::sync::RwLock<HashMap<String, Arc<Registered>>>,
     /// Shared with the generated `delete` handler, which looks for records that refer to the
@@ -294,6 +297,18 @@ impl Dispatcher {
     }
 
     /// The backend shared with other processes, when `set_shared` was called.
+    /// Set the function run at the start of `call`, `approve`, `catalog` and `meta`. It must be
+    /// cheap when there is nothing to do.
+    pub fn set_sync_hook(&self, hook: Box<dyn Fn() + Send + Sync>) {
+        let _ = self.sync_hook.set(hook);
+    }
+
+    fn sync(&self) {
+        if let Some(h) = self.sync_hook.get() {
+            h();
+        }
+    }
+
     pub fn shared_backend(&self) -> Option<Arc<dyn obop_storage::Backend>> {
         self.shared.get().map(|s| s.backend.clone())
     }
@@ -311,6 +326,7 @@ impl Dispatcher {
 
     /// What `tools/list`, `GET /api/commands` and CLI help show for this principal.
     pub fn catalog(&self, surface: Surface, p: &Principal) -> Vec<CommandInfo> {
+        self.sync();
         self.visible(surface, p)
             .into_iter()
             .map(|id| {
@@ -332,6 +348,7 @@ impl Dispatcher {
     /// can see. A model appears only if its `list` command is visible, and a field only if the
     /// principal may read it, so metadata never reveals what data would not.
     pub fn meta(&self, surface: Surface, p: &Principal) -> Vec<ModuleInfo> {
+        self.sync();
         let cmds = self.commands.read().unwrap();
         let models = self.models.read().unwrap();
         let order = self.order.read().unwrap();
@@ -617,6 +634,7 @@ impl Dispatcher {
         id: &str,
         input: &Value,
     ) -> Result<Response, CallError> {
+        self.sync();
         let c = self
             .commands
             .read()
@@ -677,6 +695,7 @@ impl Dispatcher {
         vault: &mut Vault,
         plan_id: &str,
     ) -> Result<Response, CallError> {
+        self.sync();
         if approver.kind != PrincipalKind::User {
             return Err(CallError::Forbidden("approve".into()));
         }

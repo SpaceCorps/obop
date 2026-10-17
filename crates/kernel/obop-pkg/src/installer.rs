@@ -53,13 +53,18 @@ pub struct Outcome {
 }
 
 pub struct Installer {
-    backend: Arc<dyn Backend>,
+    pub(crate) backend: Arc<dyn Backend>,
     store: Store,
     dispatcher: Weak<Dispatcher>,
     builtin: Vec<Module>,
     market: Arc<dyn Marketplace>,
     /// Plans are applied one at a time.
-    apply: Mutex<()>,
+    pub(crate) apply: Mutex<()>,
+    /// What this process has registered, by package id (a fingerprint of the stored record), so
+    /// a change made through another process can be told from this process's own (sync.rs).
+    pub(crate) registered: Mutex<std::collections::BTreeMap<String, String>>,
+    pub(crate) seen_version: std::sync::atomic::AtomicU64,
+    pub(crate) last_check_ms: std::sync::atomic::AtomicU64,
 }
 
 /// What it takes to put a step back.
@@ -96,10 +101,13 @@ impl Installer {
             builtin,
             market,
             apply: Mutex::new(()),
+            registered: Mutex::default(),
+            seen_version: Default::default(),
+            last_check_ms: Default::default(),
         })
     }
 
-    fn d(&self) -> Result<Arc<Dispatcher>, String> {
+    pub(crate) fn d(&self) -> Result<Arc<Dispatcher>, String> {
         self.dispatcher
             .upgrade()
             .ok_or_else(|| "server is shutting down".into())
@@ -155,7 +163,7 @@ impl Installer {
         }
     }
 
-    fn stored(&self) -> Vec<(String, Fields)> {
+    pub(crate) fn stored(&self) -> Vec<(String, Fields)> {
         self.backend.list(TABLE).unwrap_or_default()
     }
 
@@ -425,6 +433,13 @@ impl Installer {
                 }
             }
         }
+        // Tell the other server processes on this database that the installed set changed.
+        self.note_local_change(
+            &applied
+                .iter()
+                .map(|(i, _)| i.id.clone())
+                .collect::<Vec<_>>(),
+        );
         let root_info = applied
             .iter()
             .find(|(i, _)| i.id == root)
@@ -510,7 +525,7 @@ impl Installer {
     }
 
     /// Put the registration of a stored package back (after a failed upgrade or a rollback).
-    fn reregister(&self, id: &str, stored: &Fields) {
+    pub(crate) fn reregister(&self, id: &str, stored: &Fields) {
         let source = stored.get("source").and_then(J::as_str).unwrap_or("upload");
         let r = stored
             .get("manifest")
@@ -561,6 +576,7 @@ impl Installer {
             return Err(format!("{id} is not installed"));
         }
         self.d()?.unregister_module(id);
+        self.note_local_change(&[id.to_string()]);
         Ok(())
     }
 
@@ -628,6 +644,7 @@ impl Installer {
                 failed.push((id, e));
             }
         }
+        self.note_loaded();
         failed
     }
 
@@ -2378,6 +2395,63 @@ label = "Ota käyttöön"
             .find(|f| f.name == "plate")
             .unwrap();
         assert_eq!(plate.labels["de"], "Kennzeichen");
+    }
+
+    /// B1: a module installed, upgraded or removed through one server process shows on the
+    /// others at their next look, without a restart.
+    #[test]
+    fn modules_changed_through_one_process_follow_on_the_others() {
+        let store = Store::new();
+        let ((da, a), (db, b)) = (setup(&store), setup(&store));
+        let manager = Principal::user("m", &["fleet.user", "fleet.manager"]);
+        let visible = |d: &Dispatcher| {
+            d.meta(Surface::Rest, &manager)
+                .iter()
+                .any(|m| m.id == "fleet")
+        };
+        let sync = |i: &Installer| {
+            i.last_check_ms
+                .store(0, std::sync::atomic::Ordering::Release);
+            i.sync_modules();
+        };
+        a.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
+            .unwrap();
+        assert!(visible(&da));
+        assert!(!visible(&db), "the other process has not looked yet");
+        sync(&b);
+        assert!(visible(&db), "installed through A, registered on B");
+        assert_eq!(fleet_meta(&db).labels["de"], "Fuhrpark");
+        // Looking again with nothing changed does nothing (and does not re-register).
+        sync(&b);
+        // An upgrade through A replaces the registration on B.
+        let newer = FLEET_LABELS.replace("Fuhrpark", "Fahrzeugpark");
+        a.install(&fleet_with_labels("0.4.0", &newer), "upload", "root")
+            .unwrap();
+        sync(&b);
+        assert_eq!(fleet_meta(&db).labels["de"], "Fahrzeugpark");
+        // An install through B is not undone by B's own next look, and A follows.
+        b.install(&fleet_with_labels("0.5.0", &newer), "upload", "root")
+            .unwrap();
+        sync(&b);
+        assert!(visible(&db));
+        sync(&a);
+        assert!(visible(&da));
+        // A removal through A removes it on B.
+        a.uninstall("fleet").unwrap();
+        assert!(!visible(&da));
+        assert!(visible(&db));
+        sync(&b);
+        assert!(!visible(&db), "uninstalled through A, gone on B");
+        // The dispatcher's own entry points do the looking when the hook is set.
+        a.install(&fleet_with_labels("0.6.0", &newer), "upload", "root")
+            .unwrap();
+        let hook = b.clone();
+        db.set_sync_hook(Box::new(move || {
+            hook.last_check_ms
+                .store(0, std::sync::atomic::Ordering::Release);
+            hook.sync_modules()
+        }));
+        assert!(visible(&db), "meta() syncs first");
     }
 
     #[test]

@@ -17,7 +17,7 @@ test found, or a limit the docs state.
 ## B. Operations, scale and durability
 | # | Issue | Status |
 |---|---|---|
-| B1 | Sessions, MCP sessions, rate limits, forum and status data live in one process's memory (one process per database) | done: all of it is in the database (D59); proven by two real `obop serve` and two `platform serve` processes on PostgreSQL. Counters are fixed windows; a forum or status read may lag a write on another process by 250 ms; SQLite shares between processes on one machine only |
+| B1 | Sessions, MCP sessions, rate limits, forum and status data live in one process's memory (one process per database) | done: all of it, and the set of installed modules, is in the database (D59); proven by two real `obop serve` and two `platform serve` processes on PostgreSQL. Counters are fixed windows; a forum or status read may lag a write on another process by 250 ms; SQLite shares between processes on one machine only |
 | B2 | Connector retry queue is lost on restart | done: jobs, leases and dead letters are rows (at-least-once, stable delivery id); crash-restart and two-worker tests |
 | B3 | No key rotation or credential re-sealing for `OBOP_SECRET_KEY` | done: key ring, `obop secrets status|rotate` (dry run, batches, resumable, while serving), runbook and lost-key story in docs/DEPLOY.md; no KMS |
 | B4 | No backups: no `obop backup` / `restore`, no restore drill | done for the tools: `obop backup`, `backup verify`, `restore` (SQLite and PostgreSQL, round trips, tamper, refusal and version tests) and `deploy/restore-drill.sh` (run in CI). Out of scope as asked: scheduled backups of hosted instances (needs object storage); `pg_dump` and WAL archiving for the Sliplane PostgreSQL service are documented, not run against it |
