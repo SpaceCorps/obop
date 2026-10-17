@@ -5,7 +5,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { backofficeDist, obopBinary, siteDir, users } from "./env.ts";
+import { backofficeDist, obopBinary, secretKey, siteDir, users } from "./env.ts";
 
 const [kind] = process.argv.slice(2);
 const dir = process.env.OBOP_E2E_DIR;
@@ -48,6 +48,9 @@ if (kind === "app") {
   ];
 } else throw new Error("usage: serve.ts app|platform");
 
-const child = spawn(bin, args, { stdio: "inherit" });
+const child = spawn(bin, args, {
+  stdio: "inherit",
+  env: { ...process.env, OBOP_SECRET_KEY: secretKey, OBOP_REQUIRE_MFA_FOR_ADMINS: "0" },
+});
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => child.kill(sig));
 child.on("exit", (code) => process.exit(code ?? 0));

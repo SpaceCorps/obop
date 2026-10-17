@@ -95,6 +95,7 @@ export function TopBar(props: {
   onSignOut: () => void;
   onTheme: () => void;
   onBrand: () => void;
+  onSecurity: () => void;
 }) {
   const { current } = props;
   const i18n = useI18n();
@@ -155,6 +156,7 @@ export function TopBar(props: {
           items={[
             { heading: props.email || t("Signed in") },
             { label: t("Theme"), icon: "sun", onSelect: props.onTheme },
+            { label: t("Security"), icon: "shield-check", onSelect: props.onSecurity },
             { label: t("Brand book"), icon: "sparkle", onSelect: props.onBrand },
             "separator",
             ...languages,

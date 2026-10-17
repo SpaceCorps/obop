@@ -38,6 +38,7 @@ obop <command> [options]
 | Command                                                 | What it does                                                                                                                                                    |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `obop admin create USER [--groups a,b \| --all-groups]` | Creates a user. The password is read from standard input and must have at least 12 characters. `--all-groups` grants `platform.admin` and every built-in group. |
+| `obop admin reset-mfa USER --db URL` | Break-glass: removes a user's two-factor, revokes their sessions and writes an `operator` record to the security log. Needs database access. See [Two-factor authentication](/docs/concepts/two-factor-authentication/). |
 | `obop agent-token USER --scopes a,b [--label TEXT]`     | Issues an agent token for an existing user. Shown once. Scopes must be groups the user holds.                                                                   |
 
 Example:

@@ -17,6 +17,7 @@ This page describes what the code does today. For how to report a problem, see [
 | Approvals           | Irreversible actions and deletes are proposals when an agent calls them.                                                                                          |
 | Command boundary    | One dispatcher serves REST, MCP and the CLI, so no surface skips permissions or masking. Unknown, hidden and forbidden commands look the same.                    |
 | Isolation           | On the hosted service each business has its own database and database role.                                                                                       |
+| Two-factor          | Optional TOTP (RFC 6238) with single-use recovery codes, required for administrators by default. Secrets are sealed under a server key, codes cannot be replayed, every step is in an append-only security log. See [Two-factor authentication](/docs/concepts/two-factor-authentication/). |
 | Auth storage        | Users and tokens sit in storage outside the module registry, so no generated command can read them.                                                               |
 | Secrets             | Fields of class `secret` are never returned to anyone.                                                                                                            |
 
@@ -33,7 +34,7 @@ Honest list, so you can decide:
 - **No row-level permissions.** Access is by model and field group.
 - **No encryption at rest or key management** beyond what your database provider gives you.
 - **No backups or point-in-time recovery** for the hosted service.
-- **No single sign-on, two-factor sign-in or passkeys.** Password sign-in only.
+- **No single sign-on or passkeys.** Two-factor is TOTP only (no WebAuthn, no SMS), and the server holds the key that seals the secrets.
 - **No data export tool.** Self-hosted data is in your database.
 - **Masking is not free-text aware** and tokens live in server memory (not stable across restarts or sessions).
 - **No certification.** obop has no SOC 2, ISO 27001 or similar attestation, and no independent penetration test yet.

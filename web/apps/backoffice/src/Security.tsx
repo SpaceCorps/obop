@@ -70,7 +70,7 @@ export function SecurityTab({
             onSettings={onSettings}
             notify={notify}
           />
-          <ResetSection token={token} notify={notify} />
+          <ResetSection token={token} notify={notify} onReset={() => setRefreshKey((k) => k + 1)} />
           <EventLog token={token} refreshKey={refreshKey} />
         </>
       )}
@@ -141,7 +141,15 @@ function PolicySection({
   );
 }
 
-function ResetSection({ token, notify }: { token: string; notify: Notify }) {
+function ResetSection({
+  token,
+  notify,
+  onReset,
+}: {
+  token: string;
+  notify: Notify;
+  onReset: () => void;
+}) {
   const id = useId();
   const [user, setUser] = useState("");
   const [busy, setBusy] = useState(false);
@@ -166,6 +174,7 @@ function ResetSection({ token, notify }: { token: string; notify: Notify }) {
           if (res.ok) {
             notify(t("Two-factor reset for {user}", { user: user.trim().toLowerCase() }));
             setUser("");
+            onReset();
           } else {
             const body = (await res.json().catch(() => ({}))) as { code?: string };
             setError(

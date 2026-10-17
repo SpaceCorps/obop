@@ -50,6 +50,27 @@ Settings read by `obop platform serve --provisioner sliplane`:
 | `OBOP_IMAGE` or `OBOP_REPO` (+ `OBOP_BRANCH`) | Where instance services come from. A repository means Sliplane builds each instance itself; an image (once a registry is in place) is much faster. |
 | `OBOP_MARKETPLACE_URL` | Optional extra catalog for every instance. |
 
+### Two-factor authentication and `OBOP_SECRET_KEY` (D53)
+
+Every instance and the control plane need one server secret to protect the two-factor secrets (TOTP seeds) stored in their database. Without it nobody can turn two-factor on, and the "require for administrators" policy is not applied (a policy nobody could satisfy would lock the admins out).
+
+| Variable | Meaning |
+|---|---|
+| `OBOP_SECRET_KEY` | **Required for two-factor.** 32 random bytes as 64 hex digits (or base64). `openssl rand -hex 32`. Never put it in the database, the repository or a plain env var; set it as a secret env. Changing or losing it makes enrolled users unable to use their authenticator codes until an operator runs `obop admin reset-mfa USER` for them (recovery codes cannot be verified either, because the account's second factor cannot be read). There is no rotation yet. |
+| `OBOP_REQUIRE_MFA_FOR_ADMINS` | `0` changes the *default* of the setting `security.require_mfa_for_admins` to off (the production default is on). A value an administrator stored under Customize > Security wins. The test suite sets it to `0`. |
+| `OBOP_DEV_INSECURE_KEY` | `1` selects a public, fixed key and logs a warning. Development and tests only. |
+| `OBOP_MFA_ISSUER` | The name shown in the authenticator app (default `obop`). |
+
+The Sliplane provisioner generates a fresh random `OBOP_SECRET_KEY` for each instance and passes it with `--secret-env` when it creates the service; the control plane does not store it, so it exists only in that service's secret environment. If you recreate an instance's service by hand, set the same key again (`sliplane services set-env ... --key OBOP_SECRET_KEY --value <hex> --secret`) or enrolled people lose their authenticator. The control plane itself (`obop-platform`) needs its own `OBOP_SECRET_KEY` secret for its optional account two-factor; without it the Security button reports that two-factor is not available. The `local` provisioner passes the environment of the control plane to its child processes, so one key serves them all on a developer machine.
+
+**Break-glass.** A person who lost the device and the recovery codes is reset by an administrator in Customize > Security, or, when no administrator can sign in, by the operator with database access:
+
+```bash
+obop admin reset-mfa alice --db postgres://...      # or sqlite://obop.db
+```
+
+It removes the second factor, revokes the person's sessions and writes an `operator` record to the security log (`security_event`). The next sign-in is password-only, and if the policy covers the person they are asked to set two-factor up again.
+
 ### Known limits
 
 - **Build time and memory.** Every instance builds the Rust workspace on `spacecorps-main`. That is slow, and it competes with the other services; a registry image would remove it.

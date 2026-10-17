@@ -223,6 +223,7 @@ export function App() {
           onSignOut={signOut}
           onTheme={() => go({ app: "customize", model: "theme", tab: "theme" })}
           onBrand={() => go({ app: "customize", model: "brand", tab: "brand" })}
+          onSecurity={() => go({ app: "customize", model: "security", tab: "security" })}
         />
         <div className="workspace">
           {app && app.id !== "customize" && (

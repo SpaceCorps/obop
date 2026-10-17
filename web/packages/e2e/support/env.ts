@@ -48,8 +48,21 @@ export const users = {
     password: "e2e ivy password 1",
     groups: "wfagent.user,wfagent.manager",
   },
+  // Two-factor specs (tests/mfa.spec.ts). Each spec owns its user: a lockout or an enrolment must
+  // never leak into another spec, and users cannot be created while the instance runs.
+  tess: { name: "tess", password: "e2e tess password 1", groups: "base.user" },
+  lock: { name: "lock", password: "e2e lock password 1", groups: "base.user" },
+  quinn: { name: "quinn", password: "e2e quinn password 1", groups: "base.user" },
+  nova: { name: "nova", password: "e2e nova password 1", groups: "platform.admin" },
 } as const;
 export type UserName = keyof typeof users;
 
 export const appUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 export const platformUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
+
+/**
+ * The server secret the instance seals two-factor secrets with (D53). A throwaway test value; the
+ * suite also sets OBOP_REQUIRE_MFA_FOR_ADMINS=0 so the admin `root` signs in without a second
+ * factor, as the other 125 tests expect. The two-factor spec turns the policy on where it needs it.
+ */
+export const secretKey = "0123456789abcdef".repeat(4);

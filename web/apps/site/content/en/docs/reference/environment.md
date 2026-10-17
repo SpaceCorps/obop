@@ -15,6 +15,9 @@ obop reads a small number of environment variables. Command line flags win over 
 | `OBOP_PUBLIC_URL`          | External URL of an instance behind a proxy (`https://acme.example.com`), used in the MCP discovery documents and in the `401` challenge of `/mcp`. | from the request   |
 | `OBOP_ALLOWED_ORIGINS`     | Comma-separated browser origins allowed to call `/mcp` (DNS-rebinding protection). Clients that are not browsers send no origin.                   | none               |
 | `OBOP_MCP_RATE_PER_MINUTE` | Requests per token per minute on `/mcp`; `0` turns the limit off.                                                                                  | 600                |
+| `OBOP_SECRET_KEY`          | 32 random bytes as 64 hex digits or base64 (`openssl rand -hex 32`). Seals two-factor secrets; without it two-factor cannot be turned on. Set it as a secret. | none               |
+| `OBOP_REQUIRE_MFA_FOR_ADMINS` | `0` makes "require two-factor for administrators" off until an administrator stores a value; the default is on.                                  | on                 |
+| `OBOP_DEV_INSECURE_KEY`    | `1` uses a public key for two-factor secrets and logs a warning. Development only.                                                                  | off                |
 
 ## Control plane
 
