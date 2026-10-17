@@ -6,7 +6,7 @@
 use super::{api_error, blocking};
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -28,6 +28,22 @@ pub(crate) fn routes(prefix: &str, auth: Arc<dyn Authenticator>) -> Router {
         .route(&format!("{prefix}/mfa/disable"), post(disable))
         .route(&format!("{prefix}/mfa/recovery"), post(recovery))
         .route(&format!("{prefix}/mfa/reset"), post(reset))
+        .route(&format!("{prefix}/sessions"), get(sessions))
+        .route(&format!("{prefix}/sessions/revoke-all"), post(revoke_all))
+        .route(&format!("{prefix}/password"), post(change_password))
+        .route(&format!("{prefix}/users"), get(users))
+        .route(
+            &format!("{prefix}/users/{{name}}/disable"),
+            post(disable_user),
+        )
+        .route(
+            &format!("{prefix}/users/{{name}}/enable"),
+            post(enable_user),
+        )
+        .route(
+            &format!("{prefix}/users/{{name}}/reset-password"),
+            post(reset_password),
+        )
         .with_state(auth)
 }
 
@@ -47,7 +63,18 @@ pub(crate) fn outcome(out: LoginOutcome) -> Response {
         LoginOutcome::Session {
             token,
             mfa_enrolment_required: false,
+            password_change_required: false,
         } => Json(json!({"token": token})).into_response(),
+        LoginOutcome::Session {
+            token,
+            password_change_required: true,
+            ..
+        } => Json(json!({
+            "token": token,
+            "password_change_required": true,
+            "hint": "An administrator set a temporary password. This session can only change it: POST /api/auth/password with current_password and new_password."
+        }))
+        .into_response(),
         LoginOutcome::Session { token, .. } => Json(json!({
             "token": token,
             "mfa_enrolment_required": true,
@@ -184,9 +211,10 @@ async fn confirm(State(a): Auth, h: HeaderMap, Json(b): Json<J>) -> Response {
 
 async fn disable(State(a): Auth, h: HeaderMap, Json(b): Json<J>) -> Response {
     blocking(move || match human(&*a, &h) {
-        Ok((p, _, api)) => api
-            .disable(
+        Ok((p, session, api)) => api
+            .disable_in_session(
                 &p,
+                &session,
                 b["password"].as_str().unwrap_or(""),
                 text(&b, "code"),
                 text(&b, "recovery_code"),
@@ -219,6 +247,107 @@ async fn reset(State(a): Auth, h: HeaderMap, Json(b): Json<J>) -> Response {
         Ok((p, _, api)) => api
             .admin_reset(&p, b["user"].as_str().unwrap_or(""))
             .map_or_else(mfa_error, |()| Json(json!({"reset": true})).into_response()),
+        Err(r) => r,
+    })
+    .await
+}
+
+/// The person's own sessions: when they started and end, which one this is.
+async fn sessions(State(a): Auth, h: HeaderMap) -> Response {
+    blocking(move || match human(&*a, &h) {
+        Ok((p, session, api)) => api
+            .sessions(&p, &session)
+            .map_or_else(mfa_error, |j| Json(j).into_response()),
+        Err(r) => r,
+    })
+    .await
+}
+
+/// Sign out everywhere. The body may carry `{"keep_current": true}` to keep this session.
+async fn revoke_all(State(a): Auth, h: HeaderMap, body: Option<Json<J>>) -> Response {
+    blocking(move || match human(&*a, &h) {
+        Ok((p, session, api)) => {
+            let keep = body
+                .as_ref()
+                .is_some_and(|b| b["keep_current"].as_bool() == Some(true));
+            api.revoke_sessions(&p, &session, keep)
+                .map_or_else(mfa_error, |n| Json(json!({"revoked": n})).into_response())
+        }
+        Err(r) => r,
+    })
+    .await
+}
+
+/// Change one's own password: the current one, and a code when two-factor is on. Ends the
+/// person's other sessions.
+async fn change_password(State(a): Auth, h: HeaderMap, Json(b): Json<J>) -> Response {
+    blocking(move || match human(&*a, &h) {
+        Ok((p, session, api)) => api
+            .change_password(
+                &p,
+                &session,
+                b["current_password"].as_str().unwrap_or(""),
+                b["new_password"].as_str().unwrap_or(""),
+                text(&b, "code"),
+                text(&b, "recovery_code"),
+            )
+            .map_or_else(mfa_error, |()| {
+                Json(json!({"changed": true})).into_response()
+            }),
+        Err(r) => r,
+    })
+    .await
+}
+
+/// Administrators: the accounts.
+async fn users(State(a): Auth, h: HeaderMap) -> Response {
+    blocking(move || match human(&*a, &h) {
+        Ok((p, _, api)) => api
+            .users(&p)
+            .map_or_else(mfa_error, |j| Json(j).into_response()),
+        Err(r) => r,
+    })
+    .await
+}
+
+async fn set_disabled(
+    a: Arc<dyn Authenticator>,
+    h: HeaderMap,
+    name: String,
+    disabled: bool,
+) -> Response {
+    blocking(move || match human(&*a, &h) {
+        Ok((p, _, api)) => api
+            .set_user_disabled(&p, &name, disabled)
+            .map_or_else(mfa_error, |()| {
+                Json(json!({"user": name, "disabled": disabled})).into_response()
+            }),
+        Err(r) => r,
+    })
+    .await
+}
+
+async fn disable_user(State(a): Auth, h: HeaderMap, Path(name): Path<String>) -> Response {
+    set_disabled(a, h, name, true).await
+}
+
+async fn enable_user(State(a): Auth, h: HeaderMap, Path(name): Path<String>) -> Response {
+    set_disabled(a, h, name, false).await
+}
+
+/// An administrator sets a temporary password; the person must choose a new one at sign-in.
+async fn reset_password(
+    State(a): Auth,
+    h: HeaderMap,
+    Path(name): Path<String>,
+    Json(b): Json<J>,
+) -> Response {
+    blocking(move || match human(&*a, &h) {
+        Ok((p, _, api)) => api
+            .reset_user_password(&p, &name, b["password"].as_str().unwrap_or(""))
+            .map_or_else(mfa_error, |()| {
+                Json(json!({"user": name, "must_change_password": true})).into_response()
+            }),
         Err(r) => r,
     })
     .await

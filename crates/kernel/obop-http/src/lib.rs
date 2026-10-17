@@ -394,6 +394,7 @@ pub trait PlatformApi: Send + Sync {
             .map(|token| obop_commands::LoginOutcome::Session {
                 token,
                 mfa_enrolment_required: false,
+                password_change_required: false,
             })
     }
     /// The authenticator behind the accounts, for the optional two-factor routes (D53).

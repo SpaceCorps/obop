@@ -9,15 +9,15 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower::ServiceExt;
 
-const PW: &str = "correct horse battery";
-const T0: u64 = 1_700_000_010;
+pub(crate) const PW: &str = "correct horse battery";
+pub(crate) const T0: u64 = 1_700_000_010;
 
-struct Rig {
-    r: axum::Router,
-    auth: Arc<Auth>,
+pub(crate) struct Rig {
+    pub(crate) r: axum::Router,
+    pub(crate) auth: Arc<Auth>,
 }
 
-fn rig(require_admins: bool) -> Rig {
+pub(crate) fn rig(require_admins: bool) -> Rig {
     let app = App::new();
     app.seed_demo();
     let auth = Arc::new(Auth::with_test_config(
@@ -41,7 +41,7 @@ fn rig(require_admins: bool) -> Rig {
     Rig { r, auth }
 }
 
-async fn send(
+pub(crate) async fn send(
     r: &axum::Router,
     method: &str,
     token: Option<&str>,
@@ -65,11 +65,11 @@ async fn send(
     (status, serde_json::from_slice(&bytes).unwrap_or(J::Null))
 }
 
-async fn post(r: &axum::Router, t: Option<&str>, path: &str, body: J) -> (u16, J) {
+pub(crate) async fn post(r: &axum::Router, t: Option<&str>, path: &str, body: J) -> (u16, J) {
     send(r, "POST", t, path, body).await
 }
 
-async fn first_step(r: &axum::Router, user: &str) -> J {
+pub(crate) async fn first_step(r: &axum::Router, user: &str) -> J {
     let (s, b) = post(
         r,
         None,
@@ -81,7 +81,7 @@ async fn first_step(r: &axum::Router, user: &str) -> J {
     b
 }
 
-async fn token(r: &axum::Router, user: &str) -> String {
+pub(crate) async fn token(r: &axum::Router, user: &str) -> String {
     first_step(r, user).await["token"]
         .as_str()
         .unwrap()
@@ -89,7 +89,7 @@ async fn token(r: &axum::Router, user: &str) -> String {
 }
 
 /// Enrol over HTTP; returns the secret and the recovery codes.
-async fn enrol(rig: &Rig, user: &str) -> (Vec<u8>, Vec<String>) {
+pub(crate) async fn enrol(rig: &Rig, user: &str) -> (Vec<u8>, Vec<String>) {
     let t = token(&rig.r, user).await;
     let (s, b) = post(&rig.r, Some(&t), "/api/auth/mfa/begin", json!({})).await;
     assert_eq!(s, 200, "{b}");
@@ -113,7 +113,7 @@ async fn enrol(rig: &Rig, user: &str) -> (Vec<u8>, Vec<String>) {
     (secret, codes)
 }
 
-fn code(secret: &[u8], at: u64) -> String {
+pub(crate) fn code(secret: &[u8], at: u64) -> String {
     totp::code_for_step(secret, totp::step_at(at))
 }
 

@@ -22,7 +22,7 @@ const FAILED_EVENT_EVERY: Duration = Duration::from_secs(10);
 
 /// Table of the append-only event log; the `security_event` model of the `platform` module
 /// reads it.
-pub const EVENT_TABLE: &str = "security_event";
+pub const EVENT_TABLE: &str = obop_commands::audit::EVENT_TABLE;
 const MFA_TOKEN_TABLE: &str = "auth_mfa_token";
 
 #[derive(Debug, Clone)]
@@ -83,26 +83,6 @@ impl AuthConfig {
     }
 }
 
-/// `YYYY-MM-DDTHH:MM:SSZ` for a Unix time.
-pub fn rfc3339(secs: u64) -> String {
-    let (days, rem) = ((secs / 86400) as i64, secs % 86400);
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + i64::from(m <= 2);
-    format!(
-        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
-        rem / 3600,
-        rem % 3600 / 60,
-        rem % 60
-    )
-}
-
 /// 16 base32 characters (80 bits) in four groups.
 fn new_recovery_code() -> String {
     let s = totp::base32_encode(&random_bytes::<10>());
@@ -152,7 +132,7 @@ impl Auth {
             .unwrap_or(false)
     }
 
-    fn enrolment_required_for(&self, groups: &[String]) -> bool {
+    pub(crate) fn enrolment_required_for(&self, groups: &[String]) -> bool {
         // Without a server key nobody could enrol, so the policy cannot be applied.
         !self.config.keys.is_empty()
             && (self.require_mfa_for_all()
@@ -171,18 +151,7 @@ impl Auth {
 
     /// Append to the security event log. Never pass a code, a secret or a password.
     pub(crate) fn event(&self, user: &str, kind: &str, actor: &str, detail: &str) {
-        let at = self.now();
-        let mut f = Fields::new();
-        f.insert("user".into(), J::from(user));
-        f.insert("kind".into(), J::from(kind));
-        f.insert("actor".into(), J::from(actor));
-        f.insert("detail".into(), J::from(detail));
-        f.insert("at".into(), J::from(rfc3339(at)));
-        // Sortable by time, unique by suffix.
-        let id = format!("{at:012}-{}", hex(&random_bytes::<6>()));
-        if let Err(e) = self.backend.insert(EVENT_TABLE, &id, &f) {
-            eprintln!("could not write security event {kind}: {e}");
-        }
+        obop_commands::audit::record_event(&*self.backend, self.now(), user, kind, actor, detail);
     }
 
     fn failed_code_event(&self, user: &str) {
@@ -216,7 +185,7 @@ impl Auth {
     }
 
     /// The stored user as a JSON object (a missing key reads as null, unlike `Fields`).
-    fn user_record(&self, name: &str) -> Result<J, MfaError> {
+    pub(crate) fn user_record(&self, name: &str) -> Result<J, MfaError> {
         self.backend
             .get("auth_user", name)
             .ok()
@@ -225,7 +194,7 @@ impl Auth {
             .ok_or(MfaError::NotFound)
     }
 
-    fn put(&self, name: &str, patch: &Fields) -> Result<(), MfaError> {
+    pub(crate) fn put(&self, name: &str, patch: &Fields) -> Result<(), MfaError> {
         match self.backend.update("auth_user", name, patch) {
             Ok(true) => Ok(()),
             Ok(false) => Err(MfaError::NotFound),
@@ -233,7 +202,7 @@ impl Auth {
         }
     }
 
-    fn password_ok(&self, name: &str, password: &str) -> bool {
+    pub(crate) fn password_ok(&self, name: &str, password: &str) -> bool {
         use argon2::password_hash::{PasswordVerifier, phc::PasswordHash};
         let stored = self
             .backend
@@ -256,7 +225,7 @@ impl Auth {
 
     /// Check a TOTP code or a recovery code for `name`. Consumes what it accepts (the step, or
     /// the recovery code). Counts a miss toward the lockout. Call with `mfa_lock` held.
-    fn check_second_factor(
+    pub(crate) fn check_second_factor(
         &self,
         name: &str,
         code: Option<&str>,
@@ -353,6 +322,13 @@ impl Auth {
             self.record_failure(&name);
             return Err("invalid username or password".into());
         }
+        // Same answer as a wrong password, so nobody can tell a disabled account from none; the
+        // security log says what happened.
+        if self.is_disabled(&name) {
+            self.event(&name, "login_refused", &name, "the account is disabled");
+            return Err("invalid username or password".into());
+        }
+        self.purge_tokens();
         if self.mfa_enabled(&name) {
             let token = format!("obopmfa_{}", hex(&random_bytes::<32>()));
             let mut f = Fields::new();
@@ -379,11 +355,7 @@ impl Auth {
                 "signed in without two-factor; only enrolment is allowed",
             );
         }
-        let token = self.issue_session(&name, limited)?;
-        Ok(LoginOutcome::Session {
-            token,
-            mfa_enrolment_required: limited,
-        })
+        self.session_outcome(&name, limited)
     }
 
     pub(crate) fn login_mfa_impl(
@@ -418,13 +390,8 @@ impl Auth {
             Ok(()) => {
                 // Single use: the token is gone whatever happens next.
                 let _ = self.backend.delete(MFA_TOKEN_TABLE, &key);
-                let token = self
-                    .issue_session(&name, false)
-                    .map_err(MfaError::Unavailable)?;
-                Ok(LoginOutcome::Session {
-                    token,
-                    mfa_enrolment_required: false,
-                })
+                self.session_outcome(&name, false)
+                    .map_err(MfaError::Unavailable)
             }
             Err(e @ (MfaError::Denied(_) | MfaError::Locked(_))) => {
                 let mut p = Fields::new();
@@ -436,18 +403,64 @@ impl Auth {
         }
     }
 
+    /// A session for `name`. It is limited to the account routes when two-factor enrolment is
+    /// owed (`enrol`) or an administrator reset the password and a new one is owed.
+    fn session_outcome(&self, name: &str, enrol: bool) -> Result<LoginOutcome, String> {
+        let must_change = self.must_change_password(name);
+        let token = self.issue_session(name, enrol || must_change)?;
+        if must_change {
+            self.event(
+                name,
+                "limited_session",
+                name,
+                "signed in with a temporary password; only a password change is allowed",
+            );
+        }
+        Ok(LoginOutcome::Session {
+            token,
+            mfa_enrolment_required: enrol,
+            password_change_required: must_change,
+        })
+    }
+
+    /// Turn two-factor off. Every other session of the person ends (all of them when the caller
+    /// is not a session): a stolen session must not outlive the second factor.
+    fn disable_impl(
+        &self,
+        p: &Principal,
+        session: Option<&str>,
+        password: &str,
+        code: Option<&str>,
+        recovery: Option<&str>,
+    ) -> Result<(), MfaError> {
+        let name = person(p)?;
+        let _g = self.mfa_guard()?;
+        let u = self.user_record(name)?;
+        if u["mfa_enabled"].as_bool() != Some(true) {
+            return Err(MfaError::Invalid("two-factor is not on".into()));
+        }
+        if !self.password_ok(name, password) {
+            self.record_failure(name);
+            return Err(MfaError::BadPassword);
+        }
+        self.check_second_factor(name, code, recovery)?;
+        self.clear_factor(name)?;
+        let keep = session.map(token_hash);
+        let n = self.revoke_user_sessions(name, keep.as_deref());
+        self.event(
+            name,
+            "disable",
+            name,
+            &format!("turned off by the user; {n} other session(s) signed out"),
+        );
+        Ok(())
+    }
+
     // ---- operator -----------------------------------------------------------------------
 
     /// Revoke every session of a user (not agent tokens: those are separate credentials).
     fn revoke_sessions(&self, name: &str) {
-        for (id, t) in self.backend.list("auth_token").unwrap_or_default() {
-            let t = J::Object(t);
-            if t["owner"].as_str() == Some(name) && t["kind"].as_str() == Some("user") {
-                let mut p = Fields::new();
-                p.insert("revoked".into(), J::Bool(true));
-                let _ = self.backend.update("auth_token", &id, &p);
-            }
-        }
+        self.revoke_user_sessions(name, None);
     }
 
     fn clear_factor(&self, name: &str) -> Result<(), MfaError> {
@@ -579,20 +592,18 @@ impl MfaApi for Auth {
         code: Option<&str>,
         recovery: Option<&str>,
     ) -> Result<(), MfaError> {
-        let name = person(p)?;
-        let _g = self.mfa_guard()?;
-        let u = self.user_record(name)?;
-        if u["mfa_enabled"].as_bool() != Some(true) {
-            return Err(MfaError::Invalid("two-factor is not on".into()));
-        }
-        if !self.password_ok(name, password) {
-            self.record_failure(name);
-            return Err(MfaError::BadPassword);
-        }
-        self.check_second_factor(name, code, recovery)?;
-        self.clear_factor(name)?;
-        self.event(name, "disable", name, "turned off by the user");
-        Ok(())
+        self.disable_impl(p, None, password, code, recovery)
+    }
+
+    fn disable_in_session(
+        &self,
+        p: &Principal,
+        session: &str,
+        password: &str,
+        code: Option<&str>,
+        recovery: Option<&str>,
+    ) -> Result<(), MfaError> {
+        self.disable_impl(p, Some(session), password, code, recovery)
     }
 
     fn regenerate_recovery(
@@ -648,5 +659,51 @@ impl MfaApi for Auth {
         self.revoke_sessions(&target);
         self.event(&target, "reset", actor, "reset by an administrator");
         Ok(())
+    }
+    fn sessions(&self, p: &Principal, session: &str) -> Result<J, MfaError> {
+        self.sessions_impl(p, session)
+    }
+
+    fn revoke_sessions(
+        &self,
+        p: &Principal,
+        session: &str,
+        keep_current: bool,
+    ) -> Result<usize, MfaError> {
+        self.revoke_sessions_impl(p, session, keep_current)
+    }
+
+    fn change_password(
+        &self,
+        p: &Principal,
+        session: &str,
+        current: &str,
+        new: &str,
+        code: Option<&str>,
+        recovery_code: Option<&str>,
+    ) -> Result<(), MfaError> {
+        self.change_password_impl(p, session, current, new, code, recovery_code)
+    }
+
+    fn users(&self, admin: &Principal) -> Result<J, MfaError> {
+        self.users_impl(admin)
+    }
+
+    fn set_user_disabled(
+        &self,
+        admin: &Principal,
+        target: &str,
+        disabled: bool,
+    ) -> Result<(), MfaError> {
+        self.set_user_disabled_impl(admin, target, disabled)
+    }
+
+    fn reset_user_password(
+        &self,
+        admin: &Principal,
+        target: &str,
+        temporary: &str,
+    ) -> Result<(), MfaError> {
+        self.reset_user_password_impl(admin, target, temporary)
     }
 }

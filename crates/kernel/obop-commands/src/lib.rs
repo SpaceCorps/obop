@@ -3,6 +3,7 @@
 //! with token scopes for agents), restores masked input tokens (D40), runs the handler and
 //! shapes the output through the masking policy.
 
+pub mod audit;
 mod shared;
 pub use shared::Shared;
 use shared::{Pending, Plans};
@@ -896,6 +897,7 @@ pub trait Authenticator: Send + Sync {
             .map(|token| LoginOutcome::Session {
                 token,
                 mfa_enrolment_required: false,
+                password_change_required: false,
             })
     }
     /// Second sign-in step: a TOTP `code` or a `recovery_code` for the short-lived `mfa_token`.
@@ -928,6 +930,8 @@ pub enum LoginOutcome {
         token: String,
         /// The session is limited to two-factor enrolment because the instance requires it.
         mfa_enrolment_required: bool,
+        /// The session is limited to changing the password because an administrator reset it.
+        password_change_required: bool,
     },
     MfaRequired {
         mfa_token: String,
@@ -966,7 +970,8 @@ pub trait MfaApi: Send + Sync {
         session: &str,
         code: &str,
     ) -> Result<serde_json::Value, MfaError>;
-    /// Needs the password and a current code or a recovery code.
+    /// Needs the password and a current code or a recovery code. Signs out every session of the
+    /// person (a stolen session must not outlive the second factor).
     fn disable(
         &self,
         p: &Principal,
@@ -974,6 +979,17 @@ pub trait MfaApi: Send + Sync {
         code: Option<&str>,
         recovery_code: Option<&str>,
     ) -> Result<(), MfaError>;
+    /// As `disable`, keeping the session the call came from signed in.
+    fn disable_in_session(
+        &self,
+        p: &Principal,
+        _session: &str,
+        password: &str,
+        code: Option<&str>,
+        recovery_code: Option<&str>,
+    ) -> Result<(), MfaError> {
+        self.disable(p, password, code, recovery_code)
+    }
     fn regenerate_recovery(
         &self,
         p: &Principal,
@@ -983,6 +999,61 @@ pub trait MfaApi: Send + Sync {
     ) -> Result<serde_json::Value, MfaError>;
     /// `platform.admin` removes another user's second factor; never one's own.
     fn admin_reset(&self, admin: &Principal, target: &str) -> Result<(), MfaError>;
+
+    // ---- sessions, password and accounts (B7) -------------------------------------------
+
+    /// The person's own sessions: when they started, when they end, which one this is. Nothing
+    /// in the answer can be used as a credential.
+    fn sessions(&self, _p: &Principal, _session: &str) -> Result<serde_json::Value, MfaError> {
+        Err(MfaError::NotFound)
+    }
+    /// Sign the person out: every session, or every one but the calling session. Returns how
+    /// many ended. Agent tokens issued by the person are separate credentials and stay.
+    fn revoke_sessions(
+        &self,
+        _p: &Principal,
+        _session: &str,
+        _keep_current: bool,
+    ) -> Result<usize, MfaError> {
+        Err(MfaError::NotFound)
+    }
+    /// Change one's own password: needs the current password and, when two-factor is on, a
+    /// code or recovery code. Ends the person's other sessions.
+    fn change_password(
+        &self,
+        _p: &Principal,
+        _session: &str,
+        _current: &str,
+        _new: &str,
+        _code: Option<&str>,
+        _recovery_code: Option<&str>,
+    ) -> Result<(), MfaError> {
+        Err(MfaError::NotFound)
+    }
+    /// `platform.admin` lists the accounts (never a hash or a secret).
+    fn users(&self, _admin: &Principal) -> Result<serde_json::Value, MfaError> {
+        Err(MfaError::NotFound)
+    }
+    /// `platform.admin` disables or enables another account. Disabling ends its sessions and
+    /// blocks its tokens; it is refused for oneself and for the last enabled administrator.
+    fn set_user_disabled(
+        &self,
+        _admin: &Principal,
+        _target: &str,
+        _disabled: bool,
+    ) -> Result<(), MfaError> {
+        Err(MfaError::NotFound)
+    }
+    /// `platform.admin` sets a temporary password for another account: its sessions end and the
+    /// person must choose a new password at the next sign-in.
+    fn reset_user_password(
+        &self,
+        _admin: &Principal,
+        _target: &str,
+        _temporary: &str,
+    ) -> Result<(), MfaError> {
+        Err(MfaError::NotFound)
+    }
 }
 
 mod guards;

@@ -3,37 +3,37 @@ use crate::mfa::EVENT_TABLE;
 use obop_commands::{ADMIN_GROUP, Authenticator};
 use obop_storage::Backend;
 
-const PW: &str = "correct horse battery";
-const T0: u64 = 1_700_000_010;
+pub(crate) const PW: &str = "correct horse battery";
+pub(crate) const T0: u64 = 1_700_000_010;
 
-struct Rig {
-    a: Auth,
-    b: Arc<dyn Backend>,
+pub(crate) struct Rig {
+    pub(crate) a: Auth,
+    pub(crate) b: Arc<dyn Backend>,
 }
 
-fn rig_with(config: AuthConfig) -> Rig {
+pub(crate) fn rig_with(config: AuthConfig) -> Rig {
     let b = obop_storage::open("memory:").unwrap();
     let a = Auth::with_test_config(b.clone(), config);
     a.set_clock_for_test(T0);
     Rig { a, b }
 }
 
-fn rig() -> Rig {
+pub(crate) fn rig() -> Rig {
     rig_with(AuthConfig::insecure_dev())
 }
 
-fn enforcing() -> AuthConfig {
+pub(crate) fn enforcing() -> AuthConfig {
     AuthConfig {
         default_require_admins: true,
         ..AuthConfig::insecure_dev()
     }
 }
 
-fn groups(g: &[&str]) -> Vec<String> {
+pub(crate) fn groups(g: &[&str]) -> Vec<String> {
     g.iter().map(|s| s.to_string()).collect()
 }
 
-fn session(a: &Auth, user: &str) -> (String, Principal) {
+pub(crate) fn session(a: &Auth, user: &str) -> (String, Principal) {
     let LoginOutcome::Session { token, .. } = a.login_step(user, PW).unwrap() else {
         panic!("expected a session")
     };
@@ -42,7 +42,7 @@ fn session(a: &Auth, user: &str) -> (String, Principal) {
 }
 
 /// Enrol `user` and return (secret bytes, recovery codes). The clock is left at `T0`.
-fn enrol(a: &Auth, user: &str) -> (Vec<u8>, Vec<String>) {
+pub(crate) fn enrol(a: &Auth, user: &str) -> (Vec<u8>, Vec<String>) {
     let (token, p) = session(a, user);
     let begun = a.begin(&p).unwrap();
     let secret = totp::base32_decode(begun["secret"].as_str().unwrap()).unwrap();
@@ -57,18 +57,18 @@ fn enrol(a: &Auth, user: &str) -> (Vec<u8>, Vec<String>) {
     (secret, codes)
 }
 
-fn mfa_token(a: &Auth, user: &str) -> String {
+pub(crate) fn mfa_token(a: &Auth, user: &str) -> String {
     match a.login_step(user, PW).unwrap() {
         LoginOutcome::MfaRequired { mfa_token } => mfa_token,
         other => panic!("expected the second step, got {other:?}"),
     }
 }
 
-fn code_at(secret: &[u8], secs: u64) -> String {
+pub(crate) fn code_at(secret: &[u8], secs: u64) -> String {
     totp::code_for_step(secret, totp::step_at(secs))
 }
 
-fn user_with(a: &Auth, name: &str, g: &[&str]) {
+pub(crate) fn user_with(a: &Auth, name: &str, g: &[&str]) {
     a.create_user(name, PW, &groups(g)).unwrap();
 }
 
@@ -142,6 +142,7 @@ fn sign_in_needs_the_second_step_and_the_token_is_not_a_session() {
     let LoginOutcome::Session {
         token,
         mfa_enrolment_required,
+        ..
     } = out
     else {
         panic!()
@@ -234,6 +235,7 @@ fn without_a_server_key_two_factor_cannot_be_enabled() {
     let LoginOutcome::Session {
         token,
         mfa_enrolment_required,
+        ..
     } = r.a.login_step("root", PW).unwrap()
     else {
         panic!()
@@ -365,6 +367,7 @@ fn admins_without_two_factor_get_a_limited_session_until_they_enrol() {
     let LoginOutcome::Session {
         token,
         mfa_enrolment_required,
+        ..
     } = r.a.login_step("root", PW).unwrap()
     else {
         panic!()
@@ -643,9 +646,15 @@ fn the_event_log_records_what_happened_and_never_a_secret() {
 
 #[test]
 fn timestamps_are_rfc3339() {
-    assert_eq!(crate::mfa::rfc3339(0), "1970-01-01T00:00:00Z");
-    assert_eq!(crate::mfa::rfc3339(1_700_000_010), "2023-11-14T22:13:30Z");
-    assert_eq!(crate::mfa::rfc3339(951_782_400), "2000-02-29T00:00:00Z");
+    assert_eq!(obop_commands::audit::rfc3339(0), "1970-01-01T00:00:00Z");
+    assert_eq!(
+        obop_commands::audit::rfc3339(1_700_000_010),
+        "2023-11-14T22:13:30Z"
+    );
+    assert_eq!(
+        obop_commands::audit::rfc3339(951_782_400),
+        "2000-02-29T00:00:00Z"
+    );
 }
 
 /// The same flow on a real PostgreSQL (JSONB merge of null fields, event inserts):

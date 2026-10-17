@@ -13,10 +13,12 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+mod account;
 mod mfa;
 pub mod seal;
 pub mod totp;
 
+pub use account::{MIN_PASSWORD_CHARS, suggest_temporary_password};
 pub use mfa::{AuthConfig, EVENT_TABLE};
 
 const SESSION_SECS: u64 = 12 * 3600;
@@ -93,7 +95,7 @@ impl Auth {
         self.backend.count("auth_user").unwrap_or(0)
     }
 
-    fn hash_password(&self, password: &str) -> Result<String, String> {
+    pub(crate) fn hash_password(&self, password: &str) -> Result<String, String> {
         self.hasher
             .hash_password(password.as_bytes())
             .map(|h: PasswordHash| h.to_string())
@@ -172,6 +174,11 @@ impl Auth {
 
     fn user_principal(&self, name: &str) -> Option<Principal> {
         let u = self.backend.get("auth_user", name).ok()??;
+        // A disabled account holds no principal: its sessions and agent tokens stop working at
+        // once, and work again if an administrator enables it.
+        if u.get("disabled").and_then(J::as_bool) == Some(true) {
+            return None;
+        }
         let groups: Vec<_> = str_list(&u["groups"]);
         Some(Principal::user(
             name,
@@ -215,6 +222,7 @@ impl Auth {
         );
         f.insert("revoked".into(), J::Bool(false));
         f.insert("limited".into(), J::Bool(limited));
+        f.insert("created_at".into(), J::from(self.now()));
         self.backend.insert("auth_token", &token_hash(&token), &f)?;
         Ok(token)
     }
@@ -229,18 +237,18 @@ impl Auth {
 
     /// Failed attempts per user live in the storage backend (an atomic expiring counter), so
     /// the lockout holds across server processes and restarts (B1).
-    fn failure_key(name: &str) -> String {
+    pub(crate) fn failure_key(name: &str) -> String {
         format!("auth.fail:{name}")
     }
 
-    fn locked_out(&self, name: &str) -> bool {
+    pub(crate) fn locked_out(&self, name: &str) -> bool {
         self.backend
             .counter_get(&Self::failure_key(name))
             .unwrap_or(0)
             >= u64::from(MAX_FAILURES)
     }
 
-    fn record_failure(&self, name: &str) {
+    pub(crate) fn record_failure(&self, name: &str) {
         let _ =
             self.backend
                 .counter_add(&Self::failure_key(name), LOCKOUT.as_millis() as u64, true);
@@ -253,7 +261,7 @@ impl Auth {
     }
 
     /// Serialises read-modify-write of two-factor state across server processes.
-    fn mfa_guard(&self) -> Result<obop_storage::LockGuard, MfaError> {
+    pub(crate) fn mfa_guard(&self) -> Result<obop_storage::LockGuard, MfaError> {
         self.backend.lock("auth.mfa").map_err(MfaError::Unavailable)
     }
 }

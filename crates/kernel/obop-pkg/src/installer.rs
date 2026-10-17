@@ -574,18 +574,39 @@ impl Installer {
             .unwrap_or_else(|| "{}".into())
     }
 
+    /// As `set_settings_as`, for the operator at the command line.
     pub fn set_settings(&self, text: &str) -> Result<(), String> {
+        self.set_settings_as(text, "operator")
+    }
+
+    /// Store the settings. A change to anything under `security` (the two-factor policy and the
+    /// like) is written to the security event log with who made it and the old and new value of
+    /// each key that changed. Values that look like secrets are not written.
+    pub fn set_settings_as(&self, text: &str, actor: &str) -> Result<(), String> {
         if text.len() > 64 * 1024 {
             return Err("settings are larger than 64 KiB".into());
         }
-        match serde_json::from_str::<J>(text) {
-            Ok(J::Object(_)) => {}
+        let new: J = match serde_json::from_str::<J>(text) {
+            Ok(v @ J::Object(_)) => v,
             _ => return Err("settings must be a JSON object".into()),
-        }
+        };
+        let old: J = serde_json::from_str(&self.settings()).unwrap_or(J::Null);
         let mut f = Fields::new();
         f.insert("value".into(), J::from(text));
         if !self.backend.update("obop_setting", "instance", &f)? {
             self.backend.insert("obop_setting", "instance", &f)?;
+        }
+        for line in security_changes(&old["security"], &new["security"]) {
+            obop_commands::audit::record_event(
+                &*self.backend,
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs()),
+                "(instance)",
+                "settings_change",
+                actor,
+                &line,
+            );
         }
         Ok(())
     }
@@ -955,6 +976,46 @@ fn s(v: &str) -> Value {
     Value::text(v)
 }
 
+/// What changed between two `security` objects, one line per key: `security.key: old -> new`.
+/// Booleans, numbers and short plain strings are shown; anything under a key that looks like a
+/// secret, and anything longer or structured, is only said to have changed.
+pub(crate) fn security_changes(old: &J, new: &J) -> Vec<String> {
+    let empty = serde_json::Map::new();
+    let (o, n) = (
+        old.as_object().unwrap_or(&empty),
+        new.as_object().unwrap_or(&empty),
+    );
+    let mut keys: Vec<&String> = o.keys().chain(n.keys()).collect();
+    keys.sort();
+    keys.dedup();
+    let show = |key: &str, v: Option<&J>| -> String {
+        let lower = key.to_ascii_lowercase();
+        let secretish = ["secret", "token", "password", "key", "credential"]
+            .iter()
+            .any(|w| lower.contains(w));
+        match v {
+            None | Some(J::Null) => "(unset)".into(),
+            _ if secretish => "(hidden)".into(),
+            Some(J::Bool(b)) => b.to_string(),
+            Some(J::Number(x)) => x.to_string(),
+            Some(J::String(s)) if s.chars().count() <= 60 && !s.chars().any(char::is_control) => {
+                format!("{s:?}")
+            }
+            Some(_) => "(changed)".into(),
+        }
+    };
+    keys.into_iter()
+        .filter(|k| o.get(*k) != n.get(*k))
+        .map(|k| {
+            format!(
+                "security.{k}: {} -> {}",
+                show(k, o.get(k)),
+                show(k, n.get(k))
+            )
+        })
+        .collect()
+}
+
 fn caller(i: &BTreeMap<String, Value>) -> String {
     match i.get("_caller") {
         Some(Value::Text(t)) => t.clone(),
@@ -1226,7 +1287,7 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change",
                     ),
                     f(
                         "actor",
@@ -1331,7 +1392,7 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
                 return Err("expected an object".into());
             };
             let v = text(x, "value")?;
-            i.set_settings(&v)?;
+            i.set_settings_as(&v, &caller(x))?;
             Ok(Value::map([("id", s("instance")), ("value", s(&v))]))
         }),
     );
@@ -1417,6 +1478,72 @@ mod tests {
             },
             _ => panic!(),
         }
+    }
+
+    /// B7: a change to the `security` settings is logged with who made it and what changed.
+    #[test]
+    fn changes_to_the_security_settings_are_written_to_the_security_log() {
+        let store = Store::new();
+        let (d, _) = setup(&store);
+        let upd = |v: &str| {
+            call(
+                &d,
+                &admin(),
+                "setting.update",
+                Value::map([("value", Value::text(v))]),
+            )
+            .unwrap_or_else(|e| panic!("{e:?}"))
+        };
+        let log = || -> Vec<String> {
+            store
+                .backend()
+                .list("security_event")
+                .unwrap()
+                .into_iter()
+                .filter(|(_, f)| f["kind"] == "settings_change")
+                .map(|(_, f)| {
+                    format!(
+                        "{} | {} | {}",
+                        f["actor"].as_str().unwrap(),
+                        f["user"].as_str().unwrap(),
+                        f["detail"].as_str().unwrap()
+                    )
+                })
+                .collect()
+        };
+        // Interface settings are not security settings: no event.
+        upd(r##"{"theme":{"accent":"#123456"}}"##);
+        assert!(log().is_empty());
+        upd(r##"{"theme":{"accent":"#123456"},"security":{"require_mfa_for_admins":true}}"##);
+        assert_eq!(
+            log(),
+            ["root | (instance) | security.require_mfa_for_admins: (unset) -> true"]
+        );
+        upd(r##"{"security":{"require_mfa_for_admins":false,"require_mfa_for_all":true}}"##);
+        let l = log();
+        assert_eq!(l.len(), 3, "{l:?}");
+        assert!(l.contains(
+            &"root | (instance) | security.require_mfa_for_admins: true -> false".to_string()
+        ));
+        assert!(l.contains(
+            &"root | (instance) | security.require_mfa_for_all: (unset) -> true".to_string()
+        ));
+        // Saving the same security values again writes nothing.
+        upd(
+            r##"{"theme":{"accent":"#abcdef"},"security":{"require_mfa_for_admins":false,"require_mfa_for_all":true}}"##,
+        );
+        assert_eq!(log().len(), 3);
+        // Nothing that looks like a secret is written, nor long or structured values.
+        upd(
+            r##"{"security":{"webhook_secret":"hunter2-hunter2","note":{"a":[1,2]},"session_hours":12}}"##,
+        );
+        let all = log().join("\n");
+        assert!(!all.contains("hunter2"), "{all}");
+        assert!(all.contains("security.webhook_secret: (unset) -> (hidden)"));
+        assert!(all.contains("security.note: (unset) -> (changed)"));
+        assert!(all.contains("security.session_hours: (unset) -> 12"));
+        // The actor is the caller, and the log is readable by admins only.
+        assert!(log().iter().all(|l| l.starts_with("root |")));
     }
 
     /// D53: the security event log is a model like any other for reading, and read-only.

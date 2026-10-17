@@ -1,0 +1,85 @@
+//! The append-only security event log (`security_event`, D53, B7): one writer for everything
+//! that records who did what to an account or to the security settings. Never pass a code, a
+//! password, a token or a secret as `detail`.
+
+use obop_storage::{Backend, Fields};
+use serde_json::Value as J;
+
+/// Table of the log; the `security_event` model of the `platform` module reads it.
+pub const EVENT_TABLE: &str = "security_event";
+
+/// `YYYY-MM-DDTHH:MM:SSZ` for a Unix time.
+pub fn rfc3339(secs: u64) -> String {
+    let (days, rem) = ((secs / 86400) as i64, secs % 86400);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60
+    )
+}
+
+fn hex6() -> String {
+    let mut b = [0u8; 6];
+    getrandom_fill(&mut b);
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+fn getrandom_fill(b: &mut [u8]) {
+    // uuid is already a dependency and draws from the operating system's randomness.
+    let u = uuid::Uuid::now_v7();
+    let bytes = u.as_bytes();
+    let n = b.len().min(bytes.len());
+    b[..n].copy_from_slice(&bytes[bytes.len() - n..]);
+}
+
+/// Append one event at time `at` (Unix seconds). A failure to write is reported on stderr and
+/// never stops the action being logged.
+pub fn record_event(
+    backend: &dyn Backend,
+    at: u64,
+    user: &str,
+    kind: &str,
+    actor: &str,
+    detail: &str,
+) {
+    let mut f = Fields::new();
+    f.insert("user".into(), J::from(user));
+    f.insert("kind".into(), J::from(kind));
+    f.insert("actor".into(), J::from(actor));
+    f.insert("detail".into(), J::from(detail));
+    f.insert("at".into(), J::from(rfc3339(at)));
+    // Sortable by time, unique by suffix.
+    let id = format!("{at:012}-{}", hex6());
+    if let Err(e) = backend.insert(EVENT_TABLE, &id, &f) {
+        eprintln!("could not write security event {kind}: {e}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn times_format_as_rfc3339_and_events_are_appended_sorted() {
+        assert_eq!(rfc3339(0), "1970-01-01T00:00:00Z");
+        assert_eq!(rfc3339(1_800_000_000), "2027-01-15T08:00:00Z");
+        let b = obop_storage::open("memory:").unwrap();
+        record_event(&*b, 20, "ada", "x", "root", "note");
+        record_event(&*b, 10, "ada", "y", "root", "note");
+        let rows = b.list(EVENT_TABLE).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(rows[0].0.starts_with("000000000020-"));
+        assert_eq!(rows[1].1["kind"], "y");
+        assert_eq!(rows[1].1["at"], "1970-01-01T00:00:10Z");
+    }
+}

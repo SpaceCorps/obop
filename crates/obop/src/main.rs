@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod account_tests;
 mod app;
 #[cfg(test)]
 mod connectors_tests;
