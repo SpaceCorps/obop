@@ -15,6 +15,12 @@ use std::sync::{Arc, Mutex};
 pub type Fields = serde_json::Map<String, J>;
 pub type Result<T> = std::result::Result<T, String>;
 
+mod atomic;
+pub mod blob;
+
+pub use atomic::{ApplyError, Op};
+use atomic::{TxView, run_ops};
+
 pub trait Backend: Send + Sync {
     fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()>;
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>>;
@@ -37,6 +43,14 @@ pub trait Backend: Send + Sync {
             }
         }
         Ok(())
+    }
+    /// Apply several steps all-or-nothing and isolated from every other writer: the primitive
+    /// for checks that must not race (the last unit of stock, a voucher's last use, a state that
+    /// changes once). On `Err` nothing was changed. A backend that cannot do this refuses.
+    fn apply(&self, _ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        Err(ApplyError::Storage(
+            "this storage backend has no atomic batches".into(),
+        ))
     }
     /// Short name for logs: `memory`, `sqlite` or `postgres`.
     fn kind(&self) -> &'static str;
@@ -142,6 +156,48 @@ impl Backend for Memory {
                 .push((id.clone(), fields.clone()));
         }
         Ok(())
+    }
+    fn apply(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        struct M<'a>(&'a mut BTreeMap<String, Vec<(String, Fields)>>);
+        impl TxView for M<'_> {
+            fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+                Ok(self
+                    .0
+                    .get(model)
+                    .and_then(|r| r.iter().find(|(i, _)| i == id))
+                    .map(|(_, f)| f.clone()))
+            }
+            fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                self.0
+                    .entry(model.into())
+                    .or_default()
+                    .push((id.into(), fields.clone()));
+                Ok(())
+            }
+            fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                if let Some((_, f)) = self
+                    .0
+                    .get_mut(model)
+                    .and_then(|r| r.iter_mut().find(|(i, _)| i == id))
+                {
+                    *f = fields.clone();
+                }
+                Ok(())
+            }
+            fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
+                if let Some(r) = self.0.get_mut(model) {
+                    r.retain(|(i, _)| i != id);
+                }
+                Ok(())
+            }
+        }
+        let mut g = self.rows.lock().unwrap();
+        let backup = g.clone();
+        let r = run_ops(&mut M(&mut g), ops);
+        if r.is_err() {
+            *g = backup;
+        }
+        r
     }
     fn kind(&self) -> &'static str {
         "memory"
@@ -289,6 +345,69 @@ impl Backend for Sqlite {
         }
         tx.commit().map_err(|e| e.to_string())
     }
+    fn apply(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        struct S<'a>(&'a rusqlite::Transaction<'a>);
+        impl TxView for S<'_> {
+            fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+                let text: Option<String> = self
+                    .0
+                    .query_row(
+                        "SELECT data FROM obop_record WHERE model = ?1 AND id = ?2",
+                        (model, id),
+                        |r| r.get(0),
+                    )
+                    .map(Some)
+                    .or_else(|e| {
+                        if e == rusqlite::Error::QueryReturnedNoRows {
+                            Ok(None)
+                        } else {
+                            Err(e)
+                        }
+                    })
+                    .map_err(|e| e.to_string())?;
+                text.map(|t| parse(&t)).transpose()
+            }
+            fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                self.0
+                    .execute(
+                        "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)",
+                        (model, id, J::Object(fields.clone()).to_string()),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+            fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                self.0
+                    .execute(
+                        "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
+                        (model, id, J::Object(fields.clone()).to_string()),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+            fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
+                self.0
+                    .execute(
+                        "DELETE FROM obop_record WHERE model = ?1 AND id = ?2",
+                        (model, id),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+        }
+        let mut g = self.conn.lock().unwrap();
+        let tx = g
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(|e| ApplyError::Storage(e.to_string()))?;
+        let r = run_ops(&mut S(&tx), ops);
+        match r {
+            Ok(()) => tx.commit().map_err(|e| ApplyError::Storage(e.to_string())),
+            Err(e) => {
+                let _ = tx.rollback();
+                Err(e)
+            }
+        }
+    }
     fn kind(&self) -> &'static str {
         "sqlite"
     }
@@ -418,6 +537,67 @@ impl Backend for Pg {
         }
         tx.commit().map_err(|e| e.to_string())
     }
+    fn apply(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        struct P<'a>(postgres::Transaction<'a>);
+        impl TxView for P<'_> {
+            fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+                // Row lock: another process applying a batch to the same record waits here.
+                let row = self
+                    .0
+                    .query_opt(
+                        "SELECT data FROM obop_record WHERE model = $1 AND id = $2 FOR UPDATE",
+                        &[&model, &id],
+                    )
+                    .map_err(|e| e.to_string())?;
+                row.map(|r| pg_fields(r.get::<_, J>(0))).transpose()
+            }
+            fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                let data = J::Object(fields.clone());
+                self.0
+                    .execute(
+                        "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
+                        &[&model, &id, &data],
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+            fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                let data = J::Object(fields.clone());
+                self.0
+                    .execute(
+                        "UPDATE obop_record SET data = $3 WHERE model = $1 AND id = $2",
+                        &[&model, &id, &data],
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+            fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
+                self.0
+                    .execute(
+                        "DELETE FROM obop_record WHERE model = $1 AND id = $2",
+                        &[&model, &id],
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+        }
+        let mut g = self.client.lock().unwrap();
+        let tx = g
+            .transaction()
+            .map_err(|e| ApplyError::Storage(e.to_string()))?;
+        let mut view = P(tx);
+        let r = run_ops(&mut view, ops);
+        match r {
+            Ok(()) => view
+                .0
+                .commit()
+                .map_err(|e| ApplyError::Storage(e.to_string())),
+            Err(e) => {
+                let _ = view.0.rollback();
+                Err(e)
+            }
+        }
+    }
     fn kind(&self) -> &'static str {
         "postgres"
     }
@@ -468,6 +648,69 @@ mod tests {
         assert!(b.insert_many(&[row("m3"), row("a")]).is_err());
         assert!(b.get(&model, "m3").unwrap().is_none(), "rolled back");
         assert_eq!(b.count(&model).unwrap(), 3);
+        atomic_contract(b, &model);
+    }
+
+    /// Atomic batches: bounds, upserts, compare-and-set and all-or-nothing.
+    fn atomic_contract(b: &dyn Backend, model: &str) {
+        let stock = |b: &dyn Backend| b.get(model, "s").unwrap().unwrap()["n"].as_i64().unwrap();
+        b.insert(model, "s", &fields("n", J::from(3))).unwrap();
+        let take = |n: i64| Op::add(model, "s", "n", -n).min(0);
+        b.apply(&[take(2)]).unwrap();
+        assert_eq!(stock(b), 1);
+        // The second step crosses the bound: the first must not stick.
+        let r = b.apply(&[Op::add(model, "s", "n", 5), take(9)]);
+        assert!(
+            matches!(r, Err(ApplyError::Conflict { index: 1, .. })),
+            "{r:?}"
+        );
+        assert_eq!(stock(b), 1, "rolled back");
+        // Upsert counters with an upper bound.
+        let hit = || {
+            Op::add(model, "u", "n", 1)
+                .max(2)
+                .or_create(fields("code", J::from("X")))
+        };
+        b.apply(&[hit()]).unwrap();
+        b.apply(&[hit()]).unwrap();
+        assert!(b.apply(&[hit()]).is_err());
+        let u = b.get(model, "u").unwrap().unwrap();
+        assert_eq!((u["n"].as_i64(), u["code"].as_str()), (Some(2), Some("X")));
+        assert!(
+            b.apply(&[Op::add(model, "nope", "n", 1)]).is_err(),
+            "no record, no create"
+        );
+        // Insert is a conflict on an existing id; compare-and-set changes state once.
+        let ins = Op::Insert {
+            model: model.into(),
+            id: "s".into(),
+            fields: Fields::new(),
+        };
+        assert!(b.apply(&[ins]).is_err());
+        let flip = |from: J| Op::Patch {
+            model: model.into(),
+            id: "s".into(),
+            patch: fields("st", J::from("done")),
+            expect: vec![("st".into(), from)],
+        };
+        b.apply(&[flip(J::Null)]).unwrap();
+        assert!(b.apply(&[flip(J::Null)]).is_err(), "already changed");
+        assert_eq!(b.get(model, "s").unwrap().unwrap()["st"], J::from("done"));
+        assert_eq!(stock(b), 1, "other fields kept");
+        // The last unit goes to exactly one of many racing writers.
+        b.insert(model, "last", &fields("n", J::from(1))).unwrap();
+        let ok = std::sync::atomic::AtomicUsize::new(0);
+        std::thread::scope(|s| {
+            for _ in 0..8 {
+                s.spawn(|| {
+                    if b.apply(&[Op::add(model, "last", "n", -1).min(0)]).is_ok() {
+                        ok.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    }
+                });
+            }
+        });
+        assert_eq!(ok.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(b.get(model, "last").unwrap().unwrap()["n"], J::from(0));
     }
 
     #[test]
