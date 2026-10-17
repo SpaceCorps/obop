@@ -450,6 +450,16 @@ impl Provisioner for Sliplane {
             if let Some(m) = &self.cfg.marketplace_url {
                 args.extend(["--env".into(), format!("OBOP_MARKETPLACE_URL={m}")]);
             }
+            // D63: the instance may ask this control plane to upgrade it (and nothing else)
+            // with its own token, which is a secret like the key above.
+            if !spec.update_token.is_empty() && !spec.control_url.is_empty() {
+                args.extend([
+                    "--secret-env".into(),
+                    format!("OBOP_UPDATE_TOKEN={}", spec.update_token),
+                    "--env".into(),
+                    format!("OBOP_UPDATE_URL={}", spec.control_url),
+                ]);
+            }
             // One process per instance, so it may run its own schema migrations when a new
             // version starts (docs/DEPLOY.md, "Upgrades"): an upgrade is then one redeploy.
             args.extend(["--env".into(), "OBOP_AUTO_MIGRATE=1".into()]);
@@ -626,6 +636,8 @@ mod tests {
             slug: "acme".into(),
             owner_email: "ada@example.test".into(),
             password_hash: "$argon2id$v=19$x".into(),
+            update_token: "obu_0123456789abcdef0123456789abcdef0123456789abcdef".into(),
+            control_url: "https://control.example.test".into(),
         }
     }
 

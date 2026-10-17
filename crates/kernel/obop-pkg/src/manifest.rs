@@ -29,6 +29,10 @@ pub struct Manifest {
     /// (with `.options`) and `.model.<m>.action.<a>`. Optional; English is the manifest itself.
     #[serde(default)]
     pub labels: std::collections::BTreeMap<String, LangLabels>,
+    /// `[[migration]]` (D63): declarative steps that move existing records to the shape of this
+    /// version when an older version is upgraded.
+    #[serde(default)]
+    pub migration: Vec<MigrationM>,
     /// The text this manifest was parsed from (what is stored and installed).
     #[serde(skip)]
     pub text: String,
@@ -68,24 +72,53 @@ pub struct Meta {
     /// A built-in icon name; unknown names fall back to a generic icon in the interface.
     #[serde(default)]
     pub icon: String,
+    /// Release notes of this version, shown before an update (D63). Plain text, at most 8000
+    /// characters.
+    #[serde(default)]
+    pub changelog: String,
     /// The core versions the module runs on, a semver requirement such as `^0.2` or
-    /// `>=0.2, <0.4`. Required for bundled and marketplace packages; `*` when absent.
+    /// `>=0.2, <0.4`. Required (D63).
     #[serde(default)]
     pub requires_core: String,
     /// `stable`, `beta` or `experimental`.
     #[serde(default)]
     pub maturity: String,
-    /// Shorthand: module ids that must be installed, at any version (`"*"`).
+    /// Retired (D63): the any-version shorthand. Kept only so the error can say what to write.
     #[serde(default)]
     pub depends: Vec<String>,
-    /// `[module.dependencies]`: module id to a version requirement, for example
-    /// `hr = ">=0.1, <1"`. A dependency on a built-in module is checked against the core version.
+    /// `[module.dependencies]`: module id to the versions of it this module supports, a semver
+    /// range that is required for every dependency, for example `hr = ">=0.1, <1"`. A
+    /// dependency on a built-in module is checked against the core version.
     #[serde(default)]
     pub dependencies: std::collections::BTreeMap<String, String>,
     /// Network destinations the package may reach (D41). Declarative packages run no code, so
     /// this must stay empty; the field exists so the contract is the same for later tiers.
     #[serde(default)]
     pub network_destinations: Vec<String>,
+}
+
+/// `[[migration]]` (D63): one declarative data step of an upgrade.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MigrationM {
+    /// The installed versions the step applies to, a requirement such as `<0.4`.
+    pub from: String,
+    /// `rename_field`, `set_default` or `drop_field`.
+    pub op: String,
+    pub model: String,
+    /// The field: the old name for `rename_field`, the field filled for `set_default`, the field
+    /// removed for `drop_field`.
+    pub field: String,
+    /// `rename_field`: the new name (a field of this version).
+    pub to: Option<String>,
+    /// `set_default`: the value written to every record where the field is empty.
+    pub value: Option<toml::Value>,
+    /// `drop_field`: must be `true`, because the values are deleted.
+    #[serde(default)]
+    pub confirm: bool,
+    /// A sentence for the plan the administrator confirms.
+    #[serde(default)]
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -223,6 +256,35 @@ pub struct FieldM {
     pub gapless: bool,
     /// `kind = "sequence"`: `never` (default), `year` or `month`.
     pub reset: Option<String>,
+}
+
+/// Whether `v` is a value the field can hold, for `set_default`.
+fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
+    use toml::Value as T;
+    let ok = match (f.kind.as_str(), v) {
+        ("text" | "longtext" | "date" | "ref", T::String(_)) => true,
+        ("number" | "money", T::Integer(_) | T::Float(_)) => true,
+        ("bool", T::Boolean(_)) => true,
+        ("select", T::String(s)) => f.options.iter().any(|o| o == s),
+        ("select", _) => false,
+        _ => false,
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(format!(
+            "the value does not fit the {} field {}{}",
+            f.kind,
+            f.name,
+            if f.kind == "select" {
+                format!(" (options: {})", f.options.join(", "))
+            } else if matches!(f.kind.as_str(), "image" | "file" | "sequence") {
+                " (it cannot be given a default)".to_string()
+            } else {
+                String::new()
+            }
+        ))
+    }
 }
 
 fn default_kind() -> String {
@@ -524,6 +586,92 @@ impl Manifest {
         self.build_models()?;
         self.public_specs()?;
         check_labels(&self.labels, &self.shape())?;
+        self.validate_migrations()?;
+        Ok(())
+    }
+
+    /// `[[migration]]` (D63): each step names a model and field of this package and says what to
+    /// do to the records of an older version. The steps are checked against the shape of this
+    /// version, so a step that could never run is refused when the package is read.
+    fn validate_migrations(&self) -> Result<(), String> {
+        if self.migration.len() > 100 {
+            return Err("a package may declare at most 100 migration steps".into());
+        }
+        for (i, st) in self.migration.iter().enumerate() {
+            let at = format!("migration {} ({} {}.{})", i + 1, st.op, st.model, st.field);
+            let from = Req::parse(&st.from).map_err(|e| format!("{at}: from: {e}"))?;
+            if !from.is_satisfiable() {
+                return Err(format!("{at}: from = {:?} matches no version", st.from));
+            }
+            let Some(model) = self.model.iter().find(|m| m.name == st.model) else {
+                return Err(format!(
+                    "{at}: the package declares no model {}; a step can only change this package's own models",
+                    st.model
+                ));
+            };
+            if !ident_ok(&st.field) {
+                return Err(format!("{at}: {:?} is not a field name", st.field));
+            }
+            let exists = |name: &str| model.field.iter().find(|f| f.name == name);
+            match st.op.as_str() {
+                "rename_field" => {
+                    let Some(to) = &st.to else {
+                        return Err(format!("{at}: rename_field needs `to`, the new name"));
+                    };
+                    if exists(to).is_none() {
+                        return Err(format!(
+                            "{at}: the new name {to} is not a field of {} in this version",
+                            st.model
+                        ));
+                    }
+                    if exists(&st.field).is_some() {
+                        return Err(format!(
+                            "{at}: {} is still a field of {} in this version, so it is not renamed away",
+                            st.field, st.model
+                        ));
+                    }
+                    if st.value.is_some() || st.confirm {
+                        return Err(format!("{at}: rename_field takes only `to`"));
+                    }
+                }
+                "set_default" => {
+                    let Some(f) = exists(&st.field) else {
+                        return Err(format!(
+                            "{at}: {} is not a field of {} in this version",
+                            st.field, st.model
+                        ));
+                    };
+                    let Some(v) = &st.value else {
+                        return Err(format!("{at}: set_default needs `value`"));
+                    };
+                    default_matches(f, v).map_err(|e| format!("{at}: {e}"))?;
+                    if st.to.is_some() || st.confirm {
+                        return Err(format!("{at}: set_default takes only `value`"));
+                    }
+                }
+                "drop_field" => {
+                    if exists(&st.field).is_some() {
+                        return Err(format!(
+                            "{at}: {} is still a field of {} in this version, so there is nothing to drop",
+                            st.field, st.model
+                        ));
+                    }
+                    if !st.confirm {
+                        return Err(format!(
+                            "{at}: dropping a field deletes its values from every record; add confirm = true to say so"
+                        ));
+                    }
+                    if st.to.is_some() || st.value.is_some() {
+                        return Err(format!("{at}: drop_field takes only `confirm`"));
+                    }
+                }
+                other => {
+                    return Err(format!(
+                        "{at}: unknown op {other:?} (use rename_field, set_default or drop_field)"
+                    ));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -599,33 +747,48 @@ impl Manifest {
                 m.maturity
             ));
         }
-        if !m.requires_core.is_empty() {
-            Req::parse(&m.requires_core).map_err(|e| format!("requires_core: {e}"))?;
+        if m.changelog.chars().count() > 8000 {
+            return Err("changelog is longer than 8000 characters".into());
         }
-        if m.depends.len() + m.dependencies.len() > 20 {
+        if m.requires_core.trim().is_empty() {
+            return Err(
+                "requires_core is required: declare the core versions this module runs on, for example requires_core = \"^0.2\" or \">=0.2, <0.4\""
+                    .into(),
+            );
+        }
+        let core = Req::parse(&m.requires_core).map_err(|e| format!("requires_core: {e}"))?;
+        if !core.is_satisfiable() {
+            return Err(format!(
+                "requires_core = {:?} matches no version: the range is empty",
+                m.requires_core
+            ));
+        }
+        if !m.depends.is_empty() {
+            return Err(format!(
+                "depends = [...] is no longer accepted: every dependency must name the versions it supports. Write [module.dependencies] with a range for each, for example {} = \">=0.1, <1\"",
+                m.depends[0]
+            ));
+        }
+        if m.dependencies.len() > 20 {
             return Err("a module may declare at most 20 dependencies".into());
-        }
-        let mut ids = std::collections::HashSet::new();
-        for d in &m.depends {
-            if !ident_ok(d) {
-                return Err(format!("depends: {d:?} is not a module id"));
-            }
-            if !ids.insert(d.as_str()) {
-                return Err(format!("depends lists {d} twice"));
-            }
         }
         for (d, req) in &m.dependencies {
             if !ident_ok(d) {
                 return Err(format!("[module.dependencies]: {d:?} is not a module id"));
             }
-            if ids.contains(d.as_str()) {
+            if req.trim().is_empty() {
                 return Err(format!(
-                    "{d} is declared in both depends and [module.dependencies]; use one of them (the table carries the version requirement)"
+                    "[module.dependencies] {d}: the version range is empty; write the versions of {d} this module supports, for example {d} = \">=0.1, <1\""
                 ));
             }
-            Req::parse(req).map_err(|e| format!("[module.dependencies] {d}: {e}"))?;
+            let r = Req::parse(req).map_err(|e| format!("[module.dependencies] {d}: {e}"))?;
+            if !r.is_satisfiable() {
+                return Err(format!(
+                    "[module.dependencies] {d} = {req:?} matches no version: the range is empty"
+                ));
+            }
         }
-        if ids.contains(m.id.as_str()) || m.dependencies.contains_key(&m.id) {
+        if m.dependencies.contains_key(&m.id) {
             return Err(format!("{} depends on itself", m.id));
         }
         Ok(())
@@ -636,23 +799,16 @@ impl Manifest {
         Req::parse(&self.module.requires_core).unwrap_or_else(|_| Req::any())
     }
 
-    /// Every dependency with its version requirement: `depends` (any version) first, then
-    /// `[module.dependencies]` in id order.
+    /// Every dependency with the versions it supports, `[module.dependencies]` in id order.
     pub fn requirements(&self) -> Vec<Requirement> {
-        let mut v: Vec<Requirement> = self
-            .module
-            .depends
+        self.module
+            .dependencies
             .iter()
-            .map(|id| Requirement {
+            .map(|(id, r)| Requirement {
                 id: id.clone(),
-                req: Req::any(),
+                req: Req::parse(r).unwrap_or_else(|_| Req::any()),
             })
-            .collect();
-        v.extend(self.module.dependencies.iter().map(|(id, r)| Requirement {
-            id: id.clone(),
-            req: Req::parse(r).unwrap_or_else(|_| Req::any()),
-        }));
-        v
+            .collect()
     }
 
     /// The ids of the modules this one depends on.
@@ -673,23 +829,36 @@ impl Manifest {
                     .to_string(),
             );
         }
-        if self.module.requires_core.is_empty() {
-            v.push(
-                "requires_core is required for marketplace and bundled packages (for example \"^0.2\")"
-                    .to_string(),
-            );
-        }
+        v.extend(self.unbounded().into_iter().map(|u| {
+            format!(
+                "{u} has no upper bound: a catalogue package names the versions it was written for, for example \"^0.2\" or \">=0.2, <0.4\""
+            )
+        }));
         v
+    }
+
+    /// The ranges that promise to work on every future version: the core requirement and the
+    /// dependencies, named as the manifest writes them.
+    pub fn unbounded(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        if !self.core_req().is_bounded() {
+            out.push(format!("requires_core = {:?}", self.module.requires_core));
+        }
+        for r in self.requirements() {
+            if !r.req.is_bounded() {
+                out.push(format!("dependency {} = {:?}", r.id, r.req.as_str()));
+            }
+        }
+        out
     }
 
     /// Things worth knowing that do not stop an install.
     pub fn warnings(&self) -> Vec<String> {
         let mut v = Vec::new();
-        if self.module.requires_core.is_empty() {
-            v.push(
-                "requires_core is not declared, so the module is assumed to run on every core version (*); declare it, for example requires_core = \"^0.2\""
-                    .to_string(),
-            );
+        for u in self.unbounded() {
+            v.push(format!(
+                "{u} has no upper bound, so the module promises to run on every future version; name the versions it was written for"
+            ));
         }
         if self.module.license.is_empty() {
             v.push("no license is declared".to_string());
@@ -1366,6 +1535,7 @@ id = "fleet"
 version = "0.1.0"
 name = "Fleet"
 description = "Vehicles and drivers"
+requires_core = "^0.2"
 
 [[model]]
 name = "fleet_vehicle"
@@ -1747,10 +1917,17 @@ name = "Veículo"
 
     /// FLEET with extra `[module]` keys inserted after the description.
     fn with_meta(extra: &str) -> String {
-        FLEET.replace(
-            "description = \"Vehicles and drivers\"\n",
-            &format!("description = \"Vehicles and drivers\"\n{extra}\n"),
-        )
+        if extra.contains("requires_core") {
+            FLEET.replace("requires_core = \"^0.2\"\n", "").replace(
+                "description = \"Vehicles and drivers\"\n",
+                &format!("description = \"Vehicles and drivers\"\n{extra}\n"),
+            )
+        } else {
+            FLEET.replace(
+                "requires_core = \"^0.2\"\n",
+                &format!("requires_core = \"^0.2\"\n{extra}\n"),
+            )
+        }
     }
 
     fn ok_meta(extra: &str) -> Manifest {
@@ -1791,20 +1968,34 @@ maturity = "beta"
     }
 
     #[test]
-    fn every_new_key_is_optional_for_an_upload_and_warns() {
+    fn only_the_licence_is_optional_for_an_upload_and_the_catalogue_wants_bounds() {
         let m = Manifest::parse(FLEET).unwrap();
         assert_eq!(m.module.license, "");
-        assert!(m.core_req().is_any(), "requires_core defaults to *");
+        assert!(m.core_req().is_bounded());
         let w = m.warnings();
-        assert!(
-            w.iter()
-                .any(|x| x.contains("requires_core is not declared")),
-            "{w:?}"
-        );
         assert!(w.iter().any(|x| x.contains("no license")), "{w:?}");
-        let c = m.catalog_problems();
-        assert_eq!(c.len(), 2, "{c:?}");
-        assert!(c[0].contains("license is required") && c[1].contains("requires_core is required"));
+        assert_eq!(m.catalog_problems().len(), 1);
+        // The core range is required, and a range with no upper bound is a warning on an upload
+        // and an error in the catalogue (D63).
+        let e = err(&FLEET.replace("requires_core = \"^0.2\"\n", ""));
+        assert!(e.contains("requires_core is required"), "{e}");
+        let e = err(&FLEET.replace("\"^0.2\"", "\"\""));
+        assert!(e.contains("requires_core is required"), "{e}");
+        let open = Manifest::parse(&FLEET.replace("\"^0.2\"", "\">=0.2\"")).unwrap();
+        assert!(
+            open.warnings()
+                .iter()
+                .any(|x| x.contains("has no upper bound"))
+        );
+        assert!(
+            open.catalog_problems()
+                .iter()
+                .any(|x| x.contains("has no upper bound"))
+        );
+        let any = Manifest::parse(&FLEET.replace("\"^0.2\"", "\"*\"")).unwrap();
+        assert!(!any.unbounded().is_empty());
+        let e = err(&FLEET.replace("\"^0.2\"", "\">=2, <1\""));
+        assert!(e.contains("matches no version"), "{e}");
         // A proprietary or custom licence is allowed and flagged.
         let w = ok_meta("license = \"proprietary\"").warnings();
         assert!(w.iter().any(|x| x.contains("proprietary")), "{w:?}");
@@ -1836,14 +2027,16 @@ maturity = "beta"
             ("icon = \"Big Icon\"".into(), "icon \"Big Icon\""),
             ("maturity = \"alpha\"".into(), "maturity must be one of stable, beta, experimental"),
             ("requires_core = \"soon\"".into(), "requires_core:"),
+            ("requires_core = \">=2, <1\"".into(), "matches no version"),
             ("authors = [\"\"]".into(), "authors takes at most 10"),
-            ("depends = [\"Bad-Id\"]".into(), "depends: \"Bad-Id\" is not a module id"),
-            ("depends = [\"base\", \"base\"]".into(), "depends lists base twice"),
-            ("depends = [\"fleet\"]".into(), "fleet depends on itself"),
-            ("depends = [\"hr\"]\n[module.dependencies]\nhr = \"*\"".into(), "both depends and [module.dependencies]"),
+            ("depends = [\"hr\"]".into(), "depends = [...] is no longer accepted"),
             ("[module.dependencies]\nhr = \"nonsense\"".into(), "[module.dependencies] hr:"),
-            ("[module.dependencies]\nfleet = \"*\"".into(), "fleet depends on itself"),
-            ("[module.dependencies]\nBad = \"*\"".into(), "is not a module id"),
+            ("[module.dependencies]\nhr = \"\"".into(), "the version range is empty"),
+            ("[module.dependencies]\nhr = \"   \"".into(), "the version range is empty"),
+            ("[module.dependencies]\nhr = \">=2, <1\"".into(), "matches no version"),
+            ("[module.dependencies]\nfleet = \"^0.1\"".into(), "fleet depends on itself"),
+            ("[module.dependencies]\nBad = \"^1\"".into(), "is not a module id"),
+            ("changelog = \"\"\n[[migration]]\nfrom = \"<1\"\nop = \"drop_field\"\nmodel = \"fleet_vehicle\"\nfield = \"gone\"".into(), "confirm = true"),
         ];
         for (extra, want) in cases {
             // `depends` keys must come before the table header, which with_meta keeps in order.
@@ -1865,13 +2058,13 @@ maturity = "beta"
     }
 
     #[test]
-    fn both_dependency_forms_are_merged_and_the_old_one_means_any_version() {
-        let m = ok_meta("depends = [\"base\"]\n[module.dependencies]\nhr = \">=0.1, <1\"");
+    fn every_dependency_carries_its_range() {
+        let m = ok_meta("[module.dependencies]\nbase = \"^0.2\"\nhr = \">=0.1, <1\"");
         let r = m.requirements();
         assert_eq!(r.len(), 2);
         assert_eq!(
             (r[0].id.as_str(), r[0].req.to_string()),
-            ("base", "*".to_string())
+            ("base", "^0.2".to_string())
         );
         assert_eq!(
             (r[1].id.as_str(), r[1].req.to_string()),
@@ -1882,6 +2075,14 @@ maturity = "beta"
         assert_eq!(
             meta.dependencies[1],
             ("hr".to_string(), ">=0.1, <1".to_string())
+        );
+        // A wildcard parses (an upload may use it) but is flagged as unbounded.
+        let any = ok_meta("[module.dependencies]\nhr = \"*\"");
+        assert!(any.unbounded().iter().any(|u| u.contains("dependency hr")));
+        assert!(
+            any.catalog_problems()
+                .iter()
+                .any(|u| u.contains("dependency hr"))
         );
     }
 }

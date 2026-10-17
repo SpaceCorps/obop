@@ -11,6 +11,8 @@ pub struct App {
     pub dispatcher: Arc<Dispatcher>,
     pub store: Store,
     pub installer: Arc<Installer>,
+    /// Updating the instance itself (D63).
+    pub updater: Arc<obop_update::Updater>,
     pub market: Arc<dyn Marketplace>,
     /// The connectors engines (D54): egress policy, webhooks, OAuth, retention.
     pub connectors: Arc<Connectors>,
@@ -85,6 +87,19 @@ impl App {
         for (id, why) in installer.load_installed() {
             eprintln!("could not load installed module {id}: {why}");
         }
+        // Updating the instance from inside it (D63): the release feed, the compatibility of the
+        // installed modules, and the request to the control plane.
+        let ring = d
+            .shared_parts()
+            .map(|(_, ring)| ring)
+            .unwrap_or_else(obop_keys::KeyRing::default);
+        let updater = obop_update::Updater::new(
+            store.backend(),
+            installer.clone(),
+            ring,
+            obop_update::Config::from_env(),
+        );
+        obop_update::register(&d, &updater);
         // A module installed through another server process on this database appears here too.
         let syncing = installer.clone();
         d.set_sync_hook(Box::new(move || syncing.sync_modules()));
@@ -93,6 +108,7 @@ impl App {
             dispatcher: d,
             store,
             installer,
+            updater,
             market,
             connectors,
             payments,

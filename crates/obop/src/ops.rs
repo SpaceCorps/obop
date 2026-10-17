@@ -130,8 +130,34 @@ fn number(v: Option<String>, flag: &str) -> Result<Option<usize>, ExitCode> {
     .transpose()
 }
 
+/// `take`, for the other command modules.
+pub fn take_flag(args: &mut Vec<String>, flag: &str) -> Option<String> {
+    take(args, flag)
+}
+
+/// How the instance takes the backup that comes before an update from inside (D63): the same
+/// consistent, verified backup `obop backup` writes, into a directory.
+pub fn backup_fn(url: String) -> obop_update::BackupFn {
+    Arc::new(move |dir: &Path| {
+        let backend = obop_storage::open(&url).map_err(|e| e.to_string())?;
+        let ring = KeyRing::for_backend_read_only(&backend)?;
+        let st = Migrator::new(backend.clone(), ring)
+            .status()
+            .map_err(|e| e.to_string())?;
+        let schema = u64::from(st.stored.unwrap_or(0));
+        let blobs = blob_catalog(&backend, &url).map_err(|_| "cannot open the uploaded files")?;
+        let c = backup::create_with(&backend, Some(&blobs), schema, dir, &mut |_| {})?;
+        backup::verify(&c.data_path)
+            .map_err(|e| format!("the backup was written but does not verify: {e}"))?;
+        Ok(c.data_path.display().to_string())
+    })
+}
+
 /// Handle `migrate`, `backup`, `restore` and `secrets`; `None` for any other command.
 pub fn dispatch(args: &[String]) -> Option<ExitCode> {
+    if let Some(code) = crate::update_cmd::dispatch(args) {
+        return Some(code);
+    }
     let first = args.first()?.as_str();
     if first == "platform" && args.get(1).map(String::as_str) == Some("upgrade-instances") {
         let mut rest: Vec<String> = args[2..].to_vec();

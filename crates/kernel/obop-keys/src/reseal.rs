@@ -92,6 +92,12 @@ pub const FIELDS: &[SealedField] = &[
         field: "body",
         purpose: Purpose::WithId("queue-job:"),
     },
+    // The instance's update token for the control plane (D63).
+    SealedField {
+        model: "obop_update",
+        field: "token",
+        purpose: Purpose::Fixed("update-token"),
+    },
 ];
 
 /// Short-lived values whose purpose is their own key.

@@ -22,6 +22,7 @@ obop-payments = { path = "crates/kernel/obop-payments" }
 obop-auth = { path = "crates/kernel/obop-auth" }
 obop-pkg = { path = "crates/kernel/obop-pkg" }
 obop-platform = { path = "crates/kernel/obop-platform" }
+obop-update = { path = "crates/kernel/obop-update" }
 obop-commands = { path = "crates/kernel/obop-commands" }
 obop-community = { path = "crates/kernel/obop-community" }
 obop-site = { path = "crates/kernel/obop-site" }

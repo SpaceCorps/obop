@@ -74,7 +74,7 @@ pub struct Blocker {
     /// The module the problem is about.
     pub module: String,
     /// `core`, `missing`, `version`, `conflict`, `cycle`, `downgrade`, `installed`, `builtin`,
-    /// `refs`, `unavailable` or `dependents`.
+    /// `refs`, `unavailable`, `dependents` or `data`.
     pub kind: &'static str,
     pub message: String,
 }
@@ -84,6 +84,9 @@ pub struct Plan {
     pub steps: Vec<Step>,
     pub blockers: Vec<Blocker>,
     pub warnings: Vec<String>,
+    /// What each upgrade step does to the records already stored (D63), by module id. Filled in
+    /// by the installer, which can count records; the resolver itself is pure.
+    pub data: BTreeMap<String, crate::migrate::DataPlan>,
 }
 
 impl Plan {
@@ -499,6 +502,7 @@ pub fn plan_install(world: &World<'_>, root: &Manifest, root_source: &'static st
         steps,
         blockers: run.blockers,
         warnings,
+        data: BTreeMap::new(),
     }
 }
 
@@ -856,7 +860,7 @@ mod tests {
 
     #[test]
     fn refs_to_models_nobody_provides_block_the_plan() {
-        let text = "[module]\nid = \"x\"\nversion = \"0.1.0\"\nname = \"x\"\ndescription = \"d\"\n[[model]]\nname = \"x_a\"\ndescription = \"d\"\nread_group = \"x.u\"\nwrite_group = \"x.u\"\n[[model.field]]\nname = \"p\"\ndescription = \"d\"\nclass = \"none\"\nkind = \"ref\"\nto = \"project\"\n";
+        let text = "[module]\nid = \"x\"\nversion = \"0.1.0\"\nname = \"x\"\ndescription = \"d\"\nrequires_core = \"^0.2\"\n[[model]]\nname = \"x_a\"\ndescription = \"d\"\nread_group = \"x.u\"\nwrite_group = \"x.u\"\n[[model.field]]\nname = \"p\"\ndescription = \"d\"\nclass = \"none\"\nkind = \"ref\"\nto = \"project\"\n";
         let x = Manifest::parse(text).unwrap();
         let f = Fixture::new();
         let p = f.plan(&x);

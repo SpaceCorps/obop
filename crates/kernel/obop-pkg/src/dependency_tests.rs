@@ -111,7 +111,7 @@ fn chain() -> Vec<String> {
     vec![
         pkg("a", "0.2.0", "^0.2", &[("platform", "^0.2")]),
         pkg("b", "0.2.0", "^0.2", &[("a", ">=0.2, <1")]),
-        pkg("c", "0.2.0", "^0.2", &[("b", "^0.2"), ("platform", "*")]),
+        pkg("c", "0.2.0", "^0.2", &[("b", "^0.2"), ("platform", "^0.2")]),
     ]
 }
 
@@ -367,7 +367,7 @@ fn uninstall_is_blocked_while_dependents_exist_and_lists_them_transitively() {
 
 #[test]
 fn a_core_mismatch_refuses_the_install_with_both_versions() {
-    let (d, _) = setup(vec![pkg("future", "1.0.0", ">=9", &[])], &Store::new());
+    let (d, _) = setup(vec![pkg("future", "1.0.0", ">=9, <10", &[])], &Store::new());
     let e = handler_error(call(
         &d,
         &admin(),
@@ -377,7 +377,7 @@ fn a_core_mismatch_refuses_the_install_with_both_versions() {
     assert_eq!(
         e,
         format!(
-            "future 1.0.0 needs core >=9, you run {}",
+            "future 1.0.0 needs core >=9, <10, you run {}",
             obop_types::CORE_VERSION
         )
     );
@@ -385,7 +385,10 @@ fn a_core_mismatch_refuses_the_install_with_both_versions() {
         &d,
         &admin(),
         "module.install",
-        Value::map([("manifest", Value::text(&pkg("up", "0.1.0", ">=9", &[])))]),
+        Value::map([(
+            "manifest",
+            Value::text(&pkg("up", "0.1.0", ">=9, <10", &[])),
+        )]),
     ));
     assert!(e.contains("needs core >=9"), "{e}");
     // The listing says so before anyone clicks.
@@ -406,8 +409,8 @@ fn a_core_mismatch_refuses_the_install_with_both_versions() {
 #[test]
 fn a_cycle_is_named_in_the_error() {
     let shelf = vec![
-        pkg("p", "0.1.0", "*", &[("q", "*")]),
-        pkg("q", "0.1.0", "*", &[("p", "*")]),
+        pkg("p", "0.1.0", "^0.2", &[("q", "^0.1")]),
+        pkg("q", "0.1.0", "^0.2", &[("p", "^0.1")]),
     ];
     let (d, _) = setup(shelf, &Store::new());
     let e = handler_error(call(
@@ -456,7 +459,7 @@ fn preview_changes_nothing_and_describes_every_step() {
 fn the_marketplace_listing_reports_installability_and_updates() {
     let shelf = vec![
         pkg("a", "0.2.0", "^0.2", &[]),
-        pkg("b", "0.2.0", "^0.2", &[("a", "^0.2"), ("ghost", "*")]),
+        pkg("b", "0.2.0", "^0.2", &[("a", "^0.2"), ("ghost", "^0.1")]),
     ];
     let store = Store::new();
     let (d, inst) = setup(shelf.clone(), &store);
@@ -502,7 +505,7 @@ fn catalogue_rules_apply_to_marketplace_packages_and_warnings_to_uploads() {
     // ... an upload is allowed, with warnings that the plan reports.
     let upload = pkg("up", "0.1.0", "^0.2", &[])
         .replace("license = \"MIT\"\n", "license = \"proprietary\"\n")
-        .replace("requires_core = \"^0.2\"\n", "");
+        .replace("requires_core = \"^0.2\"\n", "requires_core = \">=0.2\"\n");
     let plan = call(
         &d,
         &admin(),
@@ -515,7 +518,7 @@ fn catalogue_rules_apply_to_marketplace_packages_and_warnings_to_uploads() {
     let w: Vec<&str> = list(get(&plan, "warnings")).iter().map(text).collect();
     assert!(
         w.iter()
-            .any(|x| x.contains("requires_core is not declared")),
+            .any(|x| x.contains("requires_core = \">=0.2\" has no upper bound")),
         "{w:?}"
     );
     assert!(w.iter().any(|x| x.contains("proprietary")), "{w:?}");
@@ -530,7 +533,7 @@ fn catalogue_rules_apply_to_marketplace_packages_and_warnings_to_uploads() {
     let rows = inst.module_rows();
     let up = row(&rows, "up");
     assert_eq!(text(get(up, "license_kind")), "proprietary");
-    assert_eq!(text(get(up, "requires_core")), "*");
+    assert_eq!(text(get(up, "requires_core")), ">=0.2");
     assert_eq!(text(get(up, "source")), "upload");
 }
 
@@ -560,7 +563,12 @@ fn old_and_new_marketplace_indexes_both_parse() {
     let l: Vec<Listing> = serde_json::from_str(old).unwrap();
     assert_eq!(l[0].license, "");
     assert!(l[0].dependencies.is_empty());
-    assert!(l[0].stub().is_ok());
+    // It parses, but it names no supported core versions, which a listing must (D63).
+    assert!(
+        l[0].stub()
+            .unwrap_err()
+            .contains("requires_core is required")
+    );
     // The current format carries the metadata, so cards need no manifest fetch.
     let new = r#"[{"id":"projects","name":"Projects","version":"0.3.0","description":"d","author":"SpaceCorps",
         "summary":"s","license":"AGPL-3.0-or-later","requires_core":"^0.2","categories":["services"],
@@ -611,7 +619,8 @@ fn a_remote_index_serves_listings_and_leaves_out_malformed_ones() {
     t.join().unwrap();
     assert_eq!(
         l.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(),
-        ["fleet", "projects"]
+        ["projects"],
+        "a listing without a core range is left out"
     );
-    assert_eq!(l[1].license, "MIT");
+    assert_eq!(l[0].license, "MIT");
 }

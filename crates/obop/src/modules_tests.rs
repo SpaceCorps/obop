@@ -263,14 +263,14 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
         modules_check_files_with(&refs, false, true).is_ok(),
         "--catalog accepts every shipped package"
     );
-    // Without a licence or requires_core a package passes `check` (with warnings) but not
-    // `check --catalog`.
+    // Without a licence, or with a core range that has no upper bound, a package passes `check`
+    // (with warnings) but not `check --catalog`. No core range at all is refused everywhere.
     let dir = std::env::temp_dir().join(format!("obop-catalog-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let text = std::fs::read_to_string(pk.join("fleet.toml")).unwrap();
     let bare = text
         .replace("license = \"AGPL-3.0-or-later\"\n", "")
-        .replace("requires_core = \"^0.2\"\n", "");
+        .replace("requires_core = \"^0.2\"\n", "requires_core = \">=0.2\"\n");
     let f = dir.join("fleet.toml");
     std::fs::write(&f, bare).unwrap();
     let fs = f.to_string_lossy().to_string();
@@ -284,15 +284,29 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
         r.errors.iter().any(|e| e.contains("license is required")),
         "{r:?}"
     );
+    assert!(
+        r.errors.iter().any(|e| e.contains("has no upper bound")),
+        "{r:?}"
+    );
+    let no_range = text.replace("requires_core = \"^0.2\"\n", "");
+    for catalog in [false, true] {
+        let r = obop_pkg::check_package(&no_range, &builtin, catalog);
+        assert!(
+            r.errors
+                .iter()
+                .any(|e| e.contains("requires_core is required")),
+            "{r:?}"
+        );
+    }
     // Ranges that nothing satisfies, an unknown dependency, a cycle-free core mismatch.
     let timesheets = std::fs::read_to_string(pk.join("timesheets.toml")).unwrap();
     for (broken, want) in [
         (
-            timesheets.replace("projects = \">=0.3, <1\"", "projects = \">=5\""),
+            timesheets.replace("projects = \">=0.3, <1\"", "projects = \">=5, <6\""),
             "needs projects >=5",
         ),
         (
-            timesheets.replace("projects = \">=0.3, <1\"", "ghost = \"*\""),
+            timesheets.replace("projects = \">=0.3, <1\"", "ghost = \"^1\""),
             "needs module ghost",
         ),
         (
@@ -303,7 +317,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
             "built-in module that versions with the core",
         ),
         (
-            timesheets.replace("requires_core = \"^0.2\"", "requires_core = \">=9\""),
+            timesheets.replace("requires_core = \"^0.2\"", "requires_core = \">=9, <10\""),
             "needs core >=9",
         ),
         (
@@ -315,7 +329,15 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
                 "[module.dependencies]",
                 "depends = [\"projects\"]\n[module.dependencies]",
             ),
-            "both depends and [module.dependencies]",
+            "depends = [...] is no longer accepted",
+        ),
+        (
+            timesheets.replace("projects = \">=0.3, <1\"", "projects = \"\""),
+            "the version range is empty",
+        ),
+        (
+            timesheets.replace("projects = \">=0.3, <1\"", "projects = \">=2, <1\""),
+            "matches no version",
         ),
     ] {
         let r = obop_pkg::check_package(&broken, &builtin, true);
@@ -328,7 +350,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
     // An upload with a core mismatch is a warning for `check` (the author may prepare for a
     // later core) and an error at install time.
     let r = obop_pkg::check_package(
-        &timesheets.replace("requires_core = \"^0.2\"", "requires_core = \">=9\""),
+        &timesheets.replace("requires_core = \"^0.2\"", "requires_core = \">=9, <10\""),
         &builtin,
         false,
     );

@@ -4,7 +4,8 @@
 
 use crate::manifest::Manifest;
 use crate::marketplace::Listing;
-use crate::resolve::{Blocker, Plan};
+use crate::migrate::Change;
+use crate::resolve::{Blocker, Plan, StepAction};
 use crate::semver::{Req, Version};
 use crate::spdx::{self, LicenseKind};
 use obop_commands::Value;
@@ -260,6 +261,21 @@ pub fn contents(module: &Module) -> Value {
     ])
 }
 
+/// One difference between two versions of a package, as the plan dialog shows it.
+pub fn change_value(c: &Change) -> Value {
+    Value::map([
+        ("kind", text(c.kind)),
+        ("model", text(&c.model)),
+        ("field", c.field.as_deref().map_or(Value::Null, text)),
+        ("detail", text(&c.detail)),
+        ("breaking", Value::Bool(c.breaking)),
+        (
+            "resolved_by",
+            c.resolved_by.as_deref().map_or(Value::Null, text),
+        ),
+    ])
+}
+
 pub fn blockers_value(b: &[Blocker]) -> Value {
     Value::List(
         b.iter()
@@ -276,48 +292,101 @@ pub fn blockers_value(b: &[Blocker]) -> Value {
 
 /// The result of `module_plan.preview`.
 pub fn plan_value(plan: &Plan, root: &str, ctx: &Ctx<'_>, manifest_warnings: &[String]) -> Value {
-    let steps = plan
-        .steps
-        .iter()
-        .map(|s| {
-            let x = &s.manifest.module;
-            Value::map([
-                ("id", text(&s.id)),
-                ("name", text(&s.name)),
-                ("version", text(&s.version)),
-                ("action", text(s.action.as_str())),
-                (
-                    "from_version",
-                    s.from_version.as_deref().map_or(Value::Null, text),
-                ),
-                ("license", text(&s.license)),
-                ("license_kind", text(license_kind(&s.license))),
-                ("reason", text(&s.reason)),
-                ("requested", Value::Bool(s.requested)),
-                ("source", text(s.source)),
-                (
-                    "requires_core",
-                    text(if x.requires_core.is_empty() {
-                        "*"
-                    } else {
-                        &x.requires_core
-                    }),
-                ),
-                ("author", text(&x.author)),
-                ("summary", text(&x.summary)),
-                (
-                    "dependencies",
-                    Value::List(
-                        s.manifest
-                            .requirements()
-                            .iter()
-                            .map(|r| ctx.dependency(&r.id, r.req.as_str()))
-                            .collect(),
+    let steps =
+        plan.steps
+            .iter()
+            .map(|s| {
+                let x = &s.manifest.module;
+                let new_v = s.manifest.semver();
+                // The installed packages that depend on this one, and whether the new version still
+                // fits what each of them supports (D63).
+                let dependents: Vec<Value> = if s.action == StepAction::Skip {
+                    Vec::new()
+                } else {
+                    ctx.installed
+                        .iter()
+                        .filter(|(pid, _)| pid.as_str() != s.id)
+                        .filter_map(|(pid, m)| {
+                            m.requirements()
+                                .into_iter()
+                                .find(|r| r.id == s.id)
+                                .map(|r| {
+                                    Value::map([
+                                        ("id", text(pid)),
+                                        ("name", text(&m.module.name)),
+                                        ("version", text(&m.module.version)),
+                                        ("requirement", text(r.req.as_str())),
+                                        ("satisfied", Value::Bool(r.req.matches(&new_v))),
+                                        (
+                                            "replaced_in_plan",
+                                            Value::Bool(plan.steps.iter().any(|o| {
+                                                o.id == *pid && o.action != StepAction::Skip
+                                            })),
+                                        ),
+                                    ])
+                                })
+                        })
+                        .collect()
+                };
+                let data = plan.data.get(&s.id);
+                Value::map([
+                    ("changelog", text(&x.changelog)),
+                    ("dependents", Value::List(dependents)),
+                    (
+                        "changes",
+                        Value::List(
+                            data.map(|d| d.changes.iter().map(change_value).collect())
+                                .unwrap_or_default(),
+                        ),
                     ),
-                ),
-            ])
-        })
-        .collect();
+                    (
+                        "migrations",
+                        Value::List(
+                            data.map(|d| {
+                                d.steps
+                                    .iter()
+                                    .map(|st| text(&st.summary()))
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default(),
+                        ),
+                    ),
+                    ("id", text(&s.id)),
+                    ("name", text(&s.name)),
+                    ("version", text(&s.version)),
+                    ("action", text(s.action.as_str())),
+                    (
+                        "from_version",
+                        s.from_version.as_deref().map_or(Value::Null, text),
+                    ),
+                    ("license", text(&s.license)),
+                    ("license_kind", text(license_kind(&s.license))),
+                    ("reason", text(&s.reason)),
+                    ("requested", Value::Bool(s.requested)),
+                    ("source", text(s.source)),
+                    (
+                        "requires_core",
+                        text(if x.requires_core.is_empty() {
+                            "*"
+                        } else {
+                            &x.requires_core
+                        }),
+                    ),
+                    ("author", text(&x.author)),
+                    ("summary", text(&x.summary)),
+                    (
+                        "dependencies",
+                        Value::List(
+                            s.manifest
+                                .requirements()
+                                .iter()
+                                .map(|r| ctx.dependency(&r.id, r.req.as_str()))
+                                .collect(),
+                        ),
+                    ),
+                ])
+            })
+            .collect();
     let mut warnings = plan.warnings.clone();
     for w in manifest_warnings {
         if !warnings.contains(w) {

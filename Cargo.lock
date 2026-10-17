@@ -1158,6 +1158,7 @@ dependencies = [
  "obop-site",
  "obop-storage",
  "obop-types",
+ "obop-update",
  "postgres",
  "product",
  "sales",
@@ -1364,9 +1365,13 @@ dependencies = [
  "obop-auth",
  "obop-commands",
  "obop-http",
+ "obop-keys",
+ "obop-pkg",
  "obop-storage",
+ "obop-update",
  "postgres",
  "serde_json",
+ "sha2",
  "ureq",
  "uuid",
 ]
@@ -1411,6 +1416,21 @@ dependencies = [
 [[package]]
 name = "obop-types"
 version = "0.2.0"
+
+[[package]]
+name = "obop-update"
+version = "0.2.0"
+dependencies = [
+ "obop-commands",
+ "obop-keys",
+ "obop-pkg",
+ "obop-registry",
+ "obop-storage",
+ "obop-types",
+ "serde_json",
+ "sha2",
+ "ureq",
+]
 
 [[package]]
 name = "once_cell"

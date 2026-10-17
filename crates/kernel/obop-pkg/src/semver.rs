@@ -224,6 +224,33 @@ impl Req {
     pub fn as_str(&self) -> &str {
         &self.text
     }
+
+    /// Whether the requirement rules out some future release: `^0.2` and `>=0.2, <1` do, `*` and
+    /// `>=0.2` do not. A module that declares no upper bound promises to run on every version
+    /// that will ever exist, which no author can know (D63).
+    pub fn is_bounded(&self) -> bool {
+        !self.matches(&Version::new(u64::MAX / 2, 0, 0))
+    }
+
+    /// Whether some release satisfies the requirement at all. `>=2, <1` and `>1, <1.0.1` do
+    /// not. The check tries the versions at and just around each bound, which is where a
+    /// requirement over release versions changes its answer.
+    pub fn is_satisfiable(&self) -> bool {
+        let mut candidates = vec![Version::new(0, 0, 0)];
+        for c in &self.comparators {
+            for (_, b) in &c.bounds {
+                let (a, m, p) = b.triple();
+                candidates.push(Version::new(a, m, p));
+                candidates.push(Version::new(a, m, p.saturating_add(1)));
+                candidates.push(Version::new(a, m.saturating_add(1), 0));
+                candidates.push(Version::new(a.saturating_add(1), 0, 0));
+                if p > 0 {
+                    candidates.push(Version::new(a, m, p - 1));
+                }
+            }
+        }
+        candidates.iter().any(|v| self.matches(v))
+    }
 }
 
 impl fmt::Display for Req {
@@ -484,6 +511,36 @@ mod tests {
         assert!(ok("^0.3.0-beta.1", "0.3.0-rc.1") && !ok("^0.3.0-beta.1", "0.3.0-alpha"));
         assert!(ok("<0.3.0-beta.2", "0.3.0-beta.1"));
         assert!(ok("<1.0.0", "0.9.0") && !ok("<1.0.0", "1.0.0-rc.1"));
+    }
+
+    #[test]
+    fn bounded_and_satisfiable_requirements() {
+        for (r, bounded) in [
+            ("*", false),
+            (">=0.2", false),
+            (">0", false),
+            ("^0.2", true),
+            ("~1.2", true),
+            (">=0.3, <0.5", true),
+            ("<2", true),
+            ("1.2.3", true),
+            ("=0.2.0", true),
+            ("0.*", true),
+        ] {
+            assert_eq!(Req::parse(r).unwrap().is_bounded(), bounded, "{r}");
+        }
+        for r in ["*", "^0.2", ">=0.3, <0.5", "=1.0.0", ">1.0.0, <1.0.2", "<1"] {
+            assert!(Req::parse(r).unwrap().is_satisfiable(), "{r}");
+        }
+        for r in [
+            ">=2, <1",
+            ">1, <1.0.1",
+            "<0.0.0",
+            "^0.2, ^0.3",
+            ">=1.0.0, <1.0.0",
+        ] {
+            assert!(!Req::parse(r).unwrap().is_satisfiable(), "{r}");
+        }
     }
 
     #[test]

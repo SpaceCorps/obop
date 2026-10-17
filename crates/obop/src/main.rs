@@ -18,6 +18,9 @@ mod ops;
 mod payments_tests;
 #[cfg(test)]
 mod public_site_tests;
+mod update_cmd;
+#[cfg(test)]
+mod update_tests;
 
 use app::{App, DevAuth};
 use obop_auth::Auth;
@@ -39,6 +42,10 @@ const USAGE: &str = "usage: obop <command>
   modules tree [ID]                             the dependency tree of a module (or of every installed package)
   modules plan FILE|ID                          what installing a file or marketplace package would do, without doing it
   modules install FILE | uninstall ID           manage packages in the database (operator tool); an install brings its dependencies
+  modules updates                               installed packages with a newer version on offer, and whether each can update here
+  modules update ID | update-all                update one package (or every one that can) to the version on offer, atomically,
+                                                data migrations included; `modules plan ID` shows the changes first
+  modules rollback ID                           put a package back to the version before its last update, when the data allows
   modules market                                list the marketplace; install with `modules install-from ID`
   sequences backfill [MODEL [FIELD]]            number the records that were created before their sequence field existed
   admin create USER [--groups a,b | --all-groups]
@@ -75,6 +82,17 @@ const USAGE: &str = "usage: obop <command>
   backup verify FILE                            check a backup's checksums, format and counts
   restore --db URL --from FILE [--force] [--dry-run]
                                                 restore into an empty database (--force replaces what is there)
+  update check | status [--db URL]              the running core version, the published releases, whether the installed modules fit each
+                                                (their core ranges), and the state of the last update request; never contacts anything
+                                                but the release feed (OBOP_UPDATE_FEED, default https://obop.dev/api/releases)
+  update start --to VERSION --yes [--skip-backup]
+                                                managed instances: back up (OBOP_BACKUP_DIR), then ask the control plane (OBOP_UPDATE_URL,
+                                                OBOP_UPDATE_TOKEN) to upgrade this instance to a published release
+  update rollback --yes                         ask the control plane to put the previous version back
+  platform release publish --version V --image REF [--notes T | --notes-file F] [--min-from V] [--db URL]
+  platform release list | withdraw V            the releases instances read at /api/releases
+  platform register-instance SLUG --url URL [--external-id ID] [--image REF] [--token-stdin]
+  platform update-token SLUG [--revoke]         register an instance this control plane did not create, or issue a new update token
   platform upgrade-instances --image TAG [--only SLUG] [--dry-run] [--db URL] [--provisioner sliplane]
                                                 move every running instance to a published image, one at a time, each after the
                                                 previous one is healthy; stops at the first failure. TAG is a commit tag
@@ -179,6 +197,10 @@ fn main() -> ExitCode {
         ["modules", "install", file] => modules_install(&opts, Some(file), None),
         ["modules", "install-from", id] => modules_install(&opts, None, Some(id)),
         ["modules", "uninstall", id] => modules_uninstall(&opts, id),
+        ["modules", "updates"] => modules_updates(&opts),
+        ["modules", "update", id] => modules_update(&opts, Some(id)),
+        ["modules", "update-all"] => modules_update(&opts, None),
+        ["modules", "rollback", id] => modules_rollback(&opts, id),
         ["sequences", "backfill"] => sequences_backfill(&opts, None, None),
         ["sequences", "backfill", model] => sequences_backfill(&opts, Some(model), None),
         ["sequences", "backfill", model, field] => {
@@ -276,6 +298,7 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     eprintln!("database: {}", store.backend_kind());
     let seed = o.demo || store.backend_kind() == "sqlite";
     let app = App::with_store(store);
+    app.updater.set_backup(ops::backup_fn(url.clone()));
     if seed {
         app.seed_demo();
     }
@@ -491,6 +514,78 @@ fn modules_uninstall(o: &Opts, id: &str) -> Exit {
     })?;
     app.installer.uninstall(id).map_err(|e| fail(&e))?;
     println!("uninstalled {id}; its data stays in the database");
+    Ok(())
+}
+
+fn modules_updates(o: &Opts) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    let ups = app.installer.updates();
+    if ups.is_empty() {
+        println!("every installed package is up to date");
+    }
+    for u in &ups {
+        println!(
+            "{:<16} {} -> {}  {}",
+            u.id,
+            u.installed,
+            u.available,
+            if u.ok { "can update" } else { "BLOCKED" }
+        );
+        for b in &u.blockers {
+            println!("    {b}");
+        }
+        if let Some(first) = u.changelog.trim().lines().next() {
+            println!("    notes: {first}");
+        }
+    }
+    Ok(())
+}
+
+fn modules_update(o: &Opts, id: Option<&str>) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    let by = "operator";
+    match id {
+        Some(id) => {
+            let out = app.installer.update_outcome(id, by).map_err(|e| fail(&e))?;
+            for (p, action) in &out.applied {
+                println!("{} {} {}", action.as_str(), p.id, p.version);
+            }
+            for w in &out.warnings {
+                println!("warning: {w}");
+            }
+        }
+        None => {
+            let r = app.installer.update_all(by).map_err(|e| fail(&e))?;
+            for (p, action) in &r.applied {
+                println!("{} {} {}", action.as_str(), p.id, p.version);
+            }
+            for (id, why) in &r.skipped {
+                println!("skipped {id}: {why}");
+            }
+            if r.applied.is_empty() && r.skipped.is_empty() {
+                println!("every installed package is up to date");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn modules_rollback(o: &Opts, id: &str) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    let p = app
+        .installer
+        .rollback(id, "operator")
+        .map_err(|e| fail(&e))?;
+    println!("rolled {} back to {}", p.id, p.version);
     Ok(())
 }
 
@@ -810,7 +905,21 @@ pub(crate) fn make_provisioner(
     use obop_platform::{provision, sliplane};
     let env = |k: &str| std::env::var(k).map_err(|_| format!("{k} is not set"));
     match kind {
-        "fake" => Ok(Arc::new(provision::Fake::default())),
+        "fake" => {
+            let f = provision::Fake::default();
+            // Knobs for the end-to-end tests: a slow upgrade shows its progress, a failing one
+            // shows the rollback.
+            if let Some(ms) = std::env::var("OBOP_FAKE_UPGRADE_DELAY_MS")
+                .ok()
+                .and_then(|v| v.trim().parse::<u64>().ok())
+            {
+                *f.upgrade_delay.lock().unwrap() = std::time::Duration::from_millis(ms);
+            }
+            if let Ok(img) = std::env::var("OBOP_FAKE_UPGRADE_FAIL_IMAGE") {
+                *f.upgrade_fail_image.lock().unwrap() = Some(img);
+            }
+            Ok(Arc::new(f))
+        }
         "local" => {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
             let dir = std::env::var("OBOP_DATA_DIR").unwrap_or_else(|_| "obop-instances".into());
@@ -884,6 +993,14 @@ fn platform_serve(
         make_provisioner(provisioner.unwrap_or("local"), instance_static).map_err(|e| fail(&e))?;
     let auth = Arc::new(Auth::new(backend.clone()));
     let platform = obop_platform::Platform::new(auth.clone(), backend.clone(), prov);
+    // The address instances are told to reach this control plane at (their update token and
+    // OBOP_UPDATE_URL, D63).
+    if let Some(u) = std::env::var("OBOP_CONTROL_URL")
+        .ok()
+        .or_else(|| std::env::var("OBOP_PUBLIC_URL").ok())
+    {
+        platform.set_public_url(&u);
+    }
     // The public forum (/community) and status page (/status), with their background checker.
     let community =
         obop_community::Community::open(obop_community::Config::from_env(), auth, backend.clone())

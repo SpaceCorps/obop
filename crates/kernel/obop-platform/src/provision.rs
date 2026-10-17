@@ -8,6 +8,12 @@ pub struct InstanceSpec {
     pub owner_email: String,
     /// Argon2id hash of the owner's password: the instance's first admin gets the same login.
     pub password_hash: String,
+    /// The instance's update token (D63): lets it ask this control plane to upgrade it, and
+    /// nothing else. Handed over once, as a secret environment variable; the control plane
+    /// keeps only its hash.
+    pub update_token: String,
+    /// Where the instance reaches the control plane (`OBOP_UPDATE_URL`); empty when unknown.
+    pub control_url: String,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +63,10 @@ pub struct Fake {
     pub upgrade_fail_for: Mutex<Option<String>>,
     /// The image reported for new instances.
     pub image: Mutex<Option<String>>,
+    /// How long an upgrade takes (so a page can show it running).
+    pub upgrade_delay: Mutex<std::time::Duration>,
+    /// Fail the next upgrade to this image (the rollback to the old one still succeeds).
+    pub upgrade_fail_image: Mutex<Option<String>>,
 }
 
 impl Provisioner for Fake {
@@ -78,6 +88,10 @@ impl Provisioner for Fake {
 
     fn upgrade(&self, slug: &str, _: &str, image: &str, progress: Progress) -> Result<(), String> {
         progress("Redeploying the instance");
+        std::thread::sleep(*self.upgrade_delay.lock().unwrap());
+        if self.upgrade_fail_image.lock().unwrap().as_deref() == Some(image) {
+            return Err("the new version did not answer its health check".into());
+        }
         if self.upgrade_fail_for.lock().unwrap().as_deref() == Some(slug) {
             return Err("the new version did not answer its health check".into());
         }
@@ -147,6 +161,10 @@ impl Provisioner for Local {
         let addr = format!("127.0.0.1:{port}");
         let mut cmd = std::process::Command::new(&self.exe);
         cmd.args(["serve", "--addr", &addr, "--db", &db]);
+        if !spec.update_token.is_empty() && !spec.control_url.is_empty() {
+            cmd.env("OBOP_UPDATE_TOKEN", &spec.update_token)
+                .env("OBOP_UPDATE_URL", &spec.control_url);
+        }
         if let Some(s) = &self.static_dir {
             cmd.args(["--static", s]);
         }

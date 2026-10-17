@@ -43,9 +43,7 @@ pub fn check_package(text: &str, builtin: &[Module], catalog: bool) -> Report {
     if catalog {
         errors.extend(manifest.catalog_problems());
         // The catalogue says it: those two are required there, so they are not also warnings.
-        warnings.retain(|w| {
-            !w.starts_with("requires_core is not declared") && w != "no license is declared"
-        });
+        warnings.retain(|w| !w.contains("has no upper bound") && w != "no license is declared");
     }
     if let Err(e) = manifest.to_module() {
         errors.push(e);
@@ -204,7 +202,10 @@ id = "notes"
 version = "0.1.0"
 name = "Notes"
 description = "Notes about contacts"
-depends = ["base"]
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
 
 [[model]]
 name = "notes_note"
@@ -238,7 +239,10 @@ write_group = "notes.user"
 
     #[test]
     fn dependencies_and_refs_are_checked_without_a_database() {
-        let e = check_manifest(&PKG.replace("[\"base\"]", "[\"ghost\"]"), &[base()]);
+        let e = check_manifest(
+            &PKG.replace("base = \"^0.2\"", "ghost = \"^0.2\""),
+            &[base()],
+        );
         assert!(e.iter().any(|x| x.contains("needs module ghost")), "{e:?}");
         assert!(
             e.iter()
@@ -255,7 +259,7 @@ write_group = "notes.user"
         );
         let e = check_manifest(
             &PKG.replace("\"notes\"", "\"base\"")
-                .replace("depends = [\"base\"]", "depends = []")
+                .replace("base = \"^0.2\"", "")
                 .replace("notes_note", "base_note"),
             &[base()],
         );
@@ -265,7 +269,7 @@ write_group = "notes.user"
     #[test]
     fn refs_through_a_bundled_dependency_resolve() {
         let pkg = PKG
-            .replace("depends = [\"base\"]", "depends = [\"accounting\"]")
+            .replace("base = \"^0.2\"", "accounting = \">=0.2, <1\"")
             .replace("to = \"party\"", "to = \"accounting_move\"");
         assert!(check_manifest(&pkg, &[base()]).is_empty());
     }

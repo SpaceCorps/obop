@@ -441,6 +441,27 @@ pub trait PlatformApi: Send + Sync {
     fn list(&self, token: &str) -> Result<Vec<J>, String>;
     fn create(&self, token: &str, name: &str) -> Result<J, String>;
     fn delete(&self, token: &str, id: &str) -> Result<J, String>;
+    /// The published core releases (D63). Public.
+    fn releases(&self) -> Result<J, String> {
+        Err("this control plane publishes no releases".into())
+    }
+    /// The state of an instance's update, for the holder of its update token (D63).
+    fn update_status(&self, _update_token: &str) -> Result<J, String> {
+        Err("this control plane does not run updates".into())
+    }
+    /// Ask to be moved to a published release.
+    fn update_start(
+        &self,
+        _update_token: &str,
+        _version: &str,
+        _from_version: &str,
+    ) -> Result<J, String> {
+        Err("this control plane does not run updates".into())
+    }
+    /// Ask to go back to the image before the last update.
+    fn update_rollback(&self, _update_token: &str) -> Result<J, String> {
+        Err("this control plane does not run updates".into())
+    }
 }
 
 type Api = State<Arc<dyn PlatformApi>>;
@@ -498,6 +519,11 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         .route("/api/platform/me", get(p_me))
         .route("/api/platform/instances", get(p_list).post(p_create))
         .route("/api/platform/instances/{id}/delete", post(p_delete))
+        .route("/api/releases", get(p_releases))
+        .route("/api/platform/releases", get(p_releases))
+        .route("/api/platform/update/status", get(p_update_status))
+        .route("/api/platform/update/start", post(p_update_start))
+        .route("/api/platform/update/rollback", post(p_update_rollback))
         .with_state(api.clone())
         .route("/openapi.json", get(platform_openapi))
         .route("/api/openapi.json", get(platform_openapi));
@@ -512,6 +538,47 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         Some(dir) => r.fallback_service(website::service(dir.into())),
         None => r,
     }
+}
+
+/// The release feed instances read (D63): public, cacheable for a minute.
+async fn p_releases(State(api): Api) -> Response {
+    blocking(move || match api.releases() {
+        Ok(j) => ([("cache-control", "public, max-age=60")], Json(j)).into_response(),
+        Err(e) => err(StatusCode::NOT_FOUND, e),
+    })
+    .await
+}
+
+/// What an update token's holder may do. The status code tells the cases apart without
+/// revealing which part of a token was wrong.
+fn update_answer(r: Result<J, String>) -> Response {
+    match r {
+        Ok(j) => Json(j).into_response(),
+        Err(e) if e.contains("not a valid update token") => err(StatusCode::UNAUTHORIZED, e),
+        Err(e) if e.contains("too many requests") => err(StatusCode::TOO_MANY_REQUESTS, e),
+        Err(e) if e.contains("already") => err(StatusCode::CONFLICT, e),
+        Err(e) => err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+async fn p_update_status(State(api): Api, h: HeaderMap) -> Response {
+    blocking(move || update_answer(api.update_status(bearer(&h)))).await
+}
+
+async fn p_update_start(State(api): Api, h: HeaderMap, Json(b): Json<J>) -> Response {
+    blocking(move || {
+        // Only a published version may be named: there is no field for an image.
+        update_answer(api.update_start(
+            bearer(&h),
+            b["version"].as_str().unwrap_or(""),
+            b["from_version"].as_str().unwrap_or(""),
+        ))
+    })
+    .await
+}
+
+async fn p_update_rollback(State(api): Api, h: HeaderMap) -> Response {
+    blocking(move || update_answer(api.update_rollback(bearer(&h)))).await
 }
 
 async fn p_signup(State(api): Api, Json(b): Json<J>) -> Response {

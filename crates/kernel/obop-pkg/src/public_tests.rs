@@ -8,6 +8,7 @@ id = "shop"
 version = "0.1.0"
 name = "Shop"
 description = "d"
+requires_core = "^0.2"
 
 [[model]]
 name = "shop_item"

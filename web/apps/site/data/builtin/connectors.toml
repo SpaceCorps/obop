@@ -15,7 +15,7 @@ maturity = "stable"
 requires_core = "^0.2"
 
 [module.dependencies]
-base = "*"
+base = "^0.2"
 
 [[model]]
 name = "connector_provider"

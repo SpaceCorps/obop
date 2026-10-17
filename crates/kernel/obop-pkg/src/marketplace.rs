@@ -39,7 +39,10 @@ pub struct Listing {
     pub requires_core: String,
     #[serde(default)]
     pub maturity: String,
-    /// Module id to version requirement.
+    /// Release notes of this version (D63); optional in an index.
+    #[serde(default)]
+    pub changelog: String,
+    /// Module id to the versions of it this module supports.
     #[serde(default)]
     pub dependencies: std::collections::BTreeMap<String, String>,
 }
@@ -65,6 +68,7 @@ impl Listing {
             icon: x.icon.clone(),
             requires_core: x.requires_core.clone(),
             maturity: x.maturity.clone(),
+            changelog: x.changelog.clone(),
             dependencies: m
                 .requirements()
                 .into_iter()
@@ -87,7 +91,7 @@ impl Listing {
                 .to_string()
         };
         let text = format!(
-            "[module]\nid = {}\nversion = {}\nname = {}\ndescription = {}\nauthor = {}\nauthors = {}\nsummary = {}\nlicense = {}\nhomepage = {}\nrepository = {}\ndocumentation = {}\nsupport = {}\nkeywords = {}\ncategories = {}\nicon = {}\nrequires_core = {}\nmaturity = {}\n[module.dependencies]\n{}\n",
+            "[module]\nid = {}\nversion = {}\nname = {}\ndescription = {}\nauthor = {}\nauthors = {}\nsummary = {}\nlicense = {}\nhomepage = {}\nrepository = {}\ndocumentation = {}\nsupport = {}\nkeywords = {}\ncategories = {}\nicon = {}\nrequires_core = {}\nmaturity = {}\nchangelog = {}\n[module.dependencies]\n{}\n",
             toml_str(&self.id),
             toml_str(&self.version),
             toml_str(&self.name),
@@ -109,6 +113,7 @@ impl Listing {
             toml_str(&self.icon),
             toml_str(&self.requires_core),
             toml_str(&self.maturity),
+            toml_str(&self.changelog),
             deps.join("\n"),
         );
         Manifest::parse(&text).map_err(|e| format!("listing {}: {e}", self.id))

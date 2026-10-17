@@ -4,6 +4,7 @@
 
 pub mod provision;
 pub mod sliplane;
+pub mod update;
 
 use obop_auth::Auth;
 use obop_commands::Authenticator;
@@ -57,6 +58,8 @@ pub struct Platform {
     auth: Arc<Auth>,
     backend: Arc<dyn Backend>,
     provisioner: Arc<dyn Provisioner>,
+    /// The address new instances are told to reach this control plane at (D63).
+    public_url: std::sync::Mutex<String>,
 }
 
 /// `Some(slug)` when `name` can be a subdomain: 3 to 30 characters, lowercase letters, digits
@@ -92,6 +95,7 @@ impl Platform {
             auth,
             backend,
             provisioner,
+            public_url: std::sync::Mutex::default(),
         })
     }
 
@@ -181,11 +185,17 @@ impl Platform {
         );
         f.insert("created_at".into(), J::from(now()));
         self.backend.insert(TABLE, &id, &f)?;
+        // The instance's own update token (D63): handed to the provisioner once, kept here as
+        // a hash.
+        let update_token = update::new_token();
+        self.store_update_token(&id, &update_token)?;
         let me = self.clone();
         let spec = InstanceSpec {
             slug: slug.clone(),
             owner_email: owner,
             password_hash: hash,
+            update_token,
+            control_url: self.public_url(),
         };
         let rec = id.clone();
         std::thread::spawn(move || {
@@ -437,6 +447,18 @@ impl obop_http::PlatformApi for Api {
     }
     fn delete(&self, token: &str, id: &str) -> Result<J, String> {
         Platform::delete_instance(&self.0, token, id).map(|i| i.to_json())
+    }
+    fn releases(&self) -> Result<J, String> {
+        Ok(self.0.feed_json())
+    }
+    fn update_status(&self, t: &str) -> Result<J, String> {
+        Platform::update_status(&self.0, t)
+    }
+    fn update_start(&self, t: &str, version: &str, from: &str) -> Result<J, String> {
+        Platform::update_start(&self.0, t, version, from)
+    }
+    fn update_rollback(&self, t: &str) -> Result<J, String> {
+        Platform::update_rollback(&self.0, t)
     }
 }
 
@@ -825,3 +847,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod update_tests;

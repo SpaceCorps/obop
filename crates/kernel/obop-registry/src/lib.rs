@@ -468,9 +468,10 @@ impl ModuleMeta {
             icon: icon.to_string(),
             requires_core: format!("^{major}.{minor}"),
             maturity: "stable".into(),
+            // Built-in modules version with the core, so each supports the series it ships with.
             dependencies: dependencies
                 .iter()
-                .map(|d| (d.to_string(), "*".to_string()))
+                .map(|d| (d.to_string(), format!("^{major}.{minor}")))
                 .collect(),
         }
     }

@@ -1,0 +1,21 @@
+[package]
+name = "obop-update"
+version.workspace = true
+description = "Updating the instance itself (D63): the release feed, the compatibility check of installed modules against a new core, and the admin commands that ask the control plane to upgrade this instance"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+obop-types.workspace = true
+obop-storage.workspace = true
+obop-keys.workspace = true
+obop-commands.workspace = true
+obop-registry.workspace = true
+obop-pkg.workspace = true
+serde_json = "1"
+sha2 = "0.11"
+ureq = "3"
+
+[lints]
+workspace = true

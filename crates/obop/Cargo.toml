@@ -23,6 +23,7 @@ obop-keys.workspace = true
 obop-media.workspace = true
 obop-payments.workspace = true
 obop-platform.workspace = true
+obop-update.workspace = true
 obop-mcp.workspace = true
 product.workspace = true
 crm.workspace = true

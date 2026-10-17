@@ -9,12 +9,13 @@
 
 use crate::manifest::Manifest;
 use crate::marketplace::{Bundled, Listing, Marketplace};
+use crate::migrate;
 use crate::resolve::{self, Plan, StepAction, World};
 use crate::semver::Version;
 use crate::views::{self, Ctx};
 use obop_commands::{ADMIN_GROUP, ANY_GROUP, Dispatcher, Store, Value};
 use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef, Module, ModuleMeta, intern};
-use obop_storage::{Backend, Fields};
+use obop_storage::{ApplyError, Backend, Fields, Op};
 use obop_types::DataClass;
 use serde_json::Value as J;
 use std::collections::{BTreeMap, BTreeSet};
@@ -40,6 +41,21 @@ pub struct PackageInfo {
     pub installed_by: Option<String>,
     /// The registry view of the module, for the contents summary.
     pub module: Module,
+    /// Release notes of the installed version.
+    pub changelog: String,
+    /// The version an update replaced, kept so the update can be undone.
+    pub rollback: Option<RollbackInfo>,
+    /// Unix seconds of the last update, if there was one.
+    pub updated_at: Option<u64>,
+}
+
+/// What a package remembers of the version before its last update (D63).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RollbackInfo {
+    pub version: String,
+    /// Data steps of the update that cannot be undone (a dropped field). Not empty: the update
+    /// can only be reverted from a backup.
+    pub irreversible: Vec<String>,
 }
 
 /// What an install did, step by step.
@@ -67,11 +83,59 @@ pub struct Installer {
     pub(crate) last_check_ms: std::sync::atomic::AtomicU64,
 }
 
-/// What it takes to put a step back.
+/// What it takes to put a step back in this process's registry. Nothing is written to the
+/// database before the whole plan commits, so there is nothing to undo there.
 struct Undo {
     id: String,
     previous: Option<Fields>,
 }
+
+/// The locks held while the installed set changes.
+struct Exclusive<'a> {
+    _process: std::sync::MutexGuard<'a, ()>,
+    _database: obop_storage::LockGuard,
+}
+
+/// Why a plan was not applied: `Retry` when a record changed under the batch (nothing was
+/// written, the plan can be made again), `Refused` for anything final.
+enum Failure {
+    Retry(String),
+    Refused(String),
+}
+
+/// Whether one installed package runs on a given core version.
+#[derive(Debug, Clone)]
+pub struct CoreCompat {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub requires_core: String,
+    pub compatible: bool,
+    pub reasons: Vec<String>,
+}
+
+/// An installed package with a newer version on offer.
+#[derive(Debug, Clone)]
+pub struct UpdateInfo {
+    pub id: String,
+    pub installed: String,
+    pub available: String,
+    /// Whether the update can be applied here now.
+    pub ok: bool,
+    pub blockers: Vec<String>,
+    pub changelog: String,
+}
+
+/// What `update_all` did.
+#[derive(Debug, Clone)]
+pub struct UpdateAll {
+    pub applied: Vec<(PackageInfo, StepAction)>,
+    /// Packages with an update that was not applied, with why.
+    pub skipped: Vec<(String, String)>,
+}
+
+/// The cross-process lock that serialises changes to the installed set.
+const LOCK: &str = "modules.apply";
 
 /// Where a plan starts.
 pub enum Request<'a> {
@@ -132,7 +196,38 @@ impl Installer {
             installed_at: at,
             installed_by: by,
             module,
+            changelog: m.module.changelog.clone(),
+            rollback: None,
+            updated_at: None,
         }
+    }
+
+    /// As `info`, with what the stored record adds: the last update and the way back.
+    fn info_stored(m: &Manifest, f: &Fields) -> PackageInfo {
+        let mut p = Self::info(
+            m,
+            f.get("source").and_then(J::as_str).unwrap_or("upload"),
+            f.get("installed_at").and_then(J::as_u64),
+            f.get("installed_by").and_then(J::as_str).map(String::from),
+        );
+        p.updated_at = f.get("updated_at").and_then(J::as_u64);
+        p.rollback = f
+            .get("previous_version")
+            .and_then(J::as_str)
+            .filter(|_| f.get("previous_manifest").is_some())
+            .map(|v| RollbackInfo {
+                version: v.to_string(),
+                irreversible: f
+                    .get("irreversible")
+                    .and_then(J::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            });
+        p
     }
 
     fn builtin_info(m: &Module) -> PackageInfo {
@@ -160,6 +255,9 @@ impl Installer {
             installed_at: None,
             installed_by: None,
             module: m.clone(),
+            changelog: String::new(),
+            rollback: None,
+            updated_at: None,
         }
     }
 
@@ -175,12 +273,7 @@ impl Installer {
                 .and_then(J::as_str)
                 .and_then(|t| Manifest::parse(t).ok())
             {
-                v.push(Self::info(
-                    &m,
-                    f.get("source").and_then(J::as_str).unwrap_or("upload"),
-                    f.get("installed_at").and_then(J::as_u64),
-                    f.get("installed_by").and_then(J::as_str).map(String::from),
-                ));
+                v.push(Self::info_stored(&m, &f));
             }
         }
         v
@@ -343,6 +436,30 @@ impl Installer {
                 }
             }
         }
+        // What an upgrade does to the records already stored (D63).
+        let installed = self.installed_manifests();
+        let count = |model: &str| self.backend.count(model).unwrap_or(0);
+        let mut data = Vec::new();
+        for s in &plan.steps {
+            if s.action != StepAction::Upgrade {
+                continue;
+            }
+            if let Some(old) = installed.get(&s.id) {
+                data.push((s.id.clone(), migrate::plan_data(old, &s.manifest, &count)));
+            }
+        }
+        for (id, dp) in data {
+            for b in &dp.blockers {
+                plan.blockers.push(resolve::Blocker {
+                    module: id.clone(),
+                    kind: "data",
+                    message: b.clone(),
+                });
+            }
+            plan.warnings
+                .extend(dp.warnings.iter().map(|w| format!("{id}: {w}")));
+            plan.data.insert(id, dp);
+        }
         Ok((plan, root.module.id))
     }
 
@@ -371,8 +488,11 @@ impl Installer {
                 ));
             }
         }
+        // Plan and apply under the lock: the plan is made against the installed set that the
+        // apply then changes, with no other process in between.
+        let _x = self.exclusive()?;
         let plan = self.plan(Request::Manifest(text))?.0;
-        self.apply_plan(&plan, &manifest.module.id, source, by)
+        self.apply_plan_locked(&plan, &manifest.module.id, source, by)
     }
 
     pub fn install_from_marketplace(&self, id: &str, by: &str) -> Result<PackageInfo, String> {
@@ -381,14 +501,133 @@ impl Installer {
     }
 
     pub fn install_from_marketplace_outcome(&self, id: &str, by: &str) -> Result<Outcome, String> {
+        let _x = self.exclusive()?;
         let (plan, root) = self.plan(Request::Market(id))?;
-        self.apply_plan(&plan, &root, "marketplace", by)
+        self.apply_plan_locked(&plan, &root, "marketplace", by)
+    }
+
+    /// Update an installed package to the newer version the marketplace (the bundled catalogue
+    /// or the configured one) offers, with whatever dependencies the plan needs (D63).
+    pub fn update_outcome(&self, id: &str, by: &str) -> Result<Outcome, String> {
+        let _x = self.exclusive()?;
+        let have = self
+            .installed_manifests()
+            .remove(id)
+            .ok_or_else(|| self.not_installed(id))?;
+        let (plan, root) = self.plan(Request::Market(id))?;
+        let offered = plan
+            .steps
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.manifest.semver());
+        if offered.as_ref().is_none_or(|o| *o <= have.semver()) {
+            return Err(format!(
+                "{id} {} is up to date: the marketplace offers nothing newer",
+                have.module.version
+            ));
+        }
+        self.apply_plan_locked(&plan, &root, "marketplace", by)
+    }
+
+    fn not_installed(&self, id: &str) -> String {
+        if self.builtin.iter().any(|b| b.id == id) {
+            format!("{id} is a built-in module; it is updated with the core (Settings, Updates)")
+        } else {
+            format!("{id} is not installed")
+        }
+    }
+
+    /// Update every package that has a newer version the instance can take, one plan after the
+    /// other (a dependency first when a dependent needs it). A package whose update is blocked
+    /// stays where it is and is reported with the reason; the others still update.
+    pub fn update_all(&self, by: &str) -> Result<UpdateAll, String> {
+        let _x = self.exclusive()?;
+        let mut applied: Vec<(PackageInfo, StepAction)> = Vec::new();
+        let mut skipped: BTreeMap<String, String> = BTreeMap::new();
+        for _round in 0..=self.installed_manifests().len() {
+            let offered = self.offered();
+            let candidates: Vec<String> = self
+                .installed_manifests()
+                .iter()
+                .filter(|(id, m)| {
+                    offered
+                        .get(*id)
+                        .and_then(|l| Version::parse(&l.version).ok())
+                        .is_some_and(|v| v > m.semver())
+                })
+                .map(|(id, _)| id.clone())
+                .collect();
+            let mut progress = false;
+            for id in candidates {
+                let plan = match self.plan(Request::Market(&id)) {
+                    Ok((p, _)) => p,
+                    Err(e) => {
+                        skipped.insert(id, e);
+                        continue;
+                    }
+                };
+                if !plan.ok() {
+                    skipped.insert(
+                        id,
+                        plan.blockers
+                            .iter()
+                            .map(|b| b.message.clone())
+                            .collect::<Vec<_>>()
+                            .join("; "),
+                    );
+                    continue;
+                }
+                match self.apply_plan_locked(&plan, &id, "marketplace", by) {
+                    Ok(o) => {
+                        skipped.remove(&id);
+                        applied.extend(o.applied);
+                        progress = true;
+                    }
+                    Err(e) => {
+                        skipped.insert(id, e);
+                    }
+                }
+            }
+            if !progress {
+                break;
+            }
+        }
+        Ok(UpdateAll {
+            applied,
+            skipped: skipped.into_iter().collect(),
+        })
     }
 
     /// Apply a plan that has no blockers. The root of an upload keeps `source` `upload`; every
-    /// other step comes from the marketplace. If a step fails, the ones already applied are
-    /// undone and the error says so.
+    /// other step comes from the marketplace. The whole plan is one operation: the packages'
+    /// records and every data migration they declare are written in one atomic batch, so a
+    /// failure at any step, in this process or at the database, leaves the instance exactly as
+    /// it was (D63).
     pub fn apply_plan(
+        &self,
+        plan: &Plan,
+        root: &str,
+        root_source: &str,
+        by: &str,
+    ) -> Result<Outcome, String> {
+        let _x = self.exclusive()?;
+        self.apply_plan_locked(plan, root, root_source, by)
+    }
+
+    /// The locks every change to the installed set holds: this process's, then the database's,
+    /// so two server processes never change the installed set at once (D59).
+    fn exclusive(&self) -> Result<Exclusive<'_>, String> {
+        let process = self.apply.lock().unwrap_or_else(|e| e.into_inner());
+        let database = self.backend.lock(LOCK).map_err(|e| {
+            format!("another change to the modules is still running ({e}); try again in a moment")
+        })?;
+        Ok(Exclusive {
+            _process: process,
+            _database: database,
+        })
+    }
+
+    fn apply_plan_locked(
         &self,
         plan: &Plan,
         root: &str,
@@ -403,35 +642,72 @@ impl Installer {
                 .collect::<Vec<_>>()
                 .join("; "));
         }
-        let _one_at_a_time = self.apply.lock().unwrap_or_else(|e| e.into_inner());
+        let mut last = String::new();
+        for _ in 0..4 {
+            match self.try_apply(plan, root, root_source, by) {
+                Ok(o) => return Ok(o),
+                Err(Failure::Retry(why)) => last = why,
+                Err(Failure::Refused(e)) => return Err(e),
+            }
+        }
+        Err(format!(
+            "records kept changing while the update ran ({last}); nothing was changed, try again"
+        ))
+    }
+
+    fn try_apply(
+        &self,
+        plan: &Plan,
+        root: &str,
+        root_source: &str,
+        by: &str,
+    ) -> Result<Outcome, Failure> {
         let mut done: Vec<Undo> = Vec::new();
         let mut applied = Vec::new();
+        let mut ops: Vec<Op> = Vec::new();
+        let mut notes: Vec<(String, &'static str, String)> = Vec::new();
         for step in plan.work() {
             let source = if step.id == root {
                 root_source
             } else {
                 "marketplace"
             };
-            match self.apply_step(&step.manifest, source, by) {
-                Ok((undo, info)) => {
+            match self.prepare_step(step, source, by, &mut ops) {
+                Ok((undo, info, note)) => {
                     done.push(undo);
+                    notes.push((
+                        step.id.clone(),
+                        if step.action == StepAction::Upgrade {
+                            "module_update"
+                        } else {
+                            "module_install"
+                        },
+                        note,
+                    ));
                     applied.push((info, step.action));
                 }
                 Err(e) => {
                     let n = done.len();
-                    for u in done.into_iter().rev() {
-                        self.undo(u);
-                    }
-                    return Err(if n == 0 {
+                    self.unwind(done);
+                    return Err(Failure::Refused(if n == 0 {
                         format!("{}: {e}", step.id)
                     } else {
                         format!(
                             "{}: {e}; the {n} step(s) before it were rolled back and nothing was installed",
                             step.id
                         )
-                    });
+                    }));
                 }
             }
+        }
+        if let Err(e) = self.backend.apply_checked(&ops) {
+            self.unwind(done);
+            return Err(match e {
+                ApplyError::Conflict { reason, .. } => Failure::Retry(reason),
+                ApplyError::Storage(e) => {
+                    Failure::Refused(format!("nothing was changed, the database refused it: {e}"))
+                }
+            });
         }
         // Tell the other server processes on this database that the installed set changed.
         self.note_local_change(
@@ -440,12 +716,15 @@ impl Installer {
                 .map(|(i, _)| i.id.clone())
                 .collect::<Vec<_>>(),
         );
+        for (id, kind, note) in &notes {
+            self.audit(by, kind, id, note);
+        }
         let root_info = applied
             .iter()
             .find(|(i, _)| i.id == root)
             .map(|(i, _)| i.clone())
             .or_else(|| self.list().into_iter().find(|p| p.id == root))
-            .ok_or_else(|| format!("{root} was not installed"))?;
+            .ok_or_else(|| Failure::Refused(format!("{root} was not installed")))?;
         Ok(Outcome {
             root: root_info,
             applied,
@@ -453,13 +732,21 @@ impl Installer {
         })
     }
 
-    /// Install or upgrade one package whose checks the plan has done.
-    fn apply_step(
+    /// One line in the audit log (`security_event`) about a change to the modules or the core.
+    pub fn audit(&self, by: &str, kind: &str, subject: &str, detail: &str) {
+        obop_commands::audit::record_event(&*self.backend, now(), subject, kind, by, detail);
+    }
+
+    /// Check one step of a plan, register the package in this process and add what the batch
+    /// must write to `ops`: the package record and, for an upgrade, the data steps.
+    fn prepare_step(
         &self,
-        manifest: &Manifest,
+        step: &resolve::Step,
         source: &str,
         by: &str,
-    ) -> Result<(Undo, PackageInfo), String> {
+        ops: &mut Vec<Op>,
+    ) -> Result<(Undo, PackageInfo, String), String> {
+        let manifest = &step.manifest;
         let module = manifest.to_module()?;
         let id = manifest.module.id.clone();
         if self.builtin.iter().any(|b| b.id == id) {
@@ -467,8 +754,20 @@ impl Installer {
         }
         let d = self.d()?;
         let existing = self.backend.get(TABLE, &id).map_err(|e| e.to_string())?;
+        let mut data_steps: Vec<migrate::Step> = Vec::new();
+        let mut note = format!("{} {}", id, manifest.module.version);
+        let mut old_manifest: Option<Manifest> = None;
         if let Some(old) = &existing {
+            let old_text = old.get("manifest").and_then(J::as_str).unwrap_or("");
             let old_v = old.get("version").and_then(J::as_str).unwrap_or("0.0.0");
+            if step.action == StepAction::Upgrade
+                && step.from_version.as_deref().is_some_and(|f| f != old_v)
+            {
+                return Err(format!(
+                    "{id} is now {old_v}, but this plan was made for {}; another change got in first, plan again",
+                    step.from_version.as_deref().unwrap_or("?")
+                ));
+            }
             let old_v = Version::parse(old_v).unwrap_or_else(|_| Version::new(0, 0, 0));
             if manifest.semver() <= old_v {
                 return Err(format!(
@@ -476,6 +775,29 @@ impl Installer {
                     manifest.module.version
                 ));
             }
+            let om = Manifest::parse(old_text).map_err(|e| format!("the installed copy: {e}"))?;
+            let count = |m: &str| self.backend.count(m).unwrap_or(0);
+            let dp = migrate::plan_data(&om, manifest, &count);
+            if !dp.blockers.is_empty() {
+                return Err(dp.blockers.join("; "));
+            }
+            data_steps = dp.steps;
+            note = format!("{id} {old_v} -> {}", manifest.module.version);
+            if !data_steps.is_empty() {
+                note.push_str(&format!(
+                    "; data: {}",
+                    data_steps
+                        .iter()
+                        .map(migrate::Step::summary)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+            old_manifest = Some(om);
+        } else if step.action == StepAction::Upgrade {
+            return Err(format!(
+                "{id} is no longer installed; this plan was made for an upgrade, plan again"
+            ));
         }
         for m in &module.models {
             if d.has_model(m.name) && existing.is_none() {
@@ -498,6 +820,38 @@ impl Installer {
                 .collect::<Vec<_>>()
                 .join("; "));
         }
+        let at = now();
+        let mut f = Fields::new();
+        f.insert("manifest".into(), J::from(manifest.text.as_str()));
+        f.insert("version".into(), J::from(manifest.module.version.clone()));
+        f.insert("source".into(), J::from(source));
+        f.insert("installed_by".into(), J::from(by));
+        f.insert("installed_at".into(), J::from(at));
+        if let (Some(old), Some(om)) = (&existing, &old_manifest) {
+            // Keep the way back: the version this one replaces, and what undoes the data steps.
+            let (inverse, irreversible) = migrate::inverse(&data_steps);
+            f.insert("updated_at".into(), J::from(at));
+            f.insert(
+                "previous_manifest".into(),
+                old.get("manifest").cloned().unwrap_or(J::Null),
+            );
+            f.insert(
+                "previous_version".into(),
+                J::from(om.module.version.clone()),
+            );
+            f.insert(
+                "previous_source".into(),
+                old.get("source").cloned().unwrap_or(J::from("upload")),
+            );
+            f.insert(
+                "rollback_steps".into(),
+                J::Array(inverse.iter().map(migrate::Step::to_json).collect()),
+            );
+            f.insert(
+                "irreversible".into(),
+                J::Array(irreversible.into_iter().map(J::from).collect()),
+            );
+        }
         if existing.is_some() {
             d.unregister_module(&id);
         }
@@ -507,31 +861,36 @@ impl Installer {
             }
             return Err(e);
         }
-        let at = now();
-        let mut f = Fields::new();
-        f.insert("manifest".into(), J::from(manifest.text.as_str()));
-        f.insert("version".into(), J::from(manifest.module.version.clone()));
-        f.insert("source".into(), J::from(source));
-        f.insert("installed_by".into(), J::from(by));
-        f.insert("installed_at".into(), J::from(at));
-        let stored = if existing.is_some() {
-            self.backend.update(TABLE, &id, &f).map(|_| ())
-        } else {
-            self.backend.insert(TABLE, &id, &f).map(|_| ())
+        let undo = Undo {
+            id: id.clone(),
+            previous: existing.clone(),
         };
-        if let Err(e) = stored {
-            d.unregister_module(&id);
-            if let Some(old) = &existing {
-                self.reregister(&id, old);
+        // The data steps read the records now; the batch checks that none changed before it
+        // commits.
+        match migrate::build_ops(&*self.backend, &data_steps) {
+            Ok(mut data_ops) => ops.append(&mut data_ops),
+            Err(e) => {
+                self.unwind(vec![undo]);
+                return Err(e);
             }
-            return Err(e.to_string());
         }
+        ops.push(if existing.is_some() {
+            Op::Put {
+                model: TABLE.into(),
+                id: id.clone(),
+                fields: f,
+            }
+        } else {
+            Op::Insert {
+                model: TABLE.into(),
+                id: id.clone(),
+                fields: f,
+            }
+        });
         Ok((
-            Undo {
-                id,
-                previous: existing,
-            },
+            undo,
             Self::info(manifest, source, Some(at), Some(by.to_string())),
+            note,
         ))
     }
 
@@ -549,19 +908,178 @@ impl Installer {
         }
     }
 
-    fn undo(&self, u: Undo) {
-        if let Ok(d) = self.d() {
-            d.unregister_module(&u.id);
-        }
-        match u.previous {
-            Some(f) => {
-                let _ = self.backend.update(TABLE, &u.id, &f);
+    /// Take back what this process registered for steps that were never committed.
+    fn unwind(&self, done: Vec<Undo>) {
+        for u in done.into_iter().rev() {
+            if let Ok(d) = self.d() {
+                d.unregister_module(&u.id);
+            }
+            if let Some(f) = u.previous {
                 self.reregister(&u.id, &f);
             }
-            None => {
-                let _ = self.backend.delete(TABLE, &u.id);
+        }
+    }
+
+    /// Go back to the version before the last update (D63). Possible while the update left the
+    /// data in a shape the older version reads: renames are reversed, fields the update added are
+    /// kept (the older version ignores them), and an update that deleted a field's values is
+    /// refused (restore the backup instead). The older version must still fit the core, its own
+    /// dependencies, and every installed package that depends on this one.
+    pub fn rollback(&self, id: &str, by: &str) -> Result<PackageInfo, String> {
+        let _x = self.exclusive()?;
+        let mut last = String::new();
+        for _ in 0..4 {
+            match self.try_rollback(id, by) {
+                Ok(p) => return Ok(p),
+                Err(Failure::Retry(why)) => last = why,
+                Err(Failure::Refused(e)) => return Err(e),
             }
         }
+        Err(format!(
+            "records kept changing while the rollback ran ({last}); nothing was changed, try again"
+        ))
+    }
+
+    /// Why `id` cannot go back. `None` when it can.
+    pub fn rollback_blocker(&self, id: &str) -> Option<String> {
+        let stored = self.backend.get(TABLE, id).ok().flatten()?;
+        self.rollback_check(id, &stored).err()
+    }
+
+    fn rollback_check(&self, id: &str, stored: &Fields) -> Result<Manifest, String> {
+        let Some(prev_text) = stored.get("previous_manifest").and_then(J::as_str) else {
+            return Err(format!(
+                "{id} has no earlier version to go back to: it was installed at this version, or it was already rolled back"
+            ));
+        };
+        let irreversible: Vec<&str> = stored
+            .get("irreversible")
+            .and_then(J::as_array)
+            .map(|a| a.iter().filter_map(J::as_str).collect())
+            .unwrap_or_default();
+        if !irreversible.is_empty() {
+            return Err(format!(
+                "the update of {id} deleted data ({}), so the older version cannot be restored by rolling back; restore the backup taken before the update",
+                irreversible.join("; ")
+            ));
+        }
+        let prev = Manifest::parse(prev_text).map_err(|e| format!("the earlier copy: {e}"))?;
+        let core = self.core_version();
+        let pv = prev.semver();
+        if !prev.core_req().matches(&core) {
+            return Err(format!(
+                "{id} {pv} needs core {}, but this instance runs {core}",
+                prev.core_req()
+            ));
+        }
+        let installed = self.installed_manifests();
+        for r in prev.requirements() {
+            let have = if self.builtin.iter().any(|b| b.id == r.id) {
+                Some(core.clone())
+            } else {
+                installed.get(&r.id).map(Manifest::semver)
+            };
+            match have {
+                None => {
+                    return Err(format!(
+                        "{id} {pv} needs {} {}, which is not installed",
+                        r.id, r.req
+                    ));
+                }
+                Some(v) if !r.req.matches(&v) => {
+                    return Err(format!(
+                        "{id} {pv} needs {} {}, but {v} is installed",
+                        r.id, r.req
+                    ));
+                }
+                _ => {}
+            }
+        }
+        for (other, m) in &installed {
+            for r in m.requirements() {
+                if r.id == id && !r.req.matches(&pv) {
+                    return Err(format!(
+                        "rolling {id} back to {pv} would break {other}, which needs {id} {}",
+                        r.req
+                    ));
+                }
+            }
+        }
+        Ok(prev)
+    }
+
+    fn try_rollback(&self, id: &str, by: &str) -> Result<PackageInfo, Failure> {
+        let stored = self
+            .backend
+            .get(TABLE, id)
+            .map_err(|e| Failure::Refused(e.to_string()))?
+            .ok_or_else(|| Failure::Refused(self.not_installed(id)))?;
+        self.rollback_check(id, &stored).map_err(Failure::Refused)?;
+        let prev_text = stored
+            .get("previous_manifest")
+            .and_then(J::as_str)
+            .unwrap_or("");
+        let source = stored
+            .get("previous_source")
+            .and_then(J::as_str)
+            .unwrap_or("upload")
+            .to_string();
+        let current_v = stored.get("version").and_then(J::as_str).unwrap_or("?");
+        let inverse: Vec<migrate::Step> = stored
+            .get("rollback_steps")
+            .and_then(J::as_array)
+            .map(|a| a.iter().filter_map(migrate::Step::from_json).collect())
+            .unwrap_or_default();
+        let prev = Self::with_bundled_labels(prev_text, &source).map_err(Failure::Refused)?;
+        let prev_module = prev.to_module().map_err(Failure::Refused)?;
+        let d = self.d().map_err(Failure::Refused)?;
+        let at = now();
+        let mut f = Fields::new();
+        f.insert("manifest".into(), J::from(prev_text));
+        f.insert("version".into(), J::from(prev.module.version.clone()));
+        f.insert("source".into(), J::from(source.as_str()));
+        f.insert("installed_by".into(), J::from(by));
+        f.insert("installed_at".into(), J::from(at));
+        f.insert("updated_at".into(), J::from(at));
+        f.insert("rolled_back_from".into(), J::from(current_v));
+        d.unregister_module(id);
+        if let Err(e) = self.register(&prev, &prev_module) {
+            self.reregister(id, &stored);
+            return Err(Failure::Refused(e));
+        }
+        let undo = Undo {
+            id: id.to_string(),
+            previous: Some(stored.clone()),
+        };
+        let mut ops = match migrate::build_ops(&*self.backend, &inverse) {
+            Ok(o) => o,
+            Err(e) => {
+                self.unwind(vec![undo]);
+                return Err(Failure::Refused(e));
+            }
+        };
+        ops.push(Op::Put {
+            model: TABLE.into(),
+            id: id.to_string(),
+            fields: f,
+        });
+        if let Err(e) = self.backend.apply_checked(&ops) {
+            self.unwind(vec![undo]);
+            return Err(match e {
+                ApplyError::Conflict { reason, .. } => Failure::Retry(reason),
+                ApplyError::Storage(e) => {
+                    Failure::Refused(format!("nothing was changed, the database refused it: {e}"))
+                }
+            });
+        }
+        self.note_local_change(&[id.to_string()]);
+        self.audit(
+            by,
+            "module_rollback",
+            id,
+            &format!("{id} {current_v} -> {}", prev.module.version),
+        );
+        Ok(Self::info(&prev, &source, Some(at), Some(by.to_string())))
     }
 
     /// What stops `id` from being removed: the installed packages that need it.
@@ -579,7 +1097,11 @@ impl Installer {
     /// Remove a package. Its commands disappear at once; its records stay in the database, so a
     /// reinstall brings them back. Refused while another installed package depends on it.
     pub fn uninstall(&self, id: &str) -> Result<(), String> {
-        let _one_at_a_time = self.apply.lock().unwrap_or_else(|e| e.into_inner());
+        self.uninstall_as(id, "operator")
+    }
+
+    pub fn uninstall_as(&self, id: &str, by: &str) -> Result<(), String> {
+        let _x = self.exclusive()?;
         if let Some(b) = self.uninstall_blocker(id) {
             return Err(b.message);
         }
@@ -588,6 +1110,12 @@ impl Installer {
         }
         self.d()?.unregister_module(id);
         self.note_local_change(&[id.to_string()]);
+        self.audit(
+            by,
+            "module_uninstall",
+            id,
+            &format!("{id} removed; its data stays"),
+        );
         Ok(())
     }
 
@@ -797,6 +1325,78 @@ impl Installer {
         }
     }
 
+    /// Whether each installed package would still run on core `core`: its own core range, and
+    /// the ranges it declares on built-in modules (which version with the core). A core update
+    /// uses this to refuse, or warn about, packages that were not written for the new core
+    /// (D63).
+    pub fn core_compat(&self, core: &Version) -> Vec<CoreCompat> {
+        self.installed_manifests()
+            .into_iter()
+            .map(|(id, m)| {
+                let mut reasons = Vec::new();
+                if !m.core_req().matches(core) {
+                    reasons.push(format!(
+                        "it supports core {}, not {core}",
+                        m.module.requires_core
+                    ));
+                }
+                for r in m.requirements() {
+                    if self.builtin.iter().any(|b| b.id == r.id) && !r.req.matches(core) {
+                        reasons.push(format!(
+                            "it needs {} {}, which versions with the core ({core})",
+                            r.id, r.req
+                        ));
+                    }
+                }
+                CoreCompat {
+                    id,
+                    name: m.module.name.clone(),
+                    version: m.module.version.clone(),
+                    requires_core: m.module.requires_core.clone(),
+                    compatible: reasons.is_empty(),
+                    reasons,
+                }
+            })
+            .collect()
+    }
+
+    /// The installed packages for which the marketplace offers a newer version, with whether the
+    /// update can be applied here now and why not.
+    pub fn updates(&self) -> Vec<UpdateInfo> {
+        let offered = self.offered();
+        let mut out = Vec::new();
+        for (id, m) in self.installed_manifests() {
+            let Some(l) = offered.get(&id) else { continue };
+            let Ok(v) = Version::parse(&l.version) else {
+                continue;
+            };
+            if v <= m.semver() {
+                continue;
+            }
+            let (ok, blockers, changelog) = match self.plan(Request::Market(&id)) {
+                Ok((plan, _)) => (
+                    plan.ok(),
+                    plan.blockers.iter().map(|b| b.message.clone()).collect(),
+                    plan.steps
+                        .iter()
+                        .find(|s| s.id == id)
+                        .map(|s| s.manifest.module.changelog.clone())
+                        .unwrap_or_default(),
+                ),
+                Err(e) => (false, vec![e], String::new()),
+            };
+            out.push(UpdateInfo {
+                id,
+                installed: m.module.version.clone(),
+                available: l.version.clone(),
+                ok,
+                blockers,
+                changelog,
+            });
+        }
+        out
+    }
+
     /// A plan as text, for the command line, and whether it can be applied.
     pub fn plan_text(&self, req: Request<'_>) -> Result<(String, bool), String> {
         let (plan, root) = self.plan(req)?;
@@ -822,6 +1422,43 @@ impl Installer {
                 },
                 s.reason
             ));
+        }
+        for st in plan.work().filter(|s| s.action == StepAction::Upgrade) {
+            if !st.manifest.module.changelog.trim().is_empty() {
+                out.push_str(&format!("  notes for {} {}:\n", st.id, st.version));
+                for line in st.manifest.module.changelog.trim().lines() {
+                    out.push_str(&format!("    {line}\n"));
+                }
+            }
+            if let Some(d) = plan.data.get(&st.id) {
+                for c in &d.changes {
+                    out.push_str(&format!(
+                        "  change {}: {}{}{}\n",
+                        st.id,
+                        c.detail,
+                        if c.breaking { " [breaking]" } else { "" },
+                        c.resolved_by
+                            .as_ref()
+                            .map_or(String::new(), |r| format!(" -> {r}")),
+                    ));
+                }
+            }
+            let installed = self.installed_manifests();
+            for (pid, m) in &installed {
+                if let Some(r) = m.requirements().into_iter().find(|r| r.id == st.id) {
+                    out.push_str(&format!(
+                        "  dependent {pid} {} supports {} {}: {}\n",
+                        m.module.version,
+                        st.id,
+                        r.req,
+                        if r.req.matches(&st.manifest.semver()) {
+                            "ok"
+                        } else {
+                            "NOT SATISFIED"
+                        }
+                    ));
+                }
+            }
         }
         for w in &plan.warnings {
             out.push_str(&format!("  warning: {w}\n"));
@@ -887,6 +1524,67 @@ impl Installer {
             Value::List(warnings.iter().map(|x| views::text(x)).collect()),
         );
         views::put_meta(&mut m, &p.meta, &p.id, &p.version, ctx);
+        m.insert("changelog".into(), views::text(&p.changelog));
+        m.insert(
+            "updated_at".into(),
+            p.updated_at.map_or(Value::Null, |t| Value::Int(t as i64)),
+        );
+        let rb = p.rollback.as_ref();
+        let rb_blocker = rb.and_then(|_| self.rollback_blocker(&p.id));
+        m.insert(
+            "rollback_version".into(),
+            rb.map_or(Value::Null, |r| views::text(&r.version)),
+        );
+        m.insert(
+            "rollback_available".into(),
+            Value::Bool(rb.is_some() && rb_blocker.is_none()),
+        );
+        m.insert(
+            "rollback_blocker".into(),
+            rb_blocker.as_deref().map_or(Value::Null, views::text),
+        );
+        // What the update to the version on offer would do here (D63).
+        let newer = matches!(m.get("update_available"), Some(Value::Text(_)));
+        let (mut upd_notes, mut upd_ok, mut upd_blockers, mut upd_changes, mut upd_steps) = (
+            String::new(),
+            false,
+            Value::List(vec![]),
+            Value::List(vec![]),
+            Value::List(vec![]),
+        );
+        if newer && p.source != "builtin" {
+            match self.plan(Request::Market(&p.id)) {
+                Ok((plan, _)) => {
+                    upd_ok = plan.ok();
+                    upd_blockers = views::blockers_value(&plan.blockers);
+                    if let Some(step) = plan.steps.iter().find(|s| s.id == p.id) {
+                        upd_notes = step.manifest.module.changelog.clone();
+                    }
+                    if let Some(d) = plan.data.get(&p.id) {
+                        upd_changes =
+                            Value::List(d.changes.iter().map(views::change_value).collect());
+                        upd_steps = Value::List(
+                            d.steps
+                                .iter()
+                                .map(|st| views::text(&st.summary()))
+                                .collect(),
+                        );
+                    }
+                }
+                Err(e) => {
+                    upd_blockers = Value::List(vec![Value::map([
+                        ("module", views::text(&p.id)),
+                        ("kind", views::text("unavailable")),
+                        ("message", views::text(&e)),
+                    ])]);
+                }
+            }
+        }
+        m.insert("update_changelog".into(), views::text(&upd_notes));
+        m.insert("update_compatible".into(), Value::Bool(upd_ok));
+        m.insert("update_blockers".into(), upd_blockers);
+        m.insert("update_changes".into(), upd_changes);
+        m.insert("update_migrations".into(), upd_steps);
         Value::Map(m)
     }
 
@@ -989,6 +1687,7 @@ impl Installer {
                 // For a listing, "update available" compares the installed version to the
                 // offered one, which is this listing.
                 views::put_meta(&mut m, &meta, &l.id, &l.version, &ctx);
+                m.insert("changelog".into(), views::text(&l.changelog));
                 let update = have
                     .filter(|h| h.semver() < Version::parse(&l.version).unwrap_or(h.semver()))
                     .map(|_| views::text(&l.version));
@@ -1168,6 +1867,7 @@ pub fn admin_module() -> Module {
                 "update_available",
                 "The newer version the marketplace offers, if any",
             ),
+            list("changelog", "Release notes of this version"),
         ]
     };
     let mut module_fields = vec![
@@ -1185,6 +1885,52 @@ pub fn admin_module() -> Module {
             "When it was installed (Unix seconds); empty for built-in modules",
         ),
         list("installed_by", "Who installed it"),
+        list(
+            "updated_at",
+            "When it was last updated (Unix seconds); empty if never",
+        ),
+        list(
+            "rollback_version",
+            "The version before the last update, if it is kept",
+        ),
+        f(
+            "rollback_available",
+            "Whether the last update can be undone now",
+        )
+        .kind(FieldKind::Bool),
+        list(
+            "rollback_blocker",
+            "Why the last update cannot be undone, if it cannot",
+        ),
+        list(
+            "update_changelog",
+            "Release notes of the version on offer",
+        ),
+        f(
+            "update_compatible",
+            "Whether the version on offer can be installed here now",
+        )
+        .kind(FieldKind::Bool),
+        list(
+            "update_blockers",
+            "What stops the update to the version on offer (a list)",
+        ),
+        list(
+            "update_changes",
+            "What the version on offer changes in the models: added, removed, retyped fields (a list)",
+        ),
+        list(
+            "update_migrations",
+            "The data steps the update would run, in words (a list)",
+        ),
+        list(
+            "updated",
+            "Result of upgrade_all: the modules that were updated (a list)",
+        ),
+        list(
+            "skipped",
+            "Result of upgrade_all: the modules whose update was blocked, with why (a list)",
+        ),
         list(
             "contents",
             "Models, fields, actions, approval steps and data classes the module declares",
@@ -1255,6 +2001,24 @@ pub fn admin_module() -> Module {
                         ADMIN_GROUP,
                     )
                     .approval(),
+                    CommandDef::new(
+                        "upgrade",
+                        "Update an installed module to the newer version the marketplace offers, with the dependencies the plan needs, in one atomic operation. Give id",
+                        ADMIN_GROUP,
+                    )
+                    .approval(),
+                    CommandDef::new(
+                        "upgrade_all",
+                        "Update every module that has a newer version this instance can take; a module whose update is blocked stays and is reported",
+                        ADMIN_GROUP,
+                    )
+                    .approval(),
+                    CommandDef::new(
+                        "rollback",
+                        "Put a module back to the version before its last update, when the data allows it. Give id",
+                        ADMIN_GROUP,
+                    )
+                    .approval(),
                 ],
             },
             ModelDef {
@@ -1295,6 +2059,67 @@ pub fn admin_module() -> Module {
                 )],
             },
             ModelDef {
+                name: "instance_update",
+                description: "Updating the instance itself: the running and the newest core version, whether the installed modules fit it, and the request to the control plane that runs the upgrade",
+                read_group: ADMIN_GROUP,
+                write_group: ADMIN_GROUP,
+                access: None,
+                fields: vec![
+                    list("version", "Input for start: the published version to update to"),
+                    f(
+                        "skip_backup",
+                        "Input for start: set when you have your own backup and none can be taken here",
+                    )
+                    .kind(FieldKind::Bool),
+                    list("mode", "managed (a control plane runs the upgrade) or self_hosted (commands to run yourself)"),
+                    list("current_version", "The core version this instance runs"),
+                    list("latest_version", "The newest published core version"),
+                    f("update_available", "Whether a newer core version is published").kind(FieldKind::Bool),
+                    list("feed", "Where the releases were read from"),
+                    list("feed_error", "Why the feed could not be read, if it could not"),
+                    list("checked_at", "When the feed was read (Unix seconds)"),
+                    list("releases", "Published releases, newest first, each with its notes, whether the installed modules fit it, and what blocks it (a list)"),
+                    list("dropped", "Feed entries that were left out because they failed their integrity check (a list)"),
+                    list("instructions", "The commands to update by hand (a list)"),
+                    list("backup_dir", "Where the backup before an update is written, if configured"),
+                    list("state", "idle, requested, running, succeeded, failed or rolled_back"),
+                    list("kind", "update or rollback"),
+                    list("target_version", "The version the request moves to"),
+                    list("from_version", "The version the request moves from"),
+                    list("phase", "What the upgrade is doing right now"),
+                    list("error", "Why the request failed or was rolled back"),
+                    list("backup", "Path of the backup taken before the update"),
+                    list("started_at", "When the request was made (Unix seconds)"),
+                    list("started_by", "Who made the request"),
+                    list("finished_at", "When it finished (Unix seconds)"),
+                    f("can_rollback", "Whether the last update can be reversed through the control plane").kind(FieldKind::Bool),
+                ],
+                commands: vec![
+                    CommandDef::new(
+                        "check",
+                        "Read the release feed and judge each newer release against the installed modules; includes the state of the last request",
+                        ADMIN_GROUP,
+                    ),
+                    CommandDef::new(
+                        "status",
+                        "The state of the last update request, refreshed from the control plane while it runs",
+                        ADMIN_GROUP,
+                    ),
+                    CommandDef::new(
+                        "start",
+                        "Update the instance to a published core version: takes a backup, then asks the control plane to run the upgrade. Give version",
+                        ADMIN_GROUP,
+                    )
+                    .approval(),
+                    CommandDef::new(
+                        "rollback",
+                        "Ask the control plane to put the instance back on the version before the last update",
+                        ADMIN_GROUP,
+                    )
+                    .approval(),
+                ],
+            },
+            ModelDef {
                 name: "setting",
                 description: "Instance-wide interface settings: theme and the app launcher layout",
                 read_group: ANY_GROUP,
@@ -1320,7 +2145,7 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested",
                     ),
                     f(
                         "actor",
@@ -1399,8 +2224,73 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
                 return Err("expected an object".into());
             };
             let id = text(x, "id")?;
-            i.uninstall(&id)
+            i.uninstall_as(&id, &caller(x))
                 .map(|()| Value::map([("id", s(&id)), ("uninstalled", Value::Bool(true))]))
+        }),
+    );
+    let i = inst.clone();
+    d.register(
+        &m,
+        "module",
+        "upgrade",
+        Box::new(move |input| {
+            let Value::Map(x) = input else {
+                return Err("expected an object".into());
+            };
+            refuse_skipped_dependencies(x)?;
+            i.update_outcome(&text(x, "id")?, &caller(x))
+                .map(|o| outcome_row(&o))
+        }),
+    );
+    let i = inst.clone();
+    d.register(
+        &m,
+        "module",
+        "upgrade_all",
+        Box::new(move |input| {
+            let Value::Map(x) = input else {
+                return Err("expected an object".into());
+            };
+            let r = i.update_all(&caller(x))?;
+            Ok(Value::map([
+                (
+                    "updated",
+                    Value::List(
+                        r.applied
+                            .iter()
+                            .map(|(p, a)| {
+                                Value::map([
+                                    ("id", s(&p.id)),
+                                    ("name", s(&p.name)),
+                                    ("version", s(&p.version)),
+                                    ("action", s(a.as_str())),
+                                ])
+                            })
+                            .collect(),
+                    ),
+                ),
+                (
+                    "skipped",
+                    Value::List(
+                        r.skipped
+                            .iter()
+                            .map(|(id, why)| Value::map([("id", s(id)), ("reason", s(why))]))
+                            .collect(),
+                    ),
+                ),
+            ]))
+        }),
+    );
+    let i = inst.clone();
+    d.register(
+        &m,
+        "module",
+        "rollback",
+        Box::new(move |input| {
+            let Value::Map(x) = input else {
+                return Err("expected an object".into());
+            };
+            i.rollback(&text(x, "id")?, &caller(x)).map(|p| pkg_row(&p))
         }),
     );
     let i = inst.clone();
@@ -1903,14 +2793,15 @@ mod tests {
         let needs = fleet
             .replace("id = \"fleet\"", "id = \"other\"")
             .replace("fleet_vehicle", "other_vehicle")
-            .replace(
-                "description = \"Vehicles",
-                "depends = [\"ghost\"]\ndescription = \"Vehicles",
+            .replacen(
+                "[[model]]",
+                "[module.dependencies]\nghost = \"^0.1\"\n\n[[model]]",
+                1,
             );
         assert!(
             inst.install(&needs, "upload", "r")
                 .unwrap_err()
-                .contains("needs ghost *")
+                .contains("ghost ^0.1")
         );
     }
 
@@ -2233,6 +3124,7 @@ id = "notes"
 version = "0.1.0"
 name = "Notes"
 description = "Notes about customers"
+requires_core = "^0.2"
 
 [[model]]
 name = "notes_note"
