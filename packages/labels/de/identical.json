@@ -1,10 +1,12 @@
 [
   "Bank",
+  "Basic",
   "Budget",
   "Code",
   "Dashboard",
   "Dashboards",
   "Diesel",
+  "Engine",
   "Filter",
   "Helpdesk",
   "Hybrid",
@@ -17,8 +19,12 @@
   "Problem",
   "Software",
   "Spam",
+  "Standard",
+  "Status",
+  "Stripe",
   "Ticket",
   "Transit",
   "Version",
+  "Webhook",
   "Website"
 ]

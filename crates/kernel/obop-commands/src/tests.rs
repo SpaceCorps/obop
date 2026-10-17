@@ -1967,9 +1967,7 @@ fn add_guard_runs_after_the_generated_guard_and_sees_what_it_produced() {
             &Value::map([]),
         )
         .unwrap();
-    let Value::List(rows) = r.value else {
-        panic!()
-    };
+    let Value::List(rows) = r.value else { panic!() };
     assert_eq!(rows.len(), 1, "only the caller's record");
     // The generated guard still runs first: a filter on an unknown field is refused before ours.
     let bad = Value::map([(
@@ -2037,7 +2035,10 @@ fn read_only_registration_exposes_get_list_and_search_and_ignores_actor_keys() {
     d.register_read_only(&m, &store, &["hooks_item"]);
     let u = Principal::user("ann", &["g"]);
     let id = store
-        .insert("hooks_item", [("name".to_string(), Value::text("a"))].into())
+        .insert(
+            "hooks_item",
+            [("name".to_string(), Value::text("a"))].into(),
+        )
         .unwrap();
     let call = |c: &str, v: Value| {
         d.call(

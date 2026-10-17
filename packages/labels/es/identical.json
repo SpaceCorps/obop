@@ -1,13 +1,18 @@
 [
+  "Error",
   "General",
+  "Manual",
+  "No",
   "Normal",
   "Parental",
   "Plan",
   "Slug",
   "Software",
   "Spam",
+  "Stripe",
   "Subtotal",
   "Ticket",
   "Total",
-  "Visible"
+  "Visible",
+  "Webhook"
 ]

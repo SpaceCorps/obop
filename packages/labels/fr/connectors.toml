@@ -1,0 +1,696 @@
+[labels.fr.module]
+name = "Connecteurs"
+description = "Connecter des systèmes externes et laisser chacun connecter ses propres comptes, avec des contrôles intégrés qui aident à respecter le RGPD : base juridique enregistrée, consentement retirable, minimisation, pseudonymisation par classe de données, journal sans contenu et registre des traitements. Des contrôles techniques, ni conseil juridique ni certification."
+
+[labels.fr.model.connector_provider]
+name = "Fournisseur de connecteur"
+description = "Un service ou protocole qu’une connexion peut utiliser, issu du catalogue fourni avec obop"
+
+[labels.fr.model.connector_provider.field.name]
+label = "Nom"
+description = "Nom du fournisseur"
+
+[labels.fr.model.connector_provider.field.category]
+label = "Catégorie"
+description = "Type de service"
+
+[labels.fr.model.connector_provider.field.category.options]
+generic = "Générique"
+messaging = "Messagerie"
+payments = "Paiements"
+developer = "Développement"
+calendar_contacts = "Agenda et contacts"
+automation = "Automatisation"
+
+[labels.fr.model.connector_provider.field.maturity]
+label = "Maturité"
+description = "Ce qui existe : fonctionnel, adaptateur générique ou définition seule"
+
+[labels.fr.model.connector_provider.field.maturity.options]
+working = "Fonctionnel"
+generic_adapter = "Adaptateur générique"
+definition_only = "Définition seule"
+
+[labels.fr.model.connector_provider.field.engine]
+label = "Moteur"
+description = "Le moteur générique qui l’exécute"
+
+[labels.fr.model.connector_provider.field.engine.options]
+webhook_out = "Webhook sortant"
+webhook_in = "Webhook entrant"
+rest_pull = "Récupération REST"
+csv_export = "Export CSV"
+none = "Aucun"
+
+[labels.fr.model.connector_provider.field.auth_kind]
+label = "Type d’authentification"
+description = "Comment la connexion s’authentifie"
+
+[labels.fr.model.connector_provider.field.auth_kind.options]
+api_key = "Clé d’API"
+bearer_token = "Jeton porteur"
+basic = "Basique"
+oauth2 = "OAuth 2"
+webhook_in = "Webhook entrant"
+webhook_out = "Webhook sortant"
+none = "Aucun"
+
+[labels.fr.model.connector_provider.field.direction]
+label = "Sens"
+description = "Si les données entrent, sortent ou circulent dans les deux sens"
+
+[labels.fr.model.connector_provider.field.direction.options]
+inbound = "Entrant"
+outbound = "Sortant"
+both = "Les deux"
+
+[labels.fr.model.connector_provider.field.max_classes]
+label = "Classes maximales"
+description = "Classes de données que le fournisseur peut recevoir au plus, séparées par des virgules"
+
+[labels.fr.model.connector_provider.field.purpose]
+label = "Finalité"
+description = "À quoi sert le fournisseur"
+
+[labels.fr.model.connector_provider.field.description]
+label = "Description"
+description = "Comment cela fonctionne et ce qui est testé"
+
+[labels.fr.model.connector_provider.field.legal_name]
+label = "Dénomination légale"
+description = "Dénomination légale du destinataire (information sur le sous-traitant)"
+
+[labels.fr.model.connector_provider.field.country]
+label = "Pays"
+description = "Pays du destinataire"
+
+[labels.fr.model.connector_provider.field.dpa_url]
+label = "URL du DPA"
+description = "Où le fournisseur publie son accord de traitement des données"
+
+[labels.fr.model.connector_provider.field.eu_adequate]
+label = "Adéquation UE"
+description = "Si les transferts reposent sur un traitement dans l’UE ou un pays adéquat : oui, non ou à vérifier auprès du fournisseur"
+
+[labels.fr.model.connector_provider.field.eu_adequate.options]
+yes = "Oui"
+no = "Non"
+verify = "À vérifier"
+
+[labels.fr.model.connector_provider.field.verify_note]
+label = "Note de vérification"
+description = "Ce qu’il faut confirmer auprès du fournisseur avant de s’appuyer sur ces informations"
+
+[labels.fr.model.connector_provider.field.allowed_hosts]
+label = "Hôtes autorisés"
+description = "Hôtes auxquels le fournisseur se connecte, séparés par des virgules ; vide signifie que la connexion indique les siens"
+
+[labels.fr.model.connector_provider.field.config_fields]
+label = "Champs de configuration"
+description = "Réglages et identifiants dont le fournisseur a besoin, sous forme de liste JSON"
+
+[labels.fr.model.connector_provider.field.setup]
+label = "Configuration"
+description = "Instructions de configuration"
+
+[labels.fr.model.connector_provider.field.webhook_scheme]
+label = "Schéma du webhook"
+description = "Schéma de signature des webhooks entrants"
+
+[labels.fr.model.connector_provider.field.webhook_scheme.options]
+standard = "Standard"
+github = "GitHub"
+stripe = "Stripe"
+
+[labels.fr.model.connector_provider.field.oauth_scopes]
+label = "Portées OAuth"
+description = "Portées OAuth demandées, pour les fournisseurs OAuth"
+
+[labels.fr.model.connector_provider.field.enabled]
+label = "Activé"
+description = "Un administrateur a activé le fournisseur"
+
+[labels.fr.model.connector_provider.field.users_may_use]
+label = "Utilisable par les personnes"
+description = "Les personnes peuvent y connecter leurs propres comptes"
+
+[labels.fr.model.connector_provider.field.dpa_recorded]
+label = "DPA enregistré"
+description = "L’accord avec le fournisseur est enregistré"
+
+[labels.fr.model.connector_provider.field.legal_basis]
+label = "Base juridique"
+description = "Base juridique fixée par l’administrateur pour ce fournisseur"
+
+[labels.fr.model.connector_provider.field.legal_basis.options]
+consent = "Consentement"
+contract = "Contrat"
+legitimate_interest = "Intérêt légitime"
+legal_obligation = "Obligation légale"
+
+[labels.fr.model.connector_provider.field.legal_basis_text]
+label = "Texte de la base juridique"
+description = "Texte montré aux personnes lorsqu’on leur demande leur consentement"
+
+[labels.fr.model.provider_policy]
+name = "Politique du fournisseur"
+description = "Ce qu’un administrateur a décidé pour un fournisseur : activé, pour qui, base juridique, accord et client OAuth"
+
+[labels.fr.model.provider_policy.field.provider]
+label = "Fournisseur"
+description = "Identifiant du fournisseur concerné par cette politique"
+
+[labels.fr.model.provider_policy.field.enabled]
+label = "Activé"
+description = "Le fournisseur peut être connecté"
+
+[labels.fr.model.provider_policy.field.users_may_use]
+label = "Utilisable par les personnes"
+description = "Les personnes ayant connectors.user peuvent connecter leurs propres comptes"
+
+[labels.fr.model.provider_policy.field.allowed_group]
+label = "Groupe autorisé"
+description = "Groupe d’autorisation qui peut l’utiliser ; vide signifie connectors.user"
+
+[labels.fr.model.provider_policy.field.legal_basis]
+label = "Base juridique"
+description = "Base juridique enregistrée pour les connexions de ce fournisseur"
+
+[labels.fr.model.provider_policy.field.legal_basis.options]
+consent = "Consentement"
+contract = "Contrat"
+legitimate_interest = "Intérêt légitime"
+legal_obligation = "Obligation légale"
+
+[labels.fr.model.provider_policy.field.legal_basis_text]
+label = "Texte de la base juridique"
+description = "Texte montré aux personnes lorsqu’on leur demande leur consentement"
+
+[labels.fr.model.provider_policy.field.dpa_recorded]
+label = "DPA enregistré"
+description = "Un accord de traitement des données avec le fournisseur est en place"
+
+[labels.fr.model.provider_policy.field.dpa_reference]
+label = "Référence du DPA"
+description = "Où l’accord est conservé ou sa référence"
+
+[labels.fr.model.provider_policy.field.default_policy]
+label = "Politique par défaut"
+description = "JSON de politique avec lequel démarrent les nouvelles connexions de ce fournisseur"
+
+[labels.fr.model.provider_policy.field.oauth_client_id]
+label = "Client OAuth"
+description = "Identifiant du client OAuth que vous avez enregistré auprès du fournisseur"
+
+[labels.fr.model.provider_policy.field.oauth_client_secret]
+label = "Secret du client OAuth"
+description = "Secret du client OAuth ; en écriture seule, stocké chiffré"
+
+[labels.fr.model.connection]
+name = "Connexion"
+description = "Un lien vers un système externe, avec ses identifiants, sa liste de champs autorisés, sa politique et son état"
+
+[labels.fr.model.connection.field.name]
+label = "Nom"
+description = "Un nom qui indique à quoi sert la connexion"
+
+[labels.fr.model.connection.field.provider]
+label = "Fournisseur"
+description = "Identifiant du fournisseur du catalogue"
+
+[labels.fr.model.connection.field.owner_scope]
+label = "Portée du propriétaire"
+description = "Si la connexion appartient à l’instance ou à une personne"
+
+[labels.fr.model.connection.field.owner_scope.options]
+instance = "Instance"
+user = "Personne"
+
+[labels.fr.model.connection.field.owner_user]
+label = "Propriétaire"
+description = "La personne qui possède la connexion"
+
+[labels.fr.model.connection.field.owner_groups]
+label = "Groupes du propriétaire"
+description = "Groupes d’autorisation du propriétaire lors de la dernière modification de la connexion"
+
+[labels.fr.model.connection.field.state]
+label = "État"
+description = "Où en est la connexion : brouillon, connectée, en pause, erreur ou révoquée"
+
+[labels.fr.model.connection.field.state.options]
+draft = "Brouillon"
+connected = "Connectée"
+paused = "En pause"
+error = "Erreur"
+revoked = "Révoquée"
+
+[labels.fr.model.connection.field.config]
+label = "Configuration"
+description = "Réglages non secrets sous forme d’objet JSON"
+
+[labels.fr.model.connection.field.credentials]
+label = "Identifiants"
+description = "Identifiants sous forme d’objet JSON ; en écriture seule, stockés chiffrés, jamais renvoyés"
+
+[labels.fr.model.connection.field.credentials_hint]
+label = "Indice sur les identifiants"
+description = "Indique si des identifiants sont définis, avec au plus les quatre derniers caractères"
+
+[labels.fr.model.connection.field.oauth_tokens]
+label = "Jetons OAuth"
+description = "Jetons OAuth ; en écriture seule, stockés chiffrés, jamais renvoyés"
+
+[labels.fr.model.connection.field.field_allowlist]
+label = "Liste de champs autorisés"
+description = "Champs qui peuvent sortir ou être acceptés, sous forme d’objet JSON modèle vers noms de champs ; vide signifie rien"
+
+[labels.fr.model.connection.field.policy]
+label = "Politique"
+description = "Surcharges de traitement par classe ou champ et validations d’analyses d’impact, en JSON"
+
+[labels.fr.model.connection.field.rate_limit_per_hour]
+label = "Limite de débit par heure"
+description = "Nombre maximal de flux par heure"
+
+[labels.fr.model.connection.field.volume_cap_per_day]
+label = "Plafond de volume par jour"
+description = "Nombre maximal d’enregistrements par jour"
+
+[labels.fr.model.connection.field.retention_days]
+label = "Jours de conservation"
+description = "Nombre de jours de conservation des journaux de flux et des exécutions"
+
+[labels.fr.model.connection.field.created_at]
+label = "Créée le"
+description = "Quand la connexion a été créée"
+
+[labels.fr.model.connection.field.last_sync_at]
+label = "Dernière exécution le"
+description = "Quand la connexion s’est exécutée pour la dernière fois"
+
+[labels.fr.model.connection.field.last_error]
+label = "Dernière erreur"
+description = "Résumé du dernier échec, sans contenu"
+
+[labels.fr.model.connection.field.result]
+label = "Résultat"
+description = "Résultat de la dernière commande (test, exécution, lien d’autorisation) ; jamais stocké"
+
+[labels.fr.model.connection.action.connect]
+label = "Connecter"
+description = "Démarrer les flux : nécessite une base juridique enregistrée et des réglages complets"
+
+[labels.fr.model.connection.action.pause]
+label = "Mettre en pause"
+description = "Arrêter les flux sans perdre les réglages"
+
+[labels.fr.model.connection.action.resume]
+label = "Reprendre"
+description = "Redémarrer les flux après une pause"
+
+[labels.fr.model.connection.action.retry]
+label = "Réessayer"
+description = "Redémarrer les flux après une erreur"
+
+[labels.fr.model.connection.action.revoke]
+label = "Révoquer"
+description = "Mettre fin définitivement à la connexion : l’accès s’arrête, les identifiants, jetons et tables de pseudonymes sont supprimés"
+
+[labels.fr.model.connection.action.test]
+label = "Tester"
+description = "Vérifier les réglages et l’adresse sans envoyer de données personnelles"
+
+[labels.fr.model.connection.action.sync]
+label = "Synchroniser"
+description = "Exécuter la connexion maintenant : envoyer, récupérer ou produire le fichier"
+
+[labels.fr.model.connection.action.oauth_start]
+label = "Démarrer OAuth"
+description = "Obtenir le lien où la personne autorise la connexion auprès du fournisseur"
+
+[labels.fr.model.consent]
+name = "Consentement"
+description = "La base juridique enregistrée pour une connexion : qui, pourquoi, quelles classes de données, et si elle a été retirée"
+
+[labels.fr.model.consent.field.connection]
+label = "Connexion"
+description = "La connexion concernée par cette base"
+
+[labels.fr.model.consent.field.owner_user]
+label = "Propriétaire"
+description = "Propriétaire de la connexion"
+
+[labels.fr.model.consent.field.state]
+label = "État"
+description = "active, retirée ou remplacée par un enregistrement plus récent"
+
+[labels.fr.model.consent.field.state.options]
+active = "Active"
+withdrawn = "Retirée"
+superseded = "Remplacée"
+
+[labels.fr.model.consent.field.subject_kind]
+label = "Type de personne concernée"
+description = "À qui appartient la base : une personne, un contact ou l’instance"
+
+[labels.fr.model.consent.field.subject_kind.options]
+user = "Personne"
+party = "Contact"
+instance = "Instance"
+
+[labels.fr.model.consent.field.subject]
+label = "Personne concernée"
+description = "Identifiant du contact lorsque la personne concernée est un contact"
+
+[labels.fr.model.consent.field.given_by]
+label = "Saisi par"
+description = "Qui l’a enregistrée"
+
+[labels.fr.model.consent.field.purpose]
+label = "Finalité"
+description = "La finalité du traitement des données"
+
+[labels.fr.model.consent.field.legal_basis]
+label = "Base juridique"
+description = "consentement, contrat, intérêt légitime ou obligation légale"
+
+[labels.fr.model.consent.field.legal_basis.options]
+consent = "Consentement"
+contract = "Contrat"
+legitimate_interest = "Intérêt légitime"
+legal_obligation = "Obligation légale"
+
+[labels.fr.model.consent.field.note]
+label = "Remarque"
+description = "Explication ; pour l’intérêt légitime, le test de mise en balance"
+
+[labels.fr.model.consent.field.classes]
+label = "Classes"
+description = "Classes de données qui peuvent circuler sous cet enregistrement, calculées à partir de la connexion"
+
+[labels.fr.model.consent.field.fields_summary]
+label = "Résumé des champs"
+description = "Modèles et champs qui peuvent circuler, calculés à partir de la connexion"
+
+[labels.fr.model.consent.field.recorded_at]
+label = "Enregistrée le"
+description = "Quand elle a été enregistrée"
+
+[labels.fr.model.consent.field.withdrawn_at]
+label = "Retirée le"
+description = "Quand elle a été retirée, le cas échéant"
+
+[labels.fr.model.consent.field.withdrawn_by]
+label = "Retirée par"
+description = "Qui l’a retirée"
+
+[labels.fr.model.consent.action.withdraw]
+label = "Retirer"
+description = "Retirer la base : la connexion est révoquée et ses identifiants et jetons sont supprimés"
+
+[labels.fr.model.sync_run]
+name = "Exécution de synchronisation"
+description = "Une exécution d’une connexion : quand, combien d’enregistrements et comment elle s’est terminée ; jamais les données"
+
+[labels.fr.model.sync_run.field.connection]
+label = "Connexion"
+description = "La connexion qui s’est exécutée"
+
+[labels.fr.model.sync_run.field.owner_user]
+label = "Propriétaire"
+description = "Propriétaire de la connexion"
+
+[labels.fr.model.sync_run.field.direction]
+label = "Sens"
+description = "Si des données sont sorties ou entrées"
+
+[labels.fr.model.sync_run.field.direction.options]
+inbound = "Entrant"
+outbound = "Sortant"
+
+[labels.fr.model.sync_run.field.kind]
+label = "Type"
+description = "Ce qui l’a déclenchée"
+
+[labels.fr.model.sync_run.field.kind.options]
+manual = "Manuelle"
+event = "Événement"
+pull = "Récupération"
+webhook = "Webhook"
+test = "Tester"
+
+[labels.fr.model.sync_run.field.started_at]
+label = "Démarrée le"
+description = "Quand elle a démarré"
+
+[labels.fr.model.sync_run.field.finished_at]
+label = "Terminée le"
+description = "Quand elle s’est terminée"
+
+[labels.fr.model.sync_run.field.status]
+label = "Statut"
+description = "Comment elle s’est terminée"
+
+[labels.fr.model.sync_run.field.status.options]
+running = "En cours"
+succeeded = "Réussie"
+partial = "Partielle"
+failed = "Échec"
+retrying = "Nouvelle tentative"
+dead_letter = "Lettre morte"
+
+[labels.fr.model.sync_run.field.records]
+label = "Enregistrements"
+description = "Enregistrements envoyés ou acceptés"
+
+[labels.fr.model.sync_run.field.rejected]
+label = "Rejetés"
+description = "Enregistrements refusés"
+
+[labels.fr.model.sync_run.field.proposed]
+label = "Proposés"
+description = "Modifications en attente d’approbation"
+
+[labels.fr.model.sync_run.field.error_summary]
+label = "Résumé de l’erreur"
+description = "Pourquoi elle a échoué, sans contenu"
+
+[labels.fr.model.data_flow_log]
+name = "Journal des flux de données"
+description = "Journal en ajout seul de chaque flux : quand, quoi, combien, quels champs, quel traitement, et une empreinte du contenu ; jamais le contenu"
+
+[labels.fr.model.data_flow_log.field.connection]
+label = "Connexion"
+description = "La connexion à laquelle appartient le flux"
+
+[labels.fr.model.data_flow_log.field.owner_user]
+label = "Propriétaire"
+description = "Propriétaire de la connexion"
+
+[labels.fr.model.data_flow_log.field.at]
+label = "Date et heure"
+description = "Quand cela s’est produit"
+
+[labels.fr.model.data_flow_log.field.direction]
+label = "Sens"
+description = "Si des données sont sorties ou entrées"
+
+[labels.fr.model.data_flow_log.field.direction.options]
+outbound = "Sortant"
+inbound = "Entrant"
+
+[labels.fr.model.data_flow_log.field.model]
+label = "Modèle"
+description = "Le modèle auquel appartiennent les enregistrements"
+
+[labels.fr.model.data_flow_log.field.record_count]
+label = "Nombre d’enregistrements"
+description = "Combien d’enregistrements"
+
+[labels.fr.model.data_flow_log.field.fields_sent]
+label = "Champs envoyés"
+description = "Champs sortis ou acceptés, séparés par des virgules"
+
+[labels.fr.model.data_flow_log.field.fields_denied]
+label = "Champs refusés"
+description = "Champs retenus par la politique, séparés par des virgules"
+
+[labels.fr.model.data_flow_log.field.masking_mode]
+label = "Mode de masquage"
+description = "Traitements appliqués, par exemple pseudonymise=2;allow=1"
+
+[labels.fr.model.data_flow_log.field.payload_hash]
+label = "Empreinte du contenu"
+description = "SHA-256 du contenu après traitement"
+
+[labels.fr.model.data_flow_log.field.outcome]
+label = "Résultat"
+description = "libéré, reçu, refusé, rejeté ou effacé"
+
+[labels.fr.model.data_flow_log.field.outcome.options]
+released = "Libéré"
+received = "Reçu"
+refused = "Refusé"
+rejected = "Rejetés"
+erased = "Effacé"
+
+[labels.fr.model.data_flow_log.field.reason]
+label = "Raison"
+description = "Pourquoi un flux a été refusé ou un enregistrement rejeté"
+
+[labels.fr.model.processing_register]
+name = "Registre des traitements"
+description = "Le registre des activités de traitement (RGPD, article 30) généré à partir des connexions ; exportable en CSV"
+
+[labels.fr.model.processing_register.field.connection]
+label = "Connexion"
+description = "La connexion que décrit cette ligne"
+
+[labels.fr.model.processing_register.field.name]
+label = "Nom"
+description = "Nom de la connexion"
+
+[labels.fr.model.processing_register.field.state]
+label = "État"
+description = "État de la connexion"
+
+[labels.fr.model.processing_register.field.owner_scope]
+label = "Portée du propriétaire"
+description = "Instance ou personne"
+
+[labels.fr.model.processing_register.field.owner_user]
+label = "Propriétaire"
+description = "Propriétaire de la connexion"
+
+[labels.fr.model.processing_register.field.provider]
+label = "Fournisseur"
+description = "Identifiant du fournisseur"
+
+[labels.fr.model.processing_register.field.recipient]
+label = "Destinataire"
+description = "Qui reçoit les données (dénomination légale)"
+
+[labels.fr.model.processing_register.field.recipient_country]
+label = "Pays du destinataire"
+description = "Où se trouve le destinataire"
+
+[labels.fr.model.processing_register.field.purpose]
+label = "Finalité"
+description = "Finalité du traitement"
+
+[labels.fr.model.processing_register.field.legal_basis]
+label = "Base juridique"
+description = "Base juridique enregistrée"
+
+[labels.fr.model.processing_register.field.consent_recorded_at]
+label = "Consentement enregistré le"
+description = "Quand la base a été enregistrée"
+
+[labels.fr.model.processing_register.field.data_subjects]
+label = "Personnes concernées"
+description = "Catégories de personnes concernées"
+
+[labels.fr.model.processing_register.field.personal_data_categories]
+label = "Catégories de données personnelles"
+description = "Catégories de données personnelles, avec classe et traitement"
+
+[labels.fr.model.processing_register.field.transfer_basis]
+label = "Base du transfert"
+description = "Base des transferts vers des pays tiers"
+
+[labels.fr.model.processing_register.field.agreement_recorded]
+label = "Accord enregistré"
+description = "Si l’accord avec le destinataire est enregistré"
+
+[labels.fr.model.processing_register.field.retention_days]
+label = "Jours de conservation"
+description = "Conservation des journaux, en jours"
+
+[labels.fr.model.processing_register.field.safeguards]
+label = "Garanties"
+description = "Mesures techniques et organisationnelles"
+
+[labels.fr.model.processing_register.field.csv]
+label = "CSV"
+description = "Le registre en CSV ; rempli par la commande d’export, jamais stocké"
+
+[labels.fr.model.processing_register.action.export_csv]
+label = "Exporter en CSV"
+description = "Exporter le registre en CSV"
+
+[labels.fr.model.egress_policy]
+name = "Politique de sortie des données"
+description = "Interrupteurs pour toute l’instance : l’interrupteur général, les fournisseurs UE uniquement, l’exigence d’accord et la liste d’hôtes autorisés"
+
+[labels.fr.model.egress_policy.field.flows_enabled]
+label = "Flux activés"
+description = "Interrupteur général : désactivé, rien ne sort et rien n’est accepté"
+
+[labels.fr.model.egress_policy.field.eu_only]
+label = "UE uniquement"
+description = "Les données personnelles ne vont qu’aux fournisseurs ayant une base UE ou d’adéquation"
+
+[labels.fr.model.egress_policy.field.require_dpa]
+label = "Exiger un DPA"
+description = "Les données personnelles, même pseudonymisées, ne vont qu’aux fournisseurs dont l’accord est enregistré"
+
+[labels.fr.model.egress_policy.field.host_allowlist]
+label = "Liste d’hôtes autorisés"
+description = "Hôtes que les connexions peuvent joindre, séparés par des virgules ; vide signifie aucune restriction supplémentaire"
+
+[labels.fr.model.egress_policy.field.default_retention_days]
+label = "Jours de conservation par défaut"
+description = "Conservation des journaux des connexions qui n’existent plus"
+
+[labels.fr.model.egress_policy.field.result]
+label = "Résultat"
+description = "Résultat de la dernière commande (liste de contrôle, purge) ; jamais stocké"
+
+[labels.fr.model.egress_policy.action.checklist]
+label = "Liste de contrôle"
+description = "Vérifier ce qui est configuré : accords, conservation, bases juridiques, validations"
+
+[labels.fr.model.egress_policy.action.purge]
+label = "Purger"
+description = "Supprimer les journaux de flux et les exécutions plus anciens que leur durée de conservation"
+
+[labels.fr.model.privacy_preview]
+name = "Aperçu de confidentialité"
+description = "À quoi ressemble un enregistrement d’exemple après la politique : le contenu exact et le traitement de chaque champ"
+
+[labels.fr.model.privacy_preview.field.provider]
+label = "Fournisseur"
+description = "Fournisseur concerné par l’aperçu"
+
+[labels.fr.model.privacy_preview.field.connection]
+label = "Connexion"
+description = "Une connexion existante à prévisualiser, au lieu d’un fournisseur"
+
+[labels.fr.model.privacy_preview.field.target_model]
+label = "Modèle cible"
+description = "Le modèle à prévisualiser"
+
+[labels.fr.model.privacy_preview.field.record_id]
+label = "Enregistrement"
+description = "Un enregistrement servant d’exemple ; vide signifie le premier"
+
+[labels.fr.model.privacy_preview.field.field_allowlist]
+label = "Liste de champs autorisés"
+description = "Champs à inclure, sous forme d’objet JSON modèle vers noms de champs"
+
+[labels.fr.model.privacy_preview.field.policy]
+label = "Politique"
+description = "JSON de politique à prévisualiser"
+
+[labels.fr.model.privacy_preview.field.payload]
+label = "Contenu"
+description = "Le contenu après traitement, en JSON ; jamais stocké"
+
+[labels.fr.model.privacy_preview.field.treatments]
+label = "Traitements"
+description = "Chaque champ avec sa classe et son traitement, en JSON ; jamais stocké"
+
+[labels.fr.model.privacy_preview.action.render]
+label = "Générer"
+description = "Générer un enregistrement d’exemple après masquage et pseudonymisation"

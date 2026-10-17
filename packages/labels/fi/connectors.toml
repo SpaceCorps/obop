@@ -1,0 +1,696 @@
+[labels.fi.module]
+name = "Liittimet"
+description = "Yhdistä ulkoisia järjestelmiä ja anna ihmisten yhdistää omia tilejään. Mukana GDPR:ää tukevat kontrollit: kirjattu oikeusperuste, peruutettava suostumus, tietojen minimointi, pseudonymisointi tietoluokan mukaan, sisällötön loki ja käsittelytoimien seloste. Teknisiä kontrolleja, ei oikeudellista neuvontaa eikä sertifiointi."
+
+[labels.fi.model.connector_provider]
+name = "Liittimen tarjoaja"
+description = "Palvelu tai protokolla, jota yhteys voi käyttää, obopin mukana toimitetusta luettelosta"
+
+[labels.fi.model.connector_provider.field.name]
+label = "Nimi"
+description = "Tarjoajan nimi"
+
+[labels.fi.model.connector_provider.field.category]
+label = "Luokka"
+description = "Palvelun laji"
+
+[labels.fi.model.connector_provider.field.category.options]
+generic = "Yleinen"
+messaging = "Viestintä"
+payments = "Maksut"
+developer = "Kehittäjät"
+calendar_contacts = "Kalenteri ja yhteystiedot"
+automation = "Automaatio"
+
+[labels.fi.model.connector_provider.field.maturity]
+label = "Kypsyys"
+description = "Kuinka paljon on olemassa: toimii, yleisadapteri tai vain määritelmä"
+
+[labels.fi.model.connector_provider.field.maturity.options]
+working = "Toimii"
+generic_adapter = "Yleisadapteri"
+definition_only = "Vain määritelmä"
+
+[labels.fi.model.connector_provider.field.engine]
+label = "Moottori"
+description = "Yleinen moottori, joka ajaa sen"
+
+[labels.fi.model.connector_provider.field.engine.options]
+webhook_out = "Lähtevä webhook"
+webhook_in = "Saapuva webhook"
+rest_pull = "REST-haku"
+csv_export = "CSV-vienti"
+none = "Ei mitään"
+
+[labels.fi.model.connector_provider.field.auth_kind]
+label = "Todennustapa"
+description = "Miten yhteys todennetaan"
+
+[labels.fi.model.connector_provider.field.auth_kind.options]
+api_key = "API-avain"
+bearer_token = "Bearer-token"
+basic = "Perus"
+oauth2 = "OAuth 2"
+webhook_in = "Saapuva webhook"
+webhook_out = "Lähtevä webhook"
+none = "Ei mitään"
+
+[labels.fi.model.connector_provider.field.direction]
+label = "Suunta"
+description = "Virtaako tieto sisään, ulos vai molempiin suuntiin"
+
+[labels.fi.model.connector_provider.field.direction.options]
+inbound = "Saapuva"
+outbound = "Lähtevä"
+both = "Molemmat"
+
+[labels.fi.model.connector_provider.field.max_classes]
+label = "Enimmäisluokat"
+description = "Tietoluokat, jotka tarjoaja saa enintään vastaanottaa, pilkuilla erotettuina"
+
+[labels.fi.model.connector_provider.field.purpose]
+label = "Käyttötarkoitus"
+description = "Mihin tarjoajaa käytetään"
+
+[labels.fi.model.connector_provider.field.description]
+label = "Kuvaus"
+description = "Miten se toimii ja mitä on testattu"
+
+[labels.fi.model.connector_provider.field.legal_name]
+label = "Virallinen nimi"
+description = "Vastaanottajan virallinen nimi (alikäsittelijän tiedot)"
+
+[labels.fi.model.connector_provider.field.country]
+label = "Maa"
+description = "Vastaanottajan maa"
+
+[labels.fi.model.connector_provider.field.dpa_url]
+label = "Sopimuksen URL"
+description = "Missä tarjoaja julkaisee henkilötietojen käsittelysopimuksensa"
+
+[labels.fi.model.connector_provider.field.eu_adequate]
+label = "EU:n riittävä tietosuoja"
+description = "Perustuvatko siirrot käsittelyyn EU:ssa tai riittävän tietosuojan maassa: kyllä, ei tai tarkista palveluntarjoajalta"
+
+[labels.fi.model.connector_provider.field.eu_adequate.options]
+yes = "Kyllä"
+no = "Ei"
+verify = "Tarkista"
+
+[labels.fi.model.connector_provider.field.verify_note]
+label = "Tarkistusohje"
+description = "Mitä tulee vahvistaa palveluntarjoajalta ennen kuin luotat näihin tietoihin"
+
+[labels.fi.model.connector_provider.field.allowed_hosts]
+label = "Sallitut isännät"
+description = "Isännät, joihin tarjoaja ottaa yhteyden, pilkuilla erotettuina; tyhjä tarkoittaa, että yhteys nimeää omansa"
+
+[labels.fi.model.connector_provider.field.config_fields]
+label = "Asetuskentät"
+description = "Asetukset ja tunnistetiedot, joita tarjoaja tarvitsee, JSON-listana"
+
+[labels.fi.model.connector_provider.field.setup]
+label = "Asennus"
+description = "Asennusohjeet"
+
+[labels.fi.model.connector_provider.field.webhook_scheme]
+label = "Webhook-malli"
+description = "Saapuvien webhookien allekirjoitusmalli"
+
+[labels.fi.model.connector_provider.field.webhook_scheme.options]
+standard = "Vakio"
+github = "GitHub"
+stripe = "Stripe"
+
+[labels.fi.model.connector_provider.field.oauth_scopes]
+label = "OAuth-oikeudet"
+description = "Pyydetyt OAuth-oikeudet OAuth-tarjoajille"
+
+[labels.fi.model.connector_provider.field.enabled]
+label = "Käytössä"
+description = "Ylläpitäjä otti tarjoajan käyttöön"
+
+[labels.fi.model.connector_provider.field.users_may_use]
+label = "Ihmiset saavat käyttää"
+description = "Ihmiset saavat yhdistää sillä omia tilejään"
+
+[labels.fi.model.connector_provider.field.dpa_recorded]
+label = "Sopimus kirjattu"
+description = "Sopimus palveluntarjoajan kanssa on kirjattu"
+
+[labels.fi.model.connector_provider.field.legal_basis]
+label = "Oikeusperuste"
+description = "Oikeusperuste, jonka ylläpitäjä asetti tälle tarjoajalle"
+
+[labels.fi.model.connector_provider.field.legal_basis.options]
+consent = "Suostumus"
+contract = "Sopimus"
+legitimate_interest = "Oikeutettu etu"
+legal_obligation = "Lakisääteinen velvoite"
+
+[labels.fi.model.connector_provider.field.legal_basis_text]
+label = "Oikeusperustan teksti"
+description = "Teksti, joka näytetään ihmisille suostumusta kysyttäessä"
+
+[labels.fi.model.provider_policy]
+name = "Tarjoajan käytäntö"
+description = "Mitä ylläpitäjä päätti yhdestä tarjoajasta: käyttöönotto, kenelle, oikeusperuste, sopimus ja OAuth-asiakas"
+
+[labels.fi.model.provider_policy.field.provider]
+label = "Tarjoaja"
+description = "Sen tarjoajan tunnus, jota tämä käytäntö koskee"
+
+[labels.fi.model.provider_policy.field.enabled]
+label = "Käytössä"
+description = "Tarjoajan saa yhdistää lainkaan"
+
+[labels.fi.model.provider_policy.field.users_may_use]
+label = "Ihmiset saavat käyttää"
+description = "Henkilöt, joilla on connectors.user, saavat yhdistää omia tilejään"
+
+[labels.fi.model.provider_policy.field.allowed_group]
+label = "Sallittu ryhmä"
+description = "Käyttöoikeusryhmä, joka saa käyttää sitä; tyhjä tarkoittaa connectors.user"
+
+[labels.fi.model.provider_policy.field.legal_basis]
+label = "Oikeusperuste"
+description = "Tämän tarjoajan yhteyksille kirjattu oikeusperuste"
+
+[labels.fi.model.provider_policy.field.legal_basis.options]
+consent = "Suostumus"
+contract = "Sopimus"
+legitimate_interest = "Oikeutettu etu"
+legal_obligation = "Lakisääteinen velvoite"
+
+[labels.fi.model.provider_policy.field.legal_basis_text]
+label = "Oikeusperustan teksti"
+description = "Teksti, joka näytetään ihmisille suostumusta kysyttäessä"
+
+[labels.fi.model.provider_policy.field.dpa_recorded]
+label = "Sopimus kirjattu"
+description = "Henkilötietojen käsittelysopimus palveluntarjoajan kanssa on voimassa"
+
+[labels.fi.model.provider_policy.field.dpa_reference]
+label = "Sopimuksen viite"
+description = "Missä sopimusta säilytetään tai sen viite"
+
+[labels.fi.model.provider_policy.field.default_policy]
+label = "Oletuskäytäntö"
+description = "Käytäntö-JSON, jolla tämän tarjoajan uudet yhteydet alkavat"
+
+[labels.fi.model.provider_policy.field.oauth_client_id]
+label = "OAuth-asiakas"
+description = "OAuth-asiakastunnus, jonka rekisteröit palveluntarjoajalla"
+
+[labels.fi.model.provider_policy.field.oauth_client_secret]
+label = "OAuth-asiakkaan salaisuus"
+description = "OAuth-asiakkaan salaisuus; vain kirjoitettava, tallennetaan salattuna"
+
+[labels.fi.model.connection]
+name = "Yhteys"
+description = "Yhteys yhteen ulkoiseen järjestelmään tunnistetietoineen, sallittujen kenttien listoineen, käytäntöineen ja tiloineen"
+
+[labels.fi.model.connection.field.name]
+label = "Nimi"
+description = "Nimi, josta näkee, mihin yhteyttä käytetään"
+
+[labels.fi.model.connection.field.provider]
+label = "Tarjoaja"
+description = "Tarjoajan tunnus luettelosta"
+
+[labels.fi.model.connection.field.owner_scope]
+label = "Omistajan piiri"
+description = "Kuuluuko yhteys instanssille vai yhdelle henkilölle"
+
+[labels.fi.model.connection.field.owner_scope.options]
+instance = "Instanssi"
+user = "Käyttäjä"
+
+[labels.fi.model.connection.field.owner_user]
+label = "Omistaja"
+description = "Henkilö, joka omistaa yhteyden"
+
+[labels.fi.model.connection.field.owner_groups]
+label = "Omistajan ryhmät"
+description = "Omistajan käyttöoikeusryhmät yhteyden viimeisen muutoksen aikaan"
+
+[labels.fi.model.connection.field.state]
+label = "Tila"
+description = "Missä yhteys on: luonnos, yhdistetty, tauotettu, virhe tai peruttu"
+
+[labels.fi.model.connection.field.state.options]
+draft = "Luonnos"
+connected = "Yhdistetty"
+paused = "Tauotettu"
+error = "Virhe"
+revoked = "Peruttu"
+
+[labels.fi.model.connection.field.config]
+label = "Asetukset"
+description = "Ei-salaiset asetukset JSON-objektina"
+
+[labels.fi.model.connection.field.credentials]
+label = "Tunnistetiedot"
+description = "Tunnistetiedot JSON-objektina; vain kirjoitettava, tallennetaan salattuna, ei palauteta koskaan"
+
+[labels.fi.model.connection.field.credentials_hint]
+label = "Tunnistetietojen vihje"
+description = "Onko tunnistetiedot asetettu, enintään neljä viimeistä merkkiä näytetään"
+
+[labels.fi.model.connection.field.oauth_tokens]
+label = "OAuth-tokenit"
+description = "OAuth-tokenit; vain kirjoitettavat, tallennetaan salattuina, ei palauteta koskaan"
+
+[labels.fi.model.connection.field.field_allowlist]
+label = "Sallittujen kenttien lista"
+description = "Kentät, jotka saavat lähteä tai joita saa vastaanottaa, JSON-objektina malli–kenttien nimet; tyhjä tarkoittaa ei mitään"
+
+[labels.fi.model.connection.field.policy]
+label = "Käytäntö"
+description = "Käsittelyn ohitukset luokan tai kentän mukaan ja vaikutustenarviointien vahvistukset JSON-muodossa"
+
+[labels.fi.model.connection.field.rate_limit_per_hour]
+label = "Tuntikohtainen enimmäismäärä"
+description = "Enimmäismäärä virtauksia tunnissa"
+
+[labels.fi.model.connection.field.volume_cap_per_day]
+label = "Päivittäinen määräraja"
+description = "Enimmäismäärä tietueita päivässä"
+
+[labels.fi.model.connection.field.retention_days]
+label = "Säilytyspäivät"
+description = "Päivät, joina tietovirtalokit ja ajot säilytetään"
+
+[labels.fi.model.connection.field.created_at]
+label = "Luotu"
+description = "Milloin yhteys luotiin"
+
+[labels.fi.model.connection.field.last_sync_at]
+label = "Viimeksi ajettu"
+description = "Milloin yhteys viimeksi ajettiin"
+
+[labels.fi.model.connection.field.last_error]
+label = "Viimeisin virhe"
+description = "Yhteenveto viimeisimmästä virheestä ilman sisältöä"
+
+[labels.fi.model.connection.field.result]
+label = "Tulos"
+description = "Viimeisimmän komennon tulos (testi, ajo, valtuutuslinkki); ei tallenneta koskaan"
+
+[labels.fi.model.connection.action.connect]
+label = "Yhdistä"
+description = "Käynnistä virtaukset: vaatii kirjatun oikeusperusteen ja täydelliset asetukset"
+
+[labels.fi.model.connection.action.pause]
+label = "Tauota"
+description = "Pysäytä virtaukset menettämättä asetuksia"
+
+[labels.fi.model.connection.action.resume]
+label = "Jatka"
+description = "Käynnistä virtaukset uudelleen tauon jälkeen"
+
+[labels.fi.model.connection.action.retry]
+label = "Yritä uudelleen"
+description = "Käynnistä virtaukset uudelleen virheen jälkeen"
+
+[labels.fi.model.connection.action.revoke]
+label = "Peruuta"
+description = "Lopeta yhteys lopullisesti: pääsy päättyy ja tunnistetiedot, tokenit ja pseudonyymikartat poistetaan"
+
+[labels.fi.model.connection.action.test]
+label = "Testaa"
+description = "Tarkista asetukset ja osoite lähettämättä henkilötietoja"
+
+[labels.fi.model.connection.action.sync]
+label = "Synkronoi"
+description = "Aja yhteys nyt: lähetä, hae tai tuota tiedosto"
+
+[labels.fi.model.connection.action.oauth_start]
+label = "Aloita OAuth"
+description = "Hae linkki, jossa henkilö valtuuttaa yhteyden palveluntarjoajalla"
+
+[labels.fi.model.consent]
+name = "Suostumus"
+description = "Yhteydelle kirjattu oikeusperuste: kuka, miksi, mitkä tietoluokat ja onko se peruutettu"
+
+[labels.fi.model.consent.field.connection]
+label = "Yhteys"
+description = "Yhteys, jota tämä peruste koskee"
+
+[labels.fi.model.consent.field.owner_user]
+label = "Omistaja"
+description = "Yhteyden omistaja"
+
+[labels.fi.model.consent.field.state]
+label = "Tila"
+description = "voimassa, peruutettu tai korvattu uudemmalla tiedolla"
+
+[labels.fi.model.consent.field.state.options]
+active = "Voimassa"
+withdrawn = "Peruutettu"
+superseded = "Korvattu"
+
+[labels.fi.model.consent.field.subject_kind]
+label = "Kohteen laji"
+description = "Kenen peruste on: käyttäjän, yhteystiedon tai instanssin"
+
+[labels.fi.model.consent.field.subject_kind.options]
+user = "Käyttäjä"
+party = "Yhteystieto"
+instance = "Instanssi"
+
+[labels.fi.model.consent.field.subject]
+label = "Kohde"
+description = "Yhteystiedon tunnus, kun kohde on yhteystieto"
+
+[labels.fi.model.consent.field.given_by]
+label = "Kirjaaja"
+description = "Kuka kirjasi sen"
+
+[labels.fi.model.consent.field.purpose]
+label = "Käyttötarkoitus"
+description = "Käyttötarkoitus, jota varten tietoja käsitellään"
+
+[labels.fi.model.consent.field.legal_basis]
+label = "Oikeusperuste"
+description = "suostumus, sopimus, oikeutettu etu tai lakisääteinen velvoite"
+
+[labels.fi.model.consent.field.legal_basis.options]
+consent = "Suostumus"
+contract = "Sopimus"
+legitimate_interest = "Oikeutettu etu"
+legal_obligation = "Lakisääteinen velvoite"
+
+[labels.fi.model.consent.field.note]
+label = "Huomautus"
+description = "Selitys; oikeutetun edun kohdalla intressivertailu"
+
+[labels.fi.model.consent.field.classes]
+label = "Luokat"
+description = "Tietoluokat, jotka saavat siirtyä tämän tiedon perusteella, laskettu yhteydestä"
+
+[labels.fi.model.consent.field.fields_summary]
+label = "Kenttäyhteenveto"
+description = "Mallit ja kentät, jotka saavat siirtyä, laskettu yhteydestä"
+
+[labels.fi.model.consent.field.recorded_at]
+label = "Kirjattu"
+description = "Milloin se kirjattiin"
+
+[labels.fi.model.consent.field.withdrawn_at]
+label = "Peruutettu"
+description = "Milloin se peruutettiin, jos peruutettiin"
+
+[labels.fi.model.consent.field.withdrawn_by]
+label = "Peruuttaja"
+description = "Kuka perui sen"
+
+[labels.fi.model.consent.action.withdraw]
+label = "Peruuta"
+description = "Peruuta peruste: yhteys perutaan ja sen tunnistetiedot ja tokenit poistetaan"
+
+[labels.fi.model.sync_run]
+name = "Synkronointiajo"
+description = "Yhteyden yksi ajo: milloin, kuinka monta tietuetta ja miten se päättyi; ei koskaan tietoja"
+
+[labels.fi.model.sync_run.field.connection]
+label = "Yhteys"
+description = "Yhteys, joka ajettiin"
+
+[labels.fi.model.sync_run.field.owner_user]
+label = "Omistaja"
+description = "Yhteyden omistaja"
+
+[labels.fi.model.sync_run.field.direction]
+label = "Suunta"
+description = "Lähtikö tietoa vai tuliko sitä"
+
+[labels.fi.model.sync_run.field.direction.options]
+inbound = "Saapuva"
+outbound = "Lähtevä"
+
+[labels.fi.model.sync_run.field.kind]
+label = "Laji"
+description = "Mikä sen käynnisti"
+
+[labels.fi.model.sync_run.field.kind.options]
+manual = "Manuaalinen"
+event = "Tapahtuma"
+pull = "Haku"
+webhook = "Webhook"
+test = "Testaa"
+
+[labels.fi.model.sync_run.field.started_at]
+label = "Aloitettu"
+description = "Milloin se alkoi"
+
+[labels.fi.model.sync_run.field.finished_at]
+label = "Päättynyt"
+description = "Milloin se päättyi"
+
+[labels.fi.model.sync_run.field.status]
+label = "Tila"
+description = "Miten se päättyi"
+
+[labels.fi.model.sync_run.field.status.options]
+running = "Käynnissä"
+succeeded = "Onnistui"
+partial = "Osittainen"
+failed = "Epäonnistui"
+retrying = "Yritetään uudelleen"
+dead_letter = "Menetetty"
+
+[labels.fi.model.sync_run.field.records]
+label = "Tietueet"
+description = "Lähetetyt tai hyväksytyt tietueet"
+
+[labels.fi.model.sync_run.field.rejected]
+label = "Hylätyt"
+description = "Hylätyt tietueet"
+
+[labels.fi.model.sync_run.field.proposed]
+label = "Ehdotetut"
+description = "Hyväksyntää odottavat muutokset"
+
+[labels.fi.model.sync_run.field.error_summary]
+label = "Virheen yhteenveto"
+description = "Miksi se epäonnistui ilman sisältöä"
+
+[labels.fi.model.data_flow_log]
+name = "Tietovirtausloki"
+description = "Vain lisättävä loki jokaisesta virtauksesta: milloin, mitä, kuinka monta, mitkä kentät, miten käsitelty ja sisällön tiiviste; ei koskaan sisältöä"
+
+[labels.fi.model.data_flow_log.field.connection]
+label = "Yhteys"
+description = "Yhteys, jolle virtaus kuuluu"
+
+[labels.fi.model.data_flow_log.field.owner_user]
+label = "Omistaja"
+description = "Yhteyden omistaja"
+
+[labels.fi.model.data_flow_log.field.at]
+label = "Aika"
+description = "Milloin se tapahtui"
+
+[labels.fi.model.data_flow_log.field.direction]
+label = "Suunta"
+description = "Lähtikö tietoa vai tuliko sitä"
+
+[labels.fi.model.data_flow_log.field.direction.options]
+outbound = "Lähtevä"
+inbound = "Saapuva"
+
+[labels.fi.model.data_flow_log.field.model]
+label = "Malli"
+description = "Malli, johon tietueet kuuluvat"
+
+[labels.fi.model.data_flow_log.field.record_count]
+label = "Tietueiden määrä"
+description = "Kuinka monta tietuetta"
+
+[labels.fi.model.data_flow_log.field.fields_sent]
+label = "Lähetetyt kentät"
+description = "Kentät, jotka lähtivät tai hyväksyttiin, pilkuilla erotettuina"
+
+[labels.fi.model.data_flow_log.field.fields_denied]
+label = "Estetyt kentät"
+description = "Kentät, jotka käytäntö pidätti, pilkuilla erotettuina"
+
+[labels.fi.model.data_flow_log.field.masking_mode]
+label = "Maskaustila"
+description = "Sovelletut käsittelyt, esimerkiksi pseudonymise=2;allow=1"
+
+[labels.fi.model.data_flow_log.field.payload_hash]
+label = "Sisällön tiiviste"
+description = "Sisällön SHA-256 käsittelyn jälkeen"
+
+[labels.fi.model.data_flow_log.field.outcome]
+label = "Tulos"
+description = "vapautettu, vastaanotettu, evätty, hylätty tai poistettu"
+
+[labels.fi.model.data_flow_log.field.outcome.options]
+released = "Vapautettu"
+received = "Vastaanotettu"
+refused = "Evätty"
+rejected = "Hylätyt"
+erased = "Poistettu"
+
+[labels.fi.model.data_flow_log.field.reason]
+label = "Syy"
+description = "Miksi virtaus evättiin tai tietue hylättiin"
+
+[labels.fi.model.processing_register]
+name = "Käsittelytoimien seloste"
+description = "Käsittelytoimien seloste (GDPR 30 artikla) muodostettuna yhteyksistä; viedään CSV-tiedostona"
+
+[labels.fi.model.processing_register.field.connection]
+label = "Yhteys"
+description = "Yhteys, jota tämä rivi kuvaa"
+
+[labels.fi.model.processing_register.field.name]
+label = "Nimi"
+description = "Yhteyden nimi"
+
+[labels.fi.model.processing_register.field.state]
+label = "Tila"
+description = "Yhteyden tila"
+
+[labels.fi.model.processing_register.field.owner_scope]
+label = "Omistajan piiri"
+description = "Instanssi tai käyttäjä"
+
+[labels.fi.model.processing_register.field.owner_user]
+label = "Omistaja"
+description = "Yhteyden omistaja"
+
+[labels.fi.model.processing_register.field.provider]
+label = "Tarjoaja"
+description = "Tarjoajan tunnus"
+
+[labels.fi.model.processing_register.field.recipient]
+label = "Vastaanottaja"
+description = "Kuka vastaanottaa tiedot (virallinen nimi)"
+
+[labels.fi.model.processing_register.field.recipient_country]
+label = "Vastaanottajan maa"
+description = "Missä vastaanottaja on"
+
+[labels.fi.model.processing_register.field.purpose]
+label = "Käyttötarkoitus"
+description = "Käsittelyn tarkoitus"
+
+[labels.fi.model.processing_register.field.legal_basis]
+label = "Oikeusperuste"
+description = "Kirjattu oikeusperuste"
+
+[labels.fi.model.processing_register.field.consent_recorded_at]
+label = "Suostumus kirjattu"
+description = "Milloin peruste kirjattiin"
+
+[labels.fi.model.processing_register.field.data_subjects]
+label = "Rekisteröidyt"
+description = "Rekisteröityjen ryhmät"
+
+[labels.fi.model.processing_register.field.personal_data_categories]
+label = "Henkilötietoryhmät"
+description = "Henkilötietojen ryhmät luokan ja käsittelyn kanssa"
+
+[labels.fi.model.processing_register.field.transfer_basis]
+label = "Siirron peruste"
+description = "Siirtojen peruste kolmansiin maihin"
+
+[labels.fi.model.processing_register.field.agreement_recorded]
+label = "Sopimus kirjattu"
+description = "Onko sopimus vastaanottajan kanssa kirjattu"
+
+[labels.fi.model.processing_register.field.retention_days]
+label = "Säilytyspäivät"
+description = "Lokien säilytys päivinä"
+
+[labels.fi.model.processing_register.field.safeguards]
+label = "Suojatoimet"
+description = "Tekniset ja organisatoriset toimenpiteet"
+
+[labels.fi.model.processing_register.field.csv]
+label = "CSV"
+description = "Seloste CSV-muodossa; vientikomento täyttää sen, ei tallenneta koskaan"
+
+[labels.fi.model.processing_register.action.export_csv]
+label = "Vie CSV"
+description = "Vie seloste CSV-tiedostona"
+
+[labels.fi.model.egress_policy]
+name = "Lähtevän tiedon käytäntö"
+description = "Koko instanssin kytkimet tietovirroille: pääkytkin, vain EU-tarjoajat, sopimusvaatimus ja sallittujen isäntien lista"
+
+[labels.fi.model.egress_policy.field.flows_enabled]
+label = "Virtaukset käytössä"
+description = "Pääkytkin: kun pois päältä, mikään ei lähde eikä mitään hyväksytä"
+
+[labels.fi.model.egress_policy.field.eu_only]
+label = "Vain EU"
+description = "Henkilötiedot menevät vain tarjoajille, joilla on EU- tai riittävän tietosuojan peruste"
+
+[labels.fi.model.egress_policy.field.require_dpa]
+label = "Vaadi sopimus"
+description = "Henkilötiedot, myös pseudonymisoidut, menevät vain tarjoajille, joiden sopimus on kirjattu"
+
+[labels.fi.model.egress_policy.field.host_allowlist]
+label = "Sallittujen isäntien lista"
+description = "Isännät, joihin yhteydet saavat ottaa yhteyden, pilkuilla erotettuina; tyhjä tarkoittaa ei lisärajoitusta"
+
+[labels.fi.model.egress_policy.field.default_retention_days]
+label = "Oletussäilytyspäivät"
+description = "Lokien säilytys yhteyksille, joita ei enää ole"
+
+[labels.fi.model.egress_policy.field.result]
+label = "Tulos"
+description = "Viimeisimmän komennon tulos (tarkistuslista, siivous); ei tallenneta koskaan"
+
+[labels.fi.model.egress_policy.action.checklist]
+label = "Tarkistuslista"
+description = "Tarkista, mitä on asetettu: sopimukset, säilytys, oikeusperusteet, vahvistukset"
+
+[labels.fi.model.egress_policy.action.purge]
+label = "Siivoa"
+description = "Poista tietovirtalokit ja ajot, jotka ovat säilytysaikaansa vanhempia"
+
+[labels.fi.model.privacy_preview]
+name = "Tietosuojan esikatselu"
+description = "Miltä esimerkkitietue näyttää käytännön jälkeen: tarkka sisältö ja jokaisen kentän käsittely"
+
+[labels.fi.model.privacy_preview.field.provider]
+label = "Tarjoaja"
+description = "Tarjoaja, jota esikatselu koskee"
+
+[labels.fi.model.privacy_preview.field.connection]
+label = "Yhteys"
+description = "Olemassa oleva yhteys esikatseltavaksi tarjoajan sijaan"
+
+[labels.fi.model.privacy_preview.field.target_model]
+label = "Kohdemalli"
+description = "Esikatseltava malli"
+
+[labels.fi.model.privacy_preview.field.record_id]
+label = "Tietue"
+description = "Esimerkkinä käytettävä tietue; tyhjä tarkoittaa ensimmäistä"
+
+[labels.fi.model.privacy_preview.field.field_allowlist]
+label = "Sallittujen kenttien lista"
+description = "Mukaan otettavat kentät JSON-objektina malli–kenttien nimet"
+
+[labels.fi.model.privacy_preview.field.policy]
+label = "Käytäntö"
+description = "Esikatseltava käytäntö-JSON"
+
+[labels.fi.model.privacy_preview.field.payload]
+label = "Sisältö"
+description = "Sisältö käsittelyn jälkeen JSON-muodossa; ei tallenneta koskaan"
+
+[labels.fi.model.privacy_preview.field.treatments]
+label = "Käsittelyt"
+description = "Jokainen kenttä luokkineen ja käsittelyineen JSON-muodossa; ei tallenneta koskaan"
+
+[labels.fi.model.privacy_preview.action.render]
+label = "Muodosta"
+description = "Muodosta esimerkkitietue maskauksen ja pseudonymisoinnin jälkeen"

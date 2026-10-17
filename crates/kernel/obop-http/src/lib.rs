@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use tower_http::services::{ServeDir, ServeFile};
 
 pub mod community;
+pub mod connectors;
 pub mod mcp;
 pub mod openapi;
 pub mod public;
@@ -29,6 +30,8 @@ pub struct HttpState {
     auth: Arc<dyn Authenticator>,
     sessions: Mutex<HashMap<String, Session>>,
     mcp: mcp::McpState,
+    /// The connectors engines, set once by the composition root (webhooks, OAuth redirect).
+    connectors: std::sync::OnceLock<Arc<obop_connectors::Runtime>>,
 }
 
 impl HttpState {
@@ -47,7 +50,13 @@ impl HttpState {
             auth,
             sessions: Mutex::new(HashMap::new()),
             mcp: mcp::McpState::new(mcp),
+            connectors: std::sync::OnceLock::new(),
         })
+    }
+
+    /// Serve the connectors' public doors (`/hooks/in/{id}`, `/oauth/callback`).
+    pub fn set_connectors(&self, rt: Arc<obop_connectors::Runtime>) {
+        let _ = self.connectors.set(rt);
     }
 
     /// One vault per bearer token, so mask tokens are stable inside a session (D40).
@@ -89,6 +98,13 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
         .route("/api/meta", get(meta))
         .route("/api/openapi.json", get(instance_openapi))
         .route("/api/approve/{plan_id}", post(approve))
+        .route(
+            "/hooks/in/{id}",
+            post(connectors::hook).layer(axum::extract::DefaultBodyLimit::max(
+                obop_connectors::webhook::MAX_BODY,
+            )),
+        )
+        .route("/oauth/callback", get(connectors::oauth_callback))
         .route("/api/{model}/{command}", post(call))
         .route("/mcp", any(mcp::endpoint))
         .route("/mcp/server-card", get(mcp::server_card_canonical))

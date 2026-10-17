@@ -2,6 +2,7 @@
   "accounting": "machine-drafted",
   "appointments": "machine-drafted",
   "base": "machine-drafted",
+  "connectors": "machine-drafted",
   "crm": "machine-drafted",
   "dashboards": "machine-drafted",
   "documents": "machine-drafted",

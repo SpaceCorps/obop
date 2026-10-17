@@ -1,6 +1,7 @@
 //! Composition root: the linked first-party modules, one dispatcher and one store.
 
 use obop_commands::{Authenticator, Dispatcher, Principal, Store};
+use obop_connectors::{Config as ConnectorConfig, Runtime as Connectors, SecretBox};
 use obop_pkg::{Bundled, Chain, Http, Installer, Marketplace};
 use obop_registry::Module;
 use std::sync::Arc;
@@ -11,6 +12,8 @@ pub struct App {
     pub store: Store,
     pub installer: Arc<Installer>,
     pub market: Arc<dyn Marketplace>,
+    /// The connectors engines (D54): egress policy, webhooks, OAuth, retention.
+    pub connectors: Arc<Connectors>,
 }
 
 /// The bundled catalog, plus a remote one when `OBOP_MARKETPLACE_URL` is set.
@@ -35,12 +38,24 @@ impl App {
         crm::register(&d, &store);
         sales::register(&d, &store);
         invoicing::register(&d, &store);
+        let secrets = SecretBox::open_for(&store.backend()).unwrap_or_else(|e| {
+            eprintln!("error: {e}");
+            std::process::exit(2);
+        });
+        let connectors = Connectors::new(
+            store.backend(),
+            d.clone(),
+            secrets,
+            ConnectorConfig::from_env(),
+        );
+        ::connectors::register(&d, &store, &connectors);
         let modules = vec![
             base::module(),
             product::module(),
             crm::module(),
             sales::module(),
             invoicing::module(),
+            ::connectors::module(),
             obop_pkg::admin_module(),
         ];
         let market = marketplace();
@@ -55,6 +70,7 @@ impl App {
             store,
             installer,
             market,
+            connectors,
         }
     }
 
@@ -85,13 +101,21 @@ pub fn dev_principal(token: &str) -> Option<Principal> {
         "sales.user",
         "invoicing.user",
         "invoicing.manager",
+        "connectors.user",
+        "connectors.admin",
     ];
     match token {
         "dev-admin" => Some(Principal::user("dev-admin", ALL)),
         "dev-agent" => Some(Principal::agent("dev-agent", ALL, ALL)),
         "dev-sales" => Some(Principal::user(
             "dev-sales",
-            &["base.user", "crm.user", "sales.user", "product.user"],
+            &[
+                "base.user",
+                "crm.user",
+                "sales.user",
+                "product.user",
+                "connectors.user",
+            ],
         )),
         _ => None,
     }

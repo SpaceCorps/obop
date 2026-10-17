@@ -817,10 +817,28 @@ impl Runtime {
         let scheme = Scheme::parse(p.webhook_scheme).unwrap_or(Scheme::Standard);
         let v = webhook::verify(scheme, secret, header, body, now())
             .map_err(|_| HookError::Unauthorised)?;
-        Seen::claim(&*self.backend, &c.id, &v.event_id, now()).map_err(|e| match e {
-            VerifyError::Replay => HookError::Unauthorised,
-            _ => HookError::Unauthorised,
-        })?;
+        // A request that cannot be accepted now (paused, no basis) does not use up its id, so the
+        // sender's retry after the connection is back is not taken for a replay.
+        self.ingress
+            .authorise(&c, &p, c.cfg("target_model"))
+            .map_err(|r| {
+                let why = r.to_string();
+                self.egress.log(
+                    &c,
+                    "inbound",
+                    c.cfg("target_model"),
+                    0,
+                    &[],
+                    &[],
+                    "",
+                    "",
+                    "refused",
+                    &why,
+                );
+                HookError::Refused(why)
+            })?;
+        Seen::claim(&*self.backend, &c.id, &v.event_id, now())
+            .map_err(|_: VerifyError| HookError::Unauthorised)?;
         let filter = c.cfg("event_types");
         if !filter.is_empty() {
             let ev = header("x-github-event").unwrap_or_default();
