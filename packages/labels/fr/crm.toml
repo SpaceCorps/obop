@@ -1,5 +1,6 @@
 [labels.fr.module]
 name = "CRM"
+summary = "Pistes et opportunités dans un pipeline, du premier contact au gagné ou perdu."
 
 [labels.fr.model.lead]
 name = "Piste"

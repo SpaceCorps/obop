@@ -1,5 +1,6 @@
 [labels.es.module]
 name = "CRM"
+summary = "Oportunidades y clientes potenciales en un embudo, del primer contacto a ganada o perdida."
 
 [labels.es.model.lead]
 name = "Oportunidad"

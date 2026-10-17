@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Interventions"
 description = "Interventions sur site chez des clients, réalisées par un technicien : planifiée, en route, en cours, terminée ou annulée. Une intervention enregistre le client, le site, le technicien, le jour et l’heure de début, les pièces utilisées et la signature éventuelle du client. Données personnelles incluses. Nécessite les packages Ressources humaines et Produits."
+summary = "Interventions sur site chez des clients, réalisées par un technicien, avec les pièces utilisées et un indicateur de signature du client."
 
 [labels.fr.model.field_service_job]
 name = "Intervention"

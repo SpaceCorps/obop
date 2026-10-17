@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Conectores"
 description = "Conecte sistemas externos y deje que las personas conecten sus propias cuentas, con controles integrados que apoyan el cumplimiento del RGPD: base jurídica registrada, consentimiento retirable, minimización, seudonimización por clase de datos, un registro sin contenido y un registro de tratamientos. Controles técnicos, no asesoramiento jurídico ni certificación."
+summary = "Conecta otros sistemas con base jurídica registrada, listas de campos permitidos, webhooks firmados y OAuth."
 
 [labels.es.model.connector_provider]
 name = "Proveedor de conector"

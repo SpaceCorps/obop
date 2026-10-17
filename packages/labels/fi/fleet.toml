@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Kalusto"
 description = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria. Seuraa tilaa ja huoltotietoja; se ei laske käyttökustannuksia tai polttoaineen kulutusta."
+summary = "Pienen kaluston ajoneuvot, kuljettajat ja huoltohistoria."
 
 [labels.fi.model.fleet_vehicle]
 name = "Ajoneuvo"

@@ -1066,13 +1066,20 @@ fn an_inbound_change_that_needs_approval_becomes_a_proposal() {
     let inv =
         e.s.insert(
             "invoice",
-            [
-                ("state".to_string(), Value::text("draft")),
-                ("total_minor".to_string(), Value::Int(100)),
-            ]
-            .into(),
+            [("state".to_string(), Value::text("draft"))].into(),
         )
         .unwrap();
+    // The total of an invoice is the sum of its lines.
+    e.s.insert(
+        "invoice_line",
+        [
+            ("invoice_id".to_string(), Value::text(&inv)),
+            ("quantity".to_string(), Value::Int(1)),
+            ("unit_price_minor".to_string(), Value::Int(100)),
+        ]
+        .into(),
+    )
+    .unwrap();
     // The sender knows the invoice under external id "X-1": map it by a first create is not possible,
     // so register the link as a previous delivery would have.
     let r = Receiver::new(200);

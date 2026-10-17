@@ -10,5 +10,8 @@ obop-types.workspace = true
 obop-registry.workspace = true
 obop-commands.workspace = true
 
+[dev-dependencies]
+sales.workspace = true
+
 [lints]
 workspace = true

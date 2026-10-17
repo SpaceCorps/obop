@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Strona internetowa"
 description = "Treści publicznej strony: strony, menu nawigacji, wpisy na blogu, ich tłumaczenia oraz zgłoszenia z formularzy. Przy włączonej stronie publicznej opublikowane treści są dostępne bez logowania, z SEO; widoczne są tylko pola publiczne. Publikację zatwierdza człowiek, agenci mogą ją tylko zaproponować. Dane nadawców są osobowe i nigdy publiczne."
+summary = "Strony, menu, wpisy na blogu i zgłoszenia z formularzy, udostępniane jako strona publiczna przy włączonej stronie."
 
 [labels.pl.model.website_page]
 name = "Strona"

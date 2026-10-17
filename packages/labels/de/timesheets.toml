@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Zeiterfassung"
-description = "Auf Projektaufgaben verwendete Zeit, in Minuten erfasst, mit Kennzeichen für Abrechenbarkeit und einem Genehmigungsschritt. Benötigt das Paket Projekte."
+description = "Auf Projektaufgaben verwendete Zeit, in Minuten erfasst, mit Kennzeichen für Abrechenbarkeit und einem Genehmigungsschritt. Benötigt das Paket Projekte. Wer arbeitet, sieht und bearbeitet nur die eigenen Einträge; timesheets.manager sieht alle."
+summary = "Auf Projektaufgaben verwendete Zeit in Minuten, mit Kennzeichen für Abrechenbarkeit und Genehmigungsschritt."
 
 [labels.de.model.timesheets_entry]
 name = "Zeiteintrag"
@@ -12,7 +13,7 @@ description = "Die bearbeitete Aufgabe"
 
 [labels.de.model.timesheets_entry.field.worker]
 label = "Ausführende Person"
-description = "Name der Person, die die Arbeit geleistet hat"
+description = "Benutzername der Person, die die Arbeit geleistet hat; standardmäßig die Person, die den Eintrag anlegt"
 
 [labels.de.model.timesheets_entry.field.worked_on]
 label = "Gearbeitet am"

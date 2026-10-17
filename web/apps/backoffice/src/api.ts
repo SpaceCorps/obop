@@ -1,4 +1,5 @@
-import { t, type Factor } from "@obop/ui";
+import { fmt, t, type Factor } from "@obop/ui";
+import { NETWORK_MESSAGE, NetworkError, request, serverFault } from "./net.ts";
 
 /** Translations the server may add to metadata: language code -> text (D34; absent today). */
 export type Translations = Record<string, string>;
@@ -49,6 +50,22 @@ export type FieldMeta = {
   max_bytes?: number;
   /** The model the field belongs to (set when the metadata is loaded). */
   model?: string;
+  /** Moves only through the model's actions, also for someone who can run none of them (D48). */
+  governed?: boolean;
+  /** Computed by the server when the record is read; never sent (D57). */
+  computed?: boolean;
+  /** No two records may share the value (D57). */
+  unique?: boolean;
+  /** A number the server assigns; never sent (D57). */
+  sequence?: boolean;
+};
+/** Row-level access rules of a model (D58): which records the person sees. */
+export type AccessMeta = {
+  own?: string | null;
+  via?: string | null;
+  public_field?: string | null;
+  shared_with?: string | null;
+  see_all_group?: string[];
 };
 export type ModelMeta = {
   name: string;
@@ -61,12 +78,16 @@ export type ModelMeta = {
   can_delete: boolean;
   fields: FieldMeta[];
   actions: Command[];
+  /** Present when the person sees only some of the records (D58). */
+  access?: AccessMeta;
 };
 export type ModuleMeta = {
   id: string;
   name: string;
   labels?: Translations;
   descriptions?: Translations;
+  /** The one-line card text per language (D52); absent when untranslated. */
+  summaries?: Translations;
   models: ModelMeta[];
 };
 
@@ -92,17 +113,31 @@ export async function approve(token: string, planId: string): Promise<Reply> {
 
 /**
  * `null` means the token was rejected: the caller signs out. `"enrolment"` means the session may
- * only set up two-factor authentication, which an administrator policy requires (D53).
+ * only set up two-factor authentication, which an administrator policy requires (D53). `"failed"`
+ * means the server could not be reached or answered with an error: the caller offers a retry.
  */
-export async function meta(token: string): Promise<ModuleMeta[] | null | "enrolment"> {
-  const res = await fetch("/api/meta", { headers: { authorization: `Bearer ${token}` } });
+export async function meta(token: string): Promise<ModuleMeta[] | null | "enrolment" | "failed"> {
+  let res: Response;
+  try {
+    res = await request(
+      "/api/meta",
+      { headers: { authorization: `Bearer ${token}` } },
+      { retry: true },
+    );
+  } catch {
+    return "failed";
+  }
   if (res.status === 401) return null;
   if (res.status === 403) {
     const body = (await res.json().catch(() => ({}))) as { code?: string };
     if (body.code === "mfa_enrolment_required") return "enrolment";
   }
-  if (!res.ok) return [];
-  const body = (await res.json()) as { modules: ModuleMeta[]; core_version?: string };
+  if (!res.ok) return "failed";
+  const body = (await res.json().catch(() => null)) as {
+    modules: ModuleMeta[];
+    core_version?: string;
+  } | null;
+  if (!body || !Array.isArray(body.modules)) return "failed";
   if (body.core_version) coreVersion = body.core_version;
   const modules = body.modules;
   // An older server may not send the kind yet: money by name, everything else text.
@@ -133,6 +168,8 @@ export type SearchQuery = {
   order?: ServerOrder[];
   limit?: number;
   offset?: number;
+  /** BCP-47 tag that picks the server's text collation; filled in from the active locale. */
+  lang?: string;
 };
 export type SearchResult = { rows: Row[]; total: number; denied: string[] };
 
@@ -142,10 +179,54 @@ export async function search(
   model: string,
   query: SearchQuery,
 ): Promise<SearchResult | { error: string; status: number }> {
-  const r = await call(token, `${model}.search`, query);
+  // Text sorts the way this browser would (D3): the server needs to know the language.
+  const q = query.order?.length && !query.lang ? { ...query, lang: fmt.locale } : query;
+  const r = await call(token, `${model}.search`, q);
   if (r.kind === "ok") {
     const v = r.value as { rows: Row[]; total: number };
     return { rows: v.rows, total: v.total, denied: r.denied };
+  }
+  return r.kind === "error"
+    ? { error: r.message, status: r.status }
+    : { error: t("Needs approval"), status: 202 };
+}
+
+/** One entry of `group_by`: a field, or a date field with a bucket. */
+export type AggGroupBy = { field: string; bucket?: "day" | "week" | "month" };
+/** One measure: `count`, or `sum`, `min` or `max` of a number or money field. */
+export type AggMeasure = { op: "count" } | { op: "sum" | "min" | "max"; field: string };
+export type AggGroup = {
+  /** Group field -> value (`null` for empty; a date bucket is `YYYY-MM-DD` or `YYYY-MM`). */
+  key: Record<string, unknown>;
+  count: number;
+  /** `sum:amount_minor` -> number (`min` and `max` of nothing are `null`). */
+  measures: Record<string, number | null>;
+};
+export type AggResult = { groups: AggGroup[]; total: number; denied: string[] };
+
+/**
+ * Groups and totals computed on the server over every record that matches `filter` (D4), with the
+ * same access rules as `search`: a field the person cannot read answers `unknown field`.
+ */
+export async function aggregate(
+  token: string,
+  model: string,
+  q: { filter?: ServerFilter[]; group_by?: AggGroupBy[]; measures?: AggMeasure[] },
+): Promise<AggResult | { error: string; status: number }> {
+  const body: Record<string, unknown> = {
+    aggregate: {
+      group_by: (q.group_by ?? []).map((g) => (g.bucket ? g : g.field)),
+      measures: q.measures ?? [{ op: "count" }],
+    },
+    lang: fmt.locale,
+  };
+  if (q.filter?.length) body.filter = q.filter;
+  const r = await call(token, `${model}.search`, body);
+  if (r.kind === "ok") {
+    const v = r.value as { groups?: AggGroup[]; total: number };
+    if (!Array.isArray(v.groups))
+      return { error: "aggregate is not supported by this server", status: 501 };
+    return { groups: v.groups, total: v.total, denied: r.denied };
   }
   return r.kind === "error"
     ? { error: r.message, status: r.status }
@@ -172,15 +253,33 @@ export async function list(
   return { rows: r.rows, denied: r.denied, total: r.total };
 }
 
+/** Commands that only read: safe to repeat when the connection drops. */
+const READS = new Set(["get", "list", "search"]);
+
 async function send(token: string, path: string, body: object): Promise<Reply> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const idempotent = READS.has(path.split("/").pop() ?? "");
+  let res: Response;
+  try {
+    res = await request(
+      path,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      { retry: idempotent },
+    );
+  } catch (e) {
+    if (e instanceof NetworkError) return { kind: "error", status: 0, message: NETWORK_MESSAGE };
+    throw e;
+  }
   const json = await res.json().catch(() => ({}));
   if (res.status === 202) return { kind: "approval", planId: json.plan_id };
-  if (!res.ok) return { kind: "error", status: res.status, message: json.error ?? res.statusText };
+  if (!res.ok) {
+    // A proxy or a crash answers with HTML or nothing: say that the server had a problem.
+    const message = json.error ?? (res.status >= 500 ? serverFault(res.status) : res.statusText);
+    return { kind: "error", status: res.status, message: message || serverFault(res.status) };
+  }
   return { kind: "ok", value: json.value, denied: json.denied ?? [] };
 }
 

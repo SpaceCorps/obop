@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Recursos humanos"
-description = "Empleados, departamentos y solicitudes de ausencia. Los datos personales se clasifican de forma estricta: el salario, los datos bancarios y el documento de identidad solo los ven los responsables, y los datos de salud y sindicales, el grupo especial de lectores."
+description = "Empleados, departamentos y solicitudes de ausencia. Los datos personales se clasifican de forma estricta: el salario, los datos bancarios y el documento de identidad solo los ven los responsables, y los datos de salud y sindicales, el grupo especial de lectores. Cada empleado ve y presenta solo sus propias solicitudes de ausencia; hr.manager las ve todas."
+summary = "Empleados, departamentos y solicitudes de ausencia, con salario y datos de salud restringidos a los grupos adecuados."
 
 [labels.es.model.hr_department]
 name = "Departamento"
@@ -189,3 +190,7 @@ description = "Rechazar una ausencia solicitada (solo responsables)"
 [labels.es.model.hr_employee.field.photo]
 label = "Foto"
 description = "Foto de la persona (PNG, JPEG, WebP o GIF; los metadatos como la ubicación se eliminan al subirla). Dato personal: nunca público"
+
+[labels.es.model.hr_leave_request.field.requested_by]
+label = "Solicitada por"
+description = "Nombre de usuario de la persona que pidió la ausencia; quien presenta la solicitud, salvo que se indique otra. Solo esa persona y hr.manager ven la solicitud"

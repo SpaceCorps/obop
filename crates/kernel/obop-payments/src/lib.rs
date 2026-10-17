@@ -347,7 +347,7 @@ impl Payments {
         let mut patch = Fields::new();
         patch.insert("state".into(), json!(new_state));
         patch.insert("event_ids".into(), json!(json!(seen).to_string()));
-        match self.backend.apply(&[Op::Patch {
+        match self.backend.apply_checked(&[Op::Patch {
             model: PAYMENT.into(),
             id: id.into(),
             patch,
@@ -443,7 +443,7 @@ impl Payments {
                 ops.push(Op::add("ecommerce_discount_use", usage, "count", -1).min(0));
             }
         }
-        match self.backend.apply(&ops) {
+        match self.backend.apply_checked(&ops) {
             Ok(()) => Ok(true),
             // Someone else gave them back first, or the counter is already at zero.
             Err(ApplyError::Conflict { index: 0, .. }) => Ok(false),
@@ -451,7 +451,10 @@ impl Payments {
                 // A counter that cannot go lower must not stop the units from coming back.
                 let mut ops = ops;
                 ops.retain(|op| !matches!(op, Op::Add { model, .. } if model.starts_with("ecommerce_discount")));
-                self.backend.apply(&ops).map(|()| true).or(Ok(false))
+                self.backend
+                    .apply_checked(&ops)
+                    .map(|()| true)
+                    .or(Ok(false))
             }
             Err(e) => Err(e.to_string()),
         }
@@ -485,7 +488,7 @@ impl Payments {
         patch.insert("state".into(), json!("refunded"));
         patch.insert("refund_id".into(), json!(done.id));
         patch.insert("refunded_amount".into(), json!(done.amount));
-        match self.backend.apply(&[Op::Patch {
+        match self.backend.apply_checked(&[Op::Patch {
             model: PAYMENT.into(),
             id: payment_id.into(),
             patch,
@@ -652,7 +655,7 @@ impl Payments {
         }
         let mut patch = Fields::new();
         patch.insert("state".into(), json!("cancelled"));
-        let _ = self.backend.apply(&[Op::Patch {
+        let _ = self.backend.apply_checked(&[Op::Patch {
             model: PAYMENT.into(),
             id: pid,
             patch,
@@ -672,7 +675,7 @@ impl Payments {
         let mut patch = Fields::new();
         patch.insert("state".into(), json!("succeeded"));
         patch.insert("event_ids".into(), json!(json!(seen).to_string()));
-        let _ = self.backend.apply(&[Op::Patch {
+        let _ = self.backend.apply_checked(&[Op::Patch {
             model: PAYMENT.into(),
             id: pid,
             patch,

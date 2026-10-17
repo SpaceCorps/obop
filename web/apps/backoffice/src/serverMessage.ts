@@ -5,7 +5,7 @@
 import { getLang, t, tx } from "@obop/ui";
 import type { ModuleMeta } from "./api.ts";
 import { label, optionLabel } from "./format.ts";
-import { fieldTitle, modelTitle } from "./labels.ts";
+import { appTitle, fieldTitle, modelTitle } from "./labels.ts";
 
 let modules: ModuleMeta[] = [];
 /** Lets messages name models and fields the way the interface does. */
@@ -27,6 +27,18 @@ function fieldName(model: string, field: string): string {
     if (f) return fieldTitle(f);
   }
   return tx("field", label(field));
+}
+
+/** An option value as the server quotes it ("draft"), or "(empty)", shown as the interface would. */
+function opt(raw: string): string {
+  if (raw === "(empty)") return t("empty");
+  return optionLabel(raw.replace(/^"|"$/g, ""));
+}
+
+/** A module by the name the interface gives it (its id when it is not installed). */
+function moduleName(id: string): string {
+  const m = modules.find((x) => x.id === id);
+  return m ? appTitle(m) : tx("app", label(id));
 }
 
 function values(list: string): string {
@@ -93,7 +105,7 @@ const RULES: Rule[] = [
     (m) =>
       t("{field} cannot change from {from} to {to}; from {from} it can only go to: {allowed}", {
         field: fieldName(m[1]!, m[2]!),
-        from: optionLabel(m[3]!),
+        from: opt(m[3]!),
         to: optionLabel(m[4]!),
         allowed: values(m[5]!),
       }),
@@ -103,7 +115,7 @@ const RULES: Rule[] = [
     (m) =>
       t("{field} cannot change from {from} to {to}: no action leads away from {from}", {
         field: fieldName(m[1]!, m[2]!),
-        from: optionLabel(m[3]!),
+        from: opt(m[3]!),
         to: optionLabel(m[4]!),
       }),
   ],
@@ -122,6 +134,212 @@ const RULES: Rule[] = [
           .join("; "),
       }),
   ],
+  // Transport failures the app itself reports (net.ts).
+  [
+    /^Could not reach the server$/,
+    () => t("Could not reach the server. Check your connection and try again."),
+  ],
+  [
+    /^The server had a problem \(status (\d+)\)$/,
+    (m) =>
+      t("The server had a problem (status {status}). Try again in a moment.", { status: m[1]! }),
+  ],
+  // Governed fields (D48).
+  [
+    /^(\w+)\.(\w+) starts as "([^"]*)" when a record is created; it moves on through the model's actions$/,
+    (m) =>
+      t("{field} starts as {value} when a record is created; it moves on through the actions", {
+        field: fieldName(m[1]!, m[2]!),
+        value: opt(m[3]!),
+      }),
+  ],
+  [
+    /^(\w+)\.(\w+): moving from (.+) to "([^"]*)" is the (\w+) action, which needs the ([\w.]+) group$/,
+    (m) =>
+      t(
+        "{field}: moving from {from} to {to} is the action {action}, which needs the group {group}",
+        {
+          field: fieldName(m[1]!, m[2]!),
+          from: opt(m[3]!),
+          to: opt(m[4]!),
+          action: tx("action", label(m[5]!)),
+          group: m[6]!,
+        },
+      ),
+  ],
+  [
+    /^(\w+) must be (\S+) to do this, it is (.+)$/,
+    (m) =>
+      t("{field} must be {from} to do this, it is {current}", {
+        field: tx("field", label(m[1]!)),
+        from: opt(m[2]!),
+        current: opt(m[3]!),
+      }),
+  ],
+  // Server-side queries (D49) and summaries (D4).
+  [/^unknown op "([^"]*)" \(use .*\)$/, (m) => t("Unknown filter operator {op}", { op: m[1]! })],
+  [
+    /^unknown option "([^"]*)" \(use .*\)$/,
+    (m) => t("Unknown search option {option}", { option: m[1]! }),
+  ],
+  [
+    /^at most (\d+) filter conditions$/,
+    (m) => t("At most {max} filter conditions", { max: m[1]! }),
+  ],
+  [/^at most (\d+) order keys$/, (m) => t("At most {max} sort keys", { max: m[1]! })],
+  [
+    /^limit must be an integer from 1 to (\d+)$/,
+    (m) => t("The page size must be a whole number from 1 to {max}", { max: m[1]! }),
+  ],
+  [/^offset must be zero or more$/, () => t("The offset must be zero or more")],
+  [
+    /^filter on (\w+)\.(\w+): contains only works on text fields$/,
+    (m) => t("“Contains” only works on text fields ({field})", { field: fieldName(m[1]!, m[2]!) }),
+  ],
+  [
+    /^filter on (\w+)\.(\w+): value must be (.*)$/,
+    (m) => t("The filter value for {field} is not valid", { field: fieldName(m[1]!, m[2]!) }),
+  ],
+  [
+    /^aggregate would produce more than (\d+) groups; narrow the filter or group by a coarser field$/,
+    (m) =>
+      t(
+        "This summary would have more than {max} groups. Narrow the search or group by a coarser field.",
+        {
+          max: m[1]!,
+        },
+      ),
+  ],
+  [
+    /^aggregate is only available on search$/,
+    () => t("Summaries are only available through search"),
+  ],
+  // Installing and removing modules (D55).
+  [
+    /^(\w+) needs (\w+) (.+), which is not installed and not offered by the marketplace$/,
+    (m) =>
+      t(
+        "{module} needs {dependency} {requirement}, which is not installed and not offered by the marketplace",
+        {
+          module: moduleName(m[1]!),
+          dependency: moduleName(m[2]!),
+          requirement: m[3]!,
+        },
+      ),
+  ],
+  [
+    /^(\w+) needs (\w+) (.+), but the marketplace offers \2 (\S+)$/,
+    (m) =>
+      t("{module} needs {dependency} {requirement}, but the marketplace offers version {version}", {
+        module: moduleName(m[1]!),
+        dependency: moduleName(m[2]!),
+        requirement: m[3]!,
+        version: m[4]!,
+      }),
+  ],
+  [
+    /^(\w+) (\S+) needs core (.+), you run (\S+)$/,
+    (m) =>
+      t("{module} {version} needs core {requirement}, you run {core}", {
+        module: moduleName(m[1]!),
+        version: m[2]!,
+        requirement: m[3]!,
+        core: m[4]!,
+      }),
+  ],
+  [/^dependency cycle: (.+)$/, (m) => t("Dependency cycle: {path}", { path: m[1]! })],
+  [
+    /^(\w+) (\S+) is already installed$/,
+    (m) =>
+      t("{module} {version} is already installed", { module: moduleName(m[1]!), version: m[2]! }),
+  ],
+  [
+    /^(\w+) (\S+) is already installed; (\S+) would be a downgrade, which is refused$/,
+    (m) =>
+      t(
+        "{module} {version} is already installed; version {other} would be a downgrade, which is refused",
+        {
+          module: moduleName(m[1]!),
+          version: m[2]!,
+          other: m[3]!,
+        },
+      ),
+  ],
+  [
+    /^(\w+) is a built-in module( and is part of the core)?$/,
+    (m) =>
+      t("{module} is a built-in module and is part of the core", { module: moduleName(m[1]!) }),
+  ],
+  [
+    /^model (\w+) already exists$/,
+    (m) => t("Another module already has a model named {model}", { model: modelName(m[1]!) }),
+  ],
+  [
+    /^(\w+) is required by (.+); uninstall those first$/,
+    (m) =>
+      t("{module} is required by {others}; uninstall those first", {
+        module: moduleName(m[1]!),
+        others: m[2]!,
+      }),
+  ],
+  [
+    /^upgrading (\w+) to (\S+) would break (\w+), which needs (\w+) (.+)$/,
+    (m) =>
+      t("Upgrading {module} to {version} would break {other}, which needs {need}", {
+        module: moduleName(m[1]!),
+        version: m[2]!,
+        other: moduleName(m[3]!),
+        need: `${moduleName(m[4]!)} ${m[5]!}`,
+      }),
+  ],
+  // Module manifests (docs/MODULES.md section 3.5).
+  [
+    /^invalid obop\.toml: (.*)$/,
+    (m) => t("This is not a valid module file: {detail}", { detail: m[1]! }),
+  ],
+  [/^manifest is larger than 256 KiB$/, () => t("The module file is larger than 256 KiB")],
+  [
+    /^module id "([^"]*)" must be lowercase letters, digits and _, starting with a letter$/,
+    (m) =>
+      t("The module id {id} must be lowercase letters, digits and _, starting with a letter", {
+        id: m[1]!,
+      }),
+  ],
+  [/^version must look like 1\.2\.3.*$/, () => t("The version must look like 1.2.3")],
+  [
+    /^summary must be one line of at most 140 characters$/,
+    () => t("The summary must be one line of at most 140 characters"),
+  ],
+  [
+    /^(homepage|repository|documentation|support) must be an https:\/\/ URL \(got "(.*)"\)$/,
+    (m) => t("{key} must be an https:// address (got {value})", { key: m[1]!, value: m[2]! }),
+  ],
+  [/^module needs a name and a description$/, () => t("The module needs a name and a description")],
+  [
+    /^declarative packages run no code and may not declare network destinations$/,
+    () => t("A module made of data runs no code and may not declare network destinations"),
+  ],
+  [/^package is too large/, () => t("The module is too large: at most 50 models or 200 fields")],
+  [
+    /^model "([^"]*)" must be "([^"]*)" or start with "([^"]*)_"$/,
+    (m) =>
+      t("The model {model} must be named {id} or start with {id}_", { model: m[1]!, id: m[2]! }),
+  ],
+  [
+    /^permission group "([^"]*)" must look like module\.role$/,
+    (m) => t("The permission group {group} must look like module.role", { group: m[1]! }),
+  ],
+  [
+    /^(\w+)\.(\w+): a select needs options$/,
+    (m) => t("{field}: a select needs options", { field: fieldName(m[1]!, m[2]!) }),
+  ],
+  [
+    /^(\w+)\.(\w+): a ref needs `to`, the target model$/,
+    (m) => t("{field}: a ref needs `to`, the target model", { field: fieldName(m[1]!, m[2]!) }),
+  ],
+  [/^.*: field has no description$/, () => t("Every field needs a description")],
+  [/^.*: command has no description$/, () => t("Every action needs a description")],
+  [/^.*: model has no description$/, () => t("Every model needs a description")],
   [/^no (\w+) \S+$/, (m) => t("No such {model} record", { model: modelName(m[1]!) })],
   [/^invalid username or password$/, () => t("Invalid username or password")],
   [

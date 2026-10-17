@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Sähköpostimarkkinointi"
 description = "Postituslistat, niillä olevat yhteystiedot suostumuksen tilan ja päivän kanssa sekä kampanjat luonnos-, ajoitettu- ja lähetetty-kulussa. Lähetys on peruuttamaton ja tavoittaa oikeita ihmisiä, joten se vaatii esihenkilön hyväksynnän; agentit voivat vain ehdottaa sitä. Tilastot syötetään tai tuodaan, niitä ei lasketa. Älä koskaan lähetä viestiä yhteystiedolle, joka ei ole tilannut."
+summary = "Postituslistat, suostumuksen antaneet yhteystiedot ja kampanjat. Lähetys vaatii ihmisen hyväksynnän."
 
 [labels.fi.model.email_marketing_list]
 name = "Postituslista"

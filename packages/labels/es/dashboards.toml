@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Paneles de control"
-description = "Paneles de control y sus widgets guardados como datos, para que una interfaz los muestre. Un widget es una tarjeta con tipo (kpi, barras, líneas, circular o tabla), modelo, campo de medida, agregación (contar o sumar), agrupación, filtro y posición. El paquete solo guarda la definición; no comprueba que el modelo o los campos existan y no calcula nada."
+description = "Paneles de control y sus widgets guardados como datos, para que una interfaz los muestre. Un panel es privado para su propietario (y dashboards.manager) salvo que se comparta. Un widget es una tarjeta con tipo, modelo, campo de medida, agregación (contar o sumar), agrupación, filtro y posición. El paquete solo guarda la definición; no comprueba que existan el modelo o los campos y no calcula nada."
+summary = "Paneles y widgets guardados como datos, para que el backoffice los muestre como KPI, gráficos y tablas."
 
 [labels.es.model.dashboards_dashboard]
 name = "Panel de control"
@@ -12,7 +13,7 @@ description = "Título del panel, por ejemplo Resumen de ventas"
 
 [labels.es.model.dashboards_dashboard.field.owner]
 label = "Propietario"
-description = "Nombre de la persona propietaria del panel"
+description = "Nombre de usuario de la persona propietaria del panel; quien lo crea, salvo que se indique otra"
 
 [labels.es.model.dashboards_dashboard.field.description]
 label = "Descripción"
@@ -20,7 +21,7 @@ description = "Qué muestra el panel y para quién"
 
 [labels.es.model.dashboards_dashboard.field.shared]
 label = "Compartido"
-description = "Indica si lo ve todo el que tiene acceso a la aplicación Paneles de control o solo el propietario"
+description = "Indica si lo ve todo el que puede leer paneles (y sus tarjetas) o solo el propietario y dashboards.manager; el servidor lo aplica"
 
 [labels.es.model.dashboards_dashboard.field.position]
 label = "Posición"

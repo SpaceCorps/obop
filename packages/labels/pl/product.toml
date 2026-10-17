@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "Produkty"
+summary = "Produkty i usługi z cenami i kosztem, wspólne dla sprzedaży, fakturowania i magazynu."
 
 [labels.pl.model.product]
 name = "Produkt"
@@ -11,7 +12,7 @@ description = "Nazwa produktu"
 
 [labels.pl.model.product.field.sku]
 label = "SKU"
-description = "Jednostka magazynowa (SKU)"
+description = "Jednostka magazynowa (SKU); dwa produkty nie mogą mieć tej samej"
 
 [labels.pl.model.product.field.list_price_minor]
 label = "Cena katalogowa"

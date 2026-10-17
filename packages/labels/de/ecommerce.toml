@@ -2,6 +2,8 @@
 name = "E-Commerce"
 description = "Ein Onlineshop: Kategorien, Einträge mit Bildern und Übersetzungen, Versandarten, Rabattcodes, Steuersätze und Webbestellungen. Der Server bucht den Bestand ab, wendet Rabatte und Steuern an und rechnet jeden Preis selbst. Bezahlt wird per Überweisung, Karte (Stripe Checkout) oder im Demomodus. Erstattungen brauchen eine Führungskraft. Kundendaten sind nie öffentlich. Benötigt das Paket Produkte."
 
+summary = "Ein Onlineshop: Einträge, Versand, Rabattcodes und Webbestellungen, mit öffentlichem Shop, wenn die Website aktiv ist."
+
 [labels.de.model.ecommerce_category]
 name = "Kategorie"
 description = "Eine Gruppe von Einträgen, die im Shop zusammen angezeigt werden"

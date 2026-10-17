@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Ajanvaraukset"
 description = "Varattavat resurssit (henkilöt, tilat, laitteet) ja ajanvaraukset, joissa on päivä, alkamis- ja päättymisaika sekä tilakulku. Päällekkäisyyksiä ei estetä automaattisesti."
+summary = "Varattavat henkilöt, tilat ja laitteet sekä ajanvaraukset, joilla on alku, loppu ja tilakulku."
 
 [labels.fi.model.appointments_resource]
 name = "Resurssi"

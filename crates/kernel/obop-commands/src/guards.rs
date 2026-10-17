@@ -9,25 +9,19 @@
 //! - `list` and `search`: a filter or order on a field the caller cannot read in clear is refused.
 //! - `delete`: refused while another record refers to the one being deleted.
 
+use crate::engine::access::Gate;
+use crate::engine::crud::check_fields;
+use crate::engine::effects::{lookup_fn, precheck, reachable, required_missing};
+use crate::engine::unit::{Plain, Reads};
+use crate::engine::{Actor, Engine};
 use crate::query::Query;
-use crate::store::{Store, declared_fields, id_of, validate};
-use crate::{Dispatcher, Guard, ModelMeta, Pre, Value, Verdict};
+use crate::store::{Store, declared_fields, id_of};
+use crate::{Dispatcher, Guard, Pre, Value, Verdict};
 use obop_masking::mode_for;
-use obop_registry::{ModelDef, Module, Transition};
-use obop_storage::{Backend, Fields};
+use obop_registry::{EffectKind, ModelDef, Module, Transition};
 use obop_types::{DataClass, MaskMode};
-use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, RwLock};
-
-pub(crate) type ModelsMap = Arc<RwLock<HashMap<String, ModelMeta>>>;
-
-/// The first required field that is missing or null in `rec`.
-pub(crate) fn required_missing(def: &ModelDef, rec: &Fields) -> Option<&'static str> {
-    def.fields
-        .iter()
-        .find(|f| f.required && rec.get(f.name).is_none_or(serde_json::Value::is_null))
-        .map(|f| f.name)
-}
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 fn show(v: Option<&str>) -> String {
     v.map_or_else(|| "(empty)".into(), |s| format!("{s:?}"))
@@ -89,12 +83,12 @@ struct T {
     t: Transition,
 }
 
-fn update_guard(def: &ModelDef, store: &Store) -> Option<Guard> {
+fn update_guard(def: &ModelDef, eng: &Engine) -> Option<Guard> {
     let governed = def.governed_fields();
     if governed.is_empty() {
         return None;
     }
-    let (def, store) = (def.clone(), store.clone());
+    let (def, eng) = (def.clone(), eng.clone());
     let trans: Vec<T> = def
         .transitions()
         .map(|(c, t)| T {
@@ -116,10 +110,10 @@ fn update_guard(def: &ModelDef, store: &Store) -> Option<Guard> {
             return Ok(Verdict::default());
         }
         let id = id_of(input)?;
-        let current = store
-            .backend
-            .get(def.name, &id)?
-            .ok_or_else(|| format!("no {} {id}", def.name))?;
+        let actor = Actor::of(p);
+        let look = lookup_fn(&eng);
+        let reads = Plain(eng.backend());
+        let current = Gate::new(&reads, &look, &actor).load(&def, &id)?;
         let mut verdict = Verdict::default();
         let mut moved = Vec::new();
         for (field, new) in wanted {
@@ -206,45 +200,73 @@ fn update_guard(def: &ModelDef, store: &Store) -> Option<Guard> {
             }
             // The actions run before the update does, so everything the update would refuse
             // is refused now, before any of them has written.
-            validate(&def, &store, &declared_fields(&def, input)?, false)?;
+            let given: serde_json::Map<String, serde_json::Value> = declared_fields(&def, input)?
+                .into_iter()
+                .map(|(k, v)| (k, v.to_json()))
+                .collect();
+            check_fields(&reads, &look, &actor, &def, &given, false)?;
         }
         Ok(verdict)
     }))
 }
 
-/// Checks before a transition action runs: the record exists, it is in the `from` state, and
-/// every required field is set.
-fn action_guard(def: &ModelDef, store: &Store, t: Transition) -> Guard {
-    let (def, store) = (def.clone(), store.clone());
-    Box::new(move |_, input| {
+/// Checks before a transition action runs: the record exists (and is visible to the caller), it
+/// is in the `from` state, every required field is set, and the caller may do everything the
+/// action's effects do (D56): the groups of the records it writes and of the actions it starts.
+/// If any of those actions needs approval, so does this one for an agent, and the approver must
+/// hold their groups too.
+fn action_guard(def: &ModelDef, eng: &Engine, command: &'static str) -> Guard {
+    let (def, eng) = (def.clone(), eng.clone());
+    Box::new(move |p, input| {
         let id = id_of(input)?;
-        let rec = store
-            .backend
-            .get(def.name, &id)?
-            .ok_or_else(|| format!("no {} {id}", def.name))?;
-        if let Some(from) = t.from {
-            let cur = rec
-                .get(t.field)
-                .map(Value::from_json)
-                .unwrap_or(Value::Null);
-            if cur != Value::text(from) {
-                return Err(format!(
-                    "{} must be {from} to do this, it is {}",
-                    t.field,
-                    match &cur {
-                        Value::Text(s) => format!("{s:?}"),
-                        _ => "empty".into(),
+        let actor = Actor::of(p);
+        let look = lookup_fn(&eng);
+        let reads = Plain(eng.backend());
+        let rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
+        let cmd = def
+            .commands
+            .iter()
+            .find(|c| c.name == command)
+            .ok_or_else(|| format!("{}.{command} is not declared", def.name))?;
+        precheck(&def, &rec, cmd)?;
+        let mut verdict = Verdict::default();
+        let def = eng
+            .def(def.name)
+            .ok_or_else(|| format!("no model {}", def.name))?;
+        let mut all = vec![(def.clone(), cmd.clone())];
+        all.extend(reachable(&eng, &def, cmd));
+        for (d, c) in &all {
+            for e in &c.effects {
+                let Some(t) = eng.def(e.model()) else {
+                    continue;
+                };
+                if matches!(
+                    e.kind,
+                    EffectKind::Create { .. }
+                        | EffectKind::Update { .. }
+                        | EffectKind::Adjust { .. }
+                ) {
+                    if !p.allows(t.write_group) {
+                        return Err(format!(
+                            "{}.{} also changes {} records, which needs the {} group",
+                            d.name, c.name, t.name, t.write_group
+                        ));
                     }
-                ));
+                    verdict.requires.push(t.write_group);
+                }
             }
         }
-        if let Some(name) = required_missing(&def, &rec) {
-            return Err(format!(
-                "{}.{name} is required and must be set before {} can change to {:?}",
-                def.name, t.field, t.to
-            ));
+        for (d, c) in all.iter().skip(1) {
+            if !p.allows(c.permission_group) {
+                return Err(format!(
+                    "{}.{} also runs {}.{}, which needs the {} group",
+                    def.name, command, d.name, c.name, c.permission_group
+                ));
+            }
+            verdict.requires.push(c.permission_group);
+            verdict.approval |= c.needs_approval;
         }
-        Ok(Verdict::default())
+        Ok(verdict)
     })
 }
 
@@ -271,16 +293,28 @@ pub(crate) fn query_guard(def: &ModelDef) -> Guard {
 }
 
 /// A message naming the records that still refer to `model` `id`, or `None` if nothing does.
+/// Only records the caller can see are named; the others are mentioned without ids or counts.
 pub(crate) fn referrers(
-    models: &RwLock<HashMap<String, ModelMeta>>,
-    backend: &dyn Backend,
+    eng: &Engine,
+    actor: &Actor,
     model: &str,
     id: &str,
 ) -> Result<Option<String>, String> {
-    let models = models.read().unwrap();
+    // A snapshot, so the registry is not locked while the store is read.
+    let defs: Vec<Arc<ModelDef>> = eng
+        .models
+        .read()
+        .unwrap()
+        .values()
+        .map(|m| m.def.clone())
+        .collect();
+    let look = lookup_fn(eng);
+    let reads = Plain(eng.backend());
+    let gate = Gate::new(&reads, &look, actor);
     let mut by_model: BTreeMap<&str, Vec<String>> = BTreeMap::new();
-    for (name, meta) in models.iter() {
-        let fields: Vec<&str> = meta
+    let mut hidden = false;
+    for def in &defs {
+        let fields: Vec<&str> = def
             .fields
             .iter()
             .filter(|f| f.kind.target() == Some(model))
@@ -289,22 +323,26 @@ pub(crate) fn referrers(
         if fields.is_empty() {
             continue;
         }
-        for (rid, rec) in backend.list(name)? {
-            if name == model && rid == id {
+        for (rid, rec) in reads.all(def.name)? {
+            if def.name == model && rid == id {
                 continue;
             }
             if fields
                 .iter()
                 .any(|f| rec.get(*f).and_then(serde_json::Value::as_str) == Some(id))
             {
-                by_model.entry(name).or_default().push(rid);
+                if gate.visible(def, &rec) {
+                    by_model.entry(def.name).or_default().push(rid);
+                } else {
+                    hidden = true;
+                }
             }
         }
     }
-    if by_model.is_empty() {
+    if by_model.is_empty() && !hidden {
         return Ok(None);
     }
-    let parts: Vec<String> = by_model
+    let mut parts: Vec<String> = by_model
         .iter()
         .map(|(name, ids)| {
             let shown: Vec<&str> = ids.iter().take(5).map(String::as_str).collect();
@@ -312,25 +350,28 @@ pub(crate) fn referrers(
             format!("{name} ({}): {}{more}", ids.len(), shown.join(", "))
         })
         .collect();
+    if hidden {
+        parts.push("records you cannot see".into());
+    }
     Ok(Some(format!(
         "cannot delete {model} {id}: still referenced by {}",
         parts.join("; ")
     )))
 }
 
-fn delete_guard(
-    def: &ModelDef,
-    store: &Store,
-    models: Arc<RwLock<HashMap<String, ModelMeta>>>,
-) -> Guard {
-    let (name, store) = (def.name, store.clone());
-    Box::new(move |_, input| {
+fn delete_guard(def: &ModelDef, eng: &Engine) -> Guard {
+    let (name, eng) = (def.name, eng.clone());
+    Box::new(move |p, input| {
         let id = id_of(input)?;
-        store
-            .backend
-            .get(name, &id)?
-            .ok_or_else(|| format!("no {name} {id}"))?;
-        match referrers(&models, &*store.backend, name, &id)? {
+        let actor = Actor::of(p);
+        let look = lookup_fn(&eng);
+        let reads = Plain(eng.backend());
+        let def = eng.def(name).ok_or_else(|| format!("no model {name}"))?;
+        let rec = Gate::new(&reads, &look, &actor).load(&def, &id)?;
+        if let Some(field) = crate::engine::seq::holds_gapless_number(&def, &rec) {
+            return Err(crate::engine::crud::gapless_message(&def, &id, field));
+        }
+        match referrers(&eng, &actor, name, &id)? {
             Some(why) => Err(why),
             None => Ok(Verdict::default()),
         }
@@ -340,12 +381,13 @@ fn delete_guard(
 impl Dispatcher {
     /// Register the guards the registry metadata of `module` implies (see the module docs).
     pub(crate) fn register_guards(&self, module: &Module, store: &Store) {
+        let eng = self.engine(store);
         for def in &module.models {
             let id = |c: &str| format!("{}.{c}", def.name);
             if let Some(g) = create_guard(def) {
                 self.register_guard(&module.id, &id("create"), true, g);
             }
-            if let Some(g) = update_guard(def, store) {
+            if let Some(g) = update_guard(def, &eng) {
                 self.register_guard(&module.id, &id("update"), true, g);
             }
             // Who may put which uploaded image or file into a field (D60).
@@ -354,15 +396,15 @@ impl Dispatcher {
                     self.add_guard(&module.id, &id(c), true, g);
                 }
             }
-            for (c, t) in def.transitions() {
-                self.register_guard(&module.id, &id(c.name), true, action_guard(def, store, t));
+            for (c, _) in def.transitions() {
+                self.register_guard(
+                    &module.id,
+                    &id(c.name),
+                    true,
+                    action_guard(def, &eng, c.name),
+                );
             }
-            self.register_guard(
-                &module.id,
-                &id("delete"),
-                true,
-                delete_guard(def, store, self.models.clone()),
-            );
+            self.register_guard(&module.id, &id("delete"), true, delete_guard(def, &eng));
             for c in ["list", "search"] {
                 self.register_guard(&module.id, &id(c), false, query_guard(def));
             }

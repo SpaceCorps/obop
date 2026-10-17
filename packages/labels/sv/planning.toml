@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Planering"
 description = "Arbetspass för anställda, med roller och återanvändbara mallar. Ett pass har en dag samt start och slut i minuter efter midnatt (0 till 1439; 540 är 09:00). Ett pass utan anställd är ett öppet pass. Flöde: öppet, publicerat, bekräftat av den anställde. Kräver paketet Personal."
+summary = "Arbetspass för anställda med roller och återanvändbara mallar; öppna pass publiceras och bekräftas."
 
 [labels.sv.model.planning_role]
 name = "Roll"

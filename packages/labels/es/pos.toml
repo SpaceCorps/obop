@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Punto de venta"
-description = "Cajas de tienda: punto de venta, sesiones con control de efectivo, pedidos con líneas y pagos por método. Un reembolso y el cierre de una sesión requieren aprobación humana de un responsable; los agentes solo pueden proponerlos. Totales, cambio y diferencias se introducen, no se calculan. Nunca se guardan números de tarjeta, solo la referencia de la pasarela. Requiere Productos."
+description = "Cajas de tienda: sesiones con control de efectivo, pedidos con líneas y pagos por método. Un reembolso y el cierre de una sesión requieren aprobación humana de un responsable. Los totales se calculan desde las líneas, los tiques tienen un número anual, pagar se rechaza hasta cubrir el total y crea movimientos de stock en borrador. Nunca se guardan números de tarjeta. Requiere Productos."
+summary = "Cajas de tienda: sesiones con control de efectivo, pedidos con líneas y pagos. Reembolsos y cierre requieren aprobación."
 
 [labels.es.model.pos_config]
 name = "Configuración"
@@ -96,7 +97,7 @@ description = "La sesión en la que se hizo la venta"
 
 [labels.es.model.pos_order.field.receipt_number]
 label = "Número de tique"
-description = "Número impreso en el ticket. Texto libre: los paquetes no pueden generar secuencias"
+description = "Número impreso en el tique, como R-2026-000042: una serie sin huecos que empieza de nuevo cada año, asignada al crear la venta"
 
 [labels.es.model.pos_order.field.ordered_on]
 label = "Fecha del pedido"
@@ -112,7 +113,7 @@ description = "Impuestos incluidos en el total (unidad menor de la moneda)"
 
 [labels.es.model.pos_order.field.total]
 label = "Total"
-description = "Total pagado por el cliente con impuestos incluidos (unidad menor de la moneda, introducido, no calculado)"
+description = "Total pagado por el cliente con impuestos incluidos: la suma de los subtotales de las líneas (unidad menor de la moneda)"
 
 [labels.es.model.pos_order.field.note]
 label = "Nota"
@@ -130,7 +131,7 @@ cancelled = "Cancelado"
 
 [labels.es.model.pos_order.action.pay]
 label = "Pagar"
-description = "La venta está pagada por completo"
+description = "La venta está pagada por completo: se rechaza hasta que los pagos cubran el total; crea un movimiento de stock en borrador por línea (requiere el grupo inventory.user)"
 
 [labels.es.model.pos_order.action.cancel]
 label = "Cancelar"
@@ -170,7 +171,7 @@ description = "Descuento en puntos básicos: 1000 significa 10,00 %"
 
 [labels.es.model.pos_order_line.field.subtotal]
 label = "Subtotal"
-description = "Total de la línea tras el descuento (unidad menor de la moneda, introducido, no calculado)"
+description = "Total de la línea tras el descuento: cantidad por precio unitario, menos el descuento (unidad menor de la moneda)"
 
 [labels.es.model.pos_payment]
 name = "Pago"
@@ -202,3 +203,7 @@ description = "Día del pago (YYYY-MM-DD)"
 [labels.es.model.pos_payment.field.provider_reference]
 label = "Referencia del proveedor de pago"
 description = "Referencia del terminal de tarjetas o de la pasarela de pago; nunca un número de tarjeta"
+
+[labels.es.model.pos_order.field.stock_location_id]
+label = "Ubicación de stock"
+description = "De dónde sale la mercancía del stock; al pagar se crean los movimientos de stock desde esta ubicación"

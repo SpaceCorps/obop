@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Kontakter"
+summary = "Kontakter och företag: de personer och organisationer verksamheten har att göra med."
 
 [labels.sv.model.party]
 name = "Part"

@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Allekirjoitus"
 description = "Asiakirjamallit ja allekirjoituspyynnöt luonnos-, lähetetty-, allekirjoitettu-, hylätty- ja vanhentunut-kulussa. Pyyntö nimeää allekirjoittajan (henkilötieto) ja säilyttää todisteet viitteinä. Allekirjoitettua pyyntöä ei saa muokata, ja asiakirjan tiiviste kertoo, mitä allekirjoitettiin. Lähetys ja allekirjoituksen kirjaus vaativat ihmisen hyväksynnän."
+summary = "Asiakirjamallit ja allekirjoituspyynnöt. Lähetys ja allekirjoituksen kirjaus vaativat ihmisen hyväksynnän."
 
 [labels.fi.model.sign_template]
 name = "Asiakirjamalli"

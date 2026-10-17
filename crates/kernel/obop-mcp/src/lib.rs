@@ -323,6 +323,8 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                                 "name": f.name, "description": f.description,
                                 "class": f.class, "personal_data": f.personal_data,
                                 "kind": f.kind, "required": f.required,
+                                "governed": f.governed, "computed": f.computed,
+                                "unique": f.unique, "sequence": f.sequence,
                             });
                             if f.kind == "select" {
                                 o["options"] = json!(f.options);
@@ -351,6 +353,12 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                         }).collect::<Vec<_>>(),
                     });
                     translations(&mut o, &x.labels, &x.descriptions);
+                    if let Some(a) = &x.access {
+                        o["access"] = json!({
+                            "own": a.own, "via": a.via, "public_field": a.public_field,
+                            "shared_with": a.shared_with, "see_all_group": a.see_all,
+                        });
+                    }
                     o
                 }).collect::<Vec<_>>(),
             });
@@ -358,6 +366,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                 mo["description"] = json!(m.description);
             }
             translations(&mut mo, &m.labels, &m.descriptions);
+            if !m.summaries.is_empty() {
+                mo["summaries"] = json!(m.summaries);
+            }
             mo
         })
         .collect();

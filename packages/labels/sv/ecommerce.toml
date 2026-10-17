@@ -2,6 +2,8 @@
 name = "E-handel"
 description = "En webbutik: kategorier, erbjudanden med bilder och översättningar, leveranssätt, rabattkoder, skattesatser och webbeställningar. Servern drar av lagret, tillämpar rabatter och skatter och räknar ut priserna själv. Betalning med banköverföring, kort (Stripe Checkout) eller i demoläge. Återbetalningar kräver en chef. Kunduppgifter är aldrig offentliga. Kräver paketet Produkter."
 
+summary = "En webbutik: artiklar, leverans, rabattkoder och webborder, med en publik butik när webbplatsen är på."
+
 [labels.sv.model.ecommerce_category]
 name = "Kategori"
 description = "En grupp av artiklar som visas tillsammans i butiken"

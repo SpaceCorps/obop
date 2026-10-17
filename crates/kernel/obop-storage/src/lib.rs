@@ -18,14 +18,106 @@ pub type Result<T> = std::result::Result<T, String>;
 mod atomic;
 pub mod blob;
 
-pub use atomic::{ApplyError, Op};
+pub use atomic::ApplyError;
 use atomic::{TxView, run_ops};
+
+/// One step of an atomic batch (see `Backend::apply`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Op {
+    /// Add a new record. Fails when the id exists.
+    Insert {
+        model: String,
+        id: String,
+        fields: Fields,
+    },
+    /// Merge fields into an existing record. Fails when it does not exist.
+    Merge {
+        model: String,
+        id: String,
+        patch: Fields,
+    },
+    /// Remove an existing record. Fails when it does not exist.
+    Delete { model: String, id: String },
+    /// Add `delta` to the integer `field` (absent or null counts as 0) and refuse the whole batch
+    /// if the result leaves `[min, max]` or overflows. With `create`, a missing record is
+    /// inserted with those fields first (an upsert counter); without it a missing record is a
+    /// conflict. The check and the change happen under one lock or row lock, so two callers
+    /// cannot both take the last unit.
+    Add {
+        model: String,
+        id: String,
+        field: String,
+        delta: i64,
+        min: Option<i64>,
+        max: Option<i64>,
+        create: Option<Fields>,
+    },
+    /// Merge `patch` into a record only if every `expect` field currently equals the given value
+    /// (compare-and-set, for state changes that must happen once). A missing field equals null.
+    Patch {
+        model: String,
+        id: String,
+        patch: Fields,
+        expect: Vec<(String, J)>,
+    },
+}
+
+impl Op {
+    pub fn add(model: &str, id: &str, field: &str, delta: i64) -> Op {
+        Op::Add {
+            model: model.into(),
+            id: id.into(),
+            field: field.into(),
+            delta,
+            min: None,
+            max: None,
+            create: None,
+        }
+    }
+
+    pub fn min(mut self, v: i64) -> Op {
+        if let Op::Add { min, .. } = &mut self {
+            *min = Some(v);
+        }
+        self
+    }
+
+    pub fn max(mut self, v: i64) -> Op {
+        if let Op::Add { max, .. } = &mut self {
+            *max = Some(v);
+        }
+        self
+    }
+
+    pub fn or_create(mut self, fields: Fields) -> Op {
+        if let Op::Add { create, .. } = &mut self {
+            *create = Some(fields);
+        }
+        self
+    }
+}
 
 pub trait Backend: Send + Sync {
     fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()>;
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>>;
     /// Records of a model in insertion order.
     fn list(&self, model: &str) -> Result<Vec<(String, Fields)>>;
+    /// Visit the records of a model in insertion order without collecting them, so a caller that
+    /// only folds them (an aggregate) holds one record at a time. `visit` returns `Ok(false)` to
+    /// stop early. It runs while the backend holds its connection or lock, so it must not call
+    /// the backend. The default collects with `list`; the shipped backends stream.
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        for (id, f) in self.list(model)? {
+            if !visit(&id, &f)? {
+                break;
+            }
+        }
+        Ok(())
+    }
     /// Merge `patch` into an existing record atomically. `false` if it does not exist.
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool>;
     fn count(&self, model: &str) -> Result<usize>;
@@ -44,16 +136,104 @@ pub trait Backend: Send + Sync {
         }
         Ok(())
     }
-    /// Apply several steps all-or-nothing and isolated from every other writer: the primitive
-    /// for checks that must not race (the last unit of stock, a voucher's last use, a state that
-    /// changes once). On `Err` nothing was changed. A backend that cannot do this refuses.
-    fn apply(&self, _ops: &[Op]) -> std::result::Result<(), ApplyError> {
+    /// Apply several steps all-or-nothing: every step happens or none does, and readers never see
+    /// a half-applied batch. The shipped backends do it in one transaction. The default applies
+    /// the steps one by one and puts back what it changed when one fails (it cannot undo a
+    /// removed key, and a restored record moves to the end of the insertion order), which is
+    /// good enough for a backend written for tests.
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        let mut undo: Vec<Op> = Vec::new();
+        for op in ops {
+            let step = match op {
+                Op::Add { .. } | Op::Patch { .. } => {
+                    Err("counters and compare-and-set need `apply_checked`".to_string())
+                }
+                Op::Insert { model, id, fields } => self.insert(model, id, fields).map(|()| {
+                    undo.push(Op::Delete {
+                        model: model.clone(),
+                        id: id.clone(),
+                    })
+                }),
+                Op::Merge { model, id, patch } => match self.get(model, id) {
+                    Ok(Some(before)) => self.update(model, id, patch).map(|_| {
+                        undo.push(Op::Merge {
+                            model: model.clone(),
+                            id: id.clone(),
+                            patch: before,
+                        })
+                    }),
+                    Ok(None) => Err(format!("no {model} {id}")),
+                    Err(e) => Err(e),
+                },
+                Op::Delete { model, id } => match self.get(model, id) {
+                    Ok(Some(before)) => self.delete(model, id).map(|_| {
+                        undo.push(Op::Insert {
+                            model: model.clone(),
+                            id: id.clone(),
+                            fields: before,
+                        })
+                    }),
+                    Ok(None) => Err(format!("no {model} {id}")),
+                    Err(e) => Err(e),
+                },
+            };
+            if let Err(e) = step {
+                for u in undo.into_iter().rev() {
+                    let _ = match u {
+                        Op::Add { .. } | Op::Patch { .. } => Ok(()),
+                        Op::Insert { model, id, fields } => self.insert(&model, &id, &fields),
+                        Op::Merge { model, id, patch } => {
+                            self.update(&model, &id, &patch).map(|_| ())
+                        }
+                        Op::Delete { model, id } => self.delete(&model, &id).map(|_| ()),
+                    };
+                }
+                return Err(e);
+            }
+        }
+        Ok(())
+    }
+    /// Like [`Backend::apply`] but says whether a step was refused (`Conflict`, nothing changed:
+    /// a bound crossed, a missing record, an expected value that differs) or storage failed. The
+    /// shipped backends implement `apply` through it, isolated from every other writer (a lock in
+    /// memory, `BEGIN IMMEDIATE` in SQLite, row locks in PostgreSQL). A backend that cannot do it
+    /// refuses.
+    fn apply_checked(&self, _ops: &[Op]) -> std::result::Result<(), ApplyError> {
         Err(ApplyError::Storage(
             "this storage backend has no atomic batches".into(),
         ))
     }
+    /// Records of `model` whose `field` equals `value`, in insertion order. The shipped backends
+    /// answer it in the database; the default reads the model.
+    fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
+        Ok(self
+            .list(model)?
+            .into_iter()
+            .filter(|(_, f)| f.get(field) == Some(value))
+            .collect())
+    }
+    /// Make the database refuse two records of `model` that have the same non-empty `fields[0]`
+    /// and the same values in the other `fields` (D57). `name` identifies the constraint in
+    /// errors (`obop_uq_...`). Backends without indexes do nothing: the command layer checks on
+    /// every write too. Fails if existing records already break the constraint.
+    fn ensure_unique(&self, _name: &str, _model: &str, _fields: &[&str]) -> Result<()> {
+        Ok(())
+    }
     /// Short name for logs: `memory`, `sqlite` or `postgres`.
     fn kind(&self) -> &'static str;
+}
+
+/// Names that go into DDL: lowercase letters, digits and underscore.
+fn ident(s: &str) -> Result<&str> {
+    if !s.is_empty()
+        && s.len() <= 64
+        && s.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    {
+        Ok(s)
+    } else {
+        Err(format!("{s:?} is not an identifier"))
+    }
 }
 
 pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
@@ -117,6 +297,19 @@ impl Backend for Memory {
             .cloned()
             .unwrap_or_default())
     }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        let g = self.rows.lock().unwrap();
+        for (id, f) in g.get(model).into_iter().flatten() {
+            if !visit(id, f)? {
+                break;
+            }
+        }
+        Ok(())
+    }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         let mut g = self.rows.lock().unwrap();
         match g
@@ -157,7 +350,10 @@ impl Backend for Memory {
         }
         Ok(())
     }
-    fn apply(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        self.apply_checked(ops).map_err(|e| e.to_string())
+    }
+    fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
         struct M<'a>(&'a mut BTreeMap<String, Vec<(String, Fields)>>);
         impl TxView for M<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
@@ -278,6 +474,25 @@ impl Backend for Sqlite {
         })
         .collect()
     }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare("SELECT id, data FROM obop_record WHERE model = ?1 ORDER BY seq")
+            .map_err(|e| e.to_string())?;
+        let mut rows = st.query((model,)).map_err(|e| e.to_string())?;
+        while let Some(r) = rows.next().map_err(|e| e.to_string())? {
+            let id: String = r.get(0).map_err(|e| e.to_string())?;
+            let data: String = r.get(1).map_err(|e| e.to_string())?;
+            if !visit(&id, &parse(&data)?)? {
+                break;
+            }
+        }
+        Ok(())
+    }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         let mut g = self.conn.lock().unwrap();
         let tx = g
@@ -345,7 +560,10 @@ impl Backend for Sqlite {
         }
         tx.commit().map_err(|e| e.to_string())
     }
-    fn apply(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        self.apply_checked(ops).map_err(|e| e.to_string())
+    }
+    fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
         struct S<'a>(&'a rusqlite::Transaction<'a>);
         impl TxView for S<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
@@ -407,6 +625,64 @@ impl Backend for Sqlite {
                 Err(e)
             }
         }
+    }
+    fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
+        use rusqlite::types::Value as SqlValue;
+        let bound = match value {
+            J::String(s) => SqlValue::Text(s.clone()),
+            J::Number(n) if n.is_i64() => SqlValue::Integer(n.as_i64().unwrap_or(0)),
+            J::Bool(b) => SqlValue::Integer(i64::from(*b)),
+            _ => {
+                return Ok(self
+                    .list(model)?
+                    .into_iter()
+                    .filter(|(_, f)| f.get(field) == Some(value))
+                    .collect());
+            }
+        };
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare(
+                "SELECT id, data FROM obop_record WHERE model = ?1 \
+                 AND json_extract(data, '$.' || ?2) = ?3 ORDER BY seq",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = st
+            .query_map(rusqlite::params![model, field, bound], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })
+            .map_err(|e| e.to_string())?;
+        // A JSON string "5" and a JSON number 5 are different values; SQLite compares by type
+        // affinity here, so keep only exact matches.
+        let mut out = Vec::new();
+        for r in rows {
+            let (id, data) = r.map_err(|e| e.to_string())?;
+            let f = parse(&data)?;
+            if f.get(field) == Some(value) {
+                out.push((id, f));
+            }
+        }
+        Ok(out)
+    }
+    fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
+        let (name, model) = (ident(name)?, ident(model)?);
+        let mut cols = Vec::new();
+        for (i, f) in fields.iter().enumerate() {
+            let f = ident(f)?;
+            cols.push(if i == 0 {
+                format!("NULLIF(json_extract(data, '$.{f}'), '')")
+            } else {
+                format!("COALESCE(json_extract(data, '$.{f}'), '')")
+            });
+        }
+        self.conn
+            .lock()
+            .unwrap()
+            .execute_batch(&format!(
+                "CREATE UNIQUE INDEX IF NOT EXISTS {name} ON obop_record ({}) WHERE model = '{model}'",
+                cols.join(", ")
+            ))
+            .map_err(|e| e.to_string())
     }
     fn kind(&self) -> &'static str {
         "sqlite"
@@ -487,6 +763,28 @@ impl Backend for Pg {
             .map(|r| Ok((r.get::<_, String>(0), pg_fields(r.get::<_, J>(1))?)))
             .collect()
     }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        use postgres::fallible_iterator::FallibleIterator;
+        let mut client = self.client.lock().unwrap();
+        let mut rows = client
+            .query_raw(
+                "SELECT id, data FROM obop_record WHERE model = $1 ORDER BY seq",
+                [&model as &(dyn postgres::types::ToSql + Sync)],
+            )
+            .map_err(|e| e.to_string())?;
+        while let Some(r) = rows.next().map_err(|e| e.to_string())? {
+            let id: String = r.get(0);
+            if !visit(&id, &pg_fields(r.get::<_, J>(1))?)? {
+                // Dropping the iterator early leaves the portal unread; the client discards it.
+                break;
+            }
+        }
+        Ok(())
+    }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         let patch = J::Object(patch.clone());
         let n = self
@@ -537,7 +835,10 @@ impl Backend for Pg {
         }
         tx.commit().map_err(|e| e.to_string())
     }
-    fn apply(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        self.apply_checked(ops).map_err(|e| e.to_string())
+    }
+    fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
         struct P<'a>(postgres::Transaction<'a>);
         impl TxView for P<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
@@ -598,6 +899,40 @@ impl Backend for Pg {
             }
         }
     }
+    fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
+        let rows = self
+            .client
+            .lock()
+            .unwrap()
+            .query(
+                "SELECT id, data FROM obop_record WHERE model = $1 AND data -> $2::text = $3 ORDER BY seq",
+                &[&model, &field, value],
+            )
+            .map_err(|e| e.to_string())?;
+        rows.into_iter()
+            .map(|r| Ok((r.get::<_, String>(0), pg_fields(r.get::<_, J>(1))?)))
+            .collect()
+    }
+    fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
+        let (name, model) = (ident(name)?, ident(model)?);
+        let mut cols = Vec::new();
+        for (i, f) in fields.iter().enumerate() {
+            let f = ident(f)?;
+            cols.push(if i == 0 {
+                format!("(NULLIF(data ->> '{f}', ''))")
+            } else {
+                format!("(COALESCE(data ->> '{f}', ''))")
+            });
+        }
+        self.client
+            .lock()
+            .unwrap()
+            .batch_execute(&format!(
+                "CREATE UNIQUE INDEX IF NOT EXISTS {name} ON obop_record ({}) WHERE model = '{model}'",
+                cols.join(", ")
+            ))
+            .map_err(|e| e.to_string())
+    }
     fn kind(&self) -> &'static str {
         "postgres"
     }
@@ -648,69 +983,107 @@ mod tests {
         assert!(b.insert_many(&[row("m3"), row("a")]).is_err());
         assert!(b.get(&model, "m3").unwrap().is_none(), "rolled back");
         assert_eq!(b.count(&model).unwrap(), 3);
-        atomic_contract(b, &model);
+        batches_and_lookups(b, &model);
     }
 
-    /// Atomic batches: bounds, upserts, compare-and-set and all-or-nothing.
-    fn atomic_contract(b: &dyn Backend, model: &str) {
-        let stock = |b: &dyn Backend| b.get(model, "s").unwrap().unwrap()["n"].as_i64().unwrap();
-        b.insert(model, "s", &fields("n", J::from(3))).unwrap();
-        let take = |n: i64| Op::add(model, "s", "n", -n).min(0);
-        b.apply(&[take(2)]).unwrap();
-        assert_eq!(stock(b), 1);
-        // The second step crosses the bound: the first must not stick.
-        let r = b.apply(&[Op::add(model, "s", "n", 5), take(9)]);
-        assert!(
-            matches!(r, Err(ApplyError::Conflict { index: 1, .. })),
-            "{r:?}"
+    fn batches_and_lookups(b: &dyn Backend, model: &str) {
+        let row = |k: &str, v: J| fields(k, v);
+        let (m, s) = (model.to_string(), |x: &str| x.to_string());
+        // A batch applies every step in order, later steps seeing earlier ones.
+        b.apply(&[
+            Op::Insert {
+                model: m.clone(),
+                id: s("b1"),
+                fields: row("sku", J::from("X-1")),
+            },
+            Op::Merge {
+                model: m.clone(),
+                id: s("b1"),
+                patch: row("qty", J::from(5)),
+            },
+            Op::Merge {
+                model: m.clone(),
+                id: s("a"),
+                patch: row("qty", J::from(7)),
+            },
+            Op::Delete {
+                model: m.clone(),
+                id: s("m2"),
+            },
+        ])
+        .unwrap();
+        let b1 = b.get(model, "b1").unwrap().unwrap();
+        assert_eq!(
+            (b1["sku"].clone(), b1["qty"].clone()),
+            (J::from("X-1"), J::from(5))
         );
-        assert_eq!(stock(b), 1, "rolled back");
-        // Upsert counters with an upper bound.
-        let hit = || {
-            Op::add(model, "u", "n", 1)
-                .max(2)
-                .or_create(fields("code", J::from("X")))
-        };
-        b.apply(&[hit()]).unwrap();
-        b.apply(&[hit()]).unwrap();
-        assert!(b.apply(&[hit()]).is_err());
-        let u = b.get(model, "u").unwrap().unwrap();
-        assert_eq!((u["n"].as_i64(), u["code"].as_str()), (Some(2), Some("X")));
-        assert!(
-            b.apply(&[Op::add(model, "nope", "n", 1)]).is_err(),
-            "no record, no create"
-        );
-        // Insert is a conflict on an existing id; compare-and-set changes state once.
-        let ins = Op::Insert {
-            model: model.into(),
-            id: "s".into(),
-            fields: Fields::new(),
-        };
-        assert!(b.apply(&[ins]).is_err());
-        let flip = |from: J| Op::Patch {
-            model: model.into(),
-            id: "s".into(),
-            patch: fields("st", J::from("done")),
-            expect: vec![("st".into(), from)],
-        };
-        b.apply(&[flip(J::Null)]).unwrap();
-        assert!(b.apply(&[flip(J::Null)]).is_err(), "already changed");
-        assert_eq!(b.get(model, "s").unwrap().unwrap()["st"], J::from("done"));
-        assert_eq!(stock(b), 1, "other fields kept");
-        // The last unit goes to exactly one of many racing writers.
-        b.insert(model, "last", &fields("n", J::from(1))).unwrap();
-        let ok = std::sync::atomic::AtomicUsize::new(0);
-        std::thread::scope(|s| {
-            for _ in 0..8 {
-                s.spawn(|| {
-                    if b.apply(&[Op::add(model, "last", "n", -1).min(0)]).is_ok() {
-                        ok.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                    }
-                });
-            }
-        });
-        assert_eq!(ok.load(std::sync::atomic::Ordering::SeqCst), 1);
-        assert_eq!(b.get(model, "last").unwrap().unwrap()["n"], J::from(0));
+        assert!(b.get(model, "m2").unwrap().is_none());
+        let before = b.count(model).unwrap();
+        // One failing step undoes all the others, whatever it is.
+        for bad in [
+            Op::Insert {
+                model: m.clone(),
+                id: s("a"),
+                fields: Fields::new(),
+            },
+            Op::Merge {
+                model: m.clone(),
+                id: s("ghost"),
+                patch: Fields::new(),
+            },
+            Op::Delete {
+                model: m.clone(),
+                id: s("ghost"),
+            },
+        ] {
+            let r = b.apply(&[
+                Op::Insert {
+                    model: m.clone(),
+                    id: s("b2"),
+                    fields: Fields::new(),
+                },
+                Op::Merge {
+                    model: m.clone(),
+                    id: s("a"),
+                    patch: row("qty", J::from(99)),
+                },
+                Op::Delete {
+                    model: m.clone(),
+                    id: s("b1"),
+                },
+                bad,
+            ]);
+            assert!(r.is_err());
+            assert!(b.get(model, "b2").unwrap().is_none(), "insert rolled back");
+            assert_eq!(b.get(model, "a").unwrap().unwrap()["qty"], J::from(7));
+            assert!(b.get(model, "b1").unwrap().is_some(), "delete rolled back");
+            assert_eq!(b.count(model).unwrap(), before);
+        }
+        // Lookup by field value, typed.
+        let hit = b.find(model, "sku", &J::from("X-1")).unwrap();
+        assert_eq!(hit.len(), 1);
+        assert_eq!(hit[0].0, "b1");
+        assert_eq!(b.find(model, "qty", &J::from(7)).unwrap().len(), 1);
+        assert!(b.find(model, "sku", &J::from("nope")).unwrap().is_empty());
+        assert!(b.find(model, "sku", &J::from(5)).unwrap().is_empty());
+        // A unique index refuses a second record with the same value, but not an empty one.
+        if b.kind() != "memory" {
+            let idx = format!("obop_uq_t{}_sku", std::process::id());
+            b.ensure_unique(&idx, model, &["sku"]).unwrap();
+            let dup = b.insert(model, "dup", &row("sku", J::from("X-1")));
+            assert!(dup.is_err(), "duplicate value");
+            b.insert(model, "e1", &row("sku", J::from(""))).unwrap();
+            b.insert(model, "e2", &row("sku", J::from(""))).unwrap();
+            b.insert(model, "e3", &Fields::new()).unwrap();
+            assert!(
+                b.apply(&[Op::Insert {
+                    model: m.clone(),
+                    id: s("dup2"),
+                    fields: row("sku", J::from("X-1")),
+                }])
+                .is_err()
+            );
+        }
     }
 
     #[test]

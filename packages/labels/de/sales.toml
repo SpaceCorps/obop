@@ -1,5 +1,6 @@
 [labels.de.module]
 name = "Verkauf"
+summary = "Angebote und Verkaufsaufträge für Ihre Kunden."
 
 [labels.de.model.sale_order]
 name = "Verkaufsauftrag"
@@ -20,7 +21,7 @@ cancelled = "Storniert"
 
 [labels.de.model.sale_order.field.total_minor]
 label = "Gesamt"
-description = "Auftragssumme in der kleinsten Währungseinheit"
+description = "Auftragssumme in der kleinsten Währungseinheit, die Summe der Positionen"
 
 [labels.de.model.sale_order.field.currency]
 label = "Währung"
@@ -37,3 +38,35 @@ description = "Einen Auftrag stornieren"
 [labels.de.model.sale_order.action.reset_to_draft]
 label = "Auf Entwurf zurücksetzen"
 description = "Einen stornierten Auftrag wieder auf Entwurf setzen"
+
+[labels.de.model.sale_order.field.number]
+label = "Nummer"
+description = "Auftragsnummer wie SO-00042, wird beim Anlegen des Auftrags vergeben"
+
+[labels.de.model.sale_order_line]
+name = "Verkaufsauftragsposition"
+description = "Ein Produkt oder eine Dienstleistung in einem Verkaufsauftrag"
+
+[labels.de.model.sale_order_line.field.order_id]
+label = "Auftrag"
+description = "Der Verkaufsauftrag, zu dem die Position gehört"
+
+[labels.de.model.sale_order_line.field.product_id]
+label = "Produkt"
+description = "Das verkaufte Produkt"
+
+[labels.de.model.sale_order_line.field.description]
+label = "Beschreibung"
+description = "Was verkauft wird, so wie es auf der Rechnung erscheint"
+
+[labels.de.model.sale_order_line.field.quantity]
+label = "Menge"
+description = "Verkaufte Menge"
+
+[labels.de.model.sale_order_line.field.unit_price_minor]
+label = "Stückpreis"
+description = "Preis einer Einheit in der kleinsten Währungseinheit"
+
+[labels.de.model.sale_order_line.field.amount_minor]
+label = "Betrag"
+description = "Positionsbetrag in der kleinsten Währungseinheit: Menge mal Stückpreis"

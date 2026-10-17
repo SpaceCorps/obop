@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Lager"
-description = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser. Antal anges och kontrolleras av människor; de uppdateras inte automatiskt av rörelser."
+description = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser. När en rörelse valideras tas antalet från lagerposten på källplatsen och läggs till posten på målplatsen, i ett enda steg; en post som ännu inte finns skapas. Det finns en post per produkt, plats och parti. Negativa antal är tillåtna, till exempel för virtuella platser som leverantörer."
+summary = "Lagerställen, lagerplatser, lagersaldon och lagerrörelser."
 
 [labels.sv.model.inventory_warehouse]
 name = "Lagerställe"
@@ -55,7 +56,7 @@ description = "Antalet av en produkt på en lagerplats"
 
 [labels.sv.model.inventory_item.field.product_id]
 label = "Produkt"
-description = "Produkten som lagras"
+description = "Produkten som lagras; det finns en post per produkt, plats och parti"
 
 [labels.sv.model.inventory_item.field.location_id]
 label = "Lagerplats"
@@ -79,7 +80,7 @@ description = "En förflyttning av en produkt mellan lagerplatser, eller in i el
 
 [labels.sv.model.inventory_move.field.reference]
 label = "Referens"
-description = "Rörelsens referens, till exempel ett leverans- eller inleveransnummer"
+description = "Rörelsens nummer, som MV-00042, tilldelas när rörelsen skapas"
 
 [labels.sv.model.inventory_move.field.product_id]
 label = "Produkt"
@@ -112,7 +113,7 @@ cancelled = "Annullerad"
 
 [labels.sv.model.inventory_move.action.validate]
 label = "Validera"
-description = "Bekräfta att varorna verkligen flyttats; en genomförd rörelse kan inte ångras"
+description = "Bekräfta att varorna verkligen flyttats: antalet lämnar posten på källplatsen och kommer till posten på målplatsen (endast lagerchefer); en genomförd rörelse kan inte ångras"
 
 [labels.sv.model.inventory_move.action.cancel]
 label = "Annullera"

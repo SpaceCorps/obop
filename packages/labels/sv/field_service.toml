@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Fältservice"
 description = "Uppdrag hos kunder som utförs av en tekniker: schemalagt, på väg, pågår, klart eller annullerat. Ett uppdrag registrerar kund, arbetsplats, tekniker, planerad dag och starttid (minuter efter midnatt), använda reservdelar och om kunden måste signera. Adress och kontaktuppgifter till arbetsplatsen är personuppgifter. Kräver paketen Personal och Produkter."
+summary = "Uppdrag hos kunder som utförs av en tekniker, med använda reservdelar och en markering för kundens signatur."
 
 [labels.sv.model.field_service_job]
 name = "Uppdrag"

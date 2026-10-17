@@ -201,6 +201,11 @@ impl PublicSpec {
                         }
                     ));
                 }
+                if f.computed.is_some() {
+                    return Err(format!(
+                        "{at}.{n}: a computed field is not stored, so it cannot be public"
+                    ));
+                }
                 if f.permission_group != def.read_group {
                     return Err(format!(
                         "{at}.{n}: a field restricted to {} cannot be public",
@@ -227,6 +232,11 @@ impl PublicSpec {
                 if governed.contains(&f.name) {
                     return Err(format!(
                         "{at}.{n}: a governed state field cannot be submitted; it starts at its first option"
+                    ));
+                }
+                if f.computed.is_some() || f.sequence.is_some() {
+                    return Err(format!(
+                        "{at}.{n}: a computed or numbered field is the system's; a visitor cannot submit it"
                     ));
                 }
                 if !f.class.is_some_and(submit_class_ok) {
@@ -432,7 +442,7 @@ impl PublicApi {
             .read()
             .unwrap()
             .get(model)
-            .map(|m| m.def.clone())
+            .map(|m| (*m.def).clone())
     }
 
     fn project(&self, spec: &PublicSpec, id: &str, rec: &Fields, embed: bool) -> PublicRecord {
@@ -539,6 +549,7 @@ impl PublicApi {
             input.insert("offset".into(), Value::Int(offset as i64));
         }
         let q = crate::query::Query::parse(&def, &Value::Map(input), &|_| true)?;
+        q.no_aggregate()?;
         let (page, total) = q.apply(self.store.backend.list(model)?);
         Ok((
             page.iter()
@@ -837,7 +848,7 @@ impl PublicApi {
                 fields: fields.clone(),
             });
         }
-        match self.store.backend.apply(&ops) {
+        match self.store.backend.apply_checked(&ops) {
             Ok(()) => Ok(rows.into_iter().map(|(_, id, _)| id).collect()),
             Err(obop_storage::ApplyError::Conflict { index, .. }) if index < n => {
                 Err(SubmitError::Unavailable { adjust: index })

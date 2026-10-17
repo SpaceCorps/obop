@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Produkcja"
 description = "Zestawienia materiałów i zlecenia produkcyjne z obiegiem wersja robocza, potwierdzone, w toku i wykonane. Zużycie składników z magazynu nie jest księgowane automatycznie."
+summary = "Zestawienia materiałów i zlecenia produkcyjne z obiegiem wersja robocza, potwierdzone, w toku, wykonane."
 
 [labels.pl.model.manufacturing_bom]
 name = "Zestawienie materiałów"

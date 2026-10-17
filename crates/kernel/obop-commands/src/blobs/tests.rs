@@ -14,6 +14,7 @@ fn module() -> Module {
         description: "d",
         read_group: "t.user",
         write_group: "t.user",
+        access: None,
         fields: vec![
             f("title"),
             f("photo").kind(FieldKind::Image(0)),

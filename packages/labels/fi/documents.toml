@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Asiakirjat"
-description = "Yrityksen asiakirjarekisteri: kansiot, asiakirjat lajin, omistajan, voimassaolon ja luottamuksellisuuden kanssa sekä luonnos-, julkaistu- ja arkistoitu-kulku. Tallentaa viitteitä, ei tiedostojen sisältöä."
+description = "Yrityksen asiakirjarekisteri: kansiot, asiakirjat lajin, omistajan, voimassaolon ja luottamuksellisuuden kanssa sekä luonnos-, julkaistu- ja arkistoitu-kulku. Tallentaa viitteitä, ei tiedostoja. Luottamuksellisuus valvotaan: luottamukselliset ja rajoitetut asiakirjat näkevät vain omistaja ja documents.manager."
+summary = "Yrityksen asiakirjarekisteri omistajan, voimassaolon ja luottamuksellisuuden kanssa sekä luonnos-, julkaistu- ja arkistoitu-kulku."
 
 [labels.fi.model.documents_folder]
 name = "Kansio"
@@ -44,7 +45,7 @@ other = "Muu"
 
 [labels.fi.model.documents_document.field.confidentiality]
 label = "Luottamuksellisuus"
-description = "Kenen pitäisi nähdä se, lukijoille tarkoitettuna merkintänä: julkinen, sisäinen, luottamuksellinen, rajoitettu"
+description = "Kuka saa nähdä sen: julkiset ja sisäiset asiakirjat kaikki, joilla on lukuoikeus, luottamukselliset ja rajoitetut vain omistaja ja documents.manager"
 
 [labels.fi.model.documents_document.field.confidentiality.options]
 public = "Julkinen"
@@ -54,7 +55,7 @@ restricted = "Rajoitettu"
 
 [labels.fi.model.documents_document.field.owner]
 label = "Omistaja"
-description = "Asiakirjasta vastaavan henkilön nimi"
+description = "Asiakirjasta vastaavan henkilön käyttäjänimi; sen luova henkilö, ellei toisin määritetä. Omistajat näkevät luottamukselliset asiakirjansa"
 
 [labels.fi.model.documents_document.field.reference]
 label = "Viite"
@@ -92,3 +93,7 @@ description = "Arkistoi julkaistu asiakirja (vain esihenkilö)"
 [labels.fi.model.documents_document.field.attachment]
 label = "Tiedosto"
 description = "Itse asiakirjatiedosto (PDF, kuva, teksti, taulukko tai toimisto-asiakirja, enintään 25 MiB); toimitetaan vain latauksena henkilöille, jotka saavat lukea tietueen"
+
+[labels.fi.model.documents_document.field.open_to_all]
+label = "Avoin kaikille"
+description = "Näkevätkö kaikki, joilla on asiakirjojen lukuoikeus, tämän: tosi julkisille ja sisäisille asiakirjoille"

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fmt, inSentence, msg, t } from "@obop/ui";
-import { LOAD_LIMIT, search, type ModelMeta, type Row } from "./api.ts";
+import { search, type ModelMeta, type Row } from "./api.ts";
+import { collect } from "./bulk.ts";
 import type { App } from "./Chrome.tsx";
 import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
@@ -63,6 +64,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   const d = useData();
   const title = modelTitle(model, app.module.id);
   const state = useMemo(() => decodeState(route.st), [route.st]);
+  const [extraDialog, setExtraDialog] = useState<ReactNode>(null);
   const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
   const [pageSize, setPageSizeState] = useState(() => {
     const n = readPref<number>("obop-pagesize", 100);
@@ -97,23 +99,28 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
       ? "kanban"
       : "list";
 
-  // The list pages on the server (D49) whenever the server can answer the whole search. Anything
-  // else (an any-field search, grouping, a sort by a ref) loads the records, up to 5,000, and works
-  // in the browser, exactly like kanban, pivot, graph and calendar always do. See serverQuery.ts.
+  // The list pages on the server (D49) whenever the server can answer the whole search. Kanban,
+  // pivot, graph and calendar ask the server for counts, sums and pages (D4, `aggregate`) whenever
+  // the filter is expressible. Anything else (an any-field search, a "contains" on a select, grouping
+  // the list, a sort by a ref) loads the records, up to 5,000, and works in the browser. See
+  // serverQuery.ts.
   const plan = useMemo(() => toServer(state, fields), [state, fields]);
   const grouped = state.group.length > 0;
   const serverMode = view === "list" && onServer(plan, state);
+  const aggMode = view !== "list" && plan.rest.length === 0;
   const page = Math.max(1, parseInt(route.page, 10) || 1);
   const offset = (page - 1) * pageSize;
 
-  const store = useRows(model.name, !serverMode);
+  const store = useRows(model.name, !serverMode && !aggMode);
+  // In aggregate mode this asks for one record: it answers how many records match and which
+  // fields are withheld; the view asks for the rest.
   const srv = useServerRows({
-    enabled: serverMode,
+    enabled: serverMode || aggMode,
     model: model.name,
     filter: plan.filter,
-    order: plan.order,
-    offset,
-    limit: pageSize,
+    order: aggMode ? [] : plan.order,
+    offset: aggMode ? 0 : offset,
+    limit: aggMode ? 1 : pageSize,
   });
   useEffect(() => {
     if (srv.denied.length || serverDenied.length) setServerDenied(srv.denied);
@@ -163,20 +170,22 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   const rows = store.rows;
   const filtered = useMemo(
     () =>
-      serverMode
+      serverMode || aggMode
         ? []
         : sortRows(applyFacets(rows, state.facets, fields, d.lookup), state.sort, fields, d.lookup),
     // lookup changes when ref labels load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serverMode, rows, state.facets, state.sort, fields, d.version],
+    [serverMode, aggMode, rows, state.facets, state.sort, fields, d.version],
   );
   const paging = view === "list" && !grouped;
-  const shown: Row[] = serverMode
-    ? srv.rows
-    : paging
-      ? filtered.slice(offset, offset + pageSize)
-      : filtered;
-  const total = serverMode ? srv.total : filtered.length;
+  const shown: Row[] = aggMode
+    ? []
+    : serverMode
+      ? srv.rows
+      : paging
+        ? filtered.slice(offset, offset + pageSize)
+        : filtered;
+  const total = serverMode || aggMode ? srv.total : filtered.length;
 
   // Deleting the last record of a page leaves an empty page: go back to the last one.
   useEffect(() => {
@@ -204,7 +213,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     setNewDefaults(defaults);
     put({ id: "new" });
   };
-  const found = useRecord(model.name, route.id, serverMode ? srv.rows : rows);
+  const found = useRecord(model.name, route.id, serverMode || aggMode ? srv.rows : rows);
   const selected = route.id === "new" ? "new" : found;
 
   const governed = useMemo(() => governedNames(model), [model]);
@@ -221,7 +230,9 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
         );
   };
   const update: ViewProps["update"] = async (id, patch) => {
-    const r = await d.run(`${model.name}.update`, { id, ...patch });
+    const body = { ...patch };
+    for (const f of model.fields) if (f.computed || f.sequence) delete body[f.name];
+    const r = await d.run(`${model.name}.update`, { id, ...body });
     if (r.kind === "ok") return null;
     if (r.kind === "approval") return approval("change", r.planId);
     return serverMessage(r.message);
@@ -230,6 +241,8 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     // A governed field starts at its first option; the server refuses anything else.
     const clean = { ...body };
     for (const g of governed) delete clean[g];
+    // Computed values and numbers are the server's.
+    for (const f of model.fields) if (f.computed || f.sequence) delete clean[f.name];
     const r = await d.run(`${model.name}.create`, clean);
     if (r.kind === "ok") {
       d.notify(t("{model} created", { model: title }));
@@ -240,7 +253,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   };
   const moveState: ViewProps["moveState"] = async (id, field, to) => {
     const f = model.fields.find((x) => x.name === field);
-    const row = (serverMode ? srv.rows : rows).find((r) => r.id === id);
+    const row = (serverMode || aggMode ? srv.rows : rows).find((r) => r.id === id);
     if (!f || !row) return t("Record not found");
     const out = await moveRecord(d.run, model, f, row, to, title);
     return out.kind === "ok" ? null : serverMessage(out.message);
@@ -255,15 +268,28 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   const applyFavorite = (f: Favorite) =>
     put({ st: encodeState(f.state), view: available.includes(f.view) ? f.view : view, page: "" });
 
-  /** Every record the search matches, up to the load limit. */
-  const exportAll: ViewProps["exportAll"] = async () => {
-    if (!serverMode) return { rows: filtered, truncated: false };
-    const q: Record<string, unknown> = { limit: LOAD_LIMIT };
-    if (plan.filter.length) q.filter = plan.filter;
-    if (plan.order.length) q.order = plan.order;
-    const r = await search(d.token, model.name, q);
-    if ("error" in r) return { rows: srv.rows, truncated: true };
-    return { rows: r.rows, truncated: r.total > r.rows.length };
+  /** Every record the search matches, fetched page by page up to the cap (D1). */
+  const fetchAll: ViewProps["fetchAll"] = async (o) => {
+    if (!serverMode) {
+      const rows = filtered.slice(0, o.cap);
+      return {
+        rows,
+        total: filtered.length,
+        truncated: filtered.length > rows.length,
+        cancelled: false,
+      };
+    }
+    return collect(
+      async (offset, limit) => {
+        const q: Record<string, unknown> = { offset, limit };
+        if (plan.filter.length) q.filter = plan.filter;
+        if (plan.order.length) q.order = plan.order;
+        const r = await search(d.token, model.name, q);
+        return "error" in r ? { error: r.error } : { rows: r.rows, total: r.total };
+      },
+      o.cap,
+      o,
+    );
   };
 
   const vp: ViewProps = {
@@ -271,6 +297,8 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     title,
     fields,
     rows: shown,
+    setDialog: setExtraDialog,
+    server: aggMode ? { filter: plan.filter, order: plan.order } : undefined,
     state,
     setState,
     selectedId: route.id,
@@ -284,7 +312,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
     newWith: openNew,
     drill,
     total,
-    exportAll,
+    fetchAll,
     pager: paging
       ? {
           offset,
@@ -302,13 +330,14 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
 
   const filtering = state.facets.length > 0;
   const kf = view === "kanban" ? kanbanField(fields, state.group[0]) : undefined;
-  const loaded = serverMode ? srv.loaded : store.loaded;
-  const error = serverMode ? srv.error : store.error;
+  const loaded = serverMode || aggMode ? srv.loaded : store.loaded;
+  const error = serverMode || aggMode ? srv.error : store.error;
   const withheldError = !!error && isWithheldError(error);
-  const modelEmpty = serverMode
-    ? srv.loaded && !srv.error && srv.total === 0 && plan.filter.length === 0
-    : store.loaded && rows.length === 0;
-  const truncated = !serverMode && store.loaded && store.total > rows.length;
+  const modelEmpty =
+    serverMode || aggMode
+      ? srv.loaded && !srv.error && srv.total === 0 && plan.filter.length === 0
+      : store.loaded && rows.length === 0;
+  const truncated = !serverMode && !aggMode && store.loaded && store.total > rows.length;
 
   return (
     <>
@@ -385,7 +414,11 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
           ) : modelEmpty ? (
             <EmptyState
               title={t("No {model} yet", { model: inSentence(title) })}
-              hint={t("Records you create show up here.")}
+              hint={
+                model.access
+                  ? t("You see only the records that are yours or shared with you.")
+                  : t("Records you create show up here.")
+              }
               action={
                 model.can_create
                   ? {
@@ -418,6 +451,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
           )}
         </div>
       </section>
+      {extraDialog}
       {selected && (
         <RecordPanel
           key={route.id === "new" ? `new-${JSON.stringify(newDefaults)}` : route.id}

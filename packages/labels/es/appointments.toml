@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Citas"
 description = "Recursos reservables (personas, salas, equipos) y citas con fecha, hora de inicio y de fin y un flujo de estados. Los solapamientos no se evitan automáticamente."
+summary = "Recursos reservables (personas, salas y equipos) y citas con inicio, fin y un flujo de estados."
 
 [labels.es.model.appointments_resource]
 name = "Recurso"

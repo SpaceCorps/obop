@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Tidsbokning"
 description = "Bokningsbara resurser (personer, rum, utrustning) och bokningar med datum, start- och sluttid och ett statusflöde. Överlappningar förhindras inte automatiskt."
+summary = "Bokningsbara personer, rum och utrustning samt bokningar med start, slut och ett statusflöde."
 
 [labels.sv.model.appointments_resource]
 name = "Resurs"

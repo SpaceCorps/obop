@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Varastonhallinta"
-description = "Varastot, varastopaikat, varastosaldot ja varastosiirrot. Ihmiset syöttävät ja vahvistavat määrät; siirrot eivät päivitä niitä automaattisesti."
+description = "Varastot, varastopaikat, varastosaldot ja varastosiirrot. Siirron vahvistaminen vähentää määrän lähtöpaikan saldosta ja lisää sen kohdepaikan saldoon yhdellä kertaa; puuttuva saldorivi luodaan. Yksi rivi per tuote, paikka ja erä; negatiiviset määrät sallitaan."
+summary = "Varastot, varastopaikat, varastosaldot ja varastosiirrot."
 
 [labels.fi.model.inventory_warehouse]
 name = "Varasto"
@@ -55,7 +56,7 @@ description = "Yhden tuotteen määrä yhdessä varastopaikassa"
 
 [labels.fi.model.inventory_item.field.product_id]
 label = "Tuote"
-description = "Varastoitu tuote"
+description = "Varastoitu tuote; yksi rivi per tuote, paikka ja erä"
 
 [labels.fi.model.inventory_item.field.location_id]
 label = "Sijainti"
@@ -79,7 +80,7 @@ description = "Tuotteen siirto varastopaikkojen välillä tai yritykseen tai sie
 
 [labels.fi.model.inventory_move.field.reference]
 label = "Viite"
-description = "Siirron viite, esimerkiksi toimitus- tai vastaanottonumero"
+description = "Siirron numero, esimerkiksi MV-00042, annetaan siirtoa luotaessa"
 
 [labels.fi.model.inventory_move.field.product_id]
 label = "Tuote"
@@ -112,7 +113,7 @@ cancelled = "Peruutettu"
 
 [labels.fi.model.inventory_move.action.validate]
 label = "Vahvista"
-description = "Vahvista, että tavara todella siirtyi; valmista siirtoa ei voi perua"
+description = "Vahvista, että tavara todella siirtyi: määrä poistuu lähtörivistä ja saapuu kohderiville (vain varastonhoitajat); valmista siirtoa ei voi perua"
 
 [labels.fi.model.inventory_move.action.cancel]
 label = "Peruuta"

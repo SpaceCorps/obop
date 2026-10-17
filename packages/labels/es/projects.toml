@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Proyectos"
-description = "Proyectos, hitos y tareas con responsables, plazos y flujos de estados. El avance se sigue por estado, no se calcula a partir del esfuerzo de las tareas."
+description = "Proyectos, hitos y tareas con responsables, plazos y flujos de estados. Un proyecto muestra su avance, la proporción de sus tareas que están hechas, y el tiempo estimado para ellas."
+summary = "Proyectos, hitos y tareas con responsables, plazos y flujos de estados."
 
 [labels.es.model.projects_project]
 name = "Proyecto"
@@ -154,3 +155,11 @@ description = "Marcar como hecha una tarea en curso"
 [labels.es.model.projects_task.action.cancel]
 label = "Cancelar"
 description = "Descartar una tarea que nunca se empezó"
+
+[labels.es.model.projects_project.field.estimate_minutes]
+label = "Minutos estimados"
+description = "Tiempo estimado para todas las tareas del proyecto que no están canceladas, en minutos"
+
+[labels.es.model.projects_project.field.progress]
+label = "Avance"
+description = "Proporción de las tareas del proyecto que están hechas, en porcentaje; las tareas canceladas no cuentan"

@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Produkter"
+summary = "Produkter och tjänster med pris och kostnad, delade av försäljning, fakturering och lager."
 
 [labels.sv.model.product]
 name = "Produkt"
@@ -11,7 +12,7 @@ description = "Produktnamn"
 
 [labels.sv.model.product.field.sku]
 label = "Artikelnummer (SKU)"
-description = "Artikelnummer för lagerhållning"
+description = "Artikelnummer för lagerhållning; inga två produkter har samma"
 
 [labels.sv.model.product.field.list_price_minor]
 label = "Listpris"

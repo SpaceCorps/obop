@@ -2,78 +2,8 @@
 //! voucher's last use, a state that changes once). Each backend runs [`run_ops`] inside its own
 //! transaction (a lock in memory, `BEGIN IMMEDIATE` in SQLite, row locks in PostgreSQL).
 
-use crate::{Fields, Result};
+use crate::{Fields, Op, Result};
 use serde_json::Value as J;
-
-/// One step of an atomic batch (see [`crate::Backend::apply`]).
-#[derive(Debug, Clone, PartialEq)]
-pub enum Op {
-    /// Insert a record; a duplicate id is a conflict.
-    Insert {
-        model: String,
-        id: String,
-        fields: Fields,
-    },
-    /// Add `delta` to the integer `field` (absent or null counts as 0) and refuse the whole batch
-    /// if the result leaves `[min, max]` or overflows. With `create`, a missing record is
-    /// inserted with those fields first (an upsert counter); without it a missing record is a
-    /// conflict. The check and the change happen under one lock or row lock, so two callers
-    /// cannot both take the last unit.
-    Add {
-        model: String,
-        id: String,
-        field: String,
-        delta: i64,
-        min: Option<i64>,
-        max: Option<i64>,
-        create: Option<Fields>,
-    },
-    /// Merge `patch` into a record only if every `expect` field currently equals the given value
-    /// (compare-and-set, for state changes that must happen once). A missing field equals null.
-    Patch {
-        model: String,
-        id: String,
-        patch: Fields,
-        expect: Vec<(String, J)>,
-    },
-    /// Remove a record; a missing record is not an error.
-    Delete { model: String, id: String },
-}
-
-impl Op {
-    pub fn add(model: &str, id: &str, field: &str, delta: i64) -> Op {
-        Op::Add {
-            model: model.into(),
-            id: id.into(),
-            field: field.into(),
-            delta,
-            min: None,
-            max: None,
-            create: None,
-        }
-    }
-
-    pub fn min(mut self, v: i64) -> Op {
-        if let Op::Add { min, .. } = &mut self {
-            *min = Some(v);
-        }
-        self
-    }
-
-    pub fn max(mut self, v: i64) -> Op {
-        if let Op::Add { max, .. } = &mut self {
-            *max = Some(v);
-        }
-        self
-    }
-
-    pub fn or_create(mut self, fields: Fields) -> Op {
-        if let Op::Add { create, .. } = &mut self {
-            *create = Some(fields);
-        }
-        self
-    }
-}
 
 /// Why an atomic batch was not applied. Nothing was changed in either case.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,7 +104,19 @@ pub(crate) fn run_ops(tx: &mut dyn TxView, ops: &[Op]) -> std::result::Result<()
                 rec.extend(patch.clone());
                 tx.tx_put(model, id, &rec).map_err(st)?;
             }
-            Op::Delete { model, id } => tx.tx_delete(model, id).map_err(st)?,
+            Op::Merge { model, id, patch } => {
+                let Some(mut rec) = tx.tx_get(model, id).map_err(st)? else {
+                    return Err(conflict(index, "no such record"));
+                };
+                rec.extend(patch.clone());
+                tx.tx_put(model, id, &rec).map_err(st)?;
+            }
+            Op::Delete { model, id } => {
+                if tx.tx_get(model, id).map_err(st)?.is_none() {
+                    return Err(conflict(index, "no such record"));
+                }
+                tx.tx_delete(model, id).map_err(st)?;
+            }
         }
     }
     Ok(())

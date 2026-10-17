@@ -1,5 +1,6 @@
 [labels.de.module]
 name = "Produkte"
+summary = "Produkte und Dienstleistungen mit Preisen und Kosten, gemeinsam genutzt von Verkauf, Rechnungsstellung und Lager."
 
 [labels.de.model.product]
 name = "Produkt"
@@ -11,7 +12,7 @@ description = "Produktname"
 
 [labels.de.model.product.field.sku]
 label = "Artikelnummer"
-description = "Artikelnummer (SKU)"
+description = "Artikelnummer (SKU); keine zwei Produkte haben dieselbe"
 
 [labels.de.model.product.field.list_price_minor]
 label = "Listenpreis"

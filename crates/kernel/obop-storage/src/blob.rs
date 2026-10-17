@@ -675,7 +675,7 @@ impl Catalog {
                 return Ok(true);
             }
             if owners.is_empty() && pending.is_empty() {
-                let r = self.meta.apply(&[Op::Patch {
+                let r = self.meta.apply_checked(&[Op::Patch {
                     model: MODEL.into(),
                     id: id.into(),
                     patch: Fields::new(),
@@ -703,7 +703,7 @@ impl Catalog {
             }
             let mut patch = Fields::new();
             Self::set_holds(&mut patch, &owners, &pending);
-            let r = self.meta.apply(&[Op::Patch {
+            let r = self.meta.apply_checked(&[Op::Patch {
                 model: MODEL.into(),
                 id: id.into(),
                 patch,

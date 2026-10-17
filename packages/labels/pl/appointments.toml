@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Spotkania"
 description = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z datą, godziną rozpoczęcia i zakończenia oraz obiegiem statusów. Nakładanie się terminów nie jest blokowane automatycznie."
+summary = "Zasoby do rezerwacji (osoby, sale, sprzęt) oraz spotkania z początkiem, końcem i obiegiem statusów."
 
 [labels.pl.model.appointments_resource]
 name = "Zasób"

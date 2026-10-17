@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Tietämys"
 description = "Wiki: ylätason artikkelin kautta puuksi järjestetyt artikkelit luonnos-, julkaistu- ja arkistoitu-kulussa, näkyvyysasetus ja tunnisteet. Näkyvyys on käyttöliittymän ja ihmisten noudatettava merkintä; alustalla ei ole vielä rivikohtaisia oikeuksia, joten kaikki Tietämys-ryhmien jäsenet voivat lukea kaikki artikkelit."
+summary = "Wiki: puuksi järjestetyt artikkelit luonnos-, julkaistu- ja arkistoitu-kulussa, näkyvyysasetus ja tunnisteet."
 
 [labels.fi.model.knowledge_article]
 name = "Artikkeli"

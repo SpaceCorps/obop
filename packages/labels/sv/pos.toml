@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Kassa"
-description = "Butikskassor: en kassakonfiguration, kassapass med kassakontroll som öppnas och stängs, order med rader och betalningsrader per betalsätt. Återbetalning och stängning av kassapass kräver en chefs godkännande; agenter får bara föreslå dem. Totaler, växel och kassadifferenser anges, de beräknas inte. Kortnummer får aldrig lagras; spara bara betaltjänstens referens. Kräver paketet Produkter."
+description = "Butikskassor: kassakonfiguration, kassapass med kassakontroll, order med rader och betalningar per betalsätt. Återbetalning och stängning av kassapass kräver en chefs godkännande. Totaler beräknas från raderna, kvitton får ett årligt löpnummer, betalning nekas tills betalningarna täcker totalen och skapar lagerrörelseutkast. Kortnummer får aldrig lagras. Kräver paketet Produkter."
+summary = "Butikskassor: kassapass med kassakontroll, order med rader och betalningar. Återbetalning och stängning kräver godkännande."
 
 [labels.sv.model.pos_config]
 name = "Kassa"
@@ -96,7 +97,7 @@ description = "Kassapasset som försäljningen gjordes i"
 
 [labels.sv.model.pos_order.field.receipt_number]
 label = "Kvittonummer"
-description = "Nummer som skrivs ut på kvittot. Fritext: paket kan inte generera nummerserier"
+description = "Nummer som skrivs ut på kvittot, som R-2026-000042: en serie utan luckor som börjar om varje år, tilldelas när försäljningen skapas"
 
 [labels.sv.model.pos_order.field.ordered_on]
 label = "Orderdatum"
@@ -112,7 +113,7 @@ description = "Skatt som ingår i totalbeloppet (valutans minsta enhet)"
 
 [labels.sv.model.pos_order.field.total]
 label = "Totalt"
-description = "Totalt belopp som kunden betalat inklusive skatt (valutans minsta enhet, anges och beräknas inte)"
+description = "Totalt belopp som kunden betalat inklusive skatt: summan av radsummorna (valutans minsta enhet)"
 
 [labels.sv.model.pos_order.field.note]
 label = "Anteckning"
@@ -130,7 +131,7 @@ cancelled = "Annullerad"
 
 [labels.sv.model.pos_order.action.pay]
 label = "Betala"
-description = "Försäljningen är helt betald"
+description = "Försäljningen är helt betald: nekas tills betalningarna täcker totalbeloppet; skapar ett lagerrörelseutkast per rad (kräver gruppen inventory.user)"
 
 [labels.sv.model.pos_order.action.cancel]
 label = "Annullera"
@@ -170,7 +171,7 @@ description = "Rabatt i baspunkter: 1000 är 10,00 procent"
 
 [labels.sv.model.pos_order_line.field.subtotal]
 label = "Delsumma"
-description = "Radsumma efter rabatt (valutans minsta enhet, anges och beräknas inte)"
+description = "Radsumma efter rabatt: antal gånger styckpris minus rabatten (valutans minsta enhet)"
 
 [labels.sv.model.pos_payment]
 name = "Betalning"
@@ -202,3 +203,7 @@ description = "Betalningsdagen (ÅÅÅÅ-MM-DD)"
 [labels.sv.model.pos_payment.field.provider_reference]
 label = "Betaltjänstens referens"
 description = "Referens från kortterminalen eller betaltjänsten; aldrig ett kortnummer"
+
+[labels.sv.model.pos_order.field.stock_location_id]
+label = "Lagerplats"
+description = "Var varorna lämnar lagret; vid betalning skapas lagerrörelserna från denna plats"

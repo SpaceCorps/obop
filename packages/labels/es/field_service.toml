@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Servicio de campo"
 description = "Trabajos in situ para clientes, hechos por un técnico: programado, en camino, en curso, hecho o cancelado. Un trabajo registra el cliente, el lugar, el técnico, el día y la hora de inicio previstos (minutos desde la medianoche), las piezas usadas y si el cliente debe dar su conformidad. La dirección del lugar y los datos de contacto son datos personales. Requiere Recursos humanos y Productos."
+summary = "Trabajos in situ para clientes, hechos por un técnico, con piezas usadas e indicador de conformidad del cliente."
 
 [labels.es.model.field_service_job]
 name = "Trabajo"

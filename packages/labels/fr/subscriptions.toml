@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Abonnements"
 description = "Formules récurrentes et abonnements clients avec un flux essai, actif, en retard et annulé. Il enregistre la date de la prochaine facture ; il ne crée pas de factures de lui-même."
+summary = "Formules récurrentes et abonnements clients avec un flux essai, actif, en retard et annulé."
 
 [labels.fr.model.subscriptions_plan]
 name = "Formule"

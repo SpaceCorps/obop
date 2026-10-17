@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Konnektoren"
 description = "Externe Systeme anbinden und Personen ihre eigenen Konten verbinden lassen, mit eingebauten Kontrollen zur Unterstützung der DSGVO: dokumentierte Rechtsgrundlage, widerrufbare Einwilligung, Datenminimierung, Pseudonymisierung nach Datenklasse, Protokoll ohne Nutzdaten und Verarbeitungsverzeichnis. Technische Kontrollen, keine Rechtsberatung oder Zertifizierung."
+summary = "Andere Systeme anbinden, mit dokumentierter Rechtsgrundlage, Feld-Freigabelisten, signierten Webhooks und OAuth."
 
 [labels.de.model.connector_provider]
 name = "Konnektor-Anbieter"

@@ -1,5 +1,6 @@
 [labels.fi.module]
 name = "Laskutus"
+summary = "Asiakaslaskut luonnos-, kirjattu- ja maksettu-elinkaarella."
 
 [labels.fi.model.invoice]
 name = "Lasku"
@@ -20,11 +21,11 @@ cancelled = "Peruutettu"
 
 [labels.fi.model.invoice.field.total_minor]
 label = "Yhteensä"
-description = "Laskun loppusumma valuutan pienimmässä yksikössä"
+description = "Laskun loppusumma valuutan pienimmässä yksikössä, rivien summa"
 
 [labels.fi.model.invoice.field.number]
 label = "Numero"
-description = "Katkeamaton lakisääteinen numero, jonka kirjaaminen antaa"
+description = "Katkeamaton lakisääteinen numero, esimerkiksi INV-2026-00042, jonka kirjaaminen antaa"
 
 [labels.fi.model.invoice.action.post]
 label = "Kirjaa"
@@ -33,3 +34,39 @@ description = "Kirjaa luonnoslasku ja anna sille lakisääteinen numero"
 [labels.fi.model.invoice.action.cancel]
 label = "Peruuta"
 description = "Peruuta luonnoslasku"
+
+[labels.fi.model.invoice.field.party_id]
+label = "Osapuoli"
+description = "Asiakasosapuolen tunniste"
+
+[labels.fi.model.invoice.field.currency]
+label = "Valuutta"
+description = "ISO 4217 -valuuttakoodi"
+
+[labels.fi.model.invoice_line]
+name = "Laskurivi"
+description = "Yksi tuote tai palvelu laskulla"
+
+[labels.fi.model.invoice_line.field.invoice_id]
+label = "Lasku"
+description = "Lasku, johon rivi kuuluu"
+
+[labels.fi.model.invoice_line.field.product_id]
+label = "Tuote"
+description = "Laskutettu tuote"
+
+[labels.fi.model.invoice_line.field.description]
+label = "Kuvaus"
+description = "Mitä laskutetaan"
+
+[labels.fi.model.invoice_line.field.quantity]
+label = "Määrä"
+description = "Laskutettu määrä"
+
+[labels.fi.model.invoice_line.field.unit_price_minor]
+label = "Yksikköhinta"
+description = "Yhden yksikön hinta valuutan pienimmässä yksikössä"
+
+[labels.fi.model.invoice_line.field.amount_minor]
+label = "Summa"
+description = "Rivin summa valuutan pienimmässä yksikössä: määrä kertaa yksikköhinta"

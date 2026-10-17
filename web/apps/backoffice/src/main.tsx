@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { I18nProvider, initI18n } from "@obop/ui";
 import "@obop/ui/styles.css";
 import { App } from "./App.tsx";
+import { ErrorBoundary } from "./ErrorBoundary.tsx";
 import "./style.css";
 import "./controlpanel.css";
 import "./views.css";
@@ -21,12 +22,20 @@ const loaders = [
   import.meta.glob("../locales/*/messages.json", { import: "default" }),
 ];
 
+// Errors that no screen catches are reported to the console only: nothing leaves the browser.
+addEventListener("unhandledrejection", (e) => {
+  console.error("[obop] unhandled promise rejection", e.reason);
+  e.preventDefault();
+});
+
 void initI18n({ loaders }).then(() =>
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <I18nProvider>
-        <App />
-      </I18nProvider>
+      <ErrorBoundary scope="app">
+        <I18nProvider>
+          <App />
+        </I18nProvider>
+      </ErrorBoundary>
     </StrictMode>,
   ),
 );

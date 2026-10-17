@@ -1,12 +1,23 @@
-import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import { inSentence, t } from "@obop/ui";
-import type { FieldMeta, Row } from "../api.ts";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
+import { fmt as fmtLocale, inSentence, t } from "@obop/ui";
+import { search, type FieldMeta, type Row, type ServerFilter } from "../api.ts";
 import { Cell } from "../fields.tsx";
 import { labelField, useData } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
-import { isEmpty, isMasked, isState, rowCurrency } from "../format.ts";
+import { isEmpty, isMasked, isState, money as fmtMoney, rowCurrency } from "../format.ts";
 import { fieldTitle } from "../labels.ts";
-import { formatSumRows, groupDomain, groupKey, groupLabel, groupable, sumOf } from "../query.ts";
+import { serverMessage } from "../serverMessage.ts";
+import {
+  domainOf,
+  formatSumRows,
+  groupDomain,
+  groupKey,
+  groupLabel,
+  groupable,
+  sumOf,
+} from "../query.ts";
+import { keyOf, useAggregate } from "../useAggregate.ts";
+import { AggState } from "./AggState.tsx";
 import { Icon } from "../ui.tsx";
 import { actionsOn, canMove, initialOption, isGoverned, moveRecord } from "../workflow.ts";
 import type { ViewProps } from "./types.ts";
@@ -33,26 +44,209 @@ function defaultsFor(f: FieldMeta, key: string): Record<string, unknown> {
   return { [f.name]: key };
 }
 
+/** Cards a column asks for at first, and each time "Load more" is used. */
+export const COLUMN_PAGE = 40;
+
+const nextMonth = (key: string): string => {
+  const [y, m] = key.split("-").map(Number) as [number, number];
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+};
+
+/** The server conditions that select the cards of one column. */
+export function columnFilter(f: FieldMeta, key: string): ServerFilter[] {
+  if (key === "") return [{ field: f.name, op: "is_null", value: true }];
+  if (f.kind === "bool") return [{ field: f.name, op: "eq", value: key === "true" }];
+  if (f.kind === "date")
+    return [
+      { field: f.name, op: "gte", value: `${key}-01` },
+      { field: f.name, op: "lt", value: nextMonth(key) },
+    ];
+  return [{ field: f.name, op: "eq", value: key }];
+}
+
+type ColumnState = { rows: Row[]; total: number; loading: boolean; error?: string };
+
+/**
+ * The cards of each column from `<model>.search`, one page per column (D4): a column asks for its
+ * first cards and again for more when "Load more" raises its limit. Columns refetch after any
+ * write or when the search changes; the cards already shown stay until the new ones arrive.
+ */
+function useColumnCards(opts: {
+  enabled: boolean;
+  model: string;
+  base: ServerFilter[];
+  order: { field: string; dir: "asc" | "desc" }[];
+  field: FieldMeta | undefined;
+  keys: string[];
+  folded: string[];
+  limits: Record<string, number>;
+}) {
+  const d = useData();
+  const { enabled, model, base, order, field, keys, folded, limits } = opts;
+  const [cols, setCols] = useState<Record<string, ColumnState>>({});
+  const seen = useRef(new Map<string, string>());
+  const seq = useRef(0);
+  const baseSig = JSON.stringify([model, base, order, field?.name, d.mutations]);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    // A new search or a write starts every column over; a limit change only its own.
+    seen.current.clear();
+    seq.current++;
+    if (!enabled) setCols({});
+  }, [baseSig, enabled, attempt]);
+
+  useEffect(() => {
+    if (!enabled || !field) return;
+    const token = d.token;
+    const round = seq.current;
+    for (const key of keys) {
+      if (folded.includes(key)) continue;
+      const limit = limits[key] ?? COLUMN_PAGE;
+      const sig = `${round}:${limit}`;
+      if (seen.current.get(key) === sig) continue;
+      seen.current.set(key, sig);
+      setCols((c) => ({
+        ...c,
+        [key]: { rows: c[key]?.rows ?? [], total: c[key]?.total ?? 0, loading: true },
+      }));
+      void search(token, model, {
+        filter: [...base, ...columnFilter(field, key)],
+        order,
+        limit,
+      }).then((r) => {
+        if (round !== seq.current) return;
+        setCols((c) => ({
+          ...c,
+          [key]:
+            "error" in r
+              ? {
+                  rows: c[key]?.rows ?? [],
+                  total: c[key]?.total ?? 0,
+                  loading: false,
+                  error: r.error,
+                }
+              : { rows: r.rows, total: r.total, loading: false },
+        }));
+      });
+    }
+    // baseSig stands for the search; limits and keys are listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    enabled,
+    baseSig,
+    attempt,
+    keys.join("\u0001"),
+    folded.join("\u0001"),
+    JSON.stringify(limits),
+  ]);
+
+  return { cols, retry: () => setAttempt((n) => n + 1) };
+}
+
+/** Per column: its record count and, for a money field, its sums by currency. */
+export function columnTotals(
+  groups: {
+    key: Record<string, unknown>;
+    count: number;
+    measures: Record<string, number | null>;
+  }[],
+  field: FieldMeta,
+  sumField: FieldMeta | undefined,
+) {
+  const out = new Map<string, { count: number; sums: Map<string, number> }>();
+  for (const g of groups) {
+    const k = keyOf(g.key[field.name]);
+    const e = out.get(k) ?? { count: 0, sums: new Map<string, number>() };
+    e.count += g.count;
+    if (sumField) {
+      const c = typeof g.key.currency === "string" ? g.key.currency : "";
+      e.sums.set(c, (e.sums.get(c) ?? 0) + (g.measures[`sum:${sumField.name}`] ?? 0));
+    }
+    out.set(k, e);
+  }
+  return out;
+}
+
 export function KanbanView(p: ViewProps) {
   const d = useData();
-  const { fields, rows, model } = p;
+  const { fields, model } = p;
   const gf = kanbanField(fields, p.state.group[0]);
+  const server = p.server;
+  const money1 = fields.find((f) => f.kind === "money");
   const foldKey = `obop-fold:${model.name}:${gf?.name}`;
   const [folded, setFolded] = useState<string[]>(() => readPref<string[]>(foldKey, []));
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [quick, setQuick] = useState<{ key: string; text: string } | null>(null);
   const board = useRef<HTMLDivElement>(null);
+  const pendingFocus = useRef<{ id: string; col: number } | null>(null);
+  useEffect(() => {
+    const want = pendingFocus.current;
+    if (!want) return;
+    const el = board.current?.querySelector<HTMLElement>(
+      `[data-col="${want.col}"] [data-card="${want.id}"]`,
+    );
+    if (el) {
+      pendingFocus.current = null;
+      el.focus();
+    }
+  });
+  const [limits, setLimits] = useState<Record<string, number>>({});
 
-  const keys = useMemo(
-    () => (gf ? groupDomain(gf, rows, d.lookup) : []),
+  // Server mode (D4): counts and sums per column from one aggregate, cards one page per column.
+  const hasCurrency = model.fields.some(
+    (f) => f.name === "currency" && (f.kind === "text" || f.kind === "select"),
+  );
+  const agg = useAggregate({
+    enabled: !!server && !!gf,
+    model: model.name,
+    filter: server?.filter ?? [],
+    groupBy: gf
+      ? [
+          gf.kind === "date" ? { field: gf.name, bucket: "month" } : { field: gf.name },
+          ...(hasCurrency && money1 ? [{ field: "currency" }] : []),
+        ]
+      : [],
+    measures: money1 ? [{ op: "count" }, { op: "sum", field: money1.name }] : [{ op: "count" }],
+  });
+  const totals = useMemo(
+    () => (gf && server ? columnTotals(agg.groups, gf, money1) : null),
+    [gf, server, agg.groups, money1],
+  );
+
+  const clientRows = p.rows;
+  const keys = useMemo(() => {
+    if (!gf) return [];
+    if (!server) return groupDomain(gf, clientRows, d.lookup);
+    const present = [...(totals?.keys() ?? [])];
+    return domainOf(gf, present, d.lookup);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [gf, rows, d.version],
+  }, [gf, server, clientRows, totals, d.version]);
+  const { cols, retry: retryColumns } = useColumnCards({
+    enabled: !!server && !!gf && agg.loaded && !agg.error,
+    model: model.name,
+    base: server?.filter ?? [],
+    order: server?.order ?? [],
+    field: gf,
+    keys,
+    folded,
+    limits,
+  });
+  /** Every card on screen: the loaded pages (server) or the records (browser). */
+  const rows = useMemo(
+    () => (server ? keys.flatMap((k) => cols[k]?.rows ?? []) : clientRows),
+    [server, keys, cols, clientRows],
   );
   if (!gf) return null;
+  if (server && (agg.error || !agg.loaded))
+    return (
+      <AggState agg={agg}>
+        <></>
+      </AggState>
+    );
 
   const titleField = labelField(model);
-  const money1 = fields.find((f) => f.kind === "money");
   const secondary = fields
     .filter((f) => f.name !== gf.name && f.name !== titleField?.name)
     .sort((a, b) => weight(a) - weight(b))
@@ -130,13 +324,14 @@ export function KanbanView(p: ViewProps) {
       e.preventDefault();
       const to = col + (e.key === "ArrowRight" ? 1 : -1);
       if (to < 0 || to >= keys.length) return;
-      if (e.shiftKey && canDrag)
-        void move(row.id, keys[to]!).then(() => requestAnimationFrame(() => focusById(row.id)));
-      else focus(to, index);
+      if (e.shiftKey && canDrag) {
+        // The card reappears in its new column once the board has asked again: focus it then.
+        pendingFocus.current = { id: row.id, col: to };
+        setTimeout(() => (pendingFocus.current = null), 5000);
+        void move(row.id, keys[to]!);
+      } else focus(to, index);
     }
   };
-  const focusById = (id: string) =>
-    board.current?.querySelector<HTMLElement>(`[data-card="${id}"]`)?.focus();
 
   return (
     <div
@@ -146,8 +341,24 @@ export function KanbanView(p: ViewProps) {
       aria-label={t("{model} board by {field}", { model: p.title, field: fieldTitle(gf) })}
     >
       {keys.map((key, col) => {
-        const cards = rows.filter((r) => groupKey(gf, r) === key);
-        const total = money1 ? sumOf(cards, money1.name) : null;
+        const cards = server
+          ? (cols[key]?.rows ?? [])
+          : rows.filter((r) => groupKey(gf, r) === key);
+        const count = server ? (totals?.get(key)?.count ?? 0) : cards.length;
+        const sums = totals?.get(key)?.sums;
+        const total = money1
+          ? server
+            ? [...(sums?.values() ?? [])].reduce((a, b) => a + b, 0)
+            : sumOf(cards, money1.name)
+          : null;
+        const sumText =
+          server && money1 && sums
+            ? fmtLocale.list(
+                [...sums].map(([c, n]) => fmtMoney(n, c || undefined)),
+                "conjunction",
+              )
+            : formatSumRows(money1, cards);
+        const more = server ? count - cards.length : 0;
         const isFolded = folded.includes(key);
         const name = groupLabel(gf, key, d.lookup);
         const lines = secondary;
@@ -159,7 +370,7 @@ export function KanbanView(p: ViewProps) {
             title={dragging && !may(dragging, key).ok ? may(dragging, key).reason : undefined}
             aria-label={t("{name}, {count, plural, one {# card} other {# cards}}", {
               name,
-              count: cards.length,
+              count,
             })}
             onDragOver={(e) => {
               if (!canDrag) return;
@@ -193,10 +404,10 @@ export function KanbanView(p: ViewProps) {
                   name
                 )}
               </b>
-              <span className="count">{cards.length}</span>
+              <span className="count">{count}</span>
               {!isFolded && total !== null && total > 0 && (
                 <span className="sum" title={t("Total {field}", { field: fieldTitle(money1!) })}>
-                  {formatSumRows(money1, cards)}
+                  {sumText}
                 </span>
               )}
               {p.canCreate && !isFolded && (!governed || key === initialOption(gf)) && (
@@ -330,7 +541,28 @@ export function KanbanView(p: ViewProps) {
                   )}
                 </article>
               ))}
-            {!isFolded && cards.length === 0 && quick?.key !== key && (
+            {!isFolded && more > 0 && (
+              <button
+                className="btn small kmore"
+                disabled={cols[key]?.loading}
+                onClick={() =>
+                  setLimits((l) => ({ ...l, [key]: (l[key] ?? COLUMN_PAGE) + COLUMN_PAGE }))
+                }
+              >
+                {cols[key]?.loading
+                  ? t("Loading…")
+                  : t("Load more ({count} left)", { count: more })}
+              </button>
+            )}
+            {!isFolded && cols[key]?.error && (
+              <p className="kempty" role="alert">
+                {serverMessage(cols[key]!.error)}{" "}
+                <button className="linkbtn" onClick={retryColumns}>
+                  {t("Try again")}
+                </button>
+              </p>
+            )}
+            {!isFolded && count === 0 && cards.length === 0 && quick?.key !== key && (
               <p className="kempty">
                 {canDrag ? t("Nothing here. Drop a card.") : t("Nothing here.")}
               </p>

@@ -1,21 +1,193 @@
 ---
 title: "Anslut via MCP"
-description: "Anslut Claude Desktop, Claude Code, Cursor, VS Code, Windsurf, Codex eller Gemini CLI till obop med Model Context Protocol: exakt konfiguration för varje klient, med obop mcp över stdio."
-lead: "obop levereras med en MCP-server. Varje kommando som token får använda blir ett MCP-verktyg. Den här sidan visar konfigurationen för de vanligaste klienterna."
+description: "Anslut Claude Code, Cursor, VS Code, Windsurf, Codex eller Gemini CLI till en obop-instans via URL med fjärr-MCP-servern (Streamable HTTP, bärartoken), eller kör obop mcp över stdio. Exakt konfiguration för varje klient."
+lead: "Varje obop-instans har en MCP-server på /mcp. Rikta en klient mot URL:en med en agenttoken, så blir varje kommando som token får använda ett MCP-verktyg: ingen lokal binärfil behövs."
 ---
 
-## Så fungerar det
+## Fjärr-MCP: anslut via URL
+
+En instans tillhandahåller [Model Context Protocol](https://modelcontextprotocol.io/) över **Streamable HTTP** på `https://YOUR-INSTANCE/mcp`. En hostad instans (till exempel på Sliplane) och en lokal `obop serve` har båda den; inget behöver slås på.
+
+- **Autentisering:** `Authorization: Bearer <token>` i varje förfrågan, med en [agenttoken](/docs/agents/tokens/) (eller en sessionstoken från inloggning). Token kontrolleras exakt som för REST, så verktygslistan, behörigheterna, maskeringen och godkännandena är de som token har över [REST](/docs/agents/rest/).
+- **Ännu ingen OAuth.** obop har ingen OAuth-auktoriseringsserver. Slutpunkten svarar `401` med `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource"` såsom MCP-specifikationen för auktorisering kräver, och det dokumentet anger tydligt att token kommer från `POST /api/auth/login` och `POST /api/auth/agent-token` och nämner ingen auktoriseringsserver. Klienter som bara kan ansluta via ett OAuth-flöde i webbläsaren (till exempel dialogrutan "custom connector" i Claude-apparna) **kan inte ansluta ännu**; använd en klient nedan som accepterar en header.
+- **Protokollrevisioner:** `2025-11-25`, `2025-06-18` och `2025-03-26`, förhandlade i `initialize`. Den nyaste revisionen, `2026-07-28`, är tillståndslös och fungerar annorlunda; obop implementerar den inte ännu. En klient som talar båda faller tillbaka på `initialize` när den får ett vanligt `400`, vilket är vad obop skickar för en versionsheader som inte stöds.
+- **Sessioner:** `initialize` returnerar ett `Mcp-Session-Id`; skicka det i varje senare förfrågan. Sessionen behåller maskeringsvalvet, så en maskeringstoken som `NAME_1` betyder samma sak i varje anrop i sessionen och du kan skicka tillbaka den. En annan session startar ett nytt valv. `DELETE /mcp` avslutar en session; en okänd eller utgången session svarar `404`, och klienten börjar om med `initialize`. En session tillhör den token som öppnade den och går ut efter två timmar utan förfrågan.
+- **Svaren är vanlig JSON.** Det finns ingen SSE-ström från server till klient (`GET /mcp` svarar `405`), och JSON-RPC-batchar accepteras bara i `2025-03-26`, den enda revision som har dem.
+- **Gränser:** förfrågningskroppar upp till 1 MiB (`413`), 600 förfrågningar per minut och token (`429` med `Retry-After`, kan justeras med `OBOP_MCP_RATE_PER_MINUTE`), 25 öppna sessioner per token.
+- **Webbläsare:** en förfrågan med en `Origin`-header avvisas med `403` om inte ursprunget är instansens egen publika URL (`OBOP_PUBLIC_URL`), samma ursprung på en loopback-värd, eller finns i `OBOP_ALLOWED_ORIGINS` (kommaseparerad). Det skyddar lokala instanser mot DNS rebinding. Klienter som inte är webbläsare skickar ingen `Origin`. Bakom en proxy sätter du `OBOP_PUBLIC_URL` (till exempel `https://acme.example.com`) så att upptäcktsdokumenten anger den publika adressen.
+
+### Verktyg
+
+`tools/list` visar ett verktyg per kommando som token får använda, med namnet `<model>__<command>`: `party__search`, `lead__create`, `invoice__post`. Varje verktyg har ett JSON Schema `inputSchema` som genereras från modellen: pengar- och talfält är heltal, datum är `format: date`, urvalsfält är en `enum` av sina alternativ, ett referensfält är en sträng som anger sin målmodell, och obligatoriska fält finns i `required`. `list` och `search` tar `filter`, `order`, `limit` och `offset`; `get`, `delete` och åtgärder tar ett `id`. Annotationer markerar läsningar (`readOnlyHint`) och borttagning (`destructiveHint`). Ett extra skrivskyddat verktyg, `obop__meta`, returnerar det som `GET /api/meta` returnerar: börja där. Ett verktyg som token inte får använda listas inte och besvaras som ett verktyg som inte finns.
+
+Resultaten har `structuredContent` och samma JSON som text:
+
+```json
+{ "status": "ok", "value": [{ "id": "...", "name": "NAME_1" }], "denied": ["party.tax_id"] }
+```
+
+- Ett steg som kräver en människa (varje borttagning, bokföring av en faktura) körs inte för en agent. Resultatet är ett vanligt resultat med `"status": "approval_required"`, ett `plan_id` och en uppmaning att fråga en människa, som godkänner det i back office eller med `POST /api/approve/<plan_id>`. Se [Godkännandeflödet](/docs/agents/approvals/).
+- Ett avvisat indata (ett felaktigt värde, ett saknat fält) är ett verktygsfel: `isError: true` och serverns meddelande i `structuredContent.error`.
+- `initialize` returnerar också `instructions`, en kort text som talar om för modellen hur instansen används.
+
+`tools/list` delas upp i sidor med en `cursor` bara när en token ser fler än 200 verktyg. Listan meddelar inte ändringar (`listChanged` är `false`): starta en ny session efter att du har installerat en modul.
+
+### Kontrollera med curl
+
+```bash
+export OBOP_URL=https://YOUR-INSTANCE
+export OBOP_TOKEN=obop_...
+curl -si -X POST "$OBOP_URL/mcp" \
+  -H "Authorization: Bearer $OBOP_TOKEN" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+```
+
+Kopiera headern `mcp-session-id` från svaret, skicka sedan `{"jsonrpc":"2.0","method":"notifications/initialized"}` (svar `202`) och därefter `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`, båda med `-H "Mcp-Session-Id: <id>"`.
+
+### Konfiguration av fjärrklienter
+
+Byt ut `https://YOUR-INSTANCE/mcp` och förvara token i en miljövariabel eller ett hemlighetsvalv. Formaten nedan hämtades från varje klients dokumentation 2026-10-17. Vi har kört obop bara mot kommandoradsklienten MCP Inspector (`vp dlx @modelcontextprotocol/inspector --cli URL --transport http --header "Authorization: Bearer ..." --method tools/list`) och våra egna Playwright-tester. Vi startade inte de andra klienterna, så varje kodavsnitt är **dokumenterat, inte prövat**.
+
+#### Claude Code
+
+```bash
+claude mcp add --transport http obop https://YOUR-INSTANCE/mcp \
+  --header "Authorization: Bearer $OBOP_TOKEN"
+```
+
+Lägg till `--scope project` för att skriva en delad `.mcp.json` eller `--scope user` för att använda den i alla projekt. I en delad fil läser du token från miljön så att den inte checkas in:
+
+```json
+{
+  "mcpServers": {
+    "obop": {
+      "type": "http",
+      "url": "https://YOUR-INSTANCE/mcp",
+      "headers": { "Authorization": "Bearer ${OBOP_TOKEN}" }
+    }
+  }
+}
+```
+
+Om servern avvisar headern rapporterar Claude Code en misslyckad anslutning i stället för att starta OAuth. Kontrollera med `/mcp`.
+
+#### Claude Desktop och claude.ai
+
+Apparna lägger till fjärrservrar som _custom connectors_ (Settings, Connectors, Add custom connector) och autentiserar dem med OAuth. En statisk bärar-header erbjuds inte där, och obop har ingen OAuth-server, så **en hostad obop-instans kan inte läggas till som connector ännu**. Stdio-konfigurationen [nedan](#claude-desktop-stdio) fungerar i Claude Desktop med en lokal binärfil. En brygga som communitypaketet `mcp-remote` kan lägga till en header till en fjärrserver för klienter som bara talar stdio; vi har inte testat den med obop.
+
+#### Cursor
+
+`.cursor/mcp.json` (projekt) eller `~/.cursor/mcp.json` (alla projekt):
+
+```json
+{
+  "mcpServers": {
+    "obop": {
+      "url": "https://YOUR-INSTANCE/mcp",
+      "headers": { "Authorization": "Bearer ${env:OBOP_TOKEN}" }
+    }
+  }
+}
+```
+
+#### VS Code
+
+`.vscode/mcp.json`. Nyckeln på översta nivån är `servers`, och en input frågar efter token så att den inte skrivs till disk:
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "obop-token",
+      "description": "obop agent token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "obop": {
+      "type": "http",
+      "url": "https://YOUR-INSTANCE/mcp",
+      "headers": { "Authorization": "Bearer ${input:obop-token}" }
+    }
+  }
+}
+```
+
+VS Codes dokumentation visade inget fullständigt exempel med både headers och en input, så det här kodavsnittet är sammansatt från dess fälttabeller.
+
+#### Windsurf
+
+Windsurfs dokumentation finns nu på Devin Desktops webbplats. Den anger `~/.config/devin/mcp_config.json` (macOS och Linux) och `%APPDATA%\devin\mcp_config.json` (Windows); äldre Windsurf-installationer använde `~/.codeium/windsurf/mcp_config.json`. Kontrollera vilken din version läser. Fjärrservrar använder `serverUrl` (eller `url`) och `headers`, och `${env:NAME}` expanderas:
+
+```json
+{
+  "mcpServers": {
+    "obop": {
+      "serverUrl": "https://YOUR-INSTANCE/mcp",
+      "headers": { "Authorization": "Bearer ${env:OBOP_TOKEN}" }
+    }
+  }
+}
+```
+
+#### Codex CLI
+
+I `~/.codex/config.toml`. `bearer_token_env_var` anger miljövariabeln som innehåller token; Codex skickar den som en `Authorization`-bärartoken:
+
+```toml
+[mcp_servers.obop]
+url = "https://YOUR-INSTANCE/mcp"
+bearer_token_env_var = "OBOP_TOKEN"
+```
+
+`codex mcp add` dokumenterar `--url` bara med OAuth-alternativ, så använd filen för en bärartoken.
+
+#### Gemini CLI
+
+Dokumentationen vi läste säger att Gemini CLI ersattes av Antigravity CLI 2026-06-18; kontrollera sidan för det verktyg du använder. Formatet för Gemini CLI är `httpUrl` för Streamable HTTP (`url` gäller den äldre SSE-transporten), i `~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "obop": {
+      "httpUrl": "https://YOUR-INSTANCE/mcp",
+      "headers": { "Authorization": "Bearer your-agent-token" }
+    }
+  }
+}
+```
+
+eller `gemini mcp add --transport http --header "Authorization: Bearer $OBOP_TOKEN" obop https://YOUR-INSTANCE/mcp`. Vi kunde inte bekräfta att den här filen expanderar miljövariabler i `headers`, så token är utskriven här.
+
+### Upptäckt
+
+En instans publicerar dessa utan token:
+
+| URL                                     | Vad                                                                                                                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/.well-known/oauth-protected-resource` | Metadata om OAuth-skyddad resurs (RFC 9728) för `/mcp`. Anger att det inte finns någon auktoriseringsserver. Finns också på `/.well-known/oauth-protected-resource/mcp`. |
+| `/.well-known/mcp/server-card.json`     | MCP-serverkort: namn, version, slutpunkten `streamable-http`, protokollversioner, headern `Authorization`. Finns också på `/mcp/server-card`.                            |
+| `/.well-known/ai-catalog.json`          | En AI-katalog med en post som pekar på serverkortet.                                                                                                                     |
+| `/api/openapi.json`, `/api/meta`        | OpenAPI-dokumentet har ett `x-mcp`-fält med slutpunkt, transport och protokollversioner; `GET /api/meta` har en `Link`-header med `rel="mcp"`.                           |
+
+Serverkortet är en utökning av MCP-specifikationen som fortfarande utvecklas (SEP-2127, förvarad i ett inkubationsarkiv), så dess form kan ändras; filen säger det i sin `$comment`. Det innehåller också de enkla fälten `serverInfo`, `transport`, `endpoint` och `capabilities` från ett tidigare utkast, för skannrar som letar efter dem.
+
+## MCP över stdio (lokal binärfil)
+
+Använd detta när klienten bara kan starta ett lokalt program, eller när du kör obop på samma maskin. Fjärrservern ovan behöver inget av detta.
+
+### Så fungerar det
 
 `obop mcp` är en MCP-server som talar JSON-RPC över standardin- och standardutmatning. En MCP-klient startar den som en underprocess. Den:
 
 - öppnar instansens databas själv, så den måste köras på en maskin som når databasen (SQLite-fil eller PostgreSQL-URL);
 - identifierar agenten med en agenttoken;
-- listar ett verktyg per kommando som token får använda, med namnet `<model>__<command>`: `lead__search`, `lead__create`, `invoice__post`. Det dubbla understrecket står där REST-sökvägen har ett snedstreck;
-- besvarar `tools/call` genom samma dispatcher som REST, så maskering och godkännanden gäller.
+- listar samma verktyg, med samma scheman, som fjärrservern (båda transporterna kör en och samma kodväg): ett verktyg per kommando som token får använda, med namnet `<model>__<command>`. Det dubbla understrecket står där REST-sökvägen har ett snedstreck;
+- besvarar `tools/call` genom samma dispatcher som REST, så maskering och godkännanden gäller. Maskeringstoken är stabila så länge processen körs.
 
-> **Hostade instanser.** Det finns ännu ingen HTTP-transport för fjärr-MCP, och `obop mcp` behöver databasen. Du kan inte rikta en MCP-klient på skrivbordet mot en hostad instans i dag. För hostade instanser använder du [REST](/docs/agents/rest/). MCP över HTTP med OAuth är planerat.
-
-## Innan du börjar
+### Innan du börjar
 
 1. En databas för en körande instans, och binärfilen `obop` på maskinen som kör MCP-klienten (eller använd dess absoluta sökväg).
 2. En [agenttoken](/docs/agents/tokens/) med de scope du vill ha.
@@ -33,17 +205,17 @@ Kontrollera det för hand först. Det här skickar en `initialize`- och en `tool
 
 ```bash
 printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
   | OBOP_TOKEN=obop_... OBOP_DATABASE_URL=sqlite:///home/me/obop.db obop mcp
 ```
 
-Servern rapporterar protokollversion `2025-06-18` och stöder `initialize`, `ping`, `tools/list` och `tools/call`. Verktygens indatascheman är i dag bara `{"type":"object"}`, så en klient kan inte validera argumenten; argumenten är samma JSON som i [REST-bodyn](/docs/reference/rest-api/).
+Servern svarar med den revision klienten ber om om den är någon av `2025-11-25`, `2025-06-18` och `2025-03-26`, och stöder `initialize`, `ping`, `tools/list` och `tools/call`. Verktygens argument är samma JSON som i [REST-bodyn](/docs/reference/rest-api/).
 
 Kodavsnitten nedan använder `/usr/local/bin/obop` och en platshållartoken. Byt ut båda. Formaten kontrollerades mot varje klients dokumentation 2026-10-16; där något inte gick att bekräfta är det markerat.
 
-## Claude Desktop
+### Claude Desktop (stdio)
 
 Öppna _Settings_, sedan _Developer_, sedan _Edit Config_. Filen är `~/Library/Application Support/Claude/claude_desktop_config.json` på macOS och `%APPDATA%\Claude\claude_desktop_config.json` på Windows. Lägg till:
 
@@ -64,7 +236,7 @@ Kodavsnitten nedan använder `/usr/local/bin/obop` och en platshållartoken. Byt
 
 Avsluta och starta om Claude Desktop. Claude frågar efter ditt godkännande innan den använder ett verktyg.
 
-## Claude Code
+### Claude Code (stdio)
 
 Använd kommandoraden. Allt efter `--` är serverkommandot:
 
@@ -95,7 +267,7 @@ Lägg minst ett annat alternativ (här `--transport stdio`) mellan den sista `--
 
 Kontrollera det med `claude mcp get obop` eller `/mcp` i Claude Code.
 
-## Cursor
+### Cursor (stdio)
 
 Skapa `.cursor/mcp.json` i ett projekt, eller `~/.cursor/mcp.json` för alla projekt:
 
@@ -117,7 +289,7 @@ Skapa `.cursor/mcp.json` i ett projekt, eller `~/.cursor/mcp.json` för alla pro
 
 Cursors egna exempel utelämnar `type` för stdio-servrar; dess fälttabell listar det. `${env:NAME}` läser från den miljö som Cursor startades i.
 
-## VS Code
+### VS Code (stdio)
 
 Skapa `.vscode/mcp.json`. VS Codes nyckel på översta nivån är `servers`, inte `mcpServers`, och den kan fråga efter token så att den aldrig skrivs till disk:
 
@@ -147,7 +319,7 @@ Skapa `.vscode/mcp.json`. VS Codes nyckel på översta nivån är `servers`, int
 
 VS Codes guidade kommando _MCP: Add Server_ kan i stället föreslå en portabel `.mcp.json` i formatet `mcpServers`; enligt dokumentationen accepteras båda.
 
-## Windsurf
+### Windsurf (stdio)
 
 Windsurfs dokumentation har flyttat till Devin Desktops webbplats och beskriver filen som `mcp_config.json`. Vi kunde inte bekräfta den nuvarande filplatsen för Windsurf själv. Windsurf har tidigare använt `~/.codeium/windsurf/mcp_config.json`; sidan för Devin Desktop anger `~/.config/devin/mcp_config.json` (macOS och Linux) och `%APPDATA%\devin\mcp_config.json` (Windows). Kontrollera platsen i inställningarna för din version. Formatet är samma `mcpServers`-struktur:
 
@@ -166,7 +338,7 @@ Windsurfs dokumentation har flyttat till Devin Desktops webbplats och beskriver 
 }
 ```
 
-## Codex CLI
+### Codex CLI (stdio)
 
 Lägg till en tabell i `~/.codex/config.toml` (eller `.codex/config.toml` i ett betrott projekt), eller kör `codex mcp add`:
 
@@ -182,7 +354,7 @@ OBOP_DATABASE_URL = "sqlite:///home/me/obop.db"
 
 `env_vars` vidarebefordrar `OBOP_TOKEN` från ditt skal i stället för att skriva in den i filen.
 
-## Gemini CLI
+### Gemini CLI (stdio)
 
 Lägg till i `~/.gemini/settings.json`:
 
@@ -203,20 +375,25 @@ Lägg till i `~/.gemini/settings.json`:
 
 Gemini CLI:s dokumentation säger att det ersattes av ett annat verktyg under 2026, så kontrollera den sidan för din version. Vi har inte kört obop mot det.
 
-## Valfri annan MCP-klient
+### Valfri annan MCP-klient
 
-obop är en vanlig stdio-server. Hur klientens fil än ser ut behöver den ett `command` (`obop`), `args` (`["mcp"]`) och två miljövariabler. Om klienten bara stöder fjärrservrar kan den inte ansluta ännu.
+obop är en vanlig stdio-server. Hur klientens fil än ser ut behöver den ett `command` (`obop`), `args` (`["mcp"]`) och två miljövariabler. Om klienten bara stöder fjärrservrar använder du fjärrservern ovan.
 
 ## Vad agenten ser
 
-När du har anslutit ber du agenten lista sina verktyg. Du ska bara se de kommandon som dess scope tillåter, med tillägget "(agents propose; a human approves)" på dem som kräver godkännande. Prova en läsning först, till exempel _"List the three newest leads"_, och läs sedan om [godkännandeflödet](/docs/agents/approvals/).
+När du har anslutit ber du agenten lista sina verktyg. Du ska bara se de kommandon som dess scope tillåter, med en anmärkning på dem som kräver godkännande. Prova en läsning först, till exempel _"List the three newest leads"_, och läs sedan [Godkännandeflödet](/docs/agents/approvals/).
 
 Om klienten inte visar några verktyg eller visar ett fel, gå till [Felsökning](/docs/agents/troubleshooting/).
 
 ## Verifierat och inte verifierat
 
-| Punkt                                                                                    | Status                                                                    |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `obop mcp`-handskakning, `tools/list`, `tools/call`, godkännanderesultat                 | Körda mot en riktig lokal instans.                                        |
-| Konfigurationsformat för Claude Desktop, Claude Code, Cursor, VS Code, Codex, Gemini CLI | Hämtade från varje klients dokumentation. Vi startade inte alla klienter. |
-| Windsurfs filplats                                                                       | Obekräftad, se ovan.                                                      |
+| Punkt                                                                                                        | Status                                                                                  |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `obop mcp`-handskakning, `tools/list`, `tools/call`, godkännanderesultat                                     | Körda mot en riktig lokal instans.                                                      |
+| Fjärr-`/mcp`: handskakning, verktyg, maskering, godkännandeflöde, sessioner, 401, ursprungskontroll, gränser | Automatiska tester (Rust över HTTP, Playwright) mot en riktig instans.                  |
+| Fjärr-`/mcp` med en riktig MCP-klient                                                                        | Kommandoradsklienten MCP Inspector 2.11.0: `initialize` och `tools/list`, `tools/call`. |
+| Officiell MCP-konformitetssvit                                                                               | Inte meningsfull: den kräver en server utan autentisering och egna fixtureverktyg.      |
+| Fjärrkonfiguration för Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI                         | Hämtad från varje klients dokumentation; klienterna startades inte.                     |
+| Konfigurationsformat för stdio                                                                               | Hämtade från varje klients dokumentation. Vi startade inte alla klienter.               |
+| Windsurfs filplats                                                                                           | Obekräftad, se ovan.                                                                    |
+| Connectors i Claude Desktop och claude.ai                                                                    | Kräver OAuth; obop kan inte läggas till där ännu.                                       |

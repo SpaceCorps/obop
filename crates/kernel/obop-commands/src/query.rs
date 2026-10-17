@@ -10,6 +10,8 @@
 //! values the caller is not allowed to see (D10).
 
 use crate::Value;
+use crate::aggregate::Aggregate;
+use crate::collate::{self, TextOrder};
 use obop_registry::{FieldKind, ModelDef, is_valid_date};
 use obop_storage::Fields;
 use serde_json::Value as J;
@@ -29,7 +31,7 @@ const OPS: &str = "eq, ne, contains, in, gt, gte, lt, lte, is_null";
 /// A comparable form of a stored or supplied value of one field. Both sides of a comparison come
 /// from the same field, so they always have the same variant.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum Key {
+pub(crate) enum Key {
     Int(i64),
     Str(String),
 }
@@ -68,6 +70,9 @@ pub struct Query {
     order: Vec<Sort>,
     limit: Option<usize>,
     offset: usize,
+    /// Collation language of text sorts and group order (`lang`), root order when absent.
+    lang: Option<icu_locale::Locale>,
+    pub(crate) aggregate: Option<Aggregate>,
 }
 
 /// The kind of a queryable field; `id` is the record id, a string.
@@ -147,6 +152,11 @@ fn int_option(
 }
 
 impl Query {
+    /// Whether a filter or order key is a field for which `is` says yes.
+    pub fn touches(&self, is: &dyn Fn(&str) -> bool) -> bool {
+        self.conds.iter().any(|c| is(&c.field)) || self.order.iter().any(|s| is(&s.field))
+    }
+
     /// Whether the input asks for anything beyond "every record".
     pub fn is_plain(&self) -> bool {
         self.conds.is_empty() && self.order.is_empty() && self.limit.is_none() && self.offset == 0
@@ -164,11 +174,20 @@ impl Query {
         };
         for k in m.keys() {
             // `_caller` and `_actor*` are set by the dispatcher and by guards, never by a client.
-            if !["filter", "order", "limit", "offset", "_caller"].contains(&k.as_str())
+            if ![
+                "filter",
+                "order",
+                "limit",
+                "offset",
+                "aggregate",
+                "lang",
+                "_caller",
+            ]
+            .contains(&k.as_str())
                 && !k.starts_with(ACTOR_PREFIX)
             {
                 return Err(format!(
-                    "unknown option {k:?} (use filter, order, limit and offset)"
+                    "unknown option {k:?} (use filter, order, limit, offset, aggregate and lang)"
                 ));
             }
         }
@@ -236,7 +255,85 @@ impl Query {
             }
             q.offset = o as usize;
         }
+        match m.get("lang") {
+            None | Some(Value::Null) => {}
+            Some(Value::Text(l)) => q.lang = Some(collate::parse_lang(l)?),
+            Some(_) => return Err("lang must be a BCP-47 language tag".into()),
+        }
+        match m.get("aggregate") {
+            None | Some(Value::Null) => {}
+            Some(a) => {
+                if !q.order.is_empty() || q.limit.is_some() || q.offset != 0 {
+                    return Err(
+                        "aggregate returns groups: it takes filter, not order, limit or offset"
+                            .into(),
+                    );
+                }
+                q.aggregate = Some(Aggregate::parse(def, a, &field)?);
+            }
+        }
         Ok(q)
+    }
+
+    /// The collation language of text sorts.
+    pub(crate) fn lang(&self) -> Option<&icu_locale::Locale> {
+        self.lang.as_ref()
+    }
+
+    /// `list` and the public routes do not aggregate.
+    pub fn no_aggregate(&self) -> Result<(), String> {
+        if self.aggregate.is_some() {
+            return Err("aggregate is only available on search".into());
+        }
+        Ok(())
+    }
+
+    /// Evaluate `aggregate` over a model without collecting its records: the groups and the number
+    /// of records the filter matched. `None` when the query has no `aggregate`.
+    pub fn run_aggregate(
+        &self,
+        backend: &dyn obop_storage::Backend,
+        model: &str,
+        visible: &dyn Fn(&Fields) -> bool,
+    ) -> Option<Result<(Vec<Value>, usize), String>> {
+        self.aggregate
+            .as_ref()
+            .map(|a| a.run(self, backend, model, visible))
+    }
+
+    /// `run_aggregate` over rows already in memory (computed fields filled in).
+    pub(crate) fn run_aggregate_rows(
+        &self,
+        rows: &[(String, Fields)],
+        visible: &dyn Fn(&Fields) -> bool,
+    ) -> Option<Result<(Vec<Value>, usize), String>> {
+        self.aggregate.as_ref().map(|a| {
+            a.run_with(
+                self,
+                &mut |v| {
+                    for (id, f) in rows {
+                        if !v(id, f)? {
+                            break;
+                        }
+                    }
+                    Ok(())
+                },
+                visible,
+            )
+        })
+    }
+
+    /// Whether the input asked for an aggregate.
+    pub(crate) fn has_aggregate(&self) -> bool {
+        self.aggregate.is_some()
+    }
+
+    /// Names of the fields the aggregate groups or measures.
+    pub(crate) fn aggregate_fields(&self) -> Vec<String> {
+        self.aggregate
+            .as_ref()
+            .map(|a| a.fields())
+            .unwrap_or_default()
     }
 
     /// Filter, sort and page `rows`. Returns the page and the number of matches before paging.
@@ -246,7 +343,9 @@ impl Query {
             .filter(|(id, f)| self.matches(id, f))
             .collect();
         if !self.order.is_empty() {
-            // `sort_by` is stable, so ties keep insertion order.
+            // Text sorts with the collation of `lang` (see `collate`); ties end at the record id,
+            // so the order does not depend on how the backend returned the records.
+            let text = TextOrder::new(self.lang.as_ref());
             rows.sort_by(|(ia, a), (ib, b)| {
                 for s in &self.order {
                     let (ka, kb) = (
@@ -259,7 +358,7 @@ impl Query {
                         (None, Some(_)) => return Ordering::Greater,
                         (Some(_), None) => return Ordering::Less,
                         (Some(x), Some(y)) => {
-                            let o = cmp_sort(&x, &y);
+                            let o = cmp_sort(&text, &s.kind, &s.field, &x, &y);
                             if s.desc { o.reverse() } else { o }
                         }
                     };
@@ -267,7 +366,7 @@ impl Query {
                         return ord;
                     }
                 }
-                Ordering::Equal
+                ia.cmp(ib)
             });
         }
         let total = rows.len();
@@ -279,7 +378,7 @@ impl Query {
         (page, total)
     }
 
-    fn matches(&self, id: &str, f: &Fields) -> bool {
+    pub(crate) fn matches(&self, id: &str, f: &Fields) -> bool {
         self.conds.iter().all(|c| {
             let key = if c.field == "id" {
                 Some(Key::Str(id.to_string()))
@@ -310,13 +409,14 @@ fn sort_key(field: &str, kind: &FieldKind, id: &str, f: &Fields) -> Option<Key> 
     f.get(field).and_then(|v| stored_key(kind, v))
 }
 
-/// Text sorts case-insensitively, with the exact text as tie-breaker.
-fn cmp_sort(a: &Key, b: &Key) -> Ordering {
+/// Text and long text sort by collation; ids, refs and everything else by their typed key.
+fn cmp_sort(text: &TextOrder, kind: &FieldKind, field: &str, a: &Key, b: &Key) -> Ordering {
     match (a, b) {
-        (Key::Str(x), Key::Str(y)) => x
-            .to_lowercase()
-            .cmp(&y.to_lowercase())
-            .then_with(|| x.cmp(y)),
+        (Key::Str(x), Key::Str(y))
+            if field != "id" && matches!(kind, FieldKind::Text | FieldKind::LongText) =>
+        {
+            text.compare(x, y)
+        }
         _ => a.cmp(b),
     }
 }

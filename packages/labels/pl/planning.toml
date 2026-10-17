@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Planowanie"
 description = "Zmiany dla pracowników, z rolami i szablonami wielokrotnego użytku. Zmiana ma dzień oraz początek i koniec w minutach od północy (0 do 1439; 540 to 09:00). Zmiana bez pracownika jest zmianą otwartą. Obieg: otwarte, opublikowane, potwierdzone przez pracownika. Wymaga pakietu Kadry."
+summary = "Zmiany pracowników z rolami i szablonami wielokrotnego użytku; zmiany otwarte są publikowane i potwierdzane."
 
 [labels.pl.model.planning_role]
 name = "Rola"

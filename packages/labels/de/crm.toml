@@ -1,5 +1,6 @@
 [labels.de.module]
 name = "CRM"
+summary = "Leads und Chancen in einer Pipeline vom ersten Kontakt bis zu gewonnen oder verloren."
 
 [labels.de.model.lead]
 name = "Lead"

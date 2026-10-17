@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Marketing par e-mail"
 description = "Listes de diffusion, contacts avec statut et date de consentement, et campagnes (brouillon, planifiée, envoyée). L’envoi est irréversible et exige l’approbation d’un responsable ; les agents peuvent seulement le proposer. Les statistiques sont saisies, pas calculées. Les contacts sont des données personnelles : n’écrivez jamais à un contact qui n’est pas opted_in."
+summary = "Listes de diffusion, contacts avec consentement et campagnes. L’envoi exige une approbation humaine."
 
 [labels.fr.model.email_marketing_list]
 name = "Liste"

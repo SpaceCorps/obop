@@ -2,6 +2,8 @@
 name = "Verkkokauppa"
 description = "Verkkokauppa: luokat, tuotteet kuvilla ja käännöksillä, toimitustavat, alennuskoodit, verokannat ja verkkotilaukset. Palvelin vähentää varaston, soveltaa alennukset ja verot ja laskee hinnat itse. Maksu tilisiirrolla, kortilla (Stripe Checkout) tai esittelytilassa. Hyvitykset vaativat esimiehen. Asiakastiedot eivät ole koskaan julkisia. Vaatii Tuotteet-paketin."
 
+summary = "Verkkokauppa: tuotesivut, toimitus, alennuskoodit ja verkkotilaukset sekä julkinen kauppa, kun sivusto on käytössä."
+
 [labels.fi.model.ecommerce_category]
 name = "Luokka"
 description = "Verkkokaupassa yhdessä esitettävien tuotesivujen ryhmä"

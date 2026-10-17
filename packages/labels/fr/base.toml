@@ -1,5 +1,6 @@
 [labels.fr.module]
 name = "Contacts"
+summary = "Contacts et entreprises : les personnes et organisations avec lesquelles l’entreprise traite."
 
 [labels.fr.model.party]
 name = "Tiers"

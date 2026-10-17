@@ -2,6 +2,8 @@
 name = "eCommerce"
 description = "Une boutique en ligne : catégories, offres avec images et traductions, livraison, codes de réduction, taux de taxe et commandes web. Le serveur décompte le stock, applique réductions et taxes et calcule chaque prix lui-même. Paiement par virement, carte (Stripe Checkout) ou mode démo. Remboursements : un responsable. Données clients jamais publiques. Nécessite le package Produits."
 
+summary = "Une boutique en ligne : fiches produit, livraison, codes de réduction et commandes web, avec une vitrine publique si le site est activé."
+
 [labels.fr.model.ecommerce_category]
 name = "Catégorie"
 description = "Un groupe de fiches produit présentées ensemble dans la boutique"

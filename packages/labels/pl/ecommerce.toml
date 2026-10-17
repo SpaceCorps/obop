@@ -2,6 +2,8 @@
 name = "Sklep internetowy"
 description = "Sklep internetowy: kategorie, oferty ze zdjęciami i tłumaczeniami, dostawa, kody rabatowe, stawki podatku i zamówienia. Serwer zdejmuje stan, stosuje rabaty i podatki i sam wycenia zamówienia. Płatność przelewem, kartą (Stripe Checkout) lub w trybie demo. Zwroty wymagają kierownika. Dane klientów nigdy nie są publiczne. Wymaga pakietu Produkty."
 
+summary = "Sklep internetowy: oferty, dostawa, kody rabatowe i zamówienia z witryny, z publiczną witryną sklepu przy włączonej stronie."
+
 [labels.pl.model.ecommerce_category]
 name = "Kategoria"
 description = "Grupa pozycji wyświetlanych razem w sklepie"

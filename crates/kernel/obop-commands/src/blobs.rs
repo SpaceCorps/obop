@@ -18,7 +18,7 @@
 //! - **Public read** (`PublicApi::public_blob`): only blobs held by a *published* record through
 //!   a field the package declared public, see `public.rs`.
 
-use crate::guards::ModelsMap;
+use crate::engine::Models as ModelsMap;
 use crate::store::{Store, id_of};
 use crate::{Dispatcher, Guard, Principal, PrincipalKind, Value, Verdict};
 use obop_media::{Limits, MediaError};
@@ -135,7 +135,7 @@ impl BlobService {
         self.store.blobs()
     }
 
-    fn target(&self, target: &str) -> Result<(ModelDef, usize), BlobError> {
+    fn target(&self, target: &str) -> Result<(Arc<ModelDef>, usize), BlobError> {
         let Some((model, field)) = target.split_once('.') else {
             return Err(BlobError::Bad("field must be model.field".into()));
         };

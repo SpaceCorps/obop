@@ -1,8 +1,8 @@
 [module]
 id = "expenses"
-version = "0.2.0"
+version = "0.3.0"
 name = "Expenses"
-description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission and needs a human approval; receipts are referenced by note, not stored."
+description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission and needs a human approval; receipts are referenced by note, not stored. A claim has a number from a yearly series, and an employee sees and edits only their own claims; managers and finance see all."
 author = "SpaceCorps"
 summary = "Employee expense claims with a draft, submitted, approved and paid flow."
 license = "AGPL-3.0-or-later"
@@ -19,6 +19,18 @@ description = "An amount an employee spent for the business and wants reimbursed
 read_group = "expenses.user"
 write_group = "expenses.user"
 
+  [model.access]
+  own = "employee"
+  see_all_group = ["expenses.manager", "expenses.finance"]
+
+  [[model.field]]
+  name = "number"
+  description = "Claim number such as EXP-2026-0042, assigned when the claim is created; the series starts again each year"
+  class = "none"
+  kind = "sequence"
+  format = "EXP-{year}-{seq:04}"
+  reset = "year"
+
   [[model.field]]
   name = "description"
   description = "What the money was spent on"
@@ -27,7 +39,7 @@ write_group = "expenses.user"
 
   [[model.field]]
   name = "employee"
-  description = "Name of the person claiming the expense"
+  description = "User name of the person claiming the expense; the person who creates the claim unless set otherwise"
   class = "internal"
   personal_data = true
   required = true

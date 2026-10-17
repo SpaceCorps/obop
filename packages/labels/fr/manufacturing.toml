@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Fabrication"
 description = "Nomenclatures et ordres de fabrication avec un flux brouillon, confirmé, en cours et terminé. Le stock des composants n’est pas consommé automatiquement."
+summary = "Nomenclatures et ordres de fabrication avec un flux brouillon, confirmé, en cours et terminé."
 
 [labels.fr.model.manufacturing_bom]
 name = "Nomenclature"

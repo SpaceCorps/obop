@@ -2,7 +2,7 @@
 id = "hr"
 version = "0.3.0"
 name = "Human Resources"
-description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group."
+description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group. An employee sees and files only their own leave requests; hr.manager sees all of them."
 author = "SpaceCorps"
 summary = "Employees, departments and leave requests, with pay and health data restricted to the right groups."
 license = "AGPL-3.0-or-later"
@@ -216,6 +216,16 @@ name = "hr_leave_request"
 description = "A request for time off"
 read_group = "hr.user"
 write_group = "hr.user"
+
+  [model.access]
+  own = "requested_by"
+  see_all_group = "hr.manager"
+
+  [[model.field]]
+  name = "requested_by"
+  description = "User name of the person who asked for the leave; the person who files the request unless set otherwise. Only they and hr.manager see the request"
+  class = "internal"
+  personal_data = true
 
   [[model.field]]
   name = "employee_id"

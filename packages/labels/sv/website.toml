@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Webbplats"
 description = "Innehåll till en publik webbplats: sidor med URL-slug och flödet utkast, publicerad, arkiverad, menyval, blogginlägg med byline och publiceringsdatum, översättningar av båda samt formulärsvar från besökare. Publicering gör innehåll offentligt och kräver mänskligt godkännande; agenter får bara föreslå. Avsändare är personuppgifter och är aldrig offentliga."
+summary = "Sidor, menyer, blogginlägg och formulärsvar, som en publik webbplats när webbplatsen är på."
 
 [labels.sv.model.website_page]
 name = "Sida"

@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Conocimiento"
 description = "Una wiki: artículos organizados en árbol mediante un artículo superior, con un flujo de borrador, publicado y archivado, un ajuste de visibilidad y etiquetas. La visibilidad es una indicación para la interfaz y para que las personas la respeten; la plataforma aún no tiene permisos por fila, así que todos los miembros de los grupos de Conocimiento pueden leer cualquier artículo."
+summary = "Una wiki: artículos en árbol con un flujo de borrador, publicado y archivado, visibilidad y etiquetas."
 
 [labels.es.model.knowledge_article]
 name = "Artículo"

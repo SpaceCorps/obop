@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Signature"
 description = "Modèles de documents et demandes de signature (brouillon, envoyée, signée, déclinée, expirée). Une demande désigne le signataire (donnée personnelle) et conserve les preuves sous forme de références. Une demande signée n’est immuable que par convention ; document_hash enregistre ce qui a été signé. L’envoi et la signature exigent une approbation humaine ; les agents peuvent seulement les proposer."
+summary = "Modèles de documents et demandes de signature. L’envoi et l’enregistrement d’une signature exigent une approbation humaine."
 
 [labels.fr.model.sign_template]
 name = "Modèle"

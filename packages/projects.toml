@@ -1,8 +1,8 @@
 [module]
 id = "projects"
-version = "0.3.0"
+version = "0.4.0"
 name = "Projects"
-description = "Projects, milestones and tasks with assignees, deadlines and status flows. Progress is tracked by status, not computed from task effort."
+description = "Projects, milestones and tasks with assignees, deadlines and status flows. A project shows its progress, the share of its tasks that are done, and the time estimated for them."
 author = "SpaceCorps"
 summary = "Projects, milestones and tasks with assignees, deadlines and status flows."
 license = "AGPL-3.0-or-later"
@@ -59,6 +59,20 @@ write_group = "projects.manager"
   description = "Goal and scope of the project"
   class = "none"
   kind = "longtext"
+
+  [[model.field]]
+  name = "estimate_minutes"
+  description = "Time estimated for all tasks of the project that are not cancelled, in minutes"
+  class = "none"
+  kind = "number"
+  computed = 'sum(projects_task.estimate_minutes where state != "cancelled")'
+
+  [[model.field]]
+  name = "progress"
+  description = "Share of the project's tasks that are done, in percent; cancelled tasks do not count"
+  class = "none"
+  kind = "number"
+  computed = 'if(count(projects_task where state != "cancelled") == 0, 0, count(projects_task where state == "done") * 100 / count(projects_task where state != "cancelled"))'
 
   [[model.field]]
   name = "state"

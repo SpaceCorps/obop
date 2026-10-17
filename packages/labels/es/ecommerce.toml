@@ -2,6 +2,8 @@
 name = "Comercio electrónico"
 description = "Una tienda en línea: categorías, ofertas con imágenes y traducciones, envíos, códigos de descuento, tipos de impuesto y pedidos web. El servidor descuenta el stock, aplica descuentos e impuestos y calcula cada precio él mismo. Pago por transferencia, tarjeta (Stripe Checkout) o demostración. Reembolsos: un responsable. Datos de clientes nunca públicos. Requiere el paquete Productos."
 
+summary = "Una tienda online: fichas, envíos, códigos de descuento y pedidos web, con tienda pública cuando el sitio está activado."
+
 [labels.es.model.ecommerce_category]
 name = "Categoría"
 description = "Un grupo de fichas que se muestran juntas en la tienda"

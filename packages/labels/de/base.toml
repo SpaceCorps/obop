@@ -1,5 +1,6 @@
 [labels.de.module]
 name = "Kontakte"
+summary = "Kontakte und Firmen: die Personen und Organisationen, mit denen das Unternehmen zu tun hat."
 
 [labels.de.model.party]
 name = "Geschäftspartner"

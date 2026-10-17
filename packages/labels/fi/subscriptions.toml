@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Kestotilaukset"
 description = "Toistuvat paketit ja asiakkaiden kestotilaukset kokeilu-, aktiivinen-, erääntynyt- ja peruutettu-kulussa. Kirjaa seuraavan laskun päivän; ei luo laskuja itsestään."
+summary = "Toistuvat paketit ja asiakkaiden kestotilaukset kokeilu-, aktiivinen-, erääntynyt- ja peruutettu-kulussa."
 
 [labels.fi.model.subscriptions_plan]
 name = "Paketti"
