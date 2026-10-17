@@ -16,7 +16,7 @@ async function pagesOf(request: import("@playwright/test").APIRequestContext, lo
 test.describe("website without JavaScript", () => {
   test.use({ javaScriptEnabled: false });
 
-  test("the home page is real HTML: headline, 27 apps, FAQ, pricing, no framework script", async ({
+  test("the home page is real HTML: headline, 28 apps, FAQ, pricing, no framework script", async ({
     page,
     request,
   }) => {
@@ -26,7 +26,7 @@ test.describe("website without JavaScript", () => {
 
     await page.goto(`${base()}/`);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("One platform.");
-    await expect(page.locator("#apps .app")).toHaveCount(27);
+    await expect(page.locator("#apps .app")).toHaveCount(28);
     await expect(page.locator("#apps .app.live")).toHaveCount(5);
     await expect(page.locator("#apps .app.market")).toHaveCount(22);
     await expect(
@@ -39,7 +39,7 @@ test.describe("website without JavaScript", () => {
 
   test("the apps index filters by status and category with CSS only", async ({ page }) => {
     await page.goto(`${base()}/apps/`);
-    await expect(page.locator(".apps .app")).toHaveCount(27);
+    await expect(page.locator(".apps .app")).toHaveCount(28);
     await page.locator('label[for="st-live"]').click();
     await expect(page.locator(".apps .app:visible")).toHaveCount(5);
     await page.locator('label[for="st-all"]').click();
@@ -178,7 +178,7 @@ test.describe("website without JavaScript", () => {
       "href",
       new RegExp(`${base().replace(/\./g, "\\.")}|https?://`),
     );
-    await expect(page.locator("#apps .app")).toHaveCount(27);
+    await expect(page.locator("#apps .app")).toHaveCount(28);
   });
 
   test("an untranslated page falls back to English with a visible notice and no alternates", async ({

@@ -11,6 +11,7 @@ export const DOCS_NAV: { group: "start" | "concepts" | "agents" | "reference"; p
         "/docs/concepts/data-classes-and-masking/",
         "/docs/concepts/permission-groups/",
         "/docs/concepts/workflows-and-approvals/",
+        "/docs/concepts/connectors/",
       ],
     },
     {

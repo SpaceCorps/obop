@@ -105,7 +105,7 @@ function toApp(raw: Raw, builtin: boolean, source: string): App {
   };
 }
 
-/** All 27 apps in display order: the five built in first, then the bundled marketplace packages. */
+/** All 28 apps in display order: the six built in first, then the bundled marketplace packages. */
 export function loadApps(): App[] {
   const apps: App[] = [];
   for (const id of BUILTIN_IDS) {

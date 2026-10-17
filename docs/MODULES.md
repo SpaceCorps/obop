@@ -18,7 +18,7 @@ X1 packages cannot run anything, so an administrator can install one from an upl
 
 ### What ships
 
-Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`):
+Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`):
 
 | Package | Needs | What it holds |
 |---|---|---|
@@ -300,7 +300,7 @@ Install-time errors:
 | Message | Cause and fix |
 |---|---|
 | `X needs module Y, which is not installed` | Install the dependency first (or fix `depends`). |
-| `X is a built-in module` | Your id clashes with `base`, `product`, `crm`, `sales`, `invoicing` or `platform`. |
+| `X is a built-in module` | Your id clashes with `base`, `product`, `crm`, `sales`, `invoicing`, `connectors` or `platform`. |
 | `X 0.1.0 is installed; installing 0.1.0 is not an upgrade` | Raise `version`. |
 | `model X already exists` | Another module owns a model of that name. |
 | `M.F refers to model T, which is not installed` | A `ref` into another package or built-in: install it and add it to `depends`. |
