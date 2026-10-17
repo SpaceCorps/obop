@@ -176,6 +176,11 @@ pub struct Config {
     /// How long to let a redeploy settle before asking whether the service is live: a service
     /// still reports the old deployment as live for a moment after `deploy`.
     pub settle: std::time::Duration,
+    /// A domain we control with a wildcard record pointing at the Sliplane server (for example
+    /// `obop.dev`): each new instance is also given `<slug>.<domain>` and uses it as soon as it
+    /// resolves. Without it, or while the name does not resolve, the instance keeps its
+    /// `*.sliplane.app` address.
+    pub instance_domain: Option<String>,
 }
 
 impl Config {
@@ -338,6 +343,35 @@ impl Sliplane {
         }
     }
 
+    /// Attach `<slug>.<instance_domain>` to the service. `Some(name)` once the name resolves
+    /// (waiting up to three minutes), `None` when no domain is configured, Sliplane refuses it
+    /// or DNS has no wildcard record: the instance then keeps its managed address.
+    fn custom_domain(&self, slug: &str, id: &str, progress: Progress) -> Option<String> {
+        use std::net::ToSocketAddrs;
+        let base = self.cfg.instance_domain.as_deref()?.trim_matches('.');
+        if base.is_empty() {
+            return None;
+        }
+        let name = format!("{slug}.{base}");
+        let mut add = self.base(&["services", "add-domain"]);
+        add.extend([
+            "--service-id".into(),
+            id.into(),
+            "--domain".into(),
+            name.clone(),
+        ]);
+        self.runner.run(&add).ok()?;
+        let started = std::time::Instant::now();
+        while started.elapsed() < Duration::from_secs(180) {
+            if (name.as_str(), 443).to_socket_addrs().is_ok() {
+                return Some(name);
+            }
+            progress(&format!("Waiting for {name} to resolve"));
+            std::thread::sleep(self.cfg.poll);
+        }
+        None
+    }
+
     /// Delete a service after checking that it is one of ours.
     fn delete_service(&self, slug: &str, id: &str) -> Result<(), String> {
         let mut get = self.base(&["services", "get"]);
@@ -435,9 +469,12 @@ impl Provisioner for Sliplane {
             if self.cfg.check_reachable {
                 self.wait_reachable(domain, progress)?;
             }
+            let host = self
+                .custom_domain(&spec.slug, &id, progress)
+                .unwrap_or_else(|| domain.to_string());
             Ok(Provisioned {
                 external_id: id,
-                url: format!("https://{domain}"),
+                url: format!("https://{host}"),
             })
         })();
         if result.is_err() {
@@ -577,6 +614,7 @@ mod tests {
             check_reachable: false,
             registry_credential: None,
             settle: std::time::Duration::ZERO,
+            instance_domain: None,
         }
     }
 
@@ -592,6 +630,28 @@ mod tests {
     }
 
     const CREATED: &str = r#"{"id":"service_9","name":"obop-acme","network":{"managedDomain":"obop-acme.sliplane.app"}}"#;
+
+    #[test]
+    fn a_refused_custom_domain_keeps_the_managed_address() {
+        let (runner, cell) = (
+            Arc::new(FakeRunner::default()),
+            Arc::new(FakeCell::default()),
+        );
+        runner.reply.lock().unwrap().extend([
+            Ok(CREATED.into()),
+            Ok(LIVE.into()),
+            Err("domain refused".into()),
+        ]);
+        let mut c = cfg(Source::Image("ghcr.io/x/obop:1".into()));
+        c.instance_domain = Some("obop.dev".into());
+        let s = Sliplane::new(c, runner.clone(), cell);
+        let p = s.create(&spec(), NOOP).unwrap();
+        assert_eq!(p.url, "https://obop-acme.sliplane.app");
+        let calls = runner.calls.lock().unwrap();
+        let add = calls.last().unwrap();
+        assert!(add.contains(&"add-domain".to_string()));
+        assert!(add.contains(&"acme.obop.dev".to_string()));
+    }
 
     #[test]
     fn create_makes_the_database_then_the_service() {

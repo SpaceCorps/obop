@@ -59,6 +59,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_DATA_DIR` | Where the `local` provisioner keeps instance data. |
 | `OBOP_IMAGE` or `OBOP_REPO` (+ `OBOP_BRANCH`) | Where `sliplane` instance services come from. **`OBOP_IMAGE` is preferred and wins when both are set.** |
 | `OBOP_REGISTRY_CREDENTIAL` | A Sliplane registry credential id, for a private image. |
+| `OBOP_INSTANCE_DOMAIN` | A domain with a wildcard DNS record (`*` A record to the Sliplane server's IP), for example `obop.dev`. Each new instance is also given `<slug>.<domain>` and uses it once it resolves; otherwise it keeps its `*.sliplane.app` address. |
 | `OBOP_UPGRADE_SETTLE_SECS` | Seconds to let a redeploy settle before asking Sliplane whether it is live (default 30). |
 | `SLIPLANE_ACCOUNT`, `SLIPLANE_API_KEY`, `OBOP_SLIPLANE_PROJECT`, `OBOP_SLIPLANE_SERVER`, `OBOP_CELL_ADMIN_URL`, `OBOP_CELL_INSTANCE_HOST` | The Sliplane provisioner (see "Sliplane"). |
 

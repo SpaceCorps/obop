@@ -848,6 +848,9 @@ pub(crate) fn make_provisioner(
                         .and_then(|v| v.trim().parse().ok())
                         .unwrap_or(30),
                 ),
+                instance_domain: std::env::var("OBOP_INSTANCE_DOMAIN")
+                    .ok()
+                    .filter(|d| !d.trim().is_empty()),
             };
             let cell = sliplane::PgCell {
                 admin_url: env("OBOP_CELL_ADMIN_URL")?,
