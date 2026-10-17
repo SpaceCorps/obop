@@ -15,7 +15,7 @@ use crate::{Site, md, valid_token};
 use obop_commands::{Lookup, PublicFilter, PublicRecord, Submission, SubmitError, Value};
 use serde_json::json;
 use std::collections::BTreeMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const MAX_LINES: usize = 50;
 const MAX_QTY: i64 = 99;
@@ -1045,13 +1045,12 @@ impl Site {
         let idem_key =
             (idem.len() >= 16 && idem.len() <= 64 && idem.chars().all(|c| c.is_ascii_hexdigit()))
                 .then(|| sha256_hex(&format!("idem:{src}:{idem}")));
-        let mut seen = self.idem.lock().unwrap();
-        seen.retain(|_, (_, at)| at.elapsed() < Duration::from_secs(86_400));
-        if let Some((token, _)) = idem_key.as_ref().and_then(|k| seen.get(k)) {
-            return Resp::redirect(303, &order_url(ctx, token));
-        }
-
         let token = random_token();
+        if let Some(k) = &idem_key
+            && let Err(existing) = self.claim_idem(k, &token)
+        {
+            return Resp::redirect(303, &order_url(ctx, &existing));
+        }
         let number = order_number();
         let mut order_visitor = BTreeMap::from([
             ("customer_email".to_string(), Value::text(&email)),
@@ -1102,20 +1101,18 @@ impl Site {
             });
         }
         match self.api.submit_batch(&src, batch) {
-            Ok(_) => {
-                if let Some(k) = idem_key {
-                    seen.insert(k, (token.clone(), Instant::now()));
-                }
-                drop(seen);
-                Resp::redirect(303, &order_url(ctx, &token))
-            }
+            Ok(_) => Resp::redirect(303, &order_url(ctx, &token)),
             Err(SubmitError::RateLimited { retry_after_secs }) => {
-                drop(seen);
+                if let Some(k) = &idem_key {
+                    self.release_idem(k);
+                }
                 self.error(ctx, 429, "e429.title", "err.rate")
                     .header("retry-after", &retry_after_secs.to_string())
             }
             Err(_) => {
-                drop(seen);
+                if let Some(k) = &idem_key {
+                    self.release_idem(k);
+                }
                 fail(self, ctx, vec![("", ctx.t("err.generic").into())])
             }
         }

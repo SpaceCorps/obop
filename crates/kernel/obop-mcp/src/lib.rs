@@ -56,6 +56,29 @@ impl Session {
     }
 }
 
+impl Session {
+    /// The session as JSON, for a store shared between server processes. It carries the masking
+    /// vault, so it holds personal data: seal it before it is kept.
+    pub fn to_json(&self) -> J {
+        json!({
+            "protocol": self.protocol,
+            "initialized": self.initialized,
+            "client": self.client,
+            "vault": self.vault.to_json(),
+        })
+    }
+
+    /// A session from `to_json` output; an unknown protocol revision reads as not negotiated.
+    pub fn from_json(j: &J) -> Session {
+        Session {
+            vault: Vault::from_json(&j["vault"]),
+            protocol: j["protocol"].as_str().and_then(supported),
+            initialized: j["initialized"].as_bool().unwrap_or(false),
+            client: j["client"].as_str().map(String::from),
+        }
+    }
+}
+
 impl Default for Session {
     fn default() -> Self {
         Self::new()

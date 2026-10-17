@@ -10,10 +10,9 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{any, get, post},
 };
-use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value, Vault};
+use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value};
 use serde_json::{Value as J, json};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 
 pub mod community;
@@ -22,14 +21,14 @@ pub mod mcp;
 pub mod mfa;
 pub mod openapi;
 pub mod public;
+pub(crate) mod shared;
 pub mod website;
-
-type Session = Arc<Mutex<Vault>>;
 
 pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
     auth: Arc<dyn Authenticator>,
-    sessions: Mutex<HashMap<String, Session>>,
+    /// Vaults and MCP sessions live in the storage backend, shared by every server process.
+    shared: Arc<shared::SharedState>,
     mcp: mcp::McpState,
     /// The connectors engines, set once by the composition root (webhooks, OAuth redirect).
     connectors: std::sync::OnceLock<Arc<obop_connectors::Runtime>>,
@@ -46,11 +45,12 @@ impl HttpState {
         auth: Arc<dyn Authenticator>,
         mcp: mcp::McpConfig,
     ) -> Arc<Self> {
+        let shared = shared::SharedState::for_dispatcher(&dispatcher);
         Arc::new(Self {
             dispatcher,
             auth,
-            sessions: Mutex::new(HashMap::new()),
-            mcp: mcp::McpState::new(mcp),
+            mcp: mcp::McpState::new(mcp, shared.clone()),
+            shared,
             connectors: std::sync::OnceLock::new(),
         })
     }
@@ -60,9 +60,10 @@ impl HttpState {
         let _ = self.connectors.set(rt);
     }
 
-    /// One vault per bearer token, so mask tokens are stable inside a session (D40). A session
-    /// limited to two-factor enrolment (D53) is refused here with 403 `mfa_enrolment_required`.
-    fn auth(&self, h: &HeaderMap) -> Result<(Principal, Session), AuthRejection> {
+    /// One vault per bearer token, so mask tokens are stable inside a session (D40); it lives in
+    /// the shared store, so the same token works on any server process. A session limited to
+    /// two-factor enrolment (D53) is refused here with 403 `mfa_enrolment_required`.
+    fn auth(&self, h: &HeaderMap) -> Result<(Principal, shared::VaultRef), AuthRejection> {
         let token = h
             .get("authorization")
             .and_then(|v| v.to_str().ok())
@@ -75,14 +76,8 @@ impl HttpState {
         if p.mfa_limited {
             return Err(AuthRejection::MfaEnrolmentRequired);
         }
-        let s = self
-            .sessions
-            .lock()
-            .unwrap()
-            .entry(token.to_string())
-            .or_default()
-            .clone();
-        Ok((p, s))
+        let agent = p.kind == obop_commands::PrincipalKind::Agent;
+        Ok((p, self.shared.vault(token, agent)))
     }
 }
 
@@ -220,6 +215,7 @@ fn login_blocking(s: Arc<HttpState>, body: J) -> Response {
         body["username"].as_str().unwrap_or(""),
         body["password"].as_str().unwrap_or(""),
     );
+    s.shared.maybe_purge();
     match s.auth.login_step(u, p) {
         Ok(out) => mfa::outcome(out),
         Err(e) if e.contains("too many") => {
@@ -316,10 +312,10 @@ fn call_blocking(
     };
     let input = Value::from_json(&body.map_or(json!({}), |Json(j)| j));
     let id = format!("{model}.{command}");
-    let result = s
-        .dispatcher
-        .call(Surface::Rest, &p, &mut session.lock().unwrap(), &id, &input);
-    respond(result)
+    match session.with(|vault| s.dispatcher.call(Surface::Rest, &p, vault, &id, &input)) {
+        Ok(result) => respond(result),
+        Err(e) => unavailable(&e),
+    }
 }
 
 async fn approve(State(s): Shared, h: HeaderMap, Path(plan_id): Path<String>) -> Response {
@@ -331,9 +327,20 @@ fn approve_blocking(s: Arc<HttpState>, h: HeaderMap, plan_id: String) -> Respons
         Ok(x) => x,
         Err(c) => return c.into_response(),
     };
-    respond(
-        s.dispatcher
-            .approve(&p, &mut session.lock().unwrap(), &plan_id),
+    match session.with(|vault| s.dispatcher.approve(&p, vault, &plan_id)) {
+        Ok(result) => respond(result),
+        Err(e) => unavailable(&e),
+    }
+}
+
+/// The shared store could not be reached or a lock was not granted in time.
+fn unavailable(why: &str) -> Response {
+    eprintln!("shared state unavailable: {why}");
+    api_error(
+        StatusCode::SERVICE_UNAVAILABLE,
+        "the server is busy, try again",
+        "unavailable",
+        "A lock or the database did not answer in time. Retry the request.",
     )
 }
 

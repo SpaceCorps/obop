@@ -6,6 +6,7 @@
 //! Revisions `2025-11-25`, `2025-06-18` and `2025-03-26`; answers are always `application/json`
 //! (no SSE stream); `GET /mcp` answers 405 as the specification allows.
 
+use super::shared::{SharedState, token_id};
 use super::{HttpState, blocking};
 use axum::{
     body::{Body, to_bytes},
@@ -16,9 +17,8 @@ use axum::{
 use obop_commands::Principal;
 use obop_mcp::{Reply, Session};
 use serde_json::{Value as J, json};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::time::Duration;
 
 const SESSION_HEADER: &str = "mcp-session-id";
 const VERSION_HEADER: &str = "mcp-protocol-version";
@@ -79,26 +79,40 @@ impl McpConfig {
     }
 }
 
-struct Entry {
-    /// Sessions are bound to the token that opened them: another token gets 404.
-    token: String,
-    last: Mutex<Instant>,
-    state: Mutex<Session>,
-}
-
+/// MCP sessions and rate limits live in the storage backend (B1), so a client may send its
+/// `Mcp-Session-Id` to any server process on the database. A session is a sealed record (it holds
+/// the masking vault) with an expiry that every request pushes out; it is bound to the token that
+/// opened it. While a request runs, the session is held under a cross-process lock, so two
+/// requests of one session never lose each other's vault entries.
 pub(crate) struct McpState {
     cfg: McpConfig,
-    sessions: Mutex<HashMap<String, Arc<Entry>>>,
-    rate: Mutex<HashMap<String, (Instant, u32)>>,
+    shared: Arc<SharedState>,
+}
+
+/// A session handed out by `find`: the state, saved back by `finish`.
+pub(crate) struct Entry {
+    id: String,
+    pub state: Session,
+    _lock: obop_storage::LockGuard,
+}
+
+fn now_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis())
+}
+
+fn session_key(id: &str) -> String {
+    format!("mcp:s:{id}")
+}
+
+fn index_key(token_id: &str, id: &str) -> String {
+    format!("mcp:i:{token_id}:{id}")
 }
 
 impl McpState {
-    pub(crate) fn new(cfg: McpConfig) -> Self {
-        Self {
-            cfg,
-            sessions: Mutex::new(HashMap::new()),
-            rate: Mutex::new(HashMap::new()),
-        }
+    pub(crate) fn new(cfg: McpConfig, shared: Arc<SharedState>) -> Self {
+        Self { cfg, shared }
     }
 
     /// The external base URL: the configured public URL, or scheme and host of the request.
@@ -124,80 +138,113 @@ impl McpState {
         format!("{proto}://{host}")
     }
 
+    /// Requests per token per minute, counted across all server processes.
     fn rate_ok(&self, token: &str) -> Result<(), u64> {
         if self.cfg.rate_per_minute == 0 {
             return Ok(());
         }
-        let now = Instant::now();
-        let mut m = self.rate.lock().unwrap();
-        if m.len() > 4096 {
-            m.retain(|_, (start, _)| now.duration_since(*start) < Duration::from_secs(60));
-        }
-        let e = m.entry(token.to_string()).or_insert((now, 0));
-        if now.duration_since(e.0) >= Duration::from_secs(60) {
-            *e = (now, 0);
-        }
-        if e.1 >= self.cfg.rate_per_minute {
-            return Err(60 - now.duration_since(e.0).as_secs().min(59));
-        }
-        e.1 += 1;
-        Ok(())
+        obop_storage::limit::hit(
+            &*self.shared.backend,
+            &format!("rl:mcp:{}", token_id(token)),
+            u64::from(self.cfg.rate_per_minute),
+            60_000,
+        )
+    }
+
+    fn ttl_ms(&self) -> u64 {
+        self.cfg.session_ttl.as_millis() as u64
+    }
+
+    fn save(&self, id: &str, token: &str, session: &Session) -> Result<(), String> {
+        let tid = token_id(token);
+        let mut doc = session.to_json();
+        doc["token"] = J::from(tid);
+        let sealed = self.shared.seal_json(&session_key(id), &doc)?;
+        self.shared
+            .backend
+            .kv_put(&session_key(id), &sealed, Some(self.ttl_ms()))
     }
 
     fn open(&self, token: &str, state: Session) -> Result<String, ()> {
-        let mut m = self.sessions.lock().unwrap();
-        let now = Instant::now();
-        m.retain(|_, e| now.duration_since(*e.last.lock().unwrap()) < self.cfg.session_ttl);
-        let mine: Vec<(String, Instant)> = m
+        self.shared.maybe_purge();
+        let b = &self.shared.backend;
+        let tid = token_id(token);
+        let all = b.kv_scan("mcp:i:").map_err(|_| ())?;
+        let mine_prefix = format!("mcp:i:{tid}:");
+        let mut mine: Vec<(&String, u64)> = all
             .iter()
-            .filter(|(_, e)| e.token == token)
-            .map(|(id, e)| (id.clone(), *e.last.lock().unwrap()))
+            .filter(|(k, _)| k.starts_with(&mine_prefix))
+            .map(|(k, v)| (k, v.parse().unwrap_or(0)))
             .collect();
-        if mine.len() >= self.cfg.max_sessions_per_token
-            && let Some((oldest, _)) = mine.into_iter().min_by_key(|(_, t)| *t)
-        {
-            m.remove(&oldest);
+        let mut total = all.len();
+        if mine.len() >= self.cfg.max_sessions_per_token {
+            mine.sort_by_key(|(_, t)| *t);
+            if let Some((oldest, _)) = mine.first() {
+                let id = oldest.rsplit(':').next().unwrap_or("");
+                let _ = b.kv_delete(oldest);
+                let _ = b.kv_delete(&session_key(id));
+                total = total.saturating_sub(1);
+            }
         }
-        if m.len() >= self.cfg.max_sessions {
+        if total >= self.cfg.max_sessions {
             return Err(());
         }
         let mut raw = [0u8; 32];
         getrandom::fill(&mut raw).expect("operating system randomness");
         let id: String = raw.iter().map(|b| format!("{b:02x}")).collect();
-        m.insert(
-            id.clone(),
-            Arc::new(Entry {
-                token: token.to_string(),
-                last: Mutex::new(now),
-                state: Mutex::new(state),
-            }),
-        );
+        self.save(&id, token, &state).map_err(|_| ())?;
+        b.kv_put(
+            &index_key(&tid, &id),
+            &now_ms().to_string(),
+            Some(self.ttl_ms()),
+        )
+        .map_err(|_| ())?;
         Ok(id)
     }
 
-    fn find(&self, id: &str, token: &str) -> Option<Arc<Entry>> {
-        let mut m = self.sessions.lock().unwrap();
-        let e = m.get(id)?.clone();
-        let now = Instant::now();
-        let expired = now.duration_since(*e.last.lock().unwrap()) >= self.cfg.session_ttl;
-        if expired || e.token != token {
-            if expired {
-                m.remove(id);
-            }
+    /// The session `id` of this token, locked until `finish`. `None` when unknown, expired or
+    /// opened by another token.
+    fn find(&self, id: &str, token: &str) -> Option<Entry> {
+        // Ids are 64 hex digits; anything else cannot be a key we issued.
+        if id.len() != 64 || !id.bytes().all(|c| c.is_ascii_hexdigit()) {
             return None;
         }
-        *e.last.lock().unwrap() = now;
-        Some(e)
+        let lock = self
+            .shared
+            .backend
+            .lock(&format!("mcp-session:{id}"))
+            .ok()?;
+        let sealed = self.shared.backend.kv_get(&session_key(id)).ok()??;
+        let doc = self.shared.open_json(&session_key(id), &sealed)?;
+        if doc["token"].as_str() != Some(token_id(token).as_str()) {
+            return None;
+        }
+        Some(Entry {
+            id: id.to_string(),
+            state: Session::from_json(&doc),
+            _lock: lock,
+        })
+    }
+
+    /// Save the session after a request (this also pushes its expiry out) and release it.
+    fn finish(&self, entry: Entry, token: &str) {
+        let _ = self.save(&entry.id, token, &entry.state);
+        let _ = self.shared.backend.kv_put(
+            &index_key(&token_id(token), &entry.id),
+            &now_ms().to_string(),
+            Some(self.ttl_ms()),
+        );
     }
 
     fn close(&self, id: &str, token: &str) -> bool {
-        let mut m = self.sessions.lock().unwrap();
-        if m.get(id).is_some_and(|e| e.token == token) {
-            m.remove(id);
-            true
-        } else {
-            false
-        }
+        let Some(entry) = self.find(id, token) else {
+            return false;
+        };
+        let b = &self.shared.backend;
+        let _ = b.kv_delete(&session_key(id));
+        let _ = b.kv_delete(&index_key(&token_id(token), id));
+        drop(entry);
+        true
     }
 }
 
@@ -535,14 +582,12 @@ fn post_blocking(
             ),
         );
     }
-    let entry = match session_entry(s, token, h) {
+    let mut entry = match session_entry(s, token, h) {
         Ok(e) => e,
         Err(r) => return *r,
     };
-    let reply = {
-        let mut st = entry.state.lock().unwrap_or_else(|e| e.into_inner());
-        obop_mcp::handle_payload(&s.dispatcher, p, &mut st, &payload)
-    };
+    let reply = obop_mcp::handle_payload(&s.dispatcher, p, &mut entry.state, &payload);
+    s.mcp.finish(entry, token);
     match reply {
         Reply::Accepted => StatusCode::ACCEPTED.into_response(),
         Reply::Json(j) => json_response(status_for(&j), &j),
@@ -558,7 +603,7 @@ fn status_for(j: &J) -> StatusCode {
     }
 }
 
-fn session_entry(s: &HttpState, token: &str, h: &HeaderMap) -> Result<Arc<Entry>, Box<Response>> {
+fn session_entry(s: &HttpState, token: &str, h: &HeaderMap) -> Result<Entry, Box<Response>> {
     let Some(id) = h.get(SESSION_HEADER).and_then(|v| v.to_str().ok()) else {
         return Err(Box::new(rpc_error(
             StatusCode::BAD_REQUEST,

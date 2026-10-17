@@ -199,6 +199,7 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
     base
 }
 
+pub mod limit;
 mod memory;
 mod pg;
 #[cfg(test)]

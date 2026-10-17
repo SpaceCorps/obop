@@ -15,27 +15,21 @@ use axum::{
 use obop_connectors::runtime::HookError;
 use serde_json::json;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
 
 /// Most signed-or-not requests one connection's address takes per minute. The check happens before
 /// the signature work, so a flood of garbage cannot burn CPU on HMAC.
 const PER_MINUTE: u32 = 240;
 
-fn limited(connection: &str) -> bool {
-    static WINDOWS: OnceLock<Mutex<HashMap<String, (Instant, u32)>>> = OnceLock::new();
-    let mut g = WINDOWS.get_or_init(Default::default).lock().unwrap();
-    if g.len() > 10_000 {
-        g.retain(|_, (t, _)| t.elapsed() < Duration::from_secs(60));
-    }
-    let e = g
-        .entry(connection.to_string())
-        .or_insert((Instant::now(), 0));
-    if e.0.elapsed() >= Duration::from_secs(60) {
-        *e = (Instant::now(), 0);
-    }
-    e.1 += 1;
-    e.1 > PER_MINUTE
+fn limited(s: &HttpState, connection: &str) -> bool {
+    // Counted in the storage backend, so every server process on the database shares it.
+    obop_storage::limit::hit(
+        &*s.shared.backend,
+        &format!("rl:hook:{connection}"),
+        u64::from(PER_MINUTE),
+        60_000,
+    )
+    .is_err()
 }
 
 fn json_response(status: StatusCode, v: serde_json::Value) -> Response {
@@ -56,7 +50,7 @@ fn hook_blocking(s: &HttpState, id: &str, headers: &HeaderMap, body: &[u8]) -> R
     let Some(rt) = s.connectors.get() else {
         return json_response(StatusCode::NOT_FOUND, json!({"error": "not found"}));
     };
-    if limited(id) {
+    if limited(s, id) {
         return json_response(
             StatusCode::TOO_MANY_REQUESTS,
             json!({"error": "too many requests"}),

@@ -9,8 +9,8 @@ use obop_commands::{Authenticator, LoginOutcome, MfaApi, MfaError, Principal, Pr
 use obop_storage::{Backend, Fields};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod mfa;
@@ -241,11 +241,9 @@ impl Auth {
     }
 
     fn record_failure(&self, name: &str) {
-        let _ = self.backend.counter_add(
-            &Self::failure_key(name),
-            LOCKOUT.as_millis() as u64,
-            true,
-        );
+        let _ =
+            self.backend
+                .counter_add(&Self::failure_key(name), LOCKOUT.as_millis() as u64, true);
     }
 
     /// For tests: lift every lockout of `name`.

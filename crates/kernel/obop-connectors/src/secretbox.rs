@@ -52,7 +52,6 @@ impl std::fmt::Debug for SecretBox {
 
 pub use obop_keys::{hex, unhex};
 
-
 /// The master the first format derived from a key's text.
 fn legacy_master(raw: &str) -> [u8; 32] {
     let mut master = [0u8; 32];
@@ -93,7 +92,10 @@ impl SecretBox {
     pub fn from_secret(secret: &str) -> Result<Self, String> {
         let key = Key::new(secret, obop_keys::KeySource::Environment)
             .map_err(|_| "OBOP_SECRET_KEY must be at least 32 characters".to_string())?;
-        Ok(Self::from_ring_inner(KeyRing::from_secrets(key.expose(), &[])?, None))
+        Ok(Self::from_ring_inner(
+            KeyRing::from_secrets(key.expose(), &[])?,
+            None,
+        ))
     }
 
     /// A box over an explicit ring (tooling, tests).
@@ -167,7 +169,11 @@ impl SecretBox {
 
     /// Make sure the pseudonym key of `name` exists, derived from `anchor` (the key that sealed
     /// the connection's credentials) when it has to be created. For rotation.
-    pub fn materialise_pseudonym_key(&self, name: &str, anchor: Option<&Key>) -> Result<(), String> {
+    pub fn materialise_pseudonym_key(
+        &self,
+        name: &str,
+        anchor: Option<&Key>,
+    ) -> Result<(), String> {
         let Some(store) = &self.store else {
             return Ok(());
         };
@@ -359,10 +365,19 @@ mod tests {
         let legacy = seal_v1(OLD, "connection-credentials", "sk_live_abc");
         assert!(legacy.starts_with("obs1:"));
         let b = SecretBox::from_ring(KeyRing::from_secrets(NEW, &[OLD]).unwrap()).unwrap();
-        assert_eq!(b.open("connection-credentials", &legacy).unwrap(), "sk_live_abc");
-        let fresh = b.reseal("connection-credentials", &legacy).unwrap().unwrap();
+        assert_eq!(
+            b.open("connection-credentials", &legacy).unwrap(),
+            "sk_live_abc"
+        );
+        let fresh = b
+            .reseal("connection-credentials", &legacy)
+            .unwrap()
+            .unwrap();
         assert!(fresh.starts_with("e2."));
-        assert_eq!(b.open("connection-credentials", &fresh).unwrap(), "sk_live_abc");
+        assert_eq!(
+            b.open("connection-credentials", &fresh).unwrap(),
+            "sk_live_abc"
+        );
         assert_eq!(b.reseal("connection-credentials", &fresh).unwrap(), None);
         // Without the old key the first-format value cannot be opened, and the error says so
         // without echoing anything.
@@ -380,15 +395,31 @@ mod tests {
         };
         let before = mk(KeyRing::from_secrets(OLD, &[]).unwrap());
         let k1 = before.pseudonym_key("pseudonym:c1");
-        assert_eq!(k1, before.subkey("pseudonym:c1"), "first use matches the derivation");
+        assert_eq!(
+            k1,
+            before.subkey("pseudonym:c1"),
+            "first use matches the derivation"
+        );
         // A different ring with the same stored key record: unchanged while the old key is kept.
         let after = mk(KeyRing::from_secrets(NEW, &[OLD]).unwrap());
         assert_eq!(after.pseudonym_key("pseudonym:c1"), k1);
-        assert_ne!(after.subkey("pseudonym:c1"), k1, "the derivation itself would have changed");
+        assert_ne!(
+            after.subkey("pseudonym:c1"),
+            k1,
+            "the derivation itself would have changed"
+        );
         // The stored key is sealed.
-        let rec = backend.get(PSEUDONYM_KEY_MODEL, "pseudonym:c1").unwrap().unwrap();
+        let rec = backend
+            .get(PSEUDONYM_KEY_MODEL, "pseudonym:c1")
+            .unwrap()
+            .unwrap();
         assert!(rec["key"].as_str().unwrap().starts_with("e2."));
         after.forget_pseudonym_keys("c1");
-        assert!(backend.get(PSEUDONYM_KEY_MODEL, "pseudonym:c1").unwrap().is_none());
+        assert!(
+            backend
+                .get(PSEUDONYM_KEY_MODEL, "pseudonym:c1")
+                .unwrap()
+                .is_none()
+        );
     }
 }

@@ -26,7 +26,7 @@ use i18n::{Lang, Source};
 use layout::{Caps, Ctx, MenuItem, Page};
 use obop_commands::{Lookup, PublicApi, PublicFilter, PublicRecord, Value};
 use settings::Settings;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use util::{ct_eq, esc, random_token, sha256_hex};
@@ -76,11 +76,6 @@ pub struct Site {
     api: PublicApi,
     cfg: Config,
     cached: Mutex<Option<Cached>>,
-    /// Sliding-window counters for the limits that are not the packages' own (order look-ups,
-    /// checkout bursts), keyed by a hash of the client address.
-    limits: Mutex<HashMap<String, VecDeque<Instant>>>,
-    /// Idempotency keys of placed orders: key -> (order token, when).
-    idem: Mutex<HashMap<String, (String, Instant)>>,
 }
 
 impl Site {
@@ -89,8 +84,6 @@ impl Site {
             api,
             cfg,
             cached: Mutex::new(None),
-            limits: Mutex::new(HashMap::new()),
-            idem: Mutex::new(HashMap::new()),
         }
     }
 
@@ -154,22 +147,36 @@ impl Site {
         }
     }
 
-    /// Count a hit for `key`; false when more than `max` fall in the last `window`.
+    /// Count a hit for `key`; false when more than `max` fall in the last `window`. The count
+    /// lives in the storage backend (a fixed window), so every server process shares it.
     fn allow(&self, key: &str, max: usize, window: Duration) -> bool {
-        let now = Instant::now();
-        let mut g = self.limits.lock().unwrap();
-        if g.len() > 20_000 {
-            g.retain(|_, q| q.back().is_some_and(|t| now.duration_since(*t) < window));
+        obop_storage::limit::allow(
+            &**self.api.backend(),
+            &format!("rl:site:{key}"),
+            max as u64,
+            window.as_millis() as u64,
+        )
+    }
+
+    /// Claim an idempotency key for an order about to be placed: `Ok(())` when this call owns
+    /// it, `Err(token)` with the token of the order that already owns it. Shared by every
+    /// server process, so a double submit that lands on two of them still makes one order.
+    fn claim_idem(&self, key: &str, token: &str) -> Result<(), String> {
+        let k = format!("idem:site:{key}");
+        let b = self.api.backend();
+        if b.kv_put_new(&k, token, Some(86_400_000)).unwrap_or(true) {
+            return Ok(());
         }
-        let q = g.entry(key.to_string()).or_default();
-        while q.front().is_some_and(|t| now.duration_since(*t) >= window) {
-            q.pop_front();
-        }
-        if q.len() >= max {
-            return false;
-        }
-        q.push_back(now);
-        true
+        Err(b
+            .kv_get(&k)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| token.to_string()))
+    }
+
+    /// Give a claimed key back (the order was not placed).
+    fn release_idem(&self, key: &str) {
+        let _ = self.api.backend().kv_delete(&format!("idem:site:{key}"));
     }
 
     /// The origin used in canonical links, feeds and sitemaps: the owner's setting, the
@@ -358,6 +365,18 @@ impl Site {
     /// A short opaque key for rate limits; the address itself is never stored or logged.
     fn source(&self, req: &Req) -> String {
         sha256_hex(&format!("obop-site-src:{}", req.client))[..24].to_string()
+    }
+
+    /// For tests: lift the burst limits of one client address, leaving the packages' own.
+    #[cfg(test)]
+    pub(crate) fn reset_burst_limits_for_test(&self, client: &str) {
+        let src = sha256_hex(&format!("obop-site-src:{client}"))[..24].to_string();
+        for kind in ["checkout", "order"] {
+            let _ = self
+                .api
+                .backend()
+                .counter_reset(&format!("rl:site:{kind}:{src}"));
+        }
     }
 
     // ---- lookups the pages share ----------------------------------------------------------

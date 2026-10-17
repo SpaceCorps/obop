@@ -580,12 +580,7 @@ async fn the_oauth_flow_runs_against_a_local_fake_provider_and_tokens_stay_seale
     assert!(denied.body.contains("did not authorise") && !denied.body.contains("<script>"));
     // The tokens are sealed; the access token is refreshed when it is about to expire.
     let stored = r.store.backend().get("connection", &id).unwrap().unwrap();
-    assert!(
-        stored["oauth_tokens"]
-            .as_str()
-            .unwrap()
-            .starts_with("e2.")
-    );
+    assert!(stored["oauth_tokens"].as_str().unwrap().starts_with("e2."));
     let (conn, _) = r.rt.connection(&id).unwrap();
     assert_eq!(
         r.rt.access_token(&conn).unwrap(),

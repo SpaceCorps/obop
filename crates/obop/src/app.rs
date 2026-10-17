@@ -33,6 +33,15 @@ impl App {
 
     pub fn with_store(store: Store) -> Self {
         let d = Arc::new(Dispatcher::new());
+        // Several server processes may share one database (B1): the write lock, proposed plans,
+        // sessions and rate limits go through the storage backend.
+        match obop_keys::KeyRing::for_backend(&store.backend()) {
+            Ok(ring) => d.set_shared(store.backend(), ring),
+            Err(e) => {
+                eprintln!("error: {e}");
+                std::process::exit(2);
+            }
+        }
         base::register(&d, &store);
         product::register(&d, &store);
         crm::register(&d, &store);

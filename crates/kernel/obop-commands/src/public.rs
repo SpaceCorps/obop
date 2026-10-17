@@ -20,12 +20,11 @@
 use crate::store::{declared_fields, validate_with};
 use crate::{Dispatcher, Principal, Store, Value};
 use obop_registry::{FieldKind, ModelDef};
-use obop_storage::Fields;
+use obop_storage::{Backend, Fields};
 use obop_types::DataClass;
 use serde_json::Value as J;
-use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// What of a model anybody may read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -291,16 +290,14 @@ pub struct Submission {
     pub links: Vec<(String, usize)>,
 }
 
-const HOUR: Duration = Duration::from_secs(3600);
+const HOUR_MS: u64 = 3_600_000;
 const GLOBAL_FACTOR: usize = 50;
-const MAX_LIMITER_KEYS: usize = 20_000;
 
 /// The anonymous door, shared by the public routes.
 #[derive(Clone)]
 pub struct PublicApi {
     d: Arc<Dispatcher>,
     store: Store,
-    hits: Arc<Mutex<HashMap<String, VecDeque<Instant>>>>,
 }
 
 impl Dispatcher {
@@ -358,11 +355,7 @@ impl Dispatcher {
 
 impl PublicApi {
     pub fn new(d: Arc<Dispatcher>, store: Store) -> Self {
-        Self {
-            d,
-            store,
-            hits: Arc::default(),
-        }
+        Self { d, store }
     }
 
     pub fn spec(&self, model: &str) -> Option<PublicSpec> {
@@ -645,25 +638,20 @@ impl PublicApi {
             .unwrap_or_default()
     }
 
-    /// Count a hit for the rate limit; `Err` carries seconds until the oldest hit expires.
+    /// Count a hit for the rate limit; `Err` carries seconds until the window ends. The count is
+    /// kept in the storage backend, so every server process on the database shares it (B1).
     fn hit(&self, key: &str, limit: usize) -> Result<(), u64> {
-        let now = Instant::now();
-        let mut g = self.hits.lock().unwrap();
-        if g.len() > MAX_LIMITER_KEYS {
-            g.retain(|_, q| q.back().is_some_and(|t| now.duration_since(*t) < HOUR));
-        }
-        let q = g.entry(key.to_string()).or_default();
-        while q.front().is_some_and(|t| now.duration_since(*t) >= HOUR) {
-            q.pop_front();
-        }
-        if q.len() >= limit {
-            let wait = q.front().map_or(60, |t| {
-                HOUR.saturating_sub(now.duration_since(*t)).as_secs().max(1)
-            });
-            return Err(wait);
-        }
-        q.push_back(now);
-        Ok(())
+        obop_storage::limit::hit(
+            &*self.store.backend,
+            &format!("rl:public:{}", key.replace('\0', ":")),
+            limit as u64,
+            HOUR_MS,
+        )
+    }
+
+    /// The storage backend behind the public door.
+    pub fn backend(&self) -> &Arc<dyn Backend> {
+        &self.store.backend
     }
 
     /// Create the records of a batch in one transaction and return their ids. `source` is an

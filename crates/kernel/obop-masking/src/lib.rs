@@ -40,6 +40,7 @@ pub enum RestoreError {
 }
 
 struct Entry {
+    label: String,
     value: String,
     record: String,
 }
@@ -50,6 +51,8 @@ pub struct Vault {
     by_token: HashMap<String, Entry>,
     by_value: HashMap<(String, String), String>,
     next: u64,
+    /// Changed since it was loaded or last marked clean: a shared store saves only then.
+    dirty: bool,
 }
 
 impl Vault {
@@ -65,11 +68,13 @@ impl Vault {
             return t.clone();
         }
         self.next += 1;
+        self.dirty = true;
         let token = format!("{label}_{}", self.next);
         self.by_value.insert(key, token.clone());
         self.by_token.insert(
             token.clone(),
             Entry {
+                label: label.into(),
                 value: value.into(),
                 record: record.into(),
             },
@@ -94,8 +99,57 @@ impl Vault {
         }
     }
 
+    /// Whether tokens were added or erased since the vault was loaded or marked clean.
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
+    }
+
+    /// The vault as JSON, for a shared store (it holds personal data: seal it before it is kept).
+    pub fn to_json(&self) -> serde_json::Value {
+        let mut entries: Vec<_> = self.by_token.iter().collect();
+        entries.sort_by(|a, b| a.0.cmp(b.0));
+        serde_json::json!({
+            "next": self.next,
+            "entries": entries.into_iter().map(|(t, e)| serde_json::json!({
+                "token": t, "label": e.label, "value": e.value, "record": e.record,
+            })).collect::<Vec<_>>(),
+        })
+    }
+
+    /// A vault from `to_json` output. A malformed document yields an empty vault.
+    pub fn from_json(j: &serde_json::Value) -> Vault {
+        let mut v = Vault::new();
+        v.next = j["next"].as_u64().unwrap_or(0);
+        for e in j["entries"].as_array().into_iter().flatten() {
+            let (Some(token), Some(label), Some(value), Some(record)) = (
+                e["token"].as_str(),
+                e["label"].as_str(),
+                e["value"].as_str(),
+                e["record"].as_str(),
+            ) else {
+                continue;
+            };
+            v.by_value
+                .insert((label.to_string(), value.to_string()), token.to_string());
+            v.by_token.insert(
+                token.to_string(),
+                Entry {
+                    label: label.into(),
+                    value: value.into(),
+                    record: record.into(),
+                },
+            );
+        }
+        v
+    }
+
     /// Erase every token of a record (data-subject erasure).
     pub fn erase_record(&mut self, record: &str) {
+        self.dirty = true;
         self.by_token.retain(|_, e| e.record != record);
         let live: std::collections::HashSet<_> = self.by_token.keys().cloned().collect();
         self.by_value.retain(|_, t| live.contains(t));
@@ -148,6 +202,30 @@ mod tests {
         assert_eq!(
             v.restore("PERSON_99", |_| true),
             Err(RestoreError::UnknownToken("PERSON_99".into()))
+        );
+    }
+
+    #[test]
+    fn a_vault_survives_a_round_trip_through_json_and_tracks_changes() {
+        let mut v = Vault::new();
+        assert!(!v.is_dirty());
+        let a = v.mask("PERSON", "party:1", "Ada Lovelace");
+        assert!(v.is_dirty());
+        let mut w = Vault::from_json(&v.to_json());
+        assert!(!w.is_dirty());
+        assert_eq!(w.restore(&a, |_| true), Ok("Ada Lovelace"));
+        assert_eq!(
+            w.mask("PERSON", "party:1", "Ada Lovelace"),
+            a,
+            "stays stable"
+        );
+        assert!(!w.is_dirty(), "a known value changes nothing");
+        let b = w.mask("PERSON", "party:2", "Alan Turing");
+        assert_ne!(a, b, "the counter continues");
+        assert!(w.is_dirty());
+        assert_eq!(
+            Vault::from_json(&serde_json::json!("junk")).to_json()["next"],
+            0
         );
     }
 

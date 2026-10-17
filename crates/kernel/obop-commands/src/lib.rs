@@ -3,6 +3,10 @@
 //! with token scopes for agents), restores masked input tokens (D40), runs the handler and
 //! shapes the output through the masking policy.
 
+mod shared;
+pub use shared::Shared;
+use shared::{Pending, Plans};
+
 use obop_masking::mode_for;
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
 use obop_registry::labels::Texts;
@@ -177,12 +181,6 @@ pub struct Response {
 
 pub type Handler = Box<dyn Fn(&Value) -> Result<Value, String> + Send + Sync>;
 
-struct Pending {
-    principal: Principal,
-    id: String,
-    input: Value,
-}
-
 struct Registered {
     /// `model.command`.
     id: String,
@@ -203,7 +201,9 @@ struct Registered {
 /// so the tables sit behind locks and handlers run on `Arc` clones taken out of the lock.
 #[derive(Default)]
 pub struct Dispatcher {
-    pending: std::sync::Mutex<HashMap<String, Pending>>,
+    /// Proposed calls waiting for approval: in memory, or shared between processes (B1).
+    plans: Plans,
+    shared: std::sync::OnceLock<Shared>,
     commands: std::sync::RwLock<HashMap<String, Arc<Registered>>>,
     /// Shared with the generated `delete` handler, which looks for records that refer to the
     /// one being deleted in every registered model.
@@ -283,6 +283,29 @@ pub struct ModuleInfo {
 impl Dispatcher {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Share this dispatcher's write lock and proposed plans with other server processes on the
+    /// same database (B1): the lock becomes the backend's cross-process lock and plans become
+    /// sealed, expiring records. Call once, before serving.
+    pub fn set_shared(&self, backend: Arc<dyn obop_storage::Backend>, ring: obop_keys::KeyRing) {
+        let _ = self.shared.set(Shared::new(backend, ring));
+    }
+
+    /// The backend shared with other processes, when `set_shared` was called.
+    pub fn shared_backend(&self) -> Option<Arc<dyn obop_storage::Backend>> {
+        self.shared.get().map(|s| s.backend.clone())
+    }
+
+    /// The backend and key ring shared with other processes, when `set_shared` was called.
+    pub fn shared_parts(&self) -> Option<(Arc<dyn obop_storage::Backend>, obop_keys::KeyRing)> {
+        self.shared
+            .get()
+            .map(|s| (s.backend.clone(), s.ring.clone()))
+    }
+
+    fn txn_guard(&self) -> Result<shared::TxnGuard<'_>, CallError> {
+        shared::txn_lock(self.shared.get(), &self.txn).map_err(CallError::Handler)
     }
 
     /// What `tools/list`, `GET /api/commands` and CLI help show for this principal.
@@ -612,10 +635,10 @@ impl Dispatcher {
             m.remove("_caller");
         }
         let guard = self.guards.read().unwrap().get(id).cloned();
-        let _txn = guard
-            .as_ref()
-            .filter(|g| g.serialize)
-            .map(|_| self.txn.lock().unwrap_or_else(|e| e.into_inner()));
+        let _txn = match guard.as_ref().filter(|g| g.serialize) {
+            Some(_) => Some(self.txn_guard()?),
+            None => None,
+        };
         let mut guard_approval = false;
         let mut pre = Vec::new();
         if let Some(g) = &guard {
@@ -629,14 +652,17 @@ impl Dispatcher {
         if (c.needs_approval || guard_approval) && p.kind == PrincipalKind::Agent {
             // Dry-run: keep the restored input, hand back a plan id (D18, D42).
             let plan_id = uuid::Uuid::now_v7().to_string();
-            self.pending.lock().unwrap().insert(
-                plan_id.clone(),
-                Pending {
-                    principal: p.clone(),
-                    id: id.into(),
-                    input,
-                },
-            );
+            self.plans
+                .put(
+                    self.shared.get(),
+                    &plan_id,
+                    &Pending {
+                        principal: p.clone(),
+                        id: id.into(),
+                        input,
+                    },
+                )
+                .map_err(CallError::Handler)?;
             return Err(CallError::ApprovalRequired { plan_id });
         }
         self.run(&c, p, vault, input, pre)
@@ -653,10 +679,10 @@ impl Dispatcher {
         if approver.kind != PrincipalKind::User {
             return Err(CallError::Forbidden("approve".into()));
         }
-        let _txn = self.txn.lock().unwrap_or_else(|e| e.into_inner());
-        let mut pending = self.pending.lock().unwrap();
-        let plan = pending
-            .get(plan_id)
+        let _txn = self.txn_guard()?;
+        let plan = self
+            .plans
+            .get(self.shared.get(), plan_id)
             .ok_or_else(|| CallError::UnknownPlan(plan_id.into()))?;
         let c = self
             .commands
@@ -683,8 +709,7 @@ impl Dispatcher {
                 input = i;
             }
         }
-        let plan = pending.remove(plan_id).expect("checked above");
-        drop(pending);
+        self.plans.remove(self.shared.get(), plan_id);
         self.run(&c, &plan.principal, vault, input, pre)
     }
 

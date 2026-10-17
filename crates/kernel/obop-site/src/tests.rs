@@ -1132,7 +1132,7 @@ fn security_the_model_rate_limit_stops_a_flood_of_orders() {
         let mut f = order_fields(&lines, &[("shipping_method_id", &std.id)]);
         f.retain(|(k, _)| *k != "idem");
         f.push(("idem", &idem));
-        s.site.limits.lock().unwrap().clear(); // reset the burst limit, keep the package limit
+        s.site.reset_burst_limits_for_test("192.0.2.50"); // keep the package limit
         if post_from(&s, "/shop/checkout", &f, "192.0.2.50").status == 429 {
             denied += 1;
         }

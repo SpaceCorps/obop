@@ -972,6 +972,7 @@ dependencies = [
  "obop-community",
  "obop-connectors",
  "obop-http",
+ "obop-keys",
  "obop-masking",
  "obop-mcp",
  "obop-pkg",
@@ -1009,6 +1010,7 @@ dependencies = [
 name = "obop-commands"
 version = "0.2.0"
 dependencies = [
+ "obop-keys",
  "obop-masking",
  "obop-registry",
  "obop-storage",
@@ -1068,10 +1070,13 @@ dependencies = [
  "obop-commands",
  "obop-community",
  "obop-connectors",
+ "obop-keys",
  "obop-mcp",
  "obop-site",
+ "obop-storage",
  "obop-types",
  "serde_json",
+ "sha2",
  "tokio",
  "tower",
  "tower-http",
@@ -1093,6 +1098,7 @@ name = "obop-masking"
 version = "0.2.0"
 dependencies = [
  "obop-types",
+ "serde_json",
 ]
 
 [[package]]
