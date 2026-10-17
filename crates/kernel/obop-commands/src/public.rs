@@ -797,6 +797,7 @@ impl Principal {
             kind: crate::PrincipalKind::User,
             groups: Default::default(),
             scopes: Some(Default::default()),
+            mfa_limited: false,
         }
     }
 }

@@ -193,6 +193,54 @@ pub fn validate_with(
 }
 
 impl Dispatcher {
+    /// Register only `get`, `list` and `search` for one model, so records that other code writes
+    /// (the security event log, D53) can be read on every surface and never changed through it.
+    pub fn register_read_only(&self, module: &Module, model: &str, store: &Store) {
+        let def = module
+            .models
+            .iter()
+            .find(|m| m.name == model)
+            .unwrap_or_else(|| panic!("{}: no model {model}", module.id));
+        let name = def.name;
+        let s = store.clone();
+        self.register(
+            module,
+            name,
+            "get",
+            Box::new(move |input| {
+                let id = id_of(input)?;
+                let f = s
+                    .backend
+                    .get(name, &id)?
+                    .ok_or_else(|| format!("no {name} {id}"))?;
+                Ok(to_row(&id, &f))
+            }),
+        );
+        let (s, d) = (store.clone(), def.clone());
+        self.register(
+            module,
+            name,
+            "list",
+            Box::new(move |input| {
+                let (rows, _) = run_query(&s, &d, input)?;
+                Ok(Value::List(rows))
+            }),
+        );
+        let (s, d) = (store.clone(), def.clone());
+        self.register(
+            module,
+            name,
+            "search",
+            Box::new(move |input| {
+                let (rows, total) = run_query(&s, &d, input)?;
+                Ok(Value::map([
+                    ("rows", Value::List(rows)),
+                    ("total", Value::Int(total as i64)),
+                ]))
+            }),
+        );
+    }
+
     /// Register `get`, `list`, `create` and `update` for every model of `module` against `store`.
     pub fn register_crud(&self, module: &Module, store: &Store) {
         for def in &module.models {

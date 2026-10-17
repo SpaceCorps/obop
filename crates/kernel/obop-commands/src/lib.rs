@@ -51,6 +51,9 @@ pub struct Principal {
     pub groups: HashSet<String>,
     /// Token scopes. `None` means unrestricted; agents must carry `Some`.
     pub scopes: Option<HashSet<String>>,
+    /// A session that signed in without the second factor the instance requires (D53). It may
+    /// only reach the two-factor enrolment routes; every command refuses it.
+    pub mfa_limited: bool,
 }
 
 impl Principal {
@@ -60,6 +63,7 @@ impl Principal {
             kind: PrincipalKind::User,
             groups: set(groups),
             scopes: None,
+            mfa_limited: false,
         }
     }
 
@@ -69,6 +73,7 @@ impl Principal {
             kind: PrincipalKind::Agent,
             groups: set(on_behalf_groups),
             scopes: Some(set(scopes)),
+            mfa_limited: false,
         }
     }
 
@@ -76,6 +81,10 @@ impl Principal {
     /// installed later need no re-granting) and, if scoped, the scope allows it. An agent's scopes
     /// always list concrete groups, so an admin's agent still gets only what it was scoped to.
     pub fn allows(&self, group: &str) -> bool {
+        // A session limited to two-factor enrolment holds nothing (D53), not even `*`.
+        if self.mfa_limited {
+            return false;
+        }
         // `*` means any signed-in principal (settings every user may read).
         if group == ANY_GROUP {
             return true;
@@ -773,8 +782,30 @@ fn on_surface(s: obop_registry::Surfaces, surface: Surface) -> bool {
 pub trait Authenticator: Send + Sync {
     /// Resolve a bearer token to a principal; `None` for unknown, expired or revoked tokens.
     fn resolve(&self, token: &str) -> Option<Principal>;
-    /// Exchange credentials for a session token.
+    /// Exchange credentials for a session token. Refuses a user who has two-factor sign-in on:
+    /// use `login_step` and `login_mfa` for those.
     fn login(&self, username: &str, password: &str) -> Result<String, String>;
+    /// First sign-in step: a session, or the demand for a second factor (D53).
+    fn login_step(&self, username: &str, password: &str) -> Result<LoginOutcome, String> {
+        self.login(username, password)
+            .map(|token| LoginOutcome::Session {
+                token,
+                mfa_enrolment_required: false,
+            })
+    }
+    /// Second sign-in step: a TOTP `code` or a `recovery_code` for the short-lived `mfa_token`.
+    fn login_mfa(
+        &self,
+        _mfa_token: &str,
+        _code: Option<&str>,
+        _recovery_code: Option<&str>,
+    ) -> Result<LoginOutcome, MfaError> {
+        Err(MfaError::NotFound)
+    }
+    /// Two-factor management, for authenticators that support it.
+    fn mfa(&self) -> Option<&dyn MfaApi> {
+        None
+    }
     /// A human issues a scoped token for an agent acting on their behalf (D18). Scopes must be
     /// groups the human holds.
     fn issue_agent_token(
@@ -783,6 +814,66 @@ pub trait Authenticator: Send + Sync {
         scopes: &[String],
         label: &str,
     ) -> Result<String, String>;
+}
+
+/// What the first (or second) sign-in step produced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoginOutcome {
+    Session {
+        token: String,
+        /// The session is limited to two-factor enrolment because the instance requires it.
+        mfa_enrolment_required: bool,
+    },
+    MfaRequired {
+        mfa_token: String,
+    },
+}
+
+/// Why a two-factor call failed; the HTTP layer maps each to a status code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MfaError {
+    /// Bad input or wrong state (already enrolled, nothing pending): 400.
+    Invalid(String),
+    /// A wrong code or password: 401.
+    Denied(String),
+    /// Too many attempts: 429.
+    Locked(String),
+    /// The caller may not do this (not an admin): 404, like an unknown command.
+    NotFound,
+    /// The server cannot do it (no `OBOP_SECRET_KEY`): 503.
+    Unavailable(String),
+}
+
+/// Two-factor management of the signed-in human (D53). `session` is the bearer token of the
+/// caller's session, so a limited session can be lifted once enrolment is confirmed.
+pub trait MfaApi: Send + Sync {
+    fn status(&self, p: &Principal) -> Result<serde_json::Value, MfaError>;
+    /// Start enrolment: a fresh secret (base32 and `otpauth://`), nothing active yet.
+    fn begin(&self, p: &Principal) -> Result<serde_json::Value, MfaError>;
+    /// A valid code activates the pending secret and returns the recovery codes, once.
+    fn confirm(
+        &self,
+        p: &Principal,
+        session: &str,
+        code: &str,
+    ) -> Result<serde_json::Value, MfaError>;
+    /// Needs the password and a current code or a recovery code.
+    fn disable(
+        &self,
+        p: &Principal,
+        password: &str,
+        code: Option<&str>,
+        recovery_code: Option<&str>,
+    ) -> Result<(), MfaError>;
+    fn regenerate_recovery(
+        &self,
+        p: &Principal,
+        password: &str,
+        code: Option<&str>,
+        recovery_code: Option<&str>,
+    ) -> Result<serde_json::Value, MfaError>;
+    /// `platform.admin` removes another user's second factor; never one's own.
+    fn admin_reset(&self, admin: &Principal, target: &str) -> Result<(), MfaError>;
 }
 
 mod guards;

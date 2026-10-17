@@ -3,15 +3,24 @@
 //! (D18). Records live in the storage backend under `auth_user` and `auth_token`, outside the
 //! module registry, so no generated command can read or write them.
 
-use argon2::password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash};
+use argon2::password_hash::{PasswordHasher, phc::PasswordHash};
 use argon2::{Argon2, Params};
-use obop_commands::{Authenticator, Principal, PrincipalKind};
+use obop_commands::{
+    Authenticator, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind,
+};
 use obop_storage::{Backend, Fields};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+mod mfa;
+pub mod seal;
+pub mod totp;
+
+pub use mfa::{AuthConfig, EVENT_TABLE};
 
 const SESSION_SECS: u64 = 12 * 3600;
 const MAX_FAILURES: u32 = 5;
@@ -21,9 +30,14 @@ pub struct Auth {
     backend: Arc<dyn Backend>,
     hasher: Argon2<'static>,
     failures: Mutex<HashMap<String, (u32, Instant)>>,
+    config: AuthConfig,
+    /// Serialises read-modify-write of two-factor state (one server process).
+    mfa_lock: Mutex<()>,
+    event_throttle: Mutex<HashMap<String, Instant>>,
+    fake_now: AtomicU64,
 }
 
-fn now() -> u64 {
+fn now_system() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
@@ -54,20 +68,34 @@ fn str_list(v: &J) -> Vec<String> {
 }
 
 impl Auth {
+    /// Configuration from the environment (`AuthConfig::from_env`).
     pub fn new(backend: Arc<dyn Backend>) -> Self {
+        Self::with_config(backend, AuthConfig::from_env())
+    }
+
+    pub fn with_config(backend: Arc<dyn Backend>, config: AuthConfig) -> Self {
         Self {
             backend,
             hasher: Argon2::default(),
             failures: Mutex::new(HashMap::new()),
+            config,
+            mfa_lock: Mutex::new(()),
+            event_throttle: Mutex::new(HashMap::new()),
+            fake_now: AtomicU64::new(0),
         }
     }
 
-    /// Cheap hashing parameters for tests only.
+    /// Cheap hashing parameters and the public development key, for tests only. No admin policy.
     pub fn with_test_params(backend: Arc<dyn Backend>) -> Self {
+        Self::with_test_config(backend, AuthConfig::insecure_dev())
+    }
+
+    /// Cheap hashing parameters and an explicit two-factor configuration, for tests only.
+    pub fn with_test_config(backend: Arc<dyn Backend>, config: AuthConfig) -> Self {
         let params = Params::new(8, 1, 1, None).expect("valid params");
         Self {
             hasher: Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params),
-            ..Self::new(backend)
+            ..Self::with_config(backend, config)
         }
     }
 
@@ -161,6 +189,10 @@ impl Auth {
         ))
     }
 
+    fn issue_session(&self, owner: &str, limited: bool) -> Result<String, String> {
+        self.issue_with(owner, "user", &[], "session", Some(SESSION_SECS), limited)
+    }
+
     fn issue(
         &self,
         owner: &str,
@@ -168,6 +200,18 @@ impl Auth {
         scopes: &[String],
         label: &str,
         ttl: Option<u64>,
+    ) -> Result<String, String> {
+        self.issue_with(owner, kind, scopes, label, ttl, false)
+    }
+
+    fn issue_with(
+        &self,
+        owner: &str,
+        kind: &str,
+        scopes: &[String],
+        label: &str,
+        ttl: Option<u64>,
+        limited: bool,
     ) -> Result<String, String> {
         let token = format!("obop_{}", hex(&random_bytes::<32>()));
         let mut f = Fields::new();
@@ -177,9 +221,10 @@ impl Auth {
         f.insert("label".into(), J::from(label));
         f.insert(
             "expires_at".into(),
-            ttl.map_or(J::Null, |t| J::from(now() + t)),
+            ttl.map_or(J::Null, |t| J::from(self.now() + t)),
         );
         f.insert("revoked".into(), J::Bool(false));
+        f.insert("limited".into(), J::Bool(limited));
         self.backend.insert("auth_token", &token_hash(&token), &f)?;
         Ok(token)
     }
@@ -212,7 +257,7 @@ impl Authenticator for Auth {
     fn resolve(&self, token: &str) -> Option<Principal> {
         let t = self.backend.get("auth_token", &token_hash(token)).ok()??;
         if t["revoked"].as_bool() == Some(true)
-            || t["expires_at"].as_u64().is_some_and(|e| e <= now())
+            || t["expires_at"].as_u64().is_some_and(|e| e <= self.now())
         {
             return None;
         }
@@ -222,32 +267,36 @@ impl Authenticator for Auth {
             p.id = format!("{owner}/agent");
             p.kind = PrincipalKind::Agent;
             p.scopes = Some(str_list(&t["scopes"]).into_iter().collect());
+        } else {
+            p.mfa_limited = t["limited"].as_bool() == Some(true);
         }
         Some(p)
     }
 
     fn login(&self, username: &str, password: &str) -> Result<String, String> {
-        let name = username.trim().to_lowercase();
-        if self.locked_out(&name) {
-            return Err("too many attempts, try again in a minute".into());
+        match self.login_step_impl(username, password)? {
+            LoginOutcome::Session { token, .. } => Ok(token),
+            LoginOutcome::MfaRequired { .. } => {
+                Err("a two-factor code is required: use the two-step sign-in".into())
+            }
         }
-        // Verify against a dummy hash for unknown users so timing does not reveal them.
-        let stored = self.backend.get("auth_user", &name).ok().flatten();
-        let dummy = self
-            .hash_password("dummy-password-for-timing")
-            .unwrap_or_default();
-        let hash = stored
-            .as_ref()
-            .and_then(|u| u["password_hash"].as_str().map(String::from))
-            .unwrap_or(dummy);
-        let ok = hash
-            .parse::<PasswordHash>()
-            .is_ok_and(|h| self.hasher.verify_password(password.as_bytes(), &h).is_ok());
-        if ok && stored.is_some() {
-            return self.issue(&name, "user", &[], "session", Some(SESSION_SECS));
-        }
-        self.record_failure(&name);
-        Err("invalid username or password".into())
+    }
+
+    fn login_step(&self, username: &str, password: &str) -> Result<LoginOutcome, String> {
+        self.login_step_impl(username, password)
+    }
+
+    fn login_mfa(
+        &self,
+        mfa_token: &str,
+        code: Option<&str>,
+        recovery_code: Option<&str>,
+    ) -> Result<LoginOutcome, MfaError> {
+        self.login_mfa_impl(mfa_token, code, recovery_code)
+    }
+
+    fn mfa(&self) -> Option<&dyn MfaApi> {
+        Some(self)
     }
 
     fn issue_agent_token(
@@ -268,6 +317,9 @@ impl Authenticator for Auth {
         self.issue(&owner.id, "agent", scopes, label, None)
     }
 }
+
+#[cfg(test)]
+mod mfa_tests;
 
 #[cfg(test)]
 mod tests {
