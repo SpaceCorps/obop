@@ -1,7 +1,13 @@
 //! The forum's data and rules: categories, threads, posts, members, the moderation audit log.
 //! Everything is held in memory behind one lock and written through to the storage backend as
-//! JSON documents (like `obop-platform`), so any of the three backends works. One process owns
-//! the forum; running two against the same database is not supported.
+//! JSON documents (like `obop-platform`), so any of the three backends works.
+//!
+//! Several server processes may share one database (B1, D59). The documents in the backend are
+//! the truth; the memory copy is a cache. Every write takes a cross-process lock, reloads the
+//! copy if another process changed anything since this one looked, makes its change, writes it
+//! through and bumps a shared version number. A read checks that number (at most once per
+//! `sync_every`, 250 ms by default) and reloads when it moved. So a post made on one process
+//! shows on the others within that interval, and two processes never hand out the same id.
 //!
 //! All time-dependent rules take `now` explicitly so they can be tested.
 
@@ -10,7 +16,9 @@ use crate::util;
 use obop_storage::{Backend, Fields};
 use serde_json::{Value as J, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 pub const POSTS_PER_HOUR: usize = 10;
 pub const THREADS_PER_HOUR: usize = 3;
@@ -169,6 +177,50 @@ pub struct Forum {
     backend: Arc<dyn Backend>,
     data: Mutex<Data>,
     admins: HashSet<String>,
+    /// The shared version of the data the memory copy was loaded at.
+    seen: AtomicU64,
+    checked: Mutex<Instant>,
+    sync_every: Mutex<Duration>,
+}
+
+/// The cross-process lock of every forum write, and the shared version number it bumps.
+const LOCK: &str = "community.forum";
+const VERSION: &str = "community.forum.version";
+const SYNC_EVERY: Duration = Duration::from_millis(250);
+
+/// The forum's data held for writing: the cross-process lock is held, the copy is current, and
+/// on drop (after a change) the shared version is bumped so other processes reload.
+pub struct ForumWrite<'a> {
+    forum: &'a Forum,
+    d: Option<MutexGuard<'a, Data>>,
+    changed: bool,
+    _xl: obop_storage::LockGuard,
+}
+
+impl std::ops::Deref for ForumWrite<'_> {
+    type Target = Data;
+    fn deref(&self) -> &Data {
+        self.d.as_ref().expect("held until drop")
+    }
+}
+
+impl std::ops::DerefMut for ForumWrite<'_> {
+    fn deref_mut(&mut self) -> &mut Data {
+        self.changed = true;
+        self.d.as_mut().expect("held until drop")
+    }
+}
+
+impl Drop for ForumWrite<'_> {
+    fn drop(&mut self) {
+        if self.changed {
+            if let Ok(v) = self.forum.backend.counter_add(VERSION, 0, false) {
+                self.forum.seen.store(v, Ordering::Release);
+            }
+        }
+        // Release the memory copy before the cross-process lock.
+        self.d.take();
+    }
 }
 
 fn s(f: &Fields, k: &str) -> String {
@@ -248,94 +300,135 @@ pub fn derive_name(email: &str) -> String {
     out
 }
 
+/// Everything the forum holds, read from the backend.
+fn load_data(backend: &dyn Backend) -> Result<Data, String> {
+    let mut d = Data::default();
+    for (id, f) in backend.list(T_CAT)? {
+        d.categories.push(Category {
+            slug: id,
+            name: s(&f, "name"),
+            order: n(&f, "order") as u32,
+            staff_only: b(&f, "staff_only"),
+        });
+    }
+    d.categories.sort_by_key(|c| c.order);
+    for (id, f) in backend.list(T_THREAD)? {
+        let Ok(idn) = id.parse::<u64>() else { continue };
+        d.next_thread = d.next_thread.max(idn);
+        d.threads.insert(
+            idn,
+            Thread {
+                id: idn,
+                title: s(&f, "title"),
+                cat: s(&f, "cat"),
+                author: s(&f, "author"),
+                created: n(&f, "created"),
+                last_activity: n(&f, "last_activity"),
+                updated: n(&f, "updated"),
+                pinned: b(&f, "pinned"),
+                locked: b(&f, "locked"),
+                hidden: b(&f, "hidden"),
+                deleted: b(&f, "deleted"),
+            },
+        );
+    }
+    for (id, f) in backend.list(T_POST)? {
+        let Ok(idn) = id.parse::<u64>() else { continue };
+        d.next_post = d.next_post.max(idn);
+        let p = Post {
+            id: idn,
+            thread: n(&f, "thread"),
+            author: s(&f, "author"),
+            body: s(&f, "body"),
+            created: n(&f, "created"),
+            edited: f.get("edited").and_then(J::as_u64),
+            hidden: b(&f, "hidden"),
+        };
+        d.by_thread.entry(p.thread).or_default().push(idn);
+        d.posts.insert(idn, p);
+    }
+    for v in d.by_thread.values_mut() {
+        v.sort_unstable();
+    }
+    for (id, f) in backend.list(T_MEMBER)? {
+        let m = Member {
+            email: id.clone(),
+            name: s(&f, "name"),
+            joined: n(&f, "joined"),
+        };
+        d.names.insert(m.name.to_ascii_lowercase(), id.clone());
+        d.members.insert(id, m);
+    }
+    for (id, f) in backend.list(T_AUDIT)? {
+        let Ok(idn) = id.parse::<u64>() else { continue };
+        d.next_audit = d.next_audit.max(idn);
+        d.audit.push(Audit {
+            id: idn,
+            at: n(&f, "at"),
+            actor: s(&f, "actor"),
+            action: s(&f, "action"),
+            target: s(&f, "target"),
+            detail: s(&f, "detail"),
+        });
+    }
+    d.audit.sort_by_key(|a| a.id);
+    Ok(d)
+}
+
 impl Forum {
     /// Load the forum from `backend`, seeding the categories on first run.
     pub fn open(backend: Arc<dyn Backend>, admins: HashSet<String>) -> Result<Forum, String> {
-        let mut d = Data::default();
-        if backend.count(T_CAT)? == 0 {
-            for (i, (slug, staff_only)) in SEED.iter().enumerate() {
-                put(
-                    &*backend,
-                    T_CAT,
-                    slug,
-                    fields(json!({"name": slug, "order": i, "staff_only": staff_only})),
-                )?;
+        {
+            // Two processes starting together must not both seed.
+            let _g = backend.lock(LOCK)?;
+            if backend.count(T_CAT)? == 0 {
+                for (i, (slug, staff_only)) in SEED.iter().enumerate() {
+                    put(
+                        &*backend,
+                        T_CAT,
+                        slug,
+                        fields(json!({"name": slug, "order": i, "staff_only": staff_only})),
+                    )?;
+                }
             }
         }
-        for (id, f) in backend.list(T_CAT)? {
-            d.categories.push(Category {
-                slug: id,
-                name: s(&f, "name"),
-                order: n(&f, "order") as u32,
-                staff_only: b(&f, "staff_only"),
-            });
-        }
-        d.categories.sort_by_key(|c| c.order);
-        for (id, f) in backend.list(T_THREAD)? {
-            let Ok(idn) = id.parse::<u64>() else { continue };
-            d.next_thread = d.next_thread.max(idn);
-            d.threads.insert(
-                idn,
-                Thread {
-                    id: idn,
-                    title: s(&f, "title"),
-                    cat: s(&f, "cat"),
-                    author: s(&f, "author"),
-                    created: n(&f, "created"),
-                    last_activity: n(&f, "last_activity"),
-                    updated: n(&f, "updated"),
-                    pinned: b(&f, "pinned"),
-                    locked: b(&f, "locked"),
-                    hidden: b(&f, "hidden"),
-                    deleted: b(&f, "deleted"),
-                },
-            );
-        }
-        for (id, f) in backend.list(T_POST)? {
-            let Ok(idn) = id.parse::<u64>() else { continue };
-            d.next_post = d.next_post.max(idn);
-            let p = Post {
-                id: idn,
-                thread: n(&f, "thread"),
-                author: s(&f, "author"),
-                body: s(&f, "body"),
-                created: n(&f, "created"),
-                edited: f.get("edited").and_then(J::as_u64),
-                hidden: b(&f, "hidden"),
-            };
-            d.by_thread.entry(p.thread).or_default().push(idn);
-            d.posts.insert(idn, p);
-        }
-        for v in d.by_thread.values_mut() {
-            v.sort_unstable();
-        }
-        for (id, f) in backend.list(T_MEMBER)? {
-            let m = Member {
-                email: id.clone(),
-                name: s(&f, "name"),
-                joined: n(&f, "joined"),
-            };
-            d.names.insert(m.name.to_ascii_lowercase(), id.clone());
-            d.members.insert(id, m);
-        }
-        for (id, f) in backend.list(T_AUDIT)? {
-            let Ok(idn) = id.parse::<u64>() else { continue };
-            d.next_audit = d.next_audit.max(idn);
-            d.audit.push(Audit {
-                id: idn,
-                at: n(&f, "at"),
-                actor: s(&f, "actor"),
-                action: s(&f, "action"),
-                target: s(&f, "target"),
-                detail: s(&f, "detail"),
-            });
-        }
-        d.audit.sort_by_key(|a| a.id);
+        let seen = backend.counter_get(VERSION)?;
+        let d = load_data(&*backend)?;
         Ok(Forum {
             backend,
             data: Mutex::new(d),
             admins,
+            seen: AtomicU64::new(seen),
+            checked: Mutex::new(Instant::now()),
+            sync_every: Mutex::new(SYNC_EVERY),
         })
+    }
+
+    /// How often a read may check whether another process changed the forum (tests use zero).
+    pub fn set_sync_interval(&self, every: Duration) {
+        *self.sync_every.lock().unwrap_or_else(|e| e.into_inner()) = every;
+    }
+
+    /// Reload the memory copy when the shared version moved (and `force`, or the interval is up).
+    fn sync(&self, force: bool) {
+        let every = *self.sync_every.lock().unwrap_or_else(|e| e.into_inner());
+        {
+            let mut at = self.checked.lock().unwrap_or_else(|e| e.into_inner());
+            if !force && at.elapsed() < every {
+                return;
+            }
+            *at = Instant::now();
+        }
+        let Ok(v) = self.backend.counter_get(VERSION) else {
+            return;
+        };
+        if v == self.seen.load(Ordering::Acquire) {
+            return;
+        }
+        if let Ok(fresh) = load_data(&*self.backend) {
+            *self.data.lock().unwrap_or_else(|e| e.into_inner()) = fresh;
+            self.seen.store(v, Ordering::Release);
+        }
     }
 
     pub fn backend(&self) -> &Arc<dyn Backend> {
@@ -347,9 +440,22 @@ impl Forum {
     }
 
     pub fn lock(&self) -> MutexGuard<'_, Data> {
+        self.sync(false);
         // A poisoned lock means a handler panicked mid-update; the data is still structurally
         // valid (every mutation is a single insert), so keep serving.
         self.data.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The data for a change: waits for the cross-process lock, brings the copy up to date.
+    fn write(&self) -> Result<ForumWrite<'_>, FErr> {
+        let xl = self.backend.lock(LOCK)?;
+        self.sync(true);
+        Ok(ForumWrite {
+            forum: self,
+            d: Some(self.data.lock().unwrap_or_else(|e| e.into_inner())),
+            changed: false,
+            _xl: xl,
+        })
     }
 
     // ---------- members ----------
@@ -358,7 +464,7 @@ impl Forum {
     pub fn register(&self, email: &str, display: Option<&str>, now: u64) -> Result<Member, FErr> {
         let email = email.trim().to_ascii_lowercase();
         let staff = self.is_staff(&email);
-        let mut d = self.lock();
+        let mut d = self.write()?;
         if let Some(m) = d.members.get(&email) {
             return Ok(m.clone());
         }
@@ -501,7 +607,7 @@ impl Forum {
         body: &str,
         now: u64,
     ) -> Result<u64, FErr> {
-        let mut d = self.lock();
+        let mut d = self.write()?;
         if !d.members.contains_key(email) {
             return Err(FErr::Forbidden);
         }
@@ -551,7 +657,7 @@ impl Forum {
 
     pub fn reply(&self, email: &str, thread: u64, body: &str, now: u64) -> Result<u64, FErr> {
         let staff = self.is_staff(email);
-        let mut d = self.lock();
+        let mut d = self.write()?;
         if !d.members.contains_key(email) {
             return Err(FErr::Forbidden);
         }
@@ -589,7 +695,7 @@ impl Forum {
 
     /// The author may edit their own visible post for 15 minutes.
     pub fn edit_post(&self, email: &str, post: u64, body: &str, now: u64) -> Result<u64, FErr> {
-        let mut d = self.lock();
+        let mut d = self.write()?;
         let p = d.posts.get(&post).ok_or(FErr::NotFound)?;
         let t = d.threads.get(&p.thread).ok_or(FErr::NotFound)?;
         if t.deleted {
@@ -658,7 +764,7 @@ impl Forum {
         if !self.is_staff(email) {
             return Err(FErr::Forbidden);
         }
-        let mut d = self.lock();
+        let mut d = self.write()?;
         let actor = d
             .members
             .get(email)
@@ -714,7 +820,7 @@ impl Forum {
         if !self.is_staff(email) {
             return Err(FErr::Forbidden);
         }
-        let mut d = self.lock();
+        let mut d = self.write()?;
         let actor = d
             .members
             .get(email)

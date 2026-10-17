@@ -5,14 +5,21 @@
 //! Storage (JSON documents): `status_day` (`{component}:{day start}` -> up/degraded/down counts,
 //! kept 100 days), `status_recent` (`{component}` -> the latest samples and last result),
 //! `status_incident`, `status_maint`.
+//!
+//! Several server processes may share one database (B1, D59): the stored documents are the truth
+//! and the memory copy a cache. A write takes a cross-process lock, reloads the copy if another
+//! process changed anything, writes through and bumps a shared version; a read reloads when that
+//! version moved (checked at most every `sync_every`). The background checker runs on one process
+//! per interval (a shared lease), so day counters are not counted twice.
 
 use crate::store::put;
 use crate::util::{self, day_start};
 use obop_storage::{Backend, Fields};
 use serde_json::{Value as J, json};
 use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const KEEP_DAYS: u64 = 100;
 pub const BAR_DAYS: u64 = 90;
@@ -324,6 +331,46 @@ pub struct Status {
     backend: Arc<dyn Backend>,
     inner: Mutex<Inner>,
     ring_cap: Mutex<usize>,
+    seen: AtomicU64,
+    checked: Mutex<Instant>,
+    sync_every: Mutex<Duration>,
+}
+
+const LOCK: &str = "community.status";
+const VERSION: &str = "community.status.version";
+const SYNC_EVERY: Duration = Duration::from_millis(250);
+
+/// The status data held for writing (see the module comment).
+struct StatusWrite<'a> {
+    status: &'a Status,
+    g: Option<MutexGuard<'a, Inner>>,
+    changed: bool,
+    _xl: obop_storage::LockGuard,
+}
+
+impl std::ops::Deref for StatusWrite<'_> {
+    type Target = Inner;
+    fn deref(&self) -> &Inner {
+        self.g.as_ref().expect("held until drop")
+    }
+}
+
+impl std::ops::DerefMut for StatusWrite<'_> {
+    fn deref_mut(&mut self) -> &mut Inner {
+        self.changed = true;
+        self.g.as_mut().expect("held until drop")
+    }
+}
+
+impl Drop for StatusWrite<'_> {
+    fn drop(&mut self) {
+        if self.changed
+            && let Ok(v) = self.status.backend.counter_add(VERSION, 0, false)
+        {
+            self.status.seen.store(v, Ordering::Release);
+        }
+        self.g.take();
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -384,115 +431,178 @@ fn obj(v: J) -> Fields {
     }
 }
 
-impl Status {
-    /// Load status history from `backend`.
-    pub fn open(backend: Arc<dyn Backend>) -> Result<Arc<Status>, String> {
-        let mut i = Inner {
-            enabled: vec!["api".into(), "community".into()],
-            ..Inner::default()
+/// Everything the status engine holds, read from the backend.
+fn load_inner(backend: &dyn Backend) -> Result<Inner, String> {
+    let mut i = Inner {
+        enabled: vec!["api".into(), "community".into()],
+        ..Inner::default()
+    };
+    for (id, f) in backend.list(T_DAY)? {
+        let Some((comp, ts)) = id.split_once(':') else {
+            continue;
         };
-        for (id, f) in backend.list(T_DAY)? {
-            let Some((comp, ts)) = id.split_once(':') else {
-                continue;
-            };
-            let Ok(ts) = ts.parse::<u64>() else { continue };
-            i.days.entry(comp.to_string()).or_default().insert(
-                ts,
-                Day {
-                    up: n(&f, "up"),
-                    degraded: n(&f, "degraded"),
-                    down: n(&f, "down"),
+        let Ok(ts) = ts.parse::<u64>() else { continue };
+        i.days.entry(comp.to_string()).or_default().insert(
+            ts,
+            Day {
+                up: n(&f, "up"),
+                degraded: n(&f, "degraded"),
+                down: n(&f, "down"),
+            },
+        );
+    }
+    for (comp, f) in backend.list(T_RECENT)? {
+        let samples = f
+            .get("samples")
+            .and_then(J::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|p| {
+                        let p = p.as_array()?;
+                        Some((p.first()?.as_u64()?, Health::from_code(p.get(1)?.as_u64()?)))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        i.samples.insert(comp.clone(), samples);
+        if let Some(l) = f.get("latest").and_then(J::as_object) {
+            i.latest.insert(
+                comp,
+                Latest {
+                    at: n(l, "at"),
+                    health: Health::from_code(n(l, "health")),
+                    detail: s(l, "detail"),
+                    pct: l.get("pct").and_then(J::as_f64),
+                    names: strs(l, "names"),
                 },
             );
         }
-        for (comp, f) in backend.list(T_RECENT)? {
-            let samples = f
-                .get("samples")
-                .and_then(J::as_array)
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|p| {
-                            let p = p.as_array()?;
-                            Some((p.first()?.as_u64()?, Health::from_code(p.get(1)?.as_u64()?)))
+    }
+    for (id, f) in backend.list(T_INC)? {
+        let Ok(idn) = id.parse::<u64>() else { continue };
+        let updates = f
+            .get("updates")
+            .and_then(J::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|u| {
+                        let u = u.as_object()?;
+                        Some(Update {
+                            status: IncStatus::parse(&s(u, "status"))?,
+                            body: s(u, "body"),
+                            at: n(u, "at"),
                         })
-                        .collect()
-                })
-                .unwrap_or_default();
-            i.samples.insert(comp.clone(), samples);
-            if let Some(l) = f.get("latest").and_then(J::as_object) {
-                i.latest.insert(
-                    comp,
-                    Latest {
-                        at: n(l, "at"),
-                        health: Health::from_code(n(l, "health")),
-                        detail: s(l, "detail"),
-                        pct: l.get("pct").and_then(J::as_f64),
-                        names: strs(l, "names"),
-                    },
-                );
-            }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        i.incidents.push(Incident {
+            id: idn,
+            title: s(&f, "title"),
+            impact: Impact::parse(&s(&f, "impact")).unwrap_or(Impact::None),
+            status: IncStatus::parse(&s(&f, "status")).unwrap_or(IncStatus::Investigating),
+            components: strs(&f, "components"),
+            auto: f.get("auto").and_then(J::as_bool).unwrap_or(false),
+            created: n(&f, "created"),
+            updated: n(&f, "updated"),
+            resolved_at: f.get("resolved_at").and_then(J::as_u64),
+            updates,
+        });
+    }
+    i.incidents.sort_by_key(|x| x.id);
+    for (id, f) in backend.list(T_MAINT)? {
+        let Ok(idn) = id.parse::<u64>() else { continue };
+        i.maint.push(Maintenance {
+            id: idn,
+            title: s(&f, "title"),
+            body: s(&f, "body"),
+            components: strs(&f, "components"),
+            start: n(&f, "start"),
+            end: n(&f, "end"),
+            created: n(&f, "created"),
+        });
+    }
+    i.maint.sort_by_key(|x| x.id);
+    for (c, _) in COMPONENTS {
+        if (i.days.contains_key(c) || i.latest.contains_key(c)) && !i.enabled.iter().any(|e| e == c)
+        {
+            i.enabled.push(c.to_string());
         }
-        for (id, f) in backend.list(T_INC)? {
-            let Ok(idn) = id.parse::<u64>() else { continue };
-            let updates = f
-                .get("updates")
-                .and_then(J::as_array)
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|u| {
-                            let u = u.as_object()?;
-                            Some(Update {
-                                status: IncStatus::parse(&s(u, "status"))?,
-                                body: s(u, "body"),
-                                at: n(u, "at"),
-                            })
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            i.incidents.push(Incident {
-                id: idn,
-                title: s(&f, "title"),
-                impact: Impact::parse(&s(&f, "impact")).unwrap_or(Impact::None),
-                status: IncStatus::parse(&s(&f, "status")).unwrap_or(IncStatus::Investigating),
-                components: strs(&f, "components"),
-                auto: f.get("auto").and_then(J::as_bool).unwrap_or(false),
-                created: n(&f, "created"),
-                updated: n(&f, "updated"),
-                resolved_at: f.get("resolved_at").and_then(J::as_u64),
-                updates,
-            });
-        }
-        i.incidents.sort_by_key(|x| x.id);
-        for (id, f) in backend.list(T_MAINT)? {
-            let Ok(idn) = id.parse::<u64>() else { continue };
-            i.maint.push(Maintenance {
-                id: idn,
-                title: s(&f, "title"),
-                body: s(&f, "body"),
-                components: strs(&f, "components"),
-                start: n(&f, "start"),
-                end: n(&f, "end"),
-                created: n(&f, "created"),
-            });
-        }
-        i.maint.sort_by_key(|x| x.id);
-        for (c, _) in COMPONENTS {
-            if (i.days.contains_key(c) || i.latest.contains_key(c))
-                && !i.enabled.iter().any(|e| e == c)
-            {
-                i.enabled.push(c.to_string());
-            }
-        }
+    }
+    Ok(i)
+}
+
+impl Status {
+    /// Load status history from `backend`.
+    pub fn open(backend: Arc<dyn Backend>) -> Result<Arc<Status>, String> {
+        let seen = backend.counter_get(VERSION)?;
+        let i = load_inner(&*backend)?;
         Ok(Arc::new(Status {
             backend,
             inner: Mutex::new(i),
             ring_cap: Mutex::new(1500),
+            seen: AtomicU64::new(seen),
+            checked: Mutex::new(Instant::now()),
+            sync_every: Mutex::new(SYNC_EVERY),
         }))
     }
 
+    /// How often a read may check whether another process changed the data (tests use zero).
+    pub fn set_sync_interval(&self, every: Duration) {
+        *self.sync_every.lock().unwrap_or_else(|e| e.into_inner()) = every;
+    }
+
+    fn sync(&self, force: bool) {
+        let every = *self.sync_every.lock().unwrap_or_else(|e| e.into_inner());
+        {
+            let mut at = self.checked.lock().unwrap_or_else(|e| e.into_inner());
+            if !force && at.elapsed() < every {
+                return;
+            }
+            *at = Instant::now();
+        }
+        let Ok(v) = self.backend.counter_get(VERSION) else {
+            return;
+        };
+        if v == self.seen.load(Ordering::Acquire) {
+            return;
+        }
+        if let Ok(mut fresh) = load_inner(&*self.backend) {
+            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            // Which components are shown is this process's own setting; keep it.
+            for e in &g.enabled {
+                if !fresh.enabled.contains(e) {
+                    fresh.enabled.push(e.clone());
+                }
+            }
+            *g = fresh;
+            self.seen.store(v, Ordering::Release);
+        }
+    }
+
+    /// Only one process per `interval` runs the checks: the first to ask takes the lease.
+    pub fn lead_checks(&self, interval: Duration) -> bool {
+        let ttl = (interval.as_millis() as u64).saturating_mul(9) / 10;
+        self.backend
+            .counter_add("community.status.lease", ttl.max(1), false)
+            .is_ok_and(|n| n == 1)
+    }
+
     fn lock(&self) -> MutexGuard<'_, Inner> {
+        self.sync(false);
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The data for a change: waits for the cross-process lock, brings the copy up to date.
+    fn write(&self) -> Result<StatusWrite<'_>, String> {
+        let xl = self.backend.lock(LOCK)?;
+        self.sync(true);
+        Ok(StatusWrite {
+            status: self,
+            g: Some(self.inner.lock().unwrap_or_else(|e| e.into_inner())),
+            changed: false,
+            _xl: xl,
+        })
     }
 
     /// Choose which components are shown (in `COMPONENTS` order). Unknown ids are ignored.
@@ -519,7 +629,7 @@ impl Status {
             return Err(format!("unknown component {comp}"));
         }
         let cap = *self.ring_cap.lock().unwrap_or_else(|e| e.into_inner());
-        let mut g = self.lock();
+        let mut g = self.write()?;
         if !g.enabled.iter().any(|e| e == comp) {
             g.enabled.push(comp.to_string());
         }
@@ -735,7 +845,7 @@ impl Status {
             return Err("an incident needs a title".into());
         }
         let comps = Self::valid_components(components)?;
-        let mut g = self.lock();
+        let mut g = self.write()?;
         self.create_incident_locked(&mut g, title, impact, status, comps, body, false, now)
     }
 
@@ -748,7 +858,7 @@ impl Status {
         body: &str,
         now: u64,
     ) -> Result<(), String> {
-        let mut g = self.lock();
+        let mut g = self.write()?;
         self.update_locked(&mut g, id, status, impact, body, now)
     }
 
@@ -780,7 +890,7 @@ impl Status {
             return Err("a maintenance window needs a title and an end after its start".into());
         }
         let comps = Self::valid_components(components)?;
-        let mut g = self.lock();
+        let mut g = self.write()?;
         let id = g.maint.iter().map(|m| m.id).max().unwrap_or(0) + 1;
         let m = Maintenance {
             id,
@@ -1271,7 +1381,10 @@ pub fn spawn_checker(
     status.enable(&ids);
     std::thread::spawn(move || {
         loop {
-            run_checks(&status, &probes, util::now());
+            // With several processes on one database, one of them takes each round.
+            if status.lead_checks(interval) {
+                run_checks(&status, &probes, util::now());
+            }
             std::thread::sleep(interval);
         }
     })
