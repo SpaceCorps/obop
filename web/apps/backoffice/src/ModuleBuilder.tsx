@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { msg, t } from "@obop/ui";
-import { call, type Kind, type ModuleMeta } from "./api.ts";
+import { call, getCoreVersion, type Kind, type ModuleMeta } from "./api.ts";
 import { label as labelOf } from "./format.ts";
 import { appTitle, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
@@ -80,11 +80,22 @@ export function fieldName(f: Pick<DField, "name" | "kind">): string {
 
 const q = (s: string) => JSON.stringify(s);
 
+/** The core range a new module declares by default: the series the instance runs, `^0.2`. */
+export function defaultCoreRange(core: string): string {
+  const [major, minor] = core.split(".");
+  return major && minor ? `^${major}.${minor}` : "^0.2";
+}
+
+/** What a module needs of the others (D63): module id to the versions of it that it supports. */
+export type Needs = Record<string, string>;
+
 export function manifest(
   name: string,
   modelName: string,
   fields: DField[],
   statuses: string[],
+  coreRange = defaultCoreRange(getCoreVersion()),
+  needs: Needs = {},
 ): string {
   const id = slug(name);
   const model = slug(modelName) === id ? id : `${id}_${slug(modelName)}`;
@@ -95,6 +106,12 @@ export function manifest(
     `name = ${q(name.trim())}`,
     `description = ${q(`${name.trim()}: ${modelName.trim()} records`)}`,
     `author = "Built in obop"`,
+    // Every module says which core versions it runs on and which versions of the modules it
+    // needs it supports; an update is checked against these ranges (D63).
+    `requires_core = ${q(coreRange)}`,
+    ...(Object.keys(needs).length > 0
+      ? ["", "[module.dependencies]", ...Object.entries(needs).map(([m, r]) => `${m} = ${q(r)}`)]
+      : []),
     "",
     "[[model]]",
     `name = ${q(model)}`,
@@ -172,9 +189,46 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
         ),
     [modules],
   );
+  // The versions of what is installed, so the ranges the module declares start from what it was
+  // built against: the core's series, and for each module it links to, `^<installed version>`.
+  const [core, setCore] = useState(() => defaultCoreRange(getCoreVersion()));
+  const [versions, setVersions] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let live = true;
+    void call(token, "module.list").then((r) => {
+      if (live && r.kind === "ok")
+        setVersions(
+          Object.fromEntries(
+            (r.value as { id: string; version: string; source: string }[]).map((m) => [
+              m.id,
+              m.source === "builtin" ? getCoreVersion() || m.version : m.version,
+            ]),
+          ),
+        );
+    });
+    return () => {
+      live = false;
+    };
+  }, [token]);
+  const owner = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const mod of modules) for (const x of mod.models) m.set(x.name, mod.id);
+    return m;
+  }, [modules]);
+  const needs: Needs = useMemo(() => {
+    const out: Needs = {};
+    const id0 = slug(name);
+    for (const f of named) {
+      const o = f.kind === "ref" && f.to ? owner.get(f.to) : undefined;
+      if (!o || o === id0 || o === "platform") continue;
+      const v = versions[o];
+      if (v) out[o] = defaultCoreRange(v);
+    }
+    return out;
+  }, [named, owner, versions, name]);
   const text = useMemo(
-    () => manifest(name || "My module", modelName || "Record", named, st),
-    [name, modelName, named, st],
+    () => manifest(name || "My module", modelName || "Record", named, st, core, needs),
+    [name, modelName, named, st, core, needs],
   );
   const id = slug(name);
   const upd = (i: number, patch: Partial<DField>) =>
@@ -215,6 +269,29 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
           <span className="flabel">{t("Record type")}</span>
           <input value={modelName} onChange={(e) => setModelName(e.target.value)} />
         </label>
+        <label className="field">
+          <span className="flabel">{t("Core versions it works with")}</span>
+          <input
+            value={core}
+            onChange={(e) => setCore(e.target.value)}
+            aria-label={t("Core versions it works with")}
+          />
+          <span className="hint">
+            {t(
+              "A range such as ^0.2 or >=0.2, <0.4. This instance runs core {version}. Every module must say which versions it supports; an update is refused when it would leave a range.",
+              { version: getCoreVersion() || "?" },
+            )}
+          </span>
+        </label>
+        {Object.keys(needs).length > 0 && (
+          <p className="hint">
+            {t("It needs {modules}, so the ranges are written into obop.toml.", {
+              modules: Object.entries(needs)
+                .map(([m, r]) => `${m} ${r}`)
+                .join(", "),
+            })}
+          </p>
+        )}
         <h3>{t("Fields")}</h3>
         <ul className="rows">
           {fields.map((f, i) => (

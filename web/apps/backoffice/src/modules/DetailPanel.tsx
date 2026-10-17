@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { Badge, Chip, IconButton, Icon, Notice, Tabs, fmt, panelId, t } from "@obop/ui";
+import { Badge, Button, Chip, IconButton, Icon, Notice, Tabs, fmt, panelId, t } from "@obop/ui";
 import { AppIcon } from "../Chrome.tsx";
 import { appColor } from "../theme.ts";
 import { CoreBadge, LicenseBadge, MaturityBadge, SourceBadge } from "./badges.tsx";
@@ -13,6 +13,7 @@ import {
   prettyReq,
   sourceLabel,
 } from "./status.ts";
+import { ChangeList, Notes } from "./UpgradeDetails.tsx";
 import type { Contents, PanelTab, Row } from "./types.ts";
 
 const TABS: { id: PanelTab; label: () => string }[] = [
@@ -155,7 +156,7 @@ export function DetailPanel({
           />
         )}
         {panel === "contents" && <ContentsTab row={row} kind={kind} />}
-        {panel === "versions" && <Versions row={row} kind={kind} />}
+        {panel === "versions" && <Versions row={row} kind={kind} actions={actions} />}
       </div>
     </aside>
   );
@@ -295,6 +296,70 @@ function Dependencies({
   );
   return (
     <div className="stack gap-lg">
+      <section className="stack" aria-labelledby="dep-ranges-h">
+        <h3 id="dep-ranges-h" className="overline">
+          {t("Versions it supports")}
+        </h3>
+        <div className="table-wrap">
+          <table className="table dep-ranges">
+            <caption className="sr-only">
+              {t("The versions of the core and of other modules {name} supports", { name: title })}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("Needs")}</th>
+                <th scope="col">{t("Supported versions")}</th>
+                <th scope="col">{t("Here")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{t("Core")}</td>
+                <td>
+                  <code>{prettyReq(row.requires_core)}</code>
+                </td>
+                <td>
+                  <span className="tabular">{core}</span>{" "}
+                  <Badge
+                    tone={row.compatible ? "success" : "danger"}
+                    dot={false}
+                    className="mod-badge"
+                  >
+                    {row.compatible ? t("Supported") : t("Not supported")}
+                  </Badge>
+                </td>
+              </tr>
+              {row.dependencies.map((d) => (
+                <tr key={d.id}>
+                  <td>{nameOf(d.id) || d.name}</td>
+                  <td>
+                    <code>{prettyReq(d.requirement)}</code>
+                  </td>
+                  <td>
+                    {d.installed_version ? (
+                      <span className="tabular">{d.installed_version}</span>
+                    ) : (
+                      <span className="hint">{t("not installed")}</span>
+                    )}{" "}
+                    <Badge
+                      tone={d.satisfied ? "success" : "danger"}
+                      dot={false}
+                      className="mod-badge"
+                    >
+                      {d.satisfied ? t("Supported") : t("Not supported")}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="hint">
+          {t(
+            "A module must say which versions of the core and of every module it needs it works with. An update that leaves a range is refused.",
+          )}
+        </p>
+      </section>
       <section className="stack" aria-labelledby="dep-core-h">
         <h3 id="dep-core-h" className="overline">
           {t("Core")}
@@ -457,11 +522,73 @@ function ContentsTab({ row, kind }: { row: Row; kind: "installed" | "market" }) 
   );
 }
 
-function Versions({ row, kind }: { row: Row; kind: "installed" | "market" }) {
+function Versions({
+  row,
+  kind,
+  actions,
+}: {
+  row: Row;
+  kind: "installed" | "market";
+  actions: CardActions;
+}) {
   const installed = kind === "installed" ? row.version : (row.installed_version ?? null);
   const available = kind === "installed" ? row.update_available : row.version;
+  const blocked = kind === "installed" && row.update_available && row.update_compatible === false;
   return (
-    <div className="stack">
+    <div className="stack gap-lg">
+      {kind === "installed" && row.update_available && (
+        <section className="stack" aria-labelledby="ver-upd-h">
+          <h3 id="ver-upd-h" className="overline">
+            {t("Update to {version}", { version: row.update_available })}
+          </h3>
+          {blocked ? (
+            <Notice tone="warning" title={t("It cannot be installed here yet")}>
+              {(row.update_blockers ?? []).map((b) => b.message).join(" ")}
+            </Notice>
+          ) : (
+            <Notice tone="success" title={t("It fits this instance")}>
+              {t("Every module that depends on this one still supports the new version.")}
+            </Notice>
+          )}
+          <Notes text={row.update_changelog ?? ""} label={t("What is new")} />
+          <ChangeList changes={row.update_changes ?? []} migrations={row.update_migrations ?? []} />
+        </section>
+      )}
+      {kind === "installed" && row.rollback_version && (
+        <section className="stack" aria-labelledby="ver-rb-h">
+          <h3 id="ver-rb-h" className="overline">
+            {t("Before the last update")}
+          </h3>
+          <p>
+            {t("Version {version} is kept.", { version: row.rollback_version })}{" "}
+            {row.updated_at ? (
+              <span className="hint">
+                {fmt.dateOf(new Date(row.updated_at * 1000), {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}
+              </span>
+            ) : null}
+          </p>
+          {row.rollback_available ? (
+            <div>
+              <Button icon="undo" onClick={() => actions.onRollback(row)}>
+                {t("Roll back to {version}", { version: row.rollback_version })}
+              </Button>
+            </div>
+          ) : (
+            <Notice tone="info" title={t("It cannot be rolled back from here")}>
+              {row.rollback_blocker ?? ""}
+            </Notice>
+          )}
+        </section>
+      )}
+      {kind === "installed" && row.changelog && (
+        <Notes
+          text={row.changelog}
+          label={t("Notes of the installed version ({version})", { version: row.version })}
+        />
+      )}
       <div className="table-wrap">
         <table className="table">
           <caption className="sr-only">{t("Versions of this module")}</caption>
@@ -498,7 +625,7 @@ function Versions({ row, kind }: { row: Row; kind: "installed" | "market" }) {
       </div>
       <p className="hint">
         {t(
-          "Upgrades go one way: a module is never moved to an older version. Dependencies are checked against the other installed modules before an upgrade.",
+          "An update is checked against every module that depends on this one before it runs, and it runs as one operation: it either completes or changes nothing. Rolling back is possible while the update has not deleted data.",
         )}
       </p>
     </div>

@@ -344,3 +344,183 @@ description = "Les modules à installer ou à mettre à jour, dépendances d'abo
 [labels.fr.model.marketplace_listing.field.warnings]
 label = "Avertissements"
 description = "Remarques qui n'empêchent rien, par exemple une licence propriétaire (une liste)"
+
+[labels.fr.model.module.field.changelog]
+label = "Journal des modifications"
+description = "Notes de version de cette version"
+
+[labels.fr.model.module.field.updated_at]
+label = "Mis à jour le"
+description = "Date de la dernière mise à jour (secondes Unix) ; vide si jamais"
+
+[labels.fr.model.module.field.rollback_version]
+label = "Version de retour"
+description = "La version précédant la dernière mise à jour, si elle est conservée"
+
+[labels.fr.model.module.field.rollback_available]
+label = "Retour possible"
+description = "Indique si la dernière mise à jour peut être annulée maintenant"
+
+[labels.fr.model.module.field.rollback_blocker]
+label = "Obstacle au retour"
+description = "Pourquoi la dernière mise à jour ne peut pas être annulée, le cas échéant"
+
+[labels.fr.model.module.field.update_changelog]
+label = "Journal des modifications de la mise à jour"
+description = "Notes de version de la version proposée"
+
+[labels.fr.model.module.field.update_compatible]
+label = "Mise à jour compatible"
+description = "Indique si la version proposée peut être installée ici maintenant"
+
+[labels.fr.model.module.field.update_blockers]
+label = "Obstacles à la mise à jour"
+description = "Ce qui empêche la mise à jour vers la version proposée (une liste)"
+
+[labels.fr.model.module.field.update_changes]
+label = "Changements de la mise à jour"
+description = "Ce que la version proposée change dans les modèles : champs ajoutés, supprimés ou dont le type change (une liste)"
+
+[labels.fr.model.module.field.update_migrations]
+label = "Migrations de la mise à jour"
+description = "Les étapes de données que la mise à jour exécuterait, en clair (une liste)"
+
+[labels.fr.model.module.field.updated]
+label = "Mis à jour"
+description = "Résultat de upgrade_all : les modules qui ont été mis à jour (une liste)"
+
+[labels.fr.model.module.field.skipped]
+label = "Ignorés"
+description = "Résultat de upgrade_all : les modules dont la mise à jour était bloquée, avec la raison (une liste)"
+
+[labels.fr.model.module.action.upgrade]
+label = "Mettre à niveau"
+description = "Mettre à jour un module installé vers la version plus récente proposée par la place de marché, avec les dépendances que le plan requiert, en une seule opération atomique. Indiquer id"
+
+[labels.fr.model.module.action.upgrade_all]
+label = "Tout mettre à niveau"
+description = "Mettre à jour chaque module pour lequel cette instance peut prendre une version plus récente ; un module dont la mise à jour est bloquée reste en l'état et est signalé"
+
+[labels.fr.model.module.action.rollback]
+label = "Revenir en arrière"
+description = "Ramener un module à la version précédant sa dernière mise à jour, si les données le permettent. Indiquer id"
+
+[labels.fr.model.marketplace_listing.field.changelog]
+label = "Journal des modifications"
+description = "Notes de version de cette version"
+
+[labels.fr.model.instance_update]
+name = "Mise à jour de l'instance"
+description = "La mise à jour de l'instance elle-même : la version du noyau en cours et la plus récente, la compatibilité des modules installés, et la demande au plan de contrôle qui exécute la mise à niveau"
+
+[labels.fr.model.instance_update.field.version]
+label = "Version"
+description = "Entrée de start : la version publiée vers laquelle mettre à jour"
+
+[labels.fr.model.instance_update.field.skip_backup]
+label = "Ignorer la sauvegarde"
+description = "Entrée de start : à activer si vous avez votre propre sauvegarde et qu'aucune ne peut être réalisée ici"
+
+[labels.fr.model.instance_update.field.mode]
+label = "Mode d'exécution"
+description = "managed (un plan de contrôle exécute la mise à niveau) ou self_hosted (commandes à exécuter soi-même)"
+
+[labels.fr.model.instance_update.field.current_version]
+label = "Version actuelle"
+description = "La version du noyau qu'exécute cette instance"
+
+[labels.fr.model.instance_update.field.latest_version]
+label = "Dernière version"
+description = "La version publiée la plus récente du noyau"
+
+[labels.fr.model.instance_update.field.update_available]
+label = "Mise à jour disponible"
+description = "Indique si une version plus récente du noyau est publiée"
+
+[labels.fr.model.instance_update.field.feed]
+label = "Flux"
+description = "D'où les versions ont été lues"
+
+[labels.fr.model.instance_update.field.feed_error]
+label = "Erreur de flux"
+description = "Pourquoi le flux n'a pas pu être lu, le cas échéant"
+
+[labels.fr.model.instance_update.field.checked_at]
+label = "Vérifié le"
+description = "Date de lecture du flux (secondes Unix)"
+
+[labels.fr.model.instance_update.field.releases]
+label = "Versions publiées"
+description = "Versions publiées, les plus récentes d'abord, chacune avec ses notes, sa compatibilité avec les modules installés et ce qui la bloque (une liste)"
+
+[labels.fr.model.instance_update.field.dropped]
+label = "Écartées"
+description = "Entrées du flux écartées parce qu'elles ont échoué au contrôle d'intégrité (une liste)"
+
+[labels.fr.model.instance_update.field.instructions]
+label = "Instructions"
+description = "Les commandes pour mettre à jour à la main (une liste)"
+
+[labels.fr.model.instance_update.field.backup_dir]
+label = "Répertoire de sauvegarde"
+description = "Où est écrite la sauvegarde avant une mise à jour, si configuré"
+
+[labels.fr.model.instance_update.field.state]
+label = "État"
+description = "idle, requested, running, succeeded, failed ou rolled_back"
+
+[labels.fr.model.instance_update.field.kind]
+label = "Type"
+description = "update ou rollback"
+
+[labels.fr.model.instance_update.field.target_version]
+label = "Version cible"
+description = "La version vers laquelle la demande fait passer"
+
+[labels.fr.model.instance_update.field.from_version]
+label = "Version de départ"
+description = "La version dont part la demande"
+
+[labels.fr.model.instance_update.field.phase]
+label = "Étape en cours"
+description = "Ce que fait la mise à niveau en ce moment"
+
+[labels.fr.model.instance_update.field.error]
+label = "Erreur"
+description = "Pourquoi la demande a échoué ou a été annulée"
+
+[labels.fr.model.instance_update.field.backup]
+label = "Sauvegarde"
+description = "Chemin de la sauvegarde réalisée avant la mise à jour"
+
+[labels.fr.model.instance_update.field.started_at]
+label = "Démarré le"
+description = "Date de la demande (secondes Unix)"
+
+[labels.fr.model.instance_update.field.started_by]
+label = "Démarré par"
+description = "Qui a fait la demande"
+
+[labels.fr.model.instance_update.field.finished_at]
+label = "Terminé le"
+description = "Date de fin (secondes Unix)"
+
+[labels.fr.model.instance_update.field.can_rollback]
+label = "Retour possible"
+description = "Indique si la dernière mise à jour peut être annulée via le plan de contrôle"
+
+[labels.fr.model.instance_update.action.check]
+label = "Vérifier"
+description = "Lire le flux des versions et évaluer chaque version plus récente par rapport aux modules installés ; inclut l'état de la dernière demande"
+
+[labels.fr.model.instance_update.action.status]
+label = "État"
+description = "L'état de la dernière demande de mise à jour, actualisé depuis le plan de contrôle pendant son exécution"
+
+[labels.fr.model.instance_update.action.start]
+label = "Démarrer"
+description = "Mettre l'instance à jour vers une version publiée du noyau : réalise une sauvegarde, puis demande au plan de contrôle d'exécuter la mise à niveau. Indiquer version"
+
+[labels.fr.model.instance_update.action.rollback]
+label = "Revenir en arrière"
+description = "Demander au plan de contrôle de remettre l'instance sur la version précédant la dernière mise à jour"

@@ -344,3 +344,183 @@ description = "Modulerna att installera eller uppgradera, beroenden först (en l
 [labels.sv.model.marketplace_listing.field.warnings]
 label = "Varningar"
 description = "Anmärkningar som inte hindrar något, till exempel en proprietär licens (en lista)"
+
+[labels.sv.model.module.field.changelog]
+label = "Ändringslogg"
+description = "Versionsanteckningar för den här versionen"
+
+[labels.sv.model.module.field.updated_at]
+label = "Uppdaterad den"
+description = "När den senast uppdaterades (Unix-sekunder); tom om aldrig"
+
+[labels.sv.model.module.field.rollback_version]
+label = "Återgångsversion"
+description = "Versionen före den senaste uppdateringen, om den sparas"
+
+[labels.sv.model.module.field.rollback_available]
+label = "Återgång möjlig"
+description = "Om den senaste uppdateringen kan ångras nu"
+
+[labels.sv.model.module.field.rollback_blocker]
+label = "Hinder för återgång"
+description = "Varför den senaste uppdateringen inte kan ångras, om den inte kan det"
+
+[labels.sv.model.module.field.update_changelog]
+label = "Ändringslogg för uppdateringen"
+description = "Versionsanteckningar för den erbjudna versionen"
+
+[labels.sv.model.module.field.update_compatible]
+label = "Uppdateringen är kompatibel"
+description = "Om den erbjudna versionen kan installeras här nu"
+
+[labels.sv.model.module.field.update_blockers]
+label = "Hinder för uppdateringen"
+description = "Vad som stoppar uppdateringen till den erbjudna versionen (en lista)"
+
+[labels.sv.model.module.field.update_changes]
+label = "Ändringar i uppdateringen"
+description = "Vad den erbjudna versionen ändrar i modellerna: tillagda, borttagna och omtypade fält (en lista)"
+
+[labels.sv.model.module.field.update_migrations]
+label = "Migreringar i uppdateringen"
+description = "De datasteg som uppdateringen skulle köra, i ord (en lista)"
+
+[labels.sv.model.module.field.updated]
+label = "Uppdaterade"
+description = "Resultat av upgrade_all: de moduler som uppdaterades (en lista)"
+
+[labels.sv.model.module.field.skipped]
+label = "Hoppades över"
+description = "Resultat av upgrade_all: de moduler vars uppdatering var blockerad, med skäl (en lista)"
+
+[labels.sv.model.module.action.upgrade]
+label = "Uppgradera"
+description = "Uppdatera en installerad modul till den nyare version som marknadsplatsen erbjuder, med de beroenden planen behöver, i en enda atomär åtgärd. Ange id"
+
+[labels.sv.model.module.action.upgrade_all]
+label = "Uppgradera alla"
+description = "Uppdatera varje modul som har en nyare version som den här instansen kan ta emot; en modul vars uppdatering är blockerad lämnas orörd och rapporteras"
+
+[labels.sv.model.module.action.rollback]
+label = "Gå tillbaka"
+description = "Sätt tillbaka en modul till versionen före dess senaste uppdatering, när datan tillåter det. Ange id"
+
+[labels.sv.model.marketplace_listing.field.changelog]
+label = "Ändringslogg"
+description = "Versionsanteckningar för den här versionen"
+
+[labels.sv.model.instance_update]
+name = "Instansuppdatering"
+description = "Uppdateringen av själva instansen: den körande och den senaste kärnversionen, om de installerade modulerna passar den, och begäran till kontrollplanet som kör uppgraderingen"
+
+[labels.sv.model.instance_update.field.version]
+label = "Version"
+description = "Indata för start: den publicerade version som ska uppdateras till"
+
+[labels.sv.model.instance_update.field.skip_backup]
+label = "Hoppa över säkerhetskopia"
+description = "Indata för start: ange när du har en egen säkerhetskopia och ingen kan tas här"
+
+[labels.sv.model.instance_update.field.mode]
+label = "Läge"
+description = "managed (ett kontrollplan kör uppgraderingen) eller self_hosted (kommandon att köra själv)"
+
+[labels.sv.model.instance_update.field.current_version]
+label = "Nuvarande version"
+description = "Den kärnversion som den här instansen kör"
+
+[labels.sv.model.instance_update.field.latest_version]
+label = "Senaste version"
+description = "Den senast publicerade kärnversionen"
+
+[labels.sv.model.instance_update.field.update_available]
+label = "Uppdatering finns"
+description = "Om en nyare kärnversion är publicerad"
+
+[labels.sv.model.instance_update.field.feed]
+label = "Flöde"
+description = "Varifrån utgåvorna lästes"
+
+[labels.sv.model.instance_update.field.feed_error]
+label = "Flödesfel"
+description = "Varför flödet inte kunde läsas, om det inte kunde"
+
+[labels.sv.model.instance_update.field.checked_at]
+label = "Kontrollerad den"
+description = "När flödet lästes (Unix-sekunder)"
+
+[labels.sv.model.instance_update.field.releases]
+label = "Utgåvor"
+description = "Publicerade utgåvor, nyaste först, var och en med sina anteckningar, om de installerade modulerna passar den och vad som blockerar den (en lista)"
+
+[labels.sv.model.instance_update.field.dropped]
+label = "Utelämnade"
+description = "Flödesposter som utelämnades eftersom de föll på sin integritetskontroll (en lista)"
+
+[labels.sv.model.instance_update.field.instructions]
+label = "Anvisningar"
+description = "Kommandona för att uppdatera manuellt (en lista)"
+
+[labels.sv.model.instance_update.field.backup_dir]
+label = "Katalog för säkerhetskopior"
+description = "Var säkerhetskopian före en uppdatering skrivs, om den är konfigurerad"
+
+[labels.sv.model.instance_update.field.state]
+label = "Tillstånd"
+description = "idle, requested, running, succeeded, failed eller rolled_back"
+
+[labels.sv.model.instance_update.field.kind]
+label = "Typ"
+description = "update eller rollback"
+
+[labels.sv.model.instance_update.field.target_version]
+label = "Målversion"
+description = "Versionen som begäran flyttar till"
+
+[labels.sv.model.instance_update.field.from_version]
+label = "Ursprungsversion"
+description = "Versionen som begäran flyttar från"
+
+[labels.sv.model.instance_update.field.phase]
+label = "Fas"
+description = "Vad uppgraderingen gör just nu"
+
+[labels.sv.model.instance_update.field.error]
+label = "Fel"
+description = "Varför begäran misslyckades eller återställdes"
+
+[labels.sv.model.instance_update.field.backup]
+label = "Säkerhetskopia"
+description = "Sökväg till säkerhetskopian som togs före uppdateringen"
+
+[labels.sv.model.instance_update.field.started_at]
+label = "Startad den"
+description = "När begäran gjordes (Unix-sekunder)"
+
+[labels.sv.model.instance_update.field.started_by]
+label = "Startad av"
+description = "Vem som gjorde begäran"
+
+[labels.sv.model.instance_update.field.finished_at]
+label = "Slutförd den"
+description = "När den var klar (Unix-sekunder)"
+
+[labels.sv.model.instance_update.field.can_rollback]
+label = "Kan gå tillbaka"
+description = "Om den senaste uppdateringen kan ångras via kontrollplanet"
+
+[labels.sv.model.instance_update.action.check]
+label = "Kontrollera"
+description = "Läs utgåveflödet och bedöm varje nyare utgåva mot de installerade modulerna; inkluderar tillståndet för den senaste begäran"
+
+[labels.sv.model.instance_update.action.status]
+label = "Status"
+description = "Tillståndet för den senaste uppdateringsbegäran, uppdaterat från kontrollplanet medan den körs"
+
+[labels.sv.model.instance_update.action.start]
+label = "Starta"
+description = "Uppdatera instansen till en publicerad kärnversion: tar en säkerhetskopia och ber sedan kontrollplanet köra uppgraderingen. Ange version"
+
+[labels.sv.model.instance_update.action.rollback]
+label = "Gå tillbaka"
+description = "Be kontrollplanet sätta tillbaka instansen på versionen före den senaste uppdateringen"

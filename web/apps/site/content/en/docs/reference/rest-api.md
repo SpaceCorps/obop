@@ -21,7 +21,9 @@ Content-Type: application/json
 | `POST /api/{model}/{command}` | Runs a command. The body is the command input.                                                                                               |
 | `POST /api/approve/{plan_id}` | A person approves a proposed plan.                                                                                                           |
 
-Instances also serve the web app from `/`. The control plane serves its own endpoints under `/api/platform/` (sign-up, sign-in, instances); they are used by the sign-up app and are not covered here.
+Instances also serve the web app from `/`. The control plane serves its own endpoints under `/api/platform/` (sign-up, sign-in, instances); they are used by the sign-up app and are not covered here. It also publishes `GET /api/releases` (the core releases an instance's _Updates_ page reads) and three endpoints that only an instance's update token opens (`/api/platform/update/status`, `start`, `rollback`); the token can ask for a published version and nothing else.
+
+On an instance, administrators update modules with `POST /api/module/upgrade` (`{"id": ...}`), `/api/module/upgrade_all` and `/api/module/rollback`, and the instance itself with `POST /api/instance_update/check`, `status`, `start` (`{"version": ...}`) and `rollback`. Agents only propose the changing ones (a `202` with a `plan_id`).
 
 ## Command responses
 

@@ -27,6 +27,28 @@ cargo run -- platform serve --static web/site --instance-static web/apps/backoff
 
 Open http://127.0.0.1:8090 (the website; the sign-up app is under `/app/`), create an account, create an instance, follow its link, sign in with the same credentials, then open Modules.
 
+## Updating from inside the instance (D63)
+
+Administrators update modules and the instance itself from Customize, without a shell.
+
+**Modules.** Customize, Modules, Updates lists the packages with a newer version in the bundled catalogue or the configured marketplace, with the release notes (`changelog`), what changes in the data, the data steps and the installed modules that depend on it, each with the range it supports. Update one (a plan dialog first), update all that fit, or roll back. Same from the CLI: `obop modules updates`, `modules update ID`, `modules update-all`, `modules rollback ID`. See docs/MODULES.md 7 and 7.1 for what is refused and what a package declares.
+
+**The instance.** Customize, Updates (`obop update check|status|start|rollback`) reads the release feed, judges every installed module against the new core (their declared `requires_core` and ranges on built-in modules; incompatible ones block the release), takes a backup, and for a *managed* instance asks the control plane to run the upgrade.
+
+| Variable | Where | Meaning |
+|---|---|---|
+| `OBOP_UPDATE_URL` | instance | The control plane's public address. Set by the provisioner. |
+| `OBOP_UPDATE_TOKEN` | instance (secret) | The instance's update token, set by the provisioner (Sliplane: `--secret-env`). Sealed into the database at start-up; the variable only hands it over. |
+| `OBOP_UPDATE_FEED` | instance | The release feed. Default `<OBOP_UPDATE_URL>/api/releases`, else `https://obop.dev/api/releases`; `off` disables. Only `https`, or `http` to localhost. Read only when an administrator checks. |
+| `OBOP_BACKUP_DIR` | instance | Where the backup before an update goes (mount a volume). Without it an update needs the administrator's confirmation that they have their own backup. |
+| `OBOP_CONTROL_URL` | control plane | The address handed to new instances (falls back to `OBOP_PUBLIC_URL`). |
+
+Control plane, operator side: `obop platform release publish --version V --image REF [--notes T|--notes-file F] [--min-from V]`, `release list`, `release withdraw V`; `obop platform register-instance SLUG --url URL [--external-id ID] [--image REF] [--token-stdin]` registers an instance this control plane did not create and prints (or takes) its token; `obop platform update-token SLUG [--revoke]` rotates or revokes a token.
+
+How it is kept safe: the token is 256 random bits, stored on the control plane only as a SHA-256 hash with a one-year expiry, and good for three things for its own instance: read the update state, ask for a *published version* (no field for an image or URL), ask to go back to the previous image. It opens no account API, requests are rate limited (12 per hour per instance), a wrong, expired, revoked or replaced token is refused alike, and every use is written to the control plane's audit log (`instance_update_started|succeeded|rolled_back|failed`, `release_published`, `update_token_minted`). The instance writes `instance_update_requested|finished|failed` and `module_*` to its own `security_event`. The feed is integrity-checked (a digest per release) but not signed; it never decides what runs, because the control plane deploys the image it published itself. When the new version does not answer its health check the control plane puts the previous image back and reports `rolled_back`. Schema steps are forward-only (D59): going back restores the old image, not the data; the backup path is shown on the page.
+
+**Self-hosted** (no control plane): the page, and `obop update check`, show the exact commands: `obop backup`, `docker pull <image>`, restart with `OBOP_AUTO_MIGRATE=1` (or `obop migrate plan` then `run`), `obop update check`.
+
 ## Configuration
 
 Command line flags win over variables. Secrets are set as secret environment variables of the service (Sliplane: `--secret-env`), never in the database, the repository or a plain variable.
@@ -279,5 +301,6 @@ It removes the second factor, revokes the person's sessions and writes an `opera
 - **TLS** terminates at Sliplane's proxy and the instance speaks plain HTTP behind it. Confirm before relying on it. The control plane reaches the cell over the internal network without TLS.
 - **Scheduled backups of hosted instances** are not built (they need object storage); run `obop backup` or `pg_dump` from a job (see "Backups").
 - **Instances created before D53** have no `OBOP_SECRET_KEY` unless an operator set one; without it a generated key lives in their database.
-- **Migrations** exist for the two steps above; installing a newer version of a package still does not migrate existing records of that package.
+- **Migrations** of the core exist for the two steps above; a newer version of a package migrates its records only through the `[[migration]]` steps it declares (D63).
+- **Updating from inside** has run against the fake provisioner and a loopback control plane, not against live Sliplane; the release feed is unsigned (a digest per release only).
 - **The published image** has not been built by GitHub from this history yet, and `upgrade-instances` against live Sliplane has not been run; both are covered by tests against stand-ins (the Docker build, the runner fakes), not against the real services.

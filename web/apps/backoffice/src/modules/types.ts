@@ -23,6 +23,39 @@ export type Dep = {
 
 export type Blocker = { module: string; kind: string; message: string };
 
+/** One difference between two versions of a package (D63). */
+export type Change = {
+  kind:
+    | "model_added"
+    | "model_removed"
+    | "field_added"
+    | "field_removed"
+    | "field_retyped"
+    | "field_required"
+    | "option_added"
+    | "option_removed"
+    | "action_added"
+    | "action_removed";
+  model: string;
+  field: string | null;
+  detail: string;
+  /** Could leave a stored record invalid without a declared migration step. */
+  breaking: boolean;
+  /** The migration step that resolves it, in words. */
+  resolved_by: string | null;
+};
+
+/** An installed module that depends on the one being changed, and what it supports of it. */
+export type StepDependent = {
+  id: string;
+  name: string;
+  version: string;
+  /** The versions of the changed module this dependent supports. */
+  requirement: string;
+  satisfied: boolean;
+  replaced_in_plan: boolean;
+};
+
 export type ContentsAction = { name: string; description: string; approval: boolean };
 export type ContentsModel = {
   name: string;
@@ -74,6 +107,19 @@ export type Row = {
   contents?: Contents;
   installed_at?: number | null;
   installed_by?: string | null;
+  /** Release notes of the installed version (D63). */
+  changelog?: string;
+  updated_at?: number | null;
+  /** What the version on offer would do here: notes, fit, blockers and data changes. */
+  update_changelog?: string;
+  update_compatible?: boolean;
+  update_blockers?: Blocker[];
+  update_changes?: Change[];
+  update_migrations?: string[];
+  /** The version before the last update, and whether the update can be undone now. */
+  rollback_version?: string | null;
+  rollback_available?: boolean;
+  rollback_blocker?: string | null;
   uninstallable?: boolean;
   uninstall_blockers?: Blocker[];
   warnings?: string[];
@@ -99,6 +145,12 @@ export type PlanStep = {
   author: string;
   summary: string;
   dependencies: Dep[];
+  /** Upgrade steps (D63): release notes, what changes in the models, the data steps, and the
+   *  installed modules that depend on this one with the range each supports. */
+  changelog?: string;
+  changes?: Change[];
+  migrations?: string[];
+  dependents?: StepDependent[];
 };
 
 export type Plan = {
@@ -108,6 +160,12 @@ export type Plan = {
   steps: PlanStep[];
   blockers: Blocker[];
   warnings: string[];
+};
+
+/** The result of `module.upgrade_all`. */
+export type UpgradeAll = {
+  updated: { id: string; name: string; version: string; action: string }[];
+  skipped: { id: string; reason: string }[];
 };
 
 export type Tab = "installed" | "marketplace" | "updates";

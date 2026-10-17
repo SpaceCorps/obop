@@ -50,16 +50,32 @@ obop agent-token alice --scopes crm.user --label triage-bot
 
 ## Modules
 
-| Command                        | What it does                                                                                                                                                                                         |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `obop modules check [FILE...]` | Runs the install gate. Without files, over the built-in modules. With files, over each `obop.toml`, without a database. Prints `ok  FILE` or `FAIL  FILE: reason` and exits non-zero on any failure. |
-| `obop modules list`            | Lists installed modules with their source (built in, marketplace or upload).                                                                                                                         |
-| `obop modules market`          | Lists the marketplace: the bundled catalog plus any extra catalog from `OBOP_MARKETPLACE_URL`.                                                                                                       |
-| `obop modules install-from ID` | Installs a package from the marketplace.                                                                                                                                                             |
-| `obop modules install FILE`    | Installs or upgrades from a local `obop.toml`. The version must be higher to upgrade.                                                                                                                |
-| `obop modules uninstall ID`    | Removes the package's commands and screens. Its data stays in the database. Refused while another installed module depends on it.                                                                    |
+| Command                                 | What it does                                                                                                                                                                                         |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `obop modules check [FILE...]`          | Runs the install gate. Without files, over the built-in modules. With files, over each `obop.toml`, without a database. Prints `ok  FILE` or `FAIL  FILE: reason` and exits non-zero on any failure. |
+| `obop modules list`                     | Lists installed modules with their source (built in, marketplace or upload).                                                                                                                         |
+| `obop modules market`                   | Lists the marketplace: the bundled catalog plus any extra catalog from `OBOP_MARKETPLACE_URL`.                                                                                                       |
+| `obop modules install-from ID`          | Installs a package from the marketplace.                                                                                                                                                             |
+| `obop modules install FILE`             | Installs or upgrades from a local `obop.toml`. The version must be higher to upgrade.                                                                                                                |
+| `obop modules uninstall ID`             | Removes the package's commands and screens. Its data stays in the database. Refused while another installed module depends on it.                                                                    |
+| `obop modules updates`                  | Lists installed packages with a newer version on offer and whether each can be updated here.                                                                                                         |
+| `obop modules update ID` / `update-all` | Updates one package (or every one that can be) in one atomic operation, with the data steps the new version declares. `obop modules plan ID` shows the changes first.                                |
+| `obop modules rollback ID`              | Puts a package back to the version before its last update, when the update did not delete data.                                                                                                      |
 
 These are operator tools: they write to the database directly. Inside an instance, administrators do the same from _Customize_.
+
+## Updating the instance
+
+| Command                                                                                        | What it does                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `obop update check`                                                                            | Reads the release feed (`OBOP_UPDATE_FEED`), says which releases are newer, whether every installed module fits each (their declared core ranges), and for a self-hosted instance prints the commands to run. Exits non-zero when a newer release is blocked. |
+| `obop update status`                                                                           | The state of the last update request.                                                                                                                                                                                                                         |
+| `obop update start --to VERSION --yes [--skip-backup]`                                         | Managed instances: takes a backup (`OBOP_BACKUP_DIR`), then asks the control plane to upgrade this instance to a published release.                                                                                                                           |
+| `obop update rollback --yes`                                                                   | Asks the control plane to put the previous version back.                                                                                                                                                                                                      |
+| `obop platform release publish\|list\|withdraw`                                                | Control plane: the releases instances read at `/api/releases`.                                                                                                                                                                                                |
+| `obop platform register-instance SLUG --url URL`, `obop platform update-token SLUG [--revoke]` | Control plane: register an instance it did not create, issue or revoke an update token.                                                                                                                                                                       |
+
+Inside an instance the same is _Customize_, _Updates_, and the commands `instance_update.check`, `status`, `start` and `rollback` (an agent may only propose the last two).
 
 ## Operating a database
 

@@ -1,4 +1,4 @@
-import { Button, t } from "@obop/ui";
+import { Button, Icon, t } from "@obop/ui";
 import { AppIcon } from "../Chrome.tsx";
 import { appColor } from "../theme.ts";
 import { CoreBadge, LicenseBadge, MaturityBadge, SourceBadge } from "./badges.tsx";
@@ -9,6 +9,10 @@ export type CardActions = {
   onInstall: (r: Row) => void;
   onUpdate: (r: Row) => void;
   onUninstall: (r: Row) => void;
+  /** Undo the last update (D63). */
+  onRollback: (r: Row) => void;
+  /** Update every module that can be updated now. */
+  onUpdateAll: () => void;
 };
 
 /** The buttons of a module, shared by the card and the detail panel. */
@@ -27,8 +31,17 @@ export function ModuleButtons({
     return (
       <>
         {row.update_available && (
-          <Button variant="primary" size="sm" onClick={() => actions.onUpdate(row)}>
+          <Button
+            variant={row.update_compatible === false ? "secondary" : "primary"}
+            size="sm"
+            onClick={() => actions.onUpdate(row)}
+          >
             {t("Update to {version}", { version: row.update_available })}
+          </Button>
+        )}
+        {row.rollback_version && row.rollback_available && (
+          <Button size="sm" icon="undo" onClick={() => actions.onRollback(row)}>
+            {t("Roll back")}
           </Button>
         )}
         <Button size="sm" onClick={() => actions.onUninstall(row)}>
@@ -118,6 +131,20 @@ export function ModuleCard({
         <SourceBadge source={row.source} />
       </div>
       <p className="hint mod-deps">{line || t("Needs no other module.")}</p>
+      {kind === "installed" && row.update_available && (
+        <p
+          className={`mod-update ${row.update_compatible === false ? "blocked" : "ready"}`}
+          role="status"
+        >
+          <Icon name={row.update_compatible === false ? "warning" : "arrow-up"} size={14} />
+          {row.update_compatible === false
+            ? t("Update to {version} is blocked: {reason}", {
+                version: row.update_available,
+                reason: row.update_blockers?.[0]?.message ?? "",
+              })
+            : t("Update to {version} is ready.", { version: row.update_available })}
+        </p>
+      )}
       <div className="mod-actions">
         <ModuleButtons row={row} kind={kind} actions={actions} />
       </div>

@@ -1,0 +1,195 @@
+/* Customize > Updates (D63): the instance's own version, the releases, the progress of a request. */
+.upd {
+  max-inline-size: 60rem;
+}
+.upd-now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+.upd-now-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+}
+.upd-version {
+  font-size: var(--text-xl);
+  margin: 0;
+}
+.upd-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.upd-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+.upd-progress-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.upd-progress p {
+  margin: 0;
+}
+.upd-meta {
+  margin: 0;
+}
+.upd-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.upd-releases {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.upd-release {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.upd-release summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+.upd-release summary::-webkit-details-marker {
+  display: none;
+}
+.upd-release summary:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: -2px;
+  border-radius: var(--radius-lg);
+}
+.upd-release details > .stack {
+  padding: 0 1rem 1rem;
+}
+.upd-notes-text,
+.upg-notes-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.upd-steps {
+  margin: 0;
+  padding-inline-start: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.upd-cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-inline-size: 100%;
+}
+.upd-cmd code {
+  overflow-wrap: anywhere;
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.upd-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.upd-checks li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+.upd-checks svg {
+  flex: none;
+  margin-block-start: 0.15rem;
+}
+.upd-modules th,
+.upd-modules td {
+  font-size: var(--text-sm);
+}
+
+/* Module updates (Customize > Modules): notes, data changes, dependents, update-all. */
+.mod-update {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.mod-update svg {
+  flex: none;
+  margin-block-start: 0.15rem;
+}
+.mod-update.ready {
+  color: var(--info-ink, var(--text));
+}
+.mod-update.blocked {
+  color: var(--warning-ink, var(--text));
+}
+.mods-updates-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+.mods-updates-bar p {
+  margin: 0;
+}
+.upg-step {
+  margin-block-start: var(--space-3);
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--border);
+}
+.upg-step h4 {
+  margin: 0;
+}
+.upg-notes h4 {
+  margin: 0 0 var(--space-1);
+}
+.upg-change-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.upg-change-list li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+.upg-change-list svg {
+  flex: none;
+  margin-block-start: 0.2rem;
+}
+.upg-migration-list {
+  margin: var(--space-1) 0;
+  padding-inline-start: 1.4rem;
+}
+.upg-all-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.35rem 0;
+}
+.upg-dependents td,
+.upg-dependents th,
+.dep-ranges td,
+.dep-ranges th {
+  font-size: var(--text-sm);
+}

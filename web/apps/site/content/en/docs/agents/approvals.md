@@ -8,7 +8,7 @@ lead: "Agents propose. Humans approve. This page shows the loop end to end."
 
 - Every action marked `approval = true` in its module. In the built-in apps that is `invoice.post` and `party.erase`; in bundled packages it includes posting accounting entries, refunds, sending campaigns, publishing website content, signing, and paying expenses. Each [app page](/apps/) lists them.
 - Every `delete`.
-- Installing, upgrading and removing modules (`module.install`, `module.uninstall`, `marketplace_listing.install`).
+- Installing, updating, rolling back and removing modules (`module.install`, `module.upgrade`, `module.upgrade_all`, `module.rollback`, `module.uninstall`, `marketplace_listing.install`), and updating the instance itself (`instance_update.start`, `instance_update.rollback`).
 
 `GET /api/commands` marks them with `"needs_approval": true`, and the MCP tool description ends with "(agents propose; a human approves)".
 

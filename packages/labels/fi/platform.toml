@@ -344,3 +344,183 @@ description = "Asennettavat tai päivitettävät moduulit, riippuvuudet ensin (l
 [labels.fi.model.marketplace_listing.field.warnings]
 label = "Varoitukset"
 description = "Huomautukset, jotka eivät estä mitään, esimerkiksi suljettu lisenssi (luettelo)"
+
+[labels.fi.model.module.field.changelog]
+label = "Muutosloki"
+description = "Tämän version julkaisutiedot"
+
+[labels.fi.model.module.field.updated_at]
+label = "Päivitetty"
+description = "Milloin viimeksi päivitettiin (Unix-sekunteja); tyhjä, jos ei koskaan"
+
+[labels.fi.model.module.field.rollback_version]
+label = "Palautusversio"
+description = "Versio ennen viimeisintä päivitystä, jos se säilytetään"
+
+[labels.fi.model.module.field.rollback_available]
+label = "Palautus mahdollinen"
+description = "Voiko viimeisen päivityksen perua nyt"
+
+[labels.fi.model.module.field.rollback_blocker]
+label = "Palautuksen este"
+description = "Miksi viimeistä päivitystä ei voi perua, jos sitä ei voi"
+
+[labels.fi.model.module.field.update_changelog]
+label = "Päivityksen muutosloki"
+description = "Tarjottavan version julkaisutiedot"
+
+[labels.fi.model.module.field.update_compatible]
+label = "Päivitys yhteensopiva"
+description = "Voiko tarjottavan version asentaa tänne nyt"
+
+[labels.fi.model.module.field.update_blockers]
+label = "Päivityksen esteet"
+description = "Mikä estää päivityksen tarjottuun versioon (luettelo)"
+
+[labels.fi.model.module.field.update_changes]
+label = "Päivityksen muutokset"
+description = "Mitä tarjottu versio muuttaa malleissa: lisätyt, poistetut ja tyypiltään muuttuneet kentät (luettelo)"
+
+[labels.fi.model.module.field.update_migrations]
+label = "Päivityksen migraatiot"
+description = "Datavaiheet, jotka päivitys ajaisi, sanoin kuvattuna (luettelo)"
+
+[labels.fi.model.module.field.updated]
+label = "Päivitetyt"
+description = "upgrade_all-toiminnon tulos: päivitetyt moduulit (luettelo)"
+
+[labels.fi.model.module.field.skipped]
+label = "Ohitetut"
+description = "upgrade_all-toiminnon tulos: moduulit, joiden päivitys oli estetty, syineen (luettelo)"
+
+[labels.fi.model.module.action.upgrade]
+label = "Päivitä"
+description = "Päivitä asennettu moduuli moduulikaupan tarjoamaan uudempaan versioon suunnitelman tarvitsemine riippuvuuksineen yhtenä atomisena toimintona. Anna id"
+
+[labels.fi.model.module.action.upgrade_all]
+label = "Päivitä kaikki"
+description = "Päivitä jokainen moduuli, jolla on uudempi versio, jonka tämä instanssi voi ottaa; moduuli, jonka päivitys on estetty, jää ennalleen ja siitä ilmoitetaan"
+
+[labels.fi.model.module.action.rollback]
+label = "Palauta"
+description = "Palauta moduuli versioon ennen sen viimeisintä päivitystä, kun tiedot sen sallivat. Anna id"
+
+[labels.fi.model.marketplace_listing.field.changelog]
+label = "Muutosloki"
+description = "Tämän version julkaisutiedot"
+
+[labels.fi.model.instance_update]
+name = "Instanssin päivitys"
+description = "Itse instanssin päivittäminen: käynnissä oleva ja uusin ytimen versio, sopivatko asennetut moduulit siihen, sekä pyyntö ohjaustasolle, joka ajaa päivityksen"
+
+[labels.fi.model.instance_update.field.version]
+label = "Versio"
+description = "start-toiminnon syöte: julkaistu versio, johon päivitetään"
+
+[labels.fi.model.instance_update.field.skip_backup]
+label = "Ohita varmuuskopio"
+description = "start-toiminnon syöte: valitse, kun sinulla on oma varmuuskopio eikä täällä voi ottaa sellaista"
+
+[labels.fi.model.instance_update.field.mode]
+label = "Tila"
+description = "managed (ohjaustaso ajaa päivityksen) tai self_hosted (komennot ajettavaksi itse)"
+
+[labels.fi.model.instance_update.field.current_version]
+label = "Nykyinen versio"
+description = "Ytimen versio, jota tämä instanssi käyttää"
+
+[labels.fi.model.instance_update.field.latest_version]
+label = "Uusin versio"
+description = "Uusin julkaistu ytimen versio"
+
+[labels.fi.model.instance_update.field.update_available]
+label = "Päivitys saatavilla"
+description = "Onko uudempi ytimen versio julkaistu"
+
+[labels.fi.model.instance_update.field.feed]
+label = "Syöte"
+description = "Mistä julkaisut luettiin"
+
+[labels.fi.model.instance_update.field.feed_error]
+label = "Syötteen virhe"
+description = "Miksi syötettä ei voitu lukea, jos ei voitu"
+
+[labels.fi.model.instance_update.field.checked_at]
+label = "Tarkistettu"
+description = "Milloin syöte luettiin (Unix-sekunteja)"
+
+[labels.fi.model.instance_update.field.releases]
+label = "Julkaisut"
+description = "Julkaistut versiot, uusin ensin, kukin julkaisutietoineen, tieto siitä sopivatko asennetut moduulit siihen ja mikä sen estää (luettelo)"
+
+[labels.fi.model.instance_update.field.dropped]
+label = "Pois jätetyt"
+description = "Syötteen merkinnät, jotka jätettiin pois, koska ne eivät läpäisseet eheystarkistusta (luettelo)"
+
+[labels.fi.model.instance_update.field.instructions]
+label = "Ohjeet"
+description = "Komennot käsin päivittämiseen (luettelo)"
+
+[labels.fi.model.instance_update.field.backup_dir]
+label = "Varmuuskopiohakemisto"
+description = "Minne ennen päivitystä otettava varmuuskopio kirjoitetaan, jos se on määritetty"
+
+[labels.fi.model.instance_update.field.state]
+label = "Tila"
+description = "idle, requested, running, succeeded, failed tai rolled_back"
+
+[labels.fi.model.instance_update.field.kind]
+label = "Laji"
+description = "update tai rollback"
+
+[labels.fi.model.instance_update.field.target_version]
+label = "Kohdeversio"
+description = "Versio, johon pyyntö siirtää"
+
+[labels.fi.model.instance_update.field.from_version]
+label = "Lähtöversio"
+description = "Versio, josta pyyntö siirtää"
+
+[labels.fi.model.instance_update.field.phase]
+label = "Vaihe"
+description = "Mitä päivitys tekee juuri nyt"
+
+[labels.fi.model.instance_update.field.error]
+label = "Virhe"
+description = "Miksi pyyntö epäonnistui tai palautettiin"
+
+[labels.fi.model.instance_update.field.backup]
+label = "Varmuuskopio"
+description = "Ennen päivitystä otetun varmuuskopion polku"
+
+[labels.fi.model.instance_update.field.started_at]
+label = "Aloitettu"
+description = "Milloin pyyntö tehtiin (Unix-sekunteja)"
+
+[labels.fi.model.instance_update.field.started_by]
+label = "Aloittaja"
+description = "Kuka teki pyynnön"
+
+[labels.fi.model.instance_update.field.finished_at]
+label = "Päättynyt"
+description = "Milloin se päättyi (Unix-sekunteja)"
+
+[labels.fi.model.instance_update.field.can_rollback]
+label = "Voi palauttaa"
+description = "Voiko viimeisen päivityksen kumota ohjaustason kautta"
+
+[labels.fi.model.instance_update.action.check]
+label = "Tarkista"
+description = "Lue julkaisusyöte ja arvioi jokainen uudempi julkaisu asennettuja moduuleja vasten; sisältää viimeisen pyynnön tilan"
+
+[labels.fi.model.instance_update.action.status]
+label = "Tila"
+description = "Viimeisen päivityspyynnön tila, päivitetään ohjaustasolta sen ajon aikana"
+
+[labels.fi.model.instance_update.action.start]
+label = "Käynnistä"
+description = "Päivitä instanssi julkaistuun ytimen versioon: ottaa varmuuskopion ja pyytää sitten ohjaustasoa ajamaan päivityksen. Anna version"
+
+[labels.fi.model.instance_update.action.rollback]
+label = "Palauta"
+description = "Pyydä ohjaustasoa palauttamaan instanssi versioon ennen viimeisintä päivitystä"

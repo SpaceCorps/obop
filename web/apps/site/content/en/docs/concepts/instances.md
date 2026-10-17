@@ -25,6 +25,10 @@ On hosted PostgreSQL every business gets its own database and its own database r
 
 Self-hosting is the same program without the control plane: `obop serve` is one instance. Use SQLite to try it and PostgreSQL (`OBOP_DATABASE_URL=postgres://...`) for real use. See [Getting started](/docs/getting-started/) and [Self-hosting and operations](/docs/reference/self-hosting/).
 
+## Updating an instance
+
+An administrator updates the instance from _Customize_, _Updates_. The page reads the published releases, checks every installed module against the new core, takes a backup and asks the control plane to redeploy the instance; the control plane waits for the new version to answer and puts the old one back if it does not. The instance holds only a narrow update token, never hosting credentials, and an agent can only propose the update. A self-hosted instance gets the commands to run instead (`obop update check`). Details: [Self-hosting and operations](/docs/reference/self-hosting/).
+
 ## Known limits
 
 - Creating an instance builds the Rust workspace on the host, which is slow until a prebuilt image registry is used.

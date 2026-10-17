@@ -32,7 +32,9 @@ A package is one text file. It contains no code, so an administrator can install
 
 Administrators install, upgrade and uninstall packages from _Customize_, or with the CLI (`obop modules install-from ID`, `obop modules install FILE`, `obop modules uninstall ID`). Install checks the file first: every field must have a description, a data class and a permission group, personal data may not be classed `none`, and dependencies must be installed.
 
-Uninstalling removes the commands and screens but keeps the data in the database. Installing the module again brings the records back. There are no data migrations yet: raise the `version` and install again to upgrade, and prefer adding optional fields.
+Uninstalling removes the commands and screens but keeps the data in the database. Installing the module again brings the records back.
+
+Every module declares which core versions it runs on (`requires_core`) and, for each module it needs, the range of versions it supports. _Customize_, _Modules_, _Updates_ shows newer versions with their release notes, what changes in the data and which installed modules depend on them; an update is one confirmed, atomic operation, refused when it would leave a dependent's range or break stored records. A package can declare `[[migration]]` steps (rename a field, fill a default, drop a field with confirmation) that run in the same batch, and the last update can be rolled back while it deleted nothing. The instance itself is updated from _Customize_, _Updates_ (see [Instances](/docs/concepts/instances/)).
 
 ## Keep reading
 

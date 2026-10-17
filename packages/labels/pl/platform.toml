@@ -344,3 +344,183 @@ description = "Moduły do zainstalowania lub zaktualizowania, najpierw zależno�
 [labels.pl.model.marketplace_listing.field.warnings]
 label = "Ostrzeżenia"
 description = "Uwagi, które niczego nie blokują, na przykład licencja zastrzeżona (lista)"
+
+[labels.pl.model.module.field.changelog]
+label = "Dziennik zmian"
+description = "Informacje o tym wydaniu"
+
+[labels.pl.model.module.field.updated_at]
+label = "Zaktualizowano"
+description = "Kiedy ostatnio zaktualizowano (sekundy Unix); puste, jeśli nigdy"
+
+[labels.pl.model.module.field.rollback_version]
+label = "Wersja do wycofania"
+description = "Wersja sprzed ostatniej aktualizacji, jeśli jest przechowywana"
+
+[labels.pl.model.module.field.rollback_available]
+label = "Wycofanie możliwe"
+description = "Czy ostatnią aktualizację można teraz cofnąć"
+
+[labels.pl.model.module.field.rollback_blocker]
+label = "Przeszkoda wycofania"
+description = "Dlaczego ostatniej aktualizacji nie można cofnąć, jeśli się nie da"
+
+[labels.pl.model.module.field.update_changelog]
+label = "Dziennik zmian aktualizacji"
+description = "Informacje o oferowanej wersji"
+
+[labels.pl.model.module.field.update_compatible]
+label = "Aktualizacja zgodna"
+description = "Czy oferowaną wersję można teraz zainstalować tutaj"
+
+[labels.pl.model.module.field.update_blockers]
+label = "Przeszkody aktualizacji"
+description = "Co blokuje aktualizację do oferowanej wersji (lista)"
+
+[labels.pl.model.module.field.update_changes]
+label = "Zmiany aktualizacji"
+description = "Co oferowana wersja zmienia w modelach: dodane, usunięte i zmienione typem pola (lista)"
+
+[labels.pl.model.module.field.update_migrations]
+label = "Migracje aktualizacji"
+description = "Kroki danych, które wykonałaby aktualizacja, opisane słowami (lista)"
+
+[labels.pl.model.module.field.updated]
+label = "Zaktualizowane"
+description = "Wynik upgrade_all: moduły, które zaktualizowano (lista)"
+
+[labels.pl.model.module.field.skipped]
+label = "Pominięte"
+description = "Wynik upgrade_all: moduły, których aktualizacja była zablokowana, z powodem (lista)"
+
+[labels.pl.model.module.action.upgrade]
+label = "Uaktualnij"
+description = "Zaktualizuj zainstalowany moduł do nowszej wersji oferowanej przez marketplace razem z zależnościami potrzebnymi planowi, w jednej atomowej operacji. Podaj id"
+
+[labels.pl.model.module.action.upgrade_all]
+label = "Uaktualnij wszystko"
+description = "Zaktualizuj każdy moduł, który ma nowszą wersję możliwą do przyjęcia przez tę instancję; moduł z zablokowaną aktualizacją pozostaje bez zmian i jest zgłaszany"
+
+[labels.pl.model.module.action.rollback]
+label = "Wycofaj"
+description = "Przywróć moduł do wersji sprzed ostatniej aktualizacji, gdy dane na to pozwalają. Podaj id"
+
+[labels.pl.model.marketplace_listing.field.changelog]
+label = "Dziennik zmian"
+description = "Informacje o tym wydaniu"
+
+[labels.pl.model.instance_update]
+name = "Aktualizacja instancji"
+description = "Aktualizacja samej instancji: działająca i najnowsza wersja rdzenia, czy zainstalowane moduły do niej pasują, oraz żądanie do płaszczyzny sterowania, która wykonuje uaktualnienie"
+
+[labels.pl.model.instance_update.field.version]
+label = "Wersja"
+description = "Dane wejściowe start: opublikowana wersja, do której aktualizować"
+
+[labels.pl.model.instance_update.field.skip_backup]
+label = "Pomiń kopię zapasową"
+description = "Dane wejściowe start: zaznacz, gdy masz własną kopię zapasową, a tu nie można utworzyć żadnej"
+
+[labels.pl.model.instance_update.field.mode]
+label = "Tryb"
+description = "managed (uaktualnienie wykonuje płaszczyzna sterowania) lub self_hosted (polecenia do samodzielnego uruchomienia)"
+
+[labels.pl.model.instance_update.field.current_version]
+label = "Bieżąca wersja"
+description = "Wersja rdzenia, na której działa ta instancja"
+
+[labels.pl.model.instance_update.field.latest_version]
+label = "Najnowsza wersja"
+description = "Najnowsza opublikowana wersja rdzenia"
+
+[labels.pl.model.instance_update.field.update_available]
+label = "Dostępna aktualizacja"
+description = "Czy opublikowano nowszą wersję rdzenia"
+
+[labels.pl.model.instance_update.field.feed]
+label = "Kanał"
+description = "Skąd odczytano wydania"
+
+[labels.pl.model.instance_update.field.feed_error]
+label = "Błąd kanału"
+description = "Dlaczego nie udało się odczytać kanału, jeśli się nie udało"
+
+[labels.pl.model.instance_update.field.checked_at]
+label = "Sprawdzono"
+description = "Kiedy odczytano kanał (sekundy Unix)"
+
+[labels.pl.model.instance_update.field.releases]
+label = "Wydania"
+description = "Opublikowane wydania, od najnowszego, każde z informacjami, czy pasują do nich zainstalowane moduły, i co je blokuje (lista)"
+
+[labels.pl.model.instance_update.field.dropped]
+label = "Odrzucone"
+description = "Wpisy kanału pominięte, bo nie przeszły kontroli integralności (lista)"
+
+[labels.pl.model.instance_update.field.instructions]
+label = "Instrukcje"
+description = "Polecenia do ręcznej aktualizacji (lista)"
+
+[labels.pl.model.instance_update.field.backup_dir]
+label = "Katalog kopii zapasowych"
+description = "Gdzie zapisywana jest kopia zapasowa przed aktualizacją, jeśli skonfigurowano"
+
+[labels.pl.model.instance_update.field.state]
+label = "Stan"
+description = "idle, requested, running, succeeded, failed lub rolled_back"
+
+[labels.pl.model.instance_update.field.kind]
+label = "Rodzaj"
+description = "update lub rollback"
+
+[labels.pl.model.instance_update.field.target_version]
+label = "Wersja docelowa"
+description = "Wersja, do której przechodzi żądanie"
+
+[labels.pl.model.instance_update.field.from_version]
+label = "Wersja wyjściowa"
+description = "Wersja, z której przechodzi żądanie"
+
+[labels.pl.model.instance_update.field.phase]
+label = "Etap"
+description = "Co uaktualnienie robi w tej chwili"
+
+[labels.pl.model.instance_update.field.error]
+label = "Błąd"
+description = "Dlaczego żądanie się nie powiodło lub zostało wycofane"
+
+[labels.pl.model.instance_update.field.backup]
+label = "Kopia zapasowa"
+description = "Ścieżka kopii zapasowej utworzonej przed aktualizacją"
+
+[labels.pl.model.instance_update.field.started_at]
+label = "Rozpoczęto"
+description = "Kiedy złożono żądanie (sekundy Unix)"
+
+[labels.pl.model.instance_update.field.started_by]
+label = "Rozpoczął"
+description = "Kto złożył żądanie"
+
+[labels.pl.model.instance_update.field.finished_at]
+label = "Zakończono"
+description = "Kiedy się zakończyło (sekundy Unix)"
+
+[labels.pl.model.instance_update.field.can_rollback]
+label = "Można wycofać"
+description = "Czy ostatnią aktualizację można cofnąć przez płaszczyznę sterowania"
+
+[labels.pl.model.instance_update.action.check]
+label = "Sprawdź"
+description = "Odczytaj kanał wydań i oceń każde nowsze wydanie względem zainstalowanych modułów; zawiera stan ostatniego żądania"
+
+[labels.pl.model.instance_update.action.status]
+label = "Stan"
+description = "Stan ostatniego żądania aktualizacji, odświeżany z płaszczyzny sterowania w trakcie jego trwania"
+
+[labels.pl.model.instance_update.action.start]
+label = "Uruchom"
+description = "Zaktualizuj instancję do opublikowanej wersji rdzenia: tworzy kopię zapasową, a następnie prosi płaszczyznę sterowania o wykonanie uaktualnienia. Podaj version"
+
+[labels.pl.model.instance_update.action.rollback]
+label = "Wycofaj"
+description = "Poproś płaszczyznę sterowania o przywrócenie instancji do wersji sprzed ostatniej aktualizacji"

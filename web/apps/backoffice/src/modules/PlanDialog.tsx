@@ -3,6 +3,7 @@ import { Badge, Button, Dialog, Icon, Notice, Skeleton, t } from "@obop/ui";
 import { call } from "../api.ts";
 import { serverMessage } from "../serverMessage.ts";
 import { LicenseBadge } from "./badges.tsx";
+import { ChangeList, DependentsTable, Notes } from "./UpgradeDetails.tsx";
 import { preview } from "./data.ts";
 import { prettyReq } from "./status.ts";
 import type { Blocker, Plan, PlanStep, Row } from "./types.ts";
@@ -36,6 +37,8 @@ function blockerTitle(kind: string): string {
       return t("Marketplace unavailable");
     case "dependents":
       return t("Needed by other modules");
+    case "data":
+      return t("Existing records");
     default:
       return t("Problem");
   }
@@ -111,6 +114,26 @@ export function PlanSteps({ plan, nameOf }: { plan: Plan; nameOf: (id: string) =
               ))}
             </ul>
           )}
+          {s.action === "upgrade" && (
+            <div className="stack upg-step">
+              <Notes
+                text={s.changelog ?? ""}
+                label={t("What is new in {version}", { version: s.version })}
+              />
+              <section className="stack" aria-label={t("What changes in the data")}>
+                <h4 className="overline">{t("What changes in the data")}</h4>
+                <ChangeList changes={s.changes ?? []} migrations={s.migrations ?? []} />
+              </section>
+              <section className="stack" aria-label={t("Modules that depend on this one")}>
+                <h4 className="overline">{t("Modules that depend on this one")}</h4>
+                <DependentsTable
+                  dependents={s.dependents ?? []}
+                  version={s.version}
+                  nameOf={nameOf}
+                />
+              </section>
+            </div>
+          )}
         </li>
       ))}
     </ol>
@@ -171,9 +194,12 @@ export function PlanDialog({
     if (!plan) return;
     setBusy(true);
     setFailure("");
+    // An update goes through module.upgrade: the same plan, audited as an update (D63).
     const r =
       "id" in request
-        ? await call(token, "marketplace_listing.install", { id: request.id })
+        ? upgrade
+          ? await call(token, "module.upgrade", { id: request.id })
+          : await call(token, "marketplace_listing.install", { id: request.id })
         : await call(token, "module.install", { manifest: request.manifest });
     setBusy(false);
     const rootName = root ? nameOf(root.id) || root.name : "";

@@ -61,6 +61,21 @@ test found, or a limit the docs state.
 | F1 | No fresh-eyes product QA pass over the whole product | done (section G) |
 | F2 | The live signup, instance, sign-in, 2FA and install flow has only run locally and against fakes | open (needs the owner's go-ahead to create a test account) |
 
+## H. Updating from inside the instance (D63)
+
+| # | Item | Status |
+|---|---|---|
+| H1 | Every package declares `requires_core` and a range per dependency; wildcards are catalogue errors; `depends = [...]` is retired | done (D63) |
+| H2 | `module.upgrade`, `module.upgrade_all`, `module.rollback`: atomic, locked across processes, audited, agents propose | done |
+| H3 | Declarative `[[migration]]` steps (rename, default, drop) in the update batch; breaking changes refused without them | done |
+| H4 | Customize, Updates: core version, release notes, module compatibility against the new core, backup first, control-plane request, live progress, rollback; self-hosted instructions | done |
+| H5 | Per-instance update token (hashed on the control plane, sealed on the instance), rate limit, audit on both sides, rollback to the previous image when the new one does not start | done (tested against the fake provisioner) |
+| H6 | The update path against live Sliplane and the real obop.dev feed | open (needs the owner: publish a release, then try on a test instance) |
+| H7 | The release feed is integrity-checked by digest, not signed | open (I-1: a signing key and its distribution) |
+| H8 | Rollback of a module is one level; an update that dropped data is rolled back from a backup only | by design |
+| H9 | Migration steps hold a model's records in one batch | accepted for the current sizes |
+| H10 | Hosted instances need `OBOP_BACKUP_DIR` on a volume for the automatic backup before an update; otherwise the administrator confirms their own | open (needs the owner to mount a volume) |
+
 ## G. Fresh-eyes QA pass (F1)
 
 A first-time-user pass over the running product (all 29 installed modules, 91 models, headless Chrome screenshots at 1280, 768 and 390 px, light and dark, the seven languages; the public shop with demo payments; the sign-up app on the fake provisioner; the website's 506 pages; REST parity with a restricted user; backup, restore, migrate and secrets on a fresh SQLite database; environment variables named in the docs).

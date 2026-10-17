@@ -32,6 +32,8 @@ export type ModuleSpec = {
   actions?: ActionSpec[];
 };
 
+import { coreSeries } from "./env.ts";
+
 const q = (s: string) => JSON.stringify(s);
 
 export function manifest(m: ModuleSpec): string {
@@ -42,6 +44,7 @@ export function manifest(m: ModuleSpec): string {
     `name = ${q(m.title)}`,
     `description = ${q(`${m.title} (end-to-end test module)`)}`,
     'author = "obop e2e"',
+    `requires_core = ${q(coreSeries)}`,
     "",
     "[[model]]",
     `name = ${q(m.id)}`,

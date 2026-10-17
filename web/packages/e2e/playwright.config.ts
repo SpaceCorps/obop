@@ -23,9 +23,11 @@ process.env.OBOP_E2E_DIR ??= mkdtempSync(join(tmpdir(), "obop-e2e-"));
 process.env.OBOP_E2E_APP_PORT ??= String(await freePort());
 process.env.OBOP_E2E_PLATFORM_PORT ??= String(await freePort());
 process.env.OBOP_E2E_SHOP_PORT ??= String(await freePort());
+process.env.OBOP_E2E_MARKET_PORT ??= String(await freePort());
 const app = `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 const platform = `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
 const shop = `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
+const market = `http://127.0.0.1:${process.env.OBOP_E2E_MARKET_PORT}`;
 
 // Browser: bundled Chromium in CI; locally the system Chrome, because Playwright's browsers are not
 // downloaded. PW_CHROME_PATH points at a specific executable, PW_CHANNEL picks another channel.
@@ -68,6 +70,16 @@ export default defineConfig({
     {
       command: "node support/serve.ts app",
       url: `${app}/`,
+      reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 60_000,
+    },
+    {
+      // A tiny marketplace the update specs fill with newer versions of their modules.
+      command: "node support/serve.ts market",
+      url: `${market}/index.json`,
       reuseExistingServer: false,
       gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
       stdout: "pipe",

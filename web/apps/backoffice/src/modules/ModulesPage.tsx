@@ -3,6 +3,7 @@ import { Badge, Button, EmptyState, Icon, Notice, Select, Tabs, panelId, t } fro
 import { ModuleCard } from "./ModuleCard.tsx";
 import { DependencyOverview } from "./DependencyOverview.tsx";
 import { PlanDialog, UninstallDialog } from "./PlanDialog.tsx";
+import { RollbackDialog, UpdateAllDialog } from "./UpdateDialogs.tsx";
 import { UploadArea } from "./UploadArea.tsx";
 import {
   categoriesOf,
@@ -47,6 +48,7 @@ export function ModulesPage({
   );
   const filtering = q.trim() !== "" || category !== "";
   const cardKind = tab === "marketplace" ? "market" : "installed";
+  const ready = updates.filter((r) => r.update_compatible !== false);
 
   return (
     <div className="stack gap-lg mods">
@@ -138,6 +140,25 @@ export function ModulesPage({
             <option value="needed">{t("Most needed by others")}</option>
           </Select>
         </div>
+
+        {tab === "updates" && !data.loading && updates.length > 0 && (
+          <div className="mods-updates-bar">
+            <p className="hint">
+              {t(
+                "{ready} of {total} can be updated now. A module whose update is blocked says why on its card.",
+                { ready: ready.length, total: updates.length },
+              )}
+            </p>
+            <Button
+              variant="primary"
+              icon="arrow-up"
+              disabled={ready.length === 0}
+              onClick={() => view.actions.onUpdateAll()}
+            >
+              {t("Update all compatible")}
+            </Button>
+          </div>
+        )}
 
         {data.loading ? (
           <ul className="mod-grid" aria-busy="true" aria-label={t("Loading modules")}>
@@ -252,6 +273,39 @@ export function ModulesPage({
                 : verb === "update"
                   ? t("Updated {name}", { name })
                   : t("Installed {name}", { name }),
+              o.proposed ? "info" : "ok",
+            );
+          }}
+        />
+      )}
+      {view.dialog?.kind === "updateall" && (
+        <UpdateAllDialog
+          token={view.token}
+          rows={updates}
+          nameOf={view.nameOf}
+          onClose={() => view.setDialog(null)}
+          onDone={(o) =>
+            void view.finished(
+              o.proposed
+                ? t("Waiting for a human to approve")
+                : t("{count, plural, one {Updated # module} other {Updated # modules}}", {
+                    count: o.updated,
+                  }),
+              o.proposed ? "info" : "ok",
+            )
+          }
+        />
+      )}
+      {view.dialog?.kind === "rollback" && (
+        <RollbackDialog
+          token={view.token}
+          row={view.dialog.row}
+          title={view.nameOf(view.dialog.row.id)}
+          onClose={() => view.setDialog(null)}
+          onDone={(o) => {
+            const name = view.dialog?.kind === "rollback" ? view.nameOf(view.dialog.row.id) : "";
+            void view.finished(
+              o.proposed ? t("Waiting for a human to approve") : t("Rolled {name} back", { name }),
               o.proposed ? "info" : "ok",
             );
           }}

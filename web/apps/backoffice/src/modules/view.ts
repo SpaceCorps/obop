@@ -11,6 +11,8 @@ import type { ModulesRoute, Row } from "./types.ts";
 export type Dialog =
   | { kind: "plan"; request: PlanRequest; title: string; name: string; verb: "install" | "update" }
   | { kind: "uninstall"; row: Row }
+  | { kind: "rollback"; row: Row }
+  | { kind: "updateall" }
   | null;
 
 /** A one-line card text: the summary, else the first sentence of the description. */
@@ -121,6 +123,8 @@ export function useModulesView(opts: {
           verb: "update",
         }),
       onUninstall: (r) => setDialog({ kind: "uninstall", row: r }),
+      onRollback: (r) => setDialog({ kind: "rollback", row: r }),
+      onUpdateAll: () => setDialog({ kind: "updateall" }),
     }),
     [nameOf],
   );

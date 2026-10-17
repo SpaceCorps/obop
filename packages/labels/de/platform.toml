@@ -344,3 +344,183 @@ description = "Die zu installierenden oder zu aktualisierenden Module, Abhängig
 [labels.de.model.marketplace_listing.field.warnings]
 label = "Warnungen"
 description = "Hinweise, die nichts verhindern, etwa eine proprietäre Lizenz (eine Liste)"
+
+[labels.de.model.module.field.changelog]
+label = "Änderungsprotokoll"
+description = "Versionshinweise zu dieser Version"
+
+[labels.de.model.module.field.updated_at]
+label = "Aktualisiert am"
+description = "Wann zuletzt aktualisiert wurde (Unix-Sekunden); leer, wenn nie"
+
+[labels.de.model.module.field.rollback_version]
+label = "Rollback-Version"
+description = "Die Version vor dem letzten Update, falls sie aufbewahrt wird"
+
+[labels.de.model.module.field.rollback_available]
+label = "Zurücksetzen möglich"
+description = "Ob das letzte Update jetzt rückgängig gemacht werden kann"
+
+[labels.de.model.module.field.rollback_blocker]
+label = "Hindernis fürs Zurücksetzen"
+description = "Warum das letzte Update nicht rückgängig gemacht werden kann, falls es nicht geht"
+
+[labels.de.model.module.field.update_changelog]
+label = "Änderungsprotokoll des Updates"
+description = "Versionshinweise zur angebotenen Version"
+
+[labels.de.model.module.field.update_compatible]
+label = "Update kompatibel"
+description = "Ob die angebotene Version jetzt hier installiert werden kann"
+
+[labels.de.model.module.field.update_blockers]
+label = "Update-Hindernisse"
+description = "Was das Update auf die angebotene Version verhindert (eine Liste)"
+
+[labels.de.model.module.field.update_changes]
+label = "Update-Änderungen"
+description = "Was die angebotene Version an den Modellen ändert: hinzugefügte, entfernte, im Typ geänderte Felder (eine Liste)"
+
+[labels.de.model.module.field.update_migrations]
+label = "Update-Migrationen"
+description = "Die Datenschritte, die das Update ausführen würde, in Worten (eine Liste)"
+
+[labels.de.model.module.field.updated]
+label = "Aktualisiert"
+description = "Ergebnis von upgrade_all: die Module, die aktualisiert wurden (eine Liste)"
+
+[labels.de.model.module.field.skipped]
+label = "Übersprungen"
+description = "Ergebnis von upgrade_all: die Module, deren Update blockiert war, mit Begründung (eine Liste)"
+
+[labels.de.model.module.action.upgrade]
+label = "Aktualisieren"
+description = "Ein installiertes Modul auf die neuere Version aus dem Marktplatz aktualisieren, samt den Abhängigkeiten, die der Plan braucht, in einem atomaren Vorgang. id angeben"
+
+[labels.de.model.module.action.upgrade_all]
+label = "Alle aktualisieren"
+description = "Jedes Modul aktualisieren, für das diese Instanz eine neuere Version übernehmen kann; ein Modul mit blockiertem Update bleibt unverändert und wird gemeldet"
+
+[labels.de.model.module.action.rollback]
+label = "Zurücksetzen"
+description = "Ein Modul auf die Version vor seinem letzten Update zurücksetzen, sofern die Daten es zulassen. id angeben"
+
+[labels.de.model.marketplace_listing.field.changelog]
+label = "Änderungsprotokoll"
+description = "Versionshinweise zu dieser Version"
+
+[labels.de.model.instance_update]
+name = "Instanz-Update"
+description = "Die Aktualisierung der Instanz selbst: die laufende und die neueste Kernversion, ob die installierten Module dazu passen, und die Anfrage an die Steuerungsebene, die das Upgrade ausführt"
+
+[labels.de.model.instance_update.field.version]
+label = "Version"
+description = "Eingabe für start: die veröffentlichte Version, auf die aktualisiert wird"
+
+[labels.de.model.instance_update.field.skip_backup]
+label = "Backup überspringen"
+description = "Eingabe für start: setzen, wenn ein eigenes Backup vorliegt und hier keines erstellt werden kann"
+
+[labels.de.model.instance_update.field.mode]
+label = "Modus"
+description = "managed (eine Steuerungsebene führt das Upgrade aus) oder self_hosted (Befehle zum selbst Ausführen)"
+
+[labels.de.model.instance_update.field.current_version]
+label = "Aktuelle Version"
+description = "Die Kernversion, die diese Instanz ausführt"
+
+[labels.de.model.instance_update.field.latest_version]
+label = "Neueste Version"
+description = "Die neueste veröffentlichte Kernversion"
+
+[labels.de.model.instance_update.field.update_available]
+label = "Update verfügbar"
+description = "Ob eine neuere Kernversion veröffentlicht ist"
+
+[labels.de.model.instance_update.field.feed]
+label = "Versions-Feed"
+description = "Woher die Releases gelesen wurden"
+
+[labels.de.model.instance_update.field.feed_error]
+label = "Feed-Fehler"
+description = "Warum der Feed nicht gelesen werden konnte, falls es nicht ging"
+
+[labels.de.model.instance_update.field.checked_at]
+label = "Geprüft am"
+description = "Wann der Feed gelesen wurde (Unix-Sekunden)"
+
+[labels.de.model.instance_update.field.releases]
+label = "Veröffentlichungen"
+description = "Veröffentlichte Releases, neueste zuerst, jeweils mit Hinweisen, ob die installierten Module dazu passen, und was es blockiert (eine Liste)"
+
+[labels.de.model.instance_update.field.dropped]
+label = "Ausgelassen"
+description = "Feed-Einträge, die ausgelassen wurden, weil sie die Integritätsprüfung nicht bestanden (eine Liste)"
+
+[labels.de.model.instance_update.field.instructions]
+label = "Anleitung"
+description = "Die Befehle zum Aktualisieren von Hand (eine Liste)"
+
+[labels.de.model.instance_update.field.backup_dir]
+label = "Backup-Verzeichnis"
+description = "Wohin das Backup vor einem Update geschrieben wird, falls konfiguriert"
+
+[labels.de.model.instance_update.field.state]
+label = "Status"
+description = "idle, requested, running, succeeded, failed oder rolled_back"
+
+[labels.de.model.instance_update.field.kind]
+label = "Art"
+description = "update oder rollback"
+
+[labels.de.model.instance_update.field.target_version]
+label = "Zielversion"
+description = "Die Version, zu der die Anfrage wechselt"
+
+[labels.de.model.instance_update.field.from_version]
+label = "Ausgangsversion"
+description = "Die Version, von der die Anfrage ausgeht"
+
+[labels.de.model.instance_update.field.phase]
+label = "Ablaufphase"
+description = "Was das Upgrade gerade tut"
+
+[labels.de.model.instance_update.field.error]
+label = "Fehler"
+description = "Warum die Anfrage fehlschlug oder zurückgesetzt wurde"
+
+[labels.de.model.instance_update.field.backup]
+label = "Sicherung"
+description = "Pfad des Backups, das vor dem Update erstellt wurde"
+
+[labels.de.model.instance_update.field.started_at]
+label = "Gestartet am"
+description = "Wann die Anfrage gestellt wurde (Unix-Sekunden)"
+
+[labels.de.model.instance_update.field.started_by]
+label = "Gestartet von"
+description = "Wer die Anfrage gestellt hat"
+
+[labels.de.model.instance_update.field.finished_at]
+label = "Beendet am"
+description = "Wann sie beendet wurde (Unix-Sekunden)"
+
+[labels.de.model.instance_update.field.can_rollback]
+label = "Zurücksetzen möglich"
+description = "Ob das letzte Update über die Steuerungsebene rückgängig gemacht werden kann"
+
+[labels.de.model.instance_update.action.check]
+label = "Prüfen"
+description = "Den Release-Feed lesen und jedes neuere Release gegen die installierten Module beurteilen; enthält den Status der letzten Anfrage"
+
+[labels.de.model.instance_update.action.status]
+label = "Status"
+description = "Der Status der letzten Update-Anfrage, während sie läuft von der Steuerungsebene aktualisiert"
+
+[labels.de.model.instance_update.action.start]
+label = "Starten"
+description = "Die Instanz auf eine veröffentlichte Kernversion aktualisieren: erstellt ein Backup und bittet dann die Steuerungsebene, das Upgrade auszuführen. version angeben"
+
+[labels.de.model.instance_update.action.rollback]
+label = "Zurücksetzen"
+description = "Die Steuerungsebene bitten, die Instanz auf die Version vor dem letzten Update zurückzusetzen"

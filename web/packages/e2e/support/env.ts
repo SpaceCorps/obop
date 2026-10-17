@@ -1,8 +1,8 @@
 // Paths, credentials and URLs shared by the Playwright config, the server launcher and the tests.
 // The config process picks the temp directory and the ports once and exports them as environment
 // variables, so the workers it spawns (which load the config again) see the same values.
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -14,6 +14,23 @@ export function obopBinary(): string {
     throw new Error(`obop binary not found at ${bin}; run \`cargo build\` or set OBOP_BIN`);
   return bin;
 }
+
+/** The core version under test: the workspace version in Cargo.toml (D55). */
+const [coreMajor, coreMinor, corePatch] = (() => {
+  const m = /^version = "(\d+)\.(\d+)\.(\d+)"/m.exec(
+    readFileSync(resolve(repoRoot, "Cargo.toml"), "utf8"),
+  );
+  if (!m) throw new Error("no workspace version in Cargo.toml");
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+})();
+export const coreVersion = `${coreMajor}.${coreMinor}.${corePatch}`;
+/** The core range a module written for this series declares: `^0.2`. */
+export const coreSeries = `^${coreMajor}.${coreMinor}`;
+/** The releases the control plane publishes to the instance under test (D63). */
+export const nextPatch = `${coreMajor}.${coreMinor}.${corePatch + 1}`;
+export const nextMinor = `${coreMajor}.${coreMinor + 1}.0`;
+/** The update token the app instance holds for its control plane. A throwaway test value. */
+export const updateToken = `obu_${"0123456789abcdef".repeat(4)}`;
 
 export const backofficeDist = resolve(repoRoot, "web/apps/backoffice/dist");
 /** The same app built for /admin/ (`OBOP_ADMIN_BASE=/admin/ vp build --outDir dist-admin`): the shop instance serves it. */
@@ -86,6 +103,9 @@ export const shopOwner = { name: "owner", password: "e2e shop owner 1", groups: 
 export const appUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 export const shopUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
 export const platformUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
+/** A small marketplace the specs fill (D63): packages the app instance can update to. */
+export const marketUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_MARKET_PORT}`;
+export const marketDir = () => join(process.env.OBOP_E2E_DIR ?? "", "market");
 
 /**
  * The server secret the instance seals two-factor secrets with (D53). A throwaway test value; the

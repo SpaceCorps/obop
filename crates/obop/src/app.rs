@@ -89,10 +89,7 @@ impl App {
         }
         // Updating the instance from inside it (D63): the release feed, the compatibility of the
         // installed modules, and the request to the control plane.
-        let ring = d
-            .shared_parts()
-            .map(|(_, ring)| ring)
-            .unwrap_or_else(obop_keys::KeyRing::default);
+        let ring = d.shared_parts().map(|(_, ring)| ring).unwrap_or_default();
         let updater = obop_update::Updater::new(
             store.backend(),
             installer.clone(),

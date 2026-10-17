@@ -344,3 +344,183 @@ description = "Los módulos que instalar o actualizar, primero las dependencias 
 [labels.es.model.marketplace_listing.field.warnings]
 label = "Advertencias"
 description = "Notas que no impiden nada, por ejemplo una licencia propietaria (una lista)"
+
+[labels.es.model.module.field.changelog]
+label = "Registro de cambios"
+description = "Notas de la versión de esta versión"
+
+[labels.es.model.module.field.updated_at]
+label = "Actualizado el"
+description = "Cuándo se actualizó por última vez (segundos Unix); vacío si nunca"
+
+[labels.es.model.module.field.rollback_version]
+label = "Versión de reversión"
+description = "La versión anterior a la última actualización, si se conserva"
+
+[labels.es.model.module.field.rollback_available]
+label = "Reversión disponible"
+description = "Si la última actualización se puede deshacer ahora"
+
+[labels.es.model.module.field.rollback_blocker]
+label = "Impedimento de reversión"
+description = "Por qué no se puede deshacer la última actualización, si no se puede"
+
+[labels.es.model.module.field.update_changelog]
+label = "Registro de cambios de la actualización"
+description = "Notas de la versión que se ofrece"
+
+[labels.es.model.module.field.update_compatible]
+label = "Actualización compatible"
+description = "Si la versión que se ofrece se puede instalar aquí ahora"
+
+[labels.es.model.module.field.update_blockers]
+label = "Impedimentos de la actualización"
+description = "Qué impide la actualización a la versión que se ofrece (una lista)"
+
+[labels.es.model.module.field.update_changes]
+label = "Cambios de la actualización"
+description = "Qué cambia la versión que se ofrece en los modelos: campos añadidos, eliminados o con otro tipo (una lista)"
+
+[labels.es.model.module.field.update_migrations]
+label = "Migraciones de la actualización"
+description = "Los pasos de datos que ejecutaría la actualización, en palabras (una lista)"
+
+[labels.es.model.module.field.updated]
+label = "Actualizados"
+description = "Resultado de upgrade_all: los módulos que se actualizaron (una lista)"
+
+[labels.es.model.module.field.skipped]
+label = "Omitidos"
+description = "Resultado de upgrade_all: los módulos cuya actualización estaba bloqueada, con el motivo (una lista)"
+
+[labels.es.model.module.action.upgrade]
+label = "Actualizar"
+description = "Actualizar un módulo instalado a la versión más reciente que ofrece el mercado, con las dependencias que necesita el plan, en una sola operación atómica. Indicar id"
+
+[labels.es.model.module.action.upgrade_all]
+label = "Actualizar todos"
+description = "Actualizar cada módulo que tenga una versión más reciente que esta instancia pueda admitir; un módulo cuya actualización está bloqueada se queda como está y se informa"
+
+[labels.es.model.module.action.rollback]
+label = "Revertir"
+description = "Devolver un módulo a la versión anterior a su última actualización, cuando los datos lo permiten. Indicar id"
+
+[labels.es.model.marketplace_listing.field.changelog]
+label = "Registro de cambios"
+description = "Notas de la versión de esta versión"
+
+[labels.es.model.instance_update]
+name = "Actualización de la instancia"
+description = "La actualización de la propia instancia: la versión del núcleo en ejecución y la más reciente, si los módulos instalados encajan, y la solicitud al plano de control que ejecuta la actualización"
+
+[labels.es.model.instance_update.field.version]
+label = "Versión"
+description = "Entrada de start: la versión publicada a la que actualizar"
+
+[labels.es.model.instance_update.field.skip_backup]
+label = "Omitir copia de seguridad"
+description = "Entrada de start: se marca cuando se tiene una copia de seguridad propia y aquí no se puede hacer ninguna"
+
+[labels.es.model.instance_update.field.mode]
+label = "Modo"
+description = "managed (un plano de control ejecuta la actualización) o self_hosted (comandos que se ejecutan a mano)"
+
+[labels.es.model.instance_update.field.current_version]
+label = "Versión actual"
+description = "La versión del núcleo que ejecuta esta instancia"
+
+[labels.es.model.instance_update.field.latest_version]
+label = "Última versión"
+description = "La versión del núcleo publicada más reciente"
+
+[labels.es.model.instance_update.field.update_available]
+label = "Actualización disponible"
+description = "Si hay publicada una versión más reciente del núcleo"
+
+[labels.es.model.instance_update.field.feed]
+label = "Canal"
+description = "De dónde se leyeron las versiones"
+
+[labels.es.model.instance_update.field.feed_error]
+label = "Error del canal"
+description = "Por qué no se pudo leer el canal, si no se pudo"
+
+[labels.es.model.instance_update.field.checked_at]
+label = "Comprobado el"
+description = "Cuándo se leyó el canal (segundos Unix)"
+
+[labels.es.model.instance_update.field.releases]
+label = "Versiones publicadas"
+description = "Versiones publicadas, las más recientes primero, cada una con sus notas, si los módulos instalados encajan y qué la bloquea (una lista)"
+
+[labels.es.model.instance_update.field.dropped]
+label = "Descartadas"
+description = "Entradas del canal que se dejaron fuera por no superar su comprobación de integridad (una lista)"
+
+[labels.es.model.instance_update.field.instructions]
+label = "Instrucciones"
+description = "Los comandos para actualizar a mano (una lista)"
+
+[labels.es.model.instance_update.field.backup_dir]
+label = "Directorio de copias de seguridad"
+description = "Dónde se escribe la copia de seguridad previa a una actualización, si está configurado"
+
+[labels.es.model.instance_update.field.state]
+label = "Estado"
+description = "idle, requested, running, succeeded, failed o rolled_back"
+
+[labels.es.model.instance_update.field.kind]
+label = "Tipo"
+description = "update o rollback"
+
+[labels.es.model.instance_update.field.target_version]
+label = "Versión de destino"
+description = "La versión a la que pasa la solicitud"
+
+[labels.es.model.instance_update.field.from_version]
+label = "Versión de origen"
+description = "La versión desde la que parte la solicitud"
+
+[labels.es.model.instance_update.field.phase]
+label = "Fase"
+description = "Lo que está haciendo ahora la actualización"
+
+[labels.es.model.instance_update.field.error]
+label = "Error"
+description = "Por qué la solicitud falló o se revirtió"
+
+[labels.es.model.instance_update.field.backup]
+label = "Copia de seguridad"
+description = "Ruta de la copia de seguridad hecha antes de la actualización"
+
+[labels.es.model.instance_update.field.started_at]
+label = "Iniciado el"
+description = "Cuándo se hizo la solicitud (segundos Unix)"
+
+[labels.es.model.instance_update.field.started_by]
+label = "Iniciado por"
+description = "Quién hizo la solicitud"
+
+[labels.es.model.instance_update.field.finished_at]
+label = "Terminado el"
+description = "Cuándo terminó (segundos Unix)"
+
+[labels.es.model.instance_update.field.can_rollback]
+label = "Se puede revertir"
+description = "Si la última actualización se puede revertir mediante el plano de control"
+
+[labels.es.model.instance_update.action.check]
+label = "Comprobar"
+description = "Leer el canal de versiones y evaluar cada versión más reciente frente a los módulos instalados; incluye el estado de la última solicitud"
+
+[labels.es.model.instance_update.action.status]
+label = "Estado"
+description = "El estado de la última solicitud de actualización, refrescado desde el plano de control mientras se ejecuta"
+
+[labels.es.model.instance_update.action.start]
+label = "Iniciar"
+description = "Actualizar la instancia a una versión publicada del núcleo: hace una copia de seguridad y luego pide al plano de control que ejecute la actualización. Indicar version"
+
+[labels.es.model.instance_update.action.rollback]
+label = "Revertir"
+description = "Pedir al plano de control que devuelva la instancia a la versión anterior a la última actualización"

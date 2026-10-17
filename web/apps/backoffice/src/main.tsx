@@ -11,6 +11,7 @@ import "./record.css";
 import "./blobs.css";
 import "./customize.css";
 import "./modules/modules.css";
+import "./updates/updates.css";
 import "./dashboards/dashboards.css";
 import "./connectors/connectors.css";
 import "./guide.css";

@@ -7,6 +7,7 @@ import type { ModulesRoute } from "./modules/types.ts";
 import { useModulesView } from "./modules/view.ts";
 import { BuildTab } from "./ModuleBuilder.tsx";
 import { SecurityTab } from "./Security.tsx";
+import { UpdatesPage } from "./updates/UpdatesPage.tsx";
 import { href } from "./route.ts";
 import { ContrastReport } from "./brand/ContrastReport.tsx";
 import { ACCENTS, applyTheme, hasPersonalTheme, rememberTheme, resolveTheme } from "./theme.ts";
@@ -66,6 +67,7 @@ const TABS = [
   { id: "theme", label: msg("Theme"), icon: "sun" },
   { id: "apps", label: msg("Apps"), icon: "grid" },
   { id: "modules", label: msg("Modules"), icon: "plug" },
+  { id: "updates", label: msg("Updates"), icon: "arrow-up" },
   { id: "build", label: msg("Build a module"), icon: "edit" },
   { id: "security", label: msg("Security"), icon: "shield-check" },
   { id: "brand", label: msg("Brand book"), icon: "sparkle" },
@@ -119,6 +121,7 @@ export function Customize(p: Props) {
           {tab === "modules" && (
             <ModulesPage view={view} guideHref={GUIDE_LINK} goBuild={() => p.go("build")} />
           )}
+          {tab === "updates" && <UpdatesPage token={p.token} notify={p.notify} />}
           {tab === "build" && <BuildTab {...p} />}
           {tab === "security" && <SecurityTab {...p} />}
           {tab === "guide" && (

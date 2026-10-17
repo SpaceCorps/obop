@@ -237,11 +237,12 @@ The file is TOML, at most **256 KiB**, with at most **50 models** and **200 fiel
 | `categories` | array of strings | no | At most 3 of `finance`, `sales`, `supply-chain`, `people`, `services`, `marketing`, `productivity`, `platform`, `other`. |
 | `icon` | string | no | The name of a built-in icon (lowercase letters, digits, `-`). An unknown name falls back to a generic icon; by default the icon follows the module id. |
 | `maturity` | string | no | `stable`, `beta` or `experimental`. Nothing is shown when absent. |
-| `requires_core` | string | **catalogue: yes** | A semver requirement on the core version, for example `"^0.2"` or `">=0.2, <0.4"`. Required for bundled and marketplace packages; an upload without it is assumed to run on every core (`*`) with a warning. An install on a core that does not satisfy it is refused. |
-| `depends` | array of module ids | no | Default `[]`. Shorthand for "any version": `depends = ["base"]` equals `base = "*"` in `[module.dependencies]`. |
+| `requires_core` | string | **yes (D63)** | The core versions the module runs on, a semver range such as `"^0.2"` or `">=0.2, <0.4"`. Required for every package, upload or not: missing, empty and unsatisfiable ranges are refused. A range with no upper bound (`"*"`, `">=0.2"`) is a warning for an upload and an error for the bundled catalogue and the marketplace. An install on a core that does not satisfy it is refused. |
+| `changelog` | string | no (D63) | The release notes of this version, plain text, at most 8000 characters. Shown before an update, in the plan dialog and the Versions tab. |
+| `depends` | array | no | **Retired (D63).** The any-version shorthand is refused with a message that says what to write instead: every dependency names the versions it supports in `[module.dependencies]`. |
 | `network_destinations` | array | no | Must be empty or absent: declarative packages may not reach the network. The key exists so later tiers share the contract. |
 
-Every new key is optional when a package is parsed, so manifests written before D55 still install. Unknown keys are still errors.
+Since D63 `requires_core` and a range for every dependency are required; the other keys of D55 stay optional. Unknown keys are still errors.
 
 #### `[module.dependencies]`: other modules, with versions
 
@@ -249,10 +250,11 @@ Every new key is optional when a package is parsed, so manifests written before 
 [module.dependencies]
 base = "^0.2"           # a built-in module: checked against the CORE version
 projects = ">=0.3, <1"  # a package: checked against its installed version
-hr = "*"                # any version
 ```
 
-The table maps a module id to a version requirement string. The shape is a table of strings on purpose (no inline tables, no flags): optional dependencies are not offered, because a `ref` to a model whose module is not installed cannot work, so a dependency that may be absent would be a promise the registry cannot keep. `depends = [...]` and the table may be used together for different modules, but naming the same module in both is an error. A module may not depend on itself and may declare at most 20 dependencies.
+The table maps a module id to the **range of versions of it that this module supports**, a string that is required for every dependency (an empty string, a range nothing satisfies such as `">=2, <1"`, and the retired `depends = [...]` shorthand are errors that name the dependency). A wildcard `"*"` parses but promises to work with every future version, so it is a warning for an upload and an error for the catalogue (`obop modules check --catalog`). The range is enforced both ways: installing or updating the module checks it against what is installed, and updating, rolling back or uninstalling a module checks every installed dependent's declared range against the version that would result. The plan dialog shows each dependent with its range and whether it would break.
+
+ The shape is a table of strings on purpose (no inline tables, no flags): optional dependencies are not offered, because a `ref` to a model whose module is not installed cannot work, so a dependency that may be absent would be a promise the registry cannot keep. A module may not depend on itself and may declare at most 20 dependencies.
 
 **Requirement syntax** (the rules of Cargo, so a Rust developer already knows them): `*` any release; `1.2.3` or `^1.2.3` compatible with 1.2.3 (below 2.0.0; for `0.y.z` the minor is the breaking part, so `^0.2` is `>=0.2.0, <0.3.0`); `~1.2.3` patch updates only (`>=1.2.3, <1.3.0`); `>=1.2`, `>1.2`, `<=1.2`, `<1.2`, `=1.2.3`; partial versions and wildcards (`1.*`, `=1.2`); comma-separated comparators are ANDed (`>=0.2, <0.4`). A pre-release such as `0.3.0-beta.1` satisfies a requirement only when that requirement names a pre-release of the same `major.minor.patch`; otherwise only releases match.
 
@@ -330,9 +332,11 @@ Parse and gate errors (from `obop modules install`, the Customize upload or `mod
 | `icon "X" must be a lowercase icon name such as "project"` | Letters, digits and `-`, starting with a letter. |
 | `maturity must be one of stable, beta, experimental (got "X")` | Use one of the three. |
 | `requires_core: "X" is not a version requirement (...); examples: "*", "^0.2", ">=0.2, <0.4"` | Fix the requirement; separate comparators with commas. |
-| `depends: "X" is not a module id` / `depends lists X twice` / `X depends on itself` | Fix `depends`. |
+| `requires_core is required: ...` | Add the core versions the module runs on, for example `requires_core = "^0.2"`. |
+| `[module.dependencies] X: the version range is empty` / `matches no version` | Write the range of X you support, for example `X = ">=0.1, <1"`. |
+| `depends = [...] is no longer accepted` | Move each entry to `[module.dependencies]` with a range. |
+| `X depends on itself` | Remove the entry. |
 | `[module.dependencies]: "X" is not a module id` / `[module.dependencies] X: ...` | A requirement is a string such as `">=0.2, <1"`; an inline table (`{ version = ..., optional = true }`) is a parse error. |
-| `X is declared in both depends and [module.dependencies]; use one of them` | Keep the table entry, which carries the range. |
 | `a module may declare at most 20 dependencies` | Split the module. |
 | `module needs a name and a description` | Fill them in. |
 | `declarative packages run no code and may not declare network destinations` | Remove `network_destinations`. |
@@ -640,7 +644,40 @@ The built-in modules follow the same rule: `lead.stage` (actions `qualify`, `mar
 - **A plan comes first (D55).** Every install and upgrade computes a plan before it changes anything: is the core right, is every dependency present at a version that satisfies its requirement (built-ins against the core, installed packages, marketplace packages), in what order must modules be installed. `module_plan.preview` returns it (give `id` for a marketplace package or `manifest` for an uploaded file); the Modules page shows it in a dialog; `obop modules plan FILE|ID` prints it. It is read-only and an agent may call it.
 - **Dependencies come with the module.** A dependency that is not installed but is in the marketplace is installed first, transitively, in dependency order; one that is installed at a version that fits is skipped; one that is installed but too old is upgraded when the marketplace has a version that fits. Cycles, a missing dependency, a core mismatch or a conflict are **blockers**: the plan lists them and nothing is installed.
 - **Install** (`marketplace_listing.install`, `module.install`, `obop modules install`) applies the plan as one operation: validate, run the gate, check collisions, register, store. Every step records who installed it and when. If a step fails the earlier steps are undone and the error says so. An agent proposes the whole plan; one human approval runs it once. `without_dependencies: true` is refused.
-- **Upgrade**: install a file with the same `id` and a **higher** `version` (semver order, pre-releases below their release). The module is unregistered and registered again from the new file. The stored records are not touched. There are **no migrations**: if you rename or remove a field or model, old records keep their old data in the store but the new definition no longer exposes it; if you add a `required` field, old records are not re-validated. Prefer adding optional fields. An upgrade is blocked when an installed module requires a version of this one that the new version is not (`projects` 2.0.0 while `timesheets` needs `<1`).
+- **Update (D63)**: an installed package is updated to a **higher** `version` that the marketplace offers (`module.upgrade ID`, `module.upgrade_all`, `obop modules update ID|update-all`, Customize, Modules, Updates) or that you upload (a file with the same `id`). The plan shows the release notes, what changes in the models, the data steps that will run, and which installed modules depend on this one with the range each supports. It is applied as **one atomic batch**: the data steps and the new package record are written together, so a failure or a record changed meanwhile leaves everything as it was. It holds the cross-process lock of D59, so two server processes cannot update at once.
+  - **Additive changes** (a new model, an optional field, a select option, an action) need nothing: records keep their data and the new parts start empty.
+  - **Breaking changes** are refused with a readable message unless the new version declares a step for them (section 7.1): a removed field, a retyped field (never convertible: add a new field and move the data yourself), a removed select option, a removed model, and a new or newly required field while records exist.
+  - An update is blocked when an installed module supports a range of this one that the new version leaves (`projects` 2.0.0 while `timesheets` needs `<1`).
+  - **Rollback** (`module.rollback ID`, Versions tab) puts back the version before the last update, one level deep. Renames are reversed; fields the update added stay in the database and the older version ignores them. It is refused when the update deleted data (a `drop_field` step: restore the backup instead), when the old version no longer fits the core or its dependencies, or when it would leave a dependent's range.
+  - Agents may only propose `module.upgrade`, `module.upgrade_all` and `module.rollback`; each is audited in `security_event` (`module_update`, `module_rollback`, with the data steps named).
+
+### 7.1 `[[migration]]`: declarative data steps (D63)
+
+```toml
+[[migration]]
+from = "<0.2.0"            # the installed versions this step applies to (a range, required)
+op = "rename_field"        # rename_field | set_default | drop_field
+model = "assets_asset"
+field = "plate"            # old name (rename), the field filled (set_default), the field dropped
+to = "registration"        # rename_field only: a field of this version
+description = "optional sentence for the plan"
+
+[[migration]]
+from = "<0.2.0"
+op = "set_default"         # writes `value` into every record where the field is empty
+model = "assets_asset"
+field = "tier"
+value = "standard"         # text, whole number, true/false; a select value must be an option
+
+[[migration]]
+from = "<0.2.0"
+op = "drop_field"          # deletes the values of a field this version no longer has
+model = "assets_asset"
+field = "notes"
+confirm = true             # required: the values are deleted and the step cannot be rolled back
+```
+
+Steps are checked when the package is read (the model and fields must exist in this version, the value must fit the field kind) and run in declaration order, inside the same atomic batch as the update. Each record is changed with a compare-and-set on the value that was read, so an edit made by a user meanwhile makes the whole batch fail cleanly and it is retried against the fresh data. With no records in a model, none of its changes can leave anything invalid, so nothing is refused for it.
 - **Uninstall** (`obop modules uninstall ID`, Customize, or `module.uninstall`; an administrator only) removes the commands and the models from the app; the **data stays** in the database, and installing the module again brings every record back. A module cannot be uninstalled while another installed package depends on it; the error names the dependents, directly and through others.
 - A package that no longer fits the running core (after the instance was upgraded) still loads, so its data stays reachable; the Modules page marks it incompatible.
 - Install, upgrade and uninstall are `platform.admin` commands that agents may only propose.
