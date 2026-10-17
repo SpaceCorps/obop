@@ -1716,11 +1716,18 @@ fn full_flow(s: &Shop) {
     assert_eq!(get(s, &product_path_of(&l)).status, 200);
     let std = methods(s).remove(0);
     let lines = [(l.id.as_str(), "2")];
-    let r = post(
-        s,
-        "/shop/checkout",
-        &order_fields(&lines, &[("shipping_method_id", &std.id)]),
+    // Idempotency keys now live in the database for a day: a fresh key per run, or a rerun on a
+    // persistent database would be told its order was already placed.
+    let idem = format!(
+        "{:032x}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(1, |d| d.as_nanos())
     );
+    let mut fields = order_fields(&lines, &[("shipping_method_id", &std.id)]);
+    fields.retain(|(k, _)| *k != "idem");
+    fields.push(("idem", &idem));
+    let r = post(s, "/shop/checkout", &fields);
     assert_eq!(r.status, 303);
     let page = get(s, r.get_header("location").unwrap());
     assert!(text(&page).contains("buyer@example.test"));
