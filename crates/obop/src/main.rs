@@ -18,9 +18,16 @@ use std::sync::Arc;
 const USAGE: &str = "usage: obop <command>
   --version
   modules labels TARGET LANG                    a label template (every translatable text, English values) for a module, bundled package or FILE
-  modules check [--complete] [FILE...]          the install gate over linked modules, or over package files (no database);
-                                                --complete also demands every text translated in each language present
-  modules list | install FILE | uninstall ID    manage packages in the database (operator tool)
+  modules check [--complete] [--catalog] [FILE...]
+                                                the install gate over linked modules, or over package files (no database):
+                                                parser, gate, dependencies and ranges against the built-ins and the bundled
+                                                catalogue, core requirement. --catalog also demands what the bundled catalogue and
+                                                the marketplace require (a licence, requires_core); --complete demands every text
+                                                translated in each language present
+  modules list                                  every module with version, licence, core requirement and source
+  modules tree [ID]                             the dependency tree of a module (or of every installed package)
+  modules plan FILE|ID                          what installing a file or marketplace package would do, without doing it
+  modules install FILE | uninstall ID           manage packages in the database (operator tool); an install brings its dependencies
   modules market                                list the marketplace; install with `modules install-from ID`
   admin create USER [--groups a,b | --all-groups]
                                                 create a user; the password is read from stdin
@@ -95,6 +102,7 @@ fn main() -> ExitCode {
                 | "--public-site"
                 | "--trust-proxy"
                 | "--complete"
+                | "--catalog"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -116,17 +124,22 @@ fn main() -> ExitCode {
     };
     let result = match args.as_slice() {
         [] | ["--version"] => {
-            println!("{} {}", obop_types::NAME, env!("CARGO_PKG_VERSION"));
+            println!("{} {}", obop_types::NAME, obop_types::CORE_VERSION);
             Ok(())
         }
         ["modules", "check"] => modules_check(),
-        ["modules", "check", files @ ..] => modules_check_files(files, has("--complete")),
+        ["modules", "check", files @ ..] => {
+            modules_check_files_with(files, has("--complete"), has("--catalog"))
+        }
         ["modules", "labels", target, lang] => {
             obop_pkg::files::template_for(target, lang, &App::new().modules)
                 .map(|t| print!("{t}"))
                 .map_err(|e| fail(&e))
         }
         ["modules", "list"] => modules_list(&opts),
+        ["modules", "tree"] => modules_tree(&opts, None),
+        ["modules", "tree", id] => modules_tree(&opts, Some(id)),
+        ["modules", "plan", target] => modules_plan(&opts, target),
         ["modules", "market"] => modules_market(&opts),
         ["modules", "install", file] => modules_install(&opts, Some(file), None),
         ["modules", "install-from", id] => modules_install(&opts, None, Some(id)),
@@ -266,12 +279,23 @@ fn modules_check() -> Exit {
 
 /// `obop modules check FILE...`: the parser, the D41 gate and the install-time rules that need no
 /// database, for package files. Prints `ok` or the exact errors per file.
+#[cfg(test)]
 fn modules_check_files(files: &[&str], complete: bool) -> Exit {
+    modules_check_files_with(files, complete, false)
+}
+
+fn modules_check_files_with(files: &[&str], complete: bool, catalog: bool) -> Exit {
     let builtin = App::new().modules;
     let mut failed = false;
     for f in files {
         let errors = match obop_pkg::files::read_source(std::path::Path::new(f)) {
-            Ok(obop_pkg::files::Source::Package(text)) => obop_pkg::check_manifest(&text, &builtin),
+            Ok(obop_pkg::files::Source::Package(text)) => {
+                let r = obop_pkg::check_package(&text, &builtin, catalog);
+                for w in &r.warnings {
+                    println!("warn  {f}: {w}");
+                }
+                r.errors
+            }
             Ok(obop_pkg::files::Source::Labels {
                 stem,
                 text,
@@ -308,13 +332,68 @@ fn modules_list(o: &Opts) -> Exit {
         demo: false,
         ..clone_opts(o)
     })?;
+    let core = obop_types::CORE_VERSION;
+    println!(
+        "{:<16} {:<10} {:<20} {:<12} {:<12} NAME",
+        "ID", "VERSION", "LICENSE", "NEEDS CORE", "SOURCE"
+    );
     for p in app.installer.list() {
+        let req = if p.meta.requires_core.is_empty() {
+            "*"
+        } else {
+            &p.meta.requires_core
+        };
+        let ok = obop_pkg::semver::Req::parse(req)
+            .ok()
+            .zip(obop_pkg::semver::Version::parse(core).ok())
+            .is_none_or(|(r, v)| r.matches(&v));
         println!(
-            "{:<14} {:<10} {:<12} {}",
-            p.id, p.version, p.source, p.description
+            "{:<16} {:<10} {:<20} {:<12} {:<12} {}{}",
+            p.id,
+            p.version,
+            if p.meta.license.is_empty() {
+                "-"
+            } else {
+                &p.meta.license
+            },
+            req,
+            p.source,
+            p.name,
+            if ok { "" } else { "  (needs another core)" }
         );
     }
+    println!("core {core}");
     Ok(())
+}
+
+fn modules_tree(o: &Opts, id: Option<&str>) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    print!("{}", app.installer.tree(id).map_err(|e| fail(&e))?);
+    Ok(())
+}
+
+/// `obop modules plan FILE|ID`: the install plan, nothing installed. A target that is a file on
+/// disk is an upload; anything else is a marketplace id.
+fn modules_plan(o: &Opts, target: &str) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    let (text, ok) = if std::path::Path::new(target).is_file() {
+        let manifest =
+            obop_pkg::files::read_package(std::path::Path::new(target)).map_err(|e| fail(&e))?;
+        app.installer
+            .plan_text(obop_pkg::installer::Request::Manifest(&manifest))
+    } else {
+        app.installer
+            .plan_text(obop_pkg::installer::Request::Market(target))
+    }
+    .map_err(|e| fail(&e))?;
+    print!("{text}");
+    if ok { Ok(()) } else { Err(ExitCode::FAILURE) }
 }
 
 fn modules_market(o: &Opts) -> Exit {
@@ -336,15 +415,19 @@ fn modules_install(o: &Opts, file: Option<&str>, market_id: Option<&str>) -> Exi
     })?;
     let by = "operator";
     let r = match (file, market_id) {
-        (Some(f), _) => app.installer.install(
+        (Some(f), _) => app.installer.install_outcome(
             &obop_pkg::files::read_package(std::path::Path::new(f)).map_err(|e| fail(&e))?,
             "upload",
             by,
         ),
-        (_, Some(id)) => app.installer.install_from_marketplace(id, by),
+        (_, Some(id)) => app.installer.install_from_marketplace_outcome(id, by),
         _ => unreachable!(),
     };
-    let p = r.map_err(|e| fail(&e))?;
+    let o = r.map_err(|e| fail(&e))?;
+    for (p, action) in o.applied.iter().filter(|(p, _)| p.id != o.root.id) {
+        println!("{} {} {} (dependency)", action.as_str(), p.id, p.version);
+    }
+    let p = &o.root;
     println!(
         "installed {} {} (models: {}; groups: {})",
         p.id,
@@ -352,6 +435,9 @@ fn modules_install(o: &Opts, file: Option<&str>, market_id: Option<&str>) -> Exi
         p.models.join(", "),
         p.groups.join(", ")
     );
+    for w in &o.warnings {
+        println!("warning: {w}");
+    }
     Ok(())
 }
 
@@ -1963,7 +2049,7 @@ mod tests {
             (
                 std::fs::read_to_string(root.join("packages/accounting.toml"))
                     .unwrap()
-                    .replace("depends = [\"base\"]", "depends = [\"ghost\"]"),
+                    .replace("base = \"^0.2\"", "ghost = \"^0.2\""),
                 "needs module ghost",
             ),
             (format!("{fleet}\nbogus = 1"), "invalid obop.toml"),
@@ -1977,7 +2063,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("obop-check-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let bad = dir.join("bad.toml");
-        std::fs::write(&bad, fleet.replace("0.2.0", "2")).unwrap();
+        std::fs::write(&bad, fleet.replace("0.3.0", "2")).unwrap();
         let good = root.join("packages/fleet.toml");
         let (bad_s, good_s) = (
             bad.to_string_lossy().to_string(),
@@ -2286,7 +2372,7 @@ mod bundled_packages {
         while !left.is_empty() {
             let at = left
                 .iter()
-                .position(|m| m.module.depends.iter().all(|d| have.contains(d)))
+                .position(|m| m.dependency_ids().iter().all(|d| have.contains(d)))
                 .expect("a dependency cycle or a dependency that no package provides");
             let m = left.remove(at);
             have.insert(m.module.id.clone());
@@ -2686,7 +2772,7 @@ mod bundled_packages {
         assert!(
             manifests
                 .iter()
-                .any(|m| m.module.depends.contains(&"projects".to_string()))
+                .any(|m| m.dependency_ids().contains(&"projects".to_string()))
         );
         assert!(call(&app, &admin, "module.uninstall", by_id("projects")).is_err());
         assert!(app.dispatcher.has_model("projects_task"));
@@ -2694,7 +2780,7 @@ mod bundled_packages {
         for (dep, model) in [("hr", "hr_employee"), ("accounting", "accounting_move")] {
             if manifests
                 .iter()
-                .any(|m| m.module.depends.contains(&dep.to_string()))
+                .any(|m| m.dependency_ids().contains(&dep.to_string()))
             {
                 assert!(
                     call(&app, &admin, "module.uninstall", by_id(dep)).is_err(),
@@ -2872,7 +2958,7 @@ mod bundled_packages {
         assert_eq!(info.models, ["assets_category", "assets_asset"]);
         assert_eq!(info.groups, ["assets.manager", "assets.user"]);
         let again = app.installer.install(ASSETS, "upload", "test").unwrap_err();
-        assert!(again.contains("is not an upgrade"), "{again}");
+        assert!(again.contains("is already installed"), "{again}");
         let v2 = ASSETS.replace("version = \"0.1.0\"", "version = \"0.2.0\"");
         assert_eq!(
             app.installer
@@ -2971,13 +3057,13 @@ mod bundled_packages {
         let e = app
             .installer
             .install(
-                &ASSETS.replace("depends = [\"base\"]", "depends = [\"ghost\"]"),
+                &ASSETS.replace("base = \"^0.2\"", "ghost = \"*\""),
                 "upload",
                 "t",
             )
             .unwrap_err();
         assert!(
-            e.contains("needs module ghost, which is not installed"),
+            e.contains("needs ghost *, which is not installed and not offered by the marketplace"),
             "{e}"
         );
         let e = app
@@ -2989,7 +3075,7 @@ mod bundled_packages {
             )
             .unwrap_err();
         assert!(
-            e.contains("refers to model ghost_model, which is not installed"),
+            e.contains("refers to model ghost_model, which no dependency of assets provides"),
             "{e}"
         );
         let e = app

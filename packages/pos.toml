@@ -1,10 +1,21 @@
 [module]
 id = "pos"
-version = "0.1.0"
+version = "0.2.0"
 name = "Point of Sale"
 description = "Shop tills: a point-of-sale configuration, cash-controlled sessions that are opened and closed, orders with lines, and payment lines per method. A refund and the closing of a session need a human approval from a manager; agents may only propose them. Totals, change and cash differences are entered, not computed. Card numbers must never be stored; keep only the payment provider's reference. Needs the Products package."
 author = "SpaceCorps"
-depends = ["base", "product"]
+summary = "Shop tills: cash-controlled sessions, orders with lines and payments. Refunds and closing need approval."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["pos", "retail", "till"]
+categories = ["sales"]
+maturity = "experimental"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
+product = "^0.2"
 
 [[model]]
 name = "pos_config"

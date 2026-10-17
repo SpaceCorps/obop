@@ -1,10 +1,21 @@
 [module]
 id = "ecommerce"
-version = "0.2.0"
+version = "0.3.0"
 name = "eCommerce"
 description = "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. There is no payment provider: an order starts as pending and the shop contacts the buyer. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package."
 author = "SpaceCorps"
-depends = ["base", "product"]
+summary = "An online shop: listings, shipping, discount codes and web orders, with a public storefront when the site is on."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["shop", "orders", "storefront"]
+categories = ["sales"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
+product = "^0.2"
 
 [[model]]
 name = "ecommerce_category"

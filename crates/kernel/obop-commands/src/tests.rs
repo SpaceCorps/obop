@@ -212,6 +212,7 @@ fn module(p: &str) -> Module {
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
+        meta: Default::default(),
     }
 }
 
@@ -1902,6 +1903,7 @@ fn hooks_module() -> Module {
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
+        meta: Default::default(),
     }
 }
 

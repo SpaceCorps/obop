@@ -31,11 +31,11 @@ description = "Berechtigungsgruppen, die das Modul verwendet"
 
 [labels.de.model.module.action.install]
 label = "Installieren"
-description = "Ein Modul anhand des Texts seiner obop.toml installieren oder aktualisieren"
+description = "Ein Modul anhand des Texts seiner obop.toml installieren oder aktualisieren, samt der Abhängigkeiten, die es braucht"
 
 [labels.de.model.module.action.uninstall]
 label = "Deinstallieren"
-description = "Ein Modul entfernen; seine Daten bleiben in der Datenbank erhalten"
+description = "Ein Modul entfernen; seine Daten bleiben in der Datenbank. Wird abgelehnt, solange ein anderes Modul es braucht"
 
 [labels.de.model.marketplace_listing]
 name = "Marktplatz-Eintrag"
@@ -71,7 +71,7 @@ description = "Berechtigungsgruppen, die das Modul verwendet"
 
 [labels.de.model.marketplace_listing.action.install]
 label = "Installieren"
-description = "Ein Modul anhand seiner ID aus dem Marktplatz installieren"
+description = "Ein Modul anhand seiner ID aus dem Marktplatz installieren, samt der benötigten Abhängigkeiten, in einem Vorgang"
 
 [labels.de.model.setting]
 name = "Einstellung"
@@ -104,3 +104,231 @@ description = "Eine kurze Notiz ohne Code und ohne Geheimnis"
 [labels.de.model.security_event.field.at]
 label = "Zeitpunkt"
 description = "Wann es geschah, in UTC (RFC 3339)"
+
+[labels.de.model.module.field.summary]
+label = "Zusammenfassung"
+description = "Eine Zeile über das Modul, auf seiner Karte angezeigt"
+
+[labels.de.model.module.field.author]
+label = "Autor"
+description = "Wer es veröffentlicht"
+
+[labels.de.model.module.field.authors]
+label = "Autoren"
+description = "Alle Autoren (eine Liste)"
+
+[labels.de.model.module.field.license]
+label = "Lizenz"
+description = "SPDX-Lizenzausdruck, LicenseRef-... oder proprietary"
+
+[labels.de.model.module.field.license_kind]
+label = "Lizenzart"
+description = "spdx, custom, proprietary oder none"
+
+[labels.de.model.module.field.license_url]
+label = "Lizenz-Link"
+description = "Link zur SPDX-Seite einer einzelnen Lizenzkennung"
+
+[labels.de.model.module.field.homepage]
+label = "Webseite"
+description = "Link zur Startseite des Moduls"
+
+[labels.de.model.module.field.repository]
+label = "Repository"
+description = "Link zum Quellcode-Repository"
+
+[labels.de.model.module.field.documentation]
+label = "Dokumentation"
+description = "Link zur Dokumentation"
+
+[labels.de.model.module.field.support]
+label = "Support"
+description = "Link dazu, wo Unterstützung geleistet wird"
+
+[labels.de.model.module.field.keywords]
+label = "Schlagwörter"
+description = "Suchbegriffe (eine Liste)"
+
+[labels.de.model.module.field.categories]
+label = "Kategorien"
+description = "Kategorien: finance, sales, supply-chain, people, services, marketing, productivity, platform, other"
+
+[labels.de.model.module.field.icon]
+label = "Symbol"
+description = "Name eines integrierten Symbols"
+
+[labels.de.model.module.field.maturity]
+label = "Reifegrad"
+description = "stable, beta oder experimental"
+
+[labels.de.model.module.field.requires_core]
+label = "Benötigt Kern"
+description = "Die Kernversionen, auf denen das Modul läuft, eine Semver-Anforderung"
+
+[labels.de.model.module.field.compatible]
+label = "Kompatibel"
+description = "Ob der laufende Kern die Kernanforderung erfüllt"
+
+[labels.de.model.module.field.dependencies]
+label = "Abhängigkeiten"
+description = "Abhängigkeiten mit ihrer Anforderung und wie sie derzeit erfüllt sind (eine Liste)"
+
+[labels.de.model.module.field.dependents]
+label = "Benötigt von"
+description = "IDs der installierten Module, die dieses benötigen (eine Liste)"
+
+[labels.de.model.module.field.update_available]
+label = "Update verfügbar"
+description = "Die neuere Version, die der Marktplatz anbietet, falls vorhanden"
+
+[labels.de.model.module.field.installed_at]
+label = "Installiert am"
+description = "Wann es installiert wurde (Unix-Sekunden); leer bei integrierten Modulen"
+
+[labels.de.model.module.field.installed_by]
+label = "Installiert von"
+description = "Wer es installiert hat"
+
+[labels.de.model.module.field.contents]
+label = "Inhalt"
+description = "Modelle, Felder, Aktionen, Freigabeschritte und Datenklassen, die das Modul deklariert"
+
+[labels.de.model.module.field.uninstallable]
+label = "Entfernbar"
+description = "Ob es jetzt entfernt werden kann"
+
+[labels.de.model.module.field.uninstall_blockers]
+label = "Entfernen blockiert durch"
+description = "Was das Entfernen verhindert (eine Liste)"
+
+[labels.de.model.module.field.warnings]
+label = "Warnungen"
+description = "Hinweise, die nichts verhindern, etwa eine proprietäre Lizenz (eine Liste)"
+
+[labels.de.model.marketplace_listing.field.summary]
+label = "Zusammenfassung"
+description = "Eine Zeile über das Modul, auf seiner Karte angezeigt"
+
+[labels.de.model.marketplace_listing.field.authors]
+label = "Autoren"
+description = "Alle Autoren (eine Liste)"
+
+[labels.de.model.marketplace_listing.field.license]
+label = "Lizenz"
+description = "SPDX-Lizenzausdruck, LicenseRef-... oder proprietary"
+
+[labels.de.model.marketplace_listing.field.license_kind]
+label = "Lizenzart"
+description = "spdx, custom, proprietary oder none"
+
+[labels.de.model.marketplace_listing.field.license_url]
+label = "Lizenz-Link"
+description = "Link zur SPDX-Seite einer einzelnen Lizenzkennung"
+
+[labels.de.model.marketplace_listing.field.homepage]
+label = "Webseite"
+description = "Link zur Startseite des Moduls"
+
+[labels.de.model.marketplace_listing.field.repository]
+label = "Repository"
+description = "Link zum Quellcode-Repository"
+
+[labels.de.model.marketplace_listing.field.documentation]
+label = "Dokumentation"
+description = "Link zur Dokumentation"
+
+[labels.de.model.marketplace_listing.field.support]
+label = "Support"
+description = "Link dazu, wo Unterstützung geleistet wird"
+
+[labels.de.model.marketplace_listing.field.keywords]
+label = "Schlagwörter"
+description = "Suchbegriffe (eine Liste)"
+
+[labels.de.model.marketplace_listing.field.categories]
+label = "Kategorien"
+description = "Kategorien: finance, sales, supply-chain, people, services, marketing, productivity, platform, other"
+
+[labels.de.model.marketplace_listing.field.icon]
+label = "Symbol"
+description = "Name eines integrierten Symbols"
+
+[labels.de.model.marketplace_listing.field.maturity]
+label = "Reifegrad"
+description = "stable, beta oder experimental"
+
+[labels.de.model.marketplace_listing.field.requires_core]
+label = "Benötigt Kern"
+description = "Die Kernversionen, auf denen das Modul läuft, eine Semver-Anforderung"
+
+[labels.de.model.marketplace_listing.field.compatible]
+label = "Kompatibel"
+description = "Ob der laufende Kern die Kernanforderung erfüllt"
+
+[labels.de.model.marketplace_listing.field.dependencies]
+label = "Abhängigkeiten"
+description = "Abhängigkeiten mit ihrer Anforderung und wie sie derzeit erfüllt sind (eine Liste)"
+
+[labels.de.model.marketplace_listing.field.dependents]
+label = "Benötigt von"
+description = "IDs der installierten Module, die dieses benötigen (eine Liste)"
+
+[labels.de.model.marketplace_listing.field.update_available]
+label = "Update verfügbar"
+description = "Die neuere Version, die der Marktplatz anbietet, falls vorhanden"
+
+[labels.de.model.marketplace_listing.field.without_dependencies]
+label = "Ohne Abhängigkeiten"
+description = "Muss false sein oder fehlen: erforderliche Abhängigkeiten lassen sich nicht überspringen"
+
+[labels.de.model.marketplace_listing.field.installed]
+label = "Installiert"
+description = "Ob eine Version installiert ist"
+
+[labels.de.model.marketplace_listing.field.installed_version]
+label = "Installierte Version"
+description = "Die installierte Version, falls vorhanden"
+
+[labels.de.model.marketplace_listing.field.installable]
+label = "Installierbar"
+description = "Ob es hier jetzt installiert werden kann"
+
+[labels.de.model.marketplace_listing.field.blockers]
+label = "Hindernisse"
+description = "Was die Installation verhindert (eine Liste)"
+
+[labels.de.model.module_plan]
+name = "Installationsplan"
+description = "Was die Installation eines Moduls hier bewirken würde: die Schritte der Reihe nach, Hindernisse und Warnungen"
+
+[labels.de.model.module_plan.action.preview]
+label = "Vorschau"
+description = "Eine Installation planen, ohne sie auszuführen: die Schritte der Reihe nach mit Versionen und Lizenzen, Hindernisse und Warnungen. Gib id (Marktplatz) oder manifest (obop.toml-Text) an"
+
+[labels.de.model.module_plan.field.manifest]
+label = "Manifest"
+description = "Eingabe: der Text einer obop.toml, die geplant werden soll (oder id für ein Marktplatz-Paket)"
+
+[labels.de.model.module_plan.field.ok]
+label = "Ausführbar"
+description = "Ob der Plan keine Hindernisse hat"
+
+[labels.de.model.module_plan.field.root]
+label = "Modul"
+description = "Das Modul, für das der Plan gilt"
+
+[labels.de.model.module_plan.field.core_version]
+label = "Kernversion"
+description = "Die laufende Kernversion"
+
+[labels.de.model.module_plan.field.steps]
+label = "Schritte"
+description = "Die zu installierenden oder zu aktualisierenden Module, Abhängigkeiten zuerst (eine Liste)"
+
+[labels.de.model.module_plan.field.blockers]
+label = "Hindernisse"
+description = "Was die Installation verhindert (eine Liste)"
+
+[labels.de.model.module_plan.field.warnings]
+label = "Warnungen"
+description = "Hinweise, die nichts verhindern, etwa eine proprietäre Lizenz (eine Liste)"

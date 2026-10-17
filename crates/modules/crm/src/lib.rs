@@ -1,7 +1,7 @@
 //! `crm`: leads and opportunities.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
 use obop_types::DataClass::*;
 
 pub fn module() -> Module {
@@ -71,6 +71,13 @@ pub fn module() -> Module {
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
+        meta: ModuleMeta::first_party(
+            "Leads and opportunities through a pipeline from first contact to won or lost.",
+            &["sales"],
+            &["crm", "leads", "pipeline"],
+            "crm",
+            &["base"],
+        ),
     };
     m.translated(&[
         include_str!("../../../../packages/labels/de/crm.toml"),

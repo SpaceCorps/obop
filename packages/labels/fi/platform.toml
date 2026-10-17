@@ -31,11 +31,11 @@ description = "Käyttöoikeusryhmät, joita moduuli käyttää"
 
 [labels.fi.model.module.action.install]
 label = "Asenna"
-description = "Asenna tai päivitä moduuli sen obop.toml-tiedoston tekstistä"
+description = "Asenna tai päivitä moduuli obop.toml-tiedostonsa tekstistä tarvittavine riippuvuuksineen"
 
 [labels.fi.model.module.action.uninstall]
 label = "Poista asennus"
-description = "Poista moduuli; sen tiedot säilyvät tietokannassa"
+description = "Poista moduuli; sen tiedot jäävät tietokantaan. Evätään, kun jokin toinen moduuli tarvitsee sitä"
 
 [labels.fi.model.marketplace_listing]
 name = "Moduulikaupan moduuli"
@@ -71,7 +71,7 @@ description = "Käyttöoikeusryhmät, joita moduuli käyttää"
 
 [labels.fi.model.marketplace_listing.action.install]
 label = "Asenna"
-description = "Asenna moduuli moduulikaupasta tunnisteen perusteella"
+description = "Asenna moduuli moduulikaupasta tunnuksen perusteella tarvittavine riippuvuuksineen yhdellä toimenpiteellä"
 
 [labels.fi.model.setting]
 name = "Asetus"
@@ -104,3 +104,231 @@ description = "Lyhyt huomautus ilman koodia tai salaisuutta"
 [labels.fi.model.security_event.field.at]
 label = "Aika"
 description = "Milloin se tapahtui, UTC-aikana (RFC 3339)"
+
+[labels.fi.model.module.field.summary]
+label = "Yhteenveto"
+description = "Yksi rivi moduulista, näkyy sen kortissa"
+
+[labels.fi.model.module.field.author]
+label = "Tekijä"
+description = "Kuka sen julkaisee"
+
+[labels.fi.model.module.field.authors]
+label = "Tekijät"
+description = "Kaikki tekijät (luettelo)"
+
+[labels.fi.model.module.field.license]
+label = "Lisenssi"
+description = "SPDX-lisenssilauseke, LicenseRef-... tai proprietary"
+
+[labels.fi.model.module.field.license_kind]
+label = "Lisenssin laji"
+description = "spdx, custom, proprietary tai none"
+
+[labels.fi.model.module.field.license_url]
+label = "Lisenssilinkki"
+description = "Linkki yksittäisen lisenssitunnisteen SPDX-sivulle"
+
+[labels.fi.model.module.field.homepage]
+label = "Kotisivu"
+description = "Linkki moduulin kotisivulle"
+
+[labels.fi.model.module.field.repository]
+label = "Koodivarasto"
+description = "Linkki lähdekoodin varastoon"
+
+[labels.fi.model.module.field.documentation]
+label = "Dokumentaatio"
+description = "Linkki dokumentaatioon"
+
+[labels.fi.model.module.field.support]
+label = "Tuki"
+description = "Linkki paikkaan, jossa tukea annetaan"
+
+[labels.fi.model.module.field.keywords]
+label = "Avainsanat"
+description = "Hakusanat (luettelo)"
+
+[labels.fi.model.module.field.categories]
+label = "Luokat"
+description = "Luokat: finance, sales, supply-chain, people, services, marketing, productivity, platform, other"
+
+[labels.fi.model.module.field.icon]
+label = "Kuvake"
+description = "Sisäänrakennetun kuvakkeen nimi"
+
+[labels.fi.model.module.field.maturity]
+label = "Kypsyys"
+description = "stable, beta tai experimental"
+
+[labels.fi.model.module.field.requires_core]
+label = "Vaatii ytimen"
+description = "Ytimen versiot, joilla moduuli toimii, semver-vaatimus"
+
+[labels.fi.model.module.field.compatible]
+label = "Yhteensopiva"
+description = "Täyttääkö käynnissä oleva ydin ytimen vaatimuksen"
+
+[labels.fi.model.module.field.dependencies]
+label = "Riippuvuudet"
+description = "Riippuvuudet vaatimuksineen ja nykytilanteineen (luettelo)"
+
+[labels.fi.model.module.field.dependents]
+label = "Tarvitsijat"
+description = "Asennettujen moduulien tunnisteet, jotka tarvitsevat tätä (luettelo)"
+
+[labels.fi.model.module.field.update_available]
+label = "Päivitys saatavilla"
+description = "Uudempi versio, jota moduulikauppa tarjoaa, jos sellainen on"
+
+[labels.fi.model.module.field.installed_at]
+label = "Asennusaika"
+description = "Milloin asennettu (Unix-sekunteja); tyhjä sisäänrakennetuilla moduuleilla"
+
+[labels.fi.model.module.field.installed_by]
+label = "Asentaja"
+description = "Kuka asensi"
+
+[labels.fi.model.module.field.contents]
+label = "Sisältö"
+description = "Mallit, kentät, toiminnot, hyväksyntävaiheet ja tietoluokat, jotka moduuli ilmoittaa"
+
+[labels.fi.model.module.field.uninstallable]
+label = "Poistettavissa"
+description = "Voidaanko se poistaa nyt"
+
+[labels.fi.model.module.field.uninstall_blockers]
+label = "Poiston estää"
+description = "Mikä estää sen poistamisen (luettelo)"
+
+[labels.fi.model.module.field.warnings]
+label = "Varoitukset"
+description = "Huomautukset, jotka eivät estä mitään, esimerkiksi suljettu lisenssi (luettelo)"
+
+[labels.fi.model.marketplace_listing.field.summary]
+label = "Yhteenveto"
+description = "Yksi rivi moduulista, näkyy sen kortissa"
+
+[labels.fi.model.marketplace_listing.field.authors]
+label = "Tekijät"
+description = "Kaikki tekijät (luettelo)"
+
+[labels.fi.model.marketplace_listing.field.license]
+label = "Lisenssi"
+description = "SPDX-lisenssilauseke, LicenseRef-... tai proprietary"
+
+[labels.fi.model.marketplace_listing.field.license_kind]
+label = "Lisenssin laji"
+description = "spdx, custom, proprietary tai none"
+
+[labels.fi.model.marketplace_listing.field.license_url]
+label = "Lisenssilinkki"
+description = "Linkki yksittäisen lisenssitunnisteen SPDX-sivulle"
+
+[labels.fi.model.marketplace_listing.field.homepage]
+label = "Kotisivu"
+description = "Linkki moduulin kotisivulle"
+
+[labels.fi.model.marketplace_listing.field.repository]
+label = "Koodivarasto"
+description = "Linkki lähdekoodin varastoon"
+
+[labels.fi.model.marketplace_listing.field.documentation]
+label = "Dokumentaatio"
+description = "Linkki dokumentaatioon"
+
+[labels.fi.model.marketplace_listing.field.support]
+label = "Tuki"
+description = "Linkki paikkaan, jossa tukea annetaan"
+
+[labels.fi.model.marketplace_listing.field.keywords]
+label = "Avainsanat"
+description = "Hakusanat (luettelo)"
+
+[labels.fi.model.marketplace_listing.field.categories]
+label = "Luokat"
+description = "Luokat: finance, sales, supply-chain, people, services, marketing, productivity, platform, other"
+
+[labels.fi.model.marketplace_listing.field.icon]
+label = "Kuvake"
+description = "Sisäänrakennetun kuvakkeen nimi"
+
+[labels.fi.model.marketplace_listing.field.maturity]
+label = "Kypsyys"
+description = "stable, beta tai experimental"
+
+[labels.fi.model.marketplace_listing.field.requires_core]
+label = "Vaatii ytimen"
+description = "Ytimen versiot, joilla moduuli toimii, semver-vaatimus"
+
+[labels.fi.model.marketplace_listing.field.compatible]
+label = "Yhteensopiva"
+description = "Täyttääkö käynnissä oleva ydin ytimen vaatimuksen"
+
+[labels.fi.model.marketplace_listing.field.dependencies]
+label = "Riippuvuudet"
+description = "Riippuvuudet vaatimuksineen ja nykytilanteineen (luettelo)"
+
+[labels.fi.model.marketplace_listing.field.dependents]
+label = "Tarvitsijat"
+description = "Asennettujen moduulien tunnisteet, jotka tarvitsevat tätä (luettelo)"
+
+[labels.fi.model.marketplace_listing.field.update_available]
+label = "Päivitys saatavilla"
+description = "Uudempi versio, jota moduulikauppa tarjoaa, jos sellainen on"
+
+[labels.fi.model.marketplace_listing.field.without_dependencies]
+label = "Ilman riippuvuuksia"
+description = "Täytyy olla false tai puuttua: vaadittuja riippuvuuksia ei voi ohittaa"
+
+[labels.fi.model.marketplace_listing.field.installed]
+label = "Asennettu"
+description = "Onko jokin versio asennettu"
+
+[labels.fi.model.marketplace_listing.field.installed_version]
+label = "Asennettu versio"
+description = "Asennettu versio, jos sellainen on"
+
+[labels.fi.model.marketplace_listing.field.installable]
+label = "Asennettavissa"
+description = "Voidaanko se asentaa tänne nyt"
+
+[labels.fi.model.marketplace_listing.field.blockers]
+label = "Esteet"
+description = "Mikä estää asennuksen (luettelo)"
+
+[labels.fi.model.module_plan]
+name = "Asennussuunnitelma"
+description = "Mitä moduulin asentaminen tekisi täällä: vaiheet järjestyksessä, esteet ja varoitukset"
+
+[labels.fi.model.module_plan.action.preview]
+label = "Esikatselu"
+description = "Suunnittele asennus tekemättä sitä: vaiheet järjestyksessä versioineen ja lisensseineen, esteet ja varoitukset. Anna id (moduulikauppa) tai manifest (obop.toml-teksti)"
+
+[labels.fi.model.module_plan.field.manifest]
+label = "Manifesti"
+description = "Syöte: suunniteltavan obop.toml-tiedoston teksti (tai id moduulikaupan paketille)"
+
+[labels.fi.model.module_plan.field.ok]
+label = "Toteutettavissa"
+description = "Onko suunnitelma vailla esteitä"
+
+[labels.fi.model.module_plan.field.root]
+label = "Moduuli"
+description = "Moduuli, jota suunnitelma koskee"
+
+[labels.fi.model.module_plan.field.core_version]
+label = "Ytimen versio"
+description = "Käynnissä olevan ytimen versio"
+
+[labels.fi.model.module_plan.field.steps]
+label = "Vaiheet"
+description = "Asennettavat tai päivitettävät moduulit, riippuvuudet ensin (luettelo)"
+
+[labels.fi.model.module_plan.field.blockers]
+label = "Esteet"
+description = "Mikä estää asennuksen (luettelo)"
+
+[labels.fi.model.module_plan.field.warnings]
+label = "Varoitukset"
+description = "Huomautukset, jotka eivät estä mitään, esimerkiksi suljettu lisenssi (luettelo)"

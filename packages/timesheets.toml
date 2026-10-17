@@ -1,10 +1,20 @@
 [module]
 id = "timesheets"
-version = "0.1.0"
+version = "0.2.0"
 name = "Timesheets"
 description = "Time spent on project tasks, entered in minutes, with a billable flag and an approval step. Needs the Projects package."
 author = "SpaceCorps"
-depends = ["projects"]
+summary = "Time spent on project tasks in minutes, with a billable flag and an approval step."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["timesheets", "time-tracking", "billable"]
+categories = ["services"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+projects = ">=0.3, <1"
 
 [[model]]
 name = "timesheets_entry"

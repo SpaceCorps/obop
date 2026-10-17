@@ -1,10 +1,21 @@
 [module]
 id = "purchase"
-version = "0.1.0"
+version = "0.2.0"
 name = "Purchase"
 description = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received and cancelled flow. Order totals are entered, not summed from the lines."
 author = "SpaceCorps"
-depends = ["base", "product"]
+summary = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received flow."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["purchase", "vendors", "orders"]
+categories = ["supply-chain"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
+product = "^0.2"
 
 [[model]]
 name = "purchase_vendor"

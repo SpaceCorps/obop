@@ -31,11 +31,11 @@ description = "Grupy uprawnień używane przez moduł"
 
 [labels.pl.model.module.action.install]
 label = "Zainstaluj"
-description = "Instaluje lub aktualizuje moduł na podstawie tekstu jego pliku obop.toml"
+description = "Zainstaluj lub zaktualizuj moduł z tekstu jego obop.toml razem z potrzebnymi zależnościami"
 
 [labels.pl.model.module.action.uninstall]
 label = "Odinstaluj"
-description = "Usuwa moduł; jego dane pozostają w bazie danych"
+description = "Usuń moduł; jego dane zostają w bazie. Odmowa, dopóki inny moduł go potrzebuje"
 
 [labels.pl.model.marketplace_listing]
 name = "Pozycja w marketplace"
@@ -71,7 +71,7 @@ description = "Grupy uprawnień używane przez moduł"
 
 [labels.pl.model.marketplace_listing.action.install]
 label = "Zainstaluj"
-description = "Instaluje moduł z marketplace na podstawie identyfikatora"
+description = "Zainstaluj moduł z marketplace według id razem z potrzebnymi zależnościami, w jednej operacji"
 
 [labels.pl.model.setting]
 name = "Ustawienie"
@@ -104,3 +104,231 @@ description = "Krótka notatka bez kodu i bez sekretu"
 [labels.pl.model.security_event.field.at]
 label = "Czas"
 description = "Kiedy to nastąpiło, w UTC (RFC 3339)"
+
+[labels.pl.model.module.field.summary]
+label = "Podsumowanie"
+description = "Jedna linijka o module, widoczna na jego karcie"
+
+[labels.pl.model.module.field.author]
+label = "Autor"
+description = "Kto go publikuje"
+
+[labels.pl.model.module.field.authors]
+label = "Autorzy"
+description = "Wszyscy autorzy (lista)"
+
+[labels.pl.model.module.field.license]
+label = "Licencja"
+description = "Wyrażenie licencji SPDX, LicenseRef-... lub proprietary"
+
+[labels.pl.model.module.field.license_kind]
+label = "Rodzaj licencji"
+description = "spdx, custom, proprietary lub none"
+
+[labels.pl.model.module.field.license_url]
+label = "Link do licencji"
+description = "Link do strony SPDX pojedynczego identyfikatora licencji"
+
+[labels.pl.model.module.field.homepage]
+label = "Strona główna"
+description = "Link do strony głównej modułu"
+
+[labels.pl.model.module.field.repository]
+label = "Repozytorium"
+description = "Link do repozytorium z kodem źródłowym"
+
+[labels.pl.model.module.field.documentation]
+label = "Dokumentacja"
+description = "Link do dokumentacji"
+
+[labels.pl.model.module.field.support]
+label = "Wsparcie"
+description = "Link do miejsca, gdzie udzielane jest wsparcie"
+
+[labels.pl.model.module.field.keywords]
+label = "Słowa kluczowe"
+description = "Słowa kluczowe do wyszukiwania (lista)"
+
+[labels.pl.model.module.field.categories]
+label = "Kategorie"
+description = "Kategorie: finance, sales, supply-chain, people, services, marketing, productivity, platform, other"
+
+[labels.pl.model.module.field.icon]
+label = "Ikona"
+description = "Nazwa wbudowanej ikony"
+
+[labels.pl.model.module.field.maturity]
+label = "Dojrzałość"
+description = "stable, beta lub experimental"
+
+[labels.pl.model.module.field.requires_core]
+label = "Wymaga rdzenia"
+description = "Wersje rdzenia, na których działa moduł, wymaganie semver"
+
+[labels.pl.model.module.field.compatible]
+label = "Zgodny"
+description = "Czy działający rdzeń spełnia wymaganie dotyczące rdzenia"
+
+[labels.pl.model.module.field.dependencies]
+label = "Zależności"
+description = "Zależności z ich wymaganiami i aktualnym stanem (lista)"
+
+[labels.pl.model.module.field.dependents]
+label = "Wymagany przez"
+description = "Identyfikatory zainstalowanych modułów, które potrzebują tego modułu (lista)"
+
+[labels.pl.model.module.field.update_available]
+label = "Dostępna aktualizacja"
+description = "Nowsza wersja oferowana przez marketplace, jeśli jest"
+
+[labels.pl.model.module.field.installed_at]
+label = "Zainstalowano"
+description = "Kiedy zainstalowano (sekundy uniksowe); puste dla modułów wbudowanych"
+
+[labels.pl.model.module.field.installed_by]
+label = "Zainstalował"
+description = "Kto zainstalował"
+
+[labels.pl.model.module.field.contents]
+label = "Zawartość"
+description = "Modele, pola, akcje, kroki zatwierdzania i klasy danych deklarowane przez moduł"
+
+[labels.pl.model.module.field.uninstallable]
+label = "Można usunąć"
+description = "Czy można go teraz usunąć"
+
+[labels.pl.model.module.field.uninstall_blockers]
+label = "Usunięcie blokuje"
+description = "Co uniemożliwia usunięcie (lista)"
+
+[labels.pl.model.module.field.warnings]
+label = "Ostrzeżenia"
+description = "Uwagi, które niczego nie blokują, na przykład licencja zastrzeżona (lista)"
+
+[labels.pl.model.marketplace_listing.field.summary]
+label = "Podsumowanie"
+description = "Jedna linijka o module, widoczna na jego karcie"
+
+[labels.pl.model.marketplace_listing.field.authors]
+label = "Autorzy"
+description = "Wszyscy autorzy (lista)"
+
+[labels.pl.model.marketplace_listing.field.license]
+label = "Licencja"
+description = "Wyrażenie licencji SPDX, LicenseRef-... lub proprietary"
+
+[labels.pl.model.marketplace_listing.field.license_kind]
+label = "Rodzaj licencji"
+description = "spdx, custom, proprietary lub none"
+
+[labels.pl.model.marketplace_listing.field.license_url]
+label = "Link do licencji"
+description = "Link do strony SPDX pojedynczego identyfikatora licencji"
+
+[labels.pl.model.marketplace_listing.field.homepage]
+label = "Strona główna"
+description = "Link do strony głównej modułu"
+
+[labels.pl.model.marketplace_listing.field.repository]
+label = "Repozytorium"
+description = "Link do repozytorium z kodem źródłowym"
+
+[labels.pl.model.marketplace_listing.field.documentation]
+label = "Dokumentacja"
+description = "Link do dokumentacji"
+
+[labels.pl.model.marketplace_listing.field.support]
+label = "Wsparcie"
+description = "Link do miejsca, gdzie udzielane jest wsparcie"
+
+[labels.pl.model.marketplace_listing.field.keywords]
+label = "Słowa kluczowe"
+description = "Słowa kluczowe do wyszukiwania (lista)"
+
+[labels.pl.model.marketplace_listing.field.categories]
+label = "Kategorie"
+description = "Kategorie: finance, sales, supply-chain, people, services, marketing, productivity, platform, other"
+
+[labels.pl.model.marketplace_listing.field.icon]
+label = "Ikona"
+description = "Nazwa wbudowanej ikony"
+
+[labels.pl.model.marketplace_listing.field.maturity]
+label = "Dojrzałość"
+description = "stable, beta lub experimental"
+
+[labels.pl.model.marketplace_listing.field.requires_core]
+label = "Wymaga rdzenia"
+description = "Wersje rdzenia, na których działa moduł, wymaganie semver"
+
+[labels.pl.model.marketplace_listing.field.compatible]
+label = "Zgodny"
+description = "Czy działający rdzeń spełnia wymaganie dotyczące rdzenia"
+
+[labels.pl.model.marketplace_listing.field.dependencies]
+label = "Zależności"
+description = "Zależności z ich wymaganiami i aktualnym stanem (lista)"
+
+[labels.pl.model.marketplace_listing.field.dependents]
+label = "Wymagany przez"
+description = "Identyfikatory zainstalowanych modułów, które potrzebują tego modułu (lista)"
+
+[labels.pl.model.marketplace_listing.field.update_available]
+label = "Dostępna aktualizacja"
+description = "Nowsza wersja oferowana przez marketplace, jeśli jest"
+
+[labels.pl.model.marketplace_listing.field.without_dependencies]
+label = "Bez zależności"
+description = "Musi mieć wartość false lub być pominięte: wymaganych zależności nie można pominąć"
+
+[labels.pl.model.marketplace_listing.field.installed]
+label = "Zainstalowany"
+description = "Czy jakaś wersja jest zainstalowana"
+
+[labels.pl.model.marketplace_listing.field.installed_version]
+label = "Zainstalowana wersja"
+description = "Zainstalowana wersja, jeśli jest"
+
+[labels.pl.model.marketplace_listing.field.installable]
+label = "Można zainstalować"
+description = "Czy można go teraz tutaj zainstalować"
+
+[labels.pl.model.marketplace_listing.field.blockers]
+label = "Przeszkody"
+description = "Co uniemożliwia instalację (lista)"
+
+[labels.pl.model.module_plan]
+name = "Plan instalacji"
+description = "Co zrobiłaby tutaj instalacja modułu: kroki po kolei, przeszkody i ostrzeżenia"
+
+[labels.pl.model.module_plan.action.preview]
+label = "Podgląd"
+description = "Zaplanuj instalację bez jej wykonywania: kroki po kolei z wersjami i licencjami, przeszkody i ostrzeżenia. Podaj id (marketplace) lub manifest (tekst obop.toml)"
+
+[labels.pl.model.module_plan.field.manifest]
+label = "Manifest"
+description = "Wejście: tekst pliku obop.toml do zaplanowania (albo id pakietu z marketplace)"
+
+[labels.pl.model.module_plan.field.ok]
+label = "Wykonalny"
+description = "Czy plan nie ma przeszkód"
+
+[labels.pl.model.module_plan.field.root]
+label = "Moduł"
+description = "Moduł, którego dotyczy plan"
+
+[labels.pl.model.module_plan.field.core_version]
+label = "Wersja rdzenia"
+description = "Wersja działającego rdzenia"
+
+[labels.pl.model.module_plan.field.steps]
+label = "Kroki"
+description = "Moduły do zainstalowania lub zaktualizowania, najpierw zależności (lista)"
+
+[labels.pl.model.module_plan.field.blockers]
+label = "Przeszkody"
+description = "Co uniemożliwia instalację (lista)"
+
+[labels.pl.model.module_plan.field.warnings]
+label = "Ostrzeżenia"
+description = "Uwagi, które niczego nie blokują, na przykład licencja zastrzeżona (lista)"

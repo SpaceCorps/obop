@@ -5,6 +5,11 @@ use std::fmt;
 /// Product name, as reported by the binary.
 pub const NAME: &str = "obop";
 
+/// The one authoritative core version (D55): the workspace package version. Built-in modules
+/// version with it, packages declare which core versions they run on, and `GET /api/meta`,
+/// the OpenAPI document, the MCP server info and `obop --version` all report this string.
+pub const CORE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Data classes of CONVENTIONS.md section 5, plus `None` for an explicit non-personal marker (D41).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DataClass {

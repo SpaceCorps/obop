@@ -1,10 +1,20 @@
 [module]
 id = "accounting"
-version = "0.1.0"
+version = "0.2.0"
 name = "Accounting"
 description = "Chart of accounts, journals, tax rates, journal entries with debit and credit lines, fiscal years and periods, and bank statement lines. Amounts are money fields in minor currency units and tax rates are numbers in basis points (2000 means 20.00 percent). Nothing is computed: balancing of debits and credits, tax amounts and entry numbers are the responsibility of whoever enters them. Posting an entry and closing a period or fiscal year need a human approval and the stricter accounting.approver group; agents may only propose them."
 author = "SpaceCorps"
-depends = ["base"]
+summary = "Chart of accounts, journals, taxes, fiscal periods and journal entries. Posting and closing need a human approval."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["accounting", "ledger", "journal", "tax"]
+categories = ["finance"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
 
 [[model]]
 name = "accounting_account"

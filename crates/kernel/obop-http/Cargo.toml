@@ -1,6 +1,6 @@
 [package]
 name = "obop-http"
-version = "0.0.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
@@ -10,6 +10,7 @@ obop-commands.workspace = true
 obop-connectors.workspace = true
 obop-community.workspace = true
 obop-mcp.workspace = true
+obop-types.workspace = true
 getrandom = "0.4"
 obop-site.workspace = true
 axum = "0.8.9"

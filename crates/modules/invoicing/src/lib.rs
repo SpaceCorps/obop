@@ -1,7 +1,7 @@
 //! `invoicing`: customer invoices. Posting is irreversible, so agents may only propose it.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
 use obop_types::DataClass::None as NoClass;
 
 pub fn module() -> Module {
@@ -64,6 +64,13 @@ pub fn module() -> Module {
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
+        meta: ModuleMeta::first_party(
+            "Customer invoices with a draft, posted and paid life cycle.",
+            &["finance"],
+            &["invoices", "billing"],
+            "invoicing",
+            &["base", "sales"],
+        ),
     };
     m.translated(&[
         include_str!("../../../../packages/labels/de/invoicing.toml"),

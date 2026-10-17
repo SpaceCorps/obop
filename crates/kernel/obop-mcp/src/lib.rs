@@ -209,7 +209,7 @@ fn initialize(id: &J, s: &mut Session, params: &J) -> J {
             "serverInfo": {
                 "name": "obop",
                 "title": "obop",
-                "version": env!("CARGO_PKG_VERSION"),
+                "version": obop_types::CORE_VERSION,
             },
             "instructions": INSTRUCTIONS,
         }),
@@ -358,7 +358,7 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
             mo
         })
         .collect();
-    json!({"modules": modules})
+    json!({"core_version": obop_types::CORE_VERSION, "modules": modules})
 }
 
 /// `labels` and `descriptions` (language -> text, D52), only when there is something to say.

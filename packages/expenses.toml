@@ -1,9 +1,17 @@
 [module]
 id = "expenses"
-version = "0.1.0"
+version = "0.2.0"
 name = "Expenses"
 description = "Employee expense claims with a draft, submitted, approved and paid flow. Paying is a separate permission and needs a human approval; receipts are referenced by note, not stored."
 author = "SpaceCorps"
+summary = "Employee expense claims with a draft, submitted, approved and paid flow."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["expenses", "claims", "reimbursement"]
+categories = ["finance", "people"]
+maturity = "beta"
+requires_core = "^0.2"
 
 [[model]]
 name = "expenses_expense"

@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "base"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-commands",
  "obop-masking",
@@ -269,7 +269,7 @@ checksum = "6e8ccc4ea9f6acc32d102c0f6d471d11d913ad15f20c04de743374861fa1d414"
 
 [[package]]
 name = "connectors"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "base",
  "crm",
@@ -309,7 +309,7 @@ dependencies = [
 
 [[package]]
 name = "crm"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-commands",
  "obop-registry",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "invoicing"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-commands",
  "obop-registry",
@@ -959,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "obop"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "base",
@@ -990,7 +990,7 @@ dependencies = [
 
 [[package]]
 name = "obop-auth"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -1006,7 +1006,7 @@ dependencies = [
 
 [[package]]
 name = "obop-commands"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-masking",
  "obop-registry",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "obop-community"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "ammonia",
  "form_urlencoded",
@@ -1035,7 +1035,7 @@ dependencies = [
 
 [[package]]
 name = "obop-connectors"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "obop-http"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "getrandom 0.4.3",
@@ -1068,6 +1068,7 @@ dependencies = [
  "obop-connectors",
  "obop-mcp",
  "obop-site",
+ "obop-types",
  "serde_json",
  "tokio",
  "tower",
@@ -1076,23 +1077,24 @@ dependencies = [
 
 [[package]]
 name = "obop-masking"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-types",
 ]
 
 [[package]]
 name = "obop-mcp"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-commands",
  "obop-registry",
+ "obop-types",
  "serde_json",
 ]
 
 [[package]]
 name = "obop-pkg"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-commands",
  "obop-registry",
@@ -1106,7 +1108,7 @@ dependencies = [
 
 [[package]]
 name = "obop-platform"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "getrandom 0.4.3",
  "obop-auth",
@@ -1120,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "obop-registry"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-types",
  "serde",
@@ -1129,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "obop-site"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "ammonia",
  "base",
@@ -1146,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "obop-storage"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "postgres",
  "rusqlite",
@@ -1155,7 +1157,7 @@ dependencies = [
 
 [[package]]
 name = "obop-types"
-version = "0.0.0"
+version = "0.2.0"
 
 [[package]]
 name = "once_cell"
@@ -1364,7 +1366,7 @@ dependencies = [
 
 [[package]]
 name = "product"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-commands",
  "obop-registry",
@@ -1518,7 +1520,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sales"
-version = "0.0.0"
+version = "0.2.0"
 dependencies = [
  "obop-commands",
  "obop-registry",

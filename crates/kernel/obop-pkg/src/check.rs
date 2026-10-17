@@ -7,17 +7,46 @@
 
 use crate::manifest::Manifest;
 use crate::marketplace::{Bundled, Marketplace};
+use crate::resolve::{self, World};
+use crate::semver::Version;
 use obop_registry::Module;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// What `obop modules check` found in one package.
+#[derive(Debug, Default, Clone)]
+pub struct Report {
+    pub errors: Vec<String>,
+    pub warnings: Vec<String>,
+}
 
 /// The problems with the package text, empty if it would pass an install on a fresh instance
 /// that has its dependencies. `builtin` are the linked first-party modules.
 pub fn check_manifest(text: &str, builtin: &[Module]) -> Vec<String> {
+    check_package(text, builtin, false).errors
+}
+
+/// Like `check_manifest`, with warnings. With `catalog` the package must also meet the rules
+/// for the bundled catalogue and the marketplace: a licence, a core requirement that the running
+/// core meets, and dependency ranges the bundled packages can satisfy (D55).
+pub fn check_package(text: &str, builtin: &[Module], catalog: bool) -> Report {
     let manifest = match Manifest::parse(text) {
         Ok(m) => m,
-        Err(e) => return vec![e],
+        Err(e) => {
+            return Report {
+                errors: vec![e],
+                warnings: vec![],
+            };
+        }
     };
     let mut errors = Vec::new();
+    let mut warnings = manifest.warnings();
+    if catalog {
+        errors.extend(manifest.catalog_problems());
+        // The catalogue says it: those two are required there, so they are not also warnings.
+        warnings.retain(|w| {
+            !w.starts_with("requires_core is not declared") && w != "no license is declared"
+        });
+    }
     if let Err(e) = manifest.to_module() {
         errors.push(e);
     }
@@ -35,7 +64,7 @@ pub fn check_manifest(text: &str, builtin: &[Module]) -> Vec<String> {
 
     // Models available through the dependencies, transitively for bundled packages.
     let mut available: BTreeSet<String> = BTreeSet::new();
-    let mut todo: Vec<String> = manifest.module.depends.clone();
+    let mut todo: Vec<String> = manifest.dependency_ids();
     let mut done = BTreeSet::new();
     while let Some(dep) = todo.pop() {
         if !done.insert(dep.clone()) {
@@ -47,7 +76,7 @@ pub fn check_manifest(text: &str, builtin: &[Module]) -> Vec<String> {
             available.extend(b.models.iter().map(|m| m.name.to_string()));
         } else if let Some(p) = bundled.iter().find(|p| p.module.id == dep) {
             available.extend(p.model.iter().map(|m| m.name.clone()));
-            todo.extend(p.module.depends.iter().cloned());
+            todo.extend(p.dependency_ids());
         } else {
             errors.push(format!(
                 "{id} needs module {dep}, which is neither a built-in module nor a bundled package"
@@ -77,7 +106,49 @@ pub fn check_manifest(text: &str, builtin: &[Module]) -> Vec<String> {
             ),
         });
     }
-    errors
+    // Versions: the core requirement, every range against what exists (built-ins version with
+    // the core), cycles. Unknown ids and refs were reported above.
+    let core = Version::parse(obop_types::CORE_VERSION).unwrap_or_else(|_| Version::new(0, 0, 0));
+    let catalogue: BTreeMap<String, Manifest> = bundled
+        .iter()
+        .map(|p| (p.module.id.clone(), p.clone()))
+        .collect();
+    let market = |dep: &str| Ok(catalogue.get(dep).cloned());
+    let world = World {
+        core: core.clone(),
+        builtin: builtin
+            .iter()
+            .map(|b| {
+                (
+                    b.id.clone(),
+                    b.models.iter().map(|m| m.name.to_string()).collect(),
+                )
+            })
+            .collect(),
+        installed: BTreeMap::new(),
+        market: &market,
+        registered: &|_| true,
+    };
+    let own = !builtin.iter().any(|b| &b.id == id);
+    if own {
+        let plan = resolve::plan_install(&world, &manifest, "marketplace");
+        for b in plan.blockers {
+            if matches!(b.kind, "missing" | "refs" | "installed" | "builtin") {
+                continue;
+            }
+            // A core mismatch of the package itself is only an error where the catalogue needs
+            // it to run: an author may be preparing for a later core.
+            if b.kind == "core" && b.module == *id && b.message.contains(" needs core ") && !catalog
+            {
+                warnings.push(b.message);
+            } else {
+                errors.push(b.message);
+            }
+        }
+    }
+    let mut seen = BTreeSet::new();
+    errors.retain(|e| seen.insert(e.clone()));
+    Report { errors, warnings }
 }
 
 #[cfg(test)]
@@ -100,6 +171,7 @@ mod tests {
             network_destinations: vec![],
             description: String::new(),
             translations: Default::default(),
+            meta: Default::default(),
         }
     }
 
@@ -160,6 +232,7 @@ write_group = "notes.user"
         );
         let e = check_manifest(
             &PKG.replace("\"notes\"", "\"base\"")
+                .replace("depends = [\"base\"]", "depends = []")
                 .replace("notes_note", "base_note"),
             &[base()],
         );

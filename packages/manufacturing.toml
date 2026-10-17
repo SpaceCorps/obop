@@ -1,10 +1,20 @@
 [module]
 id = "manufacturing"
-version = "0.1.0"
+version = "0.2.0"
 name = "Manufacturing"
 description = "Bills of materials and manufacturing orders with a draft, confirmed, in progress and done flow. Component stock is not consumed automatically."
 author = "SpaceCorps"
-depends = ["product"]
+summary = "Bills of materials and manufacturing orders with a draft, confirmed, in progress and done flow."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["manufacturing", "bom", "production"]
+categories = ["supply-chain"]
+maturity = "experimental"
+requires_core = "^0.2"
+
+[module.dependencies]
+product = "^0.2"
 
 [[model]]
 name = "manufacturing_bom"

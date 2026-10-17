@@ -1,9 +1,17 @@
 [module]
 id = "sign"
-version = "0.1.0"
+version = "0.2.0"
 name = "Sign"
 description = "Document templates and signature requests with a draft, sent, signed, declined, expired flow. A request names the signer (personal data) and keeps the signature evidence as references. A signed request is immutable by convention only: the platform cannot yet lock a record, so nobody should edit a request once it is signed, and the document_hash records what was signed. Sending and recording a signature need a human approval; agents may only propose them."
 author = "SpaceCorps"
+summary = "Document templates and signature requests. Sending and recording a signature need a human approval."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["signature", "e-sign", "contracts"]
+categories = ["productivity"]
+maturity = "experimental"
+requires_core = "^0.2"
 
 [[model]]
 name = "sign_template"

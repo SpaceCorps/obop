@@ -1,7 +1,7 @@
 //! `sales`: quotations and orders.
 
 use obop_commands::{Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
 use obop_types::DataClass::None as NoClass;
 
 pub fn module() -> Module {
@@ -68,6 +68,13 @@ pub fn module() -> Module {
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
+        meta: ModuleMeta::first_party(
+            "Quotations and sales orders for your customers.",
+            &["sales"],
+            &["quotations", "orders"],
+            "sales",
+            &["base", "product"],
+        ),
     };
     m.translated(&[
         include_str!("../../../../packages/labels/de/sales.toml"),

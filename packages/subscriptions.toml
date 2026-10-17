@@ -1,10 +1,20 @@
 [module]
 id = "subscriptions"
-version = "0.1.0"
+version = "0.2.0"
 name = "Subscriptions"
 description = "Recurring plans and customer subscriptions with a trial, active, past due and cancelled flow. It records the next invoice date; it does not create invoices on its own."
 author = "SpaceCorps"
-depends = ["base"]
+summary = "Recurring plans and customer subscriptions with a trial, active, past due and cancelled flow."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["subscriptions", "recurring", "plans"]
+categories = ["sales", "finance"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
 
 [[model]]
 name = "subscriptions_plan"

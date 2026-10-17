@@ -1,9 +1,17 @@
 [module]
 id = "helpdesk"
-version = "0.2.0"
+version = "0.3.0"
 name = "Helpdesk"
 description = "Support tickets with priority, severity, service-level targets and an open, in progress, resolved and closed flow. Targets are recorded, not enforced or timed automatically."
 author = "SpaceCorps"
+summary = "Support tickets with priority, severity, service-level targets and an open to closed flow."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["helpdesk", "tickets", "support", "sla"]
+categories = ["services"]
+maturity = "beta"
+requires_core = "^0.2"
 
 [[model]]
 name = "helpdesk_sla"

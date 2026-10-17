@@ -1,9 +1,13 @@
 //! Where packages come from besides an admin's own upload: a bundled catalog that ships in the
 //! binary, and any HTTPS or HTTP host serving `index.json` plus `packages/<id>.toml`.
 
+use crate::manifest::Manifest;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// One entry of a marketplace index (`index.json`, docs/MODULES.md section 9). Everything after
+/// `author` is optional so older indexes keep working; a listing that carries the catalogue
+/// metadata lets the interface show cards without fetching each manifest (D55).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Listing {
     pub id: String,
     pub name: String,
@@ -11,6 +15,104 @@ pub struct Listing {
     pub description: String,
     #[serde(default)]
     pub author: String,
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub authors: Vec<String>,
+    #[serde(default)]
+    pub license: String,
+    #[serde(default)]
+    pub homepage: String,
+    #[serde(default)]
+    pub repository: String,
+    #[serde(default)]
+    pub documentation: String,
+    #[serde(default)]
+    pub support: String,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    #[serde(default)]
+    pub icon: String,
+    #[serde(default)]
+    pub requires_core: String,
+    #[serde(default)]
+    pub maturity: String,
+    /// Module id to version requirement.
+    #[serde(default)]
+    pub dependencies: std::collections::BTreeMap<String, String>,
+}
+
+impl Listing {
+    pub fn from_manifest(m: &Manifest) -> Self {
+        let x = &m.module;
+        Self {
+            id: x.id.clone(),
+            name: x.name.clone(),
+            version: x.version.clone(),
+            description: x.description.clone(),
+            author: x.author.clone(),
+            summary: x.summary.clone(),
+            authors: x.authors.clone(),
+            license: x.license.clone(),
+            homepage: x.homepage.clone(),
+            repository: x.repository.clone(),
+            documentation: x.documentation.clone(),
+            support: x.support.clone(),
+            keywords: x.keywords.clone(),
+            categories: x.categories.clone(),
+            icon: x.icon.clone(),
+            requires_core: x.requires_core.clone(),
+            maturity: x.maturity.clone(),
+            dependencies: m
+                .requirements()
+                .into_iter()
+                .map(|r| (r.id, r.req.to_string()))
+                .collect(),
+        }
+    }
+
+    /// A manifest without models that carries only what the listing says, so the resolver can
+    /// reason about a package it has not fetched. `Err` if the entry is malformed.
+    pub fn stub(&self) -> Result<Manifest, String> {
+        let deps: Vec<String> = self
+            .dependencies
+            .iter()
+            .map(|(k, v)| format!("{k:?} = {v:?}"))
+            .collect();
+        let toml_str = |s: &str| toml::Value::String(s.to_string()).to_string();
+        let toml_list = |l: &[String]| {
+            toml::Value::Array(l.iter().map(|x| toml::Value::String(x.clone())).collect())
+                .to_string()
+        };
+        let text = format!(
+            "[module]\nid = {}\nversion = {}\nname = {}\ndescription = {}\nauthor = {}\nauthors = {}\nsummary = {}\nlicense = {}\nhomepage = {}\nrepository = {}\ndocumentation = {}\nsupport = {}\nkeywords = {}\ncategories = {}\nicon = {}\nrequires_core = {}\nmaturity = {}\n[module.dependencies]\n{}\n",
+            toml_str(&self.id),
+            toml_str(&self.version),
+            toml_str(&self.name),
+            toml_str(if self.description.is_empty() {
+                &self.name
+            } else {
+                &self.description
+            }),
+            toml_str(&self.author),
+            toml_list(&self.authors),
+            toml_str(&self.summary),
+            toml_str(&self.license),
+            toml_str(&self.homepage),
+            toml_str(&self.repository),
+            toml_str(&self.documentation),
+            toml_str(&self.support),
+            toml_list(&self.keywords),
+            toml_list(&self.categories),
+            toml_str(&self.icon),
+            toml_str(&self.requires_core),
+            toml_str(&self.maturity),
+            deps.join("\n"),
+        );
+        Manifest::parse(&text).map_err(|e| format!("listing {}: {e}", self.id))
+    }
 }
 
 pub trait Marketplace: Send + Sync {
@@ -103,14 +205,12 @@ impl Marketplace for Bundled {
         BUNDLED
             .iter()
             .map(|b| {
-                let m = crate::manifest::Manifest::parse(&combined(b))?;
-                Ok(Listing {
-                    id: m.module.id,
-                    name: m.module.name,
-                    version: m.module.version,
-                    description: m.module.description,
-                    author: m.module.author,
-                })
+                let m = Manifest::parse(&combined(b))?;
+                let problems = m.catalog_problems();
+                if !problems.is_empty() {
+                    return Err(format!("bundled package {}: {}", b.0, problems.join("; ")));
+                }
+                Ok(Listing::from_manifest(&m))
             })
             .collect()
     }
@@ -152,8 +252,11 @@ impl Http {
 
 impl Marketplace for Http {
     fn list(&self) -> Result<Vec<Listing>, String> {
-        serde_json::from_str(&self.get("index.json")?)
-            .map_err(|e| format!("bad marketplace index: {e}"))
+        let all: Vec<Listing> = serde_json::from_str(&self.get("index.json")?)
+            .map_err(|e| format!("bad marketplace index: {e}"))?;
+        // An entry that does not parse (a bad id, version or requirement) is left out rather
+        // than failing the whole catalogue.
+        Ok(all.into_iter().filter(|l| l.stub().is_ok()).collect())
     }
 
     fn fetch(&self, id: &str) -> Result<String, String> {

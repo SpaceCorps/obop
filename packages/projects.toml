@@ -1,9 +1,17 @@
 [module]
 id = "projects"
-version = "0.2.0"
+version = "0.3.0"
 name = "Projects"
 description = "Projects, milestones and tasks with assignees, deadlines and status flows. Progress is tracked by status, not computed from task effort."
 author = "SpaceCorps"
+summary = "Projects, milestones and tasks with assignees, deadlines and status flows."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["projects", "tasks", "milestones"]
+categories = ["services", "productivity"]
+maturity = "beta"
+requires_core = "^0.2"
 
 [[model]]
 name = "projects_project"

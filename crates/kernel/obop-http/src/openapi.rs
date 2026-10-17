@@ -59,7 +59,7 @@ pub fn platform(base: &str) -> J {
         "openapi": "3.1.0",
         "info": {
             "title": "obop control plane API",
-            "version": "0.1.0",
+            "version": obop_types::CORE_VERSION,
             "description": "Sign up, create your own obop instance, watch its setup, and delete it. Each instance then has its own API, described at /api/openapi.json on the instance. Errors are JSON with error, code and hint."
         },
         "servers": [{"url": base}],
@@ -274,7 +274,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
         "openapi": "3.1.0",
         "info": {
             "title": "obop instance API",
-            "version": "0.1.0",
+            "version": obop_types::CORE_VERSION,
             "description": "Every model has the same generated commands: list, search, get, create, update, delete and its own actions, all POST with a JSON body. Personal and financial fields are masked for agent tokens; irreversible steps answer 202 with a plan for a human to approve. Errors are JSON with error, code and hint. Sign in (or present a token) to see the commands your token may use; this document lists only those."
         },
         "servers": [{"url": base}],

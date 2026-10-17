@@ -1,7 +1,7 @@
 //! The registry metadata of the `connectors` module: models, fields (each with a data class and a
 //! permission group), and commands. REST, MCP, the CLI and the backoffice are generated from it.
 
-use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module};
+use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
 use obop_types::DataClass::{self, Internal, None as NoClass, Secret};
 
 /// Users who connect their own accounts and see their own connections.
@@ -317,6 +317,13 @@ pub fn module() -> Module {
         models: models(),
         network_destinations: vec![],
         translations: Default::default(),
+        meta: ModuleMeta::first_party(
+            "Connect other systems with a recorded legal basis, field allowlists, signed webhooks and OAuth.",
+            &["platform"],
+            &["integrations", "webhooks", "oauth", "gdpr"],
+            "connectors",
+            &["base"],
+        ),
     };
     m.translated(&crate::labels::docs())
 }

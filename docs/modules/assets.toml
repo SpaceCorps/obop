@@ -2,9 +2,18 @@
 id = "assets"
 version = "0.1.0"
 name = "Assets"
+summary = "A register of company equipment with a holder and a life cycle from stock to retired."
 description = "A register of company equipment: categories, individual assets with a holder, and a stock, assigned, in repair, retired life cycle. Purchase prices are visible to managers only; retiring an asset needs a human approval."
 author = "Example Ltd"
-depends = ["base"]
+license = "Apache-2.0"
+homepage = "https://example.com/assets"
+keywords = ["assets", "equipment"]
+categories = ["productivity"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
 
 [[model]]
 name = "assets_category"

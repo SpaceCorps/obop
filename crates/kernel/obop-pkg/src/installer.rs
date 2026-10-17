@@ -1,21 +1,29 @@
 //! Installing, upgrading and removing packages at runtime, and the admin commands that expose
 //! it through the same dispatcher as everything else (REST, MCP and CLI, with agents limited
 //! to proposing).
+//!
+//! An install is a plan (D55): the module asked for, plus the dependencies it needs from the
+//! marketplace, in dependency order, each checked against the running core and against the
+//! installed modules that depend on it. The plan is applied as one operation: if a step fails,
+//! the steps already applied are undone.
 
 use crate::manifest::Manifest;
-use crate::marketplace::{Bundled, Marketplace};
+use crate::marketplace::{Bundled, Listing, Marketplace};
+use crate::resolve::{self, Plan, StepAction, World};
+use crate::semver::Version;
+use crate::views::{self, Ctx};
 use obop_commands::{ADMIN_GROUP, ANY_GROUP, Dispatcher, Store, Value};
-use obop_registry::{CommandDef, FieldDef, ModelDef, Module, intern};
+use obop_registry::{CommandDef, FieldDef, FieldKind, ModelDef, Module, ModuleMeta, intern};
 use obop_storage::{Backend, Fields};
 use obop_types::DataClass;
 use serde_json::Value as J;
-use std::collections::BTreeMap;
-use std::sync::{Arc, Weak};
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const TABLE: &str = "obop_package";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct PackageInfo {
     pub id: String,
     pub name: String,
@@ -25,6 +33,23 @@ pub struct PackageInfo {
     pub source: String,
     pub models: Vec<String>,
     pub groups: Vec<String>,
+    /// Catalogue metadata (D55); for a built-in module declared in code.
+    pub meta: ModuleMeta,
+    /// Unix seconds; none for a built-in module.
+    pub installed_at: Option<u64>,
+    pub installed_by: Option<String>,
+    /// The registry view of the module, for the contents summary.
+    pub module: Module,
+}
+
+/// What an install did, step by step.
+#[derive(Debug, Clone)]
+pub struct Outcome {
+    /// The module that was asked for.
+    pub root: PackageInfo,
+    /// Every module the plan installed or upgraded, dependencies first.
+    pub applied: Vec<(PackageInfo, StepAction)>,
+    pub warnings: Vec<String>,
 }
 
 pub struct Installer {
@@ -33,15 +58,28 @@ pub struct Installer {
     dispatcher: Weak<Dispatcher>,
     builtin: Vec<Module>,
     market: Arc<dyn Marketplace>,
+    /// Plans are applied one at a time.
+    apply: Mutex<()>,
 }
 
-fn version_tuple(v: &str) -> (u32, u32, u32) {
-    let mut p = v.split('.').map(|x| x.parse().unwrap_or(0));
-    (
-        p.next().unwrap_or(0),
-        p.next().unwrap_or(0),
-        p.next().unwrap_or(0),
-    )
+/// What it takes to put a step back.
+struct Undo {
+    id: String,
+    previous: Option<Fields>,
+}
+
+/// Where a plan starts.
+pub enum Request<'a> {
+    /// The text of an `obop.toml` (an upload).
+    Manifest(&'a str),
+    /// A package of the marketplace by id.
+    Market(&'a str),
+}
+
+fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |t| t.as_secs())
 }
 
 impl Installer {
@@ -57,6 +95,7 @@ impl Installer {
             dispatcher: Arc::downgrade(dispatcher),
             builtin,
             market,
+            apply: Mutex::new(()),
         })
     }
 
@@ -66,7 +105,13 @@ impl Installer {
             .ok_or_else(|| "server is shutting down".into())
     }
 
-    fn info(m: &Manifest, source: &str) -> PackageInfo {
+    /// The running core version.
+    pub fn core_version(&self) -> Version {
+        Version::parse(obop_types::CORE_VERSION).unwrap_or_else(|_| Version::new(0, 0, 0))
+    }
+
+    fn info(m: &Manifest, source: &str, at: Option<u64>, by: Option<String>) -> PackageInfo {
+        let module = m.to_module().unwrap_or_default();
         PackageInfo {
             id: m.module.id.clone(),
             name: m.module.name.clone(),
@@ -75,15 +120,27 @@ impl Installer {
             source: source.into(),
             models: m.model.iter().map(|x| x.name.clone()).collect(),
             groups: m.groups(),
+            meta: m.module_meta(),
+            installed_at: at,
+            installed_by: by,
+            module,
         }
     }
 
     fn builtin_info(m: &Module) -> PackageInfo {
+        let mut meta = m.meta.clone();
+        if meta.version.is_empty() {
+            meta.version = obop_types::CORE_VERSION.to_string();
+        }
         PackageInfo {
             id: m.id.clone(),
             name: m.name.clone(),
-            version: "built in".into(),
-            description: format!("First-party module with {} model(s)", m.models.len()),
+            version: meta.version.clone(),
+            description: if m.description.is_empty() {
+                meta.summary.clone()
+            } else {
+                m.description.clone()
+            },
             source: "builtin".into(),
             models: m.models.iter().map(|x| x.name.to_string()).collect(),
             groups: m
@@ -91,6 +148,10 @@ impl Installer {
                 .into_iter()
                 .map(String::from)
                 .collect(),
+            meta,
+            installed_at: None,
+            installed_by: None,
+            module: m.clone(),
         }
     }
 
@@ -109,10 +170,25 @@ impl Installer {
                 v.push(Self::info(
                     &m,
                     f.get("source").and_then(J::as_str).unwrap_or("upload"),
+                    f.get("installed_at").and_then(J::as_u64),
+                    f.get("installed_by").and_then(J::as_str).map(String::from),
                 ));
             }
         }
         v
+    }
+
+    /// The manifests of the installed packages, by id.
+    pub fn installed_manifests(&self) -> BTreeMap<String, Manifest> {
+        self.stored()
+            .into_iter()
+            .filter_map(|(id, f)| {
+                f.get("manifest")
+                    .and_then(J::as_str)
+                    .and_then(|t| Manifest::parse(t).ok())
+                    .map(|m| (id, m))
+            })
+            .collect()
     }
 
     /// A package installed from the marketplace before it carried translations has none stored.
@@ -155,25 +231,231 @@ impl Installer {
         Ok(())
     }
 
-    /// Validate and install (or upgrade to a newer version of) a package. `source` is `upload`
-    /// or `marketplace`; `by` is the caller recorded for audit.
+    /// What the marketplace offers, by id. An unreachable marketplace offers nothing.
+    pub fn offered(&self) -> BTreeMap<String, Listing> {
+        self.market
+            .list()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|l| (l.id.clone(), l))
+            .collect()
+    }
+
+    /// The context the views and the resolver need.
+    fn ctx_parts(
+        &self,
+    ) -> (
+        Version,
+        BTreeMap<String, Manifest>,
+        BTreeMap<String, Listing>,
+    ) {
+        (
+            self.core_version(),
+            self.installed_manifests(),
+            self.offered(),
+        )
+    }
+
+    fn with_ctx<R>(&self, f: impl FnOnce(&Ctx<'_>) -> R) -> R {
+        let (core, installed, offered) = self.ctx_parts();
+        f(&Ctx {
+            core: &core,
+            builtin: &self.builtin,
+            installed: &installed,
+            offered: &offered,
+        })
+    }
+
+    /// Fetch and parse a marketplace package; it must satisfy the catalogue rules.
+    fn fetch_market(&self, id: &str) -> Result<Manifest, String> {
+        let text = self.market.fetch(id)?;
+        let m = Manifest::parse(&text)?;
+        if m.module.id != id {
+            return Err(format!(
+                "the marketplace answered {id} with the package {}",
+                m.module.id
+            ));
+        }
+        let problems = m.catalog_problems();
+        if !problems.is_empty() {
+            return Err(format!("marketplace package {id}: {}", problems.join("; ")));
+        }
+        Ok(m)
+    }
+
+    /// The plan for a request, without changing anything. `Err` when the request itself cannot
+    /// be read (a manifest that does not parse, a package the marketplace does not have).
+    pub fn plan(&self, req: Request<'_>) -> Result<(Plan, String), String> {
+        let (root, source) = match req {
+            Request::Manifest(t) => (Manifest::parse(t)?, "upload"),
+            Request::Market(id) => (self.fetch_market(id)?, "marketplace"),
+        };
+        root.to_module()?;
+        let offered: BTreeSet<String> = self.offered().into_keys().collect();
+        let fetch = |id: &str| -> Result<Option<Manifest>, String> {
+            if !offered.contains(id) {
+                return Ok(None);
+            }
+            self.fetch_market(id).map(Some)
+        };
+        let world = World {
+            core: self.core_version(),
+            builtin: self
+                .builtin
+                .iter()
+                .map(|m| {
+                    (
+                        m.id.clone(),
+                        m.models.iter().map(|x| x.name.to_string()).collect(),
+                    )
+                })
+                .collect(),
+            installed: self.installed_manifests(),
+            market: &fetch,
+            registered: &|m| self.d().is_ok_and(|d| d.has_model(m)),
+        };
+        let mut plan = resolve::plan_install(&world, &root, source);
+        // Models of the built-in modules and of other packages may not be taken.
+        let taken: BTreeSet<&str> = self
+            .builtin
+            .iter()
+            .flat_map(|m| m.models.iter().map(|x| x.name))
+            .collect();
+        for s in &plan.steps {
+            if s.action == StepAction::Skip {
+                continue;
+            }
+            for m in &s.manifest.model {
+                if taken.contains(m.name.as_str()) {
+                    plan.blockers.push(resolve::Blocker {
+                        module: s.id.clone(),
+                        kind: "conflict",
+                        message: format!("model {} already exists", m.name),
+                    });
+                }
+            }
+        }
+        Ok((plan, root.module.id))
+    }
+
+    /// `module_plan.preview` as data: the plan with how each dependency stands.
+    pub fn preview(&self, req: Request<'_>) -> Result<Value, String> {
+        let (plan, root) = self.plan(req)?;
+        Ok(self.with_ctx(|ctx| views::plan_value(&plan, &root, ctx, &[])))
+    }
+
+    /// Validate and install (or upgrade to a newer version of) a package, together with the
+    /// dependencies it needs from the marketplace. `source` is `upload` or `marketplace`; `by`
+    /// is the caller recorded for audit.
     pub fn install(&self, text: &str, source: &str, by: &str) -> Result<PackageInfo, String> {
+        self.install_outcome(text, source, by).map(|o| o.root)
+    }
+
+    pub fn install_outcome(&self, text: &str, source: &str, by: &str) -> Result<Outcome, String> {
         let manifest = Manifest::parse(text)?;
+        if source == "marketplace" {
+            let problems = manifest.catalog_problems();
+            if !problems.is_empty() {
+                return Err(format!(
+                    "marketplace package {}: {}",
+                    manifest.module.id,
+                    problems.join("; ")
+                ));
+            }
+        }
+        let plan = self.plan(Request::Manifest(text))?.0;
+        self.apply_plan(&plan, &manifest.module.id, source, by)
+    }
+
+    pub fn install_from_marketplace(&self, id: &str, by: &str) -> Result<PackageInfo, String> {
+        self.install_from_marketplace_outcome(id, by)
+            .map(|o| o.root)
+    }
+
+    pub fn install_from_marketplace_outcome(&self, id: &str, by: &str) -> Result<Outcome, String> {
+        let (plan, root) = self.plan(Request::Market(id))?;
+        self.apply_plan(&plan, &root, "marketplace", by)
+    }
+
+    /// Apply a plan that has no blockers. The root of an upload keeps `source` `upload`; every
+    /// other step comes from the marketplace. If a step fails, the ones already applied are
+    /// undone and the error says so.
+    pub fn apply_plan(
+        &self,
+        plan: &Plan,
+        root: &str,
+        root_source: &str,
+        by: &str,
+    ) -> Result<Outcome, String> {
+        if !plan.ok() {
+            return Err(plan
+                .blockers
+                .iter()
+                .map(|b| b.message.clone())
+                .collect::<Vec<_>>()
+                .join("; "));
+        }
+        let _one_at_a_time = self.apply.lock().unwrap_or_else(|e| e.into_inner());
+        let mut done: Vec<Undo> = Vec::new();
+        let mut applied = Vec::new();
+        for step in plan.work() {
+            let source = if step.id == root {
+                root_source
+            } else {
+                "marketplace"
+            };
+            match self.apply_step(&step.manifest, source, by) {
+                Ok((undo, info)) => {
+                    done.push(undo);
+                    applied.push((info, step.action));
+                }
+                Err(e) => {
+                    let n = done.len();
+                    for u in done.into_iter().rev() {
+                        self.undo(u);
+                    }
+                    return Err(if n == 0 {
+                        format!("{}: {e}", step.id)
+                    } else {
+                        format!(
+                            "{}: {e}; the {n} step(s) before it were rolled back and nothing was installed",
+                            step.id
+                        )
+                    });
+                }
+            }
+        }
+        let root_info = applied
+            .iter()
+            .find(|(i, _)| i.id == root)
+            .map(|(i, _)| i.clone())
+            .or_else(|| self.list().into_iter().find(|p| p.id == root))
+            .ok_or_else(|| format!("{root} was not installed"))?;
+        Ok(Outcome {
+            root: root_info,
+            applied,
+            warnings: plan.warnings.clone(),
+        })
+    }
+
+    /// Install or upgrade one package whose checks the plan has done.
+    fn apply_step(
+        &self,
+        manifest: &Manifest,
+        source: &str,
+        by: &str,
+    ) -> Result<(Undo, PackageInfo), String> {
         let module = manifest.to_module()?;
         let id = manifest.module.id.clone();
         if self.builtin.iter().any(|b| b.id == id) {
             return Err(format!("{id} is a built-in module"));
         }
-        for dep in &manifest.module.depends {
-            if !self.list().iter().any(|p| &p.id == dep) {
-                return Err(format!("{id} needs module {dep}, which is not installed"));
-            }
-        }
         let d = self.d()?;
         let existing = self.backend.get(TABLE, &id).map_err(|e| e.to_string())?;
         if let Some(old) = &existing {
             let old_v = old.get("version").and_then(J::as_str).unwrap_or("0.0.0");
-            if version_tuple(&manifest.module.version) <= version_tuple(old_v) {
+            let old_v = Version::parse(old_v).unwrap_or_else(|_| Version::new(0, 0, 0));
+            if manifest.semver() <= old_v {
                 return Err(format!(
                     "{id} {old_v} is installed; installing {} is not an upgrade",
                     manifest.module.version
@@ -181,8 +463,7 @@ impl Installer {
             }
         }
         for m in &module.models {
-            let owned_by_self = existing.is_some();
-            if d.has_model(m.name) && !owned_by_self {
+            if d.has_model(m.name) && existing.is_none() {
                 return Err(format!("model {} already exists", m.name));
             }
         }
@@ -194,64 +475,93 @@ impl Installer {
         if existing.is_some() {
             d.unregister_module(&id);
         }
-        self.register(&manifest, &module)?;
+        if let Err(e) = self.register(manifest, &module) {
+            if let Some(old) = &existing {
+                self.reregister(&id, old);
+            }
+            return Err(e);
+        }
+        let at = now();
         let mut f = Fields::new();
-        f.insert("manifest".into(), J::from(text));
+        f.insert("manifest".into(), J::from(manifest.text.as_str()));
         f.insert("version".into(), J::from(manifest.module.version.clone()));
         f.insert("source".into(), J::from(source));
         f.insert("installed_by".into(), J::from(by));
-        f.insert(
-            "installed_at".into(),
-            J::from(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map_or(0, |t| t.as_secs()),
-            ),
-        );
-        if existing.is_some() {
-            self.backend.update(TABLE, &id, &f)?;
+        f.insert("installed_at".into(), J::from(at));
+        let stored = if existing.is_some() {
+            self.backend.update(TABLE, &id, &f).map(|_| ())
         } else {
-            self.backend.insert(TABLE, &id, &f)?;
+            self.backend.insert(TABLE, &id, &f).map(|_| ())
+        };
+        if let Err(e) = stored {
+            d.unregister_module(&id);
+            if let Some(old) = &existing {
+                self.reregister(&id, old);
+            }
+            return Err(e.to_string());
         }
-        Ok(Self::info(&manifest, source))
+        Ok((
+            Undo {
+                id,
+                previous: existing,
+            },
+            Self::info(manifest, source, Some(at), Some(by.to_string())),
+        ))
     }
 
-    pub fn install_from_marketplace(&self, id: &str, by: &str) -> Result<PackageInfo, String> {
-        let text = self.market.fetch(id)?;
-        self.install(&text, "marketplace", by)
+    /// Put the registration of a stored package back (after a failed upgrade or a rollback).
+    fn reregister(&self, id: &str, stored: &Fields) {
+        let source = stored.get("source").and_then(J::as_str).unwrap_or("upload");
+        let r = stored
+            .get("manifest")
+            .and_then(J::as_str)
+            .ok_or_else(|| "no manifest".to_string())
+            .and_then(|t| Self::with_bundled_labels(t, source))
+            .and_then(|m| m.to_module().and_then(|module| self.register(&m, &module)));
+        if let Err(e) = r {
+            eprintln!("could not restore module {id}: {e}");
+        }
+    }
+
+    fn undo(&self, u: Undo) {
+        if let Ok(d) = self.d() {
+            d.unregister_module(&u.id);
+        }
+        match u.previous {
+            Some(f) => {
+                let _ = self.backend.update(TABLE, &u.id, &f);
+                self.reregister(&u.id, &f);
+            }
+            None => {
+                let _ = self.backend.delete(TABLE, &u.id);
+            }
+        }
+    }
+
+    /// What stops `id` from being removed: the installed packages that need it.
+    pub fn uninstall_blocker(&self, id: &str) -> Option<resolve::Blocker> {
+        if self.builtin.iter().any(|b| b.id == id) {
+            return Some(resolve::Blocker {
+                module: id.into(),
+                kind: "builtin",
+                message: format!("{id} is a built-in module"),
+            });
+        }
+        resolve::uninstall_blocker(&self.installed_manifests(), id)
     }
 
     /// Remove a package. Its commands disappear at once; its records stay in the database, so a
-    /// reinstall brings them back.
+    /// reinstall brings them back. Refused while another installed package depends on it.
     pub fn uninstall(&self, id: &str) -> Result<(), String> {
-        if self.builtin.iter().any(|b| b.id == id) {
-            return Err(format!("{id} is a built-in module"));
-        }
-        if self
-            .list()
-            .iter()
-            .any(|p| p.id != id && self.depends_on(&p.id, id))
-        {
-            return Err(format!("another installed module depends on {id}"));
+        let _one_at_a_time = self.apply.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(b) = self.uninstall_blocker(id) {
+            return Err(b.message);
         }
         if !self.backend.delete(TABLE, id)? {
             return Err(format!("{id} is not installed"));
         }
         self.d()?.unregister_module(id);
         Ok(())
-    }
-
-    fn depends_on(&self, pkg: &str, dep: &str) -> bool {
-        self.backend
-            .get(TABLE, pkg)
-            .ok()
-            .flatten()
-            .and_then(|f| {
-                f.get("manifest")
-                    .and_then(J::as_str)
-                    .and_then(|t| Manifest::parse(t).ok())
-            })
-            .is_some_and(|m| m.module.depends.iter().any(|d| d == dep))
     }
 
     /// The instance-wide UI settings (theme, app order): one JSON object kept as text.
@@ -280,7 +590,9 @@ impl Installer {
         Ok(())
     }
 
-    /// Register every stored package again after a restart. Returns what failed.
+    /// Register every stored package again after a restart. Returns what failed. A package that
+    /// no longer fits the running core still loads (its data is there); the module page marks
+    /// it incompatible.
     pub fn load_installed(&self) -> Vec<(String, String)> {
         let mut failed = Vec::new();
         for (id, f) in self.stored() {
@@ -296,6 +608,346 @@ impl Installer {
             }
         }
         failed
+    }
+
+    /// The dependency tree of one module (`obop modules tree ID`), or of every installed package.
+    /// A package that is only in the marketplace can be asked for by id too.
+    pub fn tree(&self, id: Option<&str>) -> Result<String, String> {
+        let (core, installed, offered) = self.ctx_parts();
+        let mut out = String::new();
+        let roots: Vec<String> = match id {
+            Some(i) => vec![i.to_string()],
+            None => installed.keys().cloned().collect(),
+        };
+        if roots.is_empty() {
+            return Ok(format!(
+                "no packages are installed; core {core} provides {}\n",
+                self.builtin
+                    .iter()
+                    .map(|m| m.id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        for r in roots {
+            let (version, license, core_req, deps, state) = if let Some(m) = installed.get(&r) {
+                (
+                    m.module.version.clone(),
+                    m.module.license.clone(),
+                    m.module.requires_core.clone(),
+                    m.requirements(),
+                    "installed",
+                )
+            } else if let Some(b) = self.builtin.iter().find(|b| b.id == r) {
+                (
+                    core.to_string(),
+                    b.meta.license.clone(),
+                    b.meta.requires_core.clone(),
+                    Vec::new(),
+                    "built in",
+                )
+            } else if let Some(l) = offered.get(&r) {
+                (
+                    l.version.clone(),
+                    l.license.clone(),
+                    l.requires_core.clone(),
+                    l.stub()?.requirements(),
+                    "marketplace, not installed",
+                )
+            } else {
+                return Err(format!("no module {r} is installed or offered"));
+            };
+            let req = if core_req.is_empty() { "*" } else { &core_req };
+            let ok = crate::semver::Req::parse(req).is_ok_and(|q| q.matches(&core));
+            out.push_str(&format!(
+                "{r} {version}  {}  [{state}]  core {req}: {} (running {core})\n",
+                if license.is_empty() {
+                    "no licence"
+                } else {
+                    &license
+                },
+                if ok { "ok" } else { "NOT COMPATIBLE" }
+            ));
+            let mut path = vec![r.clone()];
+            self.tree_children(&deps, "", &mut path, &installed, &offered, &core, &mut out);
+        }
+        Ok(out)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn tree_children(
+        &self,
+        deps: &[crate::manifest::Requirement],
+        prefix: &str,
+        path: &mut Vec<String>,
+        installed: &BTreeMap<String, Manifest>,
+        offered: &BTreeMap<String, Listing>,
+        core: &Version,
+        out: &mut String,
+    ) {
+        for (i, d) in deps.iter().enumerate() {
+            let last = i + 1 == deps.len();
+            let (branch, next) = if last {
+                ("└── ", "    ")
+            } else {
+                ("├── ", "│   ")
+            };
+            let (status, children) = if self.builtin.iter().any(|b| b.id == d.id) {
+                (
+                    format!(
+                        "built in, core {core}{}",
+                        if d.req.matches(core) {
+                            ""
+                        } else {
+                            " - NOT SATISFIED"
+                        }
+                    ),
+                    Vec::new(),
+                )
+            } else if let Some(m) = installed.get(&d.id) {
+                let v = m.semver();
+                (
+                    format!(
+                        "installed {v}{}",
+                        if d.req.matches(&v) {
+                            ""
+                        } else {
+                            " - NOT SATISFIED"
+                        }
+                    ),
+                    m.requirements(),
+                )
+            } else if let Some(l) = offered.get(&d.id) {
+                (
+                    format!("not installed, marketplace offers {}", l.version),
+                    l.stub().map(|s| s.requirements()).unwrap_or_default(),
+                )
+            } else {
+                ("MISSING".to_string(), Vec::new())
+            };
+            let cycle = path.contains(&d.id);
+            out.push_str(&format!(
+                "{prefix}{branch}{} {}  [{status}]{}\n",
+                d.id,
+                d.req,
+                if cycle { "  (cycle)" } else { "" }
+            ));
+            if !cycle && !children.is_empty() {
+                path.push(d.id.clone());
+                self.tree_children(
+                    &children,
+                    &format!("{prefix}{next}"),
+                    path,
+                    installed,
+                    offered,
+                    core,
+                    out,
+                );
+                path.pop();
+            }
+        }
+    }
+
+    /// A plan as text, for the command line, and whether it can be applied.
+    pub fn plan_text(&self, req: Request<'_>) -> Result<(String, bool), String> {
+        let (plan, root) = self.plan(req)?;
+        let mut out = format!("plan for {root} (core {})\n", self.core_version());
+        for (n, s) in plan.steps.iter().enumerate() {
+            let from = s
+                .from_version
+                .as_ref()
+                .filter(|_| s.action == StepAction::Upgrade)
+                .map(|f| format!(" from {f}"))
+                .unwrap_or_default();
+            out.push_str(&format!(
+                "  {}. {:<8} {} {}{}  {}  ({})\n",
+                n + 1,
+                s.action.as_str(),
+                s.id,
+                s.version,
+                from,
+                if s.license.is_empty() {
+                    "no licence"
+                } else {
+                    &s.license
+                },
+                s.reason
+            ));
+        }
+        for w in &plan.warnings {
+            out.push_str(&format!("  warning: {w}\n"));
+        }
+        for b in &plan.blockers {
+            out.push_str(&format!("  BLOCKED [{}]: {}\n", b.kind, b.message));
+        }
+        Ok((out, plan.ok()))
+    }
+
+    /// The row of one module as `module.list` returns it.
+    pub fn module_row(&self, p: &PackageInfo) -> Value {
+        self.with_ctx(|ctx| self.module_row_in(p, ctx))
+    }
+
+    fn module_row_in(&self, p: &PackageInfo, ctx: &Ctx<'_>) -> Value {
+        let mut m = BTreeMap::new();
+        let mut put = |k: &str, v: Value| {
+            m.insert(k.to_string(), v);
+        };
+        put("id", views::text(&p.id));
+        put("name", views::text(&p.name));
+        put("version", views::text(&p.version));
+        put("description", views::text(&p.description));
+        put("source", views::text(&p.source));
+        put(
+            "models",
+            Value::List(p.models.iter().map(|x| views::text(x)).collect()),
+        );
+        put(
+            "groups",
+            Value::List(p.groups.iter().map(|x| views::text(x)).collect()),
+        );
+        put(
+            "installed_at",
+            p.installed_at.map_or(Value::Null, |t| Value::Int(t as i64)),
+        );
+        put(
+            "installed_by",
+            p.installed_by.as_deref().map_or(Value::Null, views::text),
+        );
+        put("contents", views::contents(&p.module));
+        let blocker = if p.source == "builtin" {
+            None
+        } else {
+            resolve::uninstall_blocker(ctx.installed, &p.id)
+        };
+        put(
+            "uninstallable",
+            Value::Bool(p.source != "builtin" && blocker.is_none()),
+        );
+        put(
+            "uninstall_blockers",
+            views::blockers_value(&blocker.into_iter().collect::<Vec<_>>()),
+        );
+        let warnings: Vec<String> = ctx
+            .installed
+            .get(&p.id)
+            .map(Manifest::warnings)
+            .unwrap_or_default();
+        put(
+            "warnings",
+            Value::List(warnings.iter().map(|x| views::text(x)).collect()),
+        );
+        views::put_meta(&mut m, &p.meta, &p.id, &p.version, ctx);
+        Value::Map(m)
+    }
+
+    /// Every module, built-in ones first, as `module.list` returns them.
+    pub fn module_rows(&self) -> Value {
+        self.with_ctx(|ctx| {
+            Value::List(
+                self.list()
+                    .iter()
+                    .map(|p| self.module_row_in(p, ctx))
+                    .collect(),
+            )
+        })
+    }
+
+    /// The marketplace as `marketplace_listing.list` returns it: each listing with what it would
+    /// take to install it here.
+    pub fn listing_rows(&self) -> Result<Value, String> {
+        let listings = self.market.list()?;
+        let (core, installed, offered) = self.ctx_parts();
+        let ctx = Ctx {
+            core: &core,
+            builtin: &self.builtin,
+            installed: &installed,
+            offered: &offered,
+        };
+        // Resolve against the listings alone (no fetch per row): a stub carries the metadata
+        // the resolver needs.
+        let stubs: BTreeMap<String, Manifest> = listings
+            .iter()
+            .filter_map(|l| l.stub().ok().map(|m| (l.id.clone(), m)))
+            .collect();
+        let fetch = |id: &str| -> Result<Option<Manifest>, String> { Ok(stubs.get(id).cloned()) };
+        let world = World {
+            core: core.clone(),
+            builtin: self
+                .builtin
+                .iter()
+                .map(|m| (m.id.clone(), Vec::new()))
+                .collect(),
+            installed: installed.clone(),
+            market: &fetch,
+            registered: &|_| false,
+        };
+        let rows = listings
+            .iter()
+            .map(|l| {
+                let mut m = BTreeMap::new();
+                let mut put = |k: &str, v: Value| {
+                    m.insert(k.to_string(), v);
+                };
+                put("id", views::text(&l.id));
+                put("name", views::text(&l.name));
+                put("version", views::text(&l.version));
+                put("description", views::text(&l.description));
+                put("source", views::text("marketplace"));
+                let have = installed.get(&l.id);
+                put("installed", Value::Bool(have.is_some()));
+                put(
+                    "installed_version",
+                    have.map_or(Value::Null, |h| views::text(&h.module.version)),
+                );
+                let (installable, blockers) = match stubs.get(&l.id) {
+                    Some(stub) => {
+                        let plan = resolve::plan_install(&world, stub, "marketplace");
+                        (plan.ok(), plan.blockers)
+                    }
+                    None => (
+                        false,
+                        vec![resolve::Blocker {
+                            module: l.id.clone(),
+                            kind: "unavailable",
+                            message: format!("the listing for {} is malformed", l.id),
+                        }],
+                    ),
+                };
+                put("installable", Value::Bool(installable));
+                put("blockers", views::blockers_value(&blockers));
+                let meta = ModuleMeta {
+                    version: l.version.clone(),
+                    summary: l.summary.clone(),
+                    author: l.author.clone(),
+                    authors: l.authors.clone(),
+                    license: l.license.clone(),
+                    homepage: l.homepage.clone(),
+                    repository: l.repository.clone(),
+                    documentation: l.documentation.clone(),
+                    support: l.support.clone(),
+                    keywords: l.keywords.clone(),
+                    categories: l.categories.clone(),
+                    icon: l.icon.clone(),
+                    requires_core: l.requires_core.clone(),
+                    maturity: l.maturity.clone(),
+                    dependencies: l
+                        .dependencies
+                        .iter()
+                        .map(|(a, b)| (a.clone(), b.clone()))
+                        .collect(),
+                };
+                // For a listing, "update available" compares the installed version to the
+                // offered one, which is this listing.
+                views::put_meta(&mut m, &meta, &l.id, &l.version, &ctx);
+                let update = have
+                    .filter(|h| h.semver() < Version::parse(&l.version).unwrap_or(h.semver()))
+                    .map(|_| views::text(&l.version));
+                m.insert("update_available".into(), update.unwrap_or(Value::Null));
+                Value::Map(m)
+            })
+            .collect();
+        Ok(Value::List(rows))
     }
 }
 
@@ -335,11 +987,149 @@ fn pkg_row(p: &PackageInfo) -> Value {
     ])
 }
 
-/// Registry metadata of the admin commands. Both models are virtual: they have no stored
+/// What an install command returns: the module and every step of the plan that was applied.
+fn outcome_row(o: &Outcome) -> Value {
+    let Value::Map(mut m) = pkg_row(&o.root) else {
+        unreachable!()
+    };
+    m.insert(
+        "steps".into(),
+        Value::List(
+            o.applied
+                .iter()
+                .map(|(p, a)| {
+                    Value::map([
+                        ("id", s(&p.id)),
+                        ("name", s(&p.name)),
+                        ("version", s(&p.version)),
+                        ("action", s(a.as_str())),
+                    ])
+                })
+                .collect(),
+        ),
+    );
+    m.insert(
+        "warnings".into(),
+        Value::List(o.warnings.iter().map(|w| s(w)).collect()),
+    );
+    Value::Map(m)
+}
+
+/// `without_dependencies` may only be false: a module cannot be installed without what it needs.
+fn refuse_skipped_dependencies(i: &BTreeMap<String, Value>) -> Result<(), String> {
+    if matches!(i.get("without_dependencies"), Some(Value::Bool(true))) {
+        return Err(
+            "required dependencies cannot be skipped: install them together with the module (they are listed by module_plan.preview)"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+/// Registry metadata of the admin commands. The models are virtual: they have no stored
 /// records of their own, only handlers.
 pub fn admin_module() -> Module {
     let f =
         |name, description| FieldDef::new(name, description, DataClass::None, false, ADMIN_GROUP);
+    let list = |name, description| f(name, description).kind(FieldKind::Text);
+    // Catalogue fields shared by an installed module and a marketplace listing (D55).
+    let catalogue = || {
+        vec![
+            list("summary", "One line about the module, shown on its card"),
+            list("author", "Who publishes it"),
+            list("authors", "All authors (a list)"),
+            list(
+                "license",
+                "SPDX licence expression, LicenseRef-... or proprietary",
+            ),
+            list("license_kind", "spdx, custom, proprietary or none"),
+            list(
+                "license_url",
+                "Link to the SPDX page of a single licence identifier",
+            ),
+            list("homepage", "Link to the module's home page"),
+            list("repository", "Link to the source repository"),
+            list("documentation", "Link to the documentation"),
+            list("support", "Link to where support is given"),
+            list("keywords", "Search keywords (a list)"),
+            list(
+                "categories",
+                "Categories: finance, sales, supply-chain, people, services, marketing, productivity, platform, other",
+            ),
+            list("icon", "Name of a built-in icon"),
+            list("maturity", "stable, beta or experimental"),
+            list(
+                "requires_core",
+                "The core versions the module runs on, a semver requirement",
+            ),
+            f(
+                "compatible",
+                "Whether the running core satisfies requires_core",
+            )
+            .kind(FieldKind::Bool),
+            list(
+                "dependencies",
+                "Dependencies with their requirement and how each stands (a list)",
+            ),
+            list(
+                "dependents",
+                "Ids of the installed modules that need this one (a list)",
+            ),
+            list(
+                "update_available",
+                "The newer version the marketplace offers, if any",
+            ),
+        ]
+    };
+    let mut module_fields = vec![
+        f("name", "Display name"),
+        f("version", "Installed version"),
+        f("description", "What the module does"),
+        f("source", "builtin, upload or marketplace"),
+        f("models", "Models the module adds"),
+        f("groups", "Permission groups the module uses"),
+    ];
+    module_fields.extend(catalogue());
+    module_fields.extend([
+        list(
+            "installed_at",
+            "When it was installed (Unix seconds); empty for built-in modules",
+        ),
+        list("installed_by", "Who installed it"),
+        list(
+            "contents",
+            "Models, fields, actions, approval steps and data classes the module declares",
+        ),
+        f("uninstallable", "Whether it can be removed now").kind(FieldKind::Bool),
+        list(
+            "uninstall_blockers",
+            "What stops it from being removed (a list)",
+        ),
+        list(
+            "warnings",
+            "Notes that do not stop anything, such as a proprietary licence (a list)",
+        ),
+    ]);
+    let mut listing_fields = vec![
+        f("name", "Display name"),
+        f("version", "Latest version"),
+        f("description", "What the module does"),
+        f("source", "Where the install came from"),
+        f("models", "Models the module adds"),
+        f("groups", "Permission groups the module uses"),
+        f(
+            "without_dependencies",
+            "Must be false or absent: required dependencies cannot be skipped",
+        )
+        .kind(FieldKind::Bool),
+    ];
+    listing_fields.extend(catalogue());
+    listing_fields.extend([
+        f("installed", "Whether a version is installed").kind(FieldKind::Bool),
+        list("installed_version", "The installed version, if any"),
+        f("installable", "Whether it can be installed here now").kind(FieldKind::Bool),
+        list("blockers", "What stops it from being installed (a list)"),
+    ]);
     let m = Module {
         id: "platform".into(),
         name: "Customize".into(),
@@ -349,24 +1139,17 @@ pub fn admin_module() -> Module {
                 description: "An installed module: built in, uploaded or from the marketplace",
                 read_group: ADMIN_GROUP,
                 write_group: ADMIN_GROUP,
-                fields: vec![
-                    f("name", "Display name"),
-                    f("version", "Installed version"),
-                    f("description", "What the module does"),
-                    f("source", "builtin, upload or marketplace"),
-                    f("models", "Models the module adds"),
-                    f("groups", "Permission groups the module uses"),
-                ],
+                fields: module_fields,
                 commands: vec![
                     CommandDef::new(
                         "install",
-                        "Install or upgrade a module from the text of its obop.toml",
+                        "Install or upgrade a module from the text of its obop.toml, with the dependencies it needs",
                         ADMIN_GROUP,
                     )
                     .approval(),
                     CommandDef::new(
                         "uninstall",
-                        "Remove a module; its data stays in the database",
+                        "Remove a module; its data stays in the database. Refused while another module needs it",
                         ADMIN_GROUP,
                     )
                     .approval(),
@@ -377,23 +1160,35 @@ pub fn admin_module() -> Module {
                 description: "A module offered by the marketplace",
                 read_group: ADMIN_GROUP,
                 write_group: ADMIN_GROUP,
-                fields: vec![
-                    f("name", "Display name"),
-                    f("version", "Latest version"),
-                    f("description", "What the module does"),
-                    f("author", "Who publishes it"),
-                    f("source", "Where the install came from"),
-                    f("models", "Models the module adds"),
-                    f("groups", "Permission groups the module uses"),
-                ],
+                fields: listing_fields,
                 commands: vec![
                     CommandDef::new(
                         "install",
-                        "Install a module from the marketplace by id",
+                        "Install a module from the marketplace by id, with the dependencies it needs, in one operation",
                         ADMIN_GROUP,
                     )
                     .approval(),
                 ],
+            },
+            ModelDef {
+                name: "module_plan",
+                description: "What installing a module would do here: the steps in order, blockers and warnings",
+                read_group: ADMIN_GROUP,
+                write_group: ADMIN_GROUP,
+                fields: vec![
+                    list("manifest", "Input: the text of an obop.toml to plan (or give id for a marketplace package)"),
+                    f("ok", "Whether the plan has no blockers").kind(FieldKind::Bool),
+                    list("root", "The module the plan is for"),
+                    list("core_version", "The running core version"),
+                    list("steps", "The modules to install or upgrade, dependencies first (a list)"),
+                    list("blockers", "What stops it from being installed (a list)"),
+                    list("warnings", "Notes that do not stop anything, such as a proprietary licence (a list)"),
+                ],
+                commands: vec![CommandDef::new(
+                    "preview",
+                    "Plan an install without doing it: the steps in order with versions and licences, blockers and warnings. Give id (marketplace) or manifest (obop.toml text)",
+                    ADMIN_GROUP,
+                )],
             },
             ModelDef {
                 name: "setting",
@@ -434,6 +1229,13 @@ pub fn admin_module() -> Module {
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
+        meta: ModuleMeta::first_party(
+            "Customize the instance: theme, apps, modules and the marketplace.",
+            &["platform"],
+            &["modules", "marketplace", "settings"],
+            "customize",
+            &[],
+        ),
     };
     m.translated(&[
         include_str!("../../../../packages/labels/de/platform.toml"),
@@ -449,12 +1251,7 @@ pub fn admin_module() -> Module {
 pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
     let m = admin_module();
     let i = inst.clone();
-    d.register(
-        &m,
-        "module",
-        "list",
-        Box::new(move |_| Ok(Value::List(i.list().iter().map(pkg_row).collect()))),
-    );
+    d.register(&m, "module", "list", Box::new(move |_| Ok(i.module_rows())));
     let i = inst.clone();
     d.register(
         &m,
@@ -468,7 +1265,7 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
             i.list()
                 .iter()
                 .find(|p| p.id == id)
-                .map(pkg_row)
+                .map(|p| i.module_row(p))
                 .ok_or_else(|| format!("no module {id}"))
         }),
     );
@@ -481,8 +1278,9 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
             let Value::Map(x) = input else {
                 return Err("expected an object".into());
             };
-            i.install(&text(x, "manifest")?, "upload", &caller(x))
-                .map(|p| pkg_row(&p))
+            refuse_skipped_dependencies(x)?;
+            i.install_outcome(&text(x, "manifest")?, "upload", &caller(x))
+                .map(|o| outcome_row(&o))
         }),
     );
     let i = inst.clone();
@@ -531,23 +1329,7 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
         &m,
         "marketplace_listing",
         "list",
-        Box::new(move |_| {
-            let listings = i.market.list()?;
-            Ok(Value::List(
-                listings
-                    .iter()
-                    .map(|l| {
-                        Value::map([
-                            ("id", s(&l.id)),
-                            ("name", s(&l.name)),
-                            ("version", s(&l.version)),
-                            ("description", s(&l.description)),
-                            ("author", s(&l.author)),
-                        ])
-                    })
-                    .collect(),
-            ))
-        }),
+        Box::new(move |_| i.listing_rows()),
     );
     let i = inst.clone();
     d.register(
@@ -558,8 +1340,29 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
             let Value::Map(x) = input else {
                 return Err("expected an object".into());
             };
-            i.install_from_marketplace(&text(x, "id")?, &caller(x))
-                .map(|p| pkg_row(&p))
+            refuse_skipped_dependencies(x)?;
+            i.install_from_marketplace_outcome(&text(x, "id")?, &caller(x))
+                .map(|o| outcome_row(&o))
+        }),
+    );
+    // Read-only: what an install would do. Admin only; agents may read it freely.
+    let i = inst.clone();
+    d.register(
+        &m,
+        "module_plan",
+        "preview",
+        Box::new(move |input| {
+            let Value::Map(x) = input else {
+                return Err("expected an object".into());
+            };
+            match (x.get("manifest"), x.get("id")) {
+                (Some(Value::Text(t)), _) => i.preview(Request::Manifest(t)),
+                (_, Some(Value::Text(id))) => i.preview(Request::Market(id)),
+                _ => Err(
+                    "give either id (a marketplace package) or manifest (the text of an obop.toml)"
+                        .into(),
+                ),
+            }
         }),
     );
 }
@@ -912,17 +1715,17 @@ mod tests {
         assert!(
             inst.install(fleet, "upload", "r")
                 .unwrap_err()
-                .contains("not an upgrade")
+                .contains("already installed")
         );
-        let newer = fleet.replace("version = \"0.2.0\"", "version = \"0.3.0\"");
+        let newer = fleet.replace("version = \"0.3.0\"", "version = \"0.4.0\"");
         assert_eq!(
             inst.install(&newer, "upload", "r").unwrap().version,
-            "0.3.0"
+            "0.4.0"
         );
         assert!(
             inst.install(fleet, "upload", "r")
                 .unwrap_err()
-                .contains("not an upgrade")
+                .contains("would be a downgrade")
         );
         assert!(d.has_model("fleet_vehicle"));
         let needs = fleet
@@ -935,7 +1738,7 @@ mod tests {
         assert!(
             inst.install(&needs, "upload", "r")
                 .unwrap_err()
-                .contains("needs module ghost")
+                .contains("needs ghost *")
         );
     }
 
@@ -1274,7 +2077,7 @@ write_group = "notes.user"
 "#;
         let e = inst.install(pkg, "upload", "root").unwrap_err();
         assert!(
-            e.contains("refers to model party, which is not installed"),
+            e.contains("refers to model party, which no dependency of notes provides"),
             "{e}"
         );
         // Once a model of that name is registered, the same package installs.
@@ -1292,6 +2095,7 @@ write_group = "notes.user"
             network_destinations: vec![],
             description: String::new(),
             translations: Default::default(),
+            meta: Default::default(),
         };
         d.register_crud(&party, &store);
         inst.install(pkg, "upload", "root").unwrap();
@@ -1331,7 +2135,7 @@ label = "Ota käyttöön"
 
     fn fleet_with_labels(version: &str, labels: &str) -> String {
         Manifest::combine(
-            &include_str!("../../../../packages/fleet.toml").replace("0.2.0", version),
+            &include_str!("../../../../packages/fleet.toml").replace("0.3.0", version),
             labels,
         )
     }
@@ -1364,7 +2168,7 @@ label = "Ota käyttöön"
                 .all(|f| f.labels.is_empty() && f.option_labels.is_empty())
         );
 
-        inst.install(&fleet_with_labels("0.3.0", FLEET_LABELS), "upload", "root")
+        inst.install(&fleet_with_labels("0.4.0", FLEET_LABELS), "upload", "root")
             .unwrap();
         let m = fleet_meta(&d);
         assert_eq!(m.name, "Fleet", "the English name stays the source");

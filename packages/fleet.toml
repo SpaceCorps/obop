@@ -1,9 +1,17 @@
 [module]
 id = "fleet"
-version = "0.2.0"
+version = "0.3.0"
 name = "Fleet"
 description = "Vehicles, drivers and service history for a small fleet. Tracks status and service records; it does not compute running costs or fuel use."
 author = "SpaceCorps"
+summary = "Vehicles, drivers and service history for a small fleet."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["fleet", "vehicles", "drivers"]
+categories = ["supply-chain"]
+maturity = "beta"
+requires_core = "^0.2"
 
 [[model]]
 name = "fleet_vehicle"

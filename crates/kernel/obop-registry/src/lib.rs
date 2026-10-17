@@ -328,6 +328,89 @@ pub struct Module {
     pub network_destinations: Vec<String>,
     /// Names and descriptions in other languages (D52). English stays the source.
     pub translations: Arc<Translations>,
+    /// Version, author, licence, core requirement and the other catalogue data (D55).
+    pub meta: ModuleMeta,
+}
+
+/// The categories a module may declare (D55).
+pub const MODULE_CATEGORIES: [&str; 9] = [
+    "finance",
+    "sales",
+    "supply-chain",
+    "people",
+    "services",
+    "marketing",
+    "productivity",
+    "platform",
+    "other",
+];
+
+/// How settled a module is (D55).
+pub const MATURITIES: [&str; 3] = ["stable", "beta", "experimental"];
+
+/// What a module says about itself besides its models: the `[module]` table of `obop.toml` for a
+/// package, the same fields declared in code for a built-in module (D55). Empty strings mean
+/// "not declared".
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModuleMeta {
+    /// Semantic version. Built-in modules version with the core.
+    pub version: String,
+    /// One line for the card, at most 140 characters.
+    pub summary: String,
+    pub author: String,
+    pub authors: Vec<String>,
+    /// SPDX expression, `LicenseRef-...`, `proprietary` or `UNLICENSED`.
+    pub license: String,
+    pub homepage: String,
+    pub repository: String,
+    pub documentation: String,
+    pub support: String,
+    pub keywords: Vec<String>,
+    pub categories: Vec<String>,
+    /// A built-in icon name; an unknown one falls back to a default.
+    pub icon: String,
+    /// Semver requirement on the core version, for example `^0.2`.
+    pub requires_core: String,
+    /// `stable`, `beta` or `experimental`.
+    pub maturity: String,
+    /// Module id and semver requirement, in declaration order.
+    pub dependencies: Vec<(String, String)>,
+}
+
+impl ModuleMeta {
+    /// The metadata of a first-party built-in module: versioned with the core, licensed as the
+    /// core is (D1), requiring exactly the core series it ships with.
+    pub fn first_party(
+        summary: &str,
+        categories: &[&str],
+        keywords: &[&str],
+        icon: &str,
+        dependencies: &[&str],
+    ) -> Self {
+        let v = obop_types::CORE_VERSION;
+        let mut parts = v.split('.');
+        let (major, minor) = (parts.next().unwrap_or("0"), parts.next().unwrap_or("0"));
+        Self {
+            version: v.to_string(),
+            summary: summary.to_string(),
+            author: "SpaceCorps".into(),
+            authors: Vec::new(),
+            license: "AGPL-3.0-or-later".into(),
+            homepage: "https://github.com/SpaceCorps/obop".into(),
+            repository: "https://github.com/SpaceCorps/obop".into(),
+            documentation: String::new(),
+            support: String::new(),
+            keywords: keywords.iter().map(|x| x.to_string()).collect(),
+            categories: categories.iter().map(|x| x.to_string()).collect(),
+            icon: icon.to_string(),
+            requires_core: format!("^{major}.{minor}"),
+            maturity: "stable".into(),
+            dependencies: dependencies
+                .iter()
+                .map(|d| (d.to_string(), "*".to_string()))
+                .collect(),
+        }
+    }
 }
 
 impl Module {
@@ -497,6 +580,7 @@ mod tests {
             network_destinations: vec![],
             description: String::new(),
             translations: Default::default(),
+            meta: Default::default(),
         }
     }
 

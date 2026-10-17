@@ -6,8 +6,12 @@ pub mod files;
 pub mod installer;
 pub mod manifest;
 pub mod marketplace;
+pub mod resolve;
+pub mod semver;
+pub mod spdx;
+pub mod views;
 
-pub use check::check_manifest;
+pub use check::{Report, check_manifest, check_package};
 pub use installer::{Installer, PackageInfo, admin_module, register_admin};
 pub use manifest::Manifest;
 pub use marketplace::{Bundled, Chain, Http, Listing, Marketplace};

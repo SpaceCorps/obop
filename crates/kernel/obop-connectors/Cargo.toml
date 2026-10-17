@@ -1,6 +1,6 @@
 [package]
 name = "obop-connectors"
-version = "0.0.0"
+version.workspace = true
 description = "Framework-neutral core of the connectors app: compliant data flows, egress policy, pseudonymisation, hardened outbound HTTP, signed webhooks and OAuth2"
 edition.workspace = true
 rust-version.workspace = true

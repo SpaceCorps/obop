@@ -31,11 +31,11 @@ description = "Behörighetsgrupper som modulen använder"
 
 [labels.sv.model.module.action.install]
 label = "Installera"
-description = "Installera eller uppgradera en modul utifrån texten i dess obop.toml"
+description = "Installera eller uppgradera en modul från texten i dess obop.toml, med de beroenden den behöver"
 
 [labels.sv.model.module.action.uninstall]
 label = "Avinstallera"
-description = "Ta bort en modul; dess data finns kvar i databasen"
+description = "Ta bort en modul; dess data finns kvar i databasen. Nekas så länge en annan modul behöver den"
 
 [labels.sv.model.marketplace_listing]
 name = "Modul på marknadsplatsen"
@@ -71,7 +71,7 @@ description = "Behörighetsgrupper som modulen använder"
 
 [labels.sv.model.marketplace_listing.action.install]
 label = "Installera"
-description = "Installera en modul från marknadsplatsen med dess id"
+description = "Installera en modul från marknadsplatsen med id, med de beroenden den behöver, i en enda åtgärd"
 
 [labels.sv.model.setting]
 name = "Inställning"
@@ -104,3 +104,231 @@ description = "En kort anteckning utan kod eller hemlighet"
 [labels.sv.model.security_event.field.at]
 label = "Tid"
 description = "När det hände, i UTC (RFC 3339)"
+
+[labels.sv.model.module.field.summary]
+label = "Sammanfattning"
+description = "En rad om modulen, visas på dess kort"
+
+[labels.sv.model.module.field.author]
+label = "Utgivare"
+description = "Vem som publicerar den"
+
+[labels.sv.model.module.field.authors]
+label = "Författare"
+description = "Alla författare (en lista)"
+
+[labels.sv.model.module.field.license]
+label = "Licens"
+description = "SPDX-licensuttryck, LicenseRef-... eller proprietary"
+
+[labels.sv.model.module.field.license_kind]
+label = "Licenstyp"
+description = "spdx, custom, proprietary eller none"
+
+[labels.sv.model.module.field.license_url]
+label = "Licenslänk"
+description = "Länk till SPDX-sidan för en enskild licensidentifierare"
+
+[labels.sv.model.module.field.homepage]
+label = "Hemsida"
+description = "Länk till modulens hemsida"
+
+[labels.sv.model.module.field.repository]
+label = "Kodförråd"
+description = "Länk till källkodsförrådet"
+
+[labels.sv.model.module.field.documentation]
+label = "Dokumentation"
+description = "Länk till dokumentationen"
+
+[labels.sv.model.module.field.support]
+label = "Stöd"
+description = "Länk till var stöd ges"
+
+[labels.sv.model.module.field.keywords]
+label = "Nyckelord"
+description = "Sökord (en lista)"
+
+[labels.sv.model.module.field.categories]
+label = "Kategorier"
+description = "Kategorier: finance, sales, supply-chain, people, services, marketing, productivity, platform, other"
+
+[labels.sv.model.module.field.icon]
+label = "Ikon"
+description = "Namnet på en inbyggd ikon"
+
+[labels.sv.model.module.field.maturity]
+label = "Mognad"
+description = "stable, beta eller experimental"
+
+[labels.sv.model.module.field.requires_core]
+label = "Kräver kärna"
+description = "De kärnversioner modulen fungerar med, ett semver-krav"
+
+[labels.sv.model.module.field.compatible]
+label = "Kompatibel"
+description = "Om den körande kärnan uppfyller kärnkravet"
+
+[labels.sv.model.module.field.dependencies]
+label = "Beroenden"
+description = "Beroenden med sina krav och hur var och ett står sig (en lista)"
+
+[labels.sv.model.module.field.dependents]
+label = "Krävs av"
+description = "Id för de installerade moduler som behöver den här (en lista)"
+
+[labels.sv.model.module.field.update_available]
+label = "Uppdatering finns"
+description = "Den nyare version som marknadsplatsen erbjuder, om någon"
+
+[labels.sv.model.module.field.installed_at]
+label = "Installerad den"
+description = "När den installerades (Unix-sekunder); tom för inbyggda moduler"
+
+[labels.sv.model.module.field.installed_by]
+label = "Installerad av"
+description = "Vem som installerade den"
+
+[labels.sv.model.module.field.contents]
+label = "Innehåll"
+description = "Modeller, fält, åtgärder, godkännandesteg och dataklasser som modulen deklarerar"
+
+[labels.sv.model.module.field.uninstallable]
+label = "Kan tas bort"
+description = "Om den kan tas bort nu"
+
+[labels.sv.model.module.field.uninstall_blockers]
+label = "Borttagning blockeras av"
+description = "Vad som hindrar att den tas bort (en lista)"
+
+[labels.sv.model.module.field.warnings]
+label = "Varningar"
+description = "Anmärkningar som inte hindrar något, till exempel en proprietär licens (en lista)"
+
+[labels.sv.model.marketplace_listing.field.summary]
+label = "Sammanfattning"
+description = "En rad om modulen, visas på dess kort"
+
+[labels.sv.model.marketplace_listing.field.authors]
+label = "Författare"
+description = "Alla författare (en lista)"
+
+[labels.sv.model.marketplace_listing.field.license]
+label = "Licens"
+description = "SPDX-licensuttryck, LicenseRef-... eller proprietary"
+
+[labels.sv.model.marketplace_listing.field.license_kind]
+label = "Licenstyp"
+description = "spdx, custom, proprietary eller none"
+
+[labels.sv.model.marketplace_listing.field.license_url]
+label = "Licenslänk"
+description = "Länk till SPDX-sidan för en enskild licensidentifierare"
+
+[labels.sv.model.marketplace_listing.field.homepage]
+label = "Hemsida"
+description = "Länk till modulens hemsida"
+
+[labels.sv.model.marketplace_listing.field.repository]
+label = "Kodförråd"
+description = "Länk till källkodsförrådet"
+
+[labels.sv.model.marketplace_listing.field.documentation]
+label = "Dokumentation"
+description = "Länk till dokumentationen"
+
+[labels.sv.model.marketplace_listing.field.support]
+label = "Stöd"
+description = "Länk till var stöd ges"
+
+[labels.sv.model.marketplace_listing.field.keywords]
+label = "Nyckelord"
+description = "Sökord (en lista)"
+
+[labels.sv.model.marketplace_listing.field.categories]
+label = "Kategorier"
+description = "Kategorier: finance, sales, supply-chain, people, services, marketing, productivity, platform, other"
+
+[labels.sv.model.marketplace_listing.field.icon]
+label = "Ikon"
+description = "Namnet på en inbyggd ikon"
+
+[labels.sv.model.marketplace_listing.field.maturity]
+label = "Mognad"
+description = "stable, beta eller experimental"
+
+[labels.sv.model.marketplace_listing.field.requires_core]
+label = "Kräver kärna"
+description = "De kärnversioner modulen fungerar med, ett semver-krav"
+
+[labels.sv.model.marketplace_listing.field.compatible]
+label = "Kompatibel"
+description = "Om den körande kärnan uppfyller kärnkravet"
+
+[labels.sv.model.marketplace_listing.field.dependencies]
+label = "Beroenden"
+description = "Beroenden med sina krav och hur var och ett står sig (en lista)"
+
+[labels.sv.model.marketplace_listing.field.dependents]
+label = "Krävs av"
+description = "Id för de installerade moduler som behöver den här (en lista)"
+
+[labels.sv.model.marketplace_listing.field.update_available]
+label = "Uppdatering finns"
+description = "Den nyare version som marknadsplatsen erbjuder, om någon"
+
+[labels.sv.model.marketplace_listing.field.without_dependencies]
+label = "Utan beroenden"
+description = "Måste vara false eller utelämnas: nödvändiga beroenden kan inte hoppas över"
+
+[labels.sv.model.marketplace_listing.field.installed]
+label = "Installerad"
+description = "Om en version är installerad"
+
+[labels.sv.model.marketplace_listing.field.installed_version]
+label = "Installerad version"
+description = "Den installerade versionen, om någon"
+
+[labels.sv.model.marketplace_listing.field.installable]
+label = "Installerbar"
+description = "Om den kan installeras här nu"
+
+[labels.sv.model.marketplace_listing.field.blockers]
+label = "Hinder"
+description = "Vad som hindrar installationen (en lista)"
+
+[labels.sv.model.module_plan]
+name = "Installationsplan"
+description = "Vad installationen av en modul skulle göra här: stegen i ordning, hinder och varningar"
+
+[labels.sv.model.module_plan.action.preview]
+label = "Förhandsgranska"
+description = "Planera en installation utan att utföra den: stegen i ordning med versioner och licenser, hinder och varningar. Ange id (marknadsplatsen) eller manifest (obop.toml-text)"
+
+[labels.sv.model.module_plan.field.manifest]
+label = "Manifest"
+description = "Indata: texten i en obop.toml att planera (eller id för ett paket på marknadsplatsen)"
+
+[labels.sv.model.module_plan.field.ok]
+label = "Genomförbar"
+description = "Om planen saknar hinder"
+
+[labels.sv.model.module_plan.field.root]
+label = "Modul"
+description = "Modulen som planen gäller"
+
+[labels.sv.model.module_plan.field.core_version]
+label = "Kärnversion"
+description = "Den körande kärnans version"
+
+[labels.sv.model.module_plan.field.steps]
+label = "Steg"
+description = "Modulerna att installera eller uppgradera, beroenden först (en lista)"
+
+[labels.sv.model.module_plan.field.blockers]
+label = "Hinder"
+description = "Vad som hindrar installationen (en lista)"
+
+[labels.sv.model.module_plan.field.warnings]
+label = "Varningar"
+description = "Anmärkningar som inte hindrar något, till exempel en proprietär licens (en lista)"

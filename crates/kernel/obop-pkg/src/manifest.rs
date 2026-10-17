@@ -2,10 +2,13 @@
 //! permission groups and state-transition actions. A package contains no code, so installing
 //! one cannot run anything the registry does not already control.
 
+use crate::semver::{Req, Version};
+use crate::spdx::{self, LicenseKind};
 use obop_commands::{PublicRead, PublicReceipt, PublicSpec, PublicSubmit};
 use obop_registry::labels::{LangLabels, ModelShape, Shape, Translations, check_labels};
 use obop_registry::{
-    CommandDef, FieldDef, FieldKind, GENERATED_COMMANDS, ModelDef, Module, check_module, intern,
+    CommandDef, FieldDef, FieldKind, GENERATED_COMMANDS, MATURITIES, MODULE_CATEGORIES, ModelDef,
+    Module, ModuleMeta, check_module, intern,
 };
 use obop_types::DataClass;
 use serde::Deserialize;
@@ -24,19 +27,59 @@ pub struct Manifest {
     /// (with `.options`) and `.model.<m>.action.<a>`. Optional; English is the manifest itself.
     #[serde(default)]
     pub labels: std::collections::BTreeMap<String, LangLabels>,
+    /// The text this manifest was parsed from (what is stored and installed).
+    #[serde(skip)]
+    pub text: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Meta {
     pub id: String,
+    /// Semantic version of the module (`1.2.3`, `1.2.3-beta.1`).
     pub version: String,
     pub name: String,
     pub description: String,
+    /// One line for the card in the module catalogue, at most 140 characters (D55).
+    #[serde(default)]
+    pub summary: String,
     #[serde(default)]
     pub author: String,
     #[serde(default)]
+    pub authors: Vec<String>,
+    /// SPDX expression, `LicenseRef-...`, `proprietary` or `UNLICENSED`. Required for bundled and
+    /// marketplace packages.
+    #[serde(default)]
+    pub license: String,
+    #[serde(default)]
+    pub homepage: String,
+    #[serde(default)]
+    pub repository: String,
+    #[serde(default)]
+    pub documentation: String,
+    #[serde(default)]
+    pub support: String,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    /// A built-in icon name; unknown names fall back to a generic icon in the interface.
+    #[serde(default)]
+    pub icon: String,
+    /// The core versions the module runs on, a semver requirement such as `^0.2` or
+    /// `>=0.2, <0.4`. Required for bundled and marketplace packages; `*` when absent.
+    #[serde(default)]
+    pub requires_core: String,
+    /// `stable`, `beta` or `experimental`.
+    #[serde(default)]
+    pub maturity: String,
+    /// Shorthand: module ids that must be installed, at any version (`"*"`).
+    #[serde(default)]
     pub depends: Vec<String>,
+    /// `[module.dependencies]`: module id to a version requirement, for example
+    /// `hr = ">=0.1, <1"`. A dependency on a built-in module is checked against the core version.
+    #[serde(default)]
+    pub dependencies: std::collections::BTreeMap<String, String>,
     /// Network destinations the package may reach (D41). Declarative packages run no code, so
     /// this must stay empty; the field exists so the contract is the same for later tiers.
     #[serde(default)]
@@ -148,11 +191,40 @@ fn group_ok(g: &str) -> bool {
         .is_some_and(|(a, b)| ident_ok(a) && ident_ok(b))
 }
 
-fn semver_ok(v: &str) -> bool {
-    let p: Vec<_> = v.split('.').collect();
-    p.len() == 3
-        && p.iter()
-            .all(|x| !x.is_empty() && x.len() <= 6 && x.chars().all(|c| c.is_ascii_digit()))
+/// An `https://` URL without whitespace or control characters, at most 200 long.
+fn https_url_ok(u: &str) -> bool {
+    u.len() <= 200
+        && u.strip_prefix("https://").is_some_and(|rest| {
+            let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+            !host.is_empty()
+                && host.contains('.')
+                && !host.starts_with(['.', '-'])
+                && host
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == ':')
+        })
+        && !u.chars().any(|c| c.is_whitespace() || c.is_control())
+}
+
+fn keyword_ok(k: &str) -> bool {
+    (2..=24).contains(&k.len())
+        && k.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && k.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+fn icon_ok(i: &str) -> bool {
+    i.len() <= 30
+        && i.starts_with(|c: char| c.is_ascii_lowercase())
+        && i.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// A dependency declared by a module: the id and what version it must have.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Requirement {
+    pub id: String,
+    pub req: Req,
 }
 
 impl Manifest {
@@ -160,7 +232,9 @@ impl Manifest {
         if text.len() > MAX_BYTES {
             return Err(format!("manifest is larger than {} KiB", MAX_BYTES / 1024));
         }
-        let m: Manifest = toml::from_str(text).map_err(|e| format!("invalid obop.toml: {e}"))?;
+        let mut m: Manifest =
+            toml::from_str(text).map_err(|e| format!("invalid obop.toml: {e}"))?;
+        m.text = text.to_string();
         m.validate()?;
         Ok(m)
     }
@@ -212,12 +286,13 @@ impl Manifest {
                 "module id {id:?} must be lowercase letters, digits and _, starting with a letter"
             ));
         }
-        if !semver_ok(&self.module.version) {
+        if Version::parse(&self.module.version).is_err() {
             return Err("version must look like 1.2.3".into());
         }
         if self.module.name.trim().is_empty() || self.module.description.trim().is_empty() {
             return Err("module needs a name and a description".into());
         }
+        self.validate_meta()?;
         if !self.module.network_destinations.is_empty() {
             return Err(
                 "declarative packages run no code and may not declare network destinations".into(),
@@ -303,6 +378,187 @@ impl Manifest {
         self.public_specs()?;
         check_labels(&self.labels, &self.shape())?;
         Ok(())
+    }
+
+    /// The `[module]` keys of D55: licence, links, keywords, categories, core requirement,
+    /// maturity, summary and the dependency tables. Every one is optional here; the catalogue
+    /// rules that make some of them required are in `catalog_problems`.
+    fn validate_meta(&self) -> Result<(), String> {
+        let m = &self.module;
+        let s = &m.summary;
+        if s.chars().count() > 140 || s.contains('\n') {
+            return Err("summary must be one line of at most 140 characters".into());
+        }
+        if m.author.chars().count() > 100 {
+            return Err("author is longer than 100 characters".into());
+        }
+        if m.authors.len() > 10
+            || m.authors
+                .iter()
+                .any(|a| a.trim().is_empty() || a.chars().count() > 100)
+        {
+            return Err("authors takes at most 10 names of 1 to 100 characters".into());
+        }
+        if !m.license.is_empty() {
+            spdx::check(&m.license).map_err(|e| format!("license: {e}"))?;
+        }
+        for (key, url) in [
+            ("homepage", &m.homepage),
+            ("repository", &m.repository),
+            ("documentation", &m.documentation),
+            ("support", &m.support),
+        ] {
+            if !url.is_empty() && !https_url_ok(url) {
+                return Err(format!(
+                    "{key} must be an https:// URL (got {url:?}); plain http and other schemes are refused"
+                ));
+            }
+        }
+        if m.keywords.len() > 10 {
+            return Err("keywords takes at most 10 entries".into());
+        }
+        let mut seen = std::collections::HashSet::new();
+        for k in &m.keywords {
+            if !keyword_ok(k) || !seen.insert(k) {
+                return Err(format!(
+                    "keyword {k:?} must be unique, 2 to 24 lowercase letters, digits or -"
+                ));
+            }
+        }
+        if m.categories.len() > 3 {
+            return Err("categories takes at most 3 entries".into());
+        }
+        for (i, c) in m.categories.iter().enumerate() {
+            if !MODULE_CATEGORIES.contains(&c.as_str()) {
+                return Err(format!(
+                    "unknown category {c:?} (use {})",
+                    MODULE_CATEGORIES.join(", ")
+                ));
+            }
+            if m.categories[..i].contains(c) {
+                return Err(format!("category {c:?} is listed twice"));
+            }
+        }
+        if !m.icon.is_empty() && !icon_ok(&m.icon) {
+            return Err(format!(
+                "icon {:?} must be a lowercase icon name such as \"project\"",
+                m.icon
+            ));
+        }
+        if !m.maturity.is_empty() && !MATURITIES.contains(&m.maturity.as_str()) {
+            return Err(format!(
+                "maturity must be one of {} (got {:?})",
+                MATURITIES.join(", "),
+                m.maturity
+            ));
+        }
+        if !m.requires_core.is_empty() {
+            Req::parse(&m.requires_core).map_err(|e| format!("requires_core: {e}"))?;
+        }
+        if m.depends.len() + m.dependencies.len() > 20 {
+            return Err("a module may declare at most 20 dependencies".into());
+        }
+        let mut ids = std::collections::HashSet::new();
+        for d in &m.depends {
+            if !ident_ok(d) {
+                return Err(format!("depends: {d:?} is not a module id"));
+            }
+            if !ids.insert(d.as_str()) {
+                return Err(format!("depends lists {d} twice"));
+            }
+        }
+        for (d, req) in &m.dependencies {
+            if !ident_ok(d) {
+                return Err(format!("[module.dependencies]: {d:?} is not a module id"));
+            }
+            if ids.contains(d.as_str()) {
+                return Err(format!(
+                    "{d} is declared in both depends and [module.dependencies]; use one of them (the table carries the version requirement)"
+                ));
+            }
+            Req::parse(req).map_err(|e| format!("[module.dependencies] {d}: {e}"))?;
+        }
+        if ids.contains(m.id.as_str()) || m.dependencies.contains_key(&m.id) {
+            return Err(format!("{} depends on itself", m.id));
+        }
+        Ok(())
+    }
+
+    /// The requirement on the core version (`*` when the manifest declares none).
+    pub fn core_req(&self) -> Req {
+        Req::parse(&self.module.requires_core).unwrap_or_else(|_| Req::any())
+    }
+
+    /// Every dependency with its version requirement: `depends` (any version) first, then
+    /// `[module.dependencies]` in id order.
+    pub fn requirements(&self) -> Vec<Requirement> {
+        let mut v: Vec<Requirement> = self
+            .module
+            .depends
+            .iter()
+            .map(|id| Requirement {
+                id: id.clone(),
+                req: Req::any(),
+            })
+            .collect();
+        v.extend(self.module.dependencies.iter().map(|(id, r)| Requirement {
+            id: id.clone(),
+            req: Req::parse(r).unwrap_or_else(|_| Req::any()),
+        }));
+        v
+    }
+
+    /// The ids of the modules this one depends on.
+    pub fn dependency_ids(&self) -> Vec<String> {
+        self.requirements().into_iter().map(|r| r.id).collect()
+    }
+
+    pub fn semver(&self) -> Version {
+        Version::parse(&self.module.version).unwrap_or_else(|_| Version::new(0, 0, 0))
+    }
+
+    /// What a package must declare to be listed in a catalogue (bundled or marketplace).
+    pub fn catalog_problems(&self) -> Vec<String> {
+        let mut v = Vec::new();
+        if self.module.license.is_empty() {
+            v.push(
+                "license is required for marketplace and bundled packages (an SPDX expression such as Apache-2.0, or LicenseRef-<name>)"
+                    .to_string(),
+            );
+        }
+        if self.module.requires_core.is_empty() {
+            v.push(
+                "requires_core is required for marketplace and bundled packages (for example \"^0.2\")"
+                    .to_string(),
+            );
+        }
+        v
+    }
+
+    /// Things worth knowing that do not stop an install.
+    pub fn warnings(&self) -> Vec<String> {
+        let mut v = Vec::new();
+        if self.module.requires_core.is_empty() {
+            v.push(
+                "requires_core is not declared, so the module is assumed to run on every core version (*); declare it, for example requires_core = \"^0.2\""
+                    .to_string(),
+            );
+        }
+        if self.module.license.is_empty() {
+            v.push("no license is declared".to_string());
+        } else if let Ok(kind) = spdx::check(&self.module.license) {
+            match kind {
+                LicenseKind::Proprietary => {
+                    v.push("the module is proprietary: its terms are not open source".to_string())
+                }
+                LicenseKind::Custom => v.push(
+                    "the licence uses LicenseRef-...: read the terms that come with the module"
+                        .to_string(),
+                ),
+                LicenseKind::Spdx => {}
+            }
+        }
+        v
     }
 
     /// The languages the package ships labels for.
@@ -475,6 +731,32 @@ impl Manifest {
         g
     }
 
+    /// The catalogue metadata as the registry keeps it.
+    pub fn module_meta(&self) -> ModuleMeta {
+        let m = &self.module;
+        ModuleMeta {
+            version: m.version.clone(),
+            summary: m.summary.clone(),
+            author: m.author.clone(),
+            authors: m.authors.clone(),
+            license: m.license.clone(),
+            homepage: m.homepage.clone(),
+            repository: m.repository.clone(),
+            documentation: m.documentation.clone(),
+            support: m.support.clone(),
+            keywords: m.keywords.clone(),
+            categories: m.categories.clone(),
+            icon: m.icon.clone(),
+            requires_core: m.requires_core.clone(),
+            maturity: m.maturity.clone(),
+            dependencies: self
+                .requirements()
+                .into_iter()
+                .map(|r| (r.id, r.req.to_string()))
+                .collect(),
+        }
+    }
+
     /// Build registry metadata and run the D41 install gate over it.
     pub fn to_module(&self) -> Result<Module, String> {
         let models = self
@@ -538,6 +820,7 @@ impl Manifest {
             models,
             network_destinations: vec![],
             translations: std::sync::Arc::new(Translations::from_labels(&self.labels)),
+            meta: self.module_meta(),
         };
         let mut public_problems = Vec::new();
         for spec in self.public_specs()? {

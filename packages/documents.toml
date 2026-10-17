@@ -1,9 +1,17 @@
 [module]
 id = "documents"
-version = "0.1.0"
+version = "0.2.0"
 name = "Documents"
 description = "A register of business documents: folders, document records with kind, owner, expiry and confidentiality, and a draft, published and archived flow. It stores references, not file contents."
 author = "SpaceCorps"
+summary = "A register of business documents with owner, expiry and confidentiality, and a draft, published, archived flow."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["documents", "register", "archive"]
+categories = ["productivity"]
+maturity = "beta"
+requires_core = "^0.2"
 
 [[model]]
 name = "documents_folder"

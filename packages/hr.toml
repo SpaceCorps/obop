@@ -1,9 +1,17 @@
 [module]
 id = "hr"
-version = "0.1.0"
+version = "0.2.0"
 name = "Human Resources"
 description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group."
 author = "SpaceCorps"
+summary = "Employees, departments and leave requests, with pay and health data restricted to the right groups."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["hr", "employees", "leave"]
+categories = ["people"]
+maturity = "beta"
+requires_core = "^0.2"
 
 [[model]]
 name = "hr_department"

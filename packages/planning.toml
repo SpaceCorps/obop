@@ -1,10 +1,20 @@
 [module]
 id = "planning"
-version = "0.1.0"
+version = "0.2.0"
 name = "Planning"
 description = "Shifts for employees, with roles and reusable templates. A shift has a day and a start and end in minutes since midnight (0 to 1439; 540 is 09:00). A shift with no employee is an open shift. Workflow: open, published, confirmed by the employee. Needs the Human Resources package."
 author = "SpaceCorps"
-depends = ["hr"]
+summary = "Shifts for employees with roles and reusable templates; open shifts are published and confirmed."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["planning", "shifts", "rota"]
+categories = ["people"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+hr = ">=0.2, <1"
 
 [[model]]
 name = "planning_role"

@@ -1,9 +1,17 @@
 [module]
 id = "email_marketing"
-version = "0.1.0"
+version = "0.2.0"
 name = "Email Marketing"
 description = "Mailing lists, the contacts on them with their consent status and date, and campaigns with a draft, scheduled, sent flow. Sending is irreversible and reaches real people, so it needs a human approval from a manager; agents may only propose it. Campaign statistics are numbers entered or imported, not computed. Contacts are personal data: keep consent_status and consent_date accurate and never mail a contact that is not opted_in."
 author = "SpaceCorps"
+summary = "Mailing lists, contacts with consent, and campaigns. Sending needs a human approval."
+license = "AGPL-3.0-or-later"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["email", "campaigns", "newsletters", "consent"]
+categories = ["marketing"]
+maturity = "beta"
+requires_core = "^0.2"
 
 [[model]]
 name = "email_marketing_list"

@@ -59,6 +59,7 @@ fn module() -> Module {
         network_destinations: vec![],
         description: String::new(),
         translations: Default::default(),
+        meta: Default::default(),
     }
 }
 
