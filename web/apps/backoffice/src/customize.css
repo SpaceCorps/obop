@@ -138,3 +138,29 @@
   flex: 1;
   font-weight: var(--weight-semibold);
 }
+
+/* The screen of a session that must set up two-factor authentication first (D53). */
+.gate {
+  display: grid;
+  place-items: start center;
+  min-block-size: 100dvh;
+  padding: var(--space-8) var(--space-4);
+  background: var(--bg);
+}
+.gate-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  inline-size: min(100%, 44rem);
+  padding: var(--space-6);
+}
+.gate-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.security-tab .tf {
+  max-inline-size: 44rem;
+}

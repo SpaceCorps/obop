@@ -19,6 +19,7 @@ import {
   Pager,
   Panel,
   Popover,
+  QrCode,
   Segmented,
   Select,
   Skeleton,
@@ -30,6 +31,7 @@ import {
   Textarea,
   Toast,
   Tooltip,
+  TwoFactorStep,
 } from "@obop/ui";
 import { Block, Specimen, State } from "./kit.tsx";
 
@@ -734,6 +736,50 @@ function Listing() {
   );
 }
 
+function TwoFactor() {
+  return (
+    <Specimen
+      title="QrCode, TwoFactorStep"
+      note="A QR code is drawn in the browser as one SVG path and is always dark on white with a quiet zone, in every theme, because scanners need that contrast; the typed key goes next to it for everyone who cannot scan. The second sign-in step asks for one thing at a time: the six digits, or a recovery code."
+      wide
+      props={[
+        [
+          "QrCode value / label",
+          "string, string",
+          "required",
+          "The text to encode (an otpauth:// URI) and its accessible name. Error correction level M.",
+        ],
+        [
+          "QrCode size",
+          "number",
+          "192",
+          "Edge length in CSS pixels; it shrinks to fit its container.",
+        ],
+        [
+          "TwoFactorStep onSubmit",
+          "(factor) => Promise<string | null>",
+          "required",
+          "Resolves to the error to show, or null when the sign-in went through.",
+        ],
+        ["TwoFactorStep onBack", "() => void", "required", "Returns to the password step."],
+      ]}
+    >
+      <div className="data-grid">
+        <Panel className="demo-pad" style={{ alignSelf: "start" }}>
+          <QrCode
+            value="otpauth://totp/obop:ada%40example.test?secret=JBSWY3DPEHPK3PXP&issuer=obop"
+            label="Example QR code"
+            size={160}
+          />
+        </Panel>
+        <Panel className="demo-pad" style={{ alignSelf: "start" }}>
+          <TwoFactorStep onSubmit={async () => "That code is not valid."} onBack={() => {}} />
+        </Panel>
+      </div>
+    </Specimen>
+  );
+}
+
 export function Components({ notify }: { notify: Notify }) {
   return (
     <>
@@ -754,6 +800,7 @@ export function Components({ notify }: { notify: Notify }) {
           <Feedback notify={notify} />
           <DataDisplay />
           <Listing />
+          <TwoFactor />
         </div>
       </Block>
     </>

@@ -1,4 +1,4 @@
-import { t } from "@obop/ui";
+import { t, type Factor } from "@obop/ui";
 
 /** Translations the server may add to metadata: language code -> text (D34; absent today). */
 export type Translations = Record<string, string>;
@@ -70,10 +70,17 @@ export async function approve(token: string, planId: string): Promise<Reply> {
   return send(token, `/api/approve/${planId}`, {});
 }
 
-/** `null` means the token was rejected: the caller signs out. */
-export async function meta(token: string): Promise<ModuleMeta[] | null> {
+/**
+ * `null` means the token was rejected: the caller signs out. `"enrolment"` means the session may
+ * only set up two-factor authentication, which an administrator policy requires (D53).
+ */
+export async function meta(token: string): Promise<ModuleMeta[] | null | "enrolment"> {
   const res = await fetch("/api/meta", { headers: { authorization: `Bearer ${token}` } });
   if (res.status === 401) return null;
+  if (res.status === 403) {
+    const body = (await res.json().catch(() => ({}))) as { code?: string };
+    if (body.code === "mfa_enrolment_required") return "enrolment";
+  }
   if (!res.ok) return [];
   const modules = (await res.json()).modules as ModuleMeta[];
   // An older server may not send the kind yet: money by name, everything else text.
@@ -154,13 +161,43 @@ async function send(token: string, path: string, body: object): Promise<Reply> {
   return { kind: "ok", value: json.value, denied: json.denied ?? [] };
 }
 
-export async function login(username: string, password: string): Promise<string | null> {
-  const res = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  return res.ok ? (await res.json()).token : null;
+/** What a sign-in step produced (D53). */
+export type LoginResult =
+  | { kind: "session"; token: string; enrolment: boolean }
+  | { kind: "mfa"; mfaToken: string }
+  | { kind: "error"; status: number; code: string };
+
+async function loginStep(path: string, body: object): Promise<LoginResult> {
+  try {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      token?: string;
+      mfa_required?: boolean;
+      mfa_token?: string;
+      mfa_enrolment_required?: boolean;
+      code?: string;
+    };
+    if (res.ok && json.mfa_required && json.mfa_token)
+      return { kind: "mfa", mfaToken: json.mfa_token };
+    if (res.ok && json.token)
+      return { kind: "session", token: json.token, enrolment: !!json.mfa_enrolment_required };
+    return { kind: "error", status: res.status, code: json.code ?? "" };
+  } catch {
+    return { kind: "error", status: 0, code: "network" };
+  }
+}
+
+export function login(username: string, password: string): Promise<LoginResult> {
+  return loginStep("/api/auth/login", { username, password });
+}
+
+/** The second step: the `mfa_token` of the first, and a code or a recovery code. */
+export function loginMfa(mfaToken: string, factor: Factor): Promise<LoginResult> {
+  return loginStep("/api/auth/login/mfa", { mfa_token: mfaToken, ...factor });
 }
 
 export async function loadSettings(token: string): Promise<Settings> {
@@ -196,4 +233,6 @@ export type Settings = {
   language?: string;
   /** ISO 4217 code of the instance's currency; a record's own `currency` field wins. */
   currency?: string;
+  /** Sign-in policy (D53). Absent keys take the server's defaults. */
+  security?: { require_mfa_for_admins?: boolean; require_mfa_for_all?: boolean };
 };

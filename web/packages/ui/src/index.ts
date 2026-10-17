@@ -7,5 +7,7 @@ export * from "./icon-data.ts";
 export * from "./icons.tsx";
 export * from "./logo.tsx";
 export * from "./primitives.tsx";
+export * from "./qr.tsx";
+export * from "./twofactor.tsx";
 export * from "./theme.ts";
 export * from "./i18n/index.ts";

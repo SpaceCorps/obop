@@ -1,0 +1,117 @@
+/* Two-factor setup and the second sign-in step (D53). Tokens only; logical properties only. */
+
+.tf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-inline-size: 38rem;
+}
+.tf h3,
+.tf h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+.tf p {
+  margin: 0;
+}
+.tf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.tf-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.tf-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0;
+  padding-inline-start: var(--space-5);
+}
+.tf-steps > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.tf-steps > li::marker {
+  color: var(--text-muted);
+  font-weight: var(--weight-semibold);
+}
+.tf-key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+}
+.qr {
+  flex: none;
+  max-inline-size: 100%;
+  block-size: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.tf-key {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+.tf-secret {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.tf-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  list-style: none;
+}
+.tf-codes code {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  letter-spacing: 0.03em;
+  user-select: all;
+}
+.tf-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.tf-note svg {
+  flex: none;
+  margin-block-start: 0.15rem;
+}
+.tf-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.tf-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+}

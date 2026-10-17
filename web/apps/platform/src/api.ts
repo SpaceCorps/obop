@@ -1,3 +1,5 @@
+import type { Factor } from "@obop/ui";
+
 export type Instance = {
   id: string;
   name: string;
@@ -9,7 +11,9 @@ export type Instance = {
   phase: string;
 };
 
-type Result<T> = { ok: true; value: T } | { ok: false; error: string };
+type Result<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string; status: number; code: string };
 
 async function request<T>(
   token: string,
@@ -28,13 +32,17 @@ async function request<T>(
   const json = await res.json().catch(() => ({}));
   return res.ok
     ? { ok: true, value: json as T }
-    : { ok: false, error: json.error ?? res.statusText };
+    : { ok: false, error: json.error ?? res.statusText, status: res.status, code: json.code ?? "" };
 }
 
 export const signup = (email: string, password: string) =>
   request<{ token: string }>("", "POST", "/api/platform/signup", { email, password });
+/** A sign-in step: a session, or the demand for a second factor (D53). */
+export type LoginStep = { token?: string; mfa_required?: boolean; mfa_token?: string };
 export const login = (email: string, password: string) =>
-  request<{ token: string }>("", "POST", "/api/platform/login", { email, password });
+  request<LoginStep>("", "POST", "/api/platform/login", { email, password });
+export const loginMfa = (mfaToken: string, factor: Factor) =>
+  request<LoginStep>("", "POST", "/api/platform/login/mfa", { mfa_token: mfaToken, ...factor });
 export const list = (token: string) =>
   request<{ instances: Instance[] }>(token, "GET", "/api/platform/instances");
 export const create = (token: string, name: string) =>

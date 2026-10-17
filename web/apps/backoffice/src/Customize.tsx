@@ -4,6 +4,7 @@ import { appTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
 import { BuildTab } from "./ModuleBuilder.tsx";
+import { SecurityTab } from "./Security.tsx";
 import { href } from "./route.ts";
 import { ContrastReport } from "./brand/ContrastReport.tsx";
 import {
@@ -68,6 +69,7 @@ const TABS = [
   { id: "apps", label: msg("Apps"), icon: "grid" },
   { id: "modules", label: msg("Modules"), icon: "plug" },
   { id: "build", label: msg("Build a module"), icon: "edit" },
+  { id: "security", label: msg("Security"), icon: "shield-check" },
   { id: "brand", label: msg("Brand book"), icon: "sparkle" },
   { id: "guide", label: msg("Guide"), icon: "help" },
 ] as const;
@@ -75,7 +77,8 @@ const TABS = [
 export function Customize(p: Props) {
   // Everyone gets their own theme and the read-only brand book; the rest changes the instance.
   const tabs = TABS.filter(
-    (x) => p.isAdmin || x.id === "theme" || x.id === "brand" || x.id === "guide",
+    (x) =>
+      p.isAdmin || x.id === "theme" || x.id === "security" || x.id === "brand" || x.id === "guide",
   );
   const tab = tabs.some((x) => x.id === p.tab) ? p.tab : "theme";
   const current = tabs.find((x) => x.id === tab)!;
@@ -107,6 +110,7 @@ export function Customize(p: Props) {
         {tab === "apps" && <AppsTab {...p} />}
         {tab === "modules" && <ModulesTab {...p} />}
         {tab === "build" && <BuildTab {...p} />}
+        {tab === "security" && <SecurityTab {...p} />}
         {tab === "guide" && (
           <Suspense fallback={<Skeleton rows={6} cols={3} />}>
             <GuidePage anchor={p.anchor} goAnchor={p.goAnchor} notify={p.notify} />

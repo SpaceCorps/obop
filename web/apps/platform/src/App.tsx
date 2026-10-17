@@ -9,11 +9,17 @@ import {
   LanguageMenu,
   Logo,
   Notice,
+  Dialog,
+  TwoFactorPanel,
+  TwoFactorStep,
+  createTwoFactorApi,
   msg,
   rich,
   t,
+  twoFactorMessage,
+  type Factor,
 } from "@obop/ui";
-import { create, list, login, remove, signup, type Instance } from "./api.ts";
+import { create, list, login, loginMfa, remove, signup, type Instance } from "./api.ts";
 import { clock, phaseText, serverMessage } from "./serverMessage.ts";
 
 function stored(): string {
@@ -37,6 +43,23 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
   const [mode, setMode] = useState<"signup" | "login">("signup");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Set after the password of an account that has two-factor authentication on.
+  const [step, setStep] = useState<string | null>(null);
+  async function code(factor: Factor): Promise<string | null> {
+    if (!step) return null;
+    const r = await loginMfa(step, factor);
+    if (r.ok && r.value.token) {
+      onToken(r.value.token);
+      return null;
+    }
+    const failed = r.ok ? "" : r.code;
+    if (failed === "mfa_expired") {
+      setStep(null);
+      setError(twoFactorMessage({ status: 401, code: failed }));
+      return null;
+    }
+    return twoFactorMessage({ status: r.ok ? 0 : r.status, code: failed });
+  }
   return (
     <main className="auth-wrap">
       <aside className="auth-brand">
@@ -58,61 +81,82 @@ function Auth({ onToken }: { onToken: (token: string) => void }) {
         </ul>
         <p className="hint">{t("Free while in beta. No card needed.")}</p>
       </aside>
-      <form
-        className="auth"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          const go = mode === "signup" ? signup : login;
-          setBusy(true);
-          setError(null);
-          const r = await go(String(f.get("email")), String(f.get("password")));
-          setBusy(false);
-          if (r.ok) onToken(r.value.token);
-          else setError(serverMessage(r.error));
-        }}
-      >
-        <h1 className="auth-logo">
-          <Logo variant="full" size={30} title="obop" />
-        </h1>
-        <div className="auth-head">
-          <h2>{mode === "signup" ? t("Create your account") : t("Sign in")}</h2>
-          <p className="hint">
-            {t("One business, one platform. Sign up and get your own instance.")}
-          </p>
+      {step ? (
+        <div className="auth">
+          <h1 className="auth-logo">
+            <Logo variant="full" size={30} title="obop" />
+          </h1>
+          <TwoFactorStep
+            key={step}
+            onSubmit={code}
+            onBack={() => {
+              setStep(null);
+              setError(null);
+            }}
+          />
+          <LanguageMenu align="start" />
         </div>
-        <Input
-          label={t("Email")}
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          autoFocus
-        />
-        <Input
-          label={t("Password")}
-          name="password"
-          type="password"
-          autoComplete={mode === "signup" ? "new-password" : "current-password"}
-          minLength={12}
-          required
-          hint={mode === "signup" ? t("At least 12 characters.") : undefined}
-        />
-        {error && <Notice tone="danger" title={error} />}
-        <Button type="submit" variant="primary" size="lg" loading={busy}>
-          {mode === "signup" ? t("Create account") : t("Sign in")}
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={() => {
+      ) : (
+        <form
+          className="auth"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            setBusy(true);
             setError(null);
-            setMode(mode === "signup" ? "login" : "signup");
+            const email = String(f.get("email"));
+            const password = String(f.get("password"));
+            const r =
+              mode === "signup" ? await signup(email, password) : await login(email, password);
+            setBusy(false);
+            if (!r.ok) return setError(serverMessage(r.error));
+            if ("mfa_required" in r.value && r.value.mfa_required && r.value.mfa_token)
+              return setStep(r.value.mfa_token);
+            if (r.value.token) onToken(r.value.token);
           }}
         >
-          {mode === "signup" ? t("I already have an account") : t("Create an account")}
-        </Button>
-        <LanguageMenu align="start" />
-      </form>
+          <h1 className="auth-logo">
+            <Logo variant="full" size={30} title="obop" />
+          </h1>
+          <div className="auth-head">
+            <h2>{mode === "signup" ? t("Create your account") : t("Sign in")}</h2>
+            <p className="hint">
+              {t("One business, one platform. Sign up and get your own instance.")}
+            </p>
+          </div>
+          <Input
+            label={t("Email")}
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            autoFocus
+          />
+          <Input
+            label={t("Password")}
+            name="password"
+            type="password"
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            minLength={12}
+            required
+            hint={mode === "signup" ? t("At least 12 characters.") : undefined}
+          />
+          {error && <Notice tone="danger" title={error} />}
+          <Button type="submit" variant="primary" size="lg" loading={busy}>
+            {mode === "signup" ? t("Create account") : t("Sign in")}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setError(null);
+              setMode(mode === "signup" ? "login" : "signup");
+            }}
+          >
+            {mode === "signup" ? t("I already have an account") : t("Create an account")}
+          </Button>
+          <LanguageMenu align="start" />
+        </form>
+      )}
     </main>
   );
 }
@@ -193,6 +237,8 @@ export function App() {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Instance | null>(null);
+  const [security, setSecurity] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const setToken = useCallback((next: string) => {
     remember(next);
     setTokenState(next);
@@ -229,6 +275,9 @@ export function App() {
         </h1>
         <span className="grow" />
         <LanguageMenu />
+        <Button variant="ghost" icon="shield-check" onClick={() => setSecurity(true)}>
+          {t("Security")}
+        </Button>
         <Button variant="ghost" icon="log-out" onClick={() => setToken("")}>
           {t("Sign out")}
         </Button>
@@ -308,6 +357,19 @@ export function App() {
         </form>
         {error && <Notice tone="danger" title={error} />}
       </main>
+      {security && (
+        <Dialog title={t("Account security")} onClose={() => setSecurity(false)} size="lg">
+          <TwoFactorPanel
+            api={createTwoFactorApi("/api/platform", token)}
+            notify={(text) => setToast(text)}
+          />
+          {toast && (
+            <p className="hint" role="status">
+              {toast}
+            </p>
+          )}
+        </Dialog>
+      )}
       {toDelete && (
         <ConfirmDialog
           title={t("Delete instance?")}

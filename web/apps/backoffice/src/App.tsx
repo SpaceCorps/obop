@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LanguageSelect, setInstanceDefaults, t, useI18n } from "@obop/ui";
-import { loadSettings, login, meta, type ModuleMeta, type Settings } from "./api.ts";
+import { setInstanceDefaults, t } from "@obop/ui";
+import { loadSettings, meta, type ModuleMeta, type Settings } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
 import { Customize } from "./Customize.tsx";
 import { DashboardsApp } from "./dashboards/DashboardsApp.tsx";
@@ -9,13 +9,11 @@ import { DataProvider, type Tone } from "./data.tsx";
 import { modelTitle } from "./labels.ts";
 import { ModelPage } from "./ModelPage.tsx";
 import { href, nav, useRoute } from "./route.ts";
+import { EnrolmentGate } from "./Security.tsx";
+import { SignIn } from "./SignIn.tsx";
 import {
-  Button,
   ConfirmDialog,
   Icon,
-  Input,
-  Logo,
-  Notice,
   Skeleton,
   ToastRegion,
   type ConfirmRequest,
@@ -48,76 +46,14 @@ function recentApps(): string[] {
   }
 }
 
-function SignIn({ onDone }: { onDone: (token: string, user: string) => void }) {
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const i18n = useI18n();
-  return (
-    <main className="signin-wrap">
-      <aside className="signin-brand">
-        <h1 className="signin-logo-lg">
-          <Logo variant="full" size={28} title="obop" />
-        </h1>
-        <p className="signin-claim">{t("One business, one platform.")}</p>
-        <ul>
-          <li>
-            <Icon name="users" size={18} /> {t("Every app shares one set of contacts and products")}
-          </li>
-          <li>
-            <Icon name="shield-check" size={18} />{" "}
-            {t("Personal data is masked unless you may see it")}
-          </li>
-          <li>
-            <Icon name="sparkle" size={18} />{" "}
-            {t("Agents can do what you can, and ask before they act")}
-          </li>
-        </ul>
-      </aside>
-      <form
-        className="signin"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          const user = String(f.get("username"));
-          setBusy(true);
-          setError(null);
-          const token = await login(user, String(f.get("password")));
-          setBusy(false);
-          if (token) onDone(token, user);
-          else setError(t("Invalid username or password"));
-        }}
-      >
-        <h1 className="signin-logo">
-          <Logo variant="full" size={30} title="obop" />
-        </h1>
-        <div className="signin-head">
-          <h2>{t("Sign in")}</h2>
-          <p className="hint">{t("Sign in to your instance.")}</p>
-        </div>
-        <Input label={t("Username")} name="username" autoComplete="username" required autoFocus />
-        <Input
-          label={t("Password")}
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
-        {error && <Notice tone="danger" title={error} />}
-        <Button type="submit" variant="primary" size="lg" loading={busy}>
-          {t("Sign in")}
-        </Button>
-        <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
-      </form>
-    </main>
-  );
-}
-
 export function App() {
   const [token, setTokenState] = useState(() => read("obop-token"));
   const [email, setEmail] = useState(() => read("obop-user"));
   const [modules, setModules] = useState<ModuleMeta[]>([]);
   const [settings, setSettings] = useState<Settings>({});
   const [ready, setReady] = useState(false);
+  // The session may only set up two-factor authentication (an administrator policy, D53).
+  const [limited, setLimited] = useState(false);
   const [route, go] = useRoute();
   const [launcher, setLauncher] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -131,12 +67,15 @@ export function App() {
     write("obop-user", "");
     setTokenState("");
     setReady(false);
+    setLimited(false);
   }, []);
 
   const refresh = useCallback(async () => {
     if (!token) return;
     const [m, s] = await Promise.all([meta(token), loadSettings(token)]);
     if (m === null) return signOut();
+    setLimited(m === "enrolment");
+    if (m === "enrolment") return setReady(true);
     setModules(m);
     setSettings(s);
     applyTheme(resolveTheme(s.theme));
@@ -198,7 +137,7 @@ export function App() {
   const personalCustomize =
     route.app === "customize" &&
     !isAdmin &&
-    ["theme", "brand", "guide"].includes(route.tab || route.model);
+    ["theme", "security", "brand", "guide"].includes(route.tab || route.model);
   const hasBoards = !!app?.module.models.some((m) => m.name === "dashboards_dashboard");
   const onBoard =
     app?.id === "dashboards" && hasBoards && (route.model === "" || route.model === BOARD);
@@ -236,6 +175,18 @@ export function App() {
           setEmail(u);
           setTokenState(t);
         }}
+      />
+    );
+  if (ready && limited)
+    return (
+      <EnrolmentGate
+        token={token}
+        user={email}
+        onDone={() => {
+          setReady(false);
+          void refresh();
+        }}
+        onSignOut={signOut}
       />
     );
   if (!ready)
