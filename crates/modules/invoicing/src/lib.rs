@@ -13,6 +13,7 @@ pub fn module() -> Module {
             description: "A customer invoice; posted invoices are corrected only by credit notes",
             read_group: "invoicing.user",
             write_group: "invoicing.user",
+            access: None,
             fields: vec![
                 F::new(
                     "sale_order_id",

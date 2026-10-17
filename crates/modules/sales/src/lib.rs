@@ -13,6 +13,7 @@ pub fn module() -> Module {
             description: "A quotation or confirmed order for a customer",
             read_group: "sales.user",
             write_group: "sales.user",
+            access: None,
             fields: vec![
                 F::new(
                     "party_id",

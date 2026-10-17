@@ -147,6 +147,11 @@ fn int_option(
 }
 
 impl Query {
+    /// Whether a filter or order key is a field for which `is` says yes.
+    pub fn touches(&self, is: &dyn Fn(&str) -> bool) -> bool {
+        self.conds.iter().any(|c| is(&c.field)) || self.order.iter().any(|s| is(&s.field))
+    }
+
     /// Whether the input asks for anything beyond "every record".
     pub fn is_plain(&self) -> bool {
         self.conds.is_empty() && self.order.is_empty() && self.limit.is_none() && self.offset == 0

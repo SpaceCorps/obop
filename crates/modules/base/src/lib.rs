@@ -13,6 +13,7 @@ pub fn module() -> Module {
             description: "A person or organisation the business deals with",
             read_group: "base.user",
             write_group: "base.user",
+            access: Option::None,
             fields: vec![
                 F::new("name", "Display name", PublicDirectory, true, "base.user").required(),
                 F::new(

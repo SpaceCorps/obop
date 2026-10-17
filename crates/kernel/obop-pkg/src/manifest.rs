@@ -6,9 +6,11 @@ use crate::semver::{Req, Version};
 use crate::spdx::{self, LicenseKind};
 use obop_commands::{PublicRead, PublicReceipt, PublicSpec, PublicSubmit};
 use obop_registry::labels::{LangLabels, ModelShape, Shape, Translations, check_labels};
+use obop_registry::rules::{MAX_EFFECTS, SeqFormat};
 use obop_registry::{
-    CommandDef, FieldDef, FieldKind, GENERATED_COMMANDS, MATURITIES, MODULE_CATEGORIES, ModelDef,
-    Module, ModuleMeta, check_module, intern,
+    Access, Assertion, CommandDef, Computed, Effect, EffectKind, FieldDef, FieldKind,
+    GENERATED_COMMANDS, Lit, Locator, MATURITIES, MODULE_CATEGORIES, ModelDef, Module, ModuleMeta,
+    Reset, SequenceSpec, Src, Target, Unique, check_module, intern,
 };
 use obop_types::DataClass;
 use serde::Deserialize;
@@ -99,6 +101,24 @@ pub struct ModelM {
     pub action: Vec<ActionM>,
     /// What anonymous visitors may read and submit (D50). Absent: nothing is public.
     pub public: Option<PublicM>,
+    /// Row-level access rules (D58). Absent: the groups decide alone.
+    pub access: Option<AccessM>,
+}
+
+/// `[model.access]`: which records a caller may see and change besides the groups (D58).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AccessM {
+    /// A text field holding the user id (username) of the person the record belongs to.
+    pub own: Option<String>,
+    /// A ref field: the record is visible when the record it points at is.
+    pub via: Option<String>,
+    /// A bool field: the record is visible to everyone who may read the model when true.
+    pub public_field: Option<String>,
+    /// A text field of user ids separated by commas: those people see the record.
+    pub shared_with: Option<String>,
+    /// The holders of this group see every record.
+    pub see_all_group: Option<String>,
 }
 
 /// `[model.public]`: declarative public exposure (D50).
@@ -157,6 +177,24 @@ pub struct FieldM {
     /// Must be present and non-null on create. Defaults to false.
     #[serde(default)]
     pub required: bool,
+    /// Computed when the record is read, from an expression over its fields and child records
+    /// (D57): `sum(lines.amount)`, `quantity * unit_price`. Read-only.
+    pub computed: Option<String>,
+    /// No two records may have the same value (D57).
+    #[serde(default)]
+    pub unique: bool,
+    /// Scope of `unique`: the value need only be unique among records equal in these fields.
+    #[serde(default)]
+    pub unique_with: Vec<String>,
+    /// `kind = "sequence"`: the number template, for example `INV-{year}-{seq:05}`.
+    pub format: Option<String>,
+    /// `kind = "sequence"`: the action that numbers the record (default: when it is created).
+    pub assign_on: Option<String>,
+    /// `kind = "sequence"`: numbered records cannot be deleted, so the series has no hole.
+    #[serde(default)]
+    pub gapless: bool,
+    /// `kind = "sequence"`: `never` (default), `year` or `month`.
+    pub reset: Option<String>,
 }
 
 fn default_kind() -> String {
@@ -177,6 +215,74 @@ pub struct ActionM {
     /// Agents may only propose it (D18). Defaults to false.
     #[serde(default)]
     pub approval: bool,
+    /// What the action does besides moving the state, in the same operation (D56).
+    #[serde(default)]
+    pub effect: Vec<EffectM>,
+    /// Conditions that must hold before the action runs (D56).
+    #[serde(default)]
+    pub assert: Vec<AssertM>,
+}
+
+/// An assertion: an expression, or an expression with the message to show when it fails.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum AssertM {
+    Plain(String),
+    Full(AssertFull),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssertFull {
+    pub expr: String,
+    pub message: Option<String>,
+}
+
+/// `[[model.action.effect]]` (D56): one thing an action does in the same operation as its
+/// transition.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EffectM {
+    /// `create`, `update`, `adjust` or `set_state`.
+    pub kind: String,
+    /// The model of the records created or changed.
+    pub model: String,
+    /// `create`: a name that later effects use as `$created.name`.
+    #[serde(rename = "as")]
+    pub name: Option<String>,
+    /// Repeat once per child record of this record (a model with a ref to this one).
+    pub for_each: Option<String>,
+    pub for_each_via: Option<String>,
+    /// Run only when this expression about the record is true.
+    pub when: Option<String>,
+    /// `create`: field = value.
+    pub map: Option<std::collections::BTreeMap<String, toml::Value>>,
+    /// `update`: field = value.
+    pub set: Option<std::collections::BTreeMap<String, toml::Value>>,
+    /// `update`, `adjust`, `set_state`: a ref field of this record naming the record to act on.
+    #[serde(rename = "ref")]
+    pub ref_field: Option<String>,
+    /// `update`, `set_state`: act on every record of `model` that refers to this one.
+    #[serde(default)]
+    pub children: bool,
+    /// With `children`: which ref field, if the model has several to this one.
+    pub via: Option<String>,
+    /// `adjust`: find the one record whose fields equal these values.
+    #[serde(rename = "match")]
+    pub match_fields: Option<std::collections::BTreeMap<String, toml::Value>>,
+    /// `adjust`: the number or money field to change.
+    pub field: Option<String>,
+    /// `adjust`: `add` or `subtract`.
+    pub op: Option<String>,
+    /// `adjust`: the amount, `$self.quantity` or a whole number.
+    pub by: Option<toml::Value>,
+    /// `adjust` with `match`: create the record when none matches.
+    #[serde(default)]
+    pub create_missing: bool,
+    /// `adjust`: the field may not end below this.
+    pub min: Option<i64>,
+    /// `set_state`: the action of `model` to run.
+    pub action: Option<String>,
 }
 
 fn ident_ok(s: &str) -> bool {
@@ -323,6 +429,16 @@ impl Manifest {
                     return Err(format!("permission group {g:?} must look like module.role"));
                 }
             }
+            if let Some(a) = &m.access {
+                for g in a.see_all_group.iter() {
+                    if !group_ok(g) {
+                        return Err(format!(
+                            "{}.access: see_all_group {g:?} must look like module.role",
+                            m.name
+                        ));
+                    }
+                }
+            }
             let mut names = std::collections::HashSet::new();
             for f in &m.field {
                 if !ident_ok(&f.name) || f.name == "id" || !names.insert(&f.name) {
@@ -375,6 +491,9 @@ impl Manifest {
                 }
             }
         }
+        // Expressions, formats and effects must at least read correctly; their meaning is
+        // checked against the models by the gate (`to_module`).
+        self.build_models()?;
         self.public_specs()?;
         check_labels(&self.labels, &self.shape())?;
         Ok(())
@@ -653,11 +772,39 @@ impl Manifest {
     /// Consistency of `kind`, `options`, `to` and `required` on one field.
     fn check_kind(&self, m: &ModelM, f: &FieldM) -> Result<(), String> {
         let at = format!("{}.{}", m.name, f.name);
-        if !FieldKind::is_known(&f.kind) {
+        if !FieldKind::is_known(&f.kind) && f.kind != "sequence" {
             return Err(format!(
-                "{at}: unknown kind {:?} (use text, longtext, number, money, date, bool, select or ref)",
+                "{at}: unknown kind {:?} (use text, longtext, number, money, date, bool, select, ref or sequence)",
                 f.kind
             ));
+        }
+        let is_seq = f.kind == "sequence";
+        if !is_seq
+            && (f.format.is_some() || f.assign_on.is_some() || f.gapless || f.reset.is_some())
+        {
+            return Err(format!(
+                "{at}: format, assign_on, gapless and reset are only valid for kind \"sequence\""
+            ));
+        }
+        if is_seq {
+            if f.format.is_none() {
+                return Err(format!(
+                    "{at}: a sequence needs a format such as \"INV-{{year}}-{{seq:05}}\""
+                ));
+            }
+            if f.computed.is_some() || f.unique || !f.unique_with.is_empty() || f.required {
+                return Err(format!(
+                    "{at}: a sequence is numbered by the system; it cannot be computed, required or have unique (it is unique already)"
+                ));
+            }
+        }
+        if f.computed.is_some() && (f.required || f.unique || !f.unique_with.is_empty()) {
+            return Err(format!(
+                "{at}: a computed field cannot be required or unique"
+            ));
+        }
+        if !f.unique && !f.unique_with.is_empty() {
+            return Err(format!("{at}: unique_with needs unique = true"));
         }
         if f.kind != "select" && !f.options.is_empty() {
             return Err(format!("{at}: options are only valid for kind \"select\""));
@@ -710,6 +857,16 @@ impl Manifest {
                     v.push((format!("{}.{}", m.name, f.name), to.clone()));
                 }
             }
+            for a in &m.action {
+                for (i, e) in a.effect.iter().enumerate() {
+                    if !self.model.iter().any(|x| x.name == e.model) {
+                        v.push((
+                            format!("{}.{} effect {}", m.name, a.name, i + 1),
+                            e.model.clone(),
+                        ));
+                    }
+                }
+            }
         }
         v
     }
@@ -757,62 +914,357 @@ impl Manifest {
         }
     }
 
-    /// Build registry metadata and run the D41 install gate over it.
-    pub fn to_module(&self) -> Result<Module, String> {
-        let models = self
-            .model
-            .iter()
-            .map(|m| ModelDef {
+    fn lit_or_src(v: &toml::Value, at: &str) -> Result<Src, String> {
+        match v {
+            toml::Value::String(t) => Src::from_str(t).map_err(|e| format!("{at}: {e}")),
+            toml::Value::Integer(n) => Ok(Src::Const(Lit::Int(*n))),
+            toml::Value::Boolean(b) => Ok(Src::Const(Lit::Bool(*b))),
+            _ => Err(format!(
+                "{at}: a value is text, a whole number, true/false or a $variable"
+            )),
+        }
+    }
+
+    fn mapping(
+        what: &str,
+        m: &std::collections::BTreeMap<String, toml::Value>,
+    ) -> Result<Vec<(&'static str, Src)>, String> {
+        m.iter()
+            .map(|(k, v)| {
+                if !ident_ok(k) {
+                    return Err(format!("{what}: {k:?} is not a field name"));
+                }
+                Ok((intern(k), Self::lit_or_src(v, &format!("{what}: {k}"))?))
+            })
+            .collect()
+    }
+
+    /// An effect as registry data. Everything that can be said without knowing the other models
+    /// is checked here; the gate checks the rest.
+    fn effect_of(m: &ModelM, a: &ActionM, i: usize, e: &EffectM) -> Result<Effect, String> {
+        let what = format!("{}.{} effect {}", m.name, a.name, i + 1);
+        if !ident_ok(&e.model) {
+            return Err(format!("{what}: {:?} is not a model name", e.model));
+        }
+        let stray = |name: &str, present: bool| {
+            if present {
+                Err(format!("{what}: {name} does not apply to {}", e.kind))
+            } else {
+                Ok(())
+            }
+        };
+        let need = |name: &str, present: bool| {
+            if present {
+                Ok(())
+            } else {
+                Err(format!("{what}: {} needs {name}", e.kind))
+            }
+        };
+        if e.name.is_some() && e.kind != "create" {
+            return Err(format!("{what}: `as` is only for create"));
+        }
+        if let Some(n) = &e.name
+            && !ident_ok(n)
+        {
+            return Err(format!("{what}: {n:?} is not a name"));
+        }
+        let target = || -> Result<Target, String> {
+            match (&e.ref_field, e.children) {
+                (Some(r), false) => {
+                    stray("via", e.via.is_some())?;
+                    if !ident_ok(r) {
+                        return Err(format!("{what}: {r:?} is not a field name"));
+                    }
+                    Ok(Target::Ref(intern(r)))
+                }
+                (None, true) => {
+                    if let Some(v) = &e.via
+                        && !ident_ok(v)
+                    {
+                        return Err(format!("{what}: {v:?} is not a field name"));
+                    }
+                    Ok(Target::Children(e.via.as_deref().map(intern)))
+                }
+                (Some(_), true) => Err(format!("{what}: use ref or children, not both")),
+                (None, false) => Err(format!(
+                    "{what}: {} needs ref (a ref field of this record) or children = true",
+                    e.kind
+                )),
+            }
+        };
+        let model = intern(&e.model);
+        let kind = match e.kind.as_str() {
+            "create" => {
+                stray("set", e.set.is_some())?;
+                stray("ref", e.ref_field.is_some())?;
+                stray("children", e.children)?;
+                stray("via", e.via.is_some())?;
+                stray("match", e.match_fields.is_some())?;
+                stray("field", e.field.is_some())?;
+                stray("op", e.op.is_some())?;
+                stray("by", e.by.is_some())?;
+                stray("create_missing", e.create_missing)?;
+                stray("min", e.min.is_some())?;
+                stray("action", e.action.is_some())?;
+                let Some(map) = &e.map else {
+                    return Err(format!("{what}: create needs map"));
+                };
+                EffectKind::Create {
+                    model,
+                    map: Self::mapping(&what, map)?,
+                    name: e.name.clone(),
+                }
+            }
+            "update" => {
+                stray("map", e.map.is_some())?;
+                stray("match", e.match_fields.is_some())?;
+                stray("field", e.field.is_some())?;
+                stray("op", e.op.is_some())?;
+                stray("by", e.by.is_some())?;
+                stray("create_missing", e.create_missing)?;
+                stray("min", e.min.is_some())?;
+                stray("action", e.action.is_some())?;
+                let Some(set) = &e.set else {
+                    return Err(format!("{what}: update needs set"));
+                };
+                EffectKind::Update {
+                    model,
+                    target: target()?,
+                    set: Self::mapping(&what, set)?,
+                }
+            }
+            "adjust" => {
+                stray("map", e.map.is_some())?;
+                stray("set", e.set.is_some())?;
+                stray("children", e.children)?;
+                stray("via", e.via.is_some())?;
+                stray("action", e.action.is_some())?;
+                need("field", e.field.is_some())?;
+                need("op", e.op.is_some())?;
+                need("by", e.by.is_some())?;
+                let field = e.field.as_deref().unwrap_or_default();
+                if !ident_ok(field) {
+                    return Err(format!("{what}: {field:?} is not a field name"));
+                }
+                let subtract = match e.op.as_deref() {
+                    Some("add") => false,
+                    Some("subtract") => true,
+                    other => {
+                        return Err(format!(
+                            "{what}: op must be \"add\" or \"subtract\", not {other:?}"
+                        ));
+                    }
+                };
+                let locator = match (&e.ref_field, &e.match_fields) {
+                    (Some(r), None) => {
+                        if !ident_ok(r) {
+                            return Err(format!("{what}: {r:?} is not a field name"));
+                        }
+                        Locator::Ref(intern(r))
+                    }
+                    (None, Some(mf)) => Locator::Match(Self::mapping(&what, mf)?),
+                    (Some(_), Some(_)) => {
+                        return Err(format!("{what}: use ref or match, not both"));
+                    }
+                    (None, None) => {
+                        return Err(format!(
+                            "{what}: adjust needs ref (a ref field of this record) or match"
+                        ));
+                    }
+                };
+                let by = Self::lit_or_src(
+                    e.by.as_ref().unwrap_or(&toml::Value::Integer(0)),
+                    &format!("{what}: by"),
+                )?;
+                EffectKind::Adjust {
+                    model,
+                    locator,
+                    field: intern(field),
+                    subtract,
+                    by,
+                    create_missing: e.create_missing,
+                    min: e.min,
+                }
+            }
+            "set_state" => {
+                stray("map", e.map.is_some())?;
+                stray("set", e.set.is_some())?;
+                stray("match", e.match_fields.is_some())?;
+                stray("field", e.field.is_some())?;
+                stray("op", e.op.is_some())?;
+                stray("by", e.by.is_some())?;
+                stray("create_missing", e.create_missing)?;
+                stray("min", e.min.is_some())?;
+                need("action", e.action.is_some())?;
+                let action = e.action.as_deref().unwrap_or_default();
+                if !ident_ok(action) {
+                    return Err(format!("{what}: {action:?} is not an action name"));
+                }
+                EffectKind::SetState {
+                    model,
+                    target: target()?,
+                    action: intern(action),
+                }
+            }
+            other => {
+                return Err(format!(
+                    "{what}: unknown kind {other:?} (use create, update, adjust or set_state)"
+                ));
+            }
+        };
+        stray(
+            "for_each_via",
+            e.for_each.is_none() && e.for_each_via.is_some(),
+        )
+        .map_err(|_| format!("{what}: for_each_via needs for_each"))?;
+        let mut eff = Effect::new(kind);
+        eff.for_each = e.for_each.clone();
+        eff.for_each_via = e.for_each_via.clone();
+        if let Some(w) = &e.when {
+            eff.when = Some(std::sync::Arc::new(
+                obop_registry::expr::Expr::parse(w).map_err(|er| format!("{what}: when: {er}"))?,
+            ));
+            eff.when_source = Some(w.clone());
+        }
+        Ok(eff)
+    }
+
+    fn field_def(&self, m: &ModelM, f: &FieldM) -> Result<FieldDef, String> {
+        let at = format!("{}.{}", m.name, f.name);
+        let kind = match f.kind.as_str() {
+            "longtext" => FieldKind::LongText,
+            "number" => FieldKind::Number,
+            "money" => FieldKind::Money,
+            "date" => FieldKind::Date,
+            "bool" => FieldKind::Bool,
+            "select" => FieldKind::Select(
+                f.options
+                    .iter()
+                    .map(|o| intern(o))
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
+            "ref" => FieldKind::Ref(intern(f.to.as_deref().unwrap_or(""))),
+            _ => FieldKind::Text,
+        };
+        let sequence = if f.kind == "sequence" {
+            let format = SeqFormat::parse(f.format.as_deref().unwrap_or_default())
+                .map_err(|e| format!("{at}: format: {e}"))?;
+            let reset = match f.reset.as_deref() {
+                None => Reset::Never,
+                Some(r) => Reset::parse(r).ok_or_else(|| {
+                    format!("{at}: reset must be never, year or month, not {r:?}")
+                })?,
+            };
+            if let Some(a) = &f.assign_on
+                && !ident_ok(a)
+            {
+                return Err(format!("{at}: assign_on {a:?} is not an action name"));
+            }
+            Some(std::sync::Arc::new(SequenceSpec {
+                format,
+                assign_on: f.assign_on.as_deref().map(intern),
+                gapless: f.gapless,
+                reset,
+            }))
+        } else {
+            None
+        };
+        let computed = match &f.computed {
+            Some(src) => Some(std::sync::Arc::new(
+                Computed::parse(src).map_err(|e| format!("{at}: computed: {e}"))?,
+            )),
+            None => None,
+        };
+        for w in &f.unique_with {
+            if !ident_ok(w) {
+                return Err(format!("{at}: unique_with: {w:?} is not a field name"));
+            }
+        }
+        Ok(FieldDef {
+            name: intern(&f.name),
+            description: intern(&f.description),
+            class: DataClass::parse(&f.class),
+            permission_group: intern(f.group.as_deref().unwrap_or(&m.read_group)),
+            personal_data: f.personal_data,
+            kind,
+            required: f.required,
+            computed,
+            unique: f.unique.then(|| Unique {
+                with: f.unique_with.iter().map(|w| intern(w)).collect(),
+            }),
+            sequence,
+        })
+    }
+
+    /// The models as registry data, rules included. Syntax errors in expressions, formats and
+    /// effects are reported here, with the model, field or action they are in.
+    fn build_models(&self) -> Result<Vec<ModelDef>, String> {
+        let mut out = Vec::new();
+        for m in &self.model {
+            let fields = m
+                .field
+                .iter()
+                .map(|f| self.field_def(m, f))
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut commands = Vec::new();
+            for a in &m.action {
+                let c = CommandDef::new(
+                    intern(&a.name),
+                    intern(&a.description),
+                    intern(a.group.as_deref().unwrap_or(&m.write_group)),
+                );
+                let mut c = c.transition(&a.field, a.from.as_deref(), &a.to);
+                if a.approval {
+                    c = c.approval();
+                }
+                if a.effect.len() > MAX_EFFECTS {
+                    return Err(format!(
+                        "{}.{}: an action has at most {MAX_EFFECTS} effects",
+                        m.name, a.name
+                    ));
+                }
+                if a.assert.len() > 8 {
+                    return Err(format!("{}.{}: at most 8 assertions", m.name, a.name));
+                }
+                for (i, e) in a.effect.iter().enumerate() {
+                    c.effects.push(Self::effect_of(m, a, i, e)?);
+                }
+                for x in &a.assert {
+                    let (src, msg) = match x {
+                        AssertM::Plain(s) => (s.as_str(), None),
+                        AssertM::Full(f) => (f.expr.as_str(), f.message.as_deref()),
+                    };
+                    c.asserts.push(
+                        Assertion::parse(src, msg)
+                            .map_err(|e| format!("{}.{}: assert {src:?}: {e}", m.name, a.name))?,
+                    );
+                }
+                commands.push(c);
+            }
+            let access = m.access.as_ref().map(|a| Access {
+                own: a.own.as_deref().map(intern),
+                via: a.via.as_deref().map(intern),
+                public_field: a.public_field.as_deref().map(intern),
+                shared_with: a.shared_with.as_deref().map(intern),
+                see_all_group: a.see_all_group.as_deref().map(intern),
+            });
+            out.push(ModelDef {
                 name: intern(&m.name),
                 description: intern(&m.description),
                 read_group: intern(&m.read_group),
                 write_group: intern(&m.write_group),
-                fields: m
-                    .field
-                    .iter()
-                    .map(|f| {
-                        let kind = match f.kind.as_str() {
-                            "longtext" => FieldKind::LongText,
-                            "number" => FieldKind::Number,
-                            "money" => FieldKind::Money,
-                            "date" => FieldKind::Date,
-                            "bool" => FieldKind::Bool,
-                            "select" => FieldKind::Select(
-                                f.options
-                                    .iter()
-                                    .map(|o| intern(o))
-                                    .collect::<Vec<_>>()
-                                    .into(),
-                            ),
-                            "ref" => FieldKind::Ref(intern(f.to.as_deref().unwrap_or(""))),
-                            _ => FieldKind::Text,
-                        };
-                        FieldDef {
-                            name: intern(&f.name),
-                            description: intern(&f.description),
-                            class: DataClass::parse(&f.class),
-                            permission_group: intern(f.group.as_deref().unwrap_or(&m.read_group)),
-                            personal_data: f.personal_data,
-                            kind,
-                            required: f.required,
-                        }
-                    })
-                    .collect(),
-                commands: m
-                    .action
-                    .iter()
-                    .map(|a| {
-                        let c = CommandDef::new(
-                            intern(&a.name),
-                            intern(&a.description),
-                            intern(a.group.as_deref().unwrap_or(&m.write_group)),
-                        );
-                        let c = c.transition(&a.field, a.from.as_deref(), &a.to);
-                        if a.approval { c.approval() } else { c }
-                    })
-                    .collect(),
-            })
-            .collect();
+                access,
+                fields,
+                commands,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Build registry metadata and run the D41 install gate over it.
+    pub fn to_module(&self) -> Result<Module, String> {
+        let models = self.build_models()?;
         let module = Module {
             id: self.module.id.clone(),
             name: self.module.name.clone(),

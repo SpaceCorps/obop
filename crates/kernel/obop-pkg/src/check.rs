@@ -106,6 +106,28 @@ pub fn check_package(text: &str, builtin: &[Module], catalog: bool) -> Report {
             ),
         });
     }
+    // The rules of the models (effects, aggregates, access) against the models of the
+    // dependencies: a model the package may not rely on is not found.
+    if let Ok(module) = manifest.to_module() {
+        let mut others: Vec<std::sync::Arc<obop_registry::ModelDef>> = Vec::new();
+        for b in builtin {
+            others.extend(b.models.iter().cloned().map(std::sync::Arc::new));
+        }
+        for p in &bundled {
+            if let Ok(m) = p.to_module() {
+                others.extend(m.models.into_iter().map(std::sync::Arc::new));
+            }
+        }
+        let look = |n: &str| {
+            available
+                .contains(n)
+                .then(|| others.iter().find(|m| m.name == n).cloned())
+                .flatten()
+        };
+        for v in obop_registry::check_module_in(&module, &look) {
+            errors.push(format!("{}: {}", v.path, v.problem));
+        }
+    }
     // Versions: the core requirement, every range against what exists (built-ins version with
     // the core), cycles. Unknown ids and refs were reported above.
     let core = Version::parse(obop_types::CORE_VERSION).unwrap_or_else(|_| Version::new(0, 0, 0));
@@ -165,6 +187,7 @@ mod tests {
                 description: "p",
                 read_group: "base.user",
                 write_group: "base.user",
+                access: None,
                 fields: vec![],
                 commands: vec![],
             }],

@@ -196,6 +196,11 @@ struct Registered {
     transition: Option<Transition>,
     /// `search`: the handler returns `{rows, total}` and only the rows are shaped.
     envelope: bool,
+    /// The handler is one of the generated ones: it needs to know who is calling (row-level
+    /// access, the groups of effects), so the dispatcher puts the actor in its input.
+    actor: bool,
+    /// The command changes records.
+    writes: bool,
     handler: Handler,
 }
 
@@ -218,6 +223,21 @@ pub struct Dispatcher {
     public: std::sync::RwLock<HashMap<String, (String, PublicSpec)>>,
     /// Observers told about every command that succeeded (see `observe`).
     observers: std::sync::RwLock<Vec<(String, Arc<Observer>)>>,
+    /// Models whose writes run under the transaction lock because a rule needs it: a unique
+    /// field, a sequence, an effect, or being the target of one (D56, D57).
+    lock_models: std::sync::RwLock<HashSet<String>>,
+    /// The time sequences and `$now` use.
+    clock: SharedClock,
+}
+
+/// The clock of the engine; tests replace it to cross a year end.
+#[derive(Clone)]
+pub struct SharedClock(Arc<std::sync::RwLock<ClockFn>>);
+
+impl Default for SharedClock {
+    fn default() -> Self {
+        Self(Arc::new(std::sync::RwLock::new(engine::system_clock())))
+    }
 }
 
 /// What an observer sees of a command that succeeded: its id, who ran it, the input the handler
@@ -225,7 +245,7 @@ pub struct Dispatcher {
 pub type Observer = dyn Fn(&str, &Principal, &Value, &Value) + Send + Sync;
 
 pub(crate) struct ModelMeta {
-    pub(crate) def: obop_registry::ModelDef,
+    pub(crate) def: Arc<obop_registry::ModelDef>,
     module: String,
     module_name: String,
     description: &'static str,
@@ -252,6 +272,24 @@ pub struct FieldInfo {
     pub descriptions: Texts,
     /// Select option -> language -> label.
     pub option_labels: BTreeMap<String, Texts>,
+    /// The field is the target of an action: it moves only through the model's actions (D48).
+    pub governed: bool,
+    /// Computed from the record and its children when read; read-only (D57).
+    pub computed: bool,
+    /// No two records may share the value (D57).
+    pub unique: bool,
+    /// Numbered by the system (D57).
+    pub sequence: bool,
+}
+
+/// The row-level access rules of a model, for the interface (D58).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AccessInfo {
+    pub own: Option<&'static str>,
+    pub via: Option<&'static str>,
+    pub public_field: Option<&'static str>,
+    pub shared_with: Option<&'static str>,
+    pub see_all_group: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -267,6 +305,8 @@ pub struct ModelInfo {
     pub can_delete: bool,
     pub labels: Texts,
     pub descriptions: Texts,
+    /// Records the caller sees are limited by these rules (D58); none: all of the model.
+    pub access: Option<AccessInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -385,6 +425,10 @@ impl Dispatcher {
                                     .map(|t| t.entry.descriptions.clone())
                                     .unwrap_or_default(),
                                 option_labels: ftr.map(|t| t.options.clone()).unwrap_or_default(),
+                                governed: m.def.governed_fields().contains(&f.name),
+                                computed: f.computed.is_some(),
+                                unique: f.unique.is_some() || f.sequence.is_some(),
+                                sequence: f.sequence.is_some(),
                             }
                         })
                         .collect(),
@@ -392,6 +436,18 @@ impl Dispatcher {
                     can_create: can("create"),
                     can_update: can("update"),
                     can_delete: can("delete"),
+                    access: m
+                        .def
+                        .access
+                        .as_ref()
+                        .filter(|a| !a.is_empty())
+                        .map(|a| AccessInfo {
+                            own: a.own,
+                            via: a.via,
+                            public_field: a.public_field,
+                            shared_with: a.shared_with,
+                            see_all_group: a.see_all_group,
+                        }),
                 });
             }
             if !infos.is_empty() {
@@ -423,6 +479,28 @@ impl Dispatcher {
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
     /// undeclared command is a programming error: the surface is generated from the registry.
     pub fn register(&self, module: &Module, model: &str, command: &str, handler: Handler) {
+        self.register_inner(module, model, command, handler, false);
+    }
+
+    /// Like `register`, for the generated handlers, which read the caller from their input.
+    pub(crate) fn register_generic(
+        &self,
+        module: &Module,
+        model: &str,
+        command: &str,
+        handler: Handler,
+    ) {
+        self.register_inner(module, model, command, handler, true);
+    }
+
+    fn register_inner(
+        &self,
+        module: &Module,
+        model: &str,
+        command: &str,
+        handler: Handler,
+        actor: bool,
+    ) {
         let m = module
             .models
             .iter()
@@ -436,7 +514,7 @@ impl Dispatcher {
         self.models.write().unwrap().insert(
             m.name.to_string(),
             ModelMeta {
-                def: m.clone(),
+                def: Arc::new(m.clone()),
                 module: module.id.clone(),
                 module_name: module.name.clone(),
                 module_description: module.description.clone(),
@@ -463,6 +541,8 @@ impl Dispatcher {
                 surfaces: c.surfaces,
                 transition: c.transition,
                 envelope: command == "search",
+                actor,
+                writes: !matches!(command, "get" | "list" | "search"),
                 handler,
             }),
         );
@@ -538,7 +618,7 @@ impl Dispatcher {
             .read()
             .unwrap()
             .get(model)
-            .map(|m| m.def.clone())
+            .map(|m| (*m.def).clone())
     }
 
     /// Remove every command a module registered. Its data stays in the store.
@@ -557,11 +637,37 @@ impl Dispatcher {
             .collect();
         let models: Vec<String> = models.into_iter().map(String::from).collect();
         cmds.retain(|_, c| c.module != module);
-        let mut f = self.models.write().unwrap();
-        for m in models {
-            f.remove(&m);
+        drop(cmds);
+        {
+            let mut f = self.models.write().unwrap();
+            for m in models {
+                f.remove(&m);
+            }
         }
         self.order.write().unwrap().retain(|x| x != module);
+        self.refresh_lock_models();
+    }
+
+    /// Recompute which models need the write lock: those with a unique field, a sequence or
+    /// an effect, and every model an effect may write.
+    pub(crate) fn refresh_lock_models(&self) {
+        let mut set = HashSet::new();
+        for (name, meta) in self.models.read().unwrap().iter() {
+            if meta.def.has_rules() {
+                set.insert(name.clone());
+            }
+            for c in &meta.def.commands {
+                for e in &c.effects {
+                    set.insert(e.model().to_string());
+                }
+            }
+        }
+        *self.lock_models.write().unwrap() = set;
+    }
+
+    /// Replace the clock sequences and `$now` read (seconds since the epoch). For tests.
+    pub fn set_clock(&self, clock: ClockFn) {
+        *self.clock.0.write().unwrap() = clock;
     }
 
     /// Whether any command of `model` is registered.
@@ -609,13 +715,14 @@ impl Dispatcher {
         }
         let mut input = self.restore(p, vault, input)?;
         if let Value::Map(m) = &mut input {
+            // The caller is set by the dispatcher and by guards, never by a client.
             m.remove("_caller");
+            m.retain(|k, _| !k.starts_with(query::ACTOR_PREFIX));
         }
         let guard = self.guards.read().unwrap().get(id).cloned();
-        let _txn = guard
-            .as_ref()
-            .filter(|g| g.serialize)
-            .map(|_| self.txn.lock().unwrap_or_else(|e| e.into_inner()));
+        let needs_lock = guard.as_ref().is_some_and(|g| g.serialize)
+            || (c.writes && self.lock_models.read().unwrap().contains(c.model));
+        let _txn = needs_lock.then(|| self.txn.lock().unwrap_or_else(|e| e.into_inner()));
         let mut guard_approval = false;
         let mut pre = Vec::new();
         if let Some(g) = &guard {
@@ -703,6 +810,9 @@ impl Dispatcher {
                 let mut i = step.input;
                 if let Value::Map(m) = &mut i {
                     m.insert("_caller".into(), Value::text(&p.id));
+                    if action.actor {
+                        Actor::of(p).stamp(m);
+                    }
                 }
                 (action.handler)(&i).map_err(CallError::Handler)?;
                 if let Value::Map(m) = &mut input {
@@ -714,6 +824,9 @@ impl Dispatcher {
         // sets it after discarding anything a client sent under that name.
         if let Value::Map(m) = &mut input {
             m.insert("_caller".into(), Value::text(&p.id));
+            if c.actor {
+                Actor::of(p).stamp(m);
+            }
         }
         let out = (c.handler)(&input).map_err(CallError::Handler)?;
         let observers: Vec<Arc<Observer>> = self
@@ -960,12 +1073,14 @@ pub trait MfaApi: Send + Sync {
     fn admin_reset(&self, admin: &Principal, target: &str) -> Result<(), MfaError>;
 }
 
+mod engine;
 mod guards;
 pub mod json;
 pub mod public;
 pub mod query;
 pub mod store;
 
+pub use engine::{Actor, ClockFn};
 pub use public::{
     Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,

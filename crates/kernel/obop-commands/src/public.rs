@@ -379,7 +379,7 @@ impl PublicApi {
             .read()
             .unwrap()
             .get(model)
-            .map(|m| m.def.clone())
+            .map(|m| (*m.def).clone())
     }
 
     fn project(&self, spec: &PublicSpec, id: &str, rec: &Fields, embed: bool) -> PublicRecord {
