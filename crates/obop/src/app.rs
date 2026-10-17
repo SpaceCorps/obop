@@ -14,6 +14,8 @@ pub struct App {
     pub market: Arc<dyn Marketplace>,
     /// The connectors engines (D54): egress policy, webhooks, OAuth, retention.
     pub connectors: Arc<Connectors>,
+    /// Payments for the web shop (D62): bank transfer, Stripe Checkout, the local demo.
+    pub payments: Arc<obop_payments::Payments>,
 }
 
 /// The bundled catalog, plus a remote one when `OBOP_MARKETPLACE_URL` is set.
@@ -49,6 +51,16 @@ impl App {
             ConnectorConfig::from_env(),
         );
         ::connectors::register(&d, &store, &connectors);
+        // The shop's payments reuse the connectors' hardened egress client and read the Stripe
+        // keys from the instance's own sealed `stripe` connection.
+        let payments = obop_payments::Payments::new(
+            store.backend(),
+            d.clone(),
+            connectors.client.clone(),
+            Arc::new(obop_payments::ConnectionKeys(connectors.clone())),
+            obop_payments::Config::from_env(),
+        );
+        payments.install();
         let modules = vec![
             base::module(),
             product::module(),
@@ -71,6 +83,7 @@ impl App {
             installer,
             market,
             connectors,
+            payments,
         }
     }
 

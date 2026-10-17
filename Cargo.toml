@@ -15,6 +15,7 @@ obop-masking = { path = "crates/kernel/obop-masking" }
 obop-connectors = { path = "crates/kernel/obop-connectors" }
 obop-storage = { path = "crates/kernel/obop-storage" }
 obop-media = { path = "crates/kernel/obop-media" }
+obop-payments = { path = "crates/kernel/obop-payments" }
 obop-auth = { path = "crates/kernel/obop-auth" }
 obop-pkg = { path = "crates/kernel/obop-pkg" }
 obop-platform = { path = "crates/kernel/obop-platform" }
@@ -38,3 +39,8 @@ all = { level = "warn", priority = -1 }
 
 [profile.release]
 overflow-checks = true
+
+# Dependencies are compiled with optimisation even in debug builds: image decoding and encoding
+# (the shop seed makes a few dozen pictures) and password hashing are otherwise very slow in tests.
+[profile.dev.package."*"]
+opt-level = 2

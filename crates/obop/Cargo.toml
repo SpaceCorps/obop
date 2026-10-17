@@ -18,6 +18,7 @@ obop-auth.workspace = true
 obop-pkg.workspace = true
 obop-storage.workspace = true
 obop-media.workspace = true
+obop-payments.workspace = true
 obop-platform.workspace = true
 obop-mcp.workspace = true
 product.workspace = true

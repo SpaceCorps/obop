@@ -22,6 +22,7 @@ pub mod connectors;
 pub mod mcp;
 pub mod mfa;
 pub mod openapi;
+pub mod payments;
 pub mod public;
 pub mod website;
 
@@ -34,6 +35,8 @@ pub struct HttpState {
     mcp: mcp::McpState,
     /// The connectors engines, set once by the composition root (webhooks, OAuth redirect).
     connectors: std::sync::OnceLock<Arc<obop_connectors::Runtime>>,
+    /// The payment module's webhook door (`/hooks/pay/{provider}`), set by the composition root.
+    payments: std::sync::OnceLock<Arc<dyn obop_commands::PaymentHooks>>,
 }
 
 impl HttpState {
@@ -53,7 +56,13 @@ impl HttpState {
             sessions: Mutex::new(HashMap::new()),
             mcp: mcp::McpState::new(mcp),
             connectors: std::sync::OnceLock::new(),
+            payments: std::sync::OnceLock::new(),
         })
+    }
+
+    /// Serve the payment providers' webhook door.
+    pub fn set_payments(&self, hooks: Arc<dyn obop_commands::PaymentHooks>) {
+        let _ = self.payments.set(hooks);
     }
 
     /// Serve the connectors' public doors (`/hooks/in/{id}`, `/oauth/callback`).
@@ -129,6 +138,10 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             )),
         )
         .route("/oauth/callback", get(connectors::oauth_callback))
+        .route(
+            "/hooks/pay/{provider}",
+            post(payments::hook).layer(axum::extract::DefaultBodyLimit::max(payments::MAX_BODY)),
+        )
         .route(
             "/api/blobs",
             post(blobs::upload).layer(axum::extract::DefaultBodyLimit::disable()),

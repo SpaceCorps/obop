@@ -1,0 +1,26 @@
+[package]
+name = "obop-payments"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Payments for the web shop: a provider trait with manual (bank transfer), Stripe Checkout and a local demo provider, signed webhooks, refunds, and the stock and discount bookkeeping that follows an order that is not paid"
+
+[dependencies]
+obop-storage.workspace = true
+obop-commands.workspace = true
+obop-connectors.workspace = true
+serde_json = "1"
+uuid = { version = "1", features = ["v7"] }
+getrandom = "0.4"
+url = "2.5.8"
+
+[dev-dependencies]
+obop-pkg.workspace = true
+obop-site.workspace = true
+obop-media.workspace = true
+base.workspace = true
+product.workspace = true
+
+[lints]
+workspace = true

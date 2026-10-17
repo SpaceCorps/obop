@@ -221,7 +221,16 @@ pub struct Dispatcher {
     /// Uploads and downloads of images and files, created with the first module registered
     /// against a store (D60).
     blob_service: std::sync::OnceLock<Arc<BlobService>>,
+    /// Wrappers around a command's handler, by command id (see `around`).
+    around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
 }
+
+/// A wrapper around a command's handler: it sees who calls and the input, and decides whether and
+/// how to call the handler it wraps (the `&dyn Fn`). It runs only when the command really runs,
+/// after the guards and after any approval, so a proposal an agent makes calls nothing outside.
+pub type Around = dyn Fn(&Principal, &Value, &dyn Fn(&Value) -> Result<Value, String>) -> Result<Value, String>
+    + Send
+    + Sync;
 
 /// What an observer sees of a command that succeeded: its id, who ran it, the input the handler
 /// received and the raw output, before it was shaped for the caller.
@@ -518,6 +527,18 @@ impl Dispatcher {
         );
     }
 
+    /// Wrap the handler of command `id` (`model.command`). The wrapper survives the command being
+    /// registered again, which happens when a package is reinstalled. Used where a command has
+    /// to do something outside the store that must succeed or fail with it, such as returning
+    /// money before an order is marked refunded (D62). A second wrapper for the same id replaces
+    /// the first.
+    pub fn around(&self, id: &str, wrapper: Box<Around>) {
+        self.around
+            .write()
+            .unwrap()
+            .insert(id.to_string(), Arc::from(wrapper));
+    }
+
     /// Be told about every command that succeeds, with the module that owns the observer (removed
     /// with it). Observers run inside the call, under the dispatcher's locks: they must be quick
     /// and must not call the dispatcher; hand the work to another thread.
@@ -721,7 +742,12 @@ impl Dispatcher {
         if let Value::Map(m) = &mut input {
             m.insert("_caller".into(), Value::text(&p.id));
         }
-        let out = (c.handler)(&input).map_err(CallError::Handler)?;
+        let wrapper = self.around.read().unwrap().get(&c.id).cloned();
+        let out = match wrapper {
+            Some(w) => w(p, &input, &|i| (c.handler)(i)),
+            None => (c.handler)(&input),
+        }
+        .map_err(CallError::Handler)?;
         let observers: Vec<Arc<Observer>> = self
             .observers
             .read()
@@ -975,7 +1001,7 @@ pub mod query;
 pub mod store;
 
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
-pub use pay::{FakeView, PaymentPort, PaymentView, StartPayment, Started};
+pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{
     Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,

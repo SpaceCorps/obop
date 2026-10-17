@@ -10,6 +10,8 @@ mod mfa_tests;
 #[cfg(test)]
 mod modules_tests;
 #[cfg(test)]
+mod payments_tests;
+#[cfg(test)]
 mod public_site_tests;
 
 use app::{App, DevAuth};
@@ -623,6 +625,7 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     }
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
+    state.set_payments(app.payments.clone());
     app.connectors.start();
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
     let blobs = app.store.blobs();
@@ -641,13 +644,16 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
                 o.admin_prefix
             )));
         }
-        let site = Arc::new(obop_site::Site::new(
-            obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),
-            obop_site::Config {
-                admin_prefix: Some(o.admin_prefix.clone()),
-                ..obop_site::Config::from_env()
-            },
-        ));
+        let site = Arc::new(
+            obop_site::Site::new(
+                obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),
+                obop_site::Config {
+                    admin_prefix: Some(o.admin_prefix.clone()),
+                    ..obop_site::Config::from_env()
+                },
+            )
+            .with_payments(app.payments.clone()),
+        );
         if !site.has_public_models() {
             eprintln!(
                 "the public site is on but no public content is installed yet: obop modules install-from website, install-from ecommerce, then obop site seed"

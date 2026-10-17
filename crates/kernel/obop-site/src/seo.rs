@@ -31,7 +31,16 @@ pub fn robots(ctx: &Ctx) -> Resp {
         if let Some(a) = &ctx.admin_prefix {
             t.push_str(&format!("Disallow: {a}/\n"));
         }
-        for p in ["/api/", "/cart", "/shop/checkout", "/shop/order/"] {
+        for p in [
+            "/api/",
+            "/cart",
+            "/shop/checkout",
+            "/shop/order/",
+            "/shop/pay/",
+            "/shop/fake-pay/",
+            "/hooks/",
+            "/shop/discount/",
+        ] {
             t.push_str(&format!("Disallow: {p}\n"));
         }
         t.push_str(&format!("\nSitemap: {}\n", ctx.abs("/sitemap.xml")));

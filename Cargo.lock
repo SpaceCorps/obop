@@ -1075,6 +1075,7 @@ dependencies = [
  "obop-masking",
  "obop-mcp",
  "obop-media",
+ "obop-payments",
  "obop-pkg",
  "obop-platform",
  "obop-registry",
@@ -1199,6 +1200,24 @@ name = "obop-media"
 version = "0.2.0"
 dependencies = [
  "image",
+]
+
+[[package]]
+name = "obop-payments"
+version = "0.2.0"
+dependencies = [
+ "base",
+ "getrandom 0.4.3",
+ "obop-commands",
+ "obop-connectors",
+ "obop-media",
+ "obop-pkg",
+ "obop-site",
+ "obop-storage",
+ "product",
+ "serde_json",
+ "url",
+ "uuid",
 ]
 
 [[package]]

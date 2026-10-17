@@ -55,6 +55,35 @@ pub struct FakeView {
     pub state: String,
 }
 
+/// What the public webhook door answers (`POST /hooks/pay/{provider}`). Every failure of the
+/// signature check is the same `Unauthorized`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookReply {
+    /// Understood and applied.
+    Done,
+    /// A repeat of something already applied: acknowledged, nothing changed.
+    Duplicate,
+    /// Signed correctly and of no interest (an event about something else).
+    Ignored,
+    /// No provider by that name, or it takes no webhooks.
+    NotFound,
+    /// Missing or wrong signature, or a timestamp outside the tolerance.
+    Unauthorized,
+    /// The provider could not be reached or the store failed: the sender should retry.
+    Retry,
+}
+
+/// The webhook door of the payment module, as the HTTP layer sees it.
+pub trait PaymentHooks: Send + Sync {
+    /// Verify a delivery from `provider` (headers by lowercase name, the raw body) and apply it.
+    fn webhook(
+        &self,
+        provider: &str,
+        header: &dyn Fn(&str) -> Option<String>,
+        body: &[u8],
+    ) -> HookReply;
+}
+
 pub trait PaymentPort: Send + Sync {
     /// The payment methods that can be offered right now, out of the ones the shop's settings
     /// list (a method that needs a key or a switch is left out until it is configured).
