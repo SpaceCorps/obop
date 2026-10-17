@@ -284,7 +284,8 @@ The core follows semantic versioning. While it is below 1.0, a **minor** bump (`
 | `class` | string | required | One of `none`, `public_directory`, `internal`, `confidential_hr`, `special_category`, `financial`, `secret`. See section 5. |
 | `personal_data` | bool | `false` | `true` if the value is about an identifiable person. Not allowed with `class = "none"`. |
 | `group` | string | the model's `read_group` | `module.role`. Principals without it do not see the field. |
-| `kind` | string | `text` | `text`, `longtext`, `number`, `money`, `date`, `bool`, `select`, `ref`. |
+| `kind` | string | `text` | `text`, `longtext`, `number`, `money`, `date`, `bool`, `select`, `ref`, `image`, `file`. |
+| `max_bytes` | integer | 5 MiB (`image`), 10 MiB (`file`) | Only for `image` and `file`: the largest upload accepted for the field. |
 | `options` | array of strings | none | Only for `select` (then required, non-empty, no blanks, no duplicates). |
 | `to` | string | none | Only for `ref` (then required). Model name. |
 | `required` | bool | `false` | Must be present and non-null on create; cannot be set to null on update. |
@@ -458,6 +459,10 @@ Values travel as JSON on REST and MCP, and as `key=value` text on the CLI (which
 | `bool` | `true`/`false` | |
 | `select` | string | One of `options`. `"in_stock"` |
 | `ref` | string | The id of an existing record of model `to`; a dangling id is refused. `"9f3c..."` |
+| `image` | string | The id (64 hex characters) of a stored picture. Upload with `POST /api/blobs?field=model.field` (raw body), then put the returned id in the field. PNG, JPEG, GIF and WebP only; re-encoded, EXIF removed; SVG refused (D60). Not allowed in public submit fields, and not on personal data when public. |
+| `file` | string | The id of a stored file from a fixed allow-list (PDF, office documents, text, archives, images). Same upload route; sniffed, never served inline. |
+
+A `[model.public]` table may also set `server_read` (fields the web shop reads from a non-public model, e.g. discount codes) and `server_adjust` (numeric fields the shop changes atomically, e.g. `stock_quantity`); neither exposes the model to visitors (D61).
 
 ### 4.1 `list`, `search` and `delete`
 

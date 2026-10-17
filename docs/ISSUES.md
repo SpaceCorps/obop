@@ -29,9 +29,9 @@ test found, or a limit the docs state.
 ## C. Commerce
 | # | Issue | Status |
 |---|---|---|
-| C1 | No payments: orders stay `pending` | in progress |
-| C2 | Orders do not decrement stock; no discount codes; no taxes | in progress |
-| C3 | No images anywhere (products, pages, posts); Open Graph has no image | in progress |
+| C1 | No payments: orders stay `pending` | done (D62: `obop-payments`; manual, Stripe, demo provider; webhook, refunds, receipt) |
+| C2 | Orders do not decrement stock; no discount codes; no taxes | done (D61: atomic stock, codes, exact tax arithmetic) |
+| C3 | No images anywhere (products, pages, posts); Open Graph has no image | done (D60: blob store, `image`/`file` kinds, responsive shop images, og:image) |
 
 ## D. Interface and localisation
 | # | Issue | Status |
