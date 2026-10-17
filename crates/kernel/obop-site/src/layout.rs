@@ -549,7 +549,7 @@ pub fn csp(s: &Settings) -> String {
         })
         .unwrap_or_default();
     format!(
-        "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:{logo}; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; connect-src 'none'"
+        "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:{logo}; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self'"
     )
 }
 

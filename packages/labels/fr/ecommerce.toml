@@ -1,6 +1,6 @@
 [labels.fr.module]
 name = "eCommerce"
-description = "Une boutique en ligne : catégories, fiches produit traduisibles, modes de livraison, codes de réduction et commandes web (en attente, payée, expédiée, livrée, annulée, remboursée). Avec le site public activé, les visiteurs commandent sans compte et le serveur recalcule chaque prix. Pas de prestataire de paiement. Les remboursements exigent un responsable. Nécessite le package Produits."
+description = "Une boutique en ligne : catégories, offres avec images et traductions, livraison, codes de réduction, taux de taxe et commandes web. Le serveur décompte le stock, applique réductions et taxes et calcule chaque prix lui-même. Paiement par virement, carte (Stripe Checkout) ou mode démo. Remboursements : un responsable. Données clients jamais publiques. Nécessite le package Produits."
 
 [labels.fr.model.ecommerce_category]
 name = "Catégorie"
@@ -81,7 +81,7 @@ allow_backorder = "Autoriser les reliquats"
 
 [labels.fr.model.ecommerce_listing.field.stock_quantity]
 label = "Quantité en stock"
-description = "Unités en stock, utilisées avec la politique de stock. Les commandes ne la réduisent pas : ajustez-la à la main"
+description = "Unités en stock, avec la règle de stock. Chaque commande retire ses unités à la validation ; une commande annulée, expirée ou remboursée les remet ; corrigez à la main après un inventaire"
 
 [labels.fr.model.ecommerce_listing.field.published]
 label = "Publiée"
@@ -186,7 +186,7 @@ description = "Nombre total de fois où le code peut être utilisé ; vide sign
 
 [labels.fr.model.ecommerce_discount_code.field.used_count]
 label = "Utilisations"
-description = "Nombre de fois où il a été utilisé (tenu à jour à la main)"
+description = "Nombre d'utilisations. La boutique compte une utilisation à la commande et la rend si la commande est annulée ou jamais payée"
 
 [labels.fr.model.ecommerce_discount_code.field.minimum_order]
 label = "Commande minimum"
@@ -242,7 +242,7 @@ description = "Code de devise ISO 4217, par exemple EUR"
 
 [labels.fr.model.ecommerce_order.field.subtotal]
 label = "Sous-total"
-description = "Somme des lignes (plus petite unité monétaire, saisie et non calculée)"
+description = "Somme des lignes aux prix de l'offre (plus petite unité monétaire, calculée par la boutique à la commande)"
 
 [labels.fr.model.ecommerce_order.field.discount_total]
 label = "Total des remises"
@@ -254,11 +254,11 @@ description = "Frais de livraison (plus petite unité monétaire)"
 
 [labels.fr.model.ecommerce_order.field.tax_total]
 label = "Total des taxes"
-description = "Taxes comprises dans le total (plus petite unité monétaire)"
+description = "Toute la taxe de la commande, la part comprise dans les prix et celle ajoutée en plus (plus petite unité monétaire)"
 
 [labels.fr.model.ecommerce_order.field.total]
 label = "Total"
-description = "Montant payé par le client (plus petite unité monétaire)"
+description = "Montant payé par le client : lignes, moins la réduction, plus la livraison, plus la taxe ajoutée (plus petite unité monétaire)"
 
 [labels.fr.model.ecommerce_order.field.payment_reference]
 label = "Référence de paiement"
@@ -371,3 +371,169 @@ description = "Ordre dans la galerie, le plus petit d'abord"
 [labels.fr.model.ecommerce_listing_image.field.published]
 label = "Publié"
 description = "Si l'image est affichée dans la boutique"
+
+[labels.fr.model.ecommerce_discount_code.field.per_customer_limit]
+label = "Limite par client"
+description = "Combien de fois un client (par adresse e-mail) peut utiliser le code ; vide : sans limite"
+
+[labels.fr.model.ecommerce_discount_code.field.category_id]
+label = "Catégorie"
+description = "Seules les offres de cette catégorie sont réduites ; vide : toute la commande"
+
+[labels.fr.model.ecommerce_discount_use]
+name = "Utilisation de code"
+description = "Combien de fois un client a utilisé un code de réduction (le client est conservé sous forme de hash, jamais d'adresse e-mail)"
+
+[labels.fr.model.ecommerce_discount_use.field.code_id]
+label = "Code"
+description = "Le code de réduction"
+
+[labels.fr.model.ecommerce_discount_use.field.customer_hash]
+label = "Hash du client"
+description = "Hash de l'adresse e-mail du client, pour vérifier la limite par client sans conserver l'adresse ici"
+
+[labels.fr.model.ecommerce_discount_use.field.count]
+label = "Utilisations"
+description = "Utilisations à ce jour"
+
+[labels.fr.model.ecommerce_tax_rate]
+name = "Taux de taxe"
+description = "Un taux de taxe que la boutique applique aux offres, calculé sur le serveur"
+
+[labels.fr.model.ecommerce_tax_rate.field.name]
+label = "Nom"
+description = "Nom affiché sur la commande, par exemple TVA"
+
+[labels.fr.model.ecommerce_tax_rate.field.rate_bp]
+label = "Taux (points de base)"
+description = "Taux en points de base : 1900 vaut 19,00 pour cent"
+
+[labels.fr.model.ecommerce_tax_rate.field.country]
+label = "Pays"
+description = "Code pays à deux lettres (par exemple DE) de l'adresse de livraison concernée ; vide : tout pays sans taux propre"
+
+[labels.fr.model.ecommerce_tax_rate.field.category_id]
+label = "Catégorie"
+description = "Seulement les offres de cette catégorie ; vide : toutes les offres (et la livraison)"
+
+[labels.fr.model.ecommerce_tax_rate.field.included]
+label = "Inclus dans les prix"
+description = "Si les prix des offres incluent déjà cette taxe (usage courant dans l'UE). Sinon, la taxe est ajoutée à la commande"
+
+[labels.fr.model.ecommerce_tax_rate.field.active]
+label = "Actif"
+description = "Si le taux est appliqué"
+
+[labels.fr.model.ecommerce_order.field.discount_code]
+label = "Code de réduction utilisé"
+description = "Le code saisi par le client, tel qu'il apparaît sur la commande"
+
+[labels.fr.model.ecommerce_order.field.discount_use_id]
+label = "Utilisation par client"
+description = "Compteur par client sur lequel cette commande a compté, pour pouvoir le rendre"
+
+[labels.fr.model.ecommerce_order.field.country]
+label = "Pays"
+description = "Code pays à deux lettres de l'adresse de livraison, qui décide du taux de taxe"
+
+[labels.fr.model.ecommerce_order.field.tax_summary]
+label = "Lignes de taxe"
+description = "Les lignes de taxe de la commande en JSON : nom, taux en points de base, inclus ou non dans les prix, montant"
+
+[labels.fr.model.ecommerce_order.field.stock_returned]
+label = "Stock restitué"
+description = "Activé quand les unités d'une commande annulée, expirée ou remboursée ont été remises sur les offres, pour que cela n'arrive qu'une fois"
+
+[labels.fr.model.ecommerce_order.field.reserved_until]
+label = "Stock réservé jusqu'à"
+description = "Heure Unix jusqu'à laquelle une commande impayée réserve son stock ; ensuite elle est annulée et le stock est remis"
+
+[labels.fr.model.ecommerce_order.field.payment_method]
+label = "Mode de paiement"
+description = "Mode de paiement choisi : manual (virement ou facture), stripe (carte) ou fake (démo)"
+
+[labels.fr.model.ecommerce_order.field.payment_method.options]
+manual = "Virement ou facture"
+stripe = "Carte (Stripe)"
+fake = "Démo (aucun argent)"
+
+[labels.fr.model.ecommerce_order_line.field.discount_amount]
+label = "Réduction"
+description = "Part de la réduction de la commande qui revient à cette ligne (plus petite unité monétaire)"
+
+[labels.fr.model.ecommerce_order_line.field.tax_name]
+label = "Taxe"
+description = "Nom de la taxe appliquée à cette ligne"
+
+[labels.fr.model.ecommerce_order_line.field.tax_rate_bp]
+label = "Taux de taxe (pb)"
+description = "Taux de taxe de cette ligne en points de base"
+
+[labels.fr.model.ecommerce_order_line.field.tax_amount]
+label = "Montant de taxe"
+description = "Taxe sur cette ligne, incluse dans les prix ou ajoutée (plus petite unité monétaire)"
+
+[labels.fr.model.ecommerce_payment]
+name = "Paiement"
+description = "Un paiement pour une commande web : quel prestataire, sa référence, le montant et son issue. La boutique ne voit jamais de données de carte"
+
+[labels.fr.model.ecommerce_payment.field.order_id]
+label = "Commande"
+description = "La commande payée"
+
+[labels.fr.model.ecommerce_payment.field.provider]
+label = "Prestataire"
+description = "Qui encaisse : manual (virement ou facture), stripe (Stripe Checkout) ou fake (démo locale)"
+
+[labels.fr.model.ecommerce_payment.field.provider.options]
+manual = "Virement ou facture"
+stripe = "Carte (Stripe)"
+fake = "Démo (aucun argent)"
+
+[labels.fr.model.ecommerce_payment.field.external_id]
+label = "Référence du prestataire"
+description = "La référence du prestataire pour ce paiement, par exemple l'identifiant d'une session Stripe Checkout. Jamais un numéro de carte"
+
+[labels.fr.model.ecommerce_payment.field.checkout_url]
+label = "Page de paiement"
+description = "Où le client paie, conservé pour que la page de paiement puisse l'y renvoyer tant que le paiement est ouvert"
+
+[labels.fr.model.ecommerce_payment.field.state]
+label = "Statut"
+description = "Statut du paiement : ouvert (en attente du client), réussi, échoué, expiré, annulé, remboursé"
+
+[labels.fr.model.ecommerce_payment.field.state.options]
+open = "Ouvert"
+succeeded = "Réussi"
+failed = "Échoué"
+expired = "Expiré"
+cancelled = "Annulé"
+refunded = "Remboursé"
+
+[labels.fr.model.ecommerce_payment.field.amount]
+label = "Montant"
+description = "Montant à payer, fixé par le serveur d'après la commande (plus petite unité monétaire)"
+
+[labels.fr.model.ecommerce_payment.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217 du montant"
+
+[labels.fr.model.ecommerce_payment.field.refund_id]
+label = "Référence du remboursement"
+description = "La référence du prestataire pour le remboursement, une fois le paiement remboursé"
+
+[labels.fr.model.ecommerce_payment.field.refunded_amount]
+label = "Montant remboursé"
+description = "Montant rendu au client (plus petite unité monétaire)"
+
+[labels.fr.model.ecommerce_payment.field.event_ids]
+label = "Événements appliqués"
+description = "Identifiants des événements du prestataire déjà appliqués, en JSON, pour qu'une notification répétée ne change rien"
+
+[labels.fr.model.ecommerce_payment.action.mark_failed]
+label = "Marquer comme échoué"
+description = "Le prestataire signale que le paiement a échoué"
+
+[labels.fr.model.ecommerce_payment.action.cancel]
+label = "Annuler"
+description = "Ne plus attendre ce paiement"

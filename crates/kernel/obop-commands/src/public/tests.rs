@@ -81,6 +81,7 @@ fn specs() -> Vec<PublicSpec> {
             read: Some(read(&["title", "slug", "section_id"])),
             submit: None,
             receipt: None,
+            ..Default::default()
         },
         PublicSpec {
             model: "section".into(),
@@ -94,6 +95,7 @@ fn specs() -> Vec<PublicSpec> {
             }),
             submit: None,
             receipt: None,
+            ..Default::default()
         },
         PublicSpec {
             model: "msg".into(),
@@ -103,6 +105,7 @@ fn specs() -> Vec<PublicSpec> {
                 rate_limit_per_hour: 3,
             }),
             receipt: None,
+            ..Default::default()
         },
     ]
 }
@@ -144,6 +147,7 @@ fn the_gate_refuses_personal_restricted_and_unknown_fields() {
             read: Some(read(fields)),
             submit: None,
             receipt: None,
+            ..Default::default()
         }
         .check(page)
     };

@@ -133,6 +133,13 @@ pub struct PublicM {
     pub receipt_parent: Option<String>,
     #[serde(default)]
     pub receipt_fields: Vec<String>,
+    /// The server may read every field of the records for its own checks (never public).
+    #[serde(default)]
+    pub server_read: bool,
+    /// Number fields the server changes atomically when it creates an order (stock, a code's
+    /// use counter).
+    #[serde(default)]
+    pub server_adjust: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -586,6 +593,7 @@ impl Manifest {
                 .chain(&p.receipt_fields)
                 .chain(p.receipt_token_field.iter())
                 .chain(p.receipt_parent.iter())
+                .chain(&p.server_adjust)
             {
                 if !m.field.iter().any(|f| &f.name == n) {
                     return Err(format!("{at}: no field {n:?}"));
@@ -622,7 +630,8 @@ impl Manifest {
                     "{at}: receipt_fields need receipt_token_field or receipt_parent"
                 ));
             }
-            if !p.read && !p.submit && !has_receipt {
+            if !p.read && !p.submit && !has_receipt && !p.server_read && p.server_adjust.is_empty()
+            {
                 return Err(format!("{at}: declares nothing public"));
             }
             let desc = match p.order_dir.as_deref() {
@@ -649,6 +658,8 @@ impl Manifest {
                     parent_field: p.receipt_parent.clone(),
                     fields: p.receipt_fields.clone(),
                 }),
+                server_read: p.server_read,
+                server_adjust: p.server_adjust.clone(),
             });
         }
         Ok(out)

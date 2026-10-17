@@ -64,12 +64,19 @@ pub struct PublicReceipt {
     pub fields: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PublicSpec {
     pub model: String,
     pub read: Option<PublicRead>,
     pub submit: Option<PublicSubmit>,
     pub receipt: Option<PublicReceipt>,
+    /// The server (never a visitor) may read every field of this model's records through
+    /// [`PublicApi::server_records`]: for checks it must make itself, such as a discount code.
+    /// Nothing about the model becomes public.
+    pub server_read: bool,
+    /// Integer fields the server may change atomically with an order
+    /// ([`PublicApi::submit_order`]): stock, a code's use counter. Never a visitor.
+    pub server_adjust: Vec<String>,
 }
 
 /// Classes a public form must never collect.
@@ -91,8 +98,20 @@ impl PublicSpec {
                 .find(|f| f.name == n)
                 .ok_or_else(|| format!("{at}.public: no field {n:?}"))
         };
-        if self.read.is_none() && self.submit.is_none() && self.receipt.is_none() {
+        if self.read.is_none()
+            && self.submit.is_none()
+            && self.receipt.is_none()
+            && !self.server_read
+            && self.server_adjust.is_empty()
+        {
             return Err(format!("{at}.public: declares nothing public"));
+        }
+        for n in &self.server_adjust {
+            if !matches!(field(n)?.kind, FieldKind::Number) {
+                return Err(format!(
+                    "{at}.{n}: server_adjust fields must be numbers (counters)"
+                ));
+            }
         }
         if let Some(r) = &self.receipt {
             if r.fields.is_empty() {
@@ -279,8 +298,30 @@ pub enum PublicFilter {
     Contains(String),
 }
 
+/// A counter change that must happen together with an order, or not at all: take stock, count a
+/// discount use. The field has to be declared `server_adjust` on the model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Adjust {
+    pub model: String,
+    pub id: String,
+    pub field: String,
+    pub delta: i64,
+    /// The result must not fall below this (stock never goes below 0).
+    pub min: Option<i64>,
+    /// The result must not rise above this (a code's maximum number of uses).
+    pub max: Option<i64>,
+    /// If the record does not exist yet, create it with these fields first (an upsert counter,
+    /// for example one use counter per code and customer).
+    pub create: Option<BTreeMap<String, Value>>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum SubmitError {
+    /// An [`Adjust`] could not be applied: the stock ran out or a code was used up. The number
+    /// is the index in the list that was passed. Nothing was written.
+    Unavailable {
+        adjust: usize,
+    },
     /// The model does not accept public submissions (or does not exist).
     NotPublic,
     /// The data was refused; the message names the field and is safe to show.
@@ -740,6 +781,95 @@ impl PublicApi {
         source: &str,
         batch: Vec<Submission>,
     ) -> Result<Vec<String>, SubmitError> {
+        let rows = self.prepare(source, batch)?;
+        self.store
+            .backend
+            .insert_many(&rows)
+            .map_err(SubmitError::Storage)?;
+        Ok(rows.into_iter().map(|(_, id, _)| id).collect())
+    }
+
+    /// Like [`Self::submit_batch`], and the `adjust` changes happen in the same transaction,
+    /// checked against their bounds under a lock: two buyers cannot both take the last unit, and
+    /// a code cannot be used past its maximum. Either everything is written or nothing is.
+    pub fn submit_order(
+        &self,
+        source: &str,
+        batch: Vec<Submission>,
+        adjust: &[Adjust],
+    ) -> Result<Vec<String>, SubmitError> {
+        let mut ops: Vec<obop_storage::Op> = Vec::new();
+        for a in adjust {
+            let declared = self
+                .spec(&a.model)
+                .is_some_and(|s| s.server_adjust.contains(&a.field));
+            if !declared || a.delta.unsigned_abs() > 1_000_000 {
+                return Err(SubmitError::Rejected(format!(
+                    "{}.{} cannot be adjusted",
+                    a.model, a.field
+                )));
+            }
+            let def = self.def(&a.model).ok_or(SubmitError::NotPublic)?;
+            let create = match &a.create {
+                None => None,
+                Some(c) => {
+                    let f = declared_fields(&def, &Value::Map(c.clone()))
+                        .map_err(SubmitError::Rejected)?;
+                    Some(f.iter().map(|(k, v)| (k.clone(), v.to_json())).collect())
+                }
+            };
+            ops.push(obop_storage::Op::Add {
+                model: a.model.clone(),
+                id: a.id.clone(),
+                field: a.field.clone(),
+                delta: a.delta,
+                min: a.min,
+                max: a.max,
+                create,
+            });
+        }
+        let rows = self.prepare(source, batch)?;
+        let n = ops.len();
+        for (model, id, fields) in &rows {
+            ops.push(obop_storage::Op::Insert {
+                model: model.clone(),
+                id: id.clone(),
+                fields: fields.clone(),
+            });
+        }
+        match self.store.backend.apply(&ops) {
+            Ok(()) => Ok(rows.into_iter().map(|(_, id, _)| id).collect()),
+            Err(obop_storage::ApplyError::Conflict { index, .. }) if index < n => {
+                Err(SubmitError::Unavailable { adjust: index })
+            }
+            Err(e) => Err(SubmitError::Storage(e.to_string())),
+        }
+    }
+
+    /// Every record of a model that declared `server_read`, with all its fields, for checks the
+    /// server makes itself (a discount code). Nothing of it is ever rendered by the generic
+    /// public routes.
+    pub fn server_records(&self, model: &str) -> Result<Vec<(String, Fields)>, String> {
+        if !self.spec(model).is_some_and(|s| s.server_read) {
+            return Err(format!("{model} is not readable by the server here"));
+        }
+        self.store.backend.list(model)
+    }
+
+    /// One record of a `server_read` model.
+    pub fn server_record(&self, model: &str, id: &str) -> Result<Option<Fields>, String> {
+        if !self.spec(model).is_some_and(|s| s.server_read) {
+            return Err(format!("{model} is not readable by the server here"));
+        }
+        self.store.backend.get(model, id)
+    }
+
+    /// Validate a batch and turn it into rows, charging the rate limits.
+    fn prepare(
+        &self,
+        source: &str,
+        batch: Vec<Submission>,
+    ) -> Result<Vec<(String, String, Fields)>, SubmitError> {
         let Some(first) = batch.first() else {
             return Err(SubmitError::Rejected("nothing to submit".into()));
         };
@@ -828,11 +958,7 @@ impl PublicApi {
                     .collect(),
             ));
         }
-        self.store
-            .backend
-            .insert_many(&rows)
-            .map_err(SubmitError::Storage)?;
-        Ok(rows.into_iter().map(|(_, id, _)| id).collect())
+        Ok(rows)
     }
 
     /// A ref a visitor supplies must point at a published record of a public-read model.

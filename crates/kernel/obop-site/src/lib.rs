@@ -9,12 +9,16 @@
 //! records, submissions restricted to declared fields, prices always taken from the listing.
 
 pub mod assets;
+mod checkout;
 mod content;
+mod countries;
 pub mod http;
 pub mod i18n;
 pub mod layout;
 pub mod md;
 mod media;
+mod orderpage;
+pub mod pricing;
 pub mod seed;
 mod seo;
 pub mod settings;
@@ -25,7 +29,7 @@ pub mod util;
 use http::{Req, Resp};
 use i18n::{Lang, Source};
 use layout::{Caps, Ctx, MenuItem, Page};
-use obop_commands::{Lookup, PublicApi, PublicFilter, PublicRecord, Value};
+use obop_commands::{Lookup, PaymentPort, PublicApi, PublicFilter, PublicRecord, Value};
 use settings::Settings;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -82,6 +86,9 @@ pub struct Site {
     limits: Mutex<HashMap<String, VecDeque<Instant>>>,
     /// Idempotency keys of placed orders: key -> (order token, when).
     idem: Mutex<HashMap<String, (String, Instant)>>,
+    /// Whatever takes payments (D62); without one orders stay pending and the shop writes to
+    /// the buyer.
+    payments: Option<Arc<dyn PaymentPort>>,
 }
 
 impl Site {
@@ -92,7 +99,18 @@ impl Site {
             cached: Mutex::new(None),
             limits: Mutex::new(HashMap::new()),
             idem: Mutex::new(HashMap::new()),
+            payments: None,
         }
+    }
+
+    /// Take payments through `port` (the payment module of the instance).
+    pub fn with_payments(mut self, port: Arc<dyn PaymentPort>) -> Site {
+        self.payments = Some(port);
+        self
+    }
+
+    fn settings_snapshot(&self) -> Arc<Settings> {
+        self.refresh().0
     }
 
     /// Whether the instance has anything to show publicly at all (a package declared it).
@@ -171,6 +189,33 @@ impl Site {
         }
         q.push_back(now);
         true
+    }
+
+    /// Whether `key` has already had `max` hits in the last `window` (nothing is counted).
+    fn limited(&self, key: &str, max: usize, window: Duration) -> bool {
+        let now = Instant::now();
+        let g = self.limits.lock().unwrap();
+        g.get(key).is_some_and(|q| {
+            q.iter()
+                .filter(|t| now.duration_since(**t) < window)
+                .count()
+                >= max
+        })
+    }
+
+    /// Count one hit for `key` without checking a limit.
+    fn record(&self, key: &str) {
+        let mut g = self.limits.lock().unwrap();
+        if g.len() > 20_000 {
+            let now = Instant::now();
+            g.retain(|_, q| {
+                q.back()
+                    .is_some_and(|t| now.duration_since(*t) < Duration::from_secs(3600))
+            });
+        }
+        g.entry(key.to_string())
+            .or_default()
+            .push_back(Instant::now());
     }
 
     /// The origin used in canonical links, feeds and sitemaps: the owner's setting, the
@@ -253,7 +298,8 @@ impl Site {
         if !ctx.s.enabled {
             return self.closed(&ctx);
         }
-        let known_post = matches!(path, "/shop/checkout" | "/contact");
+        let known_post = matches!(path, "/shop/checkout" | "/contact" | "/shop/discount/check")
+            || path.starts_with("/shop/fake-pay/");
         if !matches!(method, "GET" | "HEAD") && !(method == "POST" && known_post) {
             return method_not_allowed(&ctx, if known_post { "POST" } else { "GET, HEAD" });
         }
@@ -279,6 +325,18 @@ impl Site {
             ("GET" | "HEAD", ["shop"]) => self.shop_index(&mut ctx),
             ("GET" | "HEAD", ["shop", product]) => self.product(&mut ctx, product),
             ("GET" | "HEAD", ["shop", "order", token]) => self.order_page(&mut ctx, token),
+            ("GET" | "HEAD", ["shop", "order", token, "receipt"]) => {
+                self.receipt_page(&mut ctx, token)
+            }
+            ("GET" | "HEAD", ["shop", "pay", token]) => self.pay_page(&mut ctx, token),
+            ("GET" | "HEAD", ["shop", "pay", token, "continue"]) => {
+                self.pay_continue(&mut ctx, token)
+            }
+            ("GET" | "HEAD", ["shop", "fake-pay", session]) => {
+                self.fake_pay_page(&mut ctx, session)
+            }
+            ("POST", ["shop", "fake-pay", session]) => self.fake_pay_decide(&mut ctx, session),
+            ("POST", ["shop", "discount", "check"]) => self.discount_check(&mut ctx),
             ("GET" | "HEAD", ["cart"]) => self.cart(&mut ctx, None),
             ("POST", ["shop", "checkout"]) => self.checkout(&mut ctx),
             ("GET" | "HEAD" | "POST", ["contact"]) => self.contact(&mut ctx),
@@ -419,6 +477,8 @@ impl Site {
 mod tests;
 #[cfg(test)]
 mod tests_media;
+#[cfg(test)]
+mod tests_shop;
 
 fn method_not_allowed(ctx: &Ctx, allow: &str) -> Resp {
     let mut p = Page::new(ctx.t("e405.title"), ctx.t("e405.title"), "/");

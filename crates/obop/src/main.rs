@@ -2317,6 +2317,7 @@ mod bundled_packages {
         ("accounting_move", "reversed"),
         ("accounting_period", "closed"),
         ("ecommerce_order", "refunded"),
+        ("ecommerce_payment", "failed"),
         ("email_marketing_campaign", "sent"),
         ("field_service_job", "done"),
         ("knowledge_article", "archived"),

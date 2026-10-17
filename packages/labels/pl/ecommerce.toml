@@ -1,6 +1,6 @@
 [labels.pl.module]
 name = "Sklep internetowy"
-description = "Sklep internetowy: kategorie, pozycje produktów z tłumaczeniami, metody dostawy, kody rabatowe oraz zamówienia z pozycjami i obiegiem: oczekujące, opłacone, nadane, dostarczone, anulowane, zwrócone. Zamówienia wycenia serwer na podstawie opublikowanej pozycji. Brak operatora płatności. Zwroty wymagają zatwierdzenia kierownika. Dane klienta są danymi osobowymi. Wymaga pakietu Produkty."
+description = "Sklep internetowy: kategorie, oferty ze zdjęciami i tłumaczeniami, dostawa, kody rabatowe, stawki podatku i zamówienia. Serwer zdejmuje stan, stosuje rabaty i podatki i sam wycenia zamówienia. Płatność przelewem, kartą (Stripe Checkout) lub w trybie demo. Zwroty wymagają kierownika. Dane klientów nigdy nie są publiczne. Wymaga pakietu Produkty."
 
 [labels.pl.model.ecommerce_category]
 name = "Kategoria"
@@ -81,7 +81,7 @@ allow_backorder = "Zezwalaj na zaległe zamówienia"
 
 [labels.pl.model.ecommerce_listing.field.stock_quantity]
 label = "Stan magazynowy"
-description = "Liczba sztuk na stanie, używana z zasadą braku towaru. Zamówienia jej nie zmniejszają: koryguj ręcznie"
+description = "Liczba sztuk na stanie, razem z regułą magazynową. Każde zamówienie zdejmuje sztuki przy składaniu, a anulowane, wygasłe lub zwrócone je przywraca; popraw ręcznie po inwentaryzacji"
 
 [labels.pl.model.ecommerce_listing.field.published]
 label = "Opublikowana"
@@ -186,7 +186,7 @@ description = "Ile razy łącznie można użyć kodu; puste oznacza bez limitu"
 
 [labels.pl.model.ecommerce_discount_code.field.used_count]
 label = "Liczba użyć"
-description = "Ile razy użyto kodu (aktualizowane ręcznie)"
+description = "Ile razy został użyty. Sklep zlicza użycie przy złożeniu zamówienia i oddaje je, gdy zamówienie zostanie anulowane lub nigdy nie opłacone"
 
 [labels.pl.model.ecommerce_discount_code.field.minimum_order]
 label = "Minimalne zamówienie"
@@ -242,7 +242,7 @@ description = "Kod waluty ISO 4217, na przykład PLN"
 
 [labels.pl.model.ecommerce_order.field.subtotal]
 label = "Suma częściowa"
-description = "Suma pozycji (w jednostkach podrzędnych waluty, wpisywana, nie obliczana)"
+description = "Suma pozycji po cenach ofert (najmniejsza jednostka waluty, wyliczana przez sklep przy zamówieniu)"
 
 [labels.pl.model.ecommerce_order.field.discount_total]
 label = "Rabat razem"
@@ -254,11 +254,11 @@ description = "Opłata za dostawę (w jednostkach podrzędnych waluty)"
 
 [labels.pl.model.ecommerce_order.field.tax_total]
 label = "Kwota podatku"
-description = "Podatek zawarty w sumie (w jednostkach podrzędnych waluty)"
+description = "Cały podatek zamówienia: część zawarta w cenach i część doliczona (najmniejsza jednostka waluty)"
 
 [labels.pl.model.ecommerce_order.field.total]
 label = "Razem"
-description = "Kwota płacona przez kupującego (w jednostkach podrzędnych waluty)"
+description = "Kwota płacona przez klienta: pozycje minus rabat plus dostawa plus doliczony podatek (najmniejsza jednostka waluty)"
 
 [labels.pl.model.ecommerce_order.field.payment_reference]
 label = "Referencja płatności"
@@ -371,3 +371,169 @@ description = "Kolejność w galerii, najmniejsza pierwsza"
 [labels.pl.model.ecommerce_listing_image.field.published]
 label = "Opublikowane"
 description = "Czy zdjęcie jest pokazywane w sklepie"
+
+[labels.pl.model.ecommerce_discount_code.field.per_customer_limit]
+label = "Limit na klienta"
+description = "Ile razy jeden klient (według adresu e-mail) może użyć kodu; puste oznacza brak limitu"
+
+[labels.pl.model.ecommerce_discount_code.field.category_id]
+label = "Kategoria"
+description = "Tylko oferty z tej kategorii dostają rabat; puste oznacza całe zamówienie"
+
+[labels.pl.model.ecommerce_discount_use]
+name = "Użycie kodu"
+description = "Ile razy jeden klient użył jednego kodu rabatowego (klient jest zapisany jako skrót, nigdy jako adres e-mail)"
+
+[labels.pl.model.ecommerce_discount_use.field.code_id]
+label = "Kod"
+description = "Kod rabatowy"
+
+[labels.pl.model.ecommerce_discount_use.field.customer_hash]
+label = "Skrót klienta"
+description = "Skrót adresu e-mail klienta, aby sprawdzać limit na klienta bez przechowywania adresu"
+
+[labels.pl.model.ecommerce_discount_use.field.count]
+label = "Użycia"
+description = "Dotychczasowe użycia"
+
+[labels.pl.model.ecommerce_tax_rate]
+name = "Stawka podatku"
+description = "Stawka podatku stosowana przez sklep do ofert, liczona na serwerze"
+
+[labels.pl.model.ecommerce_tax_rate.field.name]
+label = "Nazwa"
+description = "Nazwa widoczna na zamówieniu, na przykład VAT"
+
+[labels.pl.model.ecommerce_tax_rate.field.rate_bp]
+label = "Stawka (punkty bazowe)"
+description = "Stawka w punktach bazowych: 1900 to 19,00 procent"
+
+[labels.pl.model.ecommerce_tax_rate.field.country]
+label = "Kraj"
+description = "Dwuliterowy kod kraju (np. DE) adresu dostawy, którego dotyczy stawka; puste oznacza każdy kraj bez własnej stawki"
+
+[labels.pl.model.ecommerce_tax_rate.field.category_id]
+label = "Kategoria"
+description = "Tylko oferty z tej kategorii; puste oznacza każdą ofertę (i dostawę)"
+
+[labels.pl.model.ecommerce_tax_rate.field.included]
+label = "Zawarty w cenach"
+description = "Czy ceny ofert zawierają już ten podatek (zwykłe w UE). Jeśli nie, podatek jest doliczany przy zamówieniu"
+
+[labels.pl.model.ecommerce_tax_rate.field.active]
+label = "Aktywna"
+description = "Czy stawka jest stosowana"
+
+[labels.pl.model.ecommerce_order.field.discount_code]
+label = "Użyty kod rabatowy"
+description = "Kod wpisany przez klienta, tak jak widnieje na zamówieniu"
+
+[labels.pl.model.ecommerce_order.field.discount_use_id]
+label = "Użycie na klienta"
+description = "Licznik użyć na klienta, który zużyło to zamówienie, aby móc go zwrócić"
+
+[labels.pl.model.ecommerce_order.field.country]
+label = "Kraj"
+description = "Dwuliterowy kod kraju adresu dostawy, który decyduje o stawce podatku"
+
+[labels.pl.model.ecommerce_order.field.tax_summary]
+label = "Pozycje podatku"
+description = "Pozycje podatku zamówienia w JSON: nazwa, stawka w punktach bazowych, czy zawarta w cenach, kwota"
+
+[labels.pl.model.ecommerce_order.field.stock_returned]
+label = "Stan zwrócony"
+description = "Ustawiane, gdy sztuki z anulowanego, wygasłego lub zwróconego zamówienia wróciły na oferty, aby stało się to tylko raz"
+
+[labels.pl.model.ecommerce_order.field.reserved_until]
+label = "Stan zarezerwowany do"
+description = "Czas Unix, do którego nieopłacone zamówienie rezerwuje stan; potem jest anulowane, a stan wraca"
+
+[labels.pl.model.ecommerce_order.field.payment_method]
+label = "Sposób płatności"
+description = "Wybrany sposób płatności: manual (przelew lub faktura), stripe (karta) lub fake (demo)"
+
+[labels.pl.model.ecommerce_order.field.payment_method.options]
+manual = "Przelew lub faktura"
+stripe = "Karta (Stripe)"
+fake = "Demo (bez pieniędzy)"
+
+[labels.pl.model.ecommerce_order_line.field.discount_amount]
+label = "Rabat"
+description = "Część rabatu zamówienia przypadająca na tę pozycję (najmniejsza jednostka waluty)"
+
+[labels.pl.model.ecommerce_order_line.field.tax_name]
+label = "Podatek"
+description = "Nazwa podatku zastosowanego do tej pozycji"
+
+[labels.pl.model.ecommerce_order_line.field.tax_rate_bp]
+label = "Stawka podatku (pb)"
+description = "Stawka podatku tej pozycji w punktach bazowych"
+
+[labels.pl.model.ecommerce_order_line.field.tax_amount]
+label = "Kwota podatku"
+description = "Podatek od tej pozycji, zawarty w cenach lub doliczony (najmniejsza jednostka waluty)"
+
+[labels.pl.model.ecommerce_payment]
+name = "Płatność"
+description = "Płatność za zamówienie internetowe: który operator, jego numer, kwota i co się z nią stało. Sklep nigdy nie widzi danych karty"
+
+[labels.pl.model.ecommerce_payment.field.order_id]
+label = "Zamówienie"
+description = "Opłacane zamówienie"
+
+[labels.pl.model.ecommerce_payment.field.provider]
+label = "Operator"
+description = "Kto przyjmuje płatność: manual (przelew lub faktura), stripe (Stripe Checkout) lub fake (lokalne demo)"
+
+[labels.pl.model.ecommerce_payment.field.provider.options]
+manual = "Przelew lub faktura"
+stripe = "Karta (Stripe)"
+fake = "Demo (bez pieniędzy)"
+
+[labels.pl.model.ecommerce_payment.field.external_id]
+label = "Numer operatora"
+description = "Numer operatora dla tej płatności, na przykład identyfikator sesji Stripe Checkout. Nigdy numer karty"
+
+[labels.pl.model.ecommerce_payment.field.checkout_url]
+label = "Strona płatności"
+description = "Gdzie klient płaci; zapisane, aby strona płatności mogła tam odesłać, dopóki płatność jest otwarta"
+
+[labels.pl.model.ecommerce_payment.field.state]
+label = "Status"
+description = "Status płatności: otwarta (czeka na klienta), udana, nieudana, wygasła, anulowana, zwrócona"
+
+[labels.pl.model.ecommerce_payment.field.state.options]
+open = "Otwarta"
+succeeded = "Udana"
+failed = "Nieudana"
+expired = "Wygasła"
+cancelled = "Anulowana"
+refunded = "Zwrócona"
+
+[labels.pl.model.ecommerce_payment.field.amount]
+label = "Kwota"
+description = "Kwota do zapłaty, ustalona przez serwer na podstawie zamówienia (najmniejsza jednostka waluty)"
+
+[labels.pl.model.ecommerce_payment.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217 kwoty"
+
+[labels.pl.model.ecommerce_payment.field.refund_id]
+label = "Numer zwrotu"
+description = "Numer zwrotu u operatora, gdy płatność zostanie zwrócona"
+
+[labels.pl.model.ecommerce_payment.field.refunded_amount]
+label = "Zwrócona kwota"
+description = "Kwota zwrócona klientowi (najmniejsza jednostka waluty)"
+
+[labels.pl.model.ecommerce_payment.field.event_ids]
+label = "Zastosowane zdarzenia"
+description = "Identyfikatory zdarzeń operatora już zastosowanych, w JSON, aby powtórzone powiadomienie nic nie zmieniało"
+
+[labels.pl.model.ecommerce_payment.action.mark_failed]
+label = "Oznacz jako nieudaną"
+description = "Operator zgłasza, że płatność się nie powiodła"
+
+[labels.pl.model.ecommerce_payment.action.cancel]
+label = "Anuluj"
+description = "Przestań czekać na tę płatność"

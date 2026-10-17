@@ -969,13 +969,15 @@ pub trait MfaApi: Send + Sync {
 pub mod blobs;
 mod guards;
 pub mod json;
+pub mod pay;
 pub mod public;
 pub mod query;
 pub mod store;
 
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
+pub use pay::{FakeView, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{
-    Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
+    Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,
 };
 pub use store::Store;

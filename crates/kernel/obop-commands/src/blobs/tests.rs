@@ -68,6 +68,7 @@ fn env() -> Env {
             }),
             submit: None,
             receipt: None,
+            ..Default::default()
         }],
     )
     .unwrap();
@@ -537,6 +538,7 @@ fn the_gate_refuses_public_photos_of_people_and_visitor_uploads() {
             rate_limit_per_hour: 5,
         }),
         receipt: None,
+        ..Default::default()
     };
     assert!(spec(&["photo"], &[]).check(item).is_ok());
     let e = spec(&["face"], &[]).check(item).unwrap_err();

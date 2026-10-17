@@ -132,7 +132,7 @@ pub(crate) fn methods(s: &Shop) -> Vec<PublicRecord> {
         .0
 }
 
-fn order_fields<'a>(
+pub(crate) fn order_fields<'a>(
     lines: &'a [(&'a str, &'a str)],
     extra: &[(&'a str, &'a str)],
 ) -> Vec<(&'a str, &'a str)> {
@@ -907,6 +907,17 @@ fn security_checkout_validates_quantities_stock_and_fields() {
         );
         assert!(r.status == 400, "qty {q}: {}", r.status);
     }
+    let over = [(sencha.id.as_str(), "41")];
+    let mut f = order_fields(&over, &[("shipping_method_id", &std.id)]);
+    f.retain(|(k, _)| *k != "idem");
+    f.push(("idem", "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"));
+    let r = fresh_post(&s, "/shop/checkout", &f);
+    assert_eq!(r.status, 400);
+    assert!(
+        text(&r).contains("Only 40 of Sencha Green Tea, 100 g left."),
+        "{}",
+        text(&r)
+    );
     let lines = [(sencha.id.as_str(), "40")];
     assert_eq!(
         fresh_post(
@@ -918,13 +929,14 @@ fn security_checkout_validates_quantities_stock_and_fields() {
         303,
         "40 is exactly the stock"
     );
-    let over = [(sencha.id.as_str(), "41")];
-    let mut f = order_fields(&over, &[("shipping_method_id", &std.id)]);
+    // That was the last of it: the listing is sold out now, and one more is refused.
+    let one = [(sencha.id.as_str(), "1")];
+    let mut f = order_fields(&one, &[("shipping_method_id", &std.id)]);
     f.retain(|(k, _)| *k != "idem");
-    f.push(("idem", "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a"));
+    f.push(("idem", "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"));
     let r = fresh_post(&s, "/shop/checkout", &f);
     assert_eq!(r.status, 400);
-    assert!(text(&r).contains("Not enough stock"));
+    assert!(text(&r).contains("no longer available"));
     let lines = [(dripper.id.as_str(), "1")];
     assert_eq!(
         fresh_post(

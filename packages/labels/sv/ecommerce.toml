@@ -1,6 +1,6 @@
 [labels.sv.module]
 name = "E-handel"
-description = "En webbutik: kategorier, butiksartiklar med översättningar, leveranssätt, rabattkoder och webborder med rader. Besökare kan lägga order utan konto; servern prissätter varje order utifrån den publicerade artikeln. Ingen betaltjänst ingår: en order börjar som väntande. Återbetalningar kräver en chefs godkännande; agenter får bara föreslå dem. Kräver paketet Produkter."
+description = "En webbutik: kategorier, erbjudanden med bilder och översättningar, leveranssätt, rabattkoder, skattesatser och webbeställningar. Servern drar av lagret, tillämpar rabatter och skatter och räknar ut priserna själv. Betalning med banköverföring, kort (Stripe Checkout) eller i demoläge. Återbetalningar kräver en chef. Kunduppgifter är aldrig offentliga. Kräver paketet Produkter."
 
 [labels.sv.model.ecommerce_category]
 name = "Kategori"
@@ -81,7 +81,7 @@ allow_backorder = "Tillåt restorder"
 
 [labels.sv.model.ecommerce_listing.field.stock_quantity]
 label = "Lagersaldo"
-description = "Antal enheter i lager, används med lagerpolicyn. Ordrar minskar det inte: justera det manuellt"
+description = "Antal i lager, tillsammans med lagerregeln. Varje beställning drar av sina enheter i kassan, och en avbruten, utgången eller återbetald beställning lägger tillbaka dem; justera för hand efter en inventering"
 
 [labels.sv.model.ecommerce_listing.field.published]
 label = "Publicerad"
@@ -186,7 +186,7 @@ description = "Hur många gånger koden får användas totalt; tomt betyder obeg
 
 [labels.sv.model.ecommerce_discount_code.field.used_count]
 label = "Antal användningar"
-description = "Hur många gånger den har använts (uppdateras manuellt)"
+description = "Hur många gånger den har använts. Butiken räknar en användning när beställningen läggs och ger tillbaka den om beställningen avbryts eller aldrig betalas"
 
 [labels.sv.model.ecommerce_discount_code.field.minimum_order]
 label = "Minsta ordervärde"
@@ -242,7 +242,7 @@ description = "Valutakod enligt ISO 4217, till exempel SEK"
 
 [labels.sv.model.ecommerce_order.field.subtotal]
 label = "Delsumma"
-description = "Summan av raderna (valutans minsta enhet, anges och beräknas inte)"
+description = "Summan av raderna till erbjudandens priser (minsta valutaenhet, beräknas av butiken i kassan)"
 
 [labels.sv.model.ecommerce_order.field.discount_total]
 label = "Rabatt totalt"
@@ -254,11 +254,11 @@ description = "Fraktavgift (valutans minsta enhet)"
 
 [labels.sv.model.ecommerce_order.field.tax_total]
 label = "Skatt totalt"
-description = "Skatt som ingår i totalbeloppet (valutans minsta enhet)"
+description = "All skatt på beställningen, både den del som ingår i priserna och den som läggs ovanpå (minsta valutaenhet)"
 
 [labels.sv.model.ecommerce_order.field.total]
 label = "Totalt"
-description = "Belopp som kunden betalar (valutans minsta enhet)"
+description = "Beloppet kunden betalar: rader minus rabatten plus leverans plus skatt som läggs ovanpå (minsta valutaenhet)"
 
 [labels.sv.model.ecommerce_order.field.payment_reference]
 label = "Betalningsreferens"
@@ -371,3 +371,169 @@ description = "Ordning i galleriet, lägst först"
 [labels.sv.model.ecommerce_listing_image.field.published]
 label = "Publicerad"
 description = "Om bilden visas i butiken"
+
+[labels.sv.model.ecommerce_discount_code.field.per_customer_limit]
+label = "Gräns per kund"
+description = "Hur många gånger en kund (efter e-postadress) får använda koden; tomt betyder ingen gräns"
+
+[labels.sv.model.ecommerce_discount_code.field.category_id]
+label = "Kategori"
+description = "Bara erbjudanden i den här kategorin får rabatt; tomt betyder hela beställningen"
+
+[labels.sv.model.ecommerce_discount_use]
+name = "Kodanvändning"
+description = "Hur många gånger en kund har använt en rabattkod (kunden sparas som en hash, aldrig som e-postadress)"
+
+[labels.sv.model.ecommerce_discount_use.field.code_id]
+label = "Kod"
+description = "Rabattkoden"
+
+[labels.sv.model.ecommerce_discount_use.field.customer_hash]
+label = "Kundhash"
+description = "Hash av kundens e-postadress, så att gränsen per kund kan kontrolleras utan att adressen sparas här"
+
+[labels.sv.model.ecommerce_discount_use.field.count]
+label = "Användningar"
+description = "Användningar hittills"
+
+[labels.sv.model.ecommerce_tax_rate]
+name = "Skattesats"
+description = "En skattesats som butiken tillämpar på erbjudanden, beräknad på servern"
+
+[labels.sv.model.ecommerce_tax_rate.field.name]
+label = "Namn"
+description = "Namn som visas på beställningen, till exempel moms"
+
+[labels.sv.model.ecommerce_tax_rate.field.rate_bp]
+label = "Sats (baspunkter)"
+description = "Sats i baspunkter: 1900 är 19,00 procent"
+
+[labels.sv.model.ecommerce_tax_rate.field.country]
+label = "Land"
+description = "Tvåbokstavs landskod (till exempel DE) för leveransadressen som satsen gäller; tomt betyder varje land utan egen sats"
+
+[labels.sv.model.ecommerce_tax_rate.field.category_id]
+label = "Kategori"
+description = "Bara erbjudanden i den här kategorin; tomt betyder alla erbjudanden (och leverans)"
+
+[labels.sv.model.ecommerce_tax_rate.field.included]
+label = "Ingår i priserna"
+description = "Om erbjudandenas priser redan inkluderar skatten (vanligt i EU). Annars läggs skatten på i kassan"
+
+[labels.sv.model.ecommerce_tax_rate.field.active]
+label = "Aktiv"
+description = "Om satsen tillämpas"
+
+[labels.sv.model.ecommerce_order.field.discount_code]
+label = "Använd rabattkod"
+description = "Koden kunden angav, så som den visas på beställningen"
+
+[labels.sv.model.ecommerce_order.field.discount_use_id]
+label = "Användning per kund"
+description = "Vilken räknare per kund beställningen räknades mot, så att den kan ges tillbaka"
+
+[labels.sv.model.ecommerce_order.field.country]
+label = "Land"
+description = "Tvåbokstavs landskod för leveransadressen, som avgör skattesatsen"
+
+[labels.sv.model.ecommerce_order.field.tax_summary]
+label = "Skatterader"
+description = "Beställningens skatterader som JSON: namn, sats i baspunkter, om den ingår i priserna, belopp"
+
+[labels.sv.model.ecommerce_order.field.stock_returned]
+label = "Lager återlagt"
+description = "Sätts när enheterna från en avbruten, utgången eller återbetald beställning lagts tillbaka på erbjudandena, så att det bara sker en gång"
+
+[labels.sv.model.ecommerce_order.field.reserved_until]
+label = "Lager reserverat till"
+description = "Unix-tid till vilken en obetald beställning håller sitt lager; därefter avbryts den och lagret läggs tillbaka"
+
+[labels.sv.model.ecommerce_order.field.payment_method]
+label = "Betalsätt"
+description = "Hur kunden valde att betala: manual (banköverföring eller faktura), stripe (kort) eller fake (demo)"
+
+[labels.sv.model.ecommerce_order.field.payment_method.options]
+manual = "Banköverföring eller faktura"
+stripe = "Kort (Stripe)"
+fake = "Demo (inga pengar)"
+
+[labels.sv.model.ecommerce_order_line.field.discount_amount]
+label = "Rabatt"
+description = "Del av beställningens rabatt som faller på den här raden (minsta valutaenhet)"
+
+[labels.sv.model.ecommerce_order_line.field.tax_name]
+label = "Skatt"
+description = "Namn på skatten som tillämpas på den här raden"
+
+[labels.sv.model.ecommerce_order_line.field.tax_rate_bp]
+label = "Skattesats (bp)"
+description = "Skattesats för den här raden i baspunkter"
+
+[labels.sv.model.ecommerce_order_line.field.tax_amount]
+label = "Skattebelopp"
+description = "Skatt på den här raden, inkluderad i priserna eller pålagd (minsta valutaenhet)"
+
+[labels.sv.model.ecommerce_payment]
+name = "Betalning"
+description = "En betalning för en webbeställning: vilken leverantör, dess referens, beloppet och vad som hände. Butiken ser aldrig kortuppgifter"
+
+[labels.sv.model.ecommerce_payment.field.order_id]
+label = "Beställning"
+description = "Beställningen som betalas"
+
+[labels.sv.model.ecommerce_payment.field.provider]
+label = "Leverantör"
+description = "Vem som tar emot betalningen: manual (banköverföring eller faktura), stripe (Stripe Checkout) eller fake (lokal demo)"
+
+[labels.sv.model.ecommerce_payment.field.provider.options]
+manual = "Banköverföring eller faktura"
+stripe = "Kort (Stripe)"
+fake = "Demo (inga pengar)"
+
+[labels.sv.model.ecommerce_payment.field.external_id]
+label = "Leverantörens referens"
+description = "Leverantörens referens för betalningen, till exempel ett Stripe Checkout-sessions-id. Aldrig ett kortnummer"
+
+[labels.sv.model.ecommerce_payment.field.checkout_url]
+label = "Betalningssida"
+description = "Var kunden betalar; sparas så att betalningssidan kan skicka tillbaka kunden dit medan betalningen är öppen"
+
+[labels.sv.model.ecommerce_payment.field.state]
+label = "Status"
+description = "Betalningsstatus: öppen (väntar på kunden), lyckades, misslyckades, utgången, avbruten, återbetald"
+
+[labels.sv.model.ecommerce_payment.field.state.options]
+open = "Öppen"
+succeeded = "Lyckades"
+failed = "Misslyckades"
+expired = "Utgången"
+cancelled = "Avbruten"
+refunded = "Återbetald"
+
+[labels.sv.model.ecommerce_payment.field.amount]
+label = "Belopp"
+description = "Belopp att betala, satt av servern utifrån beställningen (minsta valutaenhet)"
+
+[labels.sv.model.ecommerce_payment.field.currency]
+label = "Valuta"
+description = "ISO 4217-valutakod för beloppet"
+
+[labels.sv.model.ecommerce_payment.field.refund_id]
+label = "Återbetalningsreferens"
+description = "Leverantörens referens för återbetalningen, när betalningen har återbetalats"
+
+[labels.sv.model.ecommerce_payment.field.refunded_amount]
+label = "Återbetalt belopp"
+description = "Belopp som återbetalats till kunden (minsta valutaenhet)"
+
+[labels.sv.model.ecommerce_payment.field.event_ids]
+label = "Tillämpade händelser"
+description = "Id:n för leverantörens redan tillämpade händelser som JSON, så att en upprepad avisering inte ändrar något"
+
+[labels.sv.model.ecommerce_payment.action.mark_failed]
+label = "Markera som misslyckad"
+description = "Leverantören rapporterar att betalningen misslyckades"
+
+[labels.sv.model.ecommerce_payment.action.cancel]
+label = "Avbryt"
+description = "Sluta vänta på den här betalningen"
