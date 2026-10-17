@@ -13,18 +13,13 @@
 //! derives one, seals it and stores it, so pseudonyms already handed to receivers stay valid
 //! when the ring is rotated.
 
-use chacha20poly1305::aead::{Aead, KeyInit, Payload};
-use chacha20poly1305::{ChaCha20Poly1305, Nonce};
-use hkdf::Hkdf;
 use obop_keys::{Key, KeyRing};
 use obop_storage::{Backend, Fields};
-use sha2::Sha256;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 const PREFIX: &str = "obs1:";
-const SALT: &[u8] = b"obop-secretbox-v1";
 /// Where sealed pseudonym keys live (not a registry model: no command reads it).
 pub const PSEUDONYM_KEY_MODEL: &str = "connector_pseudonym_key";
 const KEY_CACHE: Duration = Duration::from_secs(60);
@@ -52,41 +47,6 @@ impl std::fmt::Debug for SecretBox {
 
 pub use obop_keys::{hex, unhex};
 
-/// The master the first format derived from a key's text.
-fn legacy_master(raw: &str) -> [u8; 32] {
-    let mut master = [0u8; 32];
-    Hkdf::<Sha256>::new(Some(SALT), raw.as_bytes())
-        .expand(b"master", &mut master)
-        .expect("32 bytes");
-    master
-}
-
-fn legacy_subkey(raw: &str, purpose: &str) -> [u8; 32] {
-    let mut out = [0u8; 32];
-    Hkdf::<Sha256>::new(Some(SALT), &legacy_master(raw))
-        .expand(purpose.as_bytes(), &mut out)
-        .expect("32 bytes");
-    out
-}
-
-fn legacy_open(raw: &str, purpose: &str, raw_bytes: &[u8]) -> Option<Vec<u8>> {
-    if raw_bytes.len() < 12 + 16 {
-        return None;
-    }
-    let (nonce, ct) = raw_bytes.split_at(12);
-    let key = legacy_subkey(raw, &format!("seal:{purpose}"));
-    ChaCha20Poly1305::new_from_slice(&key)
-        .ok()?
-        .decrypt(
-            &Nonce::try_from(nonce).ok()?,
-            Payload {
-                msg: ct,
-                aad: purpose.as_bytes(),
-            },
-        )
-        .ok()
-}
-
 impl SecretBox {
     /// A box over one master secret (any string of 32 or more characters).
     pub fn from_secret(secret: &str) -> Result<Self, String> {
@@ -96,6 +56,13 @@ impl SecretBox {
             KeyRing::from_secrets(key.expose(), &[])?,
             None,
         ))
+    }
+
+    /// As `from_ring`, with the database that holds the stored pseudonym keys (tooling).
+    pub fn from_ring_with_store(ring: KeyRing, store: Arc<dyn Backend>) -> Result<Self, String> {
+        let mut b = Self::from_ring(ring)?;
+        b.store = Some(store);
+        Ok(b)
     }
 
     /// A box over an explicit ring (tooling, tests).
@@ -145,7 +112,7 @@ impl SecretBox {
 
     /// A 32-byte subkey of the current key for one purpose (not stored; changes on rotation).
     pub fn subkey(&self, purpose: &str) -> [u8; 32] {
-        legacy_subkey(self.current().expose(), purpose)
+        obop_keys::legacy::box_derive(self.current().expose(), purpose)
     }
 
     /// The HMAC key behind the pseudonyms of `name` (for example `pseudonym:<connection id>`).
@@ -197,7 +164,8 @@ impl SecretBox {
         if let Some(k) = read() {
             return k;
         }
-        let derived = legacy_subkey(anchor.unwrap_or_else(|| self.current()).expose(), name);
+        let derived =
+            obop_keys::legacy::box_derive(anchor.unwrap_or_else(|| self.current()).expose(), name);
         let mut f = Fields::new();
         f.insert("key".into(), self.seal_bytes(&purpose, &derived).into());
         // Another process may have created it first: then theirs is the one.
@@ -242,16 +210,7 @@ impl SecretBox {
     }
 
     fn open_bytes(&self, purpose: &str, sealed: &str) -> Result<Vec<u8>, String> {
-        if let Some(body) = sealed.strip_prefix(PREFIX) {
-            let raw = unhex(body).ok_or("sealed value is malformed")?;
-            return self
-                .ring
-                .keys()
-                .iter()
-                .find_map(|k| legacy_open(k.expose(), purpose, &raw))
-                .ok_or_else(|| "sealed value cannot be opened (wrong key or purpose)".to_string());
-        }
-        self.ring.open(purpose, sealed).map_err(|e| e.to_string())
+        obop_keys::legacy::open_any(&self.ring, purpose, None, sealed).map_err(|e| e.to_string())
     }
 
     /// Open a sealed value. The error never contains the input.
@@ -291,19 +250,7 @@ mod tests {
 
     /// A value in the first format, for the migration tests.
     pub(crate) fn seal_v1(raw: &str, purpose: &str, plaintext: &str) -> String {
-        let key = legacy_subkey(raw, &format!("seal:{purpose}"));
-        let nonce = obop_keys::random::<12>();
-        let ct = ChaCha20Poly1305::new_from_slice(&key)
-            .unwrap()
-            .encrypt(
-                &Nonce::try_from(&nonce[..]).unwrap(),
-                Payload {
-                    msg: plaintext.as_bytes(),
-                    aad: purpose.as_bytes(),
-                },
-            )
-            .unwrap();
-        format!("{PREFIX}{}{}", hex(&nonce), hex(&ct))
+        obop_keys::legacy::seal_box_v1(raw, purpose, plaintext.as_bytes())
     }
 
     #[test]

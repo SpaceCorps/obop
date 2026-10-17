@@ -77,6 +77,56 @@ pub trait Backend: Send + Sync {
     fn export(&self, batch: usize, sink: &mut RowSink<'_>) -> Result<()>;
     /// Number of records of every model.
     fn total(&self) -> Result<usize>;
+
+    /// Compare-and-set text fields of records, all in one transaction: each swap replaces the
+    /// field only if it still holds `old`. Returns how many applied; a swap whose record changed
+    /// meanwhile (or is gone) is skipped, not an error. For re-sealing secrets while serving.
+    fn swap_fields(&self, swaps: &[Swap]) -> Result<usize>;
+    /// Compare-and-set a short-lived value (see `kv_put`) if it still holds `old`.
+    fn kv_swap(&self, key: &str, old: &str, new: &str) -> Result<bool>;
+
+    /// Apply several writes as one transaction: all of them or none. A `Merge` of a record that
+    /// does not exist fails the whole batch. For migrations.
+    fn apply(&self, ops: &[Op]) -> Result<()>;
+
+    /// Fill the database from a stream of record batches, in ONE transaction: `next` is called
+    /// until it returns `None`. With `wipe`, every record and every short-lived value is removed
+    /// first, in the same transaction, so a failure leaves the database as it was. Returns the
+    /// number of records written. For `obop restore`.
+    fn import(
+        &self,
+        wipe: bool,
+        next: &mut dyn FnMut() -> Result<Option<Vec<Row>>>,
+    ) -> Result<usize>;
+}
+
+/// One write of `Backend::apply`.
+#[derive(Debug, Clone)]
+pub enum Op {
+    /// Create the record, or replace it entirely when it exists.
+    Put {
+        model: String,
+        id: String,
+        fields: Fields,
+    },
+    /// Merge fields into an existing record (like `update`).
+    Merge {
+        model: String,
+        id: String,
+        patch: Fields,
+    },
+    /// Remove a record; a missing one is not an error.
+    Delete { model: String, id: String },
+}
+
+/// One compare-and-set of a text field of a record.
+#[derive(Debug, Clone)]
+pub struct Swap {
+    pub model: String,
+    pub id: String,
+    pub field: String,
+    pub old: String,
+    pub new: String,
 }
 
 /// One stored record: model, id, fields.

@@ -108,7 +108,10 @@ impl Queue {
         f.insert("connection".into(), job.connection.clone().into());
         f.insert("run".into(), job.run.clone().into());
         f.insert("content_type".into(), job.content_type.clone().into());
-        f.insert("body".into(), self.secrets.seal(&purpose(&job.id), &body).into());
+        f.insert(
+            "body".into(),
+            self.secrets.seal(&purpose(&job.id), &body).into(),
+        );
         f.insert("attempt".into(), job.attempt.into());
         f.insert("next_at".into(), job.next_at.into());
         f.insert("lease_until".into(), 0.into());
@@ -118,7 +121,9 @@ impl Queue {
 
     fn job_of(&self, id: &str, f: &Fields) -> Option<Job> {
         let body = self.secrets.open(&purpose(id), text(f, "body")).ok()?;
-        let body = base64::engine::general_purpose::STANDARD.decode(body).ok()?;
+        let body = base64::engine::general_purpose::STANDARD
+            .decode(body)
+            .ok()?;
         Some(Job {
             id: id.to_string(),
             connection: text(f, "connection").into(),
@@ -171,7 +176,12 @@ impl Queue {
                 Some(job) => claimed.push(job),
                 // A record that cannot be opened (the key changed) must not be retried forever
                 // in silence: move it to the dead letters with the reason.
-                None => self.bury(&id, &f, "the queued payload cannot be opened (secret key?)", now),
+                None => self.bury(
+                    &id,
+                    &f,
+                    "the queued payload cannot be opened (secret key?)",
+                    now,
+                ),
             }
         }
         claimed
@@ -225,7 +235,10 @@ impl Queue {
     /// Move a job to the dead letters (the payload stays sealed).
     fn bury(&self, id: &str, f: &Fields, reason: &str, now: u64) {
         let mut d = f.clone();
-        d.insert("reason".into(), reason.chars().take(300).collect::<String>().into());
+        d.insert(
+            "reason".into(),
+            reason.chars().take(300).collect::<String>().into(),
+        );
         d.insert("dead_at".into(), now.into());
         d.remove("lease_until");
         d.remove("lease_owner");
@@ -286,7 +299,10 @@ impl Queue {
     /// For the operator's report: counts of waiting, leased and dead jobs at `now`.
     pub fn stats(&self, now: u64) -> J {
         let jobs = self.backend.list(JOBS).unwrap_or_default();
-        let leased = jobs.iter().filter(|(_, f)| num(f, "lease_until") > now).count();
+        let leased = jobs
+            .iter()
+            .filter(|(_, f)| num(f, "lease_until") > now)
+            .count();
         json!({"waiting": jobs.len() - leased, "leased": leased, "dead": self.backend.count(DEAD).unwrap_or(0)})
     }
 }
@@ -333,11 +349,17 @@ mod tests {
         }
         let last = q.take_due(now).pop().unwrap();
         assert_eq!(last.attempt, 5);
-        assert_eq!(q.requeue_because(last, now, 0, "receiver down"), Requeued::Dead);
+        assert_eq!(
+            q.requeue_because(last, now, 0, "receiver down"),
+            Requeued::Dead
+        );
         assert!(q.is_empty());
         let dead = q.dead();
         assert_eq!(dead.len(), 1);
-        assert_eq!((dead[0].id.as_str(), dead[0].reason.as_str()), ("m1", "receiver down"));
+        assert_eq!(
+            (dead[0].id.as_str(), dead[0].reason.as_str()),
+            ("m1", "receiver down")
+        );
         assert_eq!(dead[0].at, now);
         // An operator can send it again.
         assert!(q.revive("m1", now + 1));

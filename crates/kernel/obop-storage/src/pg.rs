@@ -400,6 +400,100 @@ impl Backend for Pg {
         }
         tx.commit().map_err(e)
     }
+    fn import(
+        &self,
+        wipe: bool,
+        next: &mut dyn FnMut() -> Result<Option<Vec<Row>>>,
+    ) -> Result<usize> {
+        let mut g = self.client.lock().unwrap();
+        let mut tx = g.transaction().map_err(e)?;
+        if wipe {
+            for t in ["obop_record", "obop_kv", "obop_counter"] {
+                tx.batch_execute(&format!("DELETE FROM {t}")).map_err(e)?;
+            }
+        }
+        let mut n = 0;
+        while let Some(batch) = next()? {
+            for (model, id, fields) in batch {
+                let data = J::Object(fields);
+                tx.execute(
+                    "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
+                    &[&model, &id, &data],
+                )
+                .map_err(e)?;
+                n += 1;
+            }
+        }
+        tx.commit().map_err(e)?;
+        Ok(n)
+    }
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        let mut g = self.client.lock().unwrap();
+        let mut tx = g.transaction().map_err(e)?;
+        for op in ops {
+            match op {
+                Op::Put { model, id, fields } => {
+                    let data = J::Object(fields.clone());
+                    tx.execute(
+                        "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)
+                         ON CONFLICT (model, id) DO UPDATE SET data = EXCLUDED.data",
+                        &[model, id, &data],
+                    )
+                    .map_err(e)?;
+                }
+                Op::Merge { model, id, patch } => {
+                    let patch = J::Object(patch.clone());
+                    let n = tx
+                        .execute(
+                            "UPDATE obop_record SET data = data || $3 WHERE model = $1 AND id = $2",
+                            &[model, id, &patch],
+                        )
+                        .map_err(e)?;
+                    if n == 0 {
+                        return Err(format!("no {model} {id} to merge into"));
+                    }
+                }
+                Op::Delete { model, id } => {
+                    tx.execute(
+                        "DELETE FROM obop_record WHERE model = $1 AND id = $2",
+                        &[model, id],
+                    )
+                    .map_err(e)?;
+                }
+            }
+        }
+        tx.commit().map_err(e)
+    }
+    fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
+        let mut g = self.client.lock().unwrap();
+        let mut tx = g.transaction().map_err(e)?;
+        let mut n = 0;
+        for s in swaps {
+            let new = J::from(s.new.clone());
+            let hit = tx
+                .execute(
+                    "UPDATE obop_record SET data = jsonb_set(data, ARRAY[$4::text], $5::jsonb)
+                     WHERE model = $1 AND id = $2 AND data->>$4 = $3",
+                    &[&s.model, &s.id, &s.old, &s.field, &new],
+                )
+                .map_err(e)?;
+            n += hit as usize;
+        }
+        tx.commit().map_err(e)?;
+        Ok(n)
+    }
+    fn kv_swap(&self, key: &str, old: &str, new: &str) -> Result<bool> {
+        let sql = format!(
+            "UPDATE obop_kv SET value = $3
+             WHERE key = $1 AND value = $2 AND (expires_ms = 0 OR expires_ms > {NOW})"
+        );
+        self.client
+            .lock()
+            .unwrap()
+            .execute(&sql, &[&key, &old, &new])
+            .map(|n| n > 0)
+            .map_err(e)
+    }
     fn total(&self) -> Result<usize> {
         let r = self
             .client

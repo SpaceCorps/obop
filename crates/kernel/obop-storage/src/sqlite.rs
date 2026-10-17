@@ -378,6 +378,122 @@ impl Backend for Sqlite {
             None => export_from(&mut self.conn.lock().unwrap(), batch, sink),
         }
     }
+    fn import(
+        &self,
+        wipe: bool,
+        next: &mut dyn FnMut() -> Result<Option<Vec<Row>>>,
+    ) -> Result<usize> {
+        let mut g = self.conn.lock().unwrap();
+        let tx = g
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(e)?;
+        if wipe {
+            for t in ["obop_record", "obop_kv", "obop_counter"] {
+                tx.execute(&format!("DELETE FROM {t}"), ()).map_err(e)?;
+            }
+        }
+        let mut n = 0;
+        while let Some(batch) = next()? {
+            for (model, id, fields) in batch {
+                tx.execute(
+                    "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)",
+                    (&model, &id, J::Object(fields).to_string()),
+                )
+                .map_err(e)?;
+                n += 1;
+            }
+        }
+        tx.commit().map_err(e)?;
+        Ok(n)
+    }
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        let mut g = self.conn.lock().unwrap();
+        let tx = g
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(e)?;
+        for op in ops {
+            match op {
+                Op::Put { model, id, fields } => {
+                    tx.execute(
+                        "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)
+                         ON CONFLICT (model, id) DO UPDATE SET data = excluded.data",
+                        (model, id, J::Object(fields.clone()).to_string()),
+                    )
+                    .map_err(e)?;
+                }
+                Op::Merge { model, id, patch } => {
+                    let current: Option<String> = tx
+                        .query_row(
+                            "SELECT data FROM obop_record WHERE model = ?1 AND id = ?2",
+                            (model, id),
+                            |r| r.get(0),
+                        )
+                        .optional()
+                        .map_err(e)?;
+                    let current =
+                        current.ok_or_else(|| format!("no {model} {id} to merge into"))?;
+                    let data = J::Object(merged(parse(&current)?, patch)).to_string();
+                    tx.execute(
+                        "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
+                        (model, id, data),
+                    )
+                    .map_err(e)?;
+                }
+                Op::Delete { model, id } => {
+                    tx.execute(
+                        "DELETE FROM obop_record WHERE model = ?1 AND id = ?2",
+                        (model, id),
+                    )
+                    .map_err(e)?;
+                }
+            }
+        }
+        tx.commit().map_err(e)
+    }
+    fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
+        let mut g = self.conn.lock().unwrap();
+        let tx = g
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(e)?;
+        let mut n = 0;
+        for s in swaps {
+            let current: Option<String> = tx
+                .query_row(
+                    "SELECT data FROM obop_record WHERE model = ?1 AND id = ?2",
+                    (&s.model, &s.id),
+                    |r| r.get(0),
+                )
+                .optional()
+                .map_err(e)?;
+            let Some(current) = current else { continue };
+            let mut f = parse(&current)?;
+            if f.get(&s.field).and_then(J::as_str) != Some(s.old.as_str()) {
+                continue;
+            }
+            f.insert(s.field.clone(), J::from(s.new.clone()));
+            tx.execute(
+                "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
+                (&s.model, &s.id, J::Object(f).to_string()),
+            )
+            .map_err(e)?;
+            n += 1;
+        }
+        tx.commit().map_err(e)?;
+        Ok(n)
+    }
+    fn kv_swap(&self, key: &str, old: &str, new: &str) -> Result<bool> {
+        let now = now_ms() as i64;
+        self.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE obop_kv SET value = ?3
+                 WHERE key = ?1 AND value = ?2 AND (expires_ms = 0 OR expires_ms > ?4)",
+                (key, old, new, now),
+            )
+            .map(|n| n > 0)
+            .map_err(e)
+    }
     fn total(&self) -> Result<usize> {
         self.conn
             .lock()

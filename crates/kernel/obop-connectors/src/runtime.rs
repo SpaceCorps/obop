@@ -1193,7 +1193,9 @@ impl Runtime {
         }
         let purge_due = last_of("connectors.purge") + 86_400 <= at;
         if purge_due {
-            let _ = self.backend.kv_put("connectors.purge", &at.to_string(), None);
+            let _ = self
+                .backend
+                .kv_put("connectors.purge", &at.to_string(), None);
         }
         drop(_tick);
         for id in due {

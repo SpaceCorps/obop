@@ -21,7 +21,9 @@ fn fields(n: i64) -> Fields {
 }
 
 /// `a` and `b` are two handles on the same database.
-fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>) {
+/// `destructive` also tests the wiping import, which empties the database: only for databases
+/// nothing else is using.
+fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destructive: bool) {
     // ---- counters: fixed window, shared between handles, expiry restarts at 1 ----
     let k = unique("ctr");
     assert_eq!(a.counter_get(&k).unwrap(), 0);
@@ -148,6 +150,144 @@ fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>) {
     drop(g2);
     let _again = b.lock(&key).unwrap();
 
+    // ---- compare-and-set of fields and values ----
+    let model = unique("swap");
+    let mut f = Fields::new();
+    f.insert("secret".into(), J::from("old"));
+    f.insert("other".into(), J::from(1));
+    a.insert(&model, "r1", &f).unwrap();
+    a.insert(&model, "r2", &f).unwrap();
+    let swap = |id: &str, old: &str, new: &str| Swap {
+        model: model.clone(),
+        id: id.into(),
+        field: "secret".into(),
+        old: old.into(),
+        new: new.into(),
+    };
+    // One swap is stale (wrong old value), one record is missing: only the good one applies.
+    let n = b
+        .swap_fields(&[
+            swap("r1", "old", "new1"),
+            swap("r2", "stale", "never"),
+            swap("gone", "old", "x"),
+        ])
+        .unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(a.get(&model, "r1").unwrap().unwrap()["secret"], "new1");
+    assert_eq!(
+        a.get(&model, "r1").unwrap().unwrap()["other"],
+        1,
+        "the rest is kept"
+    );
+    assert_eq!(a.get(&model, "r2").unwrap().unwrap()["secret"], "old");
+    let k = unique("kv-swap");
+    a.kv_put(&k, "v1", Some(60_000)).unwrap();
+    assert!(!b.kv_swap(&k, "wrong", "v2").unwrap());
+    assert!(b.kv_swap(&k, "v1", "v2").unwrap());
+    assert_eq!(a.kv_get(&k).unwrap().as_deref(), Some("v2"));
+    assert!(!a.kv_swap(&unique("absent"), "a", "b").unwrap());
+
+    // ---- apply: several writes, all or nothing ----
+    let model = unique("apply");
+    let mut f1 = Fields::new();
+    f1.insert("n".into(), J::from(1));
+    let mut patch = Fields::new();
+    patch.insert("n".into(), J::from(2));
+    a.insert(&model, "keep", &f1).unwrap();
+    a.insert(&model, "gone", &f1).unwrap();
+    b.apply(&[
+        Op::Put {
+            model: model.clone(),
+            id: "new".into(),
+            fields: f1.clone(),
+        },
+        Op::Put {
+            model: model.clone(),
+            id: "keep".into(),
+            fields: patch.clone(),
+        },
+        Op::Merge {
+            model: model.clone(),
+            id: "new".into(),
+            patch: patch.clone(),
+        },
+        Op::Delete {
+            model: model.clone(),
+            id: "gone".into(),
+        },
+        Op::Delete {
+            model: model.clone(),
+            id: "never-existed".into(),
+        },
+    ])
+    .unwrap();
+    assert_eq!(a.get(&model, "new").unwrap().unwrap()["n"], 2);
+    assert_eq!(
+        a.get(&model, "keep").unwrap().unwrap()["n"],
+        2,
+        "Put replaces"
+    );
+    assert!(a.get(&model, "gone").unwrap().is_none());
+    // A failing batch leaves nothing behind.
+    assert!(
+        b.apply(&[
+            Op::Put {
+                model: model.clone(),
+                id: "half".into(),
+                fields: f1.clone()
+            },
+            Op::Delete {
+                model: model.clone(),
+                id: "keep".into()
+            },
+            Op::Merge {
+                model: model.clone(),
+                id: "missing".into(),
+                patch
+            },
+        ])
+        .is_err()
+    );
+    assert!(a.get(&model, "half").unwrap().is_none());
+    assert!(a.get(&model, "keep").unwrap().is_some(), "rolled back");
+
+    // ---- import: one transaction, optionally replacing everything ----
+    let model = unique("imp");
+    let mk = |n: i64| -> Row { (model.clone(), format!("{n:03}"), fields(n)) };
+    let mut batches = vec![vec![mk(1), mk(2)], vec![mk(3)]].into_iter();
+    // A failure in the middle of the stream rolls the whole import back.
+    let mut calls = 0;
+    let failed = b.import(false, &mut || {
+        calls += 1;
+        if calls == 2 {
+            return Err("source broke".into());
+        }
+        Ok(batches.next())
+    });
+    assert_eq!(failed.unwrap_err(), "source broke");
+    assert_eq!(
+        a.count(&model).unwrap(),
+        0,
+        "nothing of a failed import is kept"
+    );
+    let mut batches = vec![vec![mk(1), mk(2)], vec![mk(3)]].into_iter();
+    assert_eq!(b.import(false, &mut || Ok(batches.next())).unwrap(), 3);
+    assert_eq!(a.count(&model).unwrap(), 3);
+    // A duplicate fails the import as a whole.
+    let mut again = vec![vec![mk(9), mk(1)]].into_iter();
+    assert!(a.import(false, &mut || Ok(again.next())).is_err());
+    assert!(b.get(&model, "009").unwrap().is_none());
+    // A wiping import replaces everything, short-lived values included.
+    if destructive {
+        let k = unique("kv-wipe");
+        a.kv_put(&k, "x", None).unwrap();
+        let mut only = vec![vec![mk(7)]].into_iter();
+        assert_eq!(b.import(true, &mut || Ok(only.next())).unwrap(), 1);
+        assert_eq!(a.total().unwrap(), 1);
+        assert_eq!(a.kv_get(&k).unwrap(), None);
+        assert_eq!(a.get(&model, "007").unwrap().unwrap()["n"], 7);
+    }
+
     // ---- export: whole database in batches, in insertion order, a stable snapshot ----
     let model = unique("exp");
     let rows: Vec<_> = (0..25)
@@ -183,14 +323,14 @@ fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>) {
 #[test]
 fn memory_shared_contract() {
     let a = open("memory:").unwrap();
-    shared_contract(a.clone(), a);
+    shared_contract(a.clone(), a, true);
 }
 
 #[test]
 fn sqlite_shared_contract_between_two_handles_on_one_file() {
     let path = std::env::temp_dir().join(unique("obop-shared").replace('/', "_") + ".db");
     let url = format!("sqlite://{}", path.display());
-    shared_contract(open(&url).unwrap(), open(&url).unwrap());
+    shared_contract(open(&url).unwrap(), open(&url).unwrap(), true);
     for entry in std::fs::read_dir(std::env::temp_dir()).unwrap().flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         if name.starts_with(path.file_name().unwrap().to_str().unwrap()) {
@@ -205,7 +345,7 @@ fn postgres_shared_contract_between_two_connections() {
         eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
         return;
     };
-    shared_contract(open(&url).unwrap(), open(&url).unwrap());
+    shared_contract(open(&url).unwrap(), open(&url).unwrap(), false);
 }
 
 #[test]

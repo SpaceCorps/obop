@@ -1,0 +1,16 @@
+[package]
+name = "obop-migrate"
+version.workspace = true
+description = "Schema version of a database and the ordered, idempotent, transactional steps that upgrade it"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+obop-types.workspace = true
+obop-storage.workspace = true
+obop-keys.workspace = true
+serde_json = "1"
+
+[lints]
+workspace = true

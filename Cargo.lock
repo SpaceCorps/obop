@@ -994,9 +994,7 @@ name = "obop-auth"
 version = "0.2.0"
 dependencies = [
  "argon2",
- "chacha20poly1305",
  "getrandom 0.4.3",
- "hkdf",
  "hmac",
  "obop-commands",
  "obop-keys",
@@ -1090,6 +1088,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hkdf",
  "obop-storage",
+ "serde_json",
  "sha2",
 ]
 
@@ -1109,6 +1108,31 @@ dependencies = [
  "obop-registry",
  "obop-types",
  "serde_json",
+]
+
+[[package]]
+name = "obop-migrate"
+version = "0.2.0"
+dependencies = [
+ "obop-keys",
+ "obop-storage",
+ "obop-types",
+ "serde_json",
+]
+
+[[package]]
+name = "obop-ops"
+version = "0.2.0"
+dependencies = [
+ "flate2",
+ "obop-connectors",
+ "obop-keys",
+ "obop-migrate",
+ "obop-storage",
+ "obop-types",
+ "postgres",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

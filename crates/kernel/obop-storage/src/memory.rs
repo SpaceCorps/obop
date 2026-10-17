@@ -223,4 +223,100 @@ impl Backend for Memory {
     fn total(&self) -> Result<usize> {
         Ok(self.rows.lock().unwrap().values().map(Vec::len).sum())
     }
+    fn import(
+        &self,
+        wipe: bool,
+        next: &mut dyn FnMut() -> Result<Option<Vec<Row>>>,
+    ) -> Result<usize> {
+        let mut rows = self.rows.lock().unwrap();
+        let mut order = self.order.lock().unwrap();
+        let (mut r2, mut o2) = if wipe {
+            (BTreeMap::new(), Vec::new())
+        } else {
+            (rows.clone(), order.clone())
+        };
+        let mut n = 0;
+        while let Some(batch) = next()? {
+            for (model, id, fields) in batch {
+                let v = r2.entry(model.clone()).or_default();
+                if v.iter().any(|(i, _)| *i == id) {
+                    return Err(format!("duplicate {model} {id}"));
+                }
+                v.push((id.clone(), fields));
+                o2.push((model, id));
+                n += 1;
+            }
+        }
+        *rows = r2;
+        *order = o2;
+        if wipe {
+            self.kv.lock().unwrap().clear();
+            self.counters.lock().unwrap().clear();
+        }
+        Ok(n)
+    }
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        // Work on a copy of the rows, then swap it in: all or nothing.
+        let mut rows = self.rows.lock().unwrap();
+        let mut order = self.order.lock().unwrap();
+        let (mut r2, mut o2) = (rows.clone(), order.clone());
+        for op in ops {
+            match op {
+                Op::Put { model, id, fields } => {
+                    let v = r2.entry(model.clone()).or_default();
+                    match v.iter_mut().find(|(i, _)| i == id) {
+                        Some((_, f)) => *f = fields.clone(),
+                        None => {
+                            v.push((id.clone(), fields.clone()));
+                            o2.push((model.clone(), id.clone()));
+                        }
+                    }
+                }
+                Op::Merge { model, id, patch } => {
+                    let f = r2
+                        .get_mut(model)
+                        .and_then(|v| v.iter_mut().find(|(i, _)| i == id))
+                        .map(|(_, f)| f)
+                        .ok_or_else(|| format!("no {model} {id} to merge into"))?;
+                    f.extend(patch.clone());
+                }
+                Op::Delete { model, id } => {
+                    if let Some(v) = r2.get_mut(model) {
+                        v.retain(|(i, _)| i != id);
+                    }
+                    o2.retain(|(m, i)| !(m == model && i == id));
+                }
+            }
+        }
+        *rows = r2;
+        *order = o2;
+        Ok(())
+    }
+    fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
+        let mut g = self.rows.lock().unwrap();
+        let mut n = 0;
+        for s in swaps {
+            let Some((_, f)) = g
+                .get_mut(&s.model)
+                .and_then(|r| r.iter_mut().find(|(i, _)| *i == s.id))
+            else {
+                continue;
+            };
+            if f.get(&s.field).and_then(J::as_str) == Some(s.old.as_str()) {
+                f.insert(s.field.clone(), J::from(s.new.clone()));
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+    fn kv_swap(&self, key: &str, old: &str, new: &str) -> Result<bool> {
+        let mut g = self.kv.lock().unwrap();
+        match g.get_mut(key) {
+            Some((v, x)) if live(*x, now_ms()) && v == old => {
+                *v = new.to_string();
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
+    }
 }

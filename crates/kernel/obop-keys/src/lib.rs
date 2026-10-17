@@ -315,6 +315,9 @@ impl KeyRing {
 }
 
 /// Whether `s` looks like an envelope of this crate.
+pub mod legacy;
+pub mod reseal;
+
 pub fn is_sealed(s: &str) -> bool {
     s.starts_with("e2.")
 }
