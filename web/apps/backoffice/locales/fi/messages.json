@@ -843,6 +843,7 @@
   "Your colour passes as chosen. Dark mode uses a lighter step of the same hue ({fill}) so it stands out on dark surfaces.": "Valitsemasi väri läpäisee sellaisenaan. Tumma tila käyttää saman sävyn vaaleampaa astetta ({fill}), jotta se erottuu tummilla pinnoilla.",
   "Your colour {chosen} is too light or too dark for text. Buttons, links and selected states use {light} in light mode and {dark} in dark mode so they pass AA.": "Valitsemasi väri {chosen} on liian vaalea tai tumma tekstille. Painikkeet, linkit ja valitut tilat käyttävät vaaleassa tilassa väriä {light} ja tummassa tilassa väriä {dark}, jotta ne läpäisevät AA-tason.",
   "Your connections": "Yhteytesi",
+  "Your password": "Salasanasi",
   "Your sessions": "Istuntosi",
   "action\u0004Activate": "Aktivoi",
   "action\u0004Approve": "Hyväksy",

@@ -843,6 +843,7 @@
   "Your colour passes as chosen. Dark mode uses a lighter step of the same hue ({fill}) so it stands out on dark surfaces.": "machine-drafted",
   "Your colour {chosen} is too light or too dark for text. Buttons, links and selected states use {light} in light mode and {dark} in dark mode so they pass AA.": "machine-drafted",
   "Your connections": "machine-drafted",
+  "Your password": "machine-drafted",
   "Your sessions": "machine-drafted",
   "action\u0004Activate": "machine-drafted",
   "action\u0004Approve": "machine-drafted",

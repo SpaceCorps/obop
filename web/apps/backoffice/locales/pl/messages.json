@@ -843,6 +843,7 @@
   "Your colour passes as chosen. Dark mode uses a lighter step of the same hue ({fill}) so it stands out on dark surfaces.": "Twój kolor spełnia wymagania bez zmian. Tryb ciemny używa jaśniejszego odcienia tej samej barwy ({fill}), aby wyróżniał się na ciemnych powierzchniach.",
   "Your colour {chosen} is too light or too dark for text. Buttons, links and selected states use {light} in light mode and {dark} in dark mode so they pass AA.": "Twój kolor {chosen} jest zbyt jasny lub zbyt ciemny dla tekstu. Przyciski, linki i stany zaznaczenia używają {light} w trybie jasnym i {dark} w trybie ciemnym, aby spełniały AA.",
   "Your connections": "Twoje połączenia",
+  "Your password": "Twoje hasło",
   "Your sessions": "Twoje sesje",
   "action\u0004Activate": "Aktywuj",
   "action\u0004Approve": "Zatwierdź",

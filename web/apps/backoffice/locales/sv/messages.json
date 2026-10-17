@@ -843,6 +843,7 @@
   "Your colour passes as chosen. Dark mode uses a lighter step of the same hue ({fill}) so it stands out on dark surfaces.": "Din färg klarar kraven som den är. Mörkt läge använder ett ljusare steg av samma nyans ({fill}) så att den syns på mörka ytor.",
   "Your colour {chosen} is too light or too dark for text. Buttons, links and selected states use {light} in light mode and {dark} in dark mode so they pass AA.": "Din färg {chosen} är för ljus eller för mörk för text. Knappar, länkar och markerade lägen använder {light} i ljust läge och {dark} i mörkt läge så att de klarar AA.",
   "Your connections": "Dina anslutningar",
+  "Your password": "Ditt lösenord",
   "Your sessions": "Dina sessioner",
   "action\u0004Activate": "Aktivera",
   "action\u0004Approve": "Godkänn",

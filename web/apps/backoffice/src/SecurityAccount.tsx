@@ -71,7 +71,7 @@ export function PasswordSection({
   return (
     <section className="stack" aria-labelledby={`${id}-h`}>
       <h3 id={`${id}-h`} className="overline">
-        {title ?? t("Password")}
+        {title ?? t("Your password")}
       </h3>
       <form
         className="stack"
