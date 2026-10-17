@@ -1,0 +1,62 @@
+# Open issues toward a finished product
+
+Compiled 2026-10-17 from the reports of every build and review pass. Status: `open`, `in progress`, `done`.
+Each row names the area that owns it. Nothing here is a new feature wish; every row is a gap an agent or a
+test found, or a limit the docs state.
+
+## A. Data model completeness (Odoo-class workflows)
+| # | Issue | Status |
+|---|---|---|
+| A1 | Actions have no side effects: confirming an order cannot create an invoice, validating a stock move cannot change quantities, posting an invoice cannot write a journal entry | in progress |
+| A2 | No computed fields: totals, balances, quantities on hand, SLA times are typed in by hand | in progress |
+| A3 | No unique constraints or number sequences (invoice, order, receipt numbers are free text) | in progress |
+| A4 | No row-level permissions: nobody can be limited to their own records (leave requests, documents, tickets) | in progress |
+| A5 | `/api/meta` does not say which fields are governed, so a user without the action sees a plain field | in progress |
+| A6 | Dashboard "shared" flag is enforced only in the browser | in progress |
+
+## B. Operations, scale and durability
+| # | Issue | Status |
+|---|---|---|
+| B1 | Sessions, MCP sessions, rate limits, forum and status data live in one process's memory (one process per database) | in progress |
+| B2 | Connector retry queue is lost on restart | in progress |
+| B3 | No key rotation or credential re-sealing for `OBOP_SECRET_KEY` | in progress |
+| B4 | No backups: no `obop backup` / `restore`, no restore drill | in progress |
+| B5 | No schema versioning or migration step for upgrades (`obop migrate`) | in progress |
+| B6 | Every customer instance builds the Rust workspace on the shared server; no published image | in progress |
+| B7 | Changing the admin 2FA policy is not audited; turning 2FA off does not revoke the user's other sessions | in progress |
+| B8 | Existing instances created before D53 have no `OBOP_SECRET_KEY` unless an operator sets one | done (live instances) |
+
+## C. Commerce
+| # | Issue | Status |
+|---|---|---|
+| C1 | No payments: orders stay `pending` | in progress |
+| C2 | Orders do not decrement stock; no discount codes; no taxes | in progress |
+| C3 | No images anywhere (products, pages, posts); Open Graph has no image | in progress |
+
+## D. Interface and localisation
+| # | Issue | Status |
+|---|---|---|
+| D1 | List selection is per page; no "select all matching" | in progress |
+| D2 | Record panel stacks below the list at tablet and phone widths | in progress |
+| D3 | Server-paged lists sort bytewise, browser lists use the locale collator | in progress |
+| D4 | Browser-side views are capped at 5,000 rows (kanban, pivot, counts) | open |
+| D5 | Translated MCP and token docs pages (6 languages) are out of date; module card summaries and server blocker messages stay English | in progress |
+| D6 | Changing language remounts the app and drops open dialogs | in progress |
+| D7 | No native review of any translation | open (needs people) |
+
+## E. Platform, trust and discovery
+| # | Issue | Status |
+|---|---|---|
+| E1 | No OAuth authorization server, so Claude Desktop / claude.ai cannot connect to a hosted instance | open |
+| E2 | `is-agentic` score is cached; brand and developer-resource discoverability depend on indexing | open (needs time and a real domain) |
+| E3 | No mailbox: contact details are GitHub only; privacy and terms are drafts for counsel | open (needs the owner) |
+| E4 | New instances use `*.sliplane.app`; per-instance `obop.dev` subdomains need a wildcard DNS record | open (needs DNS) |
+| E5 | `www.obop.dev` has no record | open (needs DNS) |
+| E6 | Google and Microsoft connector adapters are definition-only; other adapters were tested only against local stand-ins | open |
+| E7 | WebAuthn / passkeys; MCP spec 2026-07-28 | open |
+
+## F. Quality gate
+| # | Issue | Status |
+|---|---|---|
+| F1 | No fresh-eyes product QA pass over the whole product | queued after A to D |
+| F2 | The live signup, instance, sign-in, 2FA and install flow has only run locally and against fakes | open (needs the owner's go-ahead to create a test account) |
