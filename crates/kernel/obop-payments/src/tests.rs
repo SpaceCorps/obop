@@ -1288,7 +1288,10 @@ fn the_hosted_page_form_carries_the_token_of_the_cookie_the_browser_already_has(
     let l = e.listing("sencha-green-tea");
     let cart = e.get(&format!("/cart?items={l}.1"));
     let token = cookie_of(&cart).expect("the cart sets the csrf cookie");
-    assert!(cart.body_str().contains(&format!("name=\"csrf\" value=\"{token}\"")));
+    assert!(
+        cart.body_str()
+            .contains(&format!("name=\"csrf\" value=\"{token}\""))
+    );
     // The order is placed with that cookie; the demo page is opened with it and must reuse it.
     let ship = e.shipping();
     let body = format!(
@@ -1304,11 +1307,15 @@ fn the_hosted_page_form_carries_the_token_of_the_cookie_the_browser_already_has(
     let placed = e.site.handle(&r);
     assert_eq!(placed.status, 303, "{}", placed.body_str());
     let page = location(&placed);
-    let hosted = e
-        .site
-        .handle(&e.req("GET", &page).with_header("cookie", &format!("obop_csrf={token}")));
+    let hosted = e.site.handle(
+        &e.req("GET", &page)
+            .with_header("cookie", &format!("obop_csrf={token}")),
+    );
     assert_eq!(hosted.status, 200);
-    assert!(cookie_of(&hosted).is_none(), "the cookie is kept, not replaced");
+    assert!(
+        cookie_of(&hosted).is_none(),
+        "the cookie is kept, not replaced"
+    );
     // `no-referrer` would make the browser send `Origin: null` with the form, which is refused.
     assert_eq!(hosted.get_header("referrer-policy"), Some("same-origin"));
     assert!(
