@@ -74,7 +74,7 @@ impl Auth {
         let first = self
             .backend
             .counter_add("auth.purge", 600_000, false)
-            .map_or(false, |n| n == 1);
+            .is_ok_and(|n| n == 1);
         if !first {
             return;
         }
@@ -135,7 +135,7 @@ impl Auth {
                 )
             })
             .collect();
-        rows.sort_by(|a, b| b.0.cmp(&a.0));
+        rows.sort_by_key(|r| std::cmp::Reverse(r.0));
         Ok(json!({"user": name, "sessions": rows.into_iter().map(|(_, r)| r).collect::<Vec<_>>()}))
     }
 
