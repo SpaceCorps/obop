@@ -79,6 +79,14 @@ class RowStore {
     return this.rows.has(model) ? this.load(model) : Promise.resolve();
   }
 
+  /** Reload every cached model, and try again the ones whose load failed. */
+  reloadAll() {
+    for (const name of [...this.rows.keys(), ...this.errors.keys()]) {
+      this.errors.delete(name);
+      void this.load(name);
+    }
+  }
+
   load(model: string): Promise<void> {
     const running = this.pending.get(model);
     if (running) return running;
@@ -121,6 +129,10 @@ type Ctx = {
   lookup: Lookup;
   /** Where a model (or one record, or a filtered list) can be opened, if this person can see it. */
   linkTo: (model: string, opts?: { id?: string; st?: string }) => string | null;
+  /** After a bulk run: reload the cached rows of a model and make server-side views ask again. */
+  changed: (model: string) => Promise<void>;
+  /** Ask again for everything on screen (after a lost connection came back). */
+  refreshAll: () => void;
   /** Run a command, then refresh the cached list of its model. */
   run: (id: string, body?: object) => Promise<Reply>;
 };
@@ -212,6 +224,14 @@ export function DataProvider(props: {
         refIds: (model) => (store.peek(model) ?? []).map((r) => r.id),
       },
       linkTo: linkFor,
+      changed: async (model) => {
+        await store.refresh(model);
+        setMutations((n) => n + 1);
+      },
+      refreshAll: () => {
+        store.reloadAll();
+        setMutations((n) => n + 1);
+      },
       run: async (id, body = {}) => {
         const r = await call(token, id, body);
         if (r.kind === "ok") {

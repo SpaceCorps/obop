@@ -249,10 +249,10 @@ function Series({
   const d = useData();
   const { dim, measure } = data;
   const points = useMemo(
-    () => buildPoints(data.rows, dim, measure, d.lookup),
-    // ref labels arrive after the rows do
+    () => buildPoints(data.groups, dim, d.lookup),
+    // ref labels arrive after the groups do
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.rows, dim, measure, d.version],
+    [data.groups, dim, d.version],
   );
   const fmt = (n: number) => (measure ? formatSum(measure, n) : integer(n));
   const go = (key: string) => {

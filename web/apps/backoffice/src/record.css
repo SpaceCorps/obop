@@ -246,16 +246,52 @@ a.smartbtn:hover {
   min-inline-size: 7rem;
 }
 
-@media (max-width: 40rem) {
-  /* The record opens as a full-screen sheet on phones */
-  .record {
+/* Up to 1024 px the record is a sheet over the list (D2): a right-side panel on a tablet, the whole
+   screen on a phone. The list stays mounted underneath, so its selection and scroll come back. */
+.record-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: oklch(0.2 0.02 265 / 0.45);
+  animation: scrim var(--dur-3) var(--ease-out);
+}
+@keyframes scrim {
+  from {
+    opacity: 0;
+  }
+}
+html.sheet-open,
+html.sheet-open body {
+  overflow: hidden;
+}
+@media (max-width: 64rem) {
+  .record.sheet {
     position: fixed;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: 51;
+    inline-size: min(28rem, 100%);
+    block-size: 100dvh;
+    border-radius: 0;
+    box-shadow: var(--shadow-4);
+  }
+}
+@media (max-width: 40rem) {
+  .record.sheet {
     inset: 0;
-    z-index: 55;
     inline-size: auto;
     border: 0;
-    border-radius: 0;
     animation: sheet var(--dur-3) var(--ease-out);
+  }
+  .record > header .back {
+    flex: none;
+  }
+  .record > header {
+    align-items: center;
+  }
+  .record > header > div {
+    flex: 1;
+    min-inline-size: 0;
   }
   .kbd-hint {
     display: none;

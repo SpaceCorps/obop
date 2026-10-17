@@ -6,7 +6,7 @@ import { fieldTitle } from "../labels.ts";
 import {
   condForKey,
   currencyOf,
-  groupDomain,
+  domainOf,
   groupKey,
   groupLabel,
   groupable,
@@ -14,7 +14,16 @@ import {
   type GraphCfg,
 } from "../query.ts";
 import { Icon } from "../ui.tsx";
-import { fmt, MeasurePicker, measureName, measureOf, value } from "./PivotView.tsx";
+import { fmt, MeasurePicker, measureName, measureOf } from "./PivotView.tsx";
+import {
+  groupByFor,
+  keyOf,
+  measuresFor,
+  useAggregate,
+  useCurrencyOf,
+  valueOfGroup,
+} from "../useAggregate.ts";
+import { AggState } from "./AggState.tsx";
 import { kanbanField } from "./KanbanView.tsx";
 import type { ViewProps } from "./types.ts";
 
@@ -64,28 +73,40 @@ export function GraphView(p: ViewProps) {
   const id = useId();
   const set = (patch: Partial<GraphCfg>) => p.setState({ ...p.state, graph: { ...cfg, ...patch } });
 
+  const agg = useAggregate({
+    enabled: !!p.server,
+    model: p.model.name,
+    filter: p.server?.filter ?? [],
+    groupBy: [groupByFor(dim)],
+    measures: measuresFor(m),
+  });
+  const money = useCurrencyOf(!!p.server, p.model, p.server?.filter ?? []);
+
   const data = useMemo<Datum[]>(() => {
+    // The value of each group: summed on the server (D4), or counted from the rows in the browser.
+    const values = new Map<string, number>();
+    if (p.server)
+      for (const g of agg.groups) values.set(keyOf(g.key[dim.name]), valueOfGroup(g, m));
+    else
+      for (const r of rows) {
+        const k = groupKey(dim, r);
+        values.set(k, (values.get(k) ?? 0) + (m ? Number(r[m.name]) || 0 : 1));
+      }
+    const present = [...values.keys()];
     const keys =
       dim.kind === "select" || dim.kind === "bool"
-        ? groupDomain(dim, rows, d.lookup)
-        : orderKeys(
-            dim,
-            rows.map((r) => groupKey(dim, r)),
-            d.lookup,
-          );
+        ? domainOf(dim, present, d.lookup)
+        : orderKeys(dim, present, d.lookup);
     return keys.map((key) => ({
       key,
       label: groupLabel(dim, key, d.lookup),
-      value: value(
-        rows.filter((r) => groupKey(dim, r) === key),
-        m,
-      ),
+      value: values.get(key) ?? 0,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, dim, m, d.version]);
+  }, [p.server, agg.groups, rows, dim, m, d.version]);
 
   const total = data.reduce((n, x) => n + Math.max(x.value, 0), 0);
-  const cur = currencyOf(rows);
+  const cur = p.server ? money : currencyOf(rows);
   const name = t("{measure} by {dimension}", {
     measure: measureName(m),
     dimension: fieldTitle(dim),
@@ -130,64 +151,66 @@ export function GraphView(p: ViewProps) {
           {asTable ? t("Show chart") : t("Show data table")}
         </button>
       </div>
-      {data.length === 0 ? (
-        <p className="hint pad">{t("No data to chart.")}</p>
-      ) : asTable ? (
-        <div className="tablewrap">
-          <table className="table pivot-table">
-            <caption className="sr-only">{name}</caption>
-            <thead>
-              <tr>
-                <th scope="col">{fieldTitle(dim)}</th>
-                <th scope="col" className="num">
-                  {measureName(m)}
-                </th>
-                <th scope="col" className="num">
-                  {t("Share")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((x) => (
-                <tr key={x.key || "none"}>
-                  <th scope="row">{x.label}</th>
-                  <td className="num">{fmt(m, x.value, cur.currency)}</td>
-                  <td className="num">
-                    {total ? fmtLocale.percent(Math.max(x.value, 0) / total, 0) : "–"}
-                  </td>
+      <AggState agg={p.server ? agg : { ...agg, loaded: true, error: undefined }}>
+        {data.length === 0 ? (
+          <p className="hint pad">{t("No data to chart.")}</p>
+        ) : asTable ? (
+          <div className="tablewrap">
+            <table className="table pivot-table">
+              <caption className="sr-only">{name}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{fieldTitle(dim)}</th>
+                  <th scope="col" className="num">
+                    {measureName(m)}
+                  </th>
+                  <th scope="col" className="num">
+                    {t("Share")}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <figure className="chart">
-          <figcaption className="chart-title">{name}</figcaption>
-          {type === "pie" ? (
-            <Pie
-              data={data}
-              m={m}
-              cur={cur.currency}
-              total={total}
-              id={id}
-              title={chart}
-              summary={summary}
-              onPick={drill}
-            />
-          ) : (
-            <Cartesian
-              data={data}
-              m={m}
-              cur={cur.currency}
-              type={type}
-              id={id}
-              title={chart}
-              summary={summary}
-              onPick={drill}
-            />
-          )}
-        </figure>
-      )}
+              </thead>
+              <tbody>
+                {data.map((x) => (
+                  <tr key={x.key || "none"}>
+                    <th scope="row">{x.label}</th>
+                    <td className="num">{fmt(m, x.value, cur.currency)}</td>
+                    <td className="num">
+                      {total ? fmtLocale.percent(Math.max(x.value, 0) / total, 0) : "–"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <figure className="chart">
+            <figcaption className="chart-title">{name}</figcaption>
+            {type === "pie" ? (
+              <Pie
+                data={data}
+                m={m}
+                cur={cur.currency}
+                total={total}
+                id={id}
+                title={chart}
+                summary={summary}
+                onPick={drill}
+              />
+            ) : (
+              <Cartesian
+                data={data}
+                m={m}
+                cur={cur.currency}
+                type={type}
+                id={id}
+                title={chart}
+                summary={summary}
+                onPick={drill}
+              />
+            )}
+          </figure>
+        )}
+      </AggState>
     </div>
   );
 }

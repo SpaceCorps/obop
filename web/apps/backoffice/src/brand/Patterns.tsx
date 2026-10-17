@@ -103,7 +103,7 @@ function useSample(notify: Notify) {
     canUpdate: true,
     canDelete: false,
     total: rows.length,
-    exportAll: async () => ({ rows, truncated: false }),
+    fetchAll: async () => ({ rows, total: rows.length, truncated: false, cancelled: false }),
     moveState: async (id, field, to) => update(id, { [field]: to }),
     update,
     create: async (body) => {

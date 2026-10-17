@@ -1,6 +1,6 @@
 import { t } from "@obop/ui";
 import {
-  LOAD_LIMIT,
+  aggregate,
   search,
   type FieldMeta,
   type ModelMeta,
@@ -9,7 +9,8 @@ import {
 } from "../api.ts";
 import { isEmpty } from "../format.ts";
 import { fieldTitle } from "../labels.ts";
-import { groupDomain, groupKey, groupLabel, groupable, measurable, type Lookup } from "../query.ts";
+import { domainOf, groupLabel, groupable, measurable, type Lookup } from "../query.ts";
+import { groupByFor, keyOf, measuresFor, valueOfGroup } from "../useAggregate.ts";
 import { parseFilter, toServerFilter, type Condition } from "./filter.ts";
 
 export type WidgetKind = "kpi" | "bar" | "line" | "pie" | "table";
@@ -97,8 +98,8 @@ export type WidgetData =
   | { kind: "kpi"; value: number; measure?: FieldMeta; total: number; truncated: boolean }
   | {
       kind: "series";
-      /** The records of the search; the card groups them, so ref labels can arrive later. */
-      rows: Row[];
+      /** The server's groups (D4): the value of each group key; the card labels them. */
+      groups: { key: string; value: number }[];
       measure?: FieldMeta;
       dim: FieldMeta;
       total: number;
@@ -111,25 +112,17 @@ export type Fetched =
   | { state: "noaccess"; detail: string }
   | { state: "error"; message: string };
 
-const sum = (rows: Row[], f: FieldMeta) => rows.reduce((n, r) => n + (Number(r[f.name]) || 0), 0);
-
-/** The value of a group: its record count, or the sum of the measure. */
-export const valueOf = (rows: Row[], measure?: FieldMeta) =>
-  measure ? sum(rows, measure) : rows.length;
-
+/** The labelled points of a chart from the server's groups (labels of refs arrive later). */
 export function buildPoints(
-  rows: Row[],
+  groups: { key: string; value: number }[],
   dim: FieldMeta,
-  measure: FieldMeta | undefined,
   lk: Lookup,
 ): Point[] {
-  return groupDomain(dim, rows, lk).map((key) => ({
+  const value = new Map(groups.map((g) => [g.key, g.value]));
+  return domainOf(dim, [...value.keys()], lk).map((key) => ({
     key,
     label: groupLabel(dim, key, lk),
-    value: valueOf(
-      rows.filter((r) => groupKey(dim, r) === key),
-      measure,
-    ),
+    value: value.get(key) ?? 0,
   }));
 }
 
@@ -140,48 +133,50 @@ export async function fetchWidget(
   r: Extract<Resolved, { ok: true }>,
 ): Promise<Fetched> {
   const { model, filter, measure, dim } = r;
-  const q = (limit: number, extra: object = {}) =>
-    search(token, model.name, { filter: filter.length ? filter : undefined, limit, ...extra });
   const fail = (e: { error: string }): Fetched =>
     /unknown field /.test(e.error)
       ? { state: "noaccess", detail: e.error }
       : { state: "error", message: e.error };
-  // A field withheld from this person is not worth a chart: show no access, not zeros.
-  const withheld = (denied: string[]) =>
-    [measure, dim].find((f) => f && denied.includes(`${model.name}.${f.name}`));
 
-  if (w.kind === "kpi" && !measure) {
-    const res = await q(1);
-    if ("error" in res) return fail(res);
-    return {
-      state: "ready",
-      data: { kind: "kpi", value: res.total, total: res.total, truncated: false },
-    };
-  }
   if (w.kind === "table" && !dim) {
-    const res = await q(8);
+    const res = await search(token, model.name, {
+      filter: filter.length ? filter : undefined,
+      limit: 8,
+    });
     if ("error" in res) return fail(res);
     return { state: "ready", data: { kind: "rows", rows: res.rows, model, total: res.total } };
   }
-  const res = await q(LOAD_LIMIT);
+  // Counts and sums are computed by the server over every matching record (D4), under this
+  // person's access rules: a field they cannot read answers "unknown field" and shows "No access".
+  const res = await aggregate(token, model.name, {
+    filter,
+    group_by: dim ? [groupByFor(dim)] : [],
+    measures: measuresFor(measure),
+  });
   if ("error" in res) return fail(res);
-  const hidden = withheld(res.denied);
-  if (hidden) return { state: "noaccess", detail: hidden.name };
-  const truncated = res.total > res.rows.length;
   if (w.kind === "kpi")
     return {
       state: "ready",
-      data: { kind: "kpi", value: sum(res.rows, measure!), measure, total: res.total, truncated },
+      data: {
+        kind: "kpi",
+        value: measure ? (res.groups[0] ? valueOfGroup(res.groups[0], measure) : 0) : res.total,
+        measure,
+        total: res.total,
+        truncated: false,
+      },
     };
   return {
     state: "ready",
     data: {
       kind: "series",
-      rows: res.rows,
+      groups: res.groups.map((g) => ({
+        key: keyOf(g.key[dim!.name]),
+        value: valueOfGroup(g, measure),
+      })),
       measure,
       dim: dim!,
       total: res.total,
-      truncated,
+      truncated: false,
     },
   };
 }

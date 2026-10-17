@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fmt, inSentence, t } from "@obop/ui";
-import type { FieldMeta, Row } from "../api.ts";
+import { LOAD_LIMIT, search, type FieldMeta, type Row } from "../api.ts";
 import { useData } from "../data.tsx";
 import { isoDate, validDate } from "../format.ts";
 import { fieldTitle } from "../labels.ts";
-import { Icon, toneClass } from "../ui.tsx";
+import { serverMessage } from "../serverMessage.ts";
+import { EmptyState, Icon, toneClass } from "../ui.tsx";
 import type { ViewProps } from "./types.ts";
 
 /** First day of the week containing `d` (Monday in most of Europe, Sunday in the US): from the format locale. */
@@ -17,6 +18,65 @@ function weekStart(d: Date): Date {
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 
 export const dateFields = (fields: FieldMeta[]) => fields.filter((f) => f.kind === "date");
+
+type Fetched = {
+  rows: Row[];
+  /** Records in the visible range, which may be more than `rows` (the load limit). */
+  inRange: number;
+  undated: number;
+  loaded: boolean;
+  error?: string;
+};
+
+/**
+ * The records of the visible days from the server (D4): the search narrowed to the date range
+ * on screen, plus how many records have no date at all. Asks again when the person moves to another
+ * month or after any write.
+ */
+function useVisibleRecords(
+  p: ViewProps,
+  field: string,
+  from: string,
+  to: string,
+): Fetched & { retry: () => void } {
+  const d = useData();
+  const server = p.server;
+  const [st, setSt] = useState<Fetched>({ rows: [], inRange: 0, undated: 0, loaded: false });
+  const [attempt, setAttempt] = useState(0);
+  const key = JSON.stringify([p.model.name, server?.filter, field, from, to]);
+  useEffect(() => {
+    if (!server) return;
+    let live = true;
+    const base = server.filter;
+    void Promise.all([
+      search(d.token, p.model.name, {
+        filter: [...base, { field, op: "gte", value: from }, { field, op: "lte", value: to }],
+        order: [{ field, dir: "asc" }],
+        limit: LOAD_LIMIT,
+      }),
+      search(d.token, p.model.name, {
+        filter: [...base, { field, op: "is_null", value: true }],
+        limit: 1,
+      }),
+    ]).then(([inRange, undated]) => {
+      if (!live) return;
+      if ("error" in inRange) setSt((s) => ({ ...s, loaded: true, error: inRange.error }));
+      else
+        setSt({
+          rows: inRange.rows,
+          inRange: inRange.total,
+          undated: "error" in undated ? 0 : undated.total,
+          loaded: true,
+        });
+    });
+    return () => {
+      live = false;
+    };
+    // key stands for the model, search, date field and range
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, d.token, d.mutations, attempt]);
+  return { ...st, retry: () => setAttempt((n) => n + 1) };
+}
 
 export function CalendarView(p: ViewProps) {
   const d = useData();
@@ -32,9 +92,17 @@ export function CalendarView(p: ViewProps) {
     (f) => f.kind === "select" && ["state", "stage", "status"].includes(f.name),
   );
 
+  const start =
+    mode === "month"
+      ? weekStart(new Date(cursor.getFullYear(), cursor.getMonth(), 1))
+      : weekStart(cursor);
+  const days = Array.from({ length: mode === "month" ? 42 : 7 }, (_, i) => addDays(start, i));
+  const visible = useVisibleRecords(p, df.name, isoDate(days[0]!), isoDate(days[days.length - 1]!));
+  const rows = p.server ? visible.rows : p.rows;
+
   const byDay = useMemo(() => {
     const m = new Map<string, Row[]>();
-    for (const r of p.rows) {
+    for (const r of rows) {
       const v = r[df.name];
       if (typeof v === "string" && validDate(v)) {
         const a = m.get(v);
@@ -43,14 +111,10 @@ export function CalendarView(p: ViewProps) {
       }
     }
     return m;
-  }, [p.rows, df.name]);
-  const undated = p.rows.length - [...byDay.values()].reduce((n, a) => n + a.length, 0);
-
-  const start =
-    mode === "month"
-      ? weekStart(new Date(cursor.getFullYear(), cursor.getMonth(), 1))
-      : weekStart(cursor);
-  const days = Array.from({ length: mode === "month" ? 42 : 7 }, (_, i) => addDays(start, i));
+  }, [rows, df.name]);
+  const undated = p.server
+    ? visible.undated
+    : p.rows.length - [...byDay.values()].reduce((n, a) => n + a.length, 0);
   const rowsInView = mode === "month" ? 6 : 1;
   const heading =
     mode === "month"
@@ -79,8 +143,17 @@ export function CalendarView(p: ViewProps) {
     </button>
   );
 
+  if (p.server && visible.error)
+    return (
+      <EmptyState
+        title={t("Could not load the calendar")}
+        hint={serverMessage(visible.error)}
+        action={{ label: t("Try again"), onClick: visible.retry }}
+      />
+    );
+
   return (
-    <div className="calendar">
+    <div className="calendar" aria-busy={p.server && !visible.loaded ? true : undefined}>
       <div className="viewbar">
         <div className="calnav" role="group" aria-label={t("Navigate")}>
           <button className="icon-btn" aria-label={t("Previous")} onClick={() => step(-1)}>
@@ -204,6 +277,14 @@ export function CalendarView(p: ViewProps) {
             );
           })}
         </ul>
+      )}
+      {p.server && visible.inRange > rows.length && (
+        <p className="hint pad" role="status">
+          {t("Showing the first {shown} of {total} records in this period.", {
+            shown: rows.length,
+            total: visible.inRange,
+          })}
+        </p>
       )}
       {undated > 0 && (
         <p className="hint pad">
