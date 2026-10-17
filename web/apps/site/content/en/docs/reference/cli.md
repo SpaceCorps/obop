@@ -1,6 +1,6 @@
 ---
 title: "CLI reference"
-description: "Every obop command line command and option: serve, platform serve, mcp, call, commands, admin create, agent-token, modules check, install, uninstall and market."
+description: "Every obop command line command and option: serve, platform serve, mcp, call, commands, admin create, agent-token, modules, and operating a database: migrate, backup, restore, secrets rotate and upgrade-instances."
 ---
 
 The `obop` binary has no subcommand help beyond one usage page (`obop --help`). This page restates it, with what each command does.
@@ -60,6 +60,23 @@ obop agent-token alice --scopes crm.user --label triage-bot
 | `obop modules uninstall ID`    | Removes the package's commands and screens. Its data stays in the database. Refused while another installed module depends on it.                                                                    |
 
 These are operator tools: they write to the database directly. Inside an instance, administrators do the same from _Customize_.
+
+## Operating a database
+
+These commands work on a database given by `--db` (or `OBOP_DATABASE_URL`) and need no running server. The operator guide, with the procedures around them, is `docs/DEPLOY.md`.
+
+| Command                                                                                          | What it does                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `obop migrate status`                                                                            | Prints the schema version in the database, the version this build writes and the steps still pending.                                                                                                                                                                                       |
+| `obop migrate plan` / `obop migrate run [--dry-run]`                                             | `plan` (the same as `run --dry-run`) says what each pending step would do; `run` applies them in order, under a database lock. Take a backup first.                                                                                                                                         |
+| `obop backup --db URL --out DIR\|FILE`                                                           | Writes a consistent copy of every record while the server keeps running: gzip JSON Lines plus a manifest with checksums, the schema version and the core version. A directory gets a timestamped file; a path ending in `.gz` is the file. Secrets stay sealed as stored. Never overwrites. |
+| `obop backup verify FILE`                                                                        | Re-reads a backup: checksum of the file, gzip integrity, record shape, counts per model, checksum of the records. Exits non-zero on any damage.                                                                                                                                             |
+| `obop restore --db URL --from FILE [--force] [--dry-run]`                                        | Verifies, then restores in one transaction into an empty database. A non-empty target is refused unless `--force` (which replaces its contents). A backup from a newer schema or an unknown format is refused. `--dry-run` checks everything and writes nothing.                            |
+| `obop secrets status`                                                                            | Lists the key ids in `OBOP_SECRET_KEY` and `OBOP_SECRET_KEY_PREVIOUS` and how many stored secrets each protects. Never prints a key.                                                                                                                                                        |
+| `obop secrets rotate [--dry-run] [--batch N] [--max-batches N] [--skip-unopenable]`              | Re-seals every stored secret under the current key. Safe while serving, resumable, stops before writing anything if some value opens with no key. Needs `OBOP_SECRET_KEY` (and `OBOP_SECRET_KEY_PREVIOUS` for the earlier keys).                                                            |
+| `obop platform upgrade-instances --image TAG [--only SLUG] [--dry-run] [--provisioner sliplane]` | Control plane: moves every running instance to a published image, oldest first, one at a time, each after the previous one answers a health check; stops at the first failure. `TAG` is a commit tag of `OBOP_IMAGE`'s repository or a full image reference; `--only` picks one instance.   |
+
+`obop serve` refuses a database that needs migration steps unless it is started with `--auto-migrate` (or `OBOP_AUTO_MIGRATE=1`); the default is on for SQLite and off for PostgreSQL. It always refuses a database newer than itself.
 
 ## Exit status
 

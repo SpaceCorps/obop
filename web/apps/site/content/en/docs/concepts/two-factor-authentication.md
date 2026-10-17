@@ -57,7 +57,7 @@ The shared secret is stored encrypted (ChaCha20-Poly1305) under a key derived fr
 ## Limits
 
 - TOTP can be phished by a site that relays the code in real time. Passkeys (WebAuthn), which resist that, are planned but not built; SMS codes are deliberately not offered.
-- The server holds the key. Whoever controls both the running server and `OBOP_SECRET_KEY` can read the secrets. There is no key rotation yet.
+- The server holds the key. Whoever controls both the running server and `OBOP_SECRET_KEY` can read the secrets. The key can be rotated without downtime with `obop secrets rotate` (see [Self-hosting](/docs/reference/self-hosting/)).
 - There is no step-up check for sensitive actions and no "remember this browser".
 - Other languages of this page are not translated yet and show the English text.
 

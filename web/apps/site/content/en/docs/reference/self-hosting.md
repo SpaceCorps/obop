@@ -44,24 +44,24 @@ The image does the same with `--static /srv/site`. Run it with `obop platform se
 
 ## Sliplane
 
-The reference deployment runs on Sliplane, in one project with three kinds of service: a PostgreSQL 18 service on an internal network (one database and one role per business), the control plane (public, its own SQLite on a volume) and one service per customer instance built from the same repository. The control plane provisions through the bundled `sliplane` CLI and needs `SLIPLANE_API_KEY` as a secret. All settings are in [Environment variables](/docs/reference/environment/).
+The reference deployment runs on Sliplane, in one project with three kinds of service: a PostgreSQL 18 service on an internal network (one database and one role per business), the control plane (public, its own SQLite on a volume) and one service per customer instance, started from a published image (`ghcr.io/spacecorps/obop`) or built from the repository. The control plane provisions through the bundled `sliplane` CLI and needs `SLIPLANE_API_KEY` as a secret. All settings are in [Environment variables](/docs/reference/environment/).
 
 ## Operating it
 
 ### Known limits
 
-- **Build time and memory.** Each instance builds the Rust workspace on the server. That is slow and competes with other services; a registry image would remove it.
+- **Build time and memory.** An instance created from a repository builds the Rust workspace on the server. Use the published image (`OBOP_IMAGE`): there is no build.
 - **TLS** ends at the platform's proxy and the instance speaks HTTP behind it.
-- **Upgrading instances is manual.** Auto-deploy is off; redeploy each instance.
-- **No schema migrations.** Records are JSON documents, and installing a newer package version does not migrate existing records. Prefer adding optional fields.
-- **Backups.** Nothing backs up the database server for you. Use `pg_dump` or your provider's snapshots, and test a restore. A single SQLite file can be copied while the server is stopped.
-- **Full export.** The product plan promises a full export on every plan; the tool is not built. Your database is your export.
+- **Upgrading instances** is one command: `obop platform upgrade-instances --image TAG` moves every running instance to a published image, one at a time, each after a health check, and stops at the first failure.
+- **Schema versions.** A database carries its schema version. `obop migrate status|plan|run` shows and applies the steps; a server refuses a database newer than itself. Installing a newer package version still does not migrate that package's records. Prefer adding optional fields.
+- **Backups.** `obop backup --db URL --out DIR` writes a consistent copy while the server runs; `obop backup verify FILE` checks it; `obop restore --db URL --from FILE` restores it into an empty database; `deploy/restore-drill.sh` proves a restore end to end. The database server itself still needs its own `pg_dump` or WAL archive, and a restore you have not tried is not a backup.
+- **Full export.** `obop backup` is a complete, documented export (gzip JSON Lines). The customer-facing export tool of the product plan is not built.
 - **Monitoring.** There is no metrics endpoint yet. Watch the process and the database.
 - **Audit log.** There is no hash-chained audit trail yet.
 
 ### Sizing
 
-An instance is one process. SQLite is enough to evaluate. Use PostgreSQL for more than one user or for anything you cannot lose. `list` and `search` read the whole model into memory on the server, so very large tables are slow; there are no indexes yet.
+An instance is one process by default, and several processes may share one PostgreSQL database (sessions, rate limits, approvals and the rest are kept in the database). SQLite is enough to evaluate. Use PostgreSQL for more than one user or for anything you cannot lose. `list` and `search` read the whole model into memory on the server, so very large tables are slow; there are no indexes yet.
 
 ## Security basics
 

@@ -103,7 +103,7 @@ It then keeps only the allowlisted fields, treats each, replaces the record id b
 - **write-only**: the generic shaping of every response withholds a `secret` field from every caller, the field is named in `denied` and its value never appears; the connection shows only a hint (`signing_secret: set, ends cret` at most the last four characters, and nothing for a short value);
 - **absent from logs and errors**: nothing logs a body, a header or a URL; the egress client and the OAuth code report the kind of failure only.
 
-Per-connection pseudonym keys and the master-key subkeys come from the same HKDF. There is no key rotation yet (section 10); the secretbox is a small module behind two calls (`seal`, `open`) so a KMS or a shared helper can replace it.
+Per-connection pseudonym keys and the master-key subkeys come from the same HKDF. Sealed values name the key that sealed them and the key ring (`OBOP_SECRET_KEY`, `OBOP_SECRET_KEY_PREVIOUS`) is rotated with `obop secrets rotate` (D59, docs/DEPLOY.md); the stored pseudonym key of a connection is created sealed on first use, so a rotation never changes a pseudonym a receiver already has. The secretbox is a small module behind two calls (`seal`, `open`) so a KMS or a shared helper can replace it.
 
 ## 5. People connecting their own accounts
 
@@ -161,13 +161,13 @@ Not covered by this app: information duties toward data subjects (Articles 13 an
 
 ## 10. Known gaps and limits
 
-- **No key rotation.** Changing `OBOP_SECRET_KEY` makes sealed values unreadable; there is no re-seal tool and no pseudonym-key rotation.
-- **The retry queue is in memory.** A restart drops pending retries; the run stays `retrying` and the owner sends again by hand.
+- **Keys rotate; they are not in a KMS.** `obop secrets rotate` re-seals everything under the current key; a lost key still loses the sealed values (docs/DEPLOY.md, "If the key is lost").
+- **Delivery is at-least-once.** The retry queue and dead letters are in the database with leases (D59), so a restart or another process continues deliveries; a receiver may see one delivery twice after a crash, and the delivery id (sent as the webhook id) is stable so it can deduplicate. A delivery that used its retries is kept as a dead letter with the reason.
 - **Erasure is scoped.** It drops the pseudonym maps, tokens and links of the erased `party` only. Personal data copied into other models (for example a lead's contact name) is erased by those models' owners; data already delivered to a recipient cannot be recalled.
 - **The agreement flag is an attestation.** obop cannot know whether the document exists.
 - **Rate counting scans the flow log** (bounded by retention); a high-volume deployment wants the typed-column schema manager first (D44).
 - **Group snapshot.** A connection stores the owner's groups from the last time the owner changed it and narrows them to the user table at run time. A principal that is not in the user table (the fixed development tokens) keeps the snapshot.
-- **The inbound door's flood limit is per process and in memory.**
+- **The inbound door's flood limit is a fixed window in the database,** shared by all processes; a burst at a window edge can pass twice the limit.
 - **The catalogue is small and mostly generic.** Two entries are definitions only, six are untested against the real service, and nothing was verified against a vendor's current terms.
 - **SQLite is outside the compliance claims** (D44): the guarantees that depend on the database exist on PostgreSQL deployments only.
 - **Inbound data subjects** are not informed by obop (Article 14); a connection that receives personal data from a third party leaves that to the owner.
@@ -199,8 +199,8 @@ Each finding names the test that holds it. "Fixed" means the control exists and 
 | T19 | Logs and runs kept forever | Retention per connection, purge command and daily purge | module `retention_removes_old_flow_logs_and_runs`; `obop` `the_purge_command_applies_retention_to_a_real_database` | fixed |
 | T20 | Uncontrolled volume or rate | Per-connection caps, a row cap per flow | `egress::tests::rate_and_volume_caps` | fixed |
 | T21 | An administrator disables the safety valves unnoticed | The checklist lists relaxed settings; high-risk releases and clear-text fields are reported; raising is approval-required for agents | `checklist::tests::checklist_flags_what_is_missing_and_always_carries_the_disclaimer` | fixed (reporting) |
-| T22 | The master key is lost, leaked or never set | Environment key preferred; the generated key is flagged; no rotation | `secretbox::tests::generated_key_is_created_once_and_reused`, checklist item `secret_key` | open (rotation) |
-| T23 | Retry queue lost on restart | Documented | none | open |
+| T22 | The master key is lost, leaked or never set | Environment key preferred; the generated key is flagged; key ring and `obop secrets rotate`; a lost key is a documented loss of the sealed values only | `secretbox::tests::generated_key_is_created_once_and_reused`, `secretbox::tests::values_from_before_the_key_ring_still_open_and_reseal`, `reseal::tests`, `secrets::tests` (obop-ops), checklist item `secret_key` | fixed (rotation) |
+| T23 | Retry queue lost on restart | Jobs, leases and dead letters are rows; payloads sealed | `queue::tests`, `connectors::tests::queued_deliveries_survive_a_restart_and_two_processes_never_send_one_twice` | fixed |
 
 ## 12. Configuration
 

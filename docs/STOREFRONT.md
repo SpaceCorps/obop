@@ -130,7 +130,7 @@ Left open: see Known gaps (shared-address rate limits, in-process counters, no s
 - **No payments.** Orders start `pending`; see "Checkout" for where a provider plugs in.
 - **No images.** The data model has no file field. Product and post cards are a text monogram on a tint of the accent; Markdown images become links; logos are a setting. Open Graph has no image.
 - **Stock is not reduced** by orders, and discount codes are not accepted at checkout (codes would be an oracle for guessing). Taxes are included in prices; `tax_total` is not computed.
-- **Rate limits and idempotency keys are in memory**, per process (restart resets them); behind NAT many visitors share one address.
+- **Rate limits and idempotency keys are in the database** (D59): shared by every process and surviving a restart, as fixed windows (a burst at a window edge can pass twice the limit); behind NAT many visitors share one address.
 - **Reads scan the model's records** (D49 limits apply): fine for hundreds of listings, not for hundreds of thousands. Put a CDN in front: pages are cacheable.
 - **Feeds and `llms.txt` are in the default language;** `lastmod` exists only for records with `published_on`.
 - The checkout cart total shown before the last step is for the selected delivery method (a script updates it when you change the method; without the script the preselected one is shown); the confirmation page shows the real figures.

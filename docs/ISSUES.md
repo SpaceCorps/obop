@@ -17,13 +17,13 @@ test found, or a limit the docs state.
 ## B. Operations, scale and durability
 | # | Issue | Status |
 |---|---|---|
-| B1 | Sessions, MCP sessions, rate limits, forum and status data live in one process's memory (one process per database) | in progress |
-| B2 | Connector retry queue is lost on restart | in progress |
-| B3 | No key rotation or credential re-sealing for `OBOP_SECRET_KEY` | in progress |
-| B4 | No backups: no `obop backup` / `restore`, no restore drill | in progress |
-| B5 | No schema versioning or migration step for upgrades (`obop migrate`) | in progress |
-| B6 | Every customer instance builds the Rust workspace on the shared server; no published image | in progress |
-| B7 | Changing the admin 2FA policy is not audited; turning 2FA off does not revoke the user's other sessions | in progress |
+| B1 | Sessions, MCP sessions, rate limits, forum and status data live in one process's memory (one process per database) | done: all of it is in the database (D59); proven by two real `obop serve` and two `platform serve` processes on PostgreSQL. Counters are fixed windows; a forum or status read may lag a write on another process by 250 ms; SQLite shares between processes on one machine only |
+| B2 | Connector retry queue is lost on restart | done: jobs, leases and dead letters are rows (at-least-once, stable delivery id); crash-restart and two-worker tests |
+| B3 | No key rotation or credential re-sealing for `OBOP_SECRET_KEY` | done: key ring, `obop secrets status|rotate` (dry run, batches, resumable, while serving), runbook and lost-key story in docs/DEPLOY.md; no KMS |
+| B4 | No backups: no `obop backup` / `restore`, no restore drill | done for the tools: `obop backup`, `backup verify`, `restore` (SQLite and PostgreSQL, round trips, tamper, refusal and version tests) and `deploy/restore-drill.sh` (run in CI). Out of scope as asked: scheduled backups of hosted instances (needs object storage); `pg_dump` and WAL archiving for the Sliplane PostgreSQL service are documented, not run against it |
+| B5 | No schema versioning or migration step for upgrades (`obop migrate`) | done: `obop-migrate` (two real steps, tests for order, idempotency, rollback and concurrent runners), `obop migrate status|plan|run`, `--auto-migrate`, newer-schema refusal; compatibility promise in docs/DEPLOY.md; D59 |
+| B6 | Every customer instance builds the Rust workspace on the shared server; no published image | partly done: `image.yml` (linux/amd64, cache, provenance and SBOM, never run from here), cargo-chef Dockerfile (full image built locally; the web target was broken by the core-version read and is fixed), `OBOP_IMAGE` preferred, `obop platform upgrade-instances` (fake and runner-fake tests). Not verified live: the first GitHub run, and whether Sliplane converts a repository service to an image; no arm64 |
+| B7 | Changing the admin 2FA policy is not audited; turning 2FA off does not revoke the user's other sessions | done: `security.*` changes are logged (who, old, new), 2FA off and password change end other sessions, session list and sign out everywhere, password change, administrators disable, enable and reset accounts, Security tab panels in seven languages, unit, HTTP and Playwright tests |
 | B8 | Existing instances created before D53 have no `OBOP_SECRET_KEY` unless an operator sets one | done (live instances) |
 
 ## C. Commerce

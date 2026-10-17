@@ -52,7 +52,7 @@ TLS terminates at the proxy: send `X-Forwarded-Proto: https` so cookies get `Sec
 | `/community/mod/log` | staff only: audit log |
 | `/community/assets/app.css` | the one stylesheet (immutable, versioned with `?v=`) |
 
-Categories are seeded on first run: General, Help, Show and tell, Modules, Agents and MCP, Self-hosting, Feature requests, Announcements (staff only). Threads and posts are JSON documents in `community_thread` and `community_post`; the whole forum is held in memory behind one lock and written through, so **run one control-plane process per database**.
+Categories are seeded on first run: General, Help, Show and tell, Modules, Agents and MCP, Self-hosting, Feature requests, Announcements (staff only). Threads and posts are JSON documents in `community_thread` and `community_post`; the forum is held in memory as a cache and written through; since D59 several control-plane processes may share one database: a write takes a database lock, reloads the copy if another process changed anything (a shared version number) and bumps the version, and a read reloads when the number moved (checked at most every 250 ms).
 
 ### Writing rules
 
@@ -135,7 +135,7 @@ To add or change a string, edit the `CATALOGUE` table in `crates/kernel/obop-com
 
 ## Known limits
 
-- One process per database (in-memory write-through cache).
+- A post made on one control-plane process shows on the others within the version check (250 ms); the status checks run on one process per interval.
 - No per-IP rate limit on signup or login beyond the account lockout; put one in the proxy.
 - DNS is resolved just before the instance check, not pinned to the connection.
 - Raw check results older than the ring (about 24 hours) exist only as daily counters.
