@@ -1,6 +1,8 @@
 [labels.es.module]
 name = "Comercio electrónico"
-description = "Tienda online: categorías, fichas de producto con traducciones, métodos de envío, códigos de descuento y pedidos web. Con el sitio público activado, los visitantes piden sin cuenta y el servidor calcula siempre los precios. No hay pasarela de pago. Los reembolsos requieren aprobación humana de un responsable; los datos del cliente son personales y nunca públicos. Requiere Productos."
+description = "Una tienda en línea: categorías, ofertas con imágenes y traducciones, envíos, códigos de descuento, tipos de impuesto y pedidos web. El servidor descuenta el stock, aplica descuentos e impuestos y calcula cada precio él mismo. Pago por transferencia, tarjeta (Stripe Checkout) o demostración. Reembolsos: un responsable. Datos de clientes nunca públicos. Requiere el paquete Productos."
+
+summary = "Una tienda online: fichas, envíos, códigos de descuento y pedidos web, con tienda pública cuando el sitio está activado."
 
 [labels.es.model.ecommerce_category]
 name = "Categoría"
@@ -81,7 +83,7 @@ allow_backorder = "Permitir pedidos pendientes"
 
 [labels.es.model.ecommerce_listing.field.stock_quantity]
 label = "Cantidad en stock"
-description = "Unidades disponibles, usadas con la política de stock. Los pedidos no lo reducen: se ajusta a mano"
+description = "Unidades en stock, junto con la regla de stock. Cada pedido descuenta sus unidades al pagar y un pedido cancelado, caducado o reembolsado las devuelve; corríjalo a mano tras un recuento"
 
 [labels.es.model.ecommerce_listing.field.published]
 label = "Publicado"
@@ -186,7 +188,7 @@ description = "Cuántas veces se puede usar el código en total; vacío signific
 
 [labels.es.model.ecommerce_discount_code.field.used_count]
 label = "Usos"
-description = "Cuántas veces se ha usado (se mantiene al día a mano)"
+description = "Cuántas veces se ha usado. La tienda cuenta un uso al hacer el pedido y lo devuelve si el pedido se cancela o nunca se paga"
 
 [labels.es.model.ecommerce_discount_code.field.minimum_order]
 label = "Pedido mínimo"
@@ -242,7 +244,7 @@ description = "Código de moneda ISO 4217, por ejemplo EUR"
 
 [labels.es.model.ecommerce_order.field.subtotal]
 label = "Subtotal"
-description = "Suma de las líneas (unidad menor de la moneda, introducida, no calculada)"
+description = "Suma de las líneas a los precios de las ofertas (unidad mínima de moneda, calculada por la tienda al pagar)"
 
 [labels.es.model.ecommerce_order.field.discount_total]
 label = "Total de descuentos"
@@ -254,11 +256,11 @@ description = "Gastos de envío (unidad menor de la moneda)"
 
 [labels.es.model.ecommerce_order.field.tax_total]
 label = "Total de impuestos"
-description = "Impuestos incluidos en el total (unidad menor de la moneda)"
+description = "Todo el impuesto del pedido, la parte incluida en los precios y la añadida encima (unidad mínima de moneda)"
 
 [labels.es.model.ecommerce_order.field.total]
 label = "Total"
-description = "Importe que paga el comprador (unidad menor de la moneda)"
+description = "Importe que paga el cliente: líneas, menos el descuento, más el envío, más el impuesto añadido (unidad mínima de moneda)"
 
 [labels.es.model.ecommerce_order.field.payment_reference]
 label = "Referencia de pago"
@@ -339,3 +341,201 @@ description = "Precio por unidad con impuestos incluidos (unidad menor de la mon
 [labels.es.model.ecommerce_order_line.field.subtotal]
 label = "Subtotal"
 description = "Total de la línea (unidad menor de la moneda, introducido, no calculado)"
+
+[labels.es.model.ecommerce_listing.field.image]
+label = "Imagen"
+description = "Imagen principal del producto (PNG, JPEG, WebP o GIF, hasta 5 MiB; se recodifica y se eliminan sus metadatos al subirla)"
+
+[labels.es.model.ecommerce_listing.field.image_alt]
+label = "Descripción de la imagen"
+description = "Texto que describe la imagen principal para quienes no pueden verla"
+
+[labels.es.model.ecommerce_listing_image]
+name = "Imagen de la oferta"
+description = "Una imagen adicional de una oferta para su galería"
+
+[labels.es.model.ecommerce_listing_image.field.listing_id]
+label = "Oferta"
+description = "La oferta a la que pertenece la imagen; solo se muestra mientras la oferta esté publicada"
+
+[labels.es.model.ecommerce_listing_image.field.image]
+label = "Imagen"
+description = "La imagen (PNG, JPEG, WebP o GIF, hasta 5 MiB)"
+
+[labels.es.model.ecommerce_listing_image.field.alt]
+label = "Descripción"
+description = "Texto que describe la imagen para quienes no pueden verla"
+
+[labels.es.model.ecommerce_listing_image.field.sequence]
+label = "Orden"
+description = "Orden en la galería, el menor primero"
+
+[labels.es.model.ecommerce_listing_image.field.published]
+label = "Publicado"
+description = "Si la imagen se muestra en la tienda"
+
+[labels.es.model.ecommerce_discount_code.field.per_customer_limit]
+label = "Límite por cliente"
+description = "Cuántas veces puede usar el código un cliente (por correo electrónico); vacío significa sin límite"
+
+[labels.es.model.ecommerce_discount_code.field.category_id]
+label = "Categoría"
+description = "Solo las ofertas de esta categoría reciben la reducción; vacío significa todo el pedido"
+
+[labels.es.model.ecommerce_discount_use]
+name = "Uso de código"
+description = "Cuántas veces un cliente ha usado un código de descuento (el cliente se guarda como hash, nunca como correo electrónico)"
+
+[labels.es.model.ecommerce_discount_use.field.code_id]
+label = "Código"
+description = "El código de descuento"
+
+[labels.es.model.ecommerce_discount_use.field.customer_hash]
+label = "Hash del cliente"
+description = "Hash del correo electrónico del cliente, para comprobar el límite por cliente sin guardar la dirección aquí"
+
+[labels.es.model.ecommerce_discount_use.field.count]
+label = "Usos"
+description = "Usos hasta ahora"
+
+[labels.es.model.ecommerce_tax_rate]
+name = "Tipo de impuesto"
+description = "Un tipo de impuesto que la tienda aplica a las ofertas, calculado en el servidor"
+
+[labels.es.model.ecommerce_tax_rate.field.name]
+label = "Nombre"
+description = "Nombre que se muestra en el pedido, por ejemplo IVA"
+
+[labels.es.model.ecommerce_tax_rate.field.rate_bp]
+label = "Tipo (puntos básicos)"
+description = "Tipo en puntos básicos: 1900 es el 19,00 por ciento"
+
+[labels.es.model.ecommerce_tax_rate.field.country]
+label = "País"
+description = "Código de país de dos letras (por ejemplo DE) de la dirección de entrega a la que se aplica el tipo; vacío significa todo país sin tipo propio"
+
+[labels.es.model.ecommerce_tax_rate.field.category_id]
+label = "Categoría"
+description = "Solo las ofertas de esta categoría; vacío significa todas las ofertas (y el envío)"
+
+[labels.es.model.ecommerce_tax_rate.field.included]
+label = "Incluido en los precios"
+description = "Si los precios de las ofertas ya incluyen este impuesto (lo habitual en la UE). Si no, el impuesto se añade al pagar"
+
+[labels.es.model.ecommerce_tax_rate.field.active]
+label = "Activo"
+description = "Si el tipo se aplica"
+
+[labels.es.model.ecommerce_order.field.discount_code]
+label = "Código de descuento usado"
+description = "El código que introdujo el cliente, tal como aparece en el pedido"
+
+[labels.es.model.ecommerce_order.field.discount_use_id]
+label = "Uso por cliente"
+description = "Contra qué contador por cliente se contó este pedido, para poder devolverlo"
+
+[labels.es.model.ecommerce_order.field.country]
+label = "País"
+description = "Código de país de dos letras de la dirección de entrega, que decide el tipo de impuesto"
+
+[labels.es.model.ecommerce_order.field.tax_summary]
+label = "Líneas de impuesto"
+description = "Las líneas de impuesto del pedido en JSON: nombre, tipo en puntos básicos, si está incluido en los precios, importe"
+
+[labels.es.model.ecommerce_order.field.stock_returned]
+label = "Stock devuelto"
+description = "Se activa cuando las unidades de un pedido cancelado, caducado o reembolsado se devolvieron a las ofertas, para que ocurra una sola vez"
+
+[labels.es.model.ecommerce_order.field.reserved_until]
+label = "Stock reservado hasta"
+description = "Hora Unix hasta la que un pedido sin pagar retiene su stock; después se cancela y el stock vuelve"
+
+[labels.es.model.ecommerce_order.field.payment_method]
+label = "Método de pago"
+description = "Cómo eligió pagar el cliente: manual (transferencia o factura), stripe (tarjeta) o fake (demo)"
+
+[labels.es.model.ecommerce_order.field.payment_method.options]
+manual = "Transferencia o factura"
+stripe = "Tarjeta (Stripe)"
+fake = "Demostración (sin dinero)"
+
+[labels.es.model.ecommerce_order_line.field.discount_amount]
+label = "Descuento"
+description = "Parte del descuento del pedido que corresponde a esta línea (unidad mínima de moneda)"
+
+[labels.es.model.ecommerce_order_line.field.tax_name]
+label = "Impuesto"
+description = "Nombre del impuesto aplicado a esta línea"
+
+[labels.es.model.ecommerce_order_line.field.tax_rate_bp]
+label = "Tipo de impuesto (pb)"
+description = "Tipo de impuesto de esta línea en puntos básicos"
+
+[labels.es.model.ecommerce_order_line.field.tax_amount]
+label = "Importe del impuesto"
+description = "Impuesto de esta línea, incluido en los precios o añadido (unidad mínima de moneda)"
+
+[labels.es.model.ecommerce_payment]
+name = "Pago"
+description = "Un pago de un pedido web: qué proveedor, su referencia, el importe y qué ocurrió. La tienda nunca ve datos de tarjeta"
+
+[labels.es.model.ecommerce_payment.field.order_id]
+label = "Pedido"
+description = "El pedido que se paga"
+
+[labels.es.model.ecommerce_payment.field.provider]
+label = "Proveedor"
+description = "Quién cobra: manual (transferencia o factura), stripe (Stripe Checkout) o fake (demo local)"
+
+[labels.es.model.ecommerce_payment.field.provider.options]
+manual = "Transferencia o factura"
+stripe = "Tarjeta (Stripe)"
+fake = "Demostración (sin dinero)"
+
+[labels.es.model.ecommerce_payment.field.external_id]
+label = "Referencia del proveedor"
+description = "La referencia del proveedor para este pago, por ejemplo el id de una sesión de Stripe Checkout. Nunca un número de tarjeta"
+
+[labels.es.model.ecommerce_payment.field.checkout_url]
+label = "Página de pago"
+description = "Dónde paga el cliente; se guarda para que la página de pago pueda enviarlo allí mientras el pago esté abierto"
+
+[labels.es.model.ecommerce_payment.field.state]
+label = "Estado"
+description = "Estado del pago: abierto (esperando al cliente), correcto, fallido, caducado, cancelado, reembolsado"
+
+[labels.es.model.ecommerce_payment.field.state.options]
+open = "Abierto"
+succeeded = "Correcto"
+failed = "Fallido"
+expired = "Caducado"
+cancelled = "Cancelado"
+refunded = "Reembolsado"
+
+[labels.es.model.ecommerce_payment.field.amount]
+label = "Importe"
+description = "Importe a pagar, fijado por el servidor a partir del pedido (unidad mínima de moneda)"
+
+[labels.es.model.ecommerce_payment.field.currency]
+label = "Moneda"
+description = "Código de moneda ISO 4217 del importe"
+
+[labels.es.model.ecommerce_payment.field.refund_id]
+label = "Referencia del reembolso"
+description = "La referencia del proveedor para el reembolso, una vez reembolsado el pago"
+
+[labels.es.model.ecommerce_payment.field.refunded_amount]
+label = "Importe reembolsado"
+description = "Importe devuelto al cliente (unidad mínima de moneda)"
+
+[labels.es.model.ecommerce_payment.field.event_ids]
+label = "Eventos aplicados"
+description = "Ids de los eventos del proveedor ya aplicados, en JSON, para que una notificación repetida no cambie nada"
+
+[labels.es.model.ecommerce_payment.action.mark_failed]
+label = "Marcar como fallido"
+description = "El proveedor informa de que el pago falló"
+
+[labels.es.model.ecommerce_payment.action.cancel]
+label = "Cancelar"
+description = "Dejar de esperar este pago"

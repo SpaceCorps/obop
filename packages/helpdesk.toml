@@ -1,8 +1,8 @@
 [module]
 id = "helpdesk"
-version = "0.3.0"
+version = "0.4.0"
 name = "Helpdesk"
-description = "Support tickets with priority, severity, service-level targets and an open, in progress, resolved and closed flow. Targets are recorded, not enforced or timed automatically."
+description = "Support tickets with priority, severity, service-level targets and an open, in progress, resolved and closed flow. Targets are recorded, not enforced or timed automatically. Every ticket gets a number from a series when it is created."
 author = "SpaceCorps"
 summary = "Support tickets with priority, severity, service-level targets and an open to closed flow."
 license = "AGPL-3.0-or-later"
@@ -58,6 +58,13 @@ name = "helpdesk_ticket"
 description = "A customer support request"
 read_group = "helpdesk.agent"
 write_group = "helpdesk.agent"
+
+  [[model.field]]
+  name = "number"
+  description = "Ticket number such as TCK-00042, assigned when the ticket is created"
+  class = "none"
+  kind = "sequence"
+  format = "TCK-{seq:05}"
 
   [[model.field]]
   name = "subject"

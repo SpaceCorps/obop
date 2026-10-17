@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Kenttähuolto"
 description = "Asiakkaiden luona tehtävät työtehtävät asentajan hoitamina: ajoitettu, matkalla, käynnissä, valmis tai peruutettu. Tehtävään kirjataan asiakas, kohde, asentaja, suunniteltu päivä ja alkuaika, käytetyt osat ja tarvitseeko asiakas kuitata työ. Kohteen osoite ja yhteystiedot ovat henkilötietoja. Vaatii Henkilöstö- ja Tuotteet-paketit."
+summary = "Asiakkaiden luona tehtävät työtehtävät asentajan hoitamina, käytetyt osat ja asiakkaan kuittausmerkintä."
 
 [labels.fi.model.field_service_job]
 name = "Työtehtävä"

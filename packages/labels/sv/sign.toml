@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Signering"
 description = "Dokumentmallar och signeringsbegäranden med flödet utkast, skickad, signerad, avböjd, utgången. En begäran anger undertecknaren (personuppgift) och sparar signaturbevisen som referenser. En signerad begäran får inte ändras; dokumentets hashvärde visar vad som signerades. Att skicka och registrera en signatur kräver mänskligt godkännande; agenter får bara föreslå."
+summary = "Dokumentmallar och signeringsbegäranden. Att skicka och registrera en signatur kräver mänskligt godkännande."
 
 [labels.sv.model.sign_template]
 name = "Mall"

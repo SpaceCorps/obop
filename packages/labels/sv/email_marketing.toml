@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "E-postmarknadsföring"
 description = "Utskickslistor, kontakterna på dem med samtyckesstatus och datum samt kampanjer med flödet utkast, schemalagd, skickad. Utskick kan inte ångras och kräver en chefs godkännande; agenter får bara föreslå dem. Kampanjstatistik anges eller importeras. Kontakter är personuppgifter: håll samtycket korrekt och skicka aldrig till en kontakt som inte är anmäld."
+summary = "Utskickslistor, kontakter med samtycke och kampanjer. Utskick kräver mänskligt godkännande."
 
 [labels.sv.model.email_marketing_list]
 name = "Utskickslista"

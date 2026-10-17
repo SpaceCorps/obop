@@ -1,6 +1,8 @@
 [labels.de.module]
 name = "E-Commerce"
-description = "Ein Onlineshop: Kategorien, Shop-Einträge mit Übersetzungen, Versandarten, Rabattcodes und Webbestellungen mit Positionen. Besucher bestellen ohne Konto; der Server berechnet jeden Preis aus dem veröffentlichten Eintrag. Erstattungen brauchen die Genehmigung einer Führungskraft; Agenten dürfen sie nur vorschlagen. Benötigt das Paket Produkte."
+description = "Ein Onlineshop: Kategorien, Einträge mit Bildern und Übersetzungen, Versandarten, Rabattcodes, Steuersätze und Webbestellungen. Der Server bucht den Bestand ab, wendet Rabatte und Steuern an und rechnet jeden Preis selbst. Bezahlt wird per Überweisung, Karte (Stripe Checkout) oder im Demomodus. Erstattungen brauchen eine Führungskraft. Kundendaten sind nie öffentlich. Benötigt das Paket Produkte."
+
+summary = "Ein Onlineshop: Einträge, Versand, Rabattcodes und Webbestellungen, mit öffentlichem Shop, wenn die Website aktiv ist."
 
 [labels.de.model.ecommerce_category]
 name = "Kategorie"
@@ -81,7 +83,7 @@ allow_backorder = "Nachbestellung erlauben"
 
 [labels.de.model.ecommerce_listing.field.stock_quantity]
 label = "Lagerbestand"
-description = "Vorrätige Stückzahl, im Zusammenspiel mit der Bestandsregel. Bestellungen verringern sie nicht: von Hand anpassen"
+description = "Vorrätige Stückzahl, im Zusammenspiel mit der Bestandsregel. Jede Bestellung bucht ihre Stücke an der Kasse ab, eine stornierte, abgelaufene oder erstattete Bestellung bucht sie zurück; nach einer Inventur von Hand korrigieren"
 
 [labels.de.model.ecommerce_listing.field.published]
 label = "Veröffentlicht"
@@ -186,7 +188,7 @@ description = "Wie oft der Code insgesamt eingelöst werden darf; leer bedeutet 
 
 [labels.de.model.ecommerce_discount_code.field.used_count]
 label = "Eingelöst"
-description = "Wie oft er bereits eingelöst wurde (wird von Hand gepflegt)"
+description = "Wie oft er bereits eingelöst wurde. Der Shop zählt eine Einlösung bei der Bestellung und gibt sie zurück, wenn die Bestellung storniert oder nie bezahlt wird"
 
 [labels.de.model.ecommerce_discount_code.field.minimum_order]
 label = "Mindestbestellwert"
@@ -242,7 +244,7 @@ description = "Währungscode nach ISO 4217, zum Beispiel EUR"
 
 [labels.de.model.ecommerce_order.field.subtotal]
 label = "Zwischensumme"
-description = "Summe der Positionen (kleinste Währungseinheit, erfasst, nicht berechnet)"
+description = "Summe der Positionen zu Listenpreisen (kleinste Währungseinheit, beim Bestellen vom Shop berechnet)"
 
 [labels.de.model.ecommerce_order.field.discount_total]
 label = "Rabattbetrag"
@@ -254,11 +256,11 @@ description = "Versandgebühr (kleinste Währungseinheit)"
 
 [labels.de.model.ecommerce_order.field.tax_total]
 label = "Steuerbetrag"
-description = "In der Gesamtsumme enthaltene Steuer (kleinste Währungseinheit)"
+description = "Gesamte Steuer der Bestellung, sowohl der in den Preisen enthaltene als auch der aufgeschlagene Teil (kleinste Währungseinheit)"
 
 [labels.de.model.ecommerce_order.field.total]
 label = "Gesamt"
-description = "Betrag, den der Kunde zahlt (kleinste Währungseinheit)"
+description = "Betrag, den der Kunde zahlt: Positionen minus Rabatt plus Lieferung plus aufgeschlagene Steuer (kleinste Währungseinheit)"
 
 [labels.de.model.ecommerce_order.field.payment_reference]
 label = "Zahlungsreferenz"
@@ -339,3 +341,201 @@ description = "Preis pro Stück inklusive Steuer (kleinste Währungseinheit)"
 [labels.de.model.ecommerce_order_line.field.subtotal]
 label = "Zwischensumme"
 description = "Positionssumme (kleinste Währungseinheit, erfasst, nicht berechnet)"
+
+[labels.de.model.ecommerce_listing.field.image]
+label = "Bild"
+description = "Hauptbild des Produkts (PNG, JPEG, WebP oder GIF, bis 5 MiB; wird beim Hochladen neu kodiert und von Metadaten befreit)"
+
+[labels.de.model.ecommerce_listing.field.image_alt]
+label = "Bildbeschreibung"
+description = "Text, der das Hauptbild für Menschen beschreibt, die es nicht sehen können"
+
+[labels.de.model.ecommerce_listing_image]
+name = "Produktbild"
+description = "Ein zusätzliches Bild eines Angebots für die Galerie"
+
+[labels.de.model.ecommerce_listing_image.field.listing_id]
+label = "Angebot"
+description = "Das Angebot, zu dem das Bild gehört; es wird nur gezeigt, solange das Angebot veröffentlicht ist"
+
+[labels.de.model.ecommerce_listing_image.field.image]
+label = "Bild"
+description = "Das Bild (PNG, JPEG, WebP oder GIF, bis 5 MiB)"
+
+[labels.de.model.ecommerce_listing_image.field.alt]
+label = "Beschreibung"
+description = "Text, der das Bild für Menschen beschreibt, die es nicht sehen können"
+
+[labels.de.model.ecommerce_listing_image.field.sequence]
+label = "Reihenfolge"
+description = "Reihenfolge in der Galerie, kleinste zuerst"
+
+[labels.de.model.ecommerce_listing_image.field.published]
+label = "Veröffentlicht"
+description = "Ob das Bild im Shop gezeigt wird"
+
+[labels.de.model.ecommerce_discount_code.field.per_customer_limit]
+label = "Limit pro Kunde"
+description = "Wie oft ein Kunde (nach E-Mail-Adresse) den Code nutzen darf; leer bedeutet unbegrenzt"
+
+[labels.de.model.ecommerce_discount_code.field.category_id]
+label = "Kategorie"
+description = "Nur Einträge dieser Kategorie erhalten die Ermäßigung; leer bedeutet die ganze Bestellung"
+
+[labels.de.model.ecommerce_discount_use]
+name = "Code-Nutzung"
+description = "Wie oft ein Kunde einen Rabattcode genutzt hat (der Kunde wird als Hash gespeichert, nie als E-Mail-Adresse)"
+
+[labels.de.model.ecommerce_discount_use.field.code_id]
+label = "Code"
+description = "Der Rabattcode"
+
+[labels.de.model.ecommerce_discount_use.field.customer_hash]
+label = "Kunden-Hash"
+description = "Hash der E-Mail-Adresse des Kunden, damit das Limit pro Kunde geprüft werden kann, ohne die Adresse hier zu speichern"
+
+[labels.de.model.ecommerce_discount_use.field.count]
+label = "Nutzungen"
+description = "Bisherige Nutzungen"
+
+[labels.de.model.ecommerce_tax_rate]
+name = "Steuersatz"
+description = "Ein Steuersatz, den der Shop auf Einträge anwendet, auf dem Server berechnet"
+
+[labels.de.model.ecommerce_tax_rate.field.name]
+label = "Name"
+description = "Name auf der Bestellung, zum Beispiel MwSt."
+
+[labels.de.model.ecommerce_tax_rate.field.rate_bp]
+label = "Satz (Basispunkte)"
+description = "Satz in Basispunkten: 1900 sind 19,00 Prozent"
+
+[labels.de.model.ecommerce_tax_rate.field.country]
+label = "Land"
+description = "Zweibuchstabiger Ländercode (zum Beispiel DE) der Lieferadresse, für die dieser Satz gilt; leer bedeutet jedes Land ohne eigenen Satz"
+
+[labels.de.model.ecommerce_tax_rate.field.category_id]
+label = "Kategorie"
+description = "Nur Einträge dieser Kategorie; leer bedeutet jeder Eintrag (und die Lieferung)"
+
+[labels.de.model.ecommerce_tax_rate.field.included]
+label = "In Preisen enthalten"
+description = "Ob die Preise der Einträge diese Steuer schon enthalten (in der EU üblich). Wenn nicht, wird sie an der Kasse aufgeschlagen"
+
+[labels.de.model.ecommerce_tax_rate.field.active]
+label = "Aktiv"
+description = "Ob der Satz angewendet wird"
+
+[labels.de.model.ecommerce_order.field.discount_code]
+label = "Verwendeter Rabattcode"
+description = "Der vom Kunden eingegebene Code, wie er auf der Bestellung steht"
+
+[labels.de.model.ecommerce_order.field.discount_use_id]
+label = "Nutzung pro Kunde"
+description = "Gegen welchen Zähler pro Kunde diese Bestellung gezählt wurde, damit er zurückgegeben werden kann"
+
+[labels.de.model.ecommerce_order.field.country]
+label = "Land"
+description = "Zweibuchstabiger Ländercode der Lieferadresse; er bestimmt den Steuersatz"
+
+[labels.de.model.ecommerce_order.field.tax_summary]
+label = "Steuerzeilen"
+description = "Die Steuerzeilen der Bestellung als JSON: Name, Satz in Basispunkten, ob in den Preisen enthalten, Betrag"
+
+[labels.de.model.ecommerce_order.field.stock_returned]
+label = "Bestand zurückgebucht"
+description = "Gesetzt, wenn die Stücke einer stornierten, abgelaufenen oder erstatteten Bestellung auf die Einträge zurückgebucht wurden, damit es nur einmal geschieht"
+
+[labels.de.model.ecommerce_order.field.reserved_until]
+label = "Bestand reserviert bis"
+description = "Unix-Zeit, bis zu der eine unbezahlte Bestellung ihren Bestand reserviert; danach wird sie storniert und der Bestand zurückgebucht"
+
+[labels.de.model.ecommerce_order.field.payment_method]
+label = "Zahlungsart"
+description = "Wie der Kunde bezahlen möchte: manual (Überweisung oder Rechnung), stripe (Karte) oder fake (Demo)"
+
+[labels.de.model.ecommerce_order.field.payment_method.options]
+manual = "Überweisung oder Rechnung"
+stripe = "Karte (Stripe)"
+fake = "Demo (kein Geld)"
+
+[labels.de.model.ecommerce_order_line.field.discount_amount]
+label = "Rabatt"
+description = "Teil des Bestellrabatts, der auf diese Position entfällt (kleinste Währungseinheit)"
+
+[labels.de.model.ecommerce_order_line.field.tax_name]
+label = "Steuer"
+description = "Name der auf diese Position angewendeten Steuer"
+
+[labels.de.model.ecommerce_order_line.field.tax_rate_bp]
+label = "Steuersatz (Bp)"
+description = "Steuersatz dieser Position in Basispunkten"
+
+[labels.de.model.ecommerce_order_line.field.tax_amount]
+label = "Steuerbetrag"
+description = "Steuer auf dieser Position, in den Preisen enthalten oder aufgeschlagen (kleinste Währungseinheit)"
+
+[labels.de.model.ecommerce_payment]
+name = "Zahlung"
+description = "Eine Zahlung für eine Webbestellung: welcher Anbieter, seine Referenz, der Betrag und was daraus wurde. Der Shop sieht nie Kartendaten"
+
+[labels.de.model.ecommerce_payment.field.order_id]
+label = "Auftrag"
+description = "Der bezahlte Auftrag"
+
+[labels.de.model.ecommerce_payment.field.provider]
+label = "Anbieter"
+description = "Wer die Zahlung annimmt: manual (Überweisung oder Rechnung), stripe (Stripe Checkout) oder fake (lokale Demo)"
+
+[labels.de.model.ecommerce_payment.field.provider.options]
+manual = "Überweisung oder Rechnung"
+stripe = "Karte (Stripe)"
+fake = "Demo (kein Geld)"
+
+[labels.de.model.ecommerce_payment.field.external_id]
+label = "Anbieter-Referenz"
+description = "Die Referenz des Anbieters für diese Zahlung, zum Beispiel eine Stripe-Checkout-Session-ID. Nie eine Kartennummer"
+
+[labels.de.model.ecommerce_payment.field.checkout_url]
+label = "Zahlungsseite"
+description = "Wo der Kunde bezahlt; gespeichert, damit die Zahlungsseite ihn dorthin zurückschicken kann, solange die Zahlung offen ist"
+
+[labels.de.model.ecommerce_payment.field.state]
+label = "Status"
+description = "Zahlungsstatus: offen (wartet auf den Kunden), erfolgreich, fehlgeschlagen, abgelaufen, abgebrochen, erstattet"
+
+[labels.de.model.ecommerce_payment.field.state.options]
+open = "Offen"
+succeeded = "Erfolgreich"
+failed = "Fehlgeschlagen"
+expired = "Abgelaufen"
+cancelled = "Abgebrochen"
+refunded = "Erstattet"
+
+[labels.de.model.ecommerce_payment.field.amount]
+label = "Betrag"
+description = "Zu zahlender Betrag, vom Server aus der Bestellung gesetzt (kleinste Währungseinheit)"
+
+[labels.de.model.ecommerce_payment.field.currency]
+label = "Währung"
+description = "ISO-4217-Währungscode des Betrags"
+
+[labels.de.model.ecommerce_payment.field.refund_id]
+label = "Erstattungs-Referenz"
+description = "Die Referenz des Anbieters für die Erstattung, sobald die Zahlung erstattet wurde"
+
+[labels.de.model.ecommerce_payment.field.refunded_amount]
+label = "Erstatteter Betrag"
+description = "An den Kunden zurückgezahlter Betrag (kleinste Währungseinheit)"
+
+[labels.de.model.ecommerce_payment.field.event_ids]
+label = "Angewendete Ereignisse"
+description = "IDs der bereits angewendeten Anbieter-Ereignisse als JSON, damit eine wiederholte Meldung nichts ändert"
+
+[labels.de.model.ecommerce_payment.action.mark_failed]
+label = "Als fehlgeschlagen markieren"
+description = "Der Anbieter meldet, dass die Zahlung fehlgeschlagen ist"
+
+[labels.de.model.ecommerce_payment.action.cancel]
+label = "Abbrechen"
+description = "Nicht länger auf diese Zahlung warten"

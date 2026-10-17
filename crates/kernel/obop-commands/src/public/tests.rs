@@ -11,6 +11,7 @@ fn module() -> Module {
         description: "d",
         read_group: "t.user",
         write_group: "t.user",
+        access: None,
         fields: vec![
             f("title").required(),
             f("slug"),
@@ -31,6 +32,7 @@ fn module() -> Module {
         description: "d",
         read_group: "t.user",
         write_group: "t.user",
+        access: None,
         fields: vec![f("name"), f("visible").kind(FieldKind::Bool)],
         commands: vec![],
     };
@@ -39,6 +41,7 @@ fn module() -> Module {
         description: "d",
         read_group: "t.user",
         write_group: "t.user",
+        access: None,
         fields: vec![
             FieldDef::new("email", "d", DataClass::Internal, true, "t.user").required(),
             f("body"),
@@ -81,6 +84,7 @@ fn specs() -> Vec<PublicSpec> {
             read: Some(read(&["title", "slug", "section_id"])),
             submit: None,
             receipt: None,
+            ..Default::default()
         },
         PublicSpec {
             model: "section".into(),
@@ -94,6 +98,7 @@ fn specs() -> Vec<PublicSpec> {
             }),
             submit: None,
             receipt: None,
+            ..Default::default()
         },
         PublicSpec {
             model: "msg".into(),
@@ -103,6 +108,7 @@ fn specs() -> Vec<PublicSpec> {
                 rate_limit_per_hour: 3,
             }),
             receipt: None,
+            ..Default::default()
         },
     ]
 }
@@ -144,6 +150,7 @@ fn the_gate_refuses_personal_restricted_and_unknown_fields() {
             read: Some(read(fields)),
             submit: None,
             receipt: None,
+            ..Default::default()
         }
         .check(page)
     };

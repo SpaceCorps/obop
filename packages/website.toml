@@ -1,6 +1,6 @@
 [module]
 id = "website"
-version = "0.3.0"
+version = "0.4.0"
 name = "Website"
 description = "Content for a public website: pages with a slug and a draft, published, archived flow, navigation menu items, blog posts with a byline and a publish date, translations of both, and the form submissions visitors send in. When the instance runs with the public site enabled it serves the published content to visitors as a server-rendered website with SEO and no login; only the fields marked public are ever visible to them. Publishing makes content public and needs a human approval, agents may only propose it. Senders are personal data and are never public."
 author = "SpaceCorps"
@@ -24,7 +24,7 @@ write_group = "website.user"
   published_field = "state"
   published_value = "published"
   gone_value = "archived"
-  fields = ["title", "slug", "body", "seo_title", "seo_description", "published_on"]
+  fields = ["title", "slug", "body", "seo_title", "seo_description", "published_on", "cover_image", "cover_alt"]
   order_by = "title"
 
   [[model.field]]
@@ -60,6 +60,17 @@ write_group = "website.user"
   description = "Day the page went public (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+
+  [[model.field]]
+  name = "cover_image"
+  description = "Picture shown at the top of the page and in link previews (PNG, JPEG, WebP or GIF, re-encoded on upload)"
+  class = "none"
+  kind = "image"
+
+  [[model.field]]
+  name = "cover_alt"
+  description = "Text that describes the cover picture for people who cannot see it"
+  class = "none"
 
   [[model.field]]
   name = "state"
@@ -154,7 +165,7 @@ write_group = "website.user"
   published_field = "state"
   published_value = "published"
   gone_value = "archived"
-  fields = ["title", "slug", "byline", "summary", "body", "tags", "published_on"]
+  fields = ["title", "slug", "byline", "summary", "body", "tags", "published_on", "cover_image", "cover_alt"]
   order_by = "published_on"
   order_dir = "desc"
 
@@ -203,6 +214,17 @@ write_group = "website.user"
   description = "Day the post is dated (YYYY-MM-DD)"
   class = "none"
   kind = "date"
+
+  [[model.field]]
+  name = "cover_image"
+  description = "Picture shown at the top of the post and in link previews (PNG, JPEG, WebP or GIF, re-encoded on upload)"
+  class = "none"
+  kind = "image"
+
+  [[model.field]]
+  name = "cover_alt"
+  description = "Text that describes the cover picture for people who cannot see it"
+  class = "none"
 
   [[model.field]]
   name = "state"

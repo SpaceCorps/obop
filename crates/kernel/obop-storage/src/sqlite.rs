@@ -183,6 +183,149 @@ impl Backend for Sqlite {
         }
         tx.commit().map_err(e)
     }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare("SELECT id, data FROM obop_record WHERE model = ?1 ORDER BY seq")
+            .map_err(|e| e.to_string())?;
+        let mut rows = st.query((model,)).map_err(|e| e.to_string())?;
+        while let Some(r) = rows.next().map_err(|e| e.to_string())? {
+            let id: String = r.get(0).map_err(|e| e.to_string())?;
+            let data: String = r.get(1).map_err(|e| e.to_string())?;
+            if !visit(&id, &parse(&data)?)? {
+                break;
+            }
+        }
+        Ok(())
+    }
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        self.apply_checked(ops).map_err(|e| e.to_string())
+    }
+    fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        struct S<'a>(&'a rusqlite::Transaction<'a>);
+        impl TxView for S<'_> {
+            fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+                let text: Option<String> = self
+                    .0
+                    .query_row(
+                        "SELECT data FROM obop_record WHERE model = ?1 AND id = ?2",
+                        (model, id),
+                        |r| r.get(0),
+                    )
+                    .map(Some)
+                    .or_else(|e| {
+                        if e == rusqlite::Error::QueryReturnedNoRows {
+                            Ok(None)
+                        } else {
+                            Err(e)
+                        }
+                    })
+                    .map_err(|e| e.to_string())?;
+                text.map(|t| parse(&t)).transpose()
+            }
+            fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                self.0
+                    .execute(
+                        "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)",
+                        (model, id, J::Object(fields.clone()).to_string()),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+            fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                self.0
+                    .execute(
+                        "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
+                        (model, id, J::Object(fields.clone()).to_string()),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+            fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
+                self.0
+                    .execute(
+                        "DELETE FROM obop_record WHERE model = ?1 AND id = ?2",
+                        (model, id),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+        }
+        let mut g = self.conn.lock().unwrap();
+        let tx = g
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(|e| ApplyError::Storage(e.to_string()))?;
+        let r = run_ops(&mut S(&tx), ops);
+        match r {
+            Ok(()) => tx.commit().map_err(|e| ApplyError::Storage(e.to_string())),
+            Err(e) => {
+                let _ = tx.rollback();
+                Err(e)
+            }
+        }
+    }
+    fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
+        use rusqlite::types::Value as SqlValue;
+        let bound = match value {
+            J::String(s) => SqlValue::Text(s.clone()),
+            J::Number(n) if n.is_i64() => SqlValue::Integer(n.as_i64().unwrap_or(0)),
+            J::Bool(b) => SqlValue::Integer(i64::from(*b)),
+            _ => {
+                return Ok(self
+                    .list(model)?
+                    .into_iter()
+                    .filter(|(_, f)| f.get(field) == Some(value))
+                    .collect());
+            }
+        };
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare(
+                "SELECT id, data FROM obop_record WHERE model = ?1 \
+                 AND json_extract(data, '$.' || ?2) = ?3 ORDER BY seq",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = st
+            .query_map(rusqlite::params![model, field, bound], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })
+            .map_err(|e| e.to_string())?;
+        // A JSON string "5" and a JSON number 5 are different values; SQLite compares by type
+        // affinity here, so keep only exact matches.
+        let mut out = Vec::new();
+        for r in rows {
+            let (id, data) = r.map_err(|e| e.to_string())?;
+            let f = parse(&data)?;
+            if f.get(field) == Some(value) {
+                out.push((id, f));
+            }
+        }
+        Ok(out)
+    }
+    fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
+        let (name, model) = (ident(name)?, ident(model)?);
+        let mut cols = Vec::new();
+        for (i, f) in fields.iter().enumerate() {
+            let f = ident(f)?;
+            cols.push(if i == 0 {
+                format!("NULLIF(json_extract(data, '$.{f}'), '')")
+            } else {
+                format!("COALESCE(json_extract(data, '$.{f}'), '')")
+            });
+        }
+        self.conn
+            .lock()
+            .unwrap()
+            .execute_batch(&format!(
+                "CREATE UNIQUE INDEX IF NOT EXISTS {name} ON obop_record ({}) WHERE model = '{model}'",
+                cols.join(", ")
+            ))
+            .map_err(|e| e.to_string())
+    }
     fn kind(&self) -> &'static str {
         "sqlite"
     }
@@ -406,50 +549,7 @@ impl Backend for Sqlite {
         tx.commit().map_err(e)?;
         Ok(n)
     }
-    fn apply(&self, ops: &[Op]) -> Result<()> {
-        let mut g = self.conn.lock().unwrap();
-        let tx = g
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(e)?;
-        for op in ops {
-            match op {
-                Op::Put { model, id, fields } => {
-                    tx.execute(
-                        "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)
-                         ON CONFLICT (model, id) DO UPDATE SET data = excluded.data",
-                        (model, id, J::Object(fields.clone()).to_string()),
-                    )
-                    .map_err(e)?;
-                }
-                Op::Merge { model, id, patch } => {
-                    let current: Option<String> = tx
-                        .query_row(
-                            "SELECT data FROM obop_record WHERE model = ?1 AND id = ?2",
-                            (model, id),
-                            |r| r.get(0),
-                        )
-                        .optional()
-                        .map_err(e)?;
-                    let current =
-                        current.ok_or_else(|| format!("no {model} {id} to merge into"))?;
-                    let data = J::Object(merged(parse(&current)?, patch)).to_string();
-                    tx.execute(
-                        "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
-                        (model, id, data),
-                    )
-                    .map_err(e)?;
-                }
-                Op::Delete { model, id } => {
-                    tx.execute(
-                        "DELETE FROM obop_record WHERE model = ?1 AND id = ?2",
-                        (model, id),
-                    )
-                    .map_err(e)?;
-                }
-            }
-        }
-        tx.commit().map_err(e)
-    }
+
     fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
         let mut g = self.conn.lock().unwrap();
         let tx = g

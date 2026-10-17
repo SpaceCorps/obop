@@ -49,7 +49,7 @@ export function fromEdit(
         : {
             error: t("{field} must be one of: {options}", {
               field,
-              options: (f.options ?? []).map(optionLabel).join(", "),
+              options: (f.options ?? []).map((o) => optionLabel(o, f)).join(", "),
             }),
           };
     default:

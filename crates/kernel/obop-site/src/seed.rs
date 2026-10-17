@@ -4,6 +4,7 @@
 //! states are set directly, which the commands would not allow).
 
 use obop_commands::{Dispatcher, Store, Value};
+use obop_storage::blob::{NewBlob, Owner};
 use serde_json::{Value as J, json};
 use std::collections::BTreeMap;
 
@@ -26,6 +27,33 @@ fn i(n: i64) -> Value {
 
 fn b(v: bool) -> Value {
     Value::Bool(v)
+}
+
+/// Store a generated demo picture (an illustrated scene, no real photographs) and return its
+/// blob id. The record that uses it must call [`hold`] once it exists, because the seed writes
+/// records straight into the store, past the hooks that normally attach blobs.
+fn picture(store: &Store, seed: u8) -> Result<String, String> {
+    let (w, h) = (960, 720);
+    let bytes = obop_media::fixtures::art(w, h, seed);
+    store
+        .blobs()
+        .put(
+            &bytes,
+            NewBlob {
+                content_type: "image/png".into(),
+                width: Some(w),
+                height: Some(h),
+                uploader: "seed".into(),
+                filename: format!("demo-{seed}.png"),
+            },
+        )
+        .map(|i| i.id)
+}
+
+fn hold(store: &Store, blob: &str, model: &str, record: &str, field: &str) -> Result<(), String> {
+    store
+        .blobs()
+        .attach(blob, &Owner::new(model, record, field))
 }
 
 /// What the seed created, one line per kind.
@@ -91,17 +119,27 @@ pub fn seed(store: &Store, d: &Dispatcher) -> Result<Summary, String> {
 
     if has_site {
         let page = |slug: &str, title: &str, body: &str, desc: &str| {
-            store.insert(
-                "website_page",
-                rec(&[
-                    ("slug", t(slug)),
-                    ("title", t(title)),
-                    ("body", t(body)),
-                    ("seo_description", t(desc)),
-                    ("published_on", t("2026-09-01")),
-                    ("state", t("published")),
-                ]),
-            )
+            let mut f = rec(&[
+                ("slug", t(slug)),
+                ("title", t(title)),
+                ("body", t(body)),
+                ("seo_description", t(desc)),
+                ("published_on", t("2026-09-01")),
+                ("state", t("published")),
+            ]);
+            let cover = if slug == "home" {
+                let b = picture(store, 30)?;
+                f.insert("cover_image".into(), t(&b));
+                f.insert("cover_alt".into(), t("A teapot and a cup in morning light"));
+                Some(b)
+            } else {
+                None
+            };
+            let id = store.insert("website_page", f)?;
+            if let Some(b) = cover {
+                hold(store, &b, "website_page", &id, "cover_image")?;
+            }
+            Ok::<String, String>(id)
         };
         let home = page(
             "home",
@@ -161,7 +199,11 @@ pub fn seed(store: &Store, d: &Dispatcher) -> Result<Summary, String> {
         out.push("3 page translations (de, fr)".into());
 
         let post = |slug: &str, title: &str, summary: &str, body: &str, tags: &str, date: &str| {
-            store.insert(
+            let cover = picture(
+                store,
+                40 + (slug.bytes().map(u32::from).sum::<u32>() % 200) as u8,
+            )?;
+            let id = store.insert(
                 "website_blog_post",
                 rec(&[
                     ("slug", t(slug)),
@@ -173,8 +215,15 @@ pub fn seed(store: &Store, d: &Dispatcher) -> Result<Summary, String> {
                     ("tags", t(tags)),
                     ("published_on", t(date)),
                     ("state", t("published")),
+                    ("cover_image", t(&cover)),
+                    (
+                        "cover_alt",
+                        t(&format!("Illustration for the post {title}")),
+                    ),
                 ]),
-            )
+            )?;
+            hold(store, &cover, "website_blog_post", &id, "cover_image")?;
+            Ok::<String, String>(id)
         };
         let p1 = post(
             "how-we-pick-our-teas",
@@ -374,7 +423,9 @@ pub fn seed(store: &Store, d: &Dispatcher) -> Result<Summary, String> {
             ),
         ];
         let mut first = None;
-        for (slug, title, summary, desc, price, compare, category, policy, stock, sku) in items {
+        for (n, (slug, title, summary, desc, price, compare, category, policy, stock, sku)) in
+            items.into_iter().enumerate()
+        {
             let product = store.insert(
                 "product",
                 rec(&[
@@ -400,10 +451,36 @@ pub fn seed(store: &Store, d: &Dispatcher) -> Result<Summary, String> {
             if let Some(c) = compare {
                 fields.insert("compare_at_price".into(), i(c));
             }
+            let blob = picture(store, n as u8)?;
+            fields.insert("image".into(), t(&blob));
+            fields.insert(
+                "image_alt".into(),
+                t(&format!("Illustration of {}", title.to_lowercase())),
+            );
             let id = store.insert("ecommerce_listing", fields)?;
-            first.get_or_insert(id);
+            hold(store, &blob, "ecommerce_listing", &id, "image")?;
+            // The first two listings get a small gallery.
+            if n < 2 {
+                for extra in 0..2u8 {
+                    let g = picture(store, (n as u8) * 2 + extra + 12)?;
+                    let gid = store.insert(
+                        "ecommerce_listing_image",
+                        rec(&[
+                            ("listing_id", t(&id)),
+                            ("image", t(&g)),
+                            ("alt", t(&format!("{title}, picture {}", extra + 2))),
+                            ("sequence", i(i64::from(extra) + 1)),
+                            ("published", b(true)),
+                        ]),
+                    )?;
+                    hold(store, &g, "ecommerce_listing_image", &gid, "image")?;
+                }
+            }
+            if n == 0 {
+                first = Some(id);
+            }
         }
-        out.push("8 listings with their products".into());
+        out.push("8 listings with their products and pictures".into());
         if let Some(l) = first {
             store.insert(
                 "ecommerce_listing_translation",

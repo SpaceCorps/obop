@@ -129,7 +129,7 @@ Everything above is a command of the one dispatcher, so MCP tools exist without 
 | `rest_api_pull` | **working** | rest_pull | periodic or manual pull of a JSON API, mapping, external ids |
 | `csv_export` | **working** | csv_export | the same policy, a file for the person who downloads it |
 | Slack incoming webhook | generic adapter | webhook_out | message body format; not tested against Slack |
-| Stripe | generic adapter | webhook_out + Stripe-signed events in | form-encoded customer POST; not tested against Stripe |
+| Stripe | generic adapter | webhook_out + Stripe-signed events in | form-encoded customer POST; also the card provider of the web shop (Checkout Sessions, signed webhook at `/hooks/pay/stripe`, refunds; D62); not tested against Stripe itself |
 | GitHub webhook | generic adapter | webhook_in | `X-Hub-Signature-256`; tested with GitHub's published example |
 | Zapier, Make, n8n | generic adapter | webhook_out | their catch hooks are HTTPS URLs; not tested against them |
 | Google, Microsoft (calendar, contacts, read) | **definition only** | none | needs your own OAuth client; the OAuth flow is tested, no Google or Microsoft call exists |

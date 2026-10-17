@@ -195,6 +195,11 @@ struct Registered {
     transition: Option<Transition>,
     /// `search`: the handler returns `{rows, total}` and only the rows are shaped.
     envelope: bool,
+    /// The handler is one of the generated ones: it needs to know who is calling (row-level
+    /// access, the groups of effects), so the dispatcher puts the actor in its input.
+    actor: bool,
+    /// The command changes records.
+    writes: bool,
     handler: Handler,
 }
 
@@ -222,14 +227,41 @@ pub struct Dispatcher {
     public: std::sync::RwLock<HashMap<String, (String, PublicSpec)>>,
     /// Observers told about every command that succeeded (see `observe`).
     observers: std::sync::RwLock<Vec<(String, Arc<Observer>)>>,
+    /// Uploads and downloads of images and files, created with the first module registered
+    /// against a store (D60).
+    blob_service: std::sync::OnceLock<Arc<BlobService>>,
+    /// Wrappers around a command's handler, by command id (see `around`).
+    around: std::sync::RwLock<HashMap<String, Arc<Around>>>,
+    /// Models whose writes run under the transaction lock because a rule needs it: a unique
+    /// field, a sequence, an effect, or being the target of one (D56, D57).
+    lock_models: std::sync::RwLock<HashSet<String>>,
+    /// The time sequences and `$now` use.
+    clock: SharedClock,
 }
+
+/// The clock of the engine; tests replace it to cross a year end.
+#[derive(Clone)]
+pub struct SharedClock(Arc<std::sync::RwLock<ClockFn>>);
+
+impl Default for SharedClock {
+    fn default() -> Self {
+        Self(Arc::new(std::sync::RwLock::new(engine::system_clock())))
+    }
+}
+
+/// A wrapper around a command's handler: it sees who calls and the input, and decides whether and
+/// how to call the handler it wraps (the `&dyn Fn`). It runs only when the command really runs,
+/// after the guards and after any approval, so a proposal an agent makes calls nothing outside.
+pub type Around = dyn Fn(&Principal, &Value, &dyn Fn(&Value) -> Result<Value, String>) -> Result<Value, String>
+    + Send
+    + Sync;
 
 /// What an observer sees of a command that succeeded: its id, who ran it, the input the handler
 /// received and the raw output, before it was shaped for the caller.
 pub type Observer = dyn Fn(&str, &Principal, &Value, &Value) + Send + Sync;
 
 pub(crate) struct ModelMeta {
-    pub(crate) def: obop_registry::ModelDef,
+    pub(crate) def: Arc<obop_registry::ModelDef>,
     module: String,
     module_name: String,
     description: &'static str,
@@ -244,18 +276,39 @@ pub struct FieldInfo {
     pub description: &'static str,
     pub class: &'static str,
     pub personal_data: bool,
-    /// Lowercase field kind (D47): text, longtext, number, money, date, bool, select or ref.
+    /// Lowercase field kind (D47): text, longtext, number, money, date, bool, select, ref, image or file.
     pub kind: &'static str,
     pub required: bool,
     /// Options of a `select`; empty for other kinds.
     pub options: Vec<&'static str>,
     /// Target model of a `ref`.
     pub to: Option<&'static str>,
+    /// Largest upload in bytes of an `image` or `file` field.
+    pub max_bytes: Option<usize>,
     /// Label and description per language (D52); empty maps when untranslated.
     pub labels: Texts,
     pub descriptions: Texts,
     /// Select option -> language -> label.
     pub option_labels: BTreeMap<String, Texts>,
+    /// The field is the target of an action: it moves only through the model's actions (D48).
+    pub governed: bool,
+    /// Computed from the record and its children when read; read-only (D57).
+    pub computed: bool,
+    /// No two records may share the value (D57).
+    pub unique: bool,
+    /// Numbered by the system (D57).
+    pub sequence: bool,
+}
+
+/// The row-level access rules of a model, for the interface (D58).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AccessInfo {
+    pub own: Option<&'static str>,
+    pub via: Option<&'static str>,
+    pub public_field: Option<&'static str>,
+    pub shared_with: Option<&'static str>,
+    /// The holders of any of these groups see every record.
+    pub see_all: Vec<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,6 +324,8 @@ pub struct ModelInfo {
     pub can_delete: bool,
     pub labels: Texts,
     pub descriptions: Texts,
+    /// Records the caller sees are limited by these rules (D58); none: all of the model.
+    pub access: Option<AccessInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -281,6 +336,8 @@ pub struct ModuleInfo {
     pub description: String,
     pub labels: Texts,
     pub descriptions: Texts,
+    /// The card summary per language (D52); empty when untranslated.
+    pub summaries: Texts,
     pub models: Vec<ModelInfo>,
 }
 
@@ -421,11 +478,16 @@ impl Dispatcher {
                                 required: f.required,
                                 options: f.kind.options().to_vec(),
                                 to: f.kind.target(),
+                                max_bytes: f.kind.max_bytes(),
                                 labels: ftr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
                                 descriptions: ftr
                                     .map(|t| t.entry.descriptions.clone())
                                     .unwrap_or_default(),
                                 option_labels: ftr.map(|t| t.options.clone()).unwrap_or_default(),
+                                governed: m.def.governed_fields().contains(&f.name),
+                                computed: f.computed.is_some(),
+                                unique: f.unique.is_some() || f.sequence.is_some(),
+                                sequence: f.sequence.is_some(),
                             }
                         })
                         .collect(),
@@ -433,6 +495,18 @@ impl Dispatcher {
                     can_create: can("create"),
                     can_update: can("update"),
                     can_delete: can("delete"),
+                    access: m
+                        .def
+                        .access
+                        .as_ref()
+                        .filter(|a| !a.is_empty())
+                        .map(|a| AccessInfo {
+                            own: a.own,
+                            via: a.via,
+                            public_field: a.public_field,
+                            shared_with: a.shared_with,
+                            see_all: a.see_all.clone(),
+                        }),
                 });
             }
             if !infos.is_empty() {
@@ -440,12 +514,13 @@ impl Dispatcher {
                 let name = first
                     .map(|m| m.module_name.clone())
                     .unwrap_or_else(|| module.clone());
-                let (description, labels, descriptions) =
+                let (description, labels, descriptions, summaries) =
                     first.map_or_else(Default::default, |m| {
                         (
                             m.module_description.clone(),
                             m.translations.module.labels.clone(),
                             m.translations.module.descriptions.clone(),
+                            m.translations.summaries.clone(),
                         )
                     });
                 out.push(ModuleInfo {
@@ -454,6 +529,7 @@ impl Dispatcher {
                     description,
                     labels,
                     descriptions,
+                    summaries,
                     models: infos,
                 });
             }
@@ -464,6 +540,28 @@ impl Dispatcher {
     /// Bind a handler to a command declared in `module`'s registry metadata. A handler for an
     /// undeclared command is a programming error: the surface is generated from the registry.
     pub fn register(&self, module: &Module, model: &str, command: &str, handler: Handler) {
+        self.register_inner(module, model, command, handler, false);
+    }
+
+    /// Like `register`, for the generated handlers, which read the caller from their input.
+    pub(crate) fn register_generic(
+        &self,
+        module: &Module,
+        model: &str,
+        command: &str,
+        handler: Handler,
+    ) {
+        self.register_inner(module, model, command, handler, true);
+    }
+
+    fn register_inner(
+        &self,
+        module: &Module,
+        model: &str,
+        command: &str,
+        handler: Handler,
+        actor: bool,
+    ) {
         let m = module
             .models
             .iter()
@@ -477,7 +575,7 @@ impl Dispatcher {
         self.models.write().unwrap().insert(
             m.name.to_string(),
             ModelMeta {
-                def: m.clone(),
+                def: Arc::new(m.clone()),
                 module: module.id.clone(),
                 module_name: module.name.clone(),
                 module_description: module.description.clone(),
@@ -504,6 +602,8 @@ impl Dispatcher {
                 surfaces: c.surfaces,
                 transition: c.transition,
                 envelope: command == "search",
+                actor,
+                writes: !matches!(command, "get" | "list" | "search"),
                 handler,
             }),
         );
@@ -553,6 +653,18 @@ impl Dispatcher {
         );
     }
 
+    /// Wrap the handler of command `id` (`model.command`). The wrapper survives the command being
+    /// registered again, which happens when a package is reinstalled. Used where a command has
+    /// to do something outside the store that must succeed or fail with it, such as returning
+    /// money before an order is marked refunded (D62). A second wrapper for the same id replaces
+    /// the first.
+    pub fn around(&self, id: &str, wrapper: Box<Around>) {
+        self.around
+            .write()
+            .unwrap()
+            .insert(id.to_string(), Arc::from(wrapper));
+    }
+
     /// Be told about every command that succeeds, with the module that owns the observer (removed
     /// with it). Observers run inside the call, under the dispatcher's locks: they must be quick
     /// and must not call the dispatcher; hand the work to another thread.
@@ -579,7 +691,7 @@ impl Dispatcher {
             .read()
             .unwrap()
             .get(model)
-            .map(|m| m.def.clone())
+            .map(|m| (*m.def).clone())
     }
 
     /// Remove every command a module registered. Its data stays in the store.
@@ -598,11 +710,37 @@ impl Dispatcher {
             .collect();
         let models: Vec<String> = models.into_iter().map(String::from).collect();
         cmds.retain(|_, c| c.module != module);
-        let mut f = self.models.write().unwrap();
-        for m in models {
-            f.remove(&m);
+        drop(cmds);
+        {
+            let mut f = self.models.write().unwrap();
+            for m in models {
+                f.remove(&m);
+            }
         }
         self.order.write().unwrap().retain(|x| x != module);
+        self.refresh_lock_models();
+    }
+
+    /// Recompute which models need the write lock: those with a unique field, a sequence or
+    /// an effect, and every model an effect may write.
+    pub(crate) fn refresh_lock_models(&self) {
+        let mut set = HashSet::new();
+        for (name, meta) in self.models.read().unwrap().iter() {
+            if meta.def.has_rules() {
+                set.insert(name.clone());
+            }
+            for c in &meta.def.commands {
+                for e in &c.effects {
+                    set.insert(e.model().to_string());
+                }
+            }
+        }
+        *self.lock_models.write().unwrap() = set;
+    }
+
+    /// Replace the clock sequences and `$now` read (seconds since the epoch). For tests.
+    pub fn set_clock(&self, clock: ClockFn) {
+        *self.clock.0.write().unwrap() = clock;
     }
 
     /// Whether any command of `model` is registered.
@@ -651,12 +789,16 @@ impl Dispatcher {
         }
         let mut input = self.restore(p, vault, input)?;
         if let Value::Map(m) = &mut input {
+            // The caller is set by the dispatcher and by guards, never by a client.
             m.remove("_caller");
+            m.retain(|k, _| !k.starts_with(query::ACTOR_PREFIX));
         }
         let guard = self.guards.read().unwrap().get(id).cloned();
-        let _txn = match guard.as_ref().filter(|g| g.serialize) {
-            Some(_) => Some(self.txn_guard()?),
-            None => None,
+        let needs_lock = guard.as_ref().is_some_and(|g| g.serialize)
+            || (c.writes && self.lock_models.read().unwrap().contains(c.model));
+        let _txn = match needs_lock {
+            true => Some(self.txn_guard()?),
+            false => None,
         };
         let mut guard_approval = false;
         let mut pre = Vec::new();
@@ -748,6 +890,9 @@ impl Dispatcher {
                 let mut i = step.input;
                 if let Value::Map(m) = &mut i {
                     m.insert("_caller".into(), Value::text(&p.id));
+                    if action.actor {
+                        Actor::of(p).stamp(m);
+                    }
                 }
                 (action.handler)(&i).map_err(CallError::Handler)?;
                 if let Value::Map(m) = &mut input {
@@ -759,8 +904,16 @@ impl Dispatcher {
         // sets it after discarding anything a client sent under that name.
         if let Value::Map(m) = &mut input {
             m.insert("_caller".into(), Value::text(&p.id));
+            if c.actor {
+                Actor::of(p).stamp(m);
+            }
         }
-        let out = (c.handler)(&input).map_err(CallError::Handler)?;
+        let wrapper = self.around.read().unwrap().get(&c.id).cloned();
+        let out = match wrapper {
+            Some(w) => w(p, &input, &|i| (c.handler)(i)),
+            None => (c.handler)(&input),
+        }
+        .map_err(CallError::Handler)?;
         let observers: Vec<Arc<Observer>> = self
             .observers
             .read()
@@ -1075,14 +1228,22 @@ pub trait MfaApi: Send + Sync {
     }
 }
 
+pub mod aggregate;
+pub mod blobs;
+pub mod collate;
+mod engine;
 mod guards;
 pub mod json;
+pub mod pay;
 pub mod public;
 pub mod query;
 pub mod store;
 
+pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
+pub use engine::{Actor, ClockFn};
+pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{
-    Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
+    Adjust, Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,
 };
 pub use store::Store;
@@ -1110,5 +1271,7 @@ pub mod names {
     }
 }
 
+#[cfg(test)]
+mod engine_tests;
 #[cfg(test)]
 mod tests;

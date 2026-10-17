@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Flota"
 description = "Pojazdy, kierowcy i historia serwisowa małej floty. Śledzi status i wpisy serwisowe; nie oblicza kosztów eksploatacji ani zużycia paliwa."
+summary = "Pojazdy, kierowcy i historia serwisowa małej floty."
 
 [labels.pl.model.fleet_vehicle]
 name = "Pojazd"

@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "Fakturowanie"
+summary = "Faktury klientów z cyklem życia wersja robocza, zaksięgowana, opłacona."
 
 [labels.pl.model.invoice]
 name = "Faktura"
@@ -20,11 +21,11 @@ cancelled = "Anulowana"
 
 [labels.pl.model.invoice.field.total_minor]
 label = "Razem"
-description = "Suma faktury w jednostkach podrzędnych waluty"
+description = "Suma faktury w jednostkach podrzędnych waluty, czyli suma pozycji"
 
 [labels.pl.model.invoice.field.number]
 label = "Numer"
-description = "Ciągły numer prawny nadawany przy księgowaniu"
+description = "Ciągły numer prawny, np. INV-2026-00042, nadawany przy księgowaniu"
 
 [labels.pl.model.invoice.action.post]
 label = "Zaksięguj"
@@ -33,3 +34,39 @@ description = "Księguje fakturę roboczą i nadaje jej numer prawny"
 [labels.pl.model.invoice.action.cancel]
 label = "Anuluj"
 description = "Anuluje fakturę roboczą"
+
+[labels.pl.model.invoice.field.party_id]
+label = "Kontrahent"
+description = "Identyfikator kontrahenta, czyli klienta"
+
+[labels.pl.model.invoice.field.currency]
+label = "Waluta"
+description = "Kod waluty ISO 4217"
+
+[labels.pl.model.invoice_line]
+name = "Pozycja faktury"
+description = "Jeden produkt lub jedna usługa na fakturze"
+
+[labels.pl.model.invoice_line.field.invoice_id]
+label = "Faktura"
+description = "Faktura, do której należy pozycja"
+
+[labels.pl.model.invoice_line.field.product_id]
+label = "Produkt"
+description = "Zafakturowany produkt"
+
+[labels.pl.model.invoice_line.field.description]
+label = "Opis"
+description = "Co jest fakturowane"
+
+[labels.pl.model.invoice_line.field.quantity]
+label = "Ilość"
+description = "Zafakturowana ilość"
+
+[labels.pl.model.invoice_line.field.unit_price_minor]
+label = "Cena jednostkowa"
+description = "Cena jednej jednostki w jednostkach podrzędnych waluty"
+
+[labels.pl.model.invoice_line.field.amount_minor]
+label = "Kwota"
+description = "Kwota pozycji w jednostkach podrzędnych waluty: ilość razy cena jednostkowa"

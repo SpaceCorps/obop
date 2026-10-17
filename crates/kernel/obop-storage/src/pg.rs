@@ -186,6 +186,126 @@ impl Backend for Pg {
         }
         tx.commit().map_err(e)
     }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        use postgres::fallible_iterator::FallibleIterator;
+        let mut client = self.client.lock().unwrap();
+        let mut rows = client
+            .query_raw(
+                "SELECT id, data FROM obop_record WHERE model = $1 ORDER BY seq",
+                [&model as &(dyn postgres::types::ToSql + Sync)],
+            )
+            .map_err(|e| e.to_string())?;
+        while let Some(r) = rows.next().map_err(|e| e.to_string())? {
+            let id: String = r.get(0);
+            if !visit(&id, &pg_fields(r.get::<_, J>(1))?)? {
+                // Dropping the iterator early leaves the portal unread; the client discards it.
+                break;
+            }
+        }
+        Ok(())
+    }
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        self.apply_checked(ops).map_err(|e| e.to_string())
+    }
+    fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        struct P<'a>(postgres::Transaction<'a>);
+        impl TxView for P<'_> {
+            fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+                // Row lock: another process applying a batch to the same record waits here.
+                let row = self
+                    .0
+                    .query_opt(
+                        "SELECT data FROM obop_record WHERE model = $1 AND id = $2 FOR UPDATE",
+                        &[&model, &id],
+                    )
+                    .map_err(|e| e.to_string())?;
+                row.map(|r| pg_fields(r.get::<_, J>(0))).transpose()
+            }
+            fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                let data = J::Object(fields.clone());
+                self.0
+                    .execute(
+                        "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
+                        &[&model, &id, &data],
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+            fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                let data = J::Object(fields.clone());
+                self.0
+                    .execute(
+                        "UPDATE obop_record SET data = $3 WHERE model = $1 AND id = $2",
+                        &[&model, &id, &data],
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+            fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
+                self.0
+                    .execute(
+                        "DELETE FROM obop_record WHERE model = $1 AND id = $2",
+                        &[&model, &id],
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            }
+        }
+        let mut g = self.client.lock().unwrap();
+        let tx = g
+            .transaction()
+            .map_err(|e| ApplyError::Storage(e.to_string()))?;
+        let mut view = P(tx);
+        let r = run_ops(&mut view, ops);
+        match r {
+            Ok(()) => view
+                .0
+                .commit()
+                .map_err(|e| ApplyError::Storage(e.to_string())),
+            Err(e) => {
+                let _ = view.0.rollback();
+                Err(e)
+            }
+        }
+    }
+    fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
+        let rows = self
+            .client
+            .lock()
+            .unwrap()
+            .query(
+                "SELECT id, data FROM obop_record WHERE model = $1 AND data -> $2::text = $3 ORDER BY seq",
+                &[&model, &field, value],
+            )
+            .map_err(|e| e.to_string())?;
+        rows.into_iter()
+            .map(|r| Ok((r.get::<_, String>(0), pg_fields(r.get::<_, J>(1))?)))
+            .collect()
+    }
+    fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
+        let (name, model) = (ident(name)?, ident(model)?);
+        let mut cols = Vec::new();
+        for (i, f) in fields.iter().enumerate() {
+            let f = ident(f)?;
+            cols.push(if i == 0 {
+                format!("(NULLIF(data ->> '{f}', ''))")
+            } else {
+                format!("(COALESCE(data ->> '{f}', ''))")
+            });
+        }
+        self.client
+            .lock()
+            .unwrap()
+            .batch_execute(&format!(
+                "CREATE UNIQUE INDEX IF NOT EXISTS {name} ON obop_record ({}) WHERE model = '{model}'",
+                cols.join(", ")
+            ))
+            .map_err(|e| e.to_string())
+    }
     fn kind(&self) -> &'static str {
         "postgres"
     }
@@ -427,43 +547,7 @@ impl Backend for Pg {
         tx.commit().map_err(e)?;
         Ok(n)
     }
-    fn apply(&self, ops: &[Op]) -> Result<()> {
-        let mut g = self.client.lock().unwrap();
-        let mut tx = g.transaction().map_err(e)?;
-        for op in ops {
-            match op {
-                Op::Put { model, id, fields } => {
-                    let data = J::Object(fields.clone());
-                    tx.execute(
-                        "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)
-                         ON CONFLICT (model, id) DO UPDATE SET data = EXCLUDED.data",
-                        &[model, id, &data],
-                    )
-                    .map_err(e)?;
-                }
-                Op::Merge { model, id, patch } => {
-                    let patch = J::Object(patch.clone());
-                    let n = tx
-                        .execute(
-                            "UPDATE obop_record SET data = data || $3 WHERE model = $1 AND id = $2",
-                            &[model, id, &patch],
-                        )
-                        .map_err(e)?;
-                    if n == 0 {
-                        return Err(format!("no {model} {id} to merge into"));
-                    }
-                }
-                Op::Delete { model, id } => {
-                    tx.execute(
-                        "DELETE FROM obop_record WHERE model = $1 AND id = $2",
-                        &[model, id],
-                    )
-                    .map_err(e)?;
-                }
-            }
-        }
-        tx.commit().map_err(e)
-    }
+
     fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
         let mut g = self.client.lock().unwrap();
         let mut tx = g.transaction().map_err(e)?;

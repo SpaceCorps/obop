@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Strona internetowa"
 description = "Treści publicznej strony: strony, menu nawigacji, wpisy na blogu, ich tłumaczenia oraz zgłoszenia z formularzy. Przy włączonej stronie publicznej opublikowane treści są dostępne bez logowania, z SEO; widoczne są tylko pola publiczne. Publikację zatwierdza człowiek, agenci mogą ją tylko zaproponować. Dane nadawców są osobowe i nigdy publiczne."
+summary = "Strony, menu, wpisy na blogu i zgłoszenia z formularzy, udostępniane jako strona publiczna przy włączonej stronie."
 
 [labels.pl.model.website_page]
 name = "Strona"
@@ -266,3 +267,19 @@ description = "Przetłumaczona treść wpisu w Markdown"
 [labels.pl.model.website_blog_post_translation.field.published]
 label = "Opublikowany"
 description = "Czy tłumaczenie jest pokazywane; dostępne tylko, gdy jego wpis jest opublikowany"
+
+[labels.pl.model.website_page.field.cover_image]
+label = "Obraz tytułowy"
+description = "Obraz na górze strony i w podglądach linków (PNG, JPEG, WebP lub GIF, przy wysyłaniu kodowany ponownie)"
+
+[labels.pl.model.website_page.field.cover_alt]
+label = "Opis obrazu tytułowego"
+description = "Tekst opisujący obraz tytułowy dla osób, które go nie widzą"
+
+[labels.pl.model.website_blog_post.field.cover_image]
+label = "Obraz tytułowy"
+description = "Obraz na górze wpisu i w podglądach linków (PNG, JPEG, WebP lub GIF, przy wysyłaniu kodowany ponownie)"
+
+[labels.pl.model.website_blog_post.field.cover_alt]
+label = "Opis obrazu tytułowego"
+description = "Tekst opisujący obraz tytułowy dla osób, które go nie widzą"

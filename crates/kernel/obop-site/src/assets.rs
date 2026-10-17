@@ -123,6 +123,8 @@ input[type=checkbox],input[type=radio]{width:20px;height:20px;accent-color:var(-
 .card{position:relative;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;transition:border-color .15s,transform .15s}
 .card:hover{border-color:var(--ink)}
 .art{aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;background:var(--tint,var(--soft));color:var(--ink);font:700 3.4rem/1 var(--serif);letter-spacing:-.03em;user-select:none}
+.art.media{background:var(--soft);overflow:hidden;font-size:0}
+.art.media img{width:100%;height:100%;object-fit:cover;display:block}
 .card .body{padding:14px 16px 18px;display:flex;flex-direction:column;gap:4px;flex:1}
 .card h3{margin:0;font-size:1.05rem;line-height:1.3}
 .card h3 a{color:var(--fg);text-decoration:none}
@@ -149,6 +151,15 @@ input[type=checkbox],input[type=radio]{width:20px;height:20px;accent-color:var(-
 .product{display:grid;gap:32px;grid-template-columns:1fr}
 @media (min-width:820px){.product{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}}
 .product .art{border-radius:var(--radius);border:1px solid var(--line);font-size:7rem}
+.gallery{min-width:0}
+.gallery .main{margin:0;border-radius:var(--radius);border:1px solid var(--line);overflow:hidden;background:var(--soft)}
+.gallery .main img,.cover img{display:block;width:100%;height:auto}
+.gallery .main a,.thumbs a{display:block}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;list-style:none;margin:12px 0 0;padding:0}
+.thumbs li{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--soft)}
+.thumbs a:hover{opacity:.85}
+.thumbs img{display:block;width:100%;height:auto;aspect-ratio:1/1;object-fit:cover}
+.cover{margin:0 0 24px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:var(--soft);max-width:1080px}
 .product .buy{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:20px 0}
 .product .big{font-size:1.8rem;margin:0 0 12px}
 .product h1{margin-bottom:.25em}
@@ -169,6 +180,13 @@ input[type=checkbox],input[type=radio]{width:20px;height:20px;accent-color:var(-
 .totals dt{color:var(--muted)}
 .totals dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .totals .grand{font-weight:700;font-size:1.2rem;color:var(--fg)}
+.totals .tax{font-size:.9rem}
+.codeform{margin:0 0 24px}
+.codeform .inline{display:flex;gap:8px;align-items:stretch}
+.codeform .inline input{flex:1;min-width:0;text-transform:uppercase}
+.codemsg{margin:6px 0 0;color:var(--muted);font-size:.92rem}
+.codemsg.ok{color:var(--ok)}
+.pre{white-space:pre-line;margin:6px 0 0}
 .cartgrid{display:grid;gap:32px;grid-template-columns:1fr}
 @media (min-width:900px){.cartgrid{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);align-items:start}}
 fieldset{border:0;padding:0;margin:0 0 18px}
@@ -206,6 +224,12 @@ dl.facts dd{margin:0;white-space:pre-line}
 .post h2 a,.post h3 a{color:var(--fg);text-decoration:none}
 .post h2 a::after,.post h3 a::after{content:"";position:absolute;inset:0}
 .post .meta{margin-bottom:8px}
+.post.withimg{display:grid;gap:16px 22px;grid-template-columns:1fr;padding:0;overflow:hidden}
+@media (min-width:700px){.post.withimg{grid-template-columns:240px minmax(0,1fr);align-items:stretch}}
+.post.withimg .postbody{padding:20px 24px 22px 0}
+@media (max-width:699px){.post.withimg .postbody{padding:0 20px 20px}}
+.postimg{background:var(--soft);min-height:100%}
+.postimg img{display:block;width:100%;height:100%;object-fit:cover;aspect-ratio:3/2}
 .post p{margin:0;color:var(--muted)}
 .tags{display:flex;gap:8px;flex-wrap:wrap;list-style:none;margin:12px 0 0;padding:0}
 
@@ -269,22 +293,28 @@ if(page.hasAttribute("data-cart-page")){
     var parsed=items.split("~").map(function(p){var a=p.split(".");return[a[0],parseInt(a[1],10)||1]}).filter(function(x){return x[0]});
     save(parsed);
   }
-  var shipping=document.querySelectorAll("input[name=shipping_method_id]");
-  var box=document.querySelector("[data-sub]");
-  function money(minor,cur,lang){
-    try{var f=new Intl.NumberFormat(lang,{style:"currency",currency:cur});var d=f.resolvedOptions().maximumFractionDigits;return f.format(minor/Math.pow(10,d))}catch(e){return String(minor)}
+  // Totals are computed on the server (discount, tax, delivery); when the delivery method or the
+  // country changes the script asks for the new totals block and swaps it in.
+  var form=document.querySelector("form[data-checkout]");
+  if(form&&document.querySelector("[data-totals]")){
+    form.addEventListener("change",function(e){
+      var n=e.target&&e.target.name;
+      if(n!=="shipping_method_id"&&n!=="country")return;
+      var q=new URLSearchParams();
+      q.set("items",items);
+      var s=form.querySelector("input[name=shipping_method_id]:checked");if(s)q.set("ship",s.value);
+      var c=form.querySelector("[name=country]");if(c)q.set("country",c.value);
+      var d=form.querySelector("input[name=code]");if(d&&d.value)q.set("code",d.value);
+      var l=form.querySelector("input[name=lang]");if(l&&l.value)q.set("lang",l.value);
+      q.set("part","totals");
+      fetch("/cart?"+q.toString(),{headers:{accept:"text/html"},credentials:"same-origin"})
+        .then(function(r){return r.ok?r.text():null})
+        .then(function(h){var t=document.querySelector("[data-totals]");if(h&&t)t.outerHTML=h})
+        .catch(function(){});
+    });
   }
-  function recalc(){
-    if(!box)return;
-    var sub=parseInt(box.getAttribute("data-sub"),10)||0,cur=box.getAttribute("data-currency"),lang=box.getAttribute("data-lang")||"en",ship=0,any=false;
-    shipping.forEach(function(r){if(r.checked){any=true;var p=parseInt(r.getAttribute("data-price"),10)||0,fo=r.getAttribute("data-free-over");ship=(fo&&sub>=parseInt(fo,10))?0:p}});
-    var so=document.querySelector("[data-ship-out]"),to=document.querySelector("[data-total-out]");
-    if(so&&any)so.textContent=ship?money(ship,cur,lang):so.getAttribute("data-free");
-    if(to&&any)to.textContent=money(sub+ship,cur,lang);
-  }
-  shipping.forEach(function(r){r.addEventListener("change",recalc)});
-  recalc();
 }
+document.addEventListener("click",function(e){var b=e.target&&e.target.closest&&e.target.closest("[data-print]");if(b){e.preventDefault();window.print()}});
 paint();
 })();
 "#;

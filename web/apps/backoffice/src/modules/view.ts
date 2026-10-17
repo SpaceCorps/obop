@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { describeFor, t } from "@obop/ui";
+import { describeFor, getLang, t } from "@obop/ui";
 import { getCoreVersion, type ModuleMeta } from "../api.ts";
 import { appTitle } from "../labels.ts";
 import { useModules, type Loaded } from "./data.ts";
@@ -14,8 +14,8 @@ export type Dialog =
   | null;
 
 /** A one-line card text: the summary, else the first sentence of the description. */
-export function cardText(r: Row, description: string): string {
-  if (r.summary) return r.summary;
+export function cardText(r: Row, description: string, summary?: string): string {
+  if (summary || r.summary) return summary || r.summary;
   const first = description.split(/(?<=[.!?])\s/)[0] ?? description;
   return first.length > 140 ? `${first.slice(0, 137)}…` : first;
 }
@@ -61,6 +61,16 @@ export function useModulesView(opts: {
     (r: Row) => {
       const m = meta.find((x) => x.id === r.id);
       return (m && describeFor(m)) || r.description;
+    },
+    [meta],
+  );
+
+  /** The card summary in the active language: the module's translation, else the English one. */
+  const summaryOf = useCallback(
+    (r: Row) => {
+      const m = meta.find((x) => x.id === r.id);
+      const hit = m?.summaries?.[getLang()] ?? m?.summaries?.[getLang().split("-")[0]!];
+      return (typeof hit === "string" && hit.trim() ? hit : "") || r.summary;
     },
     [meta],
   );
@@ -137,6 +147,7 @@ export function useModulesView(opts: {
     core,
     nameOf,
     descriptionOf,
+    summaryOf,
     rowsById,
     installedIds,
     selected,

@@ -16,6 +16,8 @@ pub type Texts = BTreeMap<String, String>;
 
 pub const MAX_LABEL_CHARS: usize = 80;
 pub const MAX_DESCRIPTION_CHARS: usize = 400;
+/// The same limit as the manifest's own one-line `summary`.
+pub const MAX_SUMMARY_CHARS: usize = 140;
 
 /// A name and a description in each language: the entry for a module, model, field or action.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -43,6 +45,8 @@ pub struct ModelTr {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Translations {
     pub module: Entry,
+    /// The one-line card text of the module per language (`summary` under `[labels.<lang>.module]`).
+    pub summaries: Texts,
     pub models: BTreeMap<String, ModelTr>,
 }
 
@@ -57,12 +61,13 @@ pub struct LangLabels {
     pub model: BTreeMap<String, ModelLabels>,
 }
 
-/// `name` and `description`: a module.
+/// `name`, `description` and `summary`: a module.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct NameDesc {
     pub name: Option<String>,
     pub description: Option<String>,
+    pub summary: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
@@ -199,6 +204,11 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
                 &m.description,
                 MAX_DESCRIPTION_CHARS,
             )?;
+            val(
+                format!("{lang}.module.summary"),
+                &m.summary,
+                MAX_SUMMARY_CHARS,
+            )?;
         }
         for (model, ml) in &l.model {
             let at = format!("{lang}.model.{model}");
@@ -270,6 +280,7 @@ impl Translations {
             if let Some(m) = &l.module {
                 put(&mut t.module.labels, lang, &m.name);
                 put(&mut t.module.descriptions, lang, &m.description);
+                put(&mut t.summaries, lang, &m.summary);
             }
             for (model, ml) in &l.model {
                 let mt = t.models.entry(model.clone()).or_default();
@@ -355,6 +366,27 @@ mod tests {
         ] {
             assert!(!lang_ok(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn a_module_summary_is_translated_and_checked() {
+        let shape = Shape::default();
+        let parse = |s: &str| Translations::parse_labels(s).unwrap();
+        let ok =
+            parse("[labels.de.module]\nname = \"Fuhrpark\"\nsummary = \"Fahrzeuge und Fahrer.\"");
+        assert!(check_labels(&ok, &shape).is_ok());
+        assert_eq!(
+            Translations::from_labels(&ok).summaries["de"],
+            "Fahrzeuge und Fahrer."
+        );
+        let long = format!("[labels.de.module]\nsummary = \"{}\"", "x".repeat(141));
+        assert!(
+            check_labels(&parse(&long), &shape)
+                .unwrap_err()
+                .contains("module.summary")
+        );
+        let markup = parse("[labels.de.module]\nsummary = \"<b>x</b>\"");
+        assert!(check_labels(&markup, &shape).is_err());
     }
 
     #[test]

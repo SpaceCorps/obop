@@ -1,5 +1,6 @@
 [labels.fi.module]
 name = "CRM"
+summary = "Liidit ja myyntimahdollisuudet putkessa ensimmäisestä yhteydenotosta voittoon tai häviöön."
 
 [labels.fi.model.lead]
 name = "Liidi"

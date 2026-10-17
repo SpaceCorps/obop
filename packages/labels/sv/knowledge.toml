@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Kunskapsbas"
 description = "En wiki: artiklar ordnade i ett träd via en överordnad artikel, med flödet utkast, publicerad, arkiverad, en synlighetsinställning och taggar. Synlighet är en etikett för gränssnittet och för människor att följa; plattformen har ännu inga behörigheter per post, så alla med kunskapsbasens grupper kan läsa alla artiklar."
+summary = "En wiki: artiklar i ett träd med flödet utkast, publicerad, arkiverad samt synlighet och taggar."
 
 [labels.sv.model.knowledge_article]
 name = "Artikel"

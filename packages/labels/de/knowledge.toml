@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Wissen"
 description = "Ein Wiki: Artikel, über einen übergeordneten Artikel als Baum angeordnet, mit dem Ablauf Entwurf, veröffentlicht, archiviert, einer Sichtbarkeit und Schlagwörtern. Die Sichtbarkeit ist ein Hinweis für die Oberfläche und zur Beachtung durch Menschen; die Plattform kennt noch keine Berechtigungen pro Datensatz, daher kann jeder mit den Wissen-Gruppen jeden Artikel lesen."
+summary = "Ein Wiki: Artikel in einem Baum mit dem Ablauf Entwurf, veröffentlicht, archiviert, mit Sichtbarkeit und Schlagwörtern."
 
 [labels.de.model.knowledge_article]
 name = "Artikel"

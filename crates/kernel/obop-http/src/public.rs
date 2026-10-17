@@ -59,7 +59,7 @@ pub fn admin_prefix_ok(p: &str) -> bool {
         && rest.len() <= 32
         && !matches!(
             rest,
-            "api" | "assets" | "shop" | "blog" | "cart" | "contact"
+            "api" | "assets" | "media" | "shop" | "blog" | "cart" | "contact"
         )
         && rest
             .chars()

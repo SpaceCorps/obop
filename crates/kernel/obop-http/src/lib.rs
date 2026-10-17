@@ -15,11 +15,13 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 
+pub mod blobs;
 pub mod community;
 pub mod connectors;
 pub mod mcp;
 pub mod mfa;
 pub mod openapi;
+pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod website;
@@ -32,6 +34,8 @@ pub struct HttpState {
     mcp: mcp::McpState,
     /// The connectors engines, set once by the composition root (webhooks, OAuth redirect).
     connectors: std::sync::OnceLock<Arc<obop_connectors::Runtime>>,
+    /// The payment module's webhook door (`/hooks/pay/{provider}`), set by the composition root.
+    payments: std::sync::OnceLock<Arc<dyn obop_commands::PaymentHooks>>,
 }
 
 impl HttpState {
@@ -52,6 +56,7 @@ impl HttpState {
             mcp: mcp::McpState::new(mcp, shared.clone()),
             shared,
             connectors: std::sync::OnceLock::new(),
+            payments: std::sync::OnceLock::new(),
         })
     }
 
@@ -68,6 +73,11 @@ impl HttpState {
         } else {
             AuthRejection::MfaEnrolmentRequired
         }
+    }
+
+    /// Serve the payment providers' webhook door.
+    pub fn set_payments(&self, hooks: Arc<dyn obop_commands::PaymentHooks>) {
+        let _ = self.payments.set(hooks);
     }
 
     /// Serve the connectors' public doors (`/hooks/in/{id}`, `/oauth/callback`).
@@ -140,6 +150,15 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             )),
         )
         .route("/oauth/callback", get(connectors::oauth_callback))
+        .route(
+            "/hooks/pay/{provider}",
+            post(payments::hook).layer(axum::extract::DefaultBodyLimit::max(payments::MAX_BODY)),
+        )
+        .route(
+            "/api/blobs",
+            post(blobs::upload).layer(axum::extract::DefaultBodyLimit::disable()),
+        )
+        .route("/api/blobs/{id}", get(blobs::download))
         .route("/api/{model}/{command}", post(call))
         .route("/mcp", any(mcp::endpoint))
         .route("/mcp/server-card", get(mcp::server_card_canonical))

@@ -53,7 +53,16 @@ Each has a specimen in the Brand book (Components).
 - The list pages on the server through `<model>/search`. What the server cannot express runs in the
   browser on up to 5,000 loaded records (an any-field search, "contains" on a select or ref, grouping, a
   sort by a ref). `serverQuery.ts` documents the full list.
-- Kanban, pivot, graph and calendar load up to 5,000 records and say so in a notice when there are more.
+- Kanban, pivot, graph and calendar ask the server for counts, sums and pages (`aggregate`, D4) instead of
+  loading records: a kanban column shows its count and sum from one aggregate and its first 40 cards,
+  "Load more" asks for 40 more; the calendar asks for the days on screen; pivot and graph use the
+  grouped numbers. A search the server cannot express (any-field search, "contains" on a select) falls
+  back to loading up to 5,000 records, with the notice that says so.
+- "Select all N matching" appears when the whole page is selected and more records match. Set-field and
+  delete then run over every matching record (at most 5,000 per operation, with a message when there
+  are more) in batches of 8 with a progress bar, Cancel between batches, and a result per record;
+  agents still only propose, and the dialog says how many records are involved. CSV export streams in
+  pages of 1,000 (at most 20,000 rows).
 - The page is in the address (`page=2`); a new search starts again at page 1. Page size is a
   per-browser preference.
 
@@ -64,3 +73,23 @@ Each has a specimen in the Brand book (Components).
 - Tile filters are text: `field operator value; …`. Operators: `=`, `!=`, `~`, `>`, `>=`, `<`, `<=`,
   `in` (values separated by `|`), `is empty`, `is set`. A JSON object of exact values (the package
   documentation's form) is read as equality on each key.
+
+## The record on small screens, language changes, failures
+
+- Up to 1,024 px the record is a sheet over the list: a right-side panel (inline end) on a tablet, the
+  whole screen on a phone (up to 640 px) with a "Back to list" button. It is a dialog (`role="dialog"`,
+  `aria-modal`): focus is trapped and returned to the opener, Esc closes it, the page behind does not
+  scroll (`html.sheet-open`), and the list stays mounted underneath, so its selection and scroll are
+  there when it closes. Wider than that the panel sits beside the list and is not modal.
+- Changing the language does not remount the app (D6): `I18nProvider` clones the root element so the
+  whole tree renders again with the new text, and every component keeps its state: the route, an open
+  record panel, a dialog, a draft. Do not wrap components in `memo` and do not cache translated text
+  in `useMemo` without `useI18n().lang` in its dependencies.
+- A dropped connection never escapes as an unhandled rejection. Every command answers an error reply
+  ("Could not reach the server"); reads (get, list, search, meta) retry twice with a short backoff, writes
+  never; a page-wide banner says the app is offline or the server cannot be reached and clears itself
+  (and reloads what is on screen) when it answers again. A 500 or an HTML error page becomes "The server
+  had a problem (status 500)". A first load that fails shows "Could not load your workspace" with Try
+  again. A screen that crashes while rendering shows a recovery screen (Try again, Reload, back to the
+  apps) and logs the error to the console only; nothing is sent anywhere. Big routes load on demand and
+  show a skeleton meanwhile.

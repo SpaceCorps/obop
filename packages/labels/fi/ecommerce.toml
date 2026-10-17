@@ -1,6 +1,8 @@
 [labels.fi.module]
 name = "Verkkokauppa"
-description = "Verkkokauppa: luokat, käännetyt tuotesivut, toimitustavat, alennuskoodit ja verkkotilaukset riveineen. Julkisella sivustolla kävijät tilaavat ilman tiliä; palvelin hinnoittelee tilauksen aina julkaistun tuotesivun mukaan. Maksupalvelua ei ole. Hyvitykset vaativat esihenkilön hyväksynnän. Asiakkaan tiedot ovat henkilötietoja. Vaatii Tuotteet-paketin."
+description = "Verkkokauppa: luokat, tuotteet kuvilla ja käännöksillä, toimitustavat, alennuskoodit, verokannat ja verkkotilaukset. Palvelin vähentää varaston, soveltaa alennukset ja verot ja laskee hinnat itse. Maksu tilisiirrolla, kortilla (Stripe Checkout) tai esittelytilassa. Hyvitykset vaativat esimiehen. Asiakastiedot eivät ole koskaan julkisia. Vaatii Tuotteet-paketin."
+
+summary = "Verkkokauppa: tuotesivut, toimitus, alennuskoodit ja verkkotilaukset sekä julkinen kauppa, kun sivusto on käytössä."
 
 [labels.fi.model.ecommerce_category]
 name = "Luokka"
@@ -81,7 +83,7 @@ allow_backorder = "Salli jälkitoimitus"
 
 [labels.fi.model.ecommerce_listing.field.stock_quantity]
 label = "Varastosaldo"
-description = "Käsillä olevat yksiköt varastokäytännön käyttöön. Tilaukset eivät vähennä sitä: päivitä se käsin"
+description = "Varastossa olevat kappaleet, varastosäännön kanssa. Jokainen tilaus vähentää kappaleet kassalla, ja peruttu, vanhentunut tai hyvitetty tilaus palauttaa ne; korjaa käsin inventaarion jälkeen"
 
 [labels.fi.model.ecommerce_listing.field.published]
 label = "Julkaistu"
@@ -186,7 +188,7 @@ description = "Kuinka monta kertaa koodia saa käyttää yhteensä; tyhjä tarko
 
 [labels.fi.model.ecommerce_discount_code.field.used_count]
 label = "Käyttökerrat"
-description = "Kuinka monta kertaa koodia on käytetty (päivitetään käsin)"
+description = "Kuinka monta kertaa sitä on käytetty. Kauppa laskee käytön tilausta tehtäessä ja palauttaa sen, jos tilaus peruutetaan tai sitä ei makseta"
 
 [labels.fi.model.ecommerce_discount_code.field.minimum_order]
 label = "Vähimmäistilaus"
@@ -242,7 +244,7 @@ description = "ISO 4217 -valuuttakoodi, esimerkiksi EUR"
 
 [labels.fi.model.ecommerce_order.field.subtotal]
 label = "Välisumma"
-description = "Rivien summa (valuutan pienin yksikkö, syötetty eikä laskettu)"
+description = "Rivien summa tuotteiden hinnoilla (pienin rahayksikkö, kauppa laskee kassalla)"
 
 [labels.fi.model.ecommerce_order.field.discount_total]
 label = "Alennukset yhteensä"
@@ -254,11 +256,11 @@ description = "Toimituskulut (valuutan pienin yksikkö)"
 
 [labels.fi.model.ecommerce_order.field.tax_total]
 label = "Verot yhteensä"
-description = "Kokonaissummaan sisältyvä vero (valuutan pienin yksikkö)"
+description = "Tilauksen koko vero, sekä hintoihin sisältyvä että päälle lisätty osa (pienin rahayksikkö)"
 
 [labels.fi.model.ecommerce_order.field.total]
 label = "Yhteensä"
-description = "Summa, jonka ostaja maksaa (valuutan pienin yksikkö)"
+description = "Asiakkaan maksama summa: rivit miinus alennus plus toimitus plus päälle lisätty vero (pienin rahayksikkö)"
 
 [labels.fi.model.ecommerce_order.field.payment_reference]
 label = "Maksuviite"
@@ -339,3 +341,201 @@ description = "Yksikköhinta verokanta mukaan lukien (valuutan pienin yksikkö)"
 [labels.fi.model.ecommerce_order_line.field.subtotal]
 label = "Välisumma"
 description = "Rivin summa (valuutan pienin yksikkö, syötetty eikä laskettu)"
+
+[labels.fi.model.ecommerce_listing.field.image]
+label = "Kuva"
+description = "Tuotteen pääkuva (PNG, JPEG, WebP tai GIF, enintään 5 MiB; koodataan uudelleen ja metatiedot poistetaan latauksessa)"
+
+[labels.fi.model.ecommerce_listing.field.image_alt]
+label = "Kuvan kuvaus"
+description = "Teksti, joka kuvaa pääkuvan niille, jotka eivät näe sitä"
+
+[labels.fi.model.ecommerce_listing_image]
+name = "Tarjouksen kuva"
+description = "Tarjouksen lisäkuva galleriaa varten"
+
+[labels.fi.model.ecommerce_listing_image.field.listing_id]
+label = "Tarjous"
+description = "Tarjous, johon kuva kuuluu; se näkyy vain niin kauan kuin tarjous on julkaistu"
+
+[labels.fi.model.ecommerce_listing_image.field.image]
+label = "Kuva"
+description = "Kuva (PNG, JPEG, WebP tai GIF, enintään 5 MiB)"
+
+[labels.fi.model.ecommerce_listing_image.field.alt]
+label = "Kuvaus"
+description = "Teksti, joka kuvaa kuvan niille, jotka eivät näe sitä"
+
+[labels.fi.model.ecommerce_listing_image.field.sequence]
+label = "Järjestys"
+description = "Järjestys galleriassa, pienin ensin"
+
+[labels.fi.model.ecommerce_listing_image.field.published]
+label = "Julkaistu"
+description = "Näytetäänkö kuva kaupassa"
+
+[labels.fi.model.ecommerce_discount_code.field.per_customer_limit]
+label = "Rajoitus asiakasta kohti"
+description = "Kuinka monta kertaa yksi asiakas (sähköpostiosoitteen mukaan) saa käyttää koodia; tyhjä tarkoittaa ei rajaa"
+
+[labels.fi.model.ecommerce_discount_code.field.category_id]
+label = "Luokka"
+description = "Vain tämän luokan tuotteet saavat alennuksen; tyhjä tarkoittaa koko tilausta"
+
+[labels.fi.model.ecommerce_discount_use]
+name = "Koodin käyttö"
+description = "Kuinka monta kertaa yksi asiakas on käyttänyt yhtä alennuskoodia (asiakas tallennetaan tiivisteenä, ei koskaan sähköpostiosoitteena)"
+
+[labels.fi.model.ecommerce_discount_use.field.code_id]
+label = "Koodi"
+description = "Alennuskoodi"
+
+[labels.fi.model.ecommerce_discount_use.field.customer_hash]
+label = "Asiakkaan tiiviste"
+description = "Asiakkaan sähköpostiosoitteen tiiviste, jotta asiakaskohtainen raja voidaan tarkistaa tallentamatta osoitetta"
+
+[labels.fi.model.ecommerce_discount_use.field.count]
+label = "Käyttökerrat"
+description = "Käyttökerrat toistaiseksi"
+
+[labels.fi.model.ecommerce_tax_rate]
+name = "Verokanta"
+description = "Verokanta, jota kauppa soveltaa tuotteisiin ja joka lasketaan palvelimella"
+
+[labels.fi.model.ecommerce_tax_rate.field.name]
+label = "Nimi"
+description = "Tilauksella näkyvä nimi, esimerkiksi ALV"
+
+[labels.fi.model.ecommerce_tax_rate.field.rate_bp]
+label = "Kanta (peruspisteitä)"
+description = "Kanta peruspisteinä: 1900 on 19,00 prosenttia"
+
+[labels.fi.model.ecommerce_tax_rate.field.country]
+label = "Maa"
+description = "Toimitusosoitteen kaksikirjaiminen maakoodi (esim. DE), jota kanta koskee; tyhjä tarkoittaa jokaista maata, jolla ei ole omaa kantaa"
+
+[labels.fi.model.ecommerce_tax_rate.field.category_id]
+label = "Luokka"
+description = "Vain tämän luokan tuotteet; tyhjä tarkoittaa kaikkia tuotteita (ja toimitusta)"
+
+[labels.fi.model.ecommerce_tax_rate.field.included]
+label = "Sisältyy hintoihin"
+description = "Sisältävätkö tuotteiden hinnat jo tämän veron (EU:ssa tavallista). Jos eivät, vero lisätään kassalla"
+
+[labels.fi.model.ecommerce_tax_rate.field.active]
+label = "Aktiivinen"
+description = "Sovelletaanko kantaa"
+
+[labels.fi.model.ecommerce_order.field.discount_code]
+label = "Käytetty alennuskoodi"
+description = "Asiakkaan syöttämä koodi sellaisena kuin se näkyy tilauksella"
+
+[labels.fi.model.ecommerce_order.field.discount_use_id]
+label = "Asiakaskohtainen käyttö"
+description = "Mihin asiakaskohtaiseen laskuriin tämä tilaus laskettiin, jotta se voidaan palauttaa"
+
+[labels.fi.model.ecommerce_order.field.country]
+label = "Maa"
+description = "Toimitusosoitteen kaksikirjaiminen maakoodi, joka ratkaisee verokannan"
+
+[labels.fi.model.ecommerce_order.field.tax_summary]
+label = "Verorivit"
+description = "Tilauksen verorivit JSON-muodossa: nimi, kanta peruspisteinä, sisältyykö hintoihin, määrä"
+
+[labels.fi.model.ecommerce_order.field.stock_returned]
+label = "Varasto palautettu"
+description = "Asetetaan, kun peruutetun, vanhentuneen tai hyvitetyn tilauksen kappaleet on palautettu tuotteille, jotta se tapahtuu vain kerran"
+
+[labels.fi.model.ecommerce_order.field.reserved_until]
+label = "Varaus voimassa asti"
+description = "Unix-aika, johon asti maksamaton tilaus varaa varastonsa; sen jälkeen se perutaan ja varasto palautetaan"
+
+[labels.fi.model.ecommerce_order.field.payment_method]
+label = "Maksutapa"
+description = "Asiakkaan valitsema maksutapa: manual (tilisiirto tai lasku), stripe (kortti) tai fake (esittely)"
+
+[labels.fi.model.ecommerce_order.field.payment_method.options]
+manual = "Tilisiirto tai lasku"
+stripe = "Kortti (Stripe)"
+fake = "Esittely (ei rahaa)"
+
+[labels.fi.model.ecommerce_order_line.field.discount_amount]
+label = "Alennus"
+description = "Tilauksen alennuksen osuus tälle riville (pienin rahayksikkö)"
+
+[labels.fi.model.ecommerce_order_line.field.tax_name]
+label = "Vero"
+description = "Tälle riville sovelletun veron nimi"
+
+[labels.fi.model.ecommerce_order_line.field.tax_rate_bp]
+label = "Verokanta (ps)"
+description = "Tämän rivin verokanta peruspisteinä"
+
+[labels.fi.model.ecommerce_order_line.field.tax_amount]
+label = "Veron määrä"
+description = "Tämän rivin vero, hintoihin sisältyvä tai päälle lisätty (pienin rahayksikkö)"
+
+[labels.fi.model.ecommerce_payment]
+name = "Maksu"
+description = "Verkkotilauksen maksu: mikä palveluntarjoaja, sen viite, summa ja mitä tapahtui. Kauppa ei koskaan näe korttitietoja"
+
+[labels.fi.model.ecommerce_payment.field.order_id]
+label = "Tilaus"
+description = "Maksettava tilaus"
+
+[labels.fi.model.ecommerce_payment.field.provider]
+label = "Palveluntarjoaja"
+description = "Kuka ottaa maksun vastaan: manual (tilisiirto tai lasku), stripe (Stripe Checkout) tai fake (paikallinen esittely)"
+
+[labels.fi.model.ecommerce_payment.field.provider.options]
+manual = "Tilisiirto tai lasku"
+stripe = "Kortti (Stripe)"
+fake = "Esittely (ei rahaa)"
+
+[labels.fi.model.ecommerce_payment.field.external_id]
+label = "Palveluntarjoajan viite"
+description = "Palveluntarjoajan viite tälle maksulle, esimerkiksi Stripe Checkout -istunnon tunniste. Ei koskaan korttinumero"
+
+[labels.fi.model.ecommerce_payment.field.checkout_url]
+label = "Maksusivu"
+description = "Missä asiakas maksaa; tallennettu, jotta maksusivu voi lähettää hänet sinne niin kauan kuin maksu on auki"
+
+[labels.fi.model.ecommerce_payment.field.state]
+label = "Tila"
+description = "Maksun tila: avoin (odottaa asiakasta), onnistui, epäonnistui, vanhentunut, peruttu, hyvitetty"
+
+[labels.fi.model.ecommerce_payment.field.state.options]
+open = "Avoin"
+succeeded = "Onnistui"
+failed = "Epäonnistui"
+expired = "Vanhentunut"
+cancelled = "Peruttu"
+refunded = "Hyvitetty"
+
+[labels.fi.model.ecommerce_payment.field.amount]
+label = "Summa"
+description = "Maksettava summa, jonka palvelin asettaa tilauksesta (pienin rahayksikkö)"
+
+[labels.fi.model.ecommerce_payment.field.currency]
+label = "Valuutta"
+description = "Summan ISO 4217 -valuuttakoodi"
+
+[labels.fi.model.ecommerce_payment.field.refund_id]
+label = "Hyvityksen viite"
+description = "Palveluntarjoajan viite hyvitykselle, kun maksu on hyvitetty"
+
+[labels.fi.model.ecommerce_payment.field.refunded_amount]
+label = "Hyvitetty summa"
+description = "Asiakkaalle palautettu summa (pienin rahayksikkö)"
+
+[labels.fi.model.ecommerce_payment.field.event_ids]
+label = "Käsitellyt tapahtumat"
+description = "Jo käsiteltyjen palveluntarjoajan tapahtumien tunnisteet JSON-muodossa, jotta toistettu ilmoitus ei muuta mitään"
+
+[labels.fi.model.ecommerce_payment.action.mark_failed]
+label = "Merkitse epäonnistuneeksi"
+description = "Palveluntarjoaja ilmoittaa, että maksu epäonnistui"
+
+[labels.fi.model.ecommerce_payment.action.cancel]
+label = "Peruuta"
+description = "Lopeta tämän maksun odottaminen"

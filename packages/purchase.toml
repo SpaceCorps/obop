@@ -1,8 +1,8 @@
 [module]
 id = "purchase"
-version = "0.2.0"
+version = "0.3.0"
 name = "Purchase"
-description = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received and cancelled flow. Order totals are entered, not summed from the lines."
+description = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received and cancelled flow. An order has a number from a series, its total is the sum of its lines, and receiving the goods creates a draft stock move per line at the receiving location (the warehouse validates them)."
 author = "SpaceCorps"
 summary = "Vendors, purchase orders and order lines with a draft, sent, confirmed, received flow."
 license = "AGPL-3.0-or-later"
@@ -16,6 +16,7 @@ requires_core = "^0.2"
 [module.dependencies]
 base = "^0.2"
 product = "^0.2"
+inventory = ">=0.3, <1"
 
 [[model]]
 name = "purchase_vendor"
@@ -68,6 +69,13 @@ read_group = "purchase.user"
 write_group = "purchase.user"
 
   [[model.field]]
+  name = "number"
+  description = "Purchase order number such as PO-00042, assigned when the order is created"
+  class = "none"
+  kind = "sequence"
+  format = "PO-{seq:05}"
+
+  [[model.field]]
   name = "reference"
   description = "Order number printed on the document"
   class = "none"
@@ -99,10 +107,18 @@ write_group = "purchase.user"
   class = "none"
 
   [[model.field]]
+  name = "receive_location_id"
+  description = "Where the goods are to be received; receiving the order creates the stock moves to this location"
+  class = "none"
+  kind = "ref"
+  to = "inventory_location"
+
+  [[model.field]]
   name = "total"
-  description = "Order total as agreed with the vendor (minor currency units, e.g. cents)"
+  description = "Order total: the sum of the line amounts (minor currency units, e.g. cents)"
   class = "none"
   kind = "money"
+  computed = "sum(lines.amount)"
 
   [[model.field]]
   name = "notes"
@@ -136,10 +152,17 @@ write_group = "purchase.user"
 
   [[model.action]]
   name = "receive"
-  description = "Record that the goods arrived"
+  description = "Record that the goods arrived: a draft stock move per line is created for the warehouse to validate (needs the inventory.user group)"
   field = "state"
   from = "confirmed"
   to = "received"
+
+    [[model.action.effect]]
+    kind = "create"
+    model = "inventory_move"
+    for_each = "lines"
+    when = "is_set(receive_location_id)"
+    map = { product_id = "$line.product_id", to_location_id = "$self.receive_location_id", quantity = "$line.quantity", scheduled_on = "$self.expected_on" }
 
   [[model.action]]
   name = "cancel"
@@ -188,6 +211,13 @@ write_group = "purchase.user"
   class = "none"
   kind = "money"
   required = true
+
+  [[model.field]]
+  name = "amount"
+  description = "Line amount: quantity times unit price (minor currency units)"
+  class = "none"
+  kind = "money"
+  computed = "quantity * unit_price"
 
   [[model.field]]
   name = "received_quantity"

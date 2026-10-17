@@ -523,3 +523,51 @@ fn postgres_round_trips_and_moves_data_to_and_from_sqlite() {
         9_007_199_254_740_993_i64
     );
 }
+
+#[test]
+fn uploaded_files_travel_with_the_backup_and_come_back_intact() {
+    use obop_storage::blob::{Catalog, NewBlob};
+    let dir = Dir::new();
+    let src = dir.sqlite("src.db");
+    seed(&src);
+    let blobs = Catalog::memory(src.clone());
+    let png: Vec<u8> = (0..=255u8).cycle().take(5000).collect();
+    let info = blobs
+        .put(
+            &png,
+            NewBlob {
+                content_type: "image/png".into(),
+                uploader: "ada".into(),
+                ..NewBlob::default()
+            },
+        )
+        .unwrap();
+    let c = create_with(&src, Some(&blobs), 2, &dir.path("b.jsonl.gz"), &mut |_| {}).unwrap();
+    assert_eq!(c.manifest.blobs, 1);
+    assert_eq!(verify(&c.data_path).unwrap().manifest.blobs, 1);
+
+    // Into a database whose byte store is empty.
+    let dst = dir.sqlite("dst.db");
+    let fresh = Catalog::memory(dst.clone());
+    let r = restore_with(
+        &dst,
+        Some(&fresh),
+        2,
+        &c.data_path,
+        RestoreOptions::default(),
+        &mut |_| {},
+    )
+    .unwrap();
+    assert_eq!(r.records, c.manifest.records);
+    let back = fresh.info(&info.id).unwrap().expect("the blob record");
+    assert_eq!(back.pending, info.pending, "what holds it is kept");
+    assert_eq!(fresh.read_all(&info.id, 1 << 20).unwrap().unwrap(), png);
+
+    // A damaged blob line is caught by verify before anything is written.
+    let text = gunzip(&c.data_path);
+    let mut lines: Vec<String> = text.lines().map(String::from).collect();
+    let at = lines.iter().position(|l| l.contains("\"blob\"")).unwrap();
+    lines[at] = lines[at].replace("\"x\":\"", "\"x\":\"AA");
+    rewrite(&c, &(lines.join("\n") + "\n"));
+    assert!(verify(&c.data_path).is_err());
+}

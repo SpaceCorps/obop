@@ -31,7 +31,16 @@ pub fn robots(ctx: &Ctx) -> Resp {
         if let Some(a) = &ctx.admin_prefix {
             t.push_str(&format!("Disallow: {a}/\n"));
         }
-        for p in ["/api/", "/cart", "/shop/checkout", "/shop/order/"] {
+        for p in [
+            "/api/",
+            "/cart",
+            "/shop/checkout",
+            "/shop/order/",
+            "/shop/pay/",
+            "/shop/fake-pay/",
+            "/hooks/",
+            "/shop/discount/",
+        ] {
             t.push_str(&format!("Disallow: {p}\n"));
         }
         t.push_str(&format!("\nSitemap: {}\n", ctx.abs("/sitemap.xml")));
@@ -149,6 +158,8 @@ struct Url {
     loc: String,
     lastmod: Option<String>,
     alternates: Vec<(Lang, String)>,
+    /// Public pictures of the page (absolute URLs), for the image sitemap extension.
+    images: Vec<String>,
 }
 
 fn translated_langs(site: &Site, model: &str, ref_field: &str) -> BTreeMap<String, Vec<Lang>> {
@@ -202,6 +213,7 @@ pub fn sitemap(site: &Site, ctx: &Ctx) -> Resp {
                 loc: ctx.abs(&path),
                 lastmod,
                 alternates,
+                images: Vec::new(),
             });
         };
     let day = |r: &PublicRecord| {
@@ -255,6 +267,9 @@ pub fn sitemap(site: &Site, ctx: &Ctx) -> Resp {
             for l in &items {
                 if crate::valid_slug(l.text("slug")) {
                     push(&mut urls, product_path(l), None, listing_langs.get(&l.id));
+                    if let Some(u) = urls.last_mut() {
+                        u.images = site.listing_image_urls(ctx, l);
+                    }
                 }
             }
         }
@@ -263,7 +278,7 @@ pub fn sitemap(site: &Site, ctx: &Ctx) -> Resp {
         push(&mut urls, "/contact".into(), None, None);
     }
     let mut x = String::from(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\">\n",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:xhtml=\"http://www.w3.org/1999/xhtml\" xmlns:image=\"http://www.google.com/schemas/sitemap-image/1.1\">\n",
     );
     for u in urls {
         x.push_str(&format!("<url><loc>{}</loc>", esc(&u.loc)));
@@ -275,6 +290,12 @@ pub fn sitemap(site: &Site, ctx: &Ctx) -> Resp {
                 "<xhtml:link rel=\"alternate\" hreflang=\"{}\" href=\"{}\"/>",
                 l.code(),
                 esc(href)
+            ));
+        }
+        for img in &u.images {
+            x.push_str(&format!(
+                "<image:image><image:loc>{}</image:loc></image:image>",
+                esc(img)
             ));
         }
         x.push_str("</url>\n");
@@ -290,6 +311,7 @@ pub fn is_reserved(slug: &str) -> bool {
         slug,
         "blog"
             | "shop"
+            | "media"
             | "cart"
             | "contact"
             | "sitemap.xml"

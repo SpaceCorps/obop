@@ -33,6 +33,8 @@ const OPS_BY_KIND: Record<FieldMeta["kind"], WidgetOp[]> = {
   bool: ["eq"],
   select: ["eq", "ne", "in", "empty", "set"],
   ref: ["eq", "ne", "empty", "set"],
+  image: ["empty", "set"],
+  file: ["empty", "set"],
 };
 
 type Draft = {

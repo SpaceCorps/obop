@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Kontakter"
+summary = "Kontakter och företag: de personer och organisationer verksamheten har att göra med."
 
 [labels.sv.model.party]
 name = "Part"
@@ -24,3 +25,7 @@ description = "Interna anteckningar i fritext"
 [labels.sv.model.party.action.erase]
 label = "Radera"
 description = "Anonymisera parten på plats och registrera raderingen"
+
+[labels.sv.model.party.field.photo]
+label = "Foto"
+description = "Foto eller logotyp för kontakten (PNG, JPEG, WebP eller GIF, upp till 2 MiB)"

@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Planification"
 description = "Créneaux de travail pour les employés, avec rôles et modèles réutilisables. Un créneau a un jour et un début et une fin en minutes depuis minuit (0 à 1439 ; 540 correspond à 09:00). Un créneau sans employé est un créneau ouvert. Flux : ouvert, publié, confirmé par l’employé. Nécessite le package Ressources humaines."
+summary = "Créneaux des employés avec rôles et modèles réutilisables ; les créneaux ouverts sont publiés puis confirmés."
 
 [labels.fr.model.planning_role]
 name = "Rôle"

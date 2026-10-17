@@ -1,5 +1,6 @@
 [labels.fr.module]
 name = "Facturation"
+summary = "Factures clients avec un cycle de vie brouillon, comptabilisée et payée."
 
 [labels.fr.model.invoice]
 name = "Facture"
@@ -20,7 +21,7 @@ cancelled = "Annulée"
 
 [labels.fr.model.invoice.field.total_minor]
 label = "Total"
-description = "Total de la facture en plus petite unité monétaire"
+description = "Total de la facture en plus petite unité monétaire, somme des lignes"
 
 [labels.fr.model.invoice.field.number]
 label = "Numéro"
@@ -33,3 +34,39 @@ description = "Comptabilise une facture en brouillon et lui attribue son numéro
 [labels.fr.model.invoice.action.cancel]
 label = "Annuler"
 description = "Annule une facture en brouillon"
+
+[labels.fr.model.invoice.field.party_id]
+label = "Tiers"
+description = "Identifiant du tiers client"
+
+[labels.fr.model.invoice.field.currency]
+label = "Devise"
+description = "Code de devise ISO 4217"
+
+[labels.fr.model.invoice_line]
+name = "Ligne de facture"
+description = "Un produit ou un service d’une facture"
+
+[labels.fr.model.invoice_line.field.invoice_id]
+label = "Facture"
+description = "La facture à laquelle appartient la ligne"
+
+[labels.fr.model.invoice_line.field.product_id]
+label = "Produit"
+description = "Le produit facturé"
+
+[labels.fr.model.invoice_line.field.description]
+label = "Description"
+description = "Ce qui est facturé"
+
+[labels.fr.model.invoice_line.field.quantity]
+label = "Quantité"
+description = "Quantité facturée"
+
+[labels.fr.model.invoice_line.field.unit_price_minor]
+label = "Prix unitaire"
+description = "Prix d’une unité en plus petite unité monétaire"
+
+[labels.fr.model.invoice_line.field.amount_minor]
+label = "Montant"
+description = "Montant de la ligne en plus petite unité monétaire : quantité multipliée par le prix unitaire"

@@ -31,6 +31,37 @@ pub struct Settings {
     pub shop_page_size: usize,
     /// Extra sentence under the checkout button, for example how you will ask for payment.
     pub checkout_note: String,
+    /// `site.payment_methods`: the ways to pay the owner offers, in order: `manual`, `stripe`,
+    /// `fake`. A method that is not configured on the instance is left out of checkout.
+    pub payment_methods: Vec<String>,
+    /// Shown to a buyer who chose to pay by bank transfer or invoice: bank details, due date.
+    pub payment_instructions: String,
+    /// Two-letter country preselected at checkout when tax rates are scoped by country.
+    pub default_country: String,
+    /// Days an order paid by bank transfer holds its stock before it is cancelled.
+    pub payment_hold_days: u32,
+}
+
+/// The payment methods a site can list.
+pub const PAYMENT_METHODS: [&str; 3] = ["manual", "stripe", "fake"];
+
+fn methods_from(raw: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for m in raw
+        .split([',', ' '])
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+    {
+        let m = m.to_ascii_lowercase();
+        if PAYMENT_METHODS.contains(&m.as_str()) && !out.contains(&m) {
+            out.push(m);
+        }
+    }
+    out
+}
+
+fn country_ok(c: &str) -> bool {
+    c.len() == 2 && c.bytes().all(|b| b.is_ascii_uppercase())
 }
 
 impl Default for Settings {
@@ -51,6 +82,10 @@ impl Default for Settings {
             shop_currency: "EUR".into(),
             shop_page_size: 12,
             checkout_note: String::new(),
+            payment_methods: vec!["manual".into()],
+            payment_instructions: String::new(),
+            default_country: String::new(),
+            payment_hold_days: 7,
         }
     }
 }
@@ -169,6 +204,19 @@ impl Settings {
                 .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
                 .map_or(d.shop_page_size, |n| n.clamp(4, 48) as usize),
             checkout_note: text(m, "checkout_note", 300).unwrap_or_default(),
+            payment_methods: text(m, "payment_methods", 60)
+                .map(|r| methods_from(&r))
+                .filter(|v| !v.is_empty())
+                .unwrap_or(d.payment_methods),
+            payment_instructions: text(m, "payment_instructions", 1000).unwrap_or_default(),
+            default_country: text(m, "default_country", 2)
+                .map(|c| c.to_ascii_uppercase())
+                .filter(|c| country_ok(c))
+                .unwrap_or_default(),
+            payment_hold_days: m
+                .get("payment_hold_days")
+                .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
+                .map_or(d.payment_hold_days, |n| n.clamp(1, 60) as u32),
             title,
         }
     }
@@ -255,6 +303,35 @@ pub fn parse_value(key: &str, raw: &str) -> Result<J, String> {
                 Ok(v)
             }
         }
+        "payment_methods" => {
+            let v = methods_from(raw);
+            if v.is_empty()
+                || raw
+                    .split([',', ' '])
+                    .filter(|m| !m.trim().is_empty())
+                    .count()
+                    != v.len()
+            {
+                Err("payment_methods is a comma separated list of manual, stripe and fake".into())
+            } else {
+                Ok(J::String(v.join(",")))
+            }
+        }
+        "payment_instructions" => text_max(1000),
+        "default_country" => {
+            let c = raw.to_ascii_uppercase();
+            if raw.is_empty() || country_ok(&c) {
+                Ok(J::String(c))
+            } else {
+                Err("default_country must be a two-letter code such as DE".into())
+            }
+        }
+        "payment_hold_days" => raw
+            .parse::<u64>()
+            .ok()
+            .filter(|n| (1..=60).contains(n))
+            .map(J::from)
+            .ok_or_else(|| "payment_hold_days must be a number from 1 to 60".into()),
         "title" | "logo_text" => text_max(if key == "title" { 80 } else { 40 }),
         "tagline" => text_max(160),
         "footer_text" | "checkout_note" => text_max(300),
@@ -305,6 +382,22 @@ pub const KEYS: &[(&str, &str)] = &[
     (
         "checkout_note",
         "sentence shown at checkout, for example how you will ask for payment",
+    ),
+    (
+        "payment_methods",
+        "comma separated ways to pay, in order: manual (bank transfer), stripe (card), fake (demo, needs OBOP_DEMO_PAYMENTS=1)",
+    ),
+    (
+        "payment_instructions",
+        "shown to buyers who pay by bank transfer: account, reference, due date (up to 1000 characters)",
+    ),
+    (
+        "default_country",
+        "two-letter country preselected at checkout when tax rates differ by country",
+    ),
+    (
+        "payment_hold_days",
+        "days an order paid by bank transfer holds its stock before it is cancelled (1 to 60, default 7)",
     ),
 ];
 

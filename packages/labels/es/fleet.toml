@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Flota"
 description = "Vehículos, conductores e historial de mantenimiento de una flota pequeña. Registra el estado y los servicios; no calcula costes de uso ni consumo de combustible."
+summary = "Vehículos, conductores e historial de mantenimiento de una flota pequeña."
 
 [labels.es.model.fleet_vehicle]
 name = "Vehículo"

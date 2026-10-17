@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Point de vente"
-description = "Caisses de magasin : configuration de point de vente, sessions avec contrôle de caisse, commandes avec lignes et paiements par mode. Un remboursement et la clôture d’une session exigent l’approbation d’un responsable ; les agents peuvent seulement les proposer. Totaux et écarts de caisse sont saisis, pas calculés. Ne stockez jamais de numéro de carte. Nécessite le package Produits."
+description = "Caisses de magasin : configuration, sessions avec contrôle de caisse, commandes avec lignes et paiements par mode. Un remboursement et la clôture d’une session exigent l’approbation d’un responsable. Les totaux sont calculés, les tickets numérotés sans rupture, et le paiement crée des mouvements de stock en brouillon. Ne stockez jamais de numéro de carte. Nécessite le package Produits."
+summary = "Caisses de magasin : sessions avec contrôle de caisse, commandes et paiements. Remboursements et clôture exigent une approbation."
 
 [labels.fr.model.pos_config]
 name = "Configuration"
@@ -96,7 +97,7 @@ description = "La session pendant laquelle la vente a été faite"
 
 [labels.fr.model.pos_order.field.receipt_number]
 label = "Numéro de ticket"
-description = "Numéro imprimé sur le ticket. Texte libre : les packages ne peuvent pas générer de séquences"
+description = "Numéro imprimé sur le ticket, tel que R-2026-000042 : une série sans rupture qui repart chaque année, attribuée à la création de la vente"
 
 [labels.fr.model.pos_order.field.ordered_on]
 label = "Commandé le"
@@ -112,7 +113,7 @@ description = "Taxes comprises dans le total (plus petite unité monétaire)"
 
 [labels.fr.model.pos_order.field.total]
 label = "Total"
-description = "Total payé par le client toutes taxes comprises (plus petite unité monétaire, saisi et non calculé)"
+description = "Total payé par le client, taxes comprises : somme des sous-totaux des lignes (plus petite unité monétaire)"
 
 [labels.fr.model.pos_order.field.note]
 label = "Note"
@@ -130,7 +131,7 @@ cancelled = "Annulée"
 
 [labels.fr.model.pos_order.action.pay]
 label = "Payer"
-description = "La vente est entièrement payée"
+description = "La vente est entièrement payée : refusé tant que les paiements ne couvrent pas le total ; crée un mouvement de stock en brouillon par ligne (exige le groupe inventory.user)"
 
 [labels.fr.model.pos_order.action.cancel]
 label = "Annuler"
@@ -170,7 +171,7 @@ description = "Remise en points de base : 1000 correspond à 10,00 %"
 
 [labels.fr.model.pos_order_line.field.subtotal]
 label = "Sous-total"
-description = "Total de la ligne après remise (plus petite unité monétaire, saisi et non calculé)"
+description = "Total de la ligne après remise : quantité multipliée par le prix unitaire, moins la remise (plus petite unité monétaire)"
 
 [labels.fr.model.pos_payment]
 name = "Paiement"
@@ -202,3 +203,7 @@ description = "Jour du paiement (YYYY-MM-DD)"
 [labels.fr.model.pos_payment.field.provider_reference]
 label = "Référence du prestataire"
 description = "Référence du terminal de paiement ou du prestataire de paiement ; jamais un numéro de carte"
+
+[labels.fr.model.pos_order.field.stock_location_id]
+label = "Emplacement de stock"
+description = "D’où les marchandises sortent du stock ; le paiement crée les mouvements de stock depuis cet emplacement"

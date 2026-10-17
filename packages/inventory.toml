@@ -1,8 +1,8 @@
 [module]
 id = "inventory"
-version = "0.2.0"
+version = "0.3.0"
 name = "Inventory"
-description = "Warehouses, stock locations, stock levels and stock moves. Quantities are entered and validated by people; they are not updated automatically by moves."
+description = "Warehouses, stock locations, stock levels and stock moves. Validating a move takes the quantity out of the stock item at the source location and adds it to the item at the destination, in one step; an item that does not exist yet is created. There is one item per product, location and lot. Negative quantities are allowed, as for virtual locations such as suppliers."
 author = "SpaceCorps"
 summary = "Warehouses, stock locations, stock levels and stock moves."
 license = "AGPL-3.0-or-later"
@@ -88,11 +88,13 @@ write_group = "inventory.manager"
 
   [[model.field]]
   name = "product_id"
-  description = "The product held"
+  description = "The product held; there is one item per product, location and lot"
   class = "none"
   kind = "ref"
   to = "product"
   required = true
+  unique = true
+  unique_with = ["location_id", "lot"]
 
   [[model.field]]
   name = "location_id"
@@ -128,9 +130,10 @@ write_group = "inventory.user"
 
   [[model.field]]
   name = "reference"
-  description = "Reference of the move, for example a delivery or receipt number"
+  description = "Number of the move such as MV-00042, assigned when the move is created"
   class = "none"
-  required = true
+  kind = "sequence"
+  format = "MV-{seq:05}"
 
   [[model.field]]
   name = "product_id"
@@ -177,11 +180,32 @@ write_group = "inventory.user"
 
   [[model.action]]
   name = "validate"
-  description = "Confirm that the goods really moved; a done move cannot be undone"
+  description = "Confirm that the goods really moved: the quantity leaves the source item and arrives at the destination item (stock managers only); a done move cannot be undone"
   field = "state"
   from = "draft"
   to = "done"
+  group = "inventory.manager"
   approval = true
+
+    [[model.action.effect]]
+    kind = "adjust"
+    model = "inventory_item"
+    match = { product_id = "$self.product_id", location_id = "$self.from_location_id" }
+    field = "quantity"
+    op = "subtract"
+    by = "$self.quantity"
+    create_missing = true
+    when = "is_set(from_location_id)"
+
+    [[model.action.effect]]
+    kind = "adjust"
+    model = "inventory_item"
+    match = { product_id = "$self.product_id", location_id = "$self.to_location_id" }
+    field = "quantity"
+    op = "add"
+    by = "$self.quantity"
+    create_missing = true
+    when = "is_set(to_location_id)"
 
   [[model.action]]
   name = "cancel"

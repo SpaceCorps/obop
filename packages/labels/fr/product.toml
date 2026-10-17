@@ -1,5 +1,6 @@
 [labels.fr.module]
 name = "Produits"
+summary = "Produits et services avec prix et coût, partagés par les ventes, la facturation et le stock."
 
 [labels.fr.model.product]
 name = "Produit"
@@ -11,7 +12,7 @@ description = "Nom du produit"
 
 [labels.fr.model.product.field.sku]
 label = "SKU"
-description = "Référence de gestion de stock (SKU)"
+description = "Référence de gestion de stock (SKU) ; deux produits ne peuvent pas avoir la même"
 
 [labels.fr.model.product.field.list_price_minor]
 label = "Prix catalogue"
@@ -20,3 +21,7 @@ description = "Prix catalogue en plus petite unité monétaire"
 [labels.fr.model.product.field.cost_minor]
 label = "Coût"
 description = "Coût unitaire en plus petite unité monétaire"
+
+[labels.fr.model.product.field.image]
+label = "Image"
+description = "Image du produit (PNG, JPEG, WebP ou GIF, jusqu'à 5 Mio)"

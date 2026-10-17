@@ -9,11 +9,16 @@
 //! records, submissions restricted to declared fields, prices always taken from the listing.
 
 pub mod assets;
+mod checkout;
 mod content;
+mod countries;
 pub mod http;
 pub mod i18n;
 pub mod layout;
 pub mod md;
+mod media;
+mod orderpage;
+pub mod pricing;
 pub mod seed;
 mod seo;
 pub mod settings;
@@ -24,7 +29,7 @@ pub mod util;
 use http::{Req, Resp};
 use i18n::{Lang, Source};
 use layout::{Caps, Ctx, MenuItem, Page};
-use obop_commands::{Lookup, PublicApi, PublicFilter, PublicRecord, Value};
+use obop_commands::{Lookup, PaymentPort, PublicApi, PublicFilter, PublicRecord, Value};
 use settings::Settings;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -76,6 +81,9 @@ pub struct Site {
     api: PublicApi,
     cfg: Config,
     cached: Mutex<Option<Cached>>,
+    /// Whatever takes payments (D62); without one orders stay pending and the shop writes to
+    /// the buyer.
+    payments: Option<Arc<dyn PaymentPort>>,
 }
 
 impl Site {
@@ -84,7 +92,18 @@ impl Site {
             api,
             cfg,
             cached: Mutex::new(None),
+            payments: None,
         }
+    }
+
+    /// Take payments through `port` (the payment module of the instance).
+    pub fn with_payments(mut self, port: Arc<dyn PaymentPort>) -> Site {
+        self.payments = Some(port);
+        self
+    }
+
+    fn settings_snapshot(&self) -> Arc<Settings> {
+        self.refresh().0
     }
 
     /// Whether the instance has anything to show publicly at all (a package declared it).
@@ -174,9 +193,34 @@ impl Site {
             .unwrap_or_else(|| token.to_string()))
     }
 
+    /// Give back the key of an order that was not placed, when it had one.
+    fn release_idem_key(&self, key: &Option<String>) {
+        if let Some(k) = key {
+            self.release_idem(k);
+        }
+    }
+
     /// Give a claimed key back (the order was not placed).
     fn release_idem(&self, key: &str) {
         let _ = self.api.backend().kv_delete(&format!("idem:site:{key}"));
+    }
+
+    /// Whether `key` has already had `max` hits in its window (nothing is counted). The count
+    /// is the one `record` keeps, in the storage backend.
+    fn limited(&self, key: &str, max: usize) -> bool {
+        self.api
+            .backend()
+            .counter_get(&format!("rl:site:{key}"))
+            .is_ok_and(|n| n >= max as u64)
+    }
+
+    /// Count one hit for `key` in a window of `window`, without checking a limit.
+    fn record(&self, key: &str, window: Duration) {
+        let _ = self.api.backend().counter_add(
+            &format!("rl:site:{key}"),
+            window.as_millis() as u64,
+            false,
+        );
     }
 
     /// The origin used in canonical links, feeds and sitemaps: the owner's setting, the
@@ -259,7 +303,8 @@ impl Site {
         if !ctx.s.enabled {
             return self.closed(&ctx);
         }
-        let known_post = matches!(path, "/shop/checkout" | "/contact");
+        let known_post = matches!(path, "/shop/checkout" | "/contact" | "/shop/discount/check")
+            || path.starts_with("/shop/fake-pay/");
         if !matches!(method, "GET" | "HEAD") && !(method == "POST" && known_post) {
             return method_not_allowed(&ctx, if known_post { "POST" } else { "GET, HEAD" });
         }
@@ -275,6 +320,7 @@ impl Site {
         let segs: Vec<&str> = segs.iter().map(String::as_str).collect();
         match (method, segs.as_slice()) {
             (_, []) => self.home(&mut ctx),
+            ("GET" | "HEAD", ["media", rest]) => self.media(&ctx, rest),
             ("GET" | "HEAD", ["sitemap.xml"]) => seo::sitemap(self, &ctx),
             ("GET" | "HEAD", ["feed.xml"]) => seo::feed(self, &ctx),
             ("GET" | "HEAD", ["llms.txt"]) => seo::llms(self, &ctx),
@@ -284,6 +330,18 @@ impl Site {
             ("GET" | "HEAD", ["shop"]) => self.shop_index(&mut ctx),
             ("GET" | "HEAD", ["shop", product]) => self.product(&mut ctx, product),
             ("GET" | "HEAD", ["shop", "order", token]) => self.order_page(&mut ctx, token),
+            ("GET" | "HEAD", ["shop", "order", token, "receipt"]) => {
+                self.receipt_page(&mut ctx, token)
+            }
+            ("GET" | "HEAD", ["shop", "pay", token]) => self.pay_page(&mut ctx, token),
+            ("GET" | "HEAD", ["shop", "pay", token, "continue"]) => {
+                self.pay_continue(&mut ctx, token)
+            }
+            ("GET" | "HEAD", ["shop", "fake-pay", session]) => {
+                self.fake_pay_page(&mut ctx, session)
+            }
+            ("POST", ["shop", "fake-pay", session]) => self.fake_pay_decide(&mut ctx, session),
+            ("POST", ["shop", "discount", "check"]) => self.discount_check(&mut ctx),
             ("GET" | "HEAD", ["cart"]) => self.cart(&mut ctx, None),
             ("POST", ["shop", "checkout"]) => self.checkout(&mut ctx),
             ("GET" | "HEAD" | "POST", ["contact"]) => self.contact(&mut ctx),
@@ -434,6 +492,10 @@ impl Site {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_media;
+#[cfg(test)]
+mod tests_shop;
 
 fn method_not_allowed(ctx: &Ctx, allow: &str) -> Resp {
     let mut p = Page::new(ctx.t("e405.title"), ctx.t("e405.title"), "/");
@@ -460,6 +522,11 @@ pub(crate) fn valid_slug(s: &str) -> bool {
         && s.len() <= 120
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// A blob id: 64 lowercase hex characters.
+pub(crate) fn valid_hex_id(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 pub(crate) fn valid_token(s: &str) -> bool {

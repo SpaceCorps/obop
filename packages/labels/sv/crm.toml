@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "CRM"
+summary = "Leads och affärsmöjligheter genom en pipeline från första kontakt till vunnen eller förlorad."
 
 [labels.sv.model.lead]
 name = "Lead"

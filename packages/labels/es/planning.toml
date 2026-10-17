@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Planificación"
 description = "Turnos de empleados, con funciones y plantillas reutilizables. Un turno tiene un día y una hora de inicio y de fin en minutos desde la medianoche (de 0 a 1439; 540 son las 09:00). Un turno sin empleado es un turno abierto. Flujo: abierto, publicado, confirmado por el empleado. Requiere el paquete Recursos humanos."
+summary = "Turnos de empleados con funciones y plantillas reutilizables; los turnos abiertos se publican y se confirman."
 
 [labels.es.model.planning_role]
 name = "Rol"

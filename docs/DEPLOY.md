@@ -127,7 +127,7 @@ Treat it as the loss of confidentiality of every secret sealed under it: rotate 
 
 ## Backups
 
-`obop backup` writes a consistent logical copy of every record: gzip-compressed JSON Lines plus a manifest with checksums, the schema version and the core version. It reads from one snapshot (a repeatable-read transaction on PostgreSQL, a read transaction on SQLite), a batch at a time, so a large database never sits in memory and a running server is not stopped.
+`obop backup` writes a consistent logical copy of every record: gzip-compressed JSON Lines plus a manifest with checksums, the schema version and the core version. It reads from one snapshot (a repeatable-read transaction on PostgreSQL, a read transaction on SQLite), a batch at a time, so a large database never sits in memory and a running server is not stopped. Uploaded pictures and files (D60) follow the records as `blob` lines, one at a time, wherever their bytes live (`OBOP_BLOB_DIR`, a `<file>.blobs` directory beside a SQLite file, or the database); `obop restore` puts them back and checks that each hashes to its id, so a restore onto a new host brings the pictures too. Set the same `OBOP_BLOB_DIR` for backup and restore.
 
 ```bash
 obop backup --db postgres://... --out /backups/            # a timestamped file in the directory

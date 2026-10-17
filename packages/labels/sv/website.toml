@@ -1,6 +1,7 @@
 [labels.sv.module]
 name = "Webbplats"
 description = "Innehåll till en publik webbplats: sidor med URL-slug och flödet utkast, publicerad, arkiverad, menyval, blogginlägg med byline och publiceringsdatum, översättningar av båda samt formulärsvar från besökare. Publicering gör innehåll offentligt och kräver mänskligt godkännande; agenter får bara föreslå. Avsändare är personuppgifter och är aldrig offentliga."
+summary = "Sidor, menyer, blogginlägg och formulärsvar, som en publik webbplats när webbplatsen är på."
 
 [labels.sv.model.website_page]
 name = "Sida"
@@ -266,3 +267,19 @@ description = "Översatt inläggsinnehåll i Markdown"
 [labels.sv.model.website_blog_post_translation.field.published]
 label = "Publicerad"
 description = "Om översättningen visas; den nås bara medan dess inlägg är publicerat"
+
+[labels.sv.model.website_page.field.cover_image]
+label = "Omslagsbild"
+description = "Bild överst i sidan och i länkförhandsvisningar (PNG, JPEG, WebP eller GIF, kodas om vid uppladdning)"
+
+[labels.sv.model.website_page.field.cover_alt]
+label = "Omslagsbildens beskrivning"
+description = "Text som beskriver omslagsbilden för dem som inte kan se den"
+
+[labels.sv.model.website_blog_post.field.cover_image]
+label = "Omslagsbild"
+description = "Bild överst i inlägget och i länkförhandsvisningar (PNG, JPEG, WebP eller GIF, kodas om vid uppladdning)"
+
+[labels.sv.model.website_blog_post.field.cover_alt]
+label = "Omslagsbildens beskrivning"
+description = "Text som beskriver omslagsbilden för dem som inte kan se den"

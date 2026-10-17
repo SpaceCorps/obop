@@ -1,5 +1,6 @@
 [labels.pl.module]
 name = "Produkty"
+summary = "Produkty i usługi z cenami i kosztem, wspólne dla sprzedaży, fakturowania i magazynu."
 
 [labels.pl.model.product]
 name = "Produkt"
@@ -11,7 +12,7 @@ description = "Nazwa produktu"
 
 [labels.pl.model.product.field.sku]
 label = "SKU"
-description = "Jednostka magazynowa (SKU)"
+description = "Jednostka magazynowa (SKU); dwa produkty nie mogą mieć tej samej"
 
 [labels.pl.model.product.field.list_price_minor]
 label = "Cena katalogowa"
@@ -20,3 +21,7 @@ description = "Cena katalogowa w jednostkach podrzędnych waluty"
 [labels.pl.model.product.field.cost_minor]
 label = "Koszt"
 description = "Koszt jednostkowy w jednostkach podrzędnych waluty"
+
+[labels.pl.model.product.field.image]
+label = "Obraz"
+description = "Zdjęcie produktu (PNG, JPEG, WebP lub GIF, do 5 MiB)"

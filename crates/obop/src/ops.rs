@@ -262,6 +262,18 @@ fn migrate(args: &mut Vec<String>) -> Exit {
     }
 }
 
+/// The store of uploaded pictures and files for the database at `url`: its records are in the
+/// database, its bytes where `OBOP_BLOB_DIR` and the URL say (D60).
+fn blob_catalog(
+    backend: &std::sync::Arc<dyn obop_storage::Backend>,
+    url: &str,
+) -> Result<obop_storage::blob::Catalog, ExitCode> {
+    let dir = std::env::var("OBOP_BLOB_DIR").ok();
+    let bytes = obop_storage::blob::open_bytes(url, dir.as_deref())
+        .map_err(|e| fail(&format!("cannot open the uploaded files: {e}")))?;
+    Ok(obop_storage::blob::Catalog::new(backend.clone(), bytes))
+}
+
 fn backup_cmd(args: &mut Vec<String>) -> Exit {
     if args.first().map(String::as_str) == Some("verify") {
         if args.len() != 2 {
@@ -294,7 +306,8 @@ fn backup_cmd(args: &mut Vec<String>) -> Exit {
         .map_err(|e| fail(&e))?;
     let schema = u64::from(st.stored.unwrap_or(0));
     let mut last = 0usize;
-    let c = backup::create(&backend, schema, Path::new(&out), &mut |n| {
+    let blobs = blob_catalog(&backend, &url)?;
+    let c = backup::create_with(&backend, Some(&blobs), schema, Path::new(&out), &mut |n| {
         if n / 10_000 > last / 10_000 {
             eprintln!("  {n} records");
         }
@@ -305,10 +318,11 @@ fn backup_cmd(args: &mut Vec<String>) -> Exit {
     backup::verify(&c.data_path)
         .map_err(|e| fail(&format!("the backup was written but does not verify: {e}")))?;
     println!(
-        "backup of {} written: {} ({} records, {} bytes), manifest {}",
+        "backup of {} written: {} ({} records, {} uploaded files, {} bytes), manifest {}",
         redact(&url),
         c.data_path.display(),
         c.manifest.records,
+        c.manifest.blobs,
         c.manifest.data_bytes,
         c.manifest_path.display()
     );
@@ -340,8 +354,10 @@ fn restore_cmd(args: &mut Vec<String>) -> Exit {
     let backend =
         obop_storage::open(&url).map_err(|e| fail(&format!("cannot open the database: {e}")))?;
     let latest = obop_migrate::steps().len() as u64;
-    let r = backup::restore(
+    let blobs = blob_catalog(&backend, &url)?;
+    let r = backup::restore_with(
         &backend,
+        Some(&blobs),
         latest,
         Path::new(&from),
         RestoreOptions { force, dry_run },

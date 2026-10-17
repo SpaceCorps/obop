@@ -2,7 +2,7 @@
 
 use crate::http::Resp;
 use crate::i18n::Lang;
-use crate::layout::{self, Ctx, Page, Variants};
+use crate::layout::{self, Ctx, Page, PageImage, Variants};
 use crate::seo;
 use crate::shop::{self, product_card};
 use crate::util::{self, clean_line, date_to_ts, esc, truncate_chars};
@@ -252,9 +252,29 @@ impl Site {
             "isPartOf": {"@type": "WebSite", "name": ctx.s.title, "url": ctx.abs("/")},
             "datePublished": rec.text("published_on"),
         }));
+        let cover = self.pic(rec.text("cover_image")).map(|pic| {
+            let alt = match rec.text("cover_alt") {
+                "" => title.clone(),
+                a => a.to_string(),
+            };
+            (pic, alt)
+        });
+        if let Some((pic, alt)) = &cover {
+            let (path, width, height) = pic.social();
+            p.image = Some(PageImage {
+                path,
+                width,
+                height,
+                alt: alt.clone(),
+            });
+        }
         p.body = format!(
-            "<article><h1>{}</h1><div class=\"prose\">{}</div></article>",
+            "<article><h1>{}</h1>{}<div class=\"prose\">{}</div></article>",
             esc(&title),
+            cover.as_ref().map_or(String::new(), |(pic, alt)| format!(
+                "<figure class=\"cover\">{}</figure>",
+                pic.html(alt, "(max-width: 1120px) 100vw, 1080px", true)
+            )),
             md::render(loc.get("body"))
         );
         p.md = format!("{}\n", md::to_markdown(loc.get("body")));
@@ -351,7 +371,31 @@ impl Site {
         p.last_modified = lm;
         p.jsonld.push(seo::website_ld(ctx));
         p.jsonld.push(seo::organization_ld(ctx));
-        let mut h = format!("<section class=\"hero\"><h1>{}</h1>", esc(&title));
+        let cover = home.as_ref().and_then(|rec| {
+            let pic = self.pic(rec.text("cover_image"))?;
+            let alt = match rec.text("cover_alt") {
+                "" => title.clone(),
+                a => a.to_string(),
+            };
+            Some((pic, alt))
+        });
+        if let Some((pic, alt)) = &cover {
+            let (path, width, height) = pic.social();
+            p.image = Some(PageImage {
+                path,
+                width,
+                height,
+                alt: alt.clone(),
+            });
+        }
+        let mut h = String::new();
+        if let Some((pic, alt)) = &cover {
+            h.push_str(&format!(
+                "<figure class=\"cover\">{}</figure>",
+                pic.html(alt, "(max-width: 1120px) 100vw, 1080px", true)
+            ));
+        }
+        h.push_str(&format!("<section class=\"hero\"><h1>{}</h1>", esc(&title)));
         if !lede.is_empty() {
             h.push_str(&format!("<p class=\"lede\">{}</p>", esc(&lede)));
         }
@@ -389,7 +433,9 @@ impl Site {
             ));
             md_out.push_str(&format!("\n## {}\n\n", ctx.t("home.featured")));
             for r in &products {
-                h.push_str(&product_card(ctx, r, tr.get(&r.id)));
+                let t = tr.get(&r.id);
+                let pic = self.card_pic(r, t.map_or(r.text("title"), |t| t.text("title")));
+                h.push_str(&product_card(ctx, r, t, pic.as_deref()));
                 md_out.push_str(&shop::product_md_line(ctx, r, tr.get(&r.id)));
             }
             h.push_str("</ul></section>");
@@ -404,7 +450,7 @@ impl Site {
             ));
             md_out.push_str(&format!("\n## {}\n\n", ctx.t("home.latest")));
             for r in &posts {
-                h.push_str(&post_card(ctx, r, tr.get(&r.id), 3));
+                h.push_str(&post_card(ctx, r, tr.get(&r.id), 3, self.post_pic(r)));
                 md_out.push_str(&post_md_line(ctx, r, tr.get(&r.id)));
             }
             h.push_str("</ul></section>");
@@ -505,7 +551,7 @@ impl Site {
         } else {
             h.push_str("<ul class=\"posts\">");
             for r in &posts {
-                h.push_str(&post_card(ctx, r, tr.get(&r.id), 2));
+                h.push_str(&post_card(ctx, r, tr.get(&r.id), 2, self.post_pic(r)));
                 md_out.push_str(&post_md_line(ctx, r, tr.get(&r.id)));
             }
             h.push_str("</ul>");
@@ -571,6 +617,23 @@ impl Site {
         if !tags.is_empty() {
             ld["keywords"] = json!(tags.join(", "));
         }
+        let cover = self.pic(rec.text("cover_image")).map(|pic| {
+            let alt = match rec.text("cover_alt") {
+                "" => title.clone(),
+                a => a.to_string(),
+            };
+            (pic, alt)
+        });
+        if let Some((pic, alt)) = &cover {
+            let (path, width, height) = pic.social();
+            ld["image"] = json!([ctx.abs(&path)]);
+            p.image = Some(PageImage {
+                path,
+                width,
+                height,
+                alt: alt.clone(),
+            });
+        }
         p.jsonld.push(ld);
         let mut h = format!("<article><h1>{}</h1><p class=\"meta\">", esc(&title));
         if date_to_ts(date).is_some() {
@@ -584,6 +647,12 @@ impl Site {
             "<span>{}</span></p>",
             esc(&ctx.tf("blog.by", &[("name", &byline)]))
         ));
+        if let Some((pic, alt)) = &cover {
+            h.push_str(&format!(
+                "<figure class=\"cover\">{}</figure>",
+                pic.html(alt, "(max-width: 1120px) 100vw, 1080px", true)
+            ));
+        }
         h.push_str(&format!(
             "<div class=\"prose\">{}</div>",
             md::render(loc.get("body"))
@@ -612,6 +681,16 @@ impl Site {
             md::to_markdown(loc.get("body"))
         );
         layout::render(ctx, p)
+    }
+
+    /// The cover picture of a post as a card thumbnail, when it has a public one.
+    fn post_pic(&self, r: &PublicRecord) -> Option<String> {
+        let pic = self.pic(r.text("cover_image"))?;
+        let alt = match r.text("cover_alt") {
+            "" => r.text("title"),
+            a => a,
+        };
+        Some(pic.html(alt, "(max-width: 700px) 100vw, 240px", false))
     }
 
     // ---- /contact -------------------------------------------------------------------------
@@ -813,7 +892,13 @@ pub(crate) fn describe(own: &str, body: &str, fallback: &str) -> String {
     }
 }
 
-fn post_card(ctx: &Ctx, r: &PublicRecord, tr: Option<&PublicRecord>, level: u8) -> String {
+fn post_card(
+    ctx: &Ctx,
+    r: &PublicRecord,
+    tr: Option<&PublicRecord>,
+    level: u8,
+    img: Option<String>,
+) -> String {
     let pick = |k: &str| {
         tr.map(|t| t.text(k))
             .filter(|s| !s.is_empty())
@@ -853,8 +938,12 @@ fn post_card(ctx: &Ctx, r: &PublicRecord, tr: Option<&PublicRecord>, level: u8) 
         }
         None => String::new(),
     };
+    let cover = img.map_or(String::new(), |i| {
+        format!("<div class=\"postimg\">{i}</div>")
+    });
     format!(
-        "<li class=\"post\"{lang_attr}><h{level}><a href=\"{}\">{}</a></h{level}><p class=\"meta\">{}</p><p>{}</p></li>",
+        "<li class=\"post{}\"{lang_attr}>{cover}<div class=\"postbody\"><h{level}><a href=\"{}\">{}</a></h{level}><p class=\"meta\">{}</p><p>{}</p></div></li>",
+        if cover.is_empty() { "" } else { " withimg" },
         esc(&ctx.lpath(&format!("/blog/{}", r.text("slug")))),
         esc(title),
         meta,

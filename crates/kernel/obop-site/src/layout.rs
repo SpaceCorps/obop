@@ -91,6 +91,15 @@ pub enum Variants {
     Only(Vec<Lang>),
 }
 
+/// The picture of a page for link previews: a path below the site, its size and alt text.
+#[derive(Debug, Clone)]
+pub struct PageImage {
+    pub path: String,
+    pub width: u32,
+    pub height: u32,
+    pub alt: String,
+}
+
 pub struct Page {
     pub status: u16,
     pub title: String,
@@ -115,6 +124,8 @@ pub struct Page {
     /// Attributes for `<body>`: pre-escaped by this crate (cart page flags).
     pub body_attrs: String,
     pub extra_headers: Vec<(String, String)>,
+    /// Open Graph and Twitter image, when the page has a public picture.
+    pub image: Option<PageImage>,
 }
 
 impl Page {
@@ -138,6 +149,7 @@ impl Page {
             content_lang: None,
             body_attrs: String::new(),
             extra_headers: Vec::new(),
+            image: None,
         }
     }
 }
@@ -279,12 +291,41 @@ fn head(ctx: &Ctx, page: &Page) -> String {
             esc(&c)
         ));
     }
+    if let Some(i) = &page.image {
+        let url = ctx.abs(&i.path);
+        for (p, c) in [
+            ("og:image", url.clone()),
+            ("og:image:width", i.width.to_string()),
+            ("og:image:height", i.height.to_string()),
+            ("og:image:alt", i.alt.clone()),
+        ] {
+            h.push_str(&format!(
+                "<meta property=\"{p}\" content=\"{}\">\n",
+                esc(&c)
+            ));
+        }
+    }
     for (n, c) in [
-        ("twitter:card", "summary".to_string()),
+        (
+            "twitter:card",
+            if page.image.is_some() {
+                "summary_large_image"
+            } else {
+                "summary"
+            }
+            .to_string(),
+        ),
         ("twitter:title", page.title.clone()),
         ("twitter:description", page.description.clone()),
     ] {
         h.push_str(&format!("<meta name=\"{n}\" content=\"{}\">\n", esc(&c)));
+    }
+    if let Some(i) = &page.image {
+        h.push_str(&format!(
+            "<meta name=\"twitter:image\" content=\"{}\">\n<meta name=\"twitter:image:alt\" content=\"{}\">\n",
+            esc(&ctx.abs(&i.path)),
+            esc(&i.alt)
+        ));
     }
     h.push_str("<link rel=\"icon\" href=\"/favicon.svg\" type=\"image/svg+xml\">\n");
     h.push_str(&format!(
@@ -508,7 +549,7 @@ pub fn csp(s: &Settings) -> String {
         })
         .unwrap_or_default();
     format!(
-        "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:{logo}; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; connect-src 'none'"
+        "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:{logo}; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self'"
     )
 }
 

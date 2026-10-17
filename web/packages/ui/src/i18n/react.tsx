@@ -1,9 +1,14 @@
-import { Fragment, useSyncExternalStore, type ReactNode } from "react";
+import {
+  Fragment,
+  cloneElement,
+  isValidElement,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { LANGS, LANG_INFO, REGIONS, isPseudo, type Lang } from "./locales.ts";
 import { formatNodes, parseMessage, type FormatEnv } from "./message.ts";
 import {
   formatLocale,
-  getCurrency,
   getDir,
   getLang,
   getRegion,
@@ -21,10 +26,18 @@ import { t } from "./store.ts";
 import { Icon } from "../icons.tsx";
 import { Menu, Select } from "../primitives.tsx";
 
-/** Re-renders the whole tree when the language, region or currency changes (remounts under a new key). */
+/**
+ * Re-renders the whole tree when the language, region or currency changes, without remounting it
+ * (D6): routes, open panels, dialogs and drafts keep their state. Text comes from the global `t()`,
+ * which React cannot see, so the root element is cloned: its props are a new object, the root
+ * renders again, and every component below it renders again because the elements it returns are
+ * new. Put the provider directly around the root component (a wrapper between them that returns its
+ * `children` unchanged would stop the new render). Do not wrap components in `memo` and do not cache translated text in `useMemo` without the
+ * language in its dependencies (use `useI18n().lang`), or they keep showing the old language.
+ */
 export function I18nProvider({ children }: { children: ReactNode }) {
   useSyncExternalStore(subscribe, getVersion);
-  return <Fragment key={`${getLang()}|${getRegion()}|${getCurrency()}`}>{children}</Fragment>;
+  return <Fragment>{isValidElement(children) ? cloneElement(children) : children}</Fragment>;
 }
 
 /** Language state for components that show or change it. Text itself uses the global `t()`. */

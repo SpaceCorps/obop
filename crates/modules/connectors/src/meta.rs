@@ -73,6 +73,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "A service or protocol a connection can use, from the catalogue shipped with obop",
             read_group: USER,
             write_group: ADMIN,
+            access: None,
             fields: vec![
                 t("name", "Name of the provider", USER).required(),
                 sel("category", "Kind of service", USER, &CATEGORIES),
@@ -106,6 +107,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "What an administrator decided about one provider: enabled, for whom, legal basis, agreement and OAuth client",
             read_group: ADMIN,
             write_group: ADMIN,
+            access: None,
             fields: vec![
                 t("provider", "Id of the provider this policy is for", ADMIN).required(),
                 flag("enabled", "The provider may be connected at all", ADMIN),
@@ -126,6 +128,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "A link to one external system, with its credentials, field allowlist, policy and state",
             read_group: USER,
             write_group: USER,
+            access: None,
             fields: vec![
                 t("name", "A name that tells you what the connection is for", USER).required(),
                 t("provider", "Id of the provider from the catalogue", USER).required(),
@@ -173,6 +176,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "The legal basis recorded for a connection: who, why, which data classes, and whether it was withdrawn",
             read_group: USER,
             write_group: USER,
+            access: None,
             fields: vec![
                 F::new("connection", "The connection this basis is for", NoClass, false, USER).reference("connection").required(),
                 person("owner_user", "Owner of the connection", USER),
@@ -200,6 +204,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "One run of a connection: when, how many records, and how it ended; never the data",
             read_group: USER,
             write_group: ADMIN,
+            access: None,
             fields: vec![
                 F::new("connection", "The connection that ran", NoClass, false, USER).reference("connection").required(),
                 person("owner_user", "Owner of the connection", USER),
@@ -220,6 +225,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "Append-only record of every flow: when, what, how many, which fields, how treated, and a hash of the payload; never the payload",
             read_group: USER,
             write_group: ADMIN,
+            access: None,
             fields: vec![
                 F::new("connection", "The connection the flow belongs to", NoClass, false, USER).reference("connection").required(),
                 person("owner_user", "Owner of the connection", USER),
@@ -241,6 +247,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "The record of processing activities (GDPR Article 30) generated from the connections; exportable as CSV",
             read_group: ADMIN,
             write_group: ADMIN,
+            access: None,
             fields: {
                 let mut v = vec![
                     F::new("connection", "The connection this row describes", NoClass, false, ADMIN).reference("connection"),
@@ -271,6 +278,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "Instance-wide switches for data flows: the master switch, EU-only providers, the agreement requirement and the host allow-list",
             read_group: ADMIN,
             write_group: ADMIN,
+            access: None,
             fields: vec![
                 flag("flows_enabled", "Master switch: when off nothing leaves and nothing is accepted", ADMIN),
                 flag("eu_only", "Personal data only goes to providers with an EU or adequacy basis", ADMIN),
@@ -289,6 +297,7 @@ pub fn models() -> Vec<ModelDef> {
             description: "What a sample outbound record looks like after the policy: the exact payload and the treatment of each field",
             read_group: USER,
             write_group: USER,
+            access: None,
             fields: vec![
                 t("provider", "Provider the preview is for", USER),
                 t("connection", "An existing connection to preview, instead of a provider", USER),

@@ -123,7 +123,15 @@ export function groupLabel(f: FieldMeta, key: string, lk: Lookup): string {
 
 /** Every column a grouped view should show: the full domain for select/bool, what exists otherwise. */
 export function groupDomain(f: FieldMeta, rows: Row[], lk: Lookup): string[] {
-  const present = rows.map((r) => groupKey(f, r));
+  return domainOf(
+    f,
+    rows.map((r) => groupKey(f, r)),
+    lk,
+  );
+}
+
+/** Like `groupDomain`, from the group keys that exist (the server's groups, or the rows' keys). */
+export function domainOf(f: FieldMeta, present: string[], lk: Lookup): string[] {
   let all = present;
   if (f.kind === "select") all = [...(f.options ?? []), ...present];
   if (f.kind === "bool") all = ["true", "false", ...present];

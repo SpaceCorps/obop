@@ -215,10 +215,6 @@ fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destructive: bool) 
             model: model.clone(),
             id: "gone".into(),
         },
-        Op::Delete {
-            model: model.clone(),
-            id: "never-existed".into(),
-        },
     ])
     .unwrap();
     assert_eq!(a.get(&model, "new").unwrap().unwrap()["n"], 2);

@@ -1,8 +1,8 @@
 [module]
 id = "ecommerce"
-version = "0.3.0"
+version = "0.5.0"
 name = "eCommerce"
-description = "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. There is no payment provider: an order starts as pending and the shop contacts the buyer. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package."
+description = "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. Orders take stock off the listing at checkout, apply discount codes and tax rates on the server, and are paid by bank transfer, by card through Stripe Checkout or in a local demo mode; the payment record, the provider reference and refunds are kept with the order. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package."
 author = "SpaceCorps"
 summary = "An online shop: listings, shipping, discount codes and web orders, with a public storefront when the site is on."
 license = "AGPL-3.0-or-later"
@@ -67,8 +67,9 @@ write_group = "ecommerce.manager"
   [model.public]
   read = true
   published_field = "published"
-  fields = ["title", "slug", "summary", "description", "price", "compare_at_price", "currency", "sku", "stock_policy", "stock_quantity", "category_id"]
+  fields = ["title", "slug", "summary", "description", "price", "compare_at_price", "currency", "sku", "stock_policy", "stock_quantity", "category_id", "image", "image_alt"]
   order_by = "title"
+  server_adjust = ["stock_quantity"]
 
   [[model.field]]
   name = "product_id"
@@ -100,6 +101,17 @@ write_group = "ecommerce.manager"
   description = "Description shown on the product page, in Markdown"
   class = "none"
   kind = "longtext"
+
+  [[model.field]]
+  name = "image"
+  description = "Main picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB; it is re-encoded and its metadata removed on upload)"
+  class = "none"
+  kind = "image"
+
+  [[model.field]]
+  name = "image_alt"
+  description = "Text that describes the main picture for people who cannot see it"
+  class = "none"
 
   [[model.field]]
   name = "category_id"
@@ -140,13 +152,57 @@ write_group = "ecommerce.manager"
 
   [[model.field]]
   name = "stock_quantity"
-  description = "Units on hand, used with the stock policy. Orders do not reduce it: adjust it by hand"
+  description = "Units on hand, used with the stock policy. Every order takes its units off at checkout, and a cancelled, expired or refunded order puts them back; correct it by hand after a stock count"
   class = "none"
   kind = "number"
 
   [[model.field]]
   name = "published"
   description = "Whether the listing is visible to shoppers"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "ecommerce_listing_image"
+description = "An extra picture of a listing for its gallery"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["listing_id", "image", "alt", "sequence"]
+  order_by = "sequence"
+
+  [[model.field]]
+  name = "listing_id"
+  description = "The listing the picture belongs to; it is shown only while the listing is published"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_listing"
+  required = true
+
+  [[model.field]]
+  name = "image"
+  description = "The picture (PNG, JPEG, WebP or GIF, up to 5 MiB)"
+  class = "none"
+  kind = "image"
+  required = true
+
+  [[model.field]]
+  name = "alt"
+  description = "Text that describes the picture for people who cannot see it"
+  class = "none"
+
+  [[model.field]]
+  name = "sequence"
+  description = "Order in the gallery, lowest first"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "published"
+  description = "Whether the picture is shown in the shop"
   class = "none"
   kind = "bool"
 
@@ -254,6 +310,10 @@ description = "A code a shopper enters at checkout for a reduction"
 read_group = "ecommerce.user"
 write_group = "ecommerce.manager"
 
+  [model.public]
+  server_read = true
+  server_adjust = ["used_count"]
+
   [[model.field]]
   name = "code"
   description = "The code shoppers type, for example SPRING10"
@@ -295,7 +355,7 @@ write_group = "ecommerce.manager"
 
   [[model.field]]
   name = "used_count"
-  description = "How many times it has been used (kept up to date by hand)"
+  description = "How many times it has been used. The shop counts a use when the order is placed and gives it back when the order is cancelled or never paid"
   class = "none"
   kind = "number"
 
@@ -306,8 +366,96 @@ write_group = "ecommerce.manager"
   kind = "money"
 
   [[model.field]]
+  name = "per_customer_limit"
+  description = "How many times one customer (by email address) may use the code; empty means no limit"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "category_id"
+  description = "Only listings of this category get the reduction; empty means the whole order"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_category"
+
+  [[model.field]]
   name = "active"
   description = "Whether the code can be used"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "ecommerce_discount_use"
+description = "How many times one customer has used one discount code (the customer is kept as a hash, never as an email address)"
+read_group = "ecommerce.manager"
+write_group = "ecommerce.manager"
+
+  [model.public]
+  server_adjust = ["count"]
+
+  [[model.field]]
+  name = "code_id"
+  description = "The discount code"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_discount_code"
+  required = true
+
+  [[model.field]]
+  name = "customer_hash"
+  description = "Hash of the customer's email address, so the per-customer limit can be checked without keeping the address here"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "count"
+  description = "Uses so far"
+  class = "none"
+  kind = "number"
+
+[[model]]
+name = "ecommerce_tax_rate"
+description = "A tax rate the shop applies to listings, computed on the server"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [model.public]
+  server_read = true
+
+  [[model.field]]
+  name = "name"
+  description = "Name shown on the order, for example VAT"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "rate_bp"
+  description = "Rate in basis points: 1900 is 19.00 percent"
+  class = "none"
+  kind = "number"
+  required = true
+
+  [[model.field]]
+  name = "country"
+  description = "Two-letter country code (for example DE) of the delivery address this rate is for; empty means every country that has no rate of its own"
+  class = "none"
+
+  [[model.field]]
+  name = "category_id"
+  description = "Only listings of this category; empty means every listing (and delivery)"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_category"
+
+  [[model.field]]
+  name = "included"
+  description = "Whether listing prices already include this tax (the usual way in the EU). If not, the tax is added on top at checkout"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "active"
+  description = "Whether the rate is applied"
   class = "none"
   kind = "bool"
 
@@ -319,10 +467,10 @@ write_group = "ecommerce.user"
 
   [model.public]
   submit = true
-  submit_fields = ["customer_email", "customer_name", "shipping_address", "shipping_method_id"]
+  submit_fields = ["customer_email", "customer_name", "shipping_address", "shipping_method_id", "country"]
   rate_limit_per_hour = 10
   receipt_token_field = "access_token"
-  receipt_fields = ["number", "customer_email", "customer_name", "shipping_address", "placed_on", "currency", "subtotal", "shipping_total", "total", "state"]
+  receipt_fields = ["number", "customer_email", "customer_name", "shipping_address", "country", "placed_on", "currency", "subtotal", "discount_total", "discount_code", "shipping_total", "tax_total", "tax_summary", "total", "payment_method", "state"]
 
   [[model.field]]
   name = "number"
@@ -379,6 +527,48 @@ write_group = "ecommerce.user"
   to = "ecommerce_discount_code"
 
   [[model.field]]
+  name = "discount_code"
+  description = "The code the shopper entered, as it is shown on the order"
+  class = "none"
+
+  [[model.field]]
+  name = "discount_use_id"
+  description = "Which per-customer use counter this order counted against, so it can be given back"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "country"
+  description = "Two-letter country code of the delivery address, which decides the tax rate"
+  class = "internal"
+  personal_data = true
+
+  [[model.field]]
+  name = "tax_summary"
+  description = "The tax lines of the order as JSON: name, rate in basis points, whether included in the prices, amount"
+  class = "none"
+  kind = "longtext"
+
+  [[model.field]]
+  name = "stock_returned"
+  description = "Set when the units of a cancelled, expired or refunded order were put back on the listings, so it happens once"
+  class = "none"
+  kind = "bool"
+
+  [[model.field]]
+  name = "reserved_until"
+  description = "Unix time until which an unpaid order holds its stock; after that it is cancelled and the stock goes back"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "payment_method"
+  description = "How the shopper chose to pay: manual (bank transfer or invoice), stripe (card) or fake (demo)"
+  class = "none"
+  kind = "select"
+  options = ["manual", "stripe", "fake"]
+
+  [[model.field]]
   name = "placed_on"
   description = "Day the order was placed (YYYY-MM-DD)"
   class = "none"
@@ -391,7 +581,7 @@ write_group = "ecommerce.user"
 
   [[model.field]]
   name = "subtotal"
-  description = "Sum of the lines (minor currency units, entered not computed)"
+  description = "Sum of the lines at listing prices (minor currency units, computed by the shop at checkout)"
   class = "none"
   kind = "money"
 
@@ -409,13 +599,13 @@ write_group = "ecommerce.user"
 
   [[model.field]]
   name = "tax_total"
-  description = "Tax included in the total (minor currency units)"
+  description = "All tax on the order, both the part included in the prices and the part added on top (minor currency units)"
   class = "none"
   kind = "money"
 
   [[model.field]]
   name = "total"
-  description = "Amount the shopper pays (minor currency units)"
+  description = "Amount the shopper pays: lines, minus the discount, plus delivery, plus tax that was added on top (minor currency units)"
   class = "none"
   kind = "money"
   required = true
@@ -501,7 +691,7 @@ write_group = "ecommerce.user"
   submit_fields = ["listing_id", "quantity"]
   rate_limit_per_hour = 10
   receipt_parent = "order_id"
-  receipt_fields = ["description", "quantity", "unit_price", "subtotal"]
+  receipt_fields = ["description", "quantity", "unit_price", "subtotal", "discount_amount", "tax_name", "tax_rate_bp", "tax_amount"]
 
   [[model.field]]
   name = "order_id"
@@ -549,3 +739,115 @@ write_group = "ecommerce.user"
   description = "Line total (minor currency units, entered not computed)"
   class = "none"
   kind = "money"
+
+  [[model.field]]
+  name = "discount_amount"
+  description = "Part of the order discount that falls on this line (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "tax_name"
+  description = "Name of the tax applied to this line"
+  class = "none"
+
+  [[model.field]]
+  name = "tax_rate_bp"
+  description = "Tax rate of this line in basis points"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "tax_amount"
+  description = "Tax on this line, included in the prices or added on top (minor currency units)"
+  class = "none"
+  kind = "money"
+
+[[model]]
+name = "ecommerce_payment"
+description = "A payment for a web order: which provider, its reference, the amount and what became of it. The shop never sees card data"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [model.public]
+  receipt_parent = "order_id"
+  receipt_fields = ["provider", "state", "amount", "currency"]
+
+  [[model.field]]
+  name = "order_id"
+  description = "The order being paid"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_order"
+  required = true
+
+  [[model.field]]
+  name = "provider"
+  description = "Who takes the payment: manual (bank transfer or invoice), stripe (Stripe Checkout) or fake (local demo)"
+  class = "none"
+  kind = "select"
+  options = ["manual", "stripe", "fake"]
+  required = true
+
+  [[model.field]]
+  name = "external_id"
+  description = "The provider's reference for this payment, for example a Stripe Checkout Session id. Never a card number"
+  class = "financial"
+
+  [[model.field]]
+  name = "checkout_url"
+  description = "Where the shopper pays, kept so the payment page can send them back to it while the payment is open"
+  class = "financial"
+
+  [[model.field]]
+  name = "state"
+  description = "Payment status: open (waiting for the shopper), succeeded, failed, expired, cancelled, refunded"
+  class = "none"
+  kind = "select"
+  options = ["open", "succeeded", "failed", "expired", "cancelled", "refunded"]
+  required = true
+
+  [[model.field]]
+  name = "amount"
+  description = "Amount to pay, set by the server from the order (minor currency units)"
+  class = "none"
+  kind = "money"
+  required = true
+
+  [[model.field]]
+  name = "currency"
+  description = "ISO 4217 currency code of the amount"
+  class = "none"
+
+  [[model.field]]
+  name = "refund_id"
+  description = "The provider's reference for the refund, once the payment was refunded"
+  class = "financial"
+
+  [[model.field]]
+  name = "refunded_amount"
+  description = "Amount returned to the shopper (minor currency units)"
+  class = "none"
+  kind = "money"
+
+  [[model.field]]
+  name = "event_ids"
+  description = "Ids of the provider events already applied, as JSON, so a repeated notification changes nothing"
+  class = "none"
+  kind = "longtext"
+
+  [[model.action]]
+  name = "mark_failed"
+  description = "The provider reports that the payment failed"
+  field = "state"
+  from = "open"
+  to = "failed"
+  group = "ecommerce.manager"
+
+  [[model.action]]
+  name = "cancel"
+  description = "Give up waiting for this payment"
+  field = "state"
+  from = "open"
+  to = "cancelled"
+  group = "ecommerce.manager"

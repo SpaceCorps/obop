@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Henkilöstö"
-description = "Työntekijät, osastot ja poissaolopyynnöt. Henkilötiedot on luokiteltu tiukasti: palkka, pankkitili ja henkilötunnus näkyvät vain esihenkilöille, terveys- ja ammattiliittotiedot vain erityisryhmälle."
+description = "Työntekijät, osastot ja poissaolopyynnöt. Henkilötiedot on luokiteltu tiukasti: palkka, pankkitili ja henkilötunnus näkyvät vain esihenkilöille, terveys- ja ammattiliittotiedot vain erityisryhmälle. Työntekijä näkee ja jättää vain omat pyyntönsä; hr.manager näkee kaikki."
+summary = "Työntekijät, osastot ja poissaolopyynnöt; palkka- ja terveystiedot näkyvät vain oikeille ryhmille."
 
 [labels.fi.model.hr_department]
 name = "Osasto"
@@ -185,3 +186,11 @@ description = "Hyväksy pyydetty vapaa (vain esihenkilö)"
 [labels.fi.model.hr_leave_request.action.refuse]
 label = "Hylkää"
 description = "Hylkää pyydetty vapaa (vain esihenkilö)"
+
+[labels.fi.model.hr_employee.field.photo]
+label = "Valokuva"
+description = "Henkilön valokuva (PNG, JPEG, WebP tai GIF; metatiedot, kuten sijainti, poistetaan latauksessa). Henkilötieto: ei koskaan julkinen"
+
+[labels.fi.model.hr_leave_request.field.requested_by]
+label = "Pyytäjä"
+description = "Poissaoloa pyytävän henkilön käyttäjänimi; pyynnön jättävä henkilö, ellei toisin määritetä. Vain hän ja hr.manager näkevät pyynnön"

@@ -2,14 +2,20 @@
 mod account_tests;
 mod app;
 #[cfg(test)]
+mod blobs_tests;
+#[cfg(test)]
 mod connectors_tests;
 #[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
 #[cfg(test)]
+mod model_tests;
+#[cfg(test)]
 mod modules_tests;
 mod ops;
+#[cfg(test)]
+mod payments_tests;
 #[cfg(test)]
 mod public_site_tests;
 
@@ -34,6 +40,7 @@ const USAGE: &str = "usage: obop <command>
   modules plan FILE|ID                          what installing a file or marketplace package would do, without doing it
   modules install FILE | uninstall ID           manage packages in the database (operator tool); an install brings its dependencies
   modules market                                list the marketplace; install with `modules install-from ID`
+  sequences backfill [MODEL [FIELD]]            number the records that were created before their sequence field existed
   admin create USER [--groups a,b | --all-groups]
                                                 create a user; the password is read from stdin
   admin reset-mfa USER --db URL                 break-glass: remove USER's two-factor and sessions (needs database
@@ -172,6 +179,11 @@ fn main() -> ExitCode {
         ["modules", "install", file] => modules_install(&opts, Some(file), None),
         ["modules", "install-from", id] => modules_install(&opts, None, Some(id)),
         ["modules", "uninstall", id] => modules_uninstall(&opts, id),
+        ["sequences", "backfill"] => sequences_backfill(&opts, None, None),
+        ["sequences", "backfill", model] => sequences_backfill(&opts, Some(model), None),
+        ["sequences", "backfill", model, field] => {
+            sequences_backfill(&opts, Some(model), Some(field))
+        }
         ["admin", "reset-mfa", user] => admin_reset_mfa(&opts, user),
         ["admin", "create", user] => admin_create(&opts, user, groups, has("--all-groups")),
         ["agent-token", user] => agent_token(&opts, user, scopes, label),
@@ -482,6 +494,24 @@ fn modules_uninstall(o: &Opts, id: &str) -> Exit {
     Ok(())
 }
 
+fn sequences_backfill(o: &Opts, model: Option<&str>, field: Option<&str>) -> Exit {
+    let app = open_app(&Opts {
+        demo: false,
+        ..clone_opts(o)
+    })?;
+    let done = app
+        .dispatcher
+        .backfill_sequences(&app.store, model, field)
+        .map_err(|e| fail(&e))?;
+    for (m, f, n) in &done {
+        println!("{m}.{f}: numbered {n} record(s)");
+    }
+    if done.is_empty() {
+        println!("no sequence field matches");
+    }
+    Ok(())
+}
+
 fn admin_create(o: &Opts, user: &str, groups: Option<&str>, all: bool) -> Exit {
     let app = open_app(&Opts {
         demo: false,
@@ -650,7 +680,18 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     }
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
+    state.set_payments(app.payments.clone());
     app.connectors.start();
+    // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
+    let blobs = app.store.blobs();
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3600));
+            if let Err(e) = blobs.gc(24 * 3600) {
+                eprintln!("blob housekeeping: {e}");
+            }
+        }
+    });
     let router = if o.public_site {
         if !obop_http::public::admin_prefix_ok(&o.admin_prefix) {
             return Err(fail(&format!(
@@ -658,13 +699,16 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
                 o.admin_prefix
             )));
         }
-        let site = Arc::new(obop_site::Site::new(
-            obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),
-            obop_site::Config {
-                admin_prefix: Some(o.admin_prefix.clone()),
-                ..obop_site::Config::from_env()
-            },
-        ));
+        let site = Arc::new(
+            obop_site::Site::new(
+                obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),
+                obop_site::Config {
+                    admin_prefix: Some(o.admin_prefix.clone()),
+                    ..obop_site::Config::from_env()
+                },
+            )
+            .with_payments(app.payments.clone()),
+        );
         if !site.has_public_models() {
             eprintln!(
                 "the public site is on but no public content is installed yet: obop modules install-from website, install-from ecommerce, then obop site seed"
@@ -1583,8 +1627,9 @@ mod tests {
         .await;
         assert_eq!(s, 200, "{b}");
         assert_eq!(b["value"]["state"], "posted");
-        assert_eq!(
-            b["value"]["number"], "INV-00001",
+        let number = b["value"]["number"].as_str().unwrap_or_default();
+        assert!(
+            number.starts_with("INV-") && number.ends_with("-00001"),
             "the post action ran: {b}"
         );
 
@@ -1729,14 +1774,36 @@ mod tests {
         let (s, e) = post(
             &r,
             Some(&ada),
-            "/api/sale_order/create",
-            json!({"total_minor": 12.5}),
+            "/api/lead/create",
+            json!({"title": "x", "expected_revenue_minor": 12.5}),
         )
         .await;
         assert_eq!(s, 400, "{e}");
         assert!(
             e.to_string()
-                .contains("sale_order.total_minor must be an integer in minor currency units"),
+                .contains("lead.expected_revenue_minor must be an integer in minor currency units"),
+            "{e}"
+        );
+        // D56/D57/D58 flags: the total of an order is computed, an invoice number is a sequence,
+        // the stage of a lead is governed, and every field says so.
+        assert_eq!(total["computed"], true);
+        assert_eq!(field("sale_order", "number")["sequence"], true);
+        assert_eq!(field("sale_order", "number")["unique"], true);
+        assert_eq!(field("invoice", "number")["sequence"], true);
+        assert_eq!(stage["governed"], true);
+        assert_eq!(field("sale_order", "currency")["computed"], false);
+        assert_eq!(field("product", "sku")["unique"], true);
+        let (s, e) = post(
+            &r,
+            Some(&ada),
+            "/api/sale_order/create",
+            json!({"total_minor": 12}),
+        )
+        .await;
+        assert_eq!(s, 400, "{e}");
+        assert!(
+            e.to_string()
+                .contains("total_minor is computed and read-only"),
             "{e}"
         );
         let (s, e) = post(
@@ -2146,12 +2213,24 @@ mod tests {
 
     #[test]
     fn every_linked_module_passes_the_gate() {
+        let app = App::new();
         assert!(
-            App::new()
-                .modules
+            app.modules
                 .iter()
                 .all(|m| obop_registry::check_module(m).is_empty())
         );
+        // Effects reach across modules (a confirmed order creates an invoice): checked against
+        // all the linked modules together, where an unknown model is an error.
+        let all: Vec<std::sync::Arc<obop_registry::ModelDef>> = app
+            .modules
+            .iter()
+            .flat_map(|m| m.models.iter().cloned().map(std::sync::Arc::new))
+            .collect();
+        let look = |n: &str| all.iter().find(|m| m.name == n).cloned();
+        for m in &app.modules {
+            let v = obop_registry::check_module_in(m, &look);
+            assert!(v.is_empty(), "{}: {v:?}", m.id);
+        }
     }
     /// D52 over HTTP: `/api/meta` carries `labels`, `descriptions` and `option_labels` exactly
     /// where a translation exists, for built-in modules and for installed packages, and nothing
@@ -2345,6 +2424,7 @@ mod bundled_packages {
         ("accounting_move", "reversed"),
         ("accounting_period", "closed"),
         ("ecommerce_order", "refunded"),
+        ("ecommerce_payment", "failed"),
         ("email_marketing_campaign", "sent"),
         ("field_service_job", "done"),
         ("knowledge_article", "archived"),
@@ -2432,6 +2512,8 @@ mod bundled_packages {
             .collect()
     }
 
+    static UNIQUE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
+
     /// Builds sample records from field metadata, creating referenced records first.
     struct Maker<'a> {
         app: &'a App,
@@ -2447,7 +2529,16 @@ mod bundled_packages {
             let fields: Vec<FieldInfo> = self.meta[model].fields.clone();
             let mut m = BTreeMap::new();
             for f in fields {
+                // Computed values and numbers are the system's to give.
+                if f.computed || f.sequence {
+                    continue;
+                }
                 let v = match f.kind {
+                    // A unique field gets a value no earlier record has.
+                    "text" if f.unique => {
+                        let n = UNIQUE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        Value::Text(format!("sample-{n}"))
+                    }
                     "text" => Value::text("sample"),
                     "longtext" => Value::text("a longer sample text"),
                     "number" => Value::Int(1),
@@ -2465,6 +2556,26 @@ mod bundled_packages {
                             continue;
                         }
                         Value::Text(self.record(to, open))
+                    }
+                    "image" | "file" => {
+                        // A real upload through the blob service, as the package's own user.
+                        let (ct, bytes) = if f.kind == "image" {
+                            ("image/png", obop_media::fixtures::png(24, 16, 3))
+                        } else {
+                            ("application/pdf", b"%PDF-1.4 sample".to_vec())
+                        };
+                        let svc = self.app.dispatcher.blob_service().expect("blob service");
+                        svc.set_upload_limit(1_000_000);
+                        let target = format!("{model}.{}", f.name);
+                        let who = if self.pkg_models.contains(model) {
+                            &self.pkg_user
+                        } else {
+                            &self.admin
+                        };
+                        let info = svc
+                            .upload(who, &target, ct, "sample", &bytes)
+                            .unwrap_or_else(|e| panic!("{target}: upload {e:?}"));
+                        Value::text(&info.id)
                     }
                     other => panic!("{model}.{}: unknown kind {other}", f.name),
                 };
@@ -2530,7 +2641,14 @@ mod bundled_packages {
                 .install(&Bundled.fetch(id).unwrap(), "marketplace", "test")
                 .unwrap_or_else(|e| panic!("{id} did not install: {e}"));
 
-            let groups = m.groups();
+            // The groups of the package and of the packages its effects reach into (a sale that
+            // creates stock moves needs the right to make them; effects never elevate).
+            let mut groups = m.groups();
+            for other in &manifests {
+                groups.extend(other.groups());
+            }
+            groups.sort();
+            groups.dedup();
             let group_refs: Vec<&str> = groups.iter().map(String::as_str).collect();
             let user = Principal::user("tester", &group_refs);
             let visible = models_of(&app, &user);

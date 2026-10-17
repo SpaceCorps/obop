@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Punkt sprzedaży"
-description = "Kasy sklepowe: punkt sprzedaży, sesje z kontrolą gotówki, zamówienia z pozycjami i płatności według metody. Zwrot środków i zamknięcie sesji zatwierdza kierownik; agenci mogą je tylko zaproponować. Sumy i różnice kasowe są wpisywane, nie wyliczane. Nie przechowuje numerów kart, tylko referencję operatora płatności. Wymaga pakietu Produkty."
+description = "Kasy sklepowe: punkt sprzedaży, sesje z kontrolą gotówki, zamówienia z pozycjami i płatności według metody. Zwrot i zamknięcie sesji zatwierdza kierownik. Sumy pozycji i zamówienia są wyliczane, paragony mają ciągły numer roczny, a płatność tworzy roboczą operację magazynową na pozycję. Nie przechowuje numerów kart. Wymaga pakietu Produkty."
+summary = "Kasy sklepowe: sesje z kontrolą gotówki, zamówienia z pozycjami i płatnościami. Zwroty i zamknięcie wymagają zatwierdzenia."
 
 [labels.pl.model.pos_config]
 name = "Kasa"
@@ -96,7 +97,7 @@ description = "Sesja, w której dokonano sprzedaży"
 
 [labels.pl.model.pos_order.field.receipt_number]
 label = "Numer paragonu"
-description = "Numer drukowany na paragonie. Dowolny tekst: pakiety nie mogą generować sekwencji"
+description = "Numer na paragonie, np. R-2026-000042: ciągła seria zaczynająca się od nowa każdego roku, nadawana przy utworzeniu sprzedaży"
 
 [labels.pl.model.pos_order.field.ordered_on]
 label = "Data zamówienia"
@@ -112,7 +113,7 @@ description = "Podatek zawarty w sumie (w jednostkach podrzędnych waluty)"
 
 [labels.pl.model.pos_order.field.total]
 label = "Razem"
-description = "Suma zapłacona przez klienta z podatkiem (w jednostkach podrzędnych waluty, wpisywana, nie wyliczana)"
+description = "Suma zapłacona przez klienta z podatkiem: suma wartości pozycji (w jednostkach podrzędnych waluty)"
 
 [labels.pl.model.pos_order.field.note]
 label = "Notatka"
@@ -130,7 +131,7 @@ cancelled = "Anulowane"
 
 [labels.pl.model.pos_order.action.pay]
 label = "Zapłać"
-description = "Sprzedaż jest w pełni opłacona"
+description = "Sprzedaż jest w pełni opłacona: odrzucane, dopóki płatności nie pokrywają sumy; tworzy roboczą operację magazynową na pozycję (wymaga grupy inventory.user)"
 
 [labels.pl.model.pos_order.action.cancel]
 label = "Anuluj"
@@ -170,7 +171,7 @@ description = "Rabat w punktach bazowych: 1000 oznacza 10,00 procent"
 
 [labels.pl.model.pos_order_line.field.subtotal]
 label = "Suma częściowa"
-description = "Wartość pozycji po rabacie (w jednostkach podrzędnych waluty, wpisywana, nie wyliczana)"
+description = "Wartość pozycji po rabacie: ilość razy cena jednostkowa, pomniejszona o rabat (w jednostkach podrzędnych waluty)"
 
 [labels.pl.model.pos_payment]
 name = "Płatność"
@@ -202,3 +203,7 @@ description = "Dzień płatności (YYYY-MM-DD)"
 [labels.pl.model.pos_payment.field.provider_reference]
 label = "Referencja operatora"
 description = "Referencja z terminala płatniczego lub operatora płatności; nigdy numer karty"
+
+[labels.pl.model.pos_order.field.stock_location_id]
+label = "Lokalizacja magazynowa"
+description = "Skąd towar opuszcza magazyn; płatność tworzy operacje magazynowe z tej lokalizacji"

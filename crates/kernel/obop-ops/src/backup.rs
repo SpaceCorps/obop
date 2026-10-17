@@ -8,8 +8,14 @@
 //! ```text
 //! {"type":"header","format":1,"core_version":"0.2.0","schema_version":2,"created_at":"...","source":"postgres"}
 //! {"m":"<model>","i":"<id>","d":{...fields...}}      one line per record, in insertion order
-//! {"type":"end","records":N,"content_sha256":"..."}
+//! {"blob":"<sha256 id>","ct":"image/png","w":640,"h":480,"created":1,"x":"<base64 bytes>"}
+//! {"type":"end","records":N,"blobs":M,"content_sha256":"..."}
 //! ```
+//!
+//! Uploaded pictures and files (D60) keep their records (what holds them) with the other
+//! records and their bytes in a directory or a table of their own, so the bytes follow the
+//! records as `blob` lines, one blob at a time, through `Blobs::export`. A restore puts them
+//! back through `Blobs::import`, which checks that each hashes to its id.
 //!
 //! Next to it, `<data file>.manifest.json` repeats the header and adds the SHA-256 of the data
 //! file as stored, the SHA-256 of the record lines, the record count and the count per model.
@@ -20,6 +26,8 @@
 //! The checksums detect damage and accidental edits. They do not authenticate: someone who can
 //! rewrite both files can forge a pair, so keep backups where only the operator can write.
 
+use base64::Engine as _;
+use obop_storage::blob::{BlobInfo, Blobs, ExportedBlob};
 use obop_storage::{Backend, Fields, Row};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
@@ -95,6 +103,8 @@ pub struct Manifest {
     pub content_sha256: String,
     pub records: usize,
     pub models: BTreeMap<String, usize>,
+    /// Uploaded blobs whose bytes are in the data file.
+    pub blobs: usize,
 }
 
 impl Manifest {
@@ -112,6 +122,7 @@ impl Manifest {
             "content_sha256": self.content_sha256,
             "records": self.records,
             "models": self.models,
+            "blobs": self.blobs,
             "not_included": ["short-lived values: sessions, pending approvals, rate-limit counters"],
             "secrets": "sealed values are stored exactly as they are in the database; OBOP_SECRET_KEY is not in this backup (an instance without it keeps a generated key in the database, and that key is in the backup)",
         })
@@ -147,6 +158,7 @@ impl Manifest {
                 .iter()
                 .map(|(k, v)| (k.clone(), v.as_u64().unwrap_or(0) as usize))
                 .collect(),
+            blobs: j["blobs"].as_u64().unwrap_or(0) as usize,
         })
     }
 }
@@ -179,6 +191,17 @@ fn resolve_out(out: &Path) -> PathBuf {
 /// number of records written so far after each batch.
 pub fn create(
     backend: &Arc<dyn Backend>,
+    schema_version: u64,
+    out: &Path,
+    progress: &mut dyn FnMut(usize),
+) -> Result<Created, String> {
+    create_with(backend, None, schema_version, out, progress)
+}
+
+/// As [`create`], and the bytes of every uploaded blob when `blobs` is given.
+pub fn create_with(
+    backend: &Arc<dyn Backend>,
+    blobs: Option<&dyn Blobs>,
     schema_version: u64,
     out: &Path,
     progress: &mut dyn FnMut(usize),
@@ -232,11 +255,37 @@ pub fn create(
         let _ = std::fs::remove_file(&part);
         return Err(e);
     }
+    let mut blob_count = 0usize;
+    if let Some(blobs) = blobs {
+        let written = (|| -> Result<(), String> {
+            for b in blobs.export()? {
+                let b = b?;
+                let line = format!(
+                    "{}\n",
+                    json!({
+                        "blob": b.info.id, "ct": b.info.content_type, "w": b.info.width,
+                        "h": b.info.height, "created": b.info.created,
+                        "x": base64::engine::general_purpose::STANDARD.encode(&b.bytes),
+                    })
+                );
+                content.update(line.as_bytes());
+                gz.write_all(line.as_bytes())
+                    .map_err(|e| format!("write failed: {e}"))?;
+                blob_count += 1;
+            }
+            Ok(())
+        })();
+        if let Err(e) = written {
+            let _ = std::fs::remove_file(&part);
+            return Err(e);
+        }
+    }
     let content_sha256 = hex(&content.finalize());
     writeln!(
         gz,
         "{}",
-        json!({"type": "end", "records": records, "content_sha256": content_sha256})
+        json!({"type": "end", "records": records, "blobs": blob_count,
+               "content_sha256": content_sha256})
     )
     .map_err(io)?;
     let mut tee = gz.finish().map_err(io)?;
@@ -260,6 +309,7 @@ pub fn create(
         content_sha256,
         records,
         models,
+        blobs: blob_count,
     };
     let manifest_path = manifest_path_for(&data_path);
     std::fs::write(&manifest_path, format!("{:#}\n", manifest.to_json()))
@@ -349,6 +399,7 @@ pub fn verify(file: &Path) -> Result<Verified, String> {
     }
     let (mut content, mut n, mut models) =
         (Sha256::new(), 0usize, BTreeMap::<String, usize>::new());
+    let mut blobs = 0usize;
     let mut end: Option<J> = None;
     for line in it {
         let line = line.map_err(bad)?;
@@ -360,6 +411,18 @@ pub fn verify(file: &Path) -> Result<Verified, String> {
         if j["type"] == "end" {
             end = Some(j);
             continue;
+        }
+        if let Some(id) = j["blob"].as_str() {
+            if !j["x"].is_string() || id.len() != 64 {
+                return Err(format!("blob {} is malformed", blobs + 1));
+            }
+            content.update(line.as_bytes());
+            content.update(b"\n");
+            blobs += 1;
+            continue;
+        }
+        if blobs > 0 {
+            return Err("a record follows the blobs".into());
         }
         if !(j["m"].is_string() && j["i"].is_string() && j["d"].is_object()) {
             return Err(format!("record {} is malformed", n + 1));
@@ -377,6 +440,12 @@ pub fn verify(file: &Path) -> Result<Verified, String> {
         return Err(format!(
             "the data file holds {n} records, the manifest says {}",
             m.records
+        ));
+    }
+    if blobs != m.blobs || end["blobs"].as_u64().unwrap_or(0) != blobs as u64 {
+        return Err(format!(
+            "the data file holds {blobs} blobs, the manifest says {}",
+            m.blobs
         ));
     }
     if content != m.content_sha256 || end["content_sha256"].as_str() != Some(content.as_str()) {
@@ -416,6 +485,19 @@ pub fn restore(
     opts: RestoreOptions,
     progress: &mut dyn FnMut(usize),
 ) -> Result<Restored, String> {
+    restore_with(backend, None, latest_schema, file, opts, progress)
+}
+
+/// As [`restore`], and the bytes of the backup's blobs into `blobs` when it is given. Without
+/// it the blobs in the file are left alone (their records are still restored).
+pub fn restore_with(
+    backend: &Arc<dyn Backend>,
+    blobs: Option<&dyn Blobs>,
+    latest_schema: u64,
+    file: &Path,
+    opts: RestoreOptions,
+    progress: &mut dyn FnMut(usize),
+) -> Result<Restored, String> {
     // Every check that can fail without writing happens before anything is written.
     let v = verify(file)?;
     let m = v.manifest;
@@ -447,6 +529,7 @@ pub fn restore(
     let mut it = lines(&data)?;
     it.next(); // the header, checked by verify
     let mut written = 0usize;
+    let mut first_blob: Option<J> = None;
     let mut next = || -> Result<Option<Vec<Row>>, String> {
         let mut batch: Vec<Row> = Vec::new();
         while batch.len() < BATCH {
@@ -454,6 +537,10 @@ pub fn restore(
             let line = line.map_err(|e| format!("read failed: {e}"))?;
             let j: J = serde_json::from_str(&line).map_err(|_| "a line is not JSON")?;
             if j["type"] == "end" {
+                break;
+            }
+            if j["blob"].is_string() {
+                first_blob = Some(j);
                 break;
             }
             let fields: Fields = j["d"].as_object().cloned().ok_or("a record is malformed")?;
@@ -471,6 +558,44 @@ pub fn restore(
         Ok(Some(batch))
     };
     let n = backend.import(opts.force, &mut next)?;
+    // The blobs follow the records. Their records were restored above, so what holds each one
+    // is read back from the store; a blob without a record keeps what the file says about it.
+    let mut blob_lines: Vec<J> = first_blob.into_iter().collect();
+    if let Some(blobs) = blobs {
+        let put = |j: &J| -> Result<(), String> {
+            let id = j["blob"].as_str().unwrap_or_default();
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(j["x"].as_str().unwrap_or_default())
+                .map_err(|_| format!("blob {id} is not valid base64"))?;
+            let info = match blobs.info(id)? {
+                Some(i) => i,
+                None => BlobInfo {
+                    id: id.to_string(),
+                    size: bytes.len() as u64,
+                    content_type: j["ct"]
+                        .as_str()
+                        .unwrap_or("application/octet-stream")
+                        .into(),
+                    width: j["w"].as_u64().map(|v| v as u32),
+                    height: j["h"].as_u64().map(|v| v as u32),
+                    created: j["created"].as_u64().unwrap_or(0),
+                    owners: Vec::new(),
+                    pending: Vec::new(),
+                },
+            };
+            blobs.import(&ExportedBlob { info, bytes })
+        };
+        for j in blob_lines.drain(..) {
+            put(&j)?;
+        }
+        for line in it {
+            let line = line.map_err(|e| format!("read failed: {e}"))?;
+            let j: J = serde_json::from_str(&line).map_err(|_| "a line is not JSON")?;
+            if j["blob"].is_string() {
+                put(&j)?;
+            }
+        }
+    }
     if n != m.records {
         // Cannot happen after a verified read; if it does, the import was one transaction, but
         // say so rather than claim success.

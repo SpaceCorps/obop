@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Baza wiedzy"
 description = "Wiki: artykuły ułożone w drzewo przez artykuł nadrzędny, z obiegiem wersja robocza, opublikowane, zarchiwizowane, ustawieniem widoczności i tagami. Widoczność jest etykietą dla interfejsu i dla ludzi; platforma nie ma jeszcze uprawnień na poziomie wierszy, więc każdy z grupami Bazy wiedzy może czytać wszystkie artykuły."
+summary = "Wiki: artykuły w drzewie z obiegiem wersja robocza, opublikowany, zarchiwizowany, widocznością i tagami."
 
 [labels.pl.model.knowledge_article]
 name = "Artykuł"

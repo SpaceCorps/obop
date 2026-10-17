@@ -67,6 +67,15 @@ shown once; store it like a password
 
 Ajoutez `--db postgres://...` (ou définissez `OBOP_DATABASE_URL`) si l'instance n'utilise pas la valeur par défaut `sqlite://obop.db`.
 
+## Utiliser le jeton pour MCP
+
+Le même jeton connecte un client MCP au serveur MCP distant de l'instance, `https://YOUR-INSTANCE/mcp` : envoyez-le sous la forme `Authorization: Bearer obop_...` (les clients ont un champ `headers` ou une variable de jeton porteur pour cela). Un jeton créé avec la CLI ou via REST fonctionne pour les deux ; il n'y a rien de spécifique à MCP à créer. Gardez ces points à l'esprit :
+
+- Créez un jeton distinct par client et ne lui donnez que les scopes dont ce client a besoin. La liste des outils MCP correspond exactement aux commandes que les scopes autorisent.
+- Un jeton de session obtenu à la connexion fonctionne aussi, mais il expire après 12 heures ; un jeton d'agent n'expire pas.
+- Le jeton doit être envoyé à chaque requête, pas seulement à la première ; les clients le font dès qu'il figure dans leur configuration.
+- Il n'existe pas encore de connexion OAuth pour MCP : les clients qui ne proposent qu'une connexion par navigateur ne peuvent donc pas se connecter. Voir [Se connecter via MCP](/docs/agents/mcp/).
+
 ## Le conserver en lieu sûr
 
 - Placez-le dans une variable d'environnement ou un coffre de secrets, pas dans un dépôt.

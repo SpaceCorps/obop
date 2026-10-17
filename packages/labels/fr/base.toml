@@ -1,5 +1,6 @@
 [labels.fr.module]
 name = "Contacts"
+summary = "Contacts et entreprises : les personnes et organisations avec lesquelles l’entreprise traite."
 
 [labels.fr.model.party]
 name = "Tiers"
@@ -24,3 +25,7 @@ description = "Notes internes en texte libre"
 [labels.fr.model.party.action.erase]
 label = "Effacer"
 description = "Anonymise le tiers sur place et enregistre l’effacement"
+
+[labels.fr.model.party.field.photo]
+label = "Photo"
+description = "Photo ou logo du contact (PNG, JPEG, WebP ou GIF, jusqu'à 2 Mio)"

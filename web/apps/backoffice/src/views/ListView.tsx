@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { describeFor, inSentence, t } from "@obop/ui";
-import type { FieldMeta, Row } from "../api.ts";
+import { describeFor, fmt, inSentence, t } from "@obop/ui";
+import { call, type FieldMeta, type Row } from "../api.ts";
+import { BulkDialog } from "../BulkDialog.tsx";
+import { BULK_CAP, EXPORT_CAP, outcomeOf } from "../bulk.ts";
 import { Cell } from "../fields.tsx";
 import { useData } from "../data.tsx";
 import { readPref, writePref } from "../favorites.ts";
@@ -8,6 +10,8 @@ import { csvCell, download, isState, optionLabel, plainText, rowCurrency } from 
 import { fieldTitle } from "../labels.ts";
 import { buildGroups, formatSumRows, type Group } from "../query.ts";
 import { DeleteDialog } from "../DeleteDialog.tsx";
+import { nounFor } from "../remove.ts";
+import { serverMessage } from "../serverMessage.ts";
 import { Pager, Popover, Icon } from "../ui.tsx";
 import { canMove, isGoverned } from "../workflow.ts";
 import { InlineEdit } from "./InlineEdit.tsx";
@@ -48,6 +52,13 @@ export function ListView(p: ViewProps) {
   const [editing, setEditing] = useState<{ id: string; field: string } | null>(null);
   const [pos, setPos] = useState({ r: 0, c: 1 });
   const [deleting, setDeleting] = useState(false);
+  // "Select all N matching" (D1): the selection is the whole search, not only this page.
+  const [allMatching, setAllMatching] = useState(false);
+  const [bulk, setBulk] = useState<
+    { kind: "delete" } | { kind: "set"; field: FieldMeta; value: string | boolean } | null
+  >(null);
+  const [exporting, setExporting] = useState<{ done: number; total: number } | null>(null);
+  const cancelExport = useRef(false);
   const grid = useRef<HTMLTableSectionElement>(null);
 
   const live = useMemo(() => {
@@ -73,7 +84,16 @@ export function ListView(p: ViewProps) {
     return out;
   }, [groups, rows, collapsed]);
 
-  const allOn = rows.length > 0 && live.size === rows.length;
+  // A different search is a different set of records: the page selection and "all matching" end.
+  const searchKey = JSON.stringify(state.facets);
+  useEffect(() => {
+    setAllMatching(false);
+  }, [searchKey, p.model.name]);
+  const pageOn = rows.length > 0 && live.size === rows.length;
+  const allOn = rows.length > 0 && (allMatching || pageOn);
+  const selCount = allMatching ? p.total : live.size;
+  const hasSelection = live.size > 0 || allMatching;
+  const offerAll = pageOn && !allMatching && p.total > rows.length;
   const nCols = cols.length + 2;
   const firstAgg = cols.findIndex(isAgg);
   const span = firstAgg < 0 ? nCols : firstAgg + 1;
@@ -92,25 +112,47 @@ export function ListView(p: ViewProps) {
           : undefined;
     setState({ ...state, sort: next });
   };
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    if (allMatching) {
+      // Unticking one record leaves "all matching": what is on this page stays selected.
+      setAllMatching(false);
+      setSelected(new Set(rows.map((r) => r.id).filter((x) => x !== id)));
+      return;
+    }
     setSelected((s) => {
       const n = new Set(s);
       if (n.has(id)) n.delete(id);
       else n.add(id);
       return n;
     });
+  };
 
   function cellText(f: FieldMeta, r: Row) {
     return plainText(f, r[f.name], d.refText, rowCurrency(r));
   }
   async function exportCsv() {
-    // Selected rows, else everything the search matches (not only the page on screen).
-    let pick = rows.filter((r) => live.has(r.id));
-    if (!pick.length) {
-      const all = await p.exportAll();
-      pick = all.rows;
-      if (all.truncated)
-        d.notify(t("Exported the first {count} records only", { count: pick.length }), "info");
+    // Selected rows of this page, else everything the search matches, fetched page by page.
+    let pick = allMatching ? [] : rows.filter((r) => live.has(r.id));
+    if (allMatching || !pick.length) {
+      cancelExport.current = false;
+      setExporting({ done: 0, total: p.total });
+      const got = await p.fetchAll({
+        cap: EXPORT_CAP,
+        cancelled: () => cancelExport.current,
+        onProgress: (done, total) => setExporting({ done, total }),
+      });
+      setExporting(null);
+      if ("error" in got) return d.notify(serverMessage(got.error), "error");
+      if (got.cancelled) return d.notify(t("Export cancelled"), "info");
+      pick = got.rows;
+      if (got.truncated)
+        d.notify(
+          t("Exported the first {count} of {total} records only", {
+            count: fmt.integer(pick.length),
+            total: fmt.integer(got.total),
+          }),
+          "info",
+        );
     }
     const head = cols.map((f) => csvCell(fieldTitle(f))).join(",");
     const body = pick.map((r) => cols.map((f) => csvCell(cellText(f, r))).join(","));
@@ -122,6 +164,7 @@ export function ListView(p: ViewProps) {
     );
   }
   async function bulkSet(f: FieldMeta, value: string | boolean) {
+    if (allMatching) return setBulk({ kind: "set", field: f, value });
     const ids = [...live];
     const results = await Promise.all(ids.map((id) => p.update(id, { [f.name]: value })));
     const failed = results.filter(Boolean);
@@ -176,7 +219,8 @@ export function ListView(p: ViewProps) {
 
   function clickCell(r: Row, f: FieldMeta, ci: number) {
     // The first column opens the record; the other cells edit in place when allowed.
-    if (p.canUpdate && ci > 0 && !isMaskedVal(r[f.name])) setEditing({ id: r.id, field: f.name });
+    if (p.canUpdate && ci > 0 && !isMaskedVal(r[f.name]) && !f.computed && !f.sequence)
+      setEditing({ id: r.id, field: f.name });
     else p.onOpen(r.id);
   }
 
@@ -188,12 +232,99 @@ export function ListView(p: ViewProps) {
     .filter((r) => live.has(r.id))
     .map((r) => ({ id: r.id, label: d.recordLabel(p.model.name, r) }));
 
+  // The dialog lives in the model page: a bulk delete can empty the list, which replaces this view
+  // while the dialog still has its results to show.
+  const bulkDialog = bulk ? (
+    <BulkDialog
+      title={
+        bulk.kind === "delete"
+          ? t("Delete the matching records")
+          : t("Set {field} on the matching records", { field: fieldTitle(bulk.field) })
+      }
+      total={p.total}
+      question={(n) =>
+        bulk.kind === "delete"
+          ? t(
+              "{count, plural, one {Delete # record that matches this search? This cannot be undone.} other {Delete # records that match this search? This cannot be undone.}}",
+              { count: n },
+            )
+          : t(
+              "{count, plural, one {Set {field} to {value} on # record that matches this search?} other {Set {field} to {value} on # records that match this search?}}",
+              {
+                count: n,
+                field: fieldTitle(bulk.field),
+                value:
+                  bulk.field.kind === "bool"
+                    ? bulk.value
+                      ? t("Yes")
+                      : t("No")
+                    : optionLabel(String(bulk.value), bulk.field),
+              },
+            )
+      }
+      confirmLabel={(n) =>
+        bulk.kind === "delete"
+          ? t("{count, plural, one {Delete # record} other {Delete # records}}", { count: n })
+          : t("{count, plural, one {Change # record} other {Change # records}}", { count: n })
+      }
+      collect={(o) => p.fetchAll(o)}
+      labelOf={(row) => d.recordLabel(p.model.name, row)}
+      noun={(n) => nounFor(inSentence(p.title), n)}
+      apply={async (row) => {
+        const label = d.recordLabel(p.model.name, row);
+        const r =
+          bulk.kind === "delete"
+            ? await call(d.token, `${p.model.name}.delete`, { id: row.id })
+            : await call(d.token, `${p.model.name}.update`, {
+                id: row.id,
+                [bulk.field.name]: bulk.value,
+              });
+        return outcomeOf({ id: row.id, label }, r);
+      }}
+      onClose={() => {
+        setBulk(null);
+        p.setDialog(null);
+      }}
+      onDone={() => {
+        setSelected(new Set());
+        setAllMatching(false);
+        void d.changed(p.model.name);
+      }}
+    />
+  ) : null;
+  const showDialog = p.setDialog;
+  useEffect(() => {
+    showDialog(bulkDialog);
+    // The dialog's inputs are fixed when it opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulk]);
+
   return (
     <div className="listview">
       <div className="listbar">
-        {live.size > 0 ? (
+        {hasSelection ? (
           <div className="bulkbar" role="toolbar" aria-label={t("Bulk actions")}>
-            <strong>{t("{count} selected", { count: live.size })}</strong>
+            <strong>{t("{count} selected", { count: fmt.integer(selCount) })}</strong>
+            {offerAll && (
+              <button className="linkbtn" onClick={() => setAllMatching(true)}>
+                {t("Select all {total} matching", { total: fmt.integer(p.total) })}
+              </button>
+            )}
+            {allMatching && (
+              <span className="hint" role="status">
+                {p.total > BULK_CAP
+                  ? t(
+                      "All {total} matching records are selected; bulk actions use the first {cap}.",
+                      {
+                        total: fmt.integer(p.total),
+                        cap: fmt.integer(BULK_CAP),
+                      },
+                    )
+                  : t("All {total} matching records are selected.", {
+                      total: fmt.integer(p.total),
+                    })}
+              </span>
+            )}
             {p.canUpdate && settableFields.length > 0 && (
               <Popover label={t("Set…")} ariaLabel={t("Set a field on the selected records")}>
                 {(close) => (
@@ -222,15 +353,24 @@ export function ListView(p: ViewProps) {
                 )}
               </Popover>
             )}
-            <button className="btn small" onClick={() => void exportCsv()}>
+            <button className="btn small" disabled={!!exporting} onClick={() => void exportCsv()}>
               <Icon name="download" size={13} /> {t("Export selected")}
             </button>
             {p.canDelete && (
-              <button className="btn small danger-text" onClick={() => setDeleting(true)}>
+              <button
+                className="btn small danger-text"
+                onClick={() => (allMatching ? setBulk({ kind: "delete" }) : setDeleting(true))}
+              >
                 <Icon name="trash" size={13} /> {t("Delete")}
               </button>
             )}
-            <button className="linkbtn" onClick={() => setSelected(new Set())}>
+            <button
+              className="linkbtn"
+              onClick={() => {
+                setSelected(new Set());
+                setAllMatching(false);
+              }}
+            >
               {t("Clear")}
             </button>
           </div>
@@ -239,12 +379,24 @@ export function ListView(p: ViewProps) {
             {p.canUpdate ? t("Click a cell to edit it, the first column opens the record.") : ""}
           </span>
         )}
+        {exporting && (
+          <span className="hint" role="status" aria-live="polite">
+            {t("Exporting {done} of {total}…", {
+              done: fmt.integer(exporting.done),
+              total: fmt.integer(exporting.total),
+            })}{" "}
+            <button className="linkbtn" onClick={() => (cancelExport.current = true)}>
+              {t("Cancel")}
+            </button>
+          </span>
+        )}
         <span className="grow" />
         <button
           className="btn small"
           onClick={() => void exportCsv()}
           aria-label={t("Export all as CSV")}
-          hidden={live.size > 0}
+          hidden={hasSelection}
+          disabled={!!exporting}
         >
           <Icon name="download" size={13} /> {t("Export CSV")}
         </button>
@@ -298,9 +450,12 @@ export function ListView(p: ViewProps) {
                   aria-label={t("Select all records")}
                   checked={allOn}
                   ref={(el) => {
-                    if (el) el.indeterminate = live.size > 0 && !allOn;
+                    if (el) el.indeterminate = hasSelection && !allOn;
                   }}
-                  onChange={() => setSelected(allOn ? new Set() : new Set(rows.map((r) => r.id)))}
+                  onChange={() => {
+                    setAllMatching(false);
+                    setSelected(allOn ? new Set() : new Set(rows.map((r) => r.id)));
+                  }}
                 />
               </th>
               {cols.map((f) => {
@@ -381,7 +536,7 @@ export function ListView(p: ViewProps) {
                   key={it.row.id}
                   role="row"
                   aria-rowindex={it.ri + 2}
-                  aria-selected={live.has(it.row.id)}
+                  aria-selected={allMatching || live.has(it.row.id)}
                   aria-current={it.row.id === p.selectedId || undefined}
                   className={it.row.id === p.selectedId ? "current" : ""}
                 >
@@ -397,7 +552,7 @@ export function ListView(p: ViewProps) {
                       type="checkbox"
                       tabIndex={-1}
                       aria-label={t("Select record")}
-                      checked={live.has(it.row.id)}
+                      checked={allMatching || live.has(it.row.id)}
                       onChange={() => toggle(it.row.id)}
                     />
                   </td>

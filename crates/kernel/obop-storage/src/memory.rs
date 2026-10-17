@@ -99,6 +99,76 @@ impl Backend for Memory {
         }
         Ok(())
     }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        let g = self.rows.lock().unwrap();
+        for (id, f) in g.get(model).into_iter().flatten() {
+            if !visit(id, f)? {
+                break;
+            }
+        }
+        Ok(())
+    }
+    fn apply(&self, ops: &[Op]) -> Result<()> {
+        self.apply_checked(ops).map_err(|e| e.to_string())
+    }
+    fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        struct M<'a>(&'a mut BTreeMap<String, Vec<(String, Fields)>>);
+        impl TxView for M<'_> {
+            fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+                Ok(self
+                    .0
+                    .get(model)
+                    .and_then(|r| r.iter().find(|(i, _)| i == id))
+                    .map(|(_, f)| f.clone()))
+            }
+            fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                self.0
+                    .entry(model.into())
+                    .or_default()
+                    .push((id.into(), fields.clone()));
+                Ok(())
+            }
+            fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+                if let Some((_, f)) = self
+                    .0
+                    .get_mut(model)
+                    .and_then(|r| r.iter_mut().find(|(i, _)| i == id))
+                {
+                    *f = fields.clone();
+                }
+                Ok(())
+            }
+            fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
+                if let Some(r) = self.0.get_mut(model) {
+                    r.retain(|(i, _)| i != id);
+                }
+                Ok(())
+            }
+        }
+        let mut g = self.rows.lock().unwrap();
+        let backup = g.clone();
+        let r = run_ops(&mut M(&mut g), ops);
+        if r.is_err() {
+            *g = backup;
+        } else {
+            // Keep the cross-model insertion order (for `export`) in step with the rows.
+            let mut order = self.order.lock().unwrap();
+            order.retain(|(m, i)| g.get(m).is_some_and(|r| r.iter().any(|(x, _)| x == i)));
+            let seen: std::collections::HashSet<(String, String)> = order.iter().cloned().collect();
+            for (m, rows) in g.iter() {
+                for (i, _) in rows {
+                    if !seen.contains(&(m.clone(), i.clone())) {
+                        order.push((m.clone(), i.clone()));
+                    }
+                }
+            }
+        }
+        r
+    }
     fn kind(&self) -> &'static str {
         "memory"
     }
@@ -255,43 +325,7 @@ impl Backend for Memory {
         }
         Ok(n)
     }
-    fn apply(&self, ops: &[Op]) -> Result<()> {
-        // Work on a copy of the rows, then swap it in: all or nothing.
-        let mut rows = self.rows.lock().unwrap();
-        let mut order = self.order.lock().unwrap();
-        let (mut r2, mut o2) = (rows.clone(), order.clone());
-        for op in ops {
-            match op {
-                Op::Put { model, id, fields } => {
-                    let v = r2.entry(model.clone()).or_default();
-                    match v.iter_mut().find(|(i, _)| i == id) {
-                        Some((_, f)) => *f = fields.clone(),
-                        None => {
-                            v.push((id.clone(), fields.clone()));
-                            o2.push((model.clone(), id.clone()));
-                        }
-                    }
-                }
-                Op::Merge { model, id, patch } => {
-                    let f = r2
-                        .get_mut(model)
-                        .and_then(|v| v.iter_mut().find(|(i, _)| i == id))
-                        .map(|(_, f)| f)
-                        .ok_or_else(|| format!("no {model} {id} to merge into"))?;
-                    f.extend(patch.clone());
-                }
-                Op::Delete { model, id } => {
-                    if let Some(v) = r2.get_mut(model) {
-                        v.retain(|(i, _)| i != id);
-                    }
-                    o2.retain(|(m, i)| !(m == model && i == id));
-                }
-            }
-        }
-        *rows = r2;
-        *order = o2;
-        Ok(())
-    }
+
     fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
         let mut g = self.rows.lock().unwrap();
         let mut n = 0;

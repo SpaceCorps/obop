@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Podpisy"
 description = "Szablony dokumentów i wnioski o podpis z obiegiem wersja robocza, wysłane, podpisane, odrzucone, wygasłe. Wniosek wskazuje podpisującego (dane osobowe) i przechowuje dowody podpisu jako referencje. Podpisany wniosek jest niezmienny tylko umownie: nie należy go edytować, a skrót dokumentu zapisuje, co podpisano. Wysłanie i zapis podpisu wymagają zatwierdzenia przez człowieka."
+summary = "Szablony dokumentów i wnioski o podpis. Wysłanie i zapis podpisu wymagają zatwierdzenia przez człowieka."
 
 [labels.pl.model.sign_template]
 name = "Szablon"

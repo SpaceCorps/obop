@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setInstanceDefaults, t } from "@obop/ui";
 import { loadSettings, meta, type ModuleMeta, type Settings } from "./api.ts";
 import { AppIcon, Launcher, Palette, TopBar, appBlurb, appHref, buildApps } from "./Chrome.tsx";
 import { ConnectorsApp, ConnectorsNav } from "./connectors/ConnectorsApp.tsx";
-import { Customize } from "./Customize.tsx";
-import { DashboardsApp } from "./dashboards/DashboardsApp.tsx";
 import { BOARD, boardHref } from "./dashboards/route.ts";
 import { DataProvider, type Tone } from "./data.tsx";
+import { ErrorBoundary, OfflineBanner, OfflineNotice } from "./ErrorBoundary.tsx";
 import { modelTitle } from "./labels.ts";
 import { ModelPage } from "./ModelPage.tsx";
 import { parseModulesRoute } from "./modules/route.ts";
@@ -16,6 +15,7 @@ import { PasswordGate } from "./SecurityAccount.tsx";
 import { SignIn } from "./SignIn.tsx";
 import {
   ConfirmDialog,
+  EmptyState,
   Icon,
   Skeleton,
   ToastRegion,
@@ -23,6 +23,22 @@ import {
   type ToastItem,
 } from "./ui.tsx";
 import { applyTheme, resolveTheme } from "./theme.ts";
+
+// The big screens load on demand, so the first paint is small and a route shows a skeleton while its
+// code arrives.
+const Customize = lazy(() => import("./Customize.tsx").then((m) => ({ default: m.Customize })));
+const DashboardsApp = lazy(() =>
+  import("./dashboards/DashboardsApp.tsx").then((m) => ({ default: m.DashboardsApp })),
+);
+
+/** What every route shows while it loads. */
+function RouteSkeleton() {
+  return (
+    <section className="main panel" aria-busy="true" aria-label={t("Loading")}>
+      <Skeleton rows={8} cols={4} />
+    </section>
+  );
+}
 
 function read(key: string): string {
   try {
@@ -55,6 +71,8 @@ export function App() {
   const [modules, setModules] = useState<ModuleMeta[]>([]);
   const [settings, setSettings] = useState<Settings>({});
   const [ready, setReady] = useState(false);
+  // The first read of the metadata failed (no connection, or the server answered with an error).
+  const [loadFailed, setLoadFailed] = useState(false);
   // The session may only set up two-factor authentication (an administrator policy, D53).
   const [limited, setLimited] = useState(false);
   // The session may only choose a new password (an administrator reset it, B7).
@@ -80,6 +98,12 @@ export function App() {
     if (!token) return;
     const [m, s] = await Promise.all([meta(token), loadSettings(token)]);
     if (m === null) return signOut();
+    if (m === "failed") {
+      // Keep what is on screen after a failed refresh; show the recovery screen on a first load.
+      setLoadFailed(true);
+      return;
+    }
+    setLoadFailed(false);
     setLimited(m === "enrolment");
     setMustChange(m === "password");
     if (m === "enrolment" || m === "password") return setReady(true);
@@ -208,14 +232,38 @@ export function App() {
         onSignOut={signOut}
       />
     );
-  if (!ready)
+  if (!ready && loadFailed)
     return (
       <div className="canvas">
         <div className="topbar" />
         <div className="workspace">
           <section className="main panel">
-            <Skeleton rows={8} cols={4} />
+            <OfflineNotice />
+            <EmptyState
+              icon="warning"
+              title={t("Could not load your workspace")}
+              hint={t(
+                "The server did not answer, or answered with an error. Your data is safe. Check the connection and try again.",
+              )}
+              action={{
+                label: t("Try again"),
+                onClick: () => {
+                  setLoadFailed(false);
+                  void refresh();
+                },
+              }}
+              secondary={{ label: t("Sign out"), onClick: signOut }}
+            />
           </section>
+        </div>
+      </div>
+    );
+  if (!ready)
+    return (
+      <div className="canvas">
+        <div className="topbar" />
+        <div className="workspace">
+          <RouteSkeleton />
         </div>
       </div>
     );
@@ -286,62 +334,70 @@ export function App() {
               )}
             </nav>
           )}
-          {app?.id === "customize" || personalCustomize ? (
-            <Customize
-              token={token}
-              onSignOut={signOut}
-              tab={route.tab || route.model}
-              section={route.view}
-              anchor={route.section}
-              apps={apps}
-              modules={modules}
-              settings={settings}
-              isAdmin={isAdmin}
-              modulesRoute={parseModulesRoute(route)}
-              goModules={(patch) => {
-                const next = { ...parseModulesRoute(route), ...patch };
-                go({
-                  app: "customize",
-                  model: "modules",
-                  tab: "modules",
-                  view: next.tab === "installed" ? "" : next.tab,
-                  id: next.id,
-                  section: next.panel === "overview" ? "" : next.panel,
-                });
-              }}
-              go={(tab) => go({ app: "customize", model: tab, tab })}
-              goSection={(view) => go({ app: "customize", model: "brand", tab: "brand", view })}
-              goAnchor={(section) =>
-                go({ app: "customize", model: "guide", tab: "guide", section }, { replace: false })
-              }
-              onSettings={(s) => {
-                setSettings(s);
-                applyTheme(resolveTheme(s.theme));
-              }}
-              onModulesChanged={() => void refresh()}
-              notify={notify}
-            />
-          ) : app?.id === "connectors" ? (
-            <ConnectorsApp app={app} route={route} go={go} />
-          ) : onBoard && app ? (
-            <DashboardsApp app={app} route={route} go={go} owner={email} />
-          ) : app && model ? (
-            <ModelPage
-              key={model.name}
-              app={app}
-              model={model}
-              route={{ ...route, model: model.name }}
-              go={go}
-            />
-          ) : (
-            <Home apps={apps} />
-          )}
+          <ErrorBoundary scope="page" resetKey={`${route.app}/${route.model}/${route.tab}`}>
+            <Suspense fallback={<RouteSkeleton />}>
+              {app?.id === "customize" || personalCustomize ? (
+                <Customize
+                  token={token}
+                  onSignOut={signOut}
+                  tab={route.tab || route.model}
+                  section={route.view}
+                  anchor={route.section}
+                  apps={apps}
+                  modules={modules}
+                  settings={settings}
+                  isAdmin={isAdmin}
+                  modulesRoute={parseModulesRoute(route)}
+                  goModules={(patch) => {
+                    const next = { ...parseModulesRoute(route), ...patch };
+                    go({
+                      app: "customize",
+                      model: "modules",
+                      tab: "modules",
+                      view: next.tab === "installed" ? "" : next.tab,
+                      id: next.id,
+                      section: next.panel === "overview" ? "" : next.panel,
+                    });
+                  }}
+                  go={(tab) => go({ app: "customize", model: tab, tab })}
+                  goSection={(view) => go({ app: "customize", model: "brand", tab: "brand", view })}
+                  goAnchor={(section) =>
+                    go(
+                      { app: "customize", model: "guide", tab: "guide", section },
+                      { replace: false },
+                    )
+                  }
+                  onSettings={(s) => {
+                    setSettings(s);
+                    applyTheme(resolveTheme(s.theme));
+                  }}
+                  onModulesChanged={() => void refresh()}
+                  notify={notify}
+                />
+              ) : app?.id === "connectors" ? (
+                <ConnectorsApp app={app} route={route} go={go} />
+              ) : onBoard && app ? (
+                <DashboardsApp app={app} route={route} go={go} owner={email} />
+              ) : app && model ? (
+                <ModelPage
+                  key={model.name}
+                  app={app}
+                  model={model}
+                  route={{ ...route, model: model.name }}
+                  go={go}
+                />
+              ) : (
+                <Home apps={apps} />
+              )}
+            </Suspense>
+          </ErrorBoundary>
         </div>
         {launcher && (
           <Launcher apps={apps} recent={recentApps()} onClose={() => setLauncher(false)} />
         )}
         {palette && <Palette apps={apps} onClose={() => setPalette(false)} />}
         {confirmReq && <ConfirmDialog req={confirmReq} />}
+        <OfflineBanner />
         <ToastRegion items={toasts} onDismiss={dismiss} />
       </div>
     </DataProvider>

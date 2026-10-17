@@ -1,6 +1,7 @@
 [labels.de.module]
 name = "Außendienst"
 description = "Einsätze vor Ort bei Kunden, ausgeführt von einem Techniker: terminiert, unterwegs, in Bearbeitung, erledigt oder storniert. Ein Einsatz erfasst Kunde, Einsatzort, Techniker, geplanten Tag und Beginn (Minuten seit Mitternacht), verwendete Teile und ob der Kunde die Arbeit abzeichnen muss. Einsatzadresse und Kontaktdaten sind personenbezogene Daten. Benötigt die Pakete Personal und Produkte."
+summary = "Einsätze vor Ort bei Kunden durch einen Techniker, mit verwendeten Teilen und einem Kennzeichen für die Kundenabnahme."
 
 [labels.de.model.field_service_job]
 name = "Einsatz"

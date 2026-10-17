@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Feuilles de temps"
-description = "Temps passé sur les tâches de projet, saisi en minutes, avec un indicateur facturable et une étape d’approbation. Nécessite le package Projets."
+description = "Temps passé sur les tâches de projet, saisi en minutes, avec un indicateur facturable et une étape d’approbation. Nécessite le package Projets. Chaque personne ne voit et ne modifie que ses propres saisies ; timesheets.manager les voit toutes."
+summary = "Temps passé sur les tâches de projet, en minutes, avec un indicateur facturable et une étape d’approbation."
 
 [labels.fr.model.timesheets_entry]
 name = "Saisie de temps"
@@ -12,7 +13,7 @@ description = "La tâche sur laquelle on a travaillé"
 
 [labels.fr.model.timesheets_entry.field.worker]
 label = "Intervenant"
-description = "Nom de la personne qui a fait le travail"
+description = "Nom d’utilisateur de la personne qui a fait le travail ; par défaut la personne qui crée la saisie"
 
 [labels.fr.model.timesheets_entry.field.worked_on]
 label = "Date travaillée"

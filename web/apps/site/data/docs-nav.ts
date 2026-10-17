@@ -1,7 +1,7 @@
 /** Order of the documentation sidebar. Group titles come from the messages (docs.groups). */
 export const DOCS_NAV: { group: "start" | "concepts" | "agents" | "reference"; pages: string[] }[] =
   [
-    { group: "start", pages: ["/docs/", "/docs/getting-started/"] },
+    { group: "start", pages: ["/docs/", "/docs/getting-started/", "/docs/web-shop/"] },
     {
       group: "concepts",
       pages: [

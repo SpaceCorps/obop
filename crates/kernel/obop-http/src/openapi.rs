@@ -94,6 +94,11 @@ fn kind_schema(kind: &str, options: Option<&[String]>, to: Option<&str>) -> J {
             json!({"type": "string", "description": format!("The id of a {} record.", to.unwrap_or("referenced"))})
         }
         "longtext" => json!({"type": "string"}),
+        "image" | "file" => json!({
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "A blob id: the SHA-256 of an uploaded object. Upload with POST /api/blobs?field=model.field and use the returned id. Reads return the id and metadata, never the bytes."
+        }),
         _ => json!({"type": "string"}),
     }
 }
@@ -149,6 +154,14 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
         "/api/approve/{plan_id}".into(),
         json!({"post": {"operationId": "approvePlan", "summary": "A human approves a plan an agent proposed", "security": sec.clone(), "parameters": [{"name": "plan_id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The plan ran."}, "404": error_responses()["404"].clone()}}}),
     );
+    paths.insert(
+        "/api/blobs".into(),
+        json!({"post": {"operationId": "uploadBlob", "summary": "Upload an image or file for an image/file field (D60)", "description": "Send the bytes as the request body with their Content-Type (the type is checked against the content, never trusted). `field` names the target as model.field; the caller needs write access to it. Images are decoded and re-encoded (metadata removed); SVG is refused. Returns the blob id to store in the field. Rate limited per principal.", "security": sec.clone(), "parameters": [{"name": "field", "in": "query", "required": true, "schema": {"type": "string", "example": "product.image"}}, {"name": "filename", "in": "query", "required": false, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}, "responses": {"201": ok(json!({"type": "object", "properties": {"id": {"type": "string"}, "content_type": {"type": "string"}, "size": {"type": "integer"}, "width": {"type": "integer"}, "height": {"type": "integer"}}}), "The stored blob."), "400": error_responses()["400"].clone(), "401": error_responses()["401"].clone(), "413": {"description": "Larger than the field allows."}, "415": {"description": "Not an accepted type, or the content is not what the Content-Type says."}, "429": {"description": "Too many uploads."}}}}),
+    );
+    paths.insert(
+        "/api/blobs/{id}".into(),
+        json!({"get": {"operationId": "downloadBlob", "summary": "Download a stored image or file (D60)", "description": "Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. Strong ETag; files are sent as attachments.", "security": sec.clone(), "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}, {"name": "w", "in": "query", "required": false, "schema": {"type": "integer", "enum": [320, 640, 960, 1280]}}], "responses": {"200": {"description": "The bytes."}, "304": {"description": "Not modified."}, "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
+    );
     let mut schemas = serde_json::Map::new();
     schemas.insert("Error".into(), error_schema());
     schemas.insert(
@@ -172,14 +185,35 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 } else {
                     f.description.to_string()
                 };
+                let mut desc = desc;
+                if f.computed {
+                    desc.push_str(" (computed when read; read-only)");
+                    sch["readOnly"] = J::from(true);
+                }
+                if f.sequence {
+                    desc.push_str(" (a number the system assigns; read-only)");
+                    sch["readOnly"] = J::from(true);
+                }
+                if f.unique && !f.sequence {
+                    desc.push_str(" (unique)");
+                }
+                if f.governed {
+                    desc.push_str(" (moves only through the model's actions)");
+                }
                 sch["description"] = J::from(desc);
                 props.insert(f.name.to_string(), sch);
-                if f.required {
+                if f.required && !f.computed {
                     required.push(f.name.to_string());
                 }
             }
             let rec =
                 json!({"type": "object", "properties": props, "description": model.description});
+            // Computed and numbered fields appear in records but are not accepted as input.
+            let input_props: serde_json::Map<String, J> = props
+                .iter()
+                .filter(|(_, v)| v.get("readOnly") != Some(&J::from(true)))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
             schemas.insert(name.clone(), rec.clone());
             let op = |id: &str, summary: &str, body: Option<J>, resp: J| {
                 let mut o = json!({"operationId": format!("{name}.{id}"), "summary": summary, "tags": [m.name.clone()], "security": sec.clone(), "responses": {"200": resp, "202": ok(json!({"$ref": "#/components/schemas/ApprovalRequired"}), "Proposed; needs a human to approve."), "400": error_responses()["400"].clone(), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}});
@@ -199,8 +233,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             let id_body = json_body(
                 json!({"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}),
             );
-            let mut create_schema =
-                json!({"type": "object", "properties": rec["properties"].clone()});
+            let mut create_schema = json!({"type": "object", "properties": input_props.clone()});
             if !required.is_empty() {
                 create_schema["required"] = json!(required);
             }
@@ -210,7 +243,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             );
             paths.insert(
                 format!("/api/{name}/search"),
-                op("search", &format!("Search {name} records with filter, order, limit and offset"), Some(json_body(json!({"type": "object", "properties": {"filter": {"type": "array", "items": {"type": "object", "required": ["field", "op"], "properties": {"field": {"type": "string"}, "op": {"type": "string", "enum": ["eq", "ne", "contains", "in", "gt", "gte", "lt", "lte", "is_null"]}, "value": {}}}}, "order": {"type": "array", "items": {"type": "object", "properties": {"field": {"type": "string"}, "dir": {"type": "string", "enum": ["asc", "desc"]}}}}, "limit": {"type": "integer", "minimum": 1, "maximum": 5000}, "offset": {"type": "integer", "minimum": 0}}}))), ok(json!({"type": "object", "properties": {"value": {"type": "object", "properties": {"rows": {"type": "array", "items": {"$ref": format!("#/components/schemas/{name}")}}, "total": {"type": "integer"}}}}}), "A page of records and the total.")),
+                op("search", &format!("Search {name} records with filter, order, limit and offset"), Some(json_body(json!({"type": "object", "properties": {"filter": {"type": "array", "items": {"type": "object", "required": ["field", "op"], "properties": {"field": {"type": "string"}, "op": {"type": "string", "enum": ["eq", "ne", "contains", "in", "gt", "gte", "lt", "lte", "is_null"]}, "value": {}}}}, "order": {"type": "array", "items": {"type": "object", "properties": {"field": {"type": "string"}, "dir": {"type": "string", "enum": ["asc", "desc"]}}}}, "limit": {"type": "integer", "minimum": 1, "maximum": 5000}, "offset": {"type": "integer", "minimum": 0}, "lang": {"type": "string", "description": "BCP-47 tag that picks the text collation"}, "aggregate": {"type": "object", "description": "Groups with counts and sums over every matching record instead of rows", "properties": {"group_by": {"type": "array", "maxItems": 2, "items": {"oneOf": [{"type": "string"}, {"type": "object", "required": ["field"], "properties": {"field": {"type": "string"}, "bucket": {"type": "string", "enum": ["day", "week", "month"]}}}]}}, "measures": {"type": "array", "maxItems": 8, "items": {"type": "object", "required": ["op"], "properties": {"op": {"type": "string", "enum": ["count", "sum", "min", "max"]}, "field": {"type": "string"}}}}}}}}))), ok(json!({"type": "object", "properties": {"value": {"type": "object", "properties": {"rows": {"type": "array", "items": {"$ref": format!("#/components/schemas/{name}")}}, "total": {"type": "integer"}, "groups": {"type": "array", "items": {"type": "object", "properties": {"key": {"type": "object"}, "count": {"type": "integer"}, "measures": {"type": "object"}}}}}}}}), "A page of records and the total.")),
             );
             paths.insert(
                 format!("/api/{name}/get"),
@@ -233,7 +266,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 );
             }
             if model.can_update {
-                let mut upd = json!({"type": "object", "required": ["id"], "properties": rec["properties"].clone()});
+                let mut upd = json!({"type": "object", "required": ["id"], "properties": input_props.clone()});
                 upd["properties"]["id"] = json!({"type": "string"});
                 paths.insert(
                     format!("/api/{name}/update"),

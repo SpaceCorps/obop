@@ -7,6 +7,8 @@ use crate::{CallError, Dispatcher, Principal, Response, Store, Surface, Value, V
 use obop_registry::{CommandDef, FieldDef as F, FieldKind, ModelDef, Module, intern};
 use obop_types::DataClass;
 
+mod polish;
+
 struct Rig {
     d: Dispatcher,
     store: Store,
@@ -112,6 +114,7 @@ fn module(p: &str) -> Module {
         description: "d",
         read_group: U,
         write_group: U,
+        access: None,
         fields,
         commands,
     };
@@ -1894,6 +1897,7 @@ fn hooks_module() -> Module {
             description: "An item",
             read_group: "g",
             write_group: "g",
+            access: None,
             fields: vec![
                 F::new("name", "Name", DataClass::None, false, "g"),
                 F::new("owner", "Owner", DataClass::None, false, "g"),

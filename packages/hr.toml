@@ -1,8 +1,8 @@
 [module]
 id = "hr"
-version = "0.2.0"
+version = "0.3.0"
 name = "Human Resources"
-description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group."
+description = "Employees, departments and leave requests. Personal data is classified strictly: pay, bank and national id are visible to managers only, and health and union data to the special reader group. An employee sees and files only their own leave requests; hr.manager sees all of them."
 author = "SpaceCorps"
 summary = "Employees, departments and leave requests, with pay and health data restricted to the right groups."
 license = "AGPL-3.0-or-later"
@@ -66,6 +66,14 @@ write_group = "hr.manager"
   description = "Work phone number"
   class = "public_directory"
   personal_data = true
+
+  [[model.field]]
+  name = "photo"
+  description = "Photo of the person (PNG, JPEG, WebP or GIF; metadata such as location is removed on upload). Personal data: never public"
+  class = "confidential_hr"
+  personal_data = true
+  kind = "image"
+  max_bytes = 2097152
 
   [[model.field]]
   name = "department_id"
@@ -208,6 +216,16 @@ name = "hr_leave_request"
 description = "A request for time off"
 read_group = "hr.user"
 write_group = "hr.user"
+
+  [model.access]
+  own = "requested_by"
+  see_all_group = "hr.manager"
+
+  [[model.field]]
+  name = "requested_by"
+  description = "User name of the person who asked for the leave; the person who files the request unless set otherwise. Only they and hr.manager see the request"
+  class = "internal"
+  personal_data = true
 
   [[model.field]]
   name = "employee_id"

@@ -5,6 +5,7 @@ import { useData, useRows } from "./data.tsx";
 import type { Edit } from "./edit.ts";
 import { formatDate, integer, isEmpty, isMasked, money, optionLabel } from "./format.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
+import { BlobInput, BlobThumb, FileChip } from "./BlobFields.tsx";
 import { Badge, Icon } from "./ui.tsx";
 
 /** A value as it reads in a list, card or calendar chip. Principal-masked tokens keep their look. */
@@ -41,6 +42,10 @@ export function Cell({
       return <Badge field={field} value={String(value)} />;
     case "ref":
       return <RefLabel field={field} id={String(value)} link={link} />;
+    case "image":
+      return <BlobThumb id={String(value)} alt={fieldTitle(field)} size={40} />;
+    case "file":
+      return <FileChip id={String(value)} field={field} />;
     default:
       return <>{typeof value === "object" ? JSON.stringify(value) : String(value)}</>;
   }
@@ -105,6 +110,8 @@ type InputProps = {
   currency?: string;
   /** For a select: options that cannot be chosen now, with the reason (governed fields). */
   optionState?: (option: string) => { disabled: boolean; title?: string };
+  /** For an image: the model's `<name>_alt` field, when it has one, and whether it is empty. */
+  altHint?: { title: string; empty: boolean };
 };
 
 /** The control for one field, chosen by its kind. */
@@ -164,6 +171,20 @@ export function FieldInput(p: InputProps) {
       );
     case "ref":
       return <RefPicker {...p} />;
+    case "image":
+    case "file":
+      return (
+        <BlobInput
+          field={f}
+          value={String(value)}
+          onChange={onChange}
+          readOnly={readOnly}
+          id={p.id}
+          invalid={p.invalid}
+          describedBy={p.describedBy}
+          altHint={p.altHint}
+        />
+      );
     case "money": {
       const cur = p.currency ?? getCurrency();
       const read = String(value).trim() ? fmt.parseMoney(String(value), cur) : null;

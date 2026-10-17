@@ -1,5 +1,6 @@
 [labels.es.module]
 name = "Contactos"
+summary = "Contactos y empresas: las personas y organizaciones con las que trata el negocio."
 
 [labels.es.model.party]
 name = "Tercero"
@@ -24,3 +25,7 @@ description = "Notas internas de texto libre"
 [labels.es.model.party.action.erase]
 label = "Suprimir datos"
 description = "Anonimizar el tercero en el propio registro y dejar constancia del borrado"
+
+[labels.es.model.party.field.photo]
+label = "Foto"
+description = "Foto o logotipo del contacto (PNG, JPEG, WebP o GIF, hasta 2 MiB)"

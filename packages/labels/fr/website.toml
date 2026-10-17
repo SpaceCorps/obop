@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Site web"
 description = "Contenu d’un site web public : pages avec slug, menus, articles de blog, traductions et formulaires envoyés par les visiteurs. Avec le site public activé, le contenu publié est servi sans connexion ; seuls les champs publics sont visibles. La publication exige une approbation humaine ; les agents peuvent seulement la proposer. Les expéditeurs sont des données personnelles, jamais publiques."
+summary = "Pages, menus, articles de blog et formulaires envoyés, servis comme site web public si le site est activé."
 
 [labels.fr.model.website_page]
 name = "Page"
@@ -266,3 +267,19 @@ description = "Contenu d’article traduit en Markdown"
 [labels.fr.model.website_blog_post_translation.field.published]
 label = "Publiée"
 description = "Indique si la traduction est affichée ; elle n’est accessible que tant que son article est publié"
+
+[labels.fr.model.website_page.field.cover_image]
+label = "Image de couverture"
+description = "Image affichée en haut de la page et dans les aperçus de lien (PNG, JPEG, WebP ou GIF, réencodée au téléversement)"
+
+[labels.fr.model.website_page.field.cover_alt]
+label = "Description de la couverture"
+description = "Texte qui décrit l'image de couverture pour les personnes qui ne peuvent pas la voir"
+
+[labels.fr.model.website_blog_post.field.cover_image]
+label = "Image de couverture"
+description = "Image affichée en haut de l'article et dans les aperçus de lien (PNG, JPEG, WebP ou GIF, réencodée au téléversement)"
+
+[labels.fr.model.website_blog_post.field.cover_alt]
+label = "Description de la couverture"
+description = "Texte qui décrit l'image de couverture pour les personnes qui ne peuvent pas la voir"

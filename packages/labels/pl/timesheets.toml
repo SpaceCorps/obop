@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Ewidencja czasu pracy"
-description = "Czas poświęcony na zadania projektowe, wpisywany w minutach, ze znacznikiem do fakturowania i krokiem zatwierdzenia. Wymaga pakietu Projekty."
+description = "Czas poświęcony na zadania projektowe, wpisywany w minutach, ze znacznikiem do fakturowania i krokiem zatwierdzenia. Wymaga pakietu Projekty. Wykonawca widzi i edytuje tylko własne wpisy; timesheets.manager widzi wszystkie."
+summary = "Czas poświęcony na zadania projektowe w minutach, ze znacznikiem do fakturowania i krokiem zatwierdzenia."
 
 [labels.pl.model.timesheets_entry]
 name = "Wpis"
@@ -12,7 +13,7 @@ description = "Zadanie, nad którym pracowano"
 
 [labels.pl.model.timesheets_entry.field.worker]
 label = "Wykonawca"
-description = "Imię i nazwisko osoby, która wykonała pracę"
+description = "Nazwa użytkownika osoby, która wykonała pracę; domyślnie osoba tworząca wpis"
 
 [labels.pl.model.timesheets_entry.field.worked_on]
 label = "Data pracy"

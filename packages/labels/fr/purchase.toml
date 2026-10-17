@@ -1,6 +1,7 @@
 [labels.fr.module]
 name = "Achats"
-description = "Fournisseurs, commandes d’achat et lignes de commande avec un flux brouillon, envoyée, confirmée, reçue et annulée. Les totaux de commande sont saisis, pas additionnés à partir des lignes."
+description = "Fournisseurs, commandes d’achat et lignes de commande avec un flux brouillon, envoyée, confirmée, reçue et annulée. Une commande a un numéro issu d’une série, son total est la somme de ses lignes, et la réception des marchandises crée un mouvement de stock en brouillon par ligne à l’emplacement de réception (l’entrepôt les valide)."
+summary = "Fournisseurs, commandes d’achat et lignes de commande avec un flux brouillon, envoyée, confirmée, reçue."
 
 [labels.fr.model.purchase_vendor]
 name = "Fournisseur"
@@ -56,7 +57,7 @@ description = "Code de devise ISO 4217, par exemple EUR"
 
 [labels.fr.model.purchase_order.field.total]
 label = "Total"
-description = "Total de la commande tel que convenu avec le fournisseur (plus petite unité monétaire, par exemple en centimes)"
+description = "Total de la commande : somme des montants des lignes (plus petite unité monétaire, par exemple en centimes)"
 
 [labels.fr.model.purchase_order.field.notes]
 label = "Notes"
@@ -83,7 +84,7 @@ description = "Engage la commande auprès du fournisseur (responsable uniquement
 
 [labels.fr.model.purchase_order.action.receive]
 label = "Réceptionner"
-description = "Enregistre que la marchandise est arrivée"
+description = "Enregistre l’arrivée des marchandises : un mouvement de stock en brouillon est créé par ligne, à valider par l’entrepôt (exige le groupe inventory.user)"
 
 [labels.fr.model.purchase_order.action.cancel]
 label = "Annuler"
@@ -116,3 +117,15 @@ description = "Prix convenu par unité (plus petite unité monétaire, par exemp
 [labels.fr.model.purchase_order_line.field.received_quantity]
 label = "Quantité reçue"
 description = "Unités reçues jusqu’à présent"
+
+[labels.fr.model.purchase_order.field.number]
+label = "Numéro"
+description = "Numéro de commande d’achat tel que PO-00042, attribué à la création de la commande"
+
+[labels.fr.model.purchase_order.field.receive_location_id]
+label = "Emplacement de réception"
+description = "Où les marchandises doivent être reçues ; la réception de la commande crée les mouvements de stock vers cet emplacement"
+
+[labels.fr.model.purchase_order_line.field.amount]
+label = "Montant"
+description = "Montant de la ligne : quantité multipliée par le prix unitaire (plus petite unité monétaire)"

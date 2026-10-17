@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Konektory"
 description = "Łącz systemy zewnętrzne i pozwalaj ludziom łączyć własne konta, z wbudowanymi mechanizmami wspierającymi zgodność z RODO: zapisana podstawa prawna, zgoda do wycofania, minimalizacja danych, pseudonimizacja według klasy, dziennik bez treści i rejestr czynności przetwarzania. Środki techniczne, nie porada prawna ani certyfikacja."
+summary = "Łącz inne systemy z zapisaną podstawą prawną, listami dozwolonych pól, podpisanymi webhookami i OAuth."
 
 [labels.pl.model.connector_provider]
 name = "Dostawca konektora"

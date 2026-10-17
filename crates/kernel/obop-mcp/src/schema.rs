@@ -31,12 +31,27 @@ pub fn field_schema(f: &FieldInfo) -> J {
             " (the id of a {} record)",
             f.to.unwrap_or("referenced")
         )),
+        "image" | "file" => desc.push_str(
+            " (a blob id: 64 lowercase hex characters, returned by an upload; you receive ids and metadata, never the bytes)",
+        ),
         _ => {}
     }
     if f.personal_data {
         desc.push_str(
             " (personal data: agents read it as a mask token and may send the token back)",
         );
+    }
+    if f.computed {
+        desc.push_str(" (computed from other data when read; read-only, never send it)");
+    }
+    if f.sequence {
+        desc.push_str(" (a number the system assigns; read-only, never send it)");
+    }
+    if f.unique && !f.sequence {
+        desc.push_str(" (must be unique: no other record may have the same value)");
+    }
+    if f.governed {
+        desc.push_str(" (moves only through the model's actions)");
     }
     s["description"] = J::from(desc);
     s
@@ -77,6 +92,35 @@ fn query_properties() -> J {
     })
 }
 
+/// The `aggregate` input of `search`: groups and measures computed on the server (D4).
+fn aggregate_schema() -> J {
+    json!({
+        "type": "object",
+        "description": "Instead of rows, return groups with counts and sums over every matching record. Takes filter (not order, limit or offset).",
+        "properties": {
+            "group_by": {
+                "type": "array",
+                "maxItems": 2,
+                "items": {"oneOf": [
+                    {"type": "string", "description": "A field name."},
+                    {"type": "object", "required": ["field"], "properties": {
+                        "field": {"type": "string"},
+                        "bucket": {"type": "string", "enum": ["day", "week", "month"], "description": "Required for date fields."}
+                    }}
+                ]}
+            },
+            "measures": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {"type": "object", "required": ["op"], "properties": {
+                    "op": {"type": "string", "enum": ["count", "sum", "min", "max"]},
+                    "field": {"type": "string", "description": "A number or money field; omit for count."}
+                }}
+            }
+        }
+    })
+}
+
 fn object(properties: J, required: &[String]) -> J {
     let mut s = json!({"type": "object", "properties": properties});
     if !required.is_empty() {
@@ -89,7 +133,8 @@ fn field_properties(model: &ModelInfo, skip: &[&str]) -> serde_json::Map<String,
     model
         .fields
         .iter()
-        .filter(|f| !skip.contains(&f.name))
+        // Computed and numbered fields are outputs only.
+        .filter(|f| !skip.contains(&f.name) && !f.computed && !f.sequence)
         .map(|f| (f.name.to_string(), field_schema(f)))
         .collect()
 }
@@ -104,13 +149,19 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
         .collect();
     match cmd {
         "get" | "delete" => object(json!({"id": id_property(&model.name)}), &["id".to_string()]),
-        "list" | "search" => object(query_properties(), &[]),
+        "list" => object(query_properties(), &[]),
+        "search" => {
+            let mut props = query_properties();
+            props["lang"] = json!({"type": "string", "description": "BCP-47 tag (sv, de-AT) choosing how text is ordered; default is the language-neutral order."});
+            props["aggregate"] = aggregate_schema();
+            object(props, &[])
+        }
         "create" => {
             let props = field_properties(model, &governed);
             let required: Vec<String> = model
                 .fields
                 .iter()
-                .filter(|f| f.required && !governed.contains(&f.name))
+                .filter(|f| f.required && !governed.contains(&f.name) && !f.computed)
                 .map(|f| f.name.to_string())
                 .collect();
             object(J::Object(props), &required)
@@ -138,7 +189,8 @@ pub fn output_schema(cmd: &str) -> J {
             "type": "object",
             "properties": {
                 "rows": {"type": "array", "items": {"type": "object"}},
-                "total": {"type": "integer", "description": "Matches before limit and offset."}
+                "total": {"type": "integer", "description": "Matches before limit and offset."},
+                "groups": {"type": "array", "description": "With aggregate: {key, count, measures} per group.", "items": {"type": "object"}}
             }
         }),
         _ => json!({"type": "object"}),
@@ -234,9 +286,14 @@ mod tests {
             required: false,
             options: vec!["a", "b"],
             to: Some("party"),
+            max_bytes: None,
             labels: Default::default(),
             descriptions: Default::default(),
             option_labels: Default::default(),
+            governed: false,
+            computed: false,
+            unique: false,
+            sequence: false,
         }
     }
 
@@ -272,9 +329,14 @@ mod tests {
             required,
             options: vec!["draft", "posted"],
             to: Some("party"),
+            max_bytes: None,
             labels: Default::default(),
             descriptions: Default::default(),
             option_labels: Default::default(),
+            governed: false,
+            computed: false,
+            unique: false,
+            sequence: false,
         };
         ModelInfo {
             name: "doc".into(),
@@ -305,6 +367,7 @@ mod tests {
             can_delete: true,
             labels: Default::default(),
             descriptions: Default::default(),
+            access: None,
         }
     }
 

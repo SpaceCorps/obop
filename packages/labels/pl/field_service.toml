@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Serwis terenowy"
 description = "Zlecenia u klientów wykonywane przez technika na miejscu: zaplanowane, w drodze, w toku, wykonane lub anulowane. Zlecenie zapisuje klienta, miejsce, technika, planowany dzień i początek (minuty od północy), użyte części oraz to, czy klient musi potwierdzić wykonanie podpisem. Adres miejsca i dane kontaktowe to dane osobowe. Wymaga pakietów Kadry i Produkty."
+summary = "Zlecenia u klientów wykonywane na miejscu przez technika, z użytymi częściami i znacznikiem potwierdzenia przez klienta."
 
 [labels.pl.model.field_service_job]
 name = "Zlecenie"

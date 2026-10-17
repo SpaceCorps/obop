@@ -1,5 +1,6 @@
 [labels.sv.module]
 name = "Fakturering"
+summary = "Kundfakturor med livscykeln utkast, bokförd och betald."
 
 [labels.sv.model.invoice]
 name = "Faktura"
@@ -20,11 +21,11 @@ cancelled = "Annullerad"
 
 [labels.sv.model.invoice.field.total_minor]
 label = "Totalt"
-description = "Fakturans totalbelopp i valutans minsta enhet"
+description = "Fakturans totalbelopp i valutans minsta enhet, summan av raderna"
 
 [labels.sv.model.invoice.field.number]
 label = "Nummer"
-description = "Lagstadgat löpnummer utan luckor, tilldelas vid bokföring"
+description = "Lagstadgat löpnummer utan luckor, som INV-2026-00042, tilldelas vid bokföring"
 
 [labels.sv.model.invoice.action.post]
 label = "Bokför"
@@ -33,3 +34,39 @@ description = "Bokför en faktura i utkast och tilldela dess lagstadgade nummer"
 [labels.sv.model.invoice.action.cancel]
 label = "Annullera"
 description = "Annullera en faktura i utkast"
+
+[labels.sv.model.invoice.field.party_id]
+label = "Part"
+description = "Kundens part-id"
+
+[labels.sv.model.invoice.field.currency]
+label = "Valuta"
+description = "Valutakod enligt ISO 4217"
+
+[labels.sv.model.invoice_line]
+name = "Fakturarad"
+description = "En produkt eller tjänst på en faktura"
+
+[labels.sv.model.invoice_line.field.invoice_id]
+label = "Faktura"
+description = "Fakturan som raden tillhör"
+
+[labels.sv.model.invoice_line.field.product_id]
+label = "Produkt"
+description = "Produkten som faktureras"
+
+[labels.sv.model.invoice_line.field.description]
+label = "Beskrivning"
+description = "Det som faktureras"
+
+[labels.sv.model.invoice_line.field.quantity]
+label = "Antal"
+description = "Fakturerad mängd"
+
+[labels.sv.model.invoice_line.field.unit_price_minor]
+label = "Enhetspris"
+description = "Pris för en enhet i valutans minsta enhet"
+
+[labels.sv.model.invoice_line.field.amount_minor]
+label = "Belopp"
+description = "Radbelopp i minsta enhet: antal gånger enhetspris"

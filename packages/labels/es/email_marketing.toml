@@ -1,6 +1,7 @@
 [labels.es.module]
 name = "Marketing por correo"
 description = "Listas de correo, contactos con su consentimiento y campañas con flujo de borrador, programada y enviada. Enviar es irreversible y llega a personas reales, por lo que requiere aprobación humana de un responsable; los agentes solo pueden proponerlo. Las estadísticas se introducen, no se calculan. Los contactos son datos personales: no escribas a quien no haya dado su consentimiento."
+summary = "Listas de correo, contactos con consentimiento y campañas. Enviar requiere aprobación humana."
 
 [labels.es.model.email_marketing_list]
 name = "Lista"

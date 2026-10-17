@@ -1,6 +1,7 @@
 [labels.fi.module]
 name = "Kirjanpito"
-description = "Tilikartta, päiväkirjat, verokannat, kirjaukset debet- ja kredit-riveineen, tilikaudet, jaksot ja tiliotteen rivit. Summat ovat valuutan pienimmässä yksikössä ja verokannat peruspisteinä. Mitään ei lasketa: tasapaino, verot ja numerot syöttää käyttäjä. Kirjaaminen sekä jakson tai tilikauden sulkeminen vaativat ihmisen hyväksynnän (accounting.approver); agentit voivat vain ehdottaa niitä."
+description = "Tilikartta, päiväkirjat, verokannat, kirjaukset debet- ja kredit-riveineen, tilikaudet, jaksot ja tiliotteen rivit. Kirjaus näyttää debet- ja kredit-summansa, ja kirjaaminen evätään, ellei ne ole yhtä suuret; numero annetaan katkeamattomasta vuosisarjasta. Kirjaaminen sekä jakson tai tilikauden sulkeminen vaativat ihmisen hyväksynnän; agentit voivat vain ehdottaa niitä."
+summary = "Tilikartta, päiväkirjat, verokannat, tilikaudet ja kirjaukset. Kirjaaminen ja sulkeminen vaativat ihmisen hyväksynnän."
 
 [labels.fi.model.accounting_account]
 name = "Tili"
@@ -8,7 +9,7 @@ description = "Tilikartan tili"
 
 [labels.fi.model.accounting_account.field.code]
 label = "Koodi"
-description = "Tilin koodi tilikartassa, esimerkiksi 400000"
+description = "Tilin koodi tilikartassa, esimerkiksi 400000; kahdella tilillä ei ole samaa koodia"
 
 [labels.fi.model.accounting_account.field.name]
 label = "Nimi"
@@ -54,7 +55,7 @@ description = "Päiväkirjan nimi, esimerkiksi Myyntilaskut"
 
 [labels.fi.model.accounting_journal.field.code]
 label = "Koodi"
-description = "Lyhyt koodi kirjausnumeroissa, esimerkiksi INV"
+description = "Päiväkirjan lyhyt koodi, esimerkiksi INV; kahdella päiväkirjalla ei ole samaa koodia"
 
 [labels.fi.model.accounting_journal.field.kind]
 label = "Laji"
@@ -194,7 +195,7 @@ description = "Kirjauksen kirjanpitopäivä (YYYY-MM-DD)"
 
 [labels.fi.model.accounting_move.field.number]
 label = "Numero"
-description = "Kirjausnumero, esimerkiksi INV/2026/0001. Vapaa teksti: paketit eivät voi luoda numerosarjoja, joten kirjaaja antaa seuraavan numeron käsin ja pitää sarjan katkeamattomana"
+description = "Kirjausnumero, esimerkiksi JE/2026/00042, annetaan kirjattaessa katkeamattomasta sarjasta, joka alkaa alusta joka vuosi"
 
 [labels.fi.model.accounting_move.field.reference]
 label = "Viite"
@@ -220,7 +221,7 @@ reversed = "Vastakirjattu"
 
 [labels.fi.model.accounting_move.action.post]
 label = "Kirjaa"
-description = "Kirjaa luonnos pääkirjaan (vain hyväksyjä; debetin ja kreditin tasapainoa ei tarkisteta)"
+description = "Kirjaa luonnoksen pääkirjaan ja numeroi sen (vain hyväksyjä; evätään, ellei debet ole yhtä suuri kuin kredit)"
 
 [labels.fi.model.accounting_move.action.cancel]
 label = "Peruuta"
@@ -322,3 +323,11 @@ description = "Täsmäytä kohdistettu rivi (vain esihenkilö)"
 [labels.fi.model.accounting_bank_statement_line.action.unmatch]
 label = "Poista kohdistus"
 description = "Peruuta virheellinen kohdistus"
+
+[labels.fi.model.accounting_move.field.total_debit]
+label = "Debet yhteensä"
+description = "Kirjauksen rivien debet-summien summa (valuutan pienin yksikkö)"
+
+[labels.fi.model.accounting_move.field.total_credit]
+label = "Kredit yhteensä"
+description = "Kirjauksen rivien kredit-summien summa (valuutan pienin yksikkö)"

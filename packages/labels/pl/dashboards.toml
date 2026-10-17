@@ -1,6 +1,7 @@
 [labels.pl.module]
 name = "Pulpity"
-description = "Pulpity i ich kafelki zapisane jako dane do wyświetlenia w interfejsie. Pulpit ma tytuł i właściciela. Kafelek określa rodzaj (KPI, słupkowy, liniowy, kołowy, tabela), czytany model, agregowane pole miary, agregację (liczba lub suma), grupowanie, filtr (obiekt JSON) i kolejność. Pakiet tylko przechowuje definicję: nie sprawdza modelu ani pól i niczego nie oblicza."
+description = "Pulpity i ich kafelki zapisane jako dane do wyświetlenia w interfejsie. Pulpit ma tytuł i właściciela i jest prywatny (widzi go też dashboards.manager), dopóki nie zostanie udostępniony. Kafelek określa rodzaj, czytany model, pole miary, agregację, grupowanie, filtr i kolejność. Pakiet nie sprawdza modelu ani pól i niczego nie oblicza."
+summary = "Pulpity i kafelki zapisane jako dane, które interfejs wyświetla jako KPI, wykresy i tabele."
 
 [labels.pl.model.dashboards_dashboard]
 name = "Pulpit"
@@ -12,7 +13,7 @@ description = "Tytuł pulpitu, na przykład Przegląd sprzedaży"
 
 [labels.pl.model.dashboards_dashboard.field.owner]
 label = "Właściciel"
-description = "Imię i nazwisko właściciela pulpitu"
+description = "Nazwa użytkownika właściciela pulpitu; domyślnie osoba, która go tworzy"
 
 [labels.pl.model.dashboards_dashboard.field.description]
 label = "Opis"
@@ -20,7 +21,7 @@ description = "Co pokazuje pulpit i dla kogo"
 
 [labels.pl.model.dashboards_dashboard.field.shared]
 label = "Udostępniony"
-description = "Czy widzą go wszyscy z dostępem do aplikacji Pulpity, czy tylko właściciel"
+description = "Czy widzą go (i jego kafelki) wszyscy z prawem odczytu pulpitów, czy tylko właściciel i dashboards.manager; egzekwuje to serwer"
 
 [labels.pl.model.dashboards_dashboard.field.position]
 label = "Kolejność"

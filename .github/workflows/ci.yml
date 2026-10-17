@@ -79,6 +79,7 @@ jobs:
       - name: Build the apps and assemble the site
         run: |
           (cd web/apps/backoffice && vp build)
+          (cd web/apps/backoffice && OBOP_ADMIN_BASE=/admin/ vp build --outDir dist-admin)
           deploy/build-site.sh
       - name: Check the e2e package
         run: cd web/packages/e2e && vp check && vp run typecheck
