@@ -452,7 +452,7 @@ export function Wizard(props: Props) {
       )}
 
       {step === "fields" && provider && (
-        <>
+        <div className="cx-stack">
           <p>
             {inbound
               ? t(
@@ -542,7 +542,7 @@ export function Wizard(props: Props) {
               />
             </>
           )}
-        </>
+        </div>
       )}
 
       {step === "basis" && provider && (

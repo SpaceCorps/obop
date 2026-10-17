@@ -1685,3 +1685,108 @@ fn the_flow_works_on_postgres() {
     };
     flow_on(&env_on(Store::open(&url).unwrap()));
 }
+
+// ---- a service that sends records and takes events back ---------------------------------------------
+
+#[test]
+fn stripe_takes_form_encoded_customers_and_signed_events_through_one_connection() {
+    // The catalogue entry, pointed at loopback: its real host is not reachable from a test.
+    let mut stripe = providers().into_iter().find(|p| p.id == "stripe").unwrap();
+    stripe.allowed_hosts = vec!["127.0.0.1"];
+    let mut all: Vec<_> = providers()
+        .into_iter()
+        .filter(|p| p.id != "stripe")
+        .collect();
+    all.push(stripe);
+    let s = Store::new();
+    let d = Arc::new(Dispatcher::new());
+    base::register(&d, &s);
+    crm::register(&d, &s);
+    let rt = Runtime::with_providers(
+        s.backend(),
+        d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: None,
+        },
+        all,
+        None,
+    );
+    register(&d, &s, &rt);
+    let e = Env { d, s, rt };
+    seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "stripe", false);
+    let api_key = "sk_live_stripe_test_key_9876";
+    let whsec = "whsec_stripe_inbound_secret_0001";
+    let c = ok(
+        &e,
+        &admin(),
+        "connection.create",
+        json!({"name": "Stripe", "provider": "stripe",
+               "config": json!({"url": r.url(), "target_model": "lead",
+                                "mapping": json!({"data.object.name": "contact_name", "data.object.id": "title"}).to_string()}).to_string(),
+               "credentials": json!({"api_key": api_key, "signing_secret": whsec}).to_string(),
+               "field_allowlist": json!({"party": ["name", "email", "tax_id"], "lead": ["title", "contact_name"]}).to_string()}),
+    );
+    assert_clean(&c);
+    let id = c["id"].as_str().unwrap().to_string();
+    ok(
+        &e,
+        &admin(),
+        "consent.create",
+        json!({"connection": id, "purpose": "Keep customers in Stripe", "legal_basis": "contract"}),
+    );
+    // Stripe may receive financial data by its maximum, but the default policy still withholds it.
+    ok(&e, &admin(), "connection.connect", json!({"id": id}));
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    let hit = r.last();
+    let (head, body) = hit.split_once("\r\n\r\n").unwrap();
+    assert!(
+        head.to_ascii_lowercase()
+            .contains(&format!("authorization: bearer {api_key}").to_ascii_lowercase())
+    );
+    assert!(
+        head.to_ascii_lowercase()
+            .contains("application/x-www-form-urlencoded")
+    );
+    assert!(
+        body.contains("name=psn_") && body.contains("metadata%5Bobop_ref%5D=psn_"),
+        "{body}"
+    );
+    assert!(
+        !body.contains("tax_id") && !body.contains("Ada") && !body.contains("ada%40"),
+        "{body}"
+    );
+    // Only the party went out: the lead model is for what Stripe may write here.
+    assert_eq!(r.count(), 1);
+
+    // Events come back signed with the Stripe scheme.
+    let event = json!({"id": "evt_1", "type": "customer.created", "data": {"object": {"id": "cus_123", "name": "Grace Hopper"}}}).to_string();
+    let ts = obop_connectors::util::now();
+    let sig = format!(
+        "t={ts},v1={}",
+        webhook::stripe_signature(whsec, ts, event.as_bytes())
+    );
+    let hdr = |k: &str| (k == "stripe-signature").then(|| sig.clone());
+    let o = e.rt.receive_webhook(&id, &hdr, event.as_bytes()).unwrap();
+    assert_eq!(o.created, 1);
+    let lead = &e.s.backend().list("lead").unwrap()[0].1;
+    assert_eq!(
+        (lead["title"].as_str(), lead["contact_name"].as_str()),
+        (Some("cus_123"), Some("Grace Hopper"))
+    );
+    // The same event twice, and an event signed for another secret, are refused.
+    assert!(e.rt.receive_webhook(&id, &hdr, event.as_bytes()).is_err());
+    let forged = format!(
+        "t={ts},v1={}",
+        webhook::stripe_signature("whsec_other_secret_other_secret", ts, event.as_bytes())
+    );
+    let bad = |k: &str| (k == "stripe-signature").then(|| forged.clone());
+    assert_eq!(
+        e.rt.receive_webhook(&id, &bad, event.as_bytes())
+            .unwrap_err(),
+        obop_connectors::runtime::HookError::Unauthorised
+    );
+}

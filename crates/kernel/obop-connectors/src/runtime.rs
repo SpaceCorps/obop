@@ -622,8 +622,18 @@ impl Runtime {
             _ => {}
         }
         let mut results = Vec::new();
-        for model in c.allowlist.keys() {
+        // The model that receives events is on the allowlist for what may be written; it is not
+        // something this connection sends.
+        let receives = if p.can_receive() {
+            c.cfg("target_model")
+        } else {
+            ""
+        };
+        for model in c.allowlist.keys().filter(|m| m.as_str() != receives) {
             results.push(self.send(connection, model, None, "obop.manual", "manual")?);
+        }
+        if results.is_empty() {
+            return Err("there is nothing on the allowlist to send".into());
         }
         if results.len() == 1 {
             return Ok(results.remove(0));
@@ -803,7 +813,12 @@ impl Runtime {
         let (c, p) = self
             .connection(connection)
             .map_err(|_| HookError::NotFound)?;
-        if p.engine != Engine::WebhookIn {
+        // A webhook receiver, or a service that both sends records and posts events back (Stripe).
+        let receives = p.engine == Engine::WebhookIn
+            || (p.engine == Engine::WebhookOut
+                && p.can_receive()
+                && !c.cfg("target_model").is_empty());
+        if !receives {
             return Err(HookError::NotFound);
         }
         if body.len() > webhook::MAX_BODY {
@@ -1032,7 +1047,9 @@ impl Runtime {
                     "the address passed the egress checks (https, allowed host, public address)"
                         .into(),
                 );
-                if p.engine == Engine::WebhookOut {
+                if p.engine == Engine::WebhookOut && p.body_format == "form" {
+                    notes.push("no test request is sent: this service takes records only".into());
+                } else if p.engine == Engine::WebhookOut {
                     // A test event carries no record and no personal data.
                     let run = self.start_run(&c, "outbound", "test");
                     let (sent, failed) = self.send_prepared(&c, &p, &run, "obop.test", "", &[]);

@@ -249,6 +249,8 @@ Scopes read `<model>:<operation>` (for example `party:read`, `invoice:write`, `i
 
 **Purpose.** One way to talk to the outside world, in three trust levels, behind ports owned by the apps that need them (D27).
 
+**Built so far (D54).** A first slice runs today as the built-in `connectors` app: generic webhook, REST pull and CSV engines, signed inbound webhooks, OAuth2 with PKCE, the one hardened egress client and a policy gate by data class with consent, a flow log and a processing register. It is documented in [CONNECTORS.md](../CONNECTORS.md); the X3 Wasm tier, the typed provider ports below and the named adapters beyond the generic ones are not built.
+
 | Code tier | What | Runs | Authors | Wave |
 |---|---|---|---|---|
 | X5 native | Protocol adapters (IMAP, SMTP, CalDAV), bank-file parsers, core payment adapters, tax rules, OAuth broker | In-process Rust, reviewed like core | obop team only | W1 |

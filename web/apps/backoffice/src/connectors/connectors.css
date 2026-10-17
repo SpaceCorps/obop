@@ -286,6 +286,10 @@
   flex: none;
 }
 
+.cx-stack {
+  display: grid;
+  gap: var(--space-4);
+}
 .cx-detail {
   display: grid;
   gap: var(--space-4);

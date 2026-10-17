@@ -467,6 +467,20 @@ pub fn providers() -> Vec<Provider> {
                     false,
                     "Command ids that create or update a Stripe customer.",
                 ),
+                f(
+                    "target_model",
+                    "Model for inbound events",
+                    false,
+                    false,
+                    "The model that receives Stripe events. Leave empty to only send.",
+                ),
+                f(
+                    "mapping",
+                    "Field mapping for events",
+                    false,
+                    false,
+                    "JSON object: payload path to field, for example {\"data.object.name\": \"contact_name\"}.",
+                ),
             ],
             setup: "1. Create a restricted key in Stripe. 2. Enter it with the customers URL. 3. Allow only the fields Stripe needs, and decide per field whether they leave as a pseudonym or in clear. 4. Record the Stripe DPA and your legal basis (contract is typical).",
             ..base()
