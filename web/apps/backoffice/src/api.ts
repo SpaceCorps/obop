@@ -56,6 +56,12 @@ export type ModuleMeta = {
   models: ModelMeta[];
 };
 
+let coreVersion = "";
+/** The running core version, from the last `/api/meta` (empty until it has been read). */
+export function getCoreVersion(): string {
+  return coreVersion;
+}
+
 export type Reply =
   | { kind: "ok"; value: unknown; denied: string[] }
   | { kind: "approval"; planId: string }
@@ -82,7 +88,9 @@ export async function meta(token: string): Promise<ModuleMeta[] | null | "enrolm
     if (body.code === "mfa_enrolment_required") return "enrolment";
   }
   if (!res.ok) return [];
-  const modules = (await res.json()).modules as ModuleMeta[];
+  const body = (await res.json()) as { modules: ModuleMeta[]; core_version?: string };
+  if (body.core_version) coreVersion = body.core_version;
+  const modules = body.modules;
   // An older server may not send the kind yet: money by name, everything else text.
   for (const m of modules)
     for (const model of m.models)

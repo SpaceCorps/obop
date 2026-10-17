@@ -34,6 +34,7 @@ import {
   TwoFactorStep,
 } from "@obop/ui";
 import { Block, Specimen, State } from "./kit.tsx";
+import { ModuleSpecimens } from "./ModuleSpecimens.tsx";
 
 type Notify = (t: string, tone?: "ok" | "error" | "info") => void;
 
@@ -800,6 +801,7 @@ export function Components({ notify }: { notify: Notify }) {
           <Feedback notify={notify} />
           <DataDisplay />
           <Listing />
+          <ModuleSpecimens />
           <TwoFactor />
         </div>
       </Block>

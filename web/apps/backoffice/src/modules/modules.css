@@ -1,0 +1,531 @@
+/* Customize > Modules (D55): cards, the detail panel, the dependency tree and overview, the plan dialog. */
+
+.mods {
+  gap: var(--space-6);
+}
+.mods-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+}
+.mods-head-text {
+  flex: 1 1 24rem;
+  max-inline-size: 46rem;
+}
+.mods-head h2 {
+  margin-block-end: var(--space-1);
+  font-size: var(--text-2xl);
+}
+.mods-core.badge {
+  padding: 0.3rem 0.8rem;
+  font-size: var(--text-sm);
+}
+
+/* ---------- Toolbar ---------- */
+.mods-toolbar {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) 13rem 15rem;
+  gap: var(--space-3);
+  align-items: end;
+}
+.mods-search.searchfield {
+  min-inline-size: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.mods-search input {
+  min-block-size: calc(var(--control-h) - 2px);
+  font-size: var(--text-base);
+}
+
+/* ---------- Cards ---------- */
+.mod-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mod-grid > li {
+  display: flex;
+  min-inline-size: 0;
+}
+.card.mod-card {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+  min-block-size: 15.5rem;
+  padding: var(--space-4);
+  transition:
+    border-color var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
+}
+.card.mod-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-1);
+}
+.card.mod-card.selected {
+  border-color: var(--accent-fill);
+  box-shadow: 0 0 0 1px var(--accent-fill);
+}
+.mod-top {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-inline-size: 0;
+}
+.mod-title {
+  min-inline-size: 0;
+}
+.mod-title h3 {
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+}
+.mod-link {
+  color: inherit;
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+/* The name is the link; it stretches over the card so the whole card opens the panel. */
+.mod-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.mod-link:focus-visible {
+  outline: none;
+}
+.mod-link:focus-visible::after {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.card.mod-card .mod-summary {
+  flex: 1;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-base);
+}
+.mod-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.mod-badge {
+  max-inline-size: 100%;
+  white-space: normal;
+}
+.card.mod-card .mod-deps {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.mod-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: var(--control-h-sm);
+}
+.card.mod-card .btn {
+  grid-column: auto;
+  justify-self: auto;
+  margin: 0;
+}
+.skeleton-card {
+  justify-content: center;
+}
+.skeleton-line {
+  display: block;
+  block-size: 0.85rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  animation: mod-pulse 1.4s var(--ease-in-out) infinite;
+}
+.skeleton-line.wide {
+  inline-size: 70%;
+  block-size: 1.2rem;
+}
+.skeleton-line.short {
+  inline-size: 40%;
+}
+@keyframes mod-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line {
+    animation: none;
+  }
+}
+
+/* ---------- Detail panel ---------- */
+.mod-panel {
+  inline-size: 33rem;
+}
+.mod-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-inline-size: 0;
+}
+.mod-panel-top {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem 1.25rem 0.5rem;
+}
+.mod-panel .tabs {
+  padding-inline: 0.75rem;
+}
+.mod-panel-body {
+  padding: var(--space-5);
+}
+.mod-desc {
+  margin: 0;
+  line-height: var(--leading-relaxed);
+}
+.meta-list {
+  display: grid;
+  margin: 0;
+}
+.meta-row {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-block-end: 1px solid var(--border);
+}
+.meta-row dt {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.meta-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.ext-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.plain {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ct-models li {
+  padding-block-end: 0.6rem;
+  border-block-end: 1px solid var(--border);
+}
+.ct-models li .hint {
+  margin: 0;
+}
+.ct-models .chips {
+  margin-block-start: 0.35rem;
+}
+.customize .stack.gap-lg {
+  gap: var(--space-6);
+}
+
+/* ---------- Dependency tree ---------- */
+.dep-core {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.dep-tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dep-tree .dep-tree {
+  margin-inline-start: 1.1rem;
+  padding-inline-start: 1.1rem;
+  border-inline-start: 1px solid var(--border-strong);
+}
+.dep-node {
+  position: relative;
+  padding-block: 0.25rem;
+}
+.dep-tree .dep-tree > .dep-node::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 1.35rem;
+  inset-inline-start: -1.1rem;
+  inline-size: 1rem;
+  border-block-start: 1px solid var(--border-strong);
+}
+/* The vertical line ends at the last branch. */
+.dep-tree .dep-tree > .dep-node:last-child::after {
+  content: "";
+  position: absolute;
+  inset-block: 1.4rem 0;
+  inset-inline-start: calc(-1.1rem - 1px);
+  inline-size: 3px;
+  background: var(--surface);
+}
+.dep-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.75rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.dep-name {
+  font-weight: var(--weight-semibold);
+}
+.dep-range code,
+.dep-core code,
+.meta-row code {
+  padding: 0.05rem 0.35rem;
+  border-radius: var(--radius-xs);
+  background: var(--surface-3);
+  font-size: var(--text-sm);
+}
+.dep-have {
+  font-size: var(--text-sm);
+}
+.dep-none {
+  margin: 0;
+}
+
+/* ---------- Instance overview ---------- */
+.dep-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.dep-svg-wrap {
+  padding: var(--space-2);
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.dep-svg {
+  display: block;
+  max-inline-size: none;
+}
+.dep-edge {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+.dep-edge.bad {
+  stroke: var(--danger);
+}
+.dep-arrow {
+  fill: var(--text-subtle);
+}
+.dep-box rect {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+}
+.dep-box.builtin rect {
+  fill: var(--surface-3);
+}
+.dep-box text {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.dep-box:hover rect {
+  stroke: var(--accent-fill);
+}
+.dep-box:focus-visible {
+  outline: none;
+}
+.dep-box:focus-visible rect {
+  stroke: var(--focus);
+  stroke-width: 2.5;
+}
+.dep-table-wrap summary {
+  cursor: pointer;
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+}
+.dep-table-wrap .table-wrap {
+  margin-block-start: var(--space-2);
+}
+.dep-table-wrap .plain {
+  gap: 0.25rem;
+}
+
+/* ---------- Plan dialog and checks ---------- */
+.plan-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.plan-body > p {
+  margin: 0;
+}
+.plan-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: plan;
+}
+.plan-steps > li {
+  position: relative;
+  padding: 0.7rem 0.85rem 0.7rem 2.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  counter-increment: plan;
+}
+.plan-steps > li::before {
+  content: counter(plan);
+  position: absolute;
+  inset-block-start: 0.7rem;
+  inset-inline-start: 0.75rem;
+  display: grid;
+  place-items: center;
+  inline-size: 1.4rem;
+  block-size: 1.4rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+.plan-steps > li.skip {
+  opacity: 0.8;
+}
+.plan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+.plan-why {
+  margin: 0.25rem 0 0;
+}
+.plan-deps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  list-style: none;
+}
+.plan-foot {
+  font-size: var(--text-sm);
+}
+.blockers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.blockers li {
+  font-size: var(--text-base);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--danger-soft);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+}
+.blockers p {
+  margin: 0.2rem 0 0;
+  color: var(--text);
+}
+.mods-upload {
+  padding: var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.mods-upload-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+.mods-upload-head p {
+  margin: 0.2rem 0 0;
+}
+.mods-upload-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.mods-upload textarea {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+.mods-check:empty {
+  display: none;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 60rem) {
+  /* Beside the list there is no room: the panel floats over it. */
+  .mod-panel {
+    position: fixed;
+    inset-block: 4.25rem 0.5rem;
+    inset-inline-end: 0.5rem;
+    z-index: 55;
+    inline-size: min(33rem, calc(100vw - 1rem));
+    box-shadow: var(--shadow-3);
+  }
+  .mods-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mods-search {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 40rem) {
+  .mod-panel {
+    inset: 0;
+    inline-size: auto;
+  }
+  .mods-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .mod-grid {
+    grid-template-columns: 1fr;
+  }
+  .meta-row {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+  .customize .content.pad {
+    padding-inline: var(--space-4);
+  }
+}

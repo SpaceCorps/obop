@@ -1,26 +1,20 @@
-import { Suspense, lazy, useCallback, useEffect, useId, useState } from "react";
-import { call, saveSettings, type ModuleMeta, type Settings, type Theme } from "./api.ts";
-import { appTitle } from "./labels.ts";
-import { serverMessage } from "./serverMessage.ts";
+import { Suspense, lazy, useId, useState } from "react";
+import { saveSettings, type ModuleMeta, type Settings, type Theme } from "./api.ts";
 import { AppIcon, type App } from "./Chrome.tsx";
+import { DetailPanel } from "./modules/DetailPanel.tsx";
+import { ModulesPage } from "./modules/ModulesPage.tsx";
+import type { ModulesRoute } from "./modules/types.ts";
+import { useModulesView } from "./modules/view.ts";
 import { BuildTab } from "./ModuleBuilder.tsx";
 import { SecurityTab } from "./Security.tsx";
 import { href } from "./route.ts";
 import { ContrastReport } from "./brand/ContrastReport.tsx";
-import {
-  ACCENTS,
-  appColor,
-  applyTheme,
-  hasPersonalTheme,
-  rememberTheme,
-  resolveTheme,
-} from "./theme.ts";
+import { ACCENTS, applyTheme, hasPersonalTheme, rememberTheme, resolveTheme } from "./theme.ts";
 import {
   Badge,
   Button,
   Chip,
   Icon,
-  Input,
   Notice,
   LanguageSelect,
   RegionSelect,
@@ -29,7 +23,6 @@ import {
   Skeleton,
   Switch,
   Tabs,
-  describeFor,
   fmt,
   isPseudo,
   msg,
@@ -56,6 +49,9 @@ type Props = {
   modules: ModuleMeta[];
   settings: Settings;
   isAdmin: boolean;
+  /** Where the Modules tab is (its list, the open module and the panel tab). */
+  modulesRoute: ModulesRoute;
+  goModules: (r: Partial<ModulesRoute>) => void;
   go: (tab: string) => void;
   goSection: (section: string) => void;
   goAnchor: (id: string) => void;
@@ -82,47 +78,77 @@ export function Customize(p: Props) {
   );
   const tab = tabs.some((x) => x.id === p.tab) ? p.tab : "theme";
   const current = tabs.find((x) => x.id === tab)!;
+  const view = useModulesView({
+    token: p.token,
+    enabled: tab === "modules" && p.isAdmin,
+    meta: p.modules,
+    route: p.modulesRoute,
+    go: p.goModules,
+    notify: p.notify,
+    onChanged: p.onModulesChanged,
+  });
   return (
-    <section className="main panel customize" aria-label={t("Customize")}>
-      <div className="controlpanel">
-        <div className="cp-top">
-          <div className="crumbs">
-            <span>{t("Customize")}</span>
-            <Icon name="chevron-right" size={12} />
-            <strong>{t(current.label)}</strong>
+    <>
+      <section className="main panel customize" aria-label={t("Customize")}>
+        <div className="controlpanel">
+          <div className="cp-top">
+            <div className="crumbs">
+              <span>{t("Customize")}</span>
+              <Icon name="chevron-right" size={12} />
+              <strong>{t(current.label)}</strong>
+            </div>
           </div>
+          <Tabs
+            label={t("Customize")}
+            idPrefix="cz"
+            value={tab as (typeof TABS)[number]["id"]}
+            onChange={(id) => p.go(id)}
+            tabs={tabs.map((x) => ({ id: x.id, label: t(x.label), icon: x.icon }))}
+          />
         </div>
-        <Tabs
-          label={t("Customize")}
-          idPrefix="cz"
-          value={tab as (typeof TABS)[number]["id"]}
-          onChange={(id) => p.go(id)}
-          tabs={tabs.map((x) => ({ id: x.id, label: t(x.label), icon: x.icon }))}
+        <div
+          className="content pad"
+          role="tabpanel"
+          id={panelId("cz")}
+          aria-labelledby={`cz-tab-${tab}`}
+        >
+          {tab === "theme" && <ThemeTab {...p} />}
+          {tab === "apps" && <AppsTab {...p} />}
+          {tab === "modules" && (
+            <ModulesPage view={view} guideHref={GUIDE_LINK} goBuild={() => p.go("build")} />
+          )}
+          {tab === "build" && <BuildTab {...p} />}
+          {tab === "security" && <SecurityTab {...p} />}
+          {tab === "guide" && (
+            <Suspense fallback={<Skeleton rows={6} cols={3} />}>
+              <GuidePage anchor={p.anchor} goAnchor={p.goAnchor} notify={p.notify} />
+            </Suspense>
+          )}
+          {tab === "brand" && (
+            <Suspense fallback={<Skeleton rows={6} cols={3} />}>
+              <BrandBook section={p.section} goSection={p.goSection} notify={p.notify} />
+            </Suspense>
+          )}
+        </div>
+      </section>
+      {tab === "modules" && view.selected && (
+        <DetailPanel
+          key={view.selected.row.id}
+          row={view.selected.row}
+          kind={view.selected.kind}
+          panel={p.modulesRoute.panel}
+          setPanel={(panel) => p.goModules({ panel })}
+          onClose={() => p.goModules({ id: "" })}
+          core={view.core}
+          title={view.nameOf(view.selected.row.id)}
+          description={view.descriptionOf(view.selected.row)}
+          nameOf={view.nameOf}
+          index={view.rowsById}
+          hrefFor={view.hrefFor}
+          actions={view.actions}
         />
-      </div>
-      <div
-        className="content pad"
-        role="tabpanel"
-        id={panelId("cz")}
-        aria-labelledby={`cz-tab-${tab}`}
-      >
-        {tab === "theme" && <ThemeTab {...p} />}
-        {tab === "apps" && <AppsTab {...p} />}
-        {tab === "modules" && <ModulesTab {...p} />}
-        {tab === "build" && <BuildTab {...p} />}
-        {tab === "security" && <SecurityTab {...p} />}
-        {tab === "guide" && (
-          <Suspense fallback={<Skeleton rows={6} cols={3} />}>
-            <GuidePage anchor={p.anchor} goAnchor={p.goAnchor} notify={p.notify} />
-          </Suspense>
-        )}
-        {tab === "brand" && (
-          <Suspense fallback={<Skeleton rows={6} cols={3} />}>
-            <BrandBook section={p.section} goSection={p.goSection} notify={p.notify} />
-          </Suspense>
-        )}
-      </div>
-    </section>
+      )}
+    </>
   );
 }
 
@@ -461,137 +487,6 @@ function AppsTab({ apps, settings, isAdmin, token, onSettings, notify }: Props) 
       <div>
         <Button onClick={() => save({})}>{t("Reset the launcher")}</Button>
       </div>
-    </div>
-  );
-}
-
-type Pkg = { id: string; name: string; version: string; description: string; source: string };
-
-function ModulesTab({ token, modules, onModulesChanged, notify }: Props) {
-  const [installed, setInstalled] = useState<Pkg[]>([]);
-  const [market, setMarket] = useState<Pkg[]>([]);
-  const refresh = useCallback(async () => {
-    const [a, b] = await Promise.all([
-      call(token, "module.list"),
-      call(token, "marketplace_listing.list"),
-    ]);
-    if (a.kind === "ok") setInstalled(a.value as Pkg[]);
-    if (b.kind === "ok") setMarket(b.value as Pkg[]);
-  }, [token]);
-  useEffect(() => void refresh(), [refresh]);
-  async function act(id: string, body: object, done: string) {
-    const r = await call(token, id, body);
-    notify(
-      r.kind === "ok"
-        ? done
-        : r.kind === "error"
-          ? serverMessage(r.message)
-          : t("Waiting for a human to approve"),
-      r.kind === "error" ? "error" : "ok",
-    );
-    await refresh();
-    onModulesChanged();
-  }
-  const have = new Set(installed.map((p) => p.id));
-  // An installed module brings its own names and descriptions per language (D52); a package that is
-  // only offered is shown from the client table and the English listing.
-  const titleOf = (p: Pkg) => {
-    const m = modules.find((x) => x.id === p.id);
-    return m ? appTitle(m) : appTitle(p);
-  };
-  const describe = (p: Pkg) => {
-    const m = modules.find((x) => x.id === p.id);
-    return (m && describeFor(m)) || p.description;
-  };
-  return (
-    <div className="stack gap-lg">
-      <p className="hint">
-        {t(
-          "A module adds an app: models, fields, permissions and workflow steps, in one text file.",
-        )}{" "}
-        <a className="reflink" href={GUIDE_LINK}>
-          {t("How to write a custom module?")}
-        </a>
-      </p>
-      <section className="stack">
-        <h3 className="overline">{t("Marketplace")}</h3>
-        <div className="cards3">
-          {market.map((p) => (
-            <article key={p.id} className="card">
-              <AppIcon
-                app={{ id: p.id, name: p.name, color: appColor(p.id, undefined, p.name) }}
-                size={40}
-              />
-              <div>
-                <strong>{titleOf(p)}</strong>
-                <p className="hint">{describe(p)}</p>
-              </div>
-              <Button
-                variant={have.has(p.id) ? "secondary" : "primary"}
-                size="sm"
-                disabled={have.has(p.id)}
-                icon={have.has(p.id) ? "check" : undefined}
-                onClick={() =>
-                  act(
-                    "marketplace_listing.install",
-                    { id: p.id },
-                    t("Installed {name}", { name: titleOf(p) }),
-                  )
-                }
-              >
-                {have.has(p.id) ? t("Installed") : t("Install")}
-              </Button>
-            </article>
-          ))}
-        </div>
-      </section>
-      <section className="stack">
-        <h3 className="overline">{t("Installed")}</h3>
-        <ul className="rows">
-          {installed.map((p) => (
-            <li key={p.id} className="row">
-              <strong>{titleOf(p)}</strong>
-              <span className="hint">{describe(p)}</span>
-              <span className="grow" />
-              <Chip>{p.source}</Chip>
-              <span className="hint tabular">{p.version}</span>
-              {p.source !== "builtin" && (
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    act("module.uninstall", { id: p.id }, t("Removed {name}", { name: titleOf(p) }))
-                  }
-                >
-                  {t("Uninstall")}
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section className="stack">
-        <h3 className="overline">{t("Upload your own")}</h3>
-        <p className="hint">
-          {t(
-            "An obop.toml file: models, fields with data classes, permission groups and actions. Or build one in the next tab.",
-          )}
-        </p>
-        <Input
-          type="file"
-          accept=".toml"
-          aria-label={t("Upload an obop.toml file")}
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (file)
-              await act(
-                "module.install",
-                { manifest: await file.text() },
-                t("Installed {name}", { name: file.name }),
-              );
-            e.target.value = "";
-          }}
-        />
-      </section>
     </div>
   );
 }

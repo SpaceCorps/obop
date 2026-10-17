@@ -8,6 +8,7 @@ import "./controlpanel.css";
 import "./views.css";
 import "./record.css";
 import "./customize.css";
+import "./modules/modules.css";
 import "./dashboards/dashboards.css";
 import "./connectors/connectors.css";
 import "./guide.css";

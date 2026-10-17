@@ -19,6 +19,7 @@ import {
 } from "@obop/ui";
 import type { ModuleMeta, Settings } from "./api.ts";
 import { appColor } from "./theme.ts";
+import { modulesHref } from "./modules/route.ts";
 import { href } from "./route.ts";
 import { boardHref } from "./dashboards/route.ts";
 import { appTitle, modelTitle } from "./labels.ts";
@@ -261,6 +262,28 @@ export function Palette({ apps, onClose }: { apps: App[]; onClose: () => void })
             app: a,
           });
       }
+    }
+    if (apps.some((a) => a.id === "customize")) {
+      all.push(
+        {
+          key: "modules",
+          title: t("Modules"),
+          hint: t("Customize"),
+          to: modulesHref({}),
+        },
+        {
+          key: "modules-market",
+          title: t("Install a module from the marketplace"),
+          hint: t("Customize"),
+          to: modulesHref({ tab: "marketplace" }),
+        },
+        {
+          key: "modules-updates",
+          title: t("Module updates"),
+          hint: t("Customize"),
+          to: modulesHref({ tab: "updates" }),
+        },
+      );
     }
     all.push({
       key: "theme",

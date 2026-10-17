@@ -9,6 +9,7 @@ import { BOARD, boardHref } from "./dashboards/route.ts";
 import { DataProvider, type Tone } from "./data.tsx";
 import { modelTitle } from "./labels.ts";
 import { ModelPage } from "./ModelPage.tsx";
+import { parseModulesRoute } from "./modules/route.ts";
 import { href, nav, useRoute } from "./route.ts";
 import { EnrolmentGate } from "./Security.tsx";
 import { SignIn } from "./SignIn.tsx";
@@ -278,6 +279,18 @@ export function App() {
               modules={modules}
               settings={settings}
               isAdmin={isAdmin}
+              modulesRoute={parseModulesRoute(route)}
+              goModules={(patch) => {
+                const next = { ...parseModulesRoute(route), ...patch };
+                go({
+                  app: "customize",
+                  model: "modules",
+                  tab: "modules",
+                  view: next.tab === "installed" ? "" : next.tab,
+                  id: next.id,
+                  section: next.panel === "overview" ? "" : next.panel,
+                });
+              }}
               go={(tab) => go({ app: "customize", model: tab, tab })}
               goSection={(view) => go({ app: "customize", model: "brand", tab: "brand", view })}
               goAnchor={(section) =>
