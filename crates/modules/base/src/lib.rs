@@ -37,6 +37,14 @@ pub fn module() -> Module {
                     "base.user",
                 )
                 .kind(FieldKind::LongText),
+                F::new(
+                    "photo",
+                    "Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB)",
+                    Internal,
+                    true,
+                    "base.user",
+                )
+                .kind(FieldKind::Image(2 * 1024 * 1024)),
             ],
             commands: vec![
                 CommandDef::new(
@@ -72,6 +80,7 @@ pub fn register(d: &Dispatcher, store: &Store) {
     let m = module();
     d.register_crud(&m, store);
     let s = store.clone();
+    let party = m.models[0].clone();
     d.register(
         &m,
         "party",
@@ -88,6 +97,8 @@ pub fn register(d: &Dispatcher, store: &Store) {
                 .map(|f| (f.to_string(), Value::text("[erased]")))
                 .collect();
             s.update("party", id, erased)?;
+            // The photo is personal data too: clear the field and delete the file (D60).
+            s.erase_blob_fields(&party, id)?;
             Ok(Value::map([
                 ("id", Value::text(id)),
                 ("name", Value::text("[erased]")),

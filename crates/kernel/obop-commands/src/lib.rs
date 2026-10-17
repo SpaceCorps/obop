@@ -218,6 +218,9 @@ pub struct Dispatcher {
     public: std::sync::RwLock<HashMap<String, (String, PublicSpec)>>,
     /// Observers told about every command that succeeded (see `observe`).
     observers: std::sync::RwLock<Vec<(String, Arc<Observer>)>>,
+    /// Uploads and downloads of images and files, created with the first module registered
+    /// against a store (D60).
+    blob_service: std::sync::OnceLock<Arc<BlobService>>,
 }
 
 /// What an observer sees of a command that succeeded: its id, who ran it, the input the handler
@@ -240,13 +243,15 @@ pub struct FieldInfo {
     pub description: &'static str,
     pub class: &'static str,
     pub personal_data: bool,
-    /// Lowercase field kind (D47): text, longtext, number, money, date, bool, select or ref.
+    /// Lowercase field kind (D47): text, longtext, number, money, date, bool, select, ref, image or file.
     pub kind: &'static str,
     pub required: bool,
     /// Options of a `select`; empty for other kinds.
     pub options: Vec<&'static str>,
     /// Target model of a `ref`.
     pub to: Option<&'static str>,
+    /// Largest upload in bytes of an `image` or `file` field.
+    pub max_bytes: Option<usize>,
     /// Label and description per language (D52); empty maps when untranslated.
     pub labels: Texts,
     pub descriptions: Texts,
@@ -380,6 +385,7 @@ impl Dispatcher {
                                 required: f.required,
                                 options: f.kind.options().to_vec(),
                                 to: f.kind.target(),
+                                max_bytes: f.kind.max_bytes(),
                                 labels: ftr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
                                 descriptions: ftr
                                     .map(|t| t.entry.descriptions.clone())
@@ -960,12 +966,14 @@ pub trait MfaApi: Send + Sync {
     fn admin_reset(&self, admin: &Principal, target: &str) -> Result<(), MfaError>;
 }
 
+pub mod blobs;
 mod guards;
 pub mod json;
 pub mod public;
 pub mod query;
 pub mod store;
 
+pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
 pub use public::{
     Lookup, PublicApi, PublicFilter, PublicRead, PublicReceipt, PublicRecord, PublicSpec,
     PublicSubmit, Receipt, Submission, SubmitError,

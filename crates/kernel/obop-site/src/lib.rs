@@ -14,6 +14,7 @@ pub mod http;
 pub mod i18n;
 pub mod layout;
 pub mod md;
+mod media;
 pub mod seed;
 mod seo;
 pub mod settings;
@@ -268,6 +269,7 @@ impl Site {
         let segs: Vec<&str> = segs.iter().map(String::as_str).collect();
         match (method, segs.as_slice()) {
             (_, []) => self.home(&mut ctx),
+            ("GET" | "HEAD", ["media", rest]) => self.media(&ctx, rest),
             ("GET" | "HEAD", ["sitemap.xml"]) => seo::sitemap(self, &ctx),
             ("GET" | "HEAD", ["feed.xml"]) => seo::feed(self, &ctx),
             ("GET" | "HEAD", ["llms.txt"]) => seo::llms(self, &ctx),
@@ -415,6 +417,8 @@ impl Site {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_media;
 
 fn method_not_allowed(ctx: &Ctx, allow: &str) -> Resp {
     let mut p = Page::new(ctx.t("e405.title"), ctx.t("e405.title"), "/");
@@ -441,6 +445,11 @@ pub(crate) fn valid_slug(s: &str) -> bool {
         && s.len() <= 120
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// A blob id: 64 lowercase hex characters.
+pub(crate) fn valid_hex_id(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 pub(crate) fn valid_token(s: &str) -> bool {

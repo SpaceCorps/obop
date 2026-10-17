@@ -24,3 +24,7 @@ description = "Vapaamuotoiset sisäiset muistiinpanot"
 [labels.fi.model.party.action.erase]
 label = "Poista tiedot"
 description = "Anonymisoi osapuoli paikallaan ja kirjaa poiston"
+
+[labels.fi.model.party.field.photo]
+label = "Kuva"
+description = "Yhteystiedon kuva tai logo (PNG, JPEG, WebP tai GIF, enintään 2 MiB)"

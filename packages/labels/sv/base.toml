@@ -24,3 +24,7 @@ description = "Interna anteckningar i fritext"
 [labels.sv.model.party.action.erase]
 label = "Radera"
 description = "Anonymisera parten på plats och registrera raderingen"
+
+[labels.sv.model.party.field.photo]
+label = "Foto"
+description = "Foto eller logotyp för kontakten (PNG, JPEG, WebP eller GIF, upp till 2 MiB)"

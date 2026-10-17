@@ -146,7 +146,8 @@ pub struct FieldM {
     pub personal_data: bool,
     /// Defaults to the model's read group.
     pub group: Option<String>,
-    /// Field kind (D47): text, longtext, number, money, date, bool, select or ref.
+    /// Field kind (D47, D60): text, longtext, number, money, date, bool, select, ref, image or
+    /// file.
     #[serde(default = "default_kind")]
     pub kind: String,
     /// Allowed values; only for `select`. For a `state` field they are the status order.
@@ -157,6 +158,9 @@ pub struct FieldM {
     /// Must be present and non-null on create. Defaults to false.
     #[serde(default)]
     pub required: bool,
+    /// Largest upload in bytes; only for `image` (default 5 MiB) and `file` (default 25 MiB),
+    /// at most 64 MiB.
+    pub max_bytes: Option<u32>,
 }
 
 fn default_kind() -> String {
@@ -655,12 +659,24 @@ impl Manifest {
         let at = format!("{}.{}", m.name, f.name);
         if !FieldKind::is_known(&f.kind) {
             return Err(format!(
-                "{at}: unknown kind {:?} (use text, longtext, number, money, date, bool, select or ref)",
+                "{at}: unknown kind {:?} (use text, longtext, number, money, date, bool, select, ref, image or file)",
                 f.kind
             ));
         }
         if f.kind != "select" && !f.options.is_empty() {
             return Err(format!("{at}: options are only valid for kind \"select\""));
+        }
+        if !matches!(f.kind.as_str(), "image" | "file") && f.max_bytes.is_some() {
+            return Err(format!(
+                "{at}: `max_bytes` is only valid for kind \"image\" or \"file\""
+            ));
+        }
+        if let Some(n) = f.max_bytes
+            && !(1024..=64 * 1024 * 1024).contains(&n)
+        {
+            return Err(format!(
+                "{at}: `max_bytes` must be between 1024 and 67108864 (64 MiB)"
+            ));
         }
         if f.kind != "ref" && f.to.is_some() {
             return Err(format!("{at}: `to` is only valid for kind \"ref\""));
@@ -785,6 +801,8 @@ impl Manifest {
                                     .into(),
                             ),
                             "ref" => FieldKind::Ref(intern(f.to.as_deref().unwrap_or(""))),
+                            "image" => FieldKind::Image(f.max_bytes.unwrap_or(0)),
+                            "file" => FieldKind::File(f.max_bytes.unwrap_or(0)),
                             _ => FieldKind::Text,
                         };
                         FieldDef {

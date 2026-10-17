@@ -20,3 +20,7 @@ description = "Listpris i valutans minsta enhet"
 [labels.sv.model.product.field.cost_minor]
 label = "Kostnad"
 description = "Kostnad per enhet i valutans minsta enhet"
+
+[labels.sv.model.product.field.image]
+label = "Bild"
+description = "Bild på produkten (PNG, JPEG, WebP eller GIF, upp till 5 MiB)"

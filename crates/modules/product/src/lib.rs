@@ -25,6 +25,14 @@ pub fn module() -> Module {
                 )
                 .kind(FieldKind::Money),
                 F::new(
+                    "image",
+                    "Picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB)",
+                    NoClass,
+                    false,
+                    "product.user",
+                )
+                .kind(FieldKind::Image(0)),
+                F::new(
                     "cost_minor",
                     "Unit cost in minor currency units",
                     NoClass,

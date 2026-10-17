@@ -6,13 +6,13 @@ use obop_commands::{Dispatcher, Store};
 use obop_pkg::{Bundled, Installer, Marketplace};
 use std::sync::Arc;
 
-struct Shop {
-    site: Site,
-    store: Store,
-    d: Arc<Dispatcher>,
+pub(crate) struct Shop {
+    pub(crate) site: Site,
+    pub(crate) store: Store,
+    pub(crate) d: Arc<Dispatcher>,
 }
 
-fn build(store: Store, seeded: bool) -> Shop {
+pub(crate) fn build(store: Store, seeded: bool) -> Shop {
     let d = Arc::new(Dispatcher::new());
     base::register(&d, &store);
     product::register(&d, &store);
@@ -48,11 +48,11 @@ fn build(store: Store, seeded: bool) -> Shop {
     Shop { site, store, d }
 }
 
-fn shop() -> Shop {
+pub(crate) fn shop() -> Shop {
     build(Store::new(), true)
 }
 
-fn req(method: &str, path: &str) -> Req {
+pub(crate) fn req(method: &str, path: &str) -> Req {
     let mut r = Req::new(method, path)
         .with_header("host", "shop.test")
         .with_header("accept-language", "en");
@@ -60,11 +60,11 @@ fn req(method: &str, path: &str) -> Req {
     r
 }
 
-fn get(s: &Shop, path: &str) -> Resp {
+pub(crate) fn get(s: &Shop, path: &str) -> Resp {
     s.site.handle(&req("GET", path))
 }
 
-fn get_h(s: &Shop, path: &str, headers: &[(&str, &str)]) -> Resp {
+pub(crate) fn get_h(s: &Shop, path: &str, headers: &[(&str, &str)]) -> Resp {
     let mut r = req("GET", path);
     for (k, v) in headers {
         r = r.with_header(k, v);
@@ -82,14 +82,14 @@ const LINK_SV: &str = "<link rel=\"alternate\" hreflang=\"sv\"";
 const LINK_ES: &str = "<link rel=\"alternate\" hreflang=\"es\"";
 const LINK_X: &str = "<link rel=\"alternate\" hreflang=\"x-default\"";
 
-const CSRF: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+pub(crate) const CSRF: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 /// A POST that carries a valid double-submit token.
-fn post(s: &Shop, path: &str, fields: &[(&str, &str)]) -> Resp {
+pub(crate) fn post(s: &Shop, path: &str, fields: &[(&str, &str)]) -> Resp {
     post_from(s, path, fields, "203.0.113.7")
 }
 
-fn post_from(s: &Shop, path: &str, fields: &[(&str, &str)], client: &str) -> Resp {
+pub(crate) fn post_from(s: &Shop, path: &str, fields: &[(&str, &str)], client: &str) -> Resp {
     let mut all: Vec<(&str, &str)> = vec![("csrf", CSRF)];
     all.extend_from_slice(fields);
     let body = all
@@ -107,13 +107,13 @@ fn post_from(s: &Shop, path: &str, fields: &[(&str, &str)], client: &str) -> Res
 }
 
 /// A POST from an address nobody used before, so rate limits do not interfere.
-fn fresh_post(s: &Shop, path: &str, fields: &[(&str, &str)]) -> Resp {
+pub(crate) fn fresh_post(s: &Shop, path: &str, fields: &[(&str, &str)]) -> Resp {
     static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     post_from(s, path, fields, &format!("10.9.{}.{}", n / 250, n % 250))
 }
 
-fn listing(s: &Shop, slug: &str) -> PublicRecord {
+pub(crate) fn listing(s: &Shop, slug: &str) -> PublicRecord {
     let (rows, _) = s
         .site
         .api()
@@ -124,7 +124,7 @@ fn listing(s: &Shop, slug: &str) -> PublicRecord {
         .unwrap_or_else(|| panic!("no listing {slug}"))
 }
 
-fn methods(s: &Shop) -> Vec<PublicRecord> {
+pub(crate) fn methods(s: &Shop) -> Vec<PublicRecord> {
     s.site
         .api()
         .list("ecommerce_shipping_method", &[], None, 0)
@@ -150,11 +150,11 @@ fn order_fields<'a>(
     f
 }
 
-fn text(r: &Resp) -> String {
+pub(crate) fn text(r: &Resp) -> String {
     r.body_str()
 }
 
-fn set_site(s: &Shop, site: serde_json::Value) {
+pub(crate) fn set_site(s: &Shop, site: serde_json::Value) {
     let value = serde_json::json!({"site": site}).to_string();
     let mut f = obop_storage::Fields::new();
     f.insert("value".into(), serde_json::Value::String(value));
@@ -164,13 +164,13 @@ fn set_site(s: &Shop, site: serde_json::Value) {
     }
 }
 
-fn set_state(s: &Shop, model: &str, id: &str, field: &str, v: Value) {
+pub(crate) fn set_state(s: &Shop, model: &str, id: &str, field: &str, v: Value) {
     s.store
         .update(model, id, [(field.to_string(), v)].into())
         .unwrap();
 }
 
-fn page_id(s: &Shop, slug: &str) -> String {
+pub(crate) fn page_id(s: &Shop, slug: &str) -> String {
     s.site
         .api()
         .find_by("website_page", "slug", slug)
@@ -181,7 +181,7 @@ fn page_id(s: &Shop, slug: &str) -> String {
         .unwrap()
 }
 
-fn add_page(s: &Shop, slug: &str, title: &str, body: &str, state: &str) -> String {
+pub(crate) fn add_page(s: &Shop, slug: &str, title: &str, body: &str, state: &str) -> String {
     s.store
         .insert(
             "website_page",

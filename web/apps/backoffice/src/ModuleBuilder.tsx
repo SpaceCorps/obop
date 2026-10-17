@@ -35,6 +35,8 @@ const KINDS: [Kind, string][] = [
   ["bool", msg("Yes / No")],
   ["select", msg("Choice")],
   ["ref", msg("Link to a record")],
+  ["image", msg("Image")],
+  ["file", msg("File")],
 ];
 
 export type DField = {

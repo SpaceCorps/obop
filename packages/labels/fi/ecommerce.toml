@@ -339,3 +339,35 @@ description = "Yksikköhinta verokanta mukaan lukien (valuutan pienin yksikkö)"
 [labels.fi.model.ecommerce_order_line.field.subtotal]
 label = "Välisumma"
 description = "Rivin summa (valuutan pienin yksikkö, syötetty eikä laskettu)"
+
+[labels.fi.model.ecommerce_listing.field.image]
+label = "Kuva"
+description = "Tuotteen pääkuva (PNG, JPEG, WebP tai GIF, enintään 5 MiB; koodataan uudelleen ja metatiedot poistetaan latauksessa)"
+
+[labels.fi.model.ecommerce_listing.field.image_alt]
+label = "Kuvan kuvaus"
+description = "Teksti, joka kuvaa pääkuvan niille, jotka eivät näe sitä"
+
+[labels.fi.model.ecommerce_listing_image]
+name = "Tarjouksen kuva"
+description = "Tarjouksen lisäkuva galleriaa varten"
+
+[labels.fi.model.ecommerce_listing_image.field.listing_id]
+label = "Tarjous"
+description = "Tarjous, johon kuva kuuluu; se näkyy vain niin kauan kuin tarjous on julkaistu"
+
+[labels.fi.model.ecommerce_listing_image.field.image]
+label = "Kuva"
+description = "Kuva (PNG, JPEG, WebP tai GIF, enintään 5 MiB)"
+
+[labels.fi.model.ecommerce_listing_image.field.alt]
+label = "Kuvaus"
+description = "Teksti, joka kuvaa kuvan niille, jotka eivät näe sitä"
+
+[labels.fi.model.ecommerce_listing_image.field.sequence]
+label = "Järjestys"
+description = "Järjestys galleriassa, pienin ensin"
+
+[labels.fi.model.ecommerce_listing_image.field.published]
+label = "Julkaistu"
+description = "Näytetäänkö kuva kaupassa"

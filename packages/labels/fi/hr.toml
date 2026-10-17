@@ -185,3 +185,7 @@ description = "Hyväksy pyydetty vapaa (vain esihenkilö)"
 [labels.fi.model.hr_leave_request.action.refuse]
 label = "Hylkää"
 description = "Hylkää pyydetty vapaa (vain esihenkilö)"
+
+[labels.fi.model.hr_employee.field.photo]
+label = "Valokuva"
+description = "Henkilön valokuva (PNG, JPEG, WebP tai GIF; metatiedot, kuten sijainti, poistetaan latauksessa). Henkilötieto: ei koskaan julkinen"

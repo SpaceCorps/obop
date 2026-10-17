@@ -24,3 +24,7 @@ description = "Notes internes en texte libre"
 [labels.fr.model.party.action.erase]
 label = "Effacer"
 description = "Anonymise le tiers sur place et enregistre l’effacement"
+
+[labels.fr.model.party.field.photo]
+label = "Photo"
+description = "Photo ou logo du contact (PNG, JPEG, WebP ou GIF, jusqu'à 2 Mio)"

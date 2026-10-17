@@ -339,3 +339,35 @@ description = "Prix par unité toutes taxes comprises (plus petite unité monét
 [labels.fr.model.ecommerce_order_line.field.subtotal]
 label = "Sous-total"
 description = "Total de la ligne (plus petite unité monétaire, saisi et non calculé)"
+
+[labels.fr.model.ecommerce_listing.field.image]
+label = "Image"
+description = "Image principale du produit (PNG, JPEG, WebP ou GIF, jusqu'à 5 Mio ; réencodée et débarrassée de ses métadonnées au téléversement)"
+
+[labels.fr.model.ecommerce_listing.field.image_alt]
+label = "Description de l'image"
+description = "Texte qui décrit l'image principale pour les personnes qui ne peuvent pas la voir"
+
+[labels.fr.model.ecommerce_listing_image]
+name = "Image d'offre"
+description = "Une image supplémentaire d'une offre pour sa galerie"
+
+[labels.fr.model.ecommerce_listing_image.field.listing_id]
+label = "Offre"
+description = "L'offre à laquelle l'image appartient ; elle n'est affichée que tant que l'offre est publiée"
+
+[labels.fr.model.ecommerce_listing_image.field.image]
+label = "Image"
+description = "L'image (PNG, JPEG, WebP ou GIF, jusqu'à 5 Mio)"
+
+[labels.fr.model.ecommerce_listing_image.field.alt]
+label = "Description"
+description = "Texte qui décrit l'image pour les personnes qui ne peuvent pas la voir"
+
+[labels.fr.model.ecommerce_listing_image.field.sequence]
+label = "Ordre"
+description = "Ordre dans la galerie, le plus petit d'abord"
+
+[labels.fr.model.ecommerce_listing_image.field.published]
+label = "Publié"
+description = "Si l'image est affichée dans la boutique"

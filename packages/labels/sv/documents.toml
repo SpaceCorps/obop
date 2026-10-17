@@ -88,3 +88,7 @@ description = "Gör ett dokument i utkast till gällande version"
 [labels.sv.model.documents_document.action.archive]
 label = "Arkivera"
 description = "Arkivera ett publicerat dokument (endast chef)"
+
+[labels.sv.model.documents_document.field.attachment]
+label = "Fil"
+description = "Själva dokumentfilen (PDF, bild, text, kalkylblad eller kontorsdokument, upp till 25 MiB); levereras bara som nedladdning till dem som får läsa posten"

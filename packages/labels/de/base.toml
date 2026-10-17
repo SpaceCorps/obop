@@ -24,3 +24,7 @@ description = "Interne Notizen als Freitext"
 [labels.de.model.party.action.erase]
 label = "Anonymisieren"
 description = "Den Geschäftspartner an Ort und Stelle anonymisieren und die Löschung protokollieren"
+
+[labels.de.model.party.field.photo]
+label = "Foto"
+description = "Foto oder Logo des Kontakts (PNG, JPEG, WebP oder GIF, bis 2 MiB)"

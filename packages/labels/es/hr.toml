@@ -185,3 +185,7 @@ description = "Aprobar una ausencia solicitada (solo responsables)"
 [labels.es.model.hr_leave_request.action.refuse]
 label = "Rechazar"
 description = "Rechazar una ausencia solicitada (solo responsables)"
+
+[labels.es.model.hr_employee.field.photo]
+label = "Foto"
+description = "Foto de la persona (PNG, JPEG, WebP o GIF; los metadatos como la ubicación se eliminan al subirla). Dato personal: nunca público"

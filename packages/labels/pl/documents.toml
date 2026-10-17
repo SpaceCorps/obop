@@ -88,3 +88,7 @@ description = "Czyni dokument roboczy aktualną wersją"
 [labels.pl.model.documents_document.action.archive]
 label = "Archiwizuj"
 description = "Archiwizuje opublikowany dokument (tylko kierownik)"
+
+[labels.pl.model.documents_document.field.attachment]
+label = "Plik"
+description = "Sam plik dokumentu (PDF, obraz, tekst, arkusz lub dokument biurowy, do 25 MiB); udostępniany wyłącznie do pobrania osobom, które mogą czytać rekord"

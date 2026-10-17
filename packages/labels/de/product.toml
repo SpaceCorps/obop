@@ -20,3 +20,7 @@ description = "Listenpreis in der kleinsten Währungseinheit"
 [labels.de.model.product.field.cost_minor]
 label = "Kosten"
 description = "Stückkosten in der kleinsten Währungseinheit"
+
+[labels.de.model.product.field.image]
+label = "Bild"
+description = "Bild des Produkts (PNG, JPEG, WebP oder GIF, bis 5 MiB)"

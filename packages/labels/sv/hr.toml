@@ -185,3 +185,7 @@ description = "Godkänn en begärd ledighet (endast chef)"
 [labels.sv.model.hr_leave_request.action.refuse]
 label = "Avslå"
 description = "Avslå en begärd ledighet (endast chef)"
+
+[labels.sv.model.hr_employee.field.photo]
+label = "Foto"
+description = "Foto av personen (PNG, JPEG, WebP eller GIF; metadata som plats tas bort vid uppladdning). Personuppgift: aldrig offentlig"

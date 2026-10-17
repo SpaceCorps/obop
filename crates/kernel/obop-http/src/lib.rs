@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tower_http::services::{ServeDir, ServeFile};
 
+pub mod blobs;
 pub mod community;
 pub mod connectors;
 pub mod mcp;
@@ -128,6 +129,11 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             )),
         )
         .route("/oauth/callback", get(connectors::oauth_callback))
+        .route(
+            "/api/blobs",
+            post(blobs::upload).layer(axum::extract::DefaultBodyLimit::disable()),
+        )
+        .route("/api/blobs/{id}", get(blobs::download))
         .route("/api/{model}/{command}", post(call))
         .route("/mcp", any(mcp::endpoint))
         .route("/mcp/server-card", get(mcp::server_card_canonical))

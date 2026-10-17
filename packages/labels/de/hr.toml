@@ -185,3 +185,7 @@ description = "Eine beantragte Abwesenheit genehmigen (nur Führungskräfte)"
 [labels.de.model.hr_leave_request.action.refuse]
 label = "Ablehnen"
 description = "Eine beantragte Abwesenheit ablehnen (nur Führungskräfte)"
+
+[labels.de.model.hr_employee.field.photo]
+label = "Foto"
+description = "Foto der Person (PNG, JPEG, WebP oder GIF; Metadaten wie der Standort werden beim Hochladen entfernt). Personenbezogene Daten: nie öffentlich"

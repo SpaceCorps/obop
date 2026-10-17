@@ -20,3 +20,7 @@ description = "Listahinta valuutan pienimmässä yksikössä"
 [labels.fi.model.product.field.cost_minor]
 label = "Kustannus"
 description = "Yksikkökustannus valuutan pienimmässä yksikössä"
+
+[labels.fi.model.product.field.image]
+label = "Kuva"
+description = "Tuotteen kuva (PNG, JPEG, WebP tai GIF, enintään 5 MiB)"

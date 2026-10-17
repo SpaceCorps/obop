@@ -266,3 +266,19 @@ description = "Przetłumaczona treść wpisu w Markdown"
 [labels.pl.model.website_blog_post_translation.field.published]
 label = "Opublikowany"
 description = "Czy tłumaczenie jest pokazywane; dostępne tylko, gdy jego wpis jest opublikowany"
+
+[labels.pl.model.website_page.field.cover_image]
+label = "Obraz tytułowy"
+description = "Obraz na górze strony i w podglądach linków (PNG, JPEG, WebP lub GIF, przy wysyłaniu kodowany ponownie)"
+
+[labels.pl.model.website_page.field.cover_alt]
+label = "Opis obrazu tytułowego"
+description = "Tekst opisujący obraz tytułowy dla osób, które go nie widzą"
+
+[labels.pl.model.website_blog_post.field.cover_image]
+label = "Obraz tytułowy"
+description = "Obraz na górze wpisu i w podglądach linków (PNG, JPEG, WebP lub GIF, przy wysyłaniu kodowany ponownie)"
+
+[labels.pl.model.website_blog_post.field.cover_alt]
+label = "Opis obrazu tytułowego"
+description = "Tekst opisujący obraz tytułowy dla osób, które go nie widzą"

@@ -5,6 +5,7 @@
 use crate::query::Query;
 use crate::{Dispatcher, Value, guards};
 use obop_registry::{FieldKind, ModelDef, Module, is_valid_date};
+use obop_storage::blob::{Blobs, Catalog};
 use obop_storage::{Backend, Fields};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -12,6 +13,8 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct Store {
     pub(crate) backend: Arc<dyn Backend>,
+    /// Images and files held by records (D60); the metadata lives in `backend`.
+    pub(crate) blobs: Arc<dyn Blobs>,
 }
 
 impl Default for Store {
@@ -39,11 +42,28 @@ impl Store {
         Self::open("memory:").expect("memory backend")
     }
 
-    /// Open `memory:`, `sqlite://PATH` or `postgres://...`.
+    /// Open `memory:`, `sqlite://PATH` or `postgres://...`. Blob bytes go to `OBOP_BLOB_DIR` when
+    /// set, else beside a SQLite file (`<file>.blobs`), else into the database (PostgreSQL), or
+    /// memory for an in-memory database (D60).
     pub fn open(url: &str) -> Result<Self, String> {
+        let backend = obop_storage::open(url)?;
+        let dir = std::env::var("OBOP_BLOB_DIR").ok();
+        let bytes = obop_storage::blob::open_bytes(url, dir.as_deref())?;
         Ok(Self {
-            backend: obop_storage::open(url)?,
+            blobs: Arc::new(Catalog::new(backend.clone(), bytes)),
+            backend,
         })
+    }
+
+    /// The blob store (images and files).
+    pub fn blobs(&self) -> Arc<dyn Blobs> {
+        self.blobs.clone()
+    }
+
+    /// Use another blob store (a different byte backend, a scanner).
+    pub fn with_blobs(mut self, blobs: Arc<dyn Blobs>) -> Self {
+        self.blobs = blobs;
+        self
     }
 
     /// The backend, for components that keep their own records (identity).
@@ -135,6 +155,9 @@ fn check_value(
         (FieldKind::Text | FieldKind::LongText, Value::Text(_)) => Ok(()),
         (FieldKind::Number | FieldKind::Money, Value::Int(_)) => Ok(()),
         (FieldKind::Bool, Value::Bool(_)) => Ok(()),
+        (FieldKind::Image(_) | FieldKind::File(_), Value::Text(id)) => {
+            crate::blobs::check_field_value(store, model, name, kind, id)
+        }
         (FieldKind::Date, Value::Text(t)) if is_valid_date(t) => Ok(()),
         (FieldKind::Select(o), Value::Text(t)) if o.contains(&t.as_str()) => Ok(()),
         (FieldKind::Ref(to), Value::Text(id))
@@ -193,6 +216,12 @@ pub fn validate_with(
 }
 
 impl Dispatcher {
+    /// The upload and download service for images and files (D60); available once a module has
+    /// been registered against a store.
+    pub fn blob_service(&self) -> Option<Arc<crate::BlobService>> {
+        self.blob_service.get().cloned()
+    }
+
     /// Register only `get`, `list` and `search` for one model, so records that other code writes
     /// (the security event log, D53) can be read on every surface and never changed through it.
     pub fn register_read_only(&self, module: &Module, model: &str, store: &Store) {
@@ -297,6 +326,7 @@ impl Dispatcher {
                     if !s.backend.delete(name, &id)? {
                         return Err(format!("no {name} {id}"));
                     }
+                    crate::blobs::release_record(&s, name, &id);
                     Ok(Value::map([("id", Value::text(&id))]))
                 }),
             );
@@ -310,6 +340,7 @@ impl Dispatcher {
                     validate(&d, &s, &fields, true)?;
                     let id = s.insert(name, fields)?;
                     let f = s.backend.get(name, &id)?.ok_or("record vanished")?;
+                    crate::blobs::hold_created(&s, &d, &id, &f);
                     Ok(to_row(&id, &f))
                 }),
             );
@@ -322,13 +353,19 @@ impl Dispatcher {
                     let id = id_of(input)?;
                     let fields = declared_fields(&d, input)?;
                     validate(&d, &s, &fields, false)?;
+                    let before = s.backend.get(name, &id)?;
                     s.update(name, &id, fields)?;
                     let f = s.backend.get(name, &id)?.ok_or("record vanished")?;
+                    if let Some(before) = before {
+                        crate::blobs::hold_updated(&s, &d, &id, &before, &f);
+                    }
                     Ok(to_row(&id, &f))
                 }),
             );
         }
         self.register_guards(module, store);
+        self.blob_service
+            .get_or_init(|| crate::BlobService::new(self, store.clone()));
     }
 
     /// Register only `get`, `list` and `search` for the named models of `module` (with the query

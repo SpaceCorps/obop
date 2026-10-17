@@ -266,3 +266,19 @@ description = "Contenu d’article traduit en Markdown"
 [labels.fr.model.website_blog_post_translation.field.published]
 label = "Publiée"
 description = "Indique si la traduction est affichée ; elle n’est accessible que tant que son article est publié"
+
+[labels.fr.model.website_page.field.cover_image]
+label = "Image de couverture"
+description = "Image affichée en haut de la page et dans les aperçus de lien (PNG, JPEG, WebP ou GIF, réencodée au téléversement)"
+
+[labels.fr.model.website_page.field.cover_alt]
+label = "Description de la couverture"
+description = "Texte qui décrit l'image de couverture pour les personnes qui ne peuvent pas la voir"
+
+[labels.fr.model.website_blog_post.field.cover_image]
+label = "Image de couverture"
+description = "Image affichée en haut de l'article et dans les aperçus de lien (PNG, JPEG, WebP ou GIF, réencodée au téléversement)"
+
+[labels.fr.model.website_blog_post.field.cover_alt]
+label = "Description de la couverture"
+description = "Texte qui décrit l'image de couverture pour les personnes qui ne peuvent pas la voir"

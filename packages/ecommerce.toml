@@ -1,6 +1,6 @@
 [module]
 id = "ecommerce"
-version = "0.3.0"
+version = "0.4.0"
 name = "eCommerce"
 description = "An online shop: categories, product listings with translations, shipping methods, discount codes, web orders with lines and a fulfilment flow of pending, paid, shipped, delivered, cancelled and refunded. When the instance runs with the public site enabled, visitors browse the published listings and place orders without an account; the server prices every order from the published listing and never trusts the browser. There is no payment provider: an order starts as pending and the shop contacts the buyer. Refunds need a human approval from a manager; agents may only propose them. Customer name, email and addresses are personal data and are never public. Needs the Products package."
 author = "SpaceCorps"
@@ -67,7 +67,7 @@ write_group = "ecommerce.manager"
   [model.public]
   read = true
   published_field = "published"
-  fields = ["title", "slug", "summary", "description", "price", "compare_at_price", "currency", "sku", "stock_policy", "stock_quantity", "category_id"]
+  fields = ["title", "slug", "summary", "description", "price", "compare_at_price", "currency", "sku", "stock_policy", "stock_quantity", "category_id", "image", "image_alt"]
   order_by = "title"
 
   [[model.field]]
@@ -100,6 +100,17 @@ write_group = "ecommerce.manager"
   description = "Description shown on the product page, in Markdown"
   class = "none"
   kind = "longtext"
+
+  [[model.field]]
+  name = "image"
+  description = "Main picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB; it is re-encoded and its metadata removed on upload)"
+  class = "none"
+  kind = "image"
+
+  [[model.field]]
+  name = "image_alt"
+  description = "Text that describes the main picture for people who cannot see it"
+  class = "none"
 
   [[model.field]]
   name = "category_id"
@@ -147,6 +158,50 @@ write_group = "ecommerce.manager"
   [[model.field]]
   name = "published"
   description = "Whether the listing is visible to shoppers"
+  class = "none"
+  kind = "bool"
+
+[[model]]
+name = "ecommerce_listing_image"
+description = "An extra picture of a listing for its gallery"
+read_group = "ecommerce.user"
+write_group = "ecommerce.manager"
+
+  [model.public]
+  read = true
+  published_field = "published"
+  fields = ["listing_id", "image", "alt", "sequence"]
+  order_by = "sequence"
+
+  [[model.field]]
+  name = "listing_id"
+  description = "The listing the picture belongs to; it is shown only while the listing is published"
+  class = "none"
+  kind = "ref"
+  to = "ecommerce_listing"
+  required = true
+
+  [[model.field]]
+  name = "image"
+  description = "The picture (PNG, JPEG, WebP or GIF, up to 5 MiB)"
+  class = "none"
+  kind = "image"
+  required = true
+
+  [[model.field]]
+  name = "alt"
+  description = "Text that describes the picture for people who cannot see it"
+  class = "none"
+
+  [[model.field]]
+  name = "sequence"
+  description = "Order in the gallery, lowest first"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "published"
+  description = "Whether the picture is shown in the shop"
   class = "none"
   kind = "bool"
 

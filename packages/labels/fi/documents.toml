@@ -88,3 +88,7 @@ description = "Tee luonnoksesta voimassa oleva versio"
 [labels.fi.model.documents_document.action.archive]
 label = "Arkistoi"
 description = "Arkistoi julkaistu asiakirja (vain esihenkilö)"
+
+[labels.fi.model.documents_document.field.attachment]
+label = "Tiedosto"
+description = "Itse asiakirjatiedosto (PDF, kuva, teksti, taulukko tai toimisto-asiakirja, enintään 25 MiB); toimitetaan vain latauksena henkilöille, jotka saavat lukea tietueen"

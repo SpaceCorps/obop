@@ -339,3 +339,35 @@ description = "Pris per enhet inklusive skatt (valutans minsta enhet)"
 [labels.sv.model.ecommerce_order_line.field.subtotal]
 label = "Delsumma"
 description = "Radsumma (valutans minsta enhet, anges och beräknas inte)"
+
+[labels.sv.model.ecommerce_listing.field.image]
+label = "Bild"
+description = "Produktens huvudbild (PNG, JPEG, WebP eller GIF, upp till 5 MiB; kodas om och metadata tas bort vid uppladdning)"
+
+[labels.sv.model.ecommerce_listing.field.image_alt]
+label = "Bildbeskrivning"
+description = "Text som beskriver huvudbilden för dem som inte kan se den"
+
+[labels.sv.model.ecommerce_listing_image]
+name = "Erbjudandebild"
+description = "En extra bild för ett erbjudandes galleri"
+
+[labels.sv.model.ecommerce_listing_image.field.listing_id]
+label = "Erbjudande"
+description = "Erbjudandet som bilden hör till; den visas bara medan erbjudandet är publicerat"
+
+[labels.sv.model.ecommerce_listing_image.field.image]
+label = "Bild"
+description = "Bilden (PNG, JPEG, WebP eller GIF, upp till 5 MiB)"
+
+[labels.sv.model.ecommerce_listing_image.field.alt]
+label = "Beskrivning"
+description = "Text som beskriver bilden för dem som inte kan se den"
+
+[labels.sv.model.ecommerce_listing_image.field.sequence]
+label = "Ordning"
+description = "Ordning i galleriet, lägst först"
+
+[labels.sv.model.ecommerce_listing_image.field.published]
+label = "Publicerad"
+description = "Om bilden visas i butiken"

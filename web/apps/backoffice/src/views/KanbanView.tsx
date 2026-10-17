@@ -343,5 +343,16 @@ export function KanbanView(p: ViewProps) {
 }
 
 function weight(f: FieldMeta): number {
-  return { money: 0, select: 1, date: 2, ref: 3, number: 4, bool: 5, text: 6, longtext: 9 }[f.kind];
+  return {
+    image: -1,
+    money: 0,
+    select: 1,
+    date: 2,
+    ref: 3,
+    number: 4,
+    bool: 5,
+    text: 6,
+    file: 7,
+    longtext: 9,
+  }[f.kind];
 }

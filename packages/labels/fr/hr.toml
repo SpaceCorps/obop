@@ -185,3 +185,7 @@ description = "Approuve un congé demandé (responsable uniquement)"
 [labels.fr.model.hr_leave_request.action.refuse]
 label = "Refuser"
 description = "Refuse un congé demandé (responsable uniquement)"
+
+[labels.fr.model.hr_employee.field.photo]
+label = "Photo"
+description = "Photo de la personne (PNG, JPEG, WebP ou GIF ; les métadonnées comme la localisation sont supprimées au téléversement). Donnée personnelle : jamais publique"

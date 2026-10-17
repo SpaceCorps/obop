@@ -31,6 +31,9 @@ pub fn field_schema(f: &FieldInfo) -> J {
             " (the id of a {} record)",
             f.to.unwrap_or("referenced")
         )),
+        "image" | "file" => desc.push_str(
+            " (a blob id: 64 lowercase hex characters, returned by an upload; you receive ids and metadata, never the bytes)",
+        ),
         _ => {}
     }
     if f.personal_data {
@@ -234,6 +237,7 @@ mod tests {
             required: false,
             options: vec!["a", "b"],
             to: Some("party"),
+            max_bytes: None,
             labels: Default::default(),
             descriptions: Default::default(),
             option_labels: Default::default(),
@@ -272,6 +276,7 @@ mod tests {
             required,
             options: vec!["draft", "posted"],
             to: Some("party"),
+            max_bytes: None,
             labels: Default::default(),
             descriptions: Default::default(),
             option_labels: Default::default(),

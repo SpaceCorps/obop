@@ -486,6 +486,12 @@ export function RecordPanel({
                     id={fid}
                     value={value(f)}
                     readOnly={!canEdit}
+                    altHint={(() => {
+                      const alt = model.fields.find((x) => x.name === `${f.name}_alt`);
+                      return alt
+                        ? { title: fieldTitle(alt), empty: !String(value(alt)).trim() }
+                        : undefined;
+                    })()}
                     currency={currency}
                     invalid={!!err}
                     describedBy={err ? `${fid}-err` : undefined}

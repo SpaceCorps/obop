@@ -1,5 +1,7 @@
 mod app;
 #[cfg(test)]
+mod blobs_tests;
+#[cfg(test)]
 mod connectors_tests;
 #[cfg(test)]
 mod mcp_tests;
@@ -622,6 +624,16 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
     app.connectors.start();
+    // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
+    let blobs = app.store.blobs();
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3600));
+            if let Err(e) = blobs.gc(24 * 3600) {
+                eprintln!("blob housekeeping: {e}");
+            }
+        }
+    });
     let router = if o.public_site {
         if !obop_http::public::admin_prefix_ok(&o.admin_prefix) {
             return Err(fail(&format!(
@@ -2425,6 +2437,26 @@ mod bundled_packages {
                             continue;
                         }
                         Value::Text(self.record(to, open))
+                    }
+                    "image" | "file" => {
+                        // A real upload through the blob service, as the package's own user.
+                        let (ct, bytes) = if f.kind == "image" {
+                            ("image/png", obop_media::fixtures::png(24, 16, 3))
+                        } else {
+                            ("application/pdf", b"%PDF-1.4 sample".to_vec())
+                        };
+                        let svc = self.app.dispatcher.blob_service().expect("blob service");
+                        svc.set_upload_limit(1_000_000);
+                        let target = format!("{model}.{}", f.name);
+                        let who = if self.pkg_models.contains(model) {
+                            &self.pkg_user
+                        } else {
+                            &self.admin
+                        };
+                        let info = svc
+                            .upload(who, &target, ct, "sample", &bytes)
+                            .unwrap_or_else(|e| panic!("{target}: upload {e:?}"));
+                        Value::text(&info.id)
                     }
                     other => panic!("{model}.{}: unknown kind {other}", f.name),
                 };

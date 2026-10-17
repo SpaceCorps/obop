@@ -266,3 +266,19 @@ description = "Käännetty kirjoituksen sisältö Markdown-muodossa"
 [labels.fi.model.website_blog_post_translation.field.published]
 label = "Julkaistu"
 description = "Näytetäänkö käännös; se on tavoitettavissa vain, kun sen kirjoitus on julkaistu"
+
+[labels.fi.model.website_page.field.cover_image]
+label = "Kansikuva"
+description = "Kuva sivun yläosassa ja linkkien esikatselussa (PNG, JPEG, WebP tai GIF, koodataan uudelleen latauksessa)"
+
+[labels.fi.model.website_page.field.cover_alt]
+label = "Kansikuvan kuvaus"
+description = "Teksti, joka kuvaa kansikuvan niille, jotka eivät näe sitä"
+
+[labels.fi.model.website_blog_post.field.cover_image]
+label = "Kansikuva"
+description = "Kuva kirjoituksen yläosassa ja linkkien esikatselussa (PNG, JPEG, WebP tai GIF, koodataan uudelleen latauksessa)"
+
+[labels.fi.model.website_blog_post.field.cover_alt]
+label = "Kansikuvan kuvaus"
+description = "Teksti, joka kuvaa kansikuvan niille, jotka eivät näe sitä"

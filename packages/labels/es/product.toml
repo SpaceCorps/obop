@@ -20,3 +20,7 @@ description = "Precio de lista en la unidad menor de la moneda"
 [labels.es.model.product.field.cost_minor]
 label = "Coste"
 description = "Coste unitario en la unidad menor de la moneda"
+
+[labels.es.model.product.field.image]
+label = "Imagen"
+description = "Imagen del producto (PNG, JPEG, WebP o GIF, hasta 5 MiB)"

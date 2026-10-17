@@ -88,3 +88,7 @@ description = "Einen Dokumententwurf zur aktuellen Version machen"
 [labels.de.model.documents_document.action.archive]
 label = "Archivieren"
 description = "Ein veröffentlichtes Dokument archivieren (nur Führungskräfte)"
+
+[labels.de.model.documents_document.field.attachment]
+label = "Datei"
+description = "Die Dokumentdatei selbst (PDF, Bild, Text, Tabelle oder Office-Dokument, bis 25 MiB); wird nur als Download an Personen geliefert, die den Datensatz lesen dürfen"

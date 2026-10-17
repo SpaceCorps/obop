@@ -88,3 +88,7 @@ description = "Fait d’un document en brouillon la version en vigueur"
 [labels.fr.model.documents_document.action.archive]
 label = "Archiver"
 description = "Archive un document publié (responsable uniquement)"
+
+[labels.fr.model.documents_document.field.attachment]
+label = "Fichier"
+description = "Le fichier du document lui-même (PDF, image, texte, tableur ou document bureautique, jusqu'à 25 Mio) ; fourni uniquement en téléchargement aux personnes autorisées à lire l'enregistrement"

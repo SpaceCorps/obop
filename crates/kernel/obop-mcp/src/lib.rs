@@ -330,6 +330,9 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if let Some(to) = f.to {
                                 o["to"] = json!(to);
                             }
+                            if let Some(n) = f.max_bytes {
+                                o["max_bytes"] = json!(n);
+                            }
                             translations(&mut o, &f.labels, &f.descriptions);
                             if !f.option_labels.is_empty() {
                                 o["option_labels"] = json!(f.option_labels);

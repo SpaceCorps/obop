@@ -104,8 +104,11 @@ pub struct BlobInfo {
     pub created: u64,
     pub owners: Vec<Owner>,
     /// Uploaders who have not attached it yet: (principal id, unix time, file name).
-    pub pending: Vec<(String, u64, String)>,
+    pub pending: Vec<Claim>,
 }
+
+/// An upload not attached yet: (principal id, unix time, file name).
+pub type Claim = (String, u64, String);
 
 /// What the caller says about bytes it hands to [`Blobs::put`].
 #[derive(Debug, Clone, Default)]
@@ -638,7 +641,7 @@ impl Catalog {
         f
     }
 
-    fn set_holds(f: &mut Fields, owners: &[Owner], pending: &[(String, u64, String)]) {
+    fn set_holds(f: &mut Fields, owners: &[Owner], pending: &[Claim]) {
         f.insert(
             "owners".into(),
             J::Array(owners.iter().map(Owner::to_json).collect()),
@@ -660,7 +663,7 @@ impl Catalog {
     fn mutate(
         &self,
         id: &str,
-        change: &dyn Fn(&mut Vec<Owner>, &mut Vec<(String, u64, String)>) -> bool,
+        change: &dyn Fn(&mut Vec<Owner>, &mut Vec<Claim>) -> bool,
     ) -> Result<bool> {
         for _ in 0..16 {
             let Some(cur) = self.meta.get(MODEL, id)? else {

@@ -14,6 +14,7 @@ obop-registry = { path = "crates/kernel/obop-registry" }
 obop-masking = { path = "crates/kernel/obop-masking" }
 obop-connectors = { path = "crates/kernel/obop-connectors" }
 obop-storage = { path = "crates/kernel/obop-storage" }
+obop-media = { path = "crates/kernel/obop-media" }
 obop-auth = { path = "crates/kernel/obop-auth" }
 obop-pkg = { path = "crates/kernel/obop-pkg" }
 obop-platform = { path = "crates/kernel/obop-platform" }

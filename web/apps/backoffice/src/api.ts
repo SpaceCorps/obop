@@ -19,7 +19,17 @@ export type Command = {
 };
 export type Row = Record<string, unknown> & { id: string };
 
-export type Kind = "text" | "longtext" | "number" | "money" | "date" | "bool" | "select" | "ref";
+export type Kind =
+  | "text"
+  | "longtext"
+  | "number"
+  | "money"
+  | "date"
+  | "bool"
+  | "select"
+  | "ref"
+  | "image"
+  | "file";
 export type FieldMeta = {
   name: string;
   description: string;
@@ -35,6 +45,10 @@ export type FieldMeta = {
   options?: string[];
   /** Only for `ref`: the model the id points at. */
   to?: string;
+  /** Only for `image` and `file`: the largest upload in bytes. */
+  max_bytes?: number;
+  /** The model the field belongs to (set when the metadata is loaded). */
+  model?: string;
 };
 export type ModelMeta = {
   name: string;
@@ -97,6 +111,7 @@ export async function meta(token: string): Promise<ModuleMeta[] | null | "enrolm
       for (const f of model.fields) {
         f.kind ??= f.name.endsWith("_minor") ? "money" : "text";
         f.required ??= false;
+        f.model = model.name;
       }
   for (const m of modules)
     for (const model of m.models) {

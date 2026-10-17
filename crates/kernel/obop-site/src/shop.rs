@@ -7,7 +7,8 @@
 use crate::content::{Field, describe, email_ok, error_summary, page_param, pager};
 use crate::http::{Form, Resp};
 use crate::i18n;
-use crate::layout::{self, Ctx, Page, Variants};
+use crate::layout::{self, Ctx, Page, PageImage, Variants};
+use crate::media::Pic;
 use crate::seo;
 use crate::settings::Settings;
 use crate::util::{clean_line, esc, random_token, sha256_hex, truncate_chars, urlenc};
@@ -112,7 +113,13 @@ fn price_html(ctx: &Ctx, rec: &PublicRecord) -> String {
     h
 }
 
-pub(crate) fn product_card(ctx: &Ctx, rec: &PublicRecord, tr: Option<&PublicRecord>) -> String {
+/// `pic` is the card's picture markup when the listing has a public one (see `Site::card_pic`).
+pub(crate) fn product_card(
+    ctx: &Ctx,
+    rec: &PublicRecord,
+    tr: Option<&PublicRecord>,
+    pic: Option<&str>,
+) -> String {
     let title = pick(rec, tr, "title");
     let summary = pick(rec, tr, "summary");
     let on_sale = rec
@@ -135,10 +142,16 @@ pub(crate) fn product_card(ctx: &Ctx, rec: &PublicRecord, tr: Option<&PublicReco
     } else {
         String::new()
     };
+    let art = match pic {
+        Some(img) => format!("<div class=\"art media\">{img}</div>"),
+        None => format!(
+            "<div class=\"art t{}\" aria-hidden=\"true\">{}</div>",
+            tint_of(&rec.id),
+            esc(&monogram(title))
+        ),
+    };
     format!(
-        "<li class=\"card\"{lang}><div class=\"art t{}\" aria-hidden=\"true\">{}</div>{badge}<div class=\"body\"><h3><a href=\"{}\">{}</a></h3>{}<p>{}</p></div></li>",
-        tint_of(&rec.id),
-        esc(&monogram(title)),
+        "<li class=\"card\"{lang}>{art}{badge}<div class=\"body\"><h3><a href=\"{}\">{}</a></h3>{}<p>{}</p></div></li>",
         esc(&ctx.lpath(&product_path(rec))),
         esc(title),
         if summary.is_empty() {
@@ -259,6 +272,16 @@ pub(crate) struct Redo {
 }
 
 impl Site {
+    /// The picture of a listing card, when the listing has a public one.
+    pub(crate) fn card_pic(&self, rec: &PublicRecord, title: &str) -> Option<String> {
+        let pic = self.pic(rec.text("image"))?;
+        let alt = match rec.text("image_alt") {
+            "" => title,
+            a => a,
+        };
+        Some(pic.html(alt, "(max-width: 600px) 50vw, 280px", false))
+    }
+
     pub(crate) fn shop_translations(&self, ctx: &Ctx) -> BTreeMap<String, PublicRecord> {
         if ctx.lang == ctx.s.default_lang {
             return BTreeMap::new();
@@ -435,7 +458,9 @@ impl Site {
                 ))
             ));
             for r in &shown {
-                h.push_str(&product_card(ctx, r, tr.get(&r.id)));
+                let t = tr.get(&r.id);
+                let pic = self.card_pic(r, pick(r, t, "title"));
+                h.push_str(&product_card(ctx, r, t, pic.as_deref()));
                 md_out.push_str(&product_md_line(ctx, r, tr.get(&r.id)));
             }
             h.push_str("</ul>");
@@ -514,15 +539,84 @@ impl Site {
                 "itemCondition": "https://schema.org/NewCondition",
             });
         }
+        // Pictures: the main one, then the gallery. Only public ones are used at all.
+        let main_alt = match rec.text("image_alt") {
+            "" => title.clone(),
+            a => a.to_string(),
+        };
+        let mut pics: Vec<(Pic, String)> = Vec::new();
+        if let Some(pic) = self.pic(rec.text("image")) {
+            pics.push((pic, main_alt));
+        }
+        let gallery = self
+            .api
+            .list(
+                "ecommerce_listing_image",
+                &[(
+                    "listing_id".to_string(),
+                    PublicFilter::Eq(Value::text(&rec.id)),
+                )],
+                Some(20),
+                0,
+            )
+            .map(|(r, _)| r)
+            .unwrap_or_default();
+        for g in &gallery {
+            if let Some(pic) = self.pic(g.text("image")) {
+                let alt = match g.text("alt") {
+                    "" => title.clone(),
+                    a => a.to_string(),
+                };
+                if !pics.iter().any(|(p, _)| p.id == pic.id) {
+                    pics.push((pic, alt));
+                }
+            }
+        }
+        if let Some((first, alt)) = pics.first() {
+            let (path, width, height) = first.social();
+            p.image = Some(PageImage {
+                path,
+                width,
+                height,
+                alt: alt.clone(),
+            });
+        }
+        if !pics.is_empty() {
+            ld["image"] = json!(
+                pics.iter()
+                    .map(|(pic, _)| ctx.abs(&pic.social().0))
+                    .collect::<Vec<_>>()
+            );
+        }
         p.jsonld.push(ld);
 
         let mut h = String::from("<article class=\"product\">");
-        h.push_str(&format!(
-            "<div class=\"art t{}\" role=\"img\" aria-label=\"{}\">{}</div><div>",
-            tint_of(&rec.id),
-            esc(ctx.t("shop.product_image")),
-            esc(&monogram(&title))
-        ));
+        if let Some(((main, alt), rest)) = pics.split_first() {
+            h.push_str(&format!(
+                "<div class=\"gallery\"><figure class=\"main\"><a href=\"{}\">{}</a></figure>",
+                esc(&main.path(None)),
+                main.html(alt, "(max-width: 820px) 100vw, 560px", true)
+            ));
+            if !rest.is_empty() {
+                h.push_str("<ul class=\"thumbs\">");
+                for (pic, alt) in rest {
+                    h.push_str(&format!(
+                        "<li><a href=\"{}\">{}</a></li>",
+                        esc(&pic.path(None)),
+                        pic.html(alt, "(max-width: 820px) 33vw, 180px", false)
+                    ));
+                }
+                h.push_str("</ul>");
+            }
+            h.push_str("</div><div>");
+        } else {
+            h.push_str(&format!(
+                "<div class=\"art t{}\" role=\"img\" aria-label=\"{}\">{}</div><div>",
+                tint_of(&rec.id),
+                esc(ctx.t("shop.product_image")),
+                esc(&monogram(&title))
+            ));
+        }
         h.push_str(&format!("<h1>{}</h1>", esc(&title)));
         let price = price_html(ctx, &rec);
         h.push_str(&format!("<p class=\"big\">{price}</p>"));

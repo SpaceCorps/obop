@@ -266,3 +266,19 @@ description = "Übersetzter Beitragsinhalt in Markdown"
 [labels.de.model.website_blog_post_translation.field.published]
 label = "Veröffentlicht"
 description = "Ob die Übersetzung angezeigt wird; sie ist nur erreichbar, solange ihr Beitrag veröffentlicht ist"
+
+[labels.de.model.website_page.field.cover_image]
+label = "Titelbild"
+description = "Bild oben auf der Seite und in Linkvorschauen (PNG, JPEG, WebP oder GIF, wird beim Hochladen neu kodiert)"
+
+[labels.de.model.website_page.field.cover_alt]
+label = "Titelbild-Beschreibung"
+description = "Text, der das Titelbild für Menschen beschreibt, die es nicht sehen können"
+
+[labels.de.model.website_blog_post.field.cover_image]
+label = "Titelbild"
+description = "Bild oben auf dem Beitrag und in Linkvorschauen (PNG, JPEG, WebP oder GIF, wird beim Hochladen neu kodiert)"
+
+[labels.de.model.website_blog_post.field.cover_alt]
+label = "Titelbild-Beschreibung"
+description = "Text, der das Titelbild für Menschen beschreibt, die es nicht sehen können"

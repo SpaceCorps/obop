@@ -123,6 +123,8 @@ input[type=checkbox],input[type=radio]{width:20px;height:20px;accent-color:var(-
 .card{position:relative;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;transition:border-color .15s,transform .15s}
 .card:hover{border-color:var(--ink)}
 .art{aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;background:var(--tint,var(--soft));color:var(--ink);font:700 3.4rem/1 var(--serif);letter-spacing:-.03em;user-select:none}
+.art.media{background:var(--soft);overflow:hidden;font-size:0}
+.art.media img{width:100%;height:100%;object-fit:cover;display:block}
 .card .body{padding:14px 16px 18px;display:flex;flex-direction:column;gap:4px;flex:1}
 .card h3{margin:0;font-size:1.05rem;line-height:1.3}
 .card h3 a{color:var(--fg);text-decoration:none}
@@ -149,6 +151,15 @@ input[type=checkbox],input[type=radio]{width:20px;height:20px;accent-color:var(-
 .product{display:grid;gap:32px;grid-template-columns:1fr}
 @media (min-width:820px){.product{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}}
 .product .art{border-radius:var(--radius);border:1px solid var(--line);font-size:7rem}
+.gallery{min-width:0}
+.gallery .main{margin:0;border-radius:var(--radius);border:1px solid var(--line);overflow:hidden;background:var(--soft)}
+.gallery .main img,.cover img{display:block;width:100%;height:auto}
+.gallery .main a,.thumbs a{display:block}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;list-style:none;margin:12px 0 0;padding:0}
+.thumbs li{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--soft)}
+.thumbs a:hover{opacity:.85}
+.thumbs img{display:block;width:100%;height:auto;aspect-ratio:1/1;object-fit:cover}
+.cover{margin:0 0 24px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:var(--soft);max-width:1080px}
 .product .buy{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin:20px 0}
 .product .big{font-size:1.8rem;margin:0 0 12px}
 .product h1{margin-bottom:.25em}
@@ -206,6 +217,12 @@ dl.facts dd{margin:0;white-space:pre-line}
 .post h2 a,.post h3 a{color:var(--fg);text-decoration:none}
 .post h2 a::after,.post h3 a::after{content:"";position:absolute;inset:0}
 .post .meta{margin-bottom:8px}
+.post.withimg{display:grid;gap:16px 22px;grid-template-columns:1fr;padding:0;overflow:hidden}
+@media (min-width:700px){.post.withimg{grid-template-columns:240px minmax(0,1fr);align-items:stretch}}
+.post.withimg .postbody{padding:20px 24px 22px 0}
+@media (max-width:699px){.post.withimg .postbody{padding:0 20px 20px}}
+.postimg{background:var(--soft);min-height:100%}
+.postimg img{display:block;width:100%;height:100%;object-fit:cover;aspect-ratio:3/2}
 .post p{margin:0;color:var(--muted)}
 .tags{display:flex;gap:8px;flex-wrap:wrap;list-style:none;margin:12px 0 0;padding:0}
 

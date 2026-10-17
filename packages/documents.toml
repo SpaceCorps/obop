@@ -1,8 +1,8 @@
 [module]
 id = "documents"
-version = "0.2.0"
+version = "0.3.0"
 name = "Documents"
-description = "A register of business documents: folders, document records with kind, owner, expiry and confidentiality, and a draft, published and archived flow. It stores references, not file contents."
+description = "A register of business documents: folders, document records with kind, owner, expiry and confidentiality, and a draft, published and archived flow. It stores references and, when you upload one, the file itself."
 author = "SpaceCorps"
 summary = "A register of business documents with owner, expiry and confidentiality, and a draft, published, archived flow."
 license = "AGPL-3.0-or-later"
@@ -88,6 +88,12 @@ write_group = "documents.user"
   name = "location"
   description = "Where the file is stored, such as a link or archive box"
   class = "none"
+
+  [[model.field]]
+  name = "attachment"
+  description = "The document file itself (PDF, image, text, spreadsheet or office document, up to 25 MiB); served only as a download to people who may read the record"
+  class = "internal"
+  kind = "file"
 
   [[model.field]]
   name = "expires_on"

@@ -1,0 +1,108 @@
+/* Images and files in records (D60): thumbnails in lists and cards, the upload control. */
+
+.blobthumb {
+  display: inline-block;
+  flex: none;
+  overflow: hidden;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.blobthumb img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+.blobthumb-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 100%;
+  color: var(--text-muted);
+}
+.blobthumb.preview {
+  border-radius: var(--radius-md);
+}
+.blobthumb.preview.empty {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+.blobthumb.preview img {
+  object-fit: contain;
+}
+
+.filechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--accent-text, var(--text));
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.filechip:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.filechip:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.blobfield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+.blobfield[data-over] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.blobrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.blobactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.blobprogress {
+  block-size: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3, var(--border));
+}
+.blobprogress span {
+  display: block;
+  block-size: 100%;
+  background: var(--accent);
+  transition: inline-size 0.1s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .blobfield,
+  .blobprogress span {
+    transition: none;
+  }
+}
+
+/* Kanban cards and list rows: keep thumbnails the same height as a line of text. */
+.kval .blobthumb,
+td .blobthumb {
+  inline-size: 40px;
+  block-size: 40px;
+}

@@ -19,6 +19,8 @@ use obop_types::{DataClass, MaskMode};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, RwLock};
 
+pub(crate) type ModelsMap = Arc<RwLock<HashMap<String, ModelMeta>>>;
+
 /// The first required field that is missing or null in `rec`.
 pub(crate) fn required_missing(def: &ModelDef, rec: &Fields) -> Option<&'static str> {
     def.fields
@@ -345,6 +347,12 @@ impl Dispatcher {
             }
             if let Some(g) = update_guard(def, store) {
                 self.register_guard(&module.id, &id("update"), true, g);
+            }
+            // Who may put which uploaded image or file into a field (D60).
+            for c in ["create", "update"] {
+                if let Some(g) = crate::blobs::reference_guard(def, store, self.models.clone()) {
+                    self.add_guard(&module.id, &id(c), true, g);
+                }
             }
             for (c, t) in def.transitions() {
                 self.register_guard(&module.id, &id(c.name), true, action_guard(def, store, t));

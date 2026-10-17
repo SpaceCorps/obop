@@ -24,3 +24,7 @@ description = "Wewnętrzne notatki w dowolnej formie"
 [labels.pl.model.party.action.erase]
 label = "Wymaż"
 description = "Anonimizuje kontrahenta w miejscu i zapisuje informację o wymazaniu"
+
+[labels.pl.model.party.field.photo]
+label = "Zdjęcie"
+description = "Zdjęcie lub logo kontaktu (PNG, JPEG, WebP lub GIF, do 2 MiB)"

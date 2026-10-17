@@ -365,7 +365,7 @@ fn the_tree_list_and_plan_commands_run() {
     let t = app.installer.tree(Some("field_service")).unwrap();
     assert!(t.contains("base ^0.2  [built in, core 0.2.0]"), "{t}");
     assert!(
-        t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.2.0]"),
+        t.contains("hr >=0.2, <1  [not installed, marketplace offers 0.3.0]"),
         "{t}"
     );
 }

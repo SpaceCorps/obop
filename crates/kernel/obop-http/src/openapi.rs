@@ -94,6 +94,11 @@ fn kind_schema(kind: &str, options: Option<&[String]>, to: Option<&str>) -> J {
             json!({"type": "string", "description": format!("The id of a {} record.", to.unwrap_or("referenced"))})
         }
         "longtext" => json!({"type": "string"}),
+        "image" | "file" => json!({
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "A blob id: the SHA-256 of an uploaded object. Upload with POST /api/blobs?field=model.field and use the returned id. Reads return the id and metadata, never the bytes."
+        }),
         _ => json!({"type": "string"}),
     }
 }
@@ -148,6 +153,14 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     paths.insert(
         "/api/approve/{plan_id}".into(),
         json!({"post": {"operationId": "approvePlan", "summary": "A human approves a plan an agent proposed", "security": sec.clone(), "parameters": [{"name": "plan_id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The plan ran."}, "404": error_responses()["404"].clone()}}}),
+    );
+    paths.insert(
+        "/api/blobs".into(),
+        json!({"post": {"operationId": "uploadBlob", "summary": "Upload an image or file for an image/file field (D60)", "description": "Send the bytes as the request body with their Content-Type (the type is checked against the content, never trusted). `field` names the target as model.field; the caller needs write access to it. Images are decoded and re-encoded (metadata removed); SVG is refused. Returns the blob id to store in the field. Rate limited per principal.", "security": sec.clone(), "parameters": [{"name": "field", "in": "query", "required": true, "schema": {"type": "string", "example": "product.image"}}, {"name": "filename", "in": "query", "required": false, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}, "responses": {"201": ok(json!({"type": "object", "properties": {"id": {"type": "string"}, "content_type": {"type": "string"}, "size": {"type": "integer"}, "width": {"type": "integer"}, "height": {"type": "integer"}}}), "The stored blob."), "400": error_responses()["400"].clone(), "401": error_responses()["401"].clone(), "413": {"description": "Larger than the field allows."}, "415": {"description": "Not an accepted type, or the content is not what the Content-Type says."}, "429": {"description": "Too many uploads."}}}}),
+    );
+    paths.insert(
+        "/api/blobs/{id}".into(),
+        json!({"get": {"operationId": "downloadBlob", "summary": "Download a stored image or file (D60)", "description": "Allowed to a signed-in user who may read a record that holds the blob (or who just uploaded it). Agents get 404: they work with ids and metadata. `w` asks for a cached thumbnail of 320, 640, 960 or 1280 pixels. Strong ETag; files are sent as attachments.", "security": sec.clone(), "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}, {"name": "w", "in": "query", "required": false, "schema": {"type": "integer", "enum": [320, 640, 960, 1280]}}], "responses": {"200": {"description": "The bytes."}, "304": {"description": "Not modified."}, "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}}}),
     );
     let mut schemas = serde_json::Map::new();
     schemas.insert("Error".into(), error_schema());

@@ -339,3 +339,35 @@ description = "Cena za sztukę z podatkiem (w jednostkach podrzędnych waluty)"
 [labels.pl.model.ecommerce_order_line.field.subtotal]
 label = "Suma częściowa"
 description = "Suma pozycji (w jednostkach podrzędnych waluty, wpisywana, nie obliczana)"
+
+[labels.pl.model.ecommerce_listing.field.image]
+label = "Obraz"
+description = "Główne zdjęcie produktu (PNG, JPEG, WebP lub GIF, do 5 MiB; przy wysyłaniu kodowane ponownie, bez metadanych)"
+
+[labels.pl.model.ecommerce_listing.field.image_alt]
+label = "Opis obrazu"
+description = "Tekst opisujący główne zdjęcie dla osób, które go nie widzą"
+
+[labels.pl.model.ecommerce_listing_image]
+name = "Zdjęcie oferty"
+description = "Dodatkowe zdjęcie oferty do galerii"
+
+[labels.pl.model.ecommerce_listing_image.field.listing_id]
+label = "Oferta"
+description = "Oferta, do której należy zdjęcie; jest widoczne tylko, gdy oferta jest opublikowana"
+
+[labels.pl.model.ecommerce_listing_image.field.image]
+label = "Obraz"
+description = "Zdjęcie (PNG, JPEG, WebP lub GIF, do 5 MiB)"
+
+[labels.pl.model.ecommerce_listing_image.field.alt]
+label = "Opis"
+description = "Tekst opisujący zdjęcie dla osób, które go nie widzą"
+
+[labels.pl.model.ecommerce_listing_image.field.sequence]
+label = "Kolejność"
+description = "Kolejność w galerii, najmniejsza pierwsza"
+
+[labels.pl.model.ecommerce_listing_image.field.published]
+label = "Opublikowane"
+description = "Czy zdjęcie jest pokazywane w sklepie"

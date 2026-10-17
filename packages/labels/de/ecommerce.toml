@@ -339,3 +339,35 @@ description = "Preis pro Stück inklusive Steuer (kleinste Währungseinheit)"
 [labels.de.model.ecommerce_order_line.field.subtotal]
 label = "Zwischensumme"
 description = "Positionssumme (kleinste Währungseinheit, erfasst, nicht berechnet)"
+
+[labels.de.model.ecommerce_listing.field.image]
+label = "Bild"
+description = "Hauptbild des Produkts (PNG, JPEG, WebP oder GIF, bis 5 MiB; wird beim Hochladen neu kodiert und von Metadaten befreit)"
+
+[labels.de.model.ecommerce_listing.field.image_alt]
+label = "Bildbeschreibung"
+description = "Text, der das Hauptbild für Menschen beschreibt, die es nicht sehen können"
+
+[labels.de.model.ecommerce_listing_image]
+name = "Produktbild"
+description = "Ein zusätzliches Bild eines Angebots für die Galerie"
+
+[labels.de.model.ecommerce_listing_image.field.listing_id]
+label = "Angebot"
+description = "Das Angebot, zu dem das Bild gehört; es wird nur gezeigt, solange das Angebot veröffentlicht ist"
+
+[labels.de.model.ecommerce_listing_image.field.image]
+label = "Bild"
+description = "Das Bild (PNG, JPEG, WebP oder GIF, bis 5 MiB)"
+
+[labels.de.model.ecommerce_listing_image.field.alt]
+label = "Beschreibung"
+description = "Text, der das Bild für Menschen beschreibt, die es nicht sehen können"
+
+[labels.de.model.ecommerce_listing_image.field.sequence]
+label = "Reihenfolge"
+description = "Reihenfolge in der Galerie, kleinste zuerst"
+
+[labels.de.model.ecommerce_listing_image.field.published]
+label = "Veröffentlicht"
+description = "Ob das Bild im Shop gezeigt wird"

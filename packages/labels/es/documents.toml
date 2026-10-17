@@ -88,3 +88,7 @@ description = "Convertir un documento en borrador en la versión vigente"
 [labels.es.model.documents_document.action.archive]
 label = "Archivar"
 description = "Archivar un documento publicado (solo responsables)"
+
+[labels.es.model.documents_document.field.attachment]
+label = "Archivo"
+description = "El archivo del documento (PDF, imagen, texto, hoja de cálculo o documento de ofimática, hasta 25 MiB); se entrega solo como descarga a quienes pueden leer el registro"

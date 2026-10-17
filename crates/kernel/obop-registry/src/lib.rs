@@ -43,6 +43,11 @@ pub enum FieldKind {
     Select(Arc<[&'static str]>),
     /// JSON string: the id of an existing record of the named model.
     Ref(&'static str),
+    /// JSON string: the id (64 lowercase hex characters, the SHA-256) of a stored image blob
+    /// (D60). The number is the largest accepted upload in bytes; 0 means the default.
+    Image(u32),
+    /// As `Image`, for a document kept byte for byte and served as a download.
+    File(u32),
 }
 
 impl FieldKind {
@@ -57,6 +62,8 @@ impl FieldKind {
             Self::Bool => "bool",
             Self::Select(_) => "select",
             Self::Ref(_) => "ref",
+            Self::Image(_) => "image",
+            Self::File(_) => "file",
         }
     }
 
@@ -64,7 +71,16 @@ impl FieldKind {
     pub fn is_known(name: &str) -> bool {
         matches!(
             name,
-            "text" | "longtext" | "number" | "money" | "date" | "bool" | "select" | "ref"
+            "text"
+                | "longtext"
+                | "number"
+                | "money"
+                | "date"
+                | "bool"
+                | "select"
+                | "ref"
+                | "image"
+                | "file"
         )
     }
 
@@ -94,7 +110,31 @@ impl FieldKind {
             Self::Bool => "true or false".into(),
             Self::Select(o) => format!("one of: {}", o.join(", ")),
             Self::Ref(t) => format!("the id of an existing {t} record"),
+            Self::Image(_) => "the id of an uploaded image (upload it with POST /api/blobs)".into(),
+            Self::File(_) => "the id of an uploaded file (upload it with POST /api/blobs)".into(),
         }
+    }
+
+    /// The largest upload in bytes this field accepts (`image` and `file` only): the field's own
+    /// limit, else 5 MiB for an image and 25 MiB for a file, never more than 64 MiB.
+    pub fn max_bytes(&self) -> Option<usize> {
+        let cap = |n: u32, default: usize| {
+            if n == 0 {
+                default
+            } else {
+                (n as usize).min(64 * 1024 * 1024)
+            }
+        };
+        match self {
+            Self::Image(n) => Some(cap(*n, 5 * 1024 * 1024)),
+            Self::File(n) => Some(cap(*n, 25 * 1024 * 1024)),
+            _ => None,
+        }
+    }
+
+    /// Whether the field holds a blob id.
+    pub fn is_blob(&self) -> bool {
+        matches!(self, Self::Image(_) | Self::File(_))
     }
 }
 

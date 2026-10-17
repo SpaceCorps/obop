@@ -173,7 +173,14 @@ impl PublicSpec {
                     ));
                 }
                 if f.personal_data {
-                    return Err(format!("{at}.{n}: personal data can never be public"));
+                    return Err(format!(
+                        "{at}.{n}: personal data can never be public{}",
+                        if f.kind.is_blob() {
+                            " (a photo of a person is personal data: mark the field personal_data and keep it private)"
+                        } else {
+                            ""
+                        }
+                    ));
                 }
                 if f.permission_group != def.read_group {
                     return Err(format!(
@@ -207,6 +214,11 @@ impl PublicSpec {
                     return Err(format!(
                         "{at}.{n}: a public form cannot collect class {} data",
                         f.class.map_or("none", |c| c.as_str())
+                    ));
+                }
+                if f.kind.is_blob() {
+                    return Err(format!(
+                        "{at}.{n}: visitors cannot upload images or files (D60)"
                     ));
                 }
             }
@@ -627,6 +639,60 @@ impl PublicApi {
             record: pick(&id, &rec, &r.fields),
             children,
         }))
+    }
+
+    /// Whether anybody may fetch this blob: it is held, through a field its package declared
+    /// public, by a record that is published and whose required parents (a gallery image's
+    /// listing) are published too. A blob that is held only by private records, or only waits as
+    /// an upload, is not public, and neither is one that merely shares its bytes with a public
+    /// one under another owner's name.
+    fn blob_is_public(&self, info: &obop_storage::blob::BlobInfo) -> bool {
+        info.owners.iter().any(|o| {
+            let Some(spec) = self.spec(&o.model) else {
+                return false;
+            };
+            let Some(read) = spec.read.as_ref() else {
+                return false;
+            };
+            if !read.fields.contains(&o.field) {
+                return false;
+            }
+            let Ok(Some(rec)) = self.store.backend.get(&o.model, &o.record) else {
+                return false;
+            };
+            if !spec.published(&rec) {
+                return false;
+            }
+            let Some(def) = self.def(&o.model) else {
+                return false;
+            };
+            def.fields.iter().filter(|f| f.required).all(|f| match f.kind {
+                FieldKind::Ref(to) => match (self.spec(to), rec.get(f.name).and_then(J::as_str)) {
+                    (Some(ts), Some(tid)) if ts.read.is_some() => {
+                        matches!(self.store.backend.get(to, tid), Ok(Some(t)) if ts.published(&t))
+                    }
+                    _ => true,
+                },
+                _ => true,
+            })
+        })
+    }
+
+    /// Width, height and type of a publicly visible blob (for `width`/`height` attributes).
+    pub fn public_blob_info(&self, id: &str) -> Option<(Option<u32>, Option<u32>, String)> {
+        let info = self.store.blobs.info(id).ok().flatten()?;
+        self.blob_is_public(&info)
+            .then_some((info.width, info.height, info.content_type))
+    }
+
+    /// A blob for an anonymous visitor, or `None` (answered as not found) unless
+    /// [`Self::blob_is_public`]. `width` asks for a cached thumbnail.
+    pub fn public_blob(&self, id: &str, width: Option<u32>) -> Option<crate::blobs::Served> {
+        let info = self.store.blobs.info(id).ok().flatten()?;
+        if !self.blob_is_public(&info) {
+            return None;
+        }
+        crate::blobs::serve(&self.store, &info, width).ok()
     }
 
     /// The `site` object of the instance settings: the only settings the public side reads.

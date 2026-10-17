@@ -266,3 +266,19 @@ description = "Contenido de la entrada traducido en Markdown"
 [labels.es.model.website_blog_post_translation.field.published]
 label = "Publicado"
 description = "Indica si la traducción se muestra; solo es accesible mientras su entrada esté publicada"
+
+[labels.es.model.website_page.field.cover_image]
+label = "Imagen de portada"
+description = "Imagen en la parte superior de la página y en las vistas previas de enlaces (PNG, JPEG, WebP o GIF, se recodifica al subirla)"
+
+[labels.es.model.website_page.field.cover_alt]
+label = "Descripción de la portada"
+description = "Texto que describe la imagen de portada para quienes no pueden verla"
+
+[labels.es.model.website_blog_post.field.cover_image]
+label = "Imagen de portada"
+description = "Imagen en la parte superior de la entrada y en las vistas previas de enlaces (PNG, JPEG, WebP o GIF, se recodifica al subirla)"
+
+[labels.es.model.website_blog_post.field.cover_alt]
+label = "Descripción de la portada"
+description = "Texto que describe la imagen de portada para quienes no pueden verla"

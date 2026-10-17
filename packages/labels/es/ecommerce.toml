@@ -339,3 +339,35 @@ description = "Precio por unidad con impuestos incluidos (unidad menor de la mon
 [labels.es.model.ecommerce_order_line.field.subtotal]
 label = "Subtotal"
 description = "Total de la línea (unidad menor de la moneda, introducido, no calculado)"
+
+[labels.es.model.ecommerce_listing.field.image]
+label = "Imagen"
+description = "Imagen principal del producto (PNG, JPEG, WebP o GIF, hasta 5 MiB; se recodifica y se eliminan sus metadatos al subirla)"
+
+[labels.es.model.ecommerce_listing.field.image_alt]
+label = "Descripción de la imagen"
+description = "Texto que describe la imagen principal para quienes no pueden verla"
+
+[labels.es.model.ecommerce_listing_image]
+name = "Imagen de la oferta"
+description = "Una imagen adicional de una oferta para su galería"
+
+[labels.es.model.ecommerce_listing_image.field.listing_id]
+label = "Oferta"
+description = "La oferta a la que pertenece la imagen; solo se muestra mientras la oferta esté publicada"
+
+[labels.es.model.ecommerce_listing_image.field.image]
+label = "Imagen"
+description = "La imagen (PNG, JPEG, WebP o GIF, hasta 5 MiB)"
+
+[labels.es.model.ecommerce_listing_image.field.alt]
+label = "Descripción"
+description = "Texto que describe la imagen para quienes no pueden verla"
+
+[labels.es.model.ecommerce_listing_image.field.sequence]
+label = "Orden"
+description = "Orden en la galería, el menor primero"
+
+[labels.es.model.ecommerce_listing_image.field.published]
+label = "Publicado"
+description = "Si la imagen se muestra en la tienda"
