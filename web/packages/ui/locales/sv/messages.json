@@ -85,5 +85,8 @@
   "Use an authenticator code": "Använd en kod från appen",
   "Verify": "Verifiera",
   "Violet": "Violett",
-  "You are running low on recovery codes": "Du har nästan slut på återställningskoder"
+  "You are running low on recovery codes": "Du har nästan slut på återställningskoder",
+  "Enter the 6-digit code from your authenticator app, or use a passkey.": "Ange den sexsiffriga koden från din autentiseringsapp eller använd en passkey.",
+  "Use a passkey": "Använd en passkey",
+  "Use a passkey you added to this account to finish signing in.": "Använd en passkey som du lagt till på det här kontot för att slutföra inloggningen."
 }

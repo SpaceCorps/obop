@@ -196,7 +196,7 @@ test.describe("Customize: marketplace, module builder and theme", () => {
       await sam.goto("/");
       await sam.getByLabel("Username").fill("sam");
       await sam.getByLabel("Password").fill("e2e sam password 1");
-      await sam.getByRole("button", { name: "Sign in" }).click();
+      await sam.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(sam.locator(".topbar")).toBeVisible();
       await expect(sam.locator("html")).toHaveAttribute("style", /--accent: #d6336c/);
       await expect(sam.locator("html")).toHaveAttribute("style", /--radius: 4px/);

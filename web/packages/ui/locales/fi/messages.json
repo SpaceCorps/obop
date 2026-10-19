@@ -85,5 +85,8 @@
   "Use an authenticator code": "Käytä sovelluksen koodia",
   "Verify": "Vahvista",
   "Violet": "Violetti",
-  "You are running low on recovery codes": "Palautuskoodit alkavat loppua"
+  "You are running low on recovery codes": "Palautuskoodit alkavat loppua",
+  "Enter the 6-digit code from your authenticator app, or use a passkey.": "Syötä todennussovelluksen 6-numeroinen koodi tai käytä pääsyavainta.",
+  "Use a passkey": "Käytä pääsyavainta",
+  "Use a passkey you added to this account to finish signing in.": "Viimeistele kirjautuminen käyttämällä tilillesi lisättyä pääsyavainta."
 }

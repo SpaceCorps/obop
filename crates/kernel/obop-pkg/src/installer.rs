@@ -2137,7 +2137,7 @@ pub fn admin_module() -> Module {
             // Written by obop-auth (D53), append-only: only get, list and search exist.
             ModelDef {
                 name: "security_event",
-                description: "A sign-in security event: two-factor enrolment, use of a recovery code, reset or lockout. Append-only",
+                description: "A sign-in security event: two-factor enrolment, passkeys, use of a recovery code, reset or lockout. Append-only",
                 read_group: ADMIN_GROUP,
                 write_group: ADMIN_GROUP,
                 access: None,
@@ -2145,7 +2145,7 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
                     ),
                     f(
                         "actor",

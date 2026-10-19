@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { LanguageSelect, TwoFactorStep, t, twoFactorMessage, useI18n, type Factor } from "@obop/ui";
 import { login, loginMfa } from "./api.ts";
+import { passkeyMessage } from "./Passkeys.tsx";
+import { passkeysSupported, signInWithPasskey } from "./passkeys.ts";
 import { Button, Icon, Input, Logo, Notice } from "./ui.tsx";
 
 /**
  * Sign in. A person with two-factor authentication on sees a second step after the password
- * (D53): the code from their app, or a recovery code.
+ * (D53): the code from their app, a recovery code or a passkey (D65). A person who allowed it can
+ * also sign in with a passkey alone.
  */
 export function SignIn({
   onDone,
@@ -15,7 +18,10 @@ export function SignIn({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState<{ mfaToken: string; user: string } | null>(null);
+  const [step, setStep] = useState<{ mfaToken: string; user: string; methods: string[] } | null>(
+    null,
+  );
+  const [asking, setAsking] = useState(false);
   const i18n = useI18n();
 
   async function password(e: React.FormEvent<HTMLFormElement>) {
@@ -27,10 +33,45 @@ export function SignIn({
     const r = await login(user, String(f.get("password")));
     setBusy(false);
     if (r.kind === "session") onDone(r.token, user, r.enrolment);
-    else if (r.kind === "mfa") setStep({ mfaToken: r.mfaToken, user });
+    else if (r.kind === "mfa") setStep({ mfaToken: r.mfaToken, user, methods: r.methods });
     else if (r.status === 429) setError(twoFactorMessage({ status: 429, code: "rate_limited" }));
     else if (r.status === 0) setError(twoFactorMessage({ status: 0, code: "network" }));
     else setError(t("Invalid username or password"));
+  }
+
+  /** Sign in with a passkey alone (the person allowed it in Security). */
+  async function passwordless() {
+    setAsking(true);
+    setError(null);
+    const r = await signInWithPasskey();
+    setAsking(false);
+    if (r.ok) onDone(r.value.token, r.value.user ?? "", !!r.value.mfa_enrolment_required);
+    else if (r.kind === "cancelled") setError(passkeyMessage(r));
+    else if (r.kind === "server" && r.status === 429) setError(passkeyMessage(r));
+    else
+      setError(
+        r.kind === "server"
+          ? t(
+              "That passkey could not be used to sign in. It may not be set up for signing in without a password. Use your password instead.",
+            )
+          : passkeyMessage(r),
+      );
+  }
+
+  /** The second step with a passkey. */
+  async function passkeyStep(): Promise<string | null> {
+    if (!step) return null;
+    const r = await signInWithPasskey(step.mfaToken);
+    if (r.ok) {
+      onDone(r.value.token, step.user, !!r.value.mfa_enrolment_required);
+      return null;
+    }
+    if (r.kind === "server" && r.code === "mfa_expired") {
+      setStep(null);
+      setError(twoFactorMessage(r));
+      return null;
+    }
+    return passkeyMessage(r);
   }
 
   async function code(factor: Factor): Promise<string | null> {
@@ -76,6 +117,8 @@ export function SignIn({
           </h1>
           <TwoFactorStep
             key={step.mfaToken}
+            methods={step.methods}
+            onPasskey={passkeysSupported() ? passkeyStep : undefined}
             onSubmit={code}
             onBack={() => {
               setStep(null);
@@ -105,6 +148,11 @@ export function SignIn({
           <Button type="submit" variant="primary" size="lg" loading={busy}>
             {t("Sign in")}
           </Button>
+          {passkeysSupported() && (
+            <Button icon="key" size="lg" loading={asking} onClick={() => void passwordless()}>
+              {t("Sign in with a passkey")}
+            </Button>
+          )}
           <LanguageSelect value={i18n.lang} onChange={(l) => void i18n.setLanguage(l)} />
         </form>
       )}

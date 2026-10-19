@@ -11,7 +11,7 @@ test.describe("accessibility smoke", () => {
     scratchModule,
   }) => {
     await page.goto("/");
-    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
     expect(await unnamedControls(page), "sign-in").toEqual([]);
 
     const model = await scratchModule({

@@ -85,5 +85,8 @@
   "Use an authenticator code": "machine-drafted",
   "Verify": "machine-drafted",
   "Violet": "machine-drafted",
-  "You are running low on recovery codes": "machine-drafted"
+  "You are running low on recovery codes": "machine-drafted",
+  "Enter the 6-digit code from your authenticator app, or use a passkey.": "machine-drafted",
+  "Use a passkey": "machine-drafted",
+  "Use a passkey you added to this account to finish signing in.": "machine-drafted"
 }

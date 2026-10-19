@@ -53,7 +53,7 @@ test found, or a limit the docs state.
 | E4 | New instances use `*.sliplane.app`; per-instance `obop.dev` subdomains need a wildcard DNS record | open (needs DNS) |
 | E5 | `www.obop.dev` has no record | open (needs DNS) |
 | E6 | Google and Microsoft connector adapters are definition-only; other adapters were tested only against local stand-ins | open |
-| E7 | WebAuthn / passkeys; MCP spec 2026-07-28 | open |
+| E7 | WebAuthn / passkeys; MCP spec 2026-07-28 | passkeys done with limits (D65; exact limits below; not tried on real authenticators); MCP 2026-07-28 open |
 
 ### E1 in detail: the OAuth sign-in for MCP clients (D64)
 
@@ -64,13 +64,34 @@ Built: metadata (RFC 8414, RFC 9728, `WWW-Authenticate` with `resource_metadata`
 | E1a | **Never tried against the real Claude Desktop, claude.ai or Claude Code.** Tested with our own client (Rust over the router, Playwright in Chrome). How the real apps register, which redirect URIs and parameters they send and how they react to a refusal is from the specifications | open (needs a reachable instance and the apps) |
 | E1b | One scope only: the groups the person ticks. No per-command or per-company scopes, no step-up for sensitive groups | by design |
 | E1c | Open registration, so an application can pose under a familiar name; the page shows the redirect host and says obop cannot verify who runs it. No Client ID Metadata Documents, no allow-list of known clients | accepted; allow-list open |
-| E1d | The sign-in asks for the password again every time (no single sign-on from an open back office, no passkeys) | by design (D53) |
+| E1d | The sign-in asks for the password again every time (no single sign-on from an open back office); a passkey can be used there as the second step or alone (D65) | by design (D53) |
 | E1e | An administrator cannot list or revoke other people's connected apps; the person can, and the security log shows every event | open |
 | E1f | A password change does not end connected apps (as with agent tokens); disabling the account does | by design |
 | E1g | Changing `OBOP_PUBLIC_URL` ends every connected app (the audience changes); behind a proxy without it the address comes from `Host` and `X-Forwarded-Proto` | by design |
 | E1h | Exactly one redirect rule is looser than exact match: a loopback `http` URI may use any port (RFC 8252). A request without `resource` is bound to `/mcp` anyway, for clients written before RFC 8707 | by design |
 | E1i | The six translations of the consent page, the Connected apps strings and the docs are machine-drafted | open (D7) |
 | E1j | Rate limits are fixed windows, so a burst at the edge may pass twice the limit | accepted |
+
+### E7 in detail: passkeys (D65) and MCP 2026-07-28
+
+**Passkeys, built.** A second factor beside (or instead of) the authenticator app, satisfying the `platform.admin` policy; optional passwordless sign-in for a person who allowed it, with a passkey that verified them; registration and authentication ceremonies in Rust (`obop-auth`, `ring` for ES256, EdDSA and RS256, attestation `none`); origin and RP id from `OBOP_PUBLIC_URL` or the request; single-use two-minute challenges in the shared store; sign-counter clone detection; a list with names and last use, add, rename and remove with the password again; the last second factor kept when the policy requires one; the break-glass reset and the administrator's reset also remove passkeys; audit events; rate limits; the same sign-in on the OAuth pages with one script allowed by hash; the Security panel and the sign-in step in seven languages (the six translations are machine-drafted).
+
+| # | Limit | Status |
+|---|-------|--------|
+| E7a | **Never tried on a real authenticator or browser other than Chrome:** no phone, Touch ID or Windows Hello, security key, Safari, Firefox, synced passkey manager or cross-device sign-in. Tested with a software authenticator in Rust (ES256, EdDSA, RS256, every refusal) and Chrome's virtual authenticator in Playwright. Real devices differ in counters, flags, transports and `credProps` | open (needs devices) |
+| E7b | Attestation `none` only; no restriction by make of authenticator, no metadata service | by design |
+| E7c | No conditional-UI autofill and no username hint: a non-discoverable key (some hardware keys) works only as a second step | open |
+| E7d | One RP id per credential: changing `OBOP_PUBLIC_URL` to another host ends every passkey; no related origins, no RP id parent | by design |
+| E7e | Passkeys exist on instances, not on the control plane's own sign-in (`/api/platform`) | open |
+| E7f | No step-up for sensitive actions (AU5) and no "remember this browser"; the proof only stands in for a code | open |
+| E7g | Passkeys cannot be held or used by agent tokens | by design (D18, D53) |
+
+**MCP spec 2026-07-28: not built; what the repo documents.** `/mcp` serves Streamable HTTP with the handshake revisions 2025-03-26 to 2025-11-25 and sessions that hold the masking vault (D51); the register states that 2026-07-28 is deferred, not refused, because its per-request model has no place for the session vault. What the research corpus records as required of a 2026-07-28 server (docs/research/16-ai-native-erp.md 3.1 and 3.2; docs/spec/ai.md 4.1; D18 plans it through `rmcp` 3.5.0) is: no `initialize` handshake and no `Mcp-Session-Id`; every request carrying `io.modelcontextprotocol/protocolVersion` and the client capabilities, with `UnsupportedProtocolVersionError` for an unknown version; a mandatory `server/discover`; `Mcp-Method` and `Mcp-Name` headers; multi round-trip requests with a protected `requestState` replacing server-initiated requests; Tasks as the extension `io.modelcontextprotocol/tasks`; deterministic `tools/list`; Client ID Metadata Documents preferred and dynamic registration deprecated (obop still offers only the latter, D64); and compatibility with 2025-11-25 clients. None of this was started in E7 and none of it is invented here; the open work is the stateless masking vault (token stability keyed on the token, as REST does), `server/discover`, the per-request protocol fields, Client ID Metadata Documents and the `rmcp` migration.
+
+| # | Limit | Status |
+|---|-------|--------|
+| E7h | `/mcp` does not speak MCP 2026-07-28 (stateless, `server/discover`, MRTR, Tasks); clients that speak only that revision cannot use it. The real clients' behaviour is unmeasured (the corpus expects many to keep speaking 2025-11-25) | open |
+| E7i | No Client ID Metadata Documents; registration is open and dynamic (E1c) | open |
 
 ## F. Quality gate
 | # | Issue | Status |

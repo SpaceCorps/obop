@@ -288,8 +288,8 @@ async function send(token: string, path: string, body: object): Promise<Reply> {
 
 /** What a sign-in step produced (D53). */
 export type LoginResult =
-  | { kind: "session"; token: string; enrolment: boolean }
-  | { kind: "mfa"; mfaToken: string }
+  | { kind: "session"; token: string; enrolment: boolean; user?: string }
+  | { kind: "mfa"; mfaToken: string; methods: string[] }
   | { kind: "error"; status: number; code: string };
 
 async function loginStep(path: string, body: object): Promise<LoginResult> {
@@ -304,12 +304,19 @@ async function loginStep(path: string, body: object): Promise<LoginResult> {
       mfa_required?: boolean;
       mfa_token?: string;
       mfa_enrolment_required?: boolean;
+      methods?: string[];
+      user?: string;
       code?: string;
     };
     if (res.ok && json.mfa_required && json.mfa_token)
-      return { kind: "mfa", mfaToken: json.mfa_token };
+      return { kind: "mfa", mfaToken: json.mfa_token, methods: json.methods ?? ["totp"] };
     if (res.ok && json.token)
-      return { kind: "session", token: json.token, enrolment: !!json.mfa_enrolment_required };
+      return {
+        kind: "session",
+        token: json.token,
+        enrolment: !!json.mfa_enrolment_required,
+        ...(json.user ? { user: json.user } : {}),
+      };
     return { kind: "error", status: res.status, code: json.code ?? "" };
   } catch {
     return { kind: "error", status: 0, code: "network" };

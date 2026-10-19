@@ -16,11 +16,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 mod account;
 mod mfa;
 mod oauth;
+mod passkey;
 pub mod seal;
 pub mod totp;
+pub mod webauthn;
 
 pub use account::{MIN_PASSWORD_CHARS, suggest_temporary_password};
 pub use mfa::{AuthConfig, EVENT_TABLE};
+pub use passkey::{CHALLENGE_SECS, MAX_PASSKEYS, PASSKEY_TABLE, ceremony_site_ok};
 
 const SESSION_SECS: u64 = 12 * 3600;
 const MAX_FAILURES: u32 = 5;
@@ -328,6 +331,10 @@ impl Authenticator for Auth {
         Some(self)
     }
 
+    fn passkeys(&self) -> Option<&dyn obop_commands::PasskeyApi> {
+        Some(self)
+    }
+
     fn issue_agent_token(
         &self,
         owner: &Principal,
@@ -349,6 +356,8 @@ impl Authenticator for Auth {
 
 #[cfg(test)]
 mod mfa_tests;
+#[cfg(test)]
+mod passkey_tests;
 
 #[cfg(test)]
 mod tests {

@@ -18,6 +18,9 @@ export type TwoFactorStatus = {
   is_admin?: boolean;
   require_admins?: boolean;
   require_all?: boolean;
+  /** Passkeys (D65): how many, and whether any second factor is on (an app or a passkey). */
+  passkeys?: number;
+  second_factor?: boolean;
 };
 export type TwoFactorBegin = { secret: string; uri: string; issuer: string; account: string };
 export type TwoFactorFail = { ok: false; status: number; code: string };
@@ -101,19 +104,29 @@ export function groupKey(secret: string): string {
 /* ============ The second sign-in step ============ */
 
 /**
- * "Enter the 6-digit code", with a way to use a recovery code instead. `onSubmit` resolves to an
- * error message to show, or null when it went through (the caller moves on).
+ * "Enter the 6-digit code", with a way to use a recovery code instead, and a passkey when the
+ * person has one (D65). `methods` says what can finish this sign-in (`totp`, `passkey`).
+ * `onSubmit` and `onPasskey` resolve to an error message to show, or null when it went through
+ * (the caller moves on).
  */
 export function TwoFactorStep({
   onSubmit,
   onBack,
+  methods = ["totp"],
+  onPasskey,
 }: {
   onSubmit: (factor: Factor) => Promise<string | null>;
   onBack: () => void;
+  methods?: string[];
+  onPasskey?: () => Promise<string | null>;
 }) {
+  const totp = methods.includes("totp");
+  const passkey = methods.includes("passkey") && !!onPasskey;
   const [recovery, setRecovery] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const showCode = totp || recovery;
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const value = String(new FormData(e.currentTarget).get("code") ?? "").trim();
@@ -124,6 +137,14 @@ export function TwoFactorStep({
     setBusy(false);
     if (err) setError(err);
   }
+  async function usePasskey() {
+    if (!onPasskey) return;
+    setAsking(true);
+    setError(null);
+    const err = await onPasskey();
+    setAsking(false);
+    if (err) setError(err);
+  }
   return (
     <form className="tf-step" onSubmit={(e) => void submit(e)}>
       <div className="signin-head">
@@ -131,39 +152,64 @@ export function TwoFactorStep({
         <p className="hint">
           {recovery
             ? t("Enter one of your recovery codes. Each one works only once.")
-            : t("Enter the 6-digit code from your authenticator app.")}
+            : totp
+              ? passkey
+                ? t("Enter the 6-digit code from your authenticator app, or use a passkey.")
+                : t("Enter the 6-digit code from your authenticator app.")
+              : t("Use a passkey you added to this account to finish signing in.")}
         </p>
       </div>
-      {recovery ? (
-        <Input
-          key="recovery"
-          label={t("Recovery code")}
-          name="code"
-          autoComplete="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-          required
+      {passkey && !recovery && !totp && (
+        <Button
+          variant="primary"
+          size="lg"
+          icon="key"
+          loading={asking}
           autoFocus
-          error={error ?? undefined}
-        />
-      ) : (
-        <Input
-          key="code"
-          label={t("6-digit code")}
-          name="code"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          pattern="[0-9 ]*"
-          maxLength={7}
-          enterKeyHint="done"
-          required
-          autoFocus
-          error={error ?? undefined}
-        />
+          onClick={() => void usePasskey()}
+        >
+          {t("Use a passkey")}
+        </Button>
       )}
-      <Button type="submit" variant="primary" size="lg" loading={busy}>
-        {t("Verify")}
-      </Button>
+      {showCode &&
+        (recovery ? (
+          <Input
+            key="recovery"
+            label={t("Recovery code")}
+            name="code"
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            required
+            autoFocus
+            error={error ?? undefined}
+          />
+        ) : (
+          <Input
+            key="code"
+            label={t("6-digit code")}
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9 ]*"
+            maxLength={7}
+            enterKeyHint="done"
+            required
+            autoFocus
+            error={error ?? undefined}
+          />
+        ))}
+      {!showCode && error && <Notice tone="danger" title={error} />}
+      {showCode && (
+        <Button type="submit" variant="primary" size="lg" loading={busy}>
+          {t("Verify")}
+        </Button>
+      )}
+      {passkey && totp && !recovery && (
+        <Button icon="key" loading={asking} onClick={() => void usePasskey()}>
+          {t("Use a passkey")}
+        </Button>
+      )}
       <div className="tf-links">
         <Button
           variant="ghost"
@@ -173,7 +219,11 @@ export function TwoFactorStep({
             setError(null);
           }}
         >
-          {recovery ? t("Use an authenticator code") : t("Use a recovery code")}
+          {recovery
+            ? totp
+              ? t("Use an authenticator code")
+              : t("Use a passkey")
+            : t("Use a recovery code")}
         </Button>
         <Button variant="ghost" size="sm" onClick={onBack}>
           {t("Back to sign in")}

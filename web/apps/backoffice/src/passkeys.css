@@ -1,0 +1,77 @@
+/* Customize > Security: passkeys (D65). Tokens only; logical properties only. The setup panel
+   shares the .tf and .tf-form look of two-factor authentication. */
+
+.pk-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.pk-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+.pk-row + .pk-row {
+  border-block-start: 1px solid var(--border);
+}
+.pk-row > .icon,
+.pk-row > svg {
+  flex: none;
+  margin-block-start: var(--space-1);
+  color: var(--text-muted);
+}
+.pk-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  flex: 1 1 14rem;
+}
+.pk-name {
+  overflow-wrap: anywhere;
+}
+.pk-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.pk-badges:empty {
+  display: none;
+}
+.pk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+.pk-prove {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.pk-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+@media (max-width: 40rem) {
+  .pk-row {
+    flex-wrap: wrap;
+  }
+  .pk-actions {
+    justify-content: flex-start;
+    inline-size: 100%;
+  }
+}
+.pk-confirmed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

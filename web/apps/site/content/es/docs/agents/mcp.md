@@ -19,7 +19,7 @@ Una instancia sirve el [Model Context Protocol](https://modelcontextprotocol.io/
 
 Claude Desktop, claude.ai y Claude Code pueden conectarse a una instancia sin pegar un token. En la aplicación añade un conector personalizado (custom connector) con la dirección `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, luego `/mcp` y elige autenticar). La aplicación encuentra sola el inicio de sesión y abre en el navegador una página de **tu instancia**. Allí:
 
-1. inicias sesión con tu cuenta de obop e introduces tu código de dos pasos si la cuenta lo tiene;
+1. inicias sesión con tu cuenta de obop e introduces tu código de dos pasos si la cuenta lo tiene (una clave de acceso también sirve, como segundo paso o sola si lo permitiste en Seguridad);
 2. ves qué aplicación lo solicita y a qué dirección volverá el navegador;
 3. marcas los grupos de permisos que cedes, eliges cuánto dura el acceso (1, 7, 30 o 90 días) y pulsas **Permitir**.
 

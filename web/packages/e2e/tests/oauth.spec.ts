@@ -109,12 +109,12 @@ async function connect(
     expect(await unnamedControls(page)).toEqual([]);
     await page.getByLabel("Username").fill(users.sam.name);
     await page.getByLabel("Password").fill("not the password");
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("not right");
   }
   await page.getByLabel("Username").fill(users.sam.name);
   await page.getByLabel("Password").fill(users.sam.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Connect E2E Claude?" })).toBeVisible();
   const groups = page.getByRole("group", { name: /permission groups/ });
   if (opts.inspect) {
@@ -241,7 +241,7 @@ test.describe("MCP authorization (OAuth)", () => {
     await page.goto(authorizeUrl(clientId, challenge, resource));
     await page.getByLabel("Username").fill(users.sam.name);
     await page.getByLabel("Password").fill(users.sam.password);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "Deny" }).click();
     const back = await callback();
     expect(back.searchParams.get("error")).toBe("access_denied");
@@ -270,7 +270,7 @@ test.describe("MCP authorization (OAuth)", () => {
     await expect(page.getByRole("heading", { name: "Zum Fortfahren anmelden" })).toBeVisible();
     await page.getByLabel("Benutzername").fill(users.sam.name);
     await page.getByLabel("Passwort").fill(users.sam.password);
-    await page.getByRole("button", { name: "Anmelden" }).click();
+    await page.getByRole("button", { name: "Anmelden", exact: true }).click();
     await expect(page.getByRole("heading", { name: "E2E Sprache verbinden?" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Erlauben" })).toBeVisible();
     const overflow = await page.evaluate(

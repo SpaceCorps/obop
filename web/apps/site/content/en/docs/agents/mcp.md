@@ -19,7 +19,7 @@ An instance serves the [Model Context Protocol](https://modelcontextprotocol.io/
 
 Claude Desktop, claude.ai and Claude Code can connect to an instance without a pasted token. In the app add a custom connector with the address `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, then `/mcp` and choose to authenticate). The app finds the sign-in by itself and opens a page of **your instance** in the browser. There you:
 
-1. sign in with your obop account, and enter your two-factor code if the account has one;
+1. sign in with your obop account, and enter your two-factor code if the account has one (a passkey works too, as the second step, or on its own if you allowed that in Security);
 2. see which application asks and to which address the browser will return;
 3. tick the permission groups to hand over, choose how long the access lasts (1, 7, 30 or 90 days) and press **Allow**.
 

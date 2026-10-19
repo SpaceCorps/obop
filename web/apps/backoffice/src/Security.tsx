@@ -15,6 +15,7 @@ import {
 } from "@obop/ui";
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
 import { Icon, Logo } from "./ui.tsx";
+import { PasskeysSection } from "./Passkeys.tsx";
 import {
   ConnectedAppsSection,
   PasswordSection,
@@ -38,6 +39,14 @@ const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   login_refused: msg("Sign-in refused"),
   password_change: msg("Password changed"),
   password_change_failed: msg("Wrong password when changing it"),
+  passkey_register: msg("Passkey added"),
+  passkey_rename: msg("Passkey renamed"),
+  passkey_remove: msg("Passkey removed"),
+  passkey_used: msg("Passkey used as second step"),
+  passkey_login: msg("Signed in with a passkey alone"),
+  passkey_failed: msg("Passkey or password refused"),
+  passkey_clone: msg("Passkey refused: it may have been copied"),
+  passkey_passwordless: msg("Signing in with a passkey alone changed"),
   password_reset: msg("Password reset by an administrator"),
   sessions_revoked: msg("Sessions signed out"),
   user_disable: msg("Account disabled"),
@@ -82,7 +91,18 @@ export function SecurityTab({
   return (
     <div className="stack gap-lg security-tab">
       <TwoFactorPanel api={api} notify={notify} onChanged={() => setRefreshKey((k) => k + 1)} />
-      <PasswordSection token={token} twoFactor={!!policy?.enabled} notify={notify} />
+      <PasskeysSection
+        token={token}
+        notify={notify}
+        onChanged={() => setRefreshKey((k) => k + 1)}
+      />
+      <PasswordSection
+        token={token}
+        twoFactor={!!(policy?.second_factor ?? policy?.enabled)}
+        passkeys={(policy?.passkeys ?? 0) > 0}
+        authenticatorApp={!!policy?.enabled}
+        notify={notify}
+      />
       <SessionsSection
         token={token}
         notify={notify}
@@ -313,6 +333,7 @@ export function EnrolmentGate({
           )}
         </Notice>
         <TwoFactorPanel api={api} onActive={onDone} notify={(text) => setToast(text)} />
+        <PasskeysSection token={token} onAdded={onDone} notify={(text) => setToast(text)} />
         {toast && (
           <p className="hint" role="status">
             <Icon name="check" size={14} /> {toast}

@@ -19,7 +19,7 @@ Instanssi tarjoaa [Model Context Protocolin](https://modelcontextprotocol.io/) *
 
 Claude Desktop, claude.ai ja Claude Code voivat yhdistää instanssiin ilman liitettyä tunnistetta. Lisää sovelluksessa mukautettu liitin (custom connector) osoitteella `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, sitten `/mcp` ja valitse tunnistautuminen). Sovellus löytää kirjautumisen itse ja avaa selaimeen **oman instanssisi** sivun. Siellä:
 
-1. kirjaudut obop-tililläsi ja annat kaksivaiheisen koodin, jos tilillä on sellainen;
+1. kirjaudut obop-tililläsi ja annat kaksivaiheisen koodin, jos tilillä on sellainen (myös pääsyavain käy, toisena vaiheena tai yksinään, jos sallit sen kohdassa Turvallisuus);
 2. näet, mikä sovellus pyytää ja mihin osoitteeseen selain palaa;
 3. valitset luovutettavat käyttöoikeusryhmät, valitset pääsyn keston (1, 7, 30 tai 90 päivää) ja painat **Salli**.
 

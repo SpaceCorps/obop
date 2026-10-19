@@ -24,6 +24,7 @@ process.env.OBOP_E2E_APP_PORT ??= String(await freePort());
 process.env.OBOP_E2E_PLATFORM_PORT ??= String(await freePort());
 process.env.OBOP_E2E_SHOP_PORT ??= String(await freePort());
 process.env.OBOP_E2E_MARKET_PORT ??= String(await freePort());
+process.env.OBOP_E2E_PASSKEY_PORT ??= String(await freePort());
 const app = `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 const platform = `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
 const shop = `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
@@ -70,6 +71,17 @@ export default defineConfig({
     {
       command: "node support/serve.ts app",
       url: `${app}/`,
+      reuseExistingServer: false,
+      gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 60_000,
+    },
+    {
+      // A second instance reached as localhost: passkeys (WebAuthn) need a host name, and the
+      // other instance's public URL is 127.0.0.1.
+      command: "node support/serve.ts passkeys",
+      url: `http://127.0.0.1:${process.env.OBOP_E2E_PASSKEY_PORT}/`,
       reuseExistingServer: false,
       gracefulShutdown: { signal: "SIGTERM", timeout: 5_000 },
       stdout: "pipe",

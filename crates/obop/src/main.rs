@@ -17,6 +17,8 @@ mod modules_tests;
 mod oauth_tests;
 mod ops;
 #[cfg(test)]
+mod passkey_tests;
+#[cfg(test)]
 mod payments_tests;
 #[cfg(test)]
 mod public_site_tests;
@@ -52,7 +54,7 @@ const USAGE: &str = "usage: obop <command>
   sequences backfill [MODEL [FIELD]]            number the records that were created before their sequence field existed
   admin create USER [--groups a,b | --all-groups]
                                                 create a user; the password is read from stdin
-  admin reset-mfa USER --db URL                 break-glass: remove USER's two-factor and sessions (needs database
+  admin reset-mfa USER --db URL                 break-glass: remove USER's two-factor (app and passkeys) and sessions (needs database
                                                 access; writes an audit record); see docs/DEPLOY.md
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)
   platform serve [--addr A] [--static DIR]      the control plane: sign up and get your own instance

@@ -408,6 +408,77 @@ impl OAuth {
         }
     }
 
+    /// Options for a passkey sign-in on the page: the second step of `mfa_token`, or usernameless.
+    pub fn passkey_options(
+        &self,
+        ctx: &obop_commands::WebauthnCtx,
+        id: &str,
+        binder: &str,
+        csrf: &str,
+        mfa_token: Option<&str>,
+    ) -> Result<J, FlowError> {
+        let _ = self.load(id, binder, Some(csrf))?;
+        let api = self.auth.passkeys().ok_or(FlowError::Forbidden)?;
+        api.passkey_login_options(ctx, mfa_token)
+            .map_err(|e| match e {
+                obop_commands::MfaError::Locked(_) => FlowError::Busy(60),
+                _ => FlowError::Forbidden,
+            })
+    }
+
+    /// The browser's answer to a passkey request: signs in without a password, or completes the
+    /// second step of `mfa_token`.
+    pub fn login_passkey(
+        &self,
+        ctx: &obop_commands::WebauthnCtx,
+        id: &str,
+        binder: &str,
+        csrf: &str,
+        mfa_token: Option<&str>,
+        credential: &J,
+    ) -> Result<LoginOut, FlowError> {
+        let mut rec = self.load(id, binder, Some(csrf))?;
+        self.limit(
+            &format!("oauth:rl:login:{}", &sha_hex(&ctx.ip)[..24]),
+            self.cfg.login_per_ip,
+            600_000,
+        )
+        .map_err(|e| FlowError::Busy(e.retry_after.unwrap_or(60)))?;
+        let api = self.auth.passkeys().ok_or(FlowError::Forbidden)?;
+        match api.passkey_login(ctx, mfa_token, credential) {
+            Ok(out) => self.after_login(id, &mut rec, out),
+            Err(obop_commands::MfaError::Locked(_)) => {
+                self.count_attempt(id, &mut rec)?;
+                let _ = self.flow_put(id, &rec);
+                Ok(LoginOut::Failed("err.locked"))
+            }
+            Err(obop_commands::MfaError::Denied(_)) => {
+                self.count_attempt(id, &mut rec)?;
+                let _ = self.flow_put(id, &rec);
+                Ok(match mfa_token {
+                    Some(t) => LoginOut::MfaRetry(t.to_string()),
+                    None => LoginOut::Failed("err.passkey"),
+                })
+            }
+            Err(_) => {
+                self.count_attempt(id, &mut rec)?;
+                let _ = self.flow_put(id, &rec);
+                Ok(LoginOut::Failed(if mfa_token.is_some() {
+                    "err.code_expired"
+                } else {
+                    "err.passkey"
+                }))
+            }
+        }
+    }
+
+    /// What can complete the second step of `mfa_token` (`totp`, `passkey`).
+    pub fn mfa_methods(&self, mfa_token: &str) -> Vec<&'static str> {
+        self.auth
+            .passkeys()
+            .map_or_else(|| vec!["totp"], |p| p.methods(mfa_token))
+    }
+
     fn after_login(&self, id: &str, rec: &mut J, out: LoginOutcome) -> Result<LoginOut, FlowError> {
         match out {
             LoginOutcome::MfaRequired { mfa_token } => Ok(LoginOut::Mfa(mfa_token)),

@@ -22,6 +22,7 @@ pub mod mcp;
 pub mod mfa;
 pub mod oauth;
 pub mod openapi;
+pub(crate) mod passkeys;
 pub mod payments;
 pub mod public;
 pub(crate) mod shared;
@@ -229,11 +230,20 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             "/oauth/authorize/decision",
             post(oauth::decision).layer(body_limit()),
         )
+        .route(
+            "/oauth/authorize/passkey/options",
+            post(oauth::passkey_options).layer(body_limit()),
+        )
+        .route(
+            "/oauth/authorize/passkey",
+            post(oauth::passkey).layer(axum::extract::DefaultBodyLimit::max(32 * 1024)),
+        )
         .route("/api/auth/oauth/grants", get(oauth::list_grants))
         .route(
             "/api/auth/oauth/grants/{id}/revoke",
             post(oauth::revoke_grant),
         )
+        .merge(passkeys::routes())
         .with_state(state.clone())
         .merge(mfa::routes("/api/auth", state.auth.clone()))
 }
@@ -321,7 +331,7 @@ fn login_blocking(s: Arc<HttpState>, body: J) -> Response {
     );
     s.shared.maybe_purge();
     match s.auth.login_step(u, p) {
-        Ok(out) => mfa::outcome(out),
+        Ok(out) => mfa::outcome(Some(&*s.auth), out),
         Err(e) if e.contains("too many") => {
             (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": e}))).into_response()
         }
@@ -672,7 +682,7 @@ fn p_login_blocking(api: Arc<dyn PlatformApi>, b: J) -> Response {
         b["email"].as_str().unwrap_or(""),
         b["password"].as_str().unwrap_or(""),
     ) {
-        Ok(out) => mfa::outcome(out),
+        Ok(out) => mfa::outcome(api.authenticator().as_deref(), out),
         Err(e) if e.contains("too many") => err(StatusCode::TOO_MANY_REQUESTS, e),
         Err(e) => err(StatusCode::UNAUTHORIZED, e),
     }

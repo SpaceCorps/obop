@@ -149,6 +149,42 @@ impl McpState {
         format!("{proto}://{host}")
     }
 
+    /// The origin a browser reports for this instance, and the relying party id that goes with
+    /// it (the host, no port), for WebAuthn (D65). The configured public URL wins; without one,
+    /// behind a proxy you control (`trust_proxy`) the forwarded host and protocol, else `Host`.
+    /// Returns `None` when no host can be told.
+    pub(crate) fn webauthn_origin(
+        &self,
+        h: &HeaderMap,
+        trust_proxy: bool,
+    ) -> Option<(String, String)> {
+        let origin = if self.cfg.public_url.is_none()
+            && trust_proxy
+            && let Some(host) = h
+                .get("x-forwarded-host")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.split(',').next())
+                .map(str::trim)
+                .filter(|v| {
+                    !v.is_empty()
+                        && v.len() <= 255
+                        && v.chars()
+                            .all(|c| c.is_ascii_alphanumeric() || ".-:[]".contains(c))
+                }) {
+            let proto = match h.get("x-forwarded-proto").and_then(|v| v.to_str().ok()) {
+                Some(p) if p.split(',').next().map(str::trim) == Some("https") => "https",
+                _ => "http",
+            };
+            format!("{proto}://{host}")
+        } else {
+            self.base_url(h)
+        };
+        let origin = origin.trim_end_matches('/').to_ascii_lowercase();
+        let (_, authority) = split_origin(&origin)?;
+        let rp_id = host_part(authority).to_string();
+        (!rp_id.is_empty()).then(|| (origin.clone(), rp_id))
+    }
+
     /// Requests per token per minute, counted across all server processes.
     fn rate_ok(&self, token: &str) -> Result<(), u64> {
         if self.cfg.rate_per_minute == 0 {

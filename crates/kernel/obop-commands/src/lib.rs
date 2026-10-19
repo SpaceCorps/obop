@@ -1085,6 +1085,10 @@ pub trait Authenticator: Send + Sync {
     fn mfa(&self) -> Option<&dyn MfaApi> {
         None
     }
+    /// Passkeys (WebAuthn, D65), for authenticators that support them.
+    fn passkeys(&self) -> Option<&dyn PasskeyApi> {
+        None
+    }
     /// Resolve a bearer token and say which audience (resource) it was issued for. Tokens from
     /// the OAuth flow (D64) carry one and work only there; every other token has none.
     fn resolve_with_audience(&self, token: &str) -> Option<(Principal, Option<String>)> {
@@ -1262,6 +1266,108 @@ pub trait MfaApi: Send + Sync {
     ) -> Result<(), MfaError> {
         Err(MfaError::NotFound)
     }
+}
+
+/// Where a WebAuthn ceremony takes place, as the server sees it (D65). The HTTP layer derives it
+/// from the public URL (or, without one, the request) so the origin and the relying party id can
+/// never come from the browser's own claim.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebauthnCtx {
+    /// The relying party id: the host of the origin, no port.
+    pub rp_id: String,
+    /// The origin the browser must report in `clientDataJSON` (scheme, host, port).
+    pub origin: String,
+    /// Shown by the authenticator next to the account.
+    pub rp_name: String,
+    /// The client address, for rate limits.
+    pub ip: String,
+}
+
+/// What a person proves again before a passkey is added, renamed or removed: the password, and
+/// when a second factor is on, a code, a recovery code or a passkey proof given beforehand
+/// (`PasskeyApi::proof`).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Reauth<'a> {
+    pub password: &'a str,
+    pub code: Option<&'a str>,
+    pub recovery_code: Option<&'a str>,
+}
+
+/// Passkey management and sign-in (WebAuthn, D65). Credentials are JSON as the browser's
+/// `PublicKeyCredential` gives them, with every binary field base64url encoded.
+pub trait PasskeyApi: Send + Sync {
+    /// The person's passkeys (names, dates, flags; never anything usable as a credential).
+    fn list(&self, p: &Principal, ctx: &WebauthnCtx) -> Result<serde_json::Value, MfaError>;
+    /// Start adding a passkey: needs the password again (and a second factor when one is on).
+    /// Returns `publicKey` creation options and consumes nothing but the re-authentication.
+    fn register_options(
+        &self,
+        p: &Principal,
+        ctx: &WebauthnCtx,
+        reauth: &Reauth<'_>,
+    ) -> Result<serde_json::Value, MfaError>;
+    /// Finish adding it. The first second factor of a person also returns recovery codes, once.
+    fn register_finish(
+        &self,
+        p: &Principal,
+        session: &str,
+        ctx: &WebauthnCtx,
+        name: &str,
+        credential: &serde_json::Value,
+    ) -> Result<serde_json::Value, MfaError>;
+    fn rename(
+        &self,
+        p: &Principal,
+        id: &str,
+        name: &str,
+        reauth: &Reauth<'_>,
+    ) -> Result<(), MfaError>;
+    /// Remove one; refused when it is the last second factor and the policy requires one.
+    /// Every other session of the person ends.
+    fn remove(
+        &self,
+        p: &Principal,
+        session: &str,
+        id: &str,
+        reauth: &Reauth<'_>,
+    ) -> Result<(), MfaError>;
+    /// Allow or forbid signing in with a passkey alone (user verification required).
+    fn set_passwordless(
+        &self,
+        p: &Principal,
+        on: bool,
+        reauth: &Reauth<'_>,
+    ) -> Result<(), MfaError>;
+    /// `publicKey` request options for proving possession of a passkey inside a session.
+    fn proof_options(
+        &self,
+        p: &Principal,
+        ctx: &WebauthnCtx,
+    ) -> Result<serde_json::Value, MfaError>;
+    /// Verify that assertion; for the next 60 seconds one re-authentication of that person
+    /// accepts it in place of a code.
+    fn proof(
+        &self,
+        p: &Principal,
+        ctx: &WebauthnCtx,
+        credential: &serde_json::Value,
+    ) -> Result<(), MfaError>;
+    /// Request options for signing in: for the second step when `mfa_token` is given, else
+    /// usernameless (discoverable credentials).
+    fn passkey_login_options(
+        &self,
+        ctx: &WebauthnCtx,
+        mfa_token: Option<&str>,
+    ) -> Result<serde_json::Value, MfaError>;
+    /// Verify the assertion: the second step with `mfa_token`, else passwordless sign-in.
+    fn passkey_login(
+        &self,
+        ctx: &WebauthnCtx,
+        mfa_token: Option<&str>,
+        credential: &serde_json::Value,
+    ) -> Result<LoginOutcome, MfaError>;
+    /// The second-step methods a pending sign-in offers: `totp` and `passkey`.
+    fn methods(&self, mfa_token: &str) -> Vec<&'static str>;
 }
 
 pub mod aggregate;

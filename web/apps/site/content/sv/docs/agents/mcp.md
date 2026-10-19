@@ -19,7 +19,7 @@ En instans tillhandahåller [Model Context Protocol](https://modelcontextprotoco
 
 Claude Desktop, claude.ai och Claude Code kan ansluta till en instans utan inklistrad token. Lägg i appen till en egen koppling (custom connector) med adressen `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, sedan `/mcp` och välj att autentisera). Appen hittar inloggningen själv och öppnar en sida på **din instans** i webbläsaren. Där:
 
-1. loggar du in med ditt obop-konto och anger din tvåfaktorskod om kontot har en;
+1. loggar du in med ditt obop-konto och anger din tvåfaktorskod om kontot har en (en passkey fungerar också, som andra steg eller ensam om du tillåtit det under Säkerhet);
 2. ser du vilken applikation som frågar och till vilken adress webbläsaren återvänder;
 3. kryssar du i de behörighetsgrupper som ska lämnas över, väljer hur länge åtkomsten gäller (1, 7, 30 eller 90 dagar) och trycker på **Tillåt**.
 

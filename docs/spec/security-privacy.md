@@ -105,7 +105,7 @@ Parity column: "Community" and "Enterprise" are Odoo's editions. Waves follow se
 |---|---|---|---|
 | AU1 Password login | Argon2id, NIST SP 800-63B-4 policy: 15 characters alone (8 inside MFA), 64+ accepted, no composition rules or rotation, blocklist, throttling [R18 s2] | W0 | Matches Community `auth_password_policy` by name; what that module enforces was not researched (unverified) |
 | AU2 TOTP | RFC 6238 second factor, recovery codes (P0 in D33, shipped in W1) | W1 | Matches Community `auth_totp` |
-| AU3 Passkeys | WebAuthn Level 3 (W3C Recommendation 2026-08-25) via `webauthn-rs` (P0 in D33, shipped in W1) | W1 | Matches `auth_passkey` (Community master) |
+| AU3 Passkeys | WebAuthn (P0 in D33, shipped in W1). Built in D65 without `webauthn-rs` (it needs system OpenSSL): a small verified implementation over `ring`, attestation `none`, ES256, EdDSA and RS256, table `auth_passkey` | W1 | Matches `auth_passkey` (Community master) |
 | AU4 Sessions | Opaque, server-side, revocable, idle and absolute timeout, device list, revoke-all | W0 | Partial (`auth_timeout`); beyond |
 | AU5 Step-up | Fresh passkey or TOTP for the sensitive actions listed in 4.1 | W1 | Beyond |
 | AU6 OIDC | Single sign-on against any OIDC IdP | W1 | Matches `auth_oauth` |

@@ -28,7 +28,7 @@ pub(crate) const MAX_BODY: usize = 16 * 1024;
 
 /// The address rate limits are keyed on: the peer, or behind a trusted proxy the nearest
 /// `X-Forwarded-For` entry (the same rule as the public site).
-fn client_ip(s: &HttpState, parts: &Parts) -> String {
+pub(crate) fn client_ip(s: &HttpState, parts: &Parts) -> String {
     if s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed)
         && let Some(v) = parts
             .headers
@@ -510,12 +510,18 @@ fn after_login(st: &Step, out: Result<LoginOut, FlowError>) -> Response {
     let lang = ctx.lang.clone();
     match out {
         Ok(LoginOut::Consent) => html(StatusCode::OK, page::consent_page(&ctx, None), None),
-        Ok(LoginOut::Mfa(t)) => html(StatusCode::OK, page::mfa_page(&ctx, &t, None), None),
-        Ok(LoginOut::MfaRetry(t)) => html(
-            StatusCode::OK,
-            page::mfa_page(&ctx, &t, Some("err.code")),
-            None,
-        ),
+        Ok(LoginOut::Mfa(t)) => {
+            let pk = st.o.mfa_methods(&t).contains(&"passkey");
+            html(StatusCode::OK, page::mfa_page(&ctx, &t, None, pk), None)
+        }
+        Ok(LoginOut::MfaRetry(t)) => {
+            let pk = st.o.mfa_methods(&t).contains(&"passkey");
+            html(
+                StatusCode::OK,
+                page::mfa_page(&ctx, &t, Some("err.code"), pk),
+                None,
+            )
+        }
         Ok(LoginOut::Failed(key)) => login_again(st, &ctx, Some(key)),
         Err(e) => flow_failure(e, &lang),
     }
@@ -647,6 +653,79 @@ pub(crate) async fn revoke_grant(
             Ok(_) => StatusCode::NOT_FOUND.into_response(),
             Err(r) => *r,
         }
+    })
+    .await
+}
+
+/// The ceremony site of a page request (the same rule as the REST routes).
+fn webauthn_ctx(s: &HttpState, parts: &Parts, st: &Step) -> Option<obop_commands::WebauthnCtx> {
+    let trust = s.trust_proxy.load(std::sync::atomic::Ordering::Relaxed);
+    let (origin, rp_id) = s.mcp.webauthn_origin(&parts.headers, trust)?;
+    Some(obop_commands::WebauthnCtx {
+        rp_id,
+        origin,
+        rp_name: "obop".into(),
+        ip: st.ip.clone(),
+    })
+}
+
+/// A script on the sign-in page asks for a passkey challenge (form-encoded: `flow`, `csrf` and,
+/// for the second step, `mfa_token`; the flow cookie comes along). Answers JSON.
+pub(crate) async fn passkey_options(State(s): Shared, parts: Parts, body: Bytes) -> Response {
+    blocking(move || {
+        let st = match step(&s, &parts, &body) {
+            Ok(st) => st,
+            Err(r) => return *r,
+        };
+        let Some(c) = webauthn_ctx(&s, &parts, &st) else {
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        };
+        let mfa = pair(&st.pairs, "mfa_token").filter(|t| !t.is_empty());
+        match st
+            .o
+            .passkey_options(&c, &st.flow, &st.binder, &st.csrf, mfa)
+        {
+            Ok(j) => oauth_json(StatusCode::OK, &j),
+            Err(FlowError::Busy(wait)) => {
+                let mut r = StatusCode::TOO_MANY_REQUESTS.into_response();
+                if let Ok(v) = HeaderValue::from_str(&wait.to_string()) {
+                    r.headers_mut().insert(header::RETRY_AFTER, v);
+                }
+                harden(&mut r);
+                r
+            }
+            Err(_) => {
+                let mut r = StatusCode::FORBIDDEN.into_response();
+                harden(&mut r);
+                r
+            }
+        }
+    })
+    .await
+}
+
+/// The page's form posts the browser's answer (`credential`, JSON) with `flow`, `csrf` and
+/// optionally `mfa_token`.
+pub(crate) async fn passkey(State(s): Shared, parts: Parts, body: Bytes) -> Response {
+    blocking(move || {
+        let st = match step(&s, &parts, &body) {
+            Ok(st) => st,
+            Err(r) => return *r,
+        };
+        let Some(c) = webauthn_ctx(&s, &parts, &st) else {
+            return html(
+                StatusCode::SERVICE_UNAVAILABLE,
+                page::error_page(st.lang, "err.busy"),
+                None,
+            );
+        };
+        let mfa = pair(&st.pairs, "mfa_token").filter(|t| !t.is_empty());
+        let credential: J = pair(&st.pairs, "credential")
+            .and_then(|c| serde_json::from_str(c).ok())
+            .unwrap_or(J::Null);
+        let out =
+            st.o.login_passkey(&c, &st.flow, &st.binder, &st.csrf, mfa, &credential);
+        after_login(&st, out)
     })
     .await
 }

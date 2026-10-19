@@ -64,7 +64,7 @@ test.describe("accounts and sessions", () => {
 
     // Sign out everywhere ends this session too: the sign-in form comes back.
     await page.getByRole("button", { name: "Sign out everywhere" }).click();
-    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
     await expect(page.locator(".topbar")).toHaveCount(0);
     expect((await api.post("/api/party/list", {}, fresh.json.token)).status).toBe(401);
   });

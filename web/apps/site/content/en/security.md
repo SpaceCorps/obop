@@ -40,7 +40,7 @@ obop is a young project run by a small team, so we cannot promise a response tim
 
 ## What is missing
 
-No audit log, no token revocation, no single sign-on or two-factor sign-in, no backups for the hosted service, no certification and no independent penetration test yet. The [Security and privacy reference](/docs/reference/security/) lists these in full.
+No audit log, no token revocation, no single sign-on, no backups for the hosted service, no certification and no independent penetration test yet. The [Security and privacy reference](/docs/reference/security/) lists these in full.
 
 ## Supply chain
 

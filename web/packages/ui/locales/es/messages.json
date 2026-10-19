@@ -85,5 +85,8 @@
   "Use an authenticator code": "Usar un código de la aplicación",
   "Verify": "Verificar",
   "Violet": "Violeta",
-  "You are running low on recovery codes": "Te quedan pocos códigos de recuperación"
+  "You are running low on recovery codes": "Te quedan pocos códigos de recuperación",
+  "Enter the 6-digit code from your authenticator app, or use a passkey.": "Introduzca el código de 6 dígitos de su aplicación de autenticación o use una clave de acceso.",
+  "Use a passkey": "Usar una clave de acceso",
+  "Use a passkey you added to this account to finish signing in.": "Use una clave de acceso que haya añadido a esta cuenta para terminar de iniciar sesión."
 }

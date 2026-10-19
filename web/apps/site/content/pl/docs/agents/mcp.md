@@ -19,7 +19,7 @@ Instancja udostępnia [Model Context Protocol](https://modelcontextprotocol.io/)
 
 Claude Desktop, claude.ai i Claude Code mogą połączyć się z instancją bez wklejanego tokenu. W aplikacji dodaj własny łącznik (custom connector) z adresem `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, potem `/mcp` i wybór uwierzytelnienia). Aplikacja sama znajduje logowanie i otwiera w przeglądarce stronę **Twojej instancji**. Tam:
 
-1. logujesz się kontem obop i wpisujesz kod dwuskładnikowy, jeśli konto go ma;
+1. logujesz się kontem obop i wpisujesz kod dwuskładnikowy, jeśli konto go ma (klucz dostępu też działa, jako drugi składnik lub samodzielnie, jeśli zezwolisz na to w Bezpieczeństwie);
 2. widzisz, która aplikacja prosi o dostęp i pod jaki adres wróci przeglądarka;
 3. zaznaczasz grupy uprawnień do przekazania, wybierasz czas trwania dostępu (1, 7, 30 lub 90 dni) i naciskasz **Zezwól**.
 

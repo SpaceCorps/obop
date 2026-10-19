@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { Badge, Button, Input, Notice, Table, createTwoFactorApi, fmt, t } from "@obop/ui";
 import { Icon, Logo } from "./ui.tsx";
+import { passkeyMessage } from "./Passkeys.tsx";
+import { proveWithPasskey } from "./passkeys.ts";
 
 type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
 
@@ -48,13 +50,19 @@ const MIN_PASSWORD = 12;
 export function PasswordSection({
   token,
   twoFactor,
+  passkeys = false,
+  authenticatorApp = true,
   notify,
   onDone,
   title,
 }: {
   token: string;
-  /** Two-factor is on: a code is needed too. */
+  /** A second factor is on: a code, a recovery code or a passkey is needed too. */
   twoFactor: boolean;
+  /** The person has a passkey, which can stand in for the code (D65). */
+  passkeys?: boolean;
+  /** The person has an authenticator app; without one the code field takes a recovery code only. */
+  authenticatorApp?: boolean;
   notify: Notify;
   onDone?: () => void;
   title?: string;
@@ -64,6 +72,8 @@ export function PasswordSection({
   const [next, setNext] = useState("");
   const [again, setAgain] = useState("");
   const [code, setCode] = useState("");
+  const [proved, setProved] = useState(false);
+  const [proving, setProving] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mismatch = again !== "" && again !== next;
@@ -84,13 +94,14 @@ export function PasswordSection({
           const r = await account<{ changed: boolean }>(token, "POST", "/password", {
             current_password: current,
             new_password: next,
-            ...(twoFactor
+            ...(twoFactor && !proved
               ? factor.length > 8
                 ? { recovery_code: factor }
                 : { code: factor }
               : {}),
           });
           setBusy(false);
+          setProved(false);
           if (r.ok) {
             setCurrent("");
             setNext("");
@@ -136,17 +147,44 @@ export function PasswordSection({
           error={mismatch ? t("The new passwords do not match.") : undefined}
           required
         />
-        {twoFactor && (
+        {twoFactor && !proved && (
           <Input
-            label={t("Authenticator code")}
-            hint={t("From your authenticator app, or one of your recovery codes.")}
+            label={authenticatorApp ? t("Authenticator code") : t("Recovery code")}
+            hint={
+              authenticatorApp
+                ? t("From your authenticator app, or one of your recovery codes.")
+                : t("One of your recovery codes, or use a passkey below.")
+            }
             name="code"
-            inputMode="numeric"
+            inputMode={authenticatorApp ? "numeric" : undefined}
             autoComplete="one-time-code"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            required
+            required={!passkeys}
           />
+        )}
+        {twoFactor && passkeys && !proved && (
+          <div className="actionrow">
+            <Button
+              icon="key"
+              loading={proving}
+              onClick={async () => {
+                setProving(true);
+                setError(null);
+                const p = await proveWithPasskey(token);
+                setProving(false);
+                if (p.ok) setProved(true);
+                else setError(passkeyMessage(p));
+              }}
+            >
+              {t("Confirm with a passkey")}
+            </Button>
+          </div>
+        )}
+        {proved && (
+          <p className="hint pk-confirmed" role="status">
+            <Icon name="check-circle" size={14} /> {t("Passkey confirmed.")}
+          </p>
         )}
         {error && (
           <p className="hint" role="alert">

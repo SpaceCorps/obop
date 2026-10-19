@@ -1,7 +1,9 @@
 //! The server-rendered pages of the authorization flow: sign in, second factor, consent, and the
-//! error page. Plain HTML and one inline stylesheet, no script: the content security policy
-//! allows only that stylesheet (by hash) and sends forms to this origin and, on the consent
-//! page, to the origin the person will be sent back to. Text comes from a catalogue in the seven
+//! error page. Plain HTML and one inline stylesheet. The sign-in and second-factor pages also carry
+//! one small inline script for passkeys (WebAuthn needs `navigator.credentials`), a fixed text
+//! with nothing of the request in it; the content security policy allows exactly that script and
+//! that stylesheet (by hash) and nothing else, lets the page talk only to this origin, and sends
+//! forms to this origin and, on the consent page, to the origin the person will be sent back to. Text comes from a catalogue in the seven
 //! languages of the site (`en` `de` `fr` `pl` `fi` `sv` `es`); the language is the `lang`
 //! parameter, then the `Accept-Language` header, then English. Everything that came from outside
 //! (the application's name and address, group names) is escaped.
@@ -122,26 +124,89 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 code{overflow-wrap:anywhere}
 "#;
 
-fn csp(form_action: &str) -> String {
+/// The passkey step of the sign-in pages: ask `data-options` for a challenge, let the browser
+/// answer it (`navigator.credentials.get`), and post the answer with the page's own form. It holds
+/// nothing of the request: the flow id, the CSRF token and the texts are in the form.
+pub const PASSKEY_JS: &str = r#"(function(){
+var f=document.getElementById('pk');
+if(!f||!window.PublicKeyCredential||!navigator.credentials){return;}
+function d(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4){s+='=';}var b=atob(s),a=new Uint8Array(b.length);for(var i=0;i<b.length;i++){a[i]=b.charCodeAt(i);}return a.buffer;}
+function e(b){var a=new Uint8Array(b),s='';for(var i=0;i<a.length;i++){s+=String.fromCharCode(a[i]);}return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+var btn=document.getElementById('pkbtn'),err=document.getElementById('pkerr');
+f.hidden=false;
+function fail(){err.hidden=false;btn.disabled=false;}
+btn.addEventListener('click',function(){
+err.hidden=true;btn.disabled=true;
+var body=new URLSearchParams();
+['flow','csrf','mfa_token'].forEach(function(n){var i=f.elements[n];if(i){body.set(n,i.value);}});
+fetch(f.dataset.options,{method:'POST',body:body,credentials:'same-origin',headers:{'Accept':'application/json'}})
+.then(function(r){if(!r.ok){throw 0;}return r.json();})
+.then(function(o){var p=o.publicKey;p.challenge=d(p.challenge);p.allowCredentials=(p.allowCredentials||[]).map(function(c){c.id=d(c.id);return c;});return navigator.credentials.get({publicKey:p});})
+.then(function(c){var r=c.response;f.elements.credential.value=JSON.stringify({id:c.id,rawId:e(c.rawId),type:c.type,clientExtensionResults:c.getClientExtensionResults?c.getClientExtensionResults():{},response:{clientDataJSON:e(r.clientDataJSON),authenticatorData:e(r.authenticatorData),signature:e(r.signature),userHandle:r.userHandle?e(r.userHandle):null}});f.submit();})
+.catch(fail);
+});
+})();"#;
+
+fn csp(form_action: &str, script: bool) -> String {
     let hash = b64std(&Sha256::digest(CSS.as_bytes()));
+    let scripts = if script {
+        format!(
+            "script-src 'sha256-{}'; connect-src 'self'; ",
+            b64std(&Sha256::digest(PASSKEY_JS.as_bytes()))
+        )
+    } else {
+        String::new()
+    };
     format!(
-        "default-src 'none'; style-src 'sha256-{hash}'; form-action 'self'{form_action}; frame-ancestors 'none'; base-uri 'none'"
+        "default-src 'none'; style-src 'sha256-{hash}'; {scripts}form-action 'self'{form_action}; frame-ancestors 'none'; base-uri 'none'"
     )
 }
 
 fn shell(lang: &str, title: &str, body: &str, form_action: &str) -> Rendered {
+    shell_with(lang, title, body, form_action, false)
+}
+
+fn shell_with(lang: &str, title: &str, body: &str, form_action: &str, script: bool) -> Rendered {
+    let script_tag = if script {
+        format!("<script>{PASSKEY_JS}</script>")
+    } else {
+        String::new()
+    };
     let html = format!(
         "<!doctype html>\n<html lang=\"{lang}\"><head><meta charset=\"utf-8\">\
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
 <meta name=\"color-scheme\" content=\"light dark\"><meta name=\"referrer\" content=\"same-origin\">\
 <meta name=\"robots\" content=\"noindex,nofollow\"><title>{title}</title><style>{CSS}</style></head>\
-<body><main><p class=\"brand\">obop</p><div class=\"card\">{body}</div></main></body></html>\n",
+<body><main><p class=\"brand\">obop</p><div class=\"card\">{body}</div></main>{script_tag}</body></html>\n",
         title = esc(title)
     );
     Rendered {
         html,
-        csp: csp(form_action),
+        csp: csp(form_action, script),
     }
+}
+
+/// The passkey button of a sign-in page: hidden until the script finds the browser can do
+/// WebAuthn. `mfa_token` makes it the second step.
+fn passkey_form(ctx: &FlowCtx, mfa_token: Option<&str>, button_key: &str) -> String {
+    let l = ctx.lang.as_str();
+    let token = mfa_token.map_or_else(String::new, |t| {
+        format!(
+            "<input type=\"hidden\" name=\"mfa_token\" value=\"{}\">",
+            esc(t)
+        )
+    });
+    format!(
+        "<form id=\"pk\" method=\"post\" action=\"/oauth/authorize/passkey\" data-options=\"/oauth/authorize/passkey/options\" hidden>{hidden}{token}\
+<input type=\"hidden\" name=\"credential\" value=\"\"><p class=\"muted\">{or}</p>\
+<p id=\"pkerr\" class=\"error\" role=\"alert\" hidden><strong>{label}:</strong> {msg}</p>\
+<div class=\"row\"><button id=\"pkbtn\" type=\"button\">{button}</button></div></form>",
+        hidden = hidden(ctx),
+        or = esc(t(l, "pk.or")),
+        label = esc(t(l, "err.label")),
+        msg = esc(t(l, "err.passkey_browser")),
+        button = esc(t(l, button_key)),
+    )
 }
 
 fn error_box(lang: &str, key: Option<&str>) -> String {
@@ -180,7 +245,7 @@ pub fn login_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
 <form method=\"post\" action=\"/oauth/authorize/login\">{hidden}\
 <label for=\"u\">{user}</label><input id=\"u\" name=\"username\" type=\"text\" autocomplete=\"username\" autocapitalize=\"none\" spellcheck=\"false\" required autofocus>\
 <label for=\"p\">{pw}</label><input id=\"p\" name=\"password\" type=\"password\" autocomplete=\"current-password\" required>\
-<div class=\"row\"><button class=\"primary\" type=\"submit\">{submit}</button></div></form>",
+<div class=\"row\"><button class=\"primary\" type=\"submit\">{submit}</button></div></form>{pk}",
         h1 = esc(t(l, "login.title")),
         lead = tf(l, "login.lead", &[("app", &ctx.client_name)]),
         err = error_box(l, error),
@@ -188,17 +253,18 @@ pub fn login_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         user = esc(t(l, "login.user")),
         pw = esc(t(l, "login.password")),
         submit = esc(t(l, "login.submit")),
+        pk = passkey_form(ctx, None, "login.passkey"),
     );
-    shell(l, t(l, "login.title"), &body, "")
+    shell_with(l, t(l, "login.title"), &body, "", true)
 }
 
-pub fn mfa_page(ctx: &FlowCtx, mfa_token: &str, error: Option<&str>) -> Rendered {
+pub fn mfa_page(ctx: &FlowCtx, mfa_token: &str, error: Option<&str>, passkey: bool) -> Rendered {
     let l = ctx.lang.as_str();
     let body = format!(
         "<h1>{h1}</h1><p>{lead}</p>{err}\
 <form method=\"post\" action=\"/oauth/authorize/mfa\">{hidden}<input type=\"hidden\" name=\"mfa_token\" value=\"{tok}\">\
 <label for=\"c\">{code}</label><input id=\"c\" name=\"code\" type=\"text\" inputmode=\"numeric\" autocomplete=\"one-time-code\" autocapitalize=\"none\" spellcheck=\"false\" required autofocus>\
-<div class=\"row\"><button class=\"primary\" type=\"submit\">{submit}</button></div></form>",
+<div class=\"row\"><button class=\"primary\" type=\"submit\">{submit}</button></div></form>{pk}",
         h1 = esc(t(l, "mfa.title")),
         lead = esc(t(l, "mfa.lead")),
         err = error_box(l, error),
@@ -206,8 +272,13 @@ pub fn mfa_page(ctx: &FlowCtx, mfa_token: &str, error: Option<&str>) -> Rendered
         tok = esc(mfa_token),
         code = esc(t(l, "mfa.code")),
         submit = esc(t(l, "mfa.submit")),
+        pk = if passkey {
+            passkey_form(ctx, Some(mfa_token), "mfa.passkey")
+        } else {
+            String::new()
+        },
     );
-    shell(l, t(l, "mfa.title"), &body, "")
+    shell_with(l, t(l, "mfa.title"), &body, "", passkey)
 }
 
 fn is_admin_like(g: &str) -> bool {
@@ -334,6 +405,11 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("mfa.lead", ["Enter the 6-digit code from your authenticator app, or one of your recovery codes.", "Geben Sie den 6-stelligen Code aus Ihrer Authenticator-App oder einen Ihrer Wiederherstellungscodes ein.", "Saisissez le code à 6 chiffres de votre application d'authentification, ou l'un de vos codes de récupération.", "Wpisz 6-cyfrowy kod z aplikacji uwierzytelniającej lub jeden z kodów odzyskiwania.", "Syötä todennussovelluksen 6-numeroinen koodi tai jokin palautuskoodeistasi.", "Ange den sexsiffriga koden från din autentiseringsapp eller en av dina återställningskoder.", "Introduzca el código de 6 dígitos de su aplicación de autenticación, o uno de sus códigos de recuperación."]),
     ("mfa.code", ["Code", "Code", "Code", "Kod", "Koodi", "Kod", "Código"]),
     ("mfa.submit", ["Verify", "Bestätigen", "Vérifier", "Zweryfikuj", "Vahvista", "Verifiera", "Verificar"]),
+    ("pk.or", ["or", "oder", "ou", "lub", "tai", "eller", "o"]),
+    ("login.passkey", ["Sign in with a passkey", "Mit einem Passkey anmelden", "Se connecter avec une clé d'accès", "Zaloguj się kluczem dostępu", "Kirjaudu pääsyavaimella", "Logga in med en nyckel (passkey)", "Iniciar sesión con una clave de acceso"]),
+    ("mfa.passkey", ["Use a passkey instead", "Stattdessen einen Passkey verwenden", "Utiliser plutôt une clé d'accès", "Użyj zamiast tego klucza dostępu", "Käytä sen sijaan pääsyavainta", "Använd en nyckel (passkey) i stället", "Usar una clave de acceso"]),
+    ("err.passkey", ["That passkey could not be used to sign in. It may not be set up for signing in without a password. Use your password instead.", "Dieser Passkey konnte nicht zur Anmeldung verwendet werden. Möglicherweise ist er nicht für die Anmeldung ohne Passwort eingerichtet. Verwenden Sie stattdessen Ihr Passwort.", "Cette clé d'accès n'a pas pu servir à se connecter. Elle n'est peut-être pas configurée pour la connexion sans mot de passe. Utilisez plutôt votre mot de passe.", "Tego klucza dostępu nie można użyć do logowania. Może nie być skonfigurowany do logowania bez hasła. Użyj zamiast tego hasła.", "Tätä pääsyavainta ei voitu käyttää kirjautumiseen. Sitä ei ehkä ole otettu käyttöön kirjautumiseen ilman salasanaa. Käytä sen sijaan salasanaa.", "Nyckeln (passkey) kunde inte användas för att logga in. Den kanske inte är inställd för inloggning utan lösenord. Använd lösenordet i stället.", "No se pudo usar esa clave de acceso para iniciar sesión. Quizá no esté configurada para entrar sin contraseña. Use su contraseña."]),
+    ("err.passkey_browser", ["The passkey was not accepted, or the request was cancelled. Try again, or use your password.", "Der Passkey wurde nicht akzeptiert, oder die Anfrage wurde abgebrochen. Versuchen Sie es erneut oder verwenden Sie Ihr Passwort.", "La clé d'accès n'a pas été acceptée, ou la demande a été annulée. Réessayez, ou utilisez votre mot de passe.", "Klucz dostępu nie został zaakceptowany lub żądanie anulowano. Spróbuj ponownie albo użyj hasła.", "Pääsyavainta ei hyväksytty tai pyyntö peruttiin. Yritä uudelleen tai käytä salasanaa.", "Nyckeln (passkey) godtogs inte, eller begäran avbröts. Försök igen eller använd ditt lösenord.", "No se aceptó la clave de acceso, o se canceló la solicitud. Inténtelo de nuevo o use su contraseña."]),
     ("consent.title", ["Connect {app}?", "{app} verbinden?", "Connecter {app} ?", "Połączyć {app}?", "Yhdistetäänkö {app}?", "Ansluta {app}?", "¿Conectar {app}?"]),
     ("consent.signed_in", ["Signed in as {user}.", "Angemeldet als {user}.", "Connecté en tant que {user}.", "Zalogowano jako {user}.", "Kirjautunut käyttäjänä {user}.", "Inloggad som {user}.", "Sesión iniciada como {user}."]),
     ("consent.switch", ["Not you? Use another account", "Nicht Sie? Anderes Konto verwenden", "Ce n'est pas vous ? Utiliser un autre compte", "To nie Ty? Użyj innego konta", "Etkö se ole sinä? Käytä toista tiliä", "Inte du? Använd ett annat konto", "¿No es usted? Usar otra cuenta"]),
@@ -403,5 +479,47 @@ mod tests {
         assert!(!r.html.contains("<script>") && !r.html.contains("<b>"));
         assert!(r.csp.contains("form-action 'self' https://a.test"));
         assert!(r.csp.contains("default-src 'none'") && !r.csp.contains("unsafe"));
+        assert!(
+            !r.csp.contains("script-src"),
+            "the consent page has no script"
+        );
+        assert!(!r.html.contains("<script"));
+    }
+
+    #[test]
+    fn the_sign_in_pages_allow_exactly_one_script_by_hash() {
+        let ctx = FlowCtx {
+            id: "f".into(),
+            csrf: "c".into(),
+            lang: "de".into(),
+            client_name: "App".into(),
+            redirect_origin: "https://a.test".into(),
+            redirect_host: "a.test".into(),
+            user: None,
+            groups: vec![],
+            preselected: vec![],
+        };
+        for r in [
+            login_page(&ctx, None),
+            mfa_page(&ctx, "tok\"en", None, true),
+        ] {
+            let hash = b64std(&Sha256::digest(PASSKEY_JS.as_bytes()));
+            assert!(
+                r.csp
+                    .contains(&format!("script-src 'sha256-{hash}'; connect-src 'self';"))
+            );
+            assert!(
+                !r.csp.contains("unsafe")
+                    && !r.csp.contains("nonce")
+                    && r.csp.contains("default-src 'none'")
+            );
+            assert_eq!(r.html.matches("<script>").count(), 1);
+            assert!(r.html.contains(&format!("<script>{PASSKEY_JS}</script>")));
+            assert!(r.html.contains("Passkey"));
+            assert!(!r.html.contains("tok\"en"), "the token is escaped");
+        }
+        // Without a passkey for the pending sign-in the second-step page has no script at all.
+        let r = mfa_page(&ctx, "t", None, false);
+        assert!(!r.html.contains("<script") && !r.csp.contains("script-src"));
     }
 }

@@ -19,7 +19,7 @@ Une instance sert le [Model Context Protocol](https://modelcontextprotocol.io/) 
 
 Claude Desktop, claude.ai et Claude Code peuvent se connecter à une instance sans jeton collé. Dans l'application, ajoutez un connecteur personnalisé avec l'adresse `https://YOUR-INSTANCE/mcp` (Claude Code : `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, puis `/mcp` et choisir de s'authentifier). L'application trouve seule la connexion et ouvre dans le navigateur une page de **votre instance**. Vous y :
 
-1. vous connectez avec votre compte obop, et saisissez votre code à deux facteurs si le compte en a un ;
+1. vous connectez avec votre compte obop, et saisissez votre code à deux facteurs si le compte en a un (une clé d'accès fonctionne aussi, comme seconde étape ou seule si vous l'avez autorisé dans Sécurité) ;
 2. voyez quelle application demande l'accès et vers quelle adresse le navigateur reviendra ;
 3. cochez les groupes de permissions à transmettre, choisissez la durée de l'accès (1, 7, 30 ou 90 jours) et appuyez sur **Autoriser**.
 

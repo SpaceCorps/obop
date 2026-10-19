@@ -238,14 +238,19 @@ impl Auth {
         }
         let u = self.user_record(name)?;
         let ok = if let Some(code) = code.filter(|c| !c.trim().is_empty()) {
-            let sealed = u["totp_secret"].as_str().ok_or(MfaError::NotFound)?;
-            let secret = self.open_secret(name, sealed)?;
-            match totp::verify(&secret, code, self.now(), u["totp_last_step"].as_u64()) {
-                Some(step) => {
-                    let mut p = Fields::new();
-                    p.insert("totp_last_step".into(), J::from(step));
-                    self.put(name, &p)?;
-                    true
+            // A person with passkeys only has no authenticator-app secret: any code is a miss.
+            match u["totp_secret"].as_str() {
+                Some(sealed) => {
+                    let secret = self.open_secret(name, sealed)?;
+                    match totp::verify(&secret, code, self.now(), u["totp_last_step"].as_u64()) {
+                        Some(step) => {
+                            let mut p = Fields::new();
+                            p.insert("totp_last_step".into(), J::from(step));
+                            self.put(name, &p)?;
+                            true
+                        }
+                        None => false,
+                    }
                 }
                 None => false,
             }
@@ -276,8 +281,13 @@ impl Auth {
                 );
             }
             hit
+        } else if self.take_proof(name) {
+            // A passkey proof given a moment ago (D65) stands in for a code, once.
+            true
         } else {
-            return Err(MfaError::Invalid("enter a code or a recovery code".into()));
+            return Err(MfaError::Invalid(
+                "enter a code or a recovery code, or use a passkey".into(),
+            ));
         };
         if ok {
             Ok(())
@@ -291,7 +301,7 @@ impl Auth {
         }
     }
 
-    fn fresh_recovery(&self, name: &str) -> Result<(Vec<String>, Fields), MfaError> {
+    pub(crate) fn fresh_recovery(&self, name: &str) -> Result<(Vec<String>, Fields), MfaError> {
         let codes: Vec<String> = (0..RECOVERY_CODES).map(|_| new_recovery_code()).collect();
         let mut p = Fields::new();
         p.insert(
@@ -329,7 +339,7 @@ impl Auth {
             return Err("invalid username or password".into());
         }
         self.purge_tokens();
-        if self.mfa_enabled(&name) {
+        if self.has_second_factor(&name) {
             let token = format!("obopmfa_{}", hex(&random_bytes::<32>()));
             let mut f = Fields::new();
             f.insert("user".into(), J::from(name.as_str()));
@@ -405,7 +415,7 @@ impl Auth {
 
     /// A session for `name`. It is limited to the account routes when two-factor enrolment is
     /// owed (`enrol`) or an administrator reset the password and a new one is owed.
-    fn session_outcome(&self, name: &str, enrol: bool) -> Result<LoginOutcome, String> {
+    pub(crate) fn session_outcome(&self, name: &str, enrol: bool) -> Result<LoginOutcome, String> {
         let must_change = self.must_change_password(name);
         let token = self.issue_session(name, enrol || must_change)?;
         if must_change {
@@ -465,8 +475,12 @@ impl Auth {
 
     fn clear_factor(&self, name: &str) -> Result<(), MfaError> {
         let mut p = Fields::new();
-        for k in ["totp_secret", "totp_pending", "totp_last_step", "recovery"] {
+        for k in ["totp_secret", "totp_pending", "totp_last_step"] {
             p.insert(k.into(), J::Null);
+        }
+        // Recovery codes stay while a passkey is still a second factor (D65).
+        if self.passkeys_of(name).is_empty() {
+            p.insert("recovery".into(), J::Null);
         }
         p.insert("mfa_enabled".into(), J::Bool(false));
         self.put(name, &p)
@@ -479,9 +493,15 @@ impl Auth {
         let _g = self.backend.lock("auth.mfa")?;
         self.user_record(&name)
             .map_err(|_| format!("no user {name}"))?;
+        let passkeys = self.clear_passkeys(&name);
         self.clear_factor(&name).map_err(|e| format!("{e:?}"))?;
         self.revoke_sessions(&name);
-        self.event(&name, "reset", "operator", "reset from the command line");
+        self.event(
+            &name,
+            "reset",
+            "operator",
+            &format!("reset from the command line; {passkeys} passkey(s) removed"),
+        );
         Ok(())
     }
 
@@ -510,6 +530,8 @@ impl MfaApi for Auth {
             "enabled": u["mfa_enabled"].as_bool() == Some(true),
             "pending": u["totp_pending"].is_string(),
             "recovery_remaining": str_list(&u["recovery"]).len(),
+            "passkeys": self.passkeys_of(name).len(),
+            "second_factor": self.has_second_factor(name),
             "limited": p.mfa_limited,
             "password_change_required": u["must_change_password"].as_bool() == Some(true),
             "is_admin": p.groups.contains(ADMIN_GROUP),
@@ -616,8 +638,8 @@ impl MfaApi for Auth {
     ) -> Result<J, MfaError> {
         let name = person(p)?;
         let _g = self.mfa_guard()?;
-        let u = self.user_record(name)?;
-        if u["mfa_enabled"].as_bool() != Some(true) {
+        self.user_record(name)?;
+        if !self.has_second_factor(name) {
             return Err(MfaError::Invalid("two-factor is not on".into()));
         }
         if !self.password_ok(name, password) {
@@ -651,14 +673,23 @@ impl MfaApi for Auth {
             .flatten()
             .map(J::Object)
             .ok_or_else(|| MfaError::Invalid(format!("no user {target}")))?;
-        if u["mfa_enabled"].as_bool() != Some(true) && !u["totp_pending"].is_string() {
+        if u["mfa_enabled"].as_bool() != Some(true)
+            && !u["totp_pending"].is_string()
+            && self.passkeys_of(&target).is_empty()
+        {
             return Err(MfaError::Invalid(format!(
                 "{target} has no two-factor to reset"
             )));
         }
+        let passkeys = self.clear_passkeys(&target);
         self.clear_factor(&target)?;
         self.revoke_sessions(&target);
-        self.event(&target, "reset", actor, "reset by an administrator");
+        self.event(
+            &target,
+            "reset",
+            actor,
+            &format!("reset by an administrator; {passkeys} passkey(s) removed"),
+        );
         Ok(())
     }
     fn sessions(&self, p: &Principal, session: &str) -> Result<J, MfaError> {

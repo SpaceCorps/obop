@@ -68,13 +68,18 @@ pub(crate) fn password_change_required() -> Response {
 }
 
 /// The JSON of a sign-in step.
-pub(crate) fn outcome(out: LoginOutcome) -> Response {
+pub(crate) fn outcome(auth: Option<&dyn Authenticator>, out: LoginOutcome) -> Response {
+    outcome_json(auth, out).into_response()
+}
+
+/// The JSON of a sign-in step, for a caller that adds to it.
+pub(crate) fn outcome_json(auth: Option<&dyn Authenticator>, out: LoginOutcome) -> Json<J> {
     match out {
         LoginOutcome::Session {
             token,
             mfa_enrolment_required: false,
             password_change_required: false,
-        } => Json(json!({"token": token})).into_response(),
+        } => Json(json!({"token": token})),
         LoginOutcome::Session {
             token,
             password_change_required: true,
@@ -83,25 +88,31 @@ pub(crate) fn outcome(out: LoginOutcome) -> Response {
             "token": token,
             "password_change_required": true,
             "hint": "An administrator set a temporary password. This session can only change it: POST /api/auth/password with current_password and new_password."
-        }))
-        .into_response(),
+        })),
         LoginOutcome::Session { token, .. } => Json(json!({
             "token": token,
             "mfa_enrolment_required": true,
             "hint": "This session can only set up two-factor authentication: POST /api/auth/mfa/begin and /api/auth/mfa/confirm."
-        }))
-        .into_response(),
-        LoginOutcome::MfaRequired { mfa_token } => Json(json!({
-            "mfa_required": true,
-            "mfa_token": mfa_token,
-            "expires_in": 300,
-            "hint": "POST /api/auth/login/mfa with {mfa_token, code} or {mfa_token, recovery_code}."
-        }))
-        .into_response(),
+        })),
+        LoginOutcome::MfaRequired { mfa_token } => {
+            // What can finish this sign-in: an authenticator app code and/or a passkey (D65).
+            let methods = auth
+                .and_then(|a| a.passkeys())
+                .map(|p| p.methods(&mfa_token))
+                .filter(|m| !m.is_empty())
+                .unwrap_or_else(|| vec!["totp"]);
+            Json(json!({
+                "mfa_required": true,
+                "mfa_token": mfa_token,
+                "expires_in": 300,
+                "methods": methods,
+                "hint": "POST /api/auth/login/mfa with {mfa_token, code} or {mfa_token, recovery_code}; with a passkey, POST /api/auth/login/passkey/options and /api/auth/login/passkey with {mfa_token, credential}."
+            }))
+        }
     }
 }
 
-fn mfa_error(e: MfaError) -> Response {
+pub(crate) fn mfa_error(e: MfaError) -> Response {
     match e {
         MfaError::Invalid(m) => api_error(
             StatusCode::BAD_REQUEST,
@@ -150,7 +161,7 @@ fn mfa_error(e: MfaError) -> Response {
 
 /// The signed-in human behind the bearer token, limited sessions included, and the token.
 #[allow(clippy::result_large_err)]
-fn human<'a>(
+pub(crate) fn human<'a>(
     auth: &'a dyn Authenticator,
     h: &HeaderMap,
 ) -> Result<(Principal, String, &'a dyn MfaApi), Response> {
@@ -170,7 +181,7 @@ fn human<'a>(
     Ok((p, token.to_string(), api))
 }
 
-fn text<'a>(b: &'a J, k: &str) -> Option<&'a str> {
+pub(crate) fn text<'a>(b: &'a J, k: &str) -> Option<&'a str> {
     b[k].as_str().filter(|s| !s.trim().is_empty())
 }
 
@@ -182,7 +193,7 @@ async fn login_mfa(State(a): Auth, Json(b): Json<J>) -> Response {
             text(&b, "recovery_code"),
         );
         match r {
-            Ok(out) => outcome(out),
+            Ok(out) => outcome(Some(&*a), out),
             Err(e) => mfa_error(e),
         }
     })

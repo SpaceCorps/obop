@@ -60,25 +60,30 @@ function run(args: string[], input?: string) {
 
 let args: string[];
 const extraEnv: Record<string, string> = {};
-if (kind === "app") {
-  const db = `sqlite://${join(dir, "app.sqlite")}`;
+if (kind === "app" || kind === "passkeys") {
+  const db = `sqlite://${join(dir, kind === "app" ? "app.sqlite" : "passkeys.sqlite")}`;
   for (const u of Object.values(users))
     run(["admin", "create", u.name, "--groups", u.groups, "--db", db], `${u.password}\n`);
   args = [
     "serve",
     "--addr",
-    `127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`,
+    `127.0.0.1:${kind === "app" ? process.env.OBOP_E2E_APP_PORT : process.env.OBOP_E2E_PASSKEY_PORT}`,
     "--db",
     db,
     "--static",
     backofficeDist,
   ];
-  // Updating the instance (D63): it holds the update token of an instance the control plane
-  // knows, a directory for the backup before an update, and a marketplace the specs fill.
-  extraEnv.OBOP_UPDATE_URL = `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
-  extraEnv.OBOP_UPDATE_TOKEN = updateToken;
-  extraEnv.OBOP_BACKUP_DIR = join(dir, "backups");
-  extraEnv.OBOP_MARKETPLACE_URL = `http://127.0.0.1:${process.env.OBOP_E2E_MARKET_PORT}`;
+  if (kind === "passkeys") {
+    // Reached as http://localhost:<port> by the browser; the instance says so.
+    extraEnv.OBOP_PUBLIC_URL = `http://localhost:${process.env.OBOP_E2E_PASSKEY_PORT}`;
+  } else {
+    // Updating the instance (D63): it holds the update token of an instance the control plane
+    // knows, a directory for the backup before an update, and a marketplace the specs fill.
+    extraEnv.OBOP_UPDATE_URL = `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
+    extraEnv.OBOP_UPDATE_TOKEN = updateToken;
+    extraEnv.OBOP_BACKUP_DIR = join(dir, "backups");
+    extraEnv.OBOP_MARKETPLACE_URL = `http://127.0.0.1:${process.env.OBOP_E2E_MARKET_PORT}`;
+  }
 } else if (kind === "shop") {
   // A web shop: public site at /, back office at /admin/, the two shop packages, demo content
   // with generated pictures, and the demo payment provider (no money moves, no card is asked).
@@ -184,6 +189,7 @@ const child = spawn(bin, args, {
       kind === "shop"
         ? `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`
         : `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`,
+    ...extraEnv,
   },
 });
 for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => child.kill(sig));

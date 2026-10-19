@@ -47,5 +47,6 @@
   "option\u0004Spam",
   "option\u0004Transit",
   "{field} ≤ {to}",
-  "{field} ≥ {from}"
+  "{field} ≥ {from}",
+  "Passkeys"
 ]

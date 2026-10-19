@@ -7,7 +7,7 @@ test.describe("sign in and out", () => {
     await expect(page.getByRole("heading", { name: "obop" })).toBeVisible();
     await page.getByLabel("Username").fill(users.root.name);
     await page.getByLabel("Password").fill(users.root.password);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Your apps" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Contacts" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Account" })).toBeVisible();
@@ -21,7 +21,7 @@ test.describe("sign in and out", () => {
     await page.goto("/");
     await page.getByLabel("Username").fill("nobody");
     await page.getByLabel("Password").fill("not a real password");
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("alert")).toHaveText("Invalid username or password");
     await expect(page.locator(".topbar")).toHaveCount(0);
     expect(await page.evaluate(() => sessionStorage.getItem("obop-token"))).toBeNull();
@@ -31,7 +31,7 @@ test.describe("sign in and out", () => {
     await page.goto("/");
     await page.getByLabel("Username").fill(users.sam.name);
     await page.getByLabel("Password").fill(users.sam.password);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.locator(".topbar")).toBeVisible();
     // The session survives a reload...
     await page.reload();
@@ -40,9 +40,9 @@ test.describe("sign in and out", () => {
     await page.getByRole("button", { name: "Account" }).click();
     await expect(page.getByText(users.sam.name)).toBeVisible();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
-    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
     await expect(page.locator(".topbar")).toHaveCount(0);
   });
 });

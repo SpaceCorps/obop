@@ -43,7 +43,7 @@ async function signInForm(page: Page, user: UserName) {
   await page.goto("/");
   await page.getByLabel("Username").fill(users[user].name);
   await page.getByLabel("Password").fill(users[user].password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
 
 /** Enrol a user through the API (arranging data, not under test). */
@@ -143,7 +143,7 @@ test.describe("two-factor authentication", () => {
     // Turn it off with the password and a recovery code.
     await page.getByLabel("Username").fill(users.tess.name);
     await page.getByLabel("Password").fill(users.tess.password);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "Use a recovery code" }).click();
     await page.getByLabel("Recovery code").fill(codes[1]!);
     await page.getByRole("button", { name: "Verify" }).click();
@@ -189,7 +189,7 @@ test.describe("two-factor authentication", () => {
     await page.getByRole("button", { name: "Back to sign in" }).click();
     await page.getByLabel("Username").fill(users.lock.name);
     await page.getByLabel("Password").fill(users.lock.password);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("alert")).toHaveText(
       "Too many attempts. Wait a minute and try again.",
     );
@@ -319,7 +319,7 @@ test.describe("two-factor authentication on the control plane (opt-in)", () => {
     await page.getByRole("button", { name: "I already have an account" }).click();
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByLabel("6-digit code")).toBeFocused();
     await page.getByLabel("6-digit code").fill(code(secret, step + 1));
     await page.getByRole("button", { name: "Verify" }).click();

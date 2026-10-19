@@ -83,6 +83,10 @@ export const users = {
   // check that a person sees only her own connections and may withdraw her consent.
   // Account specs (tests/security.spec.ts): one changes her own password and ends sessions, the
   // other is disabled, enabled and given a temporary password by the administrator.
+  // Passkey specs (tests/passkeys.spec.ts): each owns her passkeys, so one spec never sees another's.
+  pia: { name: "pia", password: "e2e pia password 1!", groups: "base.user" },
+  pax: { name: "pax", password: "e2e pax password 1!", groups: "base.user" },
+  pom: { name: "pom", password: "e2e pom password 1!", groups: "base.user" },
   jo: { name: "jo", password: "e2e jo password 1!", groups: "base.user" },
   pat: { name: "pat", password: "e2e pat password 1!", groups: "base.user" },
   cora: {

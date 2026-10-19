@@ -190,7 +190,7 @@ impl Auth {
             return Err(MfaError::BadPassword);
         }
         // With two-factor on, the password alone does not change the password.
-        if u["mfa_enabled"].as_bool() == Some(true) {
+        if self.has_second_factor(name) {
             self.check_second_factor(name, code, recovery)?;
         }
         if new.chars().count() < MIN_PASSWORD_CHARS {
@@ -214,8 +214,7 @@ impl Auth {
         // The session that proved the old password may now do everything its person may, unless
         // two-factor enrolment is still owed.
         let groups = str_list(&u["groups"]);
-        let still_limited =
-            self.enrolment_required_for(&groups) && u["mfa_enabled"].as_bool() != Some(true);
+        let still_limited = self.enrolment_required_for(&groups) && !self.has_second_factor(name);
         let mut lift = Fields::new();
         lift.insert("limited".into(), J::Bool(still_limited));
         let _ = self.backend.update("auth_token", &h, &lift);
@@ -245,6 +244,16 @@ impl Auth {
                 *sessions.entry(o.to_string()).or_default() += 1;
             }
         }
+        let mut passkeys: std::collections::HashMap<String, usize> = Default::default();
+        for (_, k) in self
+            .backend
+            .list(crate::passkey::PASSKEY_TABLE)
+            .unwrap_or_default()
+        {
+            if let Some(o) = k.get("user").and_then(J::as_str) {
+                *passkeys.entry(o.to_string()).or_default() += 1;
+            }
+        }
         let mut users: Vec<J> = self
             .backend
             .list("auth_user")
@@ -256,7 +265,9 @@ impl Auth {
                     "groups": str_list(&u["groups"]),
                     "admin": str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP),
                     "disabled": u.get("disabled").and_then(J::as_bool) == Some(true),
-                    "mfa_enabled": u.get("mfa_enabled").and_then(J::as_bool) == Some(true),
+                    "mfa_enabled": u.get("mfa_enabled").and_then(J::as_bool) == Some(true)
+                        || passkeys.get(&name).is_some_and(|n| *n > 0),
+                    "passkeys": passkeys.get(&name).copied().unwrap_or(0),
                     "must_change_password": u.get("must_change_password").and_then(J::as_bool) == Some(true),
                     "sessions": sessions.get(&name).copied().unwrap_or(0),
                 })

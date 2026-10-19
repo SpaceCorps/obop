@@ -19,7 +19,7 @@ Eine Instanz stellt das [Model Context Protocol](https://modelcontextprotocol.io
 
 Claude Desktop, claude.ai und Claude Code können sich ohne eingefügtes Token mit einer Instanz verbinden. Fügen Sie in der App einen Custom Connector mit der Adresse `https://YOUR-INSTANCE/mcp` hinzu (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, dann `/mcp` und die Authentifizierung wählen). Die App findet die Anmeldung selbst und öffnet im Browser eine Seite **Ihrer Instanz**. Dort:
 
-1. melden Sie sich mit Ihrem obop-Konto an und geben, falls das Konto es hat, Ihren Zwei-Faktor-Code ein;
+1. melden Sie sich mit Ihrem obop-Konto an und geben, falls das Konto es hat, Ihren Zwei-Faktor-Code ein (auch ein Passkey funktioniert, als zweiter Schritt oder allein, wenn Sie das unter Sicherheit erlaubt haben);
 2. sehen Sie, welche Anwendung anfragt und zu welcher Adresse der Browser zurückkehrt;
 3. kreuzen Sie die Berechtigungsgruppen an, die Sie weitergeben, wählen, wie lange der Zugriff gilt (1, 7, 30 oder 90 Tage), und drücken **Erlauben**.
 
