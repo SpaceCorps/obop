@@ -74,7 +74,7 @@ Le même jeton connecte un client MCP au serveur MCP distant de l'instance, `htt
 - Créez un jeton distinct par client et ne lui donnez que les scopes dont ce client a besoin. La liste des outils MCP correspond exactement aux commandes que les scopes autorisent.
 - Un jeton de session obtenu à la connexion fonctionne aussi, mais il expire après 12 heures ; un jeton d'agent n'expire pas.
 - Le jeton doit être envoyé à chaque requête, pas seulement à la première ; les clients le font dès qu'il figure dans leur configuration.
-- Il n'existe pas encore de connexion OAuth pour MCP : les clients qui ne proposent qu'une connexion par navigateur ne peuvent donc pas se connecter. Voir [Se connecter via MCP](/docs/agents/mcp/).
+- Les clients qui proposent une connexion par navigateur (Claude Desktop, claude.ai, Claude Code) n'ont pas besoin d'un jeton collé : ils se connectent par une connexion et reçoivent un jeton de courte durée de ce type. Voir [Se connecter via MCP](/docs/agents/mcp/).
 
 ## Le conserver en lieu sûr
 

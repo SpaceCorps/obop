@@ -236,7 +236,7 @@ async fn missing_or_bad_tokens_get_401_with_resource_metadata() {
     assert_eq!(none.status, 401);
     assert_eq!(
         none.header("www-authenticate"),
-        "Bearer resource_metadata=\"http://inst.test/.well-known/oauth-protected-resource\""
+        "Bearer resource_metadata=\"http://inst.test/.well-known/oauth-protected-resource/mcp\""
     );
     let bad = post_raw(&r, Some("obop_forged"), None, body.clone(), &[]).await;
     assert_eq!(bad.status, 401);
@@ -244,7 +244,7 @@ async fn missing_or_bad_tokens_get_401_with_resource_metadata() {
     assert!(
         w.starts_with("Bearer error=\"invalid_token\"")
             && w.contains(
-                "resource_metadata=\"http://inst.test/.well-known/oauth-protected-resource\""
+                "resource_metadata=\"http://inst.test/.well-known/oauth-protected-resource/mcp\""
             ),
         "{w}"
     );

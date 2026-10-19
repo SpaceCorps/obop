@@ -1788,5 +1788,18 @@
   "“{label}” is still used by other records. Remove or change them first.": "machine-drafted",
   "“{part}” has no value": "machine-drafted",
   "“{part}” is not field operator value": "machine-drafted",
-  "“{part}” needs values after in": "machine-drafted"
+  "“{part}” needs values after in": "machine-drafted",
+  "{name} can no longer act for you.": "machine-drafted",
+  "App access ended": "machine-drafted",
+  "App access ended: a code was used twice": "machine-drafted",
+  "App access ended: a token was used twice": "machine-drafted",
+  "App connected": "machine-drafted",
+  "App refused": "machine-drafted",
+  "Apps such as Claude Desktop, claude.ai and Claude Code that you signed in for. Each acts as you, with only the groups you handed over, until it ends or you revoke it. Steps that need approval still wait for a person.": "machine-drafted",
+  "Can act with": "machine-drafted",
+  "Connected apps": "machine-drafted",
+  "Could not revoke the app.": "machine-drafted",
+  "Last active": "machine-drafted",
+  "No apps are connected. To connect one, add the address of this instance followed by /mcp as a custom connector in the app, then sign in when the browser opens.": "machine-drafted",
+  "Revoke {name}": "machine-drafted"
 }

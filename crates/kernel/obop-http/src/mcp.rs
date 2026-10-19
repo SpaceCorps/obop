@@ -330,10 +330,10 @@ fn with_cors(mut r: Response, origin: Option<&str>) -> Response {
 fn unauthorized(base: &str, presented: bool) -> Response {
     let challenge = if presented {
         format!(
-            "Bearer error=\"invalid_token\", error_description=\"unknown, expired or revoked token\", resource_metadata=\"{base}/.well-known/oauth-protected-resource\""
+            "Bearer error=\"invalid_token\", error_description=\"unknown, expired, revoked or wrongly addressed token\", resource_metadata=\"{base}/.well-known/oauth-protected-resource/mcp\""
         )
     } else {
-        format!("Bearer resource_metadata=\"{base}/.well-known/oauth-protected-resource\"")
+        format!("Bearer resource_metadata=\"{base}/.well-known/oauth-protected-resource/mcp\"")
     };
     let mut r = (
         StatusCode::UNAUTHORIZED,
@@ -401,9 +401,13 @@ fn gate(s: &HttpState, h: &HeaderMap) -> Gate {
     let Some(token) = bearer_token(h) else {
         return Gate::Stop(with_cors(unauthorized(&base, false), cors.as_deref()));
     };
-    let Some(principal) = s.auth.resolve(token) else {
+    let Some((principal, audience)) = s.auth.resolve_with_audience(token) else {
         return Gate::Stop(with_cors(unauthorized(&base, true), cors.as_deref()));
     };
+    // A token issued through the OAuth flow is for one resource only (RFC 8707, D64).
+    if audience.is_some_and(|a| a != format!("{base}/mcp")) {
+        return Gate::Stop(with_cors(unauthorized(&base, true), cors.as_deref()));
+    }
     if principal.mfa_limited {
         return Gate::Stop(with_cors(
             s.limited_rejection(&principal).into_response(),
@@ -651,7 +655,7 @@ fn delete_blocking(s: &HttpState, token: &str, h: &HeaderMap) -> Response {
 
 // ---- discovery documents --------------------------------------------------------------------
 
-fn public_json(content_type: &'static str, doc: &J) -> Response {
+pub(crate) fn public_json(content_type: &'static str, doc: &J) -> Response {
     let mut r = (StatusCode::OK, doc.to_string()).into_response();
     let h = r.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
@@ -671,20 +675,27 @@ fn public_json(content_type: &'static str, doc: &J) -> Response {
     r
 }
 
-/// RFC 9728 metadata. There is no authorization server: tokens come from the sign-in endpoints,
-/// so `authorization_servers` is left out rather than faked.
-pub(crate) fn protected_resource(base: &str, resource: &str) -> J {
-    json!({
+/// RFC 9728 metadata. `authorization_servers` is named only when this instance runs the
+/// authorization server (D64); with `--dev-auth` it is left out rather than faked.
+pub(crate) fn protected_resource(base: &str, resource: &str, oauth: bool) -> J {
+    let mut doc = json!({
         "resource": resource,
         "resource_name": "obop instance MCP server",
         "bearer_methods_supported": ["header"],
         "resource_documentation": "https://obop.dev/docs/agents/mcp/",
-        "$comment": "obop has no OAuth authorization server yet, so authorization_servers is deliberately absent. Present a bearer token from POST /api/auth/login (a person) or POST /api/auth/agent-token (a scoped agent token) in the Authorization header of every request.",
         "x-obop-token-endpoints": {
             "login": format!("{base}/api/auth/login"),
             "agent_token": format!("{base}/api/auth/agent-token"),
         },
-    })
+    });
+    if oauth {
+        doc["authorization_servers"] = json!([base]);
+    } else {
+        doc["$comment"] = J::from(
+            "This instance runs without an OAuth authorization server, so authorization_servers is deliberately absent. Present a bearer token from POST /api/auth/login or POST /api/auth/agent-token in the Authorization header of every request.",
+        );
+    }
+    doc
 }
 
 pub(crate) async fn oauth_protected_resource(
@@ -692,7 +703,10 @@ pub(crate) async fn oauth_protected_resource(
     h: HeaderMap,
 ) -> Response {
     let base = s.mcp.base_url(&h);
-    public_json("application/json", &protected_resource(&base, &base))
+    public_json(
+        "application/json",
+        &protected_resource(&base, &base, s.oauth.is_some()),
+    )
 }
 
 pub(crate) async fn oauth_protected_resource_mcp(
@@ -702,7 +716,7 @@ pub(crate) async fn oauth_protected_resource_mcp(
     let base = s.mcp.base_url(&h);
     public_json(
         "application/json",
-        &protected_resource(&base, &format!("{base}/mcp")),
+        &protected_resource(&base, &format!("{base}/mcp"), s.oauth.is_some()),
     )
 }
 
@@ -754,7 +768,7 @@ pub fn server_card(base: &str) -> J {
         }],
         "_meta": {
             "dev.obop/auth": {
-                "protectedResourceMetadata": format!("{base}/.well-known/oauth-protected-resource"),
+                "protectedResourceMetadata": format!("{base}/.well-known/oauth-protected-resource/mcp"),
                 "authorizationServer": null,
                 "tokenEndpoints": {
                     "login": format!("{base}/api/auth/login"),
@@ -774,17 +788,37 @@ pub fn server_card(base: &str) -> J {
     })
 }
 
+/// Name the authorization server in the card when the instance runs one (D64).
+pub(crate) fn with_oauth(mut card: J, base: &str, oauth: bool) -> J {
+    if oauth {
+        card["_meta"]["dev.obop/auth"]["authorizationServer"] = J::from(base);
+        card["_meta"]["dev.obop/auth"]["authorizationServerMetadata"] =
+            J::from(format!("{base}/.well-known/oauth-authorization-server"));
+        card["authentication"] = json!({
+            "type": "oauth2",
+            "header": "Authorization",
+            "description": "OAuth 2.1 authorization code with PKCE (S256) and dynamic client registration, or a bearer token on every request.",
+        });
+    }
+    card
+}
+
 pub(crate) async fn server_card_json(State(s): State<Arc<HttpState>>, h: HeaderMap) -> Response {
-    public_json("application/json", &server_card(&s.mcp.base_url(&h)))
+    let base = s.mcp.base_url(&h);
+    public_json(
+        "application/json",
+        &with_oauth(server_card(&base), &base, s.oauth.is_some()),
+    )
 }
 
 pub(crate) async fn server_card_canonical(
     State(s): State<Arc<HttpState>>,
     h: HeaderMap,
 ) -> Response {
+    let base = s.mcp.base_url(&h);
     public_json(
         "application/mcp-server-card+json",
-        &server_card(&s.mcp.base_url(&h)),
+        &with_oauth(server_card(&base), &base, s.oauth.is_some()),
     )
 }
 
@@ -813,7 +847,7 @@ pub fn x_mcp(base: &str) -> J {
         "protocolVersions": obop_mcp::SUPPORTED_VERSIONS,
         "authorization": "bearer",
         "serverCard": format!("{base}/.well-known/mcp/server-card.json"),
-        "protectedResourceMetadata": format!("{base}/.well-known/oauth-protected-resource"),
+        "protectedResourceMetadata": format!("{base}/.well-known/oauth-protected-resource/mcp"),
     })
 }
 

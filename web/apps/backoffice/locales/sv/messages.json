@@ -1788,5 +1788,18 @@
   "“{label}” is still used by other records. Remove or change them first.": "”{label}” används fortfarande av andra poster. Ta bort eller ändra dem först.",
   "“{part}” has no value": "”{part}” saknar värde",
   "“{part}” is not field operator value": "”{part}” har inte formen fält operator värde",
-  "“{part}” needs values after in": "”{part}” behöver värden efter in"
+  "“{part}” needs values after in": "”{part}” behöver värden efter in",
+  "{name} can no longer act for you.": "{name} kan inte längre agera åt dig.",
+  "App access ended": "Appens åtkomst har upphört",
+  "App access ended: a code was used twice": "Appens åtkomst har upphört: en kod användes två gånger",
+  "App access ended: a token was used twice": "Appens åtkomst har upphört: en token användes två gånger",
+  "App connected": "App ansluten",
+  "App refused": "App nekad",
+  "Apps such as Claude Desktop, claude.ai and Claude Code that you signed in for. Each acts as you, with only the groups you handed over, until it ends or you revoke it. Steps that need approval still wait for a person.": "Appar som Claude Desktop, claude.ai och Claude Code som du har loggat in för. Var och en agerar som du, bara med de grupper du lämnade över, tills åtkomsten upphör eller du återkallar den. Steg som kräver godkännande väntar fortfarande på en person.",
+  "Can act with": "Kan agera med",
+  "Connected apps": "Anslutna appar",
+  "Could not revoke the app.": "Det gick inte att återkalla appen.",
+  "Last active": "Senast aktiv",
+  "No apps are connected. To connect one, add the address of this instance followed by /mcp as a custom connector in the app, then sign in when the browser opens.": "Inga appar är anslutna. Om du vill ansluta en lägger du i appen till adressen till den här instansen följd av /mcp som anpassad koppling och loggar in när webbläsaren öppnas.",
+  "Revoke {name}": "Återkalla {name}"
 }

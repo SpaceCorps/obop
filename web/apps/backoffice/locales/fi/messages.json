@@ -1788,5 +1788,18 @@
   "“{label}” is still used by other records. Remove or change them first.": "”{label}” on yhä muiden tietueiden käytössä. Poista tai muuta ne ensin.",
   "“{part}” has no value": "Kohdalla ”{part}” ei ole arvoa",
   "“{part}” is not field operator value": "”{part}” ei ole muotoa kenttä operaattori arvo",
-  "“{part}” needs values after in": "Kohdassa ”{part}” tarvitaan arvot in-sanan jälkeen"
+  "“{part}” needs values after in": "Kohdassa ”{part}” tarvitaan arvot in-sanan jälkeen",
+  "{name} can no longer act for you.": "{name} ei voi enää toimia puolestasi.",
+  "App access ended": "Sovelluksen pääsy päättyi",
+  "App access ended: a code was used twice": "Sovelluksen pääsy päättyi: koodia käytettiin kahdesti",
+  "App access ended: a token was used twice": "Sovelluksen pääsy päättyi: tunnistetta käytettiin kahdesti",
+  "App connected": "Sovellus yhdistetty",
+  "App refused": "Sovellus hylätty",
+  "Apps such as Claude Desktop, claude.ai and Claude Code that you signed in for. Each acts as you, with only the groups you handed over, until it ends or you revoke it. Steps that need approval still wait for a person.": "Sovelluksia, kuten Claude Desktop, claude.ai ja Claude Code, joille kirjauduit. Jokainen toimii puolestasi vain luovuttamillasi ryhmillä, kunnes pääsy päättyy tai peruutat sen. Hyväksyntää vaativat vaiheet odottavat edelleen ihmistä.",
+  "Can act with": "Voi toimia ryhmillä",
+  "Connected apps": "Yhdistetyt sovellukset",
+  "Could not revoke the app.": "Sovelluksen pääsyä ei voitu peruuttaa.",
+  "Last active": "Viimeksi aktiivinen",
+  "No apps are connected. To connect one, add the address of this instance followed by /mcp as a custom connector in the app, then sign in when the browser opens.": "Sovelluksia ei ole yhdistetty. Yhdistä sovellus lisäämällä siinä tämän instanssin osoite perässä /mcp mukautettuna liittimenä ja kirjaudu sisään, kun selain avautuu.",
+  "Revoke {name}": "Peruuta pääsy: {name}"
 }

@@ -64,7 +64,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_REQUIRE_MFA_FOR_ADMINS` | `0` changes the *default* of the setting `security.require_mfa_for_admins` to off (the production default is on). A value an administrator stored under Customize > Security wins. |
 | `OBOP_DEV_INSECURE_KEY` | `1` selects a public, fixed key and logs a warning. Development and tests only. |
 | `OBOP_MFA_ISSUER` | The name shown in the authenticator app (default `obop`). |
-| `OBOP_PUBLIC_URL` | The external URL behind a proxy (`https://acme.example.com`): MCP discovery documents, webhook and OAuth redirect addresses, the community pages. |
+| `OBOP_PUBLIC_URL` | The external URL behind a proxy (`https://acme.example.com`): MCP discovery documents, the issuer, endpoints and resource identifier of the OAuth sign-in (D64), webhook and OAuth redirect addresses, the community pages. **Set it behind any proxy**: the resource a client asks for must equal `<OBOP_PUBLIC_URL>/mcp`. |
 | `OBOP_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call `/mcp`. |
 | `OBOP_MCP_RATE_PER_MINUTE` | Requests per token per minute on `/mcp`, counted across all processes (default 600; `0` is off). |
 | `OBOP_TRUST_PROXY`, `OBOP_PUBLIC_SITE`, `OBOP_ADMIN_PREFIX` | Public site settings (`--trust-proxy`, `--public-site`, `--admin-prefix`). Behind a proxy set `OBOP_TRUST_PROXY=1`, or every visitor shares the proxy's address in the rate limits. |
@@ -108,12 +108,26 @@ What is shared through the database, and how:
 | Governed writes | One database lock around the guard and the write of every mutating call, so two processes cannot race between check and write. |
 | Forum and status page | The database is the truth; each process keeps a copy that it reloads when a shared version number moves (checked at most every 250 ms). A post made on one process shows on the others within that. Writes take a database lock first, so ids are never handed out twice. One process per interval runs the status checks. |
 | Connector retry queue and dead letters | Rows with a lease: a worker claims due deliveries for 120 seconds; if it dies, another takes them. Delivery is at-least-once, and the delivery id is stable, so a receiver can deduplicate. Due pulls and the daily purge run once across processes. |
+| OAuth sign-in (D64): clients, grants, refresh tokens, codes, flows | Registered clients, grants and refresh tokens are records (hashed refresh tokens, so a rotation is a compare-and-set and a reused token is seen by whichever process gets it); codes (60 s) and sign-in flows (10 min) are expiring values, spent by whoever deletes them first; registration, authorize, sign-in and token rate limits are counters. Revoking on one process revokes on all. |
 
 What is *not* shared: small per-process caches (site settings for a few seconds, the forum and status copies between version checks). SQLite supports several processes on **one machine** too (file locks next to the database), but not on a network file system; use PostgreSQL to scale out.
 
 The locks are PostgreSQL session advisory locks (released by the server when a process dies) or, for SQLite, operating-system file locks named `<database file>.lock-<key>` (harmless to leave behind).
 
 Test it: `OBOP_TEST_POSTGRES_URL=postgres://... cargo test -p obop --test multi_process` starts two real servers on a scratch database and checks that a login on one works on the other, an MCP session continues across them, a plan proposed on one is approved on the other, parallel writes all land once, and rate limits and the lockout are counted across both.
+
+## Connecting Claude Desktop, claude.ai and Claude Code (D64)
+
+An instance is its own OAuth authorization server for its `/mcp` endpoint, so MCP clients that sign in through a browser (the custom connector of the Claude apps, `/mcp` in Claude Code) connect without a pasted token. There is nothing to switch on; what the operator owns is the address and the proxy.
+
+- **Set `OBOP_PUBLIC_URL`** (for example `https://acme.example.com`) on every instance behind a proxy. It is the issuer, the base of every endpoint and the resource a token is bound to (`<OBOP_PUBLIC_URL>/mcp`); without it the instance derives them from the `Host` header and `X-Forwarded-Proto`, which is fine on a laptop and wrong behind a proxy that rewrites the host. Set `OBOP_TRUST_PROXY=1` when a proxy you control sets `X-Forwarded-For`, or every client shares the proxy's address in the registration, sign-in and token rate limits.
+- **Forward these paths**: `/mcp`, `/oauth/*` (`register`, `authorize`, `token`, `revoke`), `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource` (and its `/mcp` variant) and `/.well-known/mcp/server-card.json`. claude.ai connects from Anthropic's servers, so the instance must be reachable from the internet over `https`; a local instance works with Claude Code and with clients on the same machine through a loopback redirect.
+- **What a person sees**: the instance's own sign-in (with the two-factor step when the account has it), then a consent page that names the application and where the browser returns to, lists the groups the person holds, and asks how long the access lasts (1, 7, 30 or 90 days). An account that must still enrol two-factor, or must change a temporary password, is sent to the back office first.
+- **What the token is**: a scoped agent token (D18) of one hour, bound to `<public URL>/mcp`: it works on `/mcp` and is refused on `/api`. It can hold only groups the person holds and never more; approvals still wait for a person. The refresh token is single use; presenting a used one, or a used code, ends the whole connection and writes `oauth_refresh_reuse` or `oauth_code_reuse` to the security log.
+- **Managing it**: every person lists and revokes their own connected apps under Customize, Security, Connected apps (`GET /api/auth/oauth/grants`, `POST /api/auth/oauth/grants/{id}/revoke`); `oauth_authorize`, `oauth_denied`, `oauth_revoked` and the reuse events are in `security_event`. Disabling an account stops its apps at once (its tokens stop resolving). A person's password change does not end them, as with other agent tokens; revoke them in the list.
+- **Registration is open**, as MCP clients expect (RFC 7591), and therefore limited: public clients only, 5 redirect URIs of `https` (or `http` on `localhost`, `127.0.0.1`, `[::1]`; no wildcards), 20 registrations per address and hour and 300 in all, at most 2000 clients, a client that never completed a connection is forgotten after a day and an idle one after 180 days. Registration is not authentication: the consent page says that obop cannot verify who runs an application.
+- **Nothing here needs `OBOP_SECRET_KEY`**: codes, refresh tokens and the binding of a sign-in are stored as SHA-256 hashes, so `obop secrets rotate` has nothing to re-seal for it. Clients, grants and refresh records are in `obop backup`; codes and sign-in flows (seconds to minutes) are not.
+- **Not tested against the real Claude apps**; see docs/ISSUES.md E1.
 
 ## The server key
 

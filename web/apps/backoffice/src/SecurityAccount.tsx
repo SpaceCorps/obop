@@ -267,6 +267,105 @@ export function SessionsSection({
   );
 }
 
+type GrantRow = {
+  id: string;
+  client_id: string;
+  client_name: string;
+  redirect_host: string;
+  scopes: string[];
+  created_at: string | null;
+  expires_at: string | null;
+  last_used_at: string | null;
+};
+
+/**
+ * The apps that connected to this instance through the sign-in flow of MCP clients (D64), each
+ * with the groups it was handed and an end date. Revoking one ends its tokens at once.
+ */
+export function ConnectedAppsSection({ token, notify }: { token: string; notify: Notify }) {
+  const id = useId();
+  const [rows, setRows] = useState<GrantRow[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    const r = await account<{ grants: GrantRow[] }>(token, "GET", "/oauth/grants");
+    setRows(r.ok ? r.value.grants : []);
+  }, [token]);
+  useEffect(() => void load(), [load]);
+  return (
+    <section className="stack" aria-labelledby={`${id}-h`}>
+      <h3 id={`${id}-h`} className="overline">
+        {t("Connected apps")}
+      </h3>
+      <p className="hint">
+        {t(
+          "Apps such as Claude Desktop, claude.ai and Claude Code that you signed in for. Each acts as you, with only the groups you handed over, until it ends or you revoke it. Steps that need approval still wait for a person.",
+        )}
+      </p>
+      {rows !== null && rows.length === 0 && (
+        <p className="hint">
+          {t(
+            "No apps are connected. To connect one, add the address of this instance followed by /mcp as a custom connector in the app, then sign in when the browser opens.",
+          )}
+        </p>
+      )}
+      {rows !== null && rows.length > 0 && (
+        <Table caption={t("Connected apps")} dense>
+          <thead>
+            <tr>
+              <th scope="col">{t("App")}</th>
+              <th scope="col">{t("Can act with")}</th>
+              <th scope="col">{t("Connected")}</th>
+              <th scope="col">{t("Last active")}</th>
+              <th scope="col">{t("Ends")}</th>
+              <th scope="col">
+                <span className="sr-only">{t("Actions")}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((g) => (
+              <tr key={g.id}>
+                <td>
+                  <strong>{g.client_name}</strong>
+                  <div className="hint">{g.redirect_host}</div>
+                </td>
+                <td>{g.scopes.join(", ")}</td>
+                <td>{g.created_at ? fmt.dateTime(g.created_at) : ""}</td>
+                <td>{g.last_used_at ? fmt.dateTime(g.last_used_at) : ""}</td>
+                <td>{g.expires_at ? fmt.dateTime(g.expires_at) : ""}</td>
+                <td>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    loading={busy === g.id}
+                    aria-label={t("Revoke {name}", { name: g.client_name })}
+                    onClick={async () => {
+                      setBusy(g.id);
+                      const r = await account<{ revoked: boolean }>(
+                        token,
+                        "POST",
+                        `/oauth/grants/${encodeURIComponent(g.id)}/revoke`,
+                        {},
+                      );
+                      setBusy(null);
+                      if (r.ok) {
+                        notify(t("{name} can no longer act for you.", { name: g.client_name }));
+                        void load();
+                      } else notify(reason(r) || t("Could not revoke the app."), "error");
+                    }}
+                  >
+                    {t("Revoke")}
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </section>
+  );
+}
+
 type Person = {
   name: string;
   admin: boolean;

@@ -98,7 +98,7 @@ value = "standard"
       expect(byTitle.first.plate ?? null).toBeNull();
 
       // The update is in the audit log, with the data steps named.
-      const events = await api.run("root", "security_event.list", { limit: 200 });
+      const events = await api.run("root", "security_event.list", { limit: 1000 });
       expect(
         events.some(
           (e: any) =>

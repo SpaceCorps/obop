@@ -10,6 +10,7 @@ obop-commands.workspace = true
 obop-connectors.workspace = true
 obop-community.workspace = true
 obop-mcp.workspace = true
+obop-oauth.workspace = true
 obop-types.workspace = true
 obop-storage.workspace = true
 obop-keys.workspace = true

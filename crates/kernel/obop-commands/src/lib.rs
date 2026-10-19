@@ -1085,6 +1085,15 @@ pub trait Authenticator: Send + Sync {
     fn mfa(&self) -> Option<&dyn MfaApi> {
         None
     }
+    /// Resolve a bearer token and say which audience (resource) it was issued for. Tokens from
+    /// the OAuth flow (D64) carry one and work only there; every other token has none.
+    fn resolve_with_audience(&self, token: &str) -> Option<(Principal, Option<String>)> {
+        self.resolve(token).map(|p| (p, None))
+    }
+    /// What the OAuth authorization server needs from the identity provider (D64).
+    fn oauth(&self) -> Option<&dyn OAuthTokens> {
+        None
+    }
     /// A human issues a scoped token for an agent acting on their behalf (D18). Scopes must be
     /// groups the human holds.
     fn issue_agent_token(
@@ -1093,6 +1102,33 @@ pub trait Authenticator: Send + Sync {
         scopes: &[String],
         label: &str,
     ) -> Result<String, String>;
+}
+
+/// The few identity operations the OAuth authorization server (D64) needs. Tokens it issues are
+/// the scoped agent tokens of D18 with a short life, an audience and a link to their grant.
+pub trait OAuthTokens: Send + Sync {
+    /// The person's principal (current groups); `None` when unknown or disabled.
+    fn principal_of(&self, user: &str) -> Option<Principal>;
+    /// A scoped agent token for `owner` that lives `ttl_secs`, works only for `audience` and
+    /// belongs to `grant`. Returns the token (shown once) and its id (for `revoke_token_id`).
+    /// Scopes must be groups the owner holds.
+    fn issue_oauth_access(
+        &self,
+        owner: &str,
+        scopes: &[String],
+        label: &str,
+        ttl_secs: u64,
+        audience: &str,
+        grant: &str,
+    ) -> Result<(String, String), String>;
+    /// Revoke a token by the id `issue_oauth_access` returned.
+    fn revoke_token_id(&self, id: &str) -> bool;
+    /// Revoke a session token that was only needed to prove a sign-in.
+    fn revoke_session(&self, token: &str) -> bool;
+    /// The grant an access token belongs to.
+    fn grant_of(&self, token: &str) -> Option<String>;
+    /// Append to the security event log (never a token, a code or a secret).
+    fn audit(&self, user: &str, kind: &str, actor: &str, detail: &str);
 }
 
 /// What the first (or second) sign-in step produced.

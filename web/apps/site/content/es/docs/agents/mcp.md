@@ -8,13 +8,30 @@ lead: "Cada instancia de obop tiene un servidor MCP en /mcp. Apunta un cliente a
 
 Una instancia sirve el [Model Context Protocol](https://modelcontextprotocol.io/) mediante **Streamable HTTP** en `https://YOUR-INSTANCE/mcp`. Lo tienen tanto una instancia alojada (por ejemplo en Sliplane) como un `obop serve` local; no hay nada que activar.
 
-- **Autenticación:** `Authorization: Bearer <token>` en cada petición, con un [token de agente](/docs/agents/tokens/) (o un token de sesión obtenido al iniciar sesión). El token se comprueba exactamente igual que en REST, de modo que la lista de herramientas, los permisos, el enmascarado y las aprobaciones son los que el token tiene mediante [REST](/docs/agents/rest/).
-- **Todavía no hay OAuth.** obop no tiene un servidor de autorización OAuth. El endpoint responde `401` con `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource"`, como pide la especificación de autorización de MCP, y ese documento indica claramente que los tokens se obtienen con `POST /api/auth/login` y `POST /api/auth/agent-token` y no nombra ningún servidor de autorización. Los clientes que solo pueden conectarse mediante un flujo OAuth en el navegador (por ejemplo el diálogo de "conector personalizado" de las aplicaciones de Claude) **todavía no pueden conectarse**; usa uno de los clientes siguientes, que aceptan una cabecera.
+- **Autenticación:** un inicio de sesión en el navegador (OAuth, véase abajo) para Claude Desktop, claude.ai y Claude Code, o `Authorization: Bearer <token>` en cada petición con un token de agente. En ambos casos el token se comprueba como en REST. Un token ausente o inválido recibe `401` con `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, como pide la especificación de autorización de MCP; ese documento nombra el servidor de autorización de la instancia (`/.well-known/oauth-authorization-server`). Un token emitido por el inicio de sesión solo vale para `/mcp`, no para `/api`.
 - **Revisiones del protocolo:** `2025-11-25`, `2025-06-18` y `2025-03-26`, negociadas en `initialize`. La revisión más reciente, `2026-07-28`, no tiene estado y funciona de otra manera; obop todavía no la implementa. Un cliente que admite ambas vuelve a `initialize` cuando recibe un `400` simple, que es lo que envía obop ante una cabecera de versión no admitida.
 - **Sesiones:** `initialize` devuelve un `Mcp-Session-Id`; envíalo en todas las peticiones posteriores. La sesión conserva la bóveda de enmascarado, de modo que un token de máscara como `NAME_1` significa lo mismo en todas las llamadas de la sesión y puedes enviarlo de vuelta. Una sesión distinta inicia una bóveda nueva. `DELETE /mcp` termina una sesión; una sesión desconocida o caducada responde `404` y el cliente vuelve a empezar con `initialize`. Una sesión pertenece al token que la abrió y caduca tras dos horas sin ninguna petición.
 - **Las respuestas son JSON simple.** No hay un flujo SSE del servidor al cliente (`GET /mcp` responde `405`), y los lotes JSON-RPC solo se aceptan en `2025-03-26`, la única revisión que los tiene.
 - **Límites:** cuerpos de petición de hasta 1 MiB (`413`), 600 peticiones por minuto y token (`429` con `Retry-After`, ajustable con `OBOP_MCP_RATE_PER_MINUTE`), 25 sesiones abiertas por token.
 - **Navegadores:** una petición con cabecera `Origin` se rechaza con `403` salvo que el origen sea la URL pública de la propia instancia (`OBOP_PUBLIC_URL`), el mismo origen en un host de loopback, o esté incluido en `OBOP_ALLOWED_ORIGINS` (separado por comas). Esto protege las instancias locales frente al DNS rebinding. Los clientes que no son navegadores no envían `Origin`. Detrás de un proxy, define `OBOP_PUBLIC_URL` (por ejemplo `https://acme.example.com`) para que los documentos de descubrimiento indiquen la dirección pública.
+
+### Conectar con un inicio de sesión en el navegador (OAuth)
+
+Claude Desktop, claude.ai y Claude Code pueden conectarse a una instancia sin pegar un token. En la aplicación añade un conector personalizado (custom connector) con la dirección `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, luego `/mcp` y elige autenticar). La aplicación encuentra sola el inicio de sesión y abre en el navegador una página de **tu instancia**. Allí:
+
+1. inicias sesión con tu cuenta de obop e introduces tu código de dos pasos si la cuenta lo tiene;
+2. ves qué aplicación lo solicita y a qué dirección volverá el navegador;
+3. marcas los grupos de permisos que cedes, eliges cuánto dura el acceso (1, 7, 30 o 90 días) y pulsas **Permitir**.
+
+Qué significa:
+
+- **La aplicación solo puede restringirte.** Se te ofrecen los grupos que tú tienes; la aplicación actúa como tú con los que marques, nunca con más (los [tokens de agente](/docs/agents/tokens/) funcionan igual). Sus acciones se registran como las de tu agente.
+- **Las aprobaciones siguen necesitando a una persona.** Un paso que requiere aprobación espera en obop a un humano; la aplicación no puede aprobar sus propias propuestas.
+- **Tokens de corta duración.** La aplicación recibe un token de acceso que dura una hora y un token de renovación que se usa una vez y se sustituye cada vez. Si un token de renovación se usa dos veces, termina toda la conexión. Un token de acceso de este inicio de sesión vale solo para `/mcp`.
+- **Mantienes el control.** En _Personalizar, Seguridad, Aplicaciones conectadas_ aparece cada conexión con sus grupos y su fecha de fin; **Revocar** la termina al instante. Conectar, rechazar, revocar y un token usado dos veces figuran en el registro de seguridad.
+- **No se confía en nada de antemano.** Cualquier aplicación puede registrarse sola, así que la página muestra el nombre que eligió y la dirección de retorno, y dice que obop no puede comprobar quién la gestiona. Las direcciones de retorno deben ser `https` (o `http` en `localhost`, `127.0.0.1` o `[::1]`), los registros están limitados y los que no se usan caducan.
+
+Protocolo, para autores de clientes: metadatos según RFC 9728 y RFC 8414, registro dinámico de clientes (RFC 7591, clientes públicos), código de autorización con PKCE **S256** (obligatorio), el parámetro `resource` (RFC 8707, debe ser la dirección `/mcp` de la instancia), rotación de tokens de renovación con detección de reutilización, revocación (RFC 7009) y el parámetro `iss` en la redirección (RFC 9207). Endpoints: `/oauth/register`, `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`. Una redirección loopback (`http://127.0.0.1:PUERTO/...`) puede usar cualquier puerto (RFC 8252); cualquier otra debe coincidir exactamente. Una instancia detrás de un proxy necesita `OBOP_PUBLIC_URL` para que las direcciones de estos documentos sean las públicas. Lo hemos construido según la especificación y probado con un cliente propio en pruebas automatizadas; **todavía no hemos conectado** las aplicaciones reales de Claude.
 
 ### Herramientas
 
@@ -74,7 +91,7 @@ Si el servidor rechaza la cabecera, Claude Code informa de un fallo de conexión
 
 #### Claude Desktop y claude.ai
 
-Las aplicaciones añaden servidores remotos como _conectores personalizados_ (Settings, Connectors, Add custom connector) y los autentican con OAuth. Allí no se ofrece una cabecera bearer estática, y obop no tiene servidor OAuth, por lo que **una instancia alojada de obop todavía no se puede añadir como conector**. La configuración stdio [de más abajo](#claude-desktop-stdio) funciona en Claude Desktop con un binario local. Un puente como el paquete comunitario `mcp-remote` puede añadir una cabecera a un servidor remoto para los clientes que solo hablan stdio; no lo hemos probado con obop.
+Las aplicaciones añaden servidores remotos como _conectores personalizados_ (Settings, Connectors, Add custom connector) y los autentican con OAuth. Introduce `https://YOUR-INSTANCE/mcp` y sigue el inicio de sesión en el navegador descrito arriba; no se pega ningún token. Para claude.ai la instancia debe ser accesible desde internet por `https`, porque las peticiones las hacen los servidores de Anthropic. La configuración stdio [más abajo](#claude-desktop-stdio) funciona en Claude Desktop con un binario local. Un puente como el paquete de la comunidad `mcp-remote` puede añadir una cabecera a un servidor remoto para clientes que solo hablan stdio; no lo hemos probado con obop.
 
 #### Cursor
 
@@ -165,12 +182,13 @@ o `gemini mcp add --transport http --header "Authorization: Bearer $OBOP_TOKEN" 
 
 Una instancia publica lo siguiente sin necesidad de token:
 
-| URL                                     | Qué                                                                                                                                                                  |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/.well-known/oauth-protected-resource` | Metadatos del recurso protegido OAuth (RFC 9728) para `/mcp`. Indica que no hay servidor de autorización. También en `/.well-known/oauth-protected-resource/mcp`.    |
-| `/.well-known/mcp/server-card.json`     | Tarjeta del servidor MCP: nombre, versión, el endpoint `streamable-http`, versiones del protocolo, la cabecera `Authorization`. También en `/mcp/server-card`.       |
-| `/.well-known/ai-catalog.json`          | Un AI Catalog de una sola entrada que apunta a la tarjeta del servidor.                                                                                              |
-| `/api/openapi.json`, `/api/meta`        | El documento OpenAPI tiene un campo `x-mcp` con el endpoint, el transporte y las versiones del protocolo; `GET /api/meta` lleva una cabecera `Link` con `rel="mcp"`. |
+| URL                                       | Qué                                                                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/.well-known/oauth-protected-resource`   | Metadatos del recurso protegido OAuth (RFC 9728) para `/mcp`, que nombran el servidor de autorización. También en `/.well-known/oauth-protected-resource/mcp`, al que apunta la respuesta `401`. |
+| `/.well-known/oauth-authorization-server` | Metadatos del servidor de autorización OAuth (RFC 8414): los endpoints, solo PKCE `S256`, solo clientes públicos.                                                                                |
+| `/.well-known/mcp/server-card.json`       | Tarjeta del servidor MCP: nombre, versión, el endpoint `streamable-http`, versiones del protocolo, la cabecera `Authorization`. También en `/mcp/server-card`.                                   |
+| `/.well-known/ai-catalog.json`            | Un AI Catalog de una sola entrada que apunta a la tarjeta del servidor.                                                                                                                          |
+| `/api/openapi.json`, `/api/meta`          | El documento OpenAPI tiene un campo `x-mcp` con el endpoint, el transporte y las versiones del protocolo; `GET /api/meta` lleva una cabecera `Link` con `rel="mcp"`.                             |
 
 La tarjeta del servidor es una extensión de la especificación MCP que aún se está desarrollando (SEP-2127, mantenida en un repositorio de incubación), por lo que su forma puede cambiar; el archivo lo indica en su `$comment`. También incluye los campos simples `serverInfo`, `transport`, `endpoint` y `capabilities` de un borrador anterior, para los analizadores que los buscan.
 
@@ -387,13 +405,14 @@ Si el cliente no muestra herramientas o da un error, ve a [Solución de problema
 
 ## Verificado y no verificado
 
-| Elemento                                                                                                 | Estado                                                                                            |
-| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Handshake de `obop mcp`, `tools/list`, `tools/call`, resultado de aprobación                             | Ejecutado contra una instancia local real.                                                        |
-| `/mcp` remoto: handshake, herramientas, enmascarado, ciclo de aprobación, sesiones, 401, origen, límites | Pruebas automatizadas (Rust sobre HTTP, Playwright) contra una instancia real.                    |
-| `/mcp` remoto con un cliente MCP real                                                                    | Cliente de línea de comandos MCP Inspector 2.11.0: `initialize` y `tools/list`, `tools/call`.     |
-| Suite oficial de conformidad de MCP                                                                      | No es significativa: necesita un servidor sin autenticación y sus propias herramientas de prueba. |
-| Configuración remota de Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI                    | Tomada de la documentación de cada cliente; los clientes no se iniciaron.                         |
-| Formatos de configuración stdio                                                                          | Tomados de la documentación de cada cliente. No iniciamos todos los clientes.                     |
-| Ubicación del archivo de Windsurf                                                                        | Sin confirmar, véase arriba.                                                                      |
-| Conectores de Claude Desktop y claude.ai                                                                 | Necesitan OAuth; obop todavía no se puede añadir allí.                                            |
+| Elemento                                                                                                    | Estado                                                                                            |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Handshake de `obop mcp`, `tools/list`, `tools/call`, resultado de aprobación                                | Ejecutado contra una instancia local real.                                                        |
+| `/mcp` remoto: handshake, herramientas, enmascarado, ciclo de aprobación, sesiones, 401, origen, límites    | Pruebas automatizadas (Rust sobre HTTP, Playwright) contra una instancia real.                    |
+| `/mcp` remoto con un cliente MCP real                                                                       | Cliente de línea de comandos MCP Inspector 2.11.0: `initialize` y `tools/list`, `tools/call`.     |
+| Suite oficial de conformidad de MCP                                                                         | No es significativa: necesita un servidor sin autenticación y sus propias herramientas de prueba. |
+| Configuración remota de Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI                       | Tomada de la documentación de cada cliente; los clientes no se iniciaron.                         |
+| Formatos de configuración stdio                                                                             | Tomados de la documentación de cada cliente. No iniciamos todos los clientes.                     |
+| Ubicación del archivo de Windsurf                                                                           | Sin confirmar, véase arriba.                                                                      |
+| Inicio de sesión en el navegador (OAuth): registro, PKCE, consentimiento, tokens, reutilización, revocación | Pruebas automatizadas (Rust y Playwright en un navegador real) con nuestro propio cliente.        |
+| Conectores de Claude Desktop y claude.ai, inicio de sesión de Claude Code                                   | **No probado** con las aplicaciones reales; construido según la especificación.                   |

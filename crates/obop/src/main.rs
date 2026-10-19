@@ -13,6 +13,8 @@ mod mfa_tests;
 mod model_tests;
 #[cfg(test)]
 mod modules_tests;
+#[cfg(test)]
+mod oauth_tests;
 mod ops;
 #[cfg(test)]
 mod payments_tests;
@@ -776,6 +778,7 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
+    state.set_trust_proxy(o.trust_proxy);
     app.connectors.start();
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
     let blobs = app.store.blobs();

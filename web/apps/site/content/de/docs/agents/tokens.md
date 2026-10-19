@@ -74,7 +74,7 @@ Dasselbe Token verbindet einen MCP-Client mit dem entfernten MCP-Server der Inst
 - Erstellen Sie pro Client ein eigenes Token und geben Sie ihm nur die Scopes, die dieser Client braucht. Die MCP-Tool-Liste besteht genau aus den Befehlen, die die Scopes erlauben.
 - Ein Sitzungs-Token aus der Anmeldung funktioniert ebenfalls, läuft aber nach 12 Stunden ab; ein Agent-Token nicht.
 - Das Token muss bei jeder Anfrage gesendet werden, nicht nur bei der ersten; Clients tun das, sobald es in ihrer Konfiguration steht.
-- Eine OAuth-Anmeldung für MCP gibt es noch nicht, daher können sich Clients, die nur eine Browser-Anmeldung anbieten, nicht verbinden. Siehe [Über MCP verbinden](/docs/agents/mcp/).
+- Clients mit Browser-Anmeldung (Claude Desktop, claude.ai, Claude Code) brauchen kein eingefügtes Token: Sie verbinden sich per Anmeldung und erhalten ein kurzlebiges Token dieser Art. Siehe [Über MCP verbinden](/docs/agents/mcp/).
 
 ## Sicher aufbewahren
 

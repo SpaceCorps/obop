@@ -74,7 +74,7 @@ Ten sam token łączy klienta MCP ze zdalnym serwerem MCP instancji, `https://YO
 - Utwórz osobny token dla każdego klienta i nadaj mu tylko zakresy, których ten klient potrzebuje. Lista narzędzi MCP to dokładnie te polecenia, na które pozwalają zakresy.
 - Token sesji z logowania też działa, ale wygasa po 12 godzinach; token agenta nie wygasa.
 - Token trzeba wysyłać w każdym żądaniu, nie tylko w pierwszym; klienci robią to sami, gdy mają go w konfiguracji.
-- Logowanie OAuth dla MCP jeszcze nie istnieje, więc klienci, którzy oferują tylko logowanie w przeglądarce, nie mogą się połączyć. Zobacz [Połączenie przez MCP](/docs/agents/mcp/).
+- Klienci oferujący logowanie w przeglądarce (Claude Desktop, claude.ai, Claude Code) nie potrzebują wklejanego tokenu: łączą się przez logowanie i dostają krótko żyjący token tego rodzaju. Zobacz [Połączenie przez MCP](/docs/agents/mcp/).
 
 ## Przechowuj go bezpiecznie
 

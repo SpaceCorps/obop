@@ -74,7 +74,7 @@ The same token connects an MCP client to the instance's remote MCP server, `http
 - Create a separate token per client and give it only the scopes that client needs. The MCP tool list is exactly the commands the scopes allow.
 - A session token from sign-in also works, but it expires after 12 hours; an agent token does not.
 - The token must be sent on every request, not only the first; clients do this once it is in their configuration.
-- There is no OAuth sign-in for MCP yet, so clients that only offer a browser login cannot connect. See [Connect over MCP](/docs/agents/mcp/).
+- Clients that offer a browser login (Claude Desktop, claude.ai, Claude Code) do not need a pasted token: they connect with a sign-in and get a short-lived token of this kind. See [Connect over MCP](/docs/agents/mcp/#connect-with-a-browser-sign-in-oauth).
 
 ## Store it safely
 

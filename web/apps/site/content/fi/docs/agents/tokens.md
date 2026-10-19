@@ -74,7 +74,7 @@ Sama tunniste yhdistää MCP-asiakkaan instanssin etä-MCP-palvelimeen `https://
 - Luo erillinen tunniste jokaista asiakasta varten ja anna sille vain ne rajaukset, joita asiakas tarvitsee. MCP-työkalulista on täsmälleen ne komennot, jotka rajaukset sallivat.
 - Myös sisäänkirjautumisen istuntotunniste toimii, mutta se vanhenee 12 tunnissa; agenttitunniste ei vanhene.
 - Tunniste on lähetettävä jokaisessa pyynnössä, ei vain ensimmäisessä; asiakkaat tekevät tämän, kun tunniste on niiden asetuksissa.
-- MCP:lle ei ole vielä OAuth-kirjautumista, joten asiakkaat, jotka tarjoavat vain selainkirjautumisen, eivät voi yhdistää. Katso [Yhdistä MCP:n kautta](/docs/agents/mcp/).
+- Asiakkaat, jotka tarjoavat selainkirjautumisen (Claude Desktop, claude.ai, Claude Code), eivät tarvitse liitettyä tunnistetta: ne yhdistävät kirjautumalla ja saavat tämänlaisen lyhytikäisen tunnisteen. Katso [Yhdistä MCP:n kautta](/docs/agents/mcp/).
 
 ## Säilytä se turvallisesti
 

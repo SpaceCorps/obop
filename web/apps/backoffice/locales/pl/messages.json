@@ -1788,5 +1788,18 @@
   "“{label}” is still used by other records. Remove or change them first.": "Rekord „{label}” jest nadal używany przez inne rekordy. Najpierw je usuń lub zmień.",
   "“{part}” has no value": "„{part}” nie ma wartości",
   "“{part}” is not field operator value": "„{part}” nie ma postaci: pole operator wartość",
-  "“{part}” needs values after in": "„{part}” wymaga wartości po in"
+  "“{part}” needs values after in": "„{part}” wymaga wartości po in",
+  "{name} can no longer act for you.": "{name} nie może już działać w Twoim imieniu.",
+  "App access ended": "Dostęp aplikacji zakończony",
+  "App access ended: a code was used twice": "Dostęp aplikacji zakończony: kod użyto dwa razy",
+  "App access ended: a token was used twice": "Dostęp aplikacji zakończony: token użyto dwa razy",
+  "App connected": "Aplikacja połączona",
+  "App refused": "Aplikacja odrzucona",
+  "Apps such as Claude Desktop, claude.ai and Claude Code that you signed in for. Each acts as you, with only the groups you handed over, until it ends or you revoke it. Steps that need approval still wait for a person.": "Aplikacje takie jak Claude Desktop, claude.ai i Claude Code, dla których się zalogowano. Każda działa w Twoim imieniu, tylko z grupami, które przekazałeś, dopóki dostęp nie wygaśnie lub go nie cofniesz. Kroki wymagające zatwierdzenia nadal czekają na człowieka.",
+  "Can act with": "Może działać z",
+  "Connected apps": "Połączone aplikacje",
+  "Could not revoke the app.": "Nie udało się cofnąć dostępu aplikacji.",
+  "Last active": "Ostatnia aktywność",
+  "No apps are connected. To connect one, add the address of this instance followed by /mcp as a custom connector in the app, then sign in when the browser opens.": "Brak połączonych aplikacji. Aby połączyć aplikację, dodaj w niej adres tej instancji z dopiskiem /mcp jako własny łącznik, a następnie zaloguj się, gdy otworzy się przeglądarka.",
+  "Revoke {name}": "Cofnij dostęp: {name}"
 }

@@ -180,7 +180,7 @@ test.describe("remote MCP over Streamable HTTP", () => {
     const anon = await request.post("/mcp", { data: ping, headers });
     expect(anon.status()).toBe(401);
     expect(anon.headers()["www-authenticate"]).toMatch(
-      /^Bearer resource_metadata="http:\/\/127\.0\.0\.1:\d+\/\.well-known\/oauth-protected-resource"$/,
+      /^Bearer resource_metadata="http:\/\/127\.0\.0\.1:\d+\/\.well-known\/oauth-protected-resource\/mcp"$/,
     );
     const forged = await request.post("/mcp", {
       data: ping,
@@ -208,7 +208,8 @@ test.describe("remote MCP over Streamable HTTP", () => {
     expect((await mcp.rpc("ping")).status).toBe(404);
 
     const prm = await (await request.get("/.well-known/oauth-protected-resource")).json();
-    expect(prm.authorization_servers).toBeUndefined();
+    // The instance is its own authorization server (D64).
+    expect(prm.authorization_servers).toEqual([new URL(prm.resource).origin]);
     expect(prm.bearer_methods_supported).toEqual(["header"]);
     const card = await (await request.get("/.well-known/mcp/server-card.json")).json();
     expect(card.remotes[0]).toMatchObject({ type: "streamable-http" });

@@ -20,6 +20,7 @@ pub mod community;
 pub mod connectors;
 pub mod mcp;
 pub mod mfa;
+pub mod oauth;
 pub mod openapi;
 pub mod payments;
 pub mod public;
@@ -32,6 +33,10 @@ pub struct HttpState {
     /// Vaults and MCP sessions live in the storage backend, shared by every server process.
     shared: Arc<shared::SharedState>,
     mcp: mcp::McpState,
+    /// The OAuth authorization server (D64); `None` when the authenticator cannot issue its tokens.
+    oauth: Option<Arc<obop_oauth::OAuth>>,
+    /// Take the client address from `X-Forwarded-For` (behind a proxy you control).
+    trust_proxy: std::sync::atomic::AtomicBool,
     /// The connectors engines, set once by the composition root (webhooks, OAuth redirect).
     connectors: std::sync::OnceLock<Arc<obop_connectors::Runtime>>,
     /// The payment module's webhook door (`/hooks/pay/{provider}`), set by the composition root.
@@ -50,9 +55,16 @@ impl HttpState {
         mcp: mcp::McpConfig,
     ) -> Arc<Self> {
         let shared = shared::SharedState::for_dispatcher(&dispatcher);
+        let oauth = obop_oauth::OAuth::new(
+            shared.backend.clone(),
+            auth.clone(),
+            obop_oauth::OAuthConfig::default(),
+        );
         Arc::new(Self {
             dispatcher,
             auth,
+            oauth,
+            trust_proxy: std::sync::atomic::AtomicBool::new(false),
             mcp: mcp::McpState::new(mcp, shared.clone()),
             shared,
             connectors: std::sync::OnceLock::new(),
@@ -75,6 +87,12 @@ impl HttpState {
         }
     }
 
+    /// Key the rate limits of the OAuth endpoints on the last `X-Forwarded-For` entry.
+    pub fn set_trust_proxy(&self, on: bool) {
+        self.trust_proxy
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Serve the payment providers' webhook door.
     pub fn set_payments(&self, hooks: Arc<dyn obop_commands::PaymentHooks>) {
         let _ = self.payments.set(hooks);
@@ -94,10 +112,14 @@ impl HttpState {
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer "))
             .ok_or(AuthRejection::Unauthorized)?;
-        let p = self
+        let (p, audience) = self
             .auth
-            .resolve(token)
+            .resolve_with_audience(token)
             .ok_or(AuthRejection::Unauthorized)?;
+        // A token issued by the OAuth flow is for /mcp only (RFC 8707, D64).
+        if audience.is_some() {
+            return Err(AuthRejection::Unauthorized);
+        }
         if p.mfa_limited {
             return Err(self.limited_rejection(&p));
         }
@@ -175,8 +197,49 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             "/.well-known/oauth-protected-resource/mcp",
             get(mcp::oauth_protected_resource_mcp),
         )
+        .route(
+            "/.well-known/oauth-authorization-server",
+            get(oauth::authorization_server),
+        )
+        .route(
+            "/oauth/register",
+            post(oauth::register)
+                .options(oauth::preflight)
+                .layer(body_limit()),
+        )
+        .route(
+            "/oauth/token",
+            post(oauth::token)
+                .options(oauth::preflight)
+                .layer(body_limit()),
+        )
+        .route(
+            "/oauth/revoke",
+            post(oauth::revoke)
+                .options(oauth::preflight)
+                .layer(body_limit()),
+        )
+        .route("/oauth/authorize", get(oauth::authorize))
+        .route(
+            "/oauth/authorize/login",
+            post(oauth::login).layer(body_limit()),
+        )
+        .route("/oauth/authorize/mfa", post(oauth::mfa).layer(body_limit()))
+        .route(
+            "/oauth/authorize/decision",
+            post(oauth::decision).layer(body_limit()),
+        )
+        .route("/api/auth/oauth/grants", get(oauth::list_grants))
+        .route(
+            "/api/auth/oauth/grants/{id}/revoke",
+            post(oauth::revoke_grant),
+        )
         .with_state(state.clone())
         .merge(mfa::routes("/api/auth", state.auth.clone()))
+}
+
+fn body_limit() -> axum::extract::DefaultBodyLimit {
+    axum::extract::DefaultBodyLimit::max(oauth::MAX_BODY)
 }
 
 /// Unknown API paths answer JSON, never the HTML shell, so agents can parse the error.
@@ -209,7 +272,12 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
         Ok((p, _)) => s.dispatcher.meta(Surface::Rest, &p),
         Err(_) => Vec::new(),
     };
-    let doc = openapi::instance(&base, &modules);
+    let mut doc = openapi::instance(&base, &modules);
+    if s.oauth.is_some() {
+        doc["x-mcp"]["authorization"] = J::from("oauth2 or bearer");
+        doc["x-mcp"]["authorizationServerMetadata"] =
+            J::from(format!("{base}/.well-known/oauth-authorization-server"));
+    }
     let mut r = Json(doc).into_response();
     r.headers_mut().insert(
         axum::http::header::VARY,

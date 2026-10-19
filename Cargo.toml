@@ -20,6 +20,7 @@ obop-ops = { path = "crates/kernel/obop-ops" }
 obop-media = { path = "crates/kernel/obop-media" }
 obop-payments = { path = "crates/kernel/obop-payments" }
 obop-auth = { path = "crates/kernel/obop-auth" }
+obop-oauth = { path = "crates/kernel/obop-oauth" }
 obop-pkg = { path = "crates/kernel/obop-pkg" }
 obop-platform = { path = "crates/kernel/obop-platform" }
 obop-update = { path = "crates/kernel/obop-update" }

@@ -74,7 +74,7 @@ Samma token ansluter en MCP-klient till instansens fjärr-MCP-server, `https://Y
 - Skapa en separat token per klient och ge den bara de scope som klienten behöver. MCP-verktygslistan är exakt de kommandon som scope tillåter.
 - En sessionstoken från inloggning fungerar också, men den går ut efter 12 timmar; en agenttoken gör det inte.
 - Token måste skickas med varje förfrågan, inte bara den första; klienter gör detta när den väl finns i deras konfiguration.
-- Det finns ännu ingen OAuth-inloggning för MCP, så klienter som bara erbjuder inloggning i webbläsaren kan inte ansluta. Se [Anslut via MCP](/docs/agents/mcp/).
+- Klienter som erbjuder inloggning i webbläsaren (Claude Desktop, claude.ai, Claude Code) behöver ingen inklistrad token: de ansluter med en inloggning och får en kortlivad token av det här slaget. Se [Anslut via MCP](/docs/agents/mcp/).
 
 ## Förvara den säkert
 

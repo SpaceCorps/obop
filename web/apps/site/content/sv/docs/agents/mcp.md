@@ -8,13 +8,30 @@ lead: "Varje obop-instans har en MCP-server på /mcp. Rikta en klient mot URL:en
 
 En instans tillhandahåller [Model Context Protocol](https://modelcontextprotocol.io/) över **Streamable HTTP** på `https://YOUR-INSTANCE/mcp`. En hostad instans (till exempel på Sliplane) och en lokal `obop serve` har båda den; inget behöver slås på.
 
-- **Autentisering:** `Authorization: Bearer <token>` i varje förfrågan, med en [agenttoken](/docs/agents/tokens/) (eller en sessionstoken från inloggning). Token kontrolleras exakt som för REST, så verktygslistan, behörigheterna, maskeringen och godkännandena är de som token har över [REST](/docs/agents/rest/).
-- **Ännu ingen OAuth.** obop har ingen OAuth-auktoriseringsserver. Slutpunkten svarar `401` med `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource"` såsom MCP-specifikationen för auktorisering kräver, och det dokumentet anger tydligt att token kommer från `POST /api/auth/login` och `POST /api/auth/agent-token` och nämner ingen auktoriseringsserver. Klienter som bara kan ansluta via ett OAuth-flöde i webbläsaren (till exempel dialogrutan "custom connector" i Claude-apparna) **kan inte ansluta ännu**; använd en klient nedan som accepterar en header.
+- **Autentisering:** inloggning i webbläsaren (OAuth, se nedan) för Claude Desktop, claude.ai och Claude Code, eller `Authorization: Bearer <token>` i varje förfrågan med en agenttoken. I båda fallen kontrolleras token som för REST. En saknad eller felaktig token får `401` med `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, som MCP:s auktoriseringsspecifikation kräver; det dokumentet nämner instansens auktoriseringsserver (`/.well-known/oauth-authorization-server`). En token som utfärdats vid inloggningen gäller bara för `/mcp`, inte för `/api`.
 - **Protokollrevisioner:** `2025-11-25`, `2025-06-18` och `2025-03-26`, förhandlade i `initialize`. Den nyaste revisionen, `2026-07-28`, är tillståndslös och fungerar annorlunda; obop implementerar den inte ännu. En klient som talar båda faller tillbaka på `initialize` när den får ett vanligt `400`, vilket är vad obop skickar för en versionsheader som inte stöds.
 - **Sessioner:** `initialize` returnerar ett `Mcp-Session-Id`; skicka det i varje senare förfrågan. Sessionen behåller maskeringsvalvet, så en maskeringstoken som `NAME_1` betyder samma sak i varje anrop i sessionen och du kan skicka tillbaka den. En annan session startar ett nytt valv. `DELETE /mcp` avslutar en session; en okänd eller utgången session svarar `404`, och klienten börjar om med `initialize`. En session tillhör den token som öppnade den och går ut efter två timmar utan förfrågan.
 - **Svaren är vanlig JSON.** Det finns ingen SSE-ström från server till klient (`GET /mcp` svarar `405`), och JSON-RPC-batchar accepteras bara i `2025-03-26`, den enda revision som har dem.
 - **Gränser:** förfrågningskroppar upp till 1 MiB (`413`), 600 förfrågningar per minut och token (`429` med `Retry-After`, kan justeras med `OBOP_MCP_RATE_PER_MINUTE`), 25 öppna sessioner per token.
 - **Webbläsare:** en förfrågan med en `Origin`-header avvisas med `403` om inte ursprunget är instansens egen publika URL (`OBOP_PUBLIC_URL`), samma ursprung på en loopback-värd, eller finns i `OBOP_ALLOWED_ORIGINS` (kommaseparerad). Det skyddar lokala instanser mot DNS rebinding. Klienter som inte är webbläsare skickar ingen `Origin`. Bakom en proxy sätter du `OBOP_PUBLIC_URL` (till exempel `https://acme.example.com`) så att upptäcktsdokumenten anger den publika adressen.
+
+### Anslut med inloggning i webbläsaren (OAuth)
+
+Claude Desktop, claude.ai och Claude Code kan ansluta till en instans utan inklistrad token. Lägg i appen till en egen koppling (custom connector) med adressen `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, sedan `/mcp` och välj att autentisera). Appen hittar inloggningen själv och öppnar en sida på **din instans** i webbläsaren. Där:
+
+1. loggar du in med ditt obop-konto och anger din tvåfaktorskod om kontot har en;
+2. ser du vilken applikation som frågar och till vilken adress webbläsaren återvänder;
+3. kryssar du i de behörighetsgrupper som ska lämnas över, väljer hur länge åtkomsten gäller (1, 7, 30 eller 90 dagar) och trycker på **Tillåt**.
+
+Vad det betyder:
+
+- **Appen kan bara begränsa dig.** Du erbjuds de grupper du själv har; appen agerar som du med de du kryssar i, aldrig med fler ([agenttokens](/docs/agents/tokens/) fungerar likadant). Dess åtgärder registreras som din agents.
+- **Godkännanden kräver fortfarande en person.** Ett steg som kräver godkännande väntar i obop på en människa; appen kan inte godkänna sina egna förslag.
+- **Kortlivade tokens.** Appen får en åtkomsttoken som gäller en timme och en förnyelsetoken som används en gång och ersätts varje gång. Om en förnyelsetoken används två gånger avslutas hela anslutningen. En åtkomsttoken från den här inloggningen gäller bara för `/mcp`.
+- **Du behåller kontrollen.** Under _Anpassa, Säkerhet, Anslutna appar_ finns varje anslutning med sina grupper och sitt slutdatum; **Återkalla** avslutar den direkt. Anslutning, nekande, återkallelse och en token som använts två gånger finns i säkerhetsloggen.
+- **Inget litas på i förväg.** Vilken applikation som helst får registrera sig själv, så sidan visar namnet den valt och adressen den återvänder till och säger att obop inte kan kontrollera vem som driver den. Återvändningsadresser måste vara `https` (eller `http` på `localhost`, `127.0.0.1` eller `[::1]`), registreringar är begränsade och oanvända löper ut.
+
+Protokoll, för klientutvecklare: metadata enligt RFC 9728 och RFC 8414, dynamisk klientregistrering (RFC 7591, publika klienter), auktoriseringskod med PKCE **S256** (obligatoriskt), parametern `resource` (RFC 8707, den måste vara instansens `/mcp`-adress), rotation av förnyelsetokens med upptäckt av återanvändning, återkallelse (RFC 7009) och parametern `iss` i omdirigeringen (RFC 9207). Slutpunkter: `/oauth/register`, `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`. En loopback-omdirigering (`http://127.0.0.1:PORT/...`) får använda vilken port som helst (RFC 8252); alla andra måste stämma exakt. En instans bakom en proxy behöver `OBOP_PUBLIC_URL` så att adresserna i dessa dokument är de publika. Vi byggde detta efter specifikationen och testade det med vår egen klient i automatiska tester; vi har **ännu inte anslutit** de riktiga Claude-apparna.
 
 ### Verktyg
 
@@ -74,7 +91,7 @@ Om servern avvisar headern rapporterar Claude Code en misslyckad anslutning i st
 
 #### Claude Desktop och claude.ai
 
-Apparna lägger till fjärrservrar som _custom connectors_ (Settings, Connectors, Add custom connector) och autentiserar dem med OAuth. En statisk bärar-header erbjuds inte där, och obop har ingen OAuth-server, så **en hostad obop-instans kan inte läggas till som connector ännu**. Stdio-konfigurationen [nedan](#claude-desktop-stdio) fungerar i Claude Desktop med en lokal binärfil. En brygga som communitypaketet `mcp-remote` kan lägga till en header till en fjärrserver för klienter som bara talar stdio; vi har inte testat den med obop.
+Apparna lägger till fjärrservrar som _custom connectors_ (Settings, Connectors, Add custom connector) och autentiserar dem med OAuth. Ange `https://YOUR-INSTANCE/mcp` och följ inloggningen i webbläsaren som beskrivs ovan; ingen token klistras in. För claude.ai måste instansen nås från internet över `https`, eftersom Anthropics servrar gör förfrågningarna. Stdio-uppsättningen [nedan](#claude-desktop-stdio) fungerar i Claude Desktop med en lokal binär. En brygga som communitypaketet `mcp-remote` kan lägga till en header till en fjärrserver för klienter som bara talar stdio; vi har inte testat den med obop.
 
 #### Cursor
 
@@ -165,12 +182,13 @@ eller `gemini mcp add --transport http --header "Authorization: Bearer $OBOP_TOK
 
 En instans publicerar dessa utan token:
 
-| URL                                     | Vad                                                                                                                                                                      |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/.well-known/oauth-protected-resource` | Metadata om OAuth-skyddad resurs (RFC 9728) för `/mcp`. Anger att det inte finns någon auktoriseringsserver. Finns också på `/.well-known/oauth-protected-resource/mcp`. |
-| `/.well-known/mcp/server-card.json`     | MCP-serverkort: namn, version, slutpunkten `streamable-http`, protokollversioner, headern `Authorization`. Finns också på `/mcp/server-card`.                            |
-| `/.well-known/ai-catalog.json`          | En AI-katalog med en post som pekar på serverkortet.                                                                                                                     |
-| `/api/openapi.json`, `/api/meta`        | OpenAPI-dokumentet har ett `x-mcp`-fält med slutpunkt, transport och protokollversioner; `GET /api/meta` har en `Link`-header med `rel="mcp"`.                           |
+| URL                                       | Vad                                                                                                                                                                           |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/.well-known/oauth-protected-resource`   | Metadata om OAuth-skyddad resurs (RFC 9728) för `/mcp`, som nämner auktoriseringsservern. Finns också på `/.well-known/oauth-protected-resource/mcp`, dit `401`-svaret pekar. |
+| `/.well-known/oauth-authorization-server` | Metadata om OAuth-auktoriseringsservern (RFC 8414): slutpunkterna, bara PKCE `S256`, bara publika klienter.                                                                   |
+| `/.well-known/mcp/server-card.json`       | MCP-serverkort: namn, version, slutpunkten `streamable-http`, protokollversioner, headern `Authorization`. Finns också på `/mcp/server-card`.                                 |
+| `/.well-known/ai-catalog.json`            | En AI-katalog med en post som pekar på serverkortet.                                                                                                                          |
+| `/api/openapi.json`, `/api/meta`          | OpenAPI-dokumentet har ett `x-mcp`-fält med slutpunkt, transport och protokollversioner; `GET /api/meta` har en `Link`-header med `rel="mcp"`.                                |
 
 Serverkortet är en utökning av MCP-specifikationen som fortfarande utvecklas (SEP-2127, förvarad i ett inkubationsarkiv), så dess form kan ändras; filen säger det i sin `$comment`. Det innehåller också de enkla fälten `serverInfo`, `transport`, `endpoint` och `capabilities` från ett tidigare utkast, för skannrar som letar efter dem.
 
@@ -396,4 +414,5 @@ Om klienten inte visar några verktyg eller visar ett fel, gå till [Felsökning
 | Fjärrkonfiguration för Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI                         | Hämtad från varje klients dokumentation; klienterna startades inte.                     |
 | Konfigurationsformat för stdio                                                                               | Hämtade från varje klients dokumentation. Vi startade inte alla klienter.               |
 | Windsurfs filplats                                                                                           | Obekräftad, se ovan.                                                                    |
-| Connectors i Claude Desktop och claude.ai                                                                    | Kräver OAuth; obop kan inte läggas till där ännu.                                       |
+| Inloggning i webbläsaren (OAuth): registrering, PKCE, samtycke, tokens, återanvändning, återkallelse         | Automatiska tester (Rust och Playwright i en riktig webbläsare) med vår egen klient.    |
+| Connectors i Claude Desktop och claude.ai, inloggning i Claude Code                                          | **Inte prövat** med de riktiga apparna; byggt efter specifikationen.                    |

@@ -8,13 +8,30 @@ lead: "Jokaisella obop-instanssilla on MCP-palvelin osoitteessa /mcp. Osoita asi
 
 Instanssi tarjoaa [Model Context Protocolin](https://modelcontextprotocol.io/) **Streamable HTTP** -siirrolla osoitteessa `https://YOUR-INSTANCE/mcp`. Isännöidyllä instanssilla (esimerkiksi Sliplanessa) ja paikallisella `obop serve` -komennolla se on käytössä; mitään ei tarvitse kytkeä päälle.
 
-- **Todennus:** `Authorization: Bearer <token>` jokaisessa pyynnössä, [agenttitunnisteella](/docs/agents/tokens/) (tai sisäänkirjautumisen istuntotunnisteella). Tunniste tarkistetaan täsmälleen kuten REST-rajapinnassa, joten työkalulista, käyttöoikeudet, maskaus ja hyväksynnät ovat samat kuin tunnisteella on [REST-rajapinnassa](/docs/agents/rest/).
-- **Ei vielä OAuthia.** obopissa ei ole OAuth-valtuutuspalvelinta. Päätepiste vastaa `401` ja otsakkeella `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource"`, kuten MCP:n valtuutusmäärittely edellyttää, ja kyseinen dokumentti kertoo selvästi, että tunnisteet tulevat osoitteista `POST /api/auth/login` ja `POST /api/auth/agent-token`, eikä se nimeä valtuutuspalvelinta. Asiakkaat, jotka voivat yhdistää vain OAuth-selainkirjautumisella (esimerkiksi Claude-sovellusten "custom connector" -ikkuna), **eivät voi vielä yhdistää**; käytä jäljempänä olevaa asiakasta, joka hyväksyy otsakkeen.
+- **Todennus:** selainkirjautuminen (OAuth, katso alla) Claude Desktopille, claude.ai:lle ja Claude Codelle tai `Authorization: Bearer <token>` jokaisessa pyynnössä agenttitunnisteella. Tunniste tarkistetaan kummassakin tapauksessa kuten REST-rajapinnassa. Puuttuva tai virheellinen tunniste saa vastauksen `401` ja `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, kuten MCP:n valtuutusmäärittely edellyttää; kyseinen dokumentti nimeää instanssin valtuutuspalvelimen (`/.well-known/oauth-authorization-server`). Kirjautumisella annettu tunniste toimii vain osoitteessa `/mcp`, ei osoitteessa `/api`.
 - **Protokollaversiot:** `2025-11-25`, `2025-06-18` ja `2025-03-26`, neuvoteltu `initialize`-kutsussa. Uusin versio, `2026-07-28`, on tilaton ja toimii eri tavalla; obop ei tue sitä vielä. Asiakas, joka puhuu molempia, palaa `initialize`-kutsuun, kun se saa pelkän `400`-vastauksen, jonka obop lähettää tukemattomasta versio-otsakkeesta.
 - **Istunnot:** `initialize` palauttaa `Mcp-Session-Id`-arvon; lähetä se jokaisessa myöhemmässä pyynnössä. Istunto säilyttää maskausholvin, joten maskitunniste, kuten `NAME_1`, tarkoittaa samaa istunnon jokaisessa kutsussa ja voit lähettää sen takaisin. Toinen istunto aloittaa uuden holvin. `DELETE /mcp` päättää istunnon; tuntematon tai vanhentunut istunto vastaa `404`, ja asiakas aloittaa uudelleen `initialize`-kutsulla. Istunto kuuluu sen avanneelle tunnisteelle ja vanhenee kahden tunnin kuluttua ilman pyyntöä.
 - **Vastaukset ovat pelkkää JSONia.** Palvelimelta asiakkaalle ei ole SSE-virtaa (`GET /mcp` vastaa `405`), ja JSON-RPC-eriä hyväksytään vain versiossa `2025-03-26`, ainoassa versiossa, jossa ne ovat.
 - **Rajat:** pyyntöjen rungot enintään 1 MiB (`413`), 600 pyyntöä minuutissa tunnistetta kohti (`429` ja `Retry-After`, säädettävissä muuttujalla `OBOP_MCP_RATE_PER_MINUTE`), 25 avointa istuntoa tunnistetta kohti.
 - **Selaimet:** pyyntö, jossa on `Origin`-otsake, hylätään vastauksella `403`, ellei origin ole instanssin oma julkinen URL (`OBOP_PUBLIC_URL`), sama origin loopback-isännällä tai lueteltu muuttujassa `OBOP_ALLOWED_ORIGINS` (pilkuilla erotettuna). Tämä suojaa paikallisia instansseja DNS rebinding -hyökkäyksiltä. Asiakkaat, jotka eivät ole selaimia, eivät lähetä `Origin`-otsaketta. Välityspalvelimen takana aseta `OBOP_PUBLIC_URL` (esimerkiksi `https://acme.example.com`), jotta löydettävyysdokumentit nimeävät julkisen osoitteen.
+
+### Yhdistä selainkirjautumisella (OAuth)
+
+Claude Desktop, claude.ai ja Claude Code voivat yhdistää instanssiin ilman liitettyä tunnistetta. Lisää sovelluksessa mukautettu liitin (custom connector) osoitteella `https://YOUR-INSTANCE/mcp` (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, sitten `/mcp` ja valitse tunnistautuminen). Sovellus löytää kirjautumisen itse ja avaa selaimeen **oman instanssisi** sivun. Siellä:
+
+1. kirjaudut obop-tililläsi ja annat kaksivaiheisen koodin, jos tilillä on sellainen;
+2. näet, mikä sovellus pyytää ja mihin osoitteeseen selain palaa;
+3. valitset luovutettavat käyttöoikeusryhmät, valitset pääsyn keston (1, 7, 30 tai 90 päivää) ja painat **Salli**.
+
+Mitä tämä tarkoittaa:
+
+- **Sovellus voi vain kaventaa oikeuksiasi.** Tarjolla ovat ryhmät, jotka itse omistat; sovellus toimii puolestasi valitsemillasi ryhmillä, ei koskaan laajemmin ([agenttitunnisteet](/docs/agents/tokens/) toimivat samoin). Sen toimet tallennetaan agenttisi toimina.
+- **Hyväksynnät vaativat edelleen ihmisen.** Hyväksyntää vaativa vaihe odottaa obopissa ihmistä; sovellus ei voi hyväksyä omia ehdotuksiaan.
+- **Lyhytikäiset tunnisteet.** Sovellus saa tunnisteen, joka on voimassa tunnin, ja uusintatunnisteen, jota käytetään kerran ja joka vaihtuu joka kerta. Jos uusintatunnistetta käytetään kahdesti, koko yhteys päättyy. Tämän kirjautumisen pääsytunniste toimii vain osoitteessa `/mcp`.
+- **Pysyt hallinnassa.** Kohdassa _Mukauta, Turvallisuus, Yhdistetyt sovellukset_ näkyy jokainen yhteys ryhmineen ja päättymispäivineen; **Peruuta** päättää sen heti. Yhdistäminen, kieltäytyminen, peruutus ja kahdesti käytetty tunniste näkyvät turvallisuuslokissa.
+- **Mitään ei luoteta etukäteen.** Kuka tahansa sovellus voi rekisteröityä itse, joten sivu näyttää sen valitseman nimen ja paluuosoitteen ja kertoo, ettei obop voi tarkistaa, kuka sitä ylläpitää. Paluuosoitteiden on oltava `https` (tai `http` osoitteissa `localhost`, `127.0.0.1` tai `[::1]`), rekisteröinnit on rajattu ja käyttämättömät vanhenevat.
+
+Protokolla asiakkaiden tekijöille: RFC 9728- ja RFC 8414 -metatiedot, dynaaminen asiakasrekisteröinti (RFC 7591, julkiset asiakkaat), valtuutuskoodi PKCE **S256** -menetelmällä (pakollinen), `resource`-parametri (RFC 8707, sen on oltava instanssin `/mcp`-osoite), uusintatunnisteiden kierto uudelleenkäytön tunnistuksella, peruutus (RFC 7009) ja `iss`-parametri uudelleenohjauksessa (RFC 9207). Päätepisteet: `/oauth/register`, `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`. Loopback-uudelleenohjaus (`http://127.0.0.1:PORT/...`) saa käyttää mitä tahansa porttia (RFC 8252); kaikkien muiden on täsmättävä tarkasti. Välityspalvelimen takana oleva instanssi tarvitsee `OBOP_PUBLIC_URL`-asetuksen, jotta näiden dokumenttien osoitteet ovat julkiset. Rakensimme tämän määrittelyn mukaan ja testasimme omalla asiakkaallamme automaattisissa testeissä; emme ole **vielä yhdistäneet** siihen oikeita Claude-sovelluksia.
 
 ### Työkalut
 
@@ -74,7 +91,7 @@ Jos palvelin hylkää otsakkeen, Claude Code ilmoittaa epäonnistuneesta yhteyde
 
 #### Claude Desktop ja claude.ai
 
-Sovellukset lisäävät etäpalvelimet _custom connector_ -liittiminä (Settings, Connectors, Add custom connector) ja todentavat ne OAuthilla. Staattista Bearer-otsaketta ei tarjota siellä, eikä obopissa ole OAuth-palvelinta, joten **isännöityä obop-instanssia ei voi vielä lisätä liittimenä**. Stdio-asetus [jäljempänä](#claude-desktop-stdio) toimii Claude Desktopissa paikallisella ohjelmalla. Yhteisön `mcp-remote`-paketin kaltainen silta voi lisätä otsakkeen etäpalvelimeen asiakkaille, jotka puhuvat vain stdiota; emme ole testanneet sitä obopin kanssa.
+Sovellukset lisäävät etäpalvelimet _custom connector_ -liittiminä (Settings, Connectors, Add custom connector) ja tunnistavat ne OAuthilla. Syötä `https://YOUR-INSTANCE/mcp` ja seuraa yllä kuvattua selainkirjautumista; tunnistetta ei liitetä. claude.ai:ta varten instanssin on oltava tavoitettavissa internetistä `https`-yhteydellä, koska pyynnöt tekevät Anthropicin palvelimet. Stdio-asetus [alla](#claude-desktop-stdio) toimii Claude Desktopissa paikallisella ohjelmalla. Yhteisön `mcp-remote`-kaltainen silta voi lisätä otsakkeen etäpalvelimelle asiakkaille, jotka puhuvat vain stdiota; emme ole testanneet sitä obopin kanssa.
 
 #### Cursor
 
@@ -165,12 +182,13 @@ tai `gemini mcp add --transport http --header "Authorization: Bearer $OBOP_TOKEN
 
 Instanssi julkaisee nämä ilman tunnistetta:
 
-| URL                                     | Mitä                                                                                                                                                                    |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/.well-known/oauth-protected-resource` | OAuth-suojatun resurssin metatiedot (RFC 9728) osoitteelle `/mcp`. Kertoo, ettei valtuutuspalvelinta ole. Myös osoitteessa `/.well-known/oauth-protected-resource/mcp`. |
-| `/.well-known/mcp/server-card.json`     | MCP-palvelinkortti: nimi, versio, `streamable-http`-päätepiste, protokollaversiot, `Authorization`-otsake. Myös osoitteessa `/mcp/server-card`.                         |
-| `/.well-known/ai-catalog.json`          | Yhden merkinnän AI Catalog, joka osoittaa palvelinkorttiin.                                                                                                             |
-| `/api/openapi.json`, `/api/meta`        | OpenAPI-dokumentissa on `x-mcp`-kenttä, jossa ovat päätepiste, siirto ja protokollaversiot; `GET /api/meta` sisältää `Link`-otsakkeen arvolla `rel="mcp"`.              |
+| URL                                       | Mitä                                                                                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/.well-known/oauth-protected-resource`   | OAuth-suojatun resurssin metatiedot (RFC 9728) osoitteelle `/mcp`, nimeävät valtuutuspalvelimen. Myös osoitteessa `/.well-known/oauth-protected-resource/mcp`, johon `401`-vastaus viittaa. |
+| `/.well-known/oauth-authorization-server` | OAuth-valtuutuspalvelimen metatiedot (RFC 8414): päätepisteet, vain PKCE `S256`, vain julkiset asiakkaat.                                                                                   |
+| `/.well-known/mcp/server-card.json`       | MCP-palvelinkortti: nimi, versio, `streamable-http`-päätepiste, protokollaversiot, `Authorization`-otsake. Myös osoitteessa `/mcp/server-card`.                                             |
+| `/.well-known/ai-catalog.json`            | Yhden merkinnän AI Catalog, joka osoittaa palvelinkorttiin.                                                                                                                                 |
+| `/api/openapi.json`, `/api/meta`          | OpenAPI-dokumentissa on `x-mcp`-kenttä, jossa ovat päätepiste, siirto ja protokollaversiot; `GET /api/meta` sisältää `Link`-otsakkeen arvolla `rel="mcp"`.                                  |
 
 Palvelinkortti on MCP-määrittelyn laajennus, jota vielä kehitetään (SEP-2127, pidetään kehitysvaiheen repositoriossa), joten sen muoto voi muuttua; tiedosto kertoo tämän `$comment`-kentässään. Siinä on myös pelkät `serverInfo`-, `transport`-, `endpoint`- ja `capabilities`-kentät aiemmasta luonnoksesta niitä etsiviä skannereita varten.
 
@@ -387,13 +405,14 @@ Jos asiakas ei näytä työkaluja tai näyttää virheen, siirry kohtaan [Vianm�
 
 ## Varmennettu ja varmentamatta
 
-| Kohta                                                                                             | Tila                                                                                   |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `obop mcp` -kättely, `tools/list`, `tools/call`, hyväksynnän tulos                                | Ajettu oikeaa paikallista instanssia vasten.                                           |
-| Etä-`/mcp`: kättely, työkalut, maskaus, hyväksyntäkierros, istunnot, 401, origin-tarkistus, rajat | Automaattiset testit (Rust HTTP:n yli, Playwright) oikeaa instanssia vasten.           |
-| Etä-`/mcp` oikealla MCP-asiakkaalla                                                               | MCP Inspectorin komentoriviasiakas 2.11.0: `initialize` ja `tools/list`, `tools/call`. |
-| Virallinen MCP-yhteensopivuustestisarja                                                           | Ei mielekäs: se vaatii palvelimen ilman todennusta ja omat testityökalunsa.            |
-| Claude Coden, Cursorin, VS Coden, Windsurfin, Codex CLI:n ja Gemini CLI:n etäasetukset            | Otettu kunkin asiakkaan dokumentaatiosta; asiakkaita ei käynnistetty.                  |
-| Stdio-asetusmuodot                                                                                | Otettu kunkin asiakkaan dokumentaatiosta. Emme käynnistäneet jokaista asiakasta.       |
-| Windsurfin tiedostosijainti                                                                       | Varmistamatta, katso yllä.                                                             |
-| Claude Desktopin ja claude.ain liittimet                                                          | Vaativat OAuthin; obopia ei voi vielä lisätä niihin.                                   |
+| Kohta                                                                                              | Tila                                                                                   |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `obop mcp` -kättely, `tools/list`, `tools/call`, hyväksynnän tulos                                 | Ajettu oikeaa paikallista instanssia vasten.                                           |
+| Etä-`/mcp`: kättely, työkalut, maskaus, hyväksyntäkierros, istunnot, 401, origin-tarkistus, rajat  | Automaattiset testit (Rust HTTP:n yli, Playwright) oikeaa instanssia vasten.           |
+| Etä-`/mcp` oikealla MCP-asiakkaalla                                                                | MCP Inspectorin komentoriviasiakas 2.11.0: `initialize` ja `tools/list`, `tools/call`. |
+| Virallinen MCP-yhteensopivuustestisarja                                                            | Ei mielekäs: se vaatii palvelimen ilman todennusta ja omat testityökalunsa.            |
+| Claude Coden, Cursorin, VS Coden, Windsurfin, Codex CLI:n ja Gemini CLI:n etäasetukset             | Otettu kunkin asiakkaan dokumentaatiosta; asiakkaita ei käynnistetty.                  |
+| Stdio-asetusmuodot                                                                                 | Otettu kunkin asiakkaan dokumentaatiosta. Emme käynnistäneet jokaista asiakasta.       |
+| Windsurfin tiedostosijainti                                                                        | Varmistamatta, katso yllä.                                                             |
+| Selainkirjautuminen (OAuth): rekisteröinti, PKCE, suostumus, tunnisteet, uudelleenkäyttö, peruutus | Automaattiset testit (Rust ja Playwright oikeassa selaimessa) omalla asiakkaallamme.   |
+| Claude Desktopin ja claude.ain liittimet, Claude Coden kirjautuminen                               | **Ei kokeiltu** oikeilla sovelluksilla; rakennettu määrittelyn mukaan.                 |

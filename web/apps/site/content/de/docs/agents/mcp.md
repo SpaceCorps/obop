@@ -8,13 +8,30 @@ lead: "Jede obop-Instanz hat einen MCP-Server unter /mcp. Richten Sie einen Clie
 
 Eine Instanz stellt das [Model Context Protocol](https://modelcontextprotocol.io/) über **Streamable HTTP** unter `https://YOUR-INSTANCE/mcp` bereit. Sowohl eine gehostete Instanz (zum Beispiel auf Sliplane) als auch ein lokales `obop serve` haben ihn; es muss nichts eingeschaltet werden.
 
-- **Authentifizierung:** `Authorization: Bearer <token>` bei jeder Anfrage, mit einem [Agent-Token](/docs/agents/tokens/) (oder einem Sitzungs-Token aus der Anmeldung). Das Token wird genau wie bei REST geprüft; Tool-Liste, Berechtigungen, Maskierung und Freigaben sind also die, die das Token über [REST](/docs/agents/rest/) hat.
-- **Noch kein OAuth.** obop hat keinen OAuth-Autorisierungsserver. Der Endpunkt antwortet mit `401` und `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource"`, wie es die MCP-Autorisierungsspezifikation verlangt. Dieses Dokument sagt ausdrücklich, dass Tokens von `POST /api/auth/login` und `POST /api/auth/agent-token` kommen, und nennt keinen Autorisierungsserver. Clients, die sich nur über einen OAuth-Browserablauf verbinden können (zum Beispiel der Dialog „Custom Connector“ der Claude-Apps), **können sich noch nicht verbinden**; nutzen Sie einen der unten genannten Clients, der einen Header akzeptiert.
+- **Authentifizierung:** eine Anmeldung im Browser (OAuth, siehe unten) für Claude Desktop, claude.ai und Claude Code, oder `Authorization: Bearer <token>` bei jeder Anfrage mit einem Agent-Token. In beiden Fällen wird das Token wie bei REST geprüft. Fehlt es oder ist es ungültig, antwortet der Server mit `401` und `WWW-Authenticate: Bearer resource_metadata="https://YOUR-INSTANCE/.well-known/oauth-protected-resource/mcp"`, wie es die MCP-Autorisierungsspezifikation verlangt; dieses Dokument nennt den Autorisierungsserver der Instanz (`/.well-known/oauth-authorization-server`). Ein bei der Anmeldung ausgestelltes Token gilt nur für `/mcp`, nicht für `/api`.
 - **Protokollversionen:** `2025-11-25`, `2025-06-18` und `2025-03-26`, ausgehandelt in `initialize`. Die neueste Version, `2026-07-28`, ist zustandslos und funktioniert anders; obop setzt sie noch nicht um. Ein Client, der beide spricht, fällt auf `initialize` zurück, wenn er ein schlichtes `400` sieht; das sendet obop bei einem nicht unterstützten Versions-Header.
 - **Sitzungen:** `initialize` liefert eine `Mcp-Session-Id`; senden Sie sie bei jeder weiteren Anfrage mit. Die Sitzung hält den Maskierungs-Tresor, sodass ein Maskierungs-Token wie `NAME_1` in jedem Aufruf der Sitzung dasselbe bedeutet und Sie es zurücksenden können. Eine andere Sitzung beginnt mit einem neuen Tresor. `DELETE /mcp` beendet eine Sitzung; eine unbekannte oder abgelaufene Sitzung beantwortet der Server mit `404`, und der Client beginnt erneut mit `initialize`. Eine Sitzung gehört dem Token, das sie geöffnet hat, und läuft nach zwei Stunden ohne Anfrage ab.
 - **Antworten sind schlichtes JSON.** Es gibt keinen SSE-Stream vom Server zum Client (`GET /mcp` antwortet mit `405`), und JSON-RPC-Batches werden nur in `2025-03-26` akzeptiert, der einzigen Version, die sie kennt.
 - **Grenzen:** Anfragekörper bis zu 1 MiB (`413`), 600 Anfragen pro Minute und Token (`429` mit `Retry-After`, einstellbar mit `OBOP_MCP_RATE_PER_MINUTE`), 25 offene Sitzungen pro Token.
 - **Browser:** Eine Anfrage mit einem `Origin`-Header wird mit `403` abgelehnt, es sei denn, der Origin ist die eigene öffentliche URL der Instanz (`OBOP_PUBLIC_URL`), derselbe Origin auf einem Loopback-Host oder in `OBOP_ALLOWED_ORIGINS` aufgeführt (kommagetrennt). Das schützt lokale Instanzen vor DNS-Rebinding. Clients, die keine Browser sind, senden keinen `Origin`. Setzen Sie hinter einem Proxy `OBOP_PUBLIC_URL` (zum Beispiel `https://acme.example.com`), damit die Discovery-Dokumente die öffentliche Adresse nennen.
+
+### Mit einer Browser-Anmeldung verbinden (OAuth)
+
+Claude Desktop, claude.ai und Claude Code können sich ohne eingefügtes Token mit einer Instanz verbinden. Fügen Sie in der App einen Custom Connector mit der Adresse `https://YOUR-INSTANCE/mcp` hinzu (Claude Code: `claude mcp add --transport http obop https://YOUR-INSTANCE/mcp`, dann `/mcp` und die Authentifizierung wählen). Die App findet die Anmeldung selbst und öffnet im Browser eine Seite **Ihrer Instanz**. Dort:
+
+1. melden Sie sich mit Ihrem obop-Konto an und geben, falls das Konto es hat, Ihren Zwei-Faktor-Code ein;
+2. sehen Sie, welche Anwendung anfragt und zu welcher Adresse der Browser zurückkehrt;
+3. kreuzen Sie die Berechtigungsgruppen an, die Sie weitergeben, wählen, wie lange der Zugriff gilt (1, 7, 30 oder 90 Tage), und drücken **Erlauben**.
+
+Was das bedeutet:
+
+- **Die App kann Sie nur einschränken.** Angeboten werden die Gruppen, die Sie selbst haben; die App handelt als Sie mit den angekreuzten, nie mit mehr ([Agent-Tokens](/docs/agents/tokens/) funktionieren genauso). Ihre Aktionen werden als Aktionen Ihres Agenten aufgezeichnet.
+- **Freigaben brauchen weiterhin eine Person.** Ein Schritt, der eine Freigabe braucht, wartet in obop auf einen Menschen; die App kann ihre eigenen Vorschläge nicht freigeben.
+- **Kurzlebige Tokens.** Die App erhält ein Zugriffs-Token, das eine Stunde gilt, und ein Refresh-Token, das einmal verwendet und jedes Mal ersetzt wird. Wird ein Refresh-Token je zweimal verwendet, endet die ganze Verbindung. Ein Zugriffs-Token aus dieser Anmeldung gilt nur für `/mcp`.
+- **Sie behalten die Kontrolle.** Unter _Anpassen, Sicherheit, Verbundene Apps_ steht jede Verbindung mit ihren Gruppen und ihrem Ende; **Widerrufen** beendet sie sofort. Verbinden, Ablehnen, Widerrufen und ein doppelt verwendetes Token stehen im Sicherheitsprotokoll.
+- **Nichts wird vorab vertraut.** Jede Anwendung darf sich selbst registrieren; die Seite zeigt daher den gewählten Namen und die Rücksprungadresse und sagt, dass obop nicht prüfen kann, wer sie betreibt. Rücksprungadressen müssen `https` sein (oder `http` auf `localhost`, `127.0.0.1` oder `[::1]`), Registrierungen sind begrenzt, ungenutzte laufen ab.
+
+Protokoll, für Client-Entwickler: Metadaten nach RFC 9728 und RFC 8414, dynamische Client-Registrierung (RFC 7591, öffentliche Clients), Authorization Code mit PKCE **S256** (Pflicht), der Parameter `resource` (RFC 8707, er muss die `/mcp`-Adresse der Instanz sein), Rotation der Refresh-Tokens mit Erkennung von Wiederverwendung, Widerruf (RFC 7009) und der Parameter `iss` bei der Weiterleitung (RFC 9207). Endpunkte: `/oauth/register`, `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`. Eine Loopback-Weiterleitung (`http://127.0.0.1:PORT/...`) darf jeden Port nutzen (RFC 8252); jede andere muss genau übereinstimmen. Eine Instanz hinter einem Proxy braucht `OBOP_PUBLIC_URL`, damit die Adressen in diesen Dokumenten die öffentlichen sind. Wir haben das nach der Spezifikation gebaut und mit einem eigenen Client in automatisierten Tests geprüft; die echten Claude-Apps haben wir damit **noch nicht verbunden**.
 
 ### Tools
 
@@ -74,7 +91,7 @@ Lehnt der Server den Header ab, meldet Claude Code eine fehlgeschlagene Verbindu
 
 #### Claude Desktop und claude.ai
 
-Die Apps fügen entfernte Server als _Custom Connectors_ hinzu (Settings, Connectors, Add custom connector) und authentifizieren sie mit OAuth. Ein statischer Bearer-Header wird dort nicht angeboten, und obop hat keinen OAuth-Server, daher **lässt sich eine gehostete obop-Instanz noch nicht als Connector hinzufügen**. Die stdio-Einrichtung [weiter unten](#claude-desktop-stdio) funktioniert in Claude Desktop mit einer lokalen Binärdatei. Eine Brücke wie das Community-Paket `mcp-remote` kann einem entfernten Server für Clients, die nur stdio sprechen, einen Header hinzufügen; wir haben sie nicht mit obop getestet.
+Die Apps fügen entfernte Server als _Custom Connectors_ hinzu (Settings, Connectors, Add custom connector) und authentifizieren sie mit OAuth. Geben Sie `https://YOUR-INSTANCE/mcp` ein und folgen Sie der oben beschriebenen Browser-Anmeldung; es wird kein Token eingefügt. Für claude.ai muss die Instanz per `https` aus dem Internet erreichbar sein, weil die Server von Anthropic die Anfragen stellen. Das stdio-Setup [unten](#claude-desktop-stdio) funktioniert in Claude Desktop mit einer lokalen Binärdatei. Eine Brücke wie das Community-Paket `mcp-remote` kann einem entfernten Server für Clients, die nur stdio sprechen, einen Header hinzufügen; wir haben sie nicht mit obop getestet.
 
 #### Cursor
 
@@ -165,12 +182,13 @@ oder `gemini mcp add --transport http --header "Authorization: Bearer $OBOP_TOKE
 
 Eine Instanz veröffentlicht Folgendes ohne Token:
 
-| URL                                     | Was                                                                                                                                                                             |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/.well-known/oauth-protected-resource` | Metadaten der OAuth-geschützten Ressource (RFC 9728) für `/mcp`. Sie besagen, dass es keinen Autorisierungsserver gibt. Auch unter `/.well-known/oauth-protected-resource/mcp`. |
-| `/.well-known/mcp/server-card.json`     | MCP-Server-Card: Name, Version, der Endpunkt `streamable-http`, Protokollversionen, der Header `Authorization`. Auch unter `/mcp/server-card`.                                  |
-| `/.well-known/ai-catalog.json`          | Ein AI Catalog mit einem Eintrag, der auf die Server-Card verweist.                                                                                                             |
-| `/api/openapi.json`, `/api/meta`        | Das OpenAPI-Dokument hat ein Feld `x-mcp` mit Endpunkt, Transport und Protokollversionen; `GET /api/meta` trägt einen `Link`-Header mit `rel="mcp"`.                            |
+| URL                                       | Was                                                                                                                                                                                          |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/.well-known/oauth-protected-resource`   | Metadaten der OAuth-geschützten Ressource (RFC 9728) für `/mcp`; nennen den Autorisierungsserver. Auch unter `/.well-known/oauth-protected-resource/mcp`, worauf die `401`-Antwort verweist. |
+| `/.well-known/oauth-authorization-server` | Metadaten des OAuth-Autorisierungsservers (RFC 8414): die Endpunkte, nur PKCE `S256`, nur öffentliche Clients.                                                                               |
+| `/.well-known/mcp/server-card.json`       | MCP-Server-Card: Name, Version, der Endpunkt `streamable-http`, Protokollversionen, der Header `Authorization`. Auch unter `/mcp/server-card`.                                               |
+| `/.well-known/ai-catalog.json`            | Ein AI Catalog mit einem Eintrag, der auf die Server-Card verweist.                                                                                                                          |
+| `/api/openapi.json`, `/api/meta`          | Das OpenAPI-Dokument hat ein Feld `x-mcp` mit Endpunkt, Transport und Protokollversionen; `GET /api/meta` trägt einen `Link`-Header mit `rel="mcp"`.                                         |
 
 Die Server-Card ist eine Erweiterung der MCP-Spezifikation, die noch entwickelt wird (SEP-2127, in einem Inkubations-Repository geführt); ihre Form kann sich daher ändern, was die Datei in ihrem `$comment` selbst sagt. Sie enthält außerdem die schlichten Felder `serverInfo`, `transport`, `endpoint` und `capabilities` aus einem früheren Entwurf, für Scanner, die danach suchen.
 
@@ -396,4 +414,5 @@ Zeigt der Client keine Tools oder einen Fehler, gehen Sie zu [Fehlerbehebung](/d
 | Entfernte Konfiguration von Claude Code, Cursor, VS Code, Windsurf, Codex CLI, Gemini CLI                | Der Dokumentation des jeweiligen Clients entnommen; die Clients wurden nicht gestartet.         |
 | Konfigurationsformate für stdio                                                                          | Der Dokumentation des jeweiligen Clients entnommen. Wir haben nicht jeden Client gestartet.     |
 | Speicherort der Windsurf-Datei                                                                           | Unbestätigt, siehe oben.                                                                        |
-| Connectors in Claude Desktop und claude.ai                                                               | Brauchen OAuth; obop lässt sich dort noch nicht hinzufügen.                                     |
+| Anmeldung im Browser (OAuth): Registrierung, PKCE, Zustimmung, Tokens, Wiederverwendung, Widerruf        | Automatisierte Tests (Rust und Playwright in einem echten Browser) mit unserem eigenen Client.  |
+| Connectors in Claude Desktop und claude.ai, Anmeldung in Claude Code                                     | **Nicht ausprobiert** mit den echten Apps; nach der Spezifikation gebaut.                       |

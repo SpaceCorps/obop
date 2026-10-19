@@ -1788,5 +1788,18 @@
   "“{label}” is still used by other records. Remove or change them first.": "D’autres enregistrements utilisent encore « {label} ». Supprimez-les ou modifiez-les d’abord.",
   "“{part}” has no value": "« {part} » n’a pas de valeur",
   "“{part}” is not field operator value": "« {part} » n’est pas de la forme champ opérateur valeur",
-  "“{part}” needs values after in": "« {part} » : des valeurs sont attendues après in"
+  "“{part}” needs values after in": "« {part} » : des valeurs sont attendues après in",
+  "{name} can no longer act for you.": "{name} ne peut plus agir pour vous.",
+  "App access ended": "Accès de l'application terminé",
+  "App access ended: a code was used twice": "Accès de l'application terminé : un code a été utilisé deux fois",
+  "App access ended: a token was used twice": "Accès de l'application terminé : un jeton a été utilisé deux fois",
+  "App connected": "Application connectée",
+  "App refused": "Application refusée",
+  "Apps such as Claude Desktop, claude.ai and Claude Code that you signed in for. Each acts as you, with only the groups you handed over, until it ends or you revoke it. Steps that need approval still wait for a person.": "Des applications comme Claude Desktop, claude.ai et Claude Code pour lesquelles vous vous êtes connecté. Chacune agit en votre nom, avec seulement les groupes que vous avez transmis, jusqu'à la fin de l'accès ou jusqu'à ce que vous le révoquiez. Les étapes qui demandent une approbation attendent toujours une personne.",
+  "Can act with": "Peut agir avec",
+  "Connected apps": "Applications connectées",
+  "Could not revoke the app.": "Impossible de révoquer l'application.",
+  "Last active": "Dernière activité",
+  "No apps are connected. To connect one, add the address of this instance followed by /mcp as a custom connector in the app, then sign in when the browser opens.": "Aucune application n'est connectée. Pour en connecter une, ajoutez dans l'application l'adresse de cette instance suivie de /mcp comme connecteur personnalisé, puis connectez-vous quand le navigateur s'ouvre.",
+  "Revoke {name}": "Révoquer {name}"
 }

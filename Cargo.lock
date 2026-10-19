@@ -1150,6 +1150,7 @@ dependencies = [
  "obop-mcp",
  "obop-media",
  "obop-migrate",
+ "obop-oauth",
  "obop-ops",
  "obop-payments",
  "obop-pkg",
@@ -1252,6 +1253,7 @@ dependencies = [
  "obop-connectors",
  "obop-keys",
  "obop-mcp",
+ "obop-oauth",
  "obop-site",
  "obop-storage",
  "obop-types",
@@ -1307,6 +1309,18 @@ dependencies = [
  "obop-storage",
  "obop-types",
  "serde_json",
+]
+
+[[package]]
+name = "obop-oauth"
+version = "0.2.0"
+dependencies = [
+ "getrandom 0.4.3",
+ "obop-auth",
+ "obop-commands",
+ "obop-storage",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

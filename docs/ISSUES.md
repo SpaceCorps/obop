@@ -47,13 +47,30 @@ test found, or a limit the docs state.
 ## E. Platform, trust and discovery
 | # | Issue | Status |
 |---|---|---|
-| E1 | No OAuth authorization server, so Claude Desktop / claude.ai cannot connect to a hosted instance | open |
+| E1 | No OAuth authorization server, so Claude Desktop / claude.ai cannot connect to a hosted instance | done (D64; exact limits below; not tried against the real apps) |
 | E2 | `is-agentic` score is cached; brand and developer-resource discoverability depend on indexing | open (needs time and a real domain) |
 | E3 | No mailbox: contact details are GitHub only; privacy and terms are drafts for counsel | open (needs the owner) |
 | E4 | New instances use `*.sliplane.app`; per-instance `obop.dev` subdomains need a wildcard DNS record | open (needs DNS) |
 | E5 | `www.obop.dev` has no record | open (needs DNS) |
 | E6 | Google and Microsoft connector adapters are definition-only; other adapters were tested only against local stand-ins | open |
 | E7 | WebAuthn / passkeys; MCP spec 2026-07-28 | open |
+
+### E1 in detail: the OAuth sign-in for MCP clients (D64)
+
+Built: metadata (RFC 8414, RFC 9728, `WWW-Authenticate` with `resource_metadata`), dynamic registration of public clients, authorization code with mandatory PKCE S256 and the RFC 8707 resource, a server-rendered sign-in (two-factor included) and consent page in seven languages, one hour access tokens bound to `<public URL>/mcp`, rotating refresh tokens with reuse detection, revocation, Connected apps in Customize, Security, audit events, rate limits and storage through D59.
+
+| # | Limit | Status |
+|---|---|---|
+| E1a | **Never tried against the real Claude Desktop, claude.ai or Claude Code.** Tested with our own client (Rust over the router, Playwright in Chrome). How the real apps register, which redirect URIs and parameters they send and how they react to a refusal is from the specifications | open (needs a reachable instance and the apps) |
+| E1b | One scope only: the groups the person ticks. No per-command or per-company scopes, no step-up for sensitive groups | by design |
+| E1c | Open registration, so an application can pose under a familiar name; the page shows the redirect host and says obop cannot verify who runs it. No Client ID Metadata Documents, no allow-list of known clients | accepted; allow-list open |
+| E1d | The sign-in asks for the password again every time (no single sign-on from an open back office, no passkeys) | by design (D53) |
+| E1e | An administrator cannot list or revoke other people's connected apps; the person can, and the security log shows every event | open |
+| E1f | A password change does not end connected apps (as with agent tokens); disabling the account does | by design |
+| E1g | Changing `OBOP_PUBLIC_URL` ends every connected app (the audience changes); behind a proxy without it the address comes from `Host` and `X-Forwarded-Proto` | by design |
+| E1h | Exactly one redirect rule is looser than exact match: a loopback `http` URI may use any port (RFC 8252). A request without `resource` is bound to `/mcp` anyway, for clients written before RFC 8707 | by design |
+| E1i | The six translations of the consent page, the Connected apps strings and the docs are machine-drafted | open (D7) |
+| E1j | Rate limits are fixed windows, so a burst at the edge may pass twice the limit | accepted |
 
 ## F. Quality gate
 | # | Issue | Status |

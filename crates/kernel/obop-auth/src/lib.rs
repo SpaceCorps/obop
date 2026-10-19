@@ -15,6 +15,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod account;
 mod mfa;
+mod oauth;
 pub mod seal;
 pub mod totp;
 
@@ -266,8 +267,9 @@ impl Auth {
     }
 }
 
-impl Authenticator for Auth {
-    fn resolve(&self, token: &str) -> Option<Principal> {
+impl Auth {
+    /// The principal of a live token and the audience it is bound to (OAuth tokens only).
+    fn resolve_full(&self, token: &str) -> Option<(Principal, Option<String>)> {
         let t = self.backend.get("auth_token", &token_hash(token)).ok()??;
         if t["revoked"].as_bool() == Some(true)
             || t["expires_at"].as_u64().is_some_and(|e| e <= self.now())
@@ -283,7 +285,21 @@ impl Authenticator for Auth {
         } else {
             p.mfa_limited = t["limited"].as_bool() == Some(true);
         }
-        Some(p)
+        Some((p, t.get("audience").and_then(J::as_str).map(String::from)))
+    }
+}
+
+impl Authenticator for Auth {
+    fn resolve(&self, token: &str) -> Option<Principal> {
+        self.resolve_full(token).map(|(p, _)| p)
+    }
+
+    fn resolve_with_audience(&self, token: &str) -> Option<(Principal, Option<String>)> {
+        self.resolve_full(token)
+    }
+
+    fn oauth(&self) -> Option<&dyn obop_commands::OAuthTokens> {
+        Some(self)
     }
 
     fn login(&self, username: &str, password: &str) -> Result<String, String> {

@@ -39,6 +39,7 @@ serde_json = "1"
 workspace = true
 
 [dev-dependencies]
+obop-oauth.workspace = true
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 postgres = "0.19"

@@ -83,7 +83,7 @@ test.describe("Customize > Updates", () => {
     await expect(progress.locator("code")).toContainText("obop-backup-");
 
     // The request and its result are in the audit log.
-    const kinds: string[] = (await api.run("root", "security_event.list", { limit: 200 })).map(
+    const kinds: string[] = (await api.run("root", "security_event.list", { limit: 1000 })).map(
       (e: { kind: string }) => e.kind,
     );
     expect(kinds).toContain("instance_update_requested");

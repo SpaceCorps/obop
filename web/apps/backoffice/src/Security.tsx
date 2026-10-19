@@ -15,7 +15,12 @@ import {
 } from "@obop/ui";
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
 import { Icon, Logo } from "./ui.tsx";
-import { PasswordSection, PeopleSection, SessionsSection } from "./SecurityAccount.tsx";
+import {
+  ConnectedAppsSection,
+  PasswordSection,
+  PeopleSection,
+  SessionsSection,
+} from "./SecurityAccount.tsx";
 
 type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
 
@@ -38,6 +43,11 @@ const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   user_disable: msg("Account disabled"),
   user_enable: msg("Account enabled"),
   settings_change: msg("Security setting changed"),
+  oauth_authorize: msg("App connected"),
+  oauth_denied: msg("App refused"),
+  oauth_revoked: msg("App access ended"),
+  oauth_refresh_reuse: msg("App access ended: a token was used twice"),
+  oauth_code_reuse: msg("App access ended: a code was used twice"),
 };
 
 /**
@@ -78,6 +88,7 @@ export function SecurityTab({
         notify={notify}
         onSignOut={onSignOut ?? (() => location.reload())}
       />
+      <ConnectedAppsSection token={token} notify={notify} />
       {isAdmin && (
         <>
           <PeopleSection token={token} notify={notify} />
