@@ -614,8 +614,11 @@ mod tests {
         let (b, ring) = seeded(1);
         let rec = b.get("auth_user", "user0").unwrap().unwrap();
         let mut s = rec["totp_secret"].as_str().unwrap().to_string();
-        s.pop();
-        s.push(if s.ends_with('0') { '1' } else { '0' });
+        // Change one hex digit inside the ciphertext to a different digit (the reader accepts
+        // either case, so a case change alone would not alter the bytes).
+        let at = s.len() - 8;
+        let flipped = if s.as_bytes()[at] == b'0' { '1' } else { '0' };
+        s.replace_range(at..=at, &flipped.to_string());
         let mut p = Fields::new();
         p.insert("totp_secret".into(), J::from(s));
         b.update("auth_user", "user0", &p).unwrap();
