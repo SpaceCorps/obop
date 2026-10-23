@@ -524,3 +524,72 @@ description = "Uppdatera instansen till en publicerad kärnversion: tar en säke
 [labels.sv.model.instance_update.action.rollback]
 label = "Gå tillbaka"
 description = "Be kontrollplanet sätta tillbaka instansen på versionen före den senaste uppdateringen"
+
+
+[labels.sv.model.user_account]
+name = "Användarkonto"
+description = "En person som kan logga in på den här instansen, med de behörighetsgrupper hen har. Ändras bara av administratörer; en agent kan bara föreslå en ändring"
+
+[labels.sv.model.user_account.field.groups]
+label = "Grupper"
+description = "Kontots behörighetsgrupper, åtskilda med kommatecken. Indata till add och set_groups: hela listan som kontot ska ha efteråt"
+
+[labels.sv.model.user_account.field.previous_groups]
+label = "Tidigare grupper"
+description = "Resultat av set_groups: grupperna som kontot hade tidigare"
+
+[labels.sv.model.user_account.field.password]
+label = "Lösenord"
+description = "Indata till add: det första lösenordet (minst 12 tecken); personen väljer ett eget vid första inloggningen. Visas aldrig"
+
+[labels.sv.model.user_account.field.must_change_password]
+label = "Måste byta lösenord"
+description = "Om personen måste välja ett nytt lösenord vid nästa inloggning"
+
+[labels.sv.model.user_account.field.note]
+label = "Anteckning"
+description = "Indata till offboard: en kort anledning som sparas i säkerhetsloggen (inga hemligheter; 200 tecken)"
+
+[labels.sv.model.user_account.field.revoked]
+label = "Återkallat"
+description = "Resultat av offboard: vad som avslutades för gott, i ord"
+
+[labels.sv.model.user_account.field.admin]
+label = "Administratör"
+description = "Om kontot tillhör administratörsgruppen"
+
+[labels.sv.model.user_account.field.disabled]
+label = "Inaktiverad"
+description = "Om kontot är inaktiverat: det kan inte logga in och dess token fungerar inte"
+
+[labels.sv.model.user_account.field.offboarded]
+label = "Avslutad"
+description = "Om kontot har avslutats: inaktiverat, med alla sessioner, agent-token och anslutna appar återkallade för gott"
+
+[labels.sv.model.user_account.field.mfa_enabled]
+label = "Tvåfaktor"
+description = "Om kontot har en andra inloggningsfaktor (en autentiseringsapp eller en nyckel)"
+
+[labels.sv.model.user_account.field.sessions]
+label = "Sessioner"
+description = "Inloggade sessioner som fortfarande är giltiga"
+
+[labels.sv.model.user_account.action.add]
+label = "Lägg till"
+description = "Skapa ett konto. Ange id (användarnamnet), password (minst 12 tecken) och groups. Personen väljer ett nytt lösenord vid första inloggningen"
+
+[labels.sv.model.user_account.action.set_groups]
+label = "Ange grupper"
+description = "Ersätt ett kontos behörighetsgrupper. Ange id och groups (hela listan efteråt). Gäller vid kontots nästa anrop. Nekas för okända grupper och om administratörsgruppen tas från en själv eller från den sista administratören"
+
+[labels.sv.model.user_account.action.offboard]
+label = "Avsluta"
+description = "Inaktivera ett konto och avsluta för gott varje session, agent-token och ansluten app. Att aktivera det senare ger dem inte tillbaka. Ange id och eventuellt note"
+
+[labels.sv.model.user_account.action.disable]
+label = "Inaktivera"
+description = "Inaktivera ett konto: det kan inte logga in och dess token slutar fungera tills det aktiveras igen. Ange id"
+
+[labels.sv.model.user_account.action.enable]
+label = "Aktivera"
+description = "Aktivera ett inaktiverat konto igen. Åtkomster som återkallats vid avslut förblir återkallade. Ange id"

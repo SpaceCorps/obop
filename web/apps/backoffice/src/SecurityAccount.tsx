@@ -4,16 +4,16 @@ import { Icon, Logo } from "./ui.tsx";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { proveWithPasskey } from "./passkeys.ts";
 
-type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
+export type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
 
 /* B7: the account side of Customize > Security: change your password, see and end your
-   sessions, and (administrators) the people of the instance with disable, enable and a password
-   reset. Everything goes through the account routes under /api/auth. */
+   sessions, and the connected apps. The administrators' People panel is People.tsx. Everything
+   goes through the account routes under /api/auth. */
 
-type Failure = { status: number; code: string; message: string };
+export type Failure = { status: number; code: string; message: string };
 type Outcome<T> = { ok: true; value: T } | ({ ok: false } & Failure);
 
-async function account<T>(
+export async function account<T>(
   token: string,
   method: "GET" | "POST",
   path: string,
@@ -34,7 +34,7 @@ async function account<T>(
 }
 
 /** A refusal in the person's language. */
-function reason(f: Failure): string {
+export function reason(f: Failure): string {
   if (f.code === "invalid_password") return t("The current password is not right.");
   if (f.code === "invalid_code") return t("That code is not valid.");
   if (f.status === 429) return t("Too many attempts. Wait a minute and try again.");
@@ -44,7 +44,7 @@ function reason(f: Failure): string {
   return "";
 }
 
-const MIN_PASSWORD = 12;
+export const MIN_PASSWORD = 12;
 
 /** Change your own password. Your other sessions are signed out. */
 export function PasswordSection({
@@ -399,167 +399,6 @@ export function ConnectedAppsSection({ token, notify }: { token: string; notify:
             ))}
           </tbody>
         </Table>
-      )}
-    </section>
-  );
-}
-
-type Person = {
-  name: string;
-  admin: boolean;
-  disabled: boolean;
-  mfa_enabled: boolean;
-  must_change_password: boolean;
-  sessions: number;
-};
-
-/** Administrators: the people of the instance. */
-export function PeopleSection({ token, notify }: { token: string; notify: Notify }) {
-  const id = useId();
-  const [people, setPeople] = useState<Person[] | null>(null);
-  const [resetting, setResetting] = useState<string | null>(null);
-  const [temp, setTemp] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const load = useCallback(async () => {
-    const r = await account<{ users: Person[] }>(token, "GET", "/users");
-    setPeople(r.ok ? r.value.users : []);
-  }, [token]);
-  useEffect(() => void load(), [load]);
-  const failed = (r: Failure) =>
-    reason(r) || (r.status === 400 ? r.message : "") || t("Could not save");
-  async function toggle(p: Person) {
-    setBusy(true);
-    const r = await account(
-      token,
-      "POST",
-      `/users/${encodeURIComponent(p.name)}/${p.disabled ? "enable" : "disable"}`,
-      {},
-    );
-    setBusy(false);
-    if (r.ok) {
-      notify(
-        p.disabled
-          ? t("{user} can sign in again.", { user: p.name })
-          : t("{user} is disabled and signed out.", { user: p.name }),
-      );
-      void load();
-    } else notify(failed(r), "error");
-  }
-  return (
-    <section className="stack" aria-labelledby={`${id}-h`}>
-      <h3 id={`${id}-h`} className="overline">
-        {t("People")}
-      </h3>
-      {people !== null && (
-        <Table caption={t("People")} dense>
-          <thead>
-            <tr>
-              <th scope="col">{t("Person")}</th>
-              <th scope="col">{t("Role")}</th>
-              <th scope="col">{t("Two-factor")}</th>
-              <th scope="col">{t("Sessions")}</th>
-              <th scope="col">{t("Status")}</th>
-              <th scope="col">
-                <span className="sr-only">{t("Actions")}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {people.map((p) => (
-              <tr key={p.name}>
-                <td>{p.name}</td>
-                <td>{p.admin ? t("Administrator") : t("Member")}</td>
-                <td>{p.mfa_enabled ? t("On") : t("Off")}</td>
-                <td>{p.sessions}</td>
-                <td>
-                  {p.disabled ? (
-                    <Badge tone="danger">{t("Disabled")}</Badge>
-                  ) : p.must_change_password ? (
-                    <Badge tone="warning">{t("Must choose a password")}</Badge>
-                  ) : (
-                    <Badge tone="success">{t("Active")}</Badge>
-                  )}
-                </td>
-                <td>
-                  <div className="actionrow">
-                    <Button size="sm" disabled={busy} onClick={() => void toggle(p)}>
-                      {p.disabled ? t("Enable") : t("Disable")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setResetting(resetting === p.name ? null : p.name);
-                        setTemp("");
-                        setError(null);
-                      }}
-                    >
-                      {t("Reset password")}
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-      {resetting && (
-        <form
-          className="stack"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            setError(null);
-            const r = await account(
-              token,
-              "POST",
-              `/users/${encodeURIComponent(resetting)}/reset-password`,
-              {
-                password: temp,
-              },
-            );
-            setBusy(false);
-            if (r.ok) {
-              notify(
-                t("Temporary password set for {user}. They choose a new one when they sign in.", {
-                  user: resetting,
-                }),
-              );
-              setResetting(null);
-              setTemp("");
-              void load();
-            } else setError(failed(r));
-          }}
-        >
-          <Input
-            label={t("Temporary password for {user}", { user: resetting })}
-            hint={t(
-              "At least {n} characters. Tell them in person. They are signed out everywhere and must choose a new password at the next sign-in. Recorded in the security log.",
-              { n: MIN_PASSWORD },
-            )}
-            type="password"
-            name="temporary_password"
-            autoComplete="new-password"
-            value={temp}
-            onChange={(e) => setTemp(e.target.value)}
-            error={error ?? undefined}
-            required
-          />
-          <div className="actionrow">
-            <Button
-              type="submit"
-              variant="primary"
-              loading={busy}
-              disabled={[...temp].length < MIN_PASSWORD}
-            >
-              {t("Set temporary password")}
-            </Button>
-            <Button variant="ghost" onClick={() => setResetting(null)}>
-              {t("Cancel")}
-            </Button>
-          </div>
-        </form>
       )}
     </section>
   );

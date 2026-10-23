@@ -177,6 +177,12 @@ impl Authenticator for DevAuth {
 }
 
 impl App {
+    /// Bind the `user_account` commands (D69) to the identity provider that serves this
+    /// instance. Not done with `--dev-auth`: the fixed dev principals are not accounts.
+    pub fn register_accounts(&self, auth: Arc<dyn Authenticator>) {
+        obop_pkg::register_accounts(&self.dispatcher, auth);
+    }
+
     /// Every permission group the linked modules declare.
     pub fn all_groups(&self) -> Vec<String> {
         let mut g: Vec<String> = self

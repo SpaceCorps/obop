@@ -15,6 +15,7 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
 
+mod accounts;
 pub mod blobs;
 pub mod community;
 pub mod connectors;
@@ -244,6 +245,7 @@ pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
             post(oauth::revoke_grant),
         )
         .merge(passkeys::routes())
+        .merge(accounts::routes())
         .with_state(state.clone())
         .merge(mfa::routes("/api/auth", state.auth.clone()))
 }

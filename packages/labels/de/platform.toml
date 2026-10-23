@@ -524,3 +524,72 @@ description = "Die Instanz auf eine veröffentlichte Kernversion aktualisieren: 
 [labels.de.model.instance_update.action.rollback]
 label = "Zurücksetzen"
 description = "Die Steuerungsebene bitten, die Instanz auf die Version vor dem letzten Update zurückzusetzen"
+
+
+[labels.de.model.user_account]
+name = "Benutzerkonto"
+description = "Eine Person, die sich bei dieser Instanz anmelden kann, mit den Berechtigungsgruppen, die sie hat. Nur Administratoren ändern es; ein Agent kann eine Änderung nur vorschlagen"
+
+[labels.de.model.user_account.field.groups]
+label = "Gruppen"
+description = "Die Berechtigungsgruppen des Kontos, durch Kommas getrennt. Eingabe von add und set_groups: die vollständige Liste, die das Konto danach haben soll"
+
+[labels.de.model.user_account.field.previous_groups]
+label = "Vorherige Gruppen"
+description = "Ergebnis von set_groups: die Gruppen, die das Konto vorher hatte"
+
+[labels.de.model.user_account.field.password]
+label = "Passwort"
+description = "Eingabe von add: das Anfangspasswort (mindestens 12 Zeichen); die Person wählt bei der ersten Anmeldung ein eigenes. Wird nie angezeigt"
+
+[labels.de.model.user_account.field.must_change_password]
+label = "Muss Passwort ändern"
+description = "Ob die Person bei der nächsten Anmeldung ein neues Passwort wählen muss"
+
+[labels.de.model.user_account.field.note]
+label = "Notiz"
+description = "Eingabe von offboard: ein kurzer Grund für das Sicherheitsprotokoll (keine Geheimnisse; 200 Zeichen)"
+
+[labels.de.model.user_account.field.revoked]
+label = "Widerrufen"
+description = "Ergebnis von offboard: was endgültig beendet wurde, in Worten"
+
+[labels.de.model.user_account.field.admin]
+label = "Administrator"
+description = "Ob das Konto die Administratorgruppe hat"
+
+[labels.de.model.user_account.field.disabled]
+label = "Deaktiviert"
+description = "Ob das Konto deaktiviert ist: Es kann sich nicht anmelden und seine Tokens funktionieren nicht"
+
+[labels.de.model.user_account.field.offboarded]
+label = "Ausgeschieden"
+description = "Ob das Konto ausgeschieden ist: deaktiviert, mit endgültig widerrufenen Sitzungen, Agent-Tokens und verbundenen Apps"
+
+[labels.de.model.user_account.field.mfa_enabled]
+label = "Zwei-Faktor"
+description = "Ob das Konto einen zweiten Anmeldefaktor hat (eine Authenticator-App oder einen Passkey)"
+
+[labels.de.model.user_account.field.sessions]
+label = "Sitzungen"
+description = "Angemeldete Sitzungen, die noch gültig sind"
+
+[labels.de.model.user_account.action.add]
+label = "Hinzufügen"
+description = "Ein Konto anlegen. Angeben: id (der Benutzername), password (mindestens 12 Zeichen) und groups. Die Person wählt bei der ersten Anmeldung ein neues Passwort"
+
+[labels.de.model.user_account.action.set_groups]
+label = "Gruppen setzen"
+description = "Die Berechtigungsgruppen eines Kontos ersetzen. Angeben: id und groups (die vollständige Liste danach). Gilt ab der nächsten Anfrage des Kontos. Abgelehnt bei unbekannten Gruppen, wenn man sich selbst oder dem letzten Administrator die Administratorgruppe nehmen will"
+
+[labels.de.model.user_account.action.offboard]
+label = "Ausscheiden lassen"
+description = "Ein Konto deaktivieren und jede Sitzung, jedes Agent-Token und jede verbundene App endgültig beenden. Eine spätere Aktivierung bringt sie nicht zurück. Angeben: id und optional note"
+
+[labels.de.model.user_account.action.disable]
+label = "Deaktivieren"
+description = "Ein Konto deaktivieren: Es kann sich nicht anmelden und seine Tokens funktionieren nicht mehr, bis es wieder aktiviert wird. Angeben: id"
+
+[labels.de.model.user_account.action.enable]
+label = "Aktivieren"
+description = "Ein deaktiviertes Konto wieder aktivieren. Durch ein Ausscheiden widerrufene Zugänge bleiben widerrufen. Angeben: id"

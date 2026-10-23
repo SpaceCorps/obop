@@ -524,3 +524,72 @@ description = "Mettre l'instance à jour vers une version publiée du noyau : r�
 [labels.fr.model.instance_update.action.rollback]
 label = "Revenir en arrière"
 description = "Demander au plan de contrôle de remettre l'instance sur la version précédant la dernière mise à jour"
+
+
+[labels.fr.model.user_account]
+name = "Compte utilisateur"
+description = "Une personne qui peut se connecter à cette instance, avec les groupes de permissions qu’elle détient. Modifié uniquement par les administrateurs ; un agent ne peut que proposer une modification"
+
+[labels.fr.model.user_account.field.groups]
+label = "Groupes"
+description = "Les groupes de permissions du compte, séparés par des virgules. Entrée de add et set_groups : la liste complète que le compte doit détenir ensuite"
+
+[labels.fr.model.user_account.field.previous_groups]
+label = "Groupes précédents"
+description = "Résultat de set_groups : les groupes que le compte détenait avant"
+
+[labels.fr.model.user_account.field.password]
+label = "Mot de passe"
+description = "Entrée de add : le mot de passe initial (au moins 12 caractères) ; la personne choisit le sien à la première connexion. Jamais affiché"
+
+[labels.fr.model.user_account.field.must_change_password]
+label = "Doit changer de mot de passe"
+description = "Si la personne doit choisir un nouveau mot de passe à la prochaine connexion"
+
+[labels.fr.model.user_account.field.note]
+label = "Note"
+description = "Entrée de offboard : une courte raison conservée dans le journal de sécurité (pas de secrets ; 200 caractères)"
+
+[labels.fr.model.user_account.field.revoked]
+label = "Révoqué"
+description = "Résultat de offboard : ce qui a été terminé définitivement, en mots"
+
+[labels.fr.model.user_account.field.admin]
+label = "Administrateur"
+description = "Si le compte détient le groupe administrateur"
+
+[labels.fr.model.user_account.field.disabled]
+label = "Désactivé"
+description = "Si le compte est désactivé : il ne peut pas se connecter et ses jetons ne fonctionnent pas"
+
+[labels.fr.model.user_account.field.offboarded]
+label = "Hors service"
+description = "Si le compte a été mis hors service : désactivé, avec chaque session, jeton d’agent et application connectée définitivement révoqués"
+
+[labels.fr.model.user_account.field.mfa_enabled]
+label = "Double authentification"
+description = "Si le compte a un second facteur de connexion (une application d’authentification ou une clé d’accès)"
+
+[labels.fr.model.user_account.field.sessions]
+label = "Sessions ouvertes"
+description = "Sessions ouvertes encore valides"
+
+[labels.fr.model.user_account.action.add]
+label = "Ajouter"
+description = "Créer un compte. Donner id (le nom d’utilisateur), password (au moins 12 caractères) et groups. La personne choisit un nouveau mot de passe à la première connexion"
+
+[labels.fr.model.user_account.action.set_groups]
+label = "Définir les groupes"
+description = "Remplacer les groupes de permissions d’un compte. Donner id et groups (la liste complète ensuite). Prend effet à la prochaine requête du compte. Refusé pour des groupes inconnus, pour retirer le groupe administrateur à soi-même ou au dernier administrateur"
+
+[labels.fr.model.user_account.action.offboard]
+label = "Mettre hors service"
+description = "Désactiver un compte et terminer définitivement chaque session, jeton d’agent et application connectée. Le réactiver plus tard ne les rétablit pas. Donner id et éventuellement note"
+
+[labels.fr.model.user_account.action.disable]
+label = "Désactiver"
+description = "Désactiver un compte : il ne peut pas se connecter et ses jetons cessent de fonctionner jusqu’à sa réactivation. Donner id"
+
+[labels.fr.model.user_account.action.enable]
+label = "Activer"
+description = "Réactiver un compte désactivé. Les accès révoqués par une mise hors service restent révoqués. Donner id"

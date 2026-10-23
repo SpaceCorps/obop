@@ -599,6 +599,10 @@ A data class tags a field for masking, export and retention (CONVENTIONS section
 
 `confidential_hr`, `special_category` and `financial` are the sensitive classes: they are withheld from agents and non-local AI routes by default and get stricter handling. A class is not a permission group; use `group` on the field to restrict who sees it.
 
+### Assigning groups to people (D69)
+
+The permission groups your module names (on models, fields and actions, and `see_all`) are exactly the groups an administrator can give to a person: Customize > Security > People lists every group of every installed module, and `obop admin groups USER --groups a,b` and `POST /api/auth/users/{name}/groups` accept only those. Install the module first; a group no module declares is refused. Removing a module does not take its group from people who hold it (they keep it until an administrator changes it), but it can no longer be given to anyone else.
+
 `personal_data = true` marks a field as about an identifiable person; it drives access and erasure requests (D33). A personal-data field may never be `none` (the gate refuses it). A field can be sensitive without being personal data (a company's bank balance is `financial`, not personal).
 
 ### Groups

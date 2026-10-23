@@ -1,5 +1,8 @@
 #[cfg(test)]
 mod account_tests;
+mod accounts_cmd;
+#[cfg(test)]
+mod accounts_tests;
 mod app;
 #[cfg(test)]
 mod blobs_tests;
@@ -54,7 +57,17 @@ const USAGE: &str = "usage: obop <command>
   sequences backfill [MODEL [FIELD]]            number the records that were created before their sequence field existed
   admin create USER [--groups a,b | --all-groups]
                                                 create a user; the password is read from stdin
-  admin reset-mfa USER --db URL                 break-glass: remove USER's two-factor (app and passkeys) and sessions (needs database
+  admin users                                   list the accounts with groups, status, two-factor and sessions
+  admin groups USER [--groups a,b]              show the groups of USER, or replace them (checked against the registered groups;
+                                                the last administrator keeps platform.admin); written to the security log
+  admin offboard USER [--note TEXT]             disable USER and end for good every session, agent token and connected app
+                                                (enabling later does not bring them back)
+  admin disable USER | enable USER              disable or enable an account (an offboarded account is enabled again the same way)
+  admin import FILE.csv [--dry-run] [--out FILE]
+                                                create many users from a CSV (columns name, groups); each gets a generated temporary
+                                                password to change at the first sign-in, printed once or written to FILE (mode 0600).
+                                                All rows are checked first; one bad row creates nothing. At most 1000 rows
+  admin reset-mfa USER --db URL                break-glass: remove USER's two-factor (app and passkeys) and sessions (needs database
                                                 access; writes an audit record); see docs/DEPLOY.md
   agent-token USER --scopes a,b [--label TEXT]  issue a scoped agent token (shown once)
   platform serve [--addr A] [--static DIR]      the control plane: sign up and get your own instance
@@ -150,6 +163,8 @@ fn main() -> ExitCode {
     let (components, args) = take_opt(&args, "--components");
     let (message, args) = take_opt(&args, "--message");
     let (admin_prefix, args) = take_opt(&args, "--admin-prefix");
+    let (out_file, args) = take_opt(&args, "--out");
+    let (note, args) = take_opt(&args, "--note");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
         matches!(
             *a,
@@ -160,6 +175,7 @@ fn main() -> ExitCode {
                 | "--trust-proxy"
                 | "--complete"
                 | "--catalog"
+                | "--dry-run"
         )
     });
     let has = |f: &str| flags.contains(&f);
@@ -211,6 +227,12 @@ fn main() -> ExitCode {
             sequences_backfill(&opts, Some(model), Some(field))
         }
         ["admin", "reset-mfa", user] => admin_reset_mfa(&opts, user),
+        ["admin", "users"] => accounts_cmd::users(&opts),
+        ["admin", "groups", user] => accounts_cmd::groups(&opts, user, groups),
+        ["admin", "offboard", user] => accounts_cmd::offboard(&opts, user, note),
+        ["admin", "disable", user] => accounts_cmd::disable(&opts, user, true),
+        ["admin", "enable", user] => accounts_cmd::disable(&opts, user, false),
+        ["admin", "import", file] => accounts_cmd::import(&opts, file, has("--dry-run"), out_file),
         ["admin", "create", user] => admin_create(&opts, user, groups, has("--all-groups")),
         ["agent-token", user] => agent_token(&opts, user, scopes, label),
         ["serve"] => serve(&opts, addr, static_dir),
@@ -313,7 +335,11 @@ fn authenticator(app: &App, o: &Opts) -> Arc<dyn Authenticator> {
     if o.dev_auth {
         Arc::new(DevAuth)
     } else {
-        Arc::new(Auth::new(app.store.backend()))
+        let auth: Arc<dyn Authenticator> = Arc::new(Auth::new(app.store.backend()));
+        // The account administration commands (D69) run as the identity provider the instance
+        // serves with.
+        app.register_accounts(auth.clone());
+        auth
     }
 }
 

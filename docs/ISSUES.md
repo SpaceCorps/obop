@@ -141,3 +141,15 @@ Not fixed (left open):
 | G12 | The design documents name commands that are marked Proposed and do not exist yet (`obop upgrade`, `obop ext`, `obop diag`, `obop ledger verify`) | these are roadmap items, flagged Proposed where they appear |
 | G13 | `obop-community`'s `both_stay_consistent_on_postgres_when_available` fails when it runs twice within about a minute against the same PostgreSQL database (the status leader lease from the first run is still held) | test hygiene only; use a fresh database per run, as CI does |
 
+## I. Batch 1: people administration and bulk create (D69, D70)
+
+Rows of this section only; another section of the register is kept apart so the two can be merged.
+
+| # | Item | Status |
+|---|---|---|
+| I1 | Anonymising or erasing the display data of an offboarded person later (offboarding disables and revokes; it rewrites nothing) | open (needs the erasure design of D54 first) |
+| I2 | People administration asks for no step-up re-authentication (it sits with the other administrator actions, E7f) | open |
+| I3 | People administration never tried against concurrent edits from several server processes on PostgreSQL, nor with the real Claude apps as the connected application | open (needs a multi-process drill) |
+| I4 | The six translations of the People panel strings and of the `user_account` labels are machine-drafted | open (D7) |
+| I5 | Groups can only be given by name; there is no per-group delegation ("may give sales.user but not platform.admin") and no group directory with descriptions | open |
+

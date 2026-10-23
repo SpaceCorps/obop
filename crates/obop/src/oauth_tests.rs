@@ -1441,3 +1441,45 @@ async fn dev_auth_runs_no_authorization_server() {
     .json();
     assert!(prm.get("authorization_servers").is_none());
 }
+
+#[tokio::test]
+async fn offboarding_ends_connected_apps_for_good_and_enabling_does_not_revive_them() {
+    // D69: the real flow, then the offboarding of the person who connected the app.
+    let rig = rig(false);
+    eve(&rig);
+    let r = &rig.r;
+    let c = client(r).await;
+    let url = authorize_url(&c, REDIRECT, &[]);
+    let loc = location(&sign_in_and_allow(r, "eve", &url, &["sales.user"], "30").await);
+    let t = exchange(r, &c, &param(&loc, "code")).await.json();
+    let (access, refresh_token) = (
+        t["access_token"].as_str().unwrap().to_string(),
+        t["refresh_token"].as_str().unwrap().to_string(),
+    );
+    assert!(!tool_names(r, &access).await.is_empty());
+    let done = rig.auth.operator_offboard("eve", "left").unwrap();
+    assert_eq!(done["revoked_apps"], 1);
+    let ping = json!({"jsonrpc":"2.0","id":1,"method":"ping"});
+    assert_eq!(
+        mcp(r, &format!("Bearer {access}"), None, ping.clone())
+            .await
+            .status,
+        401
+    );
+    assert_eq!(refresh(r, &c, &refresh_token).await.status, 400);
+    // Enabled again: the person is back, the application is not.
+    rig.auth.operator_set_disabled("eve", false).unwrap();
+    assert_eq!(
+        mcp(r, &format!("Bearer {access}"), None, ping).await.status,
+        401
+    );
+    assert_ne!(refresh(r, &c, &refresh_token).await.status, 200);
+    // A new connection, made on purpose, works.
+    let loc = location(&sign_in_and_allow(r, "eve", &url, &["sales.user"], "30").await);
+    let t = exchange(r, &c, &param(&loc, "code")).await.json();
+    assert!(
+        !tool_names(r, t["access_token"].as_str().unwrap())
+            .await
+            .is_empty()
+    );
+}

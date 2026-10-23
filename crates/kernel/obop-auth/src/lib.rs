@@ -14,6 +14,7 @@ use std::sync::atomic::AtomicU64;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod account;
+mod admin;
 mod mfa;
 mod oauth;
 mod passkey;
@@ -22,6 +23,7 @@ pub mod totp;
 pub mod webauthn;
 
 pub use account::{MIN_PASSWORD_CHARS, suggest_temporary_password};
+pub use admin::{ImportOutcome, ImportRow, clean_groups};
 pub use mfa::{AuthConfig, EVENT_TABLE};
 pub use passkey::{CHALLENGE_SECS, MAX_PASSKEYS, PASSKEY_TABLE, ceremony_site_ok};
 
@@ -335,6 +337,10 @@ impl Authenticator for Auth {
         Some(self)
     }
 
+    fn accounts(&self) -> Option<&dyn obop_commands::AccountsApi> {
+        Some(self)
+    }
+
     fn issue_agent_token(
         &self,
         owner: &Principal,
@@ -354,6 +360,8 @@ impl Authenticator for Auth {
     }
 }
 
+#[cfg(test)]
+mod admin_tests;
 #[cfg(test)]
 mod mfa_tests;
 #[cfg(test)]

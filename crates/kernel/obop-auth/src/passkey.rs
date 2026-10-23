@@ -43,7 +43,7 @@ fn challenge_key(challenge: &str) -> String {
     format!("auth.wa:{}", hex(&sha256(challenge.as_bytes())))
 }
 
-fn proof_key(user: &str) -> String {
+pub(crate) fn proof_key(user: &str) -> String {
     format!("auth.pkproof:{user}")
 }
 
