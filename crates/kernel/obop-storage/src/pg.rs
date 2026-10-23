@@ -2,10 +2,11 @@
 //! database; cross-process locks are session advisory locks on connections of their own.
 
 use super::*;
-use postgres::{Client, NoTls};
+use crate::tls::PgConnector;
+use postgres::Client;
 
 pub(crate) struct Pg {
-    url: String,
+    connector: PgConnector,
     client: Mutex<Client>,
     /// Idle connections kept for advisory locks (a lock is held on its own session).
     lock_pool: Arc<Mutex<Vec<Client>>>,
@@ -42,7 +43,8 @@ fn e(err: postgres::Error) -> String {
 
 impl Pg {
     pub(crate) fn connect(url: &str) -> Result<Self> {
-        let mut client = Client::connect(url, NoTls).map_err(e)?;
+        let connector = PgConnector::new(url)?;
+        let mut client = connector.connect()?;
         // Several processes may start at once; schema creation is serialised so they do not
         // trip over each other creating the same objects.
         let mut tx = client.transaction().map_err(e)?;
@@ -51,7 +53,7 @@ impl Pg {
         tx.batch_execute(SCHEMA).map_err(e)?;
         tx.commit().map_err(e)?;
         Ok(Self {
-            url: url.to_string(),
+            connector,
             client: Mutex::new(client),
             lock_pool: Arc::default(),
             locks: Arc::default(),
@@ -319,7 +321,7 @@ impl Backend for Pg {
             .pop();
         let mut client = match pooled {
             Some(c) => c,
-            None => Client::connect(&self.url, NoTls).map_err(e)?,
+            None => self.connector.connect()?,
         };
         let deadline = std::time::Instant::now() + LOCK_WAIT;
         loop {
@@ -487,7 +489,7 @@ impl Backend for Pg {
     fn export(&self, batch: usize, sink: &mut RowSink<'_>) -> Result<()> {
         // A connection of its own, one repeatable-read read-only transaction: a consistent
         // snapshot that does not block writers and is paged by `seq`, so memory stays bounded.
-        let mut client = Client::connect(&self.url, NoTls).map_err(e)?;
+        let mut client = self.connector.connect()?;
         let mut tx = client
             .build_transaction()
             .isolation_level(postgres::IsolationLevel::RepeatableRead)

@@ -432,6 +432,9 @@ mod pg;
 #[cfg(test)]
 mod shared_tests;
 mod sqlite;
+pub mod tls;
+#[cfg(test)]
+mod tls_tests;
 
 use memory::Memory;
 use pg::Pg;

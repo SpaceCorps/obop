@@ -141,3 +141,11 @@ Not fixed (left open):
 | G12 | The design documents name commands that are marked Proposed and do not exist yet (`obop upgrade`, `obop ext`, `obop diag`, `obop ledger verify`) | these are roadmap items, flagged Proposed where they appear |
 | G13 | `obop-community`'s `both_stay_consistent_on_postgres_when_available` fails when it runs twice within about a minute against the same PostgreSQL database (the status leader lease from the first run is still held) | test hygiene only; use a fresh database per run, as CI does |
 
+## I. Small unblockers (batch 1: D66 to D68)
+
+| # | Item | Status |
+|---|---|---|
+| I1 | TLS to PostgreSQL: `sslmode=disable|prefer|require|verify-ca|verify-full` and `sslrootcert` in the database URL, rustls, one connector for every PostgreSQL connection; a URL without `sslmode` stays plain | done (D66, PROPOSED). Tested against a throwaway `postgres:17` with a self-signed certificate |
+| I2 | PostgreSQL TLS never tried against a managed service, a connection pooler, an intermediate chain or a public CA | open (needs a real target) |
+| I3 | PostgreSQL client certificates (`sslcert`, `sslkey`), CRL/OCSP and channel binding (`SCRAM-SHA-256-PLUS`) | open (refused at start-up; not built) |
+| I4 | The database URLs the control plane gives to new hosted instances carry no `sslmode` | open (the provisioner should pass the cell's mode on) |

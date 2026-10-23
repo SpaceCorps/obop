@@ -321,8 +321,7 @@ impl DbBytes {
             .map_err(|e| e.to_string())?;
             Db::Sqlite(Mutex::new(conn))
         } else if url.starts_with("postgres://") || url.starts_with("postgresql://") {
-            let mut client =
-                postgres::Client::connect(url, postgres::NoTls).map_err(|e| e.to_string())?;
+            let mut client = crate::tls::connect(url)?;
             client
                 .batch_execute(
                     "CREATE TABLE IF NOT EXISTS obop_blob_data (

@@ -112,8 +112,7 @@ impl CellDb for PgCell {
         let (host, _) = split_url(&self.admin_url)?;
         let instance_host = self.instance_host.clone().unwrap_or_else(|| host.clone());
         let pw = random_password();
-        let mut c = postgres::Client::connect(&self.admin_url, postgres::NoTls)
-            .map_err(|e| e.to_string())?;
+        let mut c = obop_storage::tls::connect(&self.admin_url)?;
         // `name` is restricted to [a-z0-9_] by `ident`, so interpolating it is safe.
         c.batch_execute(&format!("CREATE ROLE {name} LOGIN PASSWORD '{pw}'"))
             .map_err(|e| e.to_string())?;
@@ -138,8 +137,7 @@ impl CellDb for PgCell {
 
     fn drop_database(&self, slug: &str) -> Result<(), String> {
         let name = ident(slug)?;
-        let mut c = postgres::Client::connect(&self.admin_url, postgres::NoTls)
-            .map_err(|e| e.to_string())?;
+        let mut c = obop_storage::tls::connect(&self.admin_url)?;
         c.batch_execute(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
             .map_err(|e| e.to_string())?;
         c.batch_execute(&format!("DROP ROLE IF EXISTS {name}"))

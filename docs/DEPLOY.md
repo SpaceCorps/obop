@@ -57,7 +57,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 
 | Variable | Meaning |
 |---|---|
-| `OBOP_DATABASE_URL` | Where the data lives (`--db`): `sqlite://obop.db` (the default for an instance; `sqlite://obop-platform.db` for the control plane), `postgres://user:pass@host/db`, `memory:`. |
+| `OBOP_DATABASE_URL` | Where the data lives (`--db`): `sqlite://obop.db` (the default for an instance; `sqlite://obop-platform.db` for the control plane), `postgres://user:pass@host/db?sslmode=require` (see "Database connections and TLS"), `memory:`. |
 | `OBOP_SECRET_KEY` | The current server key, 32 random bytes as 64 hex digits (`openssl rand -hex 32`). Seals two-factor secrets and connector credentials, and the sessions and approval plans kept in the database. See "The server key". Without it a key is generated and stored in the database next to the data, which protects nothing against someone holding a copy of the database. |
 | `OBOP_SECRET_KEY_PREVIOUS` | Earlier keys, comma separated: what the current key replaced and that may still protect stored values. Only needed between a key change and the end of `obop secrets rotate`. |
 | `OBOP_AUTO_MIGRATE` | `1` lets a starting server run pending schema steps itself, `0` makes it refuse and print the command. Default: on for SQLite, **off for PostgreSQL**. `--auto-migrate` and `--no-auto-migrate` override it. |
@@ -88,6 +88,30 @@ Command line flags win over variables. Secrets are set as secret environment var
 ### Tests
 
 `OBOP_TEST_POSTGRES_URL` adds PostgreSQL to `cargo test`, including the multi-process tests; `OBOP_BIN` points the end-to-end suite at a binary.
+
+## Database connections and TLS (D66)
+
+By default a `postgres://` URL connects **without TLS**, exactly as before: the password and every record cross the network in the clear. That is acceptable only on a private network you control (same host, a private overlay between containers). For any other path put the mode in the URL; every PostgreSQL connection obop opens uses it (the main connection, the lock connections, the export snapshot of `obop backup`, the blob store, the control plane's cell connections and the status check of the cell).
+
+| `sslmode` | Encrypted | Certificate checked | Use |
+|---|---|---|---|
+| (absent) or `disable` | no | no | same host or a private network |
+| `prefer` | when the server offers it | no | not recommended: an active attacker can answer "no TLS" |
+| `require` | yes, or the connection fails | no (but see below) | the minimum for any other network: stops eavesdropping |
+| `verify-ca` | yes | chain and validity, not the host name | when the host name is not in the certificate |
+| `verify-full` | yes | chain, validity and host name | **recommended** when you know the server's CA |
+
+```text
+postgres://obop:PASSWORD@db.internal:5432/obop?sslmode=require
+postgres://obop:PASSWORD@db.example.com/obop?sslmode=verify-full&sslrootcert=/etc/obop/db-ca.pem
+postgres://obop:PASSWORD@db.example.com/obop?sslmode=verify-full&sslrootcert=system
+```
+
+- `sslrootcert=PATH` is a PEM file with one or more CA certificates (a self-signed server certificate may be given as its own root, provided it is not marked as a CA). `sslrootcert=system` (also the default for the two `verify-*` modes) means the bundled Mozilla roots, for a server with a certificate from a public CA. The file is read when the URL is read, so a wrong path stops the server at start-up. Give `sslrootcert` only with `require`, `verify-ca` or `verify-full`; **`require` with a root certificate is checked like `verify-ca`**, as in libpq.
+- Refused with a clear message at start-up: `sslmode=allow`, a misspelt mode, `sslrootcert` without a mode that uses it, `sslcert`, `sslkey` and `sslcrl` (client certificates are not built), and any address that is not a `postgres://` or `postgresql://` URL. A failed verification (untrusted chain, expired certificate, wrong name, a server without TLS) is an error, never a fall back to a plain connection. The password is not in any of these messages.
+- Turn TLS on at the server (`ssl = on`, `ssl_cert_file`, `ssl_key_file`), and to forbid plain connections use `hostssl` lines in `pg_hba.conf`. obop's TLS is rustls (TLS 1.2 and 1.3, no system OpenSSL); the server's certificate key must be RSA, ECDSA or Ed25519.
+- Put the same parameters in `OBOP_CELL_ADMIN_URL`, and in `--db` for `obop backup`, `restore`, `migrate` and `secrets`. The database URLs the control plane gives to **new** hosted instances do not carry `sslmode` yet; keep the cell on a private network until they do.
+- **Not tried** against a managed PostgreSQL service, a connection pooler in TLS mode, a certificate chain with intermediates, or a public CA: only against the stock `postgres:17` image with a self-signed certificate (`cargo test -p obop-storage tls` starts one when Docker is available).
 
 ## More than one process
 

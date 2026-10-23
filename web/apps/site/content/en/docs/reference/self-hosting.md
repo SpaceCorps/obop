@@ -31,6 +31,17 @@ docker exec -it obop obop admin create alice --all-groups
 
 Put a reverse proxy with TLS in front. obop speaks plain HTTP.
 
+### Encrypt the connection to PostgreSQL
+
+A `postgres://` address connects without TLS unless you ask. On any network you do not fully control, add a mode to the address:
+
+```text
+postgres://obop:secret@db.example.com:5432/obop?sslmode=require
+postgres://obop:secret@db.example.com:5432/obop?sslmode=verify-full&sslrootcert=/etc/obop/db-ca.pem
+```
+
+`require` encrypts but does not check who answers. `verify-full` also checks the certificate chain against the root you give (or against the public roots with `sslrootcert=system`) and that the certificate names the host: use it when you can. `verify-ca` checks the chain only. A server without TLS, an untrusted certificate or a wrong host name makes the connection fail; obop never falls back to a plain connection. The same parameters work in `--db` for `obop backup`, `restore` and `migrate`. Client certificates are not supported. obop uses rustls, so no system OpenSSL is needed. This has been tried against the stock PostgreSQL 17 image with a self-signed certificate only, not against managed services or connection poolers.
+
 ## The control plane and this website
 
 The control plane serves the website with a plain static file server and the sign-up app under `/app/`:

@@ -1276,10 +1276,9 @@ pub fn probe_celldb(url: String) -> Probe {
         component: "celldb",
         run: Box::new(move || {
             let r = (|| -> Result<(), String> {
-                let mut cfg: postgres::Config =
-                    url.parse().map_err(|_| "invalid cell URL".to_string())?;
-                cfg.connect_timeout(Duration::from_secs(5));
-                let mut c = cfg.connect(postgres::NoTls).map_err(|e| e.to_string())?;
+                let mut conn = obop_storage::tls::PgConnector::new(&url)?;
+                conn.config_mut().connect_timeout(Duration::from_secs(5));
+                let mut c = conn.connect()?;
                 c.simple_query("SELECT 1").map_err(|e| e.to_string())?;
                 Ok(())
             })();
