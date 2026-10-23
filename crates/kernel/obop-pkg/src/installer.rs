@@ -2021,6 +2021,7 @@ pub fn admin_module() -> Module {
                     .approval(),
                 ],
             },
+            crate::accounts::user_account_model(),
             ModelDef {
                 name: "marketplace_listing",
                 description: "A module offered by the marketplace",

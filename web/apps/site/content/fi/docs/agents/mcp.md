@@ -403,6 +403,10 @@ Pyydä yhdistämisen jälkeen agenttia listaamaan työkalunsa. Näkyviin pitäis
 
 Jos asiakas ei näytä työkaluja tai näyttää virheen, siirry kohtaan [Vianmääritys](/docs/agents/troubleshooting/).
 
+Jokaisella mallilla, jonka agentti saa luoda, on myös työkalu `<model>__bulk_create`: enintään 1 000 riviä yhdessä kutsussa (`rows` tai `csv`-teksti), oletuksena kaikki tai ei mitään, `mode: "partial"` säilyttää hyvät rivit ja luettelee huonot, `dry_run: true` tarkistaa ensin ja `idempotency_key` tekee uusinnasta turvallisen. Peitto, laajuus ja hyväksyntä ovat samat kuin `create`-komennolla.
+
+Agentti, jonka omistaja on ylläpitäjä, näkee myös `user_account`-työkalut (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). Tiliä muuttavat palauttavat aina `approval_required`: ylläpitäjä hyväksyy suunnitelman, ja se suoritetaan tämän ylläpitäjän nykyisenä tilinä. `__add` vaatii ihmisen valitseman salasanan; palvelin ei koskaan anna agentille luotua salasanaa.
+
 ## Varmennettu ja varmentamatta
 
 | Kohta                                                                                              | Tila                                                                                   |

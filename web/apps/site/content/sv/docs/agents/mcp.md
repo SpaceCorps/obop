@@ -403,6 +403,10 @@ När du har anslutit ber du agenten lista sina verktyg. Du ska bara se de komman
 
 Om klienten inte visar några verktyg eller visar ett fel, gå till [Felsökning](/docs/agents/troubleshooting/).
 
+Varje modell som agenten får skapa har också ett verktyg `<model>__bulk_create`: upp till 1 000 rader i ett anrop (`rows` eller `csv`-text), som standard allt eller inget, `mode: "partial"` behåller de rätta raderna och listar de felaktiga, `dry_run: true` kontrollerar först och en `idempotency_key` gör ett nytt försök säkert. Maskning, omfång och godkännande är desamma som för `create`.
+
+En agent vars ägare är administratör ser också verktygen `user_account` (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). De som ändrar ett konto svarar alltid `approval_required`: en administratör godkänner planen, och den körs som administratörens aktuella konto. `__add` kräver ett lösenord som en människa valt; servern ger aldrig en agent ett genererat lösenord.
+
 ## Verifierat och inte verifierat
 
 | Punkt                                                                                                        | Status                                                                                  |

@@ -524,3 +524,72 @@ description = "Actualizar la instancia a una versión publicada del núcleo: hac
 [labels.es.model.instance_update.action.rollback]
 label = "Revertir"
 description = "Pedir al plano de control que devuelva la instancia a la versión anterior a la última actualización"
+
+
+[labels.es.model.user_account]
+name = "Cuenta de usuario"
+description = "Una persona que puede iniciar sesión en esta instancia, con los grupos de permisos que tiene. Solo la cambian los administradores; un agente solo puede proponer un cambio"
+
+[labels.es.model.user_account.field.groups]
+label = "Grupos"
+description = "Los grupos de permisos de la cuenta, separados por comas. Entrada de add y set_groups: la lista completa que la cuenta debe tener después"
+
+[labels.es.model.user_account.field.previous_groups]
+label = "Grupos anteriores"
+description = "Resultado de set_groups: los grupos que la cuenta tenía antes"
+
+[labels.es.model.user_account.field.password]
+label = "Contraseña"
+description = "Entrada de add: la contraseña inicial (al menos 12 caracteres); la persona elige la suya al iniciar sesión por primera vez. Nunca se muestra"
+
+[labels.es.model.user_account.field.must_change_password]
+label = "Debe cambiar la contraseña"
+description = "Si la persona debe elegir una contraseña nueva en el próximo inicio de sesión"
+
+[labels.es.model.user_account.field.note]
+label = "Nota"
+description = "Entrada de offboard: un motivo breve que se guarda en el registro de seguridad (sin secretos; 200 caracteres)"
+
+[labels.es.model.user_account.field.revoked]
+label = "Revocado"
+description = "Resultado de offboard: lo que se terminó definitivamente, en palabras"
+
+[labels.es.model.user_account.field.admin]
+label = "Administrador"
+description = "Si la cuenta pertenece al grupo de administradores"
+
+[labels.es.model.user_account.field.disabled]
+label = "Desactivada"
+description = "Si la cuenta está desactivada: no puede iniciar sesión y sus tokens no funcionan"
+
+[labels.es.model.user_account.field.offboarded]
+label = "Dada de baja"
+description = "Si la cuenta se dio de baja: desactivada, con todas las sesiones, tokens de agente y aplicaciones conectadas revocados definitivamente"
+
+[labels.es.model.user_account.field.mfa_enabled]
+label = "Dos factores"
+description = "Si la cuenta tiene un segundo factor de inicio de sesión (una aplicación de autenticación o una clave de acceso)"
+
+[labels.es.model.user_account.field.sessions]
+label = "Sesiones"
+description = "Sesiones iniciadas que siguen siendo válidas"
+
+[labels.es.model.user_account.action.add]
+label = "Añadir"
+description = "Crear una cuenta. Indique id (el nombre de usuario), password (al menos 12 caracteres) y groups. La persona elige una contraseña nueva al iniciar sesión por primera vez"
+
+[labels.es.model.user_account.action.set_groups]
+label = "Establecer grupos"
+description = "Sustituir los grupos de permisos de una cuenta. Indique id y groups (la lista completa después). Surte efecto en la próxima solicitud de la cuenta. Se rechaza para grupos desconocidos y al quitar el grupo de administradores a uno mismo o al último administrador"
+
+[labels.es.model.user_account.action.offboard]
+label = "Dar de baja"
+description = "Desactivar una cuenta y terminar definitivamente cada sesión, token de agente y aplicación conectada. Activarla más tarde no los devuelve. Indique id y, si quiere, note"
+
+[labels.es.model.user_account.action.disable]
+label = "Desactivar"
+description = "Desactivar una cuenta: no puede iniciar sesión y sus tokens dejan de funcionar hasta que se active de nuevo. Indique id"
+
+[labels.es.model.user_account.action.enable]
+label = "Activar"
+description = "Volver a activar una cuenta desactivada. Los accesos revocados por una baja siguen revocados. Indique id"

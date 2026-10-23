@@ -34,7 +34,7 @@ fn text_of(v: &Value) -> Option<&str> {
     }
 }
 
-fn create_guard(def: &ModelDef) -> Option<Guard> {
+pub(crate) fn create_guard(def: &ModelDef) -> Option<Guard> {
     let firsts: Vec<(&'static str, &'static str, obop_registry::FieldKind)> = def
         .governed_fields()
         .into_iter()
@@ -387,6 +387,14 @@ impl Dispatcher {
             if let Some(g) = create_guard(def) {
                 self.register_guard(&module.id, &id("create"), true, g);
             }
+            // A bulk create holds the write lock from its first check to its commit; the rows
+            // get the checks of create inside the handler, one by one (D70).
+            self.register_guard(
+                &module.id,
+                &id("bulk_create"),
+                true,
+                Box::new(|_, _| Ok(Verdict::default())),
+            );
             if let Some(g) = update_guard(def, &eng) {
                 self.register_guard(&module.id, &id("update"), true, g);
             }

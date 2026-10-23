@@ -19,7 +19,7 @@ A **permission group** is a name of the form `module.role`, for example `crm.use
 
 ## Users and agents
 
-A person's groups are set when the user is created (`obop admin create NAME --groups a,b`, or `--all-groups`). An agent token is created with a list of scopes, which are groups, and it can only narrow its owner's groups: asking for a group the owner does not hold is refused. An agent cannot create tokens itself.
+A person's groups are set when the user is created (`obop admin create NAME --groups a,b`, or `--all-groups`) and changed later by an administrator in Customize > Security > People, with `obop admin groups NAME --groups a,b`, or over REST. Only groups the installed modules declare can be given, a change reaches the person's open sessions at their next request, and every change is in the security log with the groups before and after. An agent token is created with a list of scopes, which are groups, and it can only narrow its owner's groups: asking for a group the owner does not hold is refused. An agent cannot create tokens itself.
 
 An unknown command, a hidden command and a forbidden command all answer `404 not found`, so a caller cannot probe which commands exist.
 

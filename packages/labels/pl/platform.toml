@@ -524,3 +524,72 @@ description = "Zaktualizuj instancję do opublikowanej wersji rdzenia: tworzy ko
 [labels.pl.model.instance_update.action.rollback]
 label = "Wycofaj"
 description = "Poproś płaszczyznę sterowania o przywrócenie instancji do wersji sprzed ostatniej aktualizacji"
+
+
+[labels.pl.model.user_account]
+name = "Konto użytkownika"
+description = "Osoba, która może logować się do tej instancji, wraz z grupami uprawnień, które posiada. Zmieniają je tylko administratorzy; agent może tylko zaproponować zmianę"
+
+[labels.pl.model.user_account.field.groups]
+label = "Grupy"
+description = "Grupy uprawnień konta, oddzielone przecinkami. Dane wejściowe add i set_groups: pełna lista, którą konto ma mieć po zmianie"
+
+[labels.pl.model.user_account.field.previous_groups]
+label = "Poprzednie grupy"
+description = "Wynik set_groups: grupy, które konto miało wcześniej"
+
+[labels.pl.model.user_account.field.password]
+label = "Hasło"
+description = "Dane wejściowe add: hasło początkowe (co najmniej 12 znaków); osoba wybiera własne przy pierwszym logowaniu. Nigdy nie jest pokazywane"
+
+[labels.pl.model.user_account.field.must_change_password]
+label = "Musi zmienić hasło"
+description = "Czy osoba musi wybrać nowe hasło przy następnym logowaniu"
+
+[labels.pl.model.user_account.field.note]
+label = "Notatka"
+description = "Dane wejściowe offboard: krótki powód zapisany w dzienniku bezpieczeństwa (bez sekretów; 200 znaków)"
+
+[labels.pl.model.user_account.field.revoked]
+label = "Unieważnione"
+description = "Wynik offboard: co zakończono na stałe, słowami"
+
+[labels.pl.model.user_account.field.admin]
+label = "Administrator"
+description = "Czy konto należy do grupy administratorów"
+
+[labels.pl.model.user_account.field.disabled]
+label = "Wyłączone"
+description = "Czy konto jest wyłączone: nie może się logować, a jego tokeny nie działają"
+
+[labels.pl.model.user_account.field.offboarded]
+label = "Wyłączony z firmy"
+description = "Czy konto zostało wyłączone z firmy: wyłączone, z trwale unieważnionymi sesjami, tokenami agentów i połączonymi aplikacjami"
+
+[labels.pl.model.user_account.field.mfa_enabled]
+label = "Dwuskładnikowe"
+description = "Czy konto ma drugi składnik logowania (aplikację uwierzytelniającą lub klucz dostępu)"
+
+[labels.pl.model.user_account.field.sessions]
+label = "Sesje"
+description = "Zalogowane sesje, które są jeszcze ważne"
+
+[labels.pl.model.user_account.action.add]
+label = "Dodaj"
+description = "Utwórz konto. Podaj id (nazwa użytkownika), password (co najmniej 12 znaków) i groups. Osoba wybiera nowe hasło przy pierwszym logowaniu"
+
+[labels.pl.model.user_account.action.set_groups]
+label = "Ustaw grupy"
+description = "Zastąp grupy uprawnień konta. Podaj id i groups (pełna lista po zmianie). Działa od następnego żądania konta. Odrzucane dla nieznanych grup oraz przy odebraniu grupy administratorów sobie lub ostatniemu administratorowi"
+
+[labels.pl.model.user_account.action.offboard]
+label = "Wyłącz z firmy"
+description = "Wyłącz konto i zakończ na stałe każdą sesję, token agenta i połączoną aplikację. Późniejsze włączenie ich nie przywraca. Podaj id i opcjonalnie note"
+
+[labels.pl.model.user_account.action.disable]
+label = "Wyłącz"
+description = "Wyłącz konto: nie może się logować, a jego tokeny przestają działać do ponownego włączenia. Podaj id"
+
+[labels.pl.model.user_account.action.enable]
+label = "Włącz"
+description = "Włącz ponownie wyłączone konto. Dostępy unieważnione przy wyłączeniu z firmy pozostają unieważnione. Podaj id"

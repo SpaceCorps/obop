@@ -1306,3 +1306,509 @@ fn refs_to_records_you_cannot_see_read_like_refs_to_nothing_and_ids_do_not_leak(
     ));
     assert!(e.contains("still referenced by"), "{e}");
 }
+
+// ---- bulk create (D70) ----------------------------------------------------------------------
+
+/// A person nobody else shares a rate-limit counter with (PostgreSQL keeps counters between tests).
+fn bulk_user() -> Principal {
+    Principal::user(&format!("bulk-{}", uuid::Uuid::now_v7().simple()), &[U])
+}
+
+fn rows(items: Vec<Vec<(&str, Value)>>) -> Value {
+    Value::List(items.into_iter().map(m).collect())
+}
+
+fn put(v: &Value, k: &str) -> Value {
+    match v {
+        Value::Map(m) => m.get(k).cloned().unwrap_or(Value::Null),
+        other => panic!("not a map: {other:?}"),
+    }
+}
+
+fn errors_of(v: &Value) -> Vec<(i64, String)> {
+    let Value::List(l) = put(v, "errors") else {
+        panic!("no errors list")
+    };
+    l.iter()
+        .map(|e| {
+            let Value::Text(t) = put(e, "error") else {
+                panic!()
+            };
+            (int(put(e, "row")), t)
+        })
+        .collect()
+}
+
+fn id_list(v: &Value) -> Vec<Option<String>> {
+    let Value::List(l) = put(v, "ids") else {
+        panic!("no ids")
+    };
+    l.into_iter()
+        .map(|x| match x {
+            Value::Text(t) => Some(t),
+            Value::Null => None,
+            other => panic!("{other:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn bulk_create_all_or_nothing_writes_every_row_together() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let out = r.ok(
+            &who,
+            "stock",
+            "bulk_create",
+            m(vec![(
+                "rows",
+                rows(vec![
+                    vec![("sku", t("A1")), ("qty", Value::Int(5))],
+                    vec![("sku", t("A2")), ("qty", Value::Int(7))],
+                    vec![("sku", t("A3"))],
+                ]),
+            )]),
+        );
+        assert_eq!(put(&out, "ok"), Value::Bool(true));
+        assert_eq!((int(put(&out, "total")), int(put(&out, "created"))), (3, 3));
+        let ids = id_list(&out);
+        assert!(ids.iter().all(Option::is_some));
+        assert_eq!(r.count("stock"), 3);
+        assert_eq!(
+            int(r.fld(&who, "stock", ids[1].as_ref().unwrap(), "qty")),
+            7,
+            "ids follow the order of the rows"
+        );
+    });
+}
+
+#[test]
+fn bulk_create_one_bad_row_creates_nothing_and_says_which() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let input = |dry: bool| {
+            m(vec![
+                (
+                    "rows",
+                    rows(vec![
+                        vec![("sku", t("B1"))],
+                        vec![("qty", Value::Int(1))],
+                        vec![("sku", t("B3")), ("qty", t("many"))],
+                    ]),
+                ),
+                ("dry_run", Value::Bool(dry)),
+            ])
+        };
+        let msg = r.err(&who, "stock", "bulk_create", input(false));
+        assert!(
+            msg.contains("2 of 3 row(s) are invalid")
+                && msg.contains("nothing was created")
+                && msg.contains("row 2")
+                && msg.contains("row 3"),
+            "{msg}"
+        );
+        assert_eq!(r.count("stock"), 0);
+        // The dry run answers with the whole report, not a refusal.
+        let report = r.ok(&who, "stock", "bulk_create", input(true));
+        assert_eq!(put(&report, "ok"), Value::Bool(false));
+        assert_eq!(
+            (int(put(&report, "valid")), int(put(&report, "failed"))),
+            (1, 2)
+        );
+        let errs = errors_of(&report);
+        assert_eq!(errs.iter().map(|e| e.0).collect::<Vec<_>>(), [2, 3]);
+        assert!(errs[0].1.contains("sku is required"), "{errs:?}");
+        assert!(errs[1].1.contains("must be an integer"), "{errs:?}");
+        assert_eq!(r.count("stock"), 0);
+    });
+}
+
+#[test]
+fn bulk_create_partial_keeps_the_good_rows_and_reports_the_rest() {
+    each_rig(|r| {
+        let who = bulk_user();
+        r.make(&who, "stock", vec![("sku", t("TAKEN"))]);
+        let out = r.ok(
+            &who,
+            "stock",
+            "bulk_create",
+            m(vec![
+                ("mode", t("partial")),
+                (
+                    "rows",
+                    rows(vec![
+                        vec![("sku", t("C1"))],
+                        vec![("sku", t("C1"))],
+                        vec![("sku", t("TAKEN"))],
+                        vec![("sku", t("C4"))],
+                    ]),
+                ),
+            ]),
+        );
+        assert_eq!(put(&out, "ok"), Value::Bool(false));
+        assert_eq!(
+            (int(put(&out, "created")), int(put(&out, "failed"))),
+            (2, 2)
+        );
+        let ids = id_list(&out);
+        assert_eq!(
+            ids.iter().map(Option::is_some).collect::<Vec<_>>(),
+            [true, false, false, true]
+        );
+        let errs = errors_of(&out);
+        assert_eq!(errs.iter().map(|e| e.0).collect::<Vec<_>>(), [2, 3]);
+        assert!(
+            errs.iter().all(|e| e.1.contains("must be unique")),
+            "{errs:?}"
+        );
+        assert_eq!(r.count("stock"), 3, "TAKEN, C1 and C4");
+    });
+}
+
+#[test]
+fn bulk_create_applies_the_checks_of_create_to_every_row() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let o = r.make(&who, "order", vec![("customer", t("Acme"))]);
+        let out = r.ok(
+            &who,
+            "order_line",
+            "bulk_create",
+            m(vec![
+                ("mode", t("partial")),
+                ("dry_run", Value::Bool(true)),
+                (
+                    "rows",
+                    rows(vec![
+                        vec![("order_id", t(&o)), ("qty", Value::Int(1))],
+                        vec![("order_id", t("no-such-order"))],
+                        vec![("order_id", t(&o)), ("amount", Value::Int(9))],
+                        vec![("order_id", t(&o)), ("nonsense", t("x"))],
+                        vec![("order_id", t(&o)), ("id", t("mine"))],
+                        vec![("qty", Value::Int(2))],
+                        vec![("order_id", t(&o)), ("price", Value::Bool(true))],
+                    ]),
+                ),
+            ]),
+        );
+        let errs = errors_of(&out);
+        assert_eq!(
+            errs.iter().map(|e| e.0).collect::<Vec<_>>(),
+            [2, 3, 4, 5, 6, 7]
+        );
+        assert!(errs[0].1.contains("there is no"), "{errs:?}");
+        assert!(errs[1].1.contains("computed and read-only"), "{errs:?}");
+        assert!(errs[2].1.contains("unknown field"), "{errs:?}");
+        assert!(errs[3].1.contains("id is assigned"), "{errs:?}");
+        assert!(errs[4].1.contains("order_id is required"), "{errs:?}");
+        assert!(errs[5].1.contains("must be"), "{errs:?}");
+        // A governed field starts at its first option, as with create.
+        let bad = r.err(
+            &who,
+            "order",
+            "bulk_create",
+            m(vec![(
+                "rows",
+                rows(vec![vec![("customer", t("A")), ("state", t("confirmed"))]]),
+            )]),
+        );
+        assert!(bad.contains("starts as"), "{bad}");
+        let made = r.ok(
+            &who,
+            "order",
+            "bulk_create",
+            m(vec![(
+                "rows",
+                rows(vec![
+                    vec![("customer", t("A"))],
+                    vec![("customer", t("B")), ("state", t("draft"))],
+                ]),
+            )]),
+        );
+        for id in id_list(&made).into_iter().flatten() {
+            assert_eq!(r.fld(&who, "order", &id, "state"), t("draft"));
+        }
+    });
+}
+
+#[test]
+fn bulk_create_numbers_rows_without_gaps_and_dry_runs_use_no_numbers() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let call = |dry: bool, items: Vec<Vec<(&str, Value)>>| {
+            r.ok(
+                &who,
+                "ticket",
+                "bulk_create",
+                m(vec![
+                    ("mode", t("partial")),
+                    ("dry_run", Value::Bool(dry)),
+                    ("rows", rows(items)),
+                ]),
+            )
+        };
+        call(
+            true,
+            vec![vec![("subject", t("a"))], vec![("subject", t("b"))]],
+        );
+        assert_eq!(r.count("ticket"), 0);
+        // The middle row fails after the first was numbered: its number is not used up.
+        let out = call(
+            false,
+            vec![
+                vec![("subject", t("one"))],
+                vec![("subject", t("two")), ("number", t("T-99"))],
+                vec![("subject", t("three"))],
+            ],
+        );
+        let ids = id_list(&out);
+        assert_eq!(
+            r.fld(&who, "ticket", ids[0].as_ref().unwrap(), "number"),
+            t("T-1")
+        );
+        assert_eq!(
+            r.fld(&who, "ticket", ids[2].as_ref().unwrap(), "number"),
+            t("T-2")
+        );
+        assert!(errors_of(&out)[0].1.contains("number the system assigns"));
+    });
+}
+
+#[test]
+fn bulk_create_follows_the_row_rules_and_the_permission_of_create() {
+    each_rig(|r| {
+        let ann = bulk_user();
+        let Principal { id, .. } = ann.clone();
+        // A creator may not make a record they could not then see (row-level access).
+        let out = r.ok(
+            &ann,
+            "leave",
+            "bulk_create",
+            m(vec![
+                ("mode", t("partial")),
+                (
+                    "rows",
+                    rows(vec![
+                        vec![("days", Value::Int(1))],
+                        vec![("employee", t("someone-else")), ("days", Value::Int(2))],
+                        vec![("employee", t(&id)), ("days", Value::Int(3))],
+                    ]),
+                ),
+            ]),
+        );
+        let errs = errors_of(&out);
+        assert_eq!(errs.len(), 1, "{errs:?}");
+        assert_eq!(errs[0].0, 2);
+        let ids = id_list(&out);
+        assert_eq!(
+            r.fld(&ann, "leave", ids[0].as_ref().unwrap(), "employee"),
+            t(&id)
+        );
+        // Without the group of create, nothing: the same answer as for an unknown command.
+        let nobody = Principal::user("nobody", &[]);
+        assert!(matches!(
+            r.call(
+                &nobody,
+                "stock",
+                "bulk_create",
+                m(vec![("rows", rows(vec![]))])
+            ),
+            Err(CallError::Forbidden(_))
+        ));
+        // An agent needs the scope, and then needs no approval where create needs none.
+        let scoped = Principal::agent(&id, &[U], &[U]);
+        assert!(
+            r.call(
+                &scoped,
+                "stock",
+                "bulk_create",
+                m(vec![("rows", rows(vec![vec![("sku", t("AG1"))]]))])
+            )
+            .is_ok()
+        );
+        let unscoped = Principal::agent(&id, &[U], &[MGR]);
+        assert!(matches!(
+            r.call(
+                &unscoped,
+                "stock",
+                "bulk_create",
+                m(vec![("rows", rows(vec![]))])
+            ),
+            Err(CallError::Forbidden(_))
+        ));
+    });
+}
+
+#[test]
+fn bulk_create_idempotency_key_returns_the_first_answer_to_a_retry() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let input = |sku: &str, key: &str, dry: bool| {
+            m(vec![
+                ("rows", rows(vec![vec![("sku", t(sku))]])),
+                ("idempotency_key", t(key)),
+                ("dry_run", Value::Bool(dry)),
+            ])
+        };
+        // A dry run neither reads nor spends the key.
+        r.ok(&who, "stock", "bulk_create", input("K1", "key-1", true));
+        let first = r.ok(&who, "stock", "bulk_create", input("K1", "key-1", false));
+        assert_eq!(put(&first, "replayed"), Value::Bool(false));
+        let again = r.ok(&who, "stock", "bulk_create", input("K1", "key-1", false));
+        assert_eq!(put(&again, "replayed"), Value::Bool(true));
+        assert_eq!(id_list(&first), id_list(&again));
+        assert_eq!(r.count("stock"), 1, "the retry created nothing");
+        // The same key for other rows is a mistake, not a retry.
+        let msg = r.err(&who, "stock", "bulk_create", input("K2", "key-1", false));
+        assert!(msg.contains("different request"), "{msg}");
+        assert_eq!(r.count("stock"), 1);
+        // The key belongs to the person: another person's call with it is a new call.
+        let other = bulk_user();
+        let theirs = r.ok(&other, "stock", "bulk_create", input("K3", "key-1", false));
+        assert_eq!(put(&theirs, "replayed"), Value::Bool(false));
+        // A call that created nothing (it failed) leaves the key free.
+        let fail = m(vec![
+            ("rows", rows(vec![vec![("qty", Value::Int(1))]])),
+            ("idempotency_key", t("key-2")),
+        ]);
+        r.err(&who, "stock", "bulk_create", fail);
+        let ok = r.ok(&who, "stock", "bulk_create", input("K4", "key-2", false));
+        assert_eq!(put(&ok, "replayed"), Value::Bool(false));
+        // After a day the key is forgotten.
+        let later = r.d_now() + 25 * 3600;
+        r.d.set_clock(Arc::new(move || later));
+        let renewed = r.ok(&who, "stock", "bulk_create", input("K5", "key-1", false));
+        assert_eq!(put(&renewed, "replayed"), Value::Bool(false));
+        let replay = r.ok(&who, "stock", "bulk_create", input("K5", "key-1", false));
+        assert_eq!(put(&replay, "replayed"), Value::Bool(true));
+        assert_eq!(r.count("stock"), 4, "K1, K3, K4 and K5");
+    });
+}
+
+#[test]
+fn bulk_create_refuses_malformed_calls_before_looking_at_any_row() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let many = rows(
+            (0..1001)
+                .map(|i| vec![("sku", t(&format!("S{i}")))])
+                .collect(),
+        );
+        assert!(
+            r.err(&who, "stock", "bulk_create", m(vec![("rows", many)]))
+                .contains("at most 1000 rows")
+        );
+        for (input, needle) in [
+            (m(vec![]), "give rows"),
+            (
+                m(vec![("rows", rows(vec![])), ("csv", t("sku\n1\n"))]),
+                "not both",
+            ),
+            (m(vec![("rows", t("x"))]), "list of objects"),
+            (
+                m(vec![("rows", rows(vec![])), ("mode", t("some"))]),
+                "mode must be",
+            ),
+            (
+                m(vec![("rows", rows(vec![])), ("dryrun", Value::Bool(true))]),
+                "unknown input",
+            ),
+            (
+                m(vec![
+                    ("rows", rows(vec![])),
+                    ("idempotency_key", t("has space")),
+                ]),
+                "idempotency_key must be",
+            ),
+            (
+                m(vec![("rows", rows(vec![])), ("dry_run", t("yes"))]),
+                "dry_run must be",
+            ),
+        ] {
+            let msg = r.err(&who, "stock", "bulk_create", input);
+            assert!(msg.contains(needle), "{msg} / {needle}");
+        }
+        // An empty list is a valid call that creates nothing.
+        let none = r.ok(
+            &who,
+            "stock",
+            "bulk_create",
+            m(vec![("rows", rows(vec![]))]),
+        );
+        assert_eq!(int(put(&none, "created")), 0);
+    });
+}
+
+#[test]
+fn bulk_create_is_rate_limited_per_person_and_dry_runs_count() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let call = |who: &Principal| {
+            r.call(
+                who,
+                "stock",
+                "bulk_create",
+                m(vec![
+                    ("rows", rows(vec![vec![("sku", t("R"))]])),
+                    ("dry_run", Value::Bool(true)),
+                ]),
+            )
+        };
+        for _ in 0..12 {
+            assert!(call(&who).is_ok());
+        }
+        let Err(CallError::Handler(msg)) = call(&who) else {
+            panic!("the 13th call in a minute should be refused")
+        };
+        assert!(msg.contains("too many bulk imports"), "{msg}");
+        assert!(call(&bulk_user()).is_ok(), "another person is not affected");
+    });
+}
+
+#[test]
+fn bulk_create_takes_the_largest_call_it_allows() {
+    each_rig(|r| {
+        // A thousand rows on the local backends. On PostgreSQL every check is a round trip, so
+        // the test uses fewer rows there; the limit itself is tested above.
+        let n: usize = if r.store.backend_kind() == "postgres" {
+            60
+        } else {
+            1000
+        };
+        let who = bulk_user();
+        let many = rows(
+            (0..n)
+                .map(|i| {
+                    vec![
+                        ("sku", t(&format!("L{i:04}"))),
+                        ("qty", Value::Int(i as i64)),
+                    ]
+                })
+                .collect(),
+        );
+        let out = r.ok(&who, "stock", "bulk_create", m(vec![("rows", many)]));
+        assert_eq!(int(put(&out, "created")), n as i64);
+        assert_eq!(r.count("stock"), n);
+        // Every sku is unique, so one repeated at the very end is found among them.
+        let last = format!("L{:04}", n - 1);
+        let again = r.err(
+            &who,
+            "stock",
+            "bulk_create",
+            m(vec![("rows", rows(vec![vec![("sku", t(&last))]]))]),
+        );
+        assert!(again.contains("must be unique"), "{again}");
+        // Tickets share one counter: n numbers, none skipped.
+        let tickets = rows(
+            (0..n)
+                .map(|i| vec![("subject", t(&format!("s{i}")))])
+                .collect(),
+        );
+        let out = r.ok(&who, "ticket", "bulk_create", m(vec![("rows", tickets)]));
+        let ids = id_list(&out);
+        assert_eq!(
+            r.fld(&who, "ticket", ids[n - 1].as_ref().unwrap(), "number"),
+            t(&format!("T-{n}"))
+        );
+    });
+}

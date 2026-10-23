@@ -320,6 +320,8 @@ pub struct ModelInfo {
     /// Commands beyond get, list, create and update that this principal may call.
     pub actions: Vec<CommandInfo>,
     pub can_create: bool,
+    /// The caller may create many records at once (D70).
+    pub can_bulk_create: bool,
     pub can_update: bool,
     pub can_delete: bool,
     pub labels: Texts,
@@ -493,6 +495,7 @@ impl Dispatcher {
                         .collect(),
                     actions,
                     can_create: can("create"),
+                    can_bulk_create: can("bulk_create"),
                     can_update: can("update"),
                     can_delete: can("delete"),
                     access: m
@@ -601,7 +604,8 @@ impl Dispatcher {
                 permission_group: c.permission_group,
                 surfaces: c.surfaces,
                 transition: c.transition,
-                envelope: command == "search",
+                // `search` returns {rows, total} and `bulk_create` a report: only rows are shaped.
+                envelope: matches!(command, "search" | "bulk_create"),
                 actor,
                 writes: !matches!(command, "get" | "list" | "search"),
                 handler,
@@ -741,6 +745,24 @@ impl Dispatcher {
     /// Replace the clock sequences and `$now` read (seconds since the epoch). For tests.
     pub fn set_clock(&self, clock: ClockFn) {
         *self.clock.0.write().unwrap() = clock;
+    }
+
+    /// Every permission group the registered models, fields and commands refer to (the
+    /// administrator group included, `*` excluded), sorted. These are the groups an account can
+    /// be given (D69); a module installed later adds its own.
+    pub fn known_groups(&self) -> Vec<String> {
+        self.sync();
+        let mut g: std::collections::BTreeSet<String> = [ADMIN_GROUP.to_string()].into();
+        for m in self.models.read().unwrap().values() {
+            let d = &m.def;
+            let from_model = [d.read_group, d.write_group]
+                .into_iter()
+                .chain(d.fields.iter().map(|f| f.permission_group))
+                .chain(d.commands.iter().map(|c| c.permission_group))
+                .chain(d.access.iter().flat_map(|a| a.see_all.iter().copied()));
+            g.extend(from_model.filter(|x| *x != ANY_GROUP).map(String::from));
+        }
+        g.into_iter().collect()
     }
 
     /// Whether any command of `model` is registered.
@@ -1085,6 +1107,10 @@ pub trait Authenticator: Send + Sync {
     fn mfa(&self) -> Option<&dyn MfaApi> {
         None
     }
+    /// Account administration (D69), for authenticators that support it.
+    fn accounts(&self) -> Option<&dyn AccountsApi> {
+        None
+    }
     /// Passkeys (WebAuthn, D65), for authenticators that support them.
     fn passkeys(&self) -> Option<&dyn PasskeyApi> {
         None
@@ -1375,9 +1401,11 @@ pub trait PasskeyApi: Send + Sync {
     fn methods(&self, mfa_token: &str) -> Vec<&'static str>;
 }
 
+pub mod accounts;
 pub mod aggregate;
 pub mod blobs;
 pub mod collate;
+pub mod csv;
 mod engine;
 mod guards;
 pub mod json;
@@ -1386,6 +1414,7 @@ pub mod public;
 pub mod query;
 pub mod store;
 
+pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
 pub use engine::{Actor, ClockFn};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};

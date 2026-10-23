@@ -265,6 +265,7 @@ impl Auth {
                     "groups": str_list(&u["groups"]),
                     "admin": str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP),
                     "disabled": u.get("disabled").and_then(J::as_bool) == Some(true),
+                    "offboarded": u.get("offboarded").and_then(J::as_bool) == Some(true),
                     "mfa_enabled": u.get("mfa_enabled").and_then(J::as_bool) == Some(true)
                         || passkeys.get(&name).is_some_and(|n| *n > 0),
                     "passkeys": passkeys.get(&name).copied().unwrap_or(0),
@@ -277,7 +278,7 @@ impl Auth {
         Ok(json!({"users": users}))
     }
 
-    fn enabled_admins(&self) -> usize {
+    pub(crate) fn enabled_admins(&self) -> usize {
         self.backend
             .list("auth_user")
             .unwrap_or_default()
@@ -296,8 +297,22 @@ impl Auth {
         disabled: bool,
     ) -> Result<(), MfaError> {
         let actor = admin_name(admin)?;
+        // An approved proposal of an agent runs as `alice/agent`, which may not disable `alice`.
+        let user = actor.strip_suffix("/agent").unwrap_or(actor);
+        self.set_disabled_as(actor, Some(user), target, disabled)
+    }
+
+    /// `actor_user`: the account the actor signs in as, which may not disable itself; `None` for
+    /// the operator's CLI.
+    pub(crate) fn set_disabled_as(
+        &self,
+        actor: &str,
+        actor_user: Option<&str>,
+        target: &str,
+        disabled: bool,
+    ) -> Result<(), MfaError> {
         let target = target.trim().to_lowercase();
-        if target == actor {
+        if actor_user == Some(target.as_str()) {
             return Err(MfaError::Invalid(
                 "you cannot disable your own account".into(),
             ));
@@ -319,6 +334,10 @@ impl Auth {
         }
         let mut patch = Fields::new();
         patch.insert("disabled".into(), J::Bool(disabled));
+        let was_offboarded = u["offboarded"].as_bool() == Some(true);
+        if !disabled && was_offboarded {
+            patch.insert("offboarded".into(), J::Bool(false));
+        }
         self.put(&target, &patch)?;
         if disabled {
             let n = self.revoke_user_sessions(&target, None);
@@ -327,6 +346,13 @@ impl Auth {
                 "user_disable",
                 actor,
                 &format!("account disabled; {n} session(s) signed out; its tokens stop working"),
+            );
+        } else if was_offboarded {
+            self.event(
+                &target,
+                "user_enable",
+                actor,
+                "account enabled after offboarding; the sessions, agent tokens and connected apps revoked then stay revoked",
             );
         } else {
             self.event(&target, "user_enable", actor, "account enabled");

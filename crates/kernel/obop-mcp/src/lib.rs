@@ -339,6 +339,7 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                         "name": x.name,
                         "description": x.description,
                         "can_create": x.can_create,
+                        "can_bulk_create": x.can_bulk_create,
                         "can_update": x.can_update,
                         "can_delete": x.can_delete,
                         "fields": x.fields.iter().map(|f| {

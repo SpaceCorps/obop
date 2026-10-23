@@ -7,6 +7,7 @@ import { ControlPanel, type ViewDef } from "./ControlPanel.tsx";
 import { useData, useRows } from "./data.tsx";
 import { loadFavorites, readPref, writePref, type Favorite } from "./favorites.ts";
 import { isState, visibleFields } from "./format.ts";
+import { ImportDialog } from "./ImportDialog.tsx";
 import { fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import {
@@ -349,6 +350,18 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
           fields={fields}
           canCreate={model.can_create}
           onNew={() => openNew()}
+          onImport={
+            model.can_bulk_create
+              ? () =>
+                  setExtraDialog(
+                    <ImportDialog
+                      model={model}
+                      title={title}
+                      onClose={() => setExtraDialog(null)}
+                    />,
+                  )
+              : undefined
+          }
           state={state}
           setState={setState}
           lookup={d.lookup}

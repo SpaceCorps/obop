@@ -85,7 +85,9 @@ write_group = "assets.manager"
 
 A model needs a description and two groups: people holding `read_group` can read records (`get`, `list`, `search`); people holding `write_group` can `create`, `update` and `delete`. Every field needs a description and a data class. `class = "none"` is how you say "this is not personal data and not otherwise sensitive"; it must be written out. `required = true` makes the server refuse a create without the field. Fields default to `kind = "text"`.
 
-Each model automatically gets six commands, with the same names on REST, MCP and the CLI: `<model>.get`, `.list`, `.search`, `.create`, `.update` and `.delete`. Records get an `id` assigned by the server. `list` and `search` take the optional `filter`, `order`, `limit` and `offset` of section 4.1; `delete` removes a record that no other record refers to and, being destructive, is only *proposed* by an agent. A field that is the target of an action is governed (section 6.1): `create` and `update` cannot set it freely.
+Each model automatically gets seven commands, with the same names on REST, MCP and the CLI: `<model>.get`, `.list`, `.search`, `.create`, `.bulk_create`, `.update` and `.delete`. Records get an `id` assigned by the server. `list` and `search` take the optional `filter`, `order`, `limit` and `offset` of section 4.1; `delete` removes a record that no other record refers to and, being destructive, is only *proposed* by an agent. A field that is the target of an action is governed (section 6.1): `create` and `update` cannot set it freely.
+
+`bulk_create` (D70) makes up to 1,000 records in one call, from `rows` (a list of objects) or `csv` (the text of a CSV file whose header names the fields). Each row gets exactly the checks of `create` (kinds, required fields, references the caller may see, governed fields starting at their first option, unique values also among the rows of the call, sequences, `own` defaulting to the caller, the row-level rule that a creator may not make what they could not then see; computed and numbered fields cannot be set), the write group of the model is the permission, and an agent needs approval exactly where `create` would. The call is all or nothing unless `mode` is `partial`; `dry_run` checks without writing; `idempotency_key` makes a retried call return the first answer. A CSV file is UTF-8 (a byte order mark is dropped), separated by commas or semicolons, at most 1 MiB; references are the **id** of the record they point to (there is no way to point at a record of the same file, and no remapping of ids); numbers and money are whole numbers (money in minor units such as cents: a decimal point is an error, because there are no decimal kinds yet); yes/no fields take `true`, `false`, `yes`, `no`, `1` or `0`; dates are `YYYY-MM-DD` (there is no date-time kind yet); an empty cell leaves the field out; **image and file fields cannot be imported** (upload and attach them one record at a time). A module needs to do nothing to get it, and a model that its caller cannot `create` does not offer it.
 
 ### 2.3 The main model: kinds, refs, a field-level group, personal data
 
@@ -303,7 +305,7 @@ The core follows semantic versioning. While it is below 1.0, a **minor** bump (`
 
 | Key | Type | Default | Rules |
 |---|---|---|---|
-| `name` | string | required | Identifier; not `get`, `list`, `search`, `create`, `update` or `delete`; unique within the model (a duplicate is refused). The command id is `<model>.<name>`. |
+| `name` | string | required | Identifier; not `get`, `list`, `search`, `create`, `bulk_create`, `update` or `delete`; unique within the model (a duplicate is refused). The command id is `<model>.<name>`. |
 | `description` | string | required | Not blank. |
 | `field` | string | required | A `select` field declared in the same model; any select field, not only `state` (the UI draws `state` as the status bar and kanban, other selects are governed the same way). That field becomes *governed* (section 6.1). |
 | `from` | string | none | The value the field must have now; one of the options. Without `from` the action works from any value; the bundled packages always set it. Must differ from `to`. |
@@ -352,7 +354,7 @@ Parse and gate errors (from `obop modules install`, the Customize upload or `mod
 | `M.F: a ref needs `to`, the target model` | Add `to`. |
 | `M.F: `to` "X" is not a model name` | Target must be an identifier. |
 | `M.F: `to` names "X", which this package does not declare` | A ref to a model that starts with your own id must be one of your models. |
-| `M: bad action name "X"` | Not an identifier, or one of `get`, `list`, `search`, `create`, `update`, `delete`. |
+| `M: bad action name "X"` | Not an identifier, or one of `get`, `list`, `search`, `create`, `bulk_create`, `update`, `delete`. |
 | `M: action "X" is declared twice` | Two actions of one model share a name; use distinct names (two ways to one state need two names). |
 | `M.A: acts on undeclared field "X"` | `field` must name a field of the same model. |
 | `M.A: acts on F, which is a text field; an action moves a select field between its options` | Make the field `kind = "select"` with `options`. |
@@ -598,6 +600,10 @@ A data class tags a field for masking, export and retention (CONVENTIONS section
 | `secret` | Credentials and keys; write-only. | API keys, webhook secrets |
 
 `confidential_hr`, `special_category` and `financial` are the sensitive classes: they are withheld from agents and non-local AI routes by default and get stricter handling. A class is not a permission group; use `group` on the field to restrict who sees it.
+
+### Assigning groups to people (D69)
+
+The permission groups your module names (on models, fields and actions, and `see_all`) are exactly the groups an administrator can give to a person: Customize > Security > People lists every group of every installed module, and `obop admin groups USER --groups a,b` and `POST /api/auth/users/{name}/groups` accept only those. Install the module first; a group no module declares is refused. Removing a module does not take its group from people who hold it (they keep it until an administrator changes it), but it can no longer be given to anyone else.
 
 `personal_data = true` marks a field as about an identifiable person; it drives access and erasure requests (D33). A personal-data field may never be `none` (the gate refuses it). A field can be sensitive without being personal data (a company's bank balance is `financial`, not personal).
 

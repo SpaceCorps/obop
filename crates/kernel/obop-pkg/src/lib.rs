@@ -1,6 +1,7 @@
 //! Declarative module packages: the `obop.toml` format, runtime install and removal, the
 //! marketplace, and the admin commands that drive them.
 
+pub mod accounts;
 pub mod check;
 pub mod files;
 pub mod installer;
@@ -13,6 +14,7 @@ pub mod spdx;
 mod sync;
 pub mod views;
 
+pub use accounts::register_accounts;
 pub use check::{Report, check_manifest, check_package};
 pub use installer::{
     CoreCompat, Installer, PackageInfo, RollbackInfo, UpdateAll, UpdateInfo, admin_module,

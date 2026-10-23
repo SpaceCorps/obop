@@ -16,12 +16,8 @@ import {
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
 import { Icon, Logo } from "./ui.tsx";
 import { PasskeysSection } from "./Passkeys.tsx";
-import {
-  ConnectedAppsSection,
-  PasswordSection,
-  PeopleSection,
-  SessionsSection,
-} from "./SecurityAccount.tsx";
+import { ConnectedAppsSection, PasswordSection, SessionsSection } from "./SecurityAccount.tsx";
+import { PeopleSection } from "./People.tsx";
 
 type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
 
@@ -51,6 +47,9 @@ const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   sessions_revoked: msg("Sessions signed out"),
   user_disable: msg("Account disabled"),
   user_enable: msg("Account enabled"),
+  user_create: msg("Account created"),
+  user_groups: msg("Groups changed"),
+  user_offboard: msg("Account offboarded"),
   settings_change: msg("Security setting changed"),
   oauth_authorize: msg("App connected"),
   oauth_denied: msg("App refused"),

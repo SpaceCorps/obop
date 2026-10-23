@@ -403,6 +403,10 @@ Bitten Sie den Agenten nach dem Verbinden, seine Tools aufzulisten. Sie sollten 
 
 Zeigt der Client keine Tools oder einen Fehler, gehen Sie zu [Fehlerbehebung](/docs/agents/troubleshooting/).
 
+Jedes Modell, das der Agent anlegen darf, hat außerdem ein Tool `<model>__bulk_create`: bis zu 1.000 Zeilen in einem Aufruf (`rows` oder `csv`-Text), standardmäßig ganz oder gar nicht, mit `mode: "partial"` werden die richtigen Zeilen angelegt und die fehlerhaften aufgelistet, `dry_run: true` prüft zuerst, und ein `idempotency_key` macht eine Wiederholung sicher. Maskierung, Scope und Genehmigung sind dieselben wie bei `create`.
+
+Ein Agent, dessen Eigentümer Administrator ist, sieht auch die `user_account`-Tools (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). Die, die ein Konto ändern, liefern immer `approval_required`: Ein Administrator genehmigt den Plan, und er läuft als das aktuelle Konto dieses Administrators. `__add` braucht ein Passwort, das ein Mensch gewählt hat; der Server gibt einem Agenten nie ein erzeugtes Passwort.
+
 ## Geprüft und nicht geprüft
 
 | Punkt                                                                                                    | Status                                                                                          |

@@ -264,7 +264,17 @@ pub(crate) fn check_unique(
     unit: &Unit<'_>,
     lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
 ) -> R<()> {
-    for (model, id) in unit.touched() {
+    check_unique_keys(unit, lookup, &unit.touched())
+}
+
+/// Like `check_unique`, for the given records only (a bulk create checks each new row as it adds
+/// it, instead of every row again).
+pub(crate) fn check_unique_keys(
+    unit: &Unit<'_>,
+    lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
+    keys: &[(String, String)],
+) -> R<()> {
+    for (model, id) in keys.iter().cloned() {
         let Some(def) = lookup(&model) else { continue };
         let specs = unique_specs(&def);
         if specs.is_empty() {

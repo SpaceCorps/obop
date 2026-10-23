@@ -26,7 +26,7 @@ pub(crate) fn to_row(id: &str, f: &Fields) -> Value {
     Value::Map(m)
 }
 
-fn to_fields(m: &BTreeMap<String, Value>) -> Fields {
+pub(crate) fn to_fields(m: &BTreeMap<String, Value>) -> Fields {
     m.iter().map(|(k, v)| (k.clone(), v.to_json())).collect()
 }
 
@@ -244,7 +244,7 @@ pub(crate) fn search(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     }
 }
 
-fn system_error(def: &ModelDef, name: &str) -> String {
+pub(crate) fn system_error(def: &ModelDef, name: &str) -> String {
     let f = def.fields.iter().find(|f| f.name == name);
     if f.is_some_and(|f| f.computed.is_some()) {
         format!("{}.{name} is computed and read-only", def.name)

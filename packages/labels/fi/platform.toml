@@ -524,3 +524,72 @@ description = "Päivitä instanssi julkaistuun ytimen versioon: ottaa varmuuskop
 [labels.fi.model.instance_update.action.rollback]
 label = "Palauta"
 description = "Pyydä ohjaustasoa palauttamaan instanssi versioon ennen viimeisintä päivitystä"
+
+
+[labels.fi.model.user_account]
+name = "Käyttäjätili"
+description = "Henkilö, joka voi kirjautua tähän instanssiin, ja hänen käyttöoikeusryhmänsä. Vain ylläpitäjät muuttavat sitä; agentti voi vain ehdottaa muutosta"
+
+[labels.fi.model.user_account.field.groups]
+label = "Ryhmät"
+description = "Tilin käyttöoikeusryhmät pilkuilla erotettuina. Komentojen add ja set_groups syöte: koko luettelo, joka tilillä on oltava sen jälkeen"
+
+[labels.fi.model.user_account.field.previous_groups]
+label = "Aiemmat ryhmät"
+description = "set_groups-komennon tulos: ryhmät, jotka tilillä oli aiemmin"
+
+[labels.fi.model.user_account.field.password]
+label = "Salasana"
+description = "Komennon add syöte: alkusalasana (vähintään 12 merkkiä); henkilö valitsee oman salasanansa ensimmäisellä kirjautumiskerralla. Ei näytetä koskaan"
+
+[labels.fi.model.user_account.field.must_change_password]
+label = "Salasana on vaihdettava"
+description = "Onko henkilön valittava uusi salasana seuraavalla kirjautumiskerralla"
+
+[labels.fi.model.user_account.field.note]
+label = "Huomautus"
+description = "Komennon offboard syöte: lyhyt syy, joka tallentuu tietoturvalokiin (ei salaisuuksia; 200 merkkiä)"
+
+[labels.fi.model.user_account.field.revoked]
+label = "Peruutettu"
+description = "offboard-komennon tulos: mitä päätettiin pysyvästi, sanoin"
+
+[labels.fi.model.user_account.field.admin]
+label = "Ylläpitäjä"
+description = "Kuuluuko tili ylläpitäjien ryhmään"
+
+[labels.fi.model.user_account.field.disabled]
+label = "Poistettu käytöstä"
+description = "Onko tili poistettu käytöstä: se ei voi kirjautua eivätkä sen tunnisteet toimi"
+
+[labels.fi.model.user_account.field.offboarded]
+label = "Poistettu lopullisesti"
+description = "Onko tili poistettu lopullisesti: poistettu käytöstä, ja kaikki istunnot, agenttitunnisteet ja yhdistetyt sovellukset peruutettu pysyvästi"
+
+[labels.fi.model.user_account.field.mfa_enabled]
+label = "Kaksivaiheinen"
+description = "Onko tilillä toinen kirjautumistekijä (todennussovellus tai pääsyavain)"
+
+[labels.fi.model.user_account.field.sessions]
+label = "Istunnot"
+description = "Kirjautuneet istunnot, jotka ovat vielä voimassa"
+
+[labels.fi.model.user_account.action.add]
+label = "Lisää"
+description = "Luo tili. Anna id (käyttäjätunnus), password (vähintään 12 merkkiä) ja groups. Henkilö valitsee uuden salasanan ensimmäisellä kirjautumiskerralla"
+
+[labels.fi.model.user_account.action.set_groups]
+label = "Aseta ryhmät"
+description = "Korvaa tilin käyttöoikeusryhmät. Anna id ja groups (koko luettelo jälkeenpäin). Tulee voimaan tilin seuraavassa pyynnössä. Hylätään tuntemattomille ryhmille sekä silloin, kun ylläpitäjäryhmä otetaan itseltä tai viimeiseltä ylläpitäjältä"
+
+[labels.fi.model.user_account.action.offboard]
+label = "Poista lopullisesti"
+description = "Poista tili käytöstä ja päätä pysyvästi jokainen istunto, agenttitunniste ja yhdistetty sovellus. Käyttöönotto myöhemmin ei palauta niitä. Anna id ja halutessasi note"
+
+[labels.fi.model.user_account.action.disable]
+label = "Poista käytöstä"
+description = "Poista tili käytöstä: se ei voi kirjautua ja sen tunnisteet lakkaavat toimimasta, kunnes tili otetaan uudelleen käyttöön. Anna id"
+
+[labels.fi.model.user_account.action.enable]
+label = "Ota käyttöön"
+description = "Ota käytöstä poistettu tili uudelleen käyttöön. Lopullisen poiston yhteydessä peruutetut oikeudet pysyvät peruutettuina. Anna id"

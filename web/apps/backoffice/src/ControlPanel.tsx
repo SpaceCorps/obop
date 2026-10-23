@@ -16,6 +16,8 @@ type Props = {
   fields: FieldMeta[];
   canCreate: boolean;
   onNew: () => void;
+  /** Import records from a CSV file (D70); the button shows when it is given. */
+  onImport?: () => void;
   state: ViewState;
   setState: (s: ViewState) => void;
   lookup: Lookup;
@@ -108,11 +110,18 @@ export function ControlPanel(p: Props) {
           <Icon name="chevron-right" size={12} />
           <strong>{p.title}</strong>
         </div>
-        {p.canCreate && (
-          <Button variant="primary" icon="plus" onClick={p.onNew}>
-            {t("New")}
-          </Button>
-        )}
+        <div className="cp-actions">
+          {p.onImport && (
+            <Button icon="upload" onClick={p.onImport}>
+              {t("Import")}
+            </Button>
+          )}
+          {p.canCreate && (
+            <Button variant="primary" icon="plus" onClick={p.onNew}>
+              {t("New")}
+            </Button>
+          )}
+        </div>
       </div>
       <div className="cp-bottom">
         <div className="searchwrap" ref={root}>

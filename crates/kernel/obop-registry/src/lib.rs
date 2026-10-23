@@ -331,10 +331,18 @@ pub struct ModelDef {
 }
 
 impl ModelDef {
-    /// Generated `get`, `list`, `search`, `create`, `update` and `delete`, followed by the custom
-    /// commands. The REST, MCP and CLI surfaces are derived from this list (D29, D41, D49).
+    /// Generated `get`, `list`, `search`, `create`, `bulk_create`, `update` and `delete`, followed
+    /// by the custom commands. The REST, MCP and CLI surfaces are derived from this list (D29, D41, D49).
     pub fn all_commands(&self) -> Vec<CommandDef> {
         let crud = CommandDef::new;
+        let create = crud("create", "Create a record", self.write_group);
+        // Creating many at once needs exactly the approval that creating one needs (D70).
+        let mut bulk = crud(
+            "bulk_create",
+            "Create many records in one call (at most 1000): rows as a list of objects, or csv text with field names as headers. Every row gets the checks of create. All or nothing by default; mode partial keeps the good rows and reports the bad ones; dry_run checks without writing; idempotency_key makes a retried call return the first answer",
+            self.write_group,
+        );
+        bulk.needs_approval = create.needs_approval;
         let mut v = vec![
             crud("get", "Read one record by id", self.read_group),
             crud(
@@ -347,7 +355,8 @@ impl ModelDef {
                 "Like list, but returns {rows, total} with the count before limit and offset",
                 self.read_group,
             ),
-            crud("create", "Create a record", self.write_group),
+            create,
+            bulk,
             crud("update", "Update fields of a record", self.write_group),
             crud(
                 "delete",
@@ -377,7 +386,18 @@ impl ModelDef {
 }
 
 /// Command names the platform generates for every model; a custom command cannot use them.
-pub const GENERATED_COMMANDS: [&str; 6] = ["get", "list", "search", "create", "update", "delete"];
+pub const GENERATED_COMMANDS: [&str; 7] = [
+    "get",
+    "list",
+    "search",
+    "create",
+    "bulk_create",
+    "update",
+    "delete",
+];
+
+/// Most rows one `bulk_create` call takes (D70).
+pub const MAX_BULK_ROWS: usize = 1000;
 
 #[derive(Debug, Clone, Default)]
 pub struct Module {
@@ -752,7 +772,15 @@ mod tests {
         let names: Vec<_> = cmds.iter().map(|c| c.name).collect();
         assert_eq!(
             names,
-            ["get", "list", "search", "create", "update", "delete"]
+            [
+                "get",
+                "list",
+                "search",
+                "create",
+                "bulk_create",
+                "update",
+                "delete"
+            ]
         );
         assert!(
             cmds.iter()

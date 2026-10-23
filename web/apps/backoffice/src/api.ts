@@ -73,6 +73,8 @@ export type ModelMeta = {
   labels?: Translations;
   descriptions?: Translations;
   can_create: boolean;
+  /** Whether this principal may create many records at once (bulk_create, D70). */
+  can_bulk_create?: boolean;
   can_update: boolean;
   /** Whether this principal may delete records of the model (its write group). */
   can_delete: boolean;

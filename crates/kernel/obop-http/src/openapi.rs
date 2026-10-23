@@ -269,6 +269,38 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                     ),
                 );
             }
+            if model.can_bulk_create {
+                let mut row = json!({"type": "object", "properties": input_props.clone()});
+                if !required.is_empty() {
+                    row["required"] = json!(required);
+                }
+                paths.insert(
+                    format!("/api/{name}/bulk_create"),
+                    op(
+                        "bulk_create",
+                        &format!("Create up to 1000 {name} records in one call; all or nothing unless mode is partial"),
+                        Some(json_body(json!({"type": "object", "properties": {
+                            "rows": {"type": "array", "maxItems": 1000, "items": row},
+                            "csv": {"type": "string", "description": "Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB)"},
+                            "mode": {"type": "string", "enum": ["all_or_nothing", "partial"]},
+                            "dry_run": {"type": "boolean"},
+                            "idempotency_key": {"type": "string", "maxLength": 128}
+                        }}))),
+                        ok(json!({"type": "object", "properties": {"value": {"type": "object", "properties": {
+                            "ok": {"type": "boolean"},
+                            "dry_run": {"type": "boolean"},
+                            "mode": {"type": "string"},
+                            "total": {"type": "integer"},
+                            "created": {"type": "integer"},
+                            "valid": {"type": "integer", "description": "With dry_run: rows that would be created"},
+                            "failed": {"type": "integer"},
+                            "errors": {"type": "array", "items": {"type": "object", "properties": {"row": {"type": "integer"}, "line": {"type": "integer"}, "error": {"type": "string"}}}},
+                            "ids": {"type": "array", "items": {"type": ["string", "null"]}},
+                            "replayed": {"type": "boolean"}
+                        }}}}), "The report of the call."),
+                    ),
+                );
+            }
             if model.can_update {
                 let mut upd = json!({"type": "object", "required": ["id"], "properties": input_props.clone()});
                 upd["properties"]["id"] = json!({"type": "string"});

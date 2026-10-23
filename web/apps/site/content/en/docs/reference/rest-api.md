@@ -21,6 +21,17 @@ Content-Type: application/json
 | `POST /api/{model}/{command}` | Runs a command. The body is the command input.                                                                                               |
 | `POST /api/approve/{plan_id}` | A person approves a proposed plan.                                                                                                           |
 
+Administrators also manage people over REST (a signed-in administrator's session; an agent token gets `404`, and proposes the same changes through the `user_account` commands instead):
+
+| Method and path                                                   | Purpose                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/auth/groups`                                            | The permission groups that can be given: `{"groups":[...]}`.                                                                                                                                                                  |
+| `GET /api/auth/users`                                             | The accounts, with groups, status, two-factor and sessions. Never a hash.                                                                                                                                                     |
+| `POST /api/auth/users`                                            | Create a person: `{"username","groups":[...],"password"?,"must_change_password"?}`. Without a password the answer carries `temporary_password`, once. The person must choose their own at the first sign-in.                  |
+| `POST /api/auth/users/{name}/groups`                              | `{"groups":[...]}` replaces the groups. Answers `{"before","after","added","removed","changed"}`. Takes effect at the person's next request. Refused: unknown groups, one's own administrator access, the last administrator. |
+| `POST /api/auth/users/{name}/offboard`                            | `{"note"?}` disables the account and revokes its sessions, agent tokens and connected apps for good: `{"revoked_sessions","revoked_agent_tokens","revoked_apps"}`.                                                            |
+| `POST /api/auth/users/{name}/disable`, `enable`, `reset-password` | Disable, enable, or set a temporary password (`{"password"}`).                                                                                                                                                                |
+
 Instances also serve the web app from `/`. The control plane serves its own endpoints under `/api/platform/` (sign-up, sign-in, instances); they are used by the sign-up app and are not covered here. It also publishes `GET /api/releases` (the core releases an instance's _Updates_ page reads) and three endpoints that only an instance's update token opens (`/api/platform/update/status`, `start`, `rollback`); the token can ask for a published version and nothing else.
 
 On an instance, administrators update modules with `POST /api/module/upgrade` (`{"id": ...}`), `/api/module/upgrade_all` and `/api/module/rollback`, and the instance itself with `POST /api/instance_update/check`, `status`, `start` (`{"version": ...}`) and `rollback`. Agents only propose the changing ones (a `202` with a `plan_id`).
@@ -39,14 +50,58 @@ Success: `200` with
 
 Every model gets these. For model `lead`:
 
-| Command       | Input                                         | Result                                                                                |
-| ------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `lead.get`    | `{"id"}`                                      | The record.                                                                           |
-| `lead.list`   | optional `filter`, `order`, `limit`, `offset` | An array of records.                                                                  |
-| `lead.search` | same as list                                  | `{"rows":[...],"total":N}`, where `total` counts matches before `limit` and `offset`. |
-| `lead.create` | the fields                                    | The new record, with its `id`. Governed fields start at their first option.           |
-| `lead.update` | `{"id", ...fields}`                           | The updated record. Changing a governed field runs the matching action.               |
-| `lead.delete` | `{"id"}`                                      | `{"id"}`. Refused while another record refers to it. Agents only propose it.          |
+| Command            | Input                                         | Result                                                                                |
+| ------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `lead.get`         | `{"id"}`                                      | The record.                                                                           |
+| `lead.list`        | optional `filter`, `order`, `limit`, `offset` | An array of records.                                                                  |
+| `lead.search`      | same as list                                  | `{"rows":[...],"total":N}`, where `total` counts matches before `limit` and `offset`. |
+| `lead.create`      | the fields                                    | The new record, with its `id`. Governed fields start at their first option.           |
+| `lead.bulk_create` | `rows` or `csv`, see below                    | A report: how many were created, which rows failed, and the ids.                      |
+| `lead.update`      | `{"id", ...fields}`                           | The updated record. Changing a governed field runs the matching action.               |
+| `lead.delete`      | `{"id"}`                                      | `{"id"}`. Refused while another record refers to it. Agents only propose it.          |
+
+## Create many records
+
+`POST /api/{model}/bulk_create` creates up to 1,000 records in one call (an agent token needs the same scope as for `create`, and approval exactly where `create` would). Give `rows` or `csv`:
+
+```json
+{
+  "rows": [{ "title": "First" }, { "title": "Second", "stage": "new" }],
+  "mode": "all_or_nothing",
+  "dry_run": false,
+  "idempotency_key": "import-2026-10-24"
+}
+```
+
+| Input             | Meaning                                                                                                                                                                                                                                                                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rows`            | A list of objects of field names and values, as for `create`. At most 1,000.                                                                                                                                                                                                       |
+| `csv`             | Instead: the text of a CSV file (UTF-8, `,` or `;`, at most 1 MiB, a header of field names). References are record ids; numbers are whole numbers (money in minor units, no decimal point); an empty cell leaves the field out; image and file fields are not accepted.            |
+| `mode`            | `all_or_nothing` (default): one bad row creates nothing and the call answers `400` naming the first rows. `partial`: the good rows are created and the answer lists the bad ones.                                                                                                  |
+| `dry_run`         | Check every row and write nothing. The answer is the full report, even in `all_or_nothing` mode.                                                                                                                                                                                   |
+| `idempotency_key` | Up to 128 visible characters you make up. Repeating the call with the same key and the same rows returns the first answer (`replayed: true`) for 24 hours instead of creating the rows again; other rows with the same key are refused. The key belongs to the person who used it. |
+
+Every row is checked exactly as `create` checks a record, and everything is written in one transaction. The answer:
+
+```json
+{
+  "value": {
+    "ok": true,
+    "dry_run": false,
+    "mode": "all_or_nothing",
+    "source": "rows",
+    "total": 2,
+    "created": 2,
+    "failed": 0,
+    "errors": [],
+    "errors_truncated": false,
+    "ids": ["01...", "01..."],
+    "replayed": false
+  }
+}
+```
+
+`ids` follows the order of the rows (`null` for a row that was not created); with `dry_run` the count is `valid` and there are no ids; `errors` lists at most 100 problems as `{row, line?, error}`, `line` being the line of a CSV file. A person may start `OBOP_BULK_PER_MINUTE` calls a minute (default 12). Limits: no remapping of ids and no reference from one row to another row of the same call, no decimal or date-time kinds yet, no images or files.
 
 Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input is `{"id"}`, plus any `required` fields it needs.
 

@@ -11,6 +11,7 @@
 //! - `crud`: the generated create, update and delete, built from the above.
 
 pub(crate) mod access;
+pub(crate) mod bulk;
 pub(crate) mod computed;
 pub(crate) mod crud;
 pub(crate) mod effects;
