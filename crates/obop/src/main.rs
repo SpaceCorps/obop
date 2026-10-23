@@ -10,11 +10,11 @@ mod blobs_tests;
 mod bulk_tests;
 #[cfg(test)]
 mod connectors_tests;
-mod import_cmd;
 #[cfg(test)]
 mod cors_tests;
 #[cfg(test)]
 mod health_tests;
+mod import_cmd;
 #[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
