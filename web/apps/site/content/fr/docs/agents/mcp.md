@@ -403,6 +403,10 @@ Après la connexion, demandez à l'agent de lister ses outils. Vous ne devriez v
 
 Si le client n'affiche aucun outil ou une erreur, rendez-vous sur [Dépannage](/docs/agents/troubleshooting/).
 
+Chaque modèle que l'agent peut créer a aussi un outil `<model>__bulk_create` : jusqu'à 1 000 lignes en un appel (`rows` ou texte `csv`), tout ou rien par défaut, `mode: "partial"` pour garder les bonnes lignes et lister les mauvaises, `dry_run: true` pour vérifier d'abord, et une `idempotency_key` pour rendre une nouvelle tentative sûre. Masquage, portée et approbation sont ceux de `create`.
+
+Un agent dont le propriétaire est administrateur voit aussi les outils `user_account` (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). Ceux qui modifient un compte renvoient toujours `approval_required` : un administrateur approuve le plan, qui s'exécute avec le compte actuel de cet administrateur. `__add` exige un mot de passe choisi par une personne ; le serveur ne remet jamais un mot de passe généré à un agent.
+
 ## Vérifié et non vérifié
 
 | Élément                                                                                                              | État                                                                                           |

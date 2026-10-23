@@ -300,6 +300,16 @@ impl Dispatcher {
             self.register_generic(
                 module,
                 name,
+                "bulk_create",
+                Box::new(move |input| {
+                    let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
+                    crate::engine::bulk::bulk_create(&e, &def, input)
+                }),
+            );
+            let e = eng.clone();
+            self.register_generic(
+                module,
+                name,
                 "update",
                 Box::new(move |input| {
                     let def = e.def(name).ok_or_else(|| format!("no model {name}"))?;
@@ -624,5 +634,136 @@ mod tests {
             ),
             "deal.stage must be one of",
         );
+    }
+
+    // ---- bulk create from CSV text (D70) ---------------------------------------------------
+
+    fn bulk_csv(d: &Dispatcher, u: &Principal, csv: &str, mode: &str) -> Result<Value, String> {
+        call(
+            d,
+            u,
+            "deal.bulk_create",
+            vec![("csv", Value::text(csv)), ("mode", Value::text(mode))],
+        )
+    }
+
+    fn field(v: &Value, k: &str) -> Value {
+        let Value::Map(m) = v else { panic!("{v:?}") };
+        m.get(k).cloned().unwrap_or(Value::Null)
+    }
+
+    #[test]
+    fn bulk_csv_converts_cells_by_kind_and_keeps_text_as_written() {
+        let (d, s, u) = setup();
+        let c = call(
+            &d,
+            &u,
+            "customer.create",
+            vec![("name", Value::text("Acme"))],
+        )
+        .unwrap();
+        let cid = match field(&c, "id") {
+            Value::Text(t) => t,
+            other => panic!("{other:?}"),
+        };
+        // A byte order mark, semicolons, a quoted cell with a line break and a comma, a cell
+        // that looks like a formula, an empty cell, true/false/yes, a date, a reference.
+        let file = format!(
+            "\u{feff}title;notes;qty;price;due;won;stage;customer_id\r\n\
+             first;\"two\nlines, and a comma\";5;1250;2026-10-24;yes;new;{cid}\r\n\
+             =1+1;;-3;0;;false;;\r\n"
+        );
+        let out = bulk_csv(&d, &u, &file, "all_or_nothing").unwrap();
+        assert_eq!(field(&out, "created"), Value::Int(2), "{out:?}");
+        let Value::List(ids) = field(&out, "ids") else {
+            panic!()
+        };
+        let rec = |i: usize| {
+            let Value::Text(id) = &ids[i] else { panic!() };
+            call(&d, &u, "deal.get", vec![("id", Value::text(id))]).unwrap()
+        };
+        let first = rec(0);
+        assert_eq!(
+            field(&first, "notes"),
+            Value::text("two\nlines, and a comma")
+        );
+        assert_eq!(field(&first, "qty"), Value::Int(5));
+        assert_eq!(field(&first, "price"), Value::Int(1250));
+        assert_eq!(field(&first, "won"), Value::Bool(true));
+        assert_eq!(field(&first, "due"), Value::text("2026-10-24"));
+        assert_eq!(field(&first, "customer_id"), Value::text(&cid));
+        let second = rec(1);
+        assert_eq!(
+            field(&second, "title"),
+            Value::text("=1+1"),
+            "a cell that looks like a formula is data, kept exactly"
+        );
+        assert_eq!(field(&second, "qty"), Value::Int(-3));
+        assert_eq!(
+            field(&second, "notes"),
+            Value::Null,
+            "an empty cell leaves the field out"
+        );
+        assert_eq!(s.count("deal"), 2);
+    }
+
+    #[test]
+    fn bulk_csv_row_problems_name_the_row_and_the_line() {
+        let (d, s, u) = setup();
+        let file = "title,qty,price,won,due\n\
+                    ok,1,100,true,2026-01-31\n\
+                    ,2,100,true,\n\
+                    bad qty,2.5,100,true,\n\
+                    bad money,1,12.50,true,\n\
+                    bad bool,1,1,maybe,\n\
+                    bad date,1,1,true,31/01/2026\n";
+        let out = bulk_csv(&d, &u, file, "partial").unwrap();
+        assert_eq!(field(&out, "created"), Value::Int(1));
+        let Value::List(errs) = field(&out, "errors") else {
+            panic!()
+        };
+        let text = format!("{errs:?}");
+        for needle in [
+            "title is required",
+            "must be a whole number, not \\\"2.5\\\"",
+            "without a decimal point",
+            "must be true or false",
+            "calendar date",
+        ] {
+            assert!(text.contains(needle), "{needle} not in {text}");
+        }
+        // The line of the file is given for a CSV source.
+        assert_eq!(field(&errs[0], "line"), Value::Int(3));
+        assert_eq!(field(&errs[0], "row"), Value::Int(2));
+        assert_eq!(s.count("deal"), 1);
+    }
+
+    #[test]
+    fn bulk_csv_header_and_file_problems_refuse_the_whole_file() {
+        let (d, s, u) = setup();
+        for (file, needle) in [
+            ("title,nonsense\na,b\n", "unknown column"),
+            ("id,title\n1,a\n", "\"id\" cannot be imported"),
+            ("title,title\na,b\n", "appears twice"),
+            ("title,qty\na\n", "1 column(s), but the header has 2"),
+            ("title\n\"a\n", "never closed"),
+            ("", "empty"),
+        ] {
+            let e = bulk_csv(&d, &u, file, "all_or_nothing").unwrap_err();
+            assert!(e.contains(needle), "{e} / {needle}");
+        }
+        let big = format!("title\n{}\n", "x".repeat(1_048_577));
+        assert!(
+            bulk_csv(&d, &u, &big, "all_or_nothing")
+                .unwrap_err()
+                .contains("larger")
+        );
+        let many: String = (0..1001).map(|i| format!("t{i}\n")).collect();
+        assert!(
+            bulk_csv(&d, &u, &format!("title\n{many}"), "all_or_nothing")
+                .unwrap_err()
+                .contains("more than 1000")
+        );
+        assert_eq!(s.count("deal"), 0);
     }
 }

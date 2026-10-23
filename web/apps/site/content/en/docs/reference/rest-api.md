@@ -50,14 +50,58 @@ Success: `200` with
 
 Every model gets these. For model `lead`:
 
-| Command       | Input                                         | Result                                                                                |
-| ------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `lead.get`    | `{"id"}`                                      | The record.                                                                           |
-| `lead.list`   | optional `filter`, `order`, `limit`, `offset` | An array of records.                                                                  |
-| `lead.search` | same as list                                  | `{"rows":[...],"total":N}`, where `total` counts matches before `limit` and `offset`. |
-| `lead.create` | the fields                                    | The new record, with its `id`. Governed fields start at their first option.           |
-| `lead.update` | `{"id", ...fields}`                           | The updated record. Changing a governed field runs the matching action.               |
-| `lead.delete` | `{"id"}`                                      | `{"id"}`. Refused while another record refers to it. Agents only propose it.          |
+| Command            | Input                                         | Result                                                                                |
+| ------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `lead.get`         | `{"id"}`                                      | The record.                                                                           |
+| `lead.list`        | optional `filter`, `order`, `limit`, `offset` | An array of records.                                                                  |
+| `lead.search`      | same as list                                  | `{"rows":[...],"total":N}`, where `total` counts matches before `limit` and `offset`. |
+| `lead.create`      | the fields                                    | The new record, with its `id`. Governed fields start at their first option.           |
+| `lead.bulk_create` | `rows` or `csv`, see below                    | A report: how many were created, which rows failed, and the ids.                      |
+| `lead.update`      | `{"id", ...fields}`                           | The updated record. Changing a governed field runs the matching action.               |
+| `lead.delete`      | `{"id"}`                                      | `{"id"}`. Refused while another record refers to it. Agents only propose it.          |
+
+## Create many records
+
+`POST /api/{model}/bulk_create` creates up to 1,000 records in one call (an agent token needs the same scope as for `create`, and approval exactly where `create` would). Give `rows` or `csv`:
+
+```json
+{
+  "rows": [{ "title": "First" }, { "title": "Second", "stage": "new" }],
+  "mode": "all_or_nothing",
+  "dry_run": false,
+  "idempotency_key": "import-2026-10-24"
+}
+```
+
+| Input             | Meaning                                                                                                                                                                                                                                                                            |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rows`            | A list of objects of field names and values, as for `create`. At most 1,000.                                                                                                                                                                                                       |
+| `csv`             | Instead: the text of a CSV file (UTF-8, `,` or `;`, at most 1 MiB, a header of field names). References are record ids; numbers are whole numbers (money in minor units, no decimal point); an empty cell leaves the field out; image and file fields are not accepted.            |
+| `mode`            | `all_or_nothing` (default): one bad row creates nothing and the call answers `400` naming the first rows. `partial`: the good rows are created and the answer lists the bad ones.                                                                                                  |
+| `dry_run`         | Check every row and write nothing. The answer is the full report, even in `all_or_nothing` mode.                                                                                                                                                                                   |
+| `idempotency_key` | Up to 128 visible characters you make up. Repeating the call with the same key and the same rows returns the first answer (`replayed: true`) for 24 hours instead of creating the rows again; other rows with the same key are refused. The key belongs to the person who used it. |
+
+Every row is checked exactly as `create` checks a record, and everything is written in one transaction. The answer:
+
+```json
+{
+  "value": {
+    "ok": true,
+    "dry_run": false,
+    "mode": "all_or_nothing",
+    "source": "rows",
+    "total": 2,
+    "created": 2,
+    "failed": 0,
+    "errors": [],
+    "errors_truncated": false,
+    "ids": ["01...", "01..."],
+    "replayed": false
+  }
+}
+```
+
+`ids` follows the order of the rows (`null` for a row that was not created); with `dry_run` the count is `valid` and there are no ids; `errors` lists at most 100 problems as `{row, line?, error}`, `line` being the line of a CSV file. A person may start `OBOP_BULK_PER_MINUTE` calls a minute (default 12). Limits: no remapping of ids and no reference from one row to another row of the same call, no decimal or date-time kinds yet, no images or files.
 
 Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input is `{"id"}`, plus any `required` fields it needs.
 

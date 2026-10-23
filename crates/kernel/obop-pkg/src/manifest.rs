@@ -1573,7 +1573,7 @@ write_group = "fleet.manager"
     fn valid_manifest_becomes_a_module_that_passes_the_gate() {
         let m = Manifest::parse(FLEET).unwrap();
         let module = m.to_module().unwrap();
-        assert_eq!(module.models[0].all_commands().len(), 7);
+        assert_eq!(module.models[0].all_commands().len(), 8);
         assert_eq!(m.groups(), ["fleet.manager", "fleet.user"]);
     }
 
@@ -1717,7 +1717,15 @@ write_group = "fleet.manager"
 
     #[test]
     fn generated_command_names_cannot_be_actions() {
-        for name in ["get", "list", "search", "create", "update", "delete"] {
+        for name in [
+            "get",
+            "list",
+            "search",
+            "create",
+            "bulk_create",
+            "update",
+            "delete",
+        ] {
             let bad = FLEET.replace("name = \"dispatch\"", &format!("name = \"{name}\""));
             assert!(err(&bad).contains("bad action name"), "{name}");
         }

@@ -1198,6 +1198,7 @@ dependencies = [
  "obop-storage",
  "obop-types",
  "serde_json",
+ "sha2",
  "uuid",
 ]
 

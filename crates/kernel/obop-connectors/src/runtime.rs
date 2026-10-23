@@ -1219,6 +1219,20 @@ impl Runtime {
         self.dispatcher.observe(
             "connectors",
             Box::new(move |command, _p, input, out| {
+                // A bulk create (D70) is one `create` event per record it made.
+                if let Some(model) = command.strip_suffix(".bulk_create") {
+                    if let Value::Map(m) = out
+                        && let Some(Value::List(ids)) = m.get("ids")
+                        && let Ok(t) = tx.lock()
+                    {
+                        for id in ids {
+                            if let Value::Text(id) = id {
+                                let _ = t.send((format!("{model}.create"), id.clone()));
+                            }
+                        }
+                    }
+                    return;
+                }
                 let id = match out {
                     Value::Map(m) => m.get("id"),
                     _ => None,

@@ -38,6 +38,23 @@ impl Reads for Plain<'_> {
 
 type Key = (String, String);
 
+/// What one change did to the overlay, so a part of the unit can be taken back (see `Mark`).
+struct Undo {
+    key: Key,
+    before: Option<Option<Fields>>,
+    /// The change added the record to `inserted`.
+    inserted: bool,
+}
+
+/// A point in a unit that `rewind` returns to, discarding everything done since. A bulk create
+/// that keeps the good rows uses it to drop the writes of a row that failed half way.
+pub(crate) struct Mark {
+    ops: usize,
+    undo: usize,
+    written: usize,
+    touched: usize,
+}
+
 pub(crate) struct Unit<'a> {
     backend: &'a dyn Backend,
     /// `None`: deleted in this unit.
@@ -50,6 +67,7 @@ pub(crate) struct Unit<'a> {
     /// Records inserted or merged, for the uniqueness check.
     touched: Vec<Key>,
     cap: usize,
+    undo: Vec<Undo>,
 }
 
 impl<'a> Unit<'a> {
@@ -62,7 +80,53 @@ impl<'a> Unit<'a> {
             written: 0,
             touched: Vec::new(),
             cap: MAX_EFFECT_RECORDS,
+            undo: Vec::new(),
         }
+    }
+
+    /// A unit that may write up to `cap` records (a bulk create).
+    pub fn with_cap(backend: &'a dyn Backend, cap: usize) -> Self {
+        let mut u = Self::new(backend);
+        u.cap = cap;
+        u
+    }
+
+    /// Where the unit is now.
+    pub fn mark(&self) -> Mark {
+        Mark {
+            ops: self.ops.len(),
+            undo: self.undo.len(),
+            written: self.written,
+            touched: self.touched.len(),
+        }
+    }
+
+    /// Take back everything done since `mark`.
+    pub fn rewind(&mut self, mark: Mark) {
+        while self.undo.len() > mark.undo {
+            let Some(u) = self.undo.pop() else { break };
+            if u.inserted
+                && let Some(ids) = self.inserted.get_mut(&u.key.0)
+            {
+                ids.pop();
+            }
+            match u.before {
+                None => {
+                    self.overlay.remove(&u.key);
+                }
+                Some(prev) => {
+                    self.overlay.insert(u.key, prev);
+                }
+            }
+        }
+        self.ops.truncate(mark.ops);
+        self.touched.truncate(mark.touched);
+        self.written = mark.written;
+    }
+
+    /// Add a step that is not a record write of the engine (a replay record, for example).
+    pub fn push_op(&mut self, op: Op) {
+        self.ops.push(op);
     }
 
     /// A unit for maintenance work that may touch any number of records (still one transaction).
@@ -101,7 +165,12 @@ impl<'a> Unit<'a> {
             id: key.1.clone(),
             fields: fields.clone(),
         });
-        self.overlay.insert(key.clone(), Some(fields));
+        let before = self.overlay.insert(key.clone(), Some(fields));
+        self.undo.push(Undo {
+            key: key.clone(),
+            before,
+            inserted: true,
+        });
         self.inserted
             .entry(model.to_string())
             .or_default()
@@ -123,7 +192,12 @@ impl<'a> Unit<'a> {
             id: key.1.clone(),
             patch,
         });
-        self.overlay.insert(key.clone(), Some(cur));
+        let before = self.overlay.insert(key.clone(), Some(cur));
+        self.undo.push(Undo {
+            key: key.clone(),
+            before,
+            inserted: false,
+        });
         self.touched.push(key);
         Ok(())
     }
@@ -138,8 +212,23 @@ impl<'a> Unit<'a> {
             model: key.0.clone(),
             id: key.1.clone(),
         });
-        self.overlay.insert(key, None);
+        let before = self.overlay.insert(key.clone(), None);
+        self.undo.push(Undo {
+            key,
+            before,
+            inserted: false,
+        });
         Ok(())
+    }
+
+    /// Apply every recorded step, steps that need `apply_checked` included, in one transaction.
+    pub fn commit_checked(self) -> R<()> {
+        if self.ops.is_empty() {
+            return Ok(());
+        }
+        self.backend
+            .apply_checked(&self.ops)
+            .map_err(|e| e.to_string())
     }
 
     /// Apply every recorded step in one transaction.
@@ -255,5 +344,32 @@ mod tests {
         }
         let e = u.insert("t", "over", Fields::new()).unwrap_err();
         assert!(e.contains("more than 500 records"), "{e}");
+    }
+
+    // Rewinding a unit (D70).
+    #[test]
+    fn rewind_takes_back_what_was_done_since_a_mark() {
+        let b = obop_storage::open("memory:").unwrap();
+        b.insert("t", "a", &f("n", J::from(1))).unwrap();
+        let mut u = Unit::new(&*b);
+        u.insert("t", "kept", f("n", J::from(10))).unwrap();
+        let mark = u.mark();
+        u.merge("t", "a", f("n", J::from(2))).unwrap();
+        u.merge("t", "kept", f("n", J::from(11))).unwrap();
+        u.insert("t", "dropped", f("n", J::from(3))).unwrap();
+        u.delete("t", "a").unwrap();
+        u.rewind(mark);
+        assert_eq!(Reads::get(&u, "t", "a").unwrap().unwrap()["n"], J::from(1));
+        assert_eq!(
+            Reads::get(&u, "t", "kept").unwrap().unwrap()["n"],
+            J::from(10)
+        );
+        assert!(Reads::get(&u, "t", "dropped").unwrap().is_none());
+        assert_eq!(Reads::all(&u, "t").unwrap().len(), 2);
+        assert_eq!(u.touched(), [("t".to_string(), "kept".to_string())]);
+        u.commit().unwrap();
+        assert_eq!(b.get("t", "a").unwrap().unwrap()["n"], J::from(1));
+        assert_eq!(b.get("t", "kept").unwrap().unwrap()["n"], J::from(10));
+        assert!(b.get("t", "dropped").unwrap().is_none());
     }
 }

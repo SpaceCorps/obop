@@ -122,6 +122,10 @@ curl -s -X POST http://127.0.0.1:8080/api/lead/update \
   -d '{"id":"01a14650-41ae-7455-9566-1ec1a313bdf3","expected_revenue_minor":3500000}'
 ```
 
+## Create many at once
+
+`POST /api/{model}/bulk_create` takes up to 1,000 rows (`{"rows": [...]}` or `{"csv": "..."}`), checks each as `create` would, and writes them together or, with `"mode": "partial"`, keeps the good ones. Use `"dry_run": true` first and an `"idempotency_key"` when you might retry. See the [REST API reference](/docs/reference/rest-api/#create-many-records).
+
 ## Run a workflow action
 
 ```bash

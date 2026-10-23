@@ -166,6 +166,44 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
                 .collect();
             object(J::Object(props), &required)
         }
+        "bulk_create" => {
+            let required: Vec<String> = model
+                .fields
+                .iter()
+                .filter(|f| f.required && !governed.contains(&f.name) && !f.computed)
+                .map(|f| f.name.to_string())
+                .collect();
+            let row = object(J::Object(field_properties(model, &governed)), &required);
+            object(
+                json!({
+                    "rows": {
+                        "type": "array",
+                        "maxItems": 1000,
+                        "items": row,
+                        "description": "The records to create, one object per row with the fields of create. At most 1000. Give rows or csv."
+                    },
+                    "csv": {
+                        "type": "string",
+                        "description": "Instead of rows: the text of a CSV file (UTF-8, comma or semicolon, a header line of field names, at most 1 MiB). Whole numbers only (money in minor units), true/false for yes/no fields, the id of the record for references. An empty cell leaves the field out."
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["all_or_nothing", "partial"],
+                        "description": "all_or_nothing (default): one bad row creates nothing. partial: the good rows are created and the bad ones reported by row."
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Check every row, number nothing for good and write nothing; the answer lists the problems."
+                    },
+                    "idempotency_key": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "description": "Any text you make up and reuse when you retry the same call: the retry returns the first answer instead of creating the rows again (kept 24 hours). A key reused for different rows is refused."
+                    }
+                }),
+                &[],
+            )
+        }
         "update" => {
             let mut props = field_properties(model, &[]);
             props.insert("id".into(), id_property(&model.name));
@@ -363,6 +401,7 @@ mod tests {
                 descriptions: Default::default(),
             }],
             can_create: true,
+            can_bulk_create: true,
             can_update: true,
             can_delete: true,
             labels: Default::default(),

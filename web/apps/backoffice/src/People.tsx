@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Badge, Button, Checkbox, ConfirmDialog, Dialog, Input, Notice, Table, t } from "@obop/ui";
 import { MIN_PASSWORD, account, reason, type Failure, type Notify } from "./SecurityAccount.tsx";
-import "./people.css";
 
 /* D69: the people of the instance, for administrators: create a person, choose their permission
    groups, disable, enable, reset a password, and offboard (disable and end every session, agent

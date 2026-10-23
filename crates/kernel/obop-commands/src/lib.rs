@@ -320,6 +320,8 @@ pub struct ModelInfo {
     /// Commands beyond get, list, create and update that this principal may call.
     pub actions: Vec<CommandInfo>,
     pub can_create: bool,
+    /// The caller may create many records at once (D70).
+    pub can_bulk_create: bool,
     pub can_update: bool,
     pub can_delete: bool,
     pub labels: Texts,
@@ -493,6 +495,7 @@ impl Dispatcher {
                         .collect(),
                     actions,
                     can_create: can("create"),
+                    can_bulk_create: can("bulk_create"),
                     can_update: can("update"),
                     can_delete: can("delete"),
                     access: m
@@ -601,7 +604,8 @@ impl Dispatcher {
                 permission_group: c.permission_group,
                 surfaces: c.surfaces,
                 transition: c.transition,
-                envelope: command == "search",
+                // `search` returns {rows, total} and `bulk_create` a report: only rows are shaped.
+                envelope: matches!(command, "search" | "bulk_create"),
                 actor,
                 writes: !matches!(command, "get" | "list" | "search"),
                 handler,

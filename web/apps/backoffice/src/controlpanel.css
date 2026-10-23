@@ -16,6 +16,28 @@
 .cp-top {
   justify-content: space-between;
 }
+.cp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.import-dialog .import-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.import-dialog .import-file {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+.import-dialog .import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
 .crumbs {
   display: flex;
   align-items: center;

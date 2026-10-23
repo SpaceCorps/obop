@@ -403,6 +403,8 @@ After connecting, ask the agent to list its tools. You should see only the comma
 
 If the client shows no tools or an error, go to [Troubleshooting](/docs/agents/troubleshooting/).
 
+Every model the agent may create also has a `<model>__bulk_create` tool: up to 1,000 rows in one call (`rows`, or `csv` text), all or nothing by default, `mode: "partial"` to keep the good rows and get the bad ones listed, `dry_run: true` to check first, and an `idempotency_key` to make a retry safe. It is subject to the same masking, scope and approval as `create`.
+
 An agent whose owner is an administrator also sees the `user_account` tools (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). The ones that change an account always return `approval_required`: an administrator approves the plan, and it runs as that administrator's current account, so a plan outlives nothing. `__add` needs a password a person chose; the server never hands a generated one to an agent.
 
 ## Verified and not verified

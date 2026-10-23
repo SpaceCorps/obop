@@ -11,6 +11,7 @@ import "./record.css";
 import "./blobs.css";
 import "./customize.css";
 import "./passkeys.css";
+import "./people.css";
 import "./modules/modules.css";
 import "./updates/updates.css";
 import "./dashboards/dashboards.css";

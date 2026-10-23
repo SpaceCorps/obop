@@ -7,7 +7,10 @@ mod app;
 #[cfg(test)]
 mod blobs_tests;
 #[cfg(test)]
+mod bulk_tests;
+#[cfg(test)]
 mod connectors_tests;
+mod import_cmd;
 #[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
@@ -125,6 +128,11 @@ const USAGE: &str = "usage: obop <command>
   site seed                                     fill an empty instance with an invented demo shop and blog
   site set KEY VALUE | site show                set or list the site settings (title, accent, default_lang ...)
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
+  import MODEL FILE.csv [--token TOKEN] [--mode partial] [--dry-run] [--key KEY]
+                                                create many records of MODEL from a CSV file (header = field names, references by id,
+                                                whole numbers, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
+                                                check of create. By default one bad row creates nothing; --mode partial keeps the good
+                                                rows; --dry-run only checks; --key makes a retry return the first answer
   commands [--token TOKEN]                      list the commands visible to a token
   call [--token TOKEN] <model> <command> [k=v...]
 global options
@@ -165,6 +173,8 @@ fn main() -> ExitCode {
     let (admin_prefix, args) = take_opt(&args, "--admin-prefix");
     let (out_file, args) = take_opt(&args, "--out");
     let (note, args) = take_opt(&args, "--note");
+    let (mode, args) = take_opt(&args, "--mode");
+    let (idem_key, args) = take_opt(&args, "--key");
     let (flags, args): (Vec<&str>, Vec<&str>) = args.into_iter().partition(|a| {
         matches!(
             *a,
@@ -260,6 +270,16 @@ fn main() -> ExitCode {
         ["site", "seed"] => site_seed(&opts),
         ["site", "show"] => site_show(&opts),
         ["site", "set", key, value] => site_set(&opts, key, value),
+        ["import", model, file] => import_cmd::run(
+            &opts,
+            &import_cmd::Args {
+                model,
+                file,
+                mode,
+                dry_run: has("--dry-run"),
+                key: idem_key,
+            },
+        ),
         ["mcp"] => mcp(&opts),
         ["commands"] => commands(&opts),
         ["call", model, command, kv @ ..] => call(&opts, model, command, kv),

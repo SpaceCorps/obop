@@ -403,6 +403,10 @@ Tras conectar, pide al agente que liste sus herramientas. Deberías ver solo los
 
 Si el cliente no muestra herramientas o da un error, ve a [Solución de problemas](/docs/agents/troubleshooting/).
 
+Cada modelo que el agente puede crear tiene también una herramienta `<model>__bulk_create`: hasta 1000 filas en una llamada (`rows` o texto `csv`), todo o nada por defecto, `mode: "partial"` conserva las filas correctas y lista las incorrectas, `dry_run: true` comprueba primero y una `idempotency_key` hace seguro un reintento. El enmascaramiento, el alcance y la aprobación son los de `create`.
+
+Un agente cuyo propietario es administrador ve además las herramientas `user_account` (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). Las que cambian una cuenta devuelven siempre `approval_required`: un administrador aprueba el plan, que se ejecuta como la cuenta actual de ese administrador. `__add` exige una contraseña elegida por una persona; el servidor nunca entrega a un agente una contraseña generada.
+
 ## Verificado y no verificado
 
 | Elemento                                                                                                    | Estado                                                                                            |

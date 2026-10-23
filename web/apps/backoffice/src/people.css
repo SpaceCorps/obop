@@ -6,15 +6,19 @@
   gap: var(--space-3);
 }
 .people-table .group-cell {
-  max-width: 18rem;
+  max-width: 13rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-muted);
 }
 .people-table .actionrow {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
   padding: 0;
+}
+.people-table td:last-child {
+  white-space: nowrap;
 }
 .group-picker {
   display: flex;
@@ -54,7 +58,29 @@
   user-select: all;
 }
 @media (max-width: 40rem) {
-  .people-table .group-cell {
-    max-width: 9rem;
+  /* Keep the person, the status and the actions in view; the rest is in the groups dialog. */
+  .people-table th:nth-child(2),
+  .people-table td:nth-child(2),
+  .people-table th:nth-child(3),
+  .people-table td:nth-child(3),
+  .people-table th:nth-child(4),
+  .people-table td:nth-child(4),
+  .people-table th:nth-child(5),
+  .people-table td:nth-child(5) {
+    display: none;
+  }
+  .people-table td:last-child {
+    white-space: normal;
+  }
+  .people-table .actionrow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .people-table .badge {
+    white-space: normal;
+  }
+  .people-table td,
+  .people-table th {
+    padding-inline: 0.5rem;
   }
 }

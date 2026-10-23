@@ -403,6 +403,10 @@ Po połączeniu poproś agenta o wypisanie jego narzędzi. Powinny być widoczne
 
 Jeśli klient nie pokazuje narzędzi albo zgłasza błąd, przejdź do [Rozwiązywania problemów](/docs/agents/troubleshooting/).
 
+Każdy model, który agent może tworzyć, ma też narzędzie `<model>__bulk_create`: do 1000 wierszy w jednym wywołaniu (`rows` albo tekst `csv`), domyślnie wszystko albo nic, `mode: "partial"` zachowuje poprawne wiersze i wypisuje błędne, `dry_run: true` sprawdza najpierw, a `idempotency_key` czyni ponowienie bezpiecznym. Maskowanie, zakres i zatwierdzanie są takie same jak przy `create`.
+
+Agent, którego właścicielem jest administrator, widzi też narzędzia `user_account` (`user_account__list`, `__get`, `__add`, `__set_groups`, `__offboard`, `__disable`, `__enable`). Te, które zmieniają konto, zawsze zwracają `approval_required`: administrator zatwierdza plan, który działa jako aktualne konto tego administratora. `__add` wymaga hasła wybranego przez człowieka; serwer nigdy nie przekazuje agentowi wygenerowanego hasła.
+
 ## Co sprawdzono, a czego nie
 
 | Element                                                                                                        | Stan                                                                                    |

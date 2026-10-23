@@ -66,6 +66,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_MFA_ISSUER` | The name shown in the authenticator app (default `obop`). |
 | `OBOP_PUBLIC_URL` | The external URL behind a proxy (`https://acme.example.com`): MCP discovery documents, the issuer, endpoints and resource identifier of the OAuth sign-in (D64), webhook and OAuth redirect addresses, the community pages, and the origin and relying party id of passkeys (D65). **Set it behind any proxy**: the resource a client asks for must equal `<OBOP_PUBLIC_URL>/mcp`, and a passkey works only at the address it was made for. |
 | `OBOP_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call `/mcp`. |
+| `OBOP_BULK_PER_MINUTE` | `bulk_create` calls (and `obop import`) a person may start per minute, counted across all processes, dry runs included (default 12; `0` turns the limit off). A call takes at most 1,000 rows and 1 MiB, so the default is at most 12,000 rows a minute per person (D70). |
 | `OBOP_MCP_RATE_PER_MINUTE` | Requests per token per minute on `/mcp`, counted across all processes (default 600; `0` is off). |
 | `OBOP_TRUST_PROXY`, `OBOP_PUBLIC_SITE`, `OBOP_ADMIN_PREFIX` | Public site settings (`--trust-proxy`, `--public-site`, `--admin-prefix`). Behind a proxy set `OBOP_TRUST_PROXY=1`, or every visitor shares the proxy's address in the rate limits. |
 | `OBOP_MARKETPLACE_URL` | An extra module catalogue. |
