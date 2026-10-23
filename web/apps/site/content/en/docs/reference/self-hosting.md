@@ -31,6 +31,10 @@ docker exec -it obop obop admin create alice --all-groups
 
 Put a reverse proxy with TLS in front. obop speaks plain HTTP.
 
+### Call the API from a browser application on another origin
+
+Set `OBOP_ALLOWED_ORIGINS` to a comma-separated list of exact origins, for example `https://app.example.com`. Only those origins can read answers from `/api` in a browser; the setting is off by default, wildcards are refused when the server starts, and plain `http` is accepted for `localhost` only. The API uses bearer tokens, never cookies, so credentialed requests are not allowed. Not yet tried in a real browser or behind a CDN.
+
 ### Encrypt the connection to PostgreSQL
 
 A `postgres://` address connects without TLS unless you ask. On any network you do not fully control, add a mode to the address:

@@ -62,14 +62,8 @@ impl McpConfig {
                 .ok()
                 .map(|u| u.trim().trim_end_matches('/').to_string())
                 .filter(|u| split_origin(u).is_some()),
-            allowed_origins: std::env::var("OBOP_ALLOWED_ORIGINS")
-                .map(|list| {
-                    list.split(',')
-                        .map(|o| o.trim().trim_end_matches('/').to_ascii_lowercase())
-                        .filter(|o| !o.is_empty())
-                        .collect()
-                })
-                .unwrap_or_default(),
+            // Validated at start-up by `obop serve` (cors::from_env); a bad list allows nothing.
+            allowed_origins: crate::cors::from_env().unwrap_or_default(),
             rate_per_minute: std::env::var("OBOP_MCP_RATE_PER_MINUTE")
                 .ok()
                 .and_then(|v| v.parse().ok())

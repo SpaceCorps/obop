@@ -65,7 +65,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_DEV_INSECURE_KEY` | `1` selects a public, fixed key and logs a warning. Development and tests only. |
 | `OBOP_MFA_ISSUER` | The name shown in the authenticator app (default `obop`). |
 | `OBOP_PUBLIC_URL` | The external URL behind a proxy (`https://acme.example.com`): MCP discovery documents, the issuer, endpoints and resource identifier of the OAuth sign-in (D64), webhook and OAuth redirect addresses, the community pages, and the origin and relying party id of passkeys (D65). **Set it behind any proxy**: the resource a client asks for must equal `<OBOP_PUBLIC_URL>/mcp`, and a passkey works only at the address it was made for. |
-| `OBOP_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call `/mcp`. |
+| `OBOP_ALLOWED_ORIGINS` | Comma-separated exact browser origins (`https://app.example.com`; `http://localhost:5173` on loopback only) that may call `/api` and `/mcp` from another origin. Off when unset. A wildcard or any other invalid entry stops the server at start. See "Browser clients and allowed origins". |
 | `OBOP_METRICS_TOKEN` | Opens `GET /metrics` to a scraper that sends `Authorization: Bearer <token>` (at least 16 characters, for example `openssl rand -hex 24`; a shorter one stops the server at start). Without it `/metrics` is served only when the server is bound to a loopback address, and then only to direct loopback callers without proxy headers; on any other bind it answers 404. See "Health and metrics". |
 | `OBOP_MCP_RATE_PER_MINUTE` | Requests per token per minute on `/mcp`, counted across all processes (default 600; `0` is off). |
 | `OBOP_TRUST_PROXY`, `OBOP_PUBLIC_SITE`, `OBOP_ADMIN_PREFIX` | Public site settings (`--trust-proxy`, `--public-site`, `--admin-prefix`). Behind a proxy set `OBOP_TRUST_PROXY=1`, or every visitor shares the proxy's address in the rate limits. |
@@ -139,6 +139,21 @@ Three read-only routes on every instance, served next to the API (so a `--static
 | `obop_job_queue_depth{queue="connectors",state}` | connector deliveries waiting, leased, dead (read at most every 15 seconds) |
 
 Counters are per process and restart with it; sum them across processes in the scraper. The text format is written by hand to the exposition format and has not been checked with a real Prometheus. The control plane (`platform serve`) has no such routes yet. The upgrade check of `obop platform upgrade-instances` still asks `/api/openapi.json` so that it also works for an image that predates `/readyz`.
+
+## Browser clients and allowed origins (D68)
+
+By default only pages served from the instance itself can call `/api` from a browser (same origin); scripts, agents and servers are not affected by browsers' cross-origin rules. To let a browser application on **another** origin call the API, list that origin:
+
+```text
+OBOP_ALLOWED_ORIGINS=https://app.example.com,http://localhost:5173
+```
+
+- **Exact origins only:** scheme, host and optional port, nothing else. `https` for every real host; plain `http` only for `localhost`, `127.0.0.1`, `[::1]` and `*.localhost`. **Wildcards are refused** (`*`, `https://*.example.com`), as are `null`, paths, user names and bad ports: the server prints `OBOP_ALLOWED_ORIGINS has an invalid entry "...": reason` and exits before it listens.
+- **What a listed origin gets**, on paths under `/api/`: the answer carries `Access-Control-Allow-Origin` with that origin, `Access-Control-Expose-Headers: Link, Retry-After, WWW-Authenticate`, and every `/api/` response carries `Vary: Origin`. A preflight (`OPTIONS`) is answered 204 for `GET` and `POST` with the request headers `Authorization`, `Content-Type`, `Accept` and `Accept-Language`, and a max-age of 600 seconds. Anything else (an unlisted origin, another method or header) is refused with 403 and no CORS headers. An unlisted origin's ordinary requests get no CORS headers, so its page cannot read the answer.
+- **Bearer tokens only.** The API has no cookies and `Access-Control-Allow-Credentials` is never sent, so a page cannot use the visitor's signed-in browser against the API; the page must hold a token (a session token from `/api/auth/login` or an agent token) and send it in `Authorization`. A listed origin is trusted with its tokens: keep that application free of script injection.
+- `/mcp` uses the same list (and, as before, the instance's own public URL and same-origin on loopback). The OAuth sign-in and consent pages and the OAuth token endpoints are not changed by this setting.
+- Set the headers in one place: a reverse proxy that adds its own CORS headers as well produces duplicates that browsers reject.
+- **Not tried in a real browser or behind a CDN**; verified with raw HTTP requests and the Fetch standard's rules.
 
 ## More than one process
 

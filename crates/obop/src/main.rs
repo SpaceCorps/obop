@@ -6,6 +6,8 @@ mod blobs_tests;
 #[cfg(test)]
 mod connectors_tests;
 #[cfg(test)]
+mod cors_tests;
+#[cfg(test)]
 mod health_tests;
 #[cfg(test)]
 mod mcp_tests;
@@ -771,6 +773,14 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
         return Err(fail(&format!(
             "refusing to bind {addr} with --dev-auth: dev tokens are localhost-only"
         )));
+    }
+    // A bad OBOP_ALLOWED_ORIGINS stops the server here, before it listens (D68).
+    let allowed = obop_http::cors::from_env().map_err(|e| fail(&format!("error: {e}")))?;
+    if !allowed.is_empty() {
+        eprintln!(
+            "browser origins allowed for /api and /mcp: {}",
+            allowed.join(", ")
+        );
     }
     let app = open_app(o)?;
     let auth = authenticator(&app, o);

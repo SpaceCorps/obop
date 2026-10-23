@@ -152,3 +152,5 @@ Not fixed (left open):
 | I5 | Health and metrics: `/healthz`, `/readyz` (database ping, schema compatibility), `/metrics` (build, uptime, requests by class, duration histogram, database ping, sessions, connector queue depth), closed unless token or loopback | done (D67, PROPOSED). Not tried against a real Prometheus, probe or proxy |
 | I6 | The control plane (`platform serve`) has no health or metrics routes; counters are per process; no per-route histograms | open |
 | I7 | The Sliplane upgrade check still asks `/api/openapi.json`; move it to `/readyz` once no instance runs an image that predates it | open |
+| I8 | `OBOP_ALLOWED_ORIGINS`: validated exact origins (https or loopback http, no wildcards, refused at start-up), CORS for `/api` with correct preflight, `Vary: Origin`, no credentials; `/mcp` shares the list; OAuth pages unchanged | done (D68, PROPOSED). Tested with raw requests and a real process; not tried in a real browser or behind a CDN |
+| I9 | CORS has one global list: no per-route, per-token or per-method lists; no private-network-access preflight; no cookies or credentialed mode | by design (D68) |

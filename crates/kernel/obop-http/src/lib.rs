@@ -18,6 +18,7 @@ use tower_http::services::{ServeDir, ServeFile};
 pub mod blobs;
 pub mod community;
 pub mod connectors;
+pub mod cors;
 pub mod mcp;
 pub mod mfa;
 pub mod oauth;
@@ -45,6 +46,8 @@ pub struct HttpState {
     payments: std::sync::OnceLock<Arc<dyn obop_commands::PaymentHooks>>,
     /// Counters, caches and access rule of `/healthz`, `/readyz` and `/metrics` (D67).
     ops: ops::Ops,
+    /// Browser origins allowed to call `/api` from another origin (D68); empty means none.
+    cors: cors::Cors,
 }
 
 impl HttpState {
@@ -69,6 +72,7 @@ impl HttpState {
             auth,
             oauth,
             trust_proxy: std::sync::atomic::AtomicBool::new(false),
+            cors: cors::Cors::new(&mcp.allowed_origins),
             mcp: mcp::McpState::new(mcp, shared.clone()),
             shared,
             connectors: std::sync::OnceLock::new(),
@@ -319,7 +323,11 @@ pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
 
 /// Count every response, fallbacks included, for `/metrics`.
 pub(crate) fn instrument(app: Router, state: Arc<HttpState>) -> Router {
-    app.layer(axum::middleware::from_fn_with_state(state, ops::track))
+    app.layer(axum::middleware::from_fn_with_state(
+        state.clone(),
+        cors::layer,
+    ))
+    .layer(axum::middleware::from_fn_with_state(state, ops::track))
 }
 
 /// The back office single-page app, except that an unknown `/api/...` path answers JSON (agents
