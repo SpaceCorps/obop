@@ -305,6 +305,24 @@ impl Authenticator for Auth {
         Some(self)
     }
 
+    fn active_session_count(&self) -> Option<u64> {
+        let now = self.now();
+        let tokens = self.backend.list("auth_token").ok()?;
+        Some(
+            tokens
+                .iter()
+                .filter(|(_, t)| {
+                    t.get("kind").and_then(J::as_str) == Some("user")
+                        && t.get("label").and_then(J::as_str) == Some("session")
+                        && t.get("revoked").and_then(J::as_bool) != Some(true)
+                        && t.get("expires_at")
+                            .and_then(J::as_u64)
+                            .is_none_or(|e| e > now)
+                })
+                .count() as u64,
+        )
+    }
+
     fn login(&self, username: &str, password: &str) -> Result<String, String> {
         match self.login_step_impl(username, password)? {
             LoginOutcome::Session { token, .. } => Ok(token),

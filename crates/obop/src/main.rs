@@ -6,6 +6,8 @@ mod blobs_tests;
 #[cfg(test)]
 mod connectors_tests;
 #[cfg(test)]
+mod health_tests;
+#[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
@@ -781,6 +783,19 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
     state.set_trust_proxy(o.trust_proxy);
+    // /metrics is closed unless OBOP_METRICS_TOKEN is set or the server listens on loopback (D67).
+    let metrics =
+        obop_http::ops::MetricsAccess::from_env(is_loopback(addr)).map_err(|e| fail(&e))?;
+    eprintln!(
+        "/metrics: {}",
+        match &metrics {
+            obop_http::ops::MetricsAccess::Disabled => "off (set OBOP_METRICS_TOKEN to open it)",
+            obop_http::ops::MetricsAccess::Loopback => "open to direct loopback callers",
+            obop_http::ops::MetricsAccess::Token(_) =>
+                "open with the bearer token OBOP_METRICS_TOKEN",
+        }
+    );
+    state.set_metrics_access(metrics);
     app.connectors.start();
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
     let blobs = app.store.blobs();

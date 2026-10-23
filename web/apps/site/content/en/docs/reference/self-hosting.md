@@ -67,7 +67,7 @@ The reference deployment runs on Sliplane, in one project with three kinds of se
 - **Schema versions.** A database carries its schema version. `obop migrate status|plan|run` shows and applies the steps; a server refuses a database newer than itself. Installing a newer package version still does not migrate that package's records. Prefer adding optional fields.
 - **Backups.** `obop backup --db URL --out DIR` writes a consistent copy while the server runs; `obop backup verify FILE` checks it; `obop restore --db URL --from FILE` restores it into an empty database; `deploy/restore-drill.sh` proves a restore end to end. The database server itself still needs its own `pg_dump` or WAL archive, and a restore you have not tried is not a backup.
 - **Full export.** `obop backup` is a complete, documented export (gzip JSON Lines). The customer-facing export tool of the product plan is not built.
-- **Monitoring.** There is no metrics endpoint yet. Watch the process and the database.
+- **Monitoring.** Every instance serves `GET /healthz` (the process is up), `GET /readyz` (the database answers and its schema fits; 503 with a short reason otherwise) and `GET /metrics` (Prometheus text). The first two are open and reveal nothing else; `/metrics` stays closed until you set `OBOP_METRICS_TOKEN` (or you run bound to loopback). Not yet tried against a real Prometheus or load balancer. The control plane has no such routes yet. Also watch the database.
 - **Audit log.** There is no hash-chained audit trail yet.
 
 ### Sizing

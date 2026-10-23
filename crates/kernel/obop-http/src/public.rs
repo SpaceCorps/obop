@@ -59,7 +59,16 @@ pub fn admin_prefix_ok(p: &str) -> bool {
         && rest.len() <= 32
         && !matches!(
             rest,
-            "api" | "assets" | "media" | "shop" | "blog" | "cart" | "contact"
+            "api"
+                | "assets"
+                | "media"
+                | "shop"
+                | "blog"
+                | "cart"
+                | "contact"
+                | "healthz"
+                | "readyz"
+                | "metrics"
         )
         && rest
             .chars()
@@ -73,13 +82,16 @@ pub fn router(
     site: Arc<Site>,
     cfg: PublicConfig,
 ) -> Router {
-    let mut app = api_routes(state);
+    let mut app = api_routes(state.clone());
     if let Some(dir) = static_dir {
         let admin = ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html")));
         app = app.nest_service(&cfg.admin_prefix, admin);
     }
     let h = Arc::new((site, cfg));
-    app.merge(Router::new().fallback(handle).with_state(h))
+    super::instrument(
+        app.merge(Router::new().fallback(handle).with_state(h)),
+        state,
+    )
 }
 
 type Shared = Arc<(Arc<Site>, PublicConfig)>;
@@ -174,7 +186,8 @@ mod tests {
         assert!(admin_prefix_ok("/admin"));
         assert!(admin_prefix_ok("/back-office_2"));
         for bad in [
-            "admin", "/", "", "/a/b", "/Admin", "/api", "/shop", "/a b", "/..", "//x",
+            "admin", "/", "", "/a/b", "/Admin", "/api", "/shop", "/a b", "/..", "//x", "/healthz",
+            "/readyz", "/metrics",
         ] {
             assert!(!admin_prefix_ok(bad), "{bad}");
         }

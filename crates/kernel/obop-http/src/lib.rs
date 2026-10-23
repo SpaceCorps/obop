@@ -22,6 +22,7 @@ pub mod mcp;
 pub mod mfa;
 pub mod oauth;
 pub mod openapi;
+pub mod ops;
 pub(crate) mod passkeys;
 pub mod payments;
 pub mod public;
@@ -42,6 +43,8 @@ pub struct HttpState {
     connectors: std::sync::OnceLock<Arc<obop_connectors::Runtime>>,
     /// The payment module's webhook door (`/hooks/pay/{provider}`), set by the composition root.
     payments: std::sync::OnceLock<Arc<dyn obop_commands::PaymentHooks>>,
+    /// Counters, caches and access rule of `/healthz`, `/readyz` and `/metrics` (D67).
+    ops: ops::Ops,
 }
 
 impl HttpState {
@@ -70,6 +73,7 @@ impl HttpState {
             shared,
             connectors: std::sync::OnceLock::new(),
             payments: std::sync::OnceLock::new(),
+            ops: ops::Ops::new(),
         })
     }
 
@@ -92,6 +96,11 @@ impl HttpState {
     pub fn set_trust_proxy(&self, on: bool) {
         self.trust_proxy
             .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Who may read `/metrics` (D67). The default is nobody: the route answers 404.
+    pub fn set_metrics_access(&self, access: ops::MetricsAccess) {
+        self.ops.set_access(access);
     }
 
     /// Serve the payment providers' webhook door.
@@ -160,6 +169,9 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
 /// The REST routes under `/api`, without any static or public fallback.
 pub(crate) fn api_routes(state: Arc<HttpState>) -> Router {
     Router::new()
+        .route("/healthz", get(ops::healthz))
+        .route("/readyz", get(ops::readyz))
+        .route("/metrics", get(ops::metrics))
         .route("/api/auth/login", post(login))
         .route("/api/auth/agent-token", post(agent_token))
         .route("/api/commands", get(commands))
@@ -297,11 +309,17 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
 }
 
 pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
-    let api = api_routes(state);
-    match static_dir {
+    let api = api_routes(state.clone());
+    let app = match static_dir {
         Some(dir) => api.fallback_service(spa_with_json_api_404(dir)),
         None => api.fallback(api_not_found),
-    }
+    };
+    instrument(app, state)
+}
+
+/// Count every response, fallbacks included, for `/metrics`.
+pub(crate) fn instrument(app: Router, state: Arc<HttpState>) -> Router {
+    app.layer(axum::middleware::from_fn_with_state(state, ops::track))
 }
 
 /// The back office single-page app, except that an unknown `/api/...` path answers JSON (agents

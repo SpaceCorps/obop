@@ -1254,6 +1254,7 @@ dependencies = [
  "obop-connectors",
  "obop-keys",
  "obop-mcp",
+ "obop-migrate",
  "obop-oauth",
  "obop-site",
  "obop-storage",

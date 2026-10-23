@@ -149,3 +149,6 @@ Not fixed (left open):
 | I2 | PostgreSQL TLS never tried against a managed service, a connection pooler, an intermediate chain or a public CA | open (needs a real target) |
 | I3 | PostgreSQL client certificates (`sslcert`, `sslkey`), CRL/OCSP and channel binding (`SCRAM-SHA-256-PLUS`) | open (refused at start-up; not built) |
 | I4 | The database URLs the control plane gives to new hosted instances carry no `sslmode` | open (the provisioner should pass the cell's mode on) |
+| I5 | Health and metrics: `/healthz`, `/readyz` (database ping, schema compatibility), `/metrics` (build, uptime, requests by class, duration histogram, database ping, sessions, connector queue depth), closed unless token or loopback | done (D67, PROPOSED). Not tried against a real Prometheus, probe or proxy |
+| I6 | The control plane (`platform serve`) has no health or metrics routes; counters are per process; no per-route histograms | open |
+| I7 | The Sliplane upgrade check still asks `/api/openapi.json`; move it to `/readyz` once no instance runs an image that predates it | open |

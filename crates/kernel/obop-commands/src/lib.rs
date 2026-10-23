@@ -1098,6 +1098,11 @@ pub trait Authenticator: Send + Sync {
     fn oauth(&self) -> Option<&dyn OAuthTokens> {
         None
     }
+    /// How many people's sign-in sessions are valid now (not revoked, not expired), for the
+    /// metrics endpoint (D67); `None` when the authenticator does not keep them.
+    fn active_session_count(&self) -> Option<u64> {
+        None
+    }
     /// A human issues a scoped token for an agent acting on their behalf (D18). Scopes must be
     /// groups the human holds.
     fn issue_agent_token(

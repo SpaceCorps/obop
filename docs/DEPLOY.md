@@ -66,6 +66,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_MFA_ISSUER` | The name shown in the authenticator app (default `obop`). |
 | `OBOP_PUBLIC_URL` | The external URL behind a proxy (`https://acme.example.com`): MCP discovery documents, the issuer, endpoints and resource identifier of the OAuth sign-in (D64), webhook and OAuth redirect addresses, the community pages, and the origin and relying party id of passkeys (D65). **Set it behind any proxy**: the resource a client asks for must equal `<OBOP_PUBLIC_URL>/mcp`, and a passkey works only at the address it was made for. |
 | `OBOP_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call `/mcp`. |
+| `OBOP_METRICS_TOKEN` | Opens `GET /metrics` to a scraper that sends `Authorization: Bearer <token>` (at least 16 characters, for example `openssl rand -hex 24`; a shorter one stops the server at start). Without it `/metrics` is served only when the server is bound to a loopback address, and then only to direct loopback callers without proxy headers; on any other bind it answers 404. See "Health and metrics". |
 | `OBOP_MCP_RATE_PER_MINUTE` | Requests per token per minute on `/mcp`, counted across all processes (default 600; `0` is off). |
 | `OBOP_TRUST_PROXY`, `OBOP_PUBLIC_SITE`, `OBOP_ADMIN_PREFIX` | Public site settings (`--trust-proxy`, `--public-site`, `--admin-prefix`). Behind a proxy set `OBOP_TRUST_PROXY=1`, or every visitor shares the proxy's address in the rate limits. |
 | `OBOP_MARKETPLACE_URL` | An extra module catalogue. |
@@ -112,6 +113,32 @@ postgres://obop:PASSWORD@db.example.com/obop?sslmode=verify-full&sslrootcert=sys
 - Turn TLS on at the server (`ssl = on`, `ssl_cert_file`, `ssl_key_file`), and to forbid plain connections use `hostssl` lines in `pg_hba.conf`. obop's TLS is rustls (TLS 1.2 and 1.3, no system OpenSSL); the server's certificate key must be RSA, ECDSA or Ed25519.
 - Put the same parameters in `OBOP_CELL_ADMIN_URL`, and in `--db` for `obop backup`, `restore`, `migrate` and `secrets`. The database URLs the control plane gives to **new** hosted instances do not carry `sslmode` yet; keep the cell on a private network until they do.
 - **Not tried** against a managed PostgreSQL service, a connection pooler in TLS mode, a certificate chain with intermediates, or a public CA: only against the stock `postgres:17` image with a self-signed certificate (`cargo test -p obop-storage tls` starts one when Docker is available).
+
+## Health and metrics (D67)
+
+Three read-only routes on every instance, served next to the API (so a `--static` backoffice or the public site never hides them):
+
+| Route | Answers | Use |
+|---|---|---|
+| `GET /healthz` | 200 `{"status":"ok"}` while the process serves requests. No database, no login. | liveness probe: restart the container when it fails |
+| `GET /readyz` | 200 `{"status":"ready"}` when the database answers and its schema is one this build serves; else 503 `{"status":"unavailable","reason":"..."}` with one of `database unreachable`, `database did not answer in time`, `database is newer than this server`, `database needs migration`. No login. | readiness probe: take the process out of the load balancer, do not restart |
+| `GET /metrics` | Prometheus text. **Closed unless you open it** (below). | scrape every 15 to 60 seconds |
+
+`/healthz` and `/readyz` are open on purpose and reveal nothing but those words (no versions, host names or driver messages); `/readyz` asks the database at most once every two seconds however often it is called. With several processes on one database each process answers for itself.
+
+**`/metrics` access.** Set `OBOP_METRICS_TOKEN` and scrape with the bearer token (Prometheus: `authorization: { type: Bearer, credentials: ... }` in `scrape_configs`). Without a token the route exists only when `obop serve` is bound to a loopback address, and then only a direct loopback caller that sends no `X-Forwarded-*`, `Forwarded`, `X-Real-IP` or `Via` header gets it; **if a reverse proxy on the same host strips those headers, set a token**. On any other bind (a container on `0.0.0.0`) without a token it answers 404. Series (no per-path, per-user or per-model labels):
+
+| Series | Meaning |
+|---|---|
+| `obop_build_info{core_version}` | always 1 |
+| `obop_process_uptime_seconds` | since start |
+| `obop_http_requests_total{class="2xx"...}` | responses by status class, every route including the public site |
+| `obop_http_request_duration_seconds` | histogram, 5 ms to 10 s, until the response headers are ready |
+| `obop_db_up`, `obop_db_ping_seconds` | a database ping at scrape time |
+| `obop_active_sessions` | people's valid sign-in sessions (read at most every 15 seconds) |
+| `obop_job_queue_depth{queue="connectors",state}` | connector deliveries waiting, leased, dead (read at most every 15 seconds) |
+
+Counters are per process and restart with it; sum them across processes in the scraper. The text format is written by hand to the exposition format and has not been checked with a real Prometheus. The control plane (`platform serve`) has no such routes yet. The upgrade check of `obop platform upgrade-instances` still asks `/api/openapi.json` so that it also works for an image that predates `/readyz`.
 
 ## More than one process
 
