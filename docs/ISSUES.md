@@ -160,18 +160,18 @@ Rows of this section only; another section of the register is kept apart so the 
 
 | # | Item | Status |
 |---|---|---|
-| I1 | Anonymising or erasing the display data of an offboarded person later (offboarding disables and revokes; it rewrites nothing) | open (needs the erasure design of D54 first) |
-| I2 | People administration asks for no step-up re-authentication (it sits with the other administrator actions, E7f) | open |
-| I3 | People administration never tried against concurrent edits from several server processes on PostgreSQL, nor with the real Claude apps as the connected application | open (needs a multi-process drill) |
-| I4 | The six translations of the People panel strings and of the `user_account` labels are machine-drafted | open (D7) |
-| I5 | Groups can only be given by name; there is no per-group delegation ("may give sales.user but not platform.admin") and no group directory with descriptions | open |
+| J1 | Anonymising or erasing the display data of an offboarded person later (offboarding disables and revokes; it rewrites nothing) | open (needs the erasure design of D54 first) |
+| J2 | People administration asks for no step-up re-authentication (it sits with the other administrator actions, E7f) | open |
+| J3 | People administration never tried against concurrent edits from several server processes on PostgreSQL, nor with the real Claude apps as the connected application | open (needs a multi-process drill) |
+| J4 | The six translations of the People panel strings and of the `user_account` labels are machine-drafted | open (D7) |
+| J5 | Groups can only be given by name; there is no per-group delegation ("may give sales.user but not platform.admin") and no group directory with descriptions | open |
 
 ### Bulk create (D70)
 
 | # | Item | Status |
 |---|---|---|
-| I6 | `bulk_create` is not tried against PostgreSQL under concurrent writers from several server processes, nor with 1,000-row calls over a network database; the unit tests run 60 rows on PostgreSQL and 1,000 on the local backends | open (needs a multi-process drill) |
-| I7 | No decimal or date-time kinds (a decimal point in a number or money cell is an error), no remapping of ids, no reference from one row to another row of the same call, no image or file columns; related records are imported in two calls, parents first | by design for now |
-| I8 | A call holds the write lock from its first check to its commit, so a slow database makes a large call hold it for long (about half a minute for 1,000 rows at a 7 ms round trip); splitting a call into batches under shorter locks is not built | open |
-| I9 | The validation errors of an import are the server's English text, shown as received; the strings of the dialog are machine-drafted in six languages | open (D7) |
-| I10 | The answer of an `idempotency_key` call is kept 24 hours in one table (`bulk_idempotency`), purged lazily every ten minutes; there is no setting for the time | accepted |
+| J6 | `bulk_create` is not tried against PostgreSQL under concurrent writers from several server processes, nor with 1,000-row calls over a network database; the unit tests run 60 rows on PostgreSQL and 1,000 on the local backends | open (needs a multi-process drill) |
+| J7 | No decimal or date-time kinds (a decimal point in a number or money cell is an error), no remapping of ids, no reference from one row to another row of the same call, no image or file columns; related records are imported in two calls, parents first | by design for now |
+| J8 | A call holds the write lock from its first check to its commit, so a slow database makes a large call hold it for long (about half a minute for 1,000 rows at a 7 ms round trip); splitting a call into batches under shorter locks is not built | open |
+| J9 | The validation errors of an import are the server's English text, shown as received; the strings of the dialog are machine-drafted in six languages | open (D7) |
+| J10 | The answer of an `idempotency_key` call is kept 24 hours in one table (`bulk_idempotency`), purged lazily every ten minutes; there is no setting for the time | accepted |
