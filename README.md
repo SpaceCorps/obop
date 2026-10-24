@@ -134,3 +134,5 @@ Links are relative to `README.md`; D-, F-, I- and Q-IDs refer to [docs/DECISIONS
 | R17 | [docs/research/17-oss-licensing-business-models.md](docs/research/17-oss-licensing-business-models.md) |
 | R22 | [docs/research/22-data-layer-sync-realtime-performance.md](docs/research/22-data-layer-sync-realtime-performance.md) |
 | R28 | [docs/research/28-docs-community-support-brand.md](docs/research/28-docs-community-support-brand.md) |
+
+- Handoff and operations guide for the next agent or a new machine: [`docs/HANDOFF.md`](docs/HANDOFF.md).
