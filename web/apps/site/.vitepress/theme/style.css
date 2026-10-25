@@ -810,12 +810,6 @@ fieldset.seg input:focus-visible + label {
   margin: 0 0 var(--space-4);
   color: var(--text-muted);
 }
-.cards .tag {
-  margin: 0;
-  color: var(--accent-ink);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-}
 .cards article p:last-child {
   margin-block-end: 0;
 }
@@ -838,13 +832,14 @@ fieldset.seg input:focus-visible + label {
 .flow li:last-child {
   border-block-start-color: var(--accent-fill);
 }
+/* 28 px node centred on the 2 px rail (the rail is the li's top border) */
 .flow-n {
   position: absolute;
-  inset-block-start: -0.85rem;
+  inset-block-start: calc(1px - 0.875rem);
   display: grid;
   place-items: center;
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
   border: 2px solid var(--border-strong);
   border-radius: 50%;
   background: var(--surface-2);
@@ -1396,6 +1391,148 @@ section.cta p {
     padding-block: var(--space-2);
     border-radius: 0;
     border-block-end: 1px solid var(--border);
+  }
+}
+
+/* platform: the lead card carries the labelled agent loop, two cards stack beside it */
+.home .bento {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc((100% - var(--split-gap)) * 1.1 / 2.1);
+  gap: var(--space-4);
+}
+.home .bento > article {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+.home .bento > .lead {
+  grid-row: span 2;
+  padding: var(--space-8);
+  border-color: var(--accent-line);
+  box-shadow:
+    inset 0 3px 0 var(--accent-fill),
+    var(--shadow-2);
+}
+.home .bento h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+}
+.home .bento > .lead h3 {
+  font-size: var(--text-2xl);
+}
+.home .bento p {
+  margin: 0 0 var(--space-4);
+  color: var(--text-muted);
+}
+.home .bento .tag {
+  margin: auto 0 0;
+  color: var(--accent-ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.home .bento .lead .tag {
+  margin: 0;
+}
+.home .flow-block {
+  margin-block-start: var(--space-6);
+  padding-block-start: var(--space-6);
+  border-block-start: 1px solid var(--border);
+}
+.home .bento .flow-label {
+  margin: 0 0 var(--space-4);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+/* the loop as a vertical stepper on the same rail as the steps */
+.bento .flow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin: 0;
+}
+.bento .flow li {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  column-gap: var(--space-4);
+  align-items: start;
+  padding: 0 0 var(--space-5);
+  border: 0;
+}
+.bento .flow li:last-child {
+  padding-block-end: 0;
+}
+.bento .flow-n {
+  position: static;
+  grid-row: 1 / span 2;
+}
+.bento .flow li::before {
+  content: "";
+  position: absolute;
+  inset-block: 1.75rem 0;
+  inset-inline-start: calc(0.875rem - 1px);
+  border-inline-start: 2px solid var(--border-strong);
+}
+.bento .flow li:last-child::before {
+  display: none;
+}
+.bento .flow b,
+.bento .flow li > span:not(.flow-n) {
+  grid-column: 2;
+}
+.bento .flow b {
+  font-size: var(--text-md);
+  line-height: 1.75rem;
+}
+.bento .flow li > span:not(.flow-n) {
+  font-size: var(--text-base);
+}
+@media (max-width: 64rem) {
+  .home .bento {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bento > .lead {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .bento .flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5) var(--space-8);
+  }
+  .bento .flow li {
+    padding: 0;
+  }
+  .bento .flow li::before {
+    display: none;
+  }
+}
+@media (max-width: 40rem) {
+  .home .bento {
+    grid-template-columns: 1fr;
+  }
+  .home .bento > article,
+  .home .bento > .lead {
+    padding: var(--space-5);
+  }
+  .bento .flow {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .bento .flow li {
+    padding: 0 0 var(--space-5);
+  }
+  .bento .flow li:last-child {
+    padding-block-end: 0;
+  }
+  .bento .flow li::before {
+    display: block;
+  }
+  .bento .flow li:last-child::before {
+    display: none;
   }
 }
 

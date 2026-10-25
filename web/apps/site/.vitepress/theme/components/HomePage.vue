@@ -126,21 +126,24 @@ const kick = computed(() => ({
             <p class="sub">{{ m.home.pillarsSub }}</p>
           </div>
         </div>
-        <div class="cards">
-          <article v-for="p in m.home.pillars" :key="p.title">
+        <div class="bento">
+          <article v-for="(p, i) in m.home.pillars" :key="p.title" :class="{ lead: i === 0 }">
             <span class="card-ico"><Icon :name="p.icon" :size="22" /></span>
             <h3>{{ p.title }}</h3>
             <p>{{ p.body }}</p>
             <p class="tag">{{ p.tag }}</p>
+            <div v-if="i === 0" class="flow-block">
+              <p id="flow-h" class="flow-label">{{ m.home.flowLabel }}</p>
+              <ol class="flow" aria-labelledby="flow-h">
+                <li v-for="(f, j) in m.home.flow" :key="f.title">
+                  <span class="flow-n" aria-hidden="true">{{ j + 1 }}</span>
+                  <b>{{ f.title }}</b>
+                  <span>{{ f.body }}</span>
+                </li>
+              </ol>
+            </div>
           </article>
         </div>
-        <ol class="flow" :aria-label="m.home.flowLabel">
-          <li v-for="(f, i) in m.home.flow" :key="f.title">
-            <span class="flow-n" aria-hidden="true">{{ i + 1 }}</span>
-            <b>{{ f.title }}</b>
-            <span>{{ f.body }}</span>
-          </li>
-        </ol>
       </div>
     </section>
 
