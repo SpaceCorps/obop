@@ -350,7 +350,7 @@ Parse and gate errors (from `obop modules install`, the Customize upload or `mod
 | `permission group "X" must look like module.role` | Two identifiers joined by a dot, for example `assets.user`. |
 | `M.F: bad or repeated field name` | Not an identifier, named `id`, or declared twice. |
 | `M.F: unknown data class "X"` | Use one of the seven classes. |
-| `M.F: unknown kind "X" (use text, longtext, number, money, date, bool, select or ref)` | Floats do not exist; use `number` (integer) or `money` (integer minor units). |
+| `M.F: unknown kind "X" (use text, longtext, number, money, date, datetime, decimal, bool, select, ref, sequence, image or file)` | Floats do not exist; use `number` (integer), `money` (integer minor units) or `decimal` (exact, with `precision` and `scale`). |
 | `M.F: options are only valid for kind "select"` / `` `to` is only valid for kind "ref" `` | Remove the stray key or fix the kind. |
 | `M.F: a select needs options` / `select options must be non-empty and unique` | Give at least one option; no blanks or duplicates. |
 | `M.F: a ref needs `to`, the target model` | Add `to`. |

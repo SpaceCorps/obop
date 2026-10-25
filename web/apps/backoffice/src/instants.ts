@@ -46,10 +46,13 @@ export function knownZone(zone: string): boolean {
   }
 }
 
-/** The wall clock of `zone` at the instant `ms` (a whole second boundary is enough). */
+/**
+ * The wall clock of `zone` at the instant `ms` (a whole second boundary is enough). A zone this
+ * browser does not know is read as UTC rather than throwing: the form says so when it matters.
+ */
 function wall(zone: string, ms: number) {
   const p: Record<string, number> = {};
-  for (const x of zoneFormat(zone).formatToParts(new Date(ms)))
+  for (const x of zoneFormat(knownZone(zone) ? zone : "UTC").formatToParts(new Date(ms)))
     if (x.type !== "literal") p[x.type] = Number(x.value);
   // The era is not asked for: negative years do not occur in 0001 to 9999.
   return { y: p.year!, mo: p.month!, d: p.day!, h: p.hour!, mi: p.minute!, s: p.second! };
@@ -179,7 +182,7 @@ export function formatInstant(iso: unknown, zone: string, locale: string): strin
   let f = dfCache.get(key);
   if (!f) {
     f = new Intl.DateTimeFormat(locale, {
-      timeZone: zone,
+      timeZone: knownZone(zone) ? zone : "UTC",
       dateStyle: "medium",
       timeStyle: "medium",
     });

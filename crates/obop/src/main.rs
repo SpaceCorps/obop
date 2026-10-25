@@ -2760,6 +2760,11 @@ mod bundled_packages {
                     "number" => Value::Int(1),
                     "money" => Value::Int(12_345),
                     "date" => Value::text("2026-01-31"),
+                    "datetime" => Value::text("2026-01-31T09:30:00Z"),
+                    "decimal" => Value::Text(match f.scale.unwrap_or(0) {
+                        0 => "1".to_string(),
+                        n => format!("1.{}", "5".repeat(usize::from(n))),
+                    }),
                     "bool" => Value::Bool(true),
                     "select" => match (f.name, state) {
                         ("state", Some(s)) => Value::text(s),

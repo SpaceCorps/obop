@@ -757,8 +757,8 @@ mod tests {
         );
         let mut out = Vec::new();
         let mut borrow = 0;
-        for i in 0..b.len() {
-            let mut d = b[i] - borrow - s.get(i).copied().unwrap_or(0);
+        for (i, top) in b.iter().enumerate() {
+            let mut d = top - borrow - s.get(i).copied().unwrap_or(0);
             borrow = 0;
             if d < 0 {
                 d += 10;

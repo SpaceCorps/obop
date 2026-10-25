@@ -255,8 +255,48 @@ pub fn steps_for(new: &Manifest, from: &Version) -> Vec<Step> {
     new.migration
         .iter()
         .filter(|m| Req::parse(&m.from).is_ok_and(|r| r.matches(from)))
-        .map(step_of)
+        .map(|m| {
+            let mut s = step_of(m);
+            canonical_default(new, &mut s);
+            s
+        })
         .collect()
+}
+
+/// A `set_default` into a decimal or datetime field writes the canonical text (D72): the
+/// default is written straight into the records, past the checks of the commands, so
+/// `"12.5"` into two decimals must already be `"12.50"` or the record would later be refused.
+fn canonical_default(new: &Manifest, s: &mut Step) {
+    if s.op != "set_default" {
+        return;
+    }
+    let Some(f) = new
+        .model
+        .iter()
+        .find(|m| m.name == s.model)
+        .and_then(|m| m.field.iter().find(|f| f.name == s.field))
+    else {
+        return;
+    };
+    let text = match &s.value {
+        Some(J::String(t)) => t.clone(),
+        Some(J::Number(n)) if f.kind == "decimal" => n.to_string(),
+        _ => return,
+    };
+    let canonical: Option<String> = match (f.kind.as_str(), f.precision, f.scale) {
+        ("decimal", Some(p), Some(sc)) => {
+            obop_values::Decimal::parse_for(&text, p as u8, sc as u8, None)
+                .ok()
+                .map(|d| d.to_string())
+        }
+        ("datetime", _, _) => obop_values::Instant::parse(&text)
+            .ok()
+            .map(obop_values::Instant::canonical),
+        _ => return,
+    };
+    if let Some(c) = canonical {
+        s.value = Some(J::from(c));
+    }
 }
 
 /// The data side of an update: what differs, which steps run, what stops it.
@@ -587,6 +627,31 @@ mod tests {
         // A step for another starting version does not apply.
         let p = plan_data(&m("0.3.0", &field("title", ""), ""), &new, &|_| 5);
         assert!(p.steps.is_empty());
+    }
+
+    #[test]
+    fn a_default_for_a_decimal_or_an_instant_is_written_canonically() {
+        let new = m(
+            "0.2.0",
+            &format!(
+                "{}{}{}",
+                field("title", ""),
+                field("price", "kind = \"decimal\"\n  precision = 8\n  scale = 2"),
+                field("seen", "kind = \"datetime\"")
+            ),
+            "[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"price\"\nvalue = \"12.5\"\n[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"seen\"\nvalue = \"2026-03-29T03:30:00+02:00\"\n[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"title\"\nvalue = \"12.5\"\n",
+        );
+        let steps = steps_for(&new, &Version::new(0, 1, 0));
+        let values: Vec<_> = steps.iter().map(|s| s.value.clone().unwrap()).collect();
+        assert_eq!(
+            values,
+            [
+                json!("12.50"),
+                json!("2026-03-29T01:30:00.000000Z"),
+                json!("12.5")
+            ],
+            "only decimal and datetime defaults are rewritten; text stays as written"
+        );
     }
 
     #[test]

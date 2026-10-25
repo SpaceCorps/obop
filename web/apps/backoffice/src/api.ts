@@ -239,10 +239,11 @@ export type AggGroup = {
   key: Record<string, unknown>;
   count: number;
   /**
-   * `sum:amount_minor` -> number (`min` and `max` of nothing are `null`); a decimal field's
-   * measure is its exact decimal string.
+   * `sum:amount_minor` -> number (`min` and `max` of nothing are `null`). The views only ask for
+   * number and money measures; the server also answers a decimal field's measure as its exact
+   * decimal string (D72), which no view asks for yet.
    */
-  measures: Record<string, number | string | null>;
+  measures: Record<string, number | null>;
 };
 export type AggResult = { groups: AggGroup[]; total: number; denied: string[] };
 

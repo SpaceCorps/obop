@@ -128,7 +128,7 @@ impl Rng {
         for _ in 0..digits {
             n = n * 10 + u128::from(self.next() % 10);
         }
-        let neg = self.next() % 8 == 0 && n != 0;
+        let neg = self.next().is_multiple_of(8) && n != 0;
         let s = format!("{n:0w$}", w = scale as usize + 1);
         let (int, frac) = s.split_at(s.len() - scale as usize);
         let body = if scale == 0 {
@@ -179,12 +179,57 @@ fn tool(d: &Dispatcher, p: &Principal, s: &mut Session, name: &str, args: J) -> 
 #[tokio::test]
 async fn rest_mcp_and_cli_round_trip_ten_thousand_generated_decimals() {
     let f = fixture().await;
-    let started = std::time::Instant::now();
-    let lap = |what: &str| eprintln!("{:>8.1}s {what}", started.elapsed().as_secs_f32());
-    let mut rng = Rng(0x00dec_1a7e);
-    let mut expect: Vec<(String, String, String)> = Vec::new();
-    // REST: 8,700 values in nine bulk calls, read back page by page. With 300 through MCP and
+    let mut rng = Rng(0x00de_c1a7_e5ed);
+
+    // MCP first, on a nearly empty store (the in-memory backend copies its state on every
+    // write, so a single write after thousands of rows is slow; a bulk write is not): 300
+    // values created and read back through tools/call.
+    let mut s = mcp_session(&f.app.dispatcher, &f.who);
+    for i in 0..300 {
+        let want = (rng.decimal(12, 2), rng.decimal(10, 4), rng.decimal(24, 8));
+        let made = tool(
+            &f.app.dispatcher,
+            &f.who,
+            &mut s,
+            "ledger_entry__create",
+            json!({"memo": format!("mcp-{i}"), "amount": want.0, "ratio": want.1, "weight": want.2}),
+        );
+        assert_eq!(made["isError"], false, "{made}");
+        let id = made["structuredContent"]["value"]["id"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{made}"))
+            .to_string();
+        let back = tool(
+            &f.app.dispatcher,
+            &f.who,
+            &mut s,
+            "ledger_entry__get",
+            json!({"id": id}),
+        );
+        let row = back["structuredContent"]["value"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{back}"));
+        assert_eq!(row["amount"], want.0.as_str());
+        assert_eq!(row["ratio"], want.1.as_str());
+        assert_eq!(row["weight"], want.2.as_str());
+    }
+    // MCP refuses a float with an error that names the field.
+    let bad = tool(
+        &f.app.dispatcher,
+        &f.who,
+        &mut s,
+        "ledger_entry__create",
+        json!({"memo": "x", "amount": 12.5}),
+    );
+    assert_eq!(bad["isError"], true);
+    assert!(
+        bad.to_string().contains("ledger_entry.amount must be"),
+        "{bad}"
+    );
+
+    // REST: 8,700 values in nine bulk calls, read back page by page. With the 300 above and
     // 1,000 through the CLI import (the next test) that is 10,000 values on the wire.
+    let mut expect: Vec<(String, String, String)> = Vec::new();
     for batch in 0..9 {
         let size = if batch == 8 { 700 } else { 1000 };
         let rows: Vec<J> = (0..size)
@@ -207,7 +252,6 @@ async fn rest_mcp_and_cli_round_trip_ten_thousand_generated_decimals() {
             "{b}"
         );
     }
-    lap("rest written");
     let mut got = Vec::new();
     for offset in [0, 4500] {
         let (s, b) = post(
@@ -220,7 +264,8 @@ async fn rest_mcp_and_cli_round_trip_ten_thousand_generated_decimals() {
         assert_eq!(s, 200);
         got.extend(b["value"].as_array().unwrap().clone());
     }
-    lap("rest read");
+    assert_eq!(got.len(), 9000, "8,700 from REST and 300 from MCP");
+    got.retain(|r| r["memo"].as_str().unwrap().starts_with("rest-"));
     assert_eq!(got.len(), 8700);
     got.sort_by(|a, b| a["memo"].as_str().cmp(&b["memo"].as_str()));
     let mut sorted: Vec<(usize, &(String, String, String))> = expect.iter().enumerate().collect();
@@ -232,54 +277,6 @@ async fn rest_mcp_and_cli_round_trip_ten_thousand_generated_decimals() {
     }
     // The wire form is a JSON string, never a number.
     assert!(got.iter().all(|r| r["amount"].is_string()));
-
-    // MCP: 300 values created and read back through tools/call. (Every command also runs the
-    // observers of the connectors module, so a create costs tens of milliseconds.)
-    let mut s = mcp_session(&f.app.dispatcher, &f.who);
-    for i in 0..300 {
-        let want = (rng.decimal(12, 2), rng.decimal(10, 4), rng.decimal(24, 8));
-        let made = tool(
-            &f.app.dispatcher,
-            &f.who,
-            &mut s,
-            "ledger_entry__create",
-            json!({"memo": format!("mcp-{i}"), "amount": want.0, "ratio": want.1, "weight": want.2}),
-        );
-        assert_eq!(made["isError"], false, "{made}");
-        let id = made["structuredContent"]["value"]["id"]
-            .as_str()
-            .or_else(|| made["structuredContent"]["id"].as_str())
-            .unwrap_or_else(|| panic!("{made}"))
-            .to_string();
-        let back = tool(
-            &f.app.dispatcher,
-            &f.who,
-            &mut s,
-            "ledger_entry__get",
-            json!({"id": id}),
-        );
-        let row = back["structuredContent"]["value"]
-            .as_object()
-            .or_else(|| back["structuredContent"].as_object())
-            .unwrap_or_else(|| panic!("{back}"));
-        assert_eq!(row["amount"], want.0.as_str());
-        assert_eq!(row["ratio"], want.1.as_str());
-        assert_eq!(row["weight"], want.2.as_str());
-    }
-    lap("mcp done");
-    // MCP refuses a float with an error that names the field.
-    let bad = tool(
-        &f.app.dispatcher,
-        &f.who,
-        &mut s,
-        "ledger_entry__create",
-        json!({"memo": "x", "amount": 12.5}),
-    );
-    assert_eq!(bad["isError"], true);
-    assert!(
-        bad.to_string().contains("ledger_entry.amount must be"),
-        "{bad}"
-    );
 }
 
 #[test]

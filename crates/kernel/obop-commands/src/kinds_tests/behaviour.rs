@@ -154,7 +154,7 @@ fn csv_import_rounds_only_where_the_field_declares_a_mode() {
             "{msg}"
         );
         // Decimal commas, exponents and spaces are not repaired by an import either.
-        for bad in ["1,5", "1e2", "0x1"] {
+        for bad in ["1,5", "1e2", "0x1", " 1.5", "1.5 "] {
             let csv = format!("name,price\nx,\"{bad}\"\n");
             let report = r.ok(
                 "item",

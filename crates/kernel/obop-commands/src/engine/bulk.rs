@@ -106,13 +106,11 @@ fn cell(def: &ModelDef, name: &str, raw: &str) -> Result<Option<Value>, String> 
             "false" | "no" | "0" => Value::Bool(false),
             _ => return Err(bad("true or false")),
         },
-        // A decimal or an instant stays text here; `create_row` checks it, and rounds it when the
+        FieldKind::Date | FieldKind::Select(_) | FieldKind::Ref(_) => Value::Text(t.to_string()),
+        // A decimal or an instant stays text, exactly as the file has it (spaces included, so
+        // they are refused as everywhere else); `create_row` checks it, and rounds it when the
         // field declares a mode, with the very code every other write uses (D72).
-        FieldKind::Date
-        | FieldKind::Select(_)
-        | FieldKind::Ref(_)
-        | FieldKind::Decimal { .. }
-        | FieldKind::Datetime => Value::Text(t.to_string()),
+        FieldKind::Decimal { .. } | FieldKind::Datetime => Value::Text(raw.to_string()),
         FieldKind::Image(_) | FieldKind::File(_) => {
             return Err(blob_error(def, name));
         }
