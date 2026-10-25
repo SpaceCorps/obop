@@ -128,6 +128,12 @@ impl Env for RecEnv<'_, '_> {
         let v = expr::eval_in(&c.expr, self, context_of(kind));
         self.busy.borrow_mut().pop();
         let v = v?;
+        // Every reader sees the value the record shows: a computed decimal is rounded to its
+        // own scale and mode before another field, an assertion or an effect reads it.
+        let v = match kind {
+            FieldKind::Decimal { .. } => to_v(Some(kind), Some(&from_v(kind, v))),
+            _ => v,
+        };
         self.memo.borrow_mut().insert(name.to_string(), v.clone());
         Ok(v)
     }

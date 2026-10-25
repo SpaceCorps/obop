@@ -102,6 +102,12 @@ impl Vars<'_> {
             }
             _ => self.value(s)?,
         };
+        // A whole-number constant (`rate = 0`) into a decimal is that decimal's text: the gate
+        // accepts it, and a JSON number is never a decimal.
+        let v = match (&v, kind) {
+            (J::Number(n), Some(FieldKind::Decimal { .. })) if n.is_i64() => J::from(n.to_string()),
+            _ => v,
+        };
         if matches!(kind, Some(FieldKind::Decimal { .. } | FieldKind::Datetime)) && v.is_string() {
             let mut one = Fields::new();
             one.insert(field.to_string(), v);

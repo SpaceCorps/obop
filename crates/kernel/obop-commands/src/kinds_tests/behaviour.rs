@@ -69,6 +69,57 @@ fn computed_decimals_are_exact_and_round_once_with_the_declared_mode() {
     });
 }
 
+/// A computed decimal is read by other computed fields as the rounded value the record shows,
+/// so the parts of a total add up on screen and in an effect.
+#[test]
+fn a_computed_decimal_read_by_another_is_the_rounded_value() {
+    each(|r| {
+        let id = r.create(
+            "item",
+            vec![("name", t("inv")), ("ratio", t("12.3456")), ("qty", Value::Int(3))],
+        );
+        let row = r.read("item", &id);
+        // 12.3456 * 3 = 37.0368, shown 37.04; 37.04 * 0.19 = 7.0376, shown 7.04; the gross is
+        // the sum of what is shown, 44.08 (it was 44.07, from the unrounded 37.0368 + 7.036992).
+        assert_eq!(text(get(&row, "net")), "37.04");
+        assert_eq!(text(get(&row, "vat")), "7.04");
+        assert_eq!(text(get(&row, "gross")), "44.08");
+        let sum = |a: &str, b: &str| {
+            let (a, b) = (a.replace('.', "").parse::<i64>().unwrap(), b.replace('.', "").parse::<i64>().unwrap());
+            a + b
+        };
+        assert_eq!(
+            sum(&text(get(&row, "net")), &text(get(&row, "vat"))),
+            text(get(&row, "gross")).replace('.', "").parse::<i64>().unwrap()
+        );
+        // The other example of the review: 0.0149 * 1 shows 0.01, 0.00 and 0.01.
+        let id = r.create("item", vec![("name", t("small")), ("ratio", t("0.0149")), ("qty", Value::Int(1))]);
+        let row = r.read("item", &id);
+        assert_eq!(
+            (text(get(&row, "net")), text(get(&row, "vat")), text(get(&row, "gross"))),
+            ("0.01".to_string(), "0.00".to_string(), "0.01".to_string())
+        );
+        // Filtering and sorting see the same rounded value.
+        assert_eq!(r.names(vec![cond("gross", "eq", t("44.08"))], None), ["inv"]);
+    });
+}
+
+/// A whole-number constant (`rate = 0`) in an effect is the decimal it stands for.
+#[test]
+fn a_whole_number_constant_in_an_effect_fills_a_decimal_field() {
+    each(|r| {
+        let item = r.create("item", vec![("name", t("it")), ("price", t("1.00"))]);
+        let gate = r.create("gate", vec![("item_id", t(&item))]);
+        r.ok("gate", "close", m(vec![("id", t(&gate))]));
+        let logs = list(get(&r.search("log", vec![]), "rows")).to_vec();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(text(get(&logs[0], "price_copy")), "5.0000");
+        let row = r.read("item", &item);
+        assert_eq!(text(get(&row, "price")), "7.00");
+        assert_eq!(text(get(&row, "ratio")), "0.0000");
+    });
+}
+
 #[test]
 fn sums_and_maxima_over_child_decimals_are_exact() {
     each(|r| {
@@ -154,7 +205,7 @@ fn csv_import_rounds_only_where_the_field_declares_a_mode() {
             "{msg}"
         );
         // Decimal commas, exponents and spaces are not repaired by an import either.
-        for bad in ["1,5", "1e2", "0x1", " 1.5", "1.5 "] {
+        for bad in ["1,5", "1e2", "0x1", " 1.5", "1.5 ", "   "] {
             let csv = format!("name,price\nx,\"{bad}\"\n");
             let report = r.ok(
                 "item",
@@ -221,8 +272,8 @@ fn now_and_today_are_typed_and_today_is_a_date_in_the_platform_zone() {
             "12.3400",
             "a decimal copied to a wider scale"
         );
-        // In Stockholm it is already April 1.
-        r.d.set_zones(Zones::new(Arc::new(ZoneDb::bundled()), "Europe/Stockholm").unwrap());
+        // In Berlin it is already April 1.
+        r.d.set_zones(Zones::new(Arc::new(ZoneDb::bundled()), "Europe/Berlin").unwrap());
         let item2 = r.create("item", vec![("name", t("s2")), ("price", t("1"))]);
         r.ok("item", "stamp", m(vec![("id", t(&item2))]));
         let day2 = log_of()

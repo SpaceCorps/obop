@@ -319,6 +319,22 @@ impl FieldInfo {
     pub fn decimal_pattern(&self) -> Option<String> {
         Some(obop_values::decimal::pattern(self.precision?, self.scale?))
     }
+
+    /// The pattern of the rows of `bulk_create` and `obop import`: a decimal that rounds on
+    /// import takes any number of fractional digits there.
+    pub fn decimal_import_pattern(&self) -> Option<String> {
+        let (p, s) = (self.precision?, self.scale?);
+        Some(if self.round.is_some() {
+            obop_values::decimal::import_pattern(p, s)
+        } else {
+            obop_values::decimal::pattern(p, s)
+        })
+    }
+
+    /// A value that fits this decimal, for examples (`12.33`, `12` at scale 0, `0.33` for 2,2).
+    pub fn decimal_example(&self) -> Option<String> {
+        Some(obop_values::decimal::example(self.precision?, self.scale?))
+    }
 }
 
 /// The row-level access rules of a model, for the interface (D58).

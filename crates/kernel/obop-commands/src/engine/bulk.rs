@@ -92,6 +92,11 @@ fn cell(def: &ModelDef, name: &str, raw: &str) -> Result<Option<Value>, String> 
         .ok_or_else(|| format!("unknown field {}.{name}", def.name))?;
     let t = raw.trim();
     if t.is_empty() {
+        // Spaces are not "nothing" in a decimal or datetime column: the strict parser refuses
+        // them, as it does everywhere else (D72).
+        if !raw.is_empty() && matches!(f.kind, FieldKind::Decimal { .. } | FieldKind::Datetime) {
+            return Ok(Some(Value::Text(raw.to_string())));
+        }
         return Ok(None);
     }
     let bad = |what: &str| format!("{}.{name} must be {what}, not {t:?}", def.name);

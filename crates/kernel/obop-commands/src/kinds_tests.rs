@@ -95,6 +95,10 @@ fn module(p: &str) -> Module {
                         .decimal_rounded(14, 2, Round::HalfUp)
                         .computed("price * qty"),
                     f("third").decimal(12, 4).computed("price / 3"),
+                    // A chain of computed decimals: each reads the rounded value of the last.
+                    f("net").decimal(12, 2).computed("ratio * qty"),
+                    f("vat").decimal(12, 2).computed("net * 0.19"),
+                    f("gross").decimal(12, 2).computed("net + vat"),
                     f("sum_ok")
                         .kind(FieldKind::Bool)
                         .computed("0.1 + 0.2 == 0.3"),
@@ -118,6 +122,27 @@ fn module(p: &str) -> Module {
                                 ("day", "$today"),
                                 ("price_copy", "$self.price"),
                             ],
+                        )),
+                ],
+            ),
+            model(
+                n("gate"),
+                vec![
+                    f("item_id").reference(&format!("{p}_item")),
+                    f("state").select(&["open", "done"]),
+                ],
+                vec![
+                    // Whole-number constants into decimal fields, in a create and an update.
+                    CommandDef::new("close", "Close", U)
+                        .transition("state", Some("open"), "done")
+                        .effect(Effect::create(
+                            &format!("{p}_log"),
+                            &[("item_id", "$self.item_id"), ("price_copy", "5")],
+                        ))
+                        .effect(Effect::update_ref(
+                            &format!("{p}_item"),
+                            "item_id",
+                            &[("price", "7"), ("ratio", "0")],
                         )),
                 ],
             ),
@@ -160,7 +185,11 @@ fn each(f: impl Fn(&Rig)) {
         let v = obop_registry::check_module(&module);
         assert!(v.is_empty(), "{v:?}");
         d.register_crud(&module, &store);
-        d.register_transition(&module, &format!("{p}_item"), "stamp", &store);
+        for mo in &module.models {
+            for c in &mo.commands {
+                d.register_transition(&module, mo.name, c.name, &store);
+            }
+        }
         let who = Principal::user(&format!("u-{p}"), &[U]);
         f(&Rig { d, p, who });
     }
@@ -395,25 +424,22 @@ fn every_surface_round_trips_the_same_text() {
 #[test]
 fn valid_but_loose_decimals_are_stored_in_the_canonical_form() {
     each(|r| {
-        for (given, stored) in [
-            ("12", "12.00"),
-            ("12.5", "12.50"),
-            ("-0", "0.00"),
-            ("007.10", "7.10"),
-            ("-0.00", "0.00"),
+        for (given, stored, ratio) in [
+            ("12", "12.00", "12.0000"),
+            ("12.5", "12.50", "12.5000"),
+            ("-0", "0.00", "0.0000"),
+            ("007.10", "7.10", "7.1000"),
+            ("-0.00", "0.00", "0.0000"),
         ] {
             let id = r.create("item", vec![("name", t("x")), ("price", t(given))]);
             assert_eq!(text(get(&r.read("item", &id), "price")), stored, "{given}");
-            // The same on update.
+            // The same on update, into a field of another scale.
             let out = r.ok(
                 "item",
                 "update",
                 m(vec![("id", t(&id)), ("ratio", t(given))]),
             );
-            assert!(
-                text(get(&out, "ratio")).ends_with(".0000")
-                    || text(get(&out, "ratio")).contains('.')
-            );
+            assert_eq!(text(get(&out, "ratio")), ratio, "update with {given}");
         }
         // Text fields are untouched.
         let id = r.create("item", vec![("name", t(" 1.50 "))]);

@@ -3,7 +3,7 @@
 //! ```json
 //! { "filter": [...],
 //!   "aggregate": {
-//!     "group_by": ["status", {"field": "created", "bucket": "month", "zone": "Europe/Stockholm"}],
+//!     "group_by": ["status", {"field": "created", "bucket": "month", "zone": "Europe/Berlin"}],
 //!     "measures": [{"op": "count"}, {"op": "sum", "field": "amount_minor"}] } }
 //! ```
 //!
@@ -322,10 +322,16 @@ impl Aggregate {
                         })?,
                         Some(_) => return Err("round must be half_even, half_up or down".into()),
                     };
+                    let key = format!("{op}:{name}");
+                    if measures.iter().any(|x| x.name == key) {
+                        return Err(format!(
+                            "the measure {key} is asked for twice; the answer has one {key}"
+                        ));
+                    }
                     measures.push(Measure {
                         f,
                         field: name.clone(),
-                        name: format!("{op}:{name}"),
+                        name: key,
                         dec_scale: field_scale,
                         out_scale,
                         round,
@@ -397,7 +403,7 @@ impl Aggregate {
             });
             acc.count += 1;
             for (i, m) in measured.iter().enumerate() {
-                let Some(n) = measured_units(m, f.get(&m.field)) else {
+                let Some(n) = measured_units(m, f.get(&m.field))? else {
                     continue;
                 };
                 let slot = &mut acc.vals[i];
@@ -470,18 +476,25 @@ impl Aggregate {
 }
 
 /// A value to be summed, compared or averaged, as whole units: an integer, or a decimal in
-/// units of its field's scale. Anything else (empty, malformed data that bypassed validation)
-/// is skipped.
-fn measured_units(m: &Measure, v: Option<&J>) -> Option<i128> {
-    match (m.dec_scale, v?) {
-        (None, J::Number(n)) => n.as_i64().map(i128::from),
-        (Some(scale), J::String(s)) => Decimal::parse(s)
-            .ok()?
-            .rescale(scale, Round::Down)
-            .ok()
-            .map(Decimal::units),
+/// units of its field's scale. Empty and malformed values (data that bypassed validation) are
+/// skipped; a decimal with more digits than the field keeps is an error and not a quietly
+/// shortened number: it means the field's scale was cut in an update without rewriting the
+/// stored values (a `reformat_field` migration step does that).
+fn measured_units(m: &Measure, v: Option<&J>) -> Result<Option<i128>, String> {
+    Ok(match (m.dec_scale, v) {
+        (None, Some(J::Number(n))) => n.as_i64().map(i128::from),
+        (Some(scale), Some(J::String(s))) => match Decimal::parse(s) {
+            Ok(d) if d.scale() > scale => {
+                return Err(format!(
+                    "{}: a stored value ({s}) has more than the {scale} fractional digits the field keeps; the field was narrowed without rewriting its values",
+                    m.name
+                ));
+            }
+            Ok(d) => d.rescale(scale, Round::Down).ok().map(Decimal::units),
+            Err(_) => None,
+        },
         _ => None,
-    }
+    })
 }
 
 fn group_key(g: &GroupBy, f: &Fields) -> Option<Key> {
