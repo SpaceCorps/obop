@@ -21,6 +21,10 @@ pub enum Value {
     Null,
     Bool(bool),
     Int(i64),
+    /// A JSON number that is not a 64 bit integer (a float, or an integer too large), kept as
+    /// written. No field kind accepts it, so a float never turns into a value by accident; a
+    /// decimal is sent as a string (D72).
+    Num(String),
     Text(String),
     List(Vec<Value>),
     Map(BTreeMap<String, Value>),
@@ -237,6 +241,10 @@ pub struct Dispatcher {
     lock_models: std::sync::RwLock<HashSet<String>>,
     /// The time sequences and `$now` use.
     clock: SharedClock,
+    /// Set once a test replaced the clock.
+    clock_replaced: Arc<std::sync::atomic::AtomicBool>,
+    /// The time zone database and the platform zone (D72).
+    zones: engine::SharedZones,
 }
 
 /// The clock of the engine; tests replace it to cross a year end.
@@ -276,7 +284,8 @@ pub struct FieldInfo {
     pub description: &'static str,
     pub class: &'static str,
     pub personal_data: bool,
-    /// Lowercase field kind (D47): text, longtext, number, money, date, bool, select, ref, image or file.
+    /// Lowercase field kind (D47, D72): text, longtext, number, money, date, datetime, decimal,
+    /// bool, select, ref, image or file.
     pub kind: &'static str,
     pub required: bool,
     /// Options of a `select`; empty for other kinds.
@@ -285,6 +294,11 @@ pub struct FieldInfo {
     pub to: Option<&'static str>,
     /// Largest upload in bytes of an `image` or `file` field.
     pub max_bytes: Option<usize>,
+    /// Digits in all, digits after the point and the import rounding mode (`half_even`,
+    /// `half_up`, `down`) of a `decimal` field (D72).
+    pub precision: Option<u8>,
+    pub scale: Option<u8>,
+    pub round: Option<&'static str>,
     /// Label and description per language (D52); empty maps when untranslated.
     pub labels: Texts,
     pub descriptions: Texts,
@@ -298,6 +312,13 @@ pub struct FieldInfo {
     pub unique: bool,
     /// Numbered by the system (D57).
     pub sequence: bool,
+}
+
+impl FieldInfo {
+    /// The regular expression for the text of a `decimal` field (OpenAPI and MCP `pattern`).
+    pub fn decimal_pattern(&self) -> Option<String> {
+        Some(obop_values::decimal::pattern(self.precision?, self.scale?))
+    }
 }
 
 /// The row-level access rules of a model, for the interface (D58).
@@ -481,6 +502,13 @@ impl Dispatcher {
                                 options: f.kind.options().to_vec(),
                                 to: f.kind.target(),
                                 max_bytes: f.kind.max_bytes(),
+                                precision: f.kind.decimal_shape().map(|(p, _, _)| p),
+                                scale: f.kind.decimal_shape().map(|(_, s, _)| s),
+                                round: f
+                                    .kind
+                                    .decimal_shape()
+                                    .and_then(|(_, _, r)| r)
+                                    .map(|r| r.name()),
                                 labels: ftr.map(|t| t.entry.labels.clone()).unwrap_or_default(),
                                 descriptions: ftr
                                     .map(|t| t.entry.descriptions.clone())
@@ -745,6 +773,19 @@ impl Dispatcher {
     /// Replace the clock sequences and `$now` read (seconds since the epoch). For tests.
     pub fn set_clock(&self, clock: ClockFn) {
         *self.clock.0.write().unwrap() = clock;
+        self.clock_replaced
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Replace the time zone settings (the database and the platform zone, D72). The server
+    /// sets them from `OBOP_ZONE` at start; tests swap in a fixture database.
+    pub fn set_zones(&self, zones: obop_values::Zones) {
+        *self.zones.write().unwrap() = Arc::new(zones);
+    }
+
+    /// The time zone settings in force.
+    pub fn zones(&self) -> Arc<obop_values::Zones> {
+        self.zones.read().unwrap().clone()
     }
 
     /// Every permission group the registered models, fields and commands refer to (the
@@ -1409,6 +1450,7 @@ pub mod csv;
 mod engine;
 mod guards;
 pub mod json;
+mod kinds;
 pub mod pay;
 pub mod public;
 pub mod query;
@@ -1449,5 +1491,7 @@ pub mod names {
 
 #[cfg(test)]
 mod engine_tests;
+#[cfg(test)]
+mod kinds_tests;
 #[cfg(test)]
 mod tests;

@@ -20,6 +20,8 @@ pub fn field_schema(f: &FieldInfo) -> J {
         "money" => json!({"type": "integer"}),
         "bool" => json!({"type": "boolean"}),
         "date" => json!({"type": "string", "format": "date"}),
+        "datetime" => json!({"type": "string", "format": "date-time"}),
+        "decimal" => json!({"type": "string", "pattern": f.decimal_pattern()}),
         "select" => json!({"type": "string", "enum": f.options}),
         _ => json!({"type": "string"}),
     };
@@ -27,6 +29,15 @@ pub fn field_schema(f: &FieldInfo) -> J {
     match f.kind {
         "money" => desc.push_str(" (integer, minor currency units such as cents; never a float)"),
         "date" => desc.push_str(" (calendar date, YYYY-MM-DD)"),
+        "datetime" => desc.push_str(
+            " (an instant: RFC 3339 with an offset or Z, such as 2026-03-29T01:30:00Z; microsecond precision; returned in UTC as YYYY-MM-DDTHH:MM:SS.ffffffZ)",
+        ),
+        "decimal" => desc.push_str(&format!(
+            " (an exact decimal sent and returned as a STRING such as \"12.{}\", never a JSON number; at most {} digits, exactly {} after the point in answers)",
+            "3".repeat(usize::from(f.scale.unwrap_or(0))),
+            f.precision.unwrap_or(0),
+            f.scale.unwrap_or(0)
+        )),
         "ref" => desc.push_str(&format!(
             " (the id of a {} record)",
             f.to.unwrap_or("referenced")
@@ -72,7 +83,9 @@ fn query_properties() -> J {
                 "properties": {
                     "field": {"type": "string"},
                     "op": {"type": "string", "enum": OPS},
-                    "value": {"description": "Omit for is_null; an array for in."}
+                    "value": {"description": "Omit for is_null; an array for in. Decimals and instants are strings; a decimal compares as a number, an instant as a point in time whatever offset it is written with."},
+                    "bucket": {"type": "string", "enum": ["day", "week", "iso_week", "month", "year"], "description": "On a date or datetime field: compare the period it falls in; value is then the period label (2026-04, 2026-W15, 2026-04-01). This is the explicit date-in-zone conversion."},
+                    "zone": {"type": "string", "description": "With bucket on a datetime: an IANA time zone name (default: the platform zone)."}
                 }
             }
         },
@@ -105,7 +118,8 @@ fn aggregate_schema() -> J {
                     {"type": "string", "description": "A field name."},
                     {"type": "object", "required": ["field"], "properties": {
                         "field": {"type": "string"},
-                        "bucket": {"type": "string", "enum": ["day", "week", "month"], "description": "Required for date fields."}
+                        "bucket": {"type": "string", "enum": ["day", "week", "iso_week", "month", "year"], "description": "Required for date and datetime fields. Weeks start on Monday; iso_week is YYYY-Www."},
+                        "zone": {"type": "string", "description": "For a datetime: an IANA time zone name (default: the platform zone)."}
                     }}
                 ]}
             },
@@ -113,8 +127,10 @@ fn aggregate_schema() -> J {
                 "type": "array",
                 "maxItems": 8,
                 "items": {"type": "object", "required": ["op"], "properties": {
-                    "op": {"type": "string", "enum": ["count", "sum", "min", "max"]},
-                    "field": {"type": "string", "description": "A number or money field; omit for count."}
+                    "op": {"type": "string", "enum": ["count", "sum", "min", "max", "avg"]},
+                    "field": {"type": "string", "description": "A number, money or decimal field (avg: decimal only); omit for count. A decimal measure is a string."},
+                    "scale": {"type": "integer", "minimum": 0, "maximum": 12, "description": "avg only: digits after the point (default: the field's)."},
+                    "round": {"type": "string", "enum": ["half_even", "half_up", "down"], "description": "avg only (default half_even)."}
                 }}
             }
         }
@@ -325,6 +341,9 @@ mod tests {
             options: vec!["a", "b"],
             to: Some("party"),
             max_bytes: None,
+            precision: None,
+            scale: None,
+            round: None,
             labels: Default::default(),
             descriptions: Default::default(),
             option_labels: Default::default(),
@@ -368,6 +387,9 @@ mod tests {
             options: vec!["draft", "posted"],
             to: Some("party"),
             max_bytes: None,
+            precision: (kind == "decimal").then_some(10),
+            scale: (kind == "decimal").then_some(2),
+            round: None,
             labels: Default::default(),
             descriptions: Default::default(),
             option_labels: Default::default(),

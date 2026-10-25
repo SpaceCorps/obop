@@ -27,6 +27,7 @@ use super::{Actor, Engine};
 use crate::Value;
 use crate::csv;
 use crate::guards::create_guard;
+use crate::kinds::{self, Path};
 use crate::store::declared_fields;
 use obop_registry::{FieldKind, MAX_BULK_ROWS, ModelDef};
 use obop_storage::{Fields, Op};
@@ -105,7 +106,13 @@ fn cell(def: &ModelDef, name: &str, raw: &str) -> Result<Option<Value>, String> 
             "false" | "no" | "0" => Value::Bool(false),
             _ => return Err(bad("true or false")),
         },
-        FieldKind::Date | FieldKind::Select(_) | FieldKind::Ref(_) => Value::Text(t.to_string()),
+        // A decimal or an instant stays text here; `create_row` checks it, and rounds it when the
+        // field declares a mode, with the very code every other write uses (D72).
+        FieldKind::Date
+        | FieldKind::Select(_)
+        | FieldKind::Ref(_)
+        | FieldKind::Decimal { .. }
+        | FieldKind::Datetime => Value::Text(t.to_string()),
         FieldKind::Image(_) | FieldKind::File(_) => {
             return Err(blob_error(def, name));
         }
@@ -270,6 +277,9 @@ fn create_row(
         return Err(system_error(def, k));
     }
     let mut f = to_fields(&given);
+    // An import rounds a decimal that has too many fractional digits when its field declares
+    // how (`round`); a create never does.
+    kinds::canonicalise(def, &mut f, Path::Import)?;
     default_governed(def, &mut f);
     own_default(def, &mut f, actor);
     check_fields(unit, look, actor, def, &f, true)?;

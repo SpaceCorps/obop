@@ -303,7 +303,7 @@ impl Decimal {
         }
     }
 
-    pub fn neg(self) -> Self {
+    pub fn negated(self) -> Self {
         Self {
             units: -self.units,
             scale: self.scale,
@@ -329,7 +329,7 @@ impl Decimal {
 
     /// Exact difference; the scale is the larger of the two.
     pub fn checked_sub(self, o: Self) -> Result<Self, DecimalError> {
-        self.checked_add(o.neg())
+        self.checked_add(o.negated())
     }
 
     /// Exact product; the scale is the sum of the two scales.
@@ -436,6 +436,23 @@ impl Decimal {
     }
 }
 
+/// The regular expression for the text of a decimal of `precision` and `scale`: digits that fit
+/// the precision, then up to `scale` fractional digits (OpenAPI and MCP `pattern`). Responses
+/// always carry exactly `scale` of them.
+pub fn pattern(precision: u8, scale: u8) -> String {
+    let int = match precision.saturating_sub(scale) {
+        0 => "0".to_string(),
+        1 => "[0-9]".to_string(),
+        n => format!("(0|[1-9][0-9]{{0,{}}})", n - 1),
+    };
+    let frac = if scale == 0 {
+        String::new()
+    } else {
+        format!("(\\.[0-9]{{1,{scale}}})?")
+    };
+    format!("^-?{int}{frac}$")
+}
+
 fn unexpected(s: &str, at: usize) -> String {
     let rest = s.get(at..).unwrap_or("");
     let lower = s.to_ascii_lowercase();
@@ -491,7 +508,7 @@ impl Eq for Decimal {}
 
 impl PartialOrd for Decimal {
     fn partial_cmp(&self, o: &Self) -> Option<Ordering> {
-        Some(self.compare(*o))
+        Some(self.cmp(o))
     }
 }
 impl Ord for Decimal {

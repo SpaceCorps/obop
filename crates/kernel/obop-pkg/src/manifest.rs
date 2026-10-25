@@ -238,6 +238,14 @@ pub struct FieldM {
     /// Largest upload in bytes; only for `image` (default 5 MiB) and `file` (default 25 MiB),
     /// at most 64 MiB.
     pub max_bytes: Option<u32>,
+    /// `kind = "decimal"`: digits in all, 1 to 38 (D72).
+    pub precision: Option<u32>,
+    /// `kind = "decimal"`: digits after the point, 0 to 12 and not above the precision.
+    pub scale: Option<u32>,
+    /// `kind = "decimal"`: `half_even`, `half_up` or `down`. On a stored field it is how the
+    /// import path rounds input with too many fractional digits (without it such input is an
+    /// error); on a computed field it is how the result and every division are rounded.
+    pub round: Option<String>,
     /// Computed when the record is read, from an expression over its fields and child records
     /// (D57): `sum(lines.amount)`, `quantity * unit_price`. Read-only.
     pub computed: Option<String>,
@@ -264,6 +272,20 @@ fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
     let ok = match (f.kind.as_str(), v) {
         ("text" | "longtext" | "date" | "ref", T::String(_)) => true,
         ("number" | "money", T::Integer(_) | T::Float(_)) => true,
+        ("datetime", T::String(s)) => obop_values::Instant::parse(s).is_ok(),
+        // A decimal default is a string ("12.50") or a whole number; a TOML float is not exact.
+        ("decimal", T::String(s)) => match (f.precision, f.scale) {
+            (Some(p), Some(sc)) => {
+                obop_values::Decimal::parse_for(s, p as u8, sc as u8, None).is_ok()
+            }
+            _ => false,
+        },
+        ("decimal", T::Integer(n)) => match (f.precision, f.scale) {
+            (Some(p), Some(sc)) => {
+                obop_values::Decimal::parse_for(&n.to_string(), p as u8, sc as u8, None).is_ok()
+            }
+            _ => false,
+        },
         ("bool", T::Boolean(_)) => true,
         ("select", T::String(s)) => f.options.iter().any(|o| o == s),
         ("select", _) => false,
@@ -975,7 +997,7 @@ impl Manifest {
         let at = format!("{}.{}", m.name, f.name);
         if !FieldKind::is_known(&f.kind) && f.kind != "sequence" {
             return Err(format!(
-                "{at}: unknown kind {:?} (use text, longtext, number, money, date, bool, select, ref, sequence, image or file)",
+                "{at}: unknown kind {:?} (use text, longtext, number, money, date, datetime, decimal, bool, select, ref, sequence, image or file)",
                 f.kind
             ));
         }
@@ -1024,6 +1046,32 @@ impl Manifest {
         }
         if f.kind != "ref" && f.to.is_some() {
             return Err(format!("{at}: `to` is only valid for kind \"ref\""));
+        }
+        if f.kind == "decimal" {
+            let (Some(p), Some(sc)) = (f.precision, f.scale) else {
+                return Err(format!(
+                    "{at}: a decimal needs `precision` (digits in all, 1 to 38) and `scale` (digits after the point, 0 to 12), for example precision = 12, scale = 2"
+                ));
+            };
+            if !(1..=u32::from(obop_values::MAX_PRECISION)).contains(&p) {
+                return Err(format!("{at}: `precision` must be from 1 to 38, not {p}"));
+            }
+            if sc > u32::from(obop_values::MAX_SCALE) || sc > p {
+                return Err(format!(
+                    "{at}: `scale` must be from 0 to 12 and not above the precision ({p}), not {sc}"
+                ));
+            }
+            if let Some(r) = &f.round
+                && obop_values::Round::parse(r).is_none()
+            {
+                return Err(format!(
+                    "{at}: `round` must be half_even, half_up or down, not {r:?}"
+                ));
+            }
+        } else if f.precision.is_some() || f.scale.is_some() || f.round.is_some() {
+            return Err(format!(
+                "{at}: `precision`, `scale` and `round` are only valid for kind \"decimal\""
+            ));
         }
         if f.kind == "select" {
             if f.options.is_empty() {
@@ -1355,6 +1403,12 @@ impl Manifest {
             "number" => FieldKind::Number,
             "money" => FieldKind::Money,
             "date" => FieldKind::Date,
+            "datetime" => FieldKind::Datetime,
+            "decimal" => FieldKind::Decimal {
+                precision: f.precision.unwrap_or(0) as u8,
+                scale: f.scale.unwrap_or(0) as u8,
+                round: f.round.as_deref().and_then(obop_values::Round::parse),
+            },
             "bool" => FieldKind::Bool,
             "select" => FieldKind::Select(
                 f.options

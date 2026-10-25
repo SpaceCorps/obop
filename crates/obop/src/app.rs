@@ -37,6 +37,15 @@ impl App {
 
     pub fn with_store(store: Store) -> Self {
         let d = Arc::new(Dispatcher::new());
+        // The platform time zone (D72): `OBOP_ZONE`, any IANA name, UTC by default. A name the
+        // pinned database does not know stops the start-up, not a report next month.
+        match obop_values::Zones::from_env() {
+            Ok(zones) => d.set_zones(zones),
+            Err(e) => {
+                eprintln!("error: {e}");
+                std::process::exit(2);
+            }
+        }
         // Several server processes may share one database (B1): the write lock, proposed plans,
         // sessions and rate limits go through the storage backend.
         match obop_keys::KeyRing::for_backend(&store.backend()) {

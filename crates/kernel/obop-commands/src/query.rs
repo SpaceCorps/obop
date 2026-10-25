@@ -3,8 +3,18 @@
 //!
 //! A query is parsed against the model's field kinds, so a bad field, operator or value is an
 //! error before any record is read, and then evaluated over the stored records. Comparisons are
-//! typed: numbers and money as integers, dates as calendar dates, selects by option order, so
-//! nothing is ever compared as the wrong kind of text. Evaluation happens before masking and
+//! typed: numbers and money as integers, decimals as exact numbers (never as text: `"9.5"` is
+//! below `"10.25"`), instants as points in time whatever offset they were written with, dates as
+//! calendar dates, selects by option order, so nothing is ever compared as the wrong kind of
+//! text.
+//!
+//! A condition on a `date` or `datetime` field may carry a `bucket` (`day`, `week`, `iso_week`,
+//! `month` or `year`) and, for a datetime, a `zone` (an IANA name, default the platform zone):
+//! the field is then cut into that period on the wall clock of the zone before it is compared,
+//! and `value` is the period's label (`2026-04`, `2026-W15`, `2026-04-01`). This is also the
+//! explicit "date in zone" conversion: `{field, op: "eq", bucket: "day", zone, value: "2026-04-01"}`
+//! asks for the instants that fall on that calendar day in that zone. A date never compares with
+//! an instant otherwise. Evaluation happens before masking and
 //! withholding, which is why the dispatcher refuses to filter or sort on a field the caller
 //! cannot read in clear (see `guards::query_guard`): otherwise the result would be an oracle for
 //! values the caller is not allowed to see (D10).
@@ -14,6 +24,8 @@ use crate::aggregate::Aggregate;
 use crate::collate::{self, TextOrder};
 use obop_registry::{FieldKind, ModelDef, is_valid_date};
 use obop_storage::Fields;
+use obop_values::datetime::{bucket_label, days_from_civil, parse_date, weekday};
+use obop_values::{Bucket, Decimal, Instant, Zone, Zones};
 use serde_json::Value as J;
 use std::cmp::Ordering;
 
@@ -33,7 +45,17 @@ const OPS: &str = "eq, ne, contains, in, gt, gte, lt, lte, is_null";
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Key {
     Int(i64),
+    /// An exact decimal; compared as a number whatever its scale (D72).
+    Dec(Decimal),
     Str(String),
+}
+
+/// A condition's `bucket`: the field is cut into periods before it is compared.
+#[derive(Debug, Clone)]
+struct Bucketed {
+    bucket: Bucket,
+    /// The zone of a datetime's wall clock; none for a date.
+    zone: Option<Zone>,
 }
 
 #[derive(Debug)]
@@ -55,6 +77,7 @@ struct Cond {
     field: String,
     kind: FieldKind,
     op: Op,
+    bucket: Option<Bucketed>,
 }
 
 #[derive(Debug)]
@@ -105,6 +128,8 @@ fn stored_key(kind: &FieldKind, v: &J) -> Option<Key> {
     match (kind, v) {
         (FieldKind::Number | FieldKind::Money, J::Number(n)) => n.as_i64().map(Key::Int),
         (FieldKind::Date, J::String(s)) => date_key(s).map(Key::Int),
+        (FieldKind::Decimal { .. }, J::String(s)) => Decimal::parse(s).ok().map(Key::Dec),
+        (FieldKind::Datetime, J::String(s)) => Instant::parse(s).ok().map(|i| Key::Int(i.micros())),
         (FieldKind::Bool, J::Bool(b)) => Some(Key::Int(i64::from(*b))),
         (FieldKind::Select(o), J::String(s)) => {
             o.iter().position(|x| x == s).map(|i| Key::Int(i as i64))
@@ -113,6 +138,43 @@ fn stored_key(kind: &FieldKind, v: &J) -> Option<Key> {
             Some(Key::Str(s.clone()))
         }
         _ => None,
+    }
+}
+
+/// The period label of a stored date or instant, for a condition with a `bucket`.
+fn bucket_key(kind: &FieldKind, v: &J, b: &Bucketed) -> Option<Key> {
+    match (kind, v) {
+        (FieldKind::Date, J::String(s)) => {
+            let (y, m, d) = parse_date(s)?;
+            Some(Key::Str(bucket_label(y, m, d, b.bucket)))
+        }
+        (FieldKind::Datetime, J::String(s)) => {
+            let at = Instant::parse(s).ok()?;
+            Some(Key::Str(b.zone.as_ref()?.bucket(at, b.bucket)))
+        }
+        _ => None,
+    }
+}
+
+/// Whether `s` is a label of `bucket`: the day, the Monday, the month, the ISO week or the year
+/// it names must exist.
+fn label_ok(bucket: Bucket, s: &str) -> bool {
+    match bucket {
+        Bucket::Day => parse_date(s).is_some(),
+        Bucket::Week => {
+            parse_date(s).is_some_and(|(y, m, d)| weekday(days_from_civil(y, m, d)) == 0)
+        }
+        Bucket::Month => s.len() == 7 && parse_date(&format!("{s}-01")).is_some(),
+        Bucket::Year => s.len() == 4 && parse_date(&format!("{s}-01-01")).is_some(),
+        Bucket::IsoWeek => {
+            let b = s.as_bytes();
+            b.len() == 8
+                && b[4] == b'-'
+                && b[5] == b'W'
+                && parse_date(&format!("{}-01-01", &s[..4])).is_some()
+                && b[6..].iter().all(u8::is_ascii_digit)
+                && s[6..].parse::<u32>().is_ok_and(|w| (1..=53).contains(&w))
+        }
     }
 }
 
@@ -127,6 +189,13 @@ fn operand(model: &str, field: &str, kind: &FieldKind, v: &Value) -> Result<Key,
     match (kind, v) {
         (FieldKind::Number | FieldKind::Money, Value::Int(i)) => Ok(Key::Int(*i)),
         (FieldKind::Date, Value::Text(t)) => date_key(t).map(Key::Int).ok_or_else(bad),
+        // Any exact decimal may be compared with a decimal field, whatever its scale.
+        (FieldKind::Decimal { .. }, Value::Text(t)) => Decimal::parse(t)
+            .map(Key::Dec)
+            .map_err(|e| format!("{}; {e}", bad())),
+        (FieldKind::Datetime, Value::Text(t)) => Instant::parse(t)
+            .map(|i| Key::Int(i.micros()))
+            .map_err(|e| format!("{}; {e}", bad())),
         (FieldKind::Bool, Value::Bool(b)) => Ok(Key::Int(i64::from(*b))),
         (FieldKind::Select(o), Value::Text(t)) => o
             .iter()
@@ -164,10 +233,23 @@ impl Query {
 
     /// Parse the input of `list` or `search`. `usable` says whether a field may be used in a
     /// filter or order; one that may not gets the same error as a field that does not exist.
+    /// Buckets without a zone of their own use the UTC platform zone; the dispatcher calls
+    /// `parse_in` with the instance's.
     pub fn parse(
         def: &ModelDef,
         input: &Value,
         usable: &dyn Fn(&str) -> bool,
+    ) -> Result<Self, String> {
+        Self::parse_in(def, input, usable, &Zones::default())
+    }
+
+    /// `parse` with the time zone settings of the instance (the platform zone and the database
+    /// that names the zones a `bucket` may use).
+    pub fn parse_in(
+        def: &ModelDef,
+        input: &Value,
+        usable: &dyn Fn(&str) -> bool,
+        zones: &Zones,
     ) -> Result<Self, String> {
         let Value::Map(m) = input else {
             return Err("expected an object".into());
@@ -205,7 +287,7 @@ impl Query {
                     return Err(format!("at most {MAX_FILTERS} filter conditions"));
                 }
                 for item in items {
-                    q.conds.push(parse_cond(def, item, &field)?);
+                    q.conds.push(parse_cond(def, item, &field, zones)?);
                 }
             }
             Some(_) => return Err("filter must be an array of {field, op, value}".into()),
@@ -269,7 +351,7 @@ impl Query {
                             .into(),
                     );
                 }
-                q.aggregate = Some(Aggregate::parse(def, a, &field)?);
+                q.aggregate = Some(Aggregate::parse(def, a, &field, zones)?);
             }
         }
         Ok(q)
@@ -382,6 +464,8 @@ impl Query {
         self.conds.iter().all(|c| {
             let key = if c.field == "id" {
                 Some(Key::Str(id.to_string()))
+            } else if let Some(b) = &c.bucket {
+                f.get(&c.field).and_then(|v| bucket_key(&c.kind, v, b))
             } else {
                 f.get(&c.field).and_then(|v| stored_key(&c.kind, v))
             };
@@ -425,14 +509,15 @@ fn parse_cond(
     def: &ModelDef,
     item: &Value,
     field: &dyn Fn(&str) -> Result<FieldKind, String>,
+    zones: &Zones,
 ) -> Result<Cond, String> {
     let Value::Map(c) = item else {
         return Err("each filter must be an object {field, op, value}".into());
     };
     for k in c.keys() {
-        if !["field", "op", "value"].contains(&k.as_str()) {
+        if !["field", "op", "value", "bucket", "zone"].contains(&k.as_str()) {
             return Err(format!(
-                "unknown filter key {k:?} (use field, op and value)"
+                "unknown filter key {k:?} (use field, op, value, and for a date or datetime bucket and zone)"
             ));
         }
     }
@@ -444,6 +529,7 @@ fn parse_cond(
         return Err(format!("each filter needs an op ({OPS})"));
     };
     let value = c.get("value").unwrap_or(&Value::Null);
+    let bucket = bucketed(def, name, &kind, c, zones)?;
     let one = |v: &Value| -> Result<Key, String> {
         if *v == Value::Null {
             return Err(format!(
@@ -451,7 +537,26 @@ fn parse_cond(
                 def.name
             ));
         }
-        operand(def.name, name, &kind, v)
+        match &bucket {
+            // A bucketed condition compares period labels, which sort in time order as text.
+            Some(b) => match v {
+                Value::Text(t) if label_ok(b.bucket, t) => Ok(Key::Str(t.clone())),
+                _ => Err(format!(
+                    "filter on {}.{name}: with bucket {} the value must be a {} label such as {}",
+                    def.name,
+                    b.bucket.name(),
+                    b.bucket.name(),
+                    match b.bucket {
+                        Bucket::Day => "2026-04-01",
+                        Bucket::Week => "2026-03-30 (the Monday)",
+                        Bucket::IsoWeek => "2026-W14",
+                        Bucket::Month => "2026-04",
+                        Bucket::Year => "2026",
+                    }
+                )),
+            },
+            None => operand(def.name, name, &kind, v),
+        }
     };
     let ranged = !matches!(kind, FieldKind::Ref(_) | FieldKind::Bool);
     let op = match op.as_str() {
@@ -470,7 +575,7 @@ fn parse_cond(
             Op::In(vs.iter().map(&one).collect::<Result<_, _>>()?)
         }
         "contains" => {
-            if !matches!(kind, FieldKind::Text | FieldKind::LongText) {
+            if !matches!(kind, FieldKind::Text | FieldKind::LongText) || bucket.is_some() {
                 return Err(format!(
                     "filter on {}.{name}: contains only works on text fields",
                     def.name
@@ -518,5 +623,52 @@ fn parse_cond(
         field: name.clone(),
         kind,
         op,
+        bucket,
     })
+}
+
+/// The `bucket` and `zone` of a condition, checked against the kind of the field.
+fn bucketed(
+    def: &ModelDef,
+    name: &str,
+    kind: &FieldKind,
+    c: &std::collections::BTreeMap<String, Value>,
+    zones: &Zones,
+) -> Result<Option<Bucketed>, String> {
+    let at = || format!("filter on {}.{name}", def.name);
+    let given = |k: &str| c.get(k).filter(|v| **v != Value::Null);
+    let Some(b) = given("bucket") else {
+        if given("zone").is_some() {
+            return Err(format!("{}: zone needs a bucket", at()));
+        }
+        return Ok(None);
+    };
+    if !matches!(kind, FieldKind::Date | FieldKind::Datetime) {
+        return Err(format!(
+            "{}: bucket only applies to date and datetime fields",
+            at()
+        ));
+    }
+    let bucket = match b {
+        Value::Text(t) => Bucket::parse(t),
+        _ => None,
+    }
+    .ok_or_else(|| format!("{}: bucket must be {}", at(), Bucket::NAMES))?;
+    let zone = match (kind, given("zone")) {
+        (FieldKind::Datetime, None) => Some(zones.zone(None).map_err(|e| e.to_string())?),
+        (FieldKind::Datetime, Some(Value::Text(z))) => {
+            Some(zones.zone(Some(z)).map_err(|e| format!("{}: {e}", at()))?)
+        }
+        (FieldKind::Datetime, Some(_)) => {
+            return Err(format!("{}: zone must be an IANA time zone name", at()));
+        }
+        (_, Some(_)) => {
+            return Err(format!(
+                "{}: a date has no time zone; zone only applies to datetime fields",
+                at()
+            ));
+        }
+        (_, None) => None,
+    };
+    Ok(Some(Bucketed { bucket, zone }))
 }

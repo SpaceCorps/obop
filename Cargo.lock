@@ -1241,6 +1241,7 @@ dependencies = [
  "obop-storage",
  "obop-types",
  "obop-update",
+ "obop-values",
  "postgres",
  "product",
  "sales",
@@ -1278,6 +1279,7 @@ dependencies = [
  "obop-registry",
  "obop-storage",
  "obop-types",
+ "obop-values",
  "serde_json",
  "sha2",
  "uuid",
@@ -1449,6 +1451,7 @@ dependencies = [
  "obop-registry",
  "obop-storage",
  "obop-types",
+ "obop-values",
  "serde",
  "serde_json",
  "toml",
@@ -1479,6 +1482,7 @@ name = "obop-registry"
 version = "0.2.0"
 dependencies = [
  "obop-types",
+ "obop-values",
  "serde",
  "toml",
 ]

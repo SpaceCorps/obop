@@ -359,6 +359,13 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if let Some(n) = f.max_bytes {
                                 o["max_bytes"] = json!(n);
                             }
+                            if f.kind == "decimal" {
+                                o["precision"] = json!(f.precision);
+                                o["scale"] = json!(f.scale);
+                                if let Some(r) = f.round {
+                                    o["round"] = json!(r);
+                                }
+                            }
                             translations(&mut o, &f.labels, &f.descriptions);
                             if !f.option_labels.is_empty() {
                                 o["option_labels"] = json!(f.option_labels);
@@ -396,7 +403,14 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
             mo
         })
         .collect();
-    json!({"core_version": obop_types::CORE_VERSION, "modules": modules})
+    let zones = d.zones();
+    json!({
+        "core_version": obop_types::CORE_VERSION,
+        // The platform zone and the pinned IANA database behind every date bucket and `today`
+        // (D72). A new database arrives with a release.
+        "time": {"zone": zones.platform().name(), "tzdb_version": zones.db().version()},
+        "modules": modules
+    })
 }
 
 /// `labels` and `descriptions` (language -> text, D52), only when there is something to say.
