@@ -43,7 +43,20 @@ pub use plan::{Plan, PlanStep};
 
 pub const META_MODEL: &str = "obop_meta";
 pub const META_ID: &str = "schema";
+/// The record that names this database (see [`Migrator::ensure_instance_id`]).
+pub const INSTANCE_ID: &str = "instance";
 const LOCK: &str = "obop.migrate";
+
+/// Models only the operator commands write: a database that holds nothing else is still new. The
+/// catalogue models are named in `obop-ops` (`catalog.rs`), which cannot be imported here; a test
+/// there keeps this list equal to them.
+pub const OPERATOR_MODELS: [&str; 5] = [
+    ledger::PLAN_MODEL,
+    "obop_backup",
+    "obop_restore_drill",
+    "obop_storage_attestation",
+    META_MODEL,
+];
 
 /// What a step may use.
 pub struct Ctx<'a> {
@@ -222,8 +235,22 @@ pub struct RunReport {
     pub dry_run: bool,
 }
 
+/// What is about to run, told to [`RunOptions::before`].
+#[derive(Debug, Clone)]
+pub struct Pending {
+    /// The schema version the database is at now.
+    pub stored: u32,
+    /// The steps that will run: `(version, name)`.
+    pub steps: Vec<(u32, &'static str)>,
+}
+
+/// The work a run does once it knows steps will run and nothing else stops it, under the lock and
+/// before the first write: a server that migrates itself takes its backup here. It returns the id
+/// of the backup, if one was taken; an error stops the run before anything is written.
+pub type Before = Arc<dyn Fn(&Pending) -> Result<Option<String>, String> + Send + Sync>;
+
 /// What a run records and how it behaves beyond the steps themselves.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct RunOptions {
     pub dry_run: bool,
     /// The verified backup taken before this run: written to every ledger row of the run.
@@ -232,6 +259,20 @@ pub struct RunOptions {
     pub restore_point: Option<String>,
     /// Allow a long-lock statement on a table above `ddl::WINDOW_ROWS` records (a named window).
     pub window: bool,
+    /// Called under the lock once steps are certain to run (see [`Before`]).
+    pub before: Option<Before>,
+}
+
+impl std::fmt::Debug for RunOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunOptions")
+            .field("dry_run", &self.dry_run)
+            .field("backup_id", &self.backup_id)
+            .field("restore_point", &self.restore_point)
+            .field("window", &self.window)
+            .field("before", &self.before.as_ref().map(|_| "<fn>"))
+            .finish()
+    }
 }
 
 /// A step whose definition is no longer the one that ran.
@@ -334,9 +375,20 @@ impl Migrator {
             .map(|v| v as u32))
     }
 
+    /// Whether the database holds nothing but what operator commands write (or nothing at all):
+    /// a database like that is new, whatever `obop migrate plan` or `obop storage attest` stored
+    /// in it before the first start.
+    pub fn is_blank(&self) -> Result<bool, String> {
+        let mut rest = self.backend.total()?;
+        for m in OPERATOR_MODELS {
+            rest = rest.saturating_sub(self.backend.count(m)?);
+        }
+        Ok(rest == 0)
+    }
+
     pub fn status(&self) -> Result<Status, String> {
         let stored = self.stored()?;
-        let empty = stored.is_none() && self.backend.total()? == 0;
+        let empty = stored.is_none() && self.is_blank()?;
         let current = stored.unwrap_or(0);
         let latest = self.latest();
         Ok(Status {
@@ -583,17 +635,70 @@ impl Migrator {
     /// A database with no records is at the latest version by construction: stamp it so the
     /// first commands that fill it do not look like an old database. Returns whether it stamped.
     pub fn stamp_if_fresh(&self) -> Result<bool, String> {
-        if self.stored()?.is_some() || self.backend.total()? != 0 {
+        if self.stored()?.is_some() || !self.is_blank()? {
             return Ok(false);
         }
         let _g = self.backend.lock(LOCK)?;
-        if self.stored()?.is_some() || self.backend.total()? != 0 {
+        if self.stored()?.is_some() || !self.is_blank()? {
             return Ok(false);
         }
         let mut ops = self.adopt_ops(self.latest(), "created at this version; no step was run")?;
         ops.push(self.stamp(self.latest(), "created at this version"));
+        if let Some(op) = self.instance_op()? {
+            ops.push(op);
+        }
         self.backend.apply(&ops)?;
         Ok(true)
+    }
+
+    // ---- the name of this database ---------------------------------------------------------
+
+    /// The random id of this database, if it has one. Backups and rehearsal receipts carry it, so
+    /// a gate can tell a backup of this database from a backup of another.
+    pub fn instance_id(&self) -> Result<Option<String>, String> {
+        Ok(self
+            .backend
+            .get(META_MODEL, INSTANCE_ID)?
+            .and_then(|f| f.get("id").and_then(J::as_str).map(String::from)))
+    }
+
+    /// The write that gives this database its id, `None` when it has one.
+    fn instance_op(&self) -> Result<Option<Op>, String> {
+        if self.instance_id()?.is_some() {
+            return Ok(None);
+        }
+        let mut f = Fields::new();
+        f.insert(
+            "id".into(),
+            J::from(obop_keys::hex(&obop_keys::random::<16>())),
+        );
+        f.insert("created_at".into(), J::from(now_secs()));
+        Ok(Some(Op::Put {
+            model: META_MODEL.into(),
+            id: INSTANCE_ID.into(),
+            fields: f,
+        }))
+    }
+
+    /// The id of this database, written once if it has none. Takes the migration lock; a database
+    /// is named by whichever process gets there first and never renamed.
+    pub fn ensure_instance_id(&self) -> Result<String, String> {
+        if let Some(id) = self.instance_id()? {
+            return Ok(id);
+        }
+        let _g = self.backend.lock(LOCK)?;
+        if let Some(op) = self.instance_op()? {
+            self.backend.apply(&[op])?;
+        }
+        self.instance_id()?
+            .ok_or_else(|| "the database id was not stored".into())
+    }
+
+    /// Record the steps up to the stored version that have no ledger row (a database from before
+    /// the ledger, or restored from a backup of one), under the lock. Returns how many rows.
+    pub fn adopt(&self) -> Result<usize, String> {
+        let _g = self.backend.lock(LOCK)?;
+        self.adopt_missing()
     }
 
     fn stamp(&self, version: u32, what: &str) -> Op {
@@ -685,6 +790,33 @@ impl Migrator {
                     s.version, s.name, self.window_rows
                 ));
             }
+        }
+        // Now it is certain that steps will run and nothing else stops them: the backup of a
+        // server that migrates itself is taken here, under the lock, once, and only if needed.
+        let mut hooked: Option<RunOptions> = None;
+        if !dry_run
+            && let Some(before) = &opts.before
+        {
+            let pending: Vec<(u32, &'static str)> = self
+                .steps
+                .iter()
+                .filter(|s| s.version > current)
+                .map(|s| (s.version, s.name))
+                .collect();
+            if !pending.is_empty() {
+                let id = before(&Pending {
+                    stored: current,
+                    steps: pending,
+                })?;
+                let mut o = opts.clone();
+                o.backup_id = id.or_else(|| opts.backup_id.clone());
+                hooked = Some(o);
+            }
+        }
+        let opts = hooked.as_ref().unwrap_or(opts);
+        if !dry_run && let Some(op) = self.instance_op()? {
+            // The database gets its name before anything else is written.
+            self.backend.apply(&[op])?;
         }
         let ctx = Ctx {
             backend: &self.backend,
@@ -785,18 +917,34 @@ impl Migrator {
             return Err(d.message());
         }
         if st.pending.is_empty() {
-            // A database from before the ledger: record its history once.
-            if st.stored.is_some() && self.ledger()?.iter().all(|r| r.module != "core") {
-                let _g = self.backend.lock(LOCK)?;
-                self.adopt_missing()?;
+            // A database from before the ledger, or restored from a backup of one: record the
+            // steps that have no row, once. A rollback row in the ledger does not stand in for
+            // them. A database without a name gets one.
+            if let Some(stored) = st.stored {
+                let current = stored.min(self.latest());
+                let rows = self.ledger()?;
+                let missing = self
+                    .steps
+                    .iter()
+                    .filter(|s| s.version <= current)
+                    .any(|s| !rows.iter().any(|r| r.id == ledger::core_id(s.version)));
+                if missing {
+                    self.adopt()?;
+                }
+                self.ensure_instance_id()?;
             }
             return Ok(Vec::new());
         }
         if !auto {
             return Err(format!(
                 "the database needs {} migration step(s) before this version can serve it \
-                 (it is at schema version {}, this build writes {}). Take a backup, then run:\n  \
-                 obop migrate run --db {db_hint}\nor start with --auto-migrate. See docs/DEPLOY.md.",
+                 (it is at schema version {}, this build writes {}). Read the plan with\n  \
+                 obop migrate plan --db {db_hint}\n\
+                 and run the steps with `obop migrate run --db {db_hint}`; on PostgreSQL that is the \
+                 gated procedure of docs/DEPLOY.md (a verified backup, `obop migrate rehearse`, then \
+                 `obop migrate run --backup FILE --rehearsal RECEIPT --disk-ok`). Or start once with \
+                 --auto-migrate (OBOP_AUTO_MIGRATE=1), which takes the backup first when \
+                 OBOP_BACKUP_DIR is set.",
                 st.pending.len(),
                 st.stored.unwrap_or(0),
                 st.latest
@@ -820,6 +968,25 @@ impl Migrator {
         schema_after: Option<u32>,
         discarded: &[Entry],
     ) -> Result<(), String> {
+        let (id, fields) =
+            self.rollback_row(reason, backup_id, schema_before, schema_after, discarded);
+        self.backend.apply(&[Op::Insert {
+            model: ledger::MODEL.into(),
+            id,
+            fields,
+        }])
+    }
+
+    /// The ledger row of a rollback, as `(id, fields)`, for a caller that writes it in the same
+    /// transaction as the restore itself.
+    pub fn rollback_row(
+        &self,
+        reason: &str,
+        backup_id: &str,
+        schema_before: Option<u32>,
+        schema_after: Option<u32>,
+        discarded: &[Entry],
+    ) -> (String, Fields) {
         let id = format!("core/rollback-{}", ledger::now_ms());
         let mut f = Fields::new();
         f.insert("module".into(), J::from("core"));
@@ -860,15 +1027,13 @@ impl Migrator {
                     .collect(),
             ),
         );
-        self.backend.apply(&[Op::Insert {
-            model: ledger::MODEL.into(),
-            id,
-            fields: f,
-        }])
+        (id, f)
     }
 }
 
 #[cfg(test)]
 mod ledger_tests;
+#[cfg(test)]
+mod review_tests;
 #[cfg(test)]
 mod tests;

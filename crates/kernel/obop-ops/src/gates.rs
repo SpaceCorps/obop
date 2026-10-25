@@ -632,6 +632,7 @@ impl Gate {
             backup_id: ran.backup.as_ref().map(|b| b.id.clone()),
             restore_point: ran.restore_point.clone(),
             window: o.window,
+            ..RunOptions::default()
         });
         match report {
             Ok(r) => {
