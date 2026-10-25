@@ -1588,6 +1588,63 @@ section.cta p {
   }
 }
 
+/* pricing: the price is the strongest text in its card, Team is the one tinted card */
+.home .plans {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 72rem) {
+  .home .plans {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.home .plans article {
+  padding: var(--space-5);
+}
+.home .plans .price {
+  color: var(--text);
+  font-size: var(--text-3xl);
+  white-space: nowrap;
+}
+.home .plans .hl {
+  background: linear-gradient(180deg, var(--accent-soft), var(--surface) 70%);
+}
+.home .plans .hl .price {
+  color: var(--accent-ink);
+}
+.home .plans + .fine {
+  margin: 0;
+  text-align: start;
+}
+@media (max-width: 40rem) {
+  .home .plans {
+    grid-template-columns: 1fr;
+  }
+  .home .plans article {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    column-gap: var(--space-4);
+    row-gap: var(--space-1);
+  }
+  .home .plans article > p:not(.price) {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .home .plans h3,
+  .home .plans .price {
+    margin: 0;
+  }
+  .home .plans h3 {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .home .plans .price {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+}
+
 /* two columns: copy left, visual right; the right column starts on one shared axis */
 .home .split {
   grid-template-columns: var(--split-cols);

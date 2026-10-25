@@ -262,6 +262,9 @@ const openCards = computed(() =>
             <h2>{{ m.home.pricingTitle }}</h2>
             <p class="sub">{{ m.home.pricingSub }}</p>
           </div>
+          <div class="sec-act">
+            <a class="btn" :href="href('/pricing/')">{{ m.home.pricingCta }}</a>
+          </div>
         </div>
         <div class="plans">
           <article v-for="p in m.pricing.plans" :key="p.name" :class="{ hl: p.highlight }">
@@ -272,10 +275,7 @@ const openCards = computed(() =>
             <p>{{ p.blurb }}</p>
           </article>
         </div>
-        <p class="fine center">{{ m.home.pricingFine }}</p>
-        <p class="center">
-          <a class="btn" :href="href('/pricing/')">{{ m.home.pricingCta }}</a>
-        </p>
+        <p class="fine">{{ m.home.pricingFine }}</p>
       </div>
     </section>
 
