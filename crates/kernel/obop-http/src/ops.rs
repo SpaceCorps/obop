@@ -84,6 +84,18 @@ enum Ready {
 struct Gauges {
     sessions: Option<u64>,
     queue: Option<(u64, u64, u64)>,
+    backups: Option<BackupGauges>,
+}
+
+/// What the catalogue says about backups and drills (D73), read with the other gauges.
+#[derive(Clone, Copy, Default)]
+struct BackupGauges {
+    age: Option<u64>,
+    bytes: Option<u64>,
+    duration: Option<u64>,
+    copy_age: Option<u64>,
+    drill_age: Option<u64>,
+    last_run_failed: bool,
 }
 
 pub(crate) struct Ops {
@@ -303,6 +315,16 @@ fn gauges(s: &HttpState) -> Gauges {
             let n = |k: &str| st[k].as_u64().unwrap_or(0);
             (n("waiting"), n("leased"), n("dead"))
         }),
+        backups: obop_ops::schedule::stats(&*s.shared.backend, now)
+            .ok()
+            .map(|st| BackupGauges {
+                age: st.backup_age_seconds,
+                bytes: st.backup_bytes,
+                duration: st.backup_duration_seconds,
+                copy_age: st.copy_age_seconds,
+                drill_age: st.drill_age_seconds,
+                last_run_failed: st.last_failure.is_some(),
+            }),
     };
     *s.ops.gauges.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), v));
     v
@@ -406,6 +428,45 @@ fn render(s: &HttpState) -> String {
                 "obop_job_queue_depth{{queue=\"connectors\",state=\"{state}\"}} {n}"
             );
         }
+    }
+    if let Some(b) = g.backups {
+        let mut gauge = |name: &str, help: &str, v: Option<u64>| {
+            if let Some(v) = v {
+                let _ = writeln!(t, "# HELP {name} {help}");
+                let _ = writeln!(t, "# TYPE {name} gauge");
+                let _ = writeln!(t, "{name} {v}");
+            }
+        };
+        gauge(
+            "obop_backup_age_seconds",
+            "Seconds since the newest verified backup (absent when there is none: alert on absent() too).",
+            b.age,
+        );
+        gauge(
+            "obop_backup_size_bytes",
+            "Size of the newest verified backup file.",
+            b.bytes,
+        );
+        gauge(
+            "obop_backup_duration_seconds",
+            "How long the newest verified backup took to write and verify.",
+            b.duration,
+        );
+        gauge(
+            "obop_backup_copy_age_seconds",
+            "Seconds since the newest backup that has a verified copy off this host.",
+            b.copy_age,
+        );
+        gauge(
+            "obop_restore_drill_age_seconds",
+            "Seconds since the newest restore drill that passed (alert above 35 days).",
+            b.drill_age,
+        );
+        gauge(
+            "obop_backup_last_run_failed",
+            "1 when the last scheduled backup run reported a failure (a backup or its copy).",
+            Some(u64::from(b.last_run_failed)),
+        );
     }
     t
 }

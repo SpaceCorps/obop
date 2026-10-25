@@ -762,6 +762,16 @@ impl Migrator {
     /// What a server does at start: refuse a newer database or a changed step, run pending steps
     /// when `auto`, otherwise refuse with the exact command to run. Returns lines to print.
     pub fn check_for_serve(&self, auto: bool, db_hint: &str) -> Result<Vec<String>, String> {
+        self.check_for_serve_with(auto, db_hint, &RunOptions::default())
+    }
+
+    /// As [`Migrator::check_for_serve`], with what a run records (a backup taken first).
+    pub fn check_for_serve_with(
+        &self,
+        auto: bool,
+        db_hint: &str,
+        opts: &RunOptions,
+    ) -> Result<Vec<String>, String> {
         let st = self.status()?;
         if st.ahead {
             return Err(format!(
@@ -792,7 +802,7 @@ impl Migrator {
                 st.latest
             ));
         }
-        let r = self.run(false)?;
+        let r = self.run_with(opts)?;
         Ok(r.applied
             .iter()
             .map(|(v, n, d)| format!("migrated to {v}: {n} ({d})"))

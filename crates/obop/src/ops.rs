@@ -75,10 +75,44 @@ pub(crate) fn redact(url: &str) -> String {
 /// version, refuse one from the future, and run (or demand) pending migration steps.
 pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
     let ring = KeyRing::for_backend_read_only(backend).map_err(|e| fail(&e))?;
-    let m = Migrator::new(backend.clone(), ring);
+    let m = Migrator::new(backend.clone(), ring).by("server");
     m.stamp_if_fresh().map_err(|e| fail(&e))?;
+    let auto = auto_migrate(backend.kind());
+    let mut opts = obop_migrate::RunOptions::default();
+    let st = m.status().map_err(|e| fail(&e))?;
+    if auto && !st.pending.is_empty() && !st.ahead {
+        // A server that migrates itself takes the verified backup first when it has a place to
+        // put one; a failed backup stops the migration (OBR-DAT-053).
+        let dir = std::env::var("OBOP_BACKUP_DIR")
+            .ok()
+            .filter(|d| !d.trim().is_empty());
+        let keys = crate::backup_cli::backup_keys().map_err(|e| fail(&e))?;
+        let blobs = blob_catalog(backend, url).ok();
+        let schema = u64::from(st.stored.unwrap_or(0));
+        match obop_ops::gates::auto_backup(
+            backend,
+            blobs.as_ref().map(|b| b as &dyn obop_storage::blob::Blobs),
+            schema,
+            dir.as_deref().map(Path::new),
+            &keys,
+            &obop_ops::schedule::SystemClock,
+        ) {
+            Ok(Some(id)) => {
+                eprintln!("backup before migrating: {id} (verified)");
+                opts.backup_id = Some(id);
+            }
+            Ok(None) => eprintln!(
+                "warning: migrating without a backup: set OBOP_BACKUP_DIR so a verified backup is taken first (docs/DEPLOY.md)"
+            ),
+            Err(e) => {
+                return Err(fail(&format!(
+                    "error: the backup before the migration failed, so nothing was migrated: {e}"
+                )));
+            }
+        }
+    }
     let lines = m
-        .check_for_serve(auto_migrate(backend.kind()), &redact(url))
+        .check_for_serve_with(auto, &redact(url), &opts)
         .map_err(|e| fail(&format!("error: {e}")))?;
     for l in lines {
         eprintln!("{l}");
@@ -144,14 +178,19 @@ pub fn dispatch(args: &[String]) -> Option<ExitCode> {
         let mut rest: Vec<String> = args[2..].to_vec();
         return Some(upgrade_instances(&mut rest).map_or_else(|c| c, |()| ExitCode::SUCCESS));
     }
-    if !matches!(first, "migrate" | "backup" | "restore" | "secrets") {
+    if !matches!(
+        first,
+        "migrate" | "backup" | "restore" | "secrets" | "drill" | "storage"
+    ) {
         return None;
     }
     let mut rest: Vec<String> = args[1..].to_vec();
     let r = match first {
-        "migrate" => migrate(&mut rest),
+        "migrate" => crate::migrate_cli::migrate(&mut rest),
         "backup" => crate::backup_cli::backup_cmd(&mut rest),
         "restore" => crate::backup_cli::restore_cmd(&mut rest),
+        "drill" => crate::storage_cli::drill_cmd(&mut rest),
+        "storage" => crate::storage_cli::storage_cmd(&mut rest),
         _ => secrets_cmd(&mut rest),
     };
     Some(r.map_or_else(|c| c, |()| ExitCode::SUCCESS))
@@ -226,106 +265,31 @@ fn upgrade_instances(args: &mut Vec<String>) -> Exit {
     Ok(())
 }
 
-fn migrate(args: &mut Vec<String>) -> Exit {
-    let url = db_url(take(args, "--db").as_deref());
-    let dry = has(args, "--dry-run");
-    let verb = args.first().map(String::as_str);
-    if args.len() > 1
-        || !matches!(verb, Some("status" | "verify" | "plan" | "run"))
-        || (dry && matches!(verb, Some("status" | "verify")))
-    {
-        return Err(usage());
+/// The key ring of an operator command that may run away from the database: the environment,
+/// else what the database holds (read only).
+pub(crate) fn ring_for(url: Option<&str>) -> KeyRing {
+    let env = KeyRing::from_env().unwrap_or_default();
+    if !env.is_empty() {
+        return env;
     }
-    let backend = open_existing(&url)?;
-    let ring = KeyRing::for_backend_read_only(&backend).map_err(|e| fail(&e))?;
-    let m = Migrator::new(backend, ring);
-    let st = m.status().map_err(|e| fail(&e))?;
-    match verb {
-        Some("status") => {
-            println!("{}", st.describe());
-            for (v, name) in &st.pending {
-                println!("  pending {v}: {name}");
-            }
-            let rows = m.ledger().map_err(|e| fail(&e))?;
-            if rows.is_empty() {
-                println!(
-                    "ledger: empty (a database from before the ledger is adopted by the next start or run)"
-                );
-            } else {
-                println!("ledger ({} rows):", rows.len());
-                for r in &rows {
-                    println!("  {}", ledger_line(r));
-                }
-            }
-            Ok(())
-        }
-        Some("verify") => {
-            let v = m.verify().map_err(|e| fail(&e))?;
-            for n in &v.notes {
-                println!("note: {n}");
-            }
-            for p in &v.problems {
-                println!("PROBLEM: {p}");
-            }
-            if v.ok() {
-                println!("ledger, code and schema version agree");
-                Ok(())
-            } else {
-                Err(ExitCode::FAILURE)
-            }
-        }
-        Some("plan") => {
-            let plan = m.plan().map_err(|e| fail(&format!("error: {e}")))?;
-            print!("{}", plan.describe());
-            if !plan.is_empty() {
-                m.store_plan(&plan)
-                    .map_err(|e| fail(&format!("error: {e}")))?;
-                println!("plan {} stored: a production run needs this plan", plan.id);
-            }
-            Ok(())
-        }
-        Some(_) => {
-            let r = m.run(dry).map_err(|e| fail(&format!("error: {e}")))?;
-            if r.applied.is_empty() {
-                println!("{}", st.describe());
-            }
-            for (v, name, what) in &r.applied {
-                println!(
-                    "{} {v}: {name} ({what})",
-                    if dry { "would run" } else { "ran" }
-                );
-            }
-            if !dry && !r.applied.is_empty() {
-                println!("done: {}", m.status().map_err(|e| fail(&e))?.describe());
-            }
-            Ok(())
-        }
-        None => Err(usage()),
-    }
+    url.and_then(|u| obop_storage::open(u).ok())
+        .and_then(|b| KeyRing::for_backend_read_only(&b).ok())
+        .unwrap_or_default()
 }
 
-/// One ledger row on one line.
-fn ledger_line(r: &obop_migrate::Entry) -> String {
-    format!(
-        "{} {} {} [{}, ddl {}] {} by {} {}ms sha256:{}{}{}",
-        obop_ops::backup::rfc3339(r.at),
-        r.id,
-        r.status.as_str(),
-        r.class.as_str(),
-        r.ddl.as_str(),
-        r.name,
-        r.by,
-        r.duration_ms,
-        &r.checksum[..r.checksum.len().min(12)],
-        r.backup_id
-            .as_deref()
-            .map_or(String::new(), |b| format!(" backup {b}")),
-        if r.note.is_empty() {
-            String::new()
-        } else {
-            format!(" ({})", r.note)
+/// The PostgreSQL server behind `url` as the operator tools ask about it; `None` for any other
+/// database, or when the server cannot be asked (a note says why).
+pub(crate) fn server_info(url: &str, kind: &str) -> Option<Arc<dyn obop_ops::pgadmin::ServerInfo>> {
+    if kind != "postgres" {
+        return None;
+    }
+    match obop_ops::pgadmin::Pg::connect(url) {
+        Ok(p) => Some(Arc::new(p)),
+        Err(e) => {
+            eprintln!("note: cannot ask the PostgreSQL server about itself: {e}");
+            None
         }
-    )
+    }
 }
 
 /// The store of uploaded pictures and files for the database at `url`: its records are in the

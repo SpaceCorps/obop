@@ -290,6 +290,9 @@ pub struct Manifest {
     pub data_sha256: String,
     pub data_bytes: u64,
     pub content_sha256: String,
+    /// SHA-256 over the record lines alone (without the uploaded files); absent in backups made
+    /// before D73. A restore drill compares the restored database with it.
+    pub records_sha256: Option<String>,
     pub records: usize,
     pub models: BTreeMap<String, usize>,
     /// Uploaded blobs whose bytes are in the data file.
@@ -321,6 +324,9 @@ impl Manifest {
             "not_included": ["short-lived values: sessions, pending approvals, rate-limit counters"],
             "secrets": "sealed values are stored exactly as they are in the database; OBOP_SECRET_KEY is not in this backup (an instance without it keeps a generated key in the database, and that key is in the backup)",
         });
+        if let Some(r) = &self.records_sha256 {
+            j["records_sha256"] = J::from(r.as_str());
+        }
         if let (Some(id), Some(e)) = (&self.backup_id, &self.encryption) {
             j["backup_id"] = J::from(id.as_str());
             j["encryption"] = json!({
@@ -393,6 +399,7 @@ impl Manifest {
             data_sha256: s("data_sha256")?,
             data_bytes: n("data_bytes")?,
             content_sha256: s("content_sha256")?,
+            records_sha256: j["records_sha256"].as_str().map(String::from),
             records: n("records")? as usize,
             models: j["models"]
                 .as_object()
@@ -426,16 +433,21 @@ fn manifest_path_for(data: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
+/// The file name of a backup taken at `t` (Unix seconds).
+pub fn default_name(t: u64, sealed: bool) -> String {
+    let stamp = rfc3339(t).replace(['-', ':'], "");
+    format!(
+        "obop-backup-{stamp}.{}",
+        if sealed { "obbk" } else { "jsonl.gz" }
+    )
+}
+
 /// Where the backup goes: a path ending in `.gz` or `.obbk` is the data file; anything else is a
 /// directory (created if needed) that gets a timestamped file name.
-fn resolve_out(out: &Path, sealed: bool) -> PathBuf {
+fn resolve_out(out: &Path, sealed: bool, at: u64) -> PathBuf {
     let name = out.to_string_lossy();
     if out.is_dir() || !(name.ends_with(".gz") || name.ends_with(".obbk")) {
-        let stamp = rfc3339(now_secs()).replace(['-', ':'], "");
-        out.join(format!(
-            "obop-backup-{stamp}.{}",
-            if sealed { "obbk" } else { "jsonl.gz" }
-        ))
+        out.join(default_name(at, sealed))
     } else {
         out.to_path_buf()
     }
@@ -472,9 +484,31 @@ pub fn create_sealed(
     keys: &Keys,
     progress: &mut dyn FnMut(usize),
 ) -> Result<Created, String> {
+    create_at(
+        backend,
+        blobs,
+        schema_version,
+        out,
+        keys,
+        now_secs(),
+        progress,
+    )
+}
+
+/// As [`create_sealed`], with the time the manifest records given (Unix seconds): the scheduler's
+/// clock, which a test moves by hand.
+pub fn create_at(
+    backend: &Arc<dyn Backend>,
+    blobs: Option<&dyn Blobs>,
+    schema_version: u64,
+    out: &Path,
+    keys: &Keys,
+    at: u64,
+    progress: &mut dyn FnMut(usize),
+) -> Result<Created, String> {
     let sealed = keys.can_seal();
     let format = if sealed { FORMAT_SEALED } else { FORMAT };
-    let data_path = resolve_out(out, sealed);
+    let data_path = resolve_out(out, sealed, at);
     if let Some(dir) = data_path.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
@@ -496,7 +530,7 @@ pub fn create_sealed(
         hash: Sha256::new(),
         bytes: 0,
     };
-    let created_at = rfc3339(now_secs());
+    let created_at = rfc3339(at);
     let io = |e: std::io::Error| format!("write failed: {e}");
     // What a sealed backup needs before the first byte: its id, its data key, and the header.
     let mut seal_info: Option<(String, String)> = None;
@@ -554,6 +588,7 @@ pub fn create_sealed(
         let _ = std::fs::remove_file(&part);
         return Err(e);
     }
+    let records_sha256 = hexs(&content.clone().finalize());
     let mut blob_count = 0usize;
     if let Some(blobs) = blobs {
         let written = (|| -> Result<(), String> {
@@ -606,6 +641,7 @@ pub fn create_sealed(
         data_sha256,
         data_bytes,
         content_sha256,
+        records_sha256: Some(records_sha256),
         records,
         models,
         blobs: blob_count,

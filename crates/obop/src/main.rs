@@ -20,6 +20,7 @@ mod import_cmd;
 mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
+mod migrate_cli;
 #[cfg(test)]
 mod model_tests;
 #[cfg(test)]
@@ -33,6 +34,7 @@ mod passkey_tests;
 mod payments_tests;
 #[cfg(test)]
 mod public_site_tests;
+mod storage_cli;
 mod update_cmd;
 #[cfg(test)]
 mod update_tests;
@@ -118,6 +120,35 @@ const USAGE: &str = "usage: obop <command>
   restore --db URL --from FILE [--force] [--dry-run]
                                                 restore into an empty database (--force replaces what is there); a sealed backup
                                                 needs its key (exit 3, restore_key_required, and nothing is written, without it)
+  backup run [--db URL] [--out DIR] [--copy-to DIR]... [--copy-delete] [--keep-daily N] [--keep-weekly N] [--keep-monthly N]
+      [--reason scheduled|manual] [--plain]
+                                                the whole scheduled job once (cron, or a platform's job): back up, read the backup
+                                                back and authenticate it, record it, copy it to every --copy-to (OBOP_BACKUP_COPY_DIR)
+                                                reading each copy back, and apply retention to the scheduled ones (default 35 daily,
+                                                12 monthly). `serve` runs the same job on its own timer with OBOP_BACKUP_SCHEDULE=24h
+  backup list | prune [--dry-run] [--db URL]    what the instance recorded having taken; apply retention now
+  migrate rehearse --from BACKUP [--scratch URL] [--out RECEIPT]
+                                                restore the backup into a scratch database (never the production one), run the plan
+                                                there with the drill's checks, report time, longest transaction and records; --out
+                                                writes a receipt signed with the server key for `migrate run --rehearsal`
+  migrate run [--dry-run] [--gates strict|relaxed] [--backup FILE | --backup-dir DIR] [--rehearsal RECEIPT] [--window] [--disk-ok]
+                                                on PostgreSQL (strict) refuses unless a verified backup under 24 hours old exists
+                                                (one is taken into --backup-dir / OBOP_BACKUP_DIR), `migrate plan` stored this plan,
+                                                the disk has room, a rehearsal passed and the ledger is clean; records the backup
+                                                and a restore point in the ledger. On SQLite the same checks warn
+  migrate rollback --from BACKUP --reason TEXT [--yes] [--db URL]
+                                                replace the database with a verified backup and record why in the ledger and the
+                                                security log (forward-only migrations: this is the way back)
+  drill BACKUP [--scratch URL|temp] [--keep] [--migrate] [--record-in URL] [--plane NAME]
+                                                restore BACKUP into a scratch database and check the copy (counts, a digest of every
+                                                record, schema, ledger, accounts, sealed secrets, uploaded files, a read/write set);
+                                                prints the measured recovery point and time; exits non-zero unless every check passes
+  storage check [--db URL] [--plane NAME] [--strict]
+                                                WAL archiving, TLS and durability settings of the PostgreSQL host; age of the last
+                                                verified backup, its off-host copy and its drill; the storage-encryption attestation
+  storage attest --host H --provider P --mechanism M --custody C --readers R --evidence E [--plane NAME] [--by WHO]
+  storage show                                  record that the storage of a plane is encrypted at rest (AES-256 or stronger, keys
+                                                held outside the reach of database operators); lists attestations and drills
   update check | status [--db URL]              the running core version, the published releases, whether the installed modules fit each
                                                 (their core ranges), and the state of the last update request; never contacts anything
                                                 but the release feed (OBOP_UPDATE_FEED, default https://obop.dev/api/releases)
@@ -361,6 +392,11 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     let seed = o.demo || store.backend_kind() == "sqlite";
     let app = App::with_store(store);
     app.updater.set_backup(backup_cli::backup_fn(url.clone()));
+    // A module update that rewrites records is preceded by a verified backup (D73).
+    app.installer.set_gate(Arc::new(backup_cli::ModuleGate::new(
+        store_backend_for_gate(&app),
+        app.store.blobs(),
+    )));
     if seed {
         app.seed_demo();
     }
@@ -377,6 +413,10 @@ fn authenticator(app: &App, o: &Opts) -> Arc<dyn Authenticator> {
         app.register_accounts(auth.clone());
         auth
     }
+}
+
+fn store_backend_for_gate(app: &App) -> Arc<dyn obop_storage::Backend> {
+    app.store.backend()
 }
 
 /// The principal for CLI and MCP use: a real token, or a dev token with `--dev-auth`.
@@ -865,6 +905,9 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     );
     state.set_metrics_access(metrics);
     app.connectors.start();
+    // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.
+    backup_cli::start_scheduler(app.store.backend(), app.store.blobs())
+        .map_err(|e| fail(&format!("error: {e}")))?;
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
     let blobs = app.store.blobs();
     std::thread::spawn(move || {
