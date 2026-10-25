@@ -58,6 +58,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 | Variable | Meaning |
 |---|---|
 | `OBOP_DATABASE_URL` | Where the data lives (`--db`): `sqlite://obop.db` (the default for an instance; `sqlite://obop-platform.db` for the control plane), `postgres://user:pass@host/db?sslmode=require` (see "Database connections and TLS"), `memory:`. |
+| `OBOP_DB_POOL_SIZE` and the other `OBOP_DB_*` variables, `OBOP_LOCK_DATABASE_URL` | The PostgreSQL connection pool: size, acquire timeout, recycling, statement time limits, pooler mode, direct address for locks. See "Connection pool and poolers". |
 | `OBOP_SECRET_KEY` | The current server key, 32 random bytes as 64 hex digits (`openssl rand -hex 32`). Seals two-factor secrets and connector credentials, and the sessions and approval plans kept in the database. See "The server key". Without it a key is generated and stored in the database next to the data, which protects nothing against someone holding a copy of the database. |
 | `OBOP_SECRET_KEY_PREVIOUS` | Earlier keys, comma separated: what the current key replaced and that may still protect stored values. Only needed between a key change and the end of `obop secrets rotate`. |
 | `OBOP_AUTO_MIGRATE` | `1` lets a starting server run pending schema steps itself, `0` makes it refuse and print the command. Default: on for SQLite, **off for PostgreSQL**. `--auto-migrate` and `--no-auto-migrate` override it. |
@@ -116,6 +117,51 @@ postgres://obop:PASSWORD@db.example.com/obop?sslmode=verify-full&sslrootcert=sys
 - Put the same parameters in `OBOP_CELL_ADMIN_URL`, and in `--db` for `obop backup`, `restore`, `migrate` and `secrets`. The database URLs the control plane gives to **new** hosted instances do not carry `sslmode` yet; keep the cell on a private network until they do.
 - **Not tried** against a managed PostgreSQL service, a connection pooler in TLS mode, a certificate chain with intermediates, or a public CA: only against the stock `postgres:17` image with a self-signed certificate (`cargo test -p obop-storage tls` starts one when Docker is available).
 
+## Connection pool and poolers (D74)
+
+Every process that uses PostgreSQL keeps a few small pools of connections. A request takes a connection for the length of one database call and gives it back; nothing waits behind a long read, and a slow database call never blocks the others.
+
+- **The main pool** (`OBOP_DB_POOL_SIZE`, default 8, at most 64) serves reads and writes. Connections are opened when needed, kept while they are used, closed after 5 minutes idle and after 30 minutes of life, and a connection that sat idle for a second or more is checked (a no-op round trip) before it is handed out, so a connection the server or a firewall dropped is replaced, not used. A connection that failed, or whose holder panicked, is never put back.
+- **When it is full.** A request that finds no free connection waits at most `OBOP_DB_ACQUIRE_TIMEOUT_MS` (2 s), and only if fewer than `OBOP_DB_MAX_WAITERS` (256) requests already wait; then it gets **503 with `Retry-After: 1` and `{"error":"storage_busy"}`**. The queue is bounded in length and in time, so a flood costs a bounded number of parked threads, not memory that grows with the load. Other storage faults are answered the same way instead of as a 400 or a 401: `storage_unavailable` (the database cannot be reached or the connection broke; `Retry-After: 5`) and `storage_timeout` (a statement ran into its time limit; `Retry-After: 5`). `/healthz`, `/readyz` and `/metrics` decide for themselves (a full pool does not make `/readyz` fail: the database is there, it is only busy; see the `obop_db_pool_*` series).
+- **Long reads** (a scan that folds a whole model, `obop backup`'s export, a restore) take one connection each for as long as they run, inside one repeatable-read read-only transaction, so they see one snapshot and block no writer. At most `OBOP_DB_LONG_READS` of them (default half the pool) run at once, so a few heavy reads cannot take every connection from interactive requests. A scan fetches 500 rows at a time; a consumer that stalls for more than `OBOP_DB_IDLE_IN_TRANSACTION_MS` (2 minutes) between two fetches loses its snapshot.
+- **Locks.** Cross-process locks are PostgreSQL session advisory locks and need a session that lasts, so they use a pool of their own (`OBOP_DB_LOCK_POOL_SIZE`, at most 8) that does not count against the main pool. The locks one thread holds at the same time share one connection, so a request that holds the write lock and asks for a second lock never waits for another connection. A ninth thread that wants a lock while eight others hold theirs waits the acquire timeout and then gets `storage_busy`.
+- **Blobs** (images and files kept in the database) use a pool of their own (`OBOP_DB_BLOB_POOL_SIZE`, 4).
+- **Time limits.** Every statement runs under a `statement_timeout` chosen by what it is: a point read or write, a counter, a short-lived value 5 s; a list, search or lookup 10 s; a scan or a count of everything 15 s; a transaction of several statements, a restore, an export, an index 60 s. A scan or export fetch has the limit per fetch, not for however long the consumer takes. Set a limit to `0` to leave the server's own `statement_timeout` (for example one set with `ALTER ROLE`) in place.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `OBOP_DB_POOL_SIZE` | 8 (1 to 64) | Connections of the main pool, per process. |
+| `OBOP_DB_ACQUIRE_TIMEOUT_MS` | 2000 (50 to 60000) | How long a request waits for a free connection (this includes opening a new one) before `storage_busy`. |
+| `OBOP_DB_MAX_WAITERS` | 256 | Requests allowed to wait at once; more are refused immediately. `0` never waits. |
+| `OBOP_DB_LONG_READS` | half the pool, at least 1 | Scans, exports and restores allowed at once. |
+| `OBOP_DB_IDLE_TIMEOUT_SECS` | 300 | An idle connection is closed after this long. |
+| `OBOP_DB_MAX_LIFETIME_SECS` | 1800 | A connection is closed after this long (at the latest when it comes back). |
+| `OBOP_DB_HEALTH_CHECK_IDLE_MS` | 1000 | A connection idle this long or longer is checked on checkout; `0` checks every checkout (one more round trip per call). A read that finds a dead connection is repeated once on a fresh one; a write is not repeated (it may have been applied) and fails once with `storage_unavailable`. |
+| `OBOP_DB_CONNECT_TIMEOUT_MS` | 10000 | Opening one connection (TCP, TLS, login). |
+| `OBOP_DB_STATEMENT_TIMEOUT_POINT_MS`, `_LIST_MS`, `_AGGREGATE_MS`, `_BATCH_MS` | 5000, 10000, 15000, 60000 | The limits above; `0` leaves the server's value. |
+| `OBOP_DB_IDLE_IN_TRANSACTION_MS` | 120000 | How long a scan or export transaction may sit idle between two fetches; `0` is no limit. |
+| `OBOP_DB_LOCK_POOL_SIZE` | 8 (1 to 8) | Connections for advisory locks. |
+| `OBOP_DB_BLOB_POOL_SIZE` | 4 (1 to 64) | Connections of the blob store. |
+| `OBOP_DB_POOLER` | `direct` | `transaction` when the database address is a pooler in transaction mode (below). |
+| `OBOP_LOCK_DATABASE_URL` | the database URL | A direct address (same `sslmode` rules) for the lock connections. |
+
+A value that is not a number in range stops the server at start-up with a message that names the variable. Each of the three pools is opened lazily; a process with no traffic holds one to three connections.
+
+**Sizing.** Count what PostgreSQL must allow: for every obop process up to `OBOP_DB_POOL_SIZE` + `OBOP_DB_LOCK_POOL_SIZE` + `OBOP_DB_BLOB_POOL_SIZE` (20 with the defaults) plus one for each connection being opened, summed over all processes, plus your own tools and `superuser_reserved_connections`, must stay under `max_connections` (100 by default). Raise `max_connections`, lower the pool sizes, or put a pooler in front. Connections are named `obop-main`, `obop-lock` and `obop-blob` in `pg_stat_activity` (`application_name`, unless your URL sets one).
+
+**Supported topologies.**
+
+| Topology | Setting | Status |
+|---|---|---|
+| obop processes straight to PostgreSQL (one or several) | nothing | Tested (`cargo test -p obop-storage`, `-p obop --test multi_process`, `--test pool`). |
+| PgBouncer in **session** mode | nothing | The same as direct for the application; not tried. |
+| PgBouncer in **transaction** mode | `OBOP_DB_POOLER=transaction` and `OBOP_LOCK_DATABASE_URL=<direct address>` | Tested against PgBouncer 1.26.1 (`pool_mode = transaction`, two server connections shared by eight client connections, protocol-level prepared statements on or off). |
+| PgBouncer in statement mode, other poolers (Supavisor, RDS Proxy, Odyssey, pgcat), managed poolers | | Not supported / not tried. |
+
+Behind a pooler in **transaction mode** the server connection behind a client connection changes between transactions, so anything set on the session is lost or lands on somebody else's session. obop therefore does two things only in this mode. It runs every database call in a transaction of its own and sets the time limit with `SET LOCAL` (which ends with the transaction); the price is about twice the round trips per call. And it must not take its advisory locks through the pooler: a lock belongs to a server session, and the unlock would reach another one. Give `OBOP_LOCK_DATABASE_URL` a **direct** address of the same database (a PgBouncer in session mode also works). At start-up obop connects both ways and refuses to start if they do not reach the same server and database (the name may differ: the pooler may alias it), because locks taken in the wrong database exclude nobody. The connection settings of D66 (`sslmode`, `sslrootcert`) are read from each URL separately. PgBouncer settings that matter: `pool_mode = transaction`; `default_pool_size` at least as large as the number of connections obop may use at once, or requests queue inside PgBouncer where obop's timeouts do not see them; `ignore_startup_parameters` needs nothing for obop (it sends `application_name`, `client_encoding` and the standard ones); `server_idle_timeout` below your firewall's idle limit. `OBOP_DB_ACQUIRE_TIMEOUT_MS` also covers the time PgBouncer takes to accept a new client connection. PostgreSQL's `idle_in_transaction_session_timeout` on the role should stay above `OBOP_DB_IDLE_IN_TRANSACTION_MS` or off.
+
+**Not tried:** a managed PostgreSQL service or pooler, a network partition that drops packets silently (obop sets TCP keep-alive of 60 s and a user timeout of 30 s on its connections, which helps on Linux only), more than one hour of continuous load, memory (RSS) under load. Migrations, `obop backup` and `obop restore` run through the same pools; if you use a transaction-mode pooler, point those commands at the direct address with `--db`.
+
 ## Health and metrics (D67)
 
 Three read-only routes on every instance, served next to the API (so a `--static` backoffice or the public site never hides them):
@@ -136,7 +182,13 @@ Three read-only routes on every instance, served next to the API (so a `--static
 | `obop_process_uptime_seconds` | since start |
 | `obop_http_requests_total{class="2xx"...}` | responses by status class, every route including the public site |
 | `obop_http_request_duration_seconds` | histogram, 5 ms to 10 s, until the response headers are ready |
-| `obop_db_up`, `obop_db_ping_seconds` | a database ping at scrape time |
+| `obop_db_up`, `obop_db_ping_seconds` | a database ping at scrape time (a ping refused only because the pool is full counts as up) |
+| `obop_db_pool_max_connections{pool}`, `obop_db_pool_in_use{pool}`, `obop_db_pool_idle{pool}`, `obop_db_pool_waiting{pool}` | the connection pools (D74; `pool` is `main`, `lock` or `blob`): size, checked out, open and free, callers waiting right now. Read from the pool itself, so they work when it is full |
+| `obop_db_pool_acquire_seconds{pool}` | histogram, 0.5 ms to 2.5 s: how long getting a connection took, refusals included |
+| `obop_db_pool_acquire_timeouts_total{pool}`, `obop_db_pool_acquire_rejected_total{pool}` | callers refused after the whole acquire timeout / at once because the wait queue was full (both are `storage_busy`) |
+| `obop_db_pool_connect_failures_total{pool}`, `obop_db_pool_connections_opened_total{pool}`, `obop_db_pool_connections_closed_total{pool}` | connection churn |
+| `obop_db_statement_timeouts_total` | statements cancelled by their time limit |
+| `obop_storage_faults_total{fault="busy"\|"unavailable"\|"timeout"}` | requests answered 503 because of a storage fault |
 | `obop_active_sessions` | people's valid sign-in sessions (read at most every 15 seconds) |
 | `obop_job_queue_depth{queue="connectors",state}` | connector deliveries waiting, leased, dead (read at most every 15 seconds) |
 

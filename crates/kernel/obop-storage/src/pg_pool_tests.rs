@@ -1026,7 +1026,9 @@ struct Bouncer {
 }
 
 impl Bouncer {
-    fn start() -> Option<Self> {
+    /// `max_prepared`: PgBouncer's `max_prepared_statements` (`None` keeps its default, which
+    /// supports protocol-level prepared statements in transaction mode; `0` turns that off).
+    fn start(max_prepared: Option<&str>) -> Option<Self> {
         docker(&["info", "--format", "{{.ServerVersion}}"])?;
         let net_name = unique("obop-pool-net");
         docker(&["network", "create", &net_name])?;
@@ -1039,7 +1041,7 @@ impl Bouncer {
             "DATABASE_URL=postgres://postgres:obop-test@{}:5432/postgres",
             pg.name
         );
-        let started = docker(&[
+        let mut args: Vec<String> = [
             "run",
             "-d",
             "--name",
@@ -1058,8 +1060,15 @@ impl Bouncer {
             "AUTH_TYPE=scram-sha-256",
             "-p",
             &publish,
-            "edoburu/pgbouncer:latest",
-        ]);
+        ]
+        .map(String::from)
+        .into();
+        if let Some(n) = max_prepared {
+            args.extend(["-e".into(), format!("MAX_PREPARED_STATEMENTS={n}")]);
+        }
+        args.push("edoburu/pgbouncer:latest".into());
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let started = docker(&args);
         let guard = Container(name);
         started?;
         let me = Bouncer {
@@ -1182,7 +1191,7 @@ fn shared_state_checks(a: Arc<dyn Backend>, b: Arc<dyn Backend>) {
 #[test]
 fn behind_pgbouncer_in_transaction_mode_everything_works_with_locks_on_a_direct_address() {
     let _turn = serial();
-    let Some(b) = Bouncer::start() else {
+    let Some(b) = Bouncer::start(None) else {
         eprintln!("skipping: docker, postgres:17 or edoburu/pgbouncer are not available");
         return;
     };
@@ -1264,6 +1273,33 @@ fn behind_pgbouncer_in_transaction_mode_everything_works_with_locks_on_a_direct_
         .run(Class::Point, |c| sleep_query(c, 8))
         .unwrap_err();
     assert_eq!(Fault::of_message(&e), Some(Fault::Timeout), "{e}");
+}
+
+#[test]
+fn pgbouncer_without_protocol_level_prepared_statements_works_too() {
+    let _turn = serial();
+    // `max_prepared_statements = 0`: PgBouncer forwards no named statement from one transaction
+    // to the next, so every statement must be prepared and run inside one transaction. That is
+    // what the transaction mode of the pool does.
+    let Some(b) = Bouncer::start(Some("0")) else {
+        eprintln!("skipping: docker, postgres:17 or edoburu/pgbouncer are not available");
+        return;
+    };
+    let cfg = PgPoolConfig {
+        pooler: Pooler::Transaction,
+        lock_url: Some(b.pg.url()),
+        acquire_timeout: Duration::from_secs(10),
+        ..PgPoolConfig::default()
+    };
+    let one = open_with(&b.url(), Some(cfg)).unwrap();
+    crate::tests::contract(&*one);
+    let mut seen = 0;
+    one.scan("no-such-model", &mut |_, _| {
+        seen += 1;
+        Ok(true)
+    })
+    .unwrap();
+    assert_eq!(seen, 0);
 }
 
 #[test]

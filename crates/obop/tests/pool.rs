@@ -221,6 +221,30 @@ fn http(port: u16, method: &str, path: &str, bearer: Option<&str>, body: Option<
     }
 }
 
+/// The resident memory of a process in KiB: `/proc` on Linux, `tasklist` on Windows, `ps` elsewhere.
+fn rss_kib(pid: u32) -> Option<u64> {
+    if cfg!(target_os = "linux") {
+        let status = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+        let line = status.lines().find(|l| l.starts_with("VmRSS:"))?;
+        return line.split_whitespace().nth(1)?.parse().ok();
+    }
+    if cfg!(windows) {
+        let out = Command::new("tasklist")
+            .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
+            .output()
+            .ok()?;
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        let last = text.trim().rsplit("\",\"").next()?.to_string();
+        let digits: String = last.chars().filter(char::is_ascii_digit).collect();
+        return digits.parse().ok();
+    }
+    let out = Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
 fn metrics(port: u16) -> String {
     let r = http(port, "GET", "/metrics", Some(METRICS_TOKEN), None);
     assert_eq!(r.status, 200, "metrics: {}", r.body);
@@ -283,15 +307,40 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
         )
         .unwrap();
 
-    // 200 valid, signed-in requests at once on a pool of two.
+    // 200 valid, signed-in requests at once on a pool of two, while the server's memory is read.
+    let pid = server.child.id();
+    let rss_before = rss_kib(pid);
+    let sampling = std::sync::atomic::AtomicBool::new(true);
     let started = Instant::now();
-    let replies: Vec<Reply> = std::thread::scope(|s| {
+    let (replies, rss_peak): (Vec<Reply>, Option<u64>) = std::thread::scope(|s| {
+        let sampler = s.spawn(|| {
+            let mut peak = rss_kib(pid);
+            while sampling.load(std::sync::atomic::Ordering::Relaxed) {
+                peak = peak.max(rss_kib(pid));
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            peak
+        });
         let hs: Vec<_> = (0..200)
             .map(|_| s.spawn(|| http(port, "GET", "/api/meta", Some(&token), None)))
             .collect();
-        hs.into_iter().map(|h| h.join().unwrap()).collect()
+        let replies = hs.into_iter().map(|h| h.join().unwrap()).collect();
+        sampling.store(false, std::sync::atomic::Ordering::Relaxed);
+        (replies, sampler.join().unwrap())
     });
     let all = started.elapsed();
+    if let (Some(before), Some(peak)) = (rss_before, rss_peak) {
+        eprintln!(
+            "D74 HTTP memory: resident {} MiB before, {} MiB at the peak of the 200-request stampede",
+            before / 1024,
+            peak / 1024
+        );
+        assert!(
+            peak < before + 300 * 1024,
+            "memory grew by {} MiB",
+            (peak - before) / 1024
+        );
+    }
     let busy: Vec<_> = replies
         .iter()
         .filter(|r| r.json()["error"] == "storage_busy")

@@ -46,6 +46,12 @@ postgres://obop:secret@db.example.com:5432/obop?sslmode=verify-full&sslrootcert=
 
 `require` encrypts but does not check who answers. `verify-full` also checks the certificate chain against the root you give (or against the public roots with `sslrootcert=system`) and that the certificate names the host: use it when you can. `verify-ca` checks the chain only. A server without TLS, an untrusted certificate or a wrong host name makes the connection fail; obop never falls back to a plain connection. The same parameters work in `--db` for `obop backup`, `restore` and `migrate`. Client certificates are not supported. obop uses rustls, so no system OpenSSL is needed. This has been tried against the stock PostgreSQL 17 image with a self-signed certificate only, not against managed services or connection poolers.
 
+### Connection pool and poolers
+
+Each process uses a pool of 8 PostgreSQL connections by default (`OBOP_DB_POOL_SIZE`), a separate pool of at most 8 for the cross-process locks and a small one for pictures and files, so budget about 20 connections per process against `max_connections`. A long read (a scan, a backup export) holds one connection and nothing else, and blocks no other request. When every connection is busy a request waits two seconds at most and then gets `503` with a `Retry-After` header and `{"error":"storage_busy"}`; at most 256 requests wait at once. Every database call has a time limit by kind (5 s for one record, 10 s for a list, 15 s for a scan, 60 s for a batch), and a database that restarts is picked up again without restarting obop. All settings are in [Environment variables](/docs/reference/environment/).
+
+Behind PgBouncer in **transaction mode** set `OBOP_DB_POOLER=transaction` and give `OBOP_LOCK_DATABASE_URL` a direct address of the same database, because the locks need a session that lasts and obop refuses to start if the two addresses reach different databases. PgBouncer in session mode needs nothing. This has been tried against PgBouncer 1.26.1 and the stock PostgreSQL 17 image only, not against managed poolers or a managed database.
+
 ## The control plane and this website
 
 The control plane serves the website with a plain static file server and the sign-up app under `/app/`:
@@ -71,7 +77,7 @@ The reference deployment runs on Sliplane, in one project with three kinds of se
 - **Schema versions.** A database carries its schema version. `obop migrate status|plan|run` shows and applies the steps; a server refuses a database newer than itself. Installing a newer package version still does not migrate that package's records. Prefer adding optional fields.
 - **Backups.** `obop backup --db URL --out DIR` writes a consistent copy while the server runs; `obop backup verify FILE` checks it; `obop restore --db URL --from FILE` restores it into an empty database; `deploy/restore-drill.sh` proves a restore end to end. The database server itself still needs its own `pg_dump` or WAL archive, and a restore you have not tried is not a backup.
 - **Full export.** `obop backup` is a complete, documented export (gzip JSON Lines). The customer-facing export tool of the product plan is not built.
-- **Monitoring.** Every instance serves `GET /healthz` (the process is up), `GET /readyz` (the database answers and its schema fits; 503 with a short reason otherwise) and `GET /metrics` (Prometheus text). The first two are open and reveal nothing else; `/metrics` stays closed until you set `OBOP_METRICS_TOKEN` (or you run bound to loopback). Not yet tried against a real Prometheus or load balancer. The control plane has no such routes yet. Also watch the database.
+- **Monitoring.** Every instance serves `GET /healthz` (the process is up), `GET /readyz` (the database answers and its schema fits; 503 with a short reason otherwise) and `GET /metrics` (Prometheus text, including how full the connection pools are and how often callers were refused). The first two are open and reveal nothing else; `/metrics` stays closed until you set `OBOP_METRICS_TOKEN` (or you run bound to loopback). Not yet tried against a real Prometheus or load balancer. The control plane has no such routes yet. Also watch the database.
 - **Audit log.** There is no hash-chained audit trail yet.
 
 ### Sizing
