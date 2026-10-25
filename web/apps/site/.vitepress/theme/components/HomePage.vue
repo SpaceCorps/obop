@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useSite } from "../composables.ts";
+import { GITHUB, useSite } from "../composables.ts";
 import AppsGrid from "./AppsGrid.vue";
 import Icon from "./Icon.vue";
 import Logo from "./Logo.vue";
@@ -23,6 +23,24 @@ const kick = computed(() => ({
   pricing: label("/pricing/"),
   faq: label("/docs/reference/faq/"),
 }));
+/** The open-source cards, in the order every locale lists them: icon, link text and destination. */
+const OPEN = [
+  { icon: "plug", to: () => "/app/", text: () => m.value.home.ctaPrimary },
+  {
+    icon: "home",
+    to: () => href("/docs/getting-started/"),
+    text: () => label("/docs/getting-started/"),
+  },
+  { icon: "eye", to: () => GITHUB, text: () => m.value.ui.sourceCode },
+] as const;
+const openCards = computed(() =>
+  m.value.home.openPoints.map((p, i) => ({
+    ...p,
+    icon: OPEN[i]?.icon ?? "eye",
+    to: OPEN[i]?.to() ?? GITHUB,
+    label: OPEN[i]?.text() ?? "",
+  })),
+);
 </script>
 
 <template>
@@ -223,10 +241,14 @@ const kick = computed(() => ({
             <p class="sub">{{ m.home.openBody }}</p>
           </div>
         </div>
-        <div class="cards">
-          <article v-for="p in m.home.openPoints" :key="p.title">
+        <div class="cards open">
+          <article v-for="p in openCards" :key="p.title">
+            <span class="card-ico"><Icon :name="p.icon" :size="22" /></span>
             <h3>{{ p.title }}</h3>
             <p>{{ p.body }}</p>
+            <a class="link-arrow" :href="p.to"
+              >{{ p.label }}<Icon name="arrow-right" :size="16"
+            /></a>
           </article>
         </div>
       </div>

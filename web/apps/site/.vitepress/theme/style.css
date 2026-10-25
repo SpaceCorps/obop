@@ -1543,6 +1543,51 @@ section.cta p {
   }
 }
 
+/* open source: the pillar card component again, with one explicit arrow link pinned to the bottom */
+.home .cards.open {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.home .cards article {
+  display: flex;
+  flex-direction: column;
+}
+.link-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-block-size: 2.75rem;
+  margin-block-start: auto;
+  color: var(--accent-ink);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+.link-arrow:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+@media (max-width: 48rem) {
+  .home .cards.open {
+    grid-template-columns: 1fr;
+  }
+  .home .cards.open article {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-4);
+    align-items: start;
+  }
+  .home .cards.open article > * {
+    grid-column: 2;
+  }
+  .home .cards.open .card-ico {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    margin: 0;
+  }
+  .home .cards.open .link-arrow {
+    margin-block-start: 0;
+  }
+}
+
 /* two columns: copy left, visual right; the right column starts on one shared axis */
 .home .split {
   grid-template-columns: var(--split-cols);
