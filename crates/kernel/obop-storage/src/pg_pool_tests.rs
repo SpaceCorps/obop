@@ -159,8 +159,20 @@ fn a_five_second_read_does_not_block_a_concurrent_get() {
     let pg = Arc::new(connect(&url, PgPoolConfig::default()));
     let model = unique("sleep");
     pg.insert(&model, "a", &fields(1)).unwrap();
-    // Warm a second connection, so the gets below do not pay for opening one.
+    // Two connections are open, so the gets below do not pay for opening one.
+    let hold = pg.main.lease(false).unwrap();
     pg.get(&model, "a").unwrap();
+    drop(hold);
+    // What a get costs on this machine right now, with nothing else going on.
+    let mut base: Vec<Duration> = (0..20)
+        .map(|_| {
+            let t = Instant::now();
+            pg.get(&model, "a").unwrap().unwrap();
+            t.elapsed()
+        })
+        .collect();
+    base.sort();
+    let base_median = base[base.len() / 2];
     let sleeper = {
         let pg = pg.clone();
         std::thread::spawn(move || {
@@ -186,17 +198,23 @@ fn a_five_second_read_does_not_block_a_concurrent_get() {
     took.sort();
     let (median, worst) = (took[took.len() / 2], *took.last().unwrap());
     eprintln!(
-        "D74 get during a 5 s read: {} gets, median {median:?}, worst {worst:?}",
+        "D74 get during a 5 s read: {} gets, median {median:?}, worst {worst:?}          (without it: median {base_median:?})",
         took.len()
     );
-    assert!(median < Duration::from_millis(50), "median {median:?}");
-    assert!(worst < Duration::from_millis(500), "worst {worst:?}");
+    // Under 50 ms on a quiet machine. On a busy one a get is slow with or without the long read,
+    // so the test compares: a get that waited behind the read would take about five seconds.
+    assert!(
+        median < Duration::from_millis(50).max(base_median * 5),
+        "median {median:?}"
+    );
+    assert!(worst < Duration::from_secs(2), "worst {worst:?}");
     assert!(
         pg.main.stats().in_use >= 1,
         "the long read was still running while the gets were served"
     );
     let slept = sleeper.join().unwrap();
-    assert!(slept >= Duration::from_secs(5), "{slept:?}");
+    // (`pg_sleep(5)` can return a few tens of milliseconds early.)
+    assert!(slept >= Duration::from_millis(4500), "{slept:?}");
 }
 
 #[test]

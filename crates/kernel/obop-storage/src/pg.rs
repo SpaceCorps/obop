@@ -86,7 +86,7 @@ impl Pg {
         // to a direct address. That address must reach the same server and database.
         let lock_pool = match &cfg.lock_url {
             None => Pool::new(
-                PgManager::new(tune(connector.clone(), "obop-lock", &cfg)),
+                PgManager::new(tune(connector.clone(), "obop-lock", &cfg), None),
                 cfg.settings("lock", cfg.lock_size),
             ),
             Some(lock_url) => {
@@ -108,7 +108,7 @@ impl Pg {
                     );
                 }
                 let pool = Pool::new(
-                    PgManager::new(lock_connector),
+                    PgManager::new(lock_connector, None),
                     cfg.settings("lock", cfg.lock_size),
                 );
                 pool.seed(Session::new(direct));

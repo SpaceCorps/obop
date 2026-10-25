@@ -278,18 +278,25 @@ impl Session {
 
 pub(crate) struct PgManager {
     connector: PgConnector,
+    /// The limit a new connection is given before anyone uses it, so the first call on it does not
+    /// pay a round trip for it: the point-read limit in direct mode, none otherwise.
+    initial: Option<u64>,
 }
 
 impl PgManager {
-    pub(crate) fn new(connector: PgConnector) -> Self {
-        Self { connector }
+    pub(crate) fn new(connector: PgConnector, initial: Option<u64>) -> Self {
+        Self { connector, initial }
     }
 }
 
 impl Manager for PgManager {
     type Conn = Session;
     fn connect(&self) -> Result<Session, String> {
-        self.connector.connect().map(Session::new)
+        let mut s = Session::new(self.connector.connect()?);
+        if self.initial.is_some() {
+            s.set_timeout(self.initial).map_err(|e| describe(&e))?;
+        }
+        Ok(s)
     }
     fn ping(&self, conn: &mut Session, timeout: Duration) -> bool {
         conn.client.is_valid(timeout).is_ok()
@@ -534,8 +541,12 @@ impl PgPool {
         cfg: &Arc<PgPoolConfig>,
     ) -> Self {
         let connector = tune(connector, &format!("obop-{name}"), cfg);
+        let initial = match cfg.pooler {
+            Pooler::Direct => cfg.point_ms,
+            Pooler::Transaction => None,
+        };
         Self {
-            pool: Pool::new(PgManager::new(connector), cfg.settings(name, size)),
+            pool: Pool::new(PgManager::new(connector, initial), cfg.settings(name, size)),
             cfg: cfg.clone(),
         }
     }
@@ -548,7 +559,12 @@ impl PgPool {
 
     /// Hand over a connection that is already open (the one that prepared the schema).
     pub(crate) fn seed(&self, client: Client) {
-        self.pool.seed(Session::new(client));
+        let mut s = Session::new(client);
+        if self.cfg.pooler == Pooler::Direct {
+            // Best effort: a failure here shows on the first call, which discards the connection.
+            let _ = s.set_timeout(self.cfg.point_ms);
+        }
+        self.pool.seed(s);
     }
 
     /// Check a connection out; `long` takes a long-read permit as well (see `pool`). The error is

@@ -91,7 +91,7 @@ Command line flags win over variables. Secrets are set as secret environment var
 
 ### Tests
 
-`OBOP_TEST_POSTGRES_URL` adds PostgreSQL to `cargo test`, including the multi-process tests; `OBOP_BIN` points the end-to-end suite at a binary.
+`OBOP_TEST_POSTGRES_URL` adds PostgreSQL to `cargo test`, including the multi-process tests and the connection pool tests (`cargo test -p obop-storage pg_pool`, `cargo test -p obop --test pool`); `OBOP_BIN` points the end-to-end suite at a binary. The tests that restart a server, put PgBouncer in front of it (`edoburu/pgbouncer`) or enable TLS start containers of their own and are skipped, with a message, when Docker is not available.
 
 ## Database connections and TLS (D66)
 
