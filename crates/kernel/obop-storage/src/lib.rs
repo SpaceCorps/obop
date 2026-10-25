@@ -426,9 +426,13 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
     base
 }
 
+pub mod fault;
 pub mod limit;
 mod memory;
 mod pg;
+pub mod pool;
+#[cfg(test)]
+mod pool_tests;
 #[cfg(test)]
 mod shared_tests;
 mod sqlite;
