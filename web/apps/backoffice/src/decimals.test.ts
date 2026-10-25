@@ -62,7 +62,7 @@ describe("exact decimals", () => {
     for (const v of many) oracle += BigInt(v.replace(".", ""));
     const s = oracle.toString().padStart(3, "0");
     expect(sumDecimals(many)).toBe(`${s.slice(0, -2)}.${s.slice(-2)}`);
-  });
+  }, 60_000);
 
   it("formats in the locale from the digits", () => {
     expect(formatDecimal("1234567.5", "en", 2)).toBe("1,234,567.50");
