@@ -24,6 +24,33 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const TABLE: &str = "obop_package";
 
+/// A check that runs before an update or rollback that rewrites stored records (OBR-DAT-053,
+/// D73): the binary plugs in the automatic verified backup, so the data steps of a module
+/// upgrade never run without a way back. It runs with the module lock held and before any write;
+/// an `Err` stops the operation with nothing changed.
+pub trait MigrationGate: Send + Sync {
+    fn before(&self, what: &GateRequest) -> Result<GateReceipt, String>;
+}
+
+/// What is about to run.
+#[derive(Debug, Clone)]
+pub struct GateRequest {
+    /// `module.upgrade` or `module.rollback`.
+    pub command: &'static str,
+    /// The packages whose data steps run, with their versions: `crm 0.1.0->0.2.0`.
+    pub modules: Vec<String>,
+    /// The steps in words, as in the audit record.
+    pub steps: Vec<String>,
+    pub by: String,
+}
+
+/// What the gate did, to be written into the ledger rows of the operation.
+#[derive(Debug, Clone, Default)]
+pub struct GateReceipt {
+    /// The verified backup taken first (its file name), if the gate took or found one.
+    pub backup_id: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct PackageInfo {
     pub id: String,
@@ -81,6 +108,8 @@ pub struct Installer {
     pub(crate) registered: Mutex<std::collections::BTreeMap<String, String>>,
     pub(crate) seen_version: std::sync::atomic::AtomicU64,
     pub(crate) last_check_ms: std::sync::atomic::AtomicU64,
+    /// The backup gate of updates that rewrite records (see [`MigrationGate`]).
+    gate: Mutex<Option<Arc<dyn MigrationGate>>>,
 }
 
 /// What it takes to put a step back in this process's registry. Nothing is written to the
@@ -168,7 +197,70 @@ impl Installer {
             registered: Mutex::default(),
             seen_version: Default::default(),
             last_check_ms: Default::default(),
+            gate: Mutex::new(None),
         })
+    }
+
+    /// Install the gate that runs before an update with data steps.
+    pub fn set_gate(&self, gate: Arc<dyn MigrationGate>) {
+        *self.gate.lock().unwrap_or_else(|e| e.into_inner()) = Some(gate);
+    }
+
+    /// The data steps a plan would run, per package: `(module, from, to, steps)`.
+    fn data_steps_of(&self, plan: &Plan) -> Vec<(String, String, String, Vec<migrate::Step>)> {
+        let mut out = Vec::new();
+        for step in plan.work() {
+            if step.action != StepAction::Upgrade {
+                continue;
+            }
+            let Ok(Some(old)) = self.backend.get(TABLE, &step.id) else {
+                continue;
+            };
+            let Some(om) = old
+                .get("manifest")
+                .and_then(J::as_str)
+                .and_then(|t| Manifest::parse(t).ok())
+            else {
+                continue;
+            };
+            let count = |m: &str| self.backend.count(m).unwrap_or(0);
+            let steps = migrate::plan_data(&om, &step.manifest, &count).steps;
+            if !steps.is_empty() {
+                out.push((
+                    step.id.clone(),
+                    om.module.version.clone(),
+                    step.manifest.module.version.clone(),
+                    steps,
+                ));
+            }
+        }
+        out
+    }
+
+    /// Run the gate for `command` over `steps` (the data steps about to run); `None` when there
+    /// is nothing to guard or no gate is installed.
+    fn run_gate(
+        &self,
+        command: &'static str,
+        modules: Vec<String>,
+        steps: Vec<String>,
+        by: &str,
+    ) -> Result<Option<GateReceipt>, String> {
+        if steps.is_empty() {
+            return Ok(None);
+        }
+        let gate = self.gate.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let Some(gate) = gate else {
+            return Ok(None);
+        };
+        gate.before(&GateRequest {
+            command,
+            modules,
+            steps,
+            by: by.to_string(),
+        })
+        .map(Some)
+        .map_err(|e| format!("not changed: {e}"))
     }
 
     pub(crate) fn d(&self) -> Result<Arc<Dispatcher>, String> {
@@ -642,9 +734,23 @@ impl Installer {
                 .collect::<Vec<_>>()
                 .join("; "));
         }
+        let guarded = self.data_steps_of(plan);
+        let receipt = self.run_gate(
+            "module.upgrade",
+            guarded
+                .iter()
+                .map(|(m, f, t, _)| format!("{m} {f}->{t}"))
+                .collect(),
+            guarded
+                .iter()
+                .flat_map(|(m, _, _, s)| s.iter().map(move |s| format!("{m}: {}", s.summary())))
+                .collect(),
+            by,
+        )?;
+        let backup = receipt.and_then(|r| r.backup_id);
         let mut last = String::new();
         for _ in 0..4 {
-            match self.try_apply(plan, root, root_source, by) {
+            match self.try_apply(plan, root, root_source, by, backup.as_deref()) {
                 Ok(o) => return Ok(o),
                 Err(Failure::Retry(why)) => last = why,
                 Err(Failure::Refused(e)) => return Err(e),
@@ -661,6 +767,7 @@ impl Installer {
         root: &str,
         root_source: &str,
         by: &str,
+        backup: Option<&str>,
     ) -> Result<Outcome, Failure> {
         let mut done: Vec<Undo> = Vec::new();
         let mut applied = Vec::new();
@@ -672,7 +779,7 @@ impl Installer {
             } else {
                 "marketplace"
             };
-            match self.prepare_step(step, source, by, &mut ops) {
+            match self.prepare_step(step, source, by, backup, &mut ops) {
                 Ok((undo, info, note)) => {
                     done.push(undo);
                     notes.push((
@@ -744,6 +851,7 @@ impl Installer {
         step: &resolve::Step,
         source: &str,
         by: &str,
+        backup: Option<&str>,
         ops: &mut Vec<Op>,
     ) -> Result<(Undo, PackageInfo, String), String> {
         let manifest = &step.manifest;
@@ -874,6 +982,21 @@ impl Installer {
                 return Err(e);
             }
         }
+        // One ledger row per data step, in the same batch (OBR-DAT-051).
+        if let Some(om) = &old_manifest {
+            ops.extend(Self::ledger_ops(
+                &id,
+                &om.module.version,
+                &manifest.module.version,
+                false,
+                &data_steps,
+                by,
+                backup,
+            ));
+            if let (Some(b), false) = (backup, data_steps.is_empty()) {
+                note.push_str(&format!("; backup {b}"));
+            }
+        }
         ops.push(if existing.is_some() {
             Op::Put {
                 model: TABLE.into(),
@@ -892,6 +1015,35 @@ impl Installer {
             Self::info(manifest, source, Some(at), Some(by.to_string())),
             note,
         ))
+    }
+
+    /// The ledger rows for the data steps of one package upgrade or rollback.
+    fn ledger_ops(
+        module: &str,
+        from: &str,
+        to: &str,
+        rollback: bool,
+        steps: &[migrate::Step],
+        by: &str,
+        backup: Option<&str>,
+    ) -> Vec<Op> {
+        let summaries: Vec<String> = steps.iter().map(migrate::Step::summary).collect();
+        let view: Vec<obop_migrate::ledger::PackageStep> = steps
+            .iter()
+            .zip(&summaries)
+            .map(|(s, summary)| obop_migrate::ledger::PackageStep {
+                op: &s.op,
+                model: &s.model,
+                field: &s.field,
+                to: s.to.as_deref(),
+                value: s.value.as_ref(),
+                summary,
+            })
+            .collect();
+        obop_migrate::ledger::package_entries(module, from, to, rollback, &view, by, backup)
+            .iter()
+            .map(obop_migrate::Entry::insert)
+            .collect()
     }
 
     /// Put the registration of a stored package back (after a failed upgrade or a rollback).
@@ -1033,6 +1185,22 @@ impl Installer {
         let prev = Self::with_bundled_labels(prev_text, &source).map_err(Failure::Refused)?;
         let prev_module = prev.to_module().map_err(Failure::Refused)?;
         let d = self.d().map_err(Failure::Refused)?;
+        let receipt = self
+            .run_gate(
+                "module.rollback",
+                if inverse.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![format!("{id} {current_v}->{}", prev.module.version)]
+                },
+                inverse
+                    .iter()
+                    .map(|s| format!("{id}: {}", s.summary()))
+                    .collect(),
+                by,
+            )
+            .map_err(Failure::Refused)?;
+        let backup = receipt.and_then(|r| r.backup_id);
         let at = now();
         let mut f = Fields::new();
         f.insert("manifest".into(), J::from(prev_text));
@@ -1058,6 +1226,15 @@ impl Installer {
                 return Err(Failure::Refused(e));
             }
         };
+        ops.extend(Self::ledger_ops(
+            id,
+            current_v,
+            &prev.module.version,
+            true,
+            &inverse,
+            by,
+            backup.as_deref(),
+        ));
         ops.push(Op::Put {
             model: TABLE.into(),
             id: id.to_string(),

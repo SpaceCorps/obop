@@ -1367,6 +1367,7 @@ name = "obop-pkg"
 version = "0.2.0"
 dependencies = [
  "obop-commands",
+ "obop-migrate",
  "obop-registry",
  "obop-storage",
  "obop-types",

@@ -10,6 +10,7 @@ obop-types.workspace = true
 obop-registry.workspace = true
 obop-commands.workspace = true
 obop-storage.workspace = true
+obop-migrate.workspace = true
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 ureq = "3"
