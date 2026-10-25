@@ -1074,23 +1074,43 @@ fn after_a_server_restart_the_pool_serves_again_without_restarting_the_process()
         slowest_error < Duration::from_secs(5),
         "a call during the outage answers quickly, it does not hang: {slowest_error:?}"
     );
-    // Everything works again: writes, counters, the batch path, locks, a scan.
-    b.insert(&model, "b", &fields(2)).unwrap();
-    assert_eq!(b.counter_add(&unique("c"), 60_000, false).unwrap(), 1);
-    b.apply(&[Op::Merge {
-        model: model.clone(),
-        id: "a".into(),
-        patch: fields(5),
-    }])
-    .unwrap();
-    let g = b.lock("after-restart").unwrap();
-    drop(g);
-    let mut n = 0;
-    b.scan(&model, &mut |_, _| {
-        n += 1;
-        Ok(true)
-    })
-    .unwrap();
+    // Everything works again: writes, counters, the batch path, locks, a scan. (A step may need a
+    // second go while the freshly restarted server is still busy recovering; none may need more
+    // than thirty seconds.)
+    fn eventually<T>(what: &str, mut f: impl FnMut() -> Result<T>) -> T {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match f() {
+                Ok(v) => return v,
+                Err(e) if Instant::now() < deadline => {
+                    eprintln!("{what}: not yet ({e})");
+                    std::thread::sleep(Duration::from_millis(200));
+                }
+                Err(e) => panic!("{what} did not work again within 30 s: {e}"),
+            }
+        }
+    }
+    eventually("insert", || b.insert(&model, "b", &fields(2)));
+    assert_eq!(
+        eventually("counter", || b.counter_add(&unique("c"), 60_000, false)),
+        1
+    );
+    eventually("batch", || {
+        b.apply(&[Op::Merge {
+            model: model.clone(),
+            id: "a".into(),
+            patch: fields(5),
+        }])
+    });
+    eventually("lock", || b.lock("after-restart").map(drop));
+    let n = eventually("scan", || {
+        let mut n = 0;
+        b.scan(&model, &mut |_, _| {
+            n += 1;
+            Ok(true)
+        })
+        .map(|()| n)
+    });
     assert_eq!(n, 2);
 }
 
