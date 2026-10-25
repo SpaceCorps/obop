@@ -1311,7 +1311,9 @@ dependencies = [
  "obop-keys",
  "obop-storage",
  "obop-types",
+ "postgres",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]

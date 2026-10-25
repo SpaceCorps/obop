@@ -98,9 +98,11 @@ const USAGE: &str = "usage: obop <command>
       --public-site                             also serve the public website and shop at / (or OBOP_PUBLIC_SITE=1);
                                                 the backoffice then moves to --admin-prefix (default /admin)
       --trust-proxy                             take the client address from X-Forwarded-For (OBOP_TRUST_PROXY=1)
-  migrate status | plan | run [--dry-run] [--db URL]
-                                                schema version of a database and the steps that upgrade it; `run` applies them
-                                                (take a backup first). `serve` refuses a database that needs steps unless started
+  migrate status | verify | plan | run [--dry-run] [--db URL]
+                                                schema version of a database, the migration ledger (what ran, when, by whom, with
+                                                which checksum) and the steps that upgrade it; `verify` compares ledger, code and
+                                                version and exits non-zero on drift (a step edited after it ran); `run` applies the
+                                                steps (take a backup first). `serve` refuses a database that needs steps unless started
                                                 with --auto-migrate (default: on for SQLite, off for PostgreSQL; OBOP_AUTO_MIGRATE=0|1)
   backup --db URL --out DIR|FILE                consistent logical backup (gzip JSON lines + checksum manifest), streamed
   backup verify FILE                            check a backup's checksums, format and counts

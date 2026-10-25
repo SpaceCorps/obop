@@ -250,8 +250,8 @@ fn migrate(args: &mut Vec<String>) -> Exit {
     let dry = has(args, "--dry-run");
     let verb = args.first().map(String::as_str);
     if args.len() > 1
-        || !matches!(verb, Some("status" | "plan" | "run"))
-        || (dry && verb == Some("status"))
+        || !matches!(verb, Some("status" | "verify" | "plan" | "run"))
+        || (dry && matches!(verb, Some("status" | "verify")))
     {
         return Err(usage());
     }
@@ -265,10 +265,45 @@ fn migrate(args: &mut Vec<String>) -> Exit {
             for (v, name) in &st.pending {
                 println!("  pending {v}: {name}");
             }
+            let rows = m.ledger().map_err(|e| fail(&e))?;
+            if rows.is_empty() {
+                println!(
+                    "ledger: empty (a database from before the ledger is adopted by the next start or run)"
+                );
+            } else {
+                println!("ledger ({} rows):", rows.len());
+                for r in &rows {
+                    println!("  {}", ledger_line(r));
+                }
+            }
             Ok(())
         }
-        Some(v) => {
-            let dry = dry || v == "plan";
+        Some("verify") => {
+            let v = m.verify().map_err(|e| fail(&e))?;
+            for n in &v.notes {
+                println!("note: {n}");
+            }
+            for p in &v.problems {
+                println!("PROBLEM: {p}");
+            }
+            if v.ok() {
+                println!("ledger, code and schema version agree");
+                Ok(())
+            } else {
+                Err(ExitCode::FAILURE)
+            }
+        }
+        Some("plan") => {
+            let plan = m.plan().map_err(|e| fail(&format!("error: {e}")))?;
+            print!("{}", plan.describe());
+            if !plan.is_empty() {
+                m.store_plan(&plan)
+                    .map_err(|e| fail(&format!("error: {e}")))?;
+                println!("plan {} stored: a production run needs this plan", plan.id);
+            }
+            Ok(())
+        }
+        Some(_) => {
             let r = m.run(dry).map_err(|e| fail(&format!("error: {e}")))?;
             if r.applied.is_empty() {
                 println!("{}", st.describe());
@@ -286,6 +321,30 @@ fn migrate(args: &mut Vec<String>) -> Exit {
         }
         None => Err(usage()),
     }
+}
+
+/// One ledger row on one line.
+fn ledger_line(r: &obop_migrate::Entry) -> String {
+    format!(
+        "{} {} {} [{}, ddl {}] {} by {} {}ms sha256:{}{}{}",
+        obop_ops::backup::rfc3339(r.at),
+        r.id,
+        r.status.as_str(),
+        r.class.as_str(),
+        r.ddl.as_str(),
+        r.name,
+        r.by,
+        r.duration_ms,
+        &r.checksum[..r.checksum.len().min(12)],
+        r.backup_id
+            .as_deref()
+            .map_or(String::new(), |b| format!(" backup {b}")),
+        if r.note.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", r.note)
+        }
+    )
 }
 
 /// The store of uploaded pictures and files for the database at `url`: its records are in the
