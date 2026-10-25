@@ -516,9 +516,18 @@ impl<M: Manager> Pool<M> {
             // connection comes free first.
             if st.total < inner.cfg.max_size {
                 let outage = st.last_connect_error.is_some();
-                if !outage || (st.connecting == 0 && Instant::now() >= st.backoff_until) {
+                // One connection on its way for each caller that has to wait, no more: a caller
+                // that is woken without a connection to take does not open another.
+                let wanted = st.waiting + usize::from(!waiting);
+                let open_one = if outage {
+                    // While the database is away: one probe at a time, spaced by the backoff.
+                    st.connecting == 0 && Instant::now() >= st.backoff_until
+                } else {
+                    st.connecting < wanted
+                };
+                if open_one {
                     self.spawn_connect(&mut st);
-                } else if st.total == 0 && st.connecting == 0 {
+                } else if outage && st.total == 0 && st.connecting == 0 {
                     // The last attempt failed a moment ago and nothing is open: say so at once.
                     break Err(PoolError::Unavailable(
                         st.last_connect_error.clone().unwrap_or_default(),

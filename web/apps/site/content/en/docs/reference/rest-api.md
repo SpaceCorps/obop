@@ -140,15 +140,16 @@ Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input 
 
 ## Status codes
 
-| Code | Meaning                                                                           |
-| ---- | --------------------------------------------------------------------------------- |
-| 200  | Success.                                                                          |
-| 202  | Approval required; nothing changed.                                               |
-| 400  | Input refused. `{"error":"..."}` says why.                                        |
-| 401  | Missing, unknown, expired or revoked token; or wrong sign-in.                     |
-| 404  | Unknown, hidden or forbidden command; unknown plan. Indistinguishable on purpose. |
-| 415  | Body not sent as `application/json`.                                              |
-| 429  | Sign-in lockout (five failures, one minute).                                      |
+| Code | Meaning                                                                                                                                                                                                         |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 200  | Success.                                                                                                                                                                                                        |
+| 202  | Approval required; nothing changed.                                                                                                                                                                             |
+| 400  | Input refused. `{"error":"..."}` says why.                                                                                                                                                                      |
+| 401  | Missing, unknown, expired or revoked token; or wrong sign-in.                                                                                                                                                   |
+| 404  | Unknown, hidden or forbidden command; unknown plan. Indistinguishable on purpose.                                                                                                                               |
+| 415  | Body not sent as `application/json`.                                                                                                                                                                            |
+| 429  | Sign-in lockout (five failures, one minute).                                                                                                                                                                    |
+| 503  | The database was busy, unreachable or too slow: `{"error":"storage_busy"}`, `storage_unavailable` or `storage_timeout`, with a `Retry-After` header (seconds). Nothing was started after `storage_busy`; retry. |
 
 ## MCP
 

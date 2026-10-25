@@ -30,10 +30,52 @@ fn fields(n: i64) -> Fields {
     m
 }
 
-macro_rules! pg_url {
+/// A database of this test's own on the server `OBOP_TEST_POSTGRES_URL` names, dropped afterwards
+/// (with its sessions): other tests that run beside these, in this crate or another, build
+/// indexes and fill tables in the shared database, which would make a statement here wait.
+struct Scratch {
+    admin: String,
+    name: String,
+    url: String,
+}
+
+impl Scratch {
+    fn new(base: &str) -> Scratch {
+        let name = unique("obop_pool_unit").replace('-', "_");
+        let mut c = PgConnector::new(base).unwrap().connect().unwrap();
+        c.batch_execute(&format!("CREATE DATABASE {name}")).unwrap();
+        let (head, tail) = base.rsplit_once('/').unwrap();
+        // Keep any query string (sslmode and the like) of the base address.
+        let query = tail
+            .split_once('?')
+            .map_or(String::new(), |(_, q)| format!("?{q}"));
+        Scratch {
+            admin: base.to_string(),
+            url: format!("{head}/{name}{query}"),
+            name,
+        }
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        if let Ok(mut c) = PgConnector::new(&self.admin).and_then(|c| c.connect()) {
+            let _ = c.batch_execute(&format!(
+                "DROP DATABASE IF EXISTS {} WITH (FORCE)",
+                self.name
+            ));
+        }
+    }
+}
+
+/// `(url, guard)` of a scratch database, or return from the test (saying so) without a server.
+macro_rules! pg_db {
     () => {
         match std::env::var("OBOP_TEST_POSTGRES_URL") {
-            Ok(u) => u,
+            Ok(base) => {
+                let db = Scratch::new(&base);
+                (db.url.clone(), db)
+            }
             Err(_) => {
                 eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
                 return;
@@ -155,7 +197,7 @@ fn a_bad_value_stops_start_up_and_names_the_variable_without_echoing_a_url() {
 #[test]
 fn a_five_second_read_does_not_block_a_concurrent_get() {
     let _turn = serial();
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let pg = Arc::new(connect(&url, PgPoolConfig::default()));
     let model = unique("sleep");
     pg.insert(&model, "a", &fields(1)).unwrap();
@@ -220,7 +262,7 @@ fn a_five_second_read_does_not_block_a_concurrent_get() {
 #[test]
 fn a_streaming_scan_holds_one_connection_and_nothing_else() {
     let _turn = serial();
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let pg = Arc::new(connect(&url, PgPoolConfig::default()));
     let model = unique("scanhold");
     let rows: Vec<_> = (0..20)
@@ -265,7 +307,7 @@ fn a_streaming_scan_holds_one_connection_and_nothing_else() {
 
 #[test]
 fn a_scan_sees_one_snapshot_from_its_first_row_to_its_last() {
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let pg = Arc::new(connect(&url, PgPoolConfig::default()));
     let model = unique("snapshot");
     // More than two fetches of 500 rows, so the changes below happen between fetches.
@@ -326,7 +368,7 @@ fn a_scan_sees_one_snapshot_from_its_first_row_to_its_last() {
 #[test]
 fn two_hundred_requests_on_a_pool_of_eight_refuse_the_surplus_within_the_acquire_timeout() {
     let _turn = serial();
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let pg = Arc::new(connect(&url, PgPoolConfig::default()));
     pg.counter_get("warm").unwrap();
     let start = Arc::new(std::sync::Barrier::new(200));
@@ -397,7 +439,7 @@ fn two_hundred_requests_on_a_pool_of_eight_refuse_the_surplus_within_the_acquire
 #[test]
 fn a_full_queue_refuses_without_waiting_and_memory_follows_the_bound_not_the_load() {
     let _turn = serial();
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let cfg = PgPoolConfig {
         size: 2,
         max_waiters: 5,
@@ -458,7 +500,7 @@ fn a_full_queue_refuses_without_waiting_and_memory_follows_the_bound_not_the_loa
 #[test]
 fn the_lock_pool_does_not_take_interactive_capacity_and_the_other_way_round() {
     let _turn = serial();
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let cfg = PgPoolConfig {
         size: 2,
         lock_size: 8,
@@ -536,7 +578,7 @@ fn the_lock_pool_does_not_take_interactive_capacity_and_the_other_way_round() {
 #[test]
 fn nested_locks_of_one_thread_share_a_connection_so_a_small_lock_pool_cannot_deadlock() {
     let _turn = serial();
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let app = unique("nested");
     let cfg = PgPoolConfig {
         lock_size: 2,
@@ -594,7 +636,7 @@ fn nested_locks_of_one_thread_share_a_connection_so_a_small_lock_pool_cannot_dea
 
 #[test]
 fn time_limits_follow_the_command_class_and_never_leak_between_callers() {
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let cfg = PgPoolConfig {
         size: 1,
         point_ms: Some(1111),
@@ -695,7 +737,7 @@ fn time_limits_follow_the_command_class_and_never_leak_between_callers() {
 #[test]
 fn a_statement_over_its_limit_is_cancelled_and_the_connection_stays_in_the_pool() {
     let _turn = serial();
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let cfg = PgPoolConfig {
         size: 1,
         point_ms: Some(1500),
@@ -734,7 +776,7 @@ fn a_statement_over_its_limit_is_cancelled_and_the_connection_stays_in_the_pool(
 #[test]
 fn a_slow_consumer_is_not_cut_off_by_the_statement_limit_but_a_stalled_one_is_ended() {
     let _turn = serial();
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let model = unique("slowscan");
     let cfg = PgPoolConfig {
         aggregate_ms: Some(1000),
@@ -781,7 +823,7 @@ fn a_slow_consumer_is_not_cut_off_by_the_statement_limit_but_a_stalled_one_is_en
 
 #[test]
 fn a_connection_killed_by_the_server_is_noticed_and_replaced() {
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let sep = if url.contains('?') { '&' } else { '?' };
     let kill = |app: &str| {
         let mut admin = PgConnector::new(&url).unwrap().connect().unwrap();
@@ -965,14 +1007,27 @@ fn after_a_server_restart_the_pool_serves_again_without_restarting_the_process()
     }
     let held = b.lock("survives?").unwrap();
     drop(held);
-    // Restart the database under a running pool.
+    // Restart the database under a running pool. How long the server itself needs to come back
+    // is the machine's business (it is probed on a connection of its own); what is measured is
+    // the pool: how long after the database accepts connections again it serves, and that it
+    // answers quickly while the database is away.
     let restarted = Instant::now();
     let name = pg_server.name.clone();
     let restarter = std::thread::spawn(move || docker(&["restart", "-t", "5", &name]).is_some());
+    let probe = PgConnector::new(&pg_server.url()).unwrap();
     let mut outage_errors = 0;
     let mut slowest_error = Duration::ZERO;
     let mut first_error: Option<Duration> = None;
+    let mut database_back: Option<Duration> = None;
     let back = loop {
+        if first_error.is_some()
+            && database_back.is_none()
+            && probe
+                .connect()
+                .is_ok_and(|mut c| c.simple_query("SELECT 1").is_ok())
+        {
+            database_back = Some(restarted.elapsed());
+        }
         let t = Instant::now();
         fault::clear();
         match b.get(&model, "a") {
@@ -997,18 +1052,24 @@ fn after_a_server_restart_the_pool_serves_again_without_restarting_the_process()
             }
         }
         assert!(
-            restarted.elapsed() < Duration::from_secs(30),
-            "no recovery in 30 s ({outage_errors} refused calls)"
+            restarted.elapsed() < Duration::from_secs(300),
+            "no recovery in five minutes ({outage_errors} refused calls)"
         );
         std::thread::sleep(Duration::from_millis(100));
     };
     assert!(restarter.join().unwrap(), "docker restart");
+    let database_back = database_back.unwrap_or(back);
+    let after_database = back.saturating_sub(database_back);
     eprintln!(
-        "D74 restart: the first refused call {:?} after the restart began, served again {back:?} \
-         after it; {outage_errors} refused calls, the slowest took {slowest_error:?}",
+        "D74 restart: the first refused call {:?} after the restart began, the database accepted \
+         connections again after {database_back:?}, the pool served {after_database:?} later \
+         ({back:?} in all); {outage_errors} refused calls, the slowest took {slowest_error:?}",
         first_error.unwrap()
     );
-    assert!(back < Duration::from_secs(30));
+    assert!(
+        after_database < Duration::from_secs(30),
+        "the pool took {after_database:?} to serve once the database was back"
+    );
     assert!(
         slowest_error < Duration::from_secs(5),
         "a call during the outage answers quickly, it does not hang: {slowest_error:?}"
@@ -1216,7 +1277,7 @@ fn behind_pgbouncer_in_transaction_mode_everything_works_with_locks_on_a_direct_
     let cfg = || PgPoolConfig {
         pooler: Pooler::Transaction,
         lock_url: Some(b.pg.url()),
-        acquire_timeout: Duration::from_secs(10),
+        acquire_timeout: Duration::from_secs(60),
         ..PgPoolConfig::default()
     };
     // The whole storage contract, then the shared state between two handles that stand in for two
@@ -1306,7 +1367,7 @@ fn pgbouncer_without_protocol_level_prepared_statements_works_too() {
     let cfg = PgPoolConfig {
         pooler: Pooler::Transaction,
         lock_url: Some(b.pg.url()),
-        acquire_timeout: Duration::from_secs(10),
+        acquire_timeout: Duration::from_secs(60),
         ..PgPoolConfig::default()
     };
     let one = open_with(&b.url(), Some(cfg)).unwrap();
@@ -1322,7 +1383,7 @@ fn pgbouncer_without_protocol_level_prepared_statements_works_too() {
 
 #[test]
 fn a_lock_address_that_reaches_another_database_is_refused_at_start_up() {
-    let url = pg_url!();
+    let (url, _db) = pg_db!();
     let (head, _) = url.rsplit_once('/').unwrap();
     let other = format!("{head}/postgres");
     if other == url {

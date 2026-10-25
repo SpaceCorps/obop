@@ -21,7 +21,8 @@ fn error_responses() -> J {
     json!({
         "400": {"description": "The input was rejected; the error says which field and why.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
         "401": {"description": "Missing, expired or revoked bearer token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-        "404": {"description": "No such command or record, or it is hidden from this token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+        "404": {"description": "No such command or record, or it is hidden from this token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+        "503": {"description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. Nothing was started for storage_busy; retry it. After storage_unavailable or storage_timeout a write may or may not have been applied.", "headers": {"Retry-After": {"description": "Seconds to wait before trying again.", "schema": {"type": "integer"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
     })
 }
 
@@ -60,7 +61,7 @@ pub fn platform(base: &str) -> J {
         "info": {
             "title": "obop control plane API",
             "version": obop_types::CORE_VERSION,
-            "description": "Sign up, create your own obop instance, watch its setup, and delete it. Each instance then has its own API, described at /api/openapi.json on the instance. Errors are JSON with error, code and hint."
+            "description": "Sign up, create your own obop instance, watch its setup, and delete it. Each instance then has its own API, described at /api/openapi.json on the instance. Errors are JSON with error, code and hint. A 503 with a Retry-After header (storage_busy, storage_unavailable, storage_timeout) means the database could not serve the request: try again after that many seconds."
         },
         "servers": [{"url": base}],
         "paths": {
@@ -220,7 +221,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 .collect();
             schemas.insert(name.clone(), rec.clone());
             let op = |id: &str, summary: &str, body: Option<J>, resp: J| {
-                let mut o = json!({"operationId": format!("{name}.{id}"), "summary": summary, "tags": [m.name.clone()], "security": sec.clone(), "responses": {"200": resp, "202": ok(json!({"$ref": "#/components/schemas/ApprovalRequired"}), "Proposed; needs a human to approve."), "400": error_responses()["400"].clone(), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}});
+                let mut o = json!({"operationId": format!("{name}.{id}"), "summary": summary, "tags": [m.name.clone()], "security": sec.clone(), "responses": {"200": resp, "202": ok(json!({"$ref": "#/components/schemas/ApprovalRequired"}), "Proposed; needs a human to approve."), "400": error_responses()["400"].clone(), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone(), "503": error_responses()["503"].clone()}});
                 if let Some(b) = body {
                     o["requestBody"] = b;
                 }
