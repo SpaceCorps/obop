@@ -264,6 +264,108 @@ fn a_breaking_update_without_a_step_is_refused_and_changes_nothing() {
     );
 }
 
+/// D72: a package update that changes the digits of a decimal must say how the stored values
+/// are rewritten; otherwise old records keep an old spelling next to new ones.
+#[test]
+fn changing_the_digits_of_a_decimal_needs_a_rewrite_step_and_the_step_does_it() {
+    let store = Store::new();
+    let shelf = Shelf::default();
+    let (d, inst) = setup(&store, &shelf);
+    let dec = |scale: u8, extra: &str| {
+        field(
+            "price",
+            &format!("kind = \"decimal\"
+precision = 10
+scale = {scale}
+unique = true
+{extra}"),
+        )
+    };
+    inst.install(&pkg("upd", "0.1.0", &dec(2, ""), "", "", ""), "upload", "root")
+        .unwrap();
+    rec(&store, "upd_item", "1", &[("title", json!("a")), ("price", json!("12.50"))]);
+    rec(&store, "upd_item", "2", &[("title", json!("b")), ("price", json!("3.00"))]);
+    // Without a step: refused in the plan and by the upgrade, nothing changes.
+    shelf.offer(pkg("upd", "0.2.0", &dec(4, ""), "", "", ""));
+    let plan = call(&d, &admin(), "module_plan.preview", by_id("upd")).unwrap().value;
+    assert_eq!(get(&plan, "ok"), &Value::Bool(false));
+    let all: Vec<&str> = list(get(&plan, "blockers"))
+        .iter()
+        .map(|b| text(get(b, "message")))
+        .collect();
+    assert!(
+        all.iter().any(|m| m.contains("decimal(10, 2) to decimal(10, 4)") && m.contains("reformat_field")),
+        "{all:?}"
+    );
+    assert!(err(call(&d, &admin(), "module.upgrade", by_id("upd"))).contains("reformat_field"));
+    assert_eq!(version_of(&inst, "upd"), "0.1.0");
+    assert_eq!(stored(&store, "upd_item", "1")["price"], "12.50");
+    // With the step: every stored value is rewritten in the new shape, in one batch.
+    shelf.offer(pkg(
+        "upd",
+        "0.3.0",
+        &dec(4, ""),
+        "[[migration]]
+from = \"<0.3.0\"
+op = \"reformat_field\"
+model = \"upd_item\"
+field = \"price\"
+",
+        "",
+        "",
+    ));
+    let plan = call(&d, &admin(), "module_plan.preview", by_id("upd")).unwrap().value;
+    assert_eq!(get(&plan, "ok"), &Value::Bool(true), "{plan:?}");
+    call(&d, &admin(), "module.upgrade", by_id("upd")).unwrap();
+    assert_eq!(stored(&store, "upd_item", "1")["price"], "12.5000");
+    assert_eq!(stored(&store, "upd_item", "2")["price"], "3.0000");
+    // One spelling per value again: the command layer takes the same number and a duplicate
+    // is a duplicate.
+    let made = call(
+        &d,
+        &admin(),
+        "upd_item.create",
+        Value::map([("title", Value::text("c")), ("price", Value::text("7.5"))]),
+    )
+    .unwrap()
+    .value;
+    assert_eq!(text(get(&made, "price")), "7.5000");
+    assert!(
+        err(call(
+            &d,
+            &admin(),
+            "upd_item.create",
+            Value::map([("title", Value::text("dup")), ("price", Value::text("12.5"))]),
+        ))
+        .contains("must be unique")
+    );
+    // An aggregate over values that predate a narrowing is an error, not a quietly shortened sum.
+    store
+        .backend()
+        .update(
+            "upd_item",
+            "2",
+            &[("price".to_string(), json!("3.123456"))].into_iter().collect(),
+        )
+        .unwrap();
+    let e = err(call(
+        &d,
+        &admin(),
+        "upd_item.search",
+        Value::map([(
+            "aggregate",
+            Value::map([(
+                "measures",
+                Value::List(vec![Value::map([
+                    ("op", Value::text("sum")),
+                    ("field", Value::text("price")),
+                ])]),
+            )]),
+        )]),
+    ));
+    assert!(e.contains("more than the 4 fractional digits"), "{e}");
+}
+
 #[test]
 fn rename_and_set_default_run_in_one_batch_and_rename_rolls_back() {
     let store = Store::new();

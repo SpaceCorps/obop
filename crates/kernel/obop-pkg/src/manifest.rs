@@ -103,7 +103,7 @@ pub struct Meta {
 pub struct MigrationM {
     /// The installed versions the step applies to, a requirement such as `<0.4`.
     pub from: String,
-    /// `rename_field`, `set_default` or `drop_field`.
+    /// `rename_field`, `set_default`, `drop_field` or `reformat_field`.
     pub op: String,
     pub model: String,
     /// The field: the old name for `rename_field`, the field filled for `set_default`, the field
@@ -687,9 +687,28 @@ impl Manifest {
                         return Err(format!("{at}: drop_field takes only `confirm`"));
                     }
                 }
+                "reformat_field" => {
+                    // D72: rewrite the stored values of a decimal or datetime field in the form of
+                    // its current shape (after a change of `scale` or `precision`).
+                    let Some(f) = exists(&st.field) else {
+                        return Err(format!(
+                            "{at}: {} is not a field of {} in this version",
+                            st.field, st.model
+                        ));
+                    };
+                    if !matches!(f.kind.as_str(), "decimal" | "datetime") {
+                        return Err(format!(
+                            "{at}: reformat_field is for decimal and datetime fields, and {} is {}",
+                            st.field, f.kind
+                        ));
+                    }
+                    if st.to.is_some() || st.value.is_some() || st.confirm {
+                        return Err(format!("{at}: reformat_field takes no other key"));
+                    }
+                }
                 other => {
                     return Err(format!(
-                        "{at}: unknown op {other:?} (use rename_field, set_default or drop_field)"
+                        "{at}: unknown op {other:?} (use rename_field, set_default, drop_field or reformat_field)"
                     ));
                 }
             }
