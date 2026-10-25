@@ -9,7 +9,13 @@
 //! jittered retry on lock timeout), and refuse a [`Class::Blocking`] or [`Class::Rewrite`]
 //! statement on a table above [`WINDOW_ROWS`] rows unless the operator named a maintenance window.
 //! This module is the part that needs no database: the table of known forms and the policy.
-//! Classes follow PostgreSQL 17 and 18; an unknown form is refused, not guessed.
+//! Classes follow PostgreSQL 17 and 18.
+//!
+//! [`classify`] reads the statement as tokens, so the text of a string literal or of a quoted
+//! name is never mistaken for a keyword. It takes one statement at a time (two are an error),
+//! prices a `VACUUM` with an option list, prices the constraints and defaults of an added column
+//! (a `UNIQUE` or `PRIMARY KEY` column builds an index; a default that calls a function not known
+//! to be stable rewrites the table), and refuses every form it has no price for.
 
 use std::time::Duration;
 
@@ -64,115 +70,337 @@ pub fn needs_window(class: Class, rows: u64) -> bool {
     class.holds_a_long_lock() && rows > WINDOW_ROWS
 }
 
-/// Strip comments, collapse whitespace and quoted identifiers' case, upper-case keywords.
-fn normalise(sql: &str) -> String {
-    let mut out = String::with_capacity(sql.len());
+/// One lexical item of a statement. The text of literals and quoted names is dropped (or kept
+/// apart from keywords) so that only a bare word can be a keyword.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Tok {
+    /// A bare word, upper-cased.
+    Word(String),
+    /// A quoted name.
+    Ident(String),
+    /// A string literal or a dollar-quoted body.
+    Str,
+    /// A number or a parameter.
+    Num(String),
+    Sym(char),
+}
+
+/// The statement as tokens: comments and whitespace dropped, literals and quoted names set apart.
+fn tokenize(sql: &str) -> Result<Vec<Tok>, String> {
     let b: Vec<char> = sql.chars().collect();
+    let mut out: Vec<Tok> = Vec::new();
     let mut i = 0;
     while i < b.len() {
         let c = b[i];
-        if c == '-' && b.get(i + 1) == Some(&'-') {
+        if c.is_whitespace() {
+            i += 1;
+        } else if c == '-' && b.get(i + 1) == Some(&'-') {
             while i < b.len() && b[i] != '\n' {
                 i += 1;
             }
         } else if c == '/' && b.get(i + 1) == Some(&'*') {
+            // Block comments nest in PostgreSQL.
+            let mut depth = 1;
             i += 2;
-            while i + 1 < b.len() && !(b[i] == '*' && b[i + 1] == '/') {
-                i += 1;
+            while depth > 0 {
+                match (b.get(i), b.get(i + 1)) {
+                    (Some('/'), Some('*')) => {
+                        depth += 1;
+                        i += 2;
+                    }
+                    (Some('*'), Some('/')) => {
+                        depth -= 1;
+                        i += 2;
+                    }
+                    (Some(_), _) => i += 1,
+                    (None, _) => return Err("a comment is not closed".into()),
+                }
             }
-            i += 2;
-        } else if c.is_whitespace() {
-            if !out.ends_with(' ') && !out.is_empty() {
-                out.push(' ');
+        } else if c == '\'' {
+            // `E'...'` lets a backslash escape the quote; a plain literal does not.
+            let escapes = matches!(out.last(), Some(Tok::Word(w)) if w == "E")
+                && i > 0
+                && matches!(b[i - 1], 'e' | 'E');
+            if escapes {
+                out.pop();
             }
             i += 1;
+            loop {
+                match b.get(i) {
+                    None => return Err("a string literal is not closed".into()),
+                    Some('\\') if escapes => i += 2,
+                    Some('\'') if b.get(i + 1) == Some(&'\'') => i += 2,
+                    Some('\'') => {
+                        i += 1;
+                        break;
+                    }
+                    Some(_) => i += 1,
+                }
+            }
+            out.push(Tok::Str);
+        } else if c == '"' {
+            let mut name = String::new();
+            i += 1;
+            loop {
+                match b.get(i) {
+                    None => return Err("a quoted name is not closed".into()),
+                    Some('"') if b.get(i + 1) == Some(&'"') => {
+                        name.push('"');
+                        i += 2;
+                    }
+                    Some('"') => {
+                        i += 1;
+                        break;
+                    }
+                    Some(ch) => {
+                        name.push(*ch);
+                        i += 1;
+                    }
+                }
+            }
+            out.push(Tok::Ident(name));
+        } else if c == '$' && b.get(i + 1).is_some_and(|d| d.is_ascii_digit()) {
+            let start = i;
+            i += 1;
+            while i < b.len() && b[i].is_ascii_digit() {
+                i += 1;
+            }
+            out.push(Tok::Num(b[start..i].iter().collect()));
+        } else if c == '$' {
+            // A dollar-quoted body: `$tag$ ... $tag$`.
+            let mut j = i + 1;
+            while j < b.len() && (b[j].is_alphanumeric() || b[j] == '_') {
+                j += 1;
+            }
+            if b.get(j) != Some(&'$') {
+                out.push(Tok::Sym('$'));
+                i += 1;
+                continue;
+            }
+            let tag: String = b[i..=j].iter().collect();
+            let rest: String = b[j + 1..].iter().collect();
+            match rest.find(&tag) {
+                Some(at) => i = j + 1 + rest[..at].chars().count() + tag.chars().count(),
+                None => return Err("a dollar-quoted body is not closed".into()),
+            }
+            out.push(Tok::Str);
+        } else if c.is_alphabetic() || c == '_' {
+            let start = i;
+            while i < b.len() && (b[i].is_alphanumeric() || b[i] == '_' || b[i] == '$') {
+                i += 1;
+            }
+            let w: String = b[start..i].iter().collect();
+            out.push(Tok::Word(w.to_ascii_uppercase()));
+        } else if c.is_ascii_digit() {
+            let start = i;
+            while i < b.len() && (b[i].is_alphanumeric() || b[i] == '.' || b[i] == '_') {
+                i += 1;
+            }
+            out.push(Tok::Num(b[start..i].iter().collect()));
         } else {
-            out.push(c.to_ascii_uppercase());
+            out.push(Tok::Sym(c));
             i += 1;
         }
     }
-    out.trim().trim_end_matches(';').trim().to_string()
+    Ok(out)
 }
 
-fn has(s: &str, needle: &str) -> bool {
-    s.contains(needle)
+/// The statements of a text, split at `;`. Empty ones are dropped.
+fn statements(toks: Vec<Tok>) -> Vec<Vec<Tok>> {
+    let mut all = Vec::new();
+    let mut cur = Vec::new();
+    for t in toks {
+        if t == Tok::Sym(';') {
+            if !cur.is_empty() {
+                all.push(std::mem::take(&mut cur));
+            }
+        } else {
+            cur.push(t);
+        }
+    }
+    if !cur.is_empty() {
+        all.push(cur);
+    }
+    all
 }
 
-/// Defaults that PostgreSQL evaluates once (a constant, or a stable function such as `now()`)
-/// leave the table alone; a volatile one rewrites it.
-fn volatile_default(s: &str) -> bool {
-    [
-        "RANDOM(",
-        "GEN_RANDOM_UUID(",
-        "UUID_GENERATE_V4(",
-        "CLOCK_TIMESTAMP(",
-        "TIMEOFDAY(",
-        "NEXTVAL(",
-        "TXID_CURRENT(",
-        "GEN_RANDOM_BYTES(",
-    ]
-    .iter()
-    .any(|f| s.contains(f))
+fn show(t: &[Tok]) -> String {
+    let mut s = String::new();
+    for x in t {
+        if !s.is_empty() {
+            s.push(' ');
+        }
+        match x {
+            Tok::Word(w) => s.push_str(w),
+            Tok::Ident(n) => s.push_str(&format!("\"{n}\"")),
+            Tok::Str => s.push_str("'...'"),
+            Tok::Num(n) => s.push_str(n),
+            Tok::Sym(c) => s.push(*c),
+        }
+    }
+    s
+}
+
+fn at(t: &[Tok], i: usize, w: &str) -> bool {
+    matches!(t.get(i), Some(Tok::Word(x)) if x == w)
+}
+
+/// The tokens start with these words.
+fn starts(t: &[Tok], ws: &[&str]) -> bool {
+    ws.iter().enumerate().all(|(i, w)| at(t, i, w))
+}
+
+/// The words occur, side by side, anywhere in the tokens.
+fn has(t: &[Tok], ws: &[&str]) -> bool {
+    (0..t.len()).any(|i| ws.iter().enumerate().all(|(k, w)| at(t, i + k, w)))
+}
+
+/// The tokens after the leading words, if they start with them.
+fn strip<'a>(t: &'a [Tok], ws: &[&str]) -> Option<&'a [Tok]> {
+    starts(t, ws).then(|| &t[ws.len()..])
+}
+
+/// Functions a default may call and still be evaluated once, when the column is added (stable
+/// or immutable). A call to anything else is taken to be volatile: it rewrites the table.
+const STABLE_IN_DEFAULTS: [&str; 17] = [
+    "NOW",
+    "TRANSACTION_TIMESTAMP",
+    "STATEMENT_TIMESTAMP",
+    "CURRENT_SETTING",
+    "COALESCE",
+    "NULLIF",
+    "LOWER",
+    "UPPER",
+    "ABS",
+    "ROUND",
+    "TO_JSONB",
+    "JSONB_BUILD_OBJECT",
+    "JSON_BUILD_OBJECT",
+    "TO_TIMESTAMP",
+    "MAKE_INTERVAL",
+    "CAST",
+    "ROW",
+];
+
+/// Words that are followed by a bracket without being a function call: constraints, and the
+/// types that take a length or a precision.
+const NOT_CALLS: [&str; 22] = [
+    "CHECK",
+    "REFERENCES",
+    "UNIQUE",
+    "PRIMARY",
+    "GENERATED",
+    "NOT",
+    "NULL",
+    "CONSTRAINT",
+    "DEFAULT",
+    "USING",
+    "DEFERRABLE",
+    "ON",
+    "AS",
+    "VARCHAR",
+    "CHAR",
+    "CHARACTER",
+    "NUMERIC",
+    "DECIMAL",
+    "TIMESTAMP",
+    "TIMESTAMPTZ",
+    "TIME",
+    "INTERVAL",
+];
+
+/// A column default that calls a function not known to be stable: PostgreSQL evaluates it per
+/// row and rewrites the table.
+fn volatile_default(c: &[Tok]) -> bool {
+    let Some(d) = (0..c.len()).find(|&i| at(c, i, "DEFAULT")) else {
+        return false;
+    };
+    (d + 1..c.len()).any(|i| {
+        let Tok::Word(name) = &c[i] else {
+            return false;
+        };
+        c.get(i + 1) == Some(&Tok::Sym('('))
+            && !NOT_CALLS.contains(&name.as_str())
+            && !STABLE_IN_DEFAULTS.contains(&name.as_str())
+    })
 }
 
 /// The cost class of one statement, or why it cannot be classified. Only the forms obop's
-/// migrations are allowed to use are known; anything else is an error.
+/// migrations are allowed to use are known; anything else, and more than one statement at a time,
+/// is an error.
 pub fn classify(sql: &str) -> Result<Class, String> {
-    let s = normalise(sql);
-    if s.is_empty() {
-        return Err("empty statement".into());
-    }
+    let mut stmts = statements(tokenize(sql)?);
+    let t = match stmts.len() {
+        0 => return Err("empty statement".into()),
+        1 => stmts.remove(0),
+        n => {
+            return Err(format!(
+                "{n} statements in one text: classify and run one statement at a time"
+            ));
+        }
+    };
     let unknown = || {
         format!(
             "cannot classify {:?}: add the form to ddl::classify with its cost, or use a known one",
-            s.chars().take(80).collect::<String>()
+            show(&t).chars().take(80).collect::<String>()
         )
     };
-    let first = s.split(' ').next().unwrap_or("");
-    match first {
-        "INSERT" | "SELECT" | "WITH" | "DELETE" | "COMMENT" | "ANALYZE" | "VACUUM"
-            if !has(&s, "VACUUM FULL") =>
-        {
+    let Some(Tok::Word(first)) = t.first() else {
+        return Err(unknown());
+    };
+    match first.as_str() {
+        "INSERT" | "SELECT" | "WITH" | "DELETE" | "COMMENT" | "ANALYZE" | "UPDATE" => {
             Ok(Class::None)
         }
-        "UPDATE" => Ok(Class::None),
-        "VACUUM" | "CLUSTER" => Ok(Class::Rewrite),
+        "VACUUM" => Ok(vacuum(&t)),
+        "CLUSTER" => Ok(Class::Rewrite),
         "LOCK" => Ok(Class::Blocking),
-        "REINDEX" => Ok(if has(&s, "CONCURRENTLY") {
+        "REINDEX" => Ok(if has(&t, &["CONCURRENTLY"]) {
             Class::Concurrent
         } else {
             Class::Blocking
         }),
-        "REFRESH" if has(&s, "MATERIALIZED VIEW") => Ok(if has(&s, "CONCURRENTLY") {
+        "REFRESH" if has(&t, &["MATERIALIZED", "VIEW"]) => Ok(if has(&t, &["CONCURRENTLY"]) {
             Class::Concurrent
         } else {
             Class::Blocking
         }),
-        "CREATE" => create(&s).ok_or_else(unknown),
-        "DROP" => drop(&s).ok_or_else(unknown),
-        "ALTER" if s.starts_with("ALTER TABLE") => alter_table(&s).ok_or_else(unknown),
-        "ALTER" if s.starts_with("ALTER INDEX") || s.starts_with("ALTER SEQUENCE") => {
+        "CREATE" => create(&t).ok_or_else(unknown),
+        "DROP" => drop(&t).ok_or_else(unknown),
+        "ALTER" if starts(&t, &["ALTER", "TABLE"]) => alter_table(&t).ok_or_else(unknown),
+        "ALTER" if starts(&t, &["ALTER", "INDEX"]) || starts(&t, &["ALTER", "SEQUENCE"]) => {
             Ok(Class::Instant)
         }
         _ => Err(unknown()),
     }
 }
 
-fn create(s: &str) -> Option<Class> {
-    let rest = s.strip_prefix("CREATE ")?;
-    let rest = rest
-        .strip_prefix("OR REPLACE ")
-        .or_else(|| rest.strip_prefix("UNIQUE "))
+/// `VACUUM`, `VACUUM (ANALYZE)` and the rest leave the table alone; `FULL`, written either way,
+/// rewrites it (`FULL false` and `FULL off` do not).
+fn vacuum(t: &[Tok]) -> Class {
+    let full = (0..t.len()).any(|i| {
+        at(t, i, "FULL")
+            && !(at(t, i + 1, "FALSE")
+                || at(t, i + 1, "OFF")
+                || matches!(t.get(i + 1), Some(Tok::Num(n)) if n == "0"))
+    });
+    if full { Class::Rewrite } else { Class::None }
+}
+
+fn create(t: &[Tok]) -> Option<Class> {
+    let rest = strip(t, &["CREATE"])?;
+    let rest = strip(rest, &["OR", "REPLACE"])
+        .or_else(|| strip(rest, &["UNIQUE"]))
         .unwrap_or(rest);
-    if rest.starts_with("INDEX") {
-        return Some(if has(s, "CONCURRENTLY") {
+    if starts(rest, &["INDEX"]) {
+        return Some(if has(t, &["CONCURRENTLY"]) {
             Class::Concurrent
         } else {
             Class::Blocking
         });
     }
-    if rest.starts_with("MATERIALIZED VIEW") {
-        return Some(if has(s, "WITH NO DATA") {
+    if starts(rest, &["MATERIALIZED", "VIEW"]) {
+        return Some(if has(t, &["WITH", "NO", "DATA"]) {
             Class::Instant
         } else {
             Class::Blocking
@@ -181,49 +409,49 @@ fn create(s: &str) -> Option<Class> {
     // New objects: nothing else holds them yet. CREATE TABLE ... AS SELECT copies data, but only
     // into the table it creates.
     for k in [
-        "TABLE",
-        "UNLOGGED TABLE",
-        "VIEW",
-        "SEQUENCE",
-        "TRIGGER",
-        "FUNCTION",
-        "PROCEDURE",
-        "TYPE",
-        "EXTENSION",
-        "SCHEMA",
-        "ROLE",
-        "POLICY",
+        &["TABLE"][..],
+        &["UNLOGGED", "TABLE"],
+        &["VIEW"],
+        &["SEQUENCE"],
+        &["TRIGGER"],
+        &["FUNCTION"],
+        &["PROCEDURE"],
+        &["TYPE"],
+        &["EXTENSION"],
+        &["SCHEMA"],
+        &["ROLE"],
+        &["POLICY"],
     ] {
-        if rest.starts_with(k) {
+        if starts(rest, k) {
             return Some(Class::Instant);
         }
     }
     None
 }
 
-fn drop(s: &str) -> Option<Class> {
-    let rest = s.strip_prefix("DROP ")?;
-    if rest.starts_with("INDEX") {
-        return Some(if has(s, "CONCURRENTLY") {
+fn drop(t: &[Tok]) -> Option<Class> {
+    let rest = strip(t, &["DROP"])?;
+    if starts(rest, &["INDEX"]) {
+        return Some(if has(t, &["CONCURRENTLY"]) {
             Class::Concurrent
         } else {
             Class::Instant
         });
     }
     for k in [
-        "TABLE",
-        "VIEW",
-        "MATERIALIZED VIEW",
-        "SEQUENCE",
-        "TRIGGER",
-        "FUNCTION",
-        "PROCEDURE",
-        "TYPE",
-        "SCHEMA",
-        "POLICY",
-        "EXTENSION",
+        &["TABLE"][..],
+        &["VIEW"],
+        &["MATERIALIZED", "VIEW"],
+        &["SEQUENCE"],
+        &["TRIGGER"],
+        &["FUNCTION"],
+        &["PROCEDURE"],
+        &["TYPE"],
+        &["SCHEMA"],
+        &["POLICY"],
+        &["EXTENSION"],
     ] {
-        if rest.starts_with(k) {
+        if starts(rest, k) {
             return Some(Class::Instant);
         }
     }
@@ -231,89 +459,96 @@ fn drop(s: &str) -> Option<Class> {
 }
 
 /// The class of one clause of `ALTER TABLE`.
-fn clause(c: &str) -> Option<Class> {
-    let c = c.trim();
-    if c.starts_with("ADD CONSTRAINT")
-        || c.starts_with("ADD PRIMARY KEY")
-        || c.starts_with("ADD UNIQUE")
-        || c.starts_with("ADD FOREIGN KEY")
-        || c.starts_with("ADD CHECK")
-        || c.starts_with("ADD EXCLUDE")
+fn clause(c: &[Tok]) -> Option<Class> {
+    if starts(c, &["ADD", "CONSTRAINT"])
+        || starts(c, &["ADD", "PRIMARY", "KEY"])
+        || starts(c, &["ADD", "UNIQUE"])
+        || starts(c, &["ADD", "FOREIGN", "KEY"])
+        || starts(c, &["ADD", "CHECK"])
+        || starts(c, &["ADD", "EXCLUDE"])
     {
         // An index that already exists, or a constraint added without the scan, is a catalogue
         // change; the scan is then `VALIDATE CONSTRAINT`.
-        return Some(if has(c, "NOT VALID") || has(c, "USING INDEX") {
+        return Some(if has(c, &["NOT", "VALID"]) || has(c, &["USING", "INDEX"]) {
             Class::Instant
         } else {
             Class::Blocking
         });
     }
-    if c.starts_with("VALIDATE CONSTRAINT") {
+    if starts(c, &["VALIDATE", "CONSTRAINT"]) {
         return Some(Class::Concurrent);
     }
-    if c.starts_with("ADD ") {
+    if starts(c, &["ADD"]) {
         // `ADD [COLUMN]`.
-        if has(c, "GENERATED") && (has(c, "STORED") || has(c, "AS IDENTITY")) {
+        if has(c, &["GENERATED"]) && (has(c, &["STORED"]) || has(c, &["AS", "IDENTITY"])) {
             return Some(Class::Rewrite);
         }
-        if has(c, " SERIAL") || has(c, " BIGSERIAL") || has(c, " SMALLSERIAL") {
+        if has(c, &["SERIAL"]) || has(c, &["BIGSERIAL"]) || has(c, &["SMALLSERIAL"]) {
             return Some(Class::Rewrite);
         }
-        if has(c, "DEFAULT") && volatile_default(c) {
+        if volatile_default(c) {
             return Some(Class::Rewrite);
+        }
+        // An inline constraint builds an index or scans the table under the lock.
+        if has(c, &["UNIQUE"])
+            || has(c, &["PRIMARY", "KEY"])
+            || has(c, &["REFERENCES"])
+            || has(c, &["CHECK"])
+        {
+            return Some(Class::Blocking);
         }
         // A nullable column, or one whose default is evaluated once: catalogue only (PostgreSQL 11+).
         return Some(Class::Instant);
     }
-    if c.starts_with("DROP ") {
+    if starts(c, &["DROP"]) {
         // `DROP [COLUMN]` and `DROP CONSTRAINT`: catalogue only (the space is reclaimed later).
         return Some(Class::Instant);
     }
-    if c.starts_with("ALTER ") {
-        if has(c, " TYPE ") || has(c, "SET DATA TYPE") {
+    if starts(c, &["ALTER"]) {
+        if has(c, &["TYPE"]) || has(c, &["SET", "DATA", "TYPE"]) {
             return Some(Class::Rewrite);
         }
-        if has(c, "SET NOT NULL") {
+        if has(c, &["SET", "NOT", "NULL"]) {
             return Some(Class::Blocking);
         }
-        if has(c, "ADD GENERATED") || has(c, "SET EXPRESSION") {
+        if has(c, &["ADD", "GENERATED"]) || has(c, &["SET", "EXPRESSION"]) {
             return Some(Class::Rewrite);
         }
-        if has(c, "DROP NOT NULL")
-            || has(c, "SET DEFAULT")
-            || has(c, "DROP DEFAULT")
-            || has(c, "SET STATISTICS")
-            || has(c, "SET STORAGE")
-            || has(c, "DROP IDENTITY")
+        if has(c, &["DROP", "NOT", "NULL"])
+            || has(c, &["SET", "DEFAULT"])
+            || has(c, &["DROP", "DEFAULT"])
+            || has(c, &["SET", "STATISTICS"])
+            || has(c, &["SET", "STORAGE"])
+            || has(c, &["DROP", "IDENTITY"])
         {
             return Some(Class::Instant);
         }
         return None;
     }
-    if c.starts_with("RENAME") || c.starts_with("OWNER TO") || c.starts_with("SET SCHEMA") {
+    if starts(c, &["RENAME"]) || starts(c, &["OWNER", "TO"]) || starts(c, &["SET", "SCHEMA"]) {
         return Some(Class::Instant);
     }
-    if c.starts_with("ENABLE")
-        || c.starts_with("DISABLE")
-        || c.starts_with("FORCE ROW")
-        || c.starts_with("NO FORCE")
+    if starts(c, &["ENABLE"])
+        || starts(c, &["DISABLE"])
+        || starts(c, &["FORCE", "ROW"])
+        || starts(c, &["NO", "FORCE"])
     {
         return Some(Class::Instant);
     }
-    if c.starts_with("SET LOGGED")
-        || c.starts_with("SET UNLOGGED")
-        || c.starts_with("SET TABLESPACE")
+    if starts(c, &["SET", "LOGGED"])
+        || starts(c, &["SET", "UNLOGGED"])
+        || starts(c, &["SET", "TABLESPACE"])
     {
         return Some(Class::Rewrite);
     }
-    if c.starts_with("SET (") || c.starts_with("RESET (") {
+    if (starts(c, &["SET"]) || starts(c, &["RESET"])) && c.get(1) == Some(&Tok::Sym('(')) {
         return Some(Class::Instant);
     }
-    if c.starts_with("ATTACH PARTITION") {
+    if starts(c, &["ATTACH", "PARTITION"]) {
         return Some(Class::Blocking);
     }
-    if c.starts_with("DETACH PARTITION") {
-        return Some(if has(c, "CONCURRENTLY") {
+    if starts(c, &["DETACH", "PARTITION"]) {
+        return Some(if has(c, &["CONCURRENTLY"]) {
             Class::Concurrent
         } else {
             Class::Instant
@@ -322,30 +557,44 @@ fn clause(c: &str) -> Option<Class> {
     None
 }
 
-fn alter_table(s: &str) -> Option<Class> {
-    let mut rest = s.strip_prefix("ALTER TABLE")?.trim_start();
-    if let Some(r) = rest.strip_prefix("IF EXISTS ") {
+fn alter_table(t: &[Tok]) -> Option<Class> {
+    let mut rest = strip(t, &["ALTER", "TABLE"])?;
+    if let Some(r) = strip(rest, &["IF", "EXISTS"]) {
         rest = r;
     }
-    if let Some(r) = rest.strip_prefix("ONLY ") {
+    if let Some(r) = strip(rest, &["ONLY"]) {
         rest = r;
     }
-    // Skip the table name (one token, possibly schema-qualified).
-    let (_, clauses) = rest.split_once(' ')?;
+    // Skip the table name: a name, possibly schema-qualified.
+    let is_name = |x: Option<&Tok>| matches!(x, Some(Tok::Word(_) | Tok::Ident(_)));
+    if !is_name(rest.first()) {
+        return None;
+    }
+    let mut i = 1;
+    while rest.get(i) == Some(&Tok::Sym('.')) && is_name(rest.get(i + 1)) {
+        i += 2;
+    }
+    if rest.get(i) == Some(&Tok::Sym('*')) {
+        i += 1;
+    }
+    let clauses = &rest[i..];
+    if clauses.is_empty() {
+        return None;
+    }
     // Split the clauses at top-level commas.
     let mut depth = 0i32;
-    let mut cur = String::new();
-    let mut parts = Vec::new();
-    for ch in clauses.chars() {
-        match ch {
-            '(' => depth += 1,
-            ')' => depth -= 1,
+    let mut cur: Vec<Tok> = Vec::new();
+    let mut parts: Vec<Vec<Tok>> = Vec::new();
+    for tok in clauses {
+        match tok {
+            Tok::Sym('(') => depth += 1,
+            Tok::Sym(')') => depth -= 1,
             _ => {}
         }
-        if ch == ',' && depth == 0 {
+        if *tok == Tok::Sym(',') && depth == 0 {
             parts.push(std::mem::take(&mut cur));
         } else {
-            cur.push(ch);
+            cur.push(tok.clone());
         }
     }
     parts.push(cur);
@@ -497,6 +746,93 @@ mod tests {
             e.contains("cannot classify") && e.contains("FROBNICATE"),
             "{e}"
         );
+    }
+
+    /// The shapes the review found priced too low: each of these held a long lock or rewrote a
+    /// big table while the classifier said it was free, or ran a statement it never read.
+    #[test]
+    fn the_shapes_a_substring_match_got_wrong_are_priced_or_refused() {
+        use Class::*;
+        let priced: &[(&str, Class)] = &[
+            // VACUUM with an option list.
+            ("VACUUM (FULL) big_table", Rewrite),
+            ("VACUUM (FULL, ANALYZE) big_table", Rewrite),
+            ("vacuum (full true) big_table", Rewrite),
+            ("VACUUM (FULL false) big_table", None),
+            ("VACUUM (ANALYZE) big_table", None),
+            ("VACUUM ANALYZE big_table", None),
+            // Inline constraints of an added column build an index or scan the table.
+            ("ALTER TABLE big ADD COLUMN c int UNIQUE", Blocking),
+            ("ALTER TABLE big ADD COLUMN id bigint PRIMARY KEY", Blocking),
+            ("ALTER TABLE big ADD COLUMN c int CHECK (c > 0)", Blocking),
+            (
+                "ALTER TABLE big ADD COLUMN c int REFERENCES u (id)",
+                Blocking,
+            ),
+            // A default that calls anything not known to be stable rewrites.
+            ("ALTER TABLE big ADD COLUMN c uuid DEFAULT uuidv7()", Rewrite),
+            (
+                "ALTER TABLE big ADD COLUMN c int DEFAULT my_user_fn()",
+                Rewrite,
+            ),
+            (
+                "ALTER TABLE big ADD COLUMN c int DEFAULT public.my_user_fn(1)",
+                Rewrite,
+            ),
+            (
+                "ALTER TABLE big ADD COLUMN c varchar(10) DEFAULT 'x'::varchar(10)",
+                Instant,
+            ),
+            (
+                "ALTER TABLE big ADD COLUMN c timestamptz DEFAULT now() NOT NULL",
+                Instant,
+            ),
+            // The words of a literal or of a quoted name are not keywords.
+            (
+                "ALTER TABLE big ADD COLUMN c text DEFAULT 'uuid_generate_v4( and TYPE and UNIQUE'",
+                Instant,
+            ),
+            (
+                "ALTER TABLE big ALTER COLUMN c SET DEFAULT 'concurrently type'",
+                Instant,
+            ),
+            ("CREATE INDEX idx_concurrently_x ON big (c)", Blocking),
+            ("CREATE INDEX \"concurrently\" ON big (c)", Blocking),
+            ("CREATE INDEX CONCURRENTLY idx ON big (c)", Concurrent),
+            // Names with quotes and schemas.
+            (
+                "ALTER TABLE \"my schema\".\"big table\" ALTER COLUMN c TYPE bigint",
+                Rewrite,
+            ),
+            ("ALTER TABLE ONLY s.t ADD COLUMN c int", Instant),
+        ];
+        for (sql, want) in priced {
+            assert_eq!(classify(sql), Ok(*want), "{sql}");
+        }
+        // More than one statement is never one class: the worst of them could be hidden.
+        for sql in [
+            "SELECT 1; ALTER TABLE big ALTER COLUMN c TYPE bigint",
+            "UPDATE t SET c = 1; ALTER TABLE big ALTER COLUMN c TYPE bigint",
+            "ALTER TABLE big ADD COLUMN c int; ALTER TABLE big ALTER COLUMN c TYPE bigint",
+            "DROP TABLE big; ALTER TABLE big ALTER COLUMN c TYPE bigint",
+        ] {
+            let e = classify(sql).unwrap_err();
+            assert!(e.contains("statements"), "{sql}: {e}");
+        }
+        // A trailing semicolon and a semicolon inside a literal or a body are not a second statement.
+        assert_eq!(classify("ALTER TABLE t ADD COLUMN c int;"), Ok(Instant));
+        assert_eq!(
+            classify("ALTER TABLE t ADD COLUMN c text DEFAULT 'a;b'"),
+            Ok(Instant)
+        );
+        assert_eq!(
+            classify("CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql"),
+            Ok(Instant)
+        );
+        // Text that does not close is an error, not a guess.
+        for sql in ["SELECT 'abc", "SELECT \"abc", "SELECT /* abc", "SELECT $$ abc"] {
+            assert!(classify(sql).is_err(), "{sql}");
+        }
     }
 
     #[test]
