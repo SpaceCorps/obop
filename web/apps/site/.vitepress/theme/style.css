@@ -660,7 +660,6 @@ canvas.ascii {
   border-block: 1px solid var(--border);
   background: var(--surface-2);
 }
-.home h2,
 .page h2.center {
   margin: 0 0 var(--space-4);
   font-size: clamp(1.9rem, 3.6vw, var(--text-5xl));
@@ -668,19 +667,9 @@ canvas.ascii {
   line-height: 1.08;
   text-align: center;
 }
-.split h2 {
-  text-align: start;
-}
 .sub {
-  max-inline-size: 42rem;
-  margin: 0 auto var(--space-10);
   color: var(--text-muted);
   font-size: var(--text-lg);
-  text-align: center;
-}
-.sub.left {
-  margin: 0 0 var(--space-6);
-  text-align: start;
 }
 .more {
   margin-block-start: var(--space-8);
@@ -1169,6 +1158,58 @@ section.cta p {
 .btn.light:hover {
   background: oklch(0.96 0.01 285);
   border-color: transparent;
+}
+
+/* ---------- Home page ---------- */
+.home {
+  --sec-y: var(--space-20);
+  --sec-join: var(--space-16);
+  --split-gap: var(--space-12);
+  --split-cols: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+@media (max-width: 52rem) {
+  .home {
+    --sec-y: var(--space-16);
+    --sec-join: var(--space-12);
+  }
+}
+
+/* headings: one head pattern (kicker, h2, optional sub, optional action), all left on one axis */
+.home h2 {
+  margin: 0;
+  font-size: clamp(1.75rem, 1rem + 2.2vw, var(--text-4xl));
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  text-align: start;
+}
+.home section.cta h2 {
+  margin: var(--space-3) 0 0;
+  font-size: clamp(1.9rem, 3.6vw, var(--text-5xl));
+  text-align: center;
+}
+.home .sub {
+  max-inline-size: 40rem;
+  margin: var(--space-3) 0 0;
+  line-height: 1.55;
+  text-align: start;
+}
+.home .eyebrow-text {
+  margin: 0 0 var(--space-3);
+}
+.home .sec-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-6) var(--space-8);
+  margin-block-end: var(--space-10);
+}
+.home .sec-text {
+  flex: 1 1 28rem;
+  max-inline-size: 46rem;
+}
+.home .sec-act {
+  flex: none;
 }
 
 /* ---------- Footer ---------- */

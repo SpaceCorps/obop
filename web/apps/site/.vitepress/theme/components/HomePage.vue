@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useSite } from "../composables.ts";
 import AppsGrid from "./AppsGrid.vue";
 import Icon from "./Icon.vue";
@@ -6,6 +7,22 @@ import Logo from "./Logo.vue";
 import Tile from "./Tile.vue";
 
 const { m, href } = useSite();
+
+/** A label the site already has (navigation or footer), found by its link target. */
+const label = (to: string) =>
+  m.value.nav.find((n) => n.href === to)?.label ??
+  m.value.footer.groups.flatMap((g) => g.links).find((l) => l.href === to)?.label ??
+  "";
+/** The small caps line above each section heading. No new strings: every one is an existing label. */
+const kick = computed(() => ({
+  apps: label("/apps/"),
+  platform: label("/platform/"),
+  marketplace: label("/marketplace/"),
+  steps: label("/docs/getting-started/"),
+  open: m.value.home.heroPoints[0] ?? "",
+  pricing: label("/pricing/"),
+  faq: label("/docs/reference/faq/"),
+}));
 </script>
 
 <template>
@@ -85,8 +102,13 @@ const { m, href } = useSite();
 
     <section id="apps" class="section">
       <div class="wrap">
-        <h2>{{ m.home.appsTitle }}</h2>
-        <p class="sub">{{ m.home.appsSub }}</p>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.apps }}</p>
+            <h2>{{ m.home.appsTitle }}</h2>
+            <p class="sub">{{ m.home.appsSub }}</p>
+          </div>
+        </div>
         <AppsGrid />
         <p class="center more">
           <a class="btn" :href="href('/apps/')">{{ m.home.seeAllApps }}</a>
@@ -96,8 +118,13 @@ const { m, href } = useSite();
 
     <section id="platform" class="section alt">
       <div class="wrap">
-        <h2>{{ m.home.pillarsTitle }}</h2>
-        <p class="sub">{{ m.home.pillarsSub }}</p>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.platform }}</p>
+            <h2>{{ m.home.pillarsTitle }}</h2>
+            <p class="sub">{{ m.home.pillarsSub }}</p>
+          </div>
+        </div>
         <div class="cards">
           <article v-for="p in m.home.pillars" :key="p.title">
             <span class="card-ico"><Icon :name="p.icon" :size="22" /></span>
@@ -157,7 +184,12 @@ const { m, href } = useSite();
 
     <section class="section alt">
       <div class="wrap">
-        <h2>{{ m.home.stepsTitle }}</h2>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.steps }}</p>
+            <h2>{{ m.home.stepsTitle }}</h2>
+          </div>
+        </div>
         <ol class="steps">
           <li v-for="(s, i) in m.home.steps" :key="s.title">
             <b aria-hidden="true">{{ i + 1 }}</b>
@@ -173,8 +205,13 @@ const { m, href } = useSite();
 
     <section id="open" class="section">
       <div class="wrap">
-        <h2>{{ m.home.openTitle }}</h2>
-        <p class="sub">{{ m.home.openBody }}</p>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.open }}</p>
+            <h2>{{ m.home.openTitle }}</h2>
+            <p class="sub">{{ m.home.openBody }}</p>
+          </div>
+        </div>
         <div class="cards">
           <article v-for="p in m.home.openPoints" :key="p.title">
             <h3>{{ p.title }}</h3>
@@ -186,8 +223,13 @@ const { m, href } = useSite();
 
     <section id="pricing" class="section alt">
       <div class="wrap">
-        <h2>{{ m.home.pricingTitle }}</h2>
-        <p class="sub">{{ m.home.pricingSub }}</p>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.pricing }}</p>
+            <h2>{{ m.home.pricingTitle }}</h2>
+            <p class="sub">{{ m.home.pricingSub }}</p>
+          </div>
+        </div>
         <div class="plans">
           <article v-for="p in m.pricing.plans" :key="p.name" :class="{ hl: p.highlight }">
             <h3>{{ p.name }}</h3>
@@ -206,7 +248,12 @@ const { m, href } = useSite();
 
     <section id="faq" class="section">
       <div class="wrap narrow">
-        <h2>{{ m.home.faqTitle }}</h2>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.faq }}</p>
+            <h2>{{ m.home.faqTitle }}</h2>
+          </div>
+        </div>
         <div class="faq">
           <details v-for="f in m.home.faq" :key="f.q">
             <summary>{{ f.q }}</summary>
