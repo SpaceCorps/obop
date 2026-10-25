@@ -12,6 +12,9 @@ const LANGS: Lang[] = ["de", "fr", "pl", "fi", "sv", "es"];
 const SAMPLES: string[] = [
   NETWORK_MESSAGE,
   serverFault(500),
+  "storage_busy",
+  "storage_unavailable",
+  "storage_timeout",
   'lead.stage starts as "new" when a record is created; it moves on through the model\'s actions',
   'lead.stage: moving from "new" to "won" is the mark_won action, which needs the crm.manager group',
   'stage must be new to do this, it is "won"',

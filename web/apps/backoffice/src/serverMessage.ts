@@ -144,6 +144,16 @@ const RULES: Rule[] = [
     (m) =>
       t("The server had a problem (status {status}). Try again in a moment.", { status: m[1]! }),
   ],
+  // The store was full, unreachable or too slow (D74): a 503 whose error is a code word.
+  [/^storage_busy$/, () => t("The server is busy. Try again in a moment.")],
+  [
+    /^storage_unavailable$/,
+    () => t("The database cannot be reached right now. Try again in a moment."),
+  ],
+  [
+    /^storage_timeout$/,
+    () => t("The database took too long to answer. Try again, or ask for less at once."),
+  ],
   // Governed fields (D48).
   [
     /^(\w+)\.(\w+) starts as "([^"]*)" when a record is created; it moves on through the model's actions$/,
