@@ -33,8 +33,8 @@ pub fn field_schema(f: &FieldInfo) -> J {
             " (an instant: RFC 3339 with an offset or Z, such as 2026-03-29T01:30:00Z; microsecond precision; returned in UTC as YYYY-MM-DDTHH:MM:SS.ffffffZ)",
         ),
         "decimal" => desc.push_str(&format!(
-            " (an exact decimal sent and returned as a STRING such as \"12.{}\", never a JSON number; at most {} digits, exactly {} after the point in answers)",
-            "3".repeat(usize::from(f.scale.unwrap_or(0))),
+            " (an exact decimal sent and returned as a STRING such as \"{}\", never a JSON number; at most {} digits, exactly {} after the point in answers)",
+            f.decimal_example().unwrap_or_default(),
             f.precision.unwrap_or(0),
             f.scale.unwrap_or(0)
         )),
@@ -189,7 +189,14 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
                 .filter(|f| f.required && !governed.contains(&f.name) && !f.computed)
                 .map(|f| f.name.to_string())
                 .collect();
-            let row = object(J::Object(field_properties(model, &governed)), &required);
+            // A decimal that rounds on import takes any number of fractional digits in a row.
+            let mut row_props = field_properties(model, &governed);
+            for f in model.fields.iter().filter(|f| f.kind == "decimal" && f.round.is_some()) {
+                if let Some(p) = row_props.get_mut(f.name) {
+                    p["pattern"] = json!(f.decimal_import_pattern());
+                }
+            }
+            let row = object(J::Object(row_props), &required);
             object(
                 json!({
                     "rows": {
@@ -200,7 +207,7 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
                     },
                     "csv": {
                         "type": "string",
-                        "description": "Instead of rows: the text of a CSV file (UTF-8, comma or semicolon, a header line of field names, at most 1 MiB). Whole numbers only (money in minor units), true/false for yes/no fields, the id of the record for references. An empty cell leaves the field out."
+                        "description": "Instead of rows: the text of a CSV file (UTF-8, comma or semicolon, a header line of field names, at most 1 MiB). Number fields take whole numbers and money minor units; a decimal is written with a point (12.50), a datetime with an offset or Z (2026-03-29T01:30:00Z), and a decimal field that rounds on import takes extra digits; true/false for yes/no fields, the id of the record for references. An empty cell leaves the field out."
                     },
                     "mode": {
                         "type": "string",

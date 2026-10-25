@@ -37,15 +37,6 @@ impl App {
 
     pub fn with_store(store: Store) -> Self {
         let d = Arc::new(Dispatcher::new());
-        // The platform time zone (D72): `OBOP_ZONE`, any IANA name, UTC by default. A name the
-        // pinned database does not know stops the start-up, not a report next month.
-        match obop_values::Zones::from_env() {
-            Ok(zones) => d.set_zones(zones),
-            Err(e) => {
-                eprintln!("error: {e}");
-                std::process::exit(2);
-            }
-        }
         // Several server processes may share one database (B1): the write lock, proposed plans,
         // sessions and rate limits go through the storage backend.
         match obop_keys::KeyRing::for_backend(&store.backend()) {
@@ -186,6 +177,16 @@ impl Authenticator for DevAuth {
 }
 
 impl App {
+    /// The platform time zone of this process (D72): `OBOP_ZONE`, any IANA name, UTC when it is
+    /// unset or blank. An app built in code (tests, `modules check`) is in UTC and reads no
+    /// environment; the commands that open the database call this, so a name the pinned
+    /// database does not know stops them before they touch anything.
+    pub fn set_zones_from_env(&self) -> Result<(), String> {
+        let zones = obop_values::Zones::from_env().map_err(|e| e.to_string())?;
+        self.dispatcher.set_zones(zones);
+        Ok(())
+    }
+
     /// Bind the `user_account` commands (D69) to the identity provider that serves this
     /// instance. Not done with `--dev-auth`: the fixed dev principals are not accounts.
     pub fn register_accounts(&self, auth: Arc<dyn Authenticator>) {

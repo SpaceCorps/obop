@@ -184,7 +184,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                     "decimal" => json!({
                         "type": "string",
                         "pattern": f.decimal_pattern(),
-                        "example": format!("12.{}", "3".repeat(usize::from(f.scale.unwrap_or(0)))),
+                        "example": f.decimal_example(),
                     }),
                     "datetime" => json!({
                         "type": "string",
@@ -298,7 +298,14 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 );
             }
             if model.can_bulk_create {
-                let mut row = json!({"type": "object", "properties": input_props.clone()});
+                // A decimal that rounds on import takes any number of fractional digits here.
+                let mut row_props = input_props.clone();
+                for f in model.fields.iter().filter(|f| f.kind == "decimal" && f.round.is_some()) {
+                    if let Some(p) = row_props.get_mut(f.name) {
+                        p["pattern"] = json!(f.decimal_import_pattern());
+                    }
+                }
+                let mut row = json!({"type": "object", "properties": row_props});
                 if !required.is_empty() {
                     row["required"] = json!(required);
                 }
@@ -309,7 +316,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                         &format!("Create up to 1000 {name} records in one call; all or nothing unless mode is partial"),
                         Some(json_body(json!({"type": "object", "properties": {
                             "rows": {"type": "array", "maxItems": 1000, "items": row},
-                            "csv": {"type": "string", "description": "Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB)"},
+                            "csv": {"type": "string", "description": "Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits"},
                             "mode": {"type": "string", "enum": ["all_or_nothing", "partial"]},
                             "dry_run": {"type": "boolean"},
                             "idempotency_key": {"type": "string", "maxLength": 128}

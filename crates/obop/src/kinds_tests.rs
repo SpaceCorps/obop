@@ -637,16 +637,16 @@ async fn meta_reports_the_shape_of_each_decimal_and_the_tz_database() {
             Arc::new(
                 obop_values::ZoneDb::fixture(
                     "2026-fixture",
-                    &[("Europe/Stockholm", "CET-1CEST,M3.5.1,M10.5.0/3")],
+                    &[("Europe/Berlin", "CET-1CEST,M3.5.1,M10.5.0/3")],
                 )
                 .unwrap(),
             ),
-            "Europe/Stockholm",
+            "Europe/Berlin",
         )
         .unwrap(),
     );
     let (_, meta) = send(&f.r, "GET", Some(&f.ada), "/api/meta", json!({})).await;
-    assert_eq!(meta["time"]["zone"], "Europe/Stockholm");
+    assert_eq!(meta["time"]["zone"], "Europe/Berlin");
     assert_eq!(meta["time"]["tzdb_version"], "2026-fixture");
 }
 

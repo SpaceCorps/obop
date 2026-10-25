@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { dayInZone, fromZonedInput, offsetSeconds, toZonedInput } from "./instants.ts";
 
-const SE = "Europe/Stockholm";
+const SE = "Europe/Berlin";
 const value = (text: string, zone = SE) => {
   const r = fromZonedInput(text, zone);
   if (!("value" in r)) throw new Error(`${text}: ${r.error}`);

@@ -136,7 +136,7 @@ const USAGE: &str = "usage: obop <command>
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
   import MODEL FILE.csv [--token TOKEN] [--mode partial] [--dry-run] [--key KEY]
                                                 create many records of MODEL from a CSV file (header = field names, references by id,
-                                                whole numbers, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
+                                                numbers, decimals and date-times as text, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
                                                 check of create. By default one bad row creates nothing; --mode partial keeps the good
                                                 rows; --dry-run only checks; --key makes a retry return the first answer
   commands [--token TOKEN]                      list the commands visible to a token
@@ -350,6 +350,8 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     eprintln!("database: {}", store.backend_kind());
     let seed = o.demo || store.backend_kind() == "sqlite";
     let app = App::with_store(store);
+    app.set_zones_from_env()
+        .map_err(|e| fail(&format!("error: {e}")))?;
     app.updater.set_backup(ops::backup_fn(url.clone()));
     if seed {
         app.seed_demo();
@@ -774,7 +776,7 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
                                 return (k.to_string(), Value::Int(n));
                             }
                         }
-                        "filter" | "order" => {
+                        "filter" | "order" | "aggregate" => {
                             if let Ok(j) = serde_json::from_str(v) {
                                 return (k.to_string(), Value::from_json(&j));
                             }

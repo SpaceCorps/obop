@@ -12,6 +12,7 @@ fn obop() -> Command {
         .env("OBOP_REQUIRE_MFA_FOR_ADMINS", "0")
         .env_remove("OBOP_DATABASE_URL")
         .env_remove("OBOP_ALLOWED_ORIGINS")
+        .env_remove("OBOP_ZONE")
         .env_remove("OBOP_METRICS_TOKEN")
         .env_remove("OBOP_SECRET_KEY")
         .env_remove("OBOP_SECRET_KEY_PREVIOUS");
@@ -138,6 +139,87 @@ fn other_invalid_allowed_origins_are_refused_at_startup_too() {
             "{bad}: {e}"
         );
     }
+}
+
+/// `obop serve --dev-auth` with these variables, up and listening.
+fn start_dev(env: &[(&str, &str)]) -> Server {
+    let port = free_port();
+    let child = obop()
+        .args([
+            "serve",
+            "--dev-auth",
+            "--addr",
+            &format!("127.0.0.1:{port}"),
+            "--db",
+            "memory:",
+        ])
+        .envs(env.iter().copied())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn obop serve");
+    let s = Server { child, port };
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while TcpStream::connect(("127.0.0.1", port)).is_err() {
+        assert!(Instant::now() < deadline, "obop serve did not come up");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    s
+}
+
+/// The `time` block of `/api/meta` of a running server.
+fn time_block(s: &Server) -> serde_json::Value {
+    let (st, r) = http(
+        s.port,
+        "GET",
+        "/api/meta",
+        &[("Authorization", "Bearer dev-admin")],
+    );
+    assert_eq!(st, 200, "{r}");
+    let body = r.split("\r\n\r\n").nth(1).unwrap_or_default();
+    serde_json::from_str::<serde_json::Value>(body).unwrap_or_else(|e| panic!("{e}: {body}"))
+        ["time"]
+        .clone()
+}
+
+#[test]
+fn an_unknown_time_zone_stops_the_server_and_a_good_one_is_the_platform_zone() {
+    // D72: a typo is found when the server starts, with the variable named.
+    for bad in ["Mars/Base", "../../etc/passwd", "UTC+2", "localtime", "Europe/"] {
+        let e = refused(&[("OBOP_ZONE", bad)]);
+        assert!(
+            e.contains("OBOP_ZONE") && e.contains("not a time zone"),
+            "{bad}: {e}"
+        );
+    }
+    // Unset, blank and padded or lower case names work; the zone is the canonical name.
+    let utc = start_dev(&[]);
+    assert_eq!(time_block(&utc)["zone"], "UTC");
+    let blank = start_dev(&[("OBOP_ZONE", "  ")]);
+    assert_eq!(time_block(&blank)["zone"], "UTC");
+    let berlin = start_dev(&[("OBOP_ZONE", " europe/berlin ")]);
+    let t = time_block(&berlin);
+    assert_eq!(t["zone"], "Europe/Berlin");
+    assert!(t["tzdb_version"].as_str().unwrap().starts_with("20"), "{t}");
+}
+
+#[test]
+fn every_command_that_opens_the_database_refuses_a_bad_time_zone() {
+    // Not only `serve`: `obop commands` opens the database too, and says the same.
+    let out = obop()
+        .args(["commands", "--dev-auth", "--db", "memory:"])
+        .env("OBOP_ZONE", "Mars/Base")
+        .output()
+        .expect("run obop");
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("OBOP_ZONE"));
+    // And with a good one it runs.
+    let ok = obop()
+        .args(["commands", "--dev-auth", "--db", "memory:"])
+        .env("OBOP_ZONE", "Asia/Tokyo")
+        .output()
+        .expect("run obop");
+    assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stderr));
 }
 
 #[test]
