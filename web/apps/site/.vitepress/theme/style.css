@@ -345,7 +345,7 @@ details.menu {
 .hero {
   position: relative;
   isolation: isolate;
-  padding-block: var(--space-20) var(--space-16);
+  padding-block: var(--space-20) var(--space-12);
   overflow: hidden;
   background:
     radial-gradient(
@@ -374,8 +374,6 @@ canvas.ascii {
 }
 .hero-in {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: var(--space-12);
   align-items: center;
 }
 .eyebrow {
@@ -429,35 +427,12 @@ canvas.ascii {
   flex-wrap: wrap;
   gap: var(--space-3);
 }
-.facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
-  margin: var(--space-8) 0 0;
-  padding: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  list-style: none;
-}
-.facts li {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-}
 .facts svg {
   color: var(--accent-ink);
 }
 
 /* The product illustration: drawn in HTML, decorative. */
-.mock {
-  position: relative;
-  padding-block-end: 6.5rem;
-}
 .mock-caption {
-  position: absolute;
-  inset-block-end: -1.5rem;
-  inset-inline-end: 0;
-  margin: 0;
   color: var(--text-subtle);
   font-size: var(--text-xs);
 }
@@ -587,7 +562,6 @@ canvas.ascii {
   font-variant-numeric: tabular-nums;
 }
 .mock-agent {
-  position: absolute;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--surface);
@@ -596,9 +570,6 @@ canvas.ascii {
   line-height: 1.4;
 }
 .mock-masked {
-  inset-block-end: 0;
-  inset-inline-start: -1.5rem;
-  inline-size: 13rem;
   padding: 0.75rem 0.9rem;
 }
 .mock-masked .overline {
@@ -628,8 +599,6 @@ canvas.ascii {
   font-style: italic;
 }
 .mock-approve {
-  inset-block-end: 0.5rem;
-  inset-inline-end: -0.5rem;
   display: flex;
   align-items: center;
   gap: 0.7rem;
@@ -1205,6 +1174,90 @@ section.cta p {
 }
 .home .sec-act {
   flex: none;
+}
+
+/* hero: copy and mock on the shared split, the facts as a full-width strip below them */
+.home .hero-in {
+  grid-template-columns: var(--split-cols);
+  gap: var(--space-12);
+}
+@media (min-width: 64.01rem) {
+  .home .hero-copy {
+    grid-area: 1 / 1;
+  }
+  .home .mock {
+    grid-area: 1 / 2;
+  }
+  .home .facts {
+    grid-area: 2 / 1 / 3 / -1;
+  }
+}
+@media (max-width: 64rem) {
+  .home .hero-in {
+    grid-template-columns: 1fr;
+    row-gap: var(--space-8);
+  }
+  .home .mock {
+    max-inline-size: 40rem;
+    margin-inline: 0;
+  }
+}
+.home .facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+  padding: var(--space-5) 0 0;
+  border-block-start: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  list-style: none;
+}
+.home .facts li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+.home .facts svg {
+  margin-block-start: 0.15rem;
+}
+
+/* the product mock is a grid: the two agent cards sit under the window's bottom edge, inside its width */
+.home .mock {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  column-gap: var(--space-3);
+}
+.home .mock-window {
+  grid-column: 1 / -1;
+}
+.home .mock-agent {
+  position: relative;
+  z-index: 1;
+  align-self: start;
+  margin-block-start: -0.75rem;
+}
+.home .mock-caption {
+  grid-column: 1 / -1;
+  margin: var(--space-3) 0 0;
+  text-align: end;
+}
+@media (max-width: 40rem) {
+  .home .facts {
+    grid-template-columns: 1fr;
+  }
+  .home .actions .btn {
+    flex: 1 1 100%;
+  }
+  .home .mock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home .mock-agent {
+    margin-block-start: var(--space-3);
+  }
+  .home .mock-caption {
+    text-align: start;
+  }
 }
 
 /* bands: .alt is surface-2; .join continues the band above it behind a hairline */
@@ -1814,19 +1867,6 @@ a.chip:hover {
   .hero {
     padding-block: var(--space-12);
   }
-  .hero-in {
-    grid-template-columns: 1fr;
-  }
-  .mock {
-    max-inline-size: 36rem;
-    margin-inline: auto;
-  }
-  .mock-masked {
-    inset-inline-start: 0;
-  }
-  .mock-approve {
-    inset-inline-end: 0;
-  }
   .docs {
     grid-template-columns: 14rem minmax(0, 1fr);
   }
@@ -1874,18 +1914,6 @@ a.chip:hover {
   }
   .mock-main {
     margin: 0.5rem;
-  }
-  .mock-agent {
-    position: static;
-    margin-block-start: var(--space-3);
-    inline-size: auto;
-  }
-  .mock {
-    padding-block-end: 0;
-  }
-  .mock-caption {
-    position: static;
-    margin-block-start: var(--space-2);
   }
   .hero .lead {
     font-size: var(--text-lg);

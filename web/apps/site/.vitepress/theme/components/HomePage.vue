@@ -40,12 +40,13 @@ const kick = computed(() => ({
             <a class="btn primary large" href="/app/">{{ m.home.ctaPrimary }}</a>
             <a class="btn large" :href="href('/apps/')">{{ m.home.ctaSecondary }}</a>
           </div>
-          <ul class="facts">
-            <li v-for="p in m.home.heroPoints" :key="p">
-              <Icon name="check-circle" :size="16" />{{ p }}
-            </li>
-          </ul>
         </div>
+
+        <ul class="facts">
+          <li v-for="p in m.home.heroPoints" :key="p">
+            <Icon name="check-circle" :size="16" />{{ p }}
+          </li>
+        </ul>
 
         <div class="mock" aria-hidden="true">
           <div class="mock-window">
