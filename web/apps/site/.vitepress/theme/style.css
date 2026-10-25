@@ -810,9 +810,6 @@ fieldset.seg input:focus-visible + label {
   margin: 0 0 var(--space-4);
   color: var(--text-muted);
 }
-.cards article p:last-child {
-  margin-block-end: 0;
-}
 .flow {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
@@ -832,10 +829,10 @@ fieldset.seg input:focus-visible + label {
 .flow li:last-child {
   border-block-start-color: var(--accent-fill);
 }
-/* 28 px node centred on the 2 px rail (the rail is the li's top border) */
+/* 28 px node centred on the 2 px rail (the rail is the li's top border; inset is measured from inside it) */
 .flow-n {
   position: absolute;
-  inset-block-start: calc(1px - 0.875rem);
+  inset-block-start: calc(-0.875rem - 1px);
   display: grid;
   place-items: center;
   inline-size: 1.75rem;
