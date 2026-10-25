@@ -6,21 +6,20 @@
 use obop_keys::KeyRing;
 use obop_keys::reseal::Options as ResealOptions;
 use obop_migrate::Migrator;
-use obop_ops::backup::{self, RestoreOptions};
 use obop_storage::Backend;
 use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-type Exit = Result<(), ExitCode>;
+pub(crate) type Exit = Result<(), ExitCode>;
 
-fn fail(msg: &str) -> ExitCode {
+pub(crate) fn fail(msg: &str) -> ExitCode {
     eprintln!("{msg}");
     ExitCode::FAILURE
 }
 
-fn usage() -> ExitCode {
+pub(crate) fn usage() -> ExitCode {
     eprintln!("{}", crate::USAGE);
     ExitCode::from(2)
 }
@@ -65,7 +64,7 @@ fn auto_migrate(kind: &str) -> bool {
 }
 
 /// A URL for messages, without a password.
-fn redact(url: &str) -> String {
+pub(crate) fn redact(url: &str) -> String {
     match (url.find("://"), url.rfind('@')) {
         (Some(i), Some(at)) if at > i => format!("{}://***@{}", &url[..i], &url[at + 1..]),
         _ => url.to_string(),
@@ -87,7 +86,7 @@ pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
     Ok(())
 }
 
-fn db_url(db: Option<&str>) -> String {
+pub(crate) fn db_url(db: Option<&str>) -> String {
     db.map(String::from)
         .or_else(|| std::env::var("OBOP_DATABASE_URL").ok())
         .unwrap_or_else(|| "sqlite://obop.db".into())
@@ -95,7 +94,7 @@ fn db_url(db: Option<&str>) -> String {
 
 /// Open an existing database for an operator command. A SQLite path that does not exist is an
 /// error (opening it would quietly create an empty database).
-fn open_existing(url: &str) -> Result<Arc<dyn Backend>, ExitCode> {
+pub(crate) fn open_existing(url: &str) -> Result<Arc<dyn Backend>, ExitCode> {
     if let Some(path) = url
         .strip_prefix("sqlite://")
         .or_else(|| url.strip_prefix("sqlite:"))
@@ -108,13 +107,13 @@ fn open_existing(url: &str) -> Result<Arc<dyn Backend>, ExitCode> {
     obop_storage::open(url).map_err(|e| fail(&format!("cannot open the database: {e}")))
 }
 
-fn take(args: &mut Vec<String>, flag: &str) -> Option<String> {
+pub(crate) fn take(args: &mut Vec<String>, flag: &str) -> Option<String> {
     let i = args.iter().position(|a| a == flag)?;
     args.remove(i);
     (i < args.len()).then(|| args.remove(i))
 }
 
-fn has(args: &mut Vec<String>, flag: &str) -> bool {
+pub(crate) fn has(args: &mut Vec<String>, flag: &str) -> bool {
     let n = args.len();
     args.retain(|a| a != flag);
     args.len() != n
@@ -135,24 +134,6 @@ pub fn take_flag(args: &mut Vec<String>, flag: &str) -> Option<String> {
     take(args, flag)
 }
 
-/// How the instance takes the backup that comes before an update from inside (D63): the same
-/// consistent, verified backup `obop backup` writes, into a directory.
-pub fn backup_fn(url: String) -> obop_update::BackupFn {
-    Arc::new(move |dir: &Path| {
-        let backend = obop_storage::open(&url).map_err(|e| e.to_string())?;
-        let ring = KeyRing::for_backend_read_only(&backend)?;
-        let st = Migrator::new(backend.clone(), ring)
-            .status()
-            .map_err(|e| e.to_string())?;
-        let schema = u64::from(st.stored.unwrap_or(0));
-        let blobs = blob_catalog(&backend, &url).map_err(|_| "cannot open the uploaded files")?;
-        let c = backup::create_with(&backend, Some(&blobs), schema, dir, &mut |_| {})?;
-        backup::verify(&c.data_path)
-            .map_err(|e| format!("the backup was written but does not verify: {e}"))?;
-        Ok(c.data_path.display().to_string())
-    })
-}
-
 /// Handle `migrate`, `backup`, `restore` and `secrets`; `None` for any other command.
 pub fn dispatch(args: &[String]) -> Option<ExitCode> {
     if let Some(code) = crate::update_cmd::dispatch(args) {
@@ -169,8 +150,8 @@ pub fn dispatch(args: &[String]) -> Option<ExitCode> {
     let mut rest: Vec<String> = args[1..].to_vec();
     let r = match first {
         "migrate" => migrate(&mut rest),
-        "backup" => backup_cmd(&mut rest),
-        "restore" => restore_cmd(&mut rest),
+        "backup" => crate::backup_cli::backup_cmd(&mut rest),
+        "restore" => crate::backup_cli::restore_cmd(&mut rest),
         _ => secrets_cmd(&mut rest),
     };
     Some(r.map_or_else(|c| c, |()| ExitCode::SUCCESS))
@@ -349,7 +330,7 @@ fn ledger_line(r: &obop_migrate::Entry) -> String {
 
 /// The store of uploaded pictures and files for the database at `url`: its records are in the
 /// database, its bytes where `OBOP_BLOB_DIR` and the URL say (D60).
-fn blob_catalog(
+pub(crate) fn blob_catalog(
     backend: &std::sync::Arc<dyn obop_storage::Backend>,
     url: &str,
 ) -> Result<obop_storage::blob::Catalog, ExitCode> {
@@ -357,134 +338,6 @@ fn blob_catalog(
     let bytes = obop_storage::blob::open_bytes(url, dir.as_deref())
         .map_err(|e| fail(&format!("cannot open the uploaded files: {e}")))?;
     Ok(obop_storage::blob::Catalog::new(backend.clone(), bytes))
-}
-
-fn backup_cmd(args: &mut Vec<String>) -> Exit {
-    if args.first().map(String::as_str) == Some("verify") {
-        if args.len() != 2 {
-            return Err(usage());
-        }
-        return match backup::verify(Path::new(&args[1])) {
-            Ok(v) => {
-                let m = v.manifest;
-                println!(
-                    "ok: format {}, written by obop {} at schema version {}, {} records, {}",
-                    m.format, m.core_version, m.schema_version, m.records, m.created_at
-                );
-                for (model, n) in &m.models {
-                    println!("  {model}: {n}");
-                }
-                Ok(())
-            }
-            Err(e) => Err(fail(&format!("FAILED: {e}"))),
-        };
-    }
-    let url = db_url(take(args, "--db").as_deref());
-    let out = take(args, "--out").ok_or_else(usage)?;
-    if !args.is_empty() {
-        return Err(usage());
-    }
-    let backend = open_existing(&url)?;
-    let ring = KeyRing::for_backend_read_only(&backend).map_err(|e| fail(&e))?;
-    let st = Migrator::new(backend.clone(), ring)
-        .status()
-        .map_err(|e| fail(&e))?;
-    let schema = u64::from(st.stored.unwrap_or(0));
-    let mut last = 0usize;
-    let blobs = blob_catalog(&backend, &url)?;
-    let c = backup::create_with(&backend, Some(&blobs), schema, Path::new(&out), &mut |n| {
-        if n / 10_000 > last / 10_000 {
-            eprintln!("  {n} records");
-        }
-        last = n;
-    })
-    .map_err(|e| fail(&format!("backup failed: {e}")))?;
-    // A backup is only a backup once it reads back.
-    backup::verify(&c.data_path)
-        .map_err(|e| fail(&format!("the backup was written but does not verify: {e}")))?;
-    println!(
-        "backup of {} written: {} ({} records, {} uploaded files, {} bytes), manifest {}",
-        redact(&url),
-        c.data_path.display(),
-        c.manifest.records,
-        c.manifest.blobs,
-        c.manifest.data_bytes,
-        c.manifest_path.display()
-    );
-    if backend
-        .get("connector_key", "master")
-        .ok()
-        .flatten()
-        .is_some()
-    {
-        println!(
-            "warning: this instance has no OBOP_SECRET_KEY, so its secret key is a record in the database and therefore in this backup. Set OBOP_SECRET_KEY (docs/DEPLOY.md) and keep it apart from backups."
-        );
-    } else {
-        println!(
-            "sealed secrets are inside as stored; keep OBOP_SECRET_KEY apart from backups: without it they cannot be opened"
-        );
-    }
-    Ok(())
-}
-
-fn restore_cmd(args: &mut Vec<String>) -> Exit {
-    let url = db_url(take(args, "--db").as_deref());
-    let from = take(args, "--from").ok_or_else(usage)?;
-    let force = has(args, "--force");
-    let dry_run = has(args, "--dry-run");
-    if !args.is_empty() {
-        return Err(usage());
-    }
-    let backend =
-        obop_storage::open(&url).map_err(|e| fail(&format!("cannot open the database: {e}")))?;
-    let latest = obop_migrate::steps().len() as u64;
-    let blobs = blob_catalog(&backend, &url)?;
-    let r = backup::restore_with(
-        &backend,
-        Some(&blobs),
-        latest,
-        Path::new(&from),
-        RestoreOptions { force, dry_run },
-        &mut |n| {
-            if n % 10_000 < 1000 {
-                eprintln!("  {n} records");
-            }
-        },
-    )
-    .map_err(|e| fail(&format!("restore refused or failed: {e}")))?;
-    let verb = if r.dry_run {
-        "would restore"
-    } else {
-        "restored"
-    };
-    println!(
-        "{verb} {} records into {} (backup of obop {}, schema version {}, taken {}){}",
-        r.records,
-        redact(&url),
-        r.manifest.core_version,
-        r.manifest.schema_version,
-        r.manifest.created_at,
-        if r.target_records > 0 {
-            format!("; replacing {} existing records", r.target_records)
-        } else {
-            String::new()
-        }
-    );
-    if r.manifest.core_version != obop_types::CORE_VERSION {
-        println!(
-            "note: the backup is from obop {}, this is {}",
-            r.manifest.core_version,
-            obop_types::CORE_VERSION
-        );
-    }
-    if r.needs_migration {
-        println!(
-            "the backup is from an older schema: run `obop migrate run --db {}` before serving",
-            redact(&url)
-        );
-    }
-    Ok(())
 }
 
 fn secrets_cmd(args: &mut Vec<String>) -> Exit {

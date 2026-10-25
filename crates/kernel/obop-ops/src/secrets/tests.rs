@@ -149,6 +149,7 @@ fn rotating_while_the_server_keeps_reading_and_writing_loses_nothing() {
     let b = instance();
     let ring = rotated_ring();
     let stop = std::sync::atomic::AtomicBool::new(false);
+    let started = std::sync::atomic::AtomicBool::new(false);
     std::thread::scope(|s| {
         // A "server" that uses the new ring: opens the credentials all the time and keeps
         // storing new secrets with the current key.
@@ -176,10 +177,15 @@ fn rotating_while_the_server_keeps_reading_and_writing_loses_nothing() {
                 )
                 .unwrap();
                 n += 1;
+                started.store(true, std::sync::atomic::Ordering::Relaxed);
             }
             n
         });
-        // Rotate in small batches meanwhile.
+        // Rotate in small batches meanwhile, once the "server" is really running (without this
+        // the three quick rotations could finish before the thread was scheduled).
+        while !started.load(std::sync::atomic::Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
         for _ in 0..3 {
             let r = rotate(
                 &b,

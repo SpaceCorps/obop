@@ -12,6 +12,7 @@
 use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
 use hkdf::Hkdf;
+use hmac::{Hmac, Mac};
 use obop_storage::{Backend, Fields};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -280,6 +281,30 @@ impl KeyRing {
         Ok(Some(Key::new(k, KeySource::Generated)?))
     }
 
+    /// The ring without keys that are not under the operator's control: a key generated into the
+    /// database (it is inside every backup, so a backup sealed with it could not be opened after
+    /// a total loss) and the public development key.
+    pub fn environment_only(&self) -> KeyRing {
+        KeyRing {
+            keys: self
+                .keys
+                .iter()
+                .filter(|k| k.source == KeySource::Environment)
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// This ring followed by the keys of `other` that it does not hold: what opens everything
+    /// either of them opens, with this ring's current key still the current one.
+    pub fn merged(&self, other: &KeyRing) -> KeyRing {
+        let mut r = self.clone();
+        for k in &other.keys {
+            r.push(k.clone());
+        }
+        r
+    }
+
     pub fn current(&self) -> Option<&Key> {
         self.keys.first()
     }
@@ -314,6 +339,41 @@ impl KeyRing {
         open_with(key, purpose, &nonce, &ct)
     }
 
+    /// Seal the per-stream data key of a backup (format 2) for `backup_id` with the current key.
+    pub fn wrap_data_key(&self, backup_id: &str, key: &[u8; 32]) -> Result<String, KeyError> {
+        self.seal(&format!("backup-data-key:{backup_id}"), key)
+    }
+
+    /// Open a wrapped data key with whichever key of the ring sealed it.
+    pub fn unwrap_data_key(&self, backup_id: &str, wrapped: &str) -> Result<[u8; 32], KeyError> {
+        let plain = self.open(&format!("backup-data-key:{backup_id}"), wrapped)?;
+        <[u8; 32]>::try_from(plain.as_slice()).map_err(|_| KeyError::Malformed)
+    }
+
+    /// HMAC-SHA256 of `data` under a subkey of the key `key_id` for `purpose`: the authentication
+    /// of a backup manifest. Fails with the key id when the ring does not hold the key.
+    pub fn mac(&self, key_id: &str, purpose: &str, data: &[u8]) -> Result<[u8; 32], KeyError> {
+        let key = self
+            .find(key_id)
+            .ok_or_else(|| KeyError::UnknownKey(key_id.to_string()))?;
+        let mut m = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(&key.subkey(purpose))
+            .expect("HMAC takes any key length");
+        m.update(data);
+        Ok(m.finalize().into_bytes().into())
+    }
+
+    /// Whether `tag` is the MAC of `data` (constant time).
+    pub fn mac_matches(
+        &self,
+        key_id: &str,
+        purpose: &str,
+        data: &[u8],
+        tag: &[u8],
+    ) -> Result<bool, KeyError> {
+        let want = self.mac(key_id, purpose, data)?;
+        Ok(tag.len() == want.len() && want.iter().zip(tag).fold(0u8, |a, (x, y)| a | (x ^ y)) == 0)
+    }
+
     /// Sealing text, opening text.
     pub fn seal_str(&self, purpose: &str, plain: &str) -> Result<String, KeyError> {
         self.seal(purpose, plain.as_bytes())
@@ -327,6 +387,7 @@ impl KeyRing {
 /// Whether `s` looks like an envelope of this crate.
 pub mod legacy;
 pub mod reseal;
+pub mod stream;
 
 pub fn is_sealed(s: &str) -> bool {
     s.starts_with("e2.")

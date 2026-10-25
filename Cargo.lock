@@ -1274,6 +1274,7 @@ dependencies = [
  "chacha20poly1305",
  "getrandom 0.4.3",
  "hkdf",
+ "hmac",
  "obop-storage",
  "serde_json",
  "sha2",

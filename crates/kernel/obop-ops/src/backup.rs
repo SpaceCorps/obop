@@ -1,4 +1,4 @@
-//! `obop backup`, `obop backup verify` and `obop restore` (B4, D59): a consistent logical
+//! `obop backup`, `obop backup verify` and `obop restore` (B4, D59, D73): a consistent logical
 //! export of every record, and the way back.
 //!
 //! The data file is gzip-compressed JSON Lines, written while the database is read from one
@@ -19,30 +19,55 @@
 //!
 //! Next to it, `<data file>.manifest.json` repeats the header and adds the SHA-256 of the data
 //! file as stored, the SHA-256 of the record lines, the record count and the count per model.
-//! Secrets stay sealed exactly as stored: a backup is as safe as the server key, which is NOT in
-//! it. Short-lived values (sessions, pending approvals, rate-limit counters) are not backed up;
-//! people sign in again after a restore and agents re-propose pending approvals.
+//! Secrets stay sealed exactly as stored. Short-lived values (sessions, pending approvals,
+//! rate-limit counters) are not backed up; people sign in again after a restore and agents
+//! re-propose pending approvals.
 //!
-//! The checksums detect damage and accidental edits. They do not authenticate: someone who can
-//! rewrite both files can forge a pair, so keep backups where only the operator can write.
+//! **Format 1** (this layout, plain) detects damage and accidental edits with its checksums; it
+//! does not authenticate and it does not hide the records: keep it where only the operator can
+//! read and write.
+//!
+//! **Format 2** (D73, OBR-DAT-046) is the same stream, gzip first, sealed in chunks with
+//! ChaCha20-Poly1305 (`obop_keys::stream`) under a random per-backup data key that the header
+//! carries wrapped by a key of the backup key ring (`OBOP_BACKUP_KEY`, else the server key).
+//! The manifest repeats the header's facts and adds the number of chunks, the head of a hash chain
+//! over the chunk tags and an HMAC-SHA256 over itself under a subkey of the same key. A flipped
+//! bit, a cut or extended file, a reordered chunk, an edited manifest, or a manifest and data file
+//! both rewritten without the key, all fail `verify`; without the key nothing opens
+//! (`restore_key_required`) and nothing is written. Format 1 backups keep restoring.
 
 use base64::Engine as _;
+use obop_keys::stream::{self, OpenReader, SealWriter};
+use obop_keys::{KeyRing, hex, random, unhex};
 use obop_storage::blob::{BlobInfo, Blobs, ExportedBlob};
 use obop_storage::{Backend, Fields, Row};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::Arc;
 
-/// The layout of the data file this build writes and reads.
+/// The plain layout.
 pub const FORMAT: u64 = 1;
+/// The sealed layout (D73).
+pub const FORMAT_SEALED: u64 = 2;
+/// The stable code of the error for a sealed backup whose key is not configured.
+pub const KEY_REQUIRED: &str = "restore_key_required";
 const BATCH: usize = 1000;
+const CIPHER: &str = "chacha20poly1305-stream-v1";
+const MAC_PURPOSE: &str = "backup-manifest";
 
-fn hex(b: &[u8]) -> String {
-    b.iter().map(|x| format!("{x:02x}")).collect()
+/// The code at the start of an error of this module (`restore_key_required: ...`), if it has one.
+pub fn error_code(e: &str) -> Option<&'static str> {
+    e.starts_with(KEY_REQUIRED).then_some(KEY_REQUIRED)
+}
+
+fn hexs(b: &[u8]) -> String {
+    hex(b)
 }
 
 /// `YYYY-MM-DDTHH:MM:SSZ` for a Unix time.
@@ -63,6 +88,28 @@ pub fn rfc3339(secs: u64) -> String {
         rem % 3600 / 60,
         rem % 60
     )
+}
+
+/// Seconds since the epoch of an `rfc3339` string of this module's form.
+pub fn parse_rfc3339(s: &str) -> Option<u64> {
+    let b = s.as_bytes();
+    if b.len() != 20 || b[4] != b'-' || b[7] != b'-' || b[10] != b'T' || b[19] != b'Z' {
+        return None;
+    }
+    let n = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
+    let (y, m, d) = (n(0..4)?, n(5..7)?, n(8..10)?);
+    let (h, mi, se) = (n(11..13)?, n(14..16)?, n(17..19)?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || h > 23 || mi > 59 || se > 60 {
+        return None;
+    }
+    let y2 = if m <= 2 { y - 1 } else { y };
+    let era = y2.div_euclid(400);
+    let yoe = y2.rem_euclid(400);
+    let mp = if m > 2 { m - 3 } else { m + 9 };
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    u64::try_from(days * 86400 + h * 3600 + mi * 60 + se).ok()
 }
 
 fn now_secs() -> u64 {
@@ -90,6 +137,148 @@ impl<W: Write> Write for Tee<W> {
     }
 }
 
+/// Where the gzip stream goes: straight to the file, or through the chunked cipher.
+enum Sink<W: Write> {
+    Plain(Tee<W>),
+    Sealed(SealWriter<Tee<W>>),
+}
+
+impl<W: Write> Write for Sink<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            Sink::Plain(t) => t.write(buf),
+            Sink::Sealed(s) => s.write(buf),
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Sink::Plain(t) => t.flush(),
+            Sink::Sealed(s) => s.flush(),
+        }
+    }
+}
+
+impl<W: Write> Sink<W> {
+    fn finish(self) -> std::io::Result<(Tee<W>, Option<stream::Sealed>)> {
+        match self {
+            Sink::Plain(t) => Ok((t, None)),
+            Sink::Sealed(s) => s.finish().map(|(t, sealed)| (t, Some(sealed))),
+        }
+    }
+}
+
+/// The keys a backup is sealed with and opened with.
+#[derive(Clone, Default)]
+pub struct Keys {
+    ring: KeyRing,
+    from: KeysFrom,
+}
+
+/// Where the sealing key comes from, for messages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum KeysFrom {
+    #[default]
+    Nowhere,
+    /// `OBOP_BACKUP_KEY`: a key of its own, which can be kept apart from the server's.
+    BackupKey,
+    /// The server key `OBOP_SECRET_KEY`: the backup is then as readable as the sealed secrets.
+    ServerKey,
+}
+
+impl Keys {
+    /// No key: format 1 on write, a refusal of any sealed backup on read.
+    pub fn none() -> Keys {
+        Keys::default()
+    }
+
+    /// A ring of the operator's own (tests, tooling).
+    pub fn from_ring(ring: KeyRing) -> Keys {
+        let from = if ring.is_empty() {
+            KeysFrom::Nowhere
+        } else {
+            KeysFrom::BackupKey
+        };
+        Keys { ring, from }
+    }
+
+    /// The keys of this process's environment: `OBOP_BACKUP_KEY` (and `OBOP_BACKUP_KEY_PREVIOUS`)
+    /// when set, then the server key ring, but only the keys the operator provides: a key that
+    /// was generated into the database is inside the backup, so a backup sealed with it could
+    /// never be opened after the database is gone.
+    pub fn from_env(server: &KeyRing) -> Result<Keys, String> {
+        let var = |n: &str| std::env::var(n).ok().filter(|v| !v.trim().is_empty());
+        Self::from_vars(
+            var("OBOP_BACKUP_KEY").as_deref(),
+            var("OBOP_BACKUP_KEY_PREVIOUS").as_deref(),
+            server,
+        )
+    }
+
+    /// As [`Keys::from_env`], with the two variables given.
+    pub fn from_vars(
+        current: Option<&str>,
+        previous: Option<&str>,
+        server: &KeyRing,
+    ) -> Result<Keys, String> {
+        let server = server.environment_only();
+        let Some(current) = current.map(str::trim).filter(|c| !c.is_empty()) else {
+            let from = if server.is_empty() {
+                KeysFrom::Nowhere
+            } else {
+                KeysFrom::ServerKey
+            };
+            return Ok(Keys { ring: server, from });
+        };
+        let previous = previous.unwrap_or_default();
+        let prev: Vec<&str> = previous
+            .split(',')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .collect();
+        let own = KeyRing::from_secrets(current, &prev)
+            .map_err(|e| format!("OBOP_BACKUP_KEY or OBOP_BACKUP_KEY_PREVIOUS: {e}"))?;
+        // Older backups were sealed with the server key before a key of its own existed.
+        Ok(Keys {
+            ring: own.merged(&server),
+            from: KeysFrom::BackupKey,
+        })
+    }
+
+    /// Whether a new backup can be sealed.
+    pub fn can_seal(&self) -> bool {
+        self.ring.current().is_some()
+    }
+
+    pub fn from(&self) -> KeysFrom {
+        self.from
+    }
+
+    /// The id of the key a new backup is sealed with.
+    pub fn current_id(&self) -> Option<String> {
+        self.ring.current().map(|k| k.id().to_string())
+    }
+
+    pub fn describe(&self) -> &'static str {
+        match self.from {
+            KeysFrom::Nowhere => "no key",
+            KeysFrom::BackupKey => "OBOP_BACKUP_KEY",
+            KeysFrom::ServerKey => "the server key (OBOP_SECRET_KEY)",
+        }
+    }
+}
+
+/// What a format 2 manifest says about the sealing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Encryption {
+    pub cipher: String,
+    /// The id of the key that wrapped the data key and made the manifest's MAC.
+    pub key_id: String,
+    pub chunk_size: usize,
+    pub chunks: u64,
+    /// Head of the hash chain over the chunk tags (hex).
+    pub chain_head: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct Manifest {
     pub format: u64,
@@ -105,11 +294,17 @@ pub struct Manifest {
     pub models: BTreeMap<String, usize>,
     /// Uploaded blobs whose bytes are in the data file.
     pub blobs: usize,
+    /// Format 2: random id of this backup (the data key is wrapped for it).
+    pub backup_id: Option<String>,
+    pub encryption: Option<Encryption>,
+    /// Format 2: HMAC-SHA256 of the rest of the manifest (hex).
+    pub mac: Option<String>,
 }
 
 impl Manifest {
-    fn to_json(&self) -> J {
-        json!({
+    /// The manifest as JSON, without its MAC.
+    fn to_json_unsigned(&self) -> J {
+        let mut j = json!({
             "kind": "obop-backup",
             "format": self.format,
             "core_version": self.core_version,
@@ -125,7 +320,32 @@ impl Manifest {
             "blobs": self.blobs,
             "not_included": ["short-lived values: sessions, pending approvals, rate-limit counters"],
             "secrets": "sealed values are stored exactly as they are in the database; OBOP_SECRET_KEY is not in this backup (an instance without it keeps a generated key in the database, and that key is in the backup)",
-        })
+        });
+        if let (Some(id), Some(e)) = (&self.backup_id, &self.encryption) {
+            j["backup_id"] = J::from(id.as_str());
+            j["encryption"] = json!({
+                "cipher": e.cipher, "key_id": e.key_id, "chunk_size": e.chunk_size,
+                "chunks": e.chunks, "chain_head": e.chain_head,
+            });
+        }
+        j
+    }
+
+    fn to_json(&self) -> J {
+        let mut j = self.to_json_unsigned();
+        if let Some(mac) = &self.mac {
+            j["mac"] = J::from(mac.as_str());
+        }
+        j
+    }
+
+    /// The bytes the MAC covers: the manifest without `mac`, as canonical JSON (sorted keys).
+    fn mac_input(j: &J) -> Vec<u8> {
+        let mut j = j.clone();
+        if let Some(o) = j.as_object_mut() {
+            o.remove("mac");
+        }
+        j.to_string().into_bytes()
     }
 
     fn from_json(j: &J) -> Result<Manifest, String> {
@@ -140,6 +360,28 @@ impl Manifest {
         let n = |k: &str| {
             j[k].as_u64()
                 .ok_or_else(|| format!("the manifest has no {k}"))
+        };
+        let encryption = match j.get("encryption").filter(|e| e.is_object()) {
+            None => None,
+            Some(e) => {
+                let es = |k: &str| {
+                    e[k].as_str()
+                        .map(String::from)
+                        .ok_or_else(|| format!("the manifest's encryption has no {k}"))
+                };
+                Some(Encryption {
+                    cipher: es("cipher")?,
+                    key_id: es("key_id")?,
+                    chunk_size: e["chunk_size"]
+                        .as_u64()
+                        .ok_or("the manifest's encryption has no chunk_size")?
+                        as usize,
+                    chunks: e["chunks"]
+                        .as_u64()
+                        .ok_or("the manifest's encryption has no chunks")?,
+                    chain_head: es("chain_head")?,
+                })
+            }
         };
         Ok(Manifest {
             format: n("format")?,
@@ -159,7 +401,15 @@ impl Manifest {
                 .map(|(k, v)| (k.clone(), v.as_u64().unwrap_or(0) as usize))
                 .collect(),
             blobs: j["blobs"].as_u64().unwrap_or(0) as usize,
+            backup_id: j["backup_id"].as_str().map(String::from),
+            encryption,
+            mac: j["mac"].as_str().map(String::from),
         })
+    }
+
+    /// Whether this backup is sealed (format 2).
+    pub fn sealed(&self) -> bool {
+        self.format == FORMAT_SEALED
     }
 }
 
@@ -176,12 +426,16 @@ fn manifest_path_for(data: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
-/// Where the backup goes: a path ending in `.gz` is the data file; anything else is a directory
-/// (created if needed) that gets a timestamped file name.
-fn resolve_out(out: &Path) -> PathBuf {
-    if out.is_dir() || !out.to_string_lossy().ends_with(".gz") {
+/// Where the backup goes: a path ending in `.gz` or `.obbk` is the data file; anything else is a
+/// directory (created if needed) that gets a timestamped file name.
+fn resolve_out(out: &Path, sealed: bool) -> PathBuf {
+    let name = out.to_string_lossy();
+    if out.is_dir() || !(name.ends_with(".gz") || name.ends_with(".obbk")) {
         let stamp = rfc3339(now_secs()).replace(['-', ':'], "");
-        out.join(format!("obop-backup-{stamp}.jsonl.gz"))
+        out.join(format!(
+            "obop-backup-{stamp}.{}",
+            if sealed { "obbk" } else { "jsonl.gz" }
+        ))
     } else {
         out.to_path_buf()
     }
@@ -206,7 +460,21 @@ pub fn create_with(
     out: &Path,
     progress: &mut dyn FnMut(usize),
 ) -> Result<Created, String> {
-    let data_path = resolve_out(out);
+    create_sealed(backend, blobs, schema_version, out, &Keys::none(), progress)
+}
+
+/// As [`create_with`], sealed (format 2) when `keys` can seal, plain (format 1) when not.
+pub fn create_sealed(
+    backend: &Arc<dyn Backend>,
+    blobs: Option<&dyn Blobs>,
+    schema_version: u64,
+    out: &Path,
+    keys: &Keys,
+    progress: &mut dyn FnMut(usize),
+) -> Result<Created, String> {
+    let sealed = keys.can_seal();
+    let format = if sealed { FORMAT_SEALED } else { FORMAT };
+    let data_path = resolve_out(out, sealed);
     if let Some(dir) = data_path.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
@@ -228,13 +496,44 @@ pub fn create_with(
         hash: Sha256::new(),
         bytes: 0,
     };
-    let mut gz = flate2::write::GzEncoder::new(tee, flate2::Compression::default());
     let created_at = rfc3339(now_secs());
+    let io = |e: std::io::Error| format!("write failed: {e}");
+    // What a sealed backup needs before the first byte: its id, its data key, and the header.
+    let mut seal_info: Option<(String, String)> = None;
+    let sink = if sealed {
+        let ring = &keys.ring;
+        let key_id = keys.current_id().unwrap_or_default();
+        let backup_id = hexs(&random::<16>());
+        let data_key = random::<32>();
+        let prefix = random::<7>();
+        let wrapped = ring
+            .wrap_data_key(&backup_id, &data_key)
+            .map_err(|e| e.to_string())?;
+        let header = json!({
+            "kind": "obop-backup-data", "format": FORMAT_SEALED, "cipher": CIPHER,
+            "chunk_size": stream::CHUNK, "backup_id": backup_id,
+            "nonce_prefix": hexs(&prefix), "key_id": key_id, "wrapped_key": wrapped,
+            "core_version": obop_types::CORE_VERSION, "schema_version": schema_version,
+            "created_at": created_at, "source": backend.kind(),
+        });
+        let w = SealWriter::new(
+            tee,
+            header.to_string().as_bytes(),
+            &data_key,
+            prefix,
+            stream::CHUNK,
+        )
+        .map_err(io)?;
+        seal_info = Some((backup_id, key_id));
+        Sink::Sealed(w)
+    } else {
+        Sink::Plain(tee)
+    };
+    let mut gz = flate2::write::GzEncoder::new(sink, flate2::Compression::default());
     let header = json!({
-        "type": "header", "format": FORMAT, "core_version": obop_types::CORE_VERSION,
+        "type": "header", "format": format, "core_version": obop_types::CORE_VERSION,
         "schema_version": schema_version, "created_at": created_at, "source": backend.kind(),
     });
-    let io = |e: std::io::Error| format!("write failed: {e}");
     writeln!(gz, "{header}").map_err(io)?;
     let mut content = Sha256::new();
     let mut records = 0usize;
@@ -280,7 +579,7 @@ pub fn create_with(
             return Err(e);
         }
     }
-    let content_sha256 = hex(&content.finalize());
+    let content_sha256 = hexs(&content.finalize());
     writeln!(
         gz,
         "{}",
@@ -288,14 +587,14 @@ pub fn create_with(
                "content_sha256": content_sha256})
     )
     .map_err(io)?;
-    let mut tee = gz.finish().map_err(io)?;
+    let (mut tee, sealing) = gz.finish().map_err(io)?.finish().map_err(io)?;
     tee.flush().map_err(io)?;
     tee.inner.get_ref().sync_all().map_err(io)?;
-    let (data_sha256, data_bytes) = (hex(&tee.hash.clone().finalize()), tee.bytes);
+    let (data_sha256, data_bytes) = (hexs(&tee.hash.clone().finalize()), tee.bytes);
     drop(tee);
     std::fs::rename(&part, &data_path).map_err(|e| format!("cannot finish the backup: {e}"))?;
-    let manifest = Manifest {
-        format: FORMAT,
+    let mut manifest = Manifest {
+        format,
         core_version: obop_types::CORE_VERSION.into(),
         schema_version,
         created_at,
@@ -310,7 +609,29 @@ pub fn create_with(
         records,
         models,
         blobs: blob_count,
+        backup_id: None,
+        encryption: None,
+        mac: None,
     };
+    if let (Some((backup_id, key_id)), Some(s)) = (seal_info, sealing) {
+        manifest.backup_id = Some(backup_id);
+        manifest.encryption = Some(Encryption {
+            cipher: CIPHER.into(),
+            key_id: key_id.clone(),
+            chunk_size: stream::CHUNK,
+            chunks: s.chunks,
+            chain_head: s.chain_head,
+        });
+        let tag = keys
+            .ring
+            .mac(
+                &key_id,
+                MAC_PURPOSE,
+                &Manifest::mac_input(&manifest.to_json_unsigned()),
+            )
+            .map_err(|e| e.to_string())?;
+        manifest.mac = Some(hexs(&tag));
+    }
     let manifest_path = manifest_path_for(&data_path);
     std::fs::write(&manifest_path, format!("{:#}\n", manifest.to_json()))
         .map_err(|e| format!("cannot write {}: {e}", manifest_path.display()))?;
@@ -323,6 +644,11 @@ pub fn create_with(
 
 /// The manifest next to a data file (or the manifest itself when that is what `file` names).
 fn read_manifest(file: &Path) -> Result<(Manifest, PathBuf), String> {
+    let (m, data, _) = read_manifest_json(file)?;
+    Ok((m, data))
+}
+
+fn read_manifest_json(file: &Path) -> Result<(Manifest, PathBuf, J), String> {
     let name = file.to_string_lossy().to_string();
     let (data, manifest) = if name.ends_with(".manifest.json") {
         (
@@ -335,19 +661,152 @@ fn read_manifest(file: &Path) -> Result<(Manifest, PathBuf), String> {
     let text = std::fs::read_to_string(&manifest)
         .map_err(|e| format!("cannot read the manifest {}: {e}", manifest.display()))?;
     let j: J = serde_json::from_str(&text).map_err(|e| format!("the manifest is not JSON: {e}"))?;
-    Ok((Manifest::from_json(&j)?, data))
+    Ok((Manifest::from_json(&j)?, data, j))
+}
+
+/// The manifest of a backup (the data file or its manifest), unverified.
+pub fn manifest_of(file: &Path) -> Result<Manifest, String> {
+    read_manifest(file).map(|(m, _)| m)
 }
 
 /// What `verify` found in a sound backup.
 #[derive(Debug, Clone)]
 pub struct Verified {
     pub manifest: Manifest,
+    /// The backup was opened with its key: every chunk and the manifest authenticated. A plain
+    /// (format 1) backup is never authenticated, and a sealed one checked without its key is
+    /// only checked for integrity.
+    pub authenticated: bool,
 }
 
-/// Open the data file for reading its lines. The caller checks the stored checksum first.
-fn lines(data: &Path) -> Result<std::io::Lines<BufReader<flate2::read::GzDecoder<File>>>, String> {
-    let f = File::open(data).map_err(|e| format!("cannot read {}: {e}", data.display()))?;
-    Ok(BufReader::new(flate2::read::GzDecoder::new(f)).lines())
+fn key_required(key_id: &str) -> String {
+    format!(
+        "{KEY_REQUIRED}: this backup is sealed with key {key_id}, which is not configured. Set OBOP_BACKUP_KEY (or OBOP_SECRET_KEY, and OBOP_SECRET_KEY_PREVIOUS for earlier keys) to the key that sealed it; nothing was read or written"
+    )
+}
+
+fn io_text(e: &std::io::Error) -> String {
+    match stream::stream_error(e) {
+        Some(s) => format!("the sealed backup does not open: {s}"),
+        None => format!("the data file cannot be decompressed: {e}"),
+    }
+}
+
+/// The plaintext stream of a backup being read, shared so that the reader of a sealed backup can
+/// be asked afterwards how far it got.
+enum Inner {
+    Plain(File),
+    Sealed(Box<OpenReader<BufReader<File>>>),
+}
+
+#[derive(Clone)]
+struct Shared(Rc<RefCell<Inner>>);
+
+impl Read for Shared {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match &mut *self.0.borrow_mut() {
+            Inner::Plain(f) => f.read(buf),
+            Inner::Sealed(r) => r.read(buf),
+        }
+    }
+}
+
+impl Shared {
+    /// Read what is left (a sealed stream must be read to its last chunk to be authenticated as
+    /// a whole) and say how many chunks and which chain head the reader saw. Plain: nothing.
+    fn finish(&self) -> std::io::Result<Option<(u64, String)>> {
+        let mut inner = self.0.borrow_mut();
+        let Inner::Sealed(r) = &mut *inner else {
+            return Ok(None);
+        };
+        let mut rest = Vec::new();
+        r.read_to_end(&mut rest)?;
+        if !rest.is_empty() {
+            return Err(std::io::Error::other("data follows the end of the backup"));
+        }
+        Ok(Some((r.chunks_read(), r.chain_head())))
+    }
+}
+
+type Lines = std::io::Lines<BufReader<flate2::read::GzDecoder<Shared>>>;
+
+/// The header of a sealed data file, checked against the manifest.
+struct SealedHeader {
+    bytes: Vec<u8>,
+    backup_id: String,
+    key_id: String,
+    wrapped: String,
+    prefix: [u8; 7],
+    chunk: usize,
+}
+
+fn sealed_header(f: &mut impl Read, m: &Manifest) -> Result<SealedHeader, String> {
+    let bytes = stream::read_header(f).map_err(|e| io_text(&e))?;
+    let j: J = serde_json::from_slice(&bytes).map_err(|_| "the sealed header is not JSON")?;
+    let s = |k: &str| {
+        j[k].as_str()
+            .map(String::from)
+            .ok_or_else(|| format!("the sealed header has no {k}"))
+    };
+    if j["kind"] != "obop-backup-data" || j["format"] != FORMAT_SEALED || j["cipher"] != CIPHER {
+        return Err("the sealed header is not one this obop reads".into());
+    }
+    let enc = m
+        .encryption
+        .as_ref()
+        .ok_or("the manifest of a sealed backup has no encryption section")?;
+    let h = SealedHeader {
+        backup_id: s("backup_id")?,
+        key_id: s("key_id")?,
+        wrapped: s("wrapped_key")?,
+        prefix: <[u8; 7]>::try_from(
+            unhex(&s("nonce_prefix")?)
+                .ok_or("the sealed header's nonce prefix is not hex")?
+                .as_slice(),
+        )
+        .map_err(|_| "the sealed header's nonce prefix has the wrong length")?,
+        chunk: j["chunk_size"]
+            .as_u64()
+            .ok_or("the sealed header has no chunk_size")? as usize,
+        bytes,
+    };
+    if m.backup_id.as_deref() != Some(h.backup_id.as_str())
+        || enc.key_id != h.key_id
+        || enc.chunk_size != h.chunk
+        || j["schema_version"].as_u64() != Some(m.schema_version)
+        || j["core_version"].as_str() != Some(m.core_version.as_str())
+    {
+        return Err("the header of the data file disagrees with the manifest".into());
+    }
+    Ok(h)
+}
+
+/// Open the plaintext lines of a backup. Format 2 needs the key.
+fn open_lines(data: &Path, m: &Manifest, keys: &Keys) -> Result<(Lines, Shared), String> {
+    let cannot = |e: std::io::Error| format!("cannot read {}: {e}", data.display());
+    let f = File::open(data).map_err(cannot)?;
+    let shared = if m.sealed() {
+        let mut r = BufReader::new(f);
+        let h = sealed_header(&mut r, m)?;
+        if keys.ring.find(&h.key_id).is_none() {
+            return Err(key_required(&h.key_id));
+        }
+        let data_key = keys
+            .ring
+            .unwrap_data_key(&h.backup_id, &h.wrapped)
+            .map_err(|_| {
+                "the wrapped data key does not open: the header was changed".to_string()
+            })?;
+        let o =
+            OpenReader::new(r, &h.bytes, &data_key, h.prefix, h.chunk).map_err(|e| io_text(&e))?;
+        Shared(Rc::new(RefCell::new(Inner::Sealed(Box::new(o)))))
+    } else {
+        Shared(Rc::new(RefCell::new(Inner::Plain(f))))
+    };
+    Ok((
+        BufReader::new(flate2::read::GzDecoder::new(shared.clone())).lines(),
+        shared,
+    ))
 }
 
 fn file_sha256(path: &Path) -> Result<(String, u64), String> {
@@ -361,16 +820,34 @@ fn file_sha256(path: &Path) -> Result<(String, u64), String> {
         h.update(&buf[..k]);
         n += k as u64;
     }
-    Ok((hex(&h.finalize()), n))
+    Ok((hexs(&h.finalize()), n))
 }
 
-/// Check a backup without touching any database: format, checksum of the file as stored, then
-/// a full pass over the records (gzip integrity, line shape, counts, content checksum).
+/// Check a plain backup, or a sealed one without its key (integrity only): format, checksum of
+/// the file as stored, then a full pass over the records (gzip integrity, line shape, counts,
+/// content checksum). A sealed backup is opened with [`verify_with`].
 pub fn verify(file: &Path) -> Result<Verified, String> {
-    let (m, data) = read_manifest(file)?;
-    if m.format != FORMAT {
+    verify_with(file, &Keys::none())
+}
+
+/// As [`verify`]. A sealed (format 2) backup needs its key: without it this refuses with
+/// `restore_key_required`; with it every chunk and the manifest are authenticated.
+pub fn verify_with(file: &Path, keys: &Keys) -> Result<Verified, String> {
+    verify_inner(file, keys, false)
+}
+
+/// Integrity of a sealed backup without its key: the file's checksum and size, the framing and
+/// the hash chain against the manifest. It says nothing about who wrote the file
+/// (`authenticated` is false).
+pub fn verify_structure(file: &Path) -> Result<Verified, String> {
+    verify_inner(file, &Keys::none(), true)
+}
+
+fn verify_inner(file: &Path, keys: &Keys, structure_only: bool) -> Result<Verified, String> {
+    let (m, data, json) = read_manifest_json(file)?;
+    if m.format != FORMAT && m.format != FORMAT_SEALED {
         return Err(format!(
-            "backup format {} is not supported by this obop (it reads format {FORMAT})",
+            "backup format {} is not supported by this obop (it reads formats {FORMAT} and {FORMAT_SEALED})",
             m.format
         ));
     }
@@ -386,8 +863,44 @@ pub fn verify(file: &Path) -> Result<Verified, String> {
             "the data file does not match the checksum in the manifest: damaged or changed".into(),
         );
     }
-    let mut it = lines(&data)?;
-    let bad = |e: std::io::Error| format!("the data file cannot be decompressed: {e}");
+    if m.sealed() {
+        let enc = m
+            .encryption
+            .clone()
+            .ok_or("the manifest of a sealed backup has no encryption section")?;
+        // Framing and hash chain need no key.
+        let f = File::open(&data).map_err(|e| format!("cannot read {}: {e}", data.display()))?;
+        let (chunks, head) =
+            stream::scan(BufReader::new(f), enc.chunk_size).map_err(|e| io_text(&e))?;
+        if chunks != enc.chunks || head != enc.chain_head {
+            return Err("the chunks of the data file do not match the manifest: the file was rearranged or replaced".into());
+        }
+        if structure_only {
+            let mut f = BufReader::new(File::open(&data).map_err(|e| e.to_string())?);
+            sealed_header(&mut f, &m)?;
+            return Ok(Verified {
+                manifest: m,
+                authenticated: false,
+            });
+        }
+        if keys.ring.find(&enc.key_id).is_none() {
+            return Err(key_required(&enc.key_id));
+        }
+        let mac = m
+            .mac
+            .as_deref()
+            .and_then(unhex)
+            .ok_or("the manifest of a sealed backup has no MAC: it cannot be authenticated")?;
+        if !keys
+            .ring
+            .mac_matches(&enc.key_id, MAC_PURPOSE, &Manifest::mac_input(&json), &mac)
+            .map_err(|e| e.to_string())?
+        {
+            return Err("the manifest does not authenticate: it was edited, or it is not from the holder of the key".into());
+        }
+    }
+    let (mut it, shared) = open_lines(&data, &m, keys)?;
+    let bad = |e: std::io::Error| io_text(&e);
     let head: J = serde_json::from_str(&it.next().ok_or("the data file is empty")?.map_err(bad)?)
         .map_err(|_| "the first line is not a header".to_string())?;
     if head["type"] != "header"
@@ -435,7 +948,7 @@ pub fn verify(file: &Path) -> Result<Verified, String> {
         n += 1;
     }
     let end = end.ok_or("the end marker is missing: the backup is incomplete")?;
-    let content = hex(&content.finalize());
+    let content = hexs(&content.finalize());
     if n != m.records || end["records"].as_u64() != Some(n as u64) {
         return Err(format!(
             "the data file holds {n} records, the manifest says {}",
@@ -454,7 +967,46 @@ pub fn verify(file: &Path) -> Result<Verified, String> {
     if models != m.models {
         return Err("the counts per model disagree with the manifest".into());
     }
-    Ok(Verified { manifest: m })
+    // A sealed stream is read to its last chunk: that is where truncation and extension show.
+    let seen = shared.finish().map_err(|e| io_text(&e))?;
+    if let (Some((chunks, head)), Some(enc)) = (seen, &m.encryption)
+        && (chunks != enc.chunks || head != enc.chain_head)
+    {
+        return Err("the chunks read do not match the manifest".into());
+    }
+    Ok(Verified {
+        authenticated: m.sealed(),
+        manifest: m,
+    })
+}
+
+/// How often `needle` occurs in the bytes of `file` as stored (a canary scan, OBR-DAT-056): a
+/// sealed backup holds none of its records' text, so a planted string must not be found.
+pub fn count_in_file(file: &Path, needle: &[u8]) -> Result<usize, String> {
+    if needle.is_empty() {
+        return Err("an empty canary matches everything".into());
+    }
+    let mut f = File::open(file).map_err(|e| format!("cannot read {}: {e}", file.display()))?;
+    let (mut buf, mut hits) = (vec![0u8; 1 << 16], 0usize);
+    let mut carry: Vec<u8> = Vec::new();
+    loop {
+        let k = f.read(&mut buf).map_err(|e| format!("read failed: {e}"))?;
+        if k == 0 {
+            break;
+        }
+        carry.extend_from_slice(&buf[..k]);
+        let mut from = 0;
+        while let Some(at) = carry[from..]
+            .windows(needle.len())
+            .position(|w| w == needle)
+        {
+            hits += 1;
+            from += at + needle.len();
+        }
+        let keep = (needle.len() - 1).min(carry.len());
+        carry.drain(..carry.len() - keep);
+    }
+    Ok(hits)
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -498,8 +1050,29 @@ pub fn restore_with(
     opts: RestoreOptions,
     progress: &mut dyn FnMut(usize),
 ) -> Result<Restored, String> {
+    restore_sealed(
+        backend,
+        blobs,
+        latest_schema,
+        file,
+        opts,
+        &Keys::none(),
+        progress,
+    )
+}
+
+/// As [`restore_with`], for a backup that may be sealed (needs `keys`).
+pub fn restore_sealed(
+    backend: &Arc<dyn Backend>,
+    blobs: Option<&dyn Blobs>,
+    latest_schema: u64,
+    file: &Path,
+    opts: RestoreOptions,
+    keys: &Keys,
+    progress: &mut dyn FnMut(usize),
+) -> Result<Restored, String> {
     // Every check that can fail without writing happens before anything is written.
-    let v = verify(file)?;
+    let v = verify_with(file, keys)?;
     let m = v.manifest;
     if m.schema_version > latest_schema {
         return Err(format!(
@@ -526,7 +1099,7 @@ pub fn restore_with(
         });
     }
     let (_, data) = read_manifest(file)?;
-    let mut it = lines(&data)?;
+    let (mut it, _) = open_lines(&data, &m, keys)?;
     it.next(); // the header, checked by verify
     let mut written = 0usize;
     let mut first_blob: Option<J> = None;
@@ -610,5 +1183,7 @@ pub fn restore_with(
     })
 }
 
+#[cfg(test)]
+mod sealed_tests;
 #[cfg(test)]
 mod tests;

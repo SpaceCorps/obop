@@ -4,6 +4,7 @@ mod accounts_cmd;
 #[cfg(test)]
 mod accounts_tests;
 mod app;
+mod backup_cli;
 #[cfg(test)]
 mod blobs_tests;
 #[cfg(test)]
@@ -104,10 +105,19 @@ const USAGE: &str = "usage: obop <command>
                                                 version and exits non-zero on drift (a step edited after it ran); `run` applies the
                                                 steps (take a backup first). `serve` refuses a database that needs steps unless started
                                                 with --auto-migrate (default: on for SQLite, off for PostgreSQL; OBOP_AUTO_MIGRATE=0|1)
-  backup --db URL --out DIR|FILE                consistent logical backup (gzip JSON lines + checksum manifest), streamed
-  backup verify FILE                            check a backup's checksums, format and counts
+  backup --db URL --out DIR|FILE [--plain | --encrypted]
+                                                consistent logical backup, streamed. With OBOP_BACKUP_KEY (or OBOP_SECRET_KEY) it is
+                                                format 2: gzip JSON lines sealed in chunks with ChaCha20-Poly1305 and a manifest with
+                                                a MAC (.obbk). Without a key it is format 1 (plain gzip + checksums) and says so.
+                                                --plain forces format 1, --encrypted refuses to write without a key
+  backup verify FILE [--structure-only] [--canary TEXT]
+                                                check a backup: checksums, format, counts; a sealed backup is opened with its key and
+                                                every chunk and the manifest are authenticated (exit 3, restore_key_required, without
+                                                the key). --structure-only checks a sealed file without a key (integrity, not
+                                                authenticity). --canary TEXT fails if the text is in the file as stored
   restore --db URL --from FILE [--force] [--dry-run]
-                                                restore into an empty database (--force replaces what is there)
+                                                restore into an empty database (--force replaces what is there); a sealed backup
+                                                needs its key (exit 3, restore_key_required, and nothing is written, without it)
   update check | status [--db URL]              the running core version, the published releases, whether the installed modules fit each
                                                 (their core ranges), and the state of the last update request; never contacts anything
                                                 but the release feed (OBOP_UPDATE_FEED, default https://obop.dev/api/releases)
@@ -350,7 +360,7 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     eprintln!("database: {}", store.backend_kind());
     let seed = o.demo || store.backend_kind() == "sqlite";
     let app = App::with_store(store);
-    app.updater.set_backup(ops::backup_fn(url.clone()));
+    app.updater.set_backup(backup_cli::backup_fn(url.clone()));
     if seed {
         app.seed_demo();
     }

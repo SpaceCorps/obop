@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn unique(tag: &str) -> String {
+pub(super) fn unique(tag: &str) -> String {
     static N: AtomicUsize = AtomicUsize::new(0);
     format!(
         "{tag}-{}-{}",
@@ -11,18 +11,18 @@ fn unique(tag: &str) -> String {
 }
 
 /// A scratch directory that goes away with the test.
-struct Dir(PathBuf);
+pub(super) struct Dir(PathBuf);
 
 impl Dir {
-    fn new() -> Dir {
+    pub(super) fn new() -> Dir {
         let d = std::env::temp_dir().join(unique("obop-ops"));
         std::fs::create_dir_all(&d).unwrap();
         Dir(d)
     }
-    fn path(&self, name: &str) -> PathBuf {
+    pub(super) fn path(&self, name: &str) -> PathBuf {
         self.0.join(name)
     }
-    fn sqlite(&self, name: &str) -> Arc<dyn Backend> {
+    pub(super) fn sqlite(&self, name: &str) -> Arc<dyn Backend> {
         obop_storage::open(&format!("sqlite://{}", self.path(name).display())).unwrap()
     }
 }
@@ -33,13 +33,13 @@ impl Drop for Dir {
     }
 }
 
-fn fields(v: J) -> Fields {
+pub(super) fn fields(v: J) -> Fields {
     v.as_object().unwrap().clone()
 }
 
 /// Records with the awkward things a backup must keep: sealed secrets, unicode, big numbers,
 /// nulls, nested values, an empty object.
-fn seed(b: &Arc<dyn Backend>) {
+pub(super) fn seed(b: &Arc<dyn Backend>) {
     b.insert(
         "auth_user",
         "ada",
@@ -68,7 +68,7 @@ fn seed(b: &Arc<dyn Backend>) {
     .unwrap();
 }
 
-fn all(b: &Arc<dyn Backend>) -> Vec<Row> {
+pub(super) fn all(b: &Arc<dyn Backend>) -> Vec<Row> {
     let mut v = Vec::new();
     b.export(100, &mut |batch| {
         v.extend_from_slice(batch);
@@ -78,11 +78,11 @@ fn all(b: &Arc<dyn Backend>) -> Vec<Row> {
     v
 }
 
-fn make(src: &Arc<dyn Backend>, dir: &Dir, name: &str) -> Created {
+pub(super) fn make(src: &Arc<dyn Backend>, dir: &Dir, name: &str) -> Created {
     create(src, 2, &dir.path(name), &mut |_| {}).unwrap()
 }
 
-fn gunzip(p: &Path) -> String {
+pub(super) fn gunzip(p: &Path) -> String {
     let mut s = String::new();
     flate2::read::GzDecoder::new(File::open(p).unwrap())
         .read_to_string(&mut s)
@@ -92,7 +92,7 @@ fn gunzip(p: &Path) -> String {
 
 /// Rewrite the data file with `text` and make the manifest agree about the file as stored, so
 /// only the checks of the content itself can catch what was changed.
-fn rewrite(c: &Created, text: &str) {
+pub(super) fn rewrite(c: &Created, text: &str) {
     let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     gz.write_all(text.as_bytes()).unwrap();
     let bytes = gz.finish().unwrap();
@@ -104,7 +104,7 @@ fn rewrite(c: &Created, text: &str) {
     std::fs::write(&c.manifest_path, j.to_string()).unwrap();
 }
 
-fn edit_manifest(c: &Created, f: impl FnOnce(&mut J)) {
+pub(super) fn edit_manifest(c: &Created, f: impl FnOnce(&mut J)) {
     let mut j: J =
         serde_json::from_str(&std::fs::read_to_string(&c.manifest_path).unwrap()).unwrap();
     f(&mut j);
@@ -334,10 +334,10 @@ fn versions_that_this_build_cannot_read_are_refused_before_anything_is_written()
     let dst = dir.sqlite("dst.db");
 
     // A format from the future.
-    let c = make(&src, &dir, "f2.jsonl.gz");
-    edit_manifest(&c, |j| j["format"] = J::from(2));
+    let c = make(&src, &dir, "f9.jsonl.gz");
+    edit_manifest(&c, |j| j["format"] = J::from(9));
     let e = verify(&c.data_path).unwrap_err();
-    assert!(e.contains("format 2") && e.contains("not supported"), "{e}");
+    assert!(e.contains("format 9") && e.contains("not supported"), "{e}");
     assert!(
         restore(
             &dst,
@@ -413,14 +413,14 @@ fn a_large_database_is_streamed_in_batches() {
 }
 
 /// A scratch database on the PostgreSQL server of `OBOP_TEST_POSTGRES_URL`, dropped afterwards.
-struct PgScratch {
+pub(super) struct PgScratch {
     admin: String,
     name: String,
-    url: String,
+    pub(super) url: String,
 }
 
 impl PgScratch {
-    fn new(base: &str) -> PgScratch {
+    pub(super) fn new(base: &str) -> PgScratch {
         let name = unique("obop_ops_t").replace('-', "_");
         let mut c = postgres::Client::connect(base, postgres::NoTls).unwrap();
         c.batch_execute(&format!("CREATE DATABASE {name}")).unwrap();
