@@ -1138,6 +1138,23 @@ section.cta p {
 .home .sec-act {
   flex: none;
 }
+/* touch: buttons and filter labels are at least 44 px high, the head action fills the row, long labels wrap */
+@media (max-width: 40rem) {
+  .home .sec-act,
+  .home .sec-act .btn {
+    inline-size: 100%;
+  }
+  .home .btn {
+    min-block-size: 2.75rem;
+    white-space: normal;
+    text-align: center;
+  }
+  fieldset.seg label {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+}
 
 /* hero: copy and mock on the shared split, the facts as a full-width strip below them */
 .home .hero-in {
