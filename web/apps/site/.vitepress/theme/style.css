@@ -929,41 +929,6 @@ fieldset.seg input:focus-visible + label {
   color: oklch(0.82 0.1 60);
 }
 
-/* Steps */
-.steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: var(--space-6);
-  margin: var(--space-10) 0;
-  padding: 0;
-  list-style: none;
-}
-.steps li {
-  text-align: center;
-}
-.steps b {
-  display: inline-grid;
-  place-items: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
-  margin-block-end: var(--space-3);
-  border-radius: 50%;
-  background: var(--accent-fill);
-  box-shadow:
-    var(--edge),
-    0 6px 16px -6px color-mix(in oklab, var(--accent-fill) 60%, transparent);
-  color: var(--on-accent);
-  font-size: var(--text-lg);
-}
-.steps h3 {
-  margin: 0 0 0.25rem;
-  font-size: var(--text-xl);
-}
-.steps p {
-  margin: 0;
-  color: var(--text-muted);
-}
-
 /* Pricing */
 .plans {
   display: grid;
@@ -1533,6 +1498,48 @@ section.cta p {
   }
   .bento .flow li:last-child::before {
     display: none;
+  }
+}
+
+/* steps: three steps on the loop's rail, the one primary button at the end of it */
+.steps-wrap {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--space-6);
+}
+.steps-wrap .steps {
+  grid-column: 1 / span 3;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin: 0;
+}
+.steps.flow h3 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+.steps.flow p {
+  margin: 0;
+  color: var(--text-muted);
+}
+.steps-cta {
+  grid-column: 4;
+  align-self: start;
+  margin-block-start: calc(1px - 1.375rem);
+}
+@media (max-width: 64rem) {
+  .steps-wrap {
+    display: block;
+  }
+  .steps-cta {
+    margin-block-start: var(--space-8);
+  }
+}
+@media (max-width: 40rem) {
+  .steps-wrap .steps {
+    grid-template-columns: 1fr;
+  }
+  .steps-cta .btn {
+    inline-size: 100%;
   }
 }
 

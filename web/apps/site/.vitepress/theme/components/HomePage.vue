@@ -199,16 +199,18 @@ const kick = computed(() => ({
             <h2>{{ m.home.stepsTitle }}</h2>
           </div>
         </div>
-        <ol class="steps">
-          <li v-for="(s, i) in m.home.steps" :key="s.title">
-            <b aria-hidden="true">{{ i + 1 }}</b>
-            <h3>{{ s.title }}</h3>
-            <p>{{ s.body }}</p>
-          </li>
-        </ol>
-        <p class="center">
-          <a class="btn primary large" href="/app/">{{ m.home.stepsCta }}</a>
-        </p>
+        <div class="steps-wrap">
+          <ol class="flow steps">
+            <li v-for="(s, i) in m.home.steps" :key="s.title">
+              <span class="flow-n" aria-hidden="true">{{ i + 1 }}</span>
+              <h3>{{ s.title }}</h3>
+              <p>{{ s.body }}</p>
+            </li>
+          </ol>
+          <div class="steps-cta">
+            <a class="btn primary large" href="/app/">{{ m.home.stepsCta }}</a>
+          </div>
+        </div>
       </div>
     </section>
 
