@@ -1010,8 +1010,12 @@ fieldset.seg input:focus-visible + label {
   border-block-end: 1px solid var(--border);
 }
 .faq summary {
-  position: relative;
-  padding: var(--space-4) var(--space-8) var(--space-4) 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-block-size: 3.5rem;
+  padding: var(--space-3) 0;
   font-size: var(--text-lg);
   font-weight: var(--weight-medium);
   cursor: pointer;
@@ -1020,17 +1024,22 @@ fieldset.seg input:focus-visible + label {
 .faq summary::-webkit-details-marker {
   display: none;
 }
+/* the plus is drawn, so the row can centre it exactly (a glyph sat about 5 px high) */
 .faq summary::after {
-  content: "+";
-  position: absolute;
-  inset-inline-end: 0.25rem;
-  inset-block-start: 0.85rem;
+  content: "";
+  flex: none;
+  inline-size: 0.875rem;
+  block-size: 0.875rem;
   color: var(--text-muted);
-  font-size: var(--text-2xl);
-  line-height: 1;
+  background:
+    linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat;
 }
 .faq details[open] summary::after {
-  content: "\2212";
+  background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat;
+}
+.faq summary:hover::after {
+  color: var(--text);
 }
 .faq p {
   margin: 0 0 var(--space-5);
