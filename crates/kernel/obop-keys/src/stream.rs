@@ -391,6 +391,11 @@ impl<R: Read> Read for OpenReader<R> {
 /// chain head (hex). This detects a flipped bit only through the chain a manifest recorded; the
 /// authenticity check needs the key.
 pub fn scan<R: Read>(mut inner: R, chunk: usize) -> io::Result<(u64, String)> {
+    // The chunk size usually comes from a manifest nobody has authenticated yet: bound it before
+    // it sizes anything, as `OpenReader` and `SealWriter` do.
+    if !(16..=MAX_CHUNK).contains(&chunk) {
+        return Err(StreamError::Malformed("chunk size out of range").into());
+    }
     let header = read_header(&mut inner)?;
     let aad = aad_of(&header);
     let mut chain = chain_start(&aad);
@@ -595,5 +600,23 @@ mod tests {
         assert!(open(&b, &KEY, 64).is_err());
         assert!(SealWriter::new(Vec::new(), b"x", &KEY, PREFIX, 8).is_err());
         assert!(SealWriter::new(Vec::new(), b"x", &KEY, PREFIX, MAX_CHUNK + 1).is_err());
+    }
+
+    /// The keyless scan takes its chunk size from a manifest nobody has authenticated: a hostile
+    /// value must be an error, not an overflow panic or a multi-gigabyte allocation.
+    #[test]
+    fn the_keyless_scan_refuses_a_hostile_chunk_size_and_a_hostile_length() {
+        let (bytes, _) = seal(&data(100), 64);
+        for chunk in [usize::MAX, u32::MAX as usize, MAX_CHUNK + 1, 0, 15] {
+            let e = scan(&bytes[..], chunk).unwrap_err();
+            assert!(e.to_string().contains("out of range"), "{chunk}: {e}");
+        }
+        // The right chunk size still scans.
+        assert!(scan(&bytes[..], 64).is_ok());
+        // A first length prefix of nearly 4 GiB with the largest allowed chunk is damage.
+        let mut b = bytes.clone();
+        let at = 8 + 4 + 7;
+        b[at..at + 4].copy_from_slice(&0xFFFF_FFF0u32.to_be_bytes());
+        assert!(scan(&b[..], MAX_CHUNK).is_err());
     }
 }
