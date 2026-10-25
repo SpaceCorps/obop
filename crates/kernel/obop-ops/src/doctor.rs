@@ -373,12 +373,25 @@ fn host(r: &mut Report, s: &dyn ServerInfo, i: &Inputs) -> Result<(), String> {
             Level::Fail,
             "no WAL segment has ever been archived (pg_stat_archiver)",
         ),
-        (_, Some(age)) if age > ARCHIVE_LAG_MAX => r.add(
-            "archiver",
-            "OBR-DAT-048",
-            Level::Fail,
-            format!("the last segment was archived {age} s ago; the alert threshold is 300 s"),
-        ),
+        (_, Some(age)) if age > ARCHIVE_LAG_MAX => {
+            // PostgreSQL switches a segment every archive_timeout only when there was WAL activity,
+            // so an idle database also looks late. A failed attempt after the last success is the
+            // sure sign of trouble; the lag alert on /metrics catches a stuck archiver.
+            let failing = a.last_failed_age.is_some_and(|f| f < age);
+            r.add(
+                "archiver",
+                "OBR-DAT-048",
+                if failing { Level::Fail } else { Level::Warn },
+                format!(
+                    "the last segment was archived {age} s ago (alert threshold 300 s){}",
+                    if failing {
+                        "; the most recent attempt FAILED"
+                    } else {
+                        ": an idle database archives rarely; if it is not idle, the archiver is stuck (SELECT pg_switch_wal() and watch pg_stat_archiver)"
+                    }
+                ),
+            )
+        }
         (n, Some(age)) => {
             let failing = a.last_failed_age.is_some_and(|f| f < age);
             r.add(

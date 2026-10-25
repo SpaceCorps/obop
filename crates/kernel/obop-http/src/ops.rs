@@ -85,6 +85,7 @@ struct Gauges {
     sessions: Option<u64>,
     queue: Option<(u64, u64, u64)>,
     backups: Option<BackupGauges>,
+    wal: Option<WalGauges>,
 }
 
 /// What the catalogue says about backups and drills (D73), read with the other gauges.
@@ -98,6 +99,13 @@ struct BackupGauges {
     last_run_failed: bool,
 }
 
+/// The WAL archiver as `pg_stat_archiver` reports it.
+#[derive(Clone, Copy, Default)]
+struct WalGauges {
+    lag: Option<u64>,
+    failed: u64,
+}
+
 pub(crate) struct Ops {
     started: Instant,
     /// 1xx, 2xx, 3xx, 4xx, 5xx and anything else.
@@ -108,6 +116,8 @@ pub(crate) struct Ops {
     ready: Mutex<Option<(Instant, Ready)>>,
     gauges: Mutex<Option<(Instant, Gauges)>>,
     access: Mutex<MetricsAccess>,
+    /// The PostgreSQL server, when the database is one (the WAL archive series).
+    server: std::sync::OnceLock<Arc<dyn obop_ops::pgadmin::ServerInfo>>,
 }
 
 impl Ops {
@@ -121,7 +131,12 @@ impl Ops {
             ready: Mutex::new(None),
             gauges: Mutex::new(None),
             access: Mutex::new(MetricsAccess::Disabled),
+            server: std::sync::OnceLock::new(),
         }
+    }
+
+    pub fn set_server_info(&self, info: Arc<dyn obop_ops::pgadmin::ServerInfo>) {
+        let _ = self.server.set(info);
     }
 
     pub fn set_access(&self, a: MetricsAccess) {
@@ -315,6 +330,15 @@ fn gauges(s: &HttpState) -> Gauges {
             let n = |k: &str| st[k].as_u64().unwrap_or(0);
             (n("waiting"), n("leased"), n("dead"))
         }),
+        wal: s
+            .ops
+            .server
+            .get()
+            .and_then(|srv| srv.archiver().ok())
+            .map(|a| WalGauges {
+                lag: a.last_archived_age,
+                failed: a.failed_count,
+            }),
         backups: obop_ops::schedule::stats(&*s.shared.backend, now)
             .ok()
             .map(|st| BackupGauges {
@@ -467,6 +491,22 @@ fn render(s: &HttpState) -> String {
             "1 when the last scheduled backup run reported a failure (a backup or its copy).",
             Some(u64::from(b.last_run_failed)),
         );
+    }
+    if let Some(w) = g.wal {
+        if let Some(lag) = w.lag {
+            let _ = writeln!(
+                t,
+                "# HELP obop_wal_archive_lag_seconds Seconds since PostgreSQL last archived a WAL segment (an idle database archives rarely: alert above 300 together with a rise of the failure counter, or on a database that has activity)."
+            );
+            let _ = writeln!(t, "# TYPE obop_wal_archive_lag_seconds gauge");
+            let _ = writeln!(t, "obop_wal_archive_lag_seconds {lag}");
+        }
+        let _ = writeln!(
+            t,
+            "# HELP obop_wal_archive_failed_total Failed WAL archive attempts since the statistics were last reset (pg_stat_archiver)."
+        );
+        let _ = writeln!(t, "# TYPE obop_wal_archive_failed_total counter");
+        let _ = writeln!(t, "obop_wal_archive_failed_total {}", w.failed);
     }
     t
 }

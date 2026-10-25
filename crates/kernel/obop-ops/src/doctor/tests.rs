@@ -156,8 +156,17 @@ fn an_archiver_that_is_late_failing_or_never_ran_fails() {
     let mut s = FakeServer::well_configured();
     s.archiver.last_archived_age = Some(301);
     let r = run(&*b, Some(&s), None, true);
-    assert_eq!(level(&r, "archiver"), Level::Fail);
+    // Late without a failure: an idle database looks the same, so it warns (the metric alerts).
+    assert_eq!(level(&r, "archiver"), Level::Warn);
     assert!(r.find("archiver").unwrap().detail.contains("301 s"));
+    assert!(r.find("archiver").unwrap().detail.contains("idle"));
+    let mut s = FakeServer::well_configured();
+    s.archiver.last_archived_age = Some(900);
+    s.archiver.last_failed_age = Some(100);
+    assert_eq!(
+        level(&run(&*b, Some(&s), None, true), "archiver"),
+        Level::Fail
+    );
     let mut s = FakeServer::well_configured();
     s.archiver = ArchiverStatus::default();
     assert_eq!(

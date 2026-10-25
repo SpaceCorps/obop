@@ -23,7 +23,7 @@ pub struct ArchiverStatus {
     pub last_failed_age: Option<u64>,
 }
 
-pub trait ServerInfo {
+pub trait ServerInfo: Send + Sync {
     /// A server setting (`SHOW name`); `None` when the server does not know it.
     fn setting(&self, name: &str) -> Result<Option<String>, String>;
     /// The archiver's statistics.
@@ -106,6 +106,63 @@ impl ServerInfo for Pg {
 
     fn version(&self) -> Result<String, String> {
         Ok(self.one("SELECT version()", &[])?.get(0))
+    }
+}
+
+/// A connection for a long-running process that asks now and then: made when first needed, made
+/// again (once, per question) when a question fails, so a restart of the database does not leave
+/// the process asking a dead connection forever.
+pub struct Reconnecting {
+    url: String,
+    inner: Mutex<Option<Pg>>,
+}
+
+impl Reconnecting {
+    pub fn new(url: &str) -> Reconnecting {
+        Reconnecting {
+            url: url.to_string(),
+            inner: Mutex::new(None),
+        }
+    }
+
+    fn with<T>(&self, ask: impl Fn(&Pg) -> Result<T, String>) -> Result<T, String> {
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut last = String::new();
+        for _ in 0..2 {
+            if g.is_none() {
+                *g = Some(Pg::connect(&self.url)?);
+            }
+            match g.as_ref().map(&ask) {
+                Some(Ok(v)) => return Ok(v),
+                Some(Err(e)) => {
+                    last = e;
+                    *g = None;
+                }
+                None => {}
+            }
+        }
+        Err(last)
+    }
+}
+
+impl ServerInfo for Reconnecting {
+    fn setting(&self, name: &str) -> Result<Option<String>, String> {
+        self.with(|p| p.setting(name))
+    }
+    fn archiver(&self) -> Result<ArchiverStatus, String> {
+        self.with(|p| p.archiver())
+    }
+    fn create_restore_point(&self, name: &str) -> Result<String, String> {
+        self.with(|p| p.create_restore_point(name))
+    }
+    fn in_recovery(&self) -> Result<bool, String> {
+        self.with(|p| p.in_recovery())
+    }
+    fn database_bytes(&self) -> Result<u64, String> {
+        self.with(|p| p.database_bytes())
+    }
+    fn version(&self) -> Result<String, String> {
+        self.with(|p| p.version())
     }
 }
 
@@ -226,6 +283,16 @@ mod tests {
             return;
         };
         let pg = Pg::connect(&url).unwrap();
+        // The reconnecting wrapper answers the same, and asks again after a failed question.
+        let again = Reconnecting::new(&url);
+        assert!(again.version().unwrap().starts_with("PostgreSQL"));
+        *again.inner.lock().unwrap() = None;
+        assert!(again.archiver().is_ok());
+        assert!(
+            Reconnecting::new("postgres://nobody@127.0.0.1:1/none")
+                .version()
+                .is_err()
+        );
         assert!(pg.version().unwrap().starts_with("PostgreSQL"));
         assert!(pg.setting("wal_level").unwrap().is_some());
         assert_eq!(pg.setting("no_such_setting_at_all").unwrap(), None);

@@ -904,6 +904,11 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
         }
     );
     state.set_metrics_access(metrics);
+    // On PostgreSQL the WAL archiver's lag and failures are metrics too (D73).
+    if app.store.backend_kind() == "postgres" {
+        let url = o.db.clone().unwrap_or_else(|| "sqlite://obop.db".into());
+        state.set_server_info(Arc::new(obop_ops::pgadmin::Reconnecting::new(&url)));
+    }
     app.connectors.start();
     // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.
     backup_cli::start_scheduler(app.store.backend(), app.store.blobs())

@@ -144,6 +144,7 @@ Three read-only routes on every instance, served next to the API (so a `--static
 | `obop_active_sessions` | people's valid sign-in sessions (read at most every 15 seconds) |
 | `obop_job_queue_depth{queue="connectors",state}` | connector deliveries waiting, leased, dead (read at most every 15 seconds) |
 | `obop_backup_age_seconds`, `obop_backup_size_bytes`, `obop_backup_duration_seconds`, `obop_backup_copy_age_seconds`, `obop_restore_drill_age_seconds`, `obop_backup_last_run_failed` | the newest verified backup, its copy off the host, the newest passed restore drill and whether the last scheduled run failed (from the backup catalogue; absent until the first one; D73) |
+| `obop_wal_archive_lag_seconds`, `obop_wal_archive_failed_total` | on PostgreSQL only: seconds since a WAL segment was last archived and the failed attempts, from `pg_stat_archiver` (read at most every 15 seconds; absent until a segment has been archived) |
 
 Counters are per process and restart with it; sum them across processes in the scraper. The text format is written by hand to the exposition format and has not been checked with a real Prometheus. The control plane (`platform serve`) has no such routes yet. The upgrade check of `obop platform upgrade-instances` still asks `/api/openapi.json` so that it also works for an image that predates `/readyz`.
 
@@ -317,7 +318,12 @@ OBOP_BACKUP_DIR=/var/backups/obop OBOP_BACKUP_SCHEDULE=24h OBOP_BACKUP_COPY_DIR=
 - alert: ObopBackupRunFailed
   expr: obop_backup_last_run_failed == 1
   for: 15m
+- alert: ObopWalArchiveLate          # a recovery point of five minutes needs the archiver to keep up
+  expr: obop_wal_archive_lag_seconds > 300 or increase(obop_wal_archive_failed_total[10m]) > 0
+  for: 1m
 ```
+
+PostgreSQL switches to a new WAL segment every `archive_timeout` **only when there was activity**, so on an idle database `obop_wal_archive_lag_seconds` grows without anything being wrong; the failure counter is the sure sign, and the lag rule is for a database that is in use. The age of the last *base* backup is the business of your WAL tool (`pgbackrest info`), not an obop metric.
 
 `obop storage check` asks the same questions from the command line (below).
 

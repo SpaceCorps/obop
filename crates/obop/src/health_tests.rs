@@ -461,3 +461,36 @@ async fn metrics_report_the_backup_catalogue_and_the_last_drill() {
             && !r.body.contains("/mnt")
     );
 }
+
+#[tokio::test]
+async fn metrics_report_the_wal_archiver_only_when_the_database_is_a_postgres_server() {
+    use obop_ops::pgadmin::{ArchiverStatus, FakeServer};
+    // No server information (SQLite, memory): no WAL series.
+    let f = fixture(MetricsAccess::token(TOKEN));
+    let r = send(&f.router, ok_metrics()).await;
+    assert!(!r.body.contains("obop_wal_archive"), "{}", r.body);
+    // A server that archives: the lag and the failures.
+    let f = fixture(MetricsAccess::token(TOKEN));
+    let mut srv = FakeServer::well_configured();
+    srv.archiver = ArchiverStatus {
+        archived_count: 40,
+        failed_count: 3,
+        last_archived_wal: Some("000000010000000000000009".into()),
+        last_archived_age: Some(42),
+        last_failed_age: Some(9000),
+    };
+    f.state.set_server_info(Arc::new(srv));
+    let r = send(&f.router, ok_metrics()).await;
+    assert_eq!(value(&r.body, "obop_wal_archive_lag_seconds"), 42.0);
+    assert_eq!(value(&r.body, "obop_wal_archive_failed_total"), 3.0);
+    assert!(
+        !r.body.contains("000000010000000000000009"),
+        "no segment names"
+    );
+    // A server that never archived: the failure counter, and no lag series to alert on `absent()`.
+    let f = fixture(MetricsAccess::token(TOKEN));
+    f.state.set_server_info(Arc::new(FakeServer::default()));
+    let r = send(&f.router, ok_metrics()).await;
+    assert!(!r.body.contains("obop_wal_archive_lag_seconds"));
+    assert_eq!(value(&r.body, "obop_wal_archive_failed_total"), 0.0);
+}
