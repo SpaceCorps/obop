@@ -143,23 +143,27 @@ const kick = computed(() => ({
       </div>
     </section>
 
-    <section id="marketplace" class="section">
-      <div class="wrap split">
-        <div>
-          <h2>{{ m.home.marketTitle }}</h2>
-          <p class="sub left">{{ m.home.marketBody }}</p>
-          <ul class="ticks">
-            <li v-for="t in m.home.marketTicks" :key="t">
-              <Icon name="check-circle" :size="20" />{{ t }}
-            </li>
-          </ul>
-          <p class="more-left">
-            <a class="btn" :href="href('/marketplace/')">{{ m.home.marketCta }}</a>
-          </p>
-        </div>
-        <div class="codebox">
-          <div class="codebar"><i></i><i></i><i></i><span>obop.toml</span></div>
-          <pre class="code" aria-label="Example obop.toml"><code><span class="c">[module]</span>
+    <section id="marketplace" class="section alt join">
+      <div class="wrap">
+        <div class="split">
+          <div>
+            <div class="sec-text">
+              <p class="eyebrow-text">{{ kick.marketplace }}</p>
+              <h2>{{ m.home.marketTitle }}</h2>
+              <p class="sub">{{ m.home.marketBody }}</p>
+            </div>
+            <ul class="ticks">
+              <li v-for="t in m.home.marketTicks" :key="t">
+                <Icon name="check-circle" :size="20" />{{ t }}
+              </li>
+            </ul>
+            <p class="more-left">
+              <a class="btn" :href="href('/marketplace/')">{{ m.home.marketCta }}</a>
+            </p>
+          </div>
+          <div class="codebox">
+            <div class="codebar"><i></i><i></i><i></i><span>obop.toml</span></div>
+            <pre class="code" aria-label="Example obop.toml"><code><span class="c">[module]</span>
 <span class="k">id</span> = <span class="s">"fleet"</span>
 <span class="k">name</span> = <span class="s">"Fleet"</span>
 
@@ -178,11 +182,12 @@ const kick = computed(() => ({
   <span class="k">field</span> = <span class="s">"state"</span>
   <span class="k">from</span>  = <span class="s">"available"</span>
   <span class="k">to</span>    = <span class="s">"in_service"</span></code></pre>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section alt">
+    <section class="section">
       <div class="wrap">
         <div class="sec-head">
           <div class="sec-text">
@@ -203,7 +208,7 @@ const kick = computed(() => ({
       </div>
     </section>
 
-    <section id="open" class="section">
+    <section id="open" class="section join">
       <div class="wrap">
         <div class="sec-head">
           <div class="sec-text">
@@ -246,19 +251,19 @@ const kick = computed(() => ({
       </div>
     </section>
 
-    <section id="faq" class="section">
-      <div class="wrap narrow">
-        <div class="sec-head">
+    <section id="faq" class="section alt join">
+      <div class="wrap">
+        <div class="faq-split">
           <div class="sec-text">
             <p class="eyebrow-text">{{ kick.faq }}</p>
             <h2>{{ m.home.faqTitle }}</h2>
           </div>
-        </div>
-        <div class="faq">
-          <details v-for="f in m.home.faq" :key="f.q">
-            <summary>{{ f.q }}</summary>
-            <p>{{ f.a }}</p>
-          </details>
+          <div class="faq">
+            <details v-for="f in m.home.faq" :key="f.q">
+              <summary>{{ f.q }}</summary>
+              <p>{{ f.a }}</p>
+            </details>
+          </div>
         </div>
       </div>
     </section>

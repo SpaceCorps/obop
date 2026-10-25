@@ -653,9 +653,6 @@ canvas.ascii {
 }
 
 /* ---------- Sections ---------- */
-.section {
-  padding-block: var(--space-24);
-}
 .section.alt {
   border-block: 1px solid var(--border);
   background: var(--surface-2);
@@ -902,8 +899,6 @@ fieldset.seg input:focus-visible + label {
 /* Marketplace split and code box */
 .split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-12);
   align-items: center;
 }
 .ticks {
@@ -1120,7 +1115,7 @@ fieldset.seg input:focus-visible + label {
 /* Closing band */
 .cta-band,
 section.cta {
-  padding-block: var(--space-20);
+  padding-block: var(--sec-y, var(--space-20));
   background:
     radial-gradient(
       50rem 24rem at 50% -20%,
@@ -1210,6 +1205,66 @@ section.cta p {
 }
 .home .sec-act {
   flex: none;
+}
+
+/* bands: .alt is surface-2; .join continues the band above it behind a hairline */
+.home .section {
+  padding-block: var(--sec-y);
+}
+.home .section:has(+ .section.join) {
+  padding-block-end: var(--sec-join);
+}
+.home .section.join {
+  padding-block-start: 0;
+}
+.home .section.join > .wrap::before {
+  content: "";
+  display: block;
+  margin-block-end: var(--sec-join);
+  border-block-start: 1px solid var(--border);
+}
+.home .section.alt:has(+ .section.join) {
+  border-block-end: 0;
+}
+.home .section.alt.join {
+  border-block-start: 0;
+}
+
+/* two columns: copy left, visual right; the right column starts on one shared axis */
+.home .split {
+  grid-template-columns: var(--split-cols);
+  gap: var(--split-gap);
+}
+.home .split .sec-text {
+  margin-block-end: var(--space-6);
+}
+@media (max-width: 64rem) {
+  .home .split {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 40rem) {
+  .home .code {
+    font-size: var(--text-xs);
+    line-height: 1.6;
+  }
+}
+.home .faq-split {
+  display: grid;
+  grid-template-columns: var(--split-cols);
+  gap: var(--space-8) var(--split-gap);
+  align-items: start;
+}
+@media (min-width: 64.01rem) {
+  .home .faq-split > .sec-text {
+    position: sticky;
+    inset-block-start: 6rem;
+  }
+}
+@media (max-width: 64rem) {
+  .home .faq-split {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------- Footer ---------- */
@@ -1759,8 +1814,7 @@ a.chip:hover {
   .hero {
     padding-block: var(--space-12);
   }
-  .hero-in,
-  .split {
+  .hero-in {
     grid-template-columns: 1fr;
   }
   .mock {
@@ -1796,9 +1850,6 @@ a.chip:hover {
   }
   details.menu {
     display: block;
-  }
-  .section {
-    padding-block: var(--space-16);
   }
   .docs {
     grid-template-columns: minmax(0, 1fr);
