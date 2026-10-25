@@ -7,6 +7,9 @@ pub mod datetime;
 pub mod decimal;
 pub mod zone;
 
+#[cfg(test)]
+mod pattern_tests;
+
 pub use datetime::{Bucket, DatetimeError, Instant};
 pub use decimal::{Decimal, DecimalError, MAX_PRECISION, MAX_SCALE, Round};
 pub use zone::{Zone, ZoneDb, ZoneError, Zones};

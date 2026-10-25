@@ -352,15 +352,24 @@ mod tests {
     }
 
     #[test]
-    fn the_spring_and_autumn_vectors_are_distinct_instants() {
-        // The hour that does not exist in local time round-trips.
+    fn the_two_offsets_of_a_repeated_wall_clock_name_two_instants_an_hour_apart() {
+        // No zone is involved here (the zone rules are in `zone::tests`): a text with an offset
+        // always names one instant, which is how the hour that happens twice is told apart.
+        // Berlin, 2026-10-25: 02:30 happens at +02:00 and again at +01:00.
+        let (a, b) = (ok("2026-10-25T02:30:00+02:00"), ok("2026-10-25T02:30:00+01:00"));
+        assert_eq!(a.canonical(), "2026-10-25T00:30:00.000000Z");
+        assert_eq!(b.canonical(), "2026-10-25T01:30:00.000000Z");
+        assert!(a < b);
+        assert_eq!(b.micros() - a.micros(), 3_600_000_000);
+        // 02:30 on 2026-03-29 does not exist in Berlin, but with an offset it is an instant.
+        assert_eq!(
+            canonical("2026-03-29T02:30:00+01:00").unwrap(),
+            "2026-03-29T01:30:00.000000Z"
+        );
         assert_eq!(
             canonical("2026-03-29T01:30:00Z").unwrap(),
             "2026-03-29T01:30:00.000000Z"
         );
-        let (a, b) = (ok("2026-10-25T00:30:00Z"), ok("2026-10-25T01:30:00Z"));
-        assert!(a < b);
-        assert_eq!(b.micros() - a.micros(), 3_600_000_000);
     }
 
     #[test]

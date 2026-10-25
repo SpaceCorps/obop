@@ -452,31 +452,31 @@ pub fn example(precision: u8, scale: u8) -> String {
     }
 }
 
-/// Like [`pattern`], for a field that rounds on import: any number of fractional digits.
+/// Like [`pattern`], for a field that rounds on import: any number of fractional digits, also
+/// for a field of scale 0 (`12.5` is rounded to a whole number there).
 pub fn import_pattern(precision: u8, scale: u8) -> String {
-    let p = pattern(precision, scale);
-    if scale == 0 {
-        // A whole-number field has no fraction to round: the shape is the same.
-        return p;
+    format!("^-?{}(\\.[0-9]+)?$", integer_part(precision, scale))
+}
+
+/// The pattern of the digits before the point: what the precision leaves after the scale.
+fn integer_part(precision: u8, scale: u8) -> String {
+    match precision.saturating_sub(scale) {
+        0 => "0".to_string(),
+        1 => "[0-9]".to_string(),
+        n => format!("(0|[1-9][0-9]{{0,{}}})", n - 1),
     }
-    p.replace(&format!("{{1,{scale}}}"), "+")
 }
 
 /// The regular expression for the text of a decimal of `precision` and `scale`: digits that fit
 /// the precision, then up to `scale` fractional digits (OpenAPI and MCP `pattern`). Responses
 /// always carry exactly `scale` of them.
 pub fn pattern(precision: u8, scale: u8) -> String {
-    let int = match precision.saturating_sub(scale) {
-        0 => "0".to_string(),
-        1 => "[0-9]".to_string(),
-        n => format!("(0|[1-9][0-9]{{0,{}}})", n - 1),
-    };
     let frac = if scale == 0 {
         String::new()
     } else {
         format!("(\\.[0-9]{{1,{scale}}})?")
     };
-    format!("^-?{int}{frac}$")
+    format!("^-?{}{frac}$", integer_part(precision, scale))
 }
 
 /// The product of two `u128` as `(high, low)` halves of a 256 bit number.
