@@ -712,6 +712,134 @@ mod tests {
         );
     }
 
+    /// Grade school addition on digit columns: a big-decimal adder that shares no code with
+    /// `Decimal` (columns of the written digits, carries at the end).
+    fn column_sum(values: &[String], scale: usize) -> String {
+        let mut cols = vec![0i64; 40 + scale];
+        let mut neg_cols = vec![0i64; 40 + scale];
+        for v in values {
+            let (neg, body) = v
+                .strip_prefix('-')
+                .map_or((false, v.as_str()), |b| (true, b));
+            let (int, frac) = body.split_once('.').unwrap_or((body, ""));
+            let digits: Vec<u8> = format!("{int}{frac:0<w$}", w = scale).bytes().collect();
+            let target = if neg { &mut neg_cols } else { &mut cols };
+            for (i, d) in digits.iter().rev().enumerate() {
+                target[i] += i64::from(d - b'0');
+            }
+        }
+        let carry = |c: &mut Vec<i64>| {
+            for i in 0..c.len() - 1 {
+                c[i + 1] += c[i] / 10;
+                c[i] %= 10;
+            }
+        };
+        carry(&mut cols);
+        carry(&mut neg_cols);
+        let text = |c: &[i64]| -> String {
+            let s: String = c
+                .iter()
+                .rev()
+                .map(|d| char::from(b'0' + *d as u8))
+                .collect();
+            s.trim_start_matches('0').to_string()
+        };
+        let (pos, neg) = (text(&cols), text(&neg_cols));
+        // Subtract the smaller from the larger by comparing the digit strings.
+        let (big, small, sign) = if (pos.len(), &pos) >= (neg.len(), &neg) {
+            (pos, neg, "")
+        } else {
+            (neg, pos, "-")
+        };
+        let (b, s): (Vec<i64>, Vec<i64>) = (
+            big.bytes().rev().map(|d| i64::from(d - b'0')).collect(),
+            small.bytes().rev().map(|d| i64::from(d - b'0')).collect(),
+        );
+        let mut out = Vec::new();
+        let mut borrow = 0;
+        for i in 0..b.len() {
+            let mut d = b[i] - borrow - s.get(i).copied().unwrap_or(0);
+            borrow = 0;
+            if d < 0 {
+                d += 10;
+                borrow = 1;
+            }
+            out.push(d);
+        }
+        let digits: String = out
+            .iter()
+            .rev()
+            .map(|d| char::from(b'0' + *d as u8))
+            .collect();
+        let digits = format!("{:0>w$}", digits.trim_start_matches('0'), w = scale + 1);
+        let (int, frac) = digits.split_at(digits.len() - scale);
+        let body = if scale == 0 {
+            int.to_string()
+        } else {
+            format!("{int}.{frac}")
+        };
+        if body.bytes().all(|c| c == b'0' || c == b'.') {
+            body
+        } else {
+            format!("{sign}{body}")
+        }
+    }
+
+    #[test]
+    fn a_million_scale_two_values_sum_and_average_like_an_independent_big_decimal() {
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = || {
+            seed ^= seed >> 12;
+            seed ^= seed << 25;
+            seed ^= seed >> 27;
+            seed.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        };
+        let values: Vec<String> = (0..1_000_000)
+            .map(|_| {
+                let units = (next() % 2_000_000_000) as i64 - 1_000_000_000; // up to 10 million with cents
+                format!(
+                    "{}{}.{:02}",
+                    if units < 0 { "-" } else { "" },
+                    units.abs() / 100,
+                    units.abs() % 100
+                )
+            })
+            .collect();
+        let mut sum = Decimal::zero(2);
+        for v in &values {
+            sum = sum
+                .checked_add(Decimal::parse_for(v, 12, 2, None).unwrap())
+                .unwrap();
+        }
+        assert_eq!(sum.to_string(), column_sum(&values, 2));
+        // The average at four digits, half even, from the oracle's exact sum by long division.
+        let total: i128 = column_sum(&values, 2).replace('.', "").parse().unwrap();
+        let n = values.len() as i128;
+        let num = total * 100; // hundredths to ten-thousandths
+        let (q, r) = (num.div_euclid(n), num.rem_euclid(n));
+        let even = match (2 * r).cmp(&n) {
+            Ordering::Less => q,
+            Ordering::Greater => q + 1,
+            Ordering::Equal => {
+                if q % 2 == 0 {
+                    q
+                } else {
+                    q + 1
+                }
+            }
+        };
+        let want = format!(
+            "{}{}.{:04}",
+            if even < 0 { "-" } else { "" },
+            even.abs() / 10_000,
+            even.abs() % 10_000
+        );
+        let avg = Decimal::average(sum.units(), 2, 1_000_000, 4, Round::HalfEven).unwrap();
+        assert_eq!(avg.to_string(), want);
+        // 0.1 + 0.2 is 0.3 where a double says 0.30000000000000004.
+        assert_eq!(column_sum(&["0.1".into(), "0.2".into()], 1), "0.3");
+    }
+
     #[test]
     fn comparison_is_numeric_not_lexical() {
         assert!(p("9.5") < p("10.25"));

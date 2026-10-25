@@ -183,9 +183,11 @@ async fn rest_mcp_and_cli_round_trip_ten_thousand_generated_decimals() {
     let lap = |what: &str| eprintln!("{:>8.1}s {what}", started.elapsed().as_secs_f32());
     let mut rng = Rng(0x00dec_1a7e);
     let mut expect: Vec<(String, String, String)> = Vec::new();
-    // REST: 8,000 values in eight bulk calls, read back page by page.
-    for batch in 0..8 {
-        let rows: Vec<J> = (0..1000)
+    // REST: 8,700 values in nine bulk calls, read back page by page. With 300 through MCP and
+    // 1,000 through the CLI import (the next test) that is 10,000 values on the wire.
+    for batch in 0..9 {
+        let size = if batch == 8 { 700 } else { 1000 };
+        let rows: Vec<J> = (0..size)
             .map(|i| {
                 let row = (rng.decimal(12, 2), rng.decimal(10, 4), rng.decimal(24, 8));
                 expect.push(row.clone());
@@ -201,25 +203,25 @@ async fn rest_mcp_and_cli_round_trip_ten_thousand_generated_decimals() {
         .await;
         assert_eq!(
             (s, b["value"]["created"].clone()),
-            (200, json!(1000)),
+            (200, json!(size)),
             "{b}"
         );
     }
     lap("rest written");
     let mut got = Vec::new();
-    for offset in [0, 4000] {
+    for offset in [0, 4500] {
         let (s, b) = post(
             &f.r,
             Some(&f.ada),
             "/api/ledger_entry/list",
-            json!({"limit": 4000, "offset": offset, "order": [{"field": "memo"}]}),
+            json!({"limit": 4500, "offset": offset, "order": [{"field": "memo"}]}),
         )
         .await;
         assert_eq!(s, 200);
         got.extend(b["value"].as_array().unwrap().clone());
     }
     lap("rest read");
-    assert_eq!(got.len(), 8000);
+    assert_eq!(got.len(), 8700);
     got.sort_by(|a, b| a["memo"].as_str().cmp(&b["memo"].as_str()));
     let mut sorted: Vec<(usize, &(String, String, String))> = expect.iter().enumerate().collect();
     sorted.sort_by_key(|(i, _)| format!("rest-{}-{}", i / 1000, i % 1000));
@@ -231,9 +233,10 @@ async fn rest_mcp_and_cli_round_trip_ten_thousand_generated_decimals() {
     // The wire form is a JSON string, never a number.
     assert!(got.iter().all(|r| r["amount"].is_string()));
 
-    // MCP: 1,000 values created and read back through tools/call.
+    // MCP: 300 values created and read back through tools/call. (Every command also runs the
+    // observers of the connectors module, so a create costs tens of milliseconds.)
     let mut s = mcp_session(&f.app.dispatcher, &f.who);
-    for i in 0..1000 {
+    for i in 0..300 {
         let want = (rng.decimal(12, 2), rng.decimal(10, 4), rng.decimal(24, 8));
         let made = tool(
             &f.app.dispatcher,
@@ -648,4 +651,60 @@ async fn meta_reports_the_shape_of_each_decimal_and_the_tz_database() {
     let (_, meta) = send(&f.r, "GET", Some(&f.ada), "/api/meta", json!({})).await;
     assert_eq!(meta["time"]["zone"], "Europe/Stockholm");
     assert_eq!(meta["time"]["tzdb_version"], "2026-fixture");
+}
+
+#[test]
+fn cli_modules_check_accepts_the_kinds_and_explains_mistakes() {
+    let builtin = App::new().modules;
+    let check = |text: &str| obop_pkg::check_package(text, &builtin, false).errors;
+    assert!(check(PACKAGE).is_empty(), "{:?}", check(PACKAGE));
+    let with = |from: &str, to: &str| PACKAGE.replace(from, to);
+    let first = |errors: Vec<String>| errors.into_iter().next().unwrap_or_default();
+    for (text, want) in [
+        (with("scale = 2", "scale = 13"), "0 to 12"),
+        (
+            with("precision = 12\n  scale = 2", "precision = 39\n  scale = 2"),
+            "from 1 to 38",
+        ),
+        (
+            with("round = \"half_up\"", "round = \"up\""),
+            "half_even, half_up or down",
+        ),
+        (
+            with(
+                "  kind = \"datetime\"",
+                "  kind = \"datetime\"\n  scale = 2",
+            ),
+            "only valid for kind \"decimal\"",
+        ),
+        (
+            PACKAGE.to_string()
+                + "\n  [[model.field]]\n  name = \"half\"\n  description = \"x\"\n  class = \"none\"\n  kind = \"money\"\n  computed = \"amount / 2\"\n",
+            "is a decimal number, but the field is money",
+        ),
+        (
+            PACKAGE.to_string()
+                + "\n  [[model.field]]\n  name = \"later\"\n  description = \"x\"\n  class = \"none\"\n  kind = \"decimal\"\n  precision = 10\n  scale = 2\n  computed = \"booked_at + 1\"\n",
+            "must be a number",
+        ),
+        (
+            PACKAGE.to_string()
+                + "\n  [[model.field]]\n  name = \"flag\"\n  description = \"x\"\n  class = \"none\"\n  kind = \"bool\"\n  computed = \"booked_at < \\\"2026-03-29\\\"\"\n",
+            "cannot order",
+        ),
+    ] {
+        let e = first(check(&text));
+        assert!(e.contains(want), "{want}: {e}");
+    }
+    // The command itself reads files, prints ok or FAIL and exits accordingly.
+    let dir = std::env::temp_dir().join(format!("obop-kinds-check-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let good = dir.join("ledger.toml");
+    let bad = dir.join("broken.toml");
+    std::fs::write(&good, PACKAGE).unwrap();
+    std::fs::write(&bad, with("scale = 2", "scale = 13")).unwrap();
+    let (g, b) = (good.to_str().unwrap(), bad.to_str().unwrap());
+    assert!(crate::modules_check_files_with(&[g], false, false).is_ok());
+    assert!(crate::modules_check_files_with(&[g, b], false, false).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
 }

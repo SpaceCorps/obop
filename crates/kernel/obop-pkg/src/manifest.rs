@@ -1708,6 +1708,88 @@ write_group = "fleet.manager"
     }
 
     #[test]
+    fn decimal_and_datetime_fields_parse_with_their_shape() {
+        let at = |extra: &str| {
+            FLEET.replace("name = \"plate\"", &format!("name = \"plate\"\n  {extra}"))
+        };
+        let kind_of = |t: &str| {
+            Manifest::parse(t).unwrap().to_module().unwrap().models[0].fields[0]
+                .kind
+                .clone()
+        };
+        assert_eq!(
+            kind_of(&at("kind = \"decimal\"\n  precision = 12\n  scale = 2")),
+            FieldKind::Decimal {
+                precision: 12,
+                scale: 2,
+                round: None
+            }
+        );
+        assert_eq!(
+            kind_of(&at(
+                "kind = \"decimal\"\n  precision = 38\n  scale = 12\n  round = \"half_even\""
+            )),
+            FieldKind::Decimal {
+                precision: 38,
+                scale: 12,
+                round: Some(obop_registry::Round::HalfEven)
+            }
+        );
+        assert_eq!(kind_of(&at("kind = \"datetime\"")), FieldKind::Datetime);
+        for (extra, want) in [
+            ("kind = \"decimal\"", "needs `precision`"),
+            ("kind = \"decimal\"\n  precision = 12", "needs `precision`"),
+            (
+                "kind = \"decimal\"\n  precision = 0\n  scale = 0",
+                "from 1 to 38",
+            ),
+            (
+                "kind = \"decimal\"\n  precision = 39\n  scale = 2",
+                "from 1 to 38",
+            ),
+            (
+                "kind = \"decimal\"\n  precision = 12\n  scale = 13",
+                "0 to 12",
+            ),
+            (
+                "kind = \"decimal\"\n  precision = 2\n  scale = 3",
+                "not above the precision",
+            ),
+            (
+                "kind = \"decimal\"\n  precision = 12\n  scale = 2\n  round = \"up\"",
+                "half_even, half_up or down",
+            ),
+            (
+                "kind = \"money\"\n  precision = 12",
+                "only valid for kind \"decimal\"",
+            ),
+            (
+                "kind = \"datetime\"\n  scale = 2",
+                "only valid for kind \"decimal\"",
+            ),
+            ("round = \"down\"", "only valid for kind \"decimal\""),
+            (
+                "kind = \"decimal\"\n  precision = 12.5\n  scale = 2",
+                "invalid obop.toml",
+            ),
+        ] {
+            let e = err(&at(extra));
+            assert!(e.contains(want), "{extra:?} -> {e}");
+        }
+        // A migration default for a decimal is a string or a whole number, never a float.
+        let t = at("kind = \"decimal\"\n  precision = 6\n  scale = 2");
+        let f = Manifest::parse(&t).unwrap().model[0].field[0].clone();
+        let v = |s: &str| toml::from_str::<toml::Table>(s).unwrap()["v"].clone();
+        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}"))).is_ok();
+        assert!(ok("\"12.5\"") && ok("12"));
+        assert!(!ok("12.5") && !ok("\"1.234\"") && !ok("\"1e3\"") && !ok("true") && !ok("1234567"));
+        let t = at("kind = \"datetime\"");
+        let f = Manifest::parse(&t).unwrap().model[0].field[0].clone();
+        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}"))).is_ok();
+        assert!(ok("\"2026-03-29T01:30:00Z\"") && !ok("\"2026-03-29\"") && !ok("5"));
+    }
+
+    #[test]
     fn rejects_inconsistent_field_kinds() {
         let at = |extra: &str| {
             FLEET.replace("name = \"plate\"", &format!("name = \"plate\"\n  {extra}"))
