@@ -398,6 +398,13 @@ fn ident(s: &str) -> Result<&str> {
 }
 
 pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
+    open_with(url, None)
+}
+
+/// As [`open`], with the connection pool settings given instead of read from the environment
+/// (`OBOP_DB_*`, see docs/DEPLOY.md). Only PostgreSQL has a pool; the setting is ignored for
+/// `memory:` and SQLite.
+pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
     if url == "memory:" {
         Ok(Arc::new(Memory::default()))
     } else if let Some(path) = url
@@ -406,7 +413,10 @@ pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
     {
         Ok(Arc::new(Sqlite::open(path)?))
     } else if url.starts_with("postgres://") || url.starts_with("postgresql://") {
-        Ok(Arc::new(Pg::connect(url)?))
+        Ok(Arc::new(match pool {
+            Some(cfg) => Pg::connect_with(url, cfg)?,
+            None => Pg::connect(url)?,
+        }))
     } else {
         Err(format!(
             "unsupported database url (use memory:, sqlite://PATH or postgres://...): {url}"
@@ -430,6 +440,7 @@ pub mod fault;
 pub mod limit;
 mod memory;
 mod pg;
+mod pgpool;
 pub mod pool;
 #[cfg(test)]
 mod pool_tests;
@@ -439,6 +450,8 @@ mod sqlite;
 pub mod tls;
 #[cfg(test)]
 mod tls_tests;
+
+pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
 
 use memory::Memory;
 use pg::Pg;

@@ -20,6 +20,8 @@
 //! Nothing here looks inside the bytes: sniffing, decoding limits and re-encoding are done by the
 //! caller (`obop-media`) before `put`. A virus scanner plugs in as [`Scanner`].
 
+use crate::pgpool::{Class, PgPool, PgPoolConfig, tune};
+use crate::tls::PgConnector;
 use crate::{ApplyError, Backend, Fields, Op, Result};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
@@ -285,12 +287,12 @@ const CHUNK: usize = 512 * 1024;
 
 enum Db {
     Sqlite(Mutex<rusqlite::Connection>),
-    Pg(Mutex<postgres::Client>),
+    Pg(PgPool),
 }
 
 /// Bytes in a table of the database itself, in 512 KiB chunks (so a download streams chunk by
-/// chunk and never holds the whole object in the connection). It uses its own connection to the
-/// same database, so a backup of the database holds the blobs. PostgreSQL uses `bytea` rows
+/// chunk and never holds the whole object in a connection). It uses a small pool of its own
+/// (D74) on the same database, so a backup of the database holds the blobs. PostgreSQL uses `bytea` rows
 /// instead of large objects: they are covered by ordinary dumps and replication.
 pub struct DbBytes {
     db: Arc<Db>,
@@ -300,6 +302,11 @@ impl DbBytes {
     /// Open the byte table of `url` (`sqlite://PATH` or `postgres://...`). An in-memory SQLite
     /// database is not shared between connections, so use [`MemoryBytes`] there.
     pub fn open(url: &str) -> Result<Self> {
+        Self::open_with(url, None)
+    }
+
+    /// As [`DbBytes::open`], with the pool settings given instead of read from the environment.
+    pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Self> {
         let db = if let Some(path) = url
             .strip_prefix("sqlite://")
             .or_else(|| url.strip_prefix("sqlite:"))
@@ -321,7 +328,12 @@ impl DbBytes {
             .map_err(|e| e.to_string())?;
             Db::Sqlite(Mutex::new(conn))
         } else if url.starts_with("postgres://") || url.starts_with("postgresql://") {
-            let mut client = crate::tls::connect(url)?;
+            let cfg = Arc::new(match pool {
+                Some(c) => c,
+                None => PgPoolConfig::from_env()?,
+            });
+            let connector = PgConnector::new(url)?;
+            let mut client = tune(connector.clone(), "obop-blob", &cfg).connect()?;
             client
                 .batch_execute(
                     "CREATE TABLE IF NOT EXISTS obop_blob_data (
@@ -332,7 +344,9 @@ impl DbBytes {
                      );",
                 )
                 .map_err(|e| e.to_string())?;
-            Db::Pg(Mutex::new(client))
+            let pool = PgPool::new("blob", connector, cfg.blob_size, &cfg);
+            pool.seed(client);
+            Db::Pg(pool)
         } else {
             return Err("unsupported database url for blobs".into());
         };
@@ -352,15 +366,13 @@ impl DbBytes {
                     None => Ok(None),
                 }
             }
-            Db::Pg(c) => Ok(c
-                .lock()
-                .unwrap()
-                .query_opt(
+            Db::Pg(p) => p.read(Class::Point, |c| {
+                Ok(c.query_opt(
                     "SELECT data FROM obop_blob_data WHERE key = $1 AND seq = $2",
                     &[&key, &seq],
-                )
-                .map_err(|e| e.to_string())?
-                .map(|r| r.get::<_, Vec<u8>>(0))),
+                )?
+                .map(|r| r.get::<_, Vec<u8>>(0)))
+            }),
         }
     }
 }
@@ -417,24 +429,20 @@ impl BlobBytes for DbBytes {
                 }
                 tx.commit().map_err(|e| e.to_string())
             }
-            Db::Pg(c) => {
-                let mut g = c.lock().unwrap();
-                let mut tx = g.transaction().map_err(|e| e.to_string())?;
-                tx.execute("DELETE FROM obop_blob_data WHERE key = $1", &[&key])
-                    .map_err(|e| e.to_string())?;
+            Db::Pg(p) => p.tx(Class::Batch, |c| {
+                c.execute("DELETE FROM obop_blob_data WHERE key = $1", &[&key])?;
                 let mut parts: Vec<&[u8]> = bytes.chunks(CHUNK).collect();
                 if parts.is_empty() {
                     parts.push(&[]);
                 }
                 for (seq, part) in parts.into_iter().enumerate() {
-                    tx.execute(
+                    c.execute(
                         "INSERT INTO obop_blob_data (key, seq, data) VALUES ($1, $2, $3)",
                         &[&key, &(seq as i32), &part],
-                    )
-                    .map_err(|e| e.to_string())?;
+                    )?;
                 }
-                tx.commit().map_err(|e| e.to_string())
-            }
+                Ok(())
+            }),
         }
     }
     fn open(&self, key: &str) -> Result<Option<Box<dyn Read + Send>>> {
@@ -461,12 +469,9 @@ impl BlobBytes for DbBytes {
                 .execute("DELETE FROM obop_blob_data WHERE key = ?1", (key,))
                 .map(|n| n > 0)
                 .map_err(|e| e.to_string()),
-            Db::Pg(c) => c
-                .lock()
-                .unwrap()
-                .execute("DELETE FROM obop_blob_data WHERE key = $1", &[&key])
-                .map(|n| n > 0)
-                .map_err(|e| e.to_string()),
+            Db::Pg(p) => p.run(Class::Point, |c| {
+                Ok(c.execute("DELETE FROM obop_blob_data WHERE key = $1", &[&key])? > 0)
+            }),
         }
     }
     fn keys(&self) -> Result<Vec<String>> {
@@ -481,14 +486,12 @@ impl BlobBytes for DbBytes {
                     .map_err(|e| e.to_string())?;
                 rows.map(|r| r.map_err(|e| e.to_string())).collect()
             }
-            Db::Pg(c) => Ok(c
-                .lock()
-                .unwrap()
-                .query("SELECT DISTINCT key FROM obop_blob_data", &[])
-                .map_err(|e| e.to_string())?
-                .into_iter()
-                .map(|r| r.get::<_, String>(0))
-                .collect()),
+            Db::Pg(p) => p.read(Class::List, |c| {
+                Ok(c.query("SELECT DISTINCT key FROM obop_blob_data", &[])?
+                    .into_iter()
+                    .map(|r| r.get::<_, String>(0))
+                    .collect())
+            }),
         }
     }
 }

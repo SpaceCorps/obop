@@ -185,6 +185,12 @@ pub fn stats() -> Vec<PoolStats> {
     out
 }
 
+/// The outcome of waiting: the guard back, or the guard back with the reason to give up.
+type Parked<'a, M> = Result<
+    MutexGuard<'a, State<<M as Manager>::Conn>>,
+    (MutexGuard<'a, State<<M as Manager>::Conn>>, PoolError),
+>;
+
 struct Idle<C> {
     conn: C,
     born: Instant,
@@ -415,7 +421,7 @@ impl<M: Manager> Pool<M> {
         cv: &Condvar,
         deadline: Instant,
         waiting: &mut bool,
-    ) -> Result<MutexGuard<'a, State<M::Conn>>, (MutexGuard<'a, State<M::Conn>>, PoolError)> {
+    ) -> Parked<'a, M> {
         if !*waiting {
             if st.waiting >= self.inner.cfg.max_waiters {
                 self.inner.counters.rejected.fetch_add(1, Relaxed);
