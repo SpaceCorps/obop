@@ -252,6 +252,9 @@ pub fn start_scheduler(
     backend: Arc<dyn obop_storage::Backend>,
     blobs: Arc<dyn obop_storage::blob::Blobs>,
 ) -> Result<(), String> {
+    if std::env::var_os("OBOP_BACKUP_SCHEDULE").is_none() {
+        return Ok(());
+    }
     let keys = backup_keys()?;
     let Some((settings, every)) = settings_from_env(keys)? else {
         return Ok(());

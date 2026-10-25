@@ -1,6 +1,6 @@
 # Deploying obop: the operator guide
 
-- **Status:** working document, 2026-10-17. Written against the code in the repository, not a design target. Decision record: D59 in [DECISIONS.md](DECISIONS.md).
+- **Status:** working document, 2026-10-25. Written against the code in the repository, not a design target. Decision records: D59 (operations) and D73 (backups, restore, migration gates) in [DECISIONS.md](DECISIONS.md). Recovery steps and roles: [RUNBOOK-RECOVERY.md](RUNBOOK-RECOVERY.md).
 - **Who this is for:** whoever runs obop in production, on their own server or on Sliplane. Everything here is a command you can run.
 
 ## What exists
@@ -11,9 +11,10 @@
 | Control plane | `obop platform serve` | Sign up, then create, list and delete your own instances; the forum (`/community`) and status page (`/status`). Runs a provisioner per instance. |
 | Provisioners | `--provisioner local\|sliplane\|fake` | `local` starts child `obop serve` processes with SQLite; `sliplane` creates a database on a shared cell PostgreSQL and a Sliplane service per instance; `fake` is for tests. |
 | Rolling upgrade | `obop platform upgrade-instances` | Moves every running instance to a published image, one at a time (see "The published image"). |
-| Backup and restore | `obop backup`, `obop backup verify`, `obop restore`, `deploy/restore-drill.sh` | Consistent logical backups, checked restores (see "Backups"). |
+| Backup and restore | `obop backup [run\|list\|prune]`, `obop backup verify`, `obop restore`, `obop drill`, `deploy/restore-drill.sh` | Consistent logical backups, sealed with a key (format 2), scheduled with retention and an off-host copy, authenticated restores, restore drills (see "Backups"). |
 | Key rotation | `obop secrets status`, `obop secrets rotate` | Re-seals every secret under a new server key while serving (see "The server key"). |
-| Schema | `obop migrate status\|plan\|run` | The schema version of a database and the steps that upgrade it (see "Upgrades"). |
+| Schema | `obop migrate status\|verify\|plan\|run\|rehearse\|rollback` | The schema version, the migration ledger, and the steps that upgrade it behind backup, plan and rehearsal gates (see "Upgrades"). |
+| Storage checks | `obop storage check\|attest\|show` | WAL archiving, TLS and evidence checks of a PostgreSQL host; the storage-encryption attestation (see "Backups"). |
 | Modules | Modules page, or `obop modules ...` | Admins install, upgrade and remove declarative packages (`obop.toml`) from an upload or the marketplace. |
 
 The owner's Argon2 hash is copied into the new instance as its first admin (`platform.admin`), so the signup email and password also sign in to the instance. The control plane never sees the password after signup.
@@ -40,7 +41,7 @@ Administrators update modules and the instance itself from Customize, without a 
 | `OBOP_UPDATE_URL` | instance | The control plane's public address. Set by the provisioner. |
 | `OBOP_UPDATE_TOKEN` | instance (secret) | The instance's update token, set by the provisioner (Sliplane: `--secret-env`). Sealed into the database at start-up; the variable only hands it over. |
 | `OBOP_UPDATE_FEED` | instance | The release feed. Default `<OBOP_UPDATE_URL>/api/releases`, else `https://obop.dev/api/releases`; `off` disables. Only `https`, or `http` to localhost. Read only when an administrator checks. |
-| `OBOP_BACKUP_DIR` | instance | Where the backup before an update goes (mount a volume). Without it an update needs the administrator's confirmation that they have their own backup. |
+| `OBOP_BACKUP_DIR` | instance | Where backups go (mount a volume): the backup before an update, before a migration (`--auto-migrate`, `module.upgrade` that rewrites records) and the scheduled ones. Without it an update needs the administrator's confirmation that they have their own backup, and on PostgreSQL a module update that rewrites records is refused (see "Migration gates"). |
 | `OBOP_CONTROL_URL` | control plane | The address handed to new instances (falls back to `OBOP_PUBLIC_URL`). |
 
 Control plane, operator side: `obop platform release publish --version V --image REF [--notes T|--notes-file F] [--min-from V]`, `release list`, `release withdraw V`; `obop platform register-instance SLUG --url URL [--external-id ID] [--image REF] [--token-stdin]` registers an instance this control plane did not create and prints (or takes) its token; `obop platform update-token SLUG [--revoke]` rotates or revokes a token.
@@ -60,6 +61,9 @@ Command line flags win over variables. Secrets are set as secret environment var
 | `OBOP_DATABASE_URL` | Where the data lives (`--db`): `sqlite://obop.db` (the default for an instance; `sqlite://obop-platform.db` for the control plane), `postgres://user:pass@host/db?sslmode=require` (see "Database connections and TLS"), `memory:`. |
 | `OBOP_SECRET_KEY` | The current server key, 32 random bytes as 64 hex digits (`openssl rand -hex 32`). Seals two-factor secrets and connector credentials, and the sessions and approval plans kept in the database. See "The server key". Without it a key is generated and stored in the database next to the data, which protects nothing against someone holding a copy of the database. |
 | `OBOP_SECRET_KEY_PREVIOUS` | Earlier keys, comma separated: what the current key replaced and that may still protect stored values. Only needed between a key change and the end of `obop secrets rotate`. |
+| `OBOP_BACKUP_KEY`, `OBOP_BACKUP_KEY_PREVIOUS` | The key backups are sealed with (format 2), 64 hex digits (`openssl rand -hex 32`), and earlier ones, comma separated. Without it the server key seals them; a key generated into the database never does. See "Backups". |
+| `OBOP_BACKUP_SCHEDULE`, `OBOP_BACKUP_COPY_DIR`, `OBOP_BACKUP_COPY_DELETE`, `OBOP_BACKUP_KEEP_DAILY\|WEEKLY\|MONTHLY` | Scheduled backups (`24h`), where each is copied and read back, whether retention may delete there, and retention (default 35 daily, 12 monthly). See "Scheduled backups, retention and an off-host copy". |
+| `OBOP_MIGRATION_GATES` | `strict` or `relaxed`: whether the checks before a migration or a data-rewriting module update refuse or only warn. Default strict on PostgreSQL, relaxed elsewhere. |
 | `OBOP_AUTO_MIGRATE` | `1` lets a starting server run pending schema steps itself, `0` makes it refuse and print the command. Default: on for SQLite, **off for PostgreSQL**. `--auto-migrate` and `--no-auto-migrate` override it. |
 | `OBOP_REQUIRE_MFA_FOR_ADMINS` | `0` changes the *default* of the setting `security.require_mfa_for_admins` to off (the production default is on). A value an administrator stored under Customize > Security wins. |
 | `OBOP_DEV_INSECURE_KEY` | `1` selects a public, fixed key and logs a warning. Development and tests only. |
@@ -139,6 +143,7 @@ Three read-only routes on every instance, served next to the API (so a `--static
 | `obop_db_up`, `obop_db_ping_seconds` | a database ping at scrape time |
 | `obop_active_sessions` | people's valid sign-in sessions (read at most every 15 seconds) |
 | `obop_job_queue_depth{queue="connectors",state}` | connector deliveries waiting, leased, dead (read at most every 15 seconds) |
+| `obop_backup_age_seconds`, `obop_backup_size_bytes`, `obop_backup_duration_seconds`, `obop_backup_copy_age_seconds`, `obop_restore_drill_age_seconds`, `obop_backup_last_run_failed` | the newest verified backup, its copy off the host, the newest passed restore drill and whether the last scheduled run failed (from the backup catalogue; absent until the first one; D73) |
 
 Counters are per process and restart with it; sum them across processes in the scraper. The text format is written by hand to the exposition format and has not been checked with a real Prometheus. The control plane (`platform serve`) has no such routes yet. The upgrade check of `obop platform upgrade-instances` still asks `/api/openapi.json` so that it also works for an image that predates `/readyz`.
 
@@ -213,6 +218,7 @@ Rotation needs no downtime and can be done in steps. Rehearse it on a restored c
 3. **Deploy with both keys:** `OBOP_SECRET_KEY=<new>` and `OBOP_SECRET_KEY_PREVIOUS=<old>` on every process. From now on new values are sealed with the new key and everything the old key sealed still opens. Check with `obop secrets status --db URL` (set the same variables): it lists the current and previous key ids and how many values each protects, without printing any key.
 4. **Re-seal:** `obop secrets rotate --db URL` with the same variables. Add `--dry-run` first for the counts. It re-seals in batches (`--batch N`, default 200), each batch one transaction of compare-and-set swaps, so a value the running server changed in the meantime is left alone and picked up by the next run. `--max-batches N` stops early (rotate gently, resume later). Re-running is always safe and finishes the job.
 5. **Remove the old key** from `OBOP_SECRET_KEY_PREVIOUS` at the next deploy, once the report says everything is under the current key (`obop secrets status` shows only the current id).
+6. **Backups sealed with the old key** (format 2 without an `OBOP_BACKUP_KEY` of its own, see "Backups") still need it: keep it in `OBOP_SECRET_KEY_PREVIOUS` for as long as any such backup is kept, or give backups a key of their own (`OBOP_BACKUP_KEY`) before you rotate, so that rotating the server key never touches them. `obop backup verify FILE` tells you by key id which key a backup needs.
 
 Rules the tool follows: it never prints, logs or returns a key, a plaintext or a sealed value, only places (`connection/c1.credentials`) and key ids. **A value that no key of the ring opens stops the run before anything is written** and names the first one; put the missing key in `OBOP_SECRET_KEY_PREVIOUS`, or accept losing those values with `--skip-unopenable`. It refuses to run without `OBOP_SECRET_KEY` set. The stored pseudonym key of every connection is made to exist before re-sealing, so pseudonyms already given to receivers do not change.
 
@@ -232,81 +238,213 @@ Treat it as the loss of confidentiality of every secret sealed under it: rotate 
 
 ## Backups
 
-`obop backup` writes a consistent logical copy of every record: gzip-compressed JSON Lines plus a manifest with checksums, the schema version and the core version. It reads from one snapshot (a repeatable-read transaction on PostgreSQL, a read transaction on SQLite), a batch at a time, so a large database never sits in memory and a running server is not stopped. Uploaded pictures and files (D60) follow the records as `blob` lines, one at a time, wherever their bytes live (`OBOP_BLOB_DIR`, a `<file>.blobs` directory beside a SQLite file, or the database); `obop restore` puts them back and checks that each hashes to its id, so a restore onto a new host brings the pictures too. Set the same `OBOP_BLOB_DIR` for backup and restore.
+`obop backup` writes a consistent logical copy of every record: JSON Lines (gzip-compressed) plus a manifest with checksums, the schema version and the core version. It reads from one snapshot (a repeatable-read transaction on PostgreSQL, a read transaction on SQLite), a batch at a time, so a large database never sits in memory and a running server is not stopped. Uploaded pictures and files (D60) follow the records as `blob` lines, one at a time, wherever their bytes live (`OBOP_BLOB_DIR`, a `<file>.blobs` directory beside a SQLite file, or the database); `obop restore` puts them back and checks that each hashes to its id, so a restore onto a new host brings the pictures too. Set the same `OBOP_BLOB_DIR` for backup and restore.
 
 ```bash
 obop backup --db postgres://... --out /backups/            # a timestamped file in the directory
-obop backup --db postgres://... --out /backups/nightly.jsonl.gz
-obop backup verify /backups/nightly.jsonl.gz               # checksums, gzip, format, counts
+obop backup --db postgres://... --out /backups/nightly.obbk
+obop backup verify /backups/nightly.obbk                    # opens and authenticates a sealed backup (needs the key)
 obop restore --db postgres://.../new --from FILE --dry-run # check, report, write nothing
 obop restore --db postgres://.../new --from FILE           # into an EMPTY database
 obop restore --db postgres://.../live --from FILE --force  # replace what is there
 ```
 
-- **What is in it:** every record, in insertion order (including the schema version record and the generated key if the instance has no `OBOP_SECRET_KEY`). **What is not:** sessions, pending approval plans and rate-limit counters (people sign in again; agents propose again). **Secrets stay sealed exactly as stored**; the backup is as safe as `OBOP_SECRET_KEY`, which is not in it. Store the key apart from the backups.
-- **Verification** recomputes the checksum of the file as stored, then reads every record (gzip integrity, shape, counts per model, a checksum over the records). A truncated, edited or damaged file fails. The checksums detect damage; they do not authenticate: keep backups where only the operator can write.
-- **Restore** refuses a non-empty target unless `--force`; checks the format (an unknown format is refused), refuses a backup from a newer schema than the binary knows, and writes in one transaction, so a failure leaves the target as it was. A backup from an older schema restores and tells you to run `obop migrate run`. `--force` also clears the target's sessions and counters.
+### Two formats (D73)
+
+| | Format 1 (plain) | Format 2 (sealed) |
+|---|---|---|
+| Written | when no key is configured, or with `--plain` | when `OBOP_BACKUP_KEY` or `OBOP_SECRET_KEY` is set (the default then); `--encrypted` refuses to write without a key |
+| File | `obop-backup-<time>.jsonl.gz` | `obop-backup-<time>.obbk` |
+| Records readable by whoever holds the file | yes | no: the stream is encrypted with ChaCha20-Poly1305 in 64 KiB chunks under a random key per backup |
+| Detects damage | checksums | every chunk is authenticated, and so are the order, truncation (even at a chunk boundary) and extension |
+| Authenticates who wrote it | no (anyone who can rewrite both files can forge a pair) | the manifest carries an HMAC under a subkey of the backup key, and the data file cannot be sealed without it: a data file and manifest both rewritten without the key are refused |
+| Restore | needs no key | needs the key; without it `obop restore` and `obop backup verify` stop with the code `restore_key_required`, **exit status 3**, and write nothing |
+
+Format 1 backups, including every backup made before D73, restore as they always did. A sealed file carries a clear header (format, obop version, schema version, time, the id of the key) that is authenticated but not secret; the manifest names the models and how many records each holds. Nothing else about the records is outside the cipher: `obop backup verify FILE --canary TEXT` fails if the text is found in the file as stored.
+
+**Which key.** `OBOP_BACKUP_KEY` (64 hex digits: `openssl rand -hex 32`; earlier keys in `OBOP_BACKUP_KEY_PREVIOUS`, comma separated) is a key of its own that you can keep apart from the server's. Without it the server key `OBOP_SECRET_KEY` (and its previous keys) is used, which means a backup is exactly as readable as the sealed secrets inside it, and that rotating the server key (below) leaves older backups needing the previous key. A key that was generated into the database (an instance with no `OBOP_SECRET_KEY`) is **never** used: it is inside every backup, so a backup sealed with it could not be opened after the database is gone; such an instance writes format 1 and says so. The server holds the key it seals with, so this protects the *file* (a stolen copy, a leaked bucket, a shared volume), not a compromised server. A key held only as a public key, so that the server could not read its own backups, is not built (D73, "Not delivered").
+
+**What to keep apart from the backups, and what is lost if it is lost.**
+
+| Keep | Where | If it is lost |
+|---|---|---|
+| The backup key (`OBOP_BACKUP_KEY`, or `OBOP_SECRET_KEY` when that is what sealed) | Your secret store, in at least two places, never on the volume of the backups | **Every backup sealed with it is unreadable.** There is no backdoor and no recovery. Keep a previous key for as long as any backup sealed with it is kept |
+| `OBOP_SECRET_KEY` | Your secret store | The data restores (when a separate backup key sealed it); the sealed secrets inside it (two-factor seeds, connection credentials) cannot be opened (see "If the key is lost"). If it was also the backup key, see the row above |
+| The manifest (`<file>.manifest.json`) | Beside the data file, copied with it | A sealed data file without its manifest cannot be verified or restored by `obop restore`: copy both (the manifest is a few kilobytes) |
+| The database password, `OBOP_PUBLIC_URL`, DNS | Wherever you keep deployment settings | A restore into a new database needs a new password and address; passkeys are bound to the address (D65) |
+
+Format 2 uses no public-key signature, so there is no signing key or private key to custody (OBR-DAT-046 asked for both; see D73).
+
+- **What is in it:** every record, in insertion order (including the schema version record, the migration ledger and the generated key if the instance has no `OBOP_SECRET_KEY`). **What is not:** sessions, pending approval plans and rate-limit counters (people sign in again; agents propose again). **Secrets stay sealed exactly as stored**; the server key is not in the backup.
+- **Verification** reads every record (gzip integrity, shape, counts per model, a checksum over the records, and for a sealed backup every chunk, the hash chain over the chunk tags and the manifest's MAC). A truncated, edited or damaged file fails. A format 1 file's checksums detect damage; they do not authenticate: keep those where only the operator can write. `obop backup verify FILE --structure-only` checks a sealed file's size, checksum, framing and hash chain without the key and says it proved nothing about who wrote it.
+- **Restore** refuses a non-empty target unless `--force`; checks the format (an unknown format is refused), refuses a backup from a newer schema than the binary knows, and writes in one transaction, so a failure leaves the target as it was. A backup from an older schema restores and tells you to run `obop migrate run`. `--force` also clears the target's sessions and counters. The restore is **one transaction**: its duration at your data size is what the drill measures (below); above about 10 GB a resumable chunked restore is not built (D73, "Not delivered").
 - SQLite and PostgreSQL are both supported, and a backup moves between them (it is how you move a local database to PostgreSQL).
-- **Scheduling:** `obop backup` is a command; run it from cron, a systemd timer or a scheduled job of your platform, and ship the file to storage you control. Scheduled backups for hosted instances are not part of the product yet (they need object storage); operate them as below.
+- **Memory** stays at a few megabytes (one chunk, one batch of records and one uploaded file at a time); a 50 GB database has not been backed up here, so the figure is by construction, not measured.
+
+### Scheduled backups, retention and an off-host copy (D73)
+
+`obop backup run` is the whole job once, for cron or a platform's scheduled job; `obop serve` runs the same job on its own timer. Either way: write the backup (sealed when a key is set), read it back and authenticate it, record it in the database (`obop backup list` shows them), copy it to every sink and prove each copy by reading it back and comparing its hash, then apply retention.
+
+```bash
+obop backup run --db postgres://... --out /var/backups/obop --copy-to /mnt/offsite
+OBOP_BACKUP_DIR=/var/backups/obop OBOP_BACKUP_SCHEDULE=24h OBOP_BACKUP_COPY_DIR=/mnt/offsite obop serve ...
+```
+
+| Variable / flag | Meaning |
+|---|---|
+| `OBOP_BACKUP_DIR` / `--out` | Where backups are written on this host: a volume that outlives the container. Also where the backup before an update or a migration goes |
+| `OBOP_BACKUP_SCHEDULE` | `24h`, `12h`, `90m`, `1d` ... (at least five minutes). The server checks every minute whether the newest verified scheduled backup is older than this; the decision lives in the database, so it survives restarts, and with several processes on one database one of them (a lease in the shared store) takes each backup. Needs `OBOP_BACKUP_DIR`. Off when unset |
+| `OBOP_BACKUP_COPY_DIR` / `--copy-to DIR` | Directories to copy each backup to (comma separated; repeat the flag). A copy counts only when it was read back and its SHA-256 matched. Objects are write-once: a different file under an existing name is refused |
+| `OBOP_BACKUP_COPY_DELETE=1` / `--copy-delete` | Let retention delete in the copy too. Off by default: the credential that writes backups should not be able to delete them, and expiry in the store belongs to its lifecycle rule |
+| `OBOP_BACKUP_KEEP_DAILY`, `_WEEKLY`, `_MONTHLY` / `--keep-daily N` ... | Retention. Default **35 daily, 0 weekly, 12 monthly**: for each of the last N UTC days (ISO weeks from Monday, calendar months) that has a backup, the newest backup of that period is kept; a backup kept by any rule is kept; the newest backup is never deleted |
+
+**Retention is a promise to put in your privacy notice.** It bounds how long a person's erased data survives in backups: with the default, up to 12 months. It applies to *scheduled* backups only; a backup taken by hand, before a migration or before an update stays until a person removes it (so does its data). A scheduled backup is never deleted from this host until every configured sink holds a verified copy of it.
+
+**The copy in another failure domain.** Shipped: a directory sink (`FsSink`): a mounted share, a second disk, or an object store mounted with `rclone mount` or `s3fs`. **An S3-compatible sink is not built**: a signed multipart upload client that can be tested against a real store is a project of its own, and an operator-run uploader does the same job today. Run `obop backup run` with `--out` on a local disk, upload both files of each backup with your tool (`aws s3 cp`, `rclone copy`) to a bucket with **object lock (compliance or governance mode), versioning and a lifecycle rule** in another account and region, give the uploader's credential write but not delete or lock-shortening rights, and prove the copy the way obop does: download it to a scratch directory and run `obop backup verify` on it (or, better, the drill below on it). A copy you have not restored is not a backup.
+
+**Alerts.** The metrics (`GET /metrics`, see "Health and metrics") carry `obop_backup_age_seconds`, `obop_backup_size_bytes`, `obop_backup_duration_seconds`, `obop_backup_copy_age_seconds`, `obop_restore_drill_age_seconds` and `obop_backup_last_run_failed`. Prometheus rules (not run against a real Prometheus):
+
+```yaml
+- alert: ObopBackupOverdue          # nightly job: older than 26 hours, or none at all
+  expr: obop_backup_age_seconds > 93600 or absent(obop_backup_age_seconds)
+  for: 5m
+- alert: ObopBackupNotOffHost
+  expr: obop_backup_copy_age_seconds > 93600 or absent(obop_backup_copy_age_seconds)
+  for: 5m
+- alert: ObopRestoreDrillOverdue    # the last drill that passed is older than 35 days
+  expr: obop_restore_drill_age_seconds > 3024000 or absent(obop_restore_drill_age_seconds)
+  for: 5m
+- alert: ObopBackupRunFailed
+  expr: obop_backup_last_run_failed == 1
+  for: 15m
+```
+
+`obop storage check` asks the same questions from the command line (below).
 
 ### The restore drill
 
-`deploy/restore-drill.sh BACKUP` restores a backup into a scratch PostgreSQL database, checks it and drops it again:
+`obop drill BACKUP` restores a backup into a scratch database (a temporary SQLite file, or an empty database you made: `--scratch postgres://.../scratch`) and checks the copy; `deploy/restore-drill.sh BACKUP` does that on a scratch PostgreSQL database it makes and drops, and then starts a server on the copy:
 
 ```bash
 DRILL_ADMIN_URL=postgres://postgres:PASSWORD@HOST:5432/postgres \
-OBOP_SECRET_KEY=... deploy/restore-drill.sh /backups/nightly.jsonl.gz
+OBOP_BACKUP_KEY=... OBOP_SECRET_KEY=... DRILL_RECORD_IN=postgres://.../live \
+  deploy/restore-drill.sh /backups/nightly.obbk
 ```
 
-It verifies the file, creates `obop_drill_<time>`, restores, reads the schema version (`DRILL_MIGRATE=1` also drills the migration of an older backup), counts the restored records against the manifest, checks that user accounts came back and that no sealed secret is unopenable with the keys given, starts a server on the copy and asks it `GET /api/openapi.json`, then drops the database. It exits non-zero on the first failed check. CI runs it against a PostgreSQL service on every change; run it on a schedule against your real backups (monthly is the minimum; the pipeline plan lists it as a monthly job, ENGINEERING 3.1).
+The checks: the backup verifies (a sealed one is authenticated with its key); it restores; the records per model equal the manifest; **a SHA-256 over every restored record in order equals the backup's record digest**; the schema version is one this build serves (a backup from an older schema fails the drill unless you pass `--migrate` / `DRILL_MIGRATE=1`, which migrates the copy: the drill of an upgrade); the migration ledger of the copy is clean; the accounts came back; no sealed secret is unopenable with the keys given; uploaded files came back and hash to their ids; a fixed write, change, read and delete works on the copy. The script then starts `obop serve` on the copy and asks `GET /api/openapi.json` and `GET /readyz`. It exits non-zero on the first failed check; **a sealed backup without its key exits 3**.
 
-### PostgreSQL itself (the Sliplane cell)
+`--record-in URL` (`DRILL_RECORD_IN`) writes the result into your real database as a restore drill record with the **measured** recovery point (the age of the backup when it was drilled) and recovery time (how long the restore and the checks took on that machine with that data). Those are measurements, not promises. CI runs the drill on every change against a PostgreSQL service: a sealed backup, a plain one, the wrong key (must exit 3) and a corrupt copy (must fail). Run it from a schedule against your real backups (monthly at least; docs/RUNBOOK-RECOVERY.md has the roles and the quarterly and half-yearly drills). Checks that do not apply say "not checked" instead of passing silently. Not covered: the history, freeze-hash, chain and guard-trigger checks of OBR-DAT-049 (those models do not exist yet, D75 to D77), the erasure replay (no erasure ledger yet), and a loss-of-primary drill on a new host, which is yours to run and time.
 
-`obop backup` is the portable, version-independent copy. A database server also needs its own, for point-in-time recovery and for losing the volume. With standard PostgreSQL tooling (these are the usual commands; they are not run against the Sliplane service from this repository, so try them once):
+### PostgreSQL itself: WAL archiving and point-in-time recovery
+
+`obop backup` is the portable, version-independent copy. A database server also needs its own, for point-in-time recovery and for losing the volume: a nightly backup loses up to a day; WAL archiving loses minutes. obop does not run it: you configure PostgreSQL, and `obop storage check` tells you when the settings or the evidence do not support the promise. **None of this has been run against the Sliplane service or any managed PostgreSQL**; it was written from the PostgreSQL and pgBackRest documentation and the checks were run against the stock `postgres:17` image and a fake server.
+
+The settings (`postgresql.conf`; `archive_mode` needs a restart):
+
+```conf
+wal_level = replica                  # or logical
+archive_mode = on
+archive_command = 'pgbackrest --stanza=obop archive-push %p'   # or wal-g wal-push %p, or archive_library
+archive_timeout = 60s                # a segment leaves the host at least every minute: a recovery point of minutes
+data_checksums on at initdb          # silent disk corruption is then an error, not data
+```
+
+A pgBackRest sketch (repository on an object store with object lock, encrypted with its own passphrase; check the options against your version):
+
+```conf
+# /etc/pgbackrest/pgbackrest.conf
+[global]
+repo1-type=s3
+repo1-s3-endpoint=s3.eu-central-1.example.com
+repo1-s3-bucket=obop-wal-archive         # a bucket with object lock + versioning, another failure domain
+repo1-cipher-type=aes-256-cbc
+repo1-cipher-pass=...                    # from the secret store, not this file in git
+repo1-retention-full=35                  # a PITR window of 35 days or more
+start-fast=y
+[obop]
+pg1-path=/var/lib/postgresql/data
+```
+
+Take a base backup at least daily (`pgbackrest --stanza=obop --type=full backup`, or incremental with a weekly full), and `pgbackrest check` / `verify` after changes. **A migration creates a named recovery point**: `obop migrate run` calls `pg_create_restore_point('pre-migration-<schema version>')` before its first step (it needs the privilege; with WAL archiving on, strict mode refuses to run without it) and writes the name and position to the ledger rows. Point-in-time recovery to it is `recovery_target_name = 'pre-migration-3'` with `recovery_target_action = promote`.
+
+`obop storage check --db postgres://...` verifies, on the real server: `wal_level`, `archive_mode`, an `archive_command` or `archive_library` that is not a placeholder (the command itself is never printed: it can hold credentials), `archive_timeout` of 1 to 60 seconds, that `pg_stat_archiver` has archived a segment in the last 5 minutes and that the last attempt did not fail, `fsync` and `full_page_writes`, data checksums, and TLS (D66, above: a host that is not this machine or a private name must be on `sslmode=require` at least, `verify-full` recommended); then the evidence: a verified backup under 26 hours old, sealed, with a verified off-host copy; a restore drill that passed in the last 35 days; and the storage attestation. It exits non-zero on any failure. It checks configuration and evidence, not the world: that `archive_command` points at an encrypted, locked store in another failure domain is what you attest and what the drills prove.
+
+**Host gate.** Before real personal data is loaded onto a host: perform a point-in-time restore on that host and keep the result. Procedure: write a marker row at T0; write more rows; restore the base backup plus WAL to T0 plus one second on a fresh server (`recovery_target_time`); the marker is there and the later rows are not; then `obop migrate status` and the drill checks on the result. Measure the time of a restore of your base backup plus WAL at your data size: it is the number the runbook asks for. This has not been done in this repository.
+
+### Encryption at rest
+
+obop encrypts what it controls: sealed secrets (the server key), backups (format 2, above), and nothing else by itself. The database files, the WAL, temporary files, swap, the WAL archive, the backup volume and the blob directory sit on encrypted storage that you provide: a volume or provider-managed encryption (AES-256 or stronger) whose keys are held outside the reach of ordinary database operators (the provider's key service, or a separate custodian) and never on the same volume. obop adds no database-level encryption for this (field-level encryption is a separate step).
+
+Record that, per plane, with a person's name on it, before load and again every 12 months and after any host change:
 
 ```bash
-# one business: a logical dump with pg_dump (run from any host or job that reaches obop-postgres)
-pg_dump --format=custom --no-owner "postgres://obop_acme:PASSWORD@obop-postgres.internal:5432/obop_acme" -f acme.dump
-createdb obop_drill && pg_restore --no-owner -d obop_drill acme.dump   # the drill of a pg_dump
-# the whole cell, roles included
-pg_dumpall --globals-only -h obop-postgres.internal -U postgres > globals.sql
+obop storage attest --db postgres://... --plane main --host db1.example.com --provider "Acme Cloud" \
+  --mechanism "provider-managed volume encryption, AES-256-XTS" --custody "provider key service" \
+  --readers "the provider's key service only; no database operator" --evidence "ticket 1234, provider test result 2026-10-01"
+obop storage show        # attestations, restore drills
 ```
 
-For point-in-time recovery run WAL archiving: set `archive_mode = on` and an `archive_command` (or use `pgBackRest` / `wal-g`) that copies segments to storage outside the server's volume, take a base backup regularly, and rehearse a recovery to a new server. Sliplane's volume snapshots and PostgreSQL backup guarantees are unverified (D43); do not count on them until you have restored from one. A scheduled job service in the same Sliplane project (the `postgres:18` image running `pg_dump` to an object store) is the straightforward way to run the commands above on a timer.
-
-Whichever you use: a copy you have not restored is not a backup. After restoring a dump, `obop migrate status --db URL` and `deploy/restore-drill.sh`'s server check tell you whether the database is whole.
+`obop storage check` fails when there is no attestation or it is more than 12 months old, and warns in the last 30 days. Verify the claim with canary scans: plant a string in a record, take a backup (`obop backup verify FILE --canary TEXT` finds 0 occurrences in a sealed one), and look for it with `strings` in a WAL segment, a base backup and a blob object of your own stack; a provider snapshot mounted on another machine without the key must be unreadable (record the provider's test result as the evidence). Not verified here: any provider.
 
 ## Upgrades
 
 ### Schema versions
 
-A database carries its schema version in one record (`obop_meta/schema`). Today that is the JSON-document layout plus the shapes the modules store in it (version 1 is the layout of today, step 2 re-seals secrets from before the key ring). Each change to a stored shape is a numbered, ordered, idempotent step in `obop-migrate`; a step either returns its writes, which are applied together with its version record in **one transaction**, or does its own batched, resumable writes.
+A database carries its schema version in one record (`obop_meta/schema`). Today that is the JSON-document layout plus the shapes the modules store in it (version 1 is the layout of today, step 2 re-seals secrets from before the key ring). Each change to a stored shape is a numbered, ordered, idempotent step in `obop-migrate`; a step either returns its writes, which are applied together with its version record and its ledger row in **one transaction**, or does its own batched, resumable writes.
 
 ```bash
-obop migrate status --db URL     # the version in the database, the version this build writes, pending steps
-obop migrate plan --db URL       # what each pending step would do (same as run --dry-run)
+obop migrate status --db URL     # the version in the database, the version this build writes, pending steps, the ledger
+obop migrate verify --db URL     # ledger, code and version compared; exits non-zero on drift
+obop migrate plan --db URL       # what each pending step would do, with its cost; stores the plan
 obop migrate run --db URL        # apply them, in order, under a database lock (two runners apply each step once)
 ```
 
 - A fresh, empty database is stamped with the current version. A database from before versioning counts as version 0.
 - **A server refuses to run against a newer schema than it knows** ("run a newer obop, or restore a backup taken before the upgrade"). A downgrade cannot be done safely, so there is none.
-- When pending steps exist, a starting server runs them only with `--auto-migrate` (default **on for SQLite, off for PostgreSQL**); otherwise it prints the exact command and exits. Hosted instances set `OBOP_AUTO_MIGRATE=1` (one process per instance); the control plane's own SQLite database upgrades itself.
+- When pending steps exist, a starting server runs them only with `--auto-migrate` (default **on for SQLite, off for PostgreSQL**); otherwise it prints the exact command and exits. Hosted instances set `OBOP_AUTO_MIGRATE=1` (one process per instance); the control plane's own SQLite database upgrades itself. A server that migrates itself takes a **verified backup first** when `OBOP_BACKUP_DIR` is set (sealed when a key is, recorded in the ledger) and stops without migrating if that backup fails; without a directory it migrates and says so. It does not demand a stored plan or a rehearsal: that is the choice of `--auto-migrate`; for the full gate turn it off and run `obop migrate run`.
+
+### The migration ledger (D73)
+
+Every step that runs leaves a row in the model `obop_migration`, written in the same transaction as the step: the module (`core` or a package id), the kind (`rust`, `package`), the step, its class (`expand`, `backfill`, `contract`), the cost class of its DDL (`none`, `instant`, `concurrent`, `blocking`, `rewrite`), the **SHA-256 of its definition**, the status (`applied`, `failed`, `partial`, `adopted`), when, how long, who (`operator`, `server`, or the administrator of `module.upgrade`), the database role (the one application role today), the obop version, the backup and the restore point that preceded the run. `obop migrate status` prints it.
+
+- **A step that was edited after it ran stops the server from starting** and names the step: the database in front of you was not made by the code in front of you. For a Rust step the checksum covers its declared identity and the text of its source file with comments, blank lines and indentation ignored. An applied step is never edited: to change what a step does, add a step. The checksums of the shipped steps are pinned in a test.
+- A database from before the ledger is **adopted**: its steps get rows with status `adopted` (not replayed), the time taken from the old history line; so does a fresh database (`created at this version`).
+- A step that fails inside its transaction leaves the database as it was and a `failed` row (a separate row per attempt, with the reason); a step that works in batches writes a `partial` row before it starts, and an interrupted run leaves it `partial` and the next run resumes it.
+- `module.upgrade` and `module.rollback` write one `package` row per `[[migration]]` step, in the same atomic batch as the package record and the data.
+- The integer in `obop_meta/schema` stays: servers compare it. The ledger is the record of what ran. Making the rows append-only in the database (a trigger, a separate owner role) is D77.
+- **DDL.** Nothing issues DDL on the serving path today except schema creation and the unique indexes of D57. The typed layout and the guard triggers of D75 to D77 will, and must go through **one DDL component** that classifies each statement with `obop_migrate::ddl::classify` (a table of known PostgreSQL 17 and 18 forms; an unknown form is refused, not guessed), sets `lock_timeout` 5 s and `statement_timeout` 30 min, retries a lock timeout with a bounded, jittered backoff, and refuses a `blocking` or `rewrite` step on a table above 1,000,000 records unless the operator passes `--window`. The classifier, the policy and the window rule exist and are tested; the component that executes statements does not. `obop migrate verify` does not yet compare the live catalogue (a hand-made index, a missing trigger): that needs the typed layout.
+- A step declares `compat_n_minus_1` (the previous release keeps working against the schema it leaves) or `downtime`; `obop migrate plan` prints which, and a test fails a step that declares neither. The check that binary N-1 serves requests against schema N needs a published N-1 image and is not built.
+
+### Migration gates (D73)
+
+`obop migrate run` on PostgreSQL is **strict**: it refuses unless
+
+1. a verified backup no older than 24 hours exists (`--backup FILE`, opened with its key when sealed; or one is taken into `--backup-dir` / `OBOP_BACKUP_DIR` first, read back and authenticated) and its name goes into the ledger rows;
+2. `obop migrate plan` stored the plan for exactly this database state and this build;
+3. there is room: twice the database's size where the backup goes and (SQLite) beside the file; a PostgreSQL host's own disk cannot be read from a client, so you check it is at least twice the largest table the plan touches and pass `--disk-ok`;
+4. a **rehearsal** of the same plan passed: `obop migrate rehearse --from BACKUP --out receipt.json` restores a backup into a scratch database (a temporary SQLite file, or `--scratch postgres://.../empty`; never the production database, which it refuses by name), runs the plan there, runs the drill's checks and a fixed read and write set, and reports the time, the longest single transaction and the records before and after; the receipt is signed with the server key (a hand-written, edited or other-key receipt is refused) and counts for a week; a table-locking step (DDL class `blocking` or `rewrite`) that holds its lock longer than one second fails the rehearsal;
+5. the ledger is clean, the schema is not newer than the build, no other migration holds the lock, and a long-lock step on a big table has its `--window`.
+
+On SQLite (and in memory) the same checks run and a failing one is a warning (`--gates strict|relaxed` or `OBOP_MIGRATION_GATES` overrides). With WAL archiving on, strict mode also needs `pg_create_restore_point('pre-migration-<version>')` to succeed. `module.upgrade` and `module.rollback` that rewrite records (a `rename_field`, `set_default` or `drop_field` step) take the same backup first, into `OBOP_BACKUP_DIR`: **on PostgreSQL they are refused with nothing changed when no directory is set** (set it; or `OBOP_MIGRATION_GATES=relaxed` if you take your own); an additive upgrade needs nothing.
+
+**Rollback is forward-only: it is a restore.** `obop migrate rollback --from BACKUP --reason "..." --yes` verifies the backup, replaces the database with it in one transaction, and records the reason, the backup and what the discarded database's ledger said in the ledger and in the security log. Stop every process first; start the obop version that matches the backup's schema; with WAL archiving, point-in-time recovery to `pre-migration-<version>` is the other way back. How long it takes is the restore time your last drill measured (docs/RUNBOOK-RECOVERY.md). An old binary refuses a newer schema, as before.
 
 ### The compatibility promise
 
-While the core is below 1.0 a minor version may break (D55). Within that: (1) a build never reads a database newer than itself and says so; (2) a build upgrades any database of an older schema, step by step, without data loss, and a step that fails changes nothing of itself; (3) migrations are forward-only, so the way back from an upgrade is the backup you took before it; (4) every backup restores into a build of the same or a newer schema and is migrated on the way. From 1.0 the destructive-change rules of ENGINEERING 4.3 apply.
+While the core is below 1.0 a minor version may break (D55). Within that: (1) a build never reads a database newer than itself and says so; (2) a build upgrades any database of an older schema, step by step, without data loss, and a step that fails changes nothing of itself; (3) migrations are forward-only, so the way back from an upgrade is the backup you took before it (`obop migrate rollback`); (4) every backup restores into a build of the same or a newer schema and is migrated on the way. From 1.0 the destructive-change rules of ENGINEERING 4.3 apply.
 
 ### Procedure (self-hosted)
 
-1. `obop backup` and `obop backup verify`; keep the file.
-2. Read the release notes; `obop migrate plan --db URL` with the **new** binary shows the steps.
-3. Stop the old processes (or, with several processes and only additive steps, roll them one by one: old processes keep running until they meet a schema they do not know, so finish the migration quickly).
-4. `obop migrate run --db URL` with the new binary, then start the new processes.
-5. Roll back by stopping, restoring the verified backup with the **old** binary (`obop restore --force`) and starting it.
+1. `obop migrate plan --db URL` with the **new** binary shows the steps with their cost and stores the plan; read the release notes.
+2. `obop backup --db URL --out DIR` and `obop backup verify FILE` (or let `migrate run` take it); on PostgreSQL also check WAL archiving is healthy (`obop storage check`).
+3. Rehearse: `obop migrate rehearse --from FILE --out receipt.json` on a machine that is not the database host.
+4. Stop the old processes (or, with several processes and only additive steps, roll them one by one: old processes keep running until they meet a schema they do not know, so finish the migration quickly).
+5. `obop migrate run --db URL --backup FILE --rehearsal receipt.json --disk-ok`, then start the new processes.
+6. Roll back with `obop migrate rollback --from FILE --reason "..." --yes` and the **old** binary.
 
 ### Procedure (Sliplane instances)
 
-See "The published image": build, then `obop platform upgrade-instances --image <commit>`. Hosted instances run with `OBOP_AUTO_MIGRATE=1`, so the redeploy migrates. Take a backup of the cell (or of the instance with `obop backup`) before a release that has migration steps; the command stops at the first instance that fails its health check and names it.
+See "The published image": build, then `obop platform upgrade-instances --image <commit>`. Hosted instances run with `OBOP_AUTO_MIGRATE=1`, so the redeploy migrates; set `OBOP_BACKUP_DIR` on a volume so the migration is preceded by a verified backup. Take a backup of the cell (or of the instance with `obop backup`) before a release that has migration steps; the command stops at the first instance that fails its health check and names it.
 
 ## The published image
 
@@ -410,8 +548,8 @@ obop admin import users.csv --out passwords.csv     # create them; temporary pas
 ## Known limits
 
 - **TLS** terminates at Sliplane's proxy and the instance speaks plain HTTP behind it. Confirm before relying on it. The control plane reaches the cell over the internal network without TLS.
-- **Scheduled backups of hosted instances** are not built (they need object storage); run `obop backup` or `pg_dump` from a job (see "Backups").
+- **Backups off the host:** scheduled backups, retention and a directory sink exist (D73); an S3-compatible sink is not built (run your own uploader with object lock and drill from the copy), asymmetric keys (a server that cannot read its own backups) are not built, and a restore is one transaction (no resumable chunked restore above 10 GB). Nothing about WAL archiving, point-in-time recovery or encryption at rest has been run against the Sliplane service or a managed PostgreSQL.
 - **Instances created before D53** have no `OBOP_SECRET_KEY` unless an operator set one; without it a generated key lives in their database.
-- **Migrations** of the core exist for the two steps above; a newer version of a package migrates its records only through the `[[migration]]` steps it declares (D63).
+- **Migrations** of the core exist for the two steps above, each with a ledger row and a checksum (D73); a newer version of a package migrates its records only through the `[[migration]]` steps it declares (D63), each with a ledger row. The DDL component, the live-catalogue comparison of `migrate verify`, the check that binary N-1 serves schema N, and the history/freeze/chain/guard checks of the drill wait for D75 to D77.
 - **Updating from inside** has run against the fake provisioner and a loopback control plane, not against live Sliplane; the release feed is unsigned (a digest per release only).
 - **The published image** has not been built by GitHub from this history yet, and `upgrade-instances` against live Sliplane has not been run; both are covered by tests against stand-ins (the Docker build, the runner fakes), not against the real services.

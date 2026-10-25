@@ -86,7 +86,10 @@ fn host_is_local(url: &str) -> bool {
     } else {
         host.rsplit_once(':').map_or(host, |(h, _)| h)
     };
-    host.is_empty()
+    // A file or memory database has no network path.
+    url.starts_with("sqlite:")
+        || url.starts_with("memory:")
+        || host.is_empty()
         || matches!(host, "localhost" | "127.0.0.1" | "::1")
         || host.ends_with(".localhost")
         || host.ends_with(".internal")
