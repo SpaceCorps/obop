@@ -274,7 +274,13 @@ impl Decimal {
     /// This value at exactly `scale` (rounded by `mode` when digits are dropped) and within
     /// `precision` digits.
     pub fn fit(self, precision: u8, scale: u8, mode: Round) -> Result<Self, DecimalError> {
-        let d = self.rescale(scale, mode)?;
+        // Padding a long integer part up to the scale can leave 128 bits; that is the same
+        // mistake as any other integer part that is too long, and says so.
+        let too_many = DecimalError::Precision { precision, scale };
+        let d = self.rescale(scale, mode).map_err(|e| match e {
+            DecimalError::Overflow if scale > self.scale => too_many.clone(),
+            other => other,
+        })?;
         if d.digits() > u32::from(precision) {
             return Err(DecimalError::Precision { precision, scale });
         }
@@ -350,21 +356,15 @@ impl Decimal {
         if o.units == 0 {
             return Err(DecimalError::DivisionByZero);
         }
-        // units = a * 10^(scale + o.scale - a.scale) / b
+        // units = a * 10^(scale + o.scale - a.scale) / b, rounded once. The product may need
+        // more than 128 bits even when the quotient is small (a divisor written with many
+        // trailing zeros), so it is held in 256 bits.
         let e = i32::from(scale) + i32::from(o.scale) - i32::from(self.scale);
-        let (mut num, mut den) = (self.units, o.units);
-        if e >= 0 {
-            let f = pow10(e as u32).ok_or(DecimalError::Overflow)?;
-            num = num.checked_mul(f).ok_or(DecimalError::Overflow)?;
-        } else {
-            let f = pow10((-e) as u32).ok_or(DecimalError::Overflow)?;
-            den = den.checked_mul(f).ok_or(DecimalError::Overflow)?;
-        }
-        if den < 0 {
-            num = -num;
-            den = -den;
-        }
-        Self::checked(div_round(num, den, mode), scale)
+        let (up, down) = if e >= 0 { (e as u32, 0) } else { (0, e.unsigned_abs()) };
+        Self::checked(
+            scaled_div(self.units, up, o.units, down, mode)?,
+            scale,
+        )
     }
 
     fn checked(units: i128, scale: u8) -> Result<Self, DecimalError> {
@@ -436,6 +436,32 @@ impl Decimal {
     }
 }
 
+/// A value that fits a decimal of `precision` and `scale`, written the way answers are written:
+/// `12.33` for (10,2), `12` for (5,0), `1.3` for (2,1), `0.33` for (2,2). For documentation and
+/// examples; it always parses for the same shape.
+pub fn example(precision: u8, scale: u8) -> String {
+    let int = match precision.saturating_sub(scale) {
+        0 => "0",
+        1 => "1",
+        _ => "12",
+    };
+    if scale == 0 {
+        int.to_string()
+    } else {
+        format!("{int}.{}", "3".repeat(usize::from(scale)))
+    }
+}
+
+/// Like [`pattern`], for a field that rounds on import: any number of fractional digits.
+pub fn import_pattern(precision: u8, scale: u8) -> String {
+    let p = pattern(precision, scale);
+    if scale == 0 {
+        // A whole-number field has no fraction to round: the shape is the same.
+        return p;
+    }
+    p.replace(&format!("{{1,{scale}}}"), "+")
+}
+
 /// The regular expression for the text of a decimal of `precision` and `scale`: digits that fit
 /// the precision, then up to `scale` fractional digits (OpenAPI and MCP `pattern`). Responses
 /// always carry exactly `scale` of them.
@@ -451,6 +477,87 @@ pub fn pattern(precision: u8, scale: u8) -> String {
         format!("(\\.[0-9]{{1,{scale}}})?")
     };
     format!("^-?{int}{frac}$")
+}
+
+/// The product of two `u128` as `(high, low)` halves of a 256 bit number.
+fn mul_wide(a: u128, b: u128) -> (u128, u128) {
+    const LOW: u128 = u64::MAX as u128;
+    let (a0, a1, b0, b1) = (a & LOW, a >> 64, b & LOW, b >> 64);
+    let (p00, p01, p10, p11) = (a0 * b0, a0 * b1, a1 * b0, a1 * b1);
+    let mid = (p00 >> 64) + (p01 & LOW) + (p10 & LOW);
+    let lo = (p00 & LOW) | (mid << 64);
+    let hi = p11 + (p01 >> 64) + (p10 >> 64) + (mid >> 64);
+    (hi, lo)
+}
+
+/// A 256 bit number divided by `d` (at most 2^127): quotient as `(high, low)` and the remainder.
+fn div_wide(hi: u128, lo: u128, d: u128) -> (u128, u128, u128) {
+    debug_assert!(d != 0 && d <= 1 << 127);
+    let (mut rem, mut q_hi, mut q_lo) = (0u128, 0u128, 0u128);
+    for i in (0..256u32).rev() {
+        let bit = if i >= 128 {
+            (hi >> (i - 128)) & 1
+        } else {
+            (lo >> i) & 1
+        };
+        // `rem < d <= 2^127`, so doubling it cannot overflow.
+        rem = (rem << 1) | bit;
+        let take = rem >= d;
+        if take {
+            rem -= d;
+        }
+        if i >= 128 {
+            q_hi |= u128::from(take) << (i - 128);
+        } else {
+            q_lo |= u128::from(take) << i;
+        }
+    }
+    (q_hi, q_lo, rem)
+}
+
+/// `n * 10^up / (d * 10^down)` rounded by `mode`, exact whatever the size of the intermediate
+/// product; an error only when the quotient does not fit 128 bits or `up` is beyond 38.
+fn scaled_div(n: i128, up: u32, d: i128, down: u32, mode: Round) -> Result<i128, DecimalError> {
+    if d == 0 {
+        return Err(DecimalError::DivisionByZero);
+    }
+    if n == 0 {
+        return Ok(0);
+    }
+    let neg = (n < 0) != (d < 0);
+    let (nm, dm) = (n.unsigned_abs(), d.unsigned_abs());
+    let overflow = || DecimalError::Overflow;
+    let (q, rem, den) = if down > 0 {
+        // The divisor grows. `nm` is below 2^127; when the divisor passes 128 bits the quotient
+        // is below one half and rounds to zero in every mode.
+        let Some(den) = 10u128
+            .checked_pow(down)
+            .and_then(|f| dm.checked_mul(f))
+        else {
+            return Ok(0);
+        };
+        (nm / den, nm % den, den)
+    } else {
+        let f = 10u128.checked_pow(up).ok_or_else(overflow)?;
+        let (hi, lo) = mul_wide(nm, f);
+        let (q_hi, q_lo, rem) = div_wide(hi, lo, dm);
+        if q_hi != 0 {
+            return Err(overflow());
+        }
+        (q_lo, rem, dm)
+    };
+    let away = match mode {
+        Round::Down => false,
+        _ if rem == 0 => false,
+        Round::HalfUp => rem >= den - rem,
+        Round::HalfEven => {
+            let other = den - rem;
+            rem > other || (rem == other && q % 2 == 1)
+        }
+    };
+    let q = if away { q.checked_add(1).ok_or_else(overflow)? } else { q };
+    let q = i128::try_from(q).map_err(|_| overflow())?;
+    Ok(if neg { -q } else { q })
 }
 
 fn unexpected(s: &str, at: usize) -> String {
@@ -838,6 +945,86 @@ mod tests {
         assert_eq!(avg.to_string(), want);
         // 0.1 + 0.2 is 0.3 where a double says 0.30000000000000004.
         assert_eq!(column_sum(&["0.1".into(), "0.2".into()], 1), "0.3");
+    }
+
+    #[test]
+    fn division_does_not_overflow_because_of_the_size_of_its_intermediate() {
+        // 2e14 at scale 2 over 3.000000000000: the scaled dividend is 2e38, above 128 bits,
+        // though the quotient has twenty digits.
+        let big = Decimal::parse("200000000000000.00").unwrap();
+        let three = Decimal::parse("3.000000000000").unwrap();
+        assert_eq!(
+            big.checked_div(three, 12, Round::HalfEven).unwrap().to_string(),
+            "66666666666666.666666666667"
+        );
+        assert_eq!(
+            big.checked_div(Decimal::parse("3").unwrap(), 12, Round::Down).unwrap().to_string(),
+            "66666666666666.666666666666"
+        );
+        // A divisor so large that the quotient rounds to zero in every mode.
+        let huge = Decimal::parse("99999999999999999999999999999999999999").unwrap();
+        assert_eq!(
+            Decimal::parse("1").unwrap().checked_div(huge, 0, Round::HalfUp).unwrap().to_string(),
+            "0"
+        );
+        // A real overflow is still an error.
+        assert_eq!(
+            huge.checked_div(Decimal::parse("0.001").unwrap(), 0, Round::Down),
+            Err(DecimalError::Overflow)
+        );
+        // The average of values whose sum is large: 5e28 hundredths over 1000 values.
+        assert_eq!(
+            Decimal::average(5 * 10i128.pow(28), 2, 1000, 12, Round::HalfEven)
+                .unwrap()
+                .to_string(),
+            "500000000000000000000000.000000000000"
+        );
+    }
+
+    #[test]
+    fn wide_division_agrees_with_the_plain_one_wherever_that_fits() {
+        let mut seed = 0x5deece66du64;
+        let mut next = || {
+            seed ^= seed >> 12;
+            seed ^= seed << 25;
+            seed ^= seed >> 27;
+            seed.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        };
+        for _ in 0..30_000 {
+            let n = (i128::from(next() >> 8) - (1 << 55)) * i128::from(next() % 1_000_000_007);
+            let d = i128::from(next() % 1_000_000_007) + 1;
+            let d = if next() % 2 == 0 { -d } else { d };
+            let (up, down) = if next() % 2 == 0 { (next() as u32 % 12, 0) } else { (0, next() as u32 % 12) };
+            for mode in [Round::Down, Round::HalfUp, Round::HalfEven] {
+                let (mut num, mut den) = (n * 10i128.pow(up), d * 10i128.pow(down));
+                if den < 0 {
+                    num = -num;
+                    den = -den;
+                }
+                assert_eq!(
+                    scaled_div(n, up, d, down, mode),
+                    Ok(div_round(num, den, mode)),
+                    "{n} * 10^{up} / ({d} * 10^{down}) {mode:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn too_many_integer_digits_get_the_precision_message_whatever_their_number() {
+        for digits in [2usize, 20, 27, 28, 30, 38] {
+            let text = "9".repeat(digits);
+            let e = Decimal::parse_for(&text, 38, 12, None).err();
+            if digits <= 26 {
+                assert!(e.is_none(), "{digits}");
+            } else {
+                assert_eq!(
+                    e,
+                    Some(DecimalError::Precision { precision: 38, scale: 12 }),
+                    "{digits} digits"
+                );
+            }
+        }
     }
 
     #[test]

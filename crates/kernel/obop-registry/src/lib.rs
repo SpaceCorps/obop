@@ -162,11 +162,7 @@ impl FieldKind {
             Self::Decimal {
                 precision, scale, ..
             } => {
-                let example = if *scale == 0 {
-                    "12".to_string()
-                } else {
-                    format!("12.{}", "3".repeat(usize::from(*scale)))
-                };
+                let example = obop_values::decimal::example(*precision, *scale);
                 format!(
                     "a decimal number written as a string such as \"{example}\" (at most {precision} digits, {scale} after the point; not a JSON number)"
                 )

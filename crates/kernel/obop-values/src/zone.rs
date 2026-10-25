@@ -91,7 +91,7 @@ impl ZoneDb {
     pub fn zone(&self, name: &str) -> Result<Zone, ZoneError> {
         let bad = || {
             ZoneError(format!(
-                "{name:?} is not a time zone of the IANA database {} (use a name such as Europe/Stockholm or UTC)",
+                "{name:?} is not a time zone of the IANA database {} (use a name such as Europe/Berlin or UTC)",
                 self.version
             ))
         };
@@ -141,17 +141,29 @@ impl Zone {
 
     /// Seconds the local clock is ahead of UTC at this instant.
     pub fn offset_secs(&self, at: Instant) -> i32 {
-        // jiff's timestamps end a little before the last day of year 9999.
+        // jiff's timestamps end a little before the last day of year 9999 (at a whole second):
+        // an instant beyond them has the offset of the last one.
         let us = at.micros().clamp(jiff_min_micros(), jiff_max_micros());
-        match jiff::Timestamp::from_microsecond(us) {
-            Ok(ts) => self.tz.to_offset(ts).seconds(),
-            Err(_) => 0,
-        }
+        let ts = jiff::Timestamp::from_microsecond(us).unwrap_or(if us < 0 {
+            jiff::Timestamp::MIN
+        } else {
+            jiff::Timestamp::MAX
+        });
+        self.tz.to_offset(ts).seconds()
     }
 
-    /// The calendar date on the wall clock of this zone.
+    /// The calendar date on the wall clock of this zone. An instant within a day of either end of
+    /// the range can have a local date outside years 0001 to 9999; that date is held at the
+    /// first or last day, so every label has four digits and can be used in a filter.
     pub fn date_of(&self, at: Instant) -> (i64, i64, i64) {
-        at.civil_at(self.offset_secs(at))
+        let (y, m, d) = at.civil_at(self.offset_secs(at));
+        if y < 1 {
+            (1, 1, 1)
+        } else if y > 9999 {
+            (9999, 12, 31)
+        } else {
+            (y, m, d)
+        }
     }
 
     /// The label of the period this instant falls in on the wall clock of this zone.
@@ -167,11 +179,11 @@ impl Zone {
 }
 
 fn jiff_min_micros() -> i64 {
-    jiff::Timestamp::MIN.as_microsecond()
+    jiff::Timestamp::MIN.as_second() * 1_000_000
 }
 
 fn jiff_max_micros() -> i64 {
-    jiff::Timestamp::MAX.as_microsecond()
+    jiff::Timestamp::MAX.as_second() * 1_000_000
 }
 
 /// The time settings of an instance: its database and its platform zone.
@@ -237,8 +249,8 @@ mod tests {
         Instant::parse(s).unwrap()
     }
 
-    fn stockholm() -> Zone {
-        ZoneDb::bundled().zone("Europe/Stockholm").unwrap()
+    fn berlin() -> Zone {
+        ZoneDb::bundled().zone("Europe/Berlin").unwrap()
     }
 
     #[test]
@@ -249,8 +261,8 @@ mod tests {
     }
 
     #[test]
-    fn month_buckets_in_stockholm_follow_the_wall_clock() {
-        let z = stockholm();
+    fn month_buckets_in_berlin_follow_the_wall_clock() {
+        let z = berlin();
         // 22:30Z is 00:30 on April 1 in summer time.
         assert_eq!(
             z.bucket(inst("2026-03-31T22:30:00Z"), Bucket::Month),
@@ -290,7 +302,7 @@ mod tests {
 
     #[test]
     fn the_ambiguous_and_missing_hours_are_distinct_instants_with_the_right_labels() {
-        let z = stockholm();
+        let z = berlin();
         // 2026-10-25: clocks go back from 03:00 to 02:00, so local 02:30 happens twice.
         let (a, b) = (inst("2026-10-25T00:30:00Z"), inst("2026-10-25T01:30:00Z"));
         assert_eq!(z.offset_secs(a), 7200);
@@ -308,19 +320,19 @@ mod tests {
         // 29th. This fixture starts it on the last Monday, one day later, with the same end.
         let fx = ZoneDb::fixture(
             "2026x-test",
-            &[("Europe/Stockholm", "CET-1CEST,M3.5.1,M10.5.0/3")],
+            &[("Europe/Berlin", "CET-1CEST,M3.5.1,M10.5.0/3")],
         )
         .unwrap();
         assert_eq!(fx.version(), "2026x-test");
-        let moved = fx.zone("Europe/Stockholm").unwrap();
-        let real = stockholm();
+        let moved = fx.zone("Europe/Berlin").unwrap();
+        let real = berlin();
         let at = inst("2026-03-29T22:30:00Z");
         assert_eq!(real.bucket(at, Bucket::Day), "2026-03-30");
         assert_eq!(moved.bucket(at, Bucket::Day), "2026-03-29");
         // A rule that starts summer time on the first Sunday of April moves a month bucket.
-        let april = ZoneDb::fixture("t", &[("Europe/Stockholm", "CET-1CEST,M4.1.0,M10.5.0/3")])
+        let april = ZoneDb::fixture("t", &[("Europe/Berlin", "CET-1CEST,M4.1.0,M10.5.0/3")])
             .unwrap()
-            .zone("europe/stockholm")
+            .zone("europe/berlin")
             .unwrap();
         let at = inst("2026-03-31T22:30:00Z");
         assert_eq!(real.bucket(at, Bucket::Month), "2026-04");
@@ -336,7 +348,7 @@ mod tests {
         for ok in [
             "UTC",
             "utc",
-            "Europe/Stockholm",
+            "Europe/Berlin",
             "America/Argentina/Buenos_Aires",
             "Etc/GMT+5",
         ] {
@@ -348,7 +360,7 @@ mod tests {
             "Europe/",
             "../etc/passwd",
             "UTC\0",
-            "Europe/Stockholm ",
+            "Europe/Berlin ",
             "EST5EDT; drop",
             &"A".repeat(65),
         ] {
@@ -360,7 +372,7 @@ mod tests {
 
     #[test]
     fn the_platform_zone_comes_from_the_settings() {
-        let z = Zones::new(Arc::new(ZoneDb::bundled()), "Europe/Stockholm").unwrap();
+        let z = Zones::new(Arc::new(ZoneDb::bundled()), "Europe/Berlin").unwrap();
         assert_eq!(z.today(inst("2026-03-31T22:30:00Z")), "2026-04-01");
         assert_eq!(
             Zones::default().today(inst("2026-03-31T22:30:00Z")),
@@ -368,15 +380,38 @@ mod tests {
         );
         assert!(Zones::new(Arc::new(ZoneDb::bundled()), "Nowhere/Land").is_err());
         assert_eq!(z.zone(Some("UTC")).unwrap().name(), "UTC");
-        assert_eq!(z.zone(None).unwrap().name(), "Europe/Stockholm");
+        assert_eq!(z.zone(None).unwrap().name(), "Europe/Berlin");
     }
 
     #[test]
-    fn the_extreme_instants_do_not_panic() {
-        let z = stockholm();
-        for us in [crate::datetime::MIN_MICROS, crate::datetime::MAX_MICROS, 0] {
-            let t = Instant::from_micros(us).unwrap();
-            let _ = z.bucket(t, Bucket::Day);
-        }
+    fn the_ends_of_the_range_have_the_offsets_and_labels_of_their_zone() {
+        let db = ZoneDb::bundled();
+        let (la, kolkata, utc) = (
+            db.zone("America/Los_Angeles").unwrap(),
+            db.zone("Asia/Kolkata").unwrap(),
+            db.zone("UTC").unwrap(),
+        );
+        let last = inst("9999-12-31T23:59:59.999999Z");
+        // Winter in Los Angeles, a fixed +05:30 in Kolkata, also in the last day of the range
+        // (the clamp used to turn all of these into UTC).
+        assert_eq!(la.offset_secs(last), -8 * 3600);
+        assert_eq!(kolkata.offset_secs(last), 5 * 3600 + 1800);
+        assert_eq!(utc.offset_secs(last), 0);
+        let at = inst("9999-12-31T03:00:00Z");
+        assert_eq!(la.bucket(at, Bucket::Day), "9999-12-30");
+        assert_eq!(kolkata.bucket(at, Bucket::Day), "9999-12-31");
+        assert_eq!(la.offset_secs(inst("9999-12-30T22:00:00Z")), -8 * 3600);
+        assert_eq!(la.offset_secs(inst("9999-12-30T22:00:01Z")), -8 * 3600);
+        // Local dates beyond the range are held at its first and last day.
+        assert_eq!(kolkata.bucket(last, Bucket::Day), "9999-12-31");
+        assert_eq!(kolkata.bucket(last, Bucket::Year), "9999");
+        let first = inst("0001-01-01T00:00:00Z");
+        assert_eq!(la.bucket(first, Bucket::Day), "0001-01-01");
+        assert_eq!(la.bucket(first, Bucket::Month), "0001-01");
+        assert_eq!(la.bucket(first, Bucket::IsoWeek), "0001-W01");
+        assert_eq!(kolkata.bucket(first, Bucket::Day), "0001-01-01");
+        // Zone rules at the far ends are those of the database's last and first rules.
+        assert_eq!(la.offset_secs(inst("9999-07-01T12:00:00Z")), -7 * 3600);
+        assert_eq!(utc.bucket(Instant::from_micros(crate::datetime::MAX_MICROS).unwrap(), Bucket::Day), "9999-12-31");
     }
 }
