@@ -637,9 +637,6 @@ canvas.ascii {
   color: var(--text-muted);
   font-size: var(--text-lg);
 }
-.more {
-  margin-block-start: var(--space-8);
-}
 .more-left {
   margin-block-start: var(--space-6);
 }
@@ -1281,6 +1278,125 @@ section.cta p {
 }
 .home .section.alt.join {
   border-block-start: 0;
+}
+
+/* apps: two tiers in two labelled groups, six featured cards and 22 quiet rows */
+.home .apps-wrap .filters {
+  justify-content: flex-start;
+  margin-block-end: var(--space-8);
+}
+.apps-wrap:has(#st-live:checked) .apps-group.market,
+.apps-wrap:has(#st-market:checked) .apps-group.live {
+  display: none;
+}
+.apps-group + .apps-group {
+  margin-block-start: var(--space-10);
+}
+.apps-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+.apps-group-title::before {
+  content: "";
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: var(--success);
+}
+.apps-group.market .apps-group-title::before {
+  background: var(--accent-fill);
+}
+.apps-group-title em {
+  color: var(--text-muted);
+  font-style: normal;
+  font-weight: var(--weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+.app > .tile-wrap {
+  flex: none;
+}
+.app-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-inline-size: 0;
+}
+.apps.featured {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.apps.featured .app {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+.apps.featured h3 {
+  font-size: var(--text-lg);
+}
+.apps.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-6);
+}
+.apps.compact .app {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.apps.compact .app:hover,
+.apps.compact .app:focus-within {
+  border-color: var(--border);
+  background: var(--surface);
+}
+.apps.compact h3 {
+  font-size: var(--text-base);
+}
+/* the stretched link outlines the whole card (also on /apps/) */
+.app:has(a:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.app h3 a:focus-visible {
+  outline: none;
+}
+@media (max-width: 71.99rem) {
+  .apps.compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 64rem) {
+  .apps.featured {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 40rem) {
+  .apps.featured,
+  .apps.compact {
+    grid-template-columns: 1fr;
+  }
+  .apps.featured {
+    gap: var(--space-2);
+  }
+  .apps.featured .app {
+    padding: var(--space-3) var(--space-4);
+  }
+  .apps.compact {
+    gap: 0;
+  }
+  .apps.compact .app {
+    padding-block: var(--space-2);
+    border-radius: 0;
+    border-block-end: 1px solid var(--border);
+  }
 }
 
 /* two columns: copy left, visual right; the right column starts on one shared axis */

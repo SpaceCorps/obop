@@ -109,11 +109,11 @@ const kick = computed(() => ({
             <h2>{{ m.home.appsTitle }}</h2>
             <p class="sub">{{ m.home.appsSub }}</p>
           </div>
+          <div class="sec-act">
+            <a class="btn" :href="href('/apps/')">{{ m.home.seeAllApps }}</a>
+          </div>
         </div>
-        <AppsGrid />
-        <p class="center more">
-          <a class="btn" :href="href('/apps/')">{{ m.home.seeAllApps }}</a>
-        </p>
+        <AppsGrid grouped />
       </div>
     </section>
 
