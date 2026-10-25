@@ -251,6 +251,30 @@ fn metrics(port: u16) -> String {
     r.body
 }
 
+/// `n` signed-in requests at once (each on a thread of its own); the answers, the server's resident
+/// memory before them and at its peak while they ran.
+fn stampede(port: u16, token: &str, pid: u32, n: usize) -> (Vec<Reply>, Option<u64>, Option<u64>) {
+    let before = rss_kib(pid);
+    let sampling = std::sync::atomic::AtomicBool::new(true);
+    let (replies, peak) = std::thread::scope(|s| {
+        let sampler = s.spawn(|| {
+            let mut peak = rss_kib(pid);
+            while sampling.load(std::sync::atomic::Ordering::Relaxed) {
+                peak = peak.max(rss_kib(pid));
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            peak
+        });
+        let hs: Vec<_> = (0..n)
+            .map(|_| s.spawn(|| http(port, "GET", "/api/meta", Some(token), None)))
+            .collect();
+        let replies: Vec<Reply> = hs.into_iter().map(|h| h.join().unwrap()).collect();
+        sampling.store(false, std::sync::atomic::Ordering::Relaxed);
+        (replies, sampler.join().unwrap())
+    });
+    (replies, before, peak)
+}
+
 /// The value of one series line, e.g. `obop_db_pool_in_use{pool="main"}`.
 fn series(text: &str, name: &str) -> f64 {
     text.lines()
@@ -309,25 +333,8 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
 
     // 200 valid, signed-in requests at once on a pool of two, while the server's memory is read.
     let pid = server.child.id();
-    let rss_before = rss_kib(pid);
-    let sampling = std::sync::atomic::AtomicBool::new(true);
     let started = Instant::now();
-    let (replies, rss_peak): (Vec<Reply>, Option<u64>) = std::thread::scope(|s| {
-        let sampler = s.spawn(|| {
-            let mut peak = rss_kib(pid);
-            while sampling.load(std::sync::atomic::Ordering::Relaxed) {
-                peak = peak.max(rss_kib(pid));
-                std::thread::sleep(Duration::from_millis(100));
-            }
-            peak
-        });
-        let hs: Vec<_> = (0..200)
-            .map(|_| s.spawn(|| http(port, "GET", "/api/meta", Some(&token), None)))
-            .collect();
-        let replies = hs.into_iter().map(|h| h.join().unwrap()).collect();
-        sampling.store(false, std::sync::atomic::Ordering::Relaxed);
-        (replies, sampler.join().unwrap())
-    });
+    let (replies, rss_before, rss_peak) = stampede(port, &token, pid, 200);
     let all = started.elapsed();
     if let (Some(before), Some(peak)) = (rss_before, rss_peak) {
         eprintln!(
@@ -403,13 +410,42 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
         "{m}"
     );
 
+    // Four times as many requests: the wait queue is bounded, so memory does not follow the load.
+    let (more, _, rss_peak_more) = stampede(port, &token, pid, 800);
+    for r in &more {
+        assert_eq!(r.status, 503, "{} {}", r.status, r.body);
+        assert!(
+            ["storage_busy", "storage_timeout"].contains(&r.json()["error"].as_str().unwrap_or("")),
+            "{}",
+            r.body
+        );
+    }
+    let busy_more = more
+        .iter()
+        .filter(|r| r.json()["error"] == "storage_busy")
+        .count();
+    assert!(busy_more >= 780, "{busy_more} were storage_busy");
+    if let (Some(first), Some(second)) = (rss_peak, rss_peak_more) {
+        eprintln!(
+            "D74 HTTP memory: peak {} MiB with 200 requests, {} MiB with 800",
+            first / 1024,
+            second / 1024
+        );
+        assert!(
+            second < first + 100 * 1024,
+            "memory grew by {} MiB for four times the requests",
+            second.saturating_sub(first) / 1024
+        );
+    }
+
     // Let go of the lock: the server serves again, without a restart, within a few seconds.
     locker.batch_execute("ROLLBACK").unwrap();
+    let released = Instant::now();
     let deadline = Instant::now() + Duration::from_secs(30);
     let served = loop {
         let r = http(port, "GET", "/api/meta", Some(&token), None);
         if r.status == 200 {
-            break started.elapsed();
+            break released.elapsed();
         }
         assert!(
             Instant::now() < deadline,
@@ -419,7 +455,7 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
         );
         std::thread::sleep(Duration::from_millis(200));
     };
-    eprintln!("D74 HTTP: served again {served:?} after the stampede began");
+    eprintln!("D74 HTTP: served again {served:?} after the lock was released");
     let made = http(
         port,
         "POST",
