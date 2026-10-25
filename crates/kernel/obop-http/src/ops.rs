@@ -16,6 +16,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use obop_storage::fault::Fault;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::sync::{
@@ -96,6 +97,8 @@ pub(crate) struct Ops {
     ready: Mutex<Option<(Instant, Ready)>>,
     gauges: Mutex<Option<(Instant, Gauges)>>,
     access: Mutex<MetricsAccess>,
+    /// Requests answered 503 because of a storage fault: busy, unavailable, timeout (D74).
+    faults: [AtomicU64; 3],
 }
 
 impl Ops {
@@ -109,6 +112,7 @@ impl Ops {
             ready: Mutex::new(None),
             gauges: Mutex::new(None),
             access: Mutex::new(MetricsAccess::Disabled),
+            faults: Default::default(),
         }
     }
 
@@ -144,6 +148,55 @@ pub(crate) async fn track(State(s): State<Arc<HttpState>>, req: Request, next: N
     resp
 }
 
+/// Answer 503 with `Retry-After` when anything the request did hit a storage fault (D74): the
+/// pool had no connection for it within the acquire timeout (`storage_busy`), the database could
+/// not be reached (`storage_unavailable`) or a statement ran into its limit (`storage_timeout`).
+/// The handler's own answer is dropped, because the layers above the store turn a failed read
+/// into "not signed in", "not found" or "zero", and a client must not take those for the truth.
+/// The health and metrics routes decide for themselves.
+pub(crate) async fn storage_faults(
+    State(s): State<Arc<HttpState>>,
+    req: Request,
+    next: Next,
+) -> Response {
+    if matches!(req.uri().path(), "/healthz" | "/readyz" | "/metrics") {
+        return next.run(req).await;
+    }
+    let (resp, fault) = super::FAULT
+        .scope(std::cell::Cell::new(None), async {
+            let resp = next.run(req).await;
+            (resp, super::FAULT.with(std::cell::Cell::get))
+        })
+        .await;
+    let Some(fault) = fault else { return resp };
+    let (i, hint) = match fault {
+        Fault::Busy => (
+            0,
+            "Every database connection is in use. Retry after the time in Retry-After.",
+        ),
+        Fault::Unavailable => (
+            1,
+            "The database cannot be reached right now. Retry after the time in Retry-After.",
+        ),
+        Fault::Timeout => (
+            2,
+            "A database statement ran into its time limit. Retry later, or ask for less at once.",
+        ),
+    };
+    s.ops.faults[i].fetch_add(1, Relaxed);
+    let mut r = super::api_error(
+        StatusCode::SERVICE_UNAVAILABLE,
+        fault.code(),
+        fault.code(),
+        hint,
+    );
+    r.headers_mut().insert(
+        header::RETRY_AFTER,
+        HeaderValue::from(fault.retry_after_secs()),
+    );
+    no_store(r)
+}
+
 fn no_store(mut r: Response) -> Response {
     r.headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -172,6 +225,8 @@ fn classify(ping_ok: bool, status: Result<obop_migrate::Status, String>) -> Read
         return Ready::No("database unreachable");
     }
     match status {
+        // Every connection busy is a load signal, not an outage: the pool is full of work.
+        Err(m) if Fault::of_message(&m) == Some(Fault::Busy) => Ready::Yes,
         Err(_) => Ready::No("database unreachable"),
         Ok(st) if st.ahead => Ready::No("database is newer than this server"),
         // A database with no records at all is at the latest version by construction.
@@ -180,9 +235,17 @@ fn classify(ping_ok: bool, status: Result<obop_migrate::Status, String>) -> Read
     }
 }
 
+/// A ping that fails only because the pool is saturated still shows that the database is there.
+fn reachable<T>(ping: &Result<T, String>) -> bool {
+    match ping {
+        Ok(_) => true,
+        Err(m) => Fault::of_message(m) == Some(Fault::Busy),
+    }
+}
+
 fn check_ready(s: &HttpState) -> Ready {
     let backend = &s.shared.backend;
-    let ping_ok = backend.counter_get("health.ping").is_ok();
+    let ping_ok = reachable(&backend.counter_get("health.ping"));
     let status = obop_migrate::Migrator::new(backend.clone(), s.shared.ring.clone()).status();
     classify(ping_ok, status)
 }
@@ -308,6 +371,139 @@ fn gauges(s: &HttpState) -> Gauges {
     v
 }
 
+type PoolReading = fn(&obop_storage::pool::PoolStats) -> f64;
+
+/// Pool series that are one number per pool: name, kind, help, reading.
+const POOL_SERIES: [(&str, &str, &str, PoolReading); 9] = [
+    (
+        "obop_db_pool_max_connections",
+        "gauge",
+        "Connections the pool may hold.",
+        |p| p.max_size as f64,
+    ),
+    (
+        "obop_db_pool_in_use",
+        "gauge",
+        "Connections checked out right now.",
+        |p| p.in_use as f64,
+    ),
+    (
+        "obop_db_pool_idle",
+        "gauge",
+        "Connections open and free.",
+        |p| p.idle as f64,
+    ),
+    (
+        "obop_db_pool_waiting",
+        "gauge",
+        "Callers waiting for a connection right now.",
+        |p| p.waiting as f64,
+    ),
+    (
+        "obop_db_pool_acquire_timeouts_total",
+        "counter",
+        "Callers that waited the whole acquire timeout and were refused (storage_busy).",
+        |p| p.timeouts as f64,
+    ),
+    (
+        "obop_db_pool_acquire_rejected_total",
+        "counter",
+        "Callers refused at once because too many already waited (storage_busy).",
+        |p| p.rejected as f64,
+    ),
+    (
+        "obop_db_pool_connect_failures_total",
+        "counter",
+        "Connection attempts that failed.",
+        |p| p.connect_failures as f64,
+    ),
+    (
+        "obop_db_pool_connections_opened_total",
+        "counter",
+        "Connections opened.",
+        |p| p.connections_opened as f64,
+    ),
+    (
+        "obop_db_pool_connections_closed_total",
+        "counter",
+        "Connections closed (too old, idle too long, dead or failed).",
+        |p| p.connections_closed as f64,
+    ),
+];
+
+/// The connection pools of this process (D74): how full they are, how long callers waited, how
+/// often they were refused. Read from the pools' own counters; no connection is needed, so a
+/// saturated pool can still be looked at.
+fn render_pools(t: &mut String, o: &Ops) {
+    use std::fmt::Write;
+    let pools = obop_storage::pool::stats();
+    for (name, kind, help, read) in POOL_SERIES {
+        if pools.is_empty() {
+            break;
+        }
+        let _ = writeln!(t, "# HELP {name} {help}");
+        let _ = writeln!(t, "# TYPE {name} {kind}");
+        for p in &pools {
+            let _ = writeln!(t, "{name}{{pool=\"{}\"}} {}", p.name, read(p));
+        }
+    }
+    if !pools.is_empty() {
+        let _ = writeln!(
+            t,
+            "# HELP obop_db_pool_acquire_seconds Time to get a connection, refusals included."
+        );
+        let _ = writeln!(t, "# TYPE obop_db_pool_acquire_seconds histogram");
+        for p in &pools {
+            let mut cumulative = 0;
+            for (i, b) in obop_storage::pool::ACQUIRE_BUCKETS.iter().enumerate() {
+                cumulative += p.acquire_buckets[i];
+                let _ = writeln!(
+                    t,
+                    "obop_db_pool_acquire_seconds_bucket{{pool=\"{}\",le=\"{b}\"}} {cumulative}",
+                    p.name
+                );
+            }
+            let _ = writeln!(
+                t,
+                "obop_db_pool_acquire_seconds_bucket{{pool=\"{}\",le=\"+Inf\"}} {}",
+                p.name, p.acquire_count
+            );
+            let _ = writeln!(
+                t,
+                "obop_db_pool_acquire_seconds_sum{{pool=\"{}\"}} {:.6}",
+                p.name, p.acquire_sum_secs
+            );
+            let _ = writeln!(
+                t,
+                "obop_db_pool_acquire_seconds_count{{pool=\"{}\"}} {}",
+                p.name, p.acquire_count
+            );
+        }
+    }
+    let _ = writeln!(
+        t,
+        "# HELP obop_db_statement_timeouts_total Statements cancelled by their time limit."
+    );
+    let _ = writeln!(t, "# TYPE obop_db_statement_timeouts_total counter");
+    let _ = writeln!(
+        t,
+        "obop_db_statement_timeouts_total {}",
+        obop_storage::statement_timeouts()
+    );
+    let _ = writeln!(
+        t,
+        "# HELP obop_storage_faults_total Requests answered 503 because the store was busy, unreachable or too slow."
+    );
+    let _ = writeln!(t, "# TYPE obop_storage_faults_total counter");
+    for (i, name) in ["busy", "unavailable", "timeout"].iter().enumerate() {
+        let _ = writeln!(
+            t,
+            "obop_storage_faults_total{{fault=\"{name}\"}} {}",
+            o.faults[i].load(Relaxed)
+        );
+    }
+}
+
 fn render(s: &HttpState) -> String {
     use std::fmt::Write;
     let o = &s.ops;
@@ -373,7 +569,7 @@ fn render(s: &HttpState) -> String {
     let _ = writeln!(t, "obop_http_request_duration_seconds_count {count}");
 
     let started = Instant::now();
-    let up = s.shared.backend.counter_get("health.ping").is_ok();
+    let up = reachable(&s.shared.backend.counter_get("health.ping"));
     let ping = started.elapsed().as_secs_f64();
     let _ = writeln!(t, "# HELP obop_db_up 1 when the database answered a ping.");
     let _ = writeln!(t, "# TYPE obop_db_up gauge");
@@ -384,6 +580,8 @@ fn render(s: &HttpState) -> String {
     );
     let _ = writeln!(t, "# TYPE obop_db_ping_seconds gauge");
     let _ = writeln!(t, "obop_db_ping_seconds {ping:.6}");
+
+    render_pools(&mut t, o);
 
     let g = gauges(s);
     if let Some(n) = g.sessions {
@@ -484,6 +682,22 @@ mod tests {
         assert_eq!(
             classify(true, Ok(status(None, 3, false))),
             Ready::No("database needs migration")
+        );
+    }
+
+    #[test]
+    fn a_saturated_pool_is_busy_not_down() {
+        let busy = Fault::Busy.message("all database connections are in use, try again");
+        // The database answered the pool's refusal: it is there, and ready.
+        assert!(reachable::<u64>(&Err(busy.clone())));
+        assert!(!reachable::<u64>(&Err("connection refused".into())));
+        assert!(!reachable::<u64>(&Err(
+            Fault::Unavailable.message("cannot reach")
+        )));
+        assert_eq!(classify(true, Err(busy)), Ready::Yes);
+        assert_eq!(
+            classify(true, Err(Fault::Unavailable.message("cannot reach"))),
+            Ready::No("database unreachable")
         );
     }
 

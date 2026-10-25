@@ -440,6 +440,8 @@ pub mod fault;
 pub mod limit;
 mod memory;
 mod pg;
+#[cfg(test)]
+mod pg_pool_tests;
 mod pgpool;
 pub mod pool;
 #[cfg(test)]
@@ -458,7 +460,7 @@ use pg::Pg;
 use sqlite::Sqlite;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn fields(k: &str, v: J) -> Fields {
@@ -469,7 +471,7 @@ mod tests {
 
     /// The contract every backend must meet. Also run against PostgreSQL by
     /// `OBOP_TEST_POSTGRES_URL=postgres://... cargo test -p obop-storage`.
-    fn contract(b: &dyn Backend) {
+    pub(crate) fn contract(b: &dyn Backend) {
         let model = format!("t{}", std::process::id());
         b.insert(&model, "a", &fields("n", J::from(1))).unwrap();
         b.insert(&model, "b", &fields("n", J::Null)).unwrap();

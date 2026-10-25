@@ -364,6 +364,11 @@ impl<M: Manager> Pool<M> {
         &self.inner.cfg
     }
 
+    /// A reading of this pool alone (see [`stats`] for every pool of the process).
+    pub fn report(&self) -> PoolStats {
+        self.inner.report()
+    }
+
     /// Put a connection made by the caller into the pool (the first one, opened at start-up to
     /// prepare the schema). Ignored when the pool is already full.
     pub fn seed(&self, conn: M::Conn) {

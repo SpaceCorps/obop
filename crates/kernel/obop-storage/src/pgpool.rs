@@ -334,10 +334,27 @@ fn is_statement_timeout(e: &postgres::Error) -> bool {
             .is_some_and(|d| d.message().contains("statement timeout"))
 }
 
-/// The connection itself failed (as opposed to a statement the server refused).
+/// Errors the driver raises on the client side about one statement, with the connection still
+/// sound: a parameter that does not serialise, a column of the wrong type, a wrong row count.
+fn is_statement_level(e: &postgres::Error) -> bool {
+    let text = e.to_string();
+    [
+        "error serializing parameter",
+        "error deserializing column",
+        "invalid column",
+        "query returned an unexpected",
+        "expected ",
+    ]
+    .iter()
+    .any(|p| text.starts_with(p))
+}
+
+/// The connection itself failed (as opposed to a statement the server refused or the driver
+/// refused to send): the socket broke, the server closed the session or is shutting down, the
+/// stream is out of step. Such a connection is not used again.
 pub(crate) fn connection_failed(e: &postgres::Error) -> bool {
     match e.as_db_error() {
-        None => true,
+        None => !is_statement_level(e),
         Some(d) => {
             let c = d.code();
             c == &SqlState::ADMIN_SHUTDOWN
@@ -521,6 +538,12 @@ impl PgPool {
             pool: Pool::new(PgManager::new(connector), cfg.settings(name, size)),
             cfg: cfg.clone(),
         }
+    }
+
+    /// A reading of this pool alone.
+    #[cfg(test)]
+    pub(crate) fn stats(&self) -> crate::pool::PoolStats {
+        self.pool.report()
     }
 
     /// Hand over a connection that is already open (the one that prepared the schema).

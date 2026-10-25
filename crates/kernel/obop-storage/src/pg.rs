@@ -16,9 +16,9 @@ pub(crate) struct Pg {
     /// Tells this backend's lock connections from another backend's on the same thread (tests
     /// open two backends on one database to stand in for two server processes).
     id: u64,
-    main: PgPool,
+    pub(crate) main: PgPool,
     /// Connections that hold advisory locks (a lock lives as long as its session).
-    lock_pool: Pool<PgManager>,
+    pub(crate) lock_pool: Pool<PgManager>,
     locks: Arc<LocalLocks>,
 }
 

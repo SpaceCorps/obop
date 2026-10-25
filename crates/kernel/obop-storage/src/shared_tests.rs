@@ -23,7 +23,7 @@ fn fields(n: i64) -> Fields {
 /// `a` and `b` are two handles on the same database.
 /// `destructive` also tests the wiping import, which empties the database: only for databases
 /// nothing else is using.
-fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destructive: bool) {
+pub(crate) fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destructive: bool) {
     // ---- counters: fixed window, shared between handles, expiry restarts at 1 ----
     let k = unique("ctr");
     assert_eq!(a.counter_get(&k).unwrap(), 0);

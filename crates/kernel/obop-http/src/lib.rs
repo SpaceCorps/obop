@@ -162,13 +162,33 @@ impl IntoResponse for AuthRejection {
     }
 }
 
+tokio::task_local! {
+    /// The first storage fault (pool exhausted, database unreachable, statement timed out) that
+    /// any blocking part of the current request ran into; read by `ops::storage_faults` (D74).
+    pub(crate) static FAULT: std::cell::Cell<Option<obop_storage::fault::Fault>>;
+}
+
 /// Storage backends block (the PostgreSQL client runs its own runtime, which panics if used on an
 /// async worker), so every handler that touches the dispatcher, the authenticator or the platform
-/// runs on the blocking pool.
+/// runs on the blocking pool. A handler runs on one thread from start to end, so a storage fault
+/// the pool noted on that thread (see `obop_storage::fault`) is handed to the request here, and
+/// the layer `ops::storage_faults` turns it into a 503 whatever the handler made of the error.
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
-    tokio::task::spawn_blocking(f)
-        .await
-        .expect("handler panicked")
+    let (out, fault) = tokio::task::spawn_blocking(move || {
+        obop_storage::fault::clear();
+        let out = f();
+        (out, obop_storage::fault::take())
+    })
+    .await
+    .expect("handler panicked");
+    if let Some(fault) = fault {
+        let _ = FAULT.try_with(|c| {
+            if c.get().is_none() {
+                c.set(Some(fault));
+            }
+        });
+    }
+    out
 }
 
 /// The REST routes under `/api`, without any static or public fallback.
@@ -323,9 +343,13 @@ pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
     instrument(app, state)
 }
 
-/// Count every response, fallbacks included, for `/metrics`.
+/// Count every response, fallbacks included, for `/metrics`, and answer a storage fault with 503.
 pub(crate) fn instrument(app: Router, state: Arc<HttpState>) -> Router {
     app.layer(axum::middleware::from_fn_with_state(
+        state.clone(),
+        ops::storage_faults,
+    ))
+    .layer(axum::middleware::from_fn_with_state(
         state.clone(),
         cors::layer,
     ))
