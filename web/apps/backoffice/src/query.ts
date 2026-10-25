@@ -1,6 +1,9 @@
 import { compareText, fmt, t } from "@obop/ui";
-import type { FieldMeta, Kind, Row } from "./api.ts";
+import { getTime, type FieldMeta, type Kind, type Row } from "./api.ts";
+import { compareDecimals, isDecimalText, sumDecimals } from "./decimals.ts";
+import { dayInZone } from "./instants.ts";
 import {
+  decimalText,
   decimalToMinor,
   formatDate,
   integer,
@@ -185,6 +188,10 @@ export function buildGroups(
 export const sumOf = (rows: Row[], field: string) =>
   rows.reduce((n, r) => n + (Number(r[field]) || 0), 0);
 
+/** The exact sum of a decimal column, as the server's text form (D72). */
+export const sumDecimalRows = (rows: Row[], field: string): string =>
+  sumDecimals(rows.map((r) => r[field]).filter(isDecimalText));
+
 export function formatSum(f: FieldMeta | undefined, n: number, currency?: string): string {
   return f?.kind === "money" ? money(n, currency) : integer(n);
 }
@@ -195,6 +202,7 @@ export function formatSum(f: FieldMeta | undefined, n: number, currency?: string
  */
 export function formatSumRows(f: FieldMeta | undefined, rows: Row[]): string {
   if (!f) return "";
+  if (f.kind === "decimal") return decimalText(sumDecimalRows(rows, f.name), f);
   if (f.kind !== "money") return integer(sumOf(rows, f.name));
   const byCurrency = new Map<string, number>();
   for (const r of rows) {
@@ -260,6 +268,16 @@ export function rangeNum(f: FieldMeta, s: string | undefined): number | undefine
     : Number(canonical);
 }
 
+/**
+ * A decimal range bound as the server's text form, or `undefined`. The address holds it with a
+ * dot (a link means the same in every locale); an older one may hold a comma.
+ */
+export function rangeDecimal(s: string | undefined): string | undefined {
+  if (s === undefined || s.trim() === "") return undefined;
+  const canonical = s.trim().replace(",", ".");
+  return isDecimalText(canonical) ? canonical : undefined;
+}
+
 export function matchCond(c: Cond, row: Row, fields: FieldMeta[], lk: Lookup): boolean {
   const text = (f: FieldMeta) => plainText(f, row[f.name], lk.refText).toLowerCase();
   if (c.op === "search") {
@@ -288,6 +306,21 @@ export function matchCond(c: Cond, row: Row, fields: FieldMeta[], lk: Lookup): b
         const d = String(v);
         return (!c.min || d >= c.min) && (!c.max || d <= c.max);
       }
+      if (f.kind === "datetime") {
+        // Bounds are days of the instance's zone; the instant's day there decides.
+        const d = dayInZone(v, getTime().zone);
+        return (!c.min || d >= c.min) && (!c.max || d <= c.max);
+      }
+      if (f.kind === "decimal") {
+        const x = String(v);
+        const lo = rangeDecimal(c.min);
+        const hi = rangeDecimal(c.max);
+        return (
+          isDecimalText(x) &&
+          (lo === undefined || compareDecimals(x, lo) >= 0) &&
+          (hi === undefined || compareDecimals(x, hi) <= 0)
+        );
+      }
       const n = Number(v);
       const lo = rangeNum(f, c.min);
       const hi = rangeNum(f, c.max);
@@ -309,6 +342,11 @@ function compare(f: FieldMeta, a: Row, b: Row, lk: Lookup): number {
     case "number":
     case "money":
       return (Number(x) || 0) - (Number(y) || 0);
+    case "decimal":
+      return compareDecimals(String(x), String(y));
+    // Instants are fixed-width UTC text: text order is time order.
+    case "datetime":
+      return String(x) < String(y) ? -1 : String(x) > String(y) ? 1 : 0;
     case "bool":
       return Number(Boolean(x)) - Number(Boolean(y));
     case "select": {
@@ -363,7 +401,11 @@ export function describeCond(c: Cond, fields: FieldMeta[], lk: Lookup): string {
 
 /** A stored range bound as the person reads it: a date in the locale, an amount with its currency. */
 export function boundText(f: FieldMeta | undefined, s: string): string {
-  if (f?.kind === "date") return formatDate(s);
+  if (f?.kind === "date" || f?.kind === "datetime") return formatDate(s);
+  if (f?.kind === "decimal") {
+    const d = rangeDecimal(s);
+    return d === undefined ? s : decimalText(d, {});
+  }
   const n = rangeNum(f ?? ({ kind: "number" } as FieldMeta), s);
   if (n === undefined) return s;
   return f?.kind === "money" ? money(n) : fmt.number(n, { maximumFractionDigits: 6 });
@@ -371,7 +413,12 @@ export function boundText(f: FieldMeta | undefined, s: string): string {
 
 export function validRange(f: FieldMeta, c: Extract<Cond, { op: "range" }>): boolean {
   if (!c.min && !c.max) return false;
-  if (f.kind === "date") return (!c.min || validDate(c.min)) && (!c.max || validDate(c.max));
+  if (f.kind === "date" || f.kind === "datetime")
+    return (!c.min || validDate(c.min)) && (!c.max || validDate(c.max));
+  if (f.kind === "decimal")
+    return (
+      (!c.min || rangeDecimal(c.min) !== undefined) && (!c.max || rangeDecimal(c.max) !== undefined)
+    );
   return (
     (!c.min || rangeNum(f, c.min) !== undefined) && (!c.max || rangeNum(f, c.max) !== undefined)
   );

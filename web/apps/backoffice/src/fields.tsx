@@ -1,9 +1,18 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { fmt, getCurrency, inSentence, t } from "@obop/ui";
-import type { FieldMeta, Row } from "./api.ts";
+import { getTime, type FieldMeta, type Row } from "./api.ts";
 import { useData, useRows } from "./data.tsx";
 import type { Edit } from "./edit.ts";
-import { formatDate, integer, isEmpty, isMasked, money, optionLabel } from "./format.ts";
+import {
+  decimalText,
+  formatDate,
+  instantText,
+  integer,
+  isEmpty,
+  isMasked,
+  money,
+  optionLabel,
+} from "./format.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
 import { BlobInput, BlobThumb, FileChip } from "./BlobFields.tsx";
 import { Badge, Icon } from "./ui.tsx";
@@ -30,6 +39,14 @@ export function Cell({
       return <span className="amount">{integer(value)}</span>;
     case "date":
       return <time dateTime={String(value)}>{formatDate(value)}</time>;
+    case "datetime":
+      return (
+        <time dateTime={String(value)} title={`${String(value)} (UTC)`}>
+          {instantText(value)}
+        </time>
+      );
+    case "decimal":
+      return <span className="amount">{decimalText(value, field)}</span>;
     case "bool":
       return value ? (
         <span className="yes">
@@ -239,6 +256,42 @@ export function FieldInput(p: InputProps) {
           onChange={(e) => onChange(e.target.value)}
         />
       );
+    case "decimal":
+      return (
+        <input
+          {...common}
+          type="text"
+          inputMode="decimal"
+          className="num"
+          placeholder={fmt.number(0, {
+            minimumFractionDigits: f.scale ?? 0,
+            maximumFractionDigits: f.scale ?? 0,
+          })}
+          value={String(value)}
+          readOnly={readOnly}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case "datetime": {
+      const zone = getTime().zone;
+      const hintId = `${p.id ?? "datetime"}-zone`;
+      return (
+        <div className="datetimefield">
+          <input
+            {...common}
+            aria-describedby={[p.describedBy, hintId].filter(Boolean).join(" ")}
+            type="text"
+            placeholder="2026-03-29 14:30"
+            value={String(value)}
+            readOnly={readOnly}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <small className="hint" id={hintId}>
+            {t("Time in {zone}; end with Z or +02:00 to say another zone", { zone })}
+          </small>
+        </div>
+      );
+    }
     default:
       return (
         <input

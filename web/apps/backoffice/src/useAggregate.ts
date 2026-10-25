@@ -81,7 +81,7 @@ export const measuresFor = (m: FieldMeta | undefined): AggMeasure[] =>
 
 /** The summed value of a group: the sum of the measure, or the record count. */
 export const valueOfGroup = (g: AggGroup, m: FieldMeta | undefined): number =>
-  m ? (g.measures[`sum:${m.name}`] ?? 0) : g.count;
+  m ? Number(g.measures[`sum:${m.name}`] ?? 0) : g.count;
 
 /**
  * The one currency of the records a view adds up, and whether there are several (the sums would

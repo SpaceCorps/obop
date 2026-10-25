@@ -1,6 +1,6 @@
 import type { FieldMeta, ServerFilter, ServerOrder } from "./api.ts";
 import { validDate } from "./format.ts";
-import { rangeNum, type Cond, type ViewState } from "./query.ts";
+import { rangeDecimal, rangeNum, type Cond, type ViewState } from "./query.ts";
 
 /**
  * Turns the control panel's search state into a `<model>.search` query (D49).
@@ -79,6 +79,22 @@ function convert(c: Cond, f: FieldMeta | undefined): ServerFilter[] | null {
         if ((c.min && !validDate(c.min)) || (c.max && !validDate(c.max))) return null;
         if (c.min) out.push({ field: f.name, op: "gte", value: c.min });
         if (c.max) out.push({ field: f.name, op: "lte", value: c.max });
+        return out;
+      }
+      if (f.kind === "datetime") {
+        // A day of the instance's zone: the server cuts the instant into days there (D72).
+        if ((c.min && !validDate(c.min)) || (c.max && !validDate(c.max))) return null;
+        if (c.min) out.push({ field: f.name, op: "gte", bucket: "day", value: c.min });
+        if (c.max) out.push({ field: f.name, op: "lte", bucket: "day", value: c.max });
+        return out;
+      }
+      if (f.kind === "decimal") {
+        // Decimals travel as text and compare as numbers on the server: no rounding.
+        const lo = rangeDecimal(c.min);
+        const hi = rangeDecimal(c.max);
+        if ((c.min && lo === undefined) || (c.max && hi === undefined)) return null;
+        if (lo !== undefined) out.push({ field: f.name, op: "gte", value: lo });
+        if (hi !== undefined) out.push({ field: f.name, op: "lte", value: hi });
         return out;
       }
       if (f.kind !== "number" && f.kind !== "money") return null;

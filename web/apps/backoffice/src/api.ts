@@ -26,6 +26,8 @@ export type Kind =
   | "number"
   | "money"
   | "date"
+  | "datetime"
+  | "decimal"
   | "bool"
   | "select"
   | "ref"
@@ -48,6 +50,10 @@ export type FieldMeta = {
   to?: string;
   /** Only for `image` and `file`: the largest upload in bytes. */
   max_bytes?: number;
+  /** Only for `decimal` (D72): digits in all, digits after the point, and the import rounding. */
+  precision?: number;
+  scale?: number;
+  round?: "half_even" | "half_up" | "down";
   /** The model the field belongs to (set when the metadata is loaded). */
   model?: string;
   /** Moves only through the model's actions, also for someone who can run none of them (D48). */
@@ -94,6 +100,12 @@ export type ModuleMeta = {
 };
 
 let coreVersion = "";
+let platformZone = "UTC";
+let tzdbVersion = "";
+/** The instance's time zone and the version of its pinned IANA database (D72), from `/api/meta`. */
+export function getTime(): { zone: string; tzdb: string } {
+  return { zone: platformZone, tzdb: tzdbVersion };
+}
 /** The running core version, from the last `/api/meta` (empty until it has been read). */
 export function getCoreVersion(): string {
   return coreVersion;
@@ -141,9 +153,12 @@ export async function meta(
   const body = (await res.json().catch(() => null)) as {
     modules: ModuleMeta[];
     core_version?: string;
+    time?: { zone?: string; tzdb_version?: string };
   } | null;
   if (!body || !Array.isArray(body.modules)) return "failed";
   if (body.core_version) coreVersion = body.core_version;
+  platformZone = body.time?.zone || "UTC";
+  tzdbVersion = body.time?.tzdb_version ?? "";
   const modules = body.modules;
   // An older server may not send the kind yet: money by name, everything else text.
   for (const m of modules)
@@ -166,7 +181,15 @@ export const LOAD_LIMIT = 5000;
 
 /** One server-side condition of `<model>.search` (D49). */
 export type ServerOp = "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
-export type ServerFilter = { field: string; op: ServerOp; value?: unknown };
+export type ServerFilter = {
+  field: string;
+  op: ServerOp;
+  value?: unknown;
+  /** On a date or datetime: compare the period it falls in (`value` is its label, D72). */
+  bucket?: "day" | "week" | "iso_week" | "month" | "year";
+  /** With `bucket` on a datetime: an IANA zone name; the instance's when absent. */
+  zone?: string;
+};
 export type ServerOrder = { field: string; dir: "asc" | "desc" };
 export type SearchQuery = {
   filter?: ServerFilter[];
@@ -197,15 +220,29 @@ export async function search(
 }
 
 /** One entry of `group_by`: a field, or a date field with a bucket. */
-export type AggGroupBy = { field: string; bucket?: "day" | "week" | "month" };
-/** One measure: `count`, or `sum`, `min` or `max` of a number or money field. */
-export type AggMeasure = { op: "count" } | { op: "sum" | "min" | "max"; field: string };
+export type AggGroupBy = {
+  field: string;
+  bucket?: "day" | "week" | "iso_week" | "month" | "year";
+  /** For a datetime: an IANA zone name; the instance's zone when absent (D72). */
+  zone?: string;
+};
+/**
+ * One measure: `count`, or `sum`, `min` or `max` of a number, money or decimal field; `avg` of a
+ * decimal field, with the digits and rounding of the result.
+ */
+export type AggMeasure =
+  | { op: "count" }
+  | { op: "sum" | "min" | "max"; field: string }
+  | { op: "avg"; field: string; scale?: number; round?: "half_even" | "half_up" | "down" };
 export type AggGroup = {
   /** Group field -> value (`null` for empty; a date bucket is `YYYY-MM-DD` or `YYYY-MM`). */
   key: Record<string, unknown>;
   count: number;
-  /** `sum:amount_minor` -> number (`min` and `max` of nothing are `null`). */
-  measures: Record<string, number | null>;
+  /**
+   * `sum:amount_minor` -> number (`min` and `max` of nothing are `null`); a decimal field's
+   * measure is its exact decimal string.
+   */
+  measures: Record<string, number | string | null>;
 };
 export type AggResult = { groups: AggGroup[]; total: number; denied: string[] };
 

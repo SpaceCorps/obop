@@ -7,7 +7,9 @@ import {
   t,
   validDate as validPlainDate,
 } from "@obop/ui";
-import type { FieldMeta } from "./api.ts";
+import { getTime, type FieldMeta } from "./api.ts";
+import { formatDecimal } from "./decimals.ts";
+import { formatInstant } from "./instants.ts";
 
 /**
  * The English, humanised form of a technical name: "expected_revenue_minor" -> "Expected revenue".
@@ -92,6 +94,16 @@ export function plainMajor(minor: unknown, currency?: string): string {
 
 export const validDate = validPlainDate;
 
+/** A decimal (D72) as it reads in the active locale, with its field's digits after the point. */
+export function decimalText(v: unknown, f: Pick<FieldMeta, "scale">): string {
+  return formatDecimal(v, fmt.locale, f.scale);
+}
+
+/** An instant (D72) as it reads on the wall clock of the instance's time zone. */
+export function instantText(v: unknown): string {
+  return formatInstant(v, getTime().zone, fmt.locale);
+}
+
 export function formatDate(s: unknown): string {
   return fmt.date(s);
 }
@@ -128,6 +140,10 @@ export function plainText(
       return plainMajor(v, currency);
     case "bool":
       return v ? t("Yes") : t("No");
+    // The exact text the server holds: a dot, no grouping, every digit; sortable and exportable.
+    case "decimal":
+    case "datetime":
+      return String(v);
     case "date":
       return String(v);
     case "ref":

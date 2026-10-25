@@ -16,6 +16,8 @@ mod cors_tests;
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
+mod kinds_tests;
+#[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;

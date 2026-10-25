@@ -185,19 +185,11 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                         "type": "string",
                         "pattern": f.decimal_pattern(),
                         "example": format!("12.{}", "3".repeat(usize::from(f.scale.unwrap_or(0)))),
-                        "description": format!(
-                            "An exact decimal as a string, never a JSON number: at most {} digits, {} after the point. Answers always carry exactly {} fractional digits; input with more is refused{}.",
-                            f.precision.unwrap_or(0),
-                            f.scale.unwrap_or(0),
-                            f.scale.unwrap_or(0),
-                            f.round.map_or(String::new(), |r| format!(" (except in bulk_create and obop import, which round with {r})")),
-                        ),
                     }),
                     "datetime" => json!({
                         "type": "string",
                         "format": "date-time",
                         "example": "2026-03-29T01:30:00.000000Z",
-                        "description": "An instant with microsecond precision. Send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ. No offset, no leap second, years 0001 to 9999."
                     }),
                     _ => kind_schema(
                         f.kind,
@@ -211,6 +203,21 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                     f.description.to_string()
                 };
                 let mut desc = desc;
+                match f.kind {
+                    "decimal" => desc.push_str(&format!(
+                        " (an exact decimal as a string, never a JSON number: at most {} digits, {} after the point; answers always carry exactly {} fractional digits and input with more is refused{})",
+                        f.precision.unwrap_or(0),
+                        f.scale.unwrap_or(0),
+                        f.scale.unwrap_or(0),
+                        f.round.map_or(String::new(), |r| format!(
+                            ", except in bulk_create and obop import, which round with {r}"
+                        )),
+                    )),
+                    "datetime" => desc.push_str(
+                        " (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    ),
+                    _ => {}
+                }
                 if f.computed {
                     desc.push_str(" (computed when read; read-only)");
                     sch["readOnly"] = J::from(true);
