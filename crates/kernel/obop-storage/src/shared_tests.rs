@@ -35,16 +35,23 @@ pub(crate) fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destruct
     b.counter_reset(&k).unwrap();
     assert_eq!(a.counter_get(&k).unwrap(), 0);
     let k = unique("ctr-exp");
-    assert_eq!(a.counter_add(&k, 60, false).unwrap(), 1);
-    assert_eq!(b.counter_add(&k, 60, false).unwrap(), 2);
-    std::thread::sleep(Duration::from_millis(150));
+    // The windows are wide against the gaps between calls, so a loaded machine that stalls a
+    // thread for a few hundred milliseconds cannot expire a counter the test still counts on.
+    assert_eq!(a.counter_add(&k, 400, false).unwrap(), 1);
+    assert_eq!(b.counter_add(&k, 400, false).unwrap(), 2);
+    std::thread::sleep(Duration::from_millis(600));
     assert_eq!(a.counter_get(&k).unwrap(), 0, "expired reads as zero");
-    assert_eq!(b.counter_add(&k, 60, false).unwrap(), 1, "and starts again");
-    // `extend` pushes the expiry out on every hit.
+    assert_eq!(
+        b.counter_add(&k, 400, false).unwrap(),
+        1,
+        "and starts again"
+    );
+    // `extend` pushes the expiry out on every hit: four hits 250 ms apart span 750 ms, longer
+    // than the 600 ms window, and every gap is shorter than it.
     let k = unique("ctr-ext");
     for _ in 0..4 {
-        a.counter_add(&k, 120, true).unwrap();
-        std::thread::sleep(Duration::from_millis(60));
+        a.counter_add(&k, 600, true).unwrap();
+        std::thread::sleep(Duration::from_millis(250));
     }
     assert_eq!(a.counter_get(&k).unwrap(), 4);
     // 0 never expires.

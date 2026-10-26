@@ -41,6 +41,10 @@ HTML report goes to `playwright-report/`. `OBOP_E2E_KEEP=1` keeps the temp direc
   response as a console error, so a test that provokes one on purpose declares it with `allowHttpErrors(400)`.
 - Drag and drop: a pointer drag needs the card and the drop target on screen together, so tests drop on a
   column header. See the "tall board" test in `tests/kanban.spec.ts` for the synthetic-event variant.
+- Redirects back to a client: `page.route()` is never called for a request that is a redirect target (Playwright
+  sends it on to the network), so a test that needs the browser's redirect to a loopback client (the OAuth specs)
+  starts a real listener with `support/callback.ts` and registers its address, instead of routing an invented one.
+  A route-based version passes on a desktop Chrome, which reloads its error page, and times out in CI's headless shell.
 - `test.fixme` marks a known application bug with its reproduction in a comment; fix the app, then remove it.
 
 ## Languages
