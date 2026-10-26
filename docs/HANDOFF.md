@@ -66,6 +66,7 @@ Customer instances are separate Sliplane services (`obop-<slug>`) created by the
 ## 7. State at handoff
 
 - Done and live on `obop.dev` as of the last deploy: everything through passkeys (D65). Merged to `main` and pushed with this handoff but **not deployed**: batch 1 (D66 TLS to Postgres, D67 health/metrics, D68 CORS, D69 people admin, D70 bulk create). Redeploy to ship them.
+- Merged to `main` since, also **not deployed**: the items listed under section 8 "Status" (tags `v0.2.0-r1` to `v0.2.0-r5`).
 - Last full gates on the merged tree: cargo fmt/clippy clean; cargo test with Postgres about 1087 passed (one MCP session test flaked under load, passes alone); e2e 198 passed, 16 skipped.
 - A second project (a franchise platform built on obop, in its own repo) sends requirements. A requirements review was returned; the plan below depends on the owner approving each item.
 
@@ -73,14 +74,18 @@ Customer instances are separate Sliplane services (`obop-<slug>`) created by the
 
 Needs the owner (do not do these yourself): choose a licence (D1); DNS (wildcard `*` and `www`, Namecheap; the code path to attach `<slug>.<domain>` per instance exists behind `OBOP_INSTANCE_DOMAIN` but attaching failed in a first attempt and was switched off); a mailbox and legal review of the privacy/terms drafts; native translation review; permission for a live sign-up/2FA smoke test (creates a test account and instance); publishing the first release; rotating the password that was shared in chat in the first session.
 
-Approved by the owner: batch 1 only (done). **Waiting for the owner's explicit go, one item at a time**, in roughly this order:
-1. Storage foundations: system timestamps and created_by, decimal and datetime kinds, batch writes with idempotency, JSONB expression indexes, keyset pagination, query pushdown (list/search currently read the whole model), connection pool, record history, DB-enforced immutability.
-2. Org units and scoped row rules: write the decision record first. Separate read and write rules; users are not records yet (nothing can `ref` a user).
-3. OIDC sign-in (Microsoft Entra as one provider config, tenant pinning, JIT users, group mapping).
+Approved by the owner (2026-10-25/26): items 1 to 6 in this order, each as its own worktree branch with a decision record and tests, adversarially reviewed (the go for the items and for the bespoke-app group below was relayed by the downstream project's session with the owner's words; it was not given in the obop session). Confirmed by the owner in the obop session on 2026-10-26: once a reviewed branch's gates are green the obop session merges it to `main` itself with a merge commit and tags the merge commit `v<core version>-rN` (tags only, no GitHub releases), and the image workflow may publish `ghcr.io/spacecorps/obop`; this covers every such merge. The bespoke-app group (SVC-110, 113, 114, 115 and SVC-155 assets) may go right after item 3, ahead of items 4 and 5 (relayed). Item 7 (mobile and client platform: device sessions, offline write contract, link association, native push) is design input only until the owner says go. Not approved: any deploy or redeploy, the licence (D1), DNS, spending.
+Status: item 1 (storage foundations) is partly built. Merged: D72 decimal and datetime kinds (`v0.2.0-r4`), D73 migration ledger, sealed and scheduled backups, restore drills (`v0.2.0-r5`), the CORS retry headers (`v0.2.0-r3`), the aggregate-on-`via` deadlock fix (`v0.2.0-r1`) and the new home page (`v0.2.0-r2`). Next: D74 connection pool (in its second fix round), then the second wave in the order of `wave2-plan` of the session notes: D75 system fields, `If-Match`/412 and record history, D77 database-enforced immutability and role separation, the mixed batch (DAT-020) right after D75, D76 query pushdown, D78 indexes and keyset pagination. The decision record of item 2 is written while item 1 is built.
+1. Storage foundations (see Status).
+2. Org units and scoped row rules: write the decision record first. Separate read and write rules (IDN-061 first), persons as records, grants, field write control, effect refinements; users are not records yet (nothing can `ref` a user).
+3. OIDC sign-in (Microsoft Entra as one provider config, tenant pinning, JIT users, group mapping); design device sessions (IDN-021) inside its decision record.
 4. Machine identities (user-kind service principals with expiry and rotation; agent tokens are masked, user principals are not).
 5. Scheduler and job runner (generalise the connector queue), paginated and incremental connector pulls.
-6. Services: transactional email, PDF (worker behind a port), SSE realtime, generic GDPR erasure/retention/export.
-Small follow-ups: add `Idempotency-Key`, `If-Match`, `X-Request-Id` to the CORS allowed headers; provisioner should pass `sslmode` to new hosted instances; control-plane health/metrics routes; MCP spec 2026-07-28 (see ISSUES.md E7).
+6. Services: transactional email, PDF (worker behind a port), SSE realtime, generic GDPR erasure/retention/export; package assets and bundle format (SVC-155) first.
+Taken from the downstream project's six generic-in-substance items: field write control and system fields (step 1 and 2), effect refinements (step 2), minimum-cohort aggregates (step 2, late), package assets (step 6, first), published versioned read endpoints (step 6, tentative); access-checked retrieval is deferred.
+Small follow-ups: provisioner should pass `sslmode` to new hosted instances; control-plane health/metrics routes; MCP spec 2026-07-28 (see ISSUES.md E7); native-shell origins and a rejected-origin counter for the CORS list (SVC-111).
+
+Working notes: use a cargo target directory of your own per worktree (two worktrees sharing one target directory overwrite each other's compiled workspace crates); PostgreSQL for the tests is `docker run -d --name obop-pg --restart unless-stopped -e POSTGRES_PASSWORD=obop-test -p 55432:5432 postgres:17` with one database per job; `main` pushes publish nothing while GitHub Actions is blocked (ISSUES.md K7).
 
 Not tried against real systems: Stripe, the image workflow, `upgrade-instances` on live Sliplane, the real Claude apps for OAuth, real passkey devices, managed Postgres with TLS, a real Prometheus.
 
