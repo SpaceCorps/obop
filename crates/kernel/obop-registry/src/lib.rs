@@ -7,9 +7,13 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
 
 pub mod expr;
+pub mod ext;
 pub mod labels;
 pub mod rules;
 pub mod template;
+pub use ext::{
+    CondOp, Exit, Guard, History, IndexCond, IndexDef, IndexKind, LockDate, ModelExt, StateSet,
+};
 pub use labels::Translations;
 pub use rules::{
     Access, Assertion, Computed, Effect, EffectKind, Lit, Locator, Reset, SeqFormat, SequenceSpec,
@@ -412,6 +416,10 @@ pub struct ModelDef {
     pub commands: Vec<CommandDef>,
     /// Row-level access rules (D58); none: the groups decide alone.
     pub access: Option<Access>,
+    /// Record history, declared indexes and the immutability guard; `Default::default()` for a
+    /// model that declares none of them. New per-model settings of that kind go into `ModelExt`,
+    /// not into this struct, so that no `ModelDef` literal changes again.
+    pub ext: ModelExt,
 }
 
 impl ModelDef {
@@ -478,6 +486,39 @@ pub const GENERATED_COMMANDS: [&str; 7] = [
     "bulk_create",
     "update",
     "delete",
+];
+
+/// Record keys the platform sets itself on every tracked record (D75), in storage order. Not yet
+/// refused by the install gate; the record-history step does that.
+pub const SYSTEM_FIELDS: [&str; 6] = [
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by",
+    "row_version",
+    "sys_backfilled",
+];
+
+/// Names a package field cannot take once the system fields exist: the system fields, the record
+/// id (the gate refuses `id` today) and `if_version`, the optimistic-lock input of `update`.
+pub const RESERVED_FIELDS: [&str; 8] = [
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by",
+    "row_version",
+    "sys_backfilled",
+    "id",
+    "if_version",
+];
+
+/// Model names the platform keeps for its own records (D75, D76, D77, D78); a package cannot
+/// declare a model of this name once the install gate enforces the list.
+pub const RESERVED_MODELS: [&str; 4] = [
+    "record_change",
+    "storage_event",
+    "storage_index",
+    "data_guard",
 ];
 
 /// Most rows one `bulk_create` call takes (D70).
@@ -779,6 +820,7 @@ mod tests {
                 access: None,
                 fields: vec![f],
                 commands: vec![],
+                ext: Default::default(),
             }],
             network_destinations: vec![],
             description: String::new(),
@@ -946,6 +988,92 @@ mod tests {
         let mut f = ok_field();
         f.name = "id";
         assert!(gate(f)[0].problem.contains("`id`"));
+    }
+
+    #[test]
+    fn the_reserved_names_are_exactly_these() {
+        assert_eq!(
+            SYSTEM_FIELDS,
+            [
+                "created_at",
+                "updated_at",
+                "created_by",
+                "updated_by",
+                "row_version",
+                "sys_backfilled"
+            ]
+        );
+        // The system fields in the same order, then the record id and the optimistic-lock input.
+        assert_eq!(RESERVED_FIELDS[..6], SYSTEM_FIELDS);
+        assert_eq!(RESERVED_FIELDS[6..], ["id", "if_version"]);
+        assert_eq!(
+            RESERVED_MODELS,
+            [
+                "record_change",
+                "storage_event",
+                "storage_index",
+                "data_guard"
+            ]
+        );
+        // No name appears twice in a list.
+        for list in [
+            &SYSTEM_FIELDS[..],
+            &RESERVED_FIELDS[..],
+            &RESERVED_MODELS[..],
+        ] {
+            let set: HashSet<_> = list.iter().collect();
+            assert_eq!(set.len(), list.len());
+        }
+        // The generated commands do not change until the history command lands (D75).
+        assert_eq!(GENERATED_COMMANDS.len(), 7);
+        // The gate refuses `id` already and does not yet refuse the other reserved names.
+        assert!(RESERVED_FIELDS.contains(&"id"));
+        let mut f = ok_field();
+        f.name = "created_at";
+        assert!(gate(f).is_empty());
+    }
+
+    #[test]
+    fn a_model_has_no_extensions_unless_it_declares_them() {
+        let m = ModelExt::default();
+        assert_eq!(m, ModelExt::default());
+        assert_eq!(m.history, History::default());
+        assert_eq!(m.history.off_reason, None);
+        assert_eq!(m.history.retention_days, None);
+        assert!(m.indexes.is_empty());
+        assert!(m.guard.is_none());
+        // A guard compares by value, so a gate or a diff can tell two declarations apart.
+        let guard = |v: &'static str| Guard {
+            immutable_when: Some(StateSet {
+                field: "state",
+                values: vec![v],
+            }),
+            mutable_fields: vec![],
+            exit_to: vec![Exit {
+                to: "draft",
+                action: "reopen",
+                may_change: vec![],
+            }],
+            no_delete_when: None,
+            lock_date: Some(LockDate {
+                field: "date",
+                setting: "accounting.lock_date",
+            }),
+            children_of: None,
+            append_only: false,
+        };
+        assert_eq!(guard("posted"), guard("posted"));
+        assert_ne!(guard("posted"), guard("paid"));
+        let index = IndexDef {
+            cols: vec![("driver", false), ("day", true)],
+            kind: IndexKind::Btree,
+            filter: vec![IndexCond {
+                field: "state",
+                op: CondOp::Ne,
+                values: vec![Lit::Text("cancelled".into())],
+            }],
+        };
+        assert_eq!(index.clone(), index);
     }
 
     #[test]

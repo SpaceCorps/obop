@@ -226,6 +226,7 @@ mod tests {
                 see_all: vec!["t.manager"],
                 via: None,
             }),
+            ext: Default::default(),
         });
         let task = Arc::new(ModelDef {
             name: "t_task",
@@ -238,6 +239,7 @@ mod tests {
                 via: Some("project_id"),
                 ..Access::default()
             }),
+            ext: Default::default(),
         });
         let (p, t) = (project.clone(), task.clone());
         let lookup = move |n: &str| match n {

@@ -188,6 +188,7 @@ mod tests {
                 access: None,
                 fields: vec![],
                 commands: vec![],
+                ext: Default::default(),
             }],
             network_destinations: vec![],
             description: String::new(),

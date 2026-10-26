@@ -1301,6 +1301,7 @@ mod tests {
                 f("due").kind(FieldKind::Date),
             ],
             commands: Vec::<CommandDef>::new(),
+            ext: Default::default(),
         };
         let line = ModelDef {
             name: "t_move_line",
@@ -1316,6 +1317,7 @@ mod tests {
                 f("weight").decimal(12, 3),
             ],
             commands: vec![],
+            ext: Default::default(),
         };
         (Arc::new(parent), Arc::new(line))
     }

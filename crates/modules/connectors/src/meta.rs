@@ -101,6 +101,7 @@ pub fn models() -> Vec<ModelDef> {
                 long("legal_basis_text", "Text shown to people when they are asked for consent", USER),
             ],
             commands: vec![],
+            ext: Default::default(),
         },
         ModelDef {
             name: "provider_policy",
@@ -122,6 +123,7 @@ pub fn models() -> Vec<ModelDef> {
                 class("oauth_client_secret", "OAuth client secret; write-only, stored encrypted", Secret, ADMIN),
             ],
             commands: vec![],
+            ext: Default::default(),
         },
         ModelDef {
             name: "connection",
@@ -170,6 +172,7 @@ pub fn models() -> Vec<ModelDef> {
                 CommandDef::new("sync", "Run the connection now: send, pull or produce the file", USER).approval(),
                 CommandDef::new("oauth_start", "Get the link where the person authorises the connection with the provider", USER),
             ],
+            ext: Default::default(),
         },
         ModelDef {
             name: "consent",
@@ -198,6 +201,7 @@ pub fn models() -> Vec<ModelDef> {
                     .transition("state", Some("active"), "withdrawn")
                     .approval(),
             ],
+            ext: Default::default(),
         },
         ModelDef {
             name: "sync_run",
@@ -219,6 +223,7 @@ pub fn models() -> Vec<ModelDef> {
                 t("error_summary", "Why it failed, without payloads", USER),
             ],
             commands: vec![],
+            ext: Default::default(),
         },
         ModelDef {
             name: "data_flow_log",
@@ -241,6 +246,7 @@ pub fn models() -> Vec<ModelDef> {
                 t("reason", "Why a flow was refused or a record rejected", USER),
             ],
             commands: vec![],
+            ext: Default::default(),
         },
         ModelDef {
             name: "processing_register",
@@ -272,6 +278,7 @@ pub fn models() -> Vec<ModelDef> {
                 v
             },
             commands: vec![CommandDef::new("export_csv", "Export the register as CSV", ADMIN)],
+            ext: Default::default(),
         },
         ModelDef {
             name: "egress_policy",
@@ -291,6 +298,7 @@ pub fn models() -> Vec<ModelDef> {
                 CommandDef::new("checklist", "Check what is configured: agreements, retention, legal bases, acknowledgements", ADMIN),
                 CommandDef::new("purge", "Remove flow logs and runs older than their retention", ADMIN).approval(),
             ],
+            ext: Default::default(),
         },
         ModelDef {
             name: "privacy_preview",
@@ -309,6 +317,7 @@ pub fn models() -> Vec<ModelDef> {
                 long("treatments", "Each field with its class and treatment, as JSON; never stored", USER),
             ],
             commands: vec![CommandDef::new("render", "Render a sample record after masking and pseudonymisation", USER)],
+            ext: Default::default(),
         },
     ]
 }

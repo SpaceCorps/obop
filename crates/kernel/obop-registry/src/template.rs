@@ -260,6 +260,7 @@ mod tests {
                         "sold",
                     ),
                 ],
+                ext: Default::default(),
             }],
             ..Default::default()
         }

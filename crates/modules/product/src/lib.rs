@@ -50,6 +50,7 @@ pub fn module() -> Module {
                 .kind(FieldKind::Money),
             ],
             commands: vec![],
+            ext: Default::default(),
         }],
         network_destinations: vec![],
         description: String::new(),

@@ -70,6 +70,7 @@ fn module(p: &str) -> Module {
         access: None,
         fields,
         commands,
+        ext: Default::default(),
     };
     Module {
         id: p.into(),

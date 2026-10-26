@@ -26,6 +26,7 @@ fn module() -> Module {
             Some("draft"),
             "published",
         )],
+        ext: Default::default(),
     };
     let section = ModelDef {
         name: "section",
@@ -35,6 +36,7 @@ fn module() -> Module {
         access: None,
         fields: vec![f("name"), f("visible").kind(FieldKind::Bool)],
         commands: vec![],
+        ext: Default::default(),
     };
     let msg = ModelDef {
         name: "msg",
@@ -54,6 +56,7 @@ fn module() -> Module {
             Some("new"),
             "done",
         )],
+        ext: Default::default(),
     };
     Module {
         id: "t".into(),
