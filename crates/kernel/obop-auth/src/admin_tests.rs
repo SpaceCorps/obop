@@ -513,14 +513,20 @@ fn offboard_by_the_operator_has_no_self_check_and_logs_the_operator() {
 // ---- a refused store is never "nothing to do" (D74) ---------------------------------------
 
 /// A rig whose storage can be made to refuse calls, behind the request guard as in a server.
-fn flaky_rig() -> (Rig, std::sync::Arc<obop_storage::testing::Flaky>) {
+pub(crate) fn flaky_rig() -> (Rig, std::sync::Arc<obop_storage::testing::Flaky>) {
+    flaky_rig_with(AuthConfig::insecure_dev())
+}
+
+pub(crate) fn flaky_rig_with(
+    config: AuthConfig,
+) -> (Rig, std::sync::Arc<obop_storage::testing::Flaky>) {
     let (flaky, b) = obop_storage::testing::Flaky::memory();
-    let a = Auth::with_test_config(b.clone(), AuthConfig::insecure_dev());
+    let a = Auth::with_test_config(b.clone(), config);
     a.set_clock_for_test(T0);
     (Rig { a, b }, flaky)
 }
 
-fn request<T>(f: impl FnOnce() -> T) -> (T, obop_storage::fault::Outcome) {
+pub(crate) fn request<T>(f: impl FnOnce() -> T) -> (T, obop_storage::fault::Outcome) {
     obop_storage::fault::begin_request(Default::default());
     let v = f();
     (v, obop_storage::fault::end_request())
@@ -602,6 +608,119 @@ fn a_password_reset_whose_sessions_cannot_be_listed_is_a_partial_failure() {
     });
     done.unwrap();
     assert!(r.a.resolve(&t1).is_none());
+}
+
+/// The log entry of `kind` that says INCOMPLETE: its actor and its text.
+fn incomplete_entry(r: &Rig, kind: &str) -> Option<(String, String)> {
+    events(r, kind)
+        .into_iter()
+        .find(|e| e.2.contains("INCOMPLETE"))
+        .map(|e| (e.1, e.2))
+}
+
+#[test]
+fn a_group_change_that_could_not_relimit_the_sessions_is_finished_by_repeating_it() {
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig_with(enforcing());
+    // root is an administrator with two-factor on, signed in with it: a full session.
+    user_with(&r.a, "root", &[ADMIN_GROUP]);
+    let (secret, _) = enrol(&r.a, "root");
+    let LoginOutcome::MfaRequired { mfa_token } = r.a.login_step("root", PW).unwrap() else {
+        panic!("root has two-factor on");
+    };
+    let code = totp::code_for_step(&secret, totp::step_at(T0) + 1);
+    let LoginOutcome::Session {
+        token: root_token, ..
+    } = r.a.login_mfa(&mfa_token, Some(&code), None).unwrap()
+    else {
+        panic!("a session");
+    };
+    let root = r.a.resolve(&root_token).unwrap();
+    assert!(!root.mfa_limited);
+    user_with(&r.a, "ada", &["base.user"]);
+    let (t, before) = session(&r.a, "ada");
+    assert!(!before.mfa_limited);
+    let groups = names(&["base.user", ADMIN_GROUP]);
+    // Ada becomes an administrator on an instance that demands two-factor of administrators; the
+    // live sessions cannot be relimited (the token list is refused).
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| r.a.set_user_groups(&root, "ada", &groups, &known()));
+    flaky.allow_models();
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert!(out.wrote && out.partial, "{out:?}");
+    assert!(!r.a.resolve(&t).unwrap().mfa_limited, "still not limited");
+    // The entry is the administrator's own, with what is missing added; not a stranger's.
+    let (actor, text) = incomplete_entry(&r, "user_groups").expect("an INCOMPLETE entry");
+    assert_eq!(actor, "root");
+    assert!(text.contains("groups changed: added"), "{text}");
+    // The repeat finishes it, although the groups already are as asked.
+    let (done, _) = request(|| r.a.set_user_groups(&root, "ada", &groups, &known()));
+    assert_eq!(done.unwrap()["changed"], false);
+    assert!(r.a.resolve(&t).unwrap().mfa_limited, "now limited");
+}
+
+#[test]
+fn turning_two_factor_off_that_could_not_end_the_other_sessions_is_finished_by_repeating_it() {
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    // Two sessions exist before the second factor does (one is the person's, one is stolen).
+    let (mine, p) = session(&r.a, "ada");
+    let (stolen, _) = session(&r.a, "ada");
+    let (_, codes) = enrol(&r.a, "ada");
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| r.a.disable_in_session(&p, &mine, PW, None, Some(&codes[0])));
+    flaky.allow_models();
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert!(out.wrote && out.partial, "{out:?}");
+    assert!(!r.a.mfa_enabled("ada"), "the factor is off");
+    assert!(
+        r.a.resolve(&stolen).is_some(),
+        "the other session is still alive"
+    );
+    let (actor, text) = incomplete_entry(&r, "disable").expect("an INCOMPLETE entry");
+    assert_eq!(actor, "ada");
+    assert!(text.contains("turned off by the user"), "{text}");
+    // The repeat does not say "two-factor is not on": it ends the session of the thief.
+    let (done, _) = request(|| r.a.disable_in_session(&p, &mine, PW, None, Some(&codes[1])));
+    done.unwrap();
+    assert!(r.a.resolve(&stolen).is_none(), "the other session ended");
+    assert!(r.a.resolve(&mine).is_some(), "this one stays");
+    // Once finished, the repeat is the usual answer again.
+    assert!(matches!(
+        r.a.disable_in_session(&p, &mine, PW, None, Some(&codes[2])),
+        Err(MfaError::Invalid(m)) if m.contains("not on")
+    ));
+}
+
+#[test]
+fn an_administrators_two_factor_reset_that_could_not_end_the_sessions_is_finished_by_repeating_it()
+{
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig();
+    let root = admin(&r, "root");
+    user_with(&r.a, "ada", &["base.user"]);
+    let (stolen, _) = session(&r.a, "ada");
+    enrol(&r.a, "ada");
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| r.a.admin_reset(&root, "ada"));
+    flaky.allow_models();
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert!(out.wrote && out.partial, "{out:?}");
+    assert!(!r.a.mfa_enabled("ada"));
+    assert!(r.a.resolve(&stolen).is_some());
+    let (actor, _) = incomplete_entry(&r, "reset").expect("an INCOMPLETE entry");
+    assert_eq!(actor, "root");
+    let (done, _) = request(|| r.a.admin_reset(&root, "ada"));
+    done.unwrap();
+    assert!(
+        r.a.resolve(&stolen).is_none(),
+        "the session ended on the repeat"
+    );
+    assert!(
+        matches!(r.a.admin_reset(&root, "ada"), Err(MfaError::Invalid(m)) if m.contains("no two-factor")),
+        "once finished, the usual answer"
+    );
 }
 
 #[test]

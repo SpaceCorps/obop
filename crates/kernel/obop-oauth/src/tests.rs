@@ -881,6 +881,84 @@ fn a_code_exchange_the_store_refuses_gives_the_code_back_and_leaves_nothing_behi
 }
 
 #[test]
+fn a_code_exchange_refused_at_any_call_is_never_a_final_invalid_grant_and_its_retry_works() {
+    use obop_storage::fault;
+    // Wherever in the exchange the store starts refusing (the client lookup, the account lookup,
+    // the account lookup inside the token issue, the batch), the client is told to retry, the code
+    // is still good, and no orphan access token is left.
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let c = r.client();
+    let mut refused_somewhere = 0;
+    for k in 1..=12 {
+        let code = r.code(&c, &["sales.user"]);
+        fault::begin_request(Default::default());
+        flaky.refuse_n_after_the_next_write(k);
+        let first = r.exchange(&c, &code, &verifier(), REDIRECT);
+        let out = fault::end_request();
+        flaky.allow_models();
+        if out.fault.is_none() {
+            // The refusals came after the work was done (or never): the exchange is simply done.
+            assert!(first.is_ok(), "k={k}: {first:?}");
+            continue;
+        }
+        refused_somewhere += 1;
+        let before = live_oauth_tokens(&r);
+        match first {
+            Err(e) => assert_eq!(
+                (e.status, e.error),
+                (503, "temporarily_unavailable"),
+                "k={k}: a refusal is never the final {e:?}"
+            ),
+            // The refusal hit a step the exchange does not need: it kept its answer.
+            Ok(_) => continue,
+        }
+        let again = r.exchange(&c, &code, &verifier(), REDIRECT);
+        assert!(
+            again.is_ok(),
+            "k={k}: the retry of the same code: {again:?}"
+        );
+        assert_eq!(
+            live_oauth_tokens(&r),
+            before + 1,
+            "k={k}: one token, no orphan"
+        );
+    }
+    assert!(refused_somewhere >= 3, "the sweep reached the exchange");
+}
+
+#[test]
+fn a_grant_ended_while_its_access_token_could_not_be_revoked_finishes_when_the_client_comes_back() {
+    use obop_storage::testing::Mode;
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let c = r.client();
+    let t = r.tokens(&c);
+    let access = t["access_token"].as_str().unwrap().to_string();
+    let used = t["refresh_token"].as_str().unwrap().to_string();
+    r.refresh(&c, &used).unwrap();
+    // The old refresh token is presented again: the grant is ended, the access token of the grant
+    // cannot be revoked (the store refuses it for long enough that the tries run out).
+    flaky.refuse_model("auth_token", Mode::Updates);
+    let e = r.refresh(&c, &used).unwrap_err();
+    assert_eq!((e.status, e.retry_after), (503, Some(1)));
+    flaky.allow_models();
+    assert!(r.o.grants_of("ada").is_empty(), "the grant is ended");
+    // The client presents the token once more: the access token goes now, not an hour from now.
+    let e = r.refresh(&c, &used).unwrap_err();
+    assert_eq!(e.error, "invalid_grant");
+    let current = r.backend.list("oauth_grant").unwrap().remove(0).1["access_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        live_oauth_tokens(&r),
+        0,
+        "no access token of the grant is left ({access}, {current})"
+    );
+}
+
+#[test]
 fn ending_a_grant_is_never_reported_when_the_store_refused_it() {
     use obop_storage::testing::Mode;
     let (flaky, backend) = obop_storage::testing::Flaky::memory();

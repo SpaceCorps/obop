@@ -594,6 +594,51 @@ fn the_last_second_factor_of_an_administrator_cannot_be_removed() {
 }
 
 #[test]
+fn removing_a_passkey_that_could_not_end_the_other_sessions_is_finished_by_repeating_it() {
+    use crate::admin_tests::{flaky_rig, request};
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    let (mine, p) = session(&r.a, "ada");
+    let (stolen, _) = session(&r.a, "ada");
+    let mut auth = SoftAuthenticator::es256();
+    add(&r, &mine, &p, &mut auth, "k").unwrap();
+    let id = r.a.list(&p, &ctx()).unwrap()["passkeys"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let opts = r.a.proof_options(&p, &ctx()).unwrap();
+    r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
+    // The passkey goes; ending the other sessions is refused.
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| r.a.remove(&p, &mine, &id, &pw()));
+    flaky.allow_models();
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert!(out.wrote && out.partial, "{out:?}");
+    assert_eq!(r.a.passkey_count("ada"), 0);
+    assert!(
+        r.a.resolve(&stolen).is_some(),
+        "the other session still lives"
+    );
+    assert!(
+        events_of(&r, "passkey_remove")
+            .iter()
+            .any(|d| d.contains("removed \"k\"") && d.contains("INCOMPLETE")),
+        "the entry of the removal itself, with what is missing"
+    );
+    // The repeat is not "no such passkey": it ends the other session.
+    let (done, _) = request(|| r.a.remove(&p, &mine, &id, &pw()));
+    done.unwrap();
+    assert!(r.a.resolve(&stolen).is_none());
+    assert!(r.a.resolve(&mine).is_some());
+    // Finished: the usual answer from now on.
+    assert!(matches!(
+        r.a.remove(&p, &mine, &id, &pw()),
+        Err(MfaError::Invalid(m)) if m.contains("no such passkey")
+    ));
+}
+
+#[test]
 fn removing_the_last_passkey_of_an_ordinary_user_ends_their_two_factor_state() {
     let r = rig();
     user_with(&r.a, "ada", &["base.user"]);

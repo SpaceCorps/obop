@@ -77,14 +77,15 @@ impl Fault {
         format!("{}: {detail}", self.code())
     }
 
-    /// Recognise a message made by [`Fault::message`], also when a caller wrapped it in more text.
+    /// Recognise a message made by [`Fault::message`]: the code word at the very start. Text that
+    /// merely contains it (a validation error that echoes a name the caller chose, such as
+    /// `unknown option "a: storage_busy: b"`) is not a fault, and no caller may be made to retry
+    /// its own bad input. A caller that wraps the text of a fault passes it on unchanged or says
+    /// so with [`Fault::note`].
     pub fn of_message(msg: &str) -> Option<Fault> {
         [Fault::Busy, Fault::Unavailable, Fault::Timeout]
             .into_iter()
-            .find(|f| {
-                msg.starts_with(&format!("{}:", f.code()))
-                    || msg.contains(&format!(": {}:", f.code()))
-            })
+            .find(|f| msg.starts_with(&format!("{}:", f.code())))
     }
 
     /// Does this error text say the store was too busy or unreachable, as opposed to refusing the
@@ -321,8 +322,11 @@ mod tests {
             assert!(m.starts_with(f.code()), "{m}");
             assert_eq!(Fault::of_message(&m), Some(f));
             assert!(Fault::is_transient(&m));
-            // A caller that wraps the text keeps it recognisable.
-            assert_eq!(Fault::of_message(&format!("could not save: {m}")), Some(f));
+            // Only the start counts: text that the caller chose and that is echoed back in an
+            // error is not a fault, wherever the code word sits in it.
+            assert_eq!(Fault::of_message(&format!("could not save: {m}")), None);
+            let echoed = format!(r#"unknown option "a: {}: b" (use filter, order)"#, f.code());
+            assert_eq!(Fault::of_message(&echoed), None, "{echoed}");
         }
         assert_eq!(Fault::of_message("duplicate key value"), None);
         assert_eq!(Fault::of_message("unknown field storage_busy"), None);

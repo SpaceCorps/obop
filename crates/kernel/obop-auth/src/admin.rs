@@ -8,7 +8,7 @@
 //! with who did it and what changed. Nothing logged or returned is a secret, except the
 //! temporary password a creation hands back once.
 
-use crate::{Auth, MIN_PASSWORD_CHARS, str_list, suggest_temporary_password};
+use crate::{Auth, Change, MIN_PASSWORD_CHARS, str_list, suggest_temporary_password};
 use obop_commands::{ADMIN_GROUP, AccountsApi, MfaError, NewUser, Principal, PrincipalKind};
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
@@ -137,23 +137,21 @@ impl Auth {
     /// enrolment (or to the owed password change) or not. Returns how many changed. Called after
     /// the groups change, so an account that just became an administrator on an instance that
     /// demands two-factor for administrators cannot keep using a session that never proved one.
-    fn resync_limits(&self, name: &str, groups: &[String]) -> Result<usize, MfaError> {
+    fn resync_limits(&self, name: &str, groups: &[String], ch: &Change) -> Result<usize, MfaError> {
         let limited = self
             .settled(|| {
                 self.must_change_password(name)
                     || (self.enrolment_required_for(groups) && !self.has_second_factor(name))
             })
             .map_err(|e| match e {
-                MfaError::Unavailable(m) => {
-                    self.incomplete(name, "user_groups", "reading the two-factor policy", m)
-                }
+                MfaError::Unavailable(m) => self.incomplete(ch, "reading the two-factor policy", m),
                 other => other,
             })?;
         let now = self.now();
         let mut n = 0;
         // A session that is not limited stays so unless this step runs: refused, it fails the
         // request (the groups did change) instead of reporting "no session needed a change".
-        self.needed(name, "user_groups", "relimiting the sessions", || {
+        self.needed(ch, "relimiting the sessions", || {
             for (id, t) in self.backend.list("auth_token")? {
                 let live = t.get("revoked").and_then(J::as_bool) != Some(true)
                     && t.get("expires_at")
@@ -273,7 +271,29 @@ impl Auth {
             .filter(|g| !after.contains(g))
             .cloned()
             .collect();
+        let mut detail = format!(
+            "groups changed: added {}; removed {}; now {}",
+            list(&added),
+            list(&removed),
+            list(&after)
+        );
         if added.is_empty() && removed.is_empty() {
+            // Nothing to change. The repeat of a request that changed the groups and could not
+            // relimit the sessions lands here, and must finish that (it is safe to repeat, and
+            // does nothing when every session already agrees).
+            let ch = Change::new(&target, "user_groups", actor, "groups unchanged");
+            let relimited = self.resync_limits(&target, &before, &ch)?;
+            if relimited > 0 {
+                self.event(
+                    &target,
+                    "user_groups",
+                    actor,
+                    &format!(
+                        "{relimited} session(s) now follow the two-factor policy for the groups ({})",
+                        list(&before)
+                    ),
+                );
+            }
             return Ok(
                 json!({"user": target, "before": before, "after": before, "changed": false}),
             );
@@ -295,13 +315,8 @@ impl Auth {
         let mut patch = Fields::new();
         patch.insert("groups".into(), json!(after));
         self.put(&target, &patch)?;
-        let relimited = self.resync_limits(&target, &after)?;
-        let mut detail = format!(
-            "groups changed: added {}; removed {}; now {}",
-            list(&added),
-            list(&removed),
-            list(&after)
-        );
+        let ch = Change::new(&target, "user_groups", actor, &detail);
+        let relimited = self.resync_limits(&target, &after, &ch)?;
         if relimited > 0 {
             detail.push_str(&format!(
                 "; {relimited} session(s) now follow the two-factor policy for the new groups"
@@ -360,60 +375,61 @@ impl Auth {
         // never "0 sessions ended". Offboarding the same account again finishes the rest.
         let (mut sessions, mut agents, mut apps, mut pending) = (0usize, 0usize, 0usize, 0usize);
         let tid = target.as_str();
-        self.needed(
+        let ch = Change::new(
             tid,
             "user_offboard",
-            "ending the tokens of the account",
-            || {
-                for (id, t) in self.backend.list("auth_token")? {
-                    if t.get("owner").and_then(J::as_str) != Some(tid)
-                        || t.get("revoked").and_then(J::as_bool) == Some(true)
-                    {
-                        continue;
-                    }
+            actor,
+            "account disabled and offboarded",
+        );
+        self.needed(&ch, "ending the tokens of the account", || {
+            for (id, t) in self.backend.list("auth_token")? {
+                if t.get("owner").and_then(J::as_str) != Some(tid)
+                    || t.get("revoked").and_then(J::as_bool) == Some(true)
+                {
+                    continue;
+                }
+                let mut p = Fields::new();
+                p.insert("revoked".into(), J::Bool(true));
+                if !self.backend.update("auth_token", &id, &p)? {
+                    continue;
+                }
+                // The access token of a connected application is counted with its grant below.
+                if t.get("oauth_grant").is_some() {
+                    continue;
+                }
+                if t.get("kind").and_then(J::as_str) == Some("agent") {
+                    agents += 1;
+                } else {
+                    sessions += 1;
+                }
+            }
+            // Connected applications: end each grant and forget its refresh tokens, or a refresh
+            // token would mint a new access token the day the account is enabled again.
+            for (gid, g) in self.backend.find("oauth_grant", "owner", &J::from(tid))? {
+                if g.get("revoked").and_then(J::as_bool) != Some(true) {
                     let mut p = Fields::new();
                     p.insert("revoked".into(), J::Bool(true));
-                    if !self.backend.update("auth_token", &id, &p)? {
-                        continue;
-                    }
-                    // The access token of a connected application is counted with its grant below.
-                    if t.get("oauth_grant").is_some() {
-                        continue;
-                    }
-                    if t.get("kind").and_then(J::as_str) == Some("agent") {
-                        agents += 1;
-                    } else {
-                        sessions += 1;
+                    p.insert("revoked_at".into(), J::from(self.now()));
+                    if self.backend.update("oauth_grant", &gid, &p)? {
+                        apps += 1;
                     }
                 }
-                // Connected applications: end each grant and forget its refresh tokens, or a refresh
-                // token would mint a new access token the day the account is enabled again.
-                for (gid, g) in self.backend.find("oauth_grant", "owner", &J::from(tid))? {
-                    if g.get("revoked").and_then(J::as_bool) != Some(true) {
-                        let mut p = Fields::new();
-                        p.insert("revoked".into(), J::Bool(true));
-                        p.insert("revoked_at".into(), J::from(self.now()));
-                        if self.backend.update("oauth_grant", &gid, &p)? {
-                            apps += 1;
-                        }
-                    }
-                    for (rid, _) in
-                        self.backend
-                            .find("oauth_refresh", "grant", &J::from(gid.as_str()))?
-                    {
-                        self.backend.delete("oauth_refresh", &rid)?;
-                    }
+                for (rid, _) in
+                    self.backend
+                        .find("oauth_refresh", "grant", &J::from(gid.as_str()))?
+                {
+                    self.backend.delete("oauth_refresh", &rid)?;
                 }
-                // A half-finished sign-in and a passkey proof given a moment ago.
-                for (id, _) in self.backend.find("auth_mfa_token", "user", &J::from(tid))? {
-                    if self.backend.delete("auth_mfa_token", &id)? {
-                        pending += 1;
-                    }
+            }
+            // A half-finished sign-in and a passkey proof given a moment ago.
+            for (id, _) in self.backend.find("auth_mfa_token", "user", &J::from(tid))? {
+                if self.backend.delete("auth_mfa_token", &id)? {
+                    pending += 1;
                 }
-                self.backend.kv_delete(&crate::passkey::proof_key(tid))?;
-                Ok(())
-            },
-        )?;
+            }
+            self.backend.kv_delete(&crate::passkey::proof_key(tid))?;
+            Ok(())
+        })?;
         // A lockout counter is not worth failing for: it expires by itself.
         let _ = self.backend.counter_reset(&Self::failure_key(&target));
         let mut detail = format!(

@@ -221,7 +221,9 @@ impl OAuth {
                 &grant_id,
             )
             .map_err(|e| {
-                if is_busy(&e) {
+                // The account lookup inside answers "unknown or disabled" for a refused read too:
+                // the fault noted says which it was.
+                if is_busy(&e) || fault::noted().is_some() {
                     give_back(storage_busy())
                 } else {
                     invalid_grant(&e)
@@ -306,9 +308,13 @@ impl OAuth {
             return Err(gone());
         }
         let now = self.now();
-        if grant.get("revoked").and_then(J::as_bool) == Some(true)
-            || grant.get("expires_at").and_then(J::as_u64).unwrap_or(0) <= now
-        {
+        if grant.get("revoked").and_then(J::as_bool) == Some(true) {
+            // A grant that was ended while the revocation of its access token was refused: this is
+            // where the client comes back, so the step is finished here (it is safe to repeat).
+            self.revoke_access_of(&grant)?;
+            return Err(gone());
+        }
+        if grant.get("expires_at").and_then(J::as_u64).unwrap_or(0) <= now {
             return Err(gone());
         }
         // A used token is being presented again: two parties hold it.
@@ -385,7 +391,7 @@ impl OAuth {
                 &grant_id,
             )
             .map_err(|e| {
-                if is_busy(&e) {
+                if is_busy(&e) || fault::noted().is_some() {
                     storage_busy()
                 } else {
                     invalid_grant(&e)
@@ -574,13 +580,20 @@ impl OAuth {
         if !already {
             self.audit_grant(owner, kind, &current, why);
         }
-        if let Some(a) = current.get("access_id").and_then(J::as_str) {
+        self.revoke_access_of(&current)?;
+        Ok(true)
+    }
+
+    /// Revoke the access token a grant names. Safe to repeat; a step the store refuses is tried
+    /// again and then reported (503), never skipped.
+    fn revoke_access_of(&self, grant: &Fields) -> Result<(), OAuthError> {
+        if let Some(a) = grant.get("access_id").and_then(J::as_str) {
             fault::patiently(TRIES, PAUSE, || {
                 fault::allow(|| self.tokens().try_revoke_token_id(a))
             })
             .map_err(|_| storage_busy())?;
         }
-        Ok(true)
+        Ok(())
     }
 
     fn audit_grant(&self, owner: &str, kind: &str, current: &Fields, why: &str) {

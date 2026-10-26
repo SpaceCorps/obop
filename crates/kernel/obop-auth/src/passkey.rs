@@ -6,7 +6,7 @@
 //! in `webauthn`; this file holds the rules around them.
 
 use crate::webauthn::{self as wa, b64url, b64url_decode, sha256};
-use crate::{Auth, hex, random_bytes, token_hash};
+use crate::{Auth, Change, hex, random_bytes, token_hash};
 use obop_commands::audit::rfc3339;
 use obop_commands::{
     ADMIN_GROUP, LoginOutcome, MfaError, PasskeyApi, Principal, PrincipalKind, Reauth, WebauthnCtx,
@@ -744,7 +744,25 @@ impl PasskeyApi for Auth {
         let name = person(p)?;
         let _g = self.mfa_guard()?;
         self.reauth(name, reauth)?;
-        let rec = self.own_passkey(name, id)?;
+        let op = format!("passkey_remove:{id}");
+        let rec = match self.own_passkey(name, id) {
+            Ok(r) => r,
+            // The repeat of a removal that could not end the other sessions finishes that (D74).
+            Err(MfaError::Invalid(m)) if m == "no such passkey" => {
+                let ch = Change::new(name, "passkey_remove", name, "passkey removed");
+                if let Some(n) = self.finish_owed(name, &op, &ch)? {
+                    self.event(
+                        name,
+                        "passkey_remove",
+                        name,
+                        &format!("removed; {n} other session(s) signed out (repeated)"),
+                    );
+                    return Ok(());
+                }
+                return Err(MfaError::Invalid(m));
+            }
+            Err(e) => return Err(e),
+        };
         let left = self.passkeys_of(name).len() - 1;
         let totp = self.mfa_enabled(name);
         let groups: Vec<String> = p.groups.iter().cloned().collect();
@@ -753,6 +771,9 @@ impl PasskeyApi for Auth {
                 "your administrator requires a second factor, and this is your last one: add another passkey or an authenticator app first".into(),
             ));
         }
+        let keep = token_hash(session);
+        // Written before the passkey goes: if ending the sessions is then refused, the repeat knows.
+        self.owe_revocation(name, &op, Some(&keep))?;
         self.backend
             .delete(PASSKEY_TABLE, id)
             .map_err(MfaError::Unavailable)?;
@@ -772,7 +793,14 @@ impl PasskeyApi for Auth {
             self.put(name, &patch)?;
         }
         // Like turning off the authenticator app: a stolen session must not outlive the factor.
-        let n = self.revoke_user_sessions(name, Some(&token_hash(session)))?;
+        let ch = Change::new(
+            name,
+            "passkey_remove",
+            name,
+            &format!("removed \"{}\"", rec["name"].as_str().unwrap_or("")),
+        );
+        let n = self.revoke_user_sessions(name, Some(&keep), &ch)?;
+        self.clear_owed(name);
         self.event(
             name,
             "passkey_remove",
@@ -917,10 +945,10 @@ impl PasskeyApi for Auth {
 impl Auth {
     /// The passkey `id` when it is the person's own.
     fn own_passkey(&self, name: &str, id: &str) -> Result<J, MfaError> {
+        // A refused lookup is the store's trouble, not "no such passkey".
         self.backend
             .get(PASSKEY_TABLE, id)
-            .ok()
-            .flatten()
+            .map_err(MfaError::Unavailable)?
             .map(J::Object)
             .filter(|r| r["user"].as_str() == Some(name))
             .ok_or_else(|| MfaError::Invalid("no such passkey".into()))

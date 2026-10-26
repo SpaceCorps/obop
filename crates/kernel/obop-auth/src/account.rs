@@ -2,7 +2,7 @@
 //! view of the accounts (B7, D59). Every change that matters is written to the security event
 //! log (`security_event`) with who did it; nothing logged or returned is a secret.
 
-use crate::{Auth, hex, random_bytes, str_list, token_hash};
+use crate::{Auth, Change, hex, random_bytes, str_list, token_hash};
 use obop_commands::audit::rfc3339;
 use obop_commands::{ADMIN_GROUP, MfaError, Principal, PrincipalKind};
 use obop_storage::Fields;
@@ -58,15 +58,29 @@ impl Auth {
         &self,
         name: &str,
         keep: Option<&str>,
+        ch: &Change,
+    ) -> Result<usize, MfaError> {
+        self.revoke_sessions_until(name, keep, None, ch)
+    }
+
+    /// As [`Auth::revoke_user_sessions`], limited to the sessions that began at `until` or
+    /// before: finishing a revocation later must not sign out the sessions made since.
+    fn revoke_sessions_until(
+        &self,
+        name: &str,
+        keep: Option<&str>,
+        until: Option<u64>,
+        ch: &Change,
     ) -> Result<usize, MfaError> {
         let mut n = 0;
-        self.needed(name, "sessions_revoked", "ending the sessions", || {
+        self.needed(ch, "ending the sessions", || {
             for (id, t) in self.backend.list("auth_token")? {
                 let t = J::Object(t);
                 if t["owner"].as_str() == Some(name)
                     && t["kind"].as_str() == Some("user")
                     && t["revoked"].as_bool() != Some(true)
                     && keep != Some(id.as_str())
+                    && until.is_none_or(|u| t["created_at"].as_u64().is_none_or(|c| c <= u))
                 {
                     let mut p = Fields::new();
                     p.insert("revoked".into(), J::Bool(true));
@@ -78,6 +92,55 @@ impl Auth {
             Ok(())
         })?;
         Ok(n)
+    }
+
+    /// Write down, before the change is made, that its sessions are owed a revocation (`op`
+    /// names the change; `keep` is the session that made it and stays). If the change commits
+    /// and ending the sessions is then refused for long enough, the repeat of the same request
+    /// finds this and finishes the work (D74); without it the repeat would meet "two-factor is
+    /// not on" or "no such passkey" and the sessions of a stolen password would live on.
+    pub(crate) fn owe_revocation(
+        &self,
+        name: &str,
+        op: &str,
+        keep: Option<&str>,
+    ) -> Result<(), MfaError> {
+        let mut p = Fields::new();
+        p.insert(
+            "sessions_owed".into(),
+            json!({"op": op, "keep": keep, "at": self.now()}),
+        );
+        self.put(name, &p)
+    }
+
+    /// The revocation was done: forget it is owed. Best effort: a note left behind only makes the
+    /// next repeat of the same change end the sessions that began before it, once more.
+    pub(crate) fn clear_owed(&self, name: &str) {
+        let mut p = Fields::new();
+        p.insert("sessions_owed".into(), J::Null);
+        let _ = obop_storage::fault::patiently(3, std::time::Duration::from_millis(100), || {
+            obop_storage::fault::bookkeeping(|| self.backend.update("auth_user", name, &p))
+        });
+    }
+
+    /// A repeat of the change `op` that already happened: if it left a revocation owed, do it
+    /// now and say how many sessions ended (`Some`); else `None`, and the caller answers as it did.
+    pub(crate) fn finish_owed(
+        &self,
+        name: &str,
+        op: &str,
+        ch: &Change,
+    ) -> Result<Option<usize>, MfaError> {
+        let u = self.user_record(name)?;
+        let owed = &u["sessions_owed"];
+        if owed["op"].as_str() != Some(op) {
+            return Ok(None);
+        }
+        let keep = owed["keep"].as_str().map(String::from);
+        let until = owed["at"].as_u64();
+        let n = self.revoke_sessions_until(name, keep.as_deref(), until, ch)?;
+        self.clear_owed(name);
+        Ok(Some(n))
     }
 
     /// Remove tokens that ended a day ago or more, and spent second-step tokens. Runs at most
@@ -159,7 +222,8 @@ impl Auth {
     ) -> Result<usize, MfaError> {
         let name = person(p)?;
         let h = token_hash(session);
-        let n = self.revoke_user_sessions(name, keep_current.then_some(h.as_str()))?;
+        let ch = Change::new(name, "sessions_revoked", name, "sessions signed out");
+        let n = self.revoke_user_sessions(name, keep_current.then_some(h.as_str()), &ch)?;
         self.event(
             name,
             "sessions_revoked",
@@ -222,19 +286,17 @@ impl Auth {
         patch.insert("password_changed_at".into(), J::from(self.now()));
         self.put(name, &patch)?;
         let h = token_hash(session);
-        let n = self.revoke_user_sessions(name, Some(&h))?;
+        let ch = Change::new(name, "password_change", name, "password changed");
+        let n = self.revoke_user_sessions(name, Some(&h), &ch)?;
         // The session that proved the old password may now do everything its person may, unless
         // two-factor enrolment is still owed.
         let groups = str_list(&u["groups"]);
         let still_limited = self.enrolment_required_for(&groups) && !self.has_second_factor(name);
         let mut lift = Fields::new();
         lift.insert("limited".into(), J::Bool(still_limited));
-        self.needed(
-            name,
-            "password_change",
-            "lifting the limit of this session",
-            || self.backend.update("auth_token", &h, &lift),
-        )?;
+        self.needed(&ch, "lifting the limit of this session", || {
+            self.backend.update("auth_token", &h, &lift)
+        })?;
         self.event(
             name,
             "password_change",
@@ -355,7 +417,8 @@ impl Auth {
         }
         self.put(&target, &patch)?;
         if disabled {
-            let n = self.revoke_user_sessions(&target, None)?;
+            let ch = Change::new(&target, "user_disable", actor, "account disabled");
+            let n = self.revoke_user_sessions(&target, None, &ch)?;
             self.event(
                 &target,
                 "user_disable",
@@ -402,7 +465,8 @@ impl Auth {
         patch.insert("password_hash".into(), J::from(hash));
         patch.insert("must_change_password".into(), J::Bool(true));
         self.put(&target, &patch)?;
-        let n = self.revoke_user_sessions(&target, None)?;
+        let ch = Change::new(&target, "password_reset", actor, "temporary password set");
+        let n = self.revoke_user_sessions(&target, None, &ch)?;
         // A person locked out by wrong guesses may need this to get back in at all.
         let _ = self.backend.counter_reset(&Self::failure_key(&target));
         self.event(

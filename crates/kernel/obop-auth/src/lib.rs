@@ -311,28 +311,52 @@ impl Auth {
     /// is left to do each time; `f` keeps its own tally.
     pub(crate) fn needed<T>(
         &self,
-        user: &str,
-        kind: &str,
+        ch: &Change,
         what: &str,
         mut f: impl FnMut() -> Result<T, String>,
     ) -> Result<T, MfaError> {
         obop_storage::fault::patiently(5, std::time::Duration::from_millis(150), || {
             obop_storage::fault::allow(&mut f)
         })
-        .map_err(|e| self.incomplete(user, kind, what, e))
+        .map_err(|e| self.incomplete(ch, what, e))
     }
 
-    /// The request is a partial one: mark it, say so in the security log (the entry of the change
-    /// that did commit must not be lost) and return the error that ends it.
-    pub(crate) fn incomplete(&self, user: &str, kind: &str, what: &str, e: String) -> MfaError {
+    /// The request is a partial one: mark it, say so in the security log and return the error that
+    /// ends it. The entry is the one of the change that did commit (its own kind, its own actor
+    /// and what it did), with what is missing added, so a partial failure does not replace it.
+    pub(crate) fn incomplete(&self, ch: &Change, what: &str, e: String) -> MfaError {
         obop_storage::fault::mark_partial();
         self.event(
-            user,
-            kind,
-            "system",
-            &format!("INCOMPLETE: {what} was refused by the store ({e}); repeat the request"),
+            &ch.user,
+            ch.kind,
+            &ch.actor,
+            &format!(
+                "{}; INCOMPLETE: {what} was refused by the store ({e}); repeat the request",
+                ch.detail
+            ),
         );
         MfaError::Unavailable(e)
+    }
+}
+
+/// A change of an account that has committed (or is about to), as the security log names it: who
+/// did what to whom. The steps that follow it and may be refused carry it, so that the entry of a
+/// partial failure is the entry of the change, not a stranger's (D74).
+pub(crate) struct Change {
+    pub user: String,
+    pub kind: &'static str,
+    pub actor: String,
+    pub detail: String,
+}
+
+impl Change {
+    pub(crate) fn new(user: &str, kind: &'static str, actor: &str, detail: &str) -> Self {
+        Self {
+            user: user.into(),
+            kind,
+            actor: actor.into(),
+            detail: detail.into(),
+        }
     }
 }
 

@@ -654,11 +654,28 @@ fn post_blocking(
         Err(r) => return *r,
     };
     let reply = obop_mcp::handle_payload(&s.dispatcher, p, &mut entry.state, &payload);
+    // A tool call that met a refusal of the store is a tool error with HTTP 200 in the protocol.
+    // The 503 layer turns that into the answer REST gives, but only when it knows a step failed
+    // after a change committed: say so, so an agent is told "part of it was applied", never just
+    // "try again" for a change that was made (D74).
+    if let Reply::Json(j) = &reply
+        && refused_by_the_store(j)
+    {
+        obop_storage::fault::mark_partial();
+    }
     s.mcp.finish(entry, token);
     match reply {
         Reply::Accepted => StatusCode::ACCEPTED.into_response(),
         Reply::Json(j) => json_response(status_for(&j), &j),
     }
+}
+
+/// Is this reply a tool result whose error is the store's refusal (`storage_busy: ...`)?
+fn refused_by_the_store(j: &J) -> bool {
+    j["result"]["isError"] == true
+        && j["result"]["structuredContent"]["error"]
+            .as_str()
+            .is_some_and(obop_storage::fault::Fault::is_transient)
 }
 
 /// HTTP status of a reply: protocol-level rejections of the request itself are 400, everything

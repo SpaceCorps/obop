@@ -3,7 +3,7 @@
 //! (see `seal`); recovery codes are stored as SHA-256 hashes of 80-bit random codes; the event
 //! log (`security_event`) never holds a code or a secret.
 
-use crate::{Auth, hex, now_system, random_bytes, str_list, token_hash};
+use crate::{Auth, Change, hex, now_system, random_bytes, str_list, token_hash};
 use crate::{seal, totp};
 use obop_commands::{ADMIN_GROUP, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind};
 use obop_keys::KeyRing;
@@ -456,7 +456,19 @@ impl Auth {
         let name = person(p)?;
         let _g = self.mfa_guard()?;
         let u = self.user_record(name)?;
+        let ch = Change::new(name, "disable", name, "turned off by the user");
         if u["mfa_enabled"].as_bool() != Some(true) {
+            // The repeat of a request that turned it off and could not end the other sessions
+            // finishes that (D74); only a person who never had it on is told it is not on.
+            if let Some(n) = self.finish_owed(name, "mfa_disable", &ch)? {
+                self.event(
+                    name,
+                    "disable",
+                    name,
+                    &format!("turned off by the user; {n} other session(s) signed out (repeated)"),
+                );
+                return Ok(());
+            }
             return Err(MfaError::Invalid("two-factor is not on".into()));
         }
         if !self.password_ok(name, password) {
@@ -464,9 +476,12 @@ impl Auth {
             return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;
-        self.clear_factor(name)?;
         let keep = session.map(token_hash);
-        let n = self.revoke_user_sessions(name, keep.as_deref())?;
+        // Written before the factor goes: if ending the sessions is then refused, the repeat knows.
+        self.owe_revocation(name, "mfa_disable", keep.as_deref())?;
+        self.clear_factor(name)?;
+        let n = self.revoke_user_sessions(name, keep.as_deref(), &ch)?;
+        self.clear_owed(name);
         self.event(
             name,
             "disable",
@@ -479,8 +494,8 @@ impl Auth {
     // ---- operator -----------------------------------------------------------------------
 
     /// Revoke every session of a user (not agent tokens: those are separate credentials).
-    fn revoke_sessions(&self, name: &str) -> Result<usize, MfaError> {
-        self.revoke_user_sessions(name, None)
+    fn revoke_sessions(&self, name: &str, ch: &Change) -> Result<usize, MfaError> {
+        self.revoke_user_sessions(name, None, ch)
     }
 
     fn clear_factor(&self, name: &str) -> Result<(), MfaError> {
@@ -507,7 +522,9 @@ impl Auth {
         })?;
         let passkeys = self.clear_passkeys(&name).map_err(|e| format!("{e:?}"))?;
         self.clear_factor(&name).map_err(|e| format!("{e:?}"))?;
-        self.revoke_sessions(&name).map_err(|e| format!("{e:?}"))?;
+        let ch = Change::new(&name, "reset", "operator", "reset from the command line");
+        self.revoke_sessions(&name, &ch)
+            .map_err(|e| format!("{e:?}"))?;
         self.event(
             &name,
             "reset",
@@ -679,17 +696,30 @@ impl MfaApi for Auth {
         }
         let _g = self.mfa_guard()?;
         let u = self.known_user(&target)?;
+        let ch = Change::new(&target, "reset", actor, "reset by an administrator");
         if u["mfa_enabled"].as_bool() != Some(true)
             && !u["totp_pending"].is_string()
             && self.passkeys_of(&target).is_empty()
         {
+            // The repeat of a reset that could not end the person's sessions finishes that (D74).
+            if let Some(n) = self.finish_owed(&target, "mfa_reset", &ch)? {
+                self.event(
+                    &target,
+                    "reset",
+                    actor,
+                    &format!("reset by an administrator; {n} session(s) signed out (repeated)"),
+                );
+                return Ok(());
+            }
             return Err(MfaError::Invalid(format!(
                 "{target} has no two-factor to reset"
             )));
         }
+        self.owe_revocation(&target, "mfa_reset", None)?;
         let passkeys = self.clear_passkeys(&target)?;
         self.clear_factor(&target)?;
-        self.revoke_sessions(&target)?;
+        self.revoke_sessions(&target, &ch)?;
+        self.clear_owed(&target);
         self.event(
             &target,
             "reset",

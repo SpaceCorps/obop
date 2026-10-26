@@ -950,8 +950,30 @@ impl Dispatcher {
                 input = i;
             }
         }
-        self.plans.remove(self.shared.get(), plan_id);
-        self.run(&c, &plan.principal, vault, input, pre)
+        // Taken out first, so it runs once; if it is still there the plan would run again.
+        self.plans
+            .remove(self.shared.get(), plan_id)
+            .map_err(CallError::Handler)?;
+        let result = self.run(&c, &plan.principal, vault, input, pre);
+        // The store refused before the call changed anything: the plan goes back, or the
+        // approver's retry (the 503 says to retry) would meet "not found" and the proposal would
+        // be lost (D74). After a change had committed it stays gone: it ran.
+        if let Err(CallError::Handler(m)) = &result
+            && obop_storage::fault::Fault::is_transient(m)
+            && !obop_storage::fault::state().wrote
+        {
+            // The approver's whole proposal rests on this write: tried for two seconds.
+            let put_back =
+                obop_storage::fault::patiently(10, std::time::Duration::from_millis(200), || {
+                    obop_storage::fault::bookkeeping(|| {
+                        self.plans.put(self.shared.get(), plan_id, &plan)
+                    })
+                });
+            if put_back.is_err() {
+                eprintln!("a plan could not be put back after a refusal of the store: {plan_id}");
+            }
+        }
+        result
     }
 
     fn run(

@@ -61,14 +61,10 @@ pub fn record_event(
     // Sortable by time, unique by suffix.
     let id = format!("{at:012}-{}", hex6());
     // The entry is about a change that has usually committed already: a store that is busy for a
-    // moment (D74) is waited out a little, unless this request has been refused before (then the
-    // guard refuses the write anyway and waiting would only delay the 503).
-    let tries = if obop_storage::fault::noted().is_some() {
-        1
-    } else {
-        4
-    };
-    let r = obop_storage::fault::patiently(tries, std::time::Duration::from_millis(150), || {
+    // moment (D74) is waited out a little, four tries in all. Also when this request was refused
+    // before: the guard lets the log through (an entry of a change that committed must not be
+    // lost), and that is exactly when the pool is full.
+    let r = obop_storage::fault::patiently(4, std::time::Duration::from_millis(150), || {
         backend.insert(EVENT_TABLE, &id, &f)
     });
     if let Err(e) = r {
@@ -90,6 +86,37 @@ mod tests {
         record_event(&*db, 30, "ada", "login", "ada", "note");
         assert_eq!(flaky.refused(), 2);
         assert_eq!(db.list(EVENT_TABLE).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_event_after_a_refused_call_of_the_same_request_is_also_tried_four_times() {
+        use obop_storage::fault;
+        use obop_storage::testing::{Flaky, Mode};
+        // The entry of a change that committed is written right after the call that was refused.
+        // The log is exempt from the guard, so waiting is useful there too.
+        let (flaky, db) = Flaky::memory();
+        fault::begin_request(Default::default());
+        flaky.refuse_model("x", Mode::Reads);
+        assert!(
+            db.get("x", "1").is_err(),
+            "a refused read: the fault is noted"
+        );
+        flaky.allow_models();
+        flaky.refuse_next(2);
+        record_event(
+            &*db,
+            31,
+            "ada",
+            "user_offboard",
+            "root",
+            "INCOMPLETE: a step",
+        );
+        fault::end_request();
+        assert_eq!(
+            db.list(EVENT_TABLE).unwrap().len(),
+            1,
+            "written on the third try"
+        );
     }
 
     #[test]

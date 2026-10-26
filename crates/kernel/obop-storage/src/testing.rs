@@ -32,6 +32,7 @@ pub struct Flaky {
     after_write: AtomicU8,
     after_budget: AtomicI64,
     apply_budget: AtomicI64,
+    apply_skip: AtomicI64,
 }
 
 impl Flaky {
@@ -45,6 +46,7 @@ impl Flaky {
             after_write: AtomicU8::new(0),
             after_budget: AtomicI64::new(0),
             apply_budget: AtomicI64::new(0),
+            apply_skip: AtomicI64::new(0),
         })
     }
 
@@ -86,6 +88,10 @@ impl Flaky {
     pub fn allow_models(&self) {
         *self.target.lock().unwrap() = None;
         self.after_write.store(0, SeqCst);
+        self.after_budget.store(0, SeqCst);
+        self.next.store(0, SeqCst);
+        self.apply_budget.store(0, SeqCst);
+        self.apply_skip.store(0, SeqCst);
     }
 
     /// From the next successful change on, refuse every read: the pool fills up at the very
@@ -106,11 +112,24 @@ impl Flaky {
         self.apply_budget.store(n, SeqCst);
     }
 
+    /// Let `skip` atomic batches through, then refuse the one after them (and nothing else): the
+    /// request that committed `skip` batches and met a refusal at the next.
+    pub fn refuse_nth_apply(&self, skip: i64) {
+        self.apply_skip.store(skip, SeqCst);
+        self.apply_budget.store(1, SeqCst);
+    }
+
     fn gate_apply(&self) -> Result<()> {
-        let hit = self
-            .apply_budget
+        // Batches to let through before the budget starts to refuse.
+        let skipped = self
+            .apply_skip
             .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
             .is_ok();
+        let hit = !skipped
+            && self
+                .apply_budget
+                .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
+                .is_ok();
         if hit {
             self.refused.fetch_add(1, SeqCst);
             fault::note(Fault::Busy);
