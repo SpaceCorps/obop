@@ -114,6 +114,15 @@ fn list(items: &[String]) -> String {
     }
 }
 
+/// What ending the tokens of an account ended.
+#[derive(Default)]
+pub(crate) struct Tally {
+    pub sessions: usize,
+    pub agents: usize,
+    pub apps: usize,
+    pub pending: usize,
+}
+
 impl Auth {
     /// Every group in `groups` must be registered (`known`), except those the person already
     /// holds: a group of a module that was removed can stay, it can only not be added.
@@ -363,7 +372,13 @@ impl Auth {
         patch.insert("offboarded".into(), J::Bool(true));
         patch.insert("offboarded_at".into(), J::from(self.now()));
         patch.insert("offboarded_by".into(), J::from(actor));
-        self.put(&target, &patch)?;
+        // Written before the account goes: if ending its tokens is then refused, enabling the
+        // account later finishes that first, so no token the offboarding missed comes back.
+        self.owe_revocation(&target, "user_offboard", None)?;
+        if let Err(e) = self.put(&target, &patch) {
+            self.clear_owed(&target);
+            return Err(e);
+        }
 
         // Every token of the account: sessions, agent tokens, and the access tokens of connected
         // applications. They are marked revoked, so enabling the account later does not bring
@@ -372,64 +387,22 @@ impl Auth {
         // The account is already disabled and what follows is a list of things to end, each read
         // again when the step runs again: a refused list or write is tried again, and if it is
         // still refused the offboarding fails as a partial request (503) and says so in the log,
-        // never "0 sessions ended". Offboarding the same account again finishes the rest.
-        let (mut sessions, mut agents, mut apps, mut pending) = (0usize, 0usize, 0usize, 0usize);
-        let tid = target.as_str();
+        // never "0 sessions ended". Offboarding the same account again finishes the rest, and so
+        // does enabling the account (a note says what is owed, see `settle_before_enable`).
         let ch = Change::new(
-            tid,
+            &target,
             "user_offboard",
             actor,
             "account disabled and offboarded",
         );
-        self.needed(&ch, "ending the tokens of the account", || {
-            for (id, t) in self.backend.list("auth_token")? {
-                if t.get("owner").and_then(J::as_str) != Some(tid)
-                    || t.get("revoked").and_then(J::as_bool) == Some(true)
-                {
-                    continue;
-                }
-                let mut p = Fields::new();
-                p.insert("revoked".into(), J::Bool(true));
-                if !self.backend.update("auth_token", &id, &p)? {
-                    continue;
-                }
-                // The access token of a connected application is counted with its grant below.
-                if t.get("oauth_grant").is_some() {
-                    continue;
-                }
-                if t.get("kind").and_then(J::as_str) == Some("agent") {
-                    agents += 1;
-                } else {
-                    sessions += 1;
-                }
-            }
-            // Connected applications: end each grant and forget its refresh tokens, or a refresh
-            // token would mint a new access token the day the account is enabled again.
-            for (gid, g) in self.backend.find("oauth_grant", "owner", &J::from(tid))? {
-                if g.get("revoked").and_then(J::as_bool) != Some(true) {
-                    let mut p = Fields::new();
-                    p.insert("revoked".into(), J::Bool(true));
-                    p.insert("revoked_at".into(), J::from(self.now()));
-                    if self.backend.update("oauth_grant", &gid, &p)? {
-                        apps += 1;
-                    }
-                }
-                for (rid, _) in
-                    self.backend
-                        .find("oauth_refresh", "grant", &J::from(gid.as_str()))?
-                {
-                    self.backend.delete("oauth_refresh", &rid)?;
-                }
-            }
-            // A half-finished sign-in and a passkey proof given a moment ago.
-            for (id, _) in self.backend.find("auth_mfa_token", "user", &J::from(tid))? {
-                if self.backend.delete("auth_mfa_token", &id)? {
-                    pending += 1;
-                }
-            }
-            self.backend.kv_delete(&crate::passkey::proof_key(tid))?;
-            Ok(())
-        })?;
+        let tally = self.end_account_tokens(&target, &ch)?;
+        self.clear_owed(&target);
+        let Tally {
+            sessions,
+            agents,
+            apps,
+            pending,
+        } = tally;
         // A lockout counter is not worth failing for: it expires by itself.
         let _ = self.backend.counter_reset(&Self::failure_key(&target));
         let mut detail = format!(
@@ -448,6 +421,83 @@ impl Auth {
             "revoked_apps": apps,
             "note": note,
         }))
+    }
+
+    /// End every token of an account for good: sessions, agent tokens, the access tokens of its
+    /// connected applications, the applications' grants and refresh tokens, its half-finished
+    /// sign-ins and its passkey proof. Each step reads again what is left to do, so it is safe to
+    /// run again; a refusal of the store is tried again and then fails as a partial request.
+    pub(crate) fn end_account_tokens(&self, tid: &str, ch: &Change) -> Result<Tally, MfaError> {
+        let mut t = Tally::default();
+        self.needed(ch, "ending the tokens of the account", || {
+            for (id, tok) in self.backend.list("auth_token")? {
+                if tok.get("owner").and_then(J::as_str) != Some(tid)
+                    || tok.get("revoked").and_then(J::as_bool) == Some(true)
+                {
+                    continue;
+                }
+                let mut p = Fields::new();
+                p.insert("revoked".into(), J::Bool(true));
+                if !self.backend.update("auth_token", &id, &p)? {
+                    continue;
+                }
+                // The access token of a connected application is counted with its grant below.
+                if tok.get("oauth_grant").is_some() {
+                    continue;
+                }
+                if tok.get("kind").and_then(J::as_str) == Some("agent") {
+                    t.agents += 1;
+                } else {
+                    t.sessions += 1;
+                }
+            }
+            // Connected applications: end each grant and forget its refresh tokens, or a refresh
+            // token would mint a new access token the day the account is enabled again.
+            for (gid, g) in self.backend.find("oauth_grant", "owner", &J::from(tid))? {
+                if g.get("revoked").and_then(J::as_bool) != Some(true) {
+                    let mut p = Fields::new();
+                    p.insert("revoked".into(), J::Bool(true));
+                    p.insert("revoked_at".into(), J::from(self.now()));
+                    if self.backend.update("oauth_grant", &gid, &p)? {
+                        t.apps += 1;
+                    }
+                }
+                for (rid, _) in
+                    self.backend
+                        .find("oauth_refresh", "grant", &J::from(gid.as_str()))?
+                {
+                    self.backend.delete("oauth_refresh", &rid)?;
+                }
+            }
+            // A half-finished sign-in and a passkey proof given a moment ago.
+            for (id, _) in self.backend.find("auth_mfa_token", "user", &J::from(tid))? {
+                if self.backend.delete("auth_mfa_token", &id)? {
+                    t.pending += 1;
+                }
+            }
+            self.backend.kv_delete(&crate::passkey::proof_key(tid))?;
+            Ok(())
+        })?;
+        Ok(t)
+    }
+
+    /// Before an account is enabled: finish what a disable or an offboarding of it left undone
+    /// because the store refused (a note on the account says so). Otherwise enabling would bring
+    /// back the sessions, agent tokens and connected apps that were meant to end. A refusal here
+    /// refuses the enabling.
+    pub(crate) fn settle_before_enable(&self, name: &str, ch: &Change) -> Result<(), MfaError> {
+        let u = self.user_record(name)?;
+        match u["sessions_owed"]["op"].as_str() {
+            Some("user_disable") => {
+                self.finish_owed(name, "user_disable", ch)?;
+            }
+            Some("user_offboard") => {
+                self.end_account_tokens(name, ch)?;
+                self.clear_owed(name);
+            }
+            _ => {}
+        }
+        Ok(())
     }
 
     // ---- the operator's import ------------------------------------------------------------

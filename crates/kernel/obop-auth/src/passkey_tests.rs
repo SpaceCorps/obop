@@ -639,6 +639,100 @@ fn removing_a_passkey_that_could_not_end_the_other_sessions_is_finished_by_repea
 }
 
 #[test]
+fn removing_a_passkey_with_a_refusal_at_any_call_never_panics_and_the_repeat_leaves_nothing_behind()
+{
+    use crate::admin_tests::{flaky_rig, request};
+    // A refused list of the passkeys made `len() - 1` underflow (a panic: the client got a dropped
+    // connection), and a refusal between the removal and the user's record left the recovery codes
+    // of a factor that is gone. Each call of the removal is refused in turn.
+    let mut reached = 0;
+    for skip in 0..60 {
+        let (r, flaky) = flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        let (mine, p) = session(&r.a, "ada");
+        let (stolen, _) = session(&r.a, "ada");
+        let mut auth = SoftAuthenticator::es256();
+        add(&r, &mine, &p, &mut auth, "k").unwrap();
+        let id = r.a.list(&p, &ctx()).unwrap()["passkeys"][0]["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let prove = |r: &Rig, auth: &mut SoftAuthenticator| {
+            let opts = r.a.proof_options(&p, &ctx()).unwrap();
+            r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
+        };
+        prove(&r, &mut auth);
+        flaky.refuse_call_after(skip);
+        let (first, out) = request(|| r.a.remove(&p, &mine, &id, &pw()));
+        flaky.allow_models();
+        if first.is_ok() {
+            continue;
+        }
+        reached += 1;
+        // Before anything changed a refused lookup may surface as another error (the layer says
+        // 503 for it, a fault was noted); once the removal committed it is the store's.
+        assert!(
+            matches!(first, Err(MfaError::Unavailable(_))) || (!out.wrote && first.is_err()),
+            "skip {skip}: {first:?} {out:?}"
+        );
+        // The repeat (a proof first, if the passkey is still there) finishes whatever is left.
+        if r.a.passkey_count("ada") > 0 {
+            prove(&r, &mut auth);
+        }
+        let (second, _) = request(|| r.a.remove(&p, &mine, &id, &pw()));
+        assert!(
+            second.is_ok() || r.a.passkey_count("ada") == 0 && !out.wrote,
+            "skip {skip}: {second:?}"
+        );
+        assert_eq!(r.a.passkey_count("ada"), 0, "skip {skip}");
+        assert!(
+            r.a.resolve(&stolen).is_none(),
+            "skip {skip}: the other session is still live"
+        );
+        assert!(r.a.resolve(&mine).is_some());
+        let u = r.b.get("auth_user", "ada").unwrap().unwrap();
+        assert!(
+            u["recovery"].is_null(),
+            "skip {skip}: recovery codes of a factor that is gone"
+        );
+        assert_eq!(u["passkey_login"], false, "skip {skip}");
+    }
+    assert!(reached >= 4, "the sweep reached the removal: {reached}");
+}
+
+#[test]
+fn an_administrators_reset_never_answers_done_while_the_passkey_list_cannot_be_read() {
+    use crate::admin_tests::{flaky_rig, request};
+    use obop_storage::testing::Mode;
+    // A refused lookup of the passkeys was read as "none", and the repeat of an earlier partial
+    // reset took the finishing branch on its note: the sessions went, the passkey stayed, and the
+    // administrator was told it was done.
+    let (r, flaky) = flaky_rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    user_with(&r.a, "root", &[ADMIN_GROUP]);
+    let (_, root) = session(&r.a, "root");
+    let (mine, p) = session(&r.a, "ada");
+    let (stolen, _) = session(&r.a, "ada");
+    add(&r, &mine, &p, &mut SoftAuthenticator::es256(), "k").unwrap();
+    // An earlier reset left its note (it could not go on).
+    r.a.owe_revocation("ada", "mfa_reset", None).unwrap();
+    flaky.refuse_model(crate::passkey::PASSKEY_TABLE, Mode::Reads);
+    let (done, _) = request(|| r.a.admin_reset(&root, "ada"));
+    flaky.allow_models();
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert_eq!(r.a.passkey_count("ada"), 1, "the passkey is still there");
+    assert!(
+        r.a.resolve(&stolen).is_some(),
+        "and nothing was ended behind a refusal"
+    );
+    // With the list readable the reset does its work.
+    let (done, _) = request(|| r.a.admin_reset(&root, "ada"));
+    done.unwrap();
+    assert_eq!(r.a.passkey_count("ada"), 0);
+    assert!(r.a.resolve(&stolen).is_none());
+}
+
+#[test]
 fn removing_the_last_passkey_of_an_ordinary_user_ends_their_two_factor_state() {
     let r = rig();
     user_with(&r.a, "ada", &["base.user"]);

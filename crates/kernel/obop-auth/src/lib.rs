@@ -331,8 +331,8 @@ impl Auth {
             ch.kind,
             &ch.actor,
             &format!(
-                "{}; INCOMPLETE: {what} was refused by the store ({e}); repeat the request",
-                ch.detail
+                "{}; INCOMPLETE: {what} was refused by the store ({e}); {}",
+                ch.detail, ch.then
             ),
         );
         MfaError::Unavailable(e)
@@ -347,6 +347,8 @@ pub(crate) struct Change {
     pub kind: &'static str,
     pub actor: String,
     pub detail: String,
+    /// What to do about it if a step is missing (the log says so).
+    pub then: &'static str,
 }
 
 impl Change {
@@ -356,7 +358,14 @@ impl Change {
             kind,
             actor: actor.into(),
             detail: detail.into(),
+            then: "repeat the request",
         }
+    }
+
+    /// For a change a repeat cannot finish (it needs what the change replaced): say what can.
+    pub(crate) fn then(mut self, what: &'static str) -> Self {
+        self.then = what;
+        self
     }
 }
 

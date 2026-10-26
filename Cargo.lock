@@ -990,6 +990,7 @@ version = "0.2.0"
 dependencies = [
  "obop-commands",
  "obop-registry",
+ "obop-storage",
  "obop-types",
  "sales",
 ]

@@ -11,7 +11,7 @@ use obop_commands::audit::rfc3339;
 use obop_commands::{
     ADMIN_GROUP, LoginOutcome, MfaError, PasskeyApi, Principal, PrincipalKind, Reauth, WebauthnCtx,
 };
-use obop_storage::Fields;
+use obop_storage::{Fields, Op};
 use serde_json::{Value as J, json};
 
 pub const PASSKEY_TABLE: &str = "auth_passkey";
@@ -89,6 +89,18 @@ impl Auth {
             .into_iter()
             .map(|(k, f)| (k, J::Object(f)))
             .collect()
+    }
+
+    /// The passkeys of a person, with a lookup that reports a refusal of the store: for the places
+    /// that decide something from the list, where "none" read from a refused lookup would be wrong.
+    pub(crate) fn passkeys_checked(&self, name: &str) -> Result<Vec<(String, J)>, MfaError> {
+        Ok(self
+            .backend
+            .find(PASSKEY_TABLE, "user", &J::from(name))
+            .map_err(MfaError::Unavailable)?
+            .into_iter()
+            .map(|(k, f)| (k, J::Object(f)))
+            .collect())
     }
 
     pub fn passkey_count(&self, name: &str) -> usize {
@@ -763,8 +775,11 @@ impl PasskeyApi for Auth {
             }
             Err(e) => return Err(e),
         };
-        let left = self.passkeys_of(name).len() - 1;
-        let totp = self.mfa_enabled(name);
+        // What is left is read with a lookup that reports a refusal: a refused list is not "none"
+        // (it made `len() - 1` underflow, and a person with other factors lose their recovery codes).
+        let all = self.passkeys_checked(name)?;
+        let left = all.len().saturating_sub(1);
+        let totp = self.settled(|| self.mfa_enabled(name))?;
         let groups: Vec<String> = p.groups.iter().cloned().collect();
         if left == 0 && !totp && self.enrolment_required_for(&groups) {
             return Err(MfaError::Invalid(
@@ -772,16 +787,10 @@ impl PasskeyApi for Auth {
             ));
         }
         let keep = token_hash(session);
-        // Written before the passkey goes: if ending the sessions is then refused, the repeat knows.
-        self.owe_revocation(name, &op, Some(&keep))?;
-        self.backend
-            .delete(PASSKEY_TABLE, id)
-            .map_err(MfaError::Unavailable)?;
         let mut patch = Fields::new();
-        if !self
-            .passkeys_of(name)
+        if !all
             .iter()
-            .any(|(_, r)| r["user_verified"] == true)
+            .any(|(k, r)| k != id && r["user_verified"] == true)
         {
             patch.insert("passkey_login".into(), J::Bool(false));
         }
@@ -789,9 +798,26 @@ impl PasskeyApi for Auth {
             // No second factor left, so recovery codes protect nothing.
             patch.insert("recovery".into(), J::Null);
         }
-        if !patch.is_empty() {
-            self.put(name, &patch)?;
-        }
+        // What the repeat needs to finish the work goes into the same atomic batch as the removal:
+        // the passkey, the user's record and the note that its other sessions are owed an end are
+        // one change, so none of them can be missing (D74).
+        patch.insert(
+            "sessions_owed".into(),
+            json!({"op": op, "keep": keep, "at": self.now()}),
+        );
+        self.backend
+            .apply(&[
+                Op::Delete {
+                    model: PASSKEY_TABLE.into(),
+                    id: id.into(),
+                },
+                Op::Merge {
+                    model: "auth_user".into(),
+                    id: name.into(),
+                    patch,
+                },
+            ])
+            .map_err(MfaError::Unavailable)?;
         // Like turning off the authenticator app: a stolen session must not outlive the factor.
         let ch = Change::new(
             name,

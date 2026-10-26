@@ -110,7 +110,9 @@ impl Auth {
             "sessions_owed".into(),
             json!({"op": op, "keep": keep, "at": self.now()}),
         );
-        self.put(name, &p)
+        // Not a change of the request: if the change it announces is then refused, nothing was
+        // changed and the answer says so (it was answered "partial" for a note alone).
+        obop_storage::fault::uncounted(|| self.put(name, &p))
     }
 
     /// The revocation was done: forget it is owed. Best effort: a note left behind only makes the
@@ -119,7 +121,7 @@ impl Auth {
         let mut p = Fields::new();
         p.insert("sessions_owed".into(), J::Null);
         let _ = obop_storage::fault::patiently(3, std::time::Duration::from_millis(100), || {
-            obop_storage::fault::bookkeeping(|| self.backend.update("auth_user", name, &p))
+            obop_storage::fault::uncounted_allowed(|| self.backend.update("auth_user", name, &p))
         });
     }
 
@@ -286,7 +288,11 @@ impl Auth {
         patch.insert("password_changed_at".into(), J::from(self.now()));
         self.put(name, &patch)?;
         let h = token_hash(session);
-        let ch = Change::new(name, "password_change", name, "password changed");
+        // A repeat would need the old password, which no longer works (and counts towards the
+        // lockout): the person ends the other sessions themselves.
+        let ch = Change::new(name, "password_change", name, "password changed").then(
+            "the other sessions are still live: sign out everywhere under Security (a repeat of this request needs the old password, which no longer works)",
+        );
         let n = self.revoke_user_sessions(name, Some(&h), &ch)?;
         // The session that proved the old password may now do everything its person may, unless
         // two-factor enrolment is still owed.
@@ -415,10 +421,30 @@ impl Auth {
         if !disabled && was_offboarded {
             patch.insert("offboarded".into(), J::Bool(false));
         }
-        self.put(&target, &patch)?;
+        // An account that is already disabled keeps the note it has (an offboarding's is stronger).
+        let note = disabled && !was;
+        if note {
+            // Written before the account goes: if ending its sessions is then refused, enabling
+            // it later finishes that first (D74).
+            self.owe_revocation(&target, "user_disable", None)?;
+        } else if !disabled {
+            // What a disable or an offboarding could not end comes first, or enabling would bring
+            // it back; if that is refused the account stays as it is.
+            let ch = Change::new(&target, "user_enable", actor, "account enabled");
+            self.settle_before_enable(&target, &ch)?;
+        }
+        if let Err(e) = self.put(&target, &patch) {
+            if note {
+                self.clear_owed(&target);
+            }
+            return Err(e);
+        }
         if disabled {
             let ch = Change::new(&target, "user_disable", actor, "account disabled");
             let n = self.revoke_user_sessions(&target, None, &ch)?;
+            if note {
+                self.clear_owed(&target);
+            }
             self.event(
                 &target,
                 "user_disable",

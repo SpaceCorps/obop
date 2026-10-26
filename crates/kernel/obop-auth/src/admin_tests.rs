@@ -574,18 +574,150 @@ fn offboarding_with_a_token_list_that_is_refused_fails_as_partial_and_can_be_rep
 
 #[test]
 fn offboarding_goes_on_when_the_store_refuses_for_a_moment() {
+    // One refused call at every position of the offboarding in turn. Whatever the position, the
+    // answer is true: done (and the account is gone), or refused before anything changed (and the
+    // account is untouched), or partial (the account is disabled and the log says what is left).
+    let (mut done_count, mut none_count, mut partial_count) = (0, 0, 0);
+    for skip in 0..60 {
+        let (r, flaky) = flaky_rig();
+        let root = admin(&r, "root");
+        user_with(&r.a, "ada", &["base.user"]);
+        let (t1, _) = session(&r.a, "ada");
+        flaky.refuse_call_after(skip);
+        let (done, out) = request(|| r.a.offboard_user(&root, "ada", ""));
+        flaky.allow_models();
+        let disabled =
+            r.b.get("auth_user", "ada")
+                .unwrap()
+                .unwrap()
+                .get("disabled")
+                == Some(&J::Bool(true));
+        match done {
+            Ok(v) => {
+                done_count += 1;
+                assert_eq!(v["revoked_sessions"], 1, "skip {skip}: {v}");
+                assert!(r.a.resolve(&t1).is_none(), "skip {skip}");
+                assert!(!out.partial, "skip {skip}: {out:?}");
+            }
+            Err(_) if !out.wrote => {
+                none_count += 1;
+                assert!(!disabled, "skip {skip}: said nothing was changed");
+                assert!(r.a.resolve(&t1).is_some(), "skip {skip}");
+            }
+            Err(_) => {
+                partial_count += 1;
+                assert!(out.partial && disabled, "skip {skip}: {out:?}");
+            }
+        }
+    }
+    assert!(
+        done_count >= 3,
+        "refusals that were waited out: {done_count}"
+    );
+    assert!(
+        none_count >= 1 && partial_count + done_count >= 4,
+        "{none_count} {partial_count}"
+    );
+}
+
+#[test]
+fn a_disable_or_an_offboarding_that_could_not_end_the_tokens_does_not_bring_them_back_on_enable() {
+    use obop_storage::testing::Mode;
+    // The revocation is refused and the administrator does not repeat the request. Enabling the
+    // account later finishes it first, or the session (and for an offboarding the agent token)
+    // the person was cut off from would resolve again.
+    for offboard in [false, true] {
+        let (r, flaky) = flaky_rig();
+        let root = admin(&r, "root");
+        user_with(&r.a, "ada", &["base.user"]);
+        let (stolen, ada) = session(&r.a, "ada");
+        let agent =
+            r.a.issue_agent_token(&ada, &names(&["base.user"]), "bot")
+                .unwrap();
+        flaky.refuse_model("auth_token", Mode::Reads);
+        let (done, out) = request(|| {
+            if offboard {
+                r.a.offboard_user(&root, "ada", "").map(|_| ())
+            } else {
+                r.a.set_user_disabled(&root, "ada", true)
+            }
+        });
+        flaky.allow_models();
+        assert!(
+            done.is_err() && out.partial,
+            "offboard={offboard}: {done:?} {out:?}"
+        );
+        // The enabling is refused while the tokens cannot be ended, and goes through when they can.
+        flaky.refuse_model("auth_token", Mode::Reads);
+        let (refused, _) = request(|| r.a.set_user_disabled(&root, "ada", false));
+        flaky.allow_models();
+        assert!(
+            refused.is_err(),
+            "offboard={offboard}: enabled with the tokens still live"
+        );
+        r.a.set_user_disabled(&root, "ada", false).unwrap();
+        assert!(
+            r.a.resolve(&stolen).is_none(),
+            "offboard={offboard}: the session came back"
+        );
+        if offboard {
+            assert!(r.a.resolve(&agent).is_none(), "the agent token came back");
+        }
+    }
+}
+
+#[test]
+fn a_password_change_that_could_not_end_the_other_sessions_says_what_the_person_can_do() {
+    use obop_storage::testing::Mode;
     let (r, flaky) = flaky_rig();
-    let root = admin(&r, "root");
     user_with(&r.a, "ada", &["base.user"]);
-    let (t1, _) = session(&r.a, "ada");
-    // The pool is full for a moment right after the account was disabled.
-    flaky.refuse_n_after_the_next_write(2);
-    let (done, out) = request(|| r.a.offboard_user(&root, "ada", ""));
-    let done = done.unwrap();
-    assert_eq!(done["revoked_sessions"], 1, "{done}");
-    assert!(r.a.resolve(&t1).is_none());
-    assert!(out.wrote && !out.partial, "{out:?}");
-    assert!(flaky.refused() >= 2);
+    let (mine, p) = session(&r.a, "ada");
+    let (stolen, _) = session(&r.a, "ada");
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| {
+        r.a.change_password(&p, &mine, PW, "a brand new password", None, None)
+    });
+    flaky.allow_models();
+    assert!(done.is_err() && out.partial, "{done:?} {out:?}");
+    let (_, text) = incomplete_entry(&r, "password_change").expect("an INCOMPLETE entry");
+    assert!(
+        text.contains("sign out everywhere under Security") && !text.contains("repeat the request"),
+        "a repeat cannot work (the old password is gone): {text}"
+    );
+    assert!(r.a.resolve(&stolen).is_some());
+}
+
+#[test]
+fn a_note_for_the_repeat_is_not_a_change_so_a_refused_change_is_never_answered_partial() {
+    // The note that lets a repeat finish the work is written before the change. If the change is
+    // then refused, nothing was changed: the answer is "none", and the note is taken back. At
+    // every position of turning two-factor off in turn: partial only when the factor really is off.
+    for skip in 0..40 {
+        let (r, flaky) = flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        let (mine, p) = session(&r.a, "ada");
+        let (_, codes) = enrol(&r.a, "ada");
+        flaky.refuse_call_after(skip);
+        let (done, out) = request(|| r.a.disable_in_session(&p, &mine, PW, None, Some(&codes[0])));
+        flaky.allow_models();
+        if done.is_ok() {
+            continue;
+        }
+        let off = !r.a.mfa_enabled("ada");
+        if out.partial {
+            assert!(
+                off,
+                "skip {skip}: answered partial with the factor still on: {out:?}"
+            );
+        }
+        if !off {
+            let u = r.b.get("auth_user", "ada").unwrap().unwrap();
+            assert!(
+                u.get("sessions_owed").is_none_or(J::is_null),
+                "skip {skip}: a stale note was left behind"
+            );
+        }
+    }
 }
 
 #[test]

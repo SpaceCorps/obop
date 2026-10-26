@@ -12,6 +12,7 @@ obop-commands.workspace = true
 
 [dev-dependencies]
 sales.workspace = true
+obop-storage = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true

@@ -34,6 +34,9 @@ pub struct Flaky {
     apply_budget: AtomicI64,
     apply_skip: AtomicI64,
     kv_new_budget: AtomicI64,
+    kv_put_budget: AtomicI64,
+    /// -1: off; n: calls to let through before one is refused.
+    once: AtomicI64,
 }
 
 impl Flaky {
@@ -49,6 +52,8 @@ impl Flaky {
             apply_budget: AtomicI64::new(0),
             apply_skip: AtomicI64::new(0),
             kv_new_budget: AtomicI64::new(0),
+            kv_put_budget: AtomicI64::new(0),
+            once: AtomicI64::new(-1),
         })
     }
 
@@ -95,6 +100,19 @@ impl Flaky {
         self.apply_budget.store(0, SeqCst);
         self.apply_skip.store(0, SeqCst);
         self.kv_new_budget.store(0, SeqCst);
+        self.kv_put_budget.store(0, SeqCst);
+        self.once.store(-1, SeqCst);
+    }
+
+    /// Refuse the next `n` `kv_put` calls (short-lived values: plans, sessions) and nothing else.
+    pub fn refuse_kv_put(&self, n: i64) {
+        self.kv_put_budget.store(n, SeqCst);
+    }
+
+    /// Let `skip` calls of any kind through, then refuse the one after them, once: a refusal at
+    /// one chosen position of a request (sweep `skip` to put it at every position in turn).
+    pub fn refuse_call_after(&self, skip: i64) {
+        self.once.store(skip, SeqCst);
     }
 
     /// From the next successful change on, refuse every read: the pool fills up at the very
@@ -169,6 +187,17 @@ impl Flaky {
     }
 
     fn gate_m(&self, write: bool, model: &str) -> Result<()> {
+        // `refuse_call_after`: let `n` calls through, then refuse the next one, once.
+        let once = self.once.try_update(SeqCst, SeqCst, |n| match n {
+            n if n > 0 => Some(n - 1),
+            0 => Some(-1),
+            _ => None,
+        });
+        if once == Ok(0) {
+            self.refused.fetch_add(1, SeqCst);
+            fault::note(Fault::Busy);
+            return Err(Fault::Busy.message("all database connections are in use, try again"));
+        }
         let by_budget = self
             .next
             .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
@@ -284,6 +313,15 @@ impl Backend for Flaky {
         self.inner.counter_reset(key)
     }
     fn kv_put(&self, key: &str, value: &str, ttl_ms: Option<u64>) -> Result<()> {
+        let hit = self
+            .kv_put_budget
+            .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
+            .is_ok();
+        if hit {
+            self.refused.fetch_add(1, SeqCst);
+            fault::note(Fault::Busy);
+            return Err(Fault::Busy.message("all database connections are in use, try again"));
+        }
         self.gate(true)?;
         self.inner.kv_put(key, value, ttl_ms)
     }

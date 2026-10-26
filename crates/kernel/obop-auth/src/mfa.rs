@@ -479,7 +479,11 @@ impl Auth {
         let keep = session.map(token_hash);
         // Written before the factor goes: if ending the sessions is then refused, the repeat knows.
         self.owe_revocation(name, "mfa_disable", keep.as_deref())?;
-        self.clear_factor(name)?;
+        if let Err(e) = self.clear_factor(name) {
+            // The factor is still on: nothing is owed.
+            self.clear_owed(name);
+            return Err(e);
+        }
         let n = self.revoke_user_sessions(name, keep.as_deref(), &ch)?;
         self.clear_owed(name);
         self.event(
@@ -697,9 +701,12 @@ impl MfaApi for Auth {
         let _g = self.mfa_guard()?;
         let u = self.known_user(&target)?;
         let ch = Change::new(&target, "reset", actor, "reset by an administrator");
+        // The list is read so that a refused lookup is an error: read as "none" it sent the repeat
+        // down the finishing branch with the passkey still there, and answered that it was done.
+        let passkeys_now = self.passkeys_checked(&target)?;
         if u["mfa_enabled"].as_bool() != Some(true)
             && !u["totp_pending"].is_string()
-            && self.passkeys_of(&target).is_empty()
+            && passkeys_now.is_empty()
         {
             // The repeat of a reset that could not end the person's sessions finishes that (D74).
             if let Some(n) = self.finish_owed(&target, "mfa_reset", &ch)? {

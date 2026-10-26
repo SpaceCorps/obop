@@ -661,7 +661,8 @@ fn post_blocking(
     // after a change committed: say so, so an agent is told "part of it was applied", never just
     // "try again" for a change that was made (D74).
     if let Reply::Json(j) = &reply
-        && refused_by_the_store(j)
+        && obop_storage::fault::noted().is_some()
+        && has_tool_error(j)
     {
         obop_storage::fault::mark_partial();
     }
@@ -672,12 +673,14 @@ fn post_blocking(
     }
 }
 
-/// Is this reply a tool result whose error is the store's refusal (`storage_busy: ...`)?
-fn refused_by_the_store(j: &J) -> bool {
-    j["result"]["isError"] == true
-        && j["result"]["structuredContent"]["error"]
-            .as_str()
-            .is_some_and(obop_storage::fault::Fault::is_transient)
+/// Does this reply (one message, or a JSON-RPC batch of them, protocol 2025-03-26) carry a tool
+/// error? Whether a store refusal is behind it is the request's state (a fault was noted), not a
+/// look at the words of the error, which the engine may wrap.
+fn has_tool_error(j: &J) -> bool {
+    match j {
+        J::Array(items) => items.iter().any(has_tool_error),
+        _ => j["result"]["isError"] == true || j.get("error").is_some_and(|e| !e.is_null()),
+    }
 }
 
 /// HTTP status of a reply: protocol-level rejections of the request itself are 400, everything

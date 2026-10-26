@@ -957,23 +957,52 @@ impl Dispatcher {
         let result = self.run(&c, &plan.principal, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back, or the
         // approver's retry (the 503 says to retry) would meet "not found" and the proposal would
-        // be lost (D74). After a change had committed it stays gone: it ran.
-        if let Err(CallError::Handler(m)) = &result
-            && obop_storage::fault::Fault::is_transient(m)
-            && !obop_storage::fault::state().wrote
-        {
-            // The approver's whole proposal rests on this write: tried for two seconds.
-            let put_back =
-                obop_storage::fault::patiently(10, std::time::Duration::from_millis(200), || {
-                    obop_storage::fault::bookkeeping(|| {
-                        self.plans.put(self.shared.get(), plan_id, &plan)
-                    })
-                });
-            if put_back.is_err() {
-                eprintln!("a plan could not be put back after a refusal of the store: {plan_id}");
-            }
+        // be lost (D74). The decision is the one the 503 layer makes to say "nothing was changed"
+        // (a fault was noted and no change committed), not a look at the text of the error, which
+        // the engine may wrap. After a change had committed the plan stays gone: it ran.
+        let state = obop_storage::fault::state();
+        if result.is_err() && state.fault.is_some() && !state.wrote {
+            self.put_plan_back(approver, plan_id, &plan);
         }
         result
+    }
+
+    /// Put an approved plan back after the store refused its run before anything changed. Tried
+    /// for two seconds by the clock (each try may wait for a connection). If it cannot be put
+    /// back the proposal is lost, and the answer says so: the request counts as one that did
+    /// something that cannot be taken back (so it is a partial 503), and the security log has an
+    /// entry that names the plan, so that the agent can be asked to propose again.
+    fn put_plan_back(&self, approver: &Principal, plan_id: &str, plan: &Pending) {
+        use obop_storage::fault;
+        let started = std::time::Instant::now();
+        loop {
+            let put = fault::bookkeeping(|| self.plans.put(self.shared.get(), plan_id, plan));
+            if put.is_ok() {
+                return;
+            }
+            if started.elapsed() >= std::time::Duration::from_secs(2) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+        fault::external_change();
+        fault::mark_partial();
+        if let Some(s) = self.shared.get() {
+            let at = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            audit::record_event(
+                &*s.backend,
+                at,
+                &plan.principal.id,
+                "plan_lost",
+                &approver.id,
+                &format!(
+                    "the approved plan {plan_id} ({}) could not be put back after the store refused its run: the proposal is lost, ask for it again",
+                    plan.id
+                ),
+            );
+        }
     }
 
     fn run(
