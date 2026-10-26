@@ -1190,6 +1190,61 @@ fn an_aggregate_over_a_model_that_follows_its_parent_returns_and_counts_only_vis
     });
 }
 
+/// A NUL cannot be stored in PostgreSQL text and fails a statement that binds one, so no backend
+/// accepts it in a filter value: the answer must not depend on where the data lives (D76).
+#[test]
+fn a_nul_in_a_filter_value_is_refused_on_every_backend() {
+    each_rig(|r| {
+        r.make(&emp("eve"), "leave", vec![("days", Value::Int(2))]);
+        let filter = |op: &str, value: Value| {
+            m(vec![(
+                "filter",
+                Value::List(vec![m(vec![
+                    ("field", t("employee")),
+                    ("op", t(op)),
+                    ("value", value),
+                ])]),
+            )])
+        };
+        let want = format!("filter on {}_leave.employee: text cannot contain NUL", r.p);
+        for cmd in ["list", "search"] {
+            for (op, value) in [
+                ("eq", t("e\0ve")),
+                ("ne", t("\0")),
+                ("contains", t("ev\0")),
+                ("gt", t("\0")),
+                ("in", Value::List(vec![t("eve"), t("bo\0b")])),
+            ] {
+                let e = r.err(&emp("eve"), "leave", cmd, filter(op, value));
+                assert_eq!(e, want, "{cmd} {op}");
+            }
+        }
+        // The id of a record is a text key too.
+        let by_nul_id = m(vec![(
+            "filter",
+            Value::List(vec![m(vec![
+                ("field", t("id")),
+                ("op", t("eq")),
+                ("value", t("a\0b")),
+            ])]),
+        )]);
+        let e = r.err(&emp("eve"), "leave", "list", by_nul_id);
+        assert_eq!(
+            e,
+            format!("filter on {}_leave.id: text cannot contain NUL", r.p)
+        );
+        // The same filter without the NUL still works, and finds nothing for somebody else.
+        assert_eq!(
+            r.search_total(&emp("eve"), "leave", filter("eq", t("eve"))),
+            1
+        );
+        assert_eq!(
+            r.search_total(&emp("eve"), "leave", filter("eq", t("e\u{fffd}ve"))),
+            0
+        );
+    });
+}
+
 #[test]
 fn a_record_cannot_be_created_for_or_moved_to_someone_else_by_a_person_who_cannot_see_it() {
     each_rig(|r| {
