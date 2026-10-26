@@ -228,15 +228,50 @@ fn op_target(op: &Op) -> (&str, &str) {
     }
 }
 
-/// A 32-bit FNV-1a hash of a record's identity. Two records that collide share a lock, which
-/// only makes their batches queue.
+/// How many advisory locks one batch takes at most. The records a batch names are hashed onto this
+/// many stripes, and the batch locks the distinct stripes in ascending order. A lock held by a
+/// transaction takes a slot of the server's shared lock table (`max_locks_per_transaction` times
+/// `max_connections`, 6,400 with the defaults); one lock per record would let a handful of
+/// 1,000-row batches that run together (a bulk import) fill it up, and the server then refuses
+/// every statement that needs a lock with "out of shared memory". With the stripes a batch holds
+/// at most this many (and a few records, a few locks), whatever its size.
+///
+/// Two batches whose records fall on one stripe queue behind each other, which costs a moment and
+/// is never wrong; the ordering that keeps batches from deadlocking is the same total order as
+/// before (ascending stripe). A batch of a thousand records lands on nearly every stripe, so while
+/// it runs the other batches of the database wait for it: a bulk write is one short transaction.
+pub(crate) const BATCH_LOCK_STRIPES: u32 = 128;
+
+/// The stripe of a record: a 32-bit FNV-1a hash of its identity, modulo the number of stripes.
 fn batch_key((model, id): (&str, &str)) -> i32 {
     let mut h: u32 = 0x811c_9dc5;
     for b in model.bytes().chain(std::iter::once(0xff)).chain(id.bytes()) {
         h ^= u32::from(b);
         h = h.wrapping_mul(0x0100_0193);
     }
-    h as i32
+    (h % BATCH_LOCK_STRIPES) as i32
+}
+
+/// The advisory lock keys of a batch: the distinct stripes of its records, ascending, at most
+/// [`BATCH_LOCK_STRIPES`] of them.
+pub(crate) fn batch_lock_keys(ops: &[Op]) -> Vec<i32> {
+    let mut keys: Vec<i32> = ops.iter().map(|o| batch_key(op_target(o))).collect();
+    keys.sort_unstable();
+    keys.dedup();
+    keys
+}
+
+/// Take the transaction-level advisory locks of a batch (see [`batch_lock_keys`]) in one
+/// statement, ascending. They are released when the transaction ends.
+pub(crate) fn lock_batch(c: &mut Client, keys: &[i32]) -> PR<()> {
+    if !keys.is_empty() {
+        c.execute(
+            "SELECT pg_advisory_xact_lock($1, k)
+             FROM (SELECT k FROM unnest($2::int4[]) AS t(k) ORDER BY k) s",
+            &[&BATCH_LOCK_NAMESPACE, &keys],
+        )?;
+    }
+    Ok(())
 }
 
 fn pg_fields(v: J) -> Result<Fields> {
@@ -418,25 +453,17 @@ impl Backend for Pg {
         }
         // Two batches that touch the same records must not hold them in opposite order (they
         // would deadlock), and two that create the same record must not both think it is
-        // missing: every batch first takes a transaction-level advisory lock for each record it
-        // names, in one statement and in sorted order. Nothing else takes these locks, so
-        // overlapping batches simply queue; should the server still find a deadlock (a plain
-        // write or a bulk statement of another process), the batch was rolled back whole and is
-        // run again.
-        let mut keys: Vec<i32> = ops.iter().map(|o| batch_key(op_target(o))).collect();
-        keys.sort_unstable();
-        keys.dedup();
+        // missing: every batch first takes a transaction-level advisory lock for each stripe its
+        // records fall on (at most `BATCH_LOCK_STRIPES`, whatever the size of the batch), in one
+        // statement and in ascending order. Nothing else takes these locks, so overlapping
+        // batches simply queue; should the server still find a deadlock (a plain write or a bulk
+        // statement of another process), the batch was rolled back whole and is run again.
+        let keys = batch_lock_keys(ops);
         let mut attempt = 0;
         loop {
             // A refused batch is a value, not an error of the connection: roll back, report it.
             let outcome = self.main.tx_decide(Class::Batch, false, |c| {
-                if !keys.is_empty() {
-                    c.execute(
-                        "SELECT pg_advisory_xact_lock($1, k)
-                         FROM (SELECT k FROM unnest($2::int4[]) AS t(k) ORDER BY k) s",
-                        &[&BATCH_LOCK_NAMESPACE, &keys],
-                    )?;
-                }
+                lock_batch(c, &keys)?;
                 let r = run_ops(&mut P(c), ops);
                 let commit = r.is_ok();
                 Ok((r, commit))

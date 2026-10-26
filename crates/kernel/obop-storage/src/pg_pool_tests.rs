@@ -890,6 +890,164 @@ fn batches_that_name_the_same_records_in_opposite_order_do_not_deadlock() {
 }
 
 #[test]
+fn a_batch_takes_at_most_the_stripe_count_of_advisory_locks_whatever_its_size() {
+    use crate::pg::{BATCH_LOCK_STRIPES, batch_lock_keys};
+    let ops = |n: usize| -> Vec<Op> {
+        (0..n)
+            .map(|i| Op::Insert {
+                model: "m".into(),
+                id: format!("id{i}"),
+                fields: Fields::new(),
+            })
+            .collect()
+    };
+    let big = ops(100_000);
+    let keys = batch_lock_keys(&big);
+    assert!(keys.len() <= BATCH_LOCK_STRIPES as usize, "{}", keys.len());
+    assert!(
+        keys.len() > BATCH_LOCK_STRIPES as usize * 9 / 10,
+        "the records spread over the stripes ({})",
+        keys.len()
+    );
+    assert!(
+        keys.windows(2).all(|w| w[0] < w[1]),
+        "ascending and distinct"
+    );
+    assert!(
+        keys.iter()
+            .all(|k| (0..BATCH_LOCK_STRIPES as i32).contains(k))
+    );
+    // The order of the steps does not change which locks are taken, nor their order.
+    let mut reversed = big.clone();
+    reversed.reverse();
+    assert_eq!(batch_lock_keys(&reversed), keys);
+    // A small batch takes a small number of locks (fewer when two records share a stripe).
+    assert!((1..=3).contains(&batch_lock_keys(&big[..3]).len()));
+    assert!(batch_lock_keys(&[]).is_empty());
+}
+
+#[test]
+fn the_locks_of_a_thousand_row_batch_in_the_server_are_the_stripes_not_the_records() {
+    use crate::pg::{BATCH_LOCK_STRIPES, batch_lock_keys, lock_batch};
+    let (url, _db) = pg_db!();
+    let pg = connect(&url, PgPoolConfig::default());
+    let ops: Vec<Op> = (0..1000)
+        .map(|i| Op::Insert {
+            model: "m".into(),
+            id: format!("id{i}"),
+            fields: Fields::new(),
+        })
+        .collect();
+    let keys = batch_lock_keys(&ops);
+    // The server's own count of the advisory locks this transaction holds after the statement the
+    // batch runs: one per stripe. (One per record would be 1,000.)
+    let held = pg
+        .main
+        .tx_retry(Class::Batch, |c| {
+            lock_batch(c, &keys)?;
+            let r = c.query_one(
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND pid = pg_backend_pid()",
+                &[],
+            )?;
+            Ok(r.get::<_, i64>(0))
+        })
+        .unwrap();
+    assert_eq!(held as usize, keys.len());
+    assert!(held <= i64::from(BATCH_LOCK_STRIPES), "{held}");
+}
+
+#[test]
+fn thousand_row_batches_from_many_threads_do_not_fill_the_servers_lock_table() {
+    let _turn = serial();
+    let (url, _db) = pg_db!();
+    let model = unique("bulk");
+    // Two handles stand for two server processes: 8 batches of 1,000 records at once. One advisory
+    // lock per record would be 8,000 slots of the shared lock table (6,400 with the server's
+    // defaults) if they ran together, and the server would answer "out of shared memory". The
+    // batches name other records, so only the stripes make them wait for each other, which they
+    // do (the next test counts the locks the server holds).
+    let backends: Vec<Arc<Pg>> = (0..2)
+        .map(|_| Arc::new(connect(&url, PgPoolConfig::default())))
+        .collect();
+    let mut admin = PgConnector::new(&url).unwrap().connect().unwrap();
+    let mut show = |name: &str| -> String {
+        admin
+            .query_one(&format!("SHOW {name}"), &[])
+            .unwrap()
+            .get::<_, String>(0)
+    };
+    eprintln!(
+        "server: max_locks_per_transaction={} max_connections={}",
+        show("max_locks_per_transaction"),
+        show("max_connections")
+    );
+    let barrier = Arc::new(std::sync::Barrier::new(8));
+    let handles: Vec<_> = (0..8)
+        .map(|t| {
+            let (b, barrier, model) = (backends[t % 2].clone(), barrier.clone(), model.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                let ops: Vec<Op> = (0..1000)
+                    .map(|i| Op::Insert {
+                        model: model.clone(),
+                        id: format!("t{t}-{i}"),
+                        fields: fields(i),
+                    })
+                    .collect();
+                b.apply_checked(&ops)
+                    .map_err(|e| format!("thread {t}: {e}"))
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap().unwrap();
+    }
+    assert_eq!(backends[0].count(&model).unwrap(), 8 * 1000);
+}
+
+#[test]
+fn large_batches_that_name_the_same_records_in_opposite_order_do_not_deadlock() {
+    let _turn = serial();
+    let (url, _db) = pg_db!();
+    let model = unique("opposite");
+    let (a, b) = (
+        Arc::new(connect(&url, PgPoolConfig::default())),
+        Arc::new(connect(&url, PgPoolConfig::default())),
+    );
+    let ids: Vec<String> = (0..120).map(|i| format!("r{i:03}")).collect();
+    let batch = |reverse: bool| -> Vec<Op> {
+        let mut ids = ids.clone();
+        if reverse {
+            ids.reverse();
+        }
+        ids.iter()
+            .map(|id| Op::add(&model, id, "n", 1).or_create(fields(0)))
+            .collect()
+    };
+    // Four threads on each handle; half name the records ascending, half descending.
+    let handles: Vec<_> = (0..8)
+        .map(|t| {
+            let (backend, ops) = (if t % 2 == 0 { a.clone() } else { b.clone() }, batch(t < 4));
+            std::thread::spawn(move || {
+                for round in 0..4 {
+                    backend
+                        .apply_checked(&ops)
+                        .map_err(|e| format!("thread {t} round {round}: {e}"))?;
+                }
+                Ok::<(), String>(())
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap().unwrap();
+    }
+    // Every batch was applied once, whichever way it was named: 8 threads of 4 rounds.
+    for id in &ids {
+        assert_eq!(a.get(&model, id).unwrap().unwrap()["n"], 32, "{id}");
+    }
+}
+
+#[test]
 fn a_transaction_the_server_rolled_back_for_a_deadlock_is_run_again() {
     let (url, _db) = pg_db!();
     let pg = Arc::new(connect(&url, PgPoolConfig::default()));

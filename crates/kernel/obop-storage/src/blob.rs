@@ -285,6 +285,11 @@ impl BlobBytes for FsBytes {
 
 const CHUNK: usize = 512 * 1024;
 
+/// The first integer of the two-integer advisory keys that serialise writers of one blob key.
+/// The record batches use another (`pg.rs`), and the one-integer keys of `Backend::lock` are a
+/// separate key space, so none of them meets this one.
+const BLOB_LOCK_NAMESPACE: i32 = 0x626c;
+
 enum Db {
     Sqlite(Mutex<rusqlite::Connection>),
     Pg(PgPool),
@@ -429,7 +434,17 @@ impl BlobBytes for DbBytes {
                 }
                 tx.commit().map_err(|e| e.to_string())
             }
-            Db::Pg(p) => p.tx(Class::Batch, |c| {
+            // Two writers of one key (the same content uploaded twice at once: the key is the hash
+            // of the bytes) must not both think the key is free: the second would wait for the
+            // first at the primary key and then fail with a duplicate key. The transaction takes
+            // the advisory lock of the key first, so the second one waits, then replaces the
+            // rows of the first with the same bytes. The lock is the transaction's own, so it is
+            // gone with the commit; it is in a key space of its own (not the batch locks').
+            Db::Pg(p) => p.tx_retry(Class::Batch, |c| {
+                c.execute(
+                    "SELECT pg_advisory_xact_lock($1, hashtext($2))",
+                    &[&BLOB_LOCK_NAMESPACE, &key],
+                )?;
                 c.execute("DELETE FROM obop_blob_data WHERE key = $1", &[&key])?;
                 let mut parts: Vec<&[u8]> = bytes.chunks(CHUNK).collect();
                 if parts.is_empty() {
@@ -1095,6 +1110,43 @@ mod tests {
             return;
         };
         bytes_contract(&DbBytes::open(&url).unwrap());
+    }
+
+    #[test]
+    fn the_same_bytes_uploaded_twice_at_once_are_stored_once_and_both_uploads_succeed() {
+        let Ok(url) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+            return;
+        };
+        // D74: the key is the hash of the bytes, so two uploads of one file race on one key. The
+        // second used to wait for the first at the primary key and fail with a duplicate key.
+        let b = Arc::new(DbBytes::open(&url).unwrap());
+        // Several chunks, so the writers overlap for a while.
+        let bytes: Arc<Vec<u8>> = Arc::new(
+            (0..(CHUNK * 24 + 5))
+                .map(|i| (i % 249) as u8)
+                .collect::<Vec<u8>>(),
+        );
+        let id = id_of(&bytes);
+        let barrier = Arc::new(std::sync::Barrier::new(6));
+        let hs: Vec<_> = (0..6)
+            .map(|_| {
+                let (b, bytes, id, barrier) =
+                    (b.clone(), bytes.clone(), id.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    b.put(&id, &bytes)
+                })
+            })
+            .collect();
+        for h in hs {
+            h.join()
+                .unwrap()
+                .expect("every upload of the same bytes succeeds");
+        }
+        let mut got = Vec::new();
+        b.open(&id).unwrap().unwrap().read_to_end(&mut got).unwrap();
+        assert!(got == *bytes, "stored once, whole");
+        assert!(b.delete(&id).unwrap());
     }
 
     #[test]
