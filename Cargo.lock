@@ -1306,6 +1306,7 @@ dependencies = [
  "obop-storage",
  "obop-types",
  "obop-values",
+ "postgres",
  "serde_json",
  "sha2",
  "uuid",
