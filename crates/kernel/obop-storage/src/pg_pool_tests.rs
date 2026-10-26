@@ -1218,6 +1218,19 @@ fn a_connection_that_died_under_a_deadlocked_transaction_is_not_given_to_its_rer
             other
                 .execute("SELECT pg_terminate_backend($1)", &[&pid])
                 .unwrap();
+            // The server ends the session a moment after the signal: wait until it is gone, so
+            // the rollback that follows meets a dead socket every time.
+            let gone = (0..200).any(|_| {
+                let n: i64 = other
+                    .query_one("SELECT count(*) FROM pg_stat_activity WHERE pid = $1", &[&pid])
+                    .unwrap()
+                    .get(0);
+                n == 0 || {
+                    std::thread::sleep(Duration::from_millis(10));
+                    false
+                }
+            });
+            assert!(gone, "the session was not ended");
             return Err(PErr::Msg(
                 "db error (SQLSTATE 40P01): deadlock detected".into(),
             ));
