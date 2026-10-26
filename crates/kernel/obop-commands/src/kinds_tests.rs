@@ -124,6 +124,14 @@ fn module(p: &str) -> Module {
                                 ("price_copy", "$self.price"),
                             ],
                         )),
+                    // An assertion and an effect that read the computed decimals of the record.
+                    CommandDef::new("bill", "Bill", U)
+                        .transition("state", Some("new"), "stamped")
+                        .assertion("gross == 44.08 && gross == net + vat")
+                        .effect(Effect::create(
+                            &format!("{p}_log"),
+                            &[("item_id", "$self.id"), ("price_copy", "$self.gross")],
+                        )),
                 ],
             ),
             model(
@@ -526,6 +534,32 @@ fn hostile_decimals_and_instants_are_refused_naming_the_field() {
         // Only the good record made for each refused update exists: a refused create writes
         // nothing.
         assert_eq!(r.count("item") - before, n);
+    });
+}
+
+/// A JSON number that is not a 64-bit integer is `Value::Num`, which no field kind takes: text
+/// fields refuse it too (before D72 it was stored as its digits, by accident of the conversion).
+#[test]
+fn a_json_float_or_a_huge_integer_is_refused_by_a_text_field() {
+    each(|r| {
+        let base = r.create("item", vec![("name", t("keep"))]);
+        for n in [
+            serde_json::json!(12.5),
+            serde_json::json!(1e3),
+            serde_json::json!(18_446_744_073_709_551_615u64),
+        ] {
+            let input = serde_json::json!({"name": n});
+            let e = r.err("item", "create", Value::from_json(&input));
+            assert!(e.ends_with("name must be a string"), "{n}: {e}");
+            let input = serde_json::json!({"id": base, "name": n});
+            let e = r.err("item", "update", Value::from_json(&input));
+            assert!(e.ends_with("name must be a string"), "{n}: {e}");
+        }
+        // Nothing was written, and an integer in a text field was refused before as well.
+        assert_eq!(text(get(&r.read("item", &base), "name")), "keep");
+        assert_eq!(r.count("item"), 1);
+        let e = r.err("item", "create", m(vec![("name", Value::Int(7))]));
+        assert!(e.ends_with("name must be a string"), "{e}");
     });
 }
 

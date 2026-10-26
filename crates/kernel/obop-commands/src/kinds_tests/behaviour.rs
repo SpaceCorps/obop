@@ -128,6 +128,39 @@ fn a_computed_decimal_read_by_another_is_the_rounded_value() {
     });
 }
 
+/// An assertion and an effect read the rounded value too, not the digits it was computed from:
+/// `gross` is `44.08` (37.04 + 7.04), not 44.07, which is what the unrounded parts add up to.
+#[test]
+fn an_assertion_and_an_effect_read_the_rounded_computed_decimal() {
+    each(|r| {
+        let id = r.create(
+            "item",
+            vec![
+                ("name", t("inv")),
+                ("ratio", t("12.3456")),
+                ("qty", Value::Int(3)),
+            ],
+        );
+        r.ok("item", "bill", m(vec![("id", t(&id))]));
+        let logs = list(get(&r.search("log", vec![]), "rows")).to_vec();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(text(get(&logs[0], "price_copy")), "44.0800");
+        // A record whose rounded parts do not give 44.08 fails the assertion: nothing happens.
+        let other = r.create(
+            "item",
+            vec![
+                ("name", t("other")),
+                ("ratio", t("1.0000")),
+                ("qty", Value::Int(1)),
+            ],
+        );
+        let e = r.err("item", "bill", m(vec![("id", t(&other))]));
+        assert!(e.contains("gross == 44.08"), "{e}");
+        assert_eq!(text(get(&r.read("item", &other), "state")), "new");
+        assert_eq!(list(get(&r.search("log", vec![]), "rows")).len(), 1);
+    });
+}
+
 /// A whole-number constant (`rate = 0`) in an effect is the decimal it stands for.
 #[test]
 fn a_whole_number_constant_in_an_effect_fills_a_decimal_field() {
