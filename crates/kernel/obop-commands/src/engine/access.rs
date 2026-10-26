@@ -54,6 +54,24 @@ impl<'a> Gate<'a> {
         def.access.as_ref().is_some_and(|a| !a.is_empty()) && !self.actor.admin
     }
 
+    /// Whether deciding if a record is visible reads the store: a `via` rule reads the parent
+    /// record and a computed `public_field` reads the children it is computed from. Such a rule
+    /// must not run inside `Backend::scan`, which holds the backend (SQLite's connection, the
+    /// memory lock, PostgreSQL's snapshot connection) while it visits a record: the read would
+    /// wait for what the scan holds and the instance would stop. Callers that stream records
+    /// load them first and apply the rule afterwards.
+    pub fn reads_store(&self, def: &ModelDef) -> bool {
+        self.restricts(def)
+            && def.access.as_ref().is_some_and(|a| {
+                a.via.is_some()
+                    || a.public_field.is_some_and(|f| {
+                        def.fields
+                            .iter()
+                            .any(|d| d.name == f && d.computed.is_some())
+                    })
+            })
+    }
+
     fn grants(&self, def: &ModelDef, a: &Access, rec: &Fields, hops: usize) -> bool {
         if a.see_all.iter().any(|g| self.actor.holds(g)) {
             return true;
