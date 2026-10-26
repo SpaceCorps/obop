@@ -64,7 +64,7 @@ test.describe("Customize > Modules", () => {
     // A built-in module has the same facts as a package.
     const contacts = card(page, "Contacts");
     await expect(contacts).toContainText("0.2.0 · SpaceCorps");
-    await expect(contacts).toContainText("AGPL-3.0-or-later");
+    await expect(contacts).toContainText("Apache-2.0");
     await expect(contacts).toContainText("Stable");
     await expect(contacts).toContainText("Works with core 0.2");
     await expect(contacts).toContainText("Built in");
@@ -131,7 +131,7 @@ test.describe("Customize > Modules", () => {
       await expect(steps).toHaveCount(2);
       await expect(steps.nth(0)).toContainText("Projects");
       await expect(steps.nth(0)).toContainText("0.4.0");
-      await expect(steps.nth(0)).toContainText("AGPL-3.0-or-later");
+      await expect(steps.nth(0)).toContainText("Apache-2.0");
       await expect(steps.nth(0)).toContainText("needed by timesheets");
       await expect(steps.nth(1)).toContainText("Timesheets");
       await expect(steps.nth(1)).toContainText("The module you asked for.");
@@ -309,10 +309,10 @@ test.describe("Customize > Modules", () => {
       await expect(panel).toBeVisible();
       await expect(panel.getByRole("heading", { name: "Field Service" })).toBeVisible();
       // Overview: the metadata table.
-      await expect(panel).toContainText("AGPL-3.0-or-later");
-      await expect(panel.getByRole("link", { name: /AGPL-3.0-or-later/ })).toHaveAttribute(
+      await expect(panel).toContainText("Apache-2.0");
+      await expect(panel.getByRole("link", { name: /Apache-2.0/ })).toHaveAttribute(
         "href",
-        "https://spdx.org/licenses/AGPL-3.0-or-later.html",
+        "https://spdx.org/licenses/Apache-2.0.html",
       );
       await expect(
         panel.getByRole("link", { name: /github.com\/SpaceCorps\/obop/ }).first(),

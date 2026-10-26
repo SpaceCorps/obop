@@ -74,10 +74,7 @@ fn every_bundled_package_declares_its_metadata() {
     for m in &all {
         let x = &m.module;
         let id = &x.id;
-        assert_eq!(
-            x.license, "AGPL-3.0-or-later",
-            "{id}: D1 first-party licence"
-        );
+        assert_eq!(x.license, "Apache-2.0", "{id}: first-party licence (OR-1)");
         assert!(obop_pkg::spdx::check(&x.license).is_ok(), "{id}");
         assert_eq!(x.requires_core, "^0.2", "{id}");
         assert_eq!(x.author, "SpaceCorps", "{id}");
@@ -129,7 +126,7 @@ fn every_bundled_package_declares_its_metadata() {
     // The listing carries the same metadata, so a remote index can show cards unfetched.
     let listing = Bundled.list().unwrap();
     let ts = listing.iter().find(|l| l.id == "timesheets").unwrap();
-    assert_eq!(ts.license, "AGPL-3.0-or-later");
+    assert_eq!(ts.license, "Apache-2.0");
     assert_eq!(ts.dependencies["projects"], ">=0.3, <1");
     assert_eq!(ts.requires_core, "^0.2");
 }
@@ -247,7 +244,7 @@ fn all_22_packages_install_with_their_dependencies_and_the_module_list_shows_eve
         Value::List(vec![Value::text("timesheets")])
     );
     assert_eq!(by("base")["version"], Value::text("0.2.0"));
-    assert_eq!(by("base")["license"], Value::text("AGPL-3.0-or-later"));
+    assert_eq!(by("base")["license"], Value::text("Apache-2.0"));
     let Value::List(base_dependents) = &by("base")["dependents"] else {
         panic!()
     };
@@ -295,7 +292,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
     std::fs::create_dir_all(&dir).unwrap();
     let text = std::fs::read_to_string(pk.join("fleet.toml")).unwrap();
     let bare = text
-        .replace("license = \"AGPL-3.0-or-later\"\n", "")
+        .replace("license = \"Apache-2.0\"\n", "")
         .replace("requires_core = \"^0.2\"\n", "requires_core = \">=0.2\"\n");
     let f = dir.join("fleet.toml");
     std::fs::write(&f, bare).unwrap();
@@ -347,7 +344,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
             "needs core >=9",
         ),
         (
-            timesheets.replace("license = \"AGPL-3.0-or-later\"", "license = \"Apache\""),
+            timesheets.replace("license = \"Apache-2.0\"", "license = \"Apache\""),
             "not a known SPDX",
         ),
         (
@@ -485,7 +482,7 @@ async fn the_core_version_is_served_and_an_agent_proposes_a_plan_that_one_approv
     assert_eq!(v["ok"], true);
     assert_eq!(v["core_version"], "0.2.0");
     assert_eq!(v["steps"][0]["id"], "projects");
-    assert_eq!(v["steps"][0]["license"], "AGPL-3.0-or-later");
+    assert_eq!(v["steps"][0]["license"], "Apache-2.0");
     assert_eq!(v["steps"][1]["id"], "timesheets");
     assert!(!app.dispatcher.has_model("projects_task"));
     // An agent scoped to the admin group proposes; nothing runs; one approval runs the plan.

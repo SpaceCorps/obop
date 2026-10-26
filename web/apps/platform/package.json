@@ -2,6 +2,7 @@
   "name": "@obop/platform",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "dependencies": {
     "@obop/ui": "workspace:*",

@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Safe handling of uploaded images and files: type sniffing, decoding limits, re-encoding (strips metadata) and thumbnails"
 
 [dependencies]
