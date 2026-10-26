@@ -112,10 +112,12 @@ struct Scope {
     bypass: u32,
     /// Depth of [`bookkeeping`] calls: a record change undoes a counted change.
     undo: u32,
+    /// Depth of [`uncounted`] calls: what they write does not count as a change of the request.
+    quiet: u32,
 }
 
 thread_local! {
-    static SCOPE: Cell<Scope> = const { Cell::new(Scope { active: false, fault: None, changes: 0, partial: false, bypass: 0, undo: 0 }) };
+    static SCOPE: Cell<Scope> = const { Cell::new(Scope { active: false, fault: None, changes: 0, partial: false, bypass: 0, undo: 0, quiet: 0 }) };
 }
 
 /// Remember on this thread that a storage fault happened. The first one since the last
@@ -209,6 +211,7 @@ pub fn begin_request(earlier: Outcome) {
             partial: earlier.partial,
             bypass: 0,
             undo: 0,
+            quiet: 0,
         })
     });
 }
@@ -238,7 +241,7 @@ pub fn before_write() -> Result<(), String> {
 pub fn wrote() {
     SCOPE.with(|c| {
         let mut s = c.get();
-        if s.active {
+        if s.active && s.quiet == 0 {
             if s.undo > 0 {
                 s.changes = s.changes.saturating_sub(1);
             } else {
@@ -266,32 +269,63 @@ pub fn mark_partial() {
     });
 }
 
+/// Something happened outside the store that this request cannot take back (money returned by a
+/// payment provider, a plan consumed): it counts as a change, so that a step that is then refused
+/// makes the request a partial one ([`mark_partial`]) although no record of it committed.
+pub fn external_change() {
+    SCOPE.with(|c| {
+        let mut s = c.get();
+        if s.active {
+            s.changes += 1;
+            c.set(s);
+        }
+    });
+}
+
 /// Restores the depth counters when a scoped call ends, also by a panic.
-struct Leave(bool);
+struct Leave {
+    bypass: bool,
+    undo: bool,
+    quiet: bool,
+}
 
 impl Drop for Leave {
     fn drop(&mut self) {
         SCOPE.with(|c| {
             let mut s = c.get();
-            s.bypass = s.bypass.saturating_sub(1);
-            if self.0 {
+            if self.bypass {
+                s.bypass = s.bypass.saturating_sub(1);
+            }
+            if self.undo {
                 s.undo = s.undo.saturating_sub(1);
+            }
+            if self.quiet {
+                s.quiet = s.quiet.saturating_sub(1);
             }
             c.set(s);
         });
     }
 }
 
-fn enter(undo: bool) -> Leave {
+fn enter(bypass: bool, undo: bool, quiet: bool) -> Leave {
     SCOPE.with(|c| {
         let mut s = c.get();
-        s.bypass += 1;
+        if bypass {
+            s.bypass += 1;
+        }
         if undo {
             s.undo += 1;
         }
+        if quiet {
+            s.quiet += 1;
+        }
         c.set(s);
     });
-    Leave(undo)
+    Leave {
+        bypass,
+        undo,
+        quiet,
+    }
 }
 
 /// Run `f` with its writes allowed although an earlier call of the request was refused. For a
@@ -299,7 +333,7 @@ fn enter(undo: bool) -> Leave {
 /// that holds a blob for a record just created, the mask vault of an answer already built, a
 /// session). Its changes count as usual.
 pub fn allow<T>(f: impl FnOnce() -> T) -> T {
-    let _leave = enter(false);
+    let _leave = enter(true, false, false);
     f()
 }
 
@@ -307,7 +341,22 @@ pub fn allow<T>(f: impl FnOnce() -> T) -> T {
 /// of adding one. For the writes that undo what this request itself did (release an idempotency
 /// key it claimed, revoke a token it issued, release a webhook's dedup marker).
 pub fn bookkeeping<T>(f: impl FnOnce() -> T) -> T {
-    let _leave = enter(true);
+    let _leave = enter(true, true, false);
+    f()
+}
+
+/// Run `f` and do not count what it writes as a change of the request. For a note that only
+/// helps a repeat along (what is owed after a change that has not been made yet): if the change
+/// itself is then refused, the request has changed nothing and is answered as such. The guard
+/// still refuses the write after an earlier fault.
+pub fn uncounted<T>(f: impl FnOnce() -> T) -> T {
+    let _leave = enter(false, false, true);
+    f()
+}
+
+/// As [`uncounted`], and allowed after an earlier fault: for taking such a note back.
+pub fn uncounted_allowed<T>(f: impl FnOnce() -> T) -> T {
+    let _leave = enter(true, false, true);
     f()
 }
 
@@ -421,6 +470,14 @@ mod tests {
                 partial: true
             }
         );
+        // A write that is not counted, and a change outside the store, are what they say.
+        begin_request(Outcome::default());
+        uncounted(wrote);
+        assert!(!state().wrote, "an uncounted note is not a change");
+        external_change();
+        assert!(state().wrote, "money that moved outside the store is");
+        mark_partial();
+        assert!(end_request().partial);
         // Before any change committed a refused step is a plain refusal, not a partial request.
         begin_request(Outcome::default());
         mark_partial();

@@ -33,6 +33,7 @@ pub struct Flaky {
     after_budget: AtomicI64,
     apply_budget: AtomicI64,
     apply_skip: AtomicI64,
+    kv_new_budget: AtomicI64,
 }
 
 impl Flaky {
@@ -47,6 +48,7 @@ impl Flaky {
             after_budget: AtomicI64::new(0),
             apply_budget: AtomicI64::new(0),
             apply_skip: AtomicI64::new(0),
+            kv_new_budget: AtomicI64::new(0),
         })
     }
 
@@ -92,6 +94,7 @@ impl Flaky {
         self.next.store(0, SeqCst);
         self.apply_budget.store(0, SeqCst);
         self.apply_skip.store(0, SeqCst);
+        self.kv_new_budget.store(0, SeqCst);
     }
 
     /// From the next successful change on, refuse every read: the pool fills up at the very
@@ -110,6 +113,11 @@ impl Flaky {
     /// Refuse the next `n` atomic batches (`apply`, `apply_checked`) and nothing else.
     pub fn refuse_applies(&self, n: i64) {
         self.apply_budget.store(n, SeqCst);
+    }
+
+    /// Refuse the next `n` `kv_put_new` calls (the claim of a key) and nothing else.
+    pub fn refuse_kv_new(&self, n: i64) {
+        self.kv_new_budget.store(n, SeqCst);
     }
 
     /// Let `skip` atomic batches through, then refuse the one after them (and nothing else): the
@@ -280,6 +288,15 @@ impl Backend for Flaky {
         self.inner.kv_put(key, value, ttl_ms)
     }
     fn kv_put_new(&self, key: &str, value: &str, ttl_ms: Option<u64>) -> Result<bool> {
+        let hit = self
+            .kv_new_budget
+            .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
+            .is_ok();
+        if hit {
+            self.refused.fetch_add(1, SeqCst);
+            fault::note(Fault::Busy);
+            return Err(Fault::Busy.message("all database connections are in use, try again"));
+        }
         self.gate(true)?;
         self.inner.kv_put_new(key, value, ttl_ms)
     }

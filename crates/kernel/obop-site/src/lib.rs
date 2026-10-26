@@ -77,6 +77,16 @@ struct Cached {
     css: Arc<(String, String)>,
 }
 
+/// What claiming an idempotency key came to.
+enum Claim {
+    /// This request owns the key and must give it back if it places no order.
+    Taken,
+    /// An order (this token) already owns it: the submit is a repeat.
+    Existing(String),
+    /// The store refused to say. Nothing is claimed, and nothing may be released.
+    Refused,
+}
+
 pub struct Site {
     api: PublicApi,
     cfg: Config,
@@ -177,18 +187,26 @@ impl Site {
         )
     }
 
-    /// Claim an idempotency key for an order about to be placed: `Ok(())` when this call owns
-    /// it, `Err(token)` with the token of the order that already owns it. Shared by every
-    /// server process, so a double submit that lands on two of them still makes one order.
-    fn claim_idem(&self, key: &str, token: &str) -> Result<(), String> {
+    /// Claim an idempotency key for an order about to be placed: [`Claim::Taken`] when this call
+    /// owns it, [`Claim::Existing`] with the token of the order that already owns it. Shared by
+    /// every server process, so a double submit that lands on two of them still makes one order.
+    /// A claim the store refused is **not** a claim ([`Claim::Refused`]): the submit is answered
+    /// at once (the 503 layer says so) and releases nothing, or it would delete the claim of the
+    /// other submit of the same form and the next one would make a second order (D74).
+    fn claim_idem(&self, key: &str, token: &str) -> Claim {
         let k = format!("idem:site:{key}");
         let b = self.api.backend();
         let at = util::now();
         let mine = format!("{token}|{at}");
-        if b.kv_put_new(&k, &mine, Some(86_400_000)).unwrap_or(true) {
-            return Ok(());
+        match b.kv_put_new(&k, &mine, Some(86_400_000)) {
+            Ok(true) => return Claim::Taken,
+            Ok(false) => {}
+            Err(_) => return Claim::Refused,
         }
-        let existing = b.kv_get(&k).ok().flatten().unwrap_or_else(|| mine.clone());
+        let Ok(found) = b.kv_get(&k) else {
+            return Claim::Refused;
+        };
+        let existing = found.unwrap_or_else(|| mine.clone());
         let (owner, since) = existing
             .split_once('|')
             .map_or((existing.as_str(), 0), |(o, t)| {
@@ -202,30 +220,37 @@ impl Site {
             && matches!(self.api.receipt("ecommerce_order", owner), Ok(None))
             && b.kv_swap(&k, &existing, &mine).unwrap_or(false)
         {
-            return Ok(());
+            return Claim::Taken;
         }
-        Err(owner.to_string())
+        Claim::Existing(owner.to_string())
     }
 
-    /// Give back the key of an order that was not placed, when it had one.
-    fn release_idem_key(&self, key: &Option<String>) {
-        if let Some(k) = key {
-            self.release_idem(k);
+    /// Give back the key of an order that was not placed. `held` is the key this request really
+    /// took (`None` when it took none), `token` the token it claimed it with.
+    fn release_idem_key(&self, held: &Option<String>, token: &str) {
+        if let Some(k) = held {
+            self.release_idem(k, token);
         }
     }
 
-    /// Give a claimed key back (the order was not placed).
+    /// Give a claimed key back (the order was not placed), if it is still this request's: a claim
+    /// that another submit owns now (after a takeover) is left alone.
     ///
     /// This undoes what the request itself did, so it is allowed after a refused call and tried
     /// again while the store is busy (D74): a key that stays claimed for a day turns a buyer's
     /// second submit into a ghost order.
-    fn release_idem(&self, key: &str) {
+    fn release_idem(&self, key: &str, token: &str) {
         let k = format!("idem:site:{key}");
         let b = self.api.backend();
+        let mine = format!("{token}|");
         // The site logs nothing (a test holds it to that). A key that still cannot be given back
         // after the tries expires with its day; the checkout that needed it is answered 503.
         let _ = obop_storage::fault::patiently(4, Duration::from_millis(150), || {
-            obop_storage::fault::bookkeeping(|| b.kv_delete(&k))
+            obop_storage::fault::bookkeeping(|| match b.kv_get(&k) {
+                Ok(Some(v)) if !v.starts_with(&mine) => Ok(false),
+                // Mine, or the store would not say: this request took it, so it gives it back.
+                _ => b.kv_delete(&k),
+            })
         });
     }
 

@@ -73,6 +73,8 @@ const LISTING: &str = "ecommerce_listing";
 /// Minutes before the provider's page stops taking payment. Stripe's minimum is 30.
 const SESSION_MINUTES: u64 = 31;
 const EVENTS_KEPT: usize = 50;
+/// The start of the error of a refund whose money went back and whose record was refused.
+const MONEY_RETURNED: &str = "the money was returned";
 
 fn now() -> u64 {
     obop_connectors::util::now()
@@ -338,9 +340,12 @@ impl Payments {
             f.insert("checkout_url".into(), json!(u));
         }
         // The provider's page exists now: without its reference on the record the webhook that
-        // reports the payment finds nothing to apply it to. A needed step.
-        needed(|| self.backend.update(PAYMENT, &payment_id, &f))
-            .map_err(|e| if busy(&e) { e } else { unavailable() })?;
+        // reports the payment finds nothing to apply it to. A needed step, unless there is no
+        // reference to write (a bank transfer has no page): then the order must not fail for it.
+        if !session.external_id.is_empty() || session.url.is_some() {
+            needed(|| self.backend.update(PAYMENT, &payment_id, &f))
+                .map_err(|e| if busy(&e) { e } else { unavailable() })?;
+        }
         Ok(match session.url {
             Some(url) => Started::Redirect(url),
             None => Started::Manual,
@@ -440,10 +445,17 @@ impl Payments {
         let state = self.order(order)?.map(|o| text(&o, "state").to_string());
         match state.as_deref() {
             Some("pending") => match self.run("ecommerce_order.mark_paid", order) {
-                // Marking it paid met a refusal: it is done when it is tried again. Any other
-                // answer (a refused action) leaves the order for the sweep, as before.
-                Err(e) if busy(&e) => Err(e),
-                _ => Ok(()),
+                Ok(()) => Ok(()),
+                // Marking it paid was refused. Whatever the reason, what the order is now decides:
+                // paid in the meantime is done, cancelled in the meantime (or gone) gets the money
+                // returned, and an order that is still pending is an error the caller sees (the
+                // webhook answers "retry", the sweep leaves it): never an answer that looks done
+                // while the buyer's money is held for an order nobody will ship.
+                Err(e) => match self.order(order)?.map(|o| text(&o, "state").to_string()) {
+                    Some(s) if matches!(s.as_str(), "paid" | "shipped" | "delivered") => Ok(()),
+                    Some(s) if s == "pending" => Err(e),
+                    _ => self.refund_payment(payment),
+                },
             },
             Some("paid" | "shipped" | "delivered") => Ok(()),
             // A refund the provider could not make is tried again by the provider's redelivery.
@@ -456,18 +468,21 @@ impl Payments {
     /// refusal of the store is an error; safe to run again.
     fn cancel_order(&self, order: &str) -> Result<(), String> {
         let state = self.order(order)?.map(|o| text(&o, "state").to_string());
-        if state.as_deref() == Some("pending") {
-            match self.run("ecommerce_order.cancel", order) {
-                Err(e) if busy(&e) => return Err(e),
-                _ => {}
-            }
-        }
-        // An order that was paid in the meantime keeps its units.
+        let cancel = if state.as_deref() == Some("pending") {
+            self.run("ecommerce_order.cancel", order)
+        } else {
+            Ok(())
+        };
+        // What the order is now decides. Units go back only for an order that is cancelled: an
+        // order that was paid in the meantime keeps them, one that is still pending (the cancel
+        // was refused) keeps them reserved and the refusal is returned, so nobody sells the units
+        // twice; one that is gone has nothing to give back.
         let now_state = self.order(order)?.map(|o| text(&o, "state").to_string());
-        if matches!(now_state.as_deref(), Some("paid" | "shipped" | "delivered")) {
-            return Ok(());
+        match now_state.as_deref() {
+            Some("cancelled") => self.release_order(order, true).map(|_| ()),
+            Some("pending") => cancel.and(Err("the order could not be cancelled".to_string())),
+            _ => cancel.or(Ok(())),
         }
-        self.release_order(order, true).map(|_| ())
     }
 
     // ---- stock and discounts back -------------------------------------------------------------
@@ -479,8 +494,12 @@ impl Payments {
         let Some(o) = self.order(order_id)? else {
             return Ok(false);
         };
+        // The checkout writes `stock_returned: false` when it reserves units. An order without
+        // the flag never reserved any (a staff-made order, an import, one from before the flag):
+        // there is nothing to give back, and adding its quantities to the shelf would invent
+        // stock. `true` means they are back already.
         let returned = o.get("stock_returned").cloned().unwrap_or(J::Null);
-        if returned == json!(true) {
+        if returned != json!(false) {
             return Ok(false);
         }
         let mut ops = vec![Op::Patch {
@@ -564,19 +583,30 @@ impl Payments {
                 &format!("refund-{payment_id}"),
             )
             .map_err(|e| e.to_string())?;
+        // From here the money is back with the buyer: that happened outside the store and cannot
+        // be taken back, so a refusal of the next step makes this request a partial one.
+        fault::external_change();
         let mut patch = Fields::new();
         patch.insert("state".into(), json!("refunded"));
         patch.insert("refund_id".into(), json!(done.id));
         patch.insert("refunded_amount".into(), json!(done.amount));
-        match self.backend.apply_checked(&[Op::Patch {
-            model: PAYMENT.into(),
-            id: payment_id.into(),
-            patch,
-            expect: vec![("state".into(), json!("succeeded"))],
-        }]) {
-            Ok(()) | Err(ApplyError::Conflict { .. }) => Ok(()),
-            Err(e) => Err(e.to_string()),
-        }
+        needed(|| {
+            match self.backend.apply_checked(&[Op::Patch {
+                model: PAYMENT.into(),
+                id: payment_id.into(),
+                patch: patch.clone(),
+                expect: vec![("state".into(), json!("succeeded"))],
+            }]) {
+                Ok(()) | Err(ApplyError::Conflict { .. }) => Ok(()),
+                Err(e) => Err(e.to_string()),
+            }
+        })
+        .map_err(|e| {
+            format!(
+                "{MONEY_RETURNED} (refund {}) but the payment could not be recorded as refunded: {e}; repeat the refund, the provider returns the same refund within a day",
+                done.id
+            )
+        })
     }
 
     // ---- polling and sweeping --------------------------------------------------------------
@@ -618,14 +648,16 @@ impl Payments {
         let mut n = 0;
         let mut revisited = 0;
         for (id, o) in orders {
-            // A cancelled order whose units were not given back (the step after its cancellation
-            // was refused) is finished here, a few per sweep: nobody else would.
-            if text(&o, "state") == "cancelled"
-                && o.get("stock_returned").and_then(J::as_bool) != Some(true)
+            // A cancelled or refunded order whose units were not given back (the step after it
+            // was refused) is finished here, a few per sweep: nobody else would. Only an order
+            // that recorded a reservation (`stock_returned` is `false`) has units owed.
+            let state = text(&o, "state");
+            if matches!(state, "cancelled" | "refunded")
+                && o.get("stock_returned").and_then(J::as_bool) == Some(false)
                 && revisited < 25
             {
                 revisited += 1;
-                let _ = self.release_order(&id, true);
+                let _ = self.release_order(&id, state == "cancelled");
                 continue;
             }
             let until = o
@@ -696,6 +728,25 @@ impl Payments {
         self.d.around(
             "ecommerce_order.cancel",
             Box::new(move |_, input, inner| {
+                // A pending order whose payment already succeeded (the follow-up of the event
+                // was refused and waits for the provider's redelivery) must not be cancelled with
+                // the money kept: it is returned first, as the refund wrapper does, and if the
+                // provider refuses, the order stays as it is.
+                if let Some(id) = order_id(input)
+                    && matches!(me.order(&id)?, Some(o) if text(&o, "state") == "pending")
+                    && let Some((pid, p)) = me.payment_of_order(&id)?
+                    && text(&p, "state") == "succeeded"
+                {
+                    me.refund_payment(&pid).map_err(|e| {
+                        if e.starts_with(MONEY_RETURNED) {
+                            e
+                        } else {
+                            format!(
+                                "the payment was received and could not be returned, so the order was not cancelled: {e}"
+                            )
+                        }
+                    })?;
+                }
                 let out = inner(input)?;
                 if let Some(id) = order_id(input) {
                     // The order is cancelled. Closing its payment and giving the units and the
@@ -736,17 +787,34 @@ impl Payments {
                         && let Some((pid, p)) = me.payment_of_order(id)?
                         && text(&p, "state") == "succeeded"
                     {
-                        me.refund_payment(&pid)
-                            .map_err(|e| format!("the refund was not made: {e}"))?;
+                        me.refund_payment(&pid).map_err(|e| {
+                            if e.starts_with(MONEY_RETURNED) {
+                                e
+                            } else {
+                                format!("the refund was not made: {e}")
+                            }
+                        })?;
                     }
                     let out = inner(input)?;
-                    if restock && let Some(id) = &id {
-                        needed(|| me.release_order(id, false).map(|_| ()))?;
+                    if let Some(id) = &id {
+                        if restock {
+                            needed(|| me.release_order(id, false).map(|_| ()))?;
+                        } else {
+                            // Delivered goods do not go back on the shelf: nothing is owed, and
+                            // the order says so (or the sweep would return them one day).
+                            needed(|| me.mark_stock_settled(id))?;
+                        }
                     }
                     Ok(out)
                 }),
             );
         }
+    }
+
+    /// Record that no units are owed for this order (a refund of delivered goods).
+    fn mark_stock_settled(&self, order_id: &str) -> Result<(), String> {
+        let patch = Fields::from_iter([("stock_returned".to_string(), json!(true))]);
+        self.backend.update(ORDER, order_id, &patch).map(|_| ())
     }
 
     /// Close the open payment of a cancelled order. A refusal of the store is an error (the step

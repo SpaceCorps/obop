@@ -7,6 +7,7 @@
 //! (`PublicApi::submit_order`): two buyers cannot both take the last unit, a code cannot be used
 //! past its maximum, and a refused checkout leaves nothing behind.
 
+use crate::Claim;
 use crate::content::{Field, error_summary};
 use crate::countries;
 use crate::http::Resp;
@@ -1077,10 +1078,18 @@ impl Site {
             (idem.len() >= 16 && idem.len() <= 64 && idem.chars().all(|c| c.is_ascii_hexdigit()))
                 .then(|| sha256_hex(&format!("idem:{src}:{idem}")));
         let token = random_token();
-        if let Some(k) = &idem_key
-            && let Err(existing) = self.claim_idem(k, &token)
-        {
-            return Resp::redirect(303, &order_url(ctx, &existing));
+        // The key this request really took: only that one is given back when no order is placed.
+        let mut held: Option<String> = None;
+        if let Some(k) = &idem_key {
+            match self.claim_idem(k, &token) {
+                Claim::Taken => held = Some(k.clone()),
+                Claim::Existing(existing) => {
+                    return Resp::redirect(303, &order_url(ctx, &existing));
+                }
+                // The store did not answer (the fault is noted, the layer says 503): no order is
+                // made, and the claim of the other submit of this form is not touched.
+                Claim::Refused => return fail(self, ctx, vec![("", ctx.t("err.generic").into())]),
+            }
         }
 
         let p = &q.priced;
@@ -1209,13 +1218,13 @@ impl Site {
         let ids = match self.api.submit_order(&src, batch, &adjust) {
             Ok(ids) => ids,
             Err(SubmitError::RateLimited { retry_after_secs }) => {
-                self.release_idem_key(&idem_key);
+                self.release_idem_key(&held, &token);
                 return self
                     .error(ctx, 429, "e429.title", "err.rate")
                     .header("retry-after", &retry_after_secs.to_string());
             }
             Err(SubmitError::Unavailable { adjust: i }) => {
-                self.release_idem_key(&idem_key);
+                self.release_idem_key(&held, &token);
                 // A code that was used up a moment ago, or stock that went to someone else.
                 let msg = match adjust.get(i) {
                     Some(a) if a.model == "ecommerce_listing" => {
@@ -1249,7 +1258,7 @@ impl Site {
                 return fail(self, ctx, vec![(field, msg)]);
             }
             Err(_) => {
-                self.release_idem_key(&idem_key);
+                self.release_idem_key(&held, &token);
                 return fail(self, ctx, vec![("", ctx.t("err.generic").into())]);
             }
         };
@@ -1272,7 +1281,7 @@ impl Site {
         let started = match started {
             Ok(s) => s,
             Err(msg) => {
-                self.release_idem_key(&idem_key);
+                self.release_idem_key(&held, &token);
                 // The order was placed and the payment could not be started because the store
                 // refused: the order waits for its reservation to run out. The buyer is told so
                 // by a 503 that says part of it was done, not by a cart page that says the

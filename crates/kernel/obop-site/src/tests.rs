@@ -1110,6 +1110,48 @@ fn a_checkout_refused_by_a_busy_store_releases_its_key_and_the_resubmit_makes_th
 }
 
 #[test]
+fn a_claim_the_store_refused_is_not_a_claim_and_releases_nothing_of_the_submit_that_owns_the_key() {
+    use obop_storage::fault;
+    use obop_storage::testing::Flaky;
+    // D74: two submits of one form (a double click under load). The first owns the key and makes
+    // the order. The second's claim is refused by the store: it must not go on as if it owned the
+    // key, and its failure must not delete the claim of the first, or the next submit of the same
+    // form makes a second order for one cart.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let s = build(Store::over(obop_storage::guarded(flaky.clone())), true);
+    let l = listing(&s, "sencha-green-tea");
+    let std = methods(&s).remove(0);
+    let lines = [(l.id.as_str(), "1")];
+    let f = order_fields(&lines, &[("shipping_method_id", &std.id)]);
+    let first = post(&s, "/shop/checkout", &f);
+    assert_eq!(first.status, 303);
+    let at = first.get_header("location").unwrap().to_string();
+    assert_eq!(new_orders(&s), 1);
+
+    flaky.refuse_kv_new(1);
+    fault::begin_request(Default::default());
+    let second = post(&s, "/shop/checkout", &f);
+    let out = fault::end_request();
+    assert!(
+        out.fault.is_some() && !out.wrote,
+        "the layer answers 503 (applied none): {} {out:?}",
+        second.status
+    );
+    assert_eq!(new_orders(&s), 1, "no order was made on a refused claim");
+    let claims = s.store.backend().kv_scan("idem:site:").unwrap();
+    assert_eq!(
+        claims.len(),
+        1,
+        "the claim of the first submit is still there"
+    );
+
+    // The same form again, the store healthy: a repeat of the first, not a second order.
+    let third = post(&s, "/shop/checkout", &f);
+    assert_eq!(third.get_header("location"), Some(at.as_str()));
+    assert_eq!(new_orders(&s), 1);
+}
+
+#[test]
 fn a_claim_with_no_order_behind_it_is_taken_over_when_old_and_respected_while_young() {
     // D74: a checkout that could not give its key back leaves a claim for an order that does not
     // exist. A young claim is a submit still being processed and keeps its answer; an old one is a

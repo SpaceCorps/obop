@@ -1345,6 +1345,157 @@ fn the_sweep_never_cancels_an_order_whose_payment_it_could_not_look_up() {
     assert_eq!(e.order_state(&oid), "paid");
 }
 
+#[test]
+fn an_order_that_cannot_be_marked_paid_for_another_reason_is_never_answered_as_done() {
+    // The payment is recorded and marking the order paid is refused for a reason that is not the
+    // store (a field the order lacks): the webhook is not answered 200 ("done") with the money
+    // held for an order nobody will ship, and the money is not refunded either, because the order
+    // is still there. It is answered "retry", and once the order can be marked, the redelivery does.
+    let (_flaky, e) = flaky_env();
+    e.buy("sencha-green-tea", "1", "stripe", &[]);
+    let (oid, order) = e.last_order();
+    let (sid, _) = e.stand.sessions().remove(0);
+    e.stand.pay(&sid);
+    let total = order["total"].as_i64().unwrap();
+    let body = event(
+        "evt_stuck",
+        "checkout.session.completed",
+        &sid,
+        total,
+        "paid",
+    );
+    let mut gap = Fields::new();
+    gap.insert("customer_email".into(), J::Null);
+    e.store.backend().update(ORDER, &oid, &gap).unwrap();
+    let ts = obop_connectors::util::now();
+    let reply = e.hook(&body, ts, SECRET);
+    assert_eq!(
+        reply,
+        HookReply::Retry,
+        "never Done for an order that is still pending"
+    );
+    assert_eq!(e.order_state(&oid), "pending");
+    assert!(
+        e.stand.calls("POST", "/v1/refunds").is_empty(),
+        "the order is not gone"
+    );
+    let mut fixed = Fields::new();
+    fixed.insert("customer_email".into(), json!("buyer@example.test"));
+    e.store.backend().update(ORDER, &oid, &fixed).unwrap();
+    assert_ne!(e.hook(&body, ts + 1, SECRET), HookReply::Retry);
+    assert_eq!(e.order_state(&oid), "paid");
+}
+
+#[test]
+fn a_cancelled_order_that_never_reserved_units_returns_none_and_the_sweep_leaves_it_alone() {
+    let (_flaky, e) = flaky_env();
+    e.buy("sencha-green-tea", "2", "stripe", &[]);
+    let (oid, _) = e.last_order();
+    assert_eq!(e.stock("sencha-green-tea"), 38);
+    // A staff-made order, an import, one from before the flag: nothing was reserved for it.
+    let mut no_flag = Fields::new();
+    no_flag.insert("stock_returned".into(), J::Null);
+    e.store.backend().update(ORDER, &oid, &no_flag).unwrap();
+    e.call(&e.manager(), "ecommerce_order.cancel", &oid)
+        .unwrap();
+    assert_eq!(e.order_state(&oid), "cancelled");
+    assert_eq!(
+        e.stock("sencha-green-tea"),
+        38,
+        "the cancel does not invent stock"
+    );
+    for _ in 0..2 {
+        e.pay.sweep_expired();
+    }
+    assert_eq!(e.stock("sencha-green-tea"), 38, "nor does the sweep");
+}
+
+#[test]
+fn a_cancel_of_a_pending_order_whose_payment_already_succeeded_returns_the_money() {
+    let (_flaky, e) = flaky_env();
+    e.buy("sencha-green-tea", "1", "stripe", &[]);
+    let (oid, _) = e.last_order();
+    let (sid, _) = e.stand.sessions().remove(0);
+    e.stand.pay(&sid);
+    // The state the follow-up of a payment event leaves when it is refused for long: the payment
+    // is recorded as succeeded, the order is still pending.
+    let (pid, _) = e.last_payment();
+    let mut done = Fields::new();
+    done.insert("state".into(), json!("succeeded"));
+    e.store.backend().update(PAYMENT, &pid, &done).unwrap();
+    e.call(&e.manager(), "ecommerce_order.cancel", &oid)
+        .unwrap();
+    assert_eq!(e.order_state(&oid), "cancelled");
+    assert_eq!(
+        e.last_payment().1["state"],
+        "refunded",
+        "the money did not stay"
+    );
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 1);
+    assert_eq!(e.stock("sencha-green-tea"), 40);
+}
+
+#[test]
+fn a_refund_whose_money_went_back_but_whose_record_was_refused_is_a_partial_503_that_says_so() {
+    use obop_storage::fault;
+    let (flaky, e) = flaky_env();
+    let (oid, _) = paid_stripe_order(&e, "stoneware-teapot", "1");
+    flaky.refuse_applies(50);
+    fault::begin_request(Default::default());
+    let r = e.call(&e.manager(), "ecommerce_order.refund", &oid);
+    let out = fault::end_request();
+    flaky.allow_models();
+    assert!(
+        matches!(&r, Err(CallError::Handler(m)) if m.starts_with("the money was returned")),
+        "{r:?}"
+    );
+    assert!(
+        out.wrote && out.partial,
+        "money that moved outside the store is a change: {out:?}"
+    );
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 1);
+    assert_eq!(e.order_state(&oid), "paid");
+    assert_eq!(e.last_payment().1["state"], "succeeded");
+    // The repeat records it and moves the order.
+    e.call(&e.manager(), "ecommerce_order.refund", &oid)
+        .unwrap();
+    assert_eq!(e.order_state(&oid), "refunded");
+    assert_eq!(e.last_payment().1["state"], "refunded");
+}
+
+#[test]
+fn a_refund_whose_units_could_not_go_back_is_finished_by_the_sweep_and_a_delivered_one_owes_none() {
+    use obop_storage::testing::Mode;
+    let (flaky, e) = flaky_env();
+    let (oid, _) = paid_stripe_order(&e, "stoneware-teapot", "2");
+    assert_eq!(e.stock("stoneware-teapot"), 4);
+    flaky.refuse_model(LISTING, Mode::Reads);
+    let r = e.call(&e.manager(), "ecommerce_order.refund", &oid);
+    flaky.allow_models();
+    assert!(r.is_err(), "the units could not go back: a partial 503");
+    assert_eq!(e.order_state(&oid), "refunded");
+    assert_eq!(e.stock("stoneware-teapot"), 4);
+    e.pay.sweep_expired();
+    assert_eq!(e.stock("stoneware-teapot"), 6, "the sweep returned them");
+    e.pay.sweep_expired();
+    assert_eq!(e.stock("stoneware-teapot"), 6, "once");
+    // Goods that were delivered do not go back on the shelf, and the order says nothing is owed.
+    let (late, _) = paid_stripe_order(&e, "stoneware-teapot", "1");
+    for cmd in ["ecommerce_order.ship", "ecommerce_order.deliver"] {
+        e.call(&e.manager(), cmd, &late).unwrap();
+    }
+    let before = e.stock("stoneware-teapot");
+    e.call(&e.manager(), "ecommerce_order.refund_delivered", &late)
+        .unwrap();
+    assert_eq!(e.stock("stoneware-teapot"), before);
+    e.pay.sweep_expired();
+    assert_eq!(
+        e.stock("stoneware-teapot"),
+        before,
+        "not one day later either"
+    );
+}
+
 // ---- refunds ----------------------------------------------------------------------------------
 
 fn paid_stripe_order(e: &Env, slug: &str, qty: &str) -> (String, String) {
