@@ -171,7 +171,21 @@ Rows of this section only; another section of the register is kept apart so the 
 | # | Item | Status |
 |---|---|---|
 | J6 | `bulk_create` is not tried against PostgreSQL under concurrent writers from several server processes, nor with 1,000-row calls over a network database; the unit tests run 60 rows on PostgreSQL and 1,000 on the local backends | open (needs a multi-process drill) |
-| J7 | No decimal or date-time kinds (a decimal point in a number or money cell is an error), no remapping of ids, no reference from one row to another row of the same call, no image or file columns; related records are imported in two calls, parents first | by design for now |
+| J7 | No remapping of ids (decimal and date-time cells are supported since D72; a decimal point in a number or money cell is still an error), no reference from one row to another row of the same call, no image or file columns; related records are imported in two calls, parents first | by design for now |
 | J8 | A call holds the write lock from its first check to its commit, so a slow database makes a large call hold it for long (about half a minute for 1,000 rows at a 7 ms round trip); splitting a call into batches under shorter locks is not built | open |
 | J9 | The validation errors of an import are the server's English text, shown as received; the strings of the dialog are machine-drafted in six languages | open (D7) |
 | J10 | The answer of an `idempotency_key` call is kept 24 hours in one table (`bulk_idempotency`), purged lazily every ten minutes; there is no setting for the time | accepted |
+
+## K. Storage foundations (step 1: D72 to D74)
+
+| # | Item | Status |
+|---|---|---|
+| K1 | The backoffice pivot, graph, kanban, calendar and dashboard views do not offer decimal measures or datetime, iso_week and year dimensions (the server, CLI, REST and MCP do; D72 "Not delivered"). The owner's rule is that UI parity is literal, so this needs a follow-up or the owner's written exemption | open |
+| K2 | `round` on a decimal field cannot cut input beyond the parser's 38 significant digits and 80 characters (D72) | accepted, documented |
+| K3 | A JSON float or a number beyond 64 bits sent to a text field is refused now; it used to be stored as its digits (D72). Integers were always refused | accepted |
+| K4 | The D73 operator commands (`migrate`, `backup`, `restore`, `drill`, `storage check|attest|show`) are CLI-only; D73 asks the owner to approve that exemption in writing. Until then the status views (`backup list`, `migrate status|verify`, `storage check|show`) have no REST, MCP or UI | open (owner) |
+| K5 | The findings D73 leaves open are listed in its record ("Second review round, Not delivered"): a plain backup may carry the `.obbk` name, the 400-day retention default overrides longer monthly counts, two mounts of one host directory are not recognised as one place, a long backup under the migration lock can time out a second starter, a persistent failing step grows the ledger | open |
+| K6 | Hosted instances need a volume and `OBOP_INSTANCE_BACKUP_DIR` on the control plane before a tenant can apply a module update that rewrites records (D73); `--auto-migrate` without `OBOP_BACKUP_DIR` still only warns | open (owner: the volume) |
+| K7 | GitHub Actions starts no job on SpaceCorps/obop ("recent account payments have failed or your spending limit needs to be increased"): `ci.yml` and `image.yml` have never run, so there is no CI result on any PR and no `ghcr.io/spacecorps/obop` image. Merges are gated by the local runs recorded in each merge commit | open (owner: billing) |
+| K8 | `vp run i18n:check` in `web/apps/site` reports "internal link targets differ" for `docs/agents/tokens.md` in six languages on Windows (the keys carry backslashes); not seen on other platforms, not investigated | open |
+| K9 | Timing-sensitive tests: the 60 ms counter windows of `shared_tests` fail under heavy load (pass alone), the MCP session tests flake under load. The licences of the lock-only crates `jiff-static`, `portable-atomic` and `portable-atomic-util` were not read from their manifests; run `cargo-deny` once it is part of the pipeline | open |
