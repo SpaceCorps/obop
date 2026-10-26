@@ -929,9 +929,19 @@ fieldset.seg input:focus-visible + label {
 /* Pricing */
 .plans {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
   margin-block-end: var(--space-4);
+}
+@media (min-width: 72rem) {
+  .plans {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 40rem) {
+  .plans {
+    grid-template-columns: 1fr;
+  }
 }
 .plans article {
   display: flex;
@@ -944,9 +954,13 @@ fieldset.seg input:focus-visible + label {
 }
 .plans .hl {
   border-color: var(--accent-fill);
+  background: linear-gradient(180deg, var(--accent-soft), var(--surface) 70%);
   box-shadow:
     0 0 0 1px var(--accent-fill),
     var(--shadow-2);
+}
+.plans .hl .price {
+  color: var(--accent-ink);
 }
 .plans h2,
 .plans h3 {
@@ -955,9 +969,11 @@ fieldset.seg input:focus-visible + label {
   text-align: start;
   letter-spacing: var(--tracking-snug);
 }
-.price {
+.plans .price {
   margin: 0 0 var(--space-2);
-  font-size: var(--text-4xl);
+  color: var(--text);
+  font-size: var(--text-3xl);
+  white-space: nowrap;
   font-variant-numeric: tabular-nums lining-nums;
   font-weight: var(--weight-semibold);
   letter-spacing: -0.035em;
@@ -996,6 +1012,9 @@ fieldset.seg input:focus-visible + label {
   margin-block: var(--space-8) var(--space-3);
   font-size: var(--text-2xl);
 }
+.narrow-block .faq + p {
+  margin-block-start: var(--space-8);
+}
 
 /* FAQ */
 .faq {
@@ -1007,6 +1026,7 @@ fieldset.seg input:focus-visible + label {
   border-block-end: 1px solid var(--border);
 }
 .faq summary {
+  text-wrap: pretty;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1132,7 +1152,7 @@ section.cta p {
   margin-block-end: var(--space-10);
 }
 .home .sec-text {
-  flex: 1 1 28rem;
+  flex: 1 1 36rem;
   max-inline-size: 46rem;
 }
 .home .sec-act {
@@ -1151,8 +1171,12 @@ section.cta p {
   }
   fieldset.seg label {
     display: inline-flex;
+    flex: 1 1 auto;
     align-items: center;
+    justify-content: center;
     min-block-size: 2.75rem;
+    padding-inline: var(--space-2);
+    text-align: center;
   }
 }
 
@@ -1198,6 +1222,15 @@ section.cta p {
   align-items: flex-start;
   gap: 0.6rem;
 }
+@media (min-width: 40.01rem) and (max-width: 64rem) {
+  .home .facts {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .home .facts li {
+    white-space: nowrap;
+  }
+}
 .home .facts svg {
   margin-block-start: 0.15rem;
 }
@@ -1220,7 +1253,6 @@ section.cta p {
 .home .mock-caption {
   grid-column: 1 / -1;
   margin: var(--space-3) 0 0;
-  text-align: end;
 }
 @media (max-width: 40rem) {
   .home .facts {
@@ -1234,9 +1266,6 @@ section.cta p {
   }
   .home .mock-agent {
     margin-block-start: var(--space-3);
-  }
-  .home .mock-caption {
-    text-align: start;
   }
 }
 
@@ -1324,7 +1353,9 @@ section.cta p {
 }
 .apps.compact {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
   gap: var(--space-1) var(--space-6);
+  margin-inline: calc(-1px - var(--space-3));
 }
 .apps.compact .app {
   flex-direction: row;
@@ -1373,10 +1404,13 @@ section.cta p {
     padding: var(--space-3) var(--space-4);
   }
   .apps.compact {
+    grid-auto-rows: auto;
     gap: 0;
+    margin-inline: 0;
   }
   .apps.compact .app {
     padding-block: var(--space-2);
+    padding-inline: 0;
     border-radius: 0;
     border-block-end: 1px solid var(--border);
   }
@@ -1425,6 +1459,10 @@ section.cta p {
 .home .bento .lead .tag {
   margin: 0;
 }
+.home .bento > article:not(.lead) .tag {
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--border);
+}
 .home .flow-block {
   margin-block-start: var(--space-6);
   padding-block-start: var(--space-6);
@@ -1445,6 +1483,7 @@ section.cta p {
 }
 .bento .flow li {
   display: grid;
+  align-content: start;
   grid-template-columns: 1.75rem minmax(0, 1fr);
   column-gap: var(--space-4);
   align-items: start;
@@ -1548,6 +1587,10 @@ section.cta p {
   grid-column: 4;
   align-self: start;
   margin-block-start: calc(1px - 1.375rem);
+  margin-inline-start: calc(-1 * var(--space-6));
+}
+.steps-cta .btn {
+  inline-size: 100%;
 }
 @media (max-width: 64rem) {
   .steps-wrap {
@@ -1555,11 +1598,16 @@ section.cta p {
   }
   .steps-cta {
     margin-block-start: var(--space-8);
+    margin-inline-start: 0;
+  }
+  .steps-cta .btn {
+    inline-size: auto;
   }
 }
 @media (max-width: 40rem) {
   .steps-wrap .steps {
     grid-template-columns: 1fr;
+    gap: var(--space-10);
   }
   .steps-cta .btn {
     inline-size: 100%;
@@ -1575,14 +1623,18 @@ section.cta p {
   flex-direction: column;
 }
 .link-arrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-block-size: 2.75rem;
+  display: inline-block;
+  align-self: flex-start;
   margin-block-start: auto;
+  padding-block: 0.6875rem;
   color: var(--accent-ink);
   font-weight: var(--weight-semibold);
+  line-height: 1.5;
   text-decoration: none;
+}
+.link-arrow .ico-wrap {
+  margin-inline-start: 0.4rem;
+  vertical-align: -0.15em;
 }
 .link-arrow:hover {
   text-decoration: underline;
@@ -1612,36 +1664,14 @@ section.cta p {
 }
 
 /* pricing: the price is the strongest text in its card, Team is the one tinted card */
-.home .plans {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-@media (min-width: 72rem) {
-  .home .plans {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
 .home .plans article {
   padding: var(--space-5);
-}
-.home .plans .price {
-  color: var(--text);
-  font-size: var(--text-3xl);
-  white-space: nowrap;
-}
-.home .plans .hl {
-  background: linear-gradient(180deg, var(--accent-soft), var(--surface) 70%);
-}
-.home .plans .hl .price {
-  color: var(--accent-ink);
 }
 .home .plans + .fine {
   margin: 0;
   text-align: start;
 }
 @media (max-width: 40rem) {
-  .home .plans {
-    grid-template-columns: 1fr;
-  }
   .home .plans article {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
