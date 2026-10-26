@@ -278,7 +278,7 @@ pub(crate) fn create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     default_governed(def, &mut f);
     own_default(def, &mut f, &actor);
     let look = lookup_fn(eng);
-    let mut unit = Unit::new(eng.backend());
+    let mut unit = eng.unit();
     check_fields(&unit, &look, &actor, def, &f, true)?;
     seq::assign(&mut unit, def, &mut f, None, eng.now())?;
     if let Some(why) = creator_blocked(&Gate::new(&unit, &look, &actor), def, &f) {
@@ -298,7 +298,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     let actor = Actor::from_input(input);
     let given = declared_fields(def, input)?;
     let look = lookup_fn(eng);
-    let mut unit = Unit::new(eng.backend());
+    let mut unit = eng.unit();
     let cur = Gate::new(&unit, &look, &actor).load(def, &id)?;
     let mut patch = to_fields(&given);
     // A computed or numbered field may be sent back unchanged (a form saves the whole record);
@@ -354,7 +354,7 @@ pub(crate) fn delete(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     let id = id_of(input)?;
     let actor = Actor::from_input(input);
     let look = lookup_fn(eng);
-    let mut unit = Unit::new(eng.backend());
+    let mut unit = eng.unit();
     let rec = Gate::new(&unit, &look, &actor).load(def, &id)?;
     // Checked here, not only in the guard, so the rule holds for any caller of the handler.
     if let Some(field) = seq::holds_gapless_number(def, &rec) {
@@ -385,7 +385,7 @@ pub(crate) fn transition(
         .find(|c| c.name == command)
         .ok_or_else(|| format!("{}.{command} is not declared", def.name))?;
     let look = lookup_fn(eng);
-    let mut unit = Unit::new(eng.backend());
+    let mut unit = eng.unit();
     let patch = run_action(eng, &actor, &mut unit, def, cmd, &id, 0)?;
     seq::check_unique(&unit, &look)?;
     commit(eng, unit)?;

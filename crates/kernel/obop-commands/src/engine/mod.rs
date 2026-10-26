@@ -79,6 +79,25 @@ impl Engine {
     pub fn backend(&self) -> &dyn obop_storage::Backend {
         &*self.store.backend
     }
+
+    /// A unit of work over this engine's backend, with the usual cap on the records it may touch.
+    ///
+    /// Every handler starts its unit here and not with `Unit::new(eng.backend())`, so what a unit
+    /// needs to know about the call it serves (who writes, which rules guard the records) is
+    /// added in this one place later and no handler changes (K18).
+    pub fn unit(&self) -> unit::Unit<'_> {
+        unit::Unit::new(self.backend())
+    }
+
+    /// As `unit`, with another cap on the records the unit may touch (bulk work).
+    pub fn unit_with_cap(&self, cap: usize) -> unit::Unit<'_> {
+        unit::Unit::with_cap(self.backend(), cap)
+    }
+
+    /// As `unit`, with no cap (sequence and counter work that is bounded by its own rules).
+    pub fn unit_unbounded(&self) -> unit::Unit<'_> {
+        unit::Unit::unbounded(self.backend())
+    }
 }
 
 /// Who is calling, as far as the engine needs to know: for row-level access and for the group
@@ -226,5 +245,23 @@ mod tests {
         assert_eq!(civil(1_735_689_599).rfc3339(), "2024-12-31T23:59:59Z");
         assert_eq!(civil(1_735_689_600).date(), "2025-01-01");
         assert_eq!(civil(-1).rfc3339(), "1969-12-31T23:59:59Z");
+    }
+
+    /// The three constructors of a unit differ only in the cap on the records it may touch.
+    #[test]
+    fn the_unit_constructors_differ_only_in_their_cap() {
+        use obop_registry::rules::MAX_EFFECT_RECORDS;
+        let eng = crate::Dispatcher::new().engine(&Store::new());
+
+        let mut u = eng.unit();
+        u.spend(MAX_EFFECT_RECORDS).unwrap();
+        assert!(u.spend(1).is_err());
+
+        let mut u = eng.unit_with_cap(3);
+        u.spend(3).unwrap();
+        assert!(u.spend(1).is_err());
+
+        let mut u = eng.unit_unbounded();
+        u.spend(MAX_EFFECT_RECORDS * 10).unwrap();
     }
 }

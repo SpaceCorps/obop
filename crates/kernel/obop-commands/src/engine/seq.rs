@@ -168,7 +168,7 @@ impl Dispatcher {
                     .and_then(|a| def.commands.iter().find(|c| c.name == a))
                     .and_then(|c| c.transition)
                     .map(|t| t.field);
-                let mut unit = Unit::unbounded(eng.backend());
+                let mut unit = eng.unit_unbounded();
                 let mut n = 0;
                 for (id, rec) in eng.backend().list(def.name)? {
                     if matches!(rec.get(f.name), Some(J::String(s)) if !s.is_empty()) {

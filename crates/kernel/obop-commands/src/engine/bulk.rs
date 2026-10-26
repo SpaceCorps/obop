@@ -384,7 +384,7 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
     }
 
     let look = lookup_fn(eng);
-    let mut unit = Unit::with_cap(eng.backend(), MAX_BULK_ROWS * 4);
+    let mut unit = eng.unit_with_cap(MAX_BULK_ROWS * 4);
     let mut ids: Vec<Option<String>> = Vec::with_capacity(rows.len());
     let mut errors: Vec<(usize, Option<usize>, String)> = Vec::new();
     let mut failed = 0usize;
