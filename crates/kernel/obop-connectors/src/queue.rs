@@ -252,7 +252,14 @@ impl Queue {
         d.insert("dead_at".into(), now.into());
         d.remove("lease_until");
         d.remove("lease_owner");
-        let _ = self.backend.insert(DEAD, id, &d);
+        // The job leaves the queue only once it is in the dead letters: if that write is refused
+        // it stays leased and is taken (and buried) again when the lease ends, never lost.
+        match self.backend.insert(DEAD, id, &d) {
+            Ok(()) => {}
+            Err(e) if obop_storage::fault::Fault::is_transient(&e) => return,
+            // Already buried (an earlier try whose answer was lost): the job can go.
+            Err(_) => {}
+        }
         let _ = self.backend.delete(JOBS, id);
     }
 
@@ -388,6 +395,33 @@ mod tests {
         assert_eq!(q.len(), 2, "a claimed job stays until it is completed");
         assert_eq!(q.drop_connection("c1"), Ok(2));
         assert!(q.is_empty());
+    }
+
+    #[test]
+    fn a_job_leaves_the_queue_only_once_it_is_in_the_dead_letters() {
+        use obop_storage::testing::{Flaky, Mode};
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let q = Queue::new(flaky.clone(), SecretBox::for_tests());
+        q.push(job("m1", 0)).unwrap();
+        let mut last = q.take_due(0).pop().unwrap();
+        last.attempt = 5;
+        // The dead letters cannot be written: the job must not be deleted behind that.
+        flaky.refuse_model(DEAD, Mode::All);
+        assert_eq!(
+            q.requeue_because(last.clone(), 0, 0, "down"),
+            Requeued::Dead
+        );
+        flaky.allow_models();
+        assert!(
+            b.get(JOBS, "m1").unwrap().is_some(),
+            "still queued, and not lost"
+        );
+        assert!(q.dead().is_empty());
+        // Buried when the store answers.
+        assert_eq!(q.requeue_because(last, 0, 0, "down"), Requeued::Dead);
+        assert!(b.get(JOBS, "m1").unwrap().is_none());
+        assert_eq!(q.dead().len(), 1);
     }
 
     #[test]

@@ -138,13 +138,13 @@ pub fn take_state(
     state: &str,
 ) -> Result<(Pending, String), String> {
     let bad = || "the authorization link is invalid or has expired".to_string();
-    let f = backend
-        .get(STATE_MODEL, state)
-        .ok()
-        .flatten()
-        .ok_or_else(bad)?;
-    // Single use, whatever happens next.
-    let _ = backend.delete(STATE_MODEL, state);
+    // A state the store would not give is "later": the link is not spent, and is not "invalid".
+    let f = backend.get(STATE_MODEL, state)?.ok_or_else(bad)?;
+    // Single use, and consumed atomically: two callbacks with one state cannot both pass, and a
+    // state that could not be consumed is not used (the link works again when the store answers).
+    if !backend.delete(STATE_MODEL, state)? {
+        return Err(bad());
+    }
     if f.get("created").and_then(J::as_u64).unwrap_or(0) + STATE_TTL_SECS < now() {
         return Err(bad());
     }
@@ -289,6 +289,37 @@ mod tests {
         );
         let (v, c) = pkce_pair();
         assert!(v.len() >= 43 && challenge_of(&v) == c);
+    }
+
+    #[test]
+    fn a_state_that_could_not_be_consumed_is_not_used_and_one_the_store_would_not_give_is_not_invalid()
+     {
+        use obop_storage::testing::{Flaky, Mode};
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let secrets = SecretBox::for_tests();
+        let mut f = Fields::new();
+        f.insert("connection".into(), "c1".into());
+        f.insert("actor".into(), "root".into());
+        f.insert(
+            "verifier".into(),
+            secrets.seal("oauth-state:st1", "the-verifier").into(),
+        );
+        f.insert("created".into(), now().into());
+        b.insert(STATE_MODEL, "st1", &f).unwrap();
+        // Refused to read: "later", not "the link is invalid".
+        flaky.refuse_model(STATE_MODEL, obop_storage::testing::Mode::Reads);
+        let e = take_state(&*flaky, &secrets, "st1").unwrap_err();
+        assert!(e.starts_with("storage_busy"), "{e}");
+        // Refused to consume: the state is not used (it would stay valid for a replay).
+        flaky.refuse_model(STATE_MODEL, Mode::Updates);
+        let e = take_state(&*flaky, &secrets, "st1").unwrap_err();
+        assert!(e.starts_with("storage_busy"), "{e}");
+        flaky.allow_models();
+        assert!(b.get(STATE_MODEL, "st1").unwrap().is_some(), "not spent");
+        // Once, and once only.
+        assert!(take_state(&*flaky, &secrets, "st1").is_ok());
+        assert!(take_state(&*flaky, &secrets, "st1").is_err());
     }
 
     fn cfg(port: u16) -> OAuthConfig {

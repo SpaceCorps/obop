@@ -120,21 +120,25 @@ impl SecretBox {
 
     /// The HMAC key behind the pseudonyms of `name` (for example `pseudonym:<connection id>`).
     /// Stored sealed on first use, so it survives a key rotation unchanged.
-    pub fn pseudonym_key(&self, name: &str) -> [u8; 32] {
+    ///
+    /// A store that would not answer is an error: a key derived from the current key instead of
+    /// the stored one (they differ after a rotation) would make pseudonyms that match nothing the
+    /// receiver was sent before, and would be remembered for the life of the cache (D74).
+    pub fn pseudonym_key(&self, name: &str) -> Result<[u8; 32], String> {
         let Some(store) = &self.store else {
-            return self.subkey(name);
+            return Ok(self.subkey(name));
         };
         if let Some((k, at)) = self.cache.lock().unwrap().get(name)
             && at.elapsed() < KEY_CACHE
         {
-            return *k;
+            return Ok(*k);
         }
-        let key = self.load_or_create_pseudonym_key(store, name, None);
+        let key = self.load_or_create_pseudonym_key(store, name, None)?;
         self.cache
             .lock()
             .unwrap()
             .insert(name.to_string(), (key, Instant::now()));
-        key
+        Ok(key)
     }
 
     /// Make sure the pseudonym key of `name` exists, derived from `anchor` (the key that sealed
@@ -147,7 +151,7 @@ impl SecretBox {
         let Some(store) = &self.store else {
             return Ok(());
         };
-        self.load_or_create_pseudonym_key(store, name, anchor);
+        self.load_or_create_pseudonym_key(store, name, anchor)?;
         Ok(())
     }
 
@@ -156,16 +160,20 @@ impl SecretBox {
         store: &Arc<dyn Backend>,
         name: &str,
         anchor: Option<&Key>,
-    ) -> [u8; 32] {
+    ) -> Result<[u8; 32], String> {
         let purpose = format!("pseudonym-key:{name}");
-        let read = || -> Option<[u8; 32]> {
-            let f = store.get(PSEUDONYM_KEY_MODEL, name).ok()??;
-            let sealed = f.get("key")?.as_str()?;
-            let bytes = self.open_bytes(&purpose, sealed).ok()?;
-            <[u8; 32]>::try_from(bytes.as_slice()).ok()
+        // `Err`: the store would not say. `Ok(None)`: there is no usable key stored.
+        let read = || -> Result<Option<[u8; 32]>, String> {
+            let Some(f) = store.get(PSEUDONYM_KEY_MODEL, name)? else {
+                return Ok(None);
+            };
+            Ok(f.get("key")
+                .and_then(|k| k.as_str())
+                .and_then(|sealed| self.open_bytes(&purpose, sealed).ok())
+                .and_then(|bytes| <[u8; 32]>::try_from(bytes.as_slice()).ok()))
         };
-        if let Some(k) = read() {
-            return k;
+        if let Some(k) = read()? {
+            return Ok(k);
         }
         let derived =
             obop_keys::legacy::box_derive(anchor.unwrap_or_else(|| self.current()).expose(), name);
@@ -173,22 +181,26 @@ impl SecretBox {
         f.insert("key".into(), self.seal_bytes(&purpose, &derived).into());
         // Another process may have created it first: then theirs is the one.
         match store.insert(PSEUDONYM_KEY_MODEL, name, &f) {
-            Ok(()) => derived,
-            Err(_) => read().unwrap_or(derived),
+            Ok(()) => Ok(derived),
+            Err(e) if obop_storage::fault::Fault::is_transient(&e) => Err(e),
+            Err(_) => Ok(read()?.unwrap_or(derived)),
         }
     }
 
-    /// Forget the stored pseudonym keys of a connection (revocation).
-    pub fn forget_pseudonym_keys(&self, connection: &str) {
+    /// Forget the stored pseudonym keys of a connection (revocation). A refusal of the store is
+    /// an error: a key that is still stored after the revocation was answered would link the
+    /// pseudonyms already sent. Safe to run again.
+    pub fn forget_pseudonym_keys(&self, connection: &str) -> Result<(), String> {
         if let Some(store) = &self.store {
             for name in [
                 format!("pseudonym:{connection}"),
                 format!("pseudonym:{connection}:vault"),
             ] {
-                let _ = store.delete(PSEUDONYM_KEY_MODEL, &name);
+                store.delete(PSEUDONYM_KEY_MODEL, &name)?;
                 self.cache.lock().unwrap().remove(&name);
             }
         }
+        Ok(())
     }
 
     pub fn is_sealed(s: &str) -> bool {
@@ -344,7 +356,7 @@ mod tests {
             b
         };
         let before = mk(KeyRing::from_secrets(OLD, &[]).unwrap());
-        let k1 = before.pseudonym_key("pseudonym:c1");
+        let k1 = before.pseudonym_key("pseudonym:c1").unwrap();
         assert_eq!(
             k1,
             before.subkey("pseudonym:c1"),
@@ -352,7 +364,7 @@ mod tests {
         );
         // A different ring with the same stored key record: unchanged while the old key is kept.
         let after = mk(KeyRing::from_secrets(NEW, &[OLD]).unwrap());
-        assert_eq!(after.pseudonym_key("pseudonym:c1"), k1);
+        assert_eq!(after.pseudonym_key("pseudonym:c1").unwrap(), k1);
         assert_ne!(
             after.subkey("pseudonym:c1"),
             k1,
@@ -364,12 +376,53 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(rec["key"].as_str().unwrap().starts_with("e2."));
-        after.forget_pseudonym_keys("c1");
+        after.forget_pseudonym_keys("c1").unwrap();
         assert!(
             backend
                 .get(PSEUDONYM_KEY_MODEL, "pseudonym:c1")
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn a_pseudonym_key_the_store_would_not_give_is_an_error_and_never_a_different_key() {
+        use obop_storage::testing::{Flaky, Mode};
+        // After a rotation the stored key is not the one the current key derives. A refused read
+        // fell back to the derivation, which gave other pseudonyms than the receiver had been sent
+        // and was remembered for the life of the cache.
+        let backend = obop_storage::open("memory:").unwrap();
+        let mk = |b: Arc<dyn Backend>, ring| {
+            let mut s = SecretBox::from_ring(ring).unwrap();
+            s.store = Some(b);
+            s
+        };
+        let before = mk(backend.clone(), KeyRing::from_secrets(OLD, &[]).unwrap());
+        let k1 = before.pseudonym_key("pseudonym:c1").unwrap();
+        let flaky = Flaky::new(backend.clone());
+        let after = mk(flaky.clone(), KeyRing::from_secrets(NEW, &[OLD]).unwrap());
+        flaky.refuse_model(PSEUDONYM_KEY_MODEL, Mode::Reads);
+        let refused = after.pseudonym_key("pseudonym:c1");
+        assert!(
+            matches!(&refused, Err(m) if m.starts_with("storage_busy")),
+            "{refused:?}"
+        );
+        flaky.allow_models();
+        assert_eq!(
+            after.pseudonym_key("pseudonym:c1").unwrap(),
+            k1,
+            "the stored key, not a derived one"
+        );
+        // Forgetting the keys of a revoked connection says so when it could not.
+        flaky.refuse_model(PSEUDONYM_KEY_MODEL, Mode::All);
+        assert!(after.forget_pseudonym_keys("c1").is_err());
+        flaky.allow_models();
+        assert!(
+            backend
+                .get(PSEUDONYM_KEY_MODEL, "pseudonym:c1")
+                .unwrap()
+                .is_some()
+        );
+        after.forget_pseudonym_keys("c1").unwrap();
     }
 }

@@ -57,17 +57,17 @@ impl Catalog for Dispatcher {
 
 /// A keyed pseudonym of `value`: stable for one connection, different for every other, and not
 /// reversible without the master key (and, even with it, only by guessing the plain value).
-pub fn pseudonym(secrets: &SecretBox, connection: &str, value: &J) -> String {
+pub fn pseudonym(secrets: &SecretBox, connection: &str, value: &J) -> Result<String, String> {
     let text = match value {
         J::String(s) => s.clone(),
         other => other.to_string(),
     };
     let mut m =
-        HmacSha256::new_from_slice(&secrets.pseudonym_key(&format!("pseudonym:{connection}")))
+        HmacSha256::new_from_slice(&secrets.pseudonym_key(&format!("pseudonym:{connection}"))?)
             .expect("HMAC takes any key length");
     m.update(b"v1|");
     m.update(text.as_bytes());
-    format!("psn_{}", hex(&m.finalize().into_bytes()[..16]))
+    Ok(format!("psn_{}", hex(&m.finalize().into_bytes()[..16])))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -477,7 +477,7 @@ impl Egress {
     ) -> Result<Map<String, J>, String> {
         let id = str_of(row, "id");
         let record = format!("{}:{id}", plan.model);
-        let reference = pseudonym(&self.secrets, &conn.id, &J::from(record.clone()));
+        let reference = pseudonym(&self.secrets, &conn.id, &J::from(record.clone()))?;
         if mode == Mode::Live {
             let mut f = Fields::new();
             f.insert("connection".into(), conn.id.clone().into());
@@ -501,7 +501,7 @@ impl Egress {
                 (_, J::Null) => J::Null,
                 (Treatment::Allow, v) => v.clone(),
                 (Treatment::Redact, _) => J::from(REDACTED),
-                (Treatment::Pseudonymise, v) => J::from(pseudonym(&self.secrets, &conn.id, v)),
+                (Treatment::Pseudonymise, v) => J::from(pseudonym(&self.secrets, &conn.id, v)?),
                 (Treatment::Mask, v) => J::from(self.mask(conn, &record, &pf.name, v, mode)?),
                 (Treatment::Deny, _) => continue,
             };
@@ -531,7 +531,7 @@ impl Egress {
             &self.secrets,
             &format!("{}:vault", conn.id),
             &J::from(text.clone()),
-        );
+        )?;
         if mode == Mode::Preview {
             return Ok(format!("TKN_{}", &index[4..16]));
         }
@@ -666,7 +666,7 @@ impl Egress {
                 }
             }
         }
-        self.secrets.forget_pseudonym_keys(connection);
+        self.secrets.forget_pseudonym_keys(connection)?;
         Ok(n)
     }
 
@@ -840,19 +840,17 @@ pub(crate) mod tests {
     #[test]
     fn pseudonyms_are_stable_per_connection_and_differ_across_connections() {
         let sb = SecretBox::for_tests();
-        let a = pseudonym(&sb, "c1", &J::from("ada@example.test"));
-        assert_eq!(a, pseudonym(&sb, "c1", &J::from("ada@example.test")));
-        assert_ne!(a, pseudonym(&sb, "c2", &J::from("ada@example.test")));
-        assert_ne!(a, pseudonym(&sb, "c1", &J::from("alan@example.test")));
+        let p = |sb: &SecretBox, c: &str, v: J| pseudonym(sb, c, &v).unwrap();
+        let a = p(&sb, "c1", J::from("ada@example.test"));
+        assert_eq!(a, p(&sb, "c1", J::from("ada@example.test")));
+        assert_ne!(a, p(&sb, "c2", J::from("ada@example.test")));
+        assert_ne!(a, p(&sb, "c1", J::from("alan@example.test")));
         assert!(!a.contains("ada") && a.len() == 4 + 32);
         // A different master key gives different pseudonyms: they are not derivable from the value.
         let other = SecretBox::from_secret("another-master-key-with-32-chars!!!").unwrap();
-        assert_ne!(a, pseudonym(&other, "c1", &J::from("ada@example.test")));
+        assert_ne!(a, p(&other, "c1", J::from("ada@example.test")));
         // Numbers and booleans pseudonymise too.
-        assert_ne!(
-            pseudonym(&sb, "c1", &J::from(5)),
-            pseudonym(&sb, "c1", &J::from("6"))
-        );
+        assert_ne!(p(&sb, "c1", J::from(5)), p(&sb, "c1", J::from("6")));
     }
 
     #[test]

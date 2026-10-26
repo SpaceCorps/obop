@@ -222,10 +222,17 @@ impl Ingress {
             .external_id
             .as_ref()
             .map(|e| format!("{}:{}", conn.id, sha256_hex(e.as_bytes())));
-        let existing = ext_key
-            .as_ref()
-            .and_then(|k| self.backend.get(EXTMAP, k).ok().flatten())
-            .map(|f| str_of(&f, "record").to_string());
+        // Whether this record was imported before decides between an update and a new record: a
+        // lookup the store refused is not "never imported", which would make a duplicate of it
+        // (the pull runs on the worker, where nothing else would stop it). The item is refused
+        // for now and the next run reads it again.
+        let existing = match &ext_key {
+            Some(k) => self
+                .backend
+                .get(EXTMAP, k)?
+                .map(|f| str_of(&f, "record").to_string()),
+            None => None,
+        };
         let call = |cmd: &str, input: Value| {
             self.dispatcher.call(
                 Surface::Rest,
@@ -258,7 +265,12 @@ impl Ingress {
                     },
                     _ => String::new(),
                 });
-                self.remember(conn, model, &id, ext_key.as_deref(), run_id);
+                self.remember(conn, model, &id, ext_key.as_deref(), run_id)
+                    .map_err(|e| {
+                        format!(
+                            "the record was saved, but its link to the external id could not be: {e}; the next run may add it again"
+                        )
+                    })?;
                 Ok(if cmd == "create" {
                     Done::Created(id)
                 } else {
@@ -285,24 +297,37 @@ impl Ingress {
         id: &str,
         ext_key: Option<&str>,
         run_id: &str,
-    ) {
+    ) -> Result<(), String> {
+        use obop_storage::fault::{Fault, patiently};
         if id.is_empty() {
-            return;
+            return Ok(());
         }
         let record = format!("{model}:{id}");
+        let pause = std::time::Duration::from_millis(250);
         let mut f = Fields::new();
         f.insert("connection".into(), conn.id.clone().into());
         f.insert("run".into(), run_id.into());
         f.insert("at".into(), iso(now()).into());
-        let _ = self.backend.insert(ORIGIN, &record, &f);
+        // Where the record came from (erasure and revocation find it by this): an entry that is
+        // there already is the same record seen again.
+        match patiently(4, pause, || self.backend.insert(ORIGIN, &record, &f)) {
+            Ok(()) => {}
+            Err(e) if Fault::is_transient(&e) => return Err(e),
+            Err(_) => {}
+        }
         if let Some(k) = ext_key {
             let mut m = Fields::new();
             m.insert("connection".into(), conn.id.clone().into());
             m.insert("record".into(), record.into());
-            if self.backend.insert(EXTMAP, k, &m).is_err() {
-                let _ = self.backend.update(EXTMAP, k, &m);
-            }
+            // The link that makes the next run update this record instead of adding it again.
+            patiently(4, pause, || match self.backend.insert(EXTMAP, k, &m) {
+                Ok(()) => Ok(()),
+                Err(e) if Fault::is_transient(&e) => Err(e),
+                // Already linked (an earlier run): the link is brought up to date.
+                Err(_) => self.backend.update(EXTMAP, k, &m).map(|_| ()),
+            })?;
         }
+        Ok(())
     }
 }
 

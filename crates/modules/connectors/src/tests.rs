@@ -1991,6 +1991,91 @@ fn a_pull_reads_a_json_api_into_a_model_with_a_mapping() {
     assert_clean(&ok(&e, &sam(), "sync_run.list", json!({})));
 }
 
+/// A tiny API that answers a JSON list of two leads, and the connection that pulls it.
+fn pull_env(e: &Env) -> String {
+    enable(e, "rest_api_pull", true);
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for s in l.incoming() {
+            let Ok(mut s) = s else { break };
+            let mut buf = [0u8; 4096];
+            let _ = s.read(&mut buf);
+            let body = json!({"data": {"items": [{"id": "a", "name": "Grace Hopper", "deal": "Mainframe"}, {"id": "b", "name": "Alan Turing", "deal": "Enigma"}]}}).to_string();
+            let _ = s.write_all(format!("HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}", body.len()).as_bytes());
+        }
+    });
+    let c = ok(
+        e,
+        &sam(),
+        "connection.create",
+        json!({
+        "name": "CRM export", "provider": "rest_api_pull",
+        "config": json!({"url": format!("http://127.0.0.1:{port}/leads"), "target_model": "lead", "records_path": "data.items",
+                         "external_id_key": "id", "mapping": json!({"deal": "title", "name": "contact_name"}).to_string()}).to_string(),
+        "credentials": json!({"api_key": "sk_live_pullkey_1234"}).to_string(),
+        "field_allowlist": json!({"lead": ["title", "contact_name"]}).to_string()}),
+    );
+    let id = c["id"].as_str().unwrap().to_string();
+    ok(
+        e,
+        &sam(),
+        "consent.create",
+        json!({"connection": id, "purpose": "Read leads from the partner CRM", "legal_basis": "contract"}),
+    );
+    ok(e, &sam(), "connection.connect", json!({"id": id}));
+    id
+}
+
+fn pull_result(e: &Env, id: &str) -> J {
+    let out = ok(e, &sam(), "connection.sync", json!({"id": id}));
+    serde_json::from_str(out["result"].as_str().unwrap()).unwrap()
+}
+
+#[test]
+fn a_pull_never_adds_a_record_again_because_the_store_would_not_say_it_was_imported() {
+    use obop_connectors::model::EXTMAP;
+    use obop_storage::testing::{Flaky, Mode};
+    // The pull runs on the worker, where nothing else stops a duplicate. The lookup of "was this
+    // external id imported before" that was refused read as "never": every record came again.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+    let id = pull_env(&e);
+    let res = pull_result(&e, &id);
+    assert_eq!(res["created"].as_u64(), Some(2));
+    flaky.refuse_model(EXTMAP, Mode::Reads);
+    let res = pull_result(&e, &id);
+    flaky.allow_models();
+    assert_eq!(
+        (res["created"].as_u64(), res["rejected"].as_u64()),
+        (Some(0), Some(2)),
+        "refused for now, not added again: {res}"
+    );
+    assert_eq!(e.s.backend().list("lead").unwrap().len(), 2);
+    let res = pull_result(&e, &id);
+    assert_eq!(res["updated"].as_u64(), Some(2), "{res}");
+    assert_eq!(e.s.backend().list("lead").unwrap().len(), 2);
+}
+
+#[test]
+fn a_pull_keeps_the_link_of_every_record_it_made_whichever_call_the_store_refuses() {
+    use obop_storage::testing::Flaky;
+    // One refused call at each position of a pull. The link to the external id is what makes the
+    // next run update a record instead of adding it again: written with a retry, and when it still
+    // cannot be, the item says so. After a healthy second run there are exactly two leads.
+    for skip in 0..60 {
+        let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+        let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+        let id = pull_env(&e);
+        flaky.refuse_call_after(skip);
+        let _ = raw(&e, &sam(), "connection.sync", json!({"id": id}));
+        flaky.allow_models();
+        let _ = pull_result(&e, &id);
+        let leads = e.s.backend().list("lead").unwrap().len();
+        assert_eq!(leads, 2, "skip {skip}: a record was added twice");
+    }
+}
+
 #[test]
 fn csv_export_goes_through_the_same_policy() {
     let e = env();
