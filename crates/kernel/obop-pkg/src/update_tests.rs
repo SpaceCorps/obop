@@ -267,6 +267,66 @@ fn a_breaking_update_without_a_step_is_refused_and_changes_nothing() {
 /// D72: a package update that changes the digits of a decimal must say how the stored values
 /// are rewritten; otherwise old records keep an old spelling next to new ones.
 #[test]
+fn a_reinstall_over_the_records_of_an_earlier_install_must_find_them_in_the_new_shape() {
+    let store = Store::new();
+    let shelf = Shelf::default();
+    let (d, inst) = setup(&store, &shelf);
+    let dec = |scale: u8| {
+        field(
+            "price",
+            &format!("kind = \"decimal\"\nprecision = 10\nscale = {scale}"),
+        )
+    };
+    inst.install(
+        &pkg("again", "0.1.0", &dec(2), "", "", ""),
+        "upload",
+        "root",
+    )
+    .unwrap();
+    rec(
+        &store,
+        "again_item",
+        "1",
+        &[("title", json!("a")), ("price", json!("12.50"))],
+    );
+    // An uninstall keeps the data, and the old shape is gone with the package record.
+    call(&d, &admin(), "module.uninstall", by_id("again")).unwrap();
+    let e = inst
+        .install(
+            &pkg("again", "0.2.0", &dec(4), "", "", ""),
+            "upload",
+            "root",
+        )
+        .unwrap_err();
+    assert!(
+        e.contains("again_item 1") && e.contains("12.50") && e.contains("decimal(10, 4)"),
+        "{e}"
+    );
+    assert!(e.contains("reformat_field"), "{e}");
+    assert!(
+        inst.list().iter().all(|p| p.id != "again"),
+        "nothing was installed"
+    );
+    // The same shape comes back fine, and then the update with a step is the way to change it.
+    inst.install(
+        &pkg("again", "0.1.0", &dec(2), "", "", ""),
+        "upload",
+        "root",
+    )
+    .unwrap();
+    shelf.offer(pkg(
+        "again",
+        "0.2.0",
+        &dec(4),
+        "[[migration]]\nfrom = \"<0.2.0\"\nop = \"reformat_field\"\nmodel = \"again_item\"\nfield = \"price\"\n",
+        "",
+        "",
+    ));
+    call(&d, &admin(), "module.upgrade", by_id("again")).unwrap();
+    assert_eq!(stored(&store, "again_item", "1")["price"], "12.5000");
+}
+
+#[test]
 fn changing_the_digits_of_a_decimal_needs_a_rewrite_step_and_the_step_does_it() {
     let store = Store::new();
     let shelf = Shelf::default();

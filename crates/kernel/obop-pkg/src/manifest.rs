@@ -702,6 +702,12 @@ impl Manifest {
                             st.field, f.kind
                         ));
                     }
+                    if f.computed.is_some() {
+                        return Err(format!(
+                            "{at}: {} is computed and stores nothing, so there is nothing to reformat",
+                            st.field
+                        ));
+                    }
                     if st.to.is_some() || st.value.is_some() || st.confirm {
                         return Err(format!("{at}: reformat_field takes no other key"));
                     }

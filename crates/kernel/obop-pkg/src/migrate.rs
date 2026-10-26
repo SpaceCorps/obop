@@ -99,7 +99,10 @@ pub fn diff(old: &Manifest, new: &Manifest) -> Vec<Change> {
                     } else {
                         // A decimal keeps its kind when its digits change, but the stored text has
                         // the old number of them (D72): one spelling per value needs a rewrite.
+                        // A computed decimal stores nothing, so there is nothing to rewrite.
                         if nf.kind == "decimal"
+                            && of.computed.is_none()
+                            && nf.computed.is_none()
                             && (of.precision, of.scale) != (nf.precision, nf.scale)
                         {
                             let shape = |f: &FieldM| {
@@ -306,8 +309,14 @@ fn shape_of(f: &FieldM) -> Option<J> {
             "precision": f.precision.unwrap_or(0),
             "scale": f.scale.unwrap_or(0),
             "round": f.round,
+            "unique": f.unique,
+            "unique_with": f.unique_with,
         })),
-        "datetime" => Some(json!({"kind": "datetime"})),
+        "datetime" => Some(json!({
+            "kind": "datetime",
+            "unique": f.unique,
+            "unique_with": f.unique_with,
+        })),
         _ => None,
     }
 }
@@ -568,16 +577,112 @@ fn is_empty(v: Option<&J>) -> bool {
     }
 }
 
+/// A record as read, as it will be, and what must change to get there.
+struct Edit {
+    orig: Fields,
+    cur: Fields,
+    patch: Fields,
+}
+
+/// A rewrite that rounds, or a rename that writes canonical text, can turn two different stored
+/// texts into one. Where the target field is `unique`, that would break the promise the update
+/// must keep, so it is refused, naming both records.
+fn check_unique(
+    steps: &[Step],
+    order: &[(String, String)],
+    edits: &BTreeMap<(String, String), Edit>,
+) -> Result<(), String> {
+    for s in steps {
+        let Some(shape) = &s.value else { continue };
+        if shape["unique"].as_bool() != Some(true) {
+            continue;
+        }
+        let target = if s.op == "rename_field" {
+            s.to.as_deref().unwrap_or("")
+        } else {
+            s.field.as_str()
+        };
+        let scope: Vec<&str> = shape["unique_with"]
+            .as_array()
+            .map(|a| a.iter().filter_map(J::as_str).collect())
+            .unwrap_or_default();
+        // value (with the values of the fields that scope it) -> first record, and whether a
+        // step changed it
+        let mut seen: BTreeMap<String, (&str, bool)> = BTreeMap::new();
+        for key in order.iter().filter(|k| k.0 == s.model) {
+            let Some(e) = edits.get(key) else { continue };
+            let Some(v) = e.cur.get(target).filter(|v| !is_empty(Some(v))) else {
+                continue;
+            };
+            let mut id = v.to_string();
+            for w in &scope {
+                id.push('\u{1}');
+                id.push_str(&e.cur.get(*w).map(J::to_string).unwrap_or_default());
+            }
+            let changed = e.patch.contains_key(target);
+            match seen.get(&id) {
+                Some((first, first_changed)) if changed || *first_changed => {
+                    return Err(format!(
+                        "{} {first} and {} would both hold {v} in {target} after this update, and {target} is unique; fix one of them first",
+                        s.model, key.1
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    seen.insert(id, (key.1.as_str(), changed));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A fresh install over records that an earlier install left behind (an uninstall keeps the
+/// data, and the package record with its old shape is gone): the stored decimals and instants
+/// must already be in the form of this version's fields, or the install is refused.
+pub fn check_stored_shapes(backend: &dyn Backend, new: &Manifest) -> Result<(), String> {
+    for nm in &new.model {
+        let shapes: Vec<(&FieldM, J)> = nm
+            .field
+            .iter()
+            .filter(|f| f.computed.is_none())
+            .filter_map(|f| shape_of(f).map(|s| (f, s)))
+            .collect();
+        if shapes.is_empty() || backend.count(&nm.name).unwrap_or(0) == 0 {
+            continue;
+        }
+        let rows = backend
+            .list(&nm.name)
+            .map_err(|e| format!("reading {}: {e}", nm.name))?;
+        for (id, rec) in rows {
+            for (f, shape) in &shapes {
+                let Some(v) = rec.get(&f.name).filter(|v| !v.is_null()) else {
+                    continue;
+                };
+                if !matches!(in_shape(shape, v), Ok(Some(ref n)) if n == v) {
+                    let want = match f.kind.as_str() {
+                        "decimal" => format!(
+                            "decimal({}, {})",
+                            f.precision.unwrap_or(0),
+                            f.scale.unwrap_or(0)
+                        ),
+                        _ => "an instant in canonical UTC form".to_string(),
+                    };
+                    return Err(format!(
+                        "{} {id} holds {v} in {}, which is not in the form of {want}: the records of an earlier install are still there, so install the version that wrote them first and update it to this one with a [[migration]] op = \"reformat_field\" for {}.{}",
+                        nm.name, f.name, nm.name, f.name
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The storage operations for `steps`: one compare-and-set per record that needs a change,
 /// guarded by the values the record held when it was read. The whole list is applied in one
 /// transaction by the caller.
 pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, String> {
-    /// A record as read, as it will be, and what must change to get there.
-    struct Edit {
-        orig: Fields,
-        cur: Fields,
-        patch: Fields,
-    }
     let mut edits: BTreeMap<(String, String), Edit> = BTreeMap::new();
     let mut order: Vec<(String, String)> = Vec::new();
     for s in steps {
@@ -643,6 +748,7 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
             }
         }
     }
+    check_unique(steps, &order, &edits)?;
     Ok(order
         .into_iter()
         .filter_map(|key| {
@@ -819,6 +925,92 @@ mod tests {
         );
         assert_eq!(p.steps.len(), 1);
         assert_eq!(p.steps[0].value.as_ref().unwrap()["scale"], 4);
+    }
+
+    #[test]
+    fn a_computed_decimal_stores_nothing_so_its_digits_may_change_freely() {
+        let calc = |p: u8, s: u8| m("0.2.0", &dec(p, s, "computed = \"1.5\""), "");
+        let old = m("0.1.0", &dec(8, 2, "computed = \"1.5\""), "");
+        for new in [calc(8, 4), calc(8, 1), calc(4, 2)] {
+            assert!(diff(&old, &new).is_empty(), "{:?}", diff(&old, &new));
+            let p = plan_data(&old, &new, &|_| 9);
+            assert!(
+                p.blockers.is_empty() && p.steps.is_empty(),
+                "{:?}",
+                p.blockers
+            );
+        }
+        // Changing a stored decimal into a computed one, or back, leaves nothing to rewrite
+        // either: the computed side has no stored value.
+        let stored = m("0.1.0", &dec(8, 2, ""), "");
+        assert!(
+            diff(&stored, &calc(8, 4))
+                .iter()
+                .all(|c| c.kind != "field_reshaped")
+        );
+        assert!(
+            diff(&old, &m("0.2.0", &dec(8, 4, ""), ""))
+                .iter()
+                .all(|c| c.kind != "field_reshaped")
+        );
+        // And a rewrite step for a computed field is refused when the package is read.
+        let e = Manifest::parse(&format!(
+            "[module]\nid = \"mig\"\nversion = \"0.2.0\"\nname = \"M\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\n[[model]]\nname = \"mig_item\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{}\n{}",
+            dec(8, 4, "computed = \"1.5\""),
+            step_to("<0.2.0", "reformat_field", "price", None)
+        ))
+        .err()
+        .unwrap_or_default();
+        assert!(e.contains("computed and stores nothing"), "{e}");
+    }
+
+    #[test]
+    fn a_rewrite_that_makes_two_values_one_is_refused_where_the_field_is_unique() {
+        let run =
+            |b: &dyn Backend, new: &Manifest| build_ops(b, &steps_for(new, &Version::new(0, 1, 0)));
+        let mem = || {
+            let b = obop_storage::open("memory:").unwrap();
+            // Two different four-digit values that round to the same two-digit one.
+            b.insert("mig_item", "1", &rec(&[("price", json!("12.5049"))]))
+                .unwrap();
+            b.insert("mig_item", "2", &rec(&[("price", json!("12.5001"))]))
+                .unwrap();
+            b.insert("mig_item", "3", &rec(&[("price", json!("7.0000"))]))
+                .unwrap();
+            b
+        };
+        let step = step_to("<0.2.0", "reformat_field", "price", None);
+        let unique = m(
+            "0.2.0",
+            &dec(10, 2, "round = \"half_up\"\nunique = true"),
+            &step,
+        );
+        let e = run(&*mem(), &unique).unwrap_err();
+        assert!(
+            e.contains("mig_item 1 and 2") && e.contains("12.50") && e.contains("unique"),
+            "{e}"
+        );
+        // Without `unique` the same rewrite is fine, and so is a unique field that stays distinct.
+        let plain = m("0.2.0", &dec(10, 2, "round = \"half_up\""), &step);
+        assert_eq!(run(&*mem(), &plain).unwrap().len(), 3);
+        let b = mem();
+        b.update("mig_item", "2", &rec(&[("price", json!("12.6001"))]))
+            .unwrap();
+        assert_eq!(run(&*b, &unique).unwrap().len(), 3);
+        // A rename into a unique decimal writes canonical text, which can also make two values
+        // one ("1" and "1.0" are two texts and one number).
+        let b = obop_storage::open("memory:").unwrap();
+        b.insert("mig_item", "1", &rec(&[("p", json!("1"))]))
+            .unwrap();
+        b.insert("mig_item", "2", &rec(&[("p", json!("1.0"))]))
+            .unwrap();
+        let renamed = m(
+            "0.2.0",
+            &dec(8, 2, "unique = true"),
+            &step_to("<0.2.0", "rename_field", "p", Some("price")),
+        );
+        let e = run(&*b, &renamed).unwrap_err();
+        assert!(e.contains("mig_item 1 and 2") && e.contains("1.00"), "{e}");
     }
 
     #[test]
