@@ -338,6 +338,88 @@ fn a_reinstall_over_the_records_of_an_earlier_install_must_find_them_in_the_new_
     assert_eq!(stored(&store, "again_item", "1")["price"], "12.5000");
 }
 
+/// A count the store would not give is not "no records": the check of what is stored, and the
+/// plan of an upgrade, must not be made with a zero that only means the store was busy.
+#[test]
+fn a_count_the_store_would_not_give_is_never_read_as_no_records() {
+    use obop_storage::testing::{Flaky, Mode};
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let store = Store::over(obop_storage::guarded(flaky.clone()));
+    let shelf = Shelf::default();
+    let (d, inst) = setup(&store, &shelf);
+    let dec = |scale: u8| {
+        field(
+            "price",
+            &format!("kind = \"decimal\"\nprecision = 10\nscale = {scale}"),
+        )
+    };
+    inst.install(&pkg("cnt", "0.1.0", &dec(2), "", "", ""), "upload", "root")
+        .unwrap();
+    rec(
+        &store,
+        "cnt_item",
+        "1",
+        &[("title", json!("a")), ("price", json!("12.50"))],
+    );
+    // The check of stored shapes on a reinstall: refused, not skipped.
+    let new = Manifest::parse(&pkg("cnt", "0.2.0", &dec(4), "", "", "")).unwrap();
+    flaky.refuse_model("cnt_item", Mode::Reads);
+    let e = crate::migrate::check_stored_shapes(&*store.backend(), &new).unwrap_err();
+    assert!(e.contains("storage_busy"), "{e}");
+    flaky.allow_models();
+    let e = crate::migrate::check_stored_shapes(&*store.backend(), &new).unwrap_err();
+    assert!(
+        e.contains("12.50"),
+        "healthy, the stored value is what is found: {e}"
+    );
+    // An upgrade that changes the digits of a decimal and says nothing about the stored values is
+    // blocked when there are records. With the count refused it was not (no records, no blocker),
+    // and the records stayed in the old spelling next to new ones.
+    shelf.offer(pkg("cnt", "0.2.0", &dec(4), "", "", ""));
+    flaky.refuse_model("cnt_item", Mode::Reads);
+    let e = err(call(&d, &admin(), "module.upgrade", by_id("cnt")));
+    flaky.allow_models();
+    assert!(e.contains("could not be counted"), "{e}");
+    assert_eq!(version_of(&inst, "cnt"), "0.1.0", "nothing was upgraded");
+    let e = err(call(&d, &admin(), "module.upgrade", by_id("cnt")));
+    assert!(
+        e.contains("reformat_field"),
+        "healthy: the usual blocker: {e}"
+    );
+    // With the step the upgrade does it.
+    shelf.offer(pkg(
+        "cnt",
+        "0.2.0",
+        &dec(4),
+        "[[migration]]\nfrom = \"<0.2.0\"\nop = \"reformat_field\"\nmodel = \"cnt_item\"\nfield = \"price\"\n",
+        "",
+        "",
+    ));
+    call(&d, &admin(), "module.upgrade", by_id("cnt")).unwrap();
+    assert_eq!(stored(&store, "cnt_item", "1")["price"], "12.5000");
+}
+
+#[test]
+fn the_settings_a_change_is_compared_with_are_never_nothing_because_the_store_would_not_give_them()
+{
+    use obop_storage::testing::{Flaky, Mode};
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let store = Store::over(obop_storage::guarded(flaky.clone()));
+    let (_d, inst) = setup(&store, &Shelf::default());
+    inst.set_settings(r#"{"security": {"require_mfa_for_all": true}}"#)
+        .unwrap();
+    // The audit line of a security change says old and new: with the old one unreadable the change
+    // is refused, not recorded as a change from nothing.
+    flaky.refuse_model("obop_setting", Mode::Reads);
+    let e = inst
+        .set_settings(r#"{"security": {"require_mfa_for_all": false}}"#)
+        .unwrap_err();
+    flaky.allow_models();
+    assert!(e.starts_with("storage_busy"), "{e}");
+    assert!(inst.settings().contains("true"), "unchanged");
+    assert_eq!(inst.settings(), inst.try_settings().unwrap());
+}
+
 #[test]
 fn changing_the_digits_of_a_decimal_needs_a_rewrite_step_and_the_step_does_it() {
     let store = Store::new();

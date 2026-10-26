@@ -247,11 +247,13 @@ impl Auth {
         format!("auth.fail:{name}")
     }
 
+    /// Too many wrong passwords lately. A counter the store would not give is not "none": the
+    /// answer is "locked", so that the attempts cannot go on unseen while the count cannot be
+    /// kept (D74).
     pub(crate) fn locked_out(&self, name: &str) -> bool {
         self.backend
             .counter_get(&Self::failure_key(name))
-            .unwrap_or(0)
-            >= u64::from(MAX_FAILURES)
+            .map_or(true, |n| n >= u64::from(MAX_FAILURES))
     }
 
     pub(crate) fn record_failure(&self, name: &str) {

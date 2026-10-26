@@ -30,6 +30,9 @@ const TABLE: &str = "obop_package";
 /// an `Err` stops the operation with nothing changed.
 /// Whether a model holds records, for deciding that a data step rewrites something: a count that
 /// could not be read is taken to mean it does (the gate fails closed, never open).
+/// `(module, from, to, steps)`: the data steps a plan runs for one package.
+type DataSteps = (String, String, String, Vec<migrate::Step>);
+
 pub(crate) fn holds_records(count: Result<usize, String>) -> bool {
     count.map_or(true, |n| n > 0)
 }
@@ -213,8 +216,12 @@ impl Installer {
     }
 
     /// The data steps a plan would run, per package: `(module, from, to, steps)`.
-    fn data_steps_of(&self, plan: &Plan) -> Vec<(String, String, String, Vec<migrate::Step>)> {
+    ///
+    /// A refused count is an error, not "no records": a step that rewrites stored records must
+    /// not lose its backup because the store was busy when they were counted.
+    fn data_steps_of(&self, plan: &Plan) -> Result<Vec<DataSteps>, String> {
         let mut out = Vec::new();
+        let refused = std::cell::RefCell::new(None::<String>);
         for step in plan.work() {
             if step.action != StepAction::Upgrade {
                 continue;
@@ -229,7 +236,13 @@ impl Installer {
             else {
                 continue;
             };
-            let count = |m: &str| self.backend.count(m).unwrap_or(0);
+            let count = |m: &str| match self.backend.count(m) {
+                Ok(n) => n,
+                Err(e) => {
+                    refused.borrow_mut().get_or_insert(e);
+                    0
+                }
+            };
             // A step on a model that holds no records rewrites nothing: it needs no backup.
             let steps: Vec<migrate::Step> = migrate::plan_data(&om, &step.manifest, &count)
                 .steps
@@ -245,7 +258,10 @@ impl Installer {
                 ));
             }
         }
-        out
+        if let Some(e) = refused.into_inner() {
+            return Err(format!("the records of a module could not be counted: {e}"));
+        }
+        Ok(out)
     }
 
     /// Run the gate for `command` over `steps` (the data steps about to run); `None` when there
@@ -541,7 +557,14 @@ impl Installer {
         }
         // What an upgrade does to the records already stored (D63).
         let installed = self.installed_manifests();
-        let count = |model: &str| self.backend.count(model).unwrap_or(0);
+        let refused = std::cell::RefCell::new(None::<String>);
+        let count = |model: &str| match self.backend.count(model) {
+            Ok(n) => n,
+            Err(e) => {
+                refused.borrow_mut().get_or_insert(e);
+                0
+            }
+        };
         let mut data = Vec::new();
         for s in &plan.steps {
             if s.action != StepAction::Upgrade {
@@ -550,6 +573,10 @@ impl Installer {
             if let Some(old) = installed.get(&s.id) {
                 data.push((s.id.clone(), migrate::plan_data(old, &s.manifest, &count)));
             }
+        }
+        // A plan made with a count the store refused would miss the data that blocks it.
+        if let Some(e) = refused.into_inner() {
+            return Err(format!("the records of a module could not be counted: {e}"));
         }
         for (id, dp) in data {
             for b in &dp.blockers {
@@ -745,7 +772,7 @@ impl Installer {
                 .collect::<Vec<_>>()
                 .join("; "));
         }
-        let guarded = self.data_steps_of(plan);
+        let guarded = self.data_steps_of(plan)?;
         let receipt = self.run_gate(
             "module.upgrade",
             guarded
@@ -895,8 +922,18 @@ impl Installer {
                 ));
             }
             let om = Manifest::parse(old_text).map_err(|e| format!("the installed copy: {e}"))?;
-            let count = |m: &str| self.backend.count(m).unwrap_or(0);
+            let refused = std::cell::RefCell::new(None::<String>);
+            let count = |m: &str| match self.backend.count(m) {
+                Ok(n) => n,
+                Err(e) => {
+                    refused.borrow_mut().get_or_insert(e);
+                    0
+                }
+            };
             let dp = migrate::plan_data(&om, manifest, &count);
+            if let Some(e) = refused.into_inner() {
+                return Err(format!("the records of a module could not be counted: {e}"));
+            }
             if !dp.blockers.is_empty() {
                 return Err(dp.blockers.join("; "));
             }
@@ -1315,14 +1352,20 @@ impl Installer {
         Ok(())
     }
 
-    /// The instance-wide UI settings (theme, app order): one JSON object kept as text.
+    /// The instance-wide UI settings (theme, app order): one JSON object kept as text. For a
+    /// display: settings the store would not give show as none.
     pub fn settings(&self) -> String {
-        self.backend
-            .get("obop_setting", "instance")
-            .ok()
-            .flatten()
+        self.try_settings().unwrap_or_else(|_| "{}".into())
+    }
+
+    /// As [`Installer::settings`], and a refused read is an error: what a change is compared with
+    /// (the audit line of a security setting says old and new) must not be "nothing".
+    pub fn try_settings(&self) -> Result<String, String> {
+        Ok(self
+            .backend
+            .get("obop_setting", "instance")?
             .and_then(|f| f.get("value").and_then(J::as_str).map(String::from))
-            .unwrap_or_else(|| "{}".into())
+            .unwrap_or_else(|| "{}".into()))
     }
 
     /// As `set_settings_as`, for the operator at the command line.
@@ -1341,7 +1384,7 @@ impl Installer {
             Ok(v @ J::Object(_)) => v,
             _ => return Err("settings must be a JSON object".into()),
         };
-        let old: J = serde_json::from_str(&self.settings()).unwrap_or(J::Null);
+        let old: J = serde_json::from_str(&self.try_settings()?).unwrap_or(J::Null);
         let mut f = Fields::new();
         f.insert("value".into(), J::from(text));
         if !self.backend.update("obop_setting", "instance", &f)? {

@@ -1107,6 +1107,31 @@ fn a_password_change_never_frees_a_session_that_owes_enrolment_because_a_policy_
 }
 
 #[test]
+fn a_lockout_counter_the_store_would_not_give_is_a_lockout_and_not_no_attempts() {
+    use obop_storage::testing::Mode;
+    // Read as "no failed attempts" a refused counter let the guessing go on while the count could
+    // not be kept. It is "locked" until the store answers.
+    let (r, flaky) = flaky_rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    assert!(!r.a.locked_out("ada"));
+    flaky.refuse_model("auth_user", Mode::Reads);
+    assert!(
+        !r.a.locked_out("ada"),
+        "another model refused: the counter is fine"
+    );
+    flaky.allow_models();
+    flaky.set(Mode::Reads);
+    assert!(r.a.locked_out("ada"));
+    assert!(
+        r.a.login_step("ada", PW).is_err(),
+        "not even the right password signs in while the count cannot be read"
+    );
+    flaky.set(Mode::Healthy);
+    assert!(!r.a.locked_out("ada"));
+    assert!(r.a.login_step("ada", PW).is_ok());
+}
+
+#[test]
 fn a_sign_in_without_a_second_step_takes_turns_with_a_disable_of_the_account() {
     use std::time::Duration;
     // The administrator's disable holds the account lock while it ends the sessions. A sign-in
