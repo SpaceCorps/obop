@@ -36,6 +36,7 @@
 //! both rewritten without the key, all fail `verify`; without the key nothing opens
 //! (`restore_key_required`) and nothing is written. Format 1 backups keep restoring.
 
+use crate::fsutil;
 use base64::Engine as _;
 use obop_keys::stream::{self, OpenReader, SealWriter};
 use obop_keys::{KeyRing, hex, random, unhex};
@@ -57,13 +58,22 @@ pub const FORMAT: u64 = 1;
 pub const FORMAT_SEALED: u64 = 2;
 /// The stable code of the error for a sealed backup whose key is not configured.
 pub const KEY_REQUIRED: &str = "restore_key_required";
+/// The stable code of the error for a plain backup offered to an instance that seals its own.
+pub const NOT_SEALED: &str = "backup_not_sealed";
+/// The stable code of the error for a restore whose records were restored but whose uploaded
+/// files were not all written.
+pub const FILES_FAILED: &str = "restore_files_failed";
 const BATCH: usize = 1000;
 const CIPHER: &str = "chacha20poly1305-stream-v1";
 const MAC_PURPOSE: &str = "backup-manifest";
+/// Part files of backups that nothing has written to for this long belong to a run that died.
+const STALE_PART: std::time::Duration = std::time::Duration::from_secs(6 * 3600);
 
 /// The code at the start of an error of this module (`restore_key_required: ...`), if it has one.
 pub fn error_code(e: &str) -> Option<&'static str> {
-    e.starts_with(KEY_REQUIRED).then_some(KEY_REQUIRED)
+    [KEY_REQUIRED, NOT_SEALED, FILES_FAILED]
+        .into_iter()
+        .find(|c| e.starts_with(c))
 }
 
 fn hexs(b: &[u8]) -> String {
@@ -172,6 +182,12 @@ impl<W: Write> Sink<W> {
 pub struct Keys {
     ring: KeyRing,
     from: KeysFrom,
+    /// New backups are sealed with the ring's current key. False for a ring that only opens
+    /// (`OBOP_BACKUP_KEY_PREVIOUS` without any current key).
+    seal: bool,
+    /// A plain (format 1) backup is accepted although this instance seals its own: an old backup
+    /// from before a key was set, which the operator vouches for (`--allow-plain`).
+    allow_plain: bool,
 }
 
 /// Where the sealing key comes from, for messages.
@@ -198,7 +214,18 @@ impl Keys {
         } else {
             KeysFrom::BackupKey
         };
-        Keys { ring, from }
+        Keys {
+            seal: !ring.is_empty(),
+            ring,
+            from,
+            allow_plain: false,
+        }
+    }
+
+    /// Accept plain (format 1) backups although a key is configured (see the field).
+    pub fn allowing_plain(mut self, yes: bool) -> Keys {
+        self.allow_plain = yes;
+        self
     }
 
     /// The keys of this process's environment: `OBOP_BACKUP_KEY` (and `OBOP_BACKUP_KEY_PREVIOUS`)
@@ -221,32 +248,52 @@ impl Keys {
         server: &KeyRing,
     ) -> Result<Keys, String> {
         let server = server.environment_only();
-        let Some(current) = current.map(str::trim).filter(|c| !c.is_empty()) else {
-            let from = if server.is_empty() {
-                KeysFrom::Nowhere
-            } else {
-                KeysFrom::ServerKey
-            };
-            return Ok(Keys { ring: server, from });
-        };
         let previous = previous.unwrap_or_default();
         let prev: Vec<&str> = previous
             .split(',')
             .map(str::trim)
             .filter(|p| !p.is_empty())
             .collect();
+        let Some(current) = current.map(str::trim).filter(|c| !c.is_empty()) else {
+            // No key of its own: the server key seals. Earlier backup keys that are still listed
+            // open what they sealed, behind the server's keys.
+            let from = if server.is_empty() {
+                KeysFrom::Nowhere
+            } else {
+                KeysFrom::ServerKey
+            };
+            let old = match prev.split_first() {
+                None => KeyRing::default(),
+                Some((first, rest)) => KeyRing::from_secrets(first, rest)
+                    .map_err(|e| format!("OBOP_BACKUP_KEY_PREVIOUS: {e}"))?,
+            };
+            return Ok(Keys {
+                seal: !server.is_empty(),
+                ring: server.merged(&old),
+                from,
+                allow_plain: false,
+            });
+        };
         let own = KeyRing::from_secrets(current, &prev)
             .map_err(|e| format!("OBOP_BACKUP_KEY or OBOP_BACKUP_KEY_PREVIOUS: {e}"))?;
         // Older backups were sealed with the server key before a key of its own existed.
         Ok(Keys {
             ring: own.merged(&server),
             from: KeysFrom::BackupKey,
+            seal: true,
+            allow_plain: false,
         })
     }
 
     /// Whether a new backup can be sealed.
     pub fn can_seal(&self) -> bool {
-        self.ring.current().is_some()
+        self.seal && self.ring.current().is_some()
+    }
+
+    /// Whether a plain backup is refused: this instance seals its own, so a plain one cannot be
+    /// told from a forgery by anyone who can write the backup directory.
+    pub fn refuses_plain(&self) -> bool {
+        self.can_seal() && !self.allow_plain
     }
 
     pub fn from(&self) -> KeysFrom {
@@ -297,6 +344,12 @@ pub struct Manifest {
     pub models: BTreeMap<String, usize>,
     /// Uploaded blobs whose bytes are in the data file.
     pub blobs: usize,
+    /// Uploaded blobs whose stored bytes no longer hash to their id when the backup was made:
+    /// they are left out, because a restore could not write them (at most 50 ids are listed).
+    pub blobs_damaged: Vec<String>,
+    /// The name of the database the backup was taken from (`obop_meta/instance`), if it has one.
+    /// A migration gate refuses a backup that names another database.
+    pub database_id: Option<String>,
     /// Format 2: random id of this backup (the data key is wrapped for it).
     pub backup_id: Option<String>,
     pub encryption: Option<Encryption>,
@@ -326,6 +379,12 @@ impl Manifest {
         });
         if let Some(r) = &self.records_sha256 {
             j["records_sha256"] = J::from(r.as_str());
+        }
+        if let Some(d) = &self.database_id {
+            j["database_id"] = J::from(d.as_str());
+        }
+        if !self.blobs_damaged.is_empty() {
+            j["blobs_damaged"] = json!(self.blobs_damaged);
         }
         if let (Some(id), Some(e)) = (&self.backup_id, &self.encryption) {
             j["backup_id"] = J::from(id.as_str());
@@ -375,13 +434,20 @@ impl Manifest {
                         .map(String::from)
                         .ok_or_else(|| format!("the manifest's encryption has no {k}"))
                 };
+                // The chunk size sizes buffers before anything is authenticated: bound it here.
+                let chunk_size = e["chunk_size"]
+                    .as_u64()
+                    .ok_or("the manifest's encryption has no chunk_size")?;
+                if !(16..=stream::MAX_CHUNK as u64).contains(&chunk_size) {
+                    return Err(
+                        "the manifest's encryption chunk_size is out of range: not a backup this obop wrote"
+                            .into(),
+                    );
+                }
                 Some(Encryption {
                     cipher: es("cipher")?,
                     key_id: es("key_id")?,
-                    chunk_size: e["chunk_size"]
-                        .as_u64()
-                        .ok_or("the manifest's encryption has no chunk_size")?
-                        as usize,
+                    chunk_size: chunk_size as usize,
                     chunks: e["chunks"]
                         .as_u64()
                         .ok_or("the manifest's encryption has no chunks")?,
@@ -408,6 +474,15 @@ impl Manifest {
                 .map(|(k, v)| (k.clone(), v.as_u64().unwrap_or(0) as usize))
                 .collect(),
             blobs: j["blobs"].as_u64().unwrap_or(0) as usize,
+            blobs_damaged: j["blobs_damaged"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            database_id: j["database_id"].as_str().map(String::from),
             backup_id: j["backup_id"].as_str().map(String::from),
             encryption,
             mac: j["mac"].as_str().map(String::from),
@@ -443,14 +518,19 @@ pub fn default_name(t: u64, sealed: bool) -> String {
 }
 
 /// Where the backup goes: a path ending in `.gz` or `.obbk` is the data file; anything else is a
-/// directory (created if needed) that gets a timestamped file name.
-fn resolve_out(out: &Path, sealed: bool, at: u64) -> PathBuf {
+/// directory (created if needed) that gets a timestamped file name. A sealed backup is not gzip:
+/// it cannot be given a `.gz` name, which tools would take for a file they can read.
+fn resolve_out(out: &Path, sealed: bool, at: u64) -> Result<PathBuf, String> {
     let name = out.to_string_lossy();
     if out.is_dir() || !(name.ends_with(".gz") || name.ends_with(".obbk")) {
-        out.join(default_name(at, sealed))
-    } else {
-        out.to_path_buf()
+        return Ok(out.join(default_name(at, sealed)));
     }
+    if sealed && name.ends_with(".gz") {
+        return Err(format!(
+            "{name} would hold a sealed backup (format 2), which gzip cannot read. Name the file .obbk, give a directory, or pass --plain for an unencrypted .gz"
+        ));
+    }
+    Ok(out.to_path_buf())
 }
 
 /// Write a backup of `backend` to `out` (a directory, or the data file). `progress` is told the
@@ -497,6 +577,12 @@ pub fn create_sealed(
 
 /// As [`create_sealed`], with the time the manifest records given (Unix seconds): the scheduler's
 /// clock, which a test moves by hand.
+///
+/// Nothing is left behind by a run that fails or is killed except part files (`*.part`), which the
+/// next backup into the directory sweeps. The finished files appear in this order: the manifest,
+/// then the data file, each flushed first and published without replacing anything, then the
+/// directory is flushed; a data file therefore never appears without its manifest, and a name
+/// that is taken is never overwritten.
 pub fn create_at(
     backend: &Arc<dyn Backend>,
     blobs: Option<&dyn Blobs>,
@@ -507,30 +593,88 @@ pub fn create_at(
     progress: &mut dyn FnMut(usize),
 ) -> Result<Created, String> {
     let sealed = keys.can_seal();
-    let format = if sealed { FORMAT_SEALED } else { FORMAT };
-    let data_path = resolve_out(out, sealed, at);
+    let data_path = resolve_out(out, sealed, at)?;
     if let Some(dir) = data_path.parent().filter(|d| !d.as_os_str().is_empty()) {
-        std::fs::create_dir_all(dir)
+        fsutil::create_dir_private(dir)
             .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+        // What an earlier run that was killed left behind.
+        fsutil::sweep_parts(dir, STALE_PART);
     }
-    if data_path.exists() {
-        return Err(format!(
-            "{} already exists; a backup is never overwritten",
-            data_path.display()
-        ));
+    let manifest_path = manifest_path_for(&data_path);
+    for p in [&data_path, &manifest_path] {
+        if p.exists() {
+            return Err(format!(
+                "{} already exists; a backup is never overwritten",
+                p.display()
+            ));
+        }
     }
-    let part = {
-        let mut s = data_path.as_os_str().to_os_string();
-        s.push(".part");
-        PathBuf::from(s)
-    };
-    let file = File::create(&part).map_err(|e| format!("cannot write {}: {e}", part.display()))?;
+    let (part, manifest_part) = (
+        fsutil::part_name(&data_path),
+        fsutil::part_name(&manifest_path),
+    );
+    let file = fsutil::create_new_private(&part)
+        .map_err(|e| format!("cannot write {}: {e}", part.display()))?;
+    let mut published = Published::default();
+    let result = write_backup(
+        backend,
+        blobs,
+        schema_version,
+        (&data_path, &part),
+        (&manifest_path, &manifest_part),
+        file,
+        keys,
+        at,
+        &mut published,
+        progress,
+    );
+    if result.is_err() {
+        let _ = std::fs::remove_file(&part);
+        let _ = std::fs::remove_file(&manifest_part);
+        // Only what this run published: a name another run took is not ours to remove.
+        if published.manifest {
+            let _ = std::fs::remove_file(&manifest_path);
+        }
+        if published.data {
+            let _ = std::fs::remove_file(&data_path);
+        }
+    }
+    result
+}
+
+/// Which final names a run has published, so that a failure removes exactly those.
+#[derive(Default)]
+struct Published {
+    manifest: bool,
+    data: bool,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn write_backup(
+    backend: &Arc<dyn Backend>,
+    blobs: Option<&dyn Blobs>,
+    schema_version: u64,
+    (data_path, part): (&Path, &Path),
+    (manifest_path, manifest_part): (&Path, &Path),
+    file: File,
+    keys: &Keys,
+    at: u64,
+    published: &mut Published,
+    progress: &mut dyn FnMut(usize),
+) -> Result<Created, String> {
+    let sealed = keys.can_seal();
+    let format = if sealed { FORMAT_SEALED } else { FORMAT };
     let tee = Tee {
         inner: BufWriter::new(file),
         hash: Sha256::new(),
         bytes: 0,
     };
     let created_at = rfc3339(at);
+    let database_id = backend
+        .get(obop_migrate::META_MODEL, obop_migrate::INSTANCE_ID)
+        .ok()
+        .flatten()
+        .and_then(|f| f.get("id").and_then(J::as_str).map(String::from));
     let io = |e: std::io::Error| format!("write failed: {e}");
     // What a sealed backup needs before the first byte: its id, its data key, and the header.
     let mut seal_info: Option<(String, String)> = None;
@@ -567,12 +711,13 @@ pub fn create_at(
     let header = json!({
         "type": "header", "format": format, "core_version": obop_types::CORE_VERSION,
         "schema_version": schema_version, "created_at": created_at, "source": backend.kind(),
+        "database_id": database_id,
     });
     writeln!(gz, "{header}").map_err(io)?;
     let mut content = Sha256::new();
     let mut records = 0usize;
     let mut models: BTreeMap<String, usize> = BTreeMap::new();
-    let result = backend.export(BATCH, &mut |batch| {
+    backend.export(BATCH, &mut |batch| {
         for (m, i, d) in batch {
             let line = format!("{}\n", json!({"m": m, "i": i, "d": d}));
             content.update(line.as_bytes());
@@ -583,35 +728,33 @@ pub fn create_at(
         records += batch.len();
         progress(records);
         Ok(())
-    });
-    if let Err(e) = result {
-        let _ = std::fs::remove_file(&part);
-        return Err(e);
-    }
+    })?;
     let records_sha256 = hexs(&content.clone().finalize());
     let mut blob_count = 0usize;
+    let mut blobs_damaged: Vec<String> = Vec::new();
     if let Some(blobs) = blobs {
-        let written = (|| -> Result<(), String> {
-            for b in blobs.export()? {
-                let b = b?;
-                let line = format!(
-                    "{}\n",
-                    json!({
-                        "blob": b.info.id, "ct": b.info.content_type, "w": b.info.width,
-                        "h": b.info.height, "created": b.info.created,
-                        "x": base64::engine::general_purpose::STANDARD.encode(&b.bytes),
-                    })
-                );
-                content.update(line.as_bytes());
-                gz.write_all(line.as_bytes())
-                    .map_err(|e| format!("write failed: {e}"))?;
-                blob_count += 1;
+        for b in blobs.export()? {
+            let b = b?;
+            // A file whose bytes rotted on disk no longer hashes to its id. Backing it up would
+            // make a restore fail halfway; it is left out and named in the manifest instead.
+            if hexs(&Sha256::digest(&b.bytes)) != b.info.id {
+                if blobs_damaged.len() < 50 {
+                    blobs_damaged.push(b.info.id.clone());
+                }
+                continue;
             }
-            Ok(())
-        })();
-        if let Err(e) = written {
-            let _ = std::fs::remove_file(&part);
-            return Err(e);
+            let line = format!(
+                "{}\n",
+                json!({
+                    "blob": b.info.id, "ct": b.info.content_type, "w": b.info.width,
+                    "h": b.info.height, "created": b.info.created,
+                    "x": base64::engine::general_purpose::STANDARD.encode(&b.bytes),
+                })
+            );
+            content.update(line.as_bytes());
+            gz.write_all(line.as_bytes())
+                .map_err(|e| format!("write failed: {e}"))?;
+            blob_count += 1;
         }
     }
     let content_sha256 = hexs(&content.finalize());
@@ -627,7 +770,6 @@ pub fn create_at(
     tee.inner.get_ref().sync_all().map_err(io)?;
     let (data_sha256, data_bytes) = (hexs(&tee.hash.clone().finalize()), tee.bytes);
     drop(tee);
-    std::fs::rename(&part, &data_path).map_err(|e| format!("cannot finish the backup: {e}"))?;
     let mut manifest = Manifest {
         format,
         core_version: obop_types::CORE_VERSION.into(),
@@ -645,6 +787,8 @@ pub fn create_at(
         records,
         models,
         blobs: blob_count,
+        blobs_damaged,
+        database_id,
         backup_id: None,
         encryption: None,
         mac: None,
@@ -668,17 +812,30 @@ pub fn create_at(
             .map_err(|e| e.to_string())?;
         manifest.mac = Some(hexs(&tag));
     }
-    let manifest_path = manifest_path_for(&data_path);
-    std::fs::write(&manifest_path, format!("{:#}\n", manifest.to_json()))
-        .map_err(|e| format!("cannot write {}: {e}", manifest_path.display()))?;
+    // The manifest first, flushed, under its final name; then the data file. A crash between the
+    // two leaves a manifest with no data file, which is not a backup and is never listed as one.
+    let text = format!("{:#}\n", manifest.to_json());
+    let mut mf = fsutil::create_new_private(manifest_part)
+        .map_err(|e| format!("cannot write {}: {e}", manifest_part.display()))?;
+    mf.write_all(text.as_bytes())
+        .and_then(|()| mf.sync_all())
+        .map_err(|e| format!("cannot write {}: {e}", manifest_part.display()))?;
+    drop(mf);
+    fsutil::publish_new(manifest_part, manifest_path)?;
+    published.manifest = true;
+    fsutil::publish_new(part, data_path)?;
+    published.data = true;
+    if let Some(dir) = data_path.parent() {
+        fsutil::sync_dir(dir);
+    }
     Ok(Created {
-        data_path,
-        manifest_path,
+        data_path: data_path.to_path_buf(),
+        manifest_path: manifest_path.to_path_buf(),
         manifest,
     })
 }
 
-/// The manifest next to a data file (or the manifest itself when that is what `file` names).
+// The manifest next to a data file (or the manifest itself when that is what `file` names).
 fn read_manifest(file: &Path) -> Result<(Manifest, PathBuf), String> {
     let (m, data, _) = read_manifest_json(file)?;
     Ok((m, data))
@@ -718,6 +875,13 @@ pub struct Verified {
 fn key_required(key_id: &str) -> String {
     format!(
         "{KEY_REQUIRED}: this backup is sealed with key {key_id}, which is not configured. Set OBOP_BACKUP_KEY (or OBOP_SECRET_KEY, and OBOP_SECRET_KEY_PREVIOUS for earlier keys) to the key that sealed it; nothing was read or written"
+    )
+}
+
+fn not_sealed(keys: &Keys) -> String {
+    format!(
+        "{NOT_SEALED}: this backup is plain (format 1), but this instance seals its backups (key {}). A plain backup is not authenticated: anyone who can write the backup directory could have forged it. If it is an old backup from before a key was set and you trust where it has been, pass --allow-plain",
+        keys.current_id().unwrap_or_default()
     )
 }
 
@@ -887,6 +1051,11 @@ fn verify_inner(file: &Path, keys: &Keys, structure_only: bool) -> Result<Verifi
             m.format
         ));
     }
+    // A key is configured and the file says it needs none: a plain pair can be made by anyone who
+    // can write the directory, so it is refused unless the operator vouches for it.
+    if !m.sealed() && keys.refuses_plain() {
+        return Err(not_sealed(keys));
+    }
     let (sha, bytes) = file_sha256(&data)?;
     if bytes != m.data_bytes {
         return Err(format!(
@@ -943,6 +1112,7 @@ fn verify_inner(file: &Path, keys: &Keys, structure_only: bool) -> Result<Verifi
         || head["format"].as_u64() != Some(m.format)
         || head["schema_version"].as_u64() != Some(m.schema_version)
         || head["core_version"].as_str() != Some(m.core_version.as_str())
+        || head["database_id"].as_str() != m.database_id.as_deref()
     {
         return Err("the header of the data file disagrees with the manifest".into());
     }
@@ -964,6 +1134,16 @@ fn verify_inner(file: &Path, keys: &Keys, structure_only: bool) -> Result<Verifi
         if let Some(id) = j["blob"].as_str() {
             if !j["x"].is_string() || id.len() != 64 {
                 return Err(format!("blob {} is malformed", blobs + 1));
+            }
+            // An uploaded file must hash to its id: otherwise a restore would replace the
+            // records and only then find that it cannot write the file.
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(j["x"].as_str().unwrap_or_default())
+                .map_err(|_| format!("blob {id} is not valid base64"))?;
+            if hexs(&Sha256::digest(&bytes)) != id {
+                return Err(format!(
+                    "blob {id} does not hash to its id: the uploaded file in this backup is damaged"
+                ));
             }
             content.update(line.as_bytes());
             content.update(b"\n");
@@ -1019,10 +1199,14 @@ fn verify_inner(file: &Path, keys: &Keys, structure_only: bool) -> Result<Verifi
 /// How often `needle` occurs in the bytes of `file` as stored (a canary scan, OBR-DAT-056): a
 /// sealed backup holds none of its records' text, so a planted string must not be found.
 pub fn count_in_file(file: &Path, needle: &[u8]) -> Result<usize, String> {
+    let f = File::open(file).map_err(|e| format!("cannot read {}: {e}", file.display()))?;
+    count_in_reader(f, needle)
+}
+
+fn count_in_reader(mut f: impl Read, needle: &[u8]) -> Result<usize, String> {
     if needle.is_empty() {
         return Err("an empty canary matches everything".into());
     }
-    let mut f = File::open(file).map_err(|e| format!("cannot read {}: {e}", file.display()))?;
     let (mut buf, mut hits) = (vec![0u8; 1 << 16], 0usize);
     let mut carry: Vec<u8> = Vec::new();
     loop {
@@ -1045,6 +1229,19 @@ pub fn count_in_file(file: &Path, needle: &[u8]) -> Result<usize, String> {
     Ok(hits)
 }
 
+/// A canary scan of a backup (the data file or its manifest) as its format makes it readable by
+/// someone without the key: a sealed file is scanned as stored; a plain one only compresses its
+/// records, so it is scanned after decompression, which is what `gunzip` gives anyone. Returns the
+/// number of occurrences and whether the backup is sealed.
+pub fn count_in_backup(file: &Path, needle: &[u8]) -> Result<(usize, bool), String> {
+    let (m, data) = read_manifest(file)?;
+    if m.sealed() {
+        return count_in_file(&data, needle).map(|n| (n, true));
+    }
+    let f = File::open(&data).map_err(|e| format!("cannot read {}: {e}", data.display()))?;
+    count_in_reader(flate2::read::GzDecoder::new(f), needle).map(|n| (n, false))
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RestoreOptions {
     /// Replace what the target holds. Without it a non-empty target is refused.
@@ -1063,6 +1260,9 @@ pub struct Restored {
     /// The backup is from an older schema: run `obop migrate run` before serving.
     pub needs_migration: bool,
     pub dry_run: bool,
+    /// The backup was opened with its key and every chunk and the manifest authenticated. A plain
+    /// backup is never authenticated.
+    pub authenticated: bool,
 }
 
 /// Restore `file` into `backend`. `latest_schema` is the schema version this build writes.
@@ -1107,6 +1307,38 @@ pub fn restore_sealed(
     keys: &Keys,
     progress: &mut dyn FnMut(usize),
 ) -> Result<Restored, String> {
+    restore_with_rows(
+        backend,
+        blobs,
+        latest_schema,
+        file,
+        opts,
+        keys,
+        Vec::new(),
+        progress,
+    )
+}
+
+/// As [`restore_sealed`], and `extra` rows written in the same transaction as the backup's own:
+/// a rollback records its reason there, so the restored database never exists without it. The
+/// extra rows are in `Restored::records` neither as written nor as expected.
+///
+/// The records are one transaction. The uploaded files are written after it, because what holds
+/// each file is read back from the records; every file's bytes were checked against its id before
+/// anything was written, so what can still fail is the store itself (a full disk). Then the error
+/// starts with `restore_files_failed`: the records are restored, and running the restore again
+/// with `force` writes the files.
+#[allow(clippy::too_many_arguments)]
+pub fn restore_with_rows(
+    backend: &Arc<dyn Backend>,
+    blobs: Option<&dyn Blobs>,
+    latest_schema: u64,
+    file: &Path,
+    opts: RestoreOptions,
+    keys: &Keys,
+    extra: Vec<Row>,
+    progress: &mut dyn FnMut(usize),
+) -> Result<Restored, String> {
     // Every check that can fail without writing happens before anything is written.
     let v = verify_with(file, keys)?;
     let m = v.manifest;
@@ -1132,24 +1364,34 @@ pub fn restore_sealed(
             target_records,
             needs_migration,
             dry_run: true,
+            authenticated: v.authenticated,
         });
     }
     let (_, data) = read_manifest(file)?;
     let (mut it, _) = open_lines(&data, &m, keys)?;
     it.next(); // the header, checked by verify
+    let extra_len = extra.len();
+    let mut extra = Some(extra);
     let mut written = 0usize;
     let mut first_blob: Option<J> = None;
+    let mut over = false;
     let mut next = || -> Result<Option<Vec<Row>>, String> {
         let mut batch: Vec<Row> = Vec::new();
-        while batch.len() < BATCH {
-            let Some(line) = it.next() else { break };
+        while !over && batch.len() < BATCH {
+            let Some(line) = it.next() else {
+                over = true;
+                break;
+            };
             let line = line.map_err(|e| format!("read failed: {e}"))?;
             let j: J = serde_json::from_str(&line).map_err(|_| "a line is not JSON")?;
             if j["type"] == "end" {
+                over = true;
                 break;
             }
             if j["blob"].is_string() {
+                // The blobs follow the records; this is the first of them.
                 first_blob = Some(j);
+                over = true;
                 break;
             }
             let fields: Fields = j["d"].as_object().cloned().ok_or("a record is malformed")?;
@@ -1160,7 +1402,8 @@ pub fn restore_sealed(
             ));
         }
         if batch.is_empty() {
-            return Ok(None);
+            // The backup's own rows are all in: the caller's rows go in the same transaction.
+            return Ok(extra.take().filter(|x| !x.is_empty()));
         }
         written += batch.len();
         progress(written);
@@ -1194,31 +1437,46 @@ pub fn restore_sealed(
             };
             blobs.import(&ExportedBlob { info, bytes })
         };
+        let files_failed = |id: &str, e: String| {
+            format!(
+                "{FILES_FAILED}: the {} records are restored, but the uploaded file {id} could not be written: {e}. Run the restore again with --force to write the files",
+                n.saturating_sub(extra_len)
+            )
+        };
         for j in blob_lines.drain(..) {
-            put(&j)?;
+            let id = j["blob"].as_str().unwrap_or_default().to_string();
+            put(&j).map_err(|e| files_failed(&id, e))?;
         }
         for line in it {
             let line = line.map_err(|e| format!("read failed: {e}"))?;
             let j: J = serde_json::from_str(&line).map_err(|_| "a line is not JSON")?;
             if j["blob"].is_string() {
-                put(&j)?;
+                let id = j["blob"].as_str().unwrap_or_default().to_string();
+                put(&j).map_err(|e| files_failed(&id, e))?;
             }
         }
     }
-    if n != m.records {
+    if n != m.records + extra_len {
         // Cannot happen after a verified read; if it does, the import was one transaction, but
         // say so rather than claim success.
-        return Err(format!("restored {n} records, expected {}", m.records));
+        return Err(format!(
+            "restored {} records, expected {}",
+            n.saturating_sub(extra_len),
+            m.records
+        ));
     }
     Ok(Restored {
-        records: n,
+        records: m.records,
         manifest: m,
         target_records,
         needs_migration,
         dry_run: false,
+        authenticated: v.authenticated,
     })
 }
 
+#[cfg(test)]
+mod review_tests;
 #[cfg(test)]
 mod sealed_tests;
 #[cfg(test)]

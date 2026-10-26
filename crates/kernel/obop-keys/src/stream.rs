@@ -33,7 +33,7 @@ pub const MAGIC: &[u8; 8] = b"OBOPBK2\n";
 pub const CHUNK: usize = 64 * 1024;
 const TAG: usize = 16;
 const MAX_HEADER: usize = 64 * 1024;
-const MAX_CHUNK: usize = 4 * 1024 * 1024;
+pub const MAX_CHUNK: usize = 4 * 1024 * 1024;
 
 /// Why a sealed stream did not open. The messages are fixed text: no key, no plaintext.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -388,8 +388,9 @@ impl<R: Read> Read for OpenReader<R> {
 
 /// Check the framing of a sealed stream and compute its chain without a key: every chunk has a
 /// plausible length, the stream ends exactly after a chunk. Returns the number of chunks and the
-/// chain head (hex). This detects a flipped bit only through the chain a manifest recorded; the
-/// authenticity check needs the key.
+/// chain head (hex). The chain commits to the chunk tags, their number and their order; it says
+/// nothing about the ciphertext bodies (a manifest's checksum of the whole file covers those
+/// against damage, and only the key authenticates them).
 pub fn scan<R: Read>(mut inner: R, chunk: usize) -> io::Result<(u64, String)> {
     // The chunk size usually comes from a manifest nobody has authenticated yet: bound it before
     // it sizes anything, as `OpenReader` and `SealWriter` do.
@@ -565,11 +566,19 @@ mod tests {
         std::io::copy(&mut o, &mut std::io::sink()).unwrap();
         assert_eq!(o.chain_head(), s.chain_head);
         assert_eq!(o.chunks_read(), s.chunks);
-        // A change anywhere in a chunk changes the head.
+        // The chain commits to the chunk tags (and so to their number and order), not to the
+        // ciphertext between them: a change to a tag changes the head; a change to a body byte
+        // does not, and is caught by the checksum of the whole file that the manifest records
+        // and, with the key, by the cipher. This is a framing check, not a content check.
         let mut b = bytes.clone();
         let last = b.len() - 3;
         b[last] ^= 1;
         assert_ne!(scan(&b[..], 64).unwrap().1, s.chain_head);
+        let mut body = bytes.clone();
+        let first_body = 8 + 4 + 7 + 4 + 5;
+        body[first_body] ^= 1;
+        assert_eq!(scan(&body[..], 64).unwrap().1, s.chain_head);
+        assert!(open(&body, &KEY, 64).is_err(), "the cipher refuses it");
         // A cut is a framing error.
         assert!(scan(&bytes[..bytes.len() - 5], 64).is_err());
         assert!(scan(&b"not a backup"[..], 64).is_err());

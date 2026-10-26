@@ -215,6 +215,7 @@ fn one_hundred_single_bit_flips_in_the_data_file_are_each_detected() {
     let len = std::fs::metadata(&c.data_path).unwrap().len() as usize;
     verify_with(&c.data_path, &keys(KA)).unwrap();
     let mut x: u64 = 88_172_645_463_325_252;
+    let mut reached_the_cipher = 0;
     for i in 0..100 {
         x ^= x << 13;
         x ^= x >> 7;
@@ -240,15 +241,26 @@ fn one_hundred_single_bit_flips_in_the_data_file_are_each_detected() {
             {
                 resign(&c, &keys(KA));
                 let e = verify_with(&c.data_path, &keys(KA)).unwrap_err();
+                // The cipher's own refusal, not some later parse error: a chunk that does not
+                // authenticate, or a header or wrapped key that was changed.
                 assert!(
-                    e.contains("authenticate") || e.contains("does not open") || e.contains("not"),
-                    "{e}"
+                    e.contains("does not authenticate")
+                        || e.contains("wrapped data key does not open")
+                        || e.contains("disagrees with the manifest")
+                        || e.contains("sealed header"),
+                    "flip {i} at {at}: {e}"
                 );
+                reached_the_cipher += 1;
             }
             flip(&c.data_path, at, bit);
             std::fs::write(&c.manifest_path, good).unwrap();
         }
     }
+    // The guard above must not hide the check: most of the ten flips reach the cipher.
+    assert!(
+        reached_the_cipher >= 8,
+        "only {reached_the_cipher} of 10 flips reached the cipher"
+    );
     verify_with(&c.data_path, &keys(KA)).unwrap();
 }
 
@@ -388,6 +400,11 @@ fn truncated_and_extended_sealed_backups_are_detected_even_when_the_manifest_agr
         verify_with(&c.data_path, &keys(KA)).is_err(),
         "the manifest disagrees"
     );
+    // The same with the manifest made to agree with the longer file: only the cipher can still
+    // tell, and it says the file was extended.
+    resign(&c, &keys(KA));
+    let e = verify_with(&c.data_path, &keys(KA)).unwrap_err();
+    assert!(e.contains("extended"), "{e}");
     std::fs::write(&c.manifest_path, &manifest).unwrap();
     std::fs::write(&c.data_path, &bytes).unwrap();
     verify_with(&c.data_path, &keys(KA)).unwrap();
@@ -468,17 +485,22 @@ fn format_one_backups_still_restore_and_are_never_called_authenticated() {
     seed(&src);
     let c = make_plain(&src, &dir);
     assert_eq!(c.manifest.format, 1);
-    let v = verify_with(&c.data_path, &keys(KA)).unwrap();
+    // Without a key configured a plain backup is checked and restored as it always was.
+    let v = verify_with(&c.data_path, &Keys::none()).unwrap();
     assert!(!v.authenticated);
     let dst = dir.sqlite("dst.db");
-    // With a key configured or not, a plain backup restores.
+    // With a key configured it is refused (it could be a forgery: see review_tests) unless the
+    // operator vouches for it, and even then it is never called authenticated.
+    let vouched = keys(KA).allowing_plain(true);
+    let v = verify_with(&c.data_path, &vouched).unwrap();
+    assert!(!v.authenticated);
     restore_sealed(
         &dst,
         None,
         2,
         &c.data_path,
         RestoreOptions::default(),
-        &keys(KA),
+        &vouched,
         &mut |_| {},
     )
     .unwrap();
