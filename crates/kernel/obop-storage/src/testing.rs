@@ -42,6 +42,8 @@ pub struct Flaky {
     run_len: AtomicI64,
     /// The key the next `kv_get` finds gone: another submit gave it back just before.
     vanish: AtomicBool,
+    /// -1: off; n: updates to let through before the acknowledgement of one is lost.
+    lose_ack: AtomicI64,
 }
 
 impl Flaky {
@@ -62,6 +64,7 @@ impl Flaky {
             run_left: AtomicI64::new(0),
             run_len: AtomicI64::new(0),
             vanish: AtomicBool::new(false),
+            lose_ack: AtomicI64::new(-1),
         })
     }
 
@@ -113,6 +116,14 @@ impl Flaky {
         self.run_left.store(0, SeqCst);
         self.run_len.store(0, SeqCst);
         self.vanish.store(false, SeqCst);
+        self.lose_ack.store(-1, SeqCst);
+    }
+
+    /// Let `skip` updates through, then make the next one commit and answer `storage_unavailable`:
+    /// the connection broke after the server committed and before the acknowledgement arrived, so
+    /// the outcome of the change is unknown to the caller.
+    pub fn lose_the_acknowledgement_of_an_update_after(&self, skip: i64) {
+        self.lose_ack.store(skip, SeqCst);
     }
 
     /// Delete the key that the next `kv_get` asks for just before it is read: the submit that held
@@ -301,7 +312,20 @@ impl Backend for Flaky {
     }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         self.gate_u(model)?;
-        self.inner.update(model, id, patch)
+        let lost = self.lose_ack.try_update(SeqCst, SeqCst, |n| match n {
+            n if n > 0 => Some(n - 1),
+            0 => Some(-1),
+            _ => None,
+        });
+        let done = self.inner.update(model, id, patch)?;
+        if lost == Ok(0) {
+            self.refused.fetch_add(1, SeqCst);
+            fault::note(Fault::Unavailable);
+            return Err(
+                Fault::Unavailable.message("the connection broke while the change was in flight")
+            );
+        }
+        Ok(done)
     }
     fn count(&self, model: &str) -> Result<usize> {
         self.gate_m(false, model)?;

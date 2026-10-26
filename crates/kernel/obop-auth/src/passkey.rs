@@ -468,6 +468,7 @@ impl Auth {
                 "too many attempts, try again in a minute".into(),
             ));
         }
+        self.refuse_if_disabled(&name, &key)?;
         let result = self
             .verify_assertion(ctx, "second", credential, false)
             .and_then(|(user, rec)| {
@@ -692,12 +693,18 @@ impl PasskeyApi for Auth {
             self.put(name, &patch)?;
             out["recovery_codes"] = json!(codes);
         }
-        // The session that just enrolled is no longer limited to enrolment.
+        // The session that just enrolled is no longer limited to enrolment. A needed step, as
+        // after a password change: a session that stays limited with no word of it is a request
+        // that lost a step without saying so.
         let mut lift = Fields::new();
         lift.insert("limited".into(), J::Bool(false));
-        let _ = self
-            .backend
-            .update("auth_token", &token_hash(session), &lift);
+        let ch = Change::new(name, "passkey_register", name, &format!("added \"{label}\"")).then(
+            "the passkey is registered; this session is still limited to enrolment: sign in again (the recovery codes of this request were not shown: make new ones under Security)",
+        );
+        self.needed(&ch, "lifting the enrolment limit of this session", || {
+            self.backend
+                .update("auth_token", &token_hash(session), &lift)
+        })?;
         self.event(
             name,
             "passkey_register",
@@ -801,10 +808,7 @@ impl PasskeyApi for Auth {
         // What the repeat needs to finish the work goes into the same atomic batch as the removal:
         // the passkey, the user's record and the note that its other sessions are owed an end are
         // one change, so none of them can be missing (D74).
-        patch.insert(
-            "sessions_owed".into(),
-            json!({"op": op, "keep": keep, "at": self.now()}),
-        );
+        patch.extend(self.owed_patch(name, &op, Some(&keep))?);
         self.backend
             .apply(&[
                 Op::Delete {
@@ -826,7 +830,7 @@ impl PasskeyApi for Auth {
             &format!("removed \"{}\"", rec["name"].as_str().unwrap_or("")),
         );
         let n = self.revoke_user_sessions(name, Some(&keep), &ch)?;
-        self.clear_owed(name);
+        self.clear_owed(name, &op);
         self.event(
             name,
             "passkey_remove",

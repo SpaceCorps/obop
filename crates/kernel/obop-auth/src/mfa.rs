@@ -378,6 +378,25 @@ impl Auth {
         self.session_outcome(&name, limited)
     }
 
+    /// The account was disabled after the person passed the password step: the second step must
+    /// not give them a session, which nothing would end later (it began after the disable, so
+    /// neither the sessions ended by it nor the note that enabling settles would cover it) and
+    /// which would come alive the day the account is enabled. The refused read of the account is
+    /// the store's trouble, not "enabled".
+    pub(crate) fn refuse_if_disabled(&self, name: &str, key: &str) -> Result<(), MfaError> {
+        if self.user_record(name)?["disabled"].as_bool() == Some(true) {
+            let _ = self.backend.delete(MFA_TOKEN_TABLE, key);
+            self.event(
+                name,
+                "login_refused",
+                name,
+                "the account was disabled before the second step of the sign-in",
+            );
+            return Err(MfaError::Expired);
+        }
+        Ok(())
+    }
+
     pub(crate) fn login_mfa_impl(
         &self,
         mfa_token: &str,
@@ -406,6 +425,7 @@ impl Auth {
                 "too many wrong codes for this sign-in; enter your password again".into(),
             ));
         }
+        self.refuse_if_disabled(&name, &key)?;
         match self.check_second_factor(&name, code, recovery) {
             Ok(()) => {
                 // Single use: the token is gone whatever happens next.
@@ -479,13 +499,15 @@ impl Auth {
         let keep = session.map(token_hash);
         // Written before the factor goes: if ending the sessions is then refused, the repeat knows.
         self.owe_revocation(name, "mfa_disable", keep.as_deref())?;
+        let before = obop_storage::fault::change_count();
         if let Err(e) = self.clear_factor(name) {
-            // The factor is still on: nothing is owed.
-            self.clear_owed(name);
+            // The factor is still on, unless the refusal left it unknown (the connection broke
+            // while the change was in flight): then the note stays for the repeat.
+            self.retract_owed(name, "mfa_disable", &e, before);
             return Err(e);
         }
         let n = self.revoke_user_sessions(name, keep.as_deref(), &ch)?;
-        self.clear_owed(name);
+        self.clear_owed(name, "mfa_disable");
         self.event(
             name,
             "disable",
@@ -708,7 +730,15 @@ impl MfaApi for Auth {
             && !u["totp_pending"].is_string()
             && passkeys_now.is_empty()
         {
-            // The repeat of a reset that could not end the person's sessions finishes that (D74).
+            // The repeat of a reset that stopped part of the way finishes it (D74): every step
+            // again, not only the sessions. A person whose only factor was a passkey has no
+            // `mfa_enabled` to tell the first request got no further than deleting the passkeys,
+            // while their recovery codes, the passwordless flag and a passkey proof are still on
+            // the account (and would work again as a second factor once a passkey is enrolled).
+            if crate::account::owed_notes(&u).contains_key("mfa_reset") {
+                self.clear_passkeys(&target)?;
+                self.clear_factor(&target)?;
+            }
             if let Some(n) = self.finish_owed(&target, "mfa_reset", &ch)? {
                 self.event(
                     &target,
@@ -723,10 +753,18 @@ impl MfaApi for Auth {
             )));
         }
         self.owe_revocation(&target, "mfa_reset", None)?;
-        let passkeys = self.clear_passkeys(&target)?;
+        let before = obop_storage::fault::change_count();
+        let passkeys = match self.clear_passkeys(&target) {
+            Ok(n) => n,
+            Err(e) => {
+                // Refused before anything was removed: nothing is owed.
+                self.retract_owed(&target, "mfa_reset", &e, before);
+                return Err(e);
+            }
+        };
         self.clear_factor(&target)?;
         self.revoke_sessions(&target, &ch)?;
-        self.clear_owed(&target);
+        self.clear_owed(&target, "mfa_reset");
         self.event(
             &target,
             "reset",

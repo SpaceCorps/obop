@@ -375,8 +375,9 @@ impl Auth {
         // Written before the account goes: if ending its tokens is then refused, enabling the
         // account later finishes that first, so no token the offboarding missed comes back.
         self.owe_revocation(&target, "user_offboard", None)?;
+        let before = obop_storage::fault::change_count();
         if let Err(e) = self.put(&target, &patch) {
-            self.clear_owed(&target);
+            self.retract_owed(&target, "user_offboard", &e, before);
             return Err(e);
         }
 
@@ -396,7 +397,10 @@ impl Auth {
             "account disabled and offboarded",
         );
         let tally = self.end_account_tokens(&target, &ch)?;
-        self.clear_owed(&target);
+        // Every token of the account is ended, so a disable that could not end its sessions is
+        // finished by this as well.
+        self.clear_owed(&target, "user_offboard");
+        self.clear_owed(&target, "user_disable");
         let Tally {
             sessions,
             agents,
@@ -487,15 +491,14 @@ impl Auth {
     /// refuses the enabling.
     pub(crate) fn settle_before_enable(&self, name: &str, ch: &Change) -> Result<(), MfaError> {
         let u = self.user_record(name)?;
-        match u["sessions_owed"]["op"].as_str() {
-            Some("user_disable") => {
-                self.finish_owed(name, "user_disable", ch)?;
-            }
-            Some("user_offboard") => {
-                self.end_account_tokens(name, ch)?;
-                self.clear_owed(name);
-            }
-            _ => {}
+        let notes = crate::account::owed_notes(&u);
+        if notes.contains_key("user_offboard") {
+            // Ends every token of the account, which covers what a disable left as well.
+            self.end_account_tokens(name, ch)?;
+            self.clear_owed(name, "user_offboard");
+            self.clear_owed(name, "user_disable");
+        } else if notes.contains_key("user_disable") {
+            self.finish_owed(name, "user_disable", ch)?;
         }
         Ok(())
     }

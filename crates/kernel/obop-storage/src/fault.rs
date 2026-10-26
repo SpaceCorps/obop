@@ -101,6 +101,15 @@ impl Fault {
 const GUARD_REFUSAL: &str =
     "an earlier storage call of this request was refused, so this change was not made";
 
+/// Did the call that failed with `msg` perhaps change something? Only a refusal whose outcome is
+/// unknown does: the connection broke while a change was in flight (`storage_unavailable`), and
+/// the server may have committed it before the acknowledgement was lost. A full pool, a statement
+/// that ran into its time limit (the server rolled it back), the guard's own refusal and any
+/// error that is not a fault of the store did not.
+pub fn may_have_applied(msg: &str) -> bool {
+    Fault::of_message(msg) == Some(Fault::Unavailable) && !msg.contains(GUARD_REFUSAL)
+}
+
 #[derive(Clone, Copy, Default)]
 struct Scope {
     active: bool,
@@ -250,6 +259,13 @@ pub fn wrote() {
             c.set(s);
         }
     });
+}
+
+/// How many changes this request has committed so far (and not undone); 0 outside a request
+/// scope. For code that wants to know whether the call it made changed anything before it
+/// failed: the count is the same before and after when it did not.
+pub fn change_count() -> u32 {
+    SCOPE.with(|c| c.get().changes)
 }
 
 /// A step this request needed was refused even after trying again, and a change of it has already

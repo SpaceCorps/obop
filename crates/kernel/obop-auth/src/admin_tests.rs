@@ -884,6 +884,212 @@ fn a_lookup_that_is_refused_is_the_stores_trouble_and_not_a_400_or_a_404() {
     );
 }
 
+/// The notes of an account (what its changes still owe), by the name of the change.
+fn owed_ops(r: &Rig, user: &str) -> Vec<String> {
+    let u = r.b.get("auth_user", user).unwrap().unwrap();
+    let mut ops: Vec<String> = crate::account::owed_notes(&J::Object(u))
+        .keys()
+        .cloned()
+        .collect();
+    ops.sort();
+    ops
+}
+
+#[test]
+fn a_note_that_is_kept_or_taken_back_leaves_the_notes_of_the_other_changes_alone() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    r.a.owe_revocation("ada", "user_offboard", None).unwrap();
+    r.a.owe_revocation("ada", "mfa_reset", Some("kept"))
+        .unwrap();
+    assert_eq!(owed_ops(&r, "ada"), ["mfa_reset", "user_offboard"]);
+    r.a.clear_owed("ada", "mfa_reset");
+    assert_eq!(
+        owed_ops(&r, "ada"),
+        ["user_offboard"],
+        "a later reset does not take the offboarding's note with it"
+    );
+    r.a.clear_owed("ada", "mfa_reset");
+    assert_eq!(
+        owed_ops(&r, "ada"),
+        ["user_offboard"],
+        "nothing to take back"
+    );
+    r.a.clear_owed("ada", "user_offboard");
+    let u = r.b.get("auth_user", "ada").unwrap().unwrap();
+    assert!(
+        u["sessions_owed"].is_null(),
+        "the last one leaves no empty note"
+    );
+}
+
+#[test]
+fn a_pending_offboarding_survives_a_later_reset_so_enabling_still_finishes_it() {
+    use obop_storage::testing::Mode;
+    // An offboarding that could not end the tokens leaves a note. A later reset of the same
+    // account wrote its own note over it and took it back when it was done, so enabling the
+    // account found nothing owed and brought the agent token back.
+    let (r, flaky) = flaky_rig();
+    let root = admin(&r, "root");
+    user_with(&r.a, "ada", &["base.user"]);
+    let (stolen, ada) = session(&r.a, "ada");
+    let agent =
+        r.a.issue_agent_token(&ada, &names(&["base.user"]), "bot")
+            .unwrap();
+    enrol(&r.a, "ada");
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| r.a.offboard_user(&root, "ada", ""));
+    flaky.allow_models();
+    assert!(done.is_err() && out.partial, "{done:?} {out:?}");
+    assert_eq!(owed_ops(&r, "ada"), ["user_offboard"]);
+    r.a.admin_reset(&root, "ada").unwrap();
+    assert_eq!(
+        owed_ops(&r, "ada"),
+        ["user_offboard"],
+        "the reset finished its own work and left the offboarding's"
+    );
+    r.a.set_user_disabled(&root, "ada", false).unwrap();
+    assert!(r.a.resolve(&stolen).is_none(), "the session came back");
+    assert!(r.a.resolve(&agent).is_none(), "the agent token came back");
+    assert!(owed_ops(&r, "ada").is_empty());
+}
+
+#[test]
+fn a_note_is_kept_when_the_outcome_of_the_change_is_unknown_so_the_repeat_still_ends_the_sessions()
+{
+    // The connection breaks after the server committed the change and before the acknowledgement
+    // arrived: the factor is off, and the answer says only that the outcome is unknown. Taking the
+    // note back for that left a repeat that said "two-factor is not on" and sessions that outlived
+    // the factor. At each update of the request in turn.
+    let mut hit = 0;
+    for skip in 0..6 {
+        let (r, flaky) = flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        let (mine, p) = session(&r.a, "ada");
+        let (stolen, _) = session(&r.a, "ada");
+        let (_, codes) = enrol(&r.a, "ada");
+        flaky.lose_the_acknowledgement_of_an_update_after(skip);
+        let (done, _) = request(|| r.a.disable_in_session(&p, &mine, PW, None, Some(&codes[0])));
+        flaky.allow_models();
+        if r.a.mfa_enabled("ada") || done.is_ok() {
+            continue;
+        }
+        hit += 1;
+        assert!(
+            matches!(&done, Err(MfaError::Unavailable(m)) if m.starts_with("storage_unavailable")),
+            "skip {skip}: {done:?}"
+        );
+        let (again, _) = request(|| r.a.disable_in_session(&p, &mine, PW, None, Some(&codes[1])));
+        again.unwrap_or_else(|e| panic!("skip {skip}: the repeat must finish the work: {e:?}"));
+        assert!(
+            r.a.resolve(&stolen).is_none(),
+            "skip {skip}: the session outlived the factor"
+        );
+        assert!(r.a.resolve(&mine).is_some());
+    }
+    assert!(hit >= 1, "the sweep reached the change that turns it off");
+}
+
+#[test]
+fn a_reset_that_was_refused_before_it_removed_anything_leaves_no_note_behind() {
+    // The first step (the passkeys of the person) is refused before anything was deleted: the
+    // answer says nothing was applied, and the note that announced the reset is taken back, or a
+    // later reset of an account that has no two-factor would answer "done" and sign people out.
+    let mut hit = 0;
+    for skip in 0..30 {
+        let (r, flaky) = flaky_rig();
+        let root = admin(&r, "root");
+        user_with(&r.a, "ada", &["base.user"]);
+        enrol(&r.a, "ada");
+        flaky.refuse_call_after(skip);
+        let (done, out) = request(|| r.a.admin_reset(&root, "ada"));
+        flaky.allow_models();
+        if done.is_ok() || out.wrote {
+            continue;
+        }
+        hit += 1;
+        assert!(
+            owed_ops(&r, "ada").is_empty(),
+            "skip {skip}: a stale note was left behind"
+        );
+    }
+    assert!(hit >= 3, "{hit}");
+}
+
+#[test]
+fn a_second_step_of_the_sign_in_gives_no_session_to_an_account_disabled_in_between() {
+    // Password given, the account disabled, then the code: the session the second step made began
+    // after the disable, so nothing ended it, and it came alive the day the account was enabled.
+    let r = rig();
+    let root = admin(&r, "root");
+    user_with(&r.a, "ada", &["base.user"]);
+    let (secret, _) = enrol(&r.a, "ada");
+    let LoginOutcome::MfaRequired { mfa_token } = r.a.login_step("ada", PW).unwrap() else {
+        panic!("ada has two-factor on");
+    };
+    r.a.set_user_disabled(&root, "ada", true).unwrap();
+    let before = r.b.list("auth_token").unwrap().len();
+    let code = totp::code_for_step(&secret, totp::step_at(T0) + 1);
+    let done = r.a.login_mfa(&mfa_token, Some(&code), None);
+    assert!(matches!(done, Err(MfaError::Expired)), "{done:?}");
+    assert_eq!(
+        r.b.list("auth_token").unwrap().len(),
+        before,
+        "no session was made"
+    );
+    assert!(
+        events(&r, "login_refused")
+            .iter()
+            .any(|e| e.2.contains("before the second step"))
+    );
+    r.a.set_user_disabled(&root, "ada", false).unwrap();
+    // The pending sign-in is spent: the person starts again, and signs in.
+    assert!(matches!(
+        r.a.login_mfa(&mfa_token, Some(&code), None),
+        Err(MfaError::Expired)
+    ));
+}
+
+#[test]
+fn a_password_change_whose_limit_could_not_be_lifted_says_to_sign_in_again_not_to_sign_out_everywhere()
+ {
+    // At each call of a password change in turn: the entry of the log tells what is really left.
+    // Where the other sessions were ended and only the lifting of this session's limit was
+    // refused, the person must sign in again; telling them the other sessions are still live is
+    // false (and the thief's session is gone).
+    let (mut lift, mut revoke) = (0, 0);
+    for skip in 0..30 {
+        let (r, flaky) = flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        let (mine, p) = session(&r.a, "ada");
+        let (stolen, _) = session(&r.a, "ada");
+        // Refused as long as a needed step is tried, and no longer: the log entry gets written.
+        flaky.refuse_calls_after(skip, 5);
+        let (done, _) = request(|| {
+            r.a.change_password(&p, &mine, PW, "a brand new password", None, None)
+        });
+        flaky.allow_models();
+        if done.is_ok() {
+            continue;
+        }
+        let Some((_, text)) = incomplete_entry(&r, "password_change") else {
+            continue;
+        };
+        let still_live = r.a.resolve(&stolen).is_some();
+        if text.contains("sign in again") {
+            lift += 1;
+            assert!(!still_live, "skip {skip}: {text}");
+        } else {
+            revoke += 1;
+            assert!(
+                text.contains("the other sessions are still live") && still_live,
+                "skip {skip}: {text}"
+            );
+        }
+    }
+    assert!(lift >= 1 && revoke >= 1, "{lift} {revoke}");
+}
+
 #[test]
 fn import_checks_every_row_first_and_creates_all_or_nothing() {
     let r = rig();

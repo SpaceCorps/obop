@@ -20,6 +20,20 @@ fn person(p: &Principal) -> Result<&str, MfaError> {
     }
 }
 
+/// The notes of an account that say which change has not yet ended all the sessions it should
+/// (`sessions_owed`), by the name of the change. Only notes of the current shape are read.
+pub(crate) fn owed_notes(u: &J) -> Fields {
+    u["sessions_owed"]
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .filter(|(_, v)| v.is_object())
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn admin_name(p: &Principal) -> Result<&str, MfaError> {
     let n = person(p)?;
     if p.groups.contains(ADMIN_GROUP) && !p.mfa_limited {
@@ -99,30 +113,79 @@ impl Auth {
     /// and ending the sessions is then refused for long enough, the repeat of the same request
     /// finds this and finishes the work (D74); without it the repeat would meet "two-factor is
     /// not on" or "no such passkey" and the sessions of a stolen password would live on.
+    ///
+    /// The notes of an account are one object by `op` (`sessions_owed.<op> = {keep, at}`), so a
+    /// pending offboarding survives a later reset or disable, and taking one note back leaves the
+    /// others. The caller holds the account lock (`mfa_guard`), so the object is read, changed and
+    /// written without another writer in between.
     pub(crate) fn owe_revocation(
         &self,
         name: &str,
         op: &str,
         keep: Option<&str>,
     ) -> Result<(), MfaError> {
-        let mut p = Fields::new();
-        p.insert(
-            "sessions_owed".into(),
-            json!({"op": op, "keep": keep, "at": self.now()}),
-        );
+        let patch = self.owed_patch(name, op, keep)?;
         // Not a change of the request: if the change it announces is then refused, nothing was
         // changed and the answer says so (it was answered "partial" for a note alone).
-        obop_storage::fault::uncounted(|| self.put(name, &p))
+        obop_storage::fault::uncounted(|| self.put(name, &patch))
     }
 
-    /// The revocation was done: forget it is owed. Best effort: a note left behind only makes the
-    /// next repeat of the same change end the sessions that began before it, once more.
-    pub(crate) fn clear_owed(&self, name: &str) {
+    /// The patch that adds the note of `op` to the notes the account has, for a caller that writes
+    /// it in the same atomic batch as its change.
+    pub(crate) fn owed_patch(
+        &self,
+        name: &str,
+        op: &str,
+        keep: Option<&str>,
+    ) -> Result<Fields, MfaError> {
+        let mut owed = owed_notes(&self.user_record(name)?);
+        owed.insert(op.into(), json!({"keep": keep, "at": self.now()}));
         let mut p = Fields::new();
-        p.insert("sessions_owed".into(), J::Null);
+        p.insert("sessions_owed".into(), J::Object(owed));
+        Ok(p)
+    }
+
+    /// The revocation of `op` was done: forget it is owed (the notes of other changes stay).
+    /// Best effort: a note left behind only makes the next repeat of the same change end the
+    /// sessions that began before it, once more.
+    pub(crate) fn clear_owed(&self, name: &str, op: &str) {
         let _ = obop_storage::fault::patiently(3, std::time::Duration::from_millis(100), || {
-            obop_storage::fault::uncounted_allowed(|| self.backend.update("auth_user", name, &p))
+            obop_storage::fault::uncounted_allowed(|| {
+                let Some(u) = self.backend.get("auth_user", name)? else {
+                    return Ok(());
+                };
+                let mut owed = owed_notes(&J::Object(u));
+                if owed.remove(op).is_none() {
+                    return Ok(());
+                }
+                let mut p = Fields::new();
+                p.insert(
+                    "sessions_owed".into(),
+                    if owed.is_empty() {
+                        J::Null
+                    } else {
+                        J::Object(owed)
+                    },
+                );
+                self.backend.update("auth_user", name, &p).map(|_| ())
+            })
         });
+    }
+
+    /// Take the note of `op` back after the change it announced was refused, if that change
+    /// certainly did not happen: the store refused it before it began (a full pool, a statement
+    /// that was rolled back, the guard) and the change made no commit (`changes_before` is
+    /// [`obop_storage::fault::change_count`] taken before it). After a refusal whose outcome is
+    /// unknown (the connection broke while the change was in flight) or after a change that did
+    /// commit in part, the note stays: the repeat needs it, and a note for a change that did not
+    /// happen only makes that repeat end the older sessions once more.
+    pub(crate) fn retract_owed(&self, name: &str, op: &str, e: &MfaError, changes_before: u32) {
+        let unknown =
+            matches!(e, MfaError::Unavailable(m) if obop_storage::fault::may_have_applied(m));
+        if unknown || obop_storage::fault::change_count() != changes_before {
+            return;
+        }
+        self.clear_owed(name, op);
     }
 
     /// A repeat of the change `op` that already happened: if it left a revocation owed, do it
@@ -134,14 +197,13 @@ impl Auth {
         ch: &Change,
     ) -> Result<Option<usize>, MfaError> {
         let u = self.user_record(name)?;
-        let owed = &u["sessions_owed"];
-        if owed["op"].as_str() != Some(op) {
+        let Some(owed) = owed_notes(&u).remove(op) else {
             return Ok(None);
-        }
+        };
         let keep = owed["keep"].as_str().map(String::from);
         let until = owed["at"].as_u64();
         let n = self.revoke_sessions_until(name, keep.as_deref(), until, ch)?;
-        self.clear_owed(name);
+        self.clear_owed(name, op);
         Ok(Some(n))
     }
 
@@ -300,6 +362,11 @@ impl Auth {
         let still_limited = self.enrolment_required_for(&groups) && !self.has_second_factor(name);
         let mut lift = Fields::new();
         lift.insert("limited".into(), J::Bool(still_limited));
+        // The other sessions are ended by now: what is missing here is not the same as above, and
+        // so is what the person can do about it.
+        let ch = Change::new(name, "password_change", name, "password changed").then(
+            "the other sessions are already ended; this session is still limited: sign in again",
+        );
         self.needed(&ch, "lifting the limit of this session", || {
             self.backend.update("auth_token", &h, &lift)
         })?;
@@ -433,9 +500,10 @@ impl Auth {
             let ch = Change::new(&target, "user_enable", actor, "account enabled");
             self.settle_before_enable(&target, &ch)?;
         }
+        let before = obop_storage::fault::change_count();
         if let Err(e) = self.put(&target, &patch) {
             if note {
-                self.clear_owed(&target);
+                self.retract_owed(&target, "user_disable", &e, before);
             }
             return Err(e);
         }
@@ -443,7 +511,7 @@ impl Auth {
             let ch = Change::new(&target, "user_disable", actor, "account disabled");
             let n = self.revoke_user_sessions(&target, None, &ch)?;
             if note {
-                self.clear_owed(&target);
+                self.clear_owed(&target, "user_disable");
             }
             self.event(
                 &target,
