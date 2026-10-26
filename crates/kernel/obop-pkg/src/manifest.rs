@@ -148,7 +148,9 @@ pub struct AccessM {
     pub via: Option<String>,
     /// A bool field: the record is visible to everyone who may read the model when true.
     pub public_field: Option<String>,
-    /// A text field of user ids separated by commas: those people see the record.
+    /// A text field of user ids separated by commas, semicolons, spaces or line breaks (the eight
+    /// ASCII separators of `obop_storage::keyexpr::MEMBER_SEPARATORS`; nothing is trimmed): those
+    /// people see the record.
     pub shared_with: Option<String>,
     /// The holders of this group (or of any of these groups) see every record.
     pub see_all_group: Option<OneOrMany>,

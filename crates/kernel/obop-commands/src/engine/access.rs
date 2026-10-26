@@ -342,7 +342,7 @@ mod tests {
     /// The hop limit is a budget that is spent on the way to a parent, so a parent reached at
     /// two depths has two answers. The cache once ignored the depth: a shallow visit that
     /// found a record visible let a deeper visit of another path past the limit, and the answer
-    /// depended on which record was asked about first (D76 WP0).
+    /// depended on which record was asked about first (D76).
     #[test]
     fn the_cache_keeps_one_answer_per_depth_and_the_order_of_questions_changes_nothing() {
         let node = node_model();
@@ -434,7 +434,8 @@ mod tests {
         assert!(!visible("a") && visible("x") && visible("k"));
     }
 
-    /// `shared_with` lists are split on eight ASCII separators and nothing is trimmed (K5).
+    /// `shared_with` lists are split on eight ASCII separators and nothing is trimmed (the member
+    /// tokenizer of D78; see `keyexpr::member_tokens`).
     #[test]
     fn shared_with_follows_the_member_tokenizer() {
         let project = Arc::new(ModelDef {
@@ -471,7 +472,8 @@ mod tests {
         ] {
             assert!(sees(yes), "{yes:?}");
         }
-        // Unicode spaces were trimmed away before K5, and are part of the token now.
+        // Unicode spaces were trimmed away before the tokenizer changed, and are part of the
+        // token now.
         for no in [
             "",
             "bob",
