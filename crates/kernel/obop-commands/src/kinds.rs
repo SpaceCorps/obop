@@ -157,6 +157,7 @@ mod tests {
             ],
             commands: vec![],
             access: None,
+            ext: Default::default(),
         }
     }
 

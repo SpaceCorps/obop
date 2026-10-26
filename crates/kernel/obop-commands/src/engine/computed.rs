@@ -359,6 +359,7 @@ mod tests {
             ],
             commands: vec![],
             access: None,
+            ext: Default::default(),
         };
         let line = ModelDef {
             name: "t_order_line",
@@ -373,6 +374,7 @@ mod tests {
             ],
             commands: vec![],
             access: None,
+            ext: Default::default(),
         };
         (Arc::new(order), Arc::new(line))
     }

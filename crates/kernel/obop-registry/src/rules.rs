@@ -1455,6 +1455,7 @@ mod tests {
             access: None,
             fields,
             commands,
+            ext: Default::default(),
         }
     }
     fn module(models: Vec<ModelDef>) -> Module {

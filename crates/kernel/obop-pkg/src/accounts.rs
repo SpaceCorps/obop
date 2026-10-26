@@ -76,6 +76,7 @@ pub fn user_account_model() -> ModelDef {
             )
             .approval(),
         ],
+        ext: Default::default(),
     }
 }
 

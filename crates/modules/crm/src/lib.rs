@@ -68,6 +68,7 @@ pub fn module() -> Module {
                 CommandDef::new("reopen", "Move the lead back to the new stage", "crm.user")
                     .transition("stage", Option::None, "new"),
             ],
+            ext: Default::default(),
         }],
         network_destinations: vec![],
         description: String::new(),

@@ -63,6 +63,7 @@ fn model(
         access,
         fields,
         commands,
+        ext: Default::default(),
     }
 }
 

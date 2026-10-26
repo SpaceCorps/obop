@@ -117,6 +117,7 @@ fn module(p: &str) -> Module {
         access: None,
         fields,
         commands,
+        ext: Default::default(),
     };
     Module {
         id: p.into(),
@@ -1903,6 +1904,7 @@ fn hooks_module() -> Module {
                 F::new("owner", "Owner", DataClass::None, false, "g"),
             ],
             commands: vec![],
+            ext: Default::default(),
         }],
         network_destinations: vec![],
         description: String::new(),

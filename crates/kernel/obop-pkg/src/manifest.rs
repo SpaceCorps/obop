@@ -1562,6 +1562,7 @@ impl Manifest {
                 access,
                 fields,
                 commands,
+                ext: Default::default(),
             });
         }
         Ok(out)
