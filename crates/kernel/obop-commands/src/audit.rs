@@ -52,6 +52,21 @@ pub fn record_event(
     actor: &str,
     detail: &str,
 ) {
+    if let Err(e) = try_record_event(backend, at, user, kind, actor, detail) {
+        eprintln!("could not write security event {kind}: {e}");
+    }
+}
+
+/// As [`record_event`], and a failure to write is returned, for the caller whose entry is the only
+/// trace of something (it then says so itself, with what it knows).
+pub fn try_record_event(
+    backend: &dyn Backend,
+    at: u64,
+    user: &str,
+    kind: &str,
+    actor: &str,
+    detail: &str,
+) -> Result<(), String> {
     let mut f = Fields::new();
     f.insert("user".into(), J::from(user));
     f.insert("kind".into(), J::from(kind));
@@ -64,12 +79,9 @@ pub fn record_event(
     // moment (D74) is waited out a little, four tries in all. Also when this request was refused
     // before: the guard lets the log through (an entry of a change that committed must not be
     // lost), and that is exactly when the pool is full.
-    let r = obop_storage::fault::patiently(4, std::time::Duration::from_millis(150), || {
+    obop_storage::fault::patiently(4, std::time::Duration::from_millis(150), || {
         backend.insert(EVENT_TABLE, &id, &f)
-    });
-    if let Err(e) = r {
-        eprintln!("could not write security event {kind}: {e}");
-    }
+    })
 }
 
 #[cfg(test)]
@@ -86,6 +98,21 @@ mod tests {
         record_event(&*db, 30, "ada", "login", "ada", "note");
         assert_eq!(flaky.refused(), 2);
         assert_eq!(db.list(EVENT_TABLE).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_entry_that_stays_refused_is_reported_to_its_caller_which_may_be_its_only_trace() {
+        use obop_storage::testing::Flaky;
+        let (flaky, db) = Flaky::memory();
+        flaky.refuse_next(10);
+        let r = try_record_event(&*db, 30, "ada", "plan_lost", "root", "the plan p1");
+        assert!(
+            matches!(&r, Err(m) if m.starts_with("storage_busy")),
+            "{r:?}"
+        );
+        assert_eq!(flaky.refused(), 4, "four tries, then it is reported");
+        flaky.allow_models();
+        assert!(try_record_event(&*db, 31, "ada", "plan_lost", "root", "the plan p1").is_ok());
     }
 
     #[test]

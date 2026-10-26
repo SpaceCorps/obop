@@ -950,6 +950,54 @@ fn an_agent_can_only_propose_a_delete() {
 }
 
 #[test]
+fn an_approved_plan_comes_back_when_nothing_was_applied_and_stays_gone_when_the_outcome_is_unknown()
+{
+    use obop_storage::fault::{self, Fault};
+    // The 503 layer answers "nothing was applied, repeat it" for a request that hit a fault and
+    // committed nothing, whether the run ended in an error or swallowed the refusal and answered
+    // Ok. The approver's repeat then needs the plan. After `storage_unavailable` the outcome is
+    // unknown (a change in flight may have committed): the plan stays gone, or the repeat would
+    // run an approved action twice.
+    each_backend(|r| {
+        let id = r.id(&r.ok(&user(), "party", "create", m(vec![("name", t("P"))])));
+        let cmd = r.cmd("party", "delete");
+        for (kind, answers_ok, back) in [
+            (Fault::Busy, false, true),
+            (Fault::Busy, true, true),
+            (Fault::Timeout, false, true),
+            (Fault::Unavailable, false, false),
+            (Fault::Unavailable, true, false),
+        ] {
+            let plan = plan_of(r.call(&bot(), "party", "delete", by_id(&id)));
+            r.d.around(
+                &cmd,
+                Box::new(move |_, _, _| {
+                    fault::note(kind);
+                    if answers_ok {
+                        Ok(Value::Null)
+                    } else {
+                        Err(kind.message("the store was refused"))
+                    }
+                }),
+            );
+            fault::begin_request(Default::default());
+            let _ = r.d.approve(&approver(), &mut Vault::new(), &plan);
+            let out = fault::end_request();
+            assert!(!out.wrote && out.fault == Some(kind), "{out:?}");
+            // A person without the group is refused where the plan exists, and told there is no
+            // such plan where it does not.
+            let nobody = Principal::user("n", &["other.group"]);
+            let probe = r.d.approve(&nobody, &mut Vault::new(), &plan);
+            assert_eq!(
+                matches!(probe, Err(CallError::Forbidden(_))),
+                back,
+                "{kind:?} ok={answers_ok}: {probe:?}"
+            );
+        }
+    });
+}
+
+#[test]
 fn delete_is_visible_in_meta_and_needs_the_write_group() {
     each_backend(|r| {
         let reader = Principal::user("ro", &[U]);

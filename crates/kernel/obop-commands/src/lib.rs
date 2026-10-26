@@ -958,10 +958,18 @@ impl Dispatcher {
         // The store refused before the call changed anything: the plan goes back, or the
         // approver's retry (the 503 says to retry) would meet "not found" and the proposal would
         // be lost (D74). The decision is the one the 503 layer makes to say "nothing was changed"
-        // (a fault was noted and no change committed), not a look at the text of the error, which
-        // the engine may wrap. After a change had committed the plan stays gone: it ran.
+        // (a fault was noted and no change committed), whatever the run answered (a run that
+        // swallowed a refusal and answered Ok is turned into that 503 as well), and not a look at
+        // the text of the error, which the engine may wrap. After a change had committed the plan
+        // stays gone: it ran. So it does after `storage_unavailable`, where a change in flight may
+        // have committed before the connection broke: the answer says "unknown", and putting the
+        // plan back would let the retry run an approved action twice.
         let state = obop_storage::fault::state();
-        if result.is_err() && state.fault.is_some() && !state.wrote {
+        if state
+            .fault
+            .is_some_and(|f| f != obop_storage::fault::Fault::Unavailable)
+            && !state.wrote
+        {
             self.put_plan_back(approver, plan_id, &plan);
         }
         result
@@ -991,17 +999,22 @@ impl Dispatcher {
             let at = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_secs());
-            audit::record_event(
+            let what = format!(
+                "the approved plan {plan_id} ({}) could not be put back after the store refused its run: the proposal is lost, ask for it again",
+                plan.id
+            );
+            // Under the same pressure that lost the plan the log is often refused too: then the
+            // line on stderr is the only trace that names it.
+            if let Err(e) = audit::try_record_event(
                 &*s.backend,
                 at,
                 &plan.principal.id,
                 "plan_lost",
                 &approver.id,
-                &format!(
-                    "the approved plan {plan_id} ({}) could not be put back after the store refused its run: the proposal is lost, ask for it again",
-                    plan.id
-                ),
-            );
+                &what,
+            ) {
+                eprintln!("{what} (and the security log was refused too: {e})");
+            }
         }
     }
 
