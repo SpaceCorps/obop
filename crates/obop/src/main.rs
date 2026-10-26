@@ -917,7 +917,14 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
 /// `obop connectors purge`: retention for flow logs, runs and expired webhook and OAuth entries.
 fn connectors_purge(o: &Opts) -> Exit {
     let app = open_app(o)?;
-    let (logs, runs, other) = app.connectors.purge(obop_connectors::util::now());
+    let (logs, runs, other) = app
+        .connectors
+        .purge(obop_connectors::util::now())
+        .map_err(|e| {
+            fail(&format!(
+                "the retention run stopped, nothing more was removed: {e}"
+            ))
+        })?;
     println!("removed {logs} flow log rows, {runs} runs and {other} expired entries");
     Ok(())
 }

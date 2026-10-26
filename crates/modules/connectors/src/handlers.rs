@@ -701,7 +701,8 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, store: &Store, rt: &Arc<Runtime>
         "egress_policy",
         "purge",
         Box::new(move |_| {
-            let (logs, runs, other) = r.purge(now());
+            // A refused lookup stops the run (D74): the command fails, nothing is guessed.
+            let (logs, runs, other) = r.purge(now())?;
             Ok(result(
                 INSTANCE,
                 &[],

@@ -95,6 +95,11 @@ impl Fault {
     }
 }
 
+/// What the guard says when it refuses a change because the request already hit a fault. Waiting
+/// does not change that answer, so [`patiently`] does not wait for it.
+const GUARD_REFUSAL: &str =
+    "an earlier storage call of this request was refused, so this change was not made";
+
 #[derive(Clone, Copy, Default)]
 struct Scope {
     active: bool,
@@ -151,7 +156,8 @@ pub fn patiently<T>(
     let mut n = 1;
     loop {
         match f() {
-            Err(e) if Fault::is_transient(&e) && n < attempts => {
+            // The guard's own refusal does not pass by waiting: the request already hit a fault.
+            Err(e) if Fault::is_transient(&e) && n < attempts && !e.contains(GUARD_REFUSAL) => {
                 n += 1;
                 std::thread::sleep(pause);
             }
@@ -221,9 +227,7 @@ pub fn end_request() -> Outcome {
 pub fn before_write() -> Result<(), String> {
     let s = SCOPE.with(Cell::get);
     match (s.active, s.fault) {
-        (true, Some(f)) if s.bypass == 0 => Err(f.message(
-            "an earlier storage call of this request was refused, so this change was not made",
-        )),
+        (true, Some(f)) if s.bypass == 0 => Err(f.message(GUARD_REFUSAL)),
         _ => Ok(()),
     }
 }

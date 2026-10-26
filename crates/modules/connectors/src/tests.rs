@@ -1433,6 +1433,67 @@ fn a_store_that_refuses_a_lookup_does_not_dead_letter_a_queued_delivery() {
     assert!(!e.rt.queue.is_empty(), "the delivery is still queued");
 }
 
+#[test]
+fn a_retention_run_that_cannot_read_what_it_decides_on_deletes_nothing_and_is_repeated_soon() {
+    use obop_storage::testing::{Flaky, Mode};
+    // D74: the connections are read while the pool is full. Reading "no connections" would give
+    // every log row the instance default, and the row of a connection that keeps its logs for
+    // 1,000 days would be deleted for good. The run stops instead, and the daily marker is not
+    // left saying it ran.
+    let e = env();
+    let b = e.s.backend();
+    let at = obop_connectors::util::now();
+    let mut c = obop_storage::Fields::new();
+    c.insert("retention_days".into(), J::from(1000));
+    c.insert("state".into(), J::from("connected"));
+    b.insert("connection", "keeps", &c).unwrap();
+    let mut row = obop_storage::Fields::new();
+    row.insert("connection".into(), J::from("keeps"));
+    row.insert(
+        "at".into(),
+        J::from(obop_connectors::util::iso(at - 400 * 86_400)),
+    );
+    b.insert("data_flow_log", "old-row", &row).unwrap();
+    let flaky = Flaky::new(b.clone());
+    let worker = Runtime::with_providers(
+        obop_storage::guarded(flaky.clone()),
+        e.d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: Some("http://127.0.0.1:8080".into()),
+        },
+        providers(),
+        None,
+    );
+    flaky.refuse_model(obop_connectors::model::CONNECTION, Mode::Reads);
+    let stopped = worker.purge(at);
+    assert!(
+        matches!(&stopped, Err(m) if m.starts_with("storage_busy")),
+        "{stopped:?}"
+    );
+    flaky.allow_models();
+    assert!(
+        b.get("data_flow_log", "old-row").unwrap().is_some(),
+        "the row of a long retention is still there"
+    );
+    // The same run on a healthy store keeps it too (1,000 days), and says so.
+    assert_eq!(worker.purge(at).unwrap().0, 0);
+    assert!(b.get("data_flow_log", "old-row").unwrap().is_some());
+
+    // The daily run of the worker: stopped by a refused lookup, it is not recorded as done, and it
+    // comes back within minutes, not tomorrow.
+    flaky.refuse_model(obop_connectors::model::FLOW_LOG, Mode::Reads);
+    let did = worker.tick(at + 10);
+    flaky.allow_models();
+    assert!(did.contains("postponed"), "{did}");
+    assert!(
+        !worker.tick(at + 20).contains("purged"),
+        "not again at once"
+    );
+    assert!(worker.tick(at + 400).contains("purged"), "again in minutes");
+}
+
 /// A second `Runtime` over the same store, as a restarted or a second server process has.
 fn another_process(e: &Env) -> Arc<Runtime> {
     Runtime::with_providers(
@@ -1852,7 +1913,12 @@ fn flow_on(e: &Env) {
     // Replay protection and the purge use the same primitives on every backend.
     assert!(obop_connectors::webhook::Seen::claim(&*b, "c", "evt", 1).is_ok());
     assert!(obop_connectors::webhook::Seen::claim(&*b, "c", "evt", 1).is_err());
-    assert_eq!(e.rt.purge(obop_connectors::util::now() + 400 * 86_400).0, 1);
+    assert_eq!(
+        e.rt.purge(obop_connectors::util::now() + 400 * 86_400)
+            .unwrap()
+            .0,
+        1
+    );
 }
 
 #[test]

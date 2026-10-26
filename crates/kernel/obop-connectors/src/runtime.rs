@@ -161,15 +161,21 @@ impl Runtime {
 
     /// The groups the connection may use: what its owner held when they last changed it, narrowed
     /// to what the owner holds now when the owner is a known user.
+    ///
+    /// Fails closed (D74): when the owner cannot be looked up, the connection holds no groups
+    /// (what it held when it was saved may be more than the owner holds now), and the flow that
+    /// asked is refused. Callers that can say "try later" ask [`Runtime::try_owner_groups`] first.
     pub fn owner_groups(&self, c: &Connection) -> Vec<String> {
-        let now_groups: Option<Vec<String>> = self
-            .backend
-            .get("auth_user", &c.owner_user)
-            .ok()
-            .flatten()
-            .map(|u| {
-                u["groups"]
-                    .as_array()
+        self.try_owner_groups(c).unwrap_or_default()
+    }
+
+    /// As [`Runtime::owner_groups`], but a lookup the store refused is an error ("later"), not
+    /// an answer.
+    pub fn try_owner_groups(&self, c: &Connection) -> Result<Vec<String>, String> {
+        let now_groups: Option<Vec<String>> =
+            self.backend.get("auth_user", &c.owner_user)?.map(|u| {
+                u.get("groups")
+                    .and_then(J::as_array)
                     .map(|a| {
                         a.iter()
                             .filter_map(|x| x.as_str().map(String::from))
@@ -177,7 +183,7 @@ impl Runtime {
                     })
                     .unwrap_or_default()
             });
-        match now_groups {
+        Ok(match now_groups {
             // A deleted or demoted owner narrows the connection; platform.admin keeps its meaning.
             Some(now_groups) => c
                 .owner_groups
@@ -186,7 +192,7 @@ impl Runtime {
                 .cloned()
                 .collect(),
             None => c.owner_groups.clone(),
-        }
+        })
     }
 
     fn groups_for(&self, c: &Connection, model: &str) -> (Vec<String>, Vec<String>) {
@@ -243,6 +249,8 @@ impl Runtime {
         model: &str,
         ids: Option<&[String]>,
     ) -> Result<Vec<Map<String, J>>, String> {
+        // "Later" when the owner cannot be looked up, not "the owner may not read".
+        self.try_owner_groups(c)?;
         let p = self.reader(c, model);
         let mut out = Vec::new();
         let mut v = Vault::new();
@@ -304,9 +312,13 @@ impl Runtime {
             "started_at": iso(now()), "finished_at": "", "status": "running",
             "records": 0, "rejected": 0, "proposed": 0, "error_summary": "",
         });
-        let _ = self
-            .backend
-            .insert(SYNC_RUN, &id, f.as_object().expect("object"));
+        // The record of a run is not lost to a busy moment: a few more tries, then it is reported.
+        if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+            self.backend
+                .insert(SYNC_RUN, &id, f.as_object().expect("object"))
+        }) {
+            eprintln!("connectors: a run could not be recorded: {e}");
+        }
         id
     }
 
@@ -324,9 +336,14 @@ impl Runtime {
             "rejected": rejected, "proposed": proposed,
             "error_summary": error.chars().take(300).collect::<String>(),
         });
-        let _ = self
-            .backend
-            .update(SYNC_RUN, id, f.as_object().expect("object"));
+        // A run that stays "running" for ever because its last update met a busy store would hide
+        // the failure it is about: a few more tries, then it is reported.
+        if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+            self.backend
+                .update(SYNC_RUN, id, f.as_object().expect("object"))
+        }) {
+            eprintln!("connectors: the end of a run could not be recorded: {e}");
+        }
         // The connection shows its last run and its last error.
         if let Ok(Some(run)) = self.backend.get(SYNC_RUN, id) {
             let conn = str_of(&run, "connection").to_string();
@@ -798,6 +815,7 @@ impl Runtime {
         if model.is_empty() {
             return Err("the connection has no target model".into());
         }
+        self.try_owner_groups(c)?;
         let run = self.start_run(c, "inbound", kind);
         let principal = self.connector_principal(c, &model);
         match self.ingress.accept(c, p, &model, items, &principal, &run) {
@@ -1167,12 +1185,17 @@ impl Runtime {
     /// Retention: remove flow-log and sync-run rows older than their connection's retention
     /// (the instance default for a connection that is gone), and expired webhook ids and OAuth
     /// states. Returns `(flow_logs, sync_runs, other)`.
-    pub fn purge(&self, at: u64) -> (usize, usize, usize) {
-        let inst = InstancePolicy::load(&*self.backend);
+    ///
+    /// **Fails closed** (D74): a retention run decides what to delete from the connections and the
+    /// instance policy, so a lookup the store refused (a busy pool) stops the run with an error;
+    /// reading "no connections" would apply the instance default to every row, and deleting data a
+    /// connection keeps longer cannot be undone. A run that stops is repeated, so the data is kept
+    /// a little longer, never shorter. Deleting what has expired is safe to repeat.
+    pub fn purge(&self, at: u64) -> Result<(usize, usize, usize), String> {
+        let inst = InstancePolicy::try_load(&*self.backend)?;
         let days: std::collections::HashMap<String, i64> = self
             .backend
-            .list(CONNECTION)
-            .unwrap_or_default()
+            .list(CONNECTION)?
             .into_iter()
             .map(|(id, f)| {
                 (
@@ -1183,7 +1206,7 @@ impl Runtime {
             .collect();
         let mut counts = [0usize; 2];
         for (i, table) in [FLOW_LOG, SYNC_RUN].into_iter().enumerate() {
-            for (id, f) in self.backend.list(table).unwrap_or_default() {
+            for (id, f) in self.backend.list(table)? {
                 let keep = days
                     .get(str_of(&f, "connection"))
                     .copied()
@@ -1196,15 +1219,13 @@ impl Runtime {
                 let Some(t) = parse_iso(str_of(&f, stamp)) else {
                     continue;
                 };
-                if t + (keep.max(1) as u64) * 86_400 < at
-                    && self.backend.delete(table, &id).unwrap_or(false)
-                {
+                if t + (keep.max(1) as u64) * 86_400 < at && self.backend.delete(table, &id)? {
                     counts[i] += 1;
                 }
             }
         }
         let other = Seen::sweep(&*self.backend, at) + oauth::sweep(&*self.backend);
-        (counts[0], counts[1], other)
+        Ok((counts[0], counts[1], other))
     }
 
     /// Periodic work: due pulls, due retries, the daily purge. Returns a short description.
@@ -1219,18 +1240,18 @@ impl Runtime {
         let Ok(_tick) = self.backend.lock("connectors.tick") else {
             return did.join("; ");
         };
-        let last_of = |key: &str| -> u64 {
-            self.backend
-                .kv_get(key)
-                .ok()
-                .flatten()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0)
+        // A marker the store refused to give is "later", not "never ran": reading 0 would make
+        // every pull and the retention run due at once, on every tick, while the store is busy.
+        let last_of = |key: &str| -> Option<u64> {
+            match self.backend.kv_get(key) {
+                Ok(v) => Some(v.and_then(|v| v.parse().ok()).unwrap_or(0)),
+                Err(_) => None,
+            }
         };
-        let due: Vec<String> = self
-            .backend
-            .list(CONNECTION)
-            .unwrap_or_default()
+        let Ok(connections) = self.backend.list(CONNECTION) else {
+            return did.join("; ");
+        };
+        let due: Vec<String> = connections
             .into_iter()
             .filter(|(_, f)| str_of(f, "state") == "connected")
             .filter_map(|(id, f)| {
@@ -1243,30 +1264,50 @@ impl Runtime {
                 let engine = self.provider(str_of(&f, "provider")).map(|p| p.engine);
                 (mins > 0 && engine == Some(Engine::RestPull)).then_some((id, mins))
             })
-            .filter(|(id, mins)| last_of(&format!("connectors.pull:{id}")) + mins * 60 <= at)
+            .filter(|(id, mins)| {
+                last_of(&format!("connectors.pull:{id}")).is_some_and(|l| l + mins * 60 <= at)
+            })
             .map(|(id, _)| id)
+            // Due only once it is recorded: a pull whose marker could not be written would be
+            // due again at the next tick, and the next.
+            .filter(|id| {
+                self.backend
+                    .kv_put(&format!("connectors.pull:{id}"), &at.to_string(), None)
+                    .is_ok()
+            })
             .collect();
-        for id in &due {
-            let _ = self
+        let purge_due = last_of("connectors.purge").is_some_and(|l| l + 86_400 <= at)
+            && self
                 .backend
-                .kv_put(&format!("connectors.pull:{id}"), &at.to_string(), None);
-        }
-        let purge_due = last_of("connectors.purge") + 86_400 <= at;
-        if purge_due {
-            let _ = self
-                .backend
-                .kv_put("connectors.purge", &at.to_string(), None);
-        }
+                .kv_put("connectors.purge", &at.to_string(), None)
+                .is_ok();
         drop(_tick);
         for id in due {
             let _ = self.pull(&id);
             did.push(format!("pulled {id}"));
         }
         if purge_due {
-            let (a, b, c) = self.purge(at);
-            did.push(format!(
-                "purged {a} flow logs, {b} runs, {c} expired entries"
-            ));
+            match self.purge(at) {
+                Ok((a, b, c)) => did.push(format!(
+                    "purged {a} flow logs, {b} runs, {c} expired entries"
+                )),
+                Err(e) => {
+                    // Not done, so not recorded as done: try again in a few minutes, not tomorrow.
+                    eprintln!("connectors: the retention run stopped, it is repeated soon: {e}");
+                    let _ = obop_storage::fault::patiently(
+                        4,
+                        std::time::Duration::from_millis(250),
+                        || {
+                            self.backend.kv_put(
+                                "connectors.purge",
+                                &at.saturating_sub(86_400 - 300).to_string(),
+                                None,
+                            )
+                        },
+                    );
+                    did.push("retention run postponed".into());
+                }
+            }
         }
         did.join("; ")
     }
