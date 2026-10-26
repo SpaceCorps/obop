@@ -27,6 +27,10 @@ pub struct Copy {
     pub name: String,
     /// Unix seconds at which the copy was read back and its hash matched.
     pub verified_at: u64,
+    /// SHA-256 of the data file as the sink holds it (hex), so that a later run can read the
+    /// sink again and prove the copy is still there before it deletes the local file. Absent in
+    /// records from before the review of D73.
+    pub sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,6 +52,9 @@ pub struct BackupRecord {
     /// `scheduled`, `manual`, `pre-migration`, `pre-update`.
     pub reason: String,
     pub copies: Vec<Copy>,
+    /// The machine whose disk holds `path`; only that machine removes the file. Several
+    /// processes, on several machines, share one catalogue; the files are where they were taken.
+    pub host: Option<String>,
 }
 
 impl BackupRecord {
@@ -70,10 +77,16 @@ impl BackupRecord {
             J::Array(
                 self.copies
                     .iter()
-                    .map(|c| json!({"sink": c.sink, "name": c.name, "verified_at": c.verified_at}))
+                    .map(|c| {
+                        json!({
+                            "sink": c.sink, "name": c.name, "verified_at": c.verified_at,
+                            "sha256": c.sha256,
+                        })
+                    })
                     .collect(),
             ),
         );
+        set("host", self.host.as_deref().map_or(J::Null, J::from));
         f
     }
 
@@ -100,9 +113,11 @@ impl BackupRecord {
                         sink: c["sink"].as_str()?.to_string(),
                         name: c["name"].as_str()?.to_string(),
                         verified_at: c["verified_at"].as_u64()?,
+                        sha256: c["sha256"].as_str().map(String::from),
                     })
                 })
                 .collect(),
+            host: f.get("host").and_then(J::as_str).map(String::from),
         })
     }
 }
@@ -346,7 +361,9 @@ mod tests {
                 sink: "fs:/x".into(),
                 name: id.into(),
                 verified_at: at + 1,
+                sha256: Some("ab".repeat(32)),
             }],
+            host: Some("db1".into()),
         }
     }
 

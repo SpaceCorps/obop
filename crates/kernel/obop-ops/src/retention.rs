@@ -9,7 +9,11 @@
 //!
 //! Retention bounds how long erased personal data survives in backups, so it is a setting an
 //! operator states in a privacy notice, not an internal detail: `OBOP_BACKUP_KEEP_DAILY`,
-//! `OBOP_BACKUP_KEEP_WEEKLY`, `OBOP_BACKUP_KEEP_MONTHLY`.
+//! `OBOP_BACKUP_KEEP_WEEKLY`, `OBOP_BACKUP_KEEP_MONTHLY`. The counts alone count periods *that
+//! have a backup*, so a gap or a sparse schedule stretches them; `OBOP_BACKUP_MAX_AGE_DAYS`
+//! (default 400) is the bound that holds whatever the counts do: a scheduled backup is not kept
+//! beyond it (the newest of all excepted, and nothing is removed from this host before every
+//! sink holds a verified copy).
 //!
 //! Pure functions of the list of backups; the clock is injected where time matters (the
 //! scheduler), so the rules are tested over simulated months in microseconds.
@@ -138,6 +142,66 @@ fn week_of(t: u64) -> i64 {
 fn month_of(t: u64) -> i64 {
     let (y, m) = civil(day_of(t));
     y * 12 + m
+}
+
+/// How old a scheduled backup may get before it goes, whatever the counts say: 400 days, the
+/// twelve months of the monthly rule plus the month it is in and a month's grace. The counts keep
+/// "the N most recent periods that have a backup", so after an outage they would stretch past
+/// twelve months by the length of the gap; this is the bound that holds regardless.
+pub const DEFAULT_MAX_AGE_DAYS: u64 = 400;
+
+/// `OBOP_BACKUP_MAX_AGE_DAYS`: a number of days (1 to 3650); `0` or `off` removes the bound, which
+/// leaves the promise to the counts alone.
+pub fn max_age_from_var(v: Option<&str>) -> Result<Option<u64>, String> {
+    match v.map(str::trim).filter(|s| !s.is_empty()) {
+        None => Ok(Some(DEFAULT_MAX_AGE_DAYS * 86_400)),
+        Some("0" | "off") => Ok(None),
+        Some(s) => s
+            .parse::<u64>()
+            .ok()
+            .filter(|d| (1..=3650).contains(d))
+            .map(|d| Some(d * 86_400))
+            .ok_or_else(|| {
+                format!(
+                    "OBOP_BACKUP_MAX_AGE_DAYS must be a number of days (1 to 3650), 0 or off, not {s:?}"
+                )
+            }),
+    }
+}
+
+/// Apply `policy` to `backups`, and the age bound `max_age = (now, seconds)` when there is one:
+/// a backup older than that is not kept by any rule, except the newest of all.
+pub fn decide_at(
+    policy: Retention,
+    backups: &[(String, u64)],
+    max_age: Option<(u64, u64)>,
+) -> Decision {
+    let mut d = decide(policy, backups);
+    let Some((now, limit)) = max_age else {
+        return d;
+    };
+    let age_of = |id: &str| {
+        backups
+            .iter()
+            .find(|(i, _)| i == id)
+            .map_or(0, |(_, t)| now.saturating_sub(*t))
+    };
+    let (keep, too_old): (Vec<_>, Vec<_>) = std::mem::take(&mut d.keep)
+        .into_iter()
+        .partition(|(id, why)| why.contains(&Why::Newest) || age_of(id) <= limit);
+    d.keep = keep;
+    // Oldest first, as `delete` always is.
+    let mut gone: Vec<String> = too_old.into_iter().map(|(id, _)| id).collect();
+    gone.reverse();
+    gone.extend(std::mem::take(&mut d.delete));
+    gone.sort_by_key(|id| {
+        backups
+            .iter()
+            .find(|(i, _)| i == id)
+            .map_or(0, |(_, t)| *t)
+    });
+    d.delete = gone;
+    d
 }
 
 /// Apply `policy` to `backups`.
@@ -319,6 +383,76 @@ mod tests {
         );
         assert_eq!(d.keep.len(), 1);
         assert_eq!(d.keep[0].0, "h3");
+    }
+
+    /// The privacy promise: a scheduled backup is gone about 13 months after it was taken however
+    /// the counts fall, even after an outage or on a sparse schedule, where "the N most recent
+    /// periods that have a backup" alone reaches back for years.
+    #[test]
+    fn no_scheduled_backup_outlives_the_age_bound_after_an_outage_or_on_a_sparse_schedule() {
+        let limit = DEFAULT_MAX_AGE_DAYS * DAY;
+        // 12 months of nightly backups, a 15-month outage, then one new backup.
+        let mut b = nightly(365, 2);
+        let now = START + 365 * DAY + 450 * DAY;
+        b.push(("resumed".into(), now));
+        let counts_only = decide(Retention::default(), &b);
+        let oldest = |d: &Decision| {
+            d.keep
+                .iter()
+                .filter_map(|(id, _)| b.iter().find(|(i, _)| i == id).map(|(_, t)| now - t))
+                .max()
+                .unwrap()
+        };
+        assert!(
+            oldest(&counts_only) > 700 * DAY,
+            "counts alone keep two-year-old backups: {}",
+            oldest(&counts_only) / DAY
+        );
+        let bounded = decide_at(Retention::default(), &b, Some((now, limit)));
+        assert!(oldest(&bounded) <= limit, "{}", oldest(&bounded) / DAY);
+        assert_eq!(bounded.keep.len(), 1, "only the resumed backup is left");
+        assert_eq!(bounded.keep.len() + bounded.delete.len(), b.len());
+        // A backup every 30 days for two years: nothing older than the bound stays.
+        let sparse: Vec<(String, u64)> = (0..24)
+            .map(|i| (format!("s{i:02}"), START + i * 30 * DAY))
+            .collect();
+        let now = START + 24 * 30 * DAY;
+        let d = decide_at(Retention::default(), &sparse, Some((now, limit)));
+        for (id, _) in &d.keep {
+            let t = sparse.iter().find(|(i, _)| i == id).unwrap().1;
+            assert!(now - t <= limit, "{id} is {} days old", (now - t) / DAY);
+        }
+        assert!(!d.delete.is_empty());
+        // The newest backup is never deleted, however old it is: it may be all there is.
+        let lone = vec![("only".to_string(), START)];
+        let d = decide_at(Retention::default(), &lone, Some((START + 1000 * DAY, limit)));
+        assert_eq!(d.keep.len(), 1);
+        assert!(d.delete.is_empty());
+        // No bound given: the counts alone, as before.
+        assert_eq!(
+            decide_at(Retention::default(), &b, None),
+            decide(Retention::default(), &b)
+        );
+        // A dense, gap-free schedule is untouched by the bound.
+        let dense = nightly(426, 2);
+        let now = START + 426 * DAY;
+        assert_eq!(
+            decide_at(Retention::default(), &dense, Some((now, limit))),
+            decide(Retention::default(), &dense)
+        );
+    }
+
+    #[test]
+    fn the_age_bound_is_400_days_unless_told_otherwise_and_a_typo_is_an_error() {
+        assert_eq!(max_age_from_var(None).unwrap(), Some(400 * DAY));
+        assert_eq!(max_age_from_var(Some("")).unwrap(), Some(400 * DAY));
+        assert_eq!(max_age_from_var(Some(" 90 ")).unwrap(), Some(90 * DAY));
+        assert_eq!(max_age_from_var(Some("0")).unwrap(), None);
+        assert_eq!(max_age_from_var(Some("off")).unwrap(), None);
+        for bad in ["a year", "-5", "3651", "1.5"] {
+            let e = max_age_from_var(Some(bad)).unwrap_err();
+            assert!(e.contains("OBOP_BACKUP_MAX_AGE_DAYS"), "{e}");
+        }
     }
 
     #[test]

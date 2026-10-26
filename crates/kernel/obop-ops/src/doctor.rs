@@ -171,8 +171,22 @@ pub fn check(i: &Inputs) -> Result<Report, String> {
             format!("newest verified backup {} old", human(a)),
         ),
     }
+    if stats.future_backups > 0 {
+        r.add(
+            "backup_clock",
+            "OBR-DAT-047",
+            Level::Warn,
+            format!(
+                "{} backup(s) are stamped later than now: a clock was wrong when they were taken. They are not counted as the newest backup",
+                stats.future_backups
+            ),
+        );
+    }
     let backups = Catalog::new(i.backend).backups()?;
-    if let Some(last) = backups.iter().rfind(|b| b.verified) {
+    if let Some(last) = backups
+        .iter()
+        .rfind(|b| b.verified && b.created_at <= i.now + schedule::SKEW_TOLERANCE)
+    {
         if last.format == 1 {
             r.add(
                 "backup_encrypted",
@@ -262,7 +276,7 @@ pub fn check(i: &Inputs) -> Result<Report, String> {
                 "OBR-DAT-056",
                 level,
                 format!(
-                    "{} on {} ({}), keys held by {}, readable by {}; attested {} ago by {}; evidence: {}{}",
+                    "ATTESTED, NOT VERIFIED: {} on {} ({}), keys held by {}, readable by {}; attested {} ago by {}; evidence: {}{}",
                     a.mechanism,
                     a.host,
                     a.provider,

@@ -23,10 +23,12 @@ fn backup(age: u64, format: u64, copied: bool) -> BackupRecord {
                 sink: "fs:/mnt".into(),
                 name: format!("b{age}"),
                 verified_at: NOW - age,
+                sha256: None,
             }]
         } else {
             Vec::new()
         },
+        host: None,
     }
 }
 
@@ -287,4 +289,41 @@ fn a_server_that_cannot_be_asked_is_a_failure_in_production_and_the_last_run_fai
     assert_eq!(human(3600), "60 min");
     assert_eq!(human(26 * 3600), "26 h");
     assert_eq!(human(40 * 86_400), "40 days");
+}
+
+#[test]
+fn a_backup_stamped_in_the_future_is_flagged_and_is_not_the_newest_backup() {
+    let b = obop_storage::open("memory:").unwrap();
+    let c = Catalog::new(&*b);
+    // The newest backup was taken by a clock a year ahead; a real one is three days old.
+    let mut skewed = backup(0, 2, true);
+    skewed.id = "future".into();
+    skewed.created_at = NOW + 365 * 86_400;
+    c.record_backup(&skewed).unwrap();
+    c.record_backup(&backup(3 * 86_400, 2, true)).unwrap();
+    let s = FakeServer::well_configured();
+    let r = run(&*b, Some(&s), Some("verify-full"), false);
+    assert_eq!(level(&r, "backup_clock"), Level::Warn, "{}", r.render());
+    assert!(r.find("backup_clock").unwrap().detail.contains("1 backup"));
+    assert_eq!(
+        level(&r, "backup"),
+        Level::Fail,
+        "the real newest backup is 3 days old, not 0 seconds: {}",
+        r.render()
+    );
+}
+
+#[test]
+fn an_attestation_says_it_is_attested_and_not_verified() {
+    let b = healthy();
+    let s = FakeServer::well_configured();
+    let r = run(&*b, Some(&s), Some("verify-full"), false);
+    assert!(
+        r.find("storage_attestation")
+            .unwrap()
+            .detail
+            .starts_with("ATTESTED, NOT VERIFIED"),
+        "{}",
+        r.render()
+    );
 }

@@ -441,3 +441,142 @@ fn a_postgres_backup_drills_into_sqlite_and_the_digest_still_matches() {
         .unwrap();
     result.unwrap();
 }
+
+// ---- review of D73 -------------------------------------------------------------------------
+
+#[test]
+fn a_lent_sqlite_scratch_database_loses_the_uploaded_files_of_the_drill_too() {
+    let dir = Dir::new("lentfiles");
+    let (c, _) = make(&dir, &keys(), 2);
+    assert!(c.manifest.blobs >= 1, "the backup holds an upload");
+    let lent = dir.p("lent.db");
+    let url = format!("sqlite://{}", lent.display());
+    let mut o = options(&c, keys());
+    o.scratch = Scratch::Url {
+        url: url.clone(),
+        keep: false,
+    };
+    let r = run(&o).unwrap();
+    assert!(r.passed(), "{}", r.render());
+    assert_eq!(check(&r, "files").ok, true);
+    drop(r);
+    assert_eq!(obop_storage::open(&url).unwrap().total().unwrap(), 0);
+    let files = obop_storage::blob::open_bytes(&url, None)
+        .unwrap()
+        .keys()
+        .unwrap();
+    assert!(files.is_empty(), "uploaded files left behind: {files:?}");
+    // With keep, the files stay beside the copy.
+    let kept = format!("sqlite://{}", dir.p("kept.db").display());
+    o.scratch = Scratch::Url {
+        url: kept.clone(),
+        keep: true,
+    };
+    assert!(run(&o).unwrap().passed());
+    assert!(
+        !obop_storage::blob::open_bytes(&kept, None)
+            .unwrap()
+            .keys()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_lent_postgres_scratch_database_loses_the_uploaded_files_of_the_drill_too() {
+    let Ok(base) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+        eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
+        return;
+    };
+    let name = format!("obop_drill_files_{}", std::process::id());
+    let mut admin = postgres::Client::connect(&base, postgres::NoTls).unwrap();
+    admin
+        .batch_execute(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
+        .unwrap();
+    admin
+        .batch_execute(&format!("CREATE DATABASE {name}"))
+        .unwrap();
+    let (head, _) = base.rsplit_once('/').unwrap();
+    let url = format!("{head}/{name}");
+    let dir = Dir::new("pgfiles");
+    let result = std::panic::catch_unwind(|| {
+        let (c, _) = make(&dir, &keys(), 2);
+        let mut o = options(&c, keys());
+        o.scratch = Scratch::Url {
+            url: url.clone(),
+            keep: false,
+        };
+        let r = run(&o).unwrap();
+        assert!(r.passed(), "{}", r.render());
+        drop(r);
+        let after = obop_storage::open(&url).unwrap();
+        assert_eq!(after.total().unwrap(), 0);
+        let files = obop_storage::blob::open_bytes(&url, None)
+            .unwrap()
+            .keys()
+            .unwrap();
+        assert!(files.is_empty(), "uploaded files left behind: {files:?}");
+    });
+    admin
+        .batch_execute(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
+        .unwrap();
+    result.unwrap();
+}
+
+#[test]
+fn the_temporary_scratch_database_lives_in_a_private_directory_that_goes_with_it() {
+    let db = Scratch::TempSqlite.open(None).unwrap();
+    let file = PathBuf::from(db.url.trim_start_matches("sqlite://"));
+    let dir = file.parent().unwrap().to_path_buf();
+    assert!(
+        dir.file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("obop-scratch-"),
+        "{}",
+        dir.display()
+    );
+    // The name carries random bytes, so it cannot be guessed in advance.
+    let other = Scratch::TempSqlite.open(None).unwrap();
+    assert_ne!(db.url, other.url);
+    db.backend.insert("x", "1", &f(json!({}))).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+    drop(db);
+    assert!(!dir.exists(), "the whole directory is removed");
+    drop(other);
+}
+
+#[test]
+fn a_drill_without_the_key_carries_the_stable_code_for_the_exit_status() {
+    let dir = Dir::new("code");
+    let (c, _) = make(&dir, &keys(), 2);
+    let r = run(&options(&c, Keys::none())).unwrap();
+    assert!(!r.passed());
+    assert_eq!(r.error_code(), Some(backup::KEY_REQUIRED));
+    // A wrong key is the same code.
+    let wrong = Keys::from_ring(KeyRing::from_secrets(OTHER, &[]).unwrap());
+    assert_eq!(
+        run(&options(&c, wrong)).unwrap().error_code(),
+        Some(backup::KEY_REQUIRED)
+    );
+    // A plain backup offered to an instance that seals its own has another code.
+    let (plain, _) = make_in(&dir, "plain", &Keys::none(), 2);
+    assert_eq!(
+        run(&options(&plain, keys())).unwrap().error_code(),
+        Some(backup::NOT_SEALED)
+    );
+    // A drill that passes, or fails for another reason, has none.
+    assert_eq!(run(&options(&c, keys())).unwrap().error_code(), None);
+    let mut broken = options(&c, keys());
+    broken.migrate = false;
+    std::fs::write(&c.data_path, b"damaged").unwrap();
+    let r = run(&broken).unwrap();
+    assert!(!r.passed() && r.error_code().is_none());
+}

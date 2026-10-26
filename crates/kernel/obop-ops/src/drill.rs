@@ -53,8 +53,42 @@ pub enum Scratch {
 pub struct ScratchDb {
     pub backend: Arc<dyn Backend>,
     pub url: String,
+    /// The private directory of a temporary scratch database (removed with everything in it).
     temp: Option<PathBuf>,
     clear_on_drop: bool,
+    /// The keys of the byte store of uploaded files before the restore, so that afterwards only
+    /// what the restore wrote is removed from a database the caller lent.
+    files_before: Option<std::collections::BTreeSet<String>>,
+}
+
+impl ScratchDb {
+    /// Note which uploaded files the scratch database holds now, before a restore writes more.
+    fn note_files(&mut self) {
+        if self.clear_on_drop {
+            self.files_before = obop_storage::blob::open_bytes(&self.url, None)
+                .and_then(|b| b.keys())
+                .ok()
+                .map(|k| k.into_iter().collect());
+        }
+    }
+
+    /// Remove the uploaded files the restore wrote: they are not records, so emptying the
+    /// records leaves them. Returns what could not be removed.
+    fn forget_files(&self) -> Vec<String> {
+        let (Some(before), Ok(bytes)) = (
+            &self.files_before,
+            obop_storage::blob::open_bytes(&self.url, None),
+        ) else {
+            return Vec::new();
+        };
+        let mut left = Vec::new();
+        for k in bytes.keys().unwrap_or_default() {
+            if !before.contains(&k) && bytes.delete(&k).is_err() {
+                left.push(k);
+            }
+        }
+        left
+    }
 }
 
 impl Drop for ScratchDb {
@@ -62,15 +96,52 @@ impl Drop for ScratchDb {
         if let Some(p) = &self.temp {
             // Let go of the open file first (Windows will not remove a file that is open).
             self.backend = obop_storage::open("memory:").expect("a memory database always opens");
-            let s = p.display().to_string();
-            for ext in ["", "-wal", "-shm", ".lock-obop.migrate", ".blobs"] {
-                let f = format!("{s}{ext}");
-                let _ = std::fs::remove_file(&f);
-                let _ = std::fs::remove_dir_all(&f);
-            }
+            let _ = std::fs::remove_dir_all(p);
         } else if self.clear_on_drop {
-            // Leave nothing of the restored data behind in a database the caller lent us.
-            let _ = self.backend.import(true, &mut || Ok(None));
+            // Leave nothing of the restored data behind in a database the caller lent us: the
+            // records, and the uploaded files the restore wrote beside them.
+            let left = self.forget_files();
+            if !left.is_empty() {
+                eprintln!(
+                    "warning: {} uploaded file(s) of the drilled backup could not be removed from the scratch database {}",
+                    left.len(),
+                    self.url
+                );
+            }
+            if let Err(e) = self.backend.import(true, &mut || Ok(None)) {
+                eprintln!(
+                    "warning: the scratch database {} could not be emptied again: {e}",
+                    self.url
+                );
+            }
+            if let Some(dir) = self.url.strip_prefix("sqlite://") {
+                // The directory of a file store that held only what the restore wrote.
+                let _ = std::fs::remove_dir(format!("{dir}.blobs"));
+            }
+        }
+    }
+}
+
+/// Temporary scratch directories of runs that were killed, older than this, are removed.
+const STALE_SCRATCH: std::time::Duration = std::time::Duration::from_secs(6 * 3600);
+
+fn sweep_scratch(tmp: &Path) {
+    let Ok(rd) = std::fs::read_dir(tmp) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if !name.starts_with("obop-scratch-") {
+            continue;
+        }
+        let idle = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| std::time::SystemTime::now().duration_since(t).ok());
+        if idle.is_some_and(|i| i >= STALE_SCRATCH) {
+            let _ = std::fs::remove_dir_all(e.path());
+            let _ = std::fs::remove_file(e.path());
         }
     }
 }
@@ -96,18 +167,33 @@ impl Scratch {
         static N: AtomicU64 = AtomicU64::new(0);
         match self {
             Scratch::TempSqlite => {
-                let p = std::env::temp_dir().join(format!(
-                    "obop-scratch-{}-{}.db",
+                // A restored sealed backup is in the clear in this database: it lives in a
+                // directory of its own, readable by the owner only, under a name nobody can
+                // guess (so nobody can plant a file there), and goes away with the drill.
+                let tmp = std::env::temp_dir();
+                sweep_scratch(&tmp);
+                let dir = tmp.join(format!(
+                    "obop-scratch-{}-{}-{}",
                     std::process::id(),
-                    N.fetch_add(1, Ordering::SeqCst)
+                    N.fetch_add(1, Ordering::SeqCst),
+                    obop_keys::hex(&obop_keys::random::<8>())
                 ));
-                let url = format!("sqlite://{}", p.display());
-                let backend = obop_storage::open(&url)?;
+                crate::fsutil::create_dir_private(&dir)
+                    .map_err(|e| format!("cannot make the scratch directory {}: {e}", dir.display()))?;
+                let url = format!("sqlite://{}", dir.join("scratch.db").display());
+                let backend = match obop_storage::open(&url) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let _ = std::fs::remove_dir_all(&dir);
+                        return Err(e);
+                    }
+                };
                 Ok(ScratchDb {
                     backend,
                     url,
-                    temp: Some(p),
+                    temp: Some(dir),
                     clear_on_drop: false,
+                    files_before: None,
                 })
             }
             Scratch::Url { url, keep } => {
@@ -137,6 +223,7 @@ impl Scratch {
                     url: url.clone(),
                     temp: None,
                     clear_on_drop: !keep,
+                    files_before: None,
                 })
             }
         }
@@ -166,6 +253,17 @@ pub struct Report {
 impl Report {
     pub fn passed(&self) -> bool {
         self.record.passed
+    }
+
+    /// The stable code (`restore_key_required`, `backup_not_sealed`) of the failure that stopped
+    /// the drill, if it was one of those: a caller maps it to the exit status of `verify` and
+    /// `restore`.
+    pub fn error_code(&self) -> Option<&'static str> {
+        self.record
+            .checks
+            .iter()
+            .filter(|c| !c.ok)
+            .find_map(|c| backup::error_code(&c.detail))
     }
 
     pub fn render(&self) -> String {
@@ -266,7 +364,8 @@ pub fn smoke(backend: &Arc<dyn Backend>, models: &[String]) -> Result<String, St
 pub fn run(o: &Options) -> Result<Report, String> {
     let manifest = backup::manifest_of(&o.backup)?;
     let mut c = Checks(Vec::new());
-    let scratch = o.scratch.open(o.avoid.as_deref())?;
+    let mut scratch = o.scratch.open(o.avoid.as_deref())?;
+    scratch.note_files();
     let started = Instant::now();
     let finish = |c: Checks, started: Instant, records: u64| {
         let passed = c.0.iter().all(|x| x.ok);

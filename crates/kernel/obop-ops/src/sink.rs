@@ -18,6 +18,7 @@
 //! that writes backups should not be able to remove them, and expiry belongs to the store's
 //! lifecycle rule.
 
+use crate::fsutil;
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -66,6 +67,33 @@ pub fn file_digest(path: &Path) -> Result<(String, u64), String> {
     Ok((obop_keys::hex(&h.finalize()), n))
 }
 
+/// An object that is already there is a success only when it holds the bytes being put.
+fn same_content(to: &Path, want: &str, name: &str, sink: &str) -> Result<(), String> {
+    let (have, _) = file_digest(to)?;
+    if have == *want {
+        Ok(())
+    } else {
+        Err(format!(
+            "{name} already exists in {sink} with different content; objects are write-once"
+        ))
+    }
+}
+
+/// Whether copying `src` to `to` (in `dir`) would copy a file onto itself: the same directory,
+/// or the same file reached by another name (a symlink, a bind mount, another spelling).
+fn is_same_place(src: &Path, to: &Path, dir: &Path) -> bool {
+    let canon = |p: &Path| std::fs::canonicalize(p).ok();
+    if let (Some(s), Some(t)) = (canon(src), canon(to))
+        && s == t
+    {
+        return true;
+    }
+    match (src.parent().and_then(canon), canon(dir)) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
 /// A directory as a sink.
 pub struct FsSink {
     dir: PathBuf,
@@ -94,36 +122,61 @@ impl FsSink {
 
 impl BackupSink for FsSink {
     fn name(&self) -> String {
-        format!("fs:{}", self.dir.display())
+        // The same sink under any spelling (a trailing slash, a relative path) has one name, so
+        // that a record of a copy keeps meaning the sink it was made in.
+        let dir = std::path::absolute(&self.dir).unwrap_or_else(|_| self.dir.clone());
+        let dir: PathBuf = dir.components().collect();
+        format!("fs:{}", dir.display())
     }
 
     fn put(&self, name: &str, src: &Path) -> Result<(), String> {
         let to = self.path(name)?;
-        std::fs::create_dir_all(&self.dir)
+        fsutil::create_dir_private(&self.dir)
             .map_err(|e| format!("cannot create {}: {e}", self.dir.display()))?;
-        let (want, _) = file_digest(src)?;
-        if to.exists() {
-            let (have, _) = file_digest(&to)?;
-            return if have == want {
-                Ok(())
-            } else {
-                Err(format!(
-                    "{name} already exists in {} with different content; objects are write-once",
-                    self.name()
-                ))
-            };
+        // A sink in the directory the backup is already in is not a second copy: reading it
+        // back would prove nothing, and retention would then delete the only one.
+        if is_same_place(src, &to, &self.dir) {
+            return Err(format!(
+                "{} is the directory the backup is in: that is not a copy anywhere else. Point the off-host copy at another disk, share or mount",
+                self.name()
+            ));
         }
-        let part = self.dir.join(format!("{name}.part"));
-        {
+        let (want, _) = file_digest(src)?;
+        // Write-once is decided at the moment of publishing (below); this is only the fast path
+        // for a retry that finds its own earlier copy.
+        if to.exists() {
+            return same_content(&to, &want, name, &self.name());
+        }
+        let part = fsutil::part_name(&to);
+        let copied = (|| -> Result<(), String> {
             let mut from =
                 File::open(src).map_err(|e| format!("cannot read {}: {e}", src.display()))?;
-            let mut out =
-                File::create(&part).map_err(|e| format!("cannot write {}: {e}", part.display()))?;
+            let mut out = fsutil::create_new_private(&part)
+                .map_err(|e| format!("cannot write {}: {e}", part.display()))?;
             std::io::copy(&mut from, &mut out).map_err(|e| format!("copy failed: {e}"))?;
             out.flush().map_err(|e| format!("copy failed: {e}"))?;
-            out.sync_all().map_err(|e| format!("copy failed: {e}"))?;
+            out.sync_all().map_err(|e| format!("copy failed: {e}"))
+        })();
+        if let Err(e) = copied {
+            let _ = std::fs::remove_file(&part);
+            return Err(e);
         }
-        std::fs::rename(&part, &to).map_err(|e| format!("cannot finish {name}: {e}"))
+        // Publish without replacing: if another writer got the name first, its object stays and
+        // this copy is only a success when the two are the same bytes.
+        match fsutil::publish_new(&part, &to) {
+            Ok(()) => {
+                fsutil::sync_dir(&self.dir);
+                Ok(())
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&part);
+                if to.exists() {
+                    same_content(&to, &want, name, &self.name())
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     fn digest(&self, name: &str) -> Result<(String, u64), String> {
@@ -287,6 +340,80 @@ mod tests {
                 .unwrap_err()
                 .contains("unreachable")
         );
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// "Read back and hash-checked" proves a copy only if the copy is somewhere else: a sink in the
+    /// directory of the backup (or reached by another name) would read back the file itself.
+    #[test]
+    fn a_sink_in_the_directory_of_the_backup_is_not_a_second_copy() {
+        let d = tmp("same");
+        let src = d.join("backup.obbk");
+        std::fs::write(&src, b"sealed bytes").unwrap();
+        // The same directory, spelled three ways.
+        for spelled in [
+            d.clone(),
+            d.join("."),
+            d.join("sub").join(".."),
+            PathBuf::from(format!("{}/", d.display())),
+        ] {
+            std::fs::create_dir_all(d.join("sub")).unwrap();
+            let sink = FsSink::new(spelled.clone());
+            let e = copy_verified(&sink, "backup.obbk", &src).unwrap_err();
+            assert!(e.contains("is the directory the backup is in"), "{spelled:?}: {e}");
+        }
+        // Nothing was copied, and nothing was damaged.
+        assert_eq!(std::fs::read(&src).unwrap(), b"sealed bytes");
+        // Another directory is a copy, and one name has one sink name however it is written.
+        let a = FsSink::new(d.join("off"));
+        let b = FsSink::new(format!("{}/", d.join("off").display()));
+        assert_eq!(a.name(), b.name());
+        copy_verified(&a, "backup.obbk", &src).unwrap();
+        assert_eq!(a.list().unwrap(), ["backup.obbk"]);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Two writers of one object name with different content: exactly one object results, it is
+    /// one of the two (never a mixture), and the loser is told, not told it succeeded.
+    #[test]
+    fn two_puts_of_one_name_never_mix_and_the_loser_is_refused() {
+        let d = tmp("race");
+        let (sa, sb) = (d.join("a"), d.join("b"));
+        std::fs::write(&sa, vec![0xAAu8; 4 << 20]).unwrap();
+        std::fs::write(&sb, vec![0xBBu8; 4 << 20]).unwrap();
+        for round in 0..6 {
+            let sink = std::sync::Arc::new(FsSink::new(d.join(format!("off{round}"))));
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let results: Vec<Result<(), String>> = std::thread::scope(|s| {
+                [&sa, &sb]
+                    .into_iter()
+                    .map(|src| {
+                        let (sink, barrier) = (sink.clone(), barrier.clone());
+                        s.spawn(move || {
+                            barrier.wait();
+                            sink.put("same.obbk", src)
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .map(|h| h.join().unwrap())
+                    .collect()
+            });
+            let (da, db) = (file_digest(&sa).unwrap().0, file_digest(&sb).unwrap().0);
+            let got = sink.digest("same.obbk").unwrap().0;
+            assert!(got == da || got == db, "round {round}: a mixed object");
+            assert_eq!(
+                results.iter().filter(|r| r.is_ok()).count(),
+                1,
+                "round {round}: {results:?}"
+            );
+            let winner = if results[0].is_ok() { &da } else { &db };
+            assert_eq!(&got, winner, "round {round}: the Ok put is the object there");
+            let loser = results.iter().find_map(|r| r.as_ref().err()).unwrap();
+            assert!(loser.contains("write-once"), "{loser}");
+            // No part file is left, and the object is still the winner's after a retry of it.
+            assert_eq!(sink.list().unwrap(), ["same.obbk"]);
+        }
         let _ = std::fs::remove_dir_all(&d);
     }
 
