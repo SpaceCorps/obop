@@ -123,7 +123,17 @@ async fn a_listed_origin_gets_its_own_origin_back_and_never_credentials() {
         assert_eq!(resp.status, 200);
         assert_eq!(resp.h("access-control-allow-origin"), origin);
         assert!(resp.vary().contains("origin"));
-        assert!(resp.h("access-control-expose-headers").contains("Link"));
+        let exposed = resp.h("access-control-expose-headers");
+        for name in [
+            "Link",
+            "Retry-After",
+            "WWW-Authenticate",
+            "X-Request-Id",
+            "ETag",
+            "Idempotent-Replayed",
+        ] {
+            assert!(exposed.contains(name), "{name} in {exposed}");
+        }
         assert!(
             !resp.has("access-control-allow-credentials"),
             "bearer tokens only: no cookies, no credentialed requests"
@@ -190,7 +200,7 @@ async fn a_preflight_from_a_listed_origin_is_answered_with_methods_headers_and_m
     assert_eq!(p.h("access-control-allow-methods"), "GET, POST, OPTIONS");
     assert_eq!(
         p.h("access-control-allow-headers"),
-        "Authorization, Content-Type, Accept, Accept-Language"
+        "Authorization, Content-Type, Accept, Accept-Language, Idempotency-Key, If-Match, X-Request-Id, X-App-Version"
     );
     assert_eq!(p.h("access-control-max-age"), "600");
     assert!(!p.has("access-control-allow-credentials"));
@@ -211,6 +221,48 @@ async fn a_preflight_from_a_listed_origin_is_answered_with_methods_headers_and_m
         let p = send(&r, preflight(path, APP, "POST", Some("authorization"))).await;
         assert_eq!(p.status, 204, "{path}");
     }
+}
+
+#[tokio::test]
+async fn a_preflight_for_the_headers_of_retries_and_concurrency_control_is_granted() {
+    let r = router(&[APP]);
+    let p = send(
+        &r,
+        preflight(
+            "/api/sales_order/create",
+            APP,
+            "POST",
+            Some("Authorization, Idempotency-Key, If-Match, X-Request-Id, X-App-Version"),
+        ),
+    )
+    .await;
+    assert_eq!(p.status, 204);
+    for name in [
+        "idempotency-key",
+        "if-match",
+        "x-request-id",
+        "x-app-version",
+    ] {
+        assert!(
+            p.h("access-control-allow-headers")
+                .to_ascii_lowercase()
+                .contains(name),
+            "{name}"
+        );
+    }
+    // The list is exact: a header that is not on it is still refused.
+    let p = send(
+        &r,
+        preflight(
+            "/api/x/create",
+            APP,
+            "POST",
+            Some("Idempotency-Key, X-Api-Key"),
+        ),
+    )
+    .await;
+    assert_eq!(p.status, 403);
+    assert!(!p.has_any_cors_header());
 }
 
 #[tokio::test]
