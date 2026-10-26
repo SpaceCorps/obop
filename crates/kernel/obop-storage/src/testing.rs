@@ -5,7 +5,7 @@
 use crate::fault::{self, Fault};
 use crate::{ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap, guarded};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, AtomicU8, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering::SeqCst};
 
 /// Which calls are refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +37,11 @@ pub struct Flaky {
     kv_put_budget: AtomicI64,
     /// -1: off; n: calls to let through before one is refused.
     once: AtomicI64,
+    /// Calls still to refuse after the first one of a run (see refuse_calls_after).
+    run_left: AtomicI64,
+    run_len: AtomicI64,
+    /// The key the next `kv_get` finds gone: another submit gave it back just before.
+    vanish: AtomicBool,
 }
 
 impl Flaky {
@@ -54,6 +59,9 @@ impl Flaky {
             kv_new_budget: AtomicI64::new(0),
             kv_put_budget: AtomicI64::new(0),
             once: AtomicI64::new(-1),
+            run_left: AtomicI64::new(0),
+            run_len: AtomicI64::new(0),
+            vanish: AtomicBool::new(false),
         })
     }
 
@@ -102,6 +110,15 @@ impl Flaky {
         self.kv_new_budget.store(0, SeqCst);
         self.kv_put_budget.store(0, SeqCst);
         self.once.store(-1, SeqCst);
+        self.run_left.store(0, SeqCst);
+        self.run_len.store(0, SeqCst);
+        self.vanish.store(false, SeqCst);
+    }
+
+    /// Delete the key that the next `kv_get` asks for just before it is read: the submit that held
+    /// it gave it back between a failed claim and the read of it.
+    pub fn release_key_before_the_next_kv_get(&self) {
+        self.vanish.store(true, SeqCst);
     }
 
     /// Refuse the next `n` `kv_put` calls (short-lived values: plans, sessions) and nothing else.
@@ -113,6 +130,14 @@ impl Flaky {
     /// one chosen position of a request (sweep `skip` to put it at every position in turn).
     pub fn refuse_call_after(&self, skip: i64) {
         self.once.store(skip, SeqCst);
+        self.run_len.store(0, SeqCst);
+    }
+
+    /// Let `skip` calls of any kind through, then refuse the next `n`: a store that stays refused,
+    /// from one chosen position of a request on, for longer than a step is tried again.
+    pub fn refuse_calls_after(&self, skip: i64, n: i64) {
+        self.once.store(skip, SeqCst);
+        self.run_len.store(n.max(1) - 1, SeqCst);
     }
 
     /// From the next successful change on, refuse every read: the pool fills up at the very
@@ -141,8 +166,14 @@ impl Flaky {
     /// Let `skip` atomic batches through, then refuse the one after them (and nothing else): the
     /// request that committed `skip` batches and met a refusal at the next.
     pub fn refuse_nth_apply(&self, skip: i64) {
+        self.refuse_applies_after(skip, 1);
+    }
+
+    /// Let `skip` atomic batches through, then refuse the next `n`: a store that stays refused
+    /// from one chosen step of a request on, longer than the step is tried again.
+    pub fn refuse_applies_after(&self, skip: i64, n: i64) {
         self.apply_skip.store(skip, SeqCst);
-        self.apply_budget.store(1, SeqCst);
+        self.apply_budget.store(n, SeqCst);
     }
 
     fn gate_apply(&self) -> Result<()> {
@@ -194,6 +225,16 @@ impl Flaky {
             _ => None,
         });
         if once == Ok(0) {
+            self.run_left.store(self.run_len.load(SeqCst), SeqCst);
+            self.refused.fetch_add(1, SeqCst);
+            fault::note(Fault::Busy);
+            return Err(Fault::Busy.message("all database connections are in use, try again"));
+        }
+        if self
+            .run_left
+            .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
+            .is_ok()
+        {
             self.refused.fetch_add(1, SeqCst);
             fault::note(Fault::Busy);
             return Err(Fault::Busy.message("all database connections are in use, try again"));
@@ -339,6 +380,9 @@ impl Backend for Flaky {
         self.inner.kv_put_new(key, value, ttl_ms)
     }
     fn kv_get(&self, key: &str) -> Result<Option<String>> {
+        if self.vanish.swap(false, SeqCst) {
+            let _ = self.inner.kv_delete(key);
+        }
         self.gate(false)?;
         self.inner.kv_get(key)
     }

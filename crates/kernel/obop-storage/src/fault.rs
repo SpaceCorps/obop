@@ -345,6 +345,33 @@ pub fn bookkeeping<T>(f: impl FnOnce() -> T) -> T {
     f()
 }
 
+/// Run `f` in a request scope of its own and drop what it saw when it ends. For housekeeping that
+/// a request does on nobody's behalf and that has nobody to answer (the sweep of expired orders a
+/// checkout starts with): a call of it that is refused must not make the guard refuse the request's
+/// own writes, a change it commits is not one of the request's, and the answer of the request does
+/// not say "partial" for what another order's recovery did. What it leaves undone is found again
+/// by its next run. Outside a request scope it changes nothing.
+pub fn detached<T>(f: impl FnOnce() -> T) -> T {
+    struct Restore(Scope);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            SCOPE.with(|c| c.set(self.0));
+        }
+    }
+    let saved = SCOPE.with(Cell::get);
+    if !saved.active {
+        return f();
+    }
+    SCOPE.with(|c| {
+        c.set(Scope {
+            active: true,
+            ..Scope::default()
+        })
+    });
+    let _restore = Restore(saved);
+    f()
+}
+
 /// Run `f` and do not count what it writes as a change of the request. For a note that only
 /// helps a repeat along (what is owed after a change that has not been made yet): if the change
 /// itself is then refused, the request has changed nothing and is answered as such. The guard
@@ -492,5 +519,39 @@ mod tests {
         // `mark_partial` outside a request scope does nothing.
         mark_partial();
         assert_eq!(state(), Outcome::default());
+    }
+
+    #[test]
+    fn a_detached_part_keeps_its_faults_and_changes_to_itself() {
+        clear();
+        // Outside a request scope it is only a call.
+        assert_eq!(detached(|| 7), 7);
+        begin_request(Outcome::default());
+        let inside = detached(|| {
+            note(Fault::Busy);
+            wrote();
+            assert!(
+                before_write().is_err(),
+                "its own scope refuses after its fault"
+            );
+            state()
+        });
+        assert_eq!(inside.fault, Some(Fault::Busy));
+        assert!(inside.wrote);
+        // The request does not see it: its writes are not refused and it has not changed anything.
+        assert!(before_write().is_ok());
+        assert_eq!(end_request(), Outcome::default());
+        // What the request had before is still there afterwards.
+        begin_request(Outcome::default());
+        wrote();
+        detached(|| note(Fault::Timeout));
+        assert_eq!(
+            end_request(),
+            Outcome {
+                fault: None,
+                wrote: true,
+                partial: false
+            }
+        );
     }
 }

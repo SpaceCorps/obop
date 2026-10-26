@@ -27,6 +27,9 @@ struct StandState {
     log: Vec<Logged>,
     fail_create: bool,
     fail_refund: bool,
+    /// Refunds made, by the idempotency key they were asked with: a repeat of the key gets the
+    /// same refund back, as the real API does within a day.
+    refunds: HashMap<String, (String, i64)>,
     n: u32,
 }
 
@@ -135,6 +138,11 @@ impl Stand {
         v
     }
 
+    /// Refunds the provider made (a repeat of one idempotency key is one refund).
+    fn refunds_made(&self) -> usize {
+        self.st.lock().unwrap().refunds.len()
+    }
+
     fn calls(&self, method: &str, path_prefix: &str) -> Vec<Logged> {
         self.st
             .lock()
@@ -229,13 +237,25 @@ fn respond(st: &Arc<Mutex<StandState>>, r: &Logged) -> (u16, String) {
             if g.fail_refund {
                 return err(400, "The charge has already been refunded");
             }
+            let key = r
+                .headers
+                .get("idempotency-key")
+                .cloned()
+                .unwrap_or_default();
+            if let Some((id, amount)) = g.refunds.get(&key).filter(|_| !key.is_empty()) {
+                return (
+                    200,
+                    json!({"id": id, "status": "succeeded", "amount": amount}).to_string(),
+                );
+            }
             g.n += 1;
             let n = g.n;
+            let amount = form("amount").parse::<i64>().unwrap_or(0);
+            g.refunds.insert(key, (format!("re_test_{n}"), amount));
             (
                 200,
-                json!({"id": format!("re_test_{n}"), "status": "succeeded",
-                       "amount": form("amount").parse::<i64>().unwrap_or(0)})
-                .to_string(),
+                json!({"id": format!("re_test_{n}"), "status": "succeeded", "amount": amount})
+                    .to_string(),
             )
         }
         _ => err(404, "Unrecognized request URL"),
@@ -443,6 +463,42 @@ impl Env {
                 &Value::map([("id", Value::text(id))]),
             )
             .map(|_| ())
+    }
+
+    /// What the backoffice kanban does when a card is dragged to another column: an `update` of
+    /// the governed `state` field, not a call of the action.
+    fn update_state(&self, p: &Principal, id: &str, state: &str) -> Result<(), CallError> {
+        self.d
+            .call(
+                Surface::Rest,
+                p,
+                &mut Vault::new(),
+                "ecommerce_order.update",
+                &Value::map([("id", Value::text(id)), ("state", Value::text(state))]),
+            )
+            .map(|_| ())
+    }
+
+    fn payment_of(&self, order: &str) -> Fields {
+        self.payments()
+            .into_iter()
+            .map(|(_, p)| p)
+            .find(|p| p["order_id"] == order)
+            .unwrap()
+    }
+
+    /// The state the follow-up of a payment event leaves when it is refused for long: the payment
+    /// is recorded as succeeded and the order is still as it was.
+    fn payment_succeeded(&self, order: &str) {
+        let pid = self
+            .payments()
+            .into_iter()
+            .find(|(_, p)| p["order_id"] == order)
+            .unwrap()
+            .0;
+        let mut done = Fields::new();
+        done.insert("state".into(), json!("succeeded"));
+        self.store.backend().update(PAYMENT, &pid, &done).unwrap();
     }
 
     /// A webhook delivery the way Stripe would sign it.
@@ -1494,6 +1550,181 @@ fn a_refund_whose_units_could_not_go_back_is_finished_by_the_sweep_and_a_deliver
         before,
         "not one day later either"
     );
+}
+
+#[test]
+fn moving_an_order_with_an_update_returns_the_money_and_the_units_like_the_action() {
+    // The kanban drag is an `update` of the state, not a call of the action. It ran the bare
+    // action: the order said refunded and the buyer's money never went back.
+    let e = env_with(true, false, "stripe");
+    let m = e.manager();
+    // Paid to refunded: the money and the units go back.
+    let (paid, _) = paid_stripe_order(&e, "stoneware-teapot", "2");
+    assert_eq!(e.stock("stoneware-teapot"), 4);
+    e.update_state(&m, &paid, "refunded").unwrap();
+    assert_eq!(e.order_state(&paid), "refunded");
+    assert_eq!(e.payment_of(&paid)["state"], "refunded");
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 1);
+    assert_eq!(e.stock("stoneware-teapot"), 6);
+    // Pending to cancelled, the payment already succeeded: the money is returned, not kept.
+    e.buy("sencha-green-tea", "1", "stripe", &[]);
+    let (pending, _) = e.last_order();
+    let (sid, _) = e.stand.sessions().pop().unwrap();
+    e.stand.pay(&sid);
+    e.payment_succeeded(&pending);
+    e.update_state(&m, &pending, "cancelled").unwrap();
+    assert_eq!(e.order_state(&pending), "cancelled");
+    assert_eq!(e.payment_of(&pending)["state"], "refunded");
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 2);
+    assert_eq!(e.stock("sencha-green-tea"), 40);
+    // Delivered to refunded: the money goes back, the goods do not go on the shelf, not one day
+    // later either.
+    let (late, _) = paid_stripe_order(&e, "stoneware-teapot", "1");
+    for cmd in ["ecommerce_order.ship", "ecommerce_order.deliver"] {
+        e.call(&m, cmd, &late).unwrap();
+    }
+    let before = e.stock("stoneware-teapot");
+    e.update_state(&m, &late, "refunded").unwrap();
+    assert_eq!(e.payment_of(&late)["state"], "refunded");
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 3);
+    e.pay.sweep_expired();
+    assert_eq!(e.stock("stoneware-teapot"), before);
+}
+
+#[test]
+fn an_approved_plan_that_moves_the_state_runs_the_same_wrappers() {
+    let e = env_with(true, false, "stripe");
+    let (oid, _) = paid_stripe_order(&e, "stoneware-teapot", "2");
+    let agent = Principal::agent(
+        "bot",
+        &["ecommerce.user", "ecommerce.manager"],
+        &["ecommerce.user", "ecommerce.manager"],
+    );
+    let plan = match e.update_state(&agent, &oid, "refunded") {
+        Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+        other => panic!("an agent only proposes: {other:?}"),
+    };
+    assert!(e.stand.calls("POST", "/v1/refunds").is_empty());
+    assert_eq!(e.order_state(&oid), "paid");
+    e.d.approve(&e.manager(), &mut Vault::new(), &plan).unwrap();
+    assert_eq!(e.order_state(&oid), "refunded");
+    assert_eq!(e.payment_of(&oid)["state"], "refunded");
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 1);
+    assert_eq!(e.stock("stoneware-teapot"), 6);
+}
+
+#[test]
+fn the_sweep_returns_the_money_of_a_cancelled_order_whose_payment_succeeded() {
+    // A late payment whose follow-up was lost (the process stopped after the payment was recorded,
+    // or the event id could not be given back): the provider's redelivery cannot be counted on.
+    let e = env_with(true, false, "stripe");
+    e.buy("sencha-green-tea", "1", "stripe", &[]);
+    let (oid, _) = e.last_order();
+    let (sid, _) = e.stand.sessions().remove(0);
+    e.call(&e.manager(), "ecommerce_order.cancel", &oid)
+        .unwrap();
+    e.stand.pay(&sid);
+    e.payment_succeeded(&oid);
+    assert_eq!(e.order_state(&oid), "cancelled");
+    assert!(e.stand.calls("POST", "/v1/refunds").is_empty());
+    e.pay.sweep_expired();
+    assert_eq!(e.payment_of(&oid)["state"], "refunded");
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 1);
+    assert_eq!(
+        e.order_state(&oid),
+        "cancelled",
+        "the order stays cancelled"
+    );
+    // Once.
+    e.pay.sweep_expired();
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 1);
+}
+
+#[test]
+fn a_cancel_whose_refund_record_is_refused_never_leaves_an_order_the_sweep_can_mark_paid() {
+    // The money went back and the store refused to record it, from one chosen step on. Wherever
+    // that is, the order must never end paid (and shipped) with the buyer's money returned: it is
+    // cancelled before the money moves, and what the request could not record, the sweep does.
+    for skip in 0..6 {
+        let (flaky, e) = flaky_env();
+        e.buy("sencha-green-tea", "1", "stripe", &[]);
+        let (oid, _) = e.last_order();
+        let (sid, _) = e.stand.sessions().remove(0);
+        e.stand.pay(&sid);
+        e.payment_succeeded(&oid);
+        // The reservation has run out, so that the sweep looks at the order if it is still pending.
+        let mut lapsed = Fields::new();
+        lapsed.insert("reserved_until".into(), json!(1));
+        e.store.backend().update(ORDER, &oid, &lapsed).unwrap();
+        flaky.refuse_applies_after(skip, 50);
+        let _ = e.call(&e.manager(), "ecommerce_order.cancel", &oid);
+        flaky.allow_models();
+        obop_storage::fault::clear();
+        for _ in 0..3 {
+            e.pay.sweep_expired();
+        }
+        let refunds = e.stand.refunds_made();
+        let (order, payment) = (e.order_state(&oid), e.payment_of(&oid)["state"].clone());
+        if refunds > 0 {
+            assert_eq!(
+                (order.as_str(), &payment),
+                ("cancelled", &json!("refunded")),
+                "skip {skip}: the money went back, so the order is cancelled and it is recorded"
+            );
+        } else {
+            assert_eq!(
+                (order.as_str(), &payment),
+                ("paid", &json!("succeeded")),
+                "skip {skip}: no money moved, so the order that holds it is paid"
+            );
+        }
+        assert!(refunds <= 1, "skip {skip}: refunded twice");
+    }
+}
+
+#[test]
+fn a_refund_of_delivered_goods_never_leaves_units_owed_whichever_step_the_store_refuses() {
+    for skip in 0..10 {
+        let (flaky, e) = flaky_env();
+        let (oid, _) = paid_stripe_order(&e, "stoneware-teapot", "2");
+        let m = e.manager();
+        for cmd in ["ecommerce_order.ship", "ecommerce_order.deliver"] {
+            e.call(&m, cmd, &oid).unwrap();
+        }
+        let before = e.stock("stoneware-teapot");
+        flaky.refuse_calls_after(skip, 50);
+        let _ = e.call(&m, "ecommerce_order.refund_delivered", &oid);
+        flaky.allow_models();
+        obop_storage::fault::clear();
+        for _ in 0..2 {
+            e.pay.sweep_expired();
+        }
+        assert_eq!(
+            e.stock("stoneware-teapot"),
+            before,
+            "skip {skip}: the goods are with the buyer, the shelf did not grow"
+        );
+    }
+}
+
+#[test]
+fn a_refused_call_of_the_sweep_does_not_refuse_the_buyers_own_checkout() {
+    use obop_storage::fault;
+    use obop_storage::testing::Mode;
+    // The sweep of expired orders runs at the start of a checkout, on nobody's behalf. Its read of
+    // the payments is refused here: the buyer's own claim of the form key, the order and the
+    // payment page must not be refused for it, and the answer must not call it part of the buyer's
+    // request.
+    let (flaky, e) = flaky_env();
+    flaky.refuse_model(PAYMENT, Mode::Reads);
+    fault::begin_request(Default::default());
+    let r = e.buy("sencha-green-tea", "1", "stripe", &[]);
+    let out = fault::end_request();
+    flaky.allow_models();
+    assert_eq!(r.status, 303, "{}", r.body_str());
+    assert_eq!(out.fault, None, "{out:?}");
+    assert_eq!(e.orders().len(), 1);
+    assert_eq!(e.stock("sencha-green-tea"), 39);
 }
 
 // ---- refunds ----------------------------------------------------------------------------------

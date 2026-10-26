@@ -1002,7 +1002,8 @@ impl Site {
                 .header("retry-after", "60");
         }
         if let Some(p) = &self.payments {
-            p.sweep();
+            // On nobody's behalf: what it meets or changes is not this buyer's request.
+            obop_storage::fault::detached(|| p.sweep());
         }
         let fail = |site: &Site, ctx: &mut Ctx, errors: Errors| {
             let r = Redo {

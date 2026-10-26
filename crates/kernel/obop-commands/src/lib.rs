@@ -1005,6 +1005,18 @@ impl Dispatcher {
         }
     }
 
+    /// Run the handler of a command through its wrapper, if one was installed (`around`). Every
+    /// route that runs an action goes through here: the call itself, the transition an `update`
+    /// of a governed field implies, and an approved plan. A route that called the handler
+    /// directly would skip what the wrapper does (returning money, giving units back).
+    fn invoke(&self, c: &Registered, p: &Principal, input: &Value) -> Result<Value, String> {
+        let wrapper = self.around.read().unwrap().get(&c.id).cloned();
+        match wrapper {
+            Some(w) => w(p, input, &|i| (c.handler)(i)),
+            None => (c.handler)(input),
+        }
+    }
+
     fn run(
         &self,
         c: &Registered,
@@ -1024,7 +1036,9 @@ impl Dispatcher {
                         Actor::of(p).stamp(m);
                     }
                 }
-                (action.handler)(&i).map_err(CallError::Handler)?;
+                // Through the action's own wrapper, like a call of the action: a drag of an order
+                // to "refunded" must return the money exactly as the refund action does.
+                self.invoke(&action, p, &i).map_err(CallError::Handler)?;
                 if let Value::Map(m) = &mut input {
                     m.remove(step.field);
                 }
@@ -1038,12 +1052,7 @@ impl Dispatcher {
                 Actor::of(p).stamp(m);
             }
         }
-        let wrapper = self.around.read().unwrap().get(&c.id).cloned();
-        let out = match wrapper {
-            Some(w) => w(p, &input, &|i| (c.handler)(i)),
-            None => (c.handler)(&input),
-        }
-        .map_err(CallError::Handler)?;
+        let out = self.invoke(c, p, &input).map_err(CallError::Handler)?;
         let observers: Vec<Arc<Observer>> = self
             .observers
             .read()

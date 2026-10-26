@@ -43,6 +43,7 @@ use obop_connectors::webhook::{Seen, VerifyError};
 use obop_storage::fault::{self, Fault};
 use obop_storage::{ApplyError, Backend, Fields, Op};
 use serde_json::{Value as J, json};
+use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -647,24 +648,29 @@ impl Payments {
         };
         let mut n = 0;
         let mut revisited = 0;
-        for (id, o) in orders {
+        let cancelled: HashSet<&str> = orders
+            .iter()
+            .filter(|(_, o)| text(o, "state") == "cancelled")
+            .map(|(id, _)| id.as_str())
+            .collect();
+        for (id, o) in &orders {
             // A cancelled or refunded order whose units were not given back (the step after it
             // was refused) is finished here, a few per sweep: nobody else would. Only an order
             // that recorded a reservation (`stock_returned` is `false`) has units owed.
-            let state = text(&o, "state");
+            let state = text(o, "state");
             if matches!(state, "cancelled" | "refunded")
                 && o.get("stock_returned").and_then(J::as_bool) == Some(false)
                 && revisited < 25
             {
                 revisited += 1;
-                let _ = self.release_order(&id, state == "cancelled");
+                let _ = self.release_order(id, state == "cancelled");
                 continue;
             }
             let until = o
                 .get("reserved_until")
                 .and_then(J::as_u64)
                 .unwrap_or(u64::MAX);
-            if text(&o, "state") != "pending" || until >= t {
+            if text(o, "state") != "pending" || until >= t {
                 continue;
             }
             // Every lookup below that is refused leaves the order for the next sweep: a refused
@@ -708,7 +714,30 @@ impl Payments {
                 n += 1;
             }
         }
+        self.return_stranded_payments(&cancelled);
         n
+    }
+
+    /// A cancelled order whose payment is `succeeded` is money the shop holds for nothing: a late
+    /// payment whose follow-up was lost (the process stopped after the payment was recorded, the
+    /// event id could not be given back, a poll that swallowed the refusal), or a cancel whose
+    /// refund was refused. The provider's redelivery is not a way to count on, so the sweep
+    /// returns it, a few per sweep. Safe to repeat: the provider is given a fixed key.
+    fn return_stranded_payments(&self, cancelled: &HashSet<&str>) {
+        let Ok(payments) = self.backend.list(PAYMENT) else {
+            return;
+        };
+        let mut tried = 0;
+        for (pid, p) in payments {
+            if text(&p, "state") != "succeeded" || !cancelled.contains(text(&p, "order_id")) {
+                continue;
+            }
+            if tried >= 5 {
+                break;
+            }
+            tried += 1;
+            let _ = self.refund_payment(&pid);
+        }
     }
 
     // ---- the order actions ------------------------------------------------------------------
@@ -730,30 +759,39 @@ impl Payments {
             Box::new(move |_, input, inner| {
                 // A pending order whose payment already succeeded (the follow-up of the event
                 // was refused and waits for the provider's redelivery) must not be cancelled with
-                // the money kept: it is returned first, as the refund wrapper does, and if the
-                // provider refuses, the order stays as it is.
-                if let Some(id) = order_id(input)
-                    && matches!(me.order(&id)?, Some(o) if text(&o, "state") == "pending")
-                    && let Some((pid, p)) = me.payment_of_order(&id)?
-                    && text(&p, "state") == "succeeded"
-                {
+                // the money kept. The order is cancelled FIRST and the money returned after it:
+                // a cancelled order can no longer be marked paid (by the sweep or by a
+                // redelivery) while the refund is on its way or its record is refused, and a
+                // refund that does not go through is finished by the sweep, which returns the
+                // money of every cancelled order whose payment succeeded.
+                let id = order_id(input);
+                let owed = match &id {
+                    Some(id) if matches!(me.order(id)?, Some(o) if text(&o, "state") == "pending") => {
+                        match me.payment_of_order(id)? {
+                            Some((pid, p)) if text(&p, "state") == "succeeded" => Some(pid),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                };
+                let out = inner(input)?;
+                if let Some(id) = &id {
+                    // The order is cancelled. Closing its payment and giving the units and the
+                    // code back are needed (nothing else would: the sweep visits pending orders):
+                    // tried again, and a lasting refusal is a partial 503 (D74).
+                    needed(|| me.close_payment_of(id))?;
+                    needed(|| me.release_order(id, true).map(|_| ()))?;
+                }
+                if let Some(pid) = owed {
                     me.refund_payment(&pid).map_err(|e| {
                         if e.starts_with(MONEY_RETURNED) {
                             e
                         } else {
                             format!(
-                                "the payment was received and could not be returned, so the order was not cancelled: {e}"
+                                "the order was cancelled but the payment that had been received could not be returned yet: {e}; the sweep returns it"
                             )
                         }
                     })?;
-                }
-                let out = inner(input)?;
-                if let Some(id) = order_id(input) {
-                    // The order is cancelled. Closing its payment and giving the units and the
-                    // code back are needed (nothing else would: the sweep visits pending orders):
-                    // tried again, and a lasting refusal is a partial 503 (D74).
-                    needed(|| me.close_payment_of(&id))?;
-                    needed(|| me.release_order(&id, true).map(|_| ()))?;
                 }
                 Ok(out)
             }),
@@ -780,6 +818,14 @@ impl Payments {
                 cmd,
                 Box::new(move |_, input, inner| {
                     let id = order_id(input);
+                    // Delivered goods do not go back on the shelf: nothing is owed for this
+                    // order, and it says so BEFORE it moves to refunded, so that there is no
+                    // moment at which a refunded order owes units that the sweep would return
+                    // (a delivered order owes none whatever happens next). A note that helps the
+                    // sweep along, not a change of the request, and a plain 503 if refused.
+                    if !restock && let Some(id) = &id {
+                        needed(|| fault::uncounted(|| me.mark_stock_settled(id)))?;
+                    }
                     // A refused lookup of the payment is not "no payment": the order must not be
                     // refunded without the money (nothing has been changed yet, so this is a
                     // plain 503).
@@ -796,14 +842,8 @@ impl Payments {
                         })?;
                     }
                     let out = inner(input)?;
-                    if let Some(id) = &id {
-                        if restock {
-                            needed(|| me.release_order(id, false).map(|_| ()))?;
-                        } else {
-                            // Delivered goods do not go back on the shelf: nothing is owed, and
-                            // the order says so (or the sweep would return them one day).
-                            needed(|| me.mark_stock_settled(id))?;
-                        }
+                    if restock && let Some(id) = &id {
+                        needed(|| me.release_order(id, false).map(|_| ()))?;
                     }
                     Ok(out)
                 }),
@@ -811,10 +851,20 @@ impl Payments {
         }
     }
 
-    /// Record that no units are owed for this order (a refund of delivered goods).
+    /// Record that no units are owed for this order: the goods of a delivered order are with the
+    /// buyer. Only while the order is delivered (a refund of any other order does give units
+    /// back), so a repeat after the order moved on changes nothing.
     fn mark_stock_settled(&self, order_id: &str) -> Result<(), String> {
         let patch = Fields::from_iter([("stock_returned".to_string(), json!(true))]);
-        self.backend.update(ORDER, order_id, &patch).map(|_| ())
+        match self.backend.apply_checked(&[Op::Patch {
+            model: ORDER.into(),
+            id: order_id.into(),
+            patch,
+            expect: vec![("state".into(), json!("delivered"))],
+        }]) {
+            Ok(()) | Err(ApplyError::Conflict { .. }) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
     }
 
     /// Close the open payment of a cancelled order. A refusal of the store is an error (the step
