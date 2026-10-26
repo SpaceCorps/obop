@@ -51,6 +51,7 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=Apache-2.0
           # BuildKit layer cache in the Actions cache: the dependency layer (cargo-chef) and the
           # web build are rebuilt only when their inputs change.
           cache-from: type=gha

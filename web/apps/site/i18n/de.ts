@@ -191,7 +191,7 @@ export const de: Messages = {
       },
       {
         title: "Quellcode auf GitHub",
-        body: "Lesen Sie den Code, die Entscheidungen und die Roadmap. Die Lizenz wird gerade festgelegt; siehe das Repository.",
+        body: "Lesen Sie den Code, die Entscheidungen und die Roadmap. Apache-2.0, frei nutzbar und selbst hostbar; siehe das Repository.",
       },
     ],
     pricingTitle: "Einfache Preise, geplant",
@@ -231,7 +231,7 @@ export const de: Messages = {
       },
       {
         q: "Ist obop Open Source?",
-        a: "Der Quellcode ist auf GitHub öffentlich. Die endgültige Lizenz steht noch nicht fest (das Projekt schlägt die AGPL vor); die aktuellen Bedingungen finden Sie im Repository.",
+        a: "Der Quellcode ist auf GitHub unter der Apache-2.0-Lizenz öffentlich: frei nutzbar, veränderbar und selbst hostbar. Den vollständigen Text finden Sie in der Datei LICENSE im Repository.",
       },
     ],
     ctaTitle: "Ein Unternehmen, eine Plattform.",

@@ -1,5 +1,7 @@
 # obop product description: one business, one platform
 
+> **Licence and price are settled.** The owner ruled on 2026-10-01 that the whole project is Apache-2.0 and completely free: no AGPL, Application Exception, CLA, `ee` tree, paid list, plans or prices (D1, D2; [DECISIONS.md](DECISIONS.md#owner-rulings)). Where this document describes any of those, the ruling wins and the text is history.
+
 - **Status:** Draft 0.1
 - **Date:** 2026-10-01
 - **Scope:** The master product description: what obop is, who it is for, every app and module with tier, wave and open or paid status, how it differs from Odoo, ERPNext, Dolibarr and SaaS stacks, what it promises, what ships when, and what the owner still has to decide.

@@ -1,5 +1,7 @@
 # Business: licensing, governance, editions and pricing, economics, go-to-market, risk register
 
+> **Licence and price are settled.** The owner ruled on 2026-10-01 that the whole project is Apache-2.0 and completely free: no AGPL, Application Exception, CLA, `ee` tree, paid list, plans or prices (D1, D2; [DECISIONS.md](DECISIONS.md#owner-rulings)). Where this document describes any of those, the ruling wins and the text is history.
+
 - **Status:** Draft 0.1
 - **Date:** 2026-10-01 (month 0, "M0")
 - **Scope:** How obop earns trust and money: market and ICP, positioning, licence and governance, the open/paid boundary, pricing hypotheses, economics and funding gates, partners, go-to-market, risks and counsel items.
