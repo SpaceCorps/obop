@@ -48,6 +48,22 @@ test.describe("website without JavaScript", () => {
     expect(names.sort()).toEqual(["Accounting", "Expenses", "Invoicing"]);
   });
 
+  test("the home page lists apps in two labelled groups and the status filter shows one", async ({
+    page,
+  }) => {
+    await page.goto(`${base()}/`);
+    await expect(page.locator("#apps .apps-group-title")).toHaveCount(2);
+    await page.locator('#apps label[for="st-live"]').click();
+    await expect(page.locator("#apps .app:visible")).toHaveCount(6);
+    await expect(page.locator("#apps .apps-group-title:visible")).toHaveCount(1);
+    await page.locator('#apps label[for="st-market"]').click();
+    await expect(page.locator("#apps .app:visible")).toHaveCount(22);
+    await expect(page.locator("#apps .apps-group-title:visible")).toHaveCount(1);
+    await page.locator('#apps label[for="st-all"]').click();
+    await expect(page.locator("#apps .app:visible")).toHaveCount(28);
+    await expect(page.locator("#apps .apps-group-title:visible")).toHaveCount(2);
+  });
+
   test("an app page lists models, fields, workflows, approvals and agent limits", async ({
     page,
   }) => {

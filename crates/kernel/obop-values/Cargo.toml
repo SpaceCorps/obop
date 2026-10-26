@@ -1,0 +1,15 @@
+[package]
+name = "obop-values"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Time zones: the IANA database is compiled into the binary (`jiff-tzdb`), never read from the
+# system, so an instance answers the same on every host. MIT OR Unlicense.
+jiff = { version = "0.2.38", default-features = false, features = ["std", "tzdb-bundle-always"] }
+jiff-tzdb = "0.1.9"
+
+[lints]
+workspace = true

@@ -1,11 +1,49 @@
 <script setup lang="ts">
-import { useSite } from "../composables.ts";
+import { computed } from "vue";
+import { GITHUB, useSite } from "../composables.ts";
 import AppsGrid from "./AppsGrid.vue";
 import Icon from "./Icon.vue";
 import Logo from "./Logo.vue";
 import Tile from "./Tile.vue";
 
 const { m, href } = useSite();
+
+/** A label the site already has (navigation or footer), found by its link target. */
+const label = (to: string) =>
+  m.value.nav.find((n) => n.href === to)?.label ??
+  m.value.footer.groups.flatMap((g) => g.links).find((l) => l.href === to)?.label ??
+  "";
+/** The small caps line above each section heading. No new strings: every one is an existing label. */
+const kick = computed(() => ({
+  apps: label("/apps/"),
+  platform: label("/platform/"),
+  marketplace: label("/marketplace/"),
+  steps: label("/docs/getting-started/"),
+  open: m.value.home.heroPoints[0] ?? "",
+  pricing: label("/pricing/"),
+  faq: label("/docs/reference/faq/"),
+}));
+/** The open-source cards, in the order every locale lists them: icon, link text and destination. */
+// The last word of a link label stays on one line with its arrow, so a wrapped link never strands the arrow.
+const head = (s: string) => s.slice(0, s.lastIndexOf(" ") + 1);
+const tail = (s: string) => s.slice(s.lastIndexOf(" ") + 1);
+const OPEN = [
+  { icon: "plug", to: () => "/app/", text: () => m.value.home.ctaPrimary },
+  {
+    icon: "home",
+    to: () => href("/docs/getting-started/"),
+    text: () => label("/docs/getting-started/"),
+  },
+  { icon: "eye", to: () => GITHUB, text: () => m.value.ui.sourceCode },
+] as const;
+const openCards = computed(() =>
+  m.value.home.openPoints.map((p, i) => ({
+    ...p,
+    icon: OPEN[i]?.icon ?? "eye",
+    to: OPEN[i]?.to() ?? GITHUB,
+    label: OPEN[i]?.text() ?? "",
+  })),
+);
 </script>
 
 <template>
@@ -23,12 +61,13 @@ const { m, href } = useSite();
             <a class="btn primary large" href="/app/">{{ m.home.ctaPrimary }}</a>
             <a class="btn large" :href="href('/apps/')">{{ m.home.ctaSecondary }}</a>
           </div>
-          <ul class="facts">
-            <li v-for="p in m.home.heroPoints" :key="p">
-              <Icon name="check-circle" :size="16" />{{ p }}
-            </li>
-          </ul>
         </div>
+
+        <ul class="facts">
+          <li v-for="p in m.home.heroPoints" :key="p">
+            <Icon name="check-circle" :size="16" />{{ p }}
+          </li>
+        </ul>
 
         <div class="mock" aria-hidden="true">
           <div class="mock-window">
@@ -85,54 +124,71 @@ const { m, href } = useSite();
 
     <section id="apps" class="section">
       <div class="wrap">
-        <h2>{{ m.home.appsTitle }}</h2>
-        <p class="sub">{{ m.home.appsSub }}</p>
-        <AppsGrid />
-        <p class="center more">
-          <a class="btn" :href="href('/apps/')">{{ m.home.seeAllApps }}</a>
-        </p>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.apps }}</p>
+            <h2>{{ m.home.appsTitle }}</h2>
+            <p class="sub">{{ m.home.appsSub }}</p>
+          </div>
+          <div class="sec-act">
+            <a class="btn" :href="href('/apps/')">{{ m.home.seeAllApps }}</a>
+          </div>
+        </div>
+        <AppsGrid grouped />
       </div>
     </section>
 
     <section id="platform" class="section alt">
       <div class="wrap">
-        <h2>{{ m.home.pillarsTitle }}</h2>
-        <p class="sub">{{ m.home.pillarsSub }}</p>
-        <div class="cards">
-          <article v-for="p in m.home.pillars" :key="p.title">
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.platform }}</p>
+            <h2>{{ m.home.pillarsTitle }}</h2>
+            <p class="sub">{{ m.home.pillarsSub }}</p>
+          </div>
+        </div>
+        <div class="bento">
+          <article v-for="(p, i) in m.home.pillars" :key="p.title" :class="{ lead: i === 0 }">
             <span class="card-ico"><Icon :name="p.icon" :size="22" /></span>
             <h3>{{ p.title }}</h3>
             <p>{{ p.body }}</p>
             <p class="tag">{{ p.tag }}</p>
+            <div v-if="i === 0" class="flow-block">
+              <p id="flow-h" class="flow-label">{{ m.home.flowLabel }}</p>
+              <ol class="flow" aria-labelledby="flow-h">
+                <li v-for="(f, j) in m.home.flow" :key="f.title">
+                  <span class="flow-n" aria-hidden="true">{{ j + 1 }}</span>
+                  <b>{{ f.title }}</b>
+                  <span>{{ f.body }}</span>
+                </li>
+              </ol>
+            </div>
           </article>
         </div>
-        <ol class="flow" :aria-label="m.home.flowLabel">
-          <li v-for="(f, i) in m.home.flow" :key="f.title">
-            <span class="flow-n" aria-hidden="true">{{ i + 1 }}</span>
-            <b>{{ f.title }}</b>
-            <span>{{ f.body }}</span>
-          </li>
-        </ol>
       </div>
     </section>
 
-    <section id="marketplace" class="section">
-      <div class="wrap split">
-        <div>
-          <h2>{{ m.home.marketTitle }}</h2>
-          <p class="sub left">{{ m.home.marketBody }}</p>
-          <ul class="ticks">
-            <li v-for="t in m.home.marketTicks" :key="t">
-              <Icon name="check-circle" :size="20" />{{ t }}
-            </li>
-          </ul>
-          <p class="more-left">
-            <a class="btn" :href="href('/marketplace/')">{{ m.home.marketCta }}</a>
-          </p>
-        </div>
-        <div class="codebox">
-          <div class="codebar"><i></i><i></i><i></i><span>obop.toml</span></div>
-          <pre class="code" aria-label="Example obop.toml"><code><span class="c">[module]</span>
+    <section id="marketplace" class="section alt join">
+      <div class="wrap">
+        <div class="split">
+          <div>
+            <div class="sec-text">
+              <p class="eyebrow-text">{{ kick.marketplace }}</p>
+              <h2>{{ m.home.marketTitle }}</h2>
+              <p class="sub">{{ m.home.marketBody }}</p>
+            </div>
+            <ul class="ticks">
+              <li v-for="t in m.home.marketTicks" :key="t">
+                <Icon name="check-circle" :size="20" />{{ t }}
+              </li>
+            </ul>
+            <p class="more-left">
+              <a class="btn" :href="href('/marketplace/')">{{ m.home.marketCta }}</a>
+            </p>
+          </div>
+          <div class="codebox">
+            <div class="codebar"><i></i><i></i><i></i><span>obop.toml</span></div>
+            <pre class="code" aria-label="Example obop.toml"><code><span class="c">[module]</span>
 <span class="k">id</span> = <span class="s">"fleet"</span>
 <span class="k">name</span> = <span class="s">"Fleet"</span>
 
@@ -151,34 +207,52 @@ const { m, href } = useSite();
   <span class="k">field</span> = <span class="s">"state"</span>
   <span class="k">from</span>  = <span class="s">"available"</span>
   <span class="k">to</span>    = <span class="s">"in_service"</span></code></pre>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="section alt">
+    <section class="section">
       <div class="wrap">
-        <h2>{{ m.home.stepsTitle }}</h2>
-        <ol class="steps">
-          <li v-for="(s, i) in m.home.steps" :key="s.title">
-            <b aria-hidden="true">{{ i + 1 }}</b>
-            <h3>{{ s.title }}</h3>
-            <p>{{ s.body }}</p>
-          </li>
-        </ol>
-        <p class="center">
-          <a class="btn primary large" href="/app/">{{ m.home.stepsCta }}</a>
-        </p>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.steps }}</p>
+            <h2>{{ m.home.stepsTitle }}</h2>
+          </div>
+        </div>
+        <div class="steps-wrap">
+          <ol class="flow steps">
+            <li v-for="(s, i) in m.home.steps" :key="s.title">
+              <span class="flow-n" aria-hidden="true">{{ i + 1 }}</span>
+              <h3>{{ s.title }}</h3>
+              <p>{{ s.body }}</p>
+            </li>
+          </ol>
+          <div class="steps-cta">
+            <a class="btn primary large" href="/app/">{{ m.home.stepsCta }}</a>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section id="open" class="section">
+    <section id="open" class="section join">
       <div class="wrap">
-        <h2>{{ m.home.openTitle }}</h2>
-        <p class="sub">{{ m.home.openBody }}</p>
-        <div class="cards">
-          <article v-for="p in m.home.openPoints" :key="p.title">
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.open }}</p>
+            <h2>{{ m.home.openTitle }}</h2>
+            <p class="sub">{{ m.home.openBody }}</p>
+          </div>
+        </div>
+        <div class="cards open">
+          <article v-for="p in openCards" :key="p.title">
+            <span class="card-ico"><Icon :name="p.icon" :size="22" /></span>
             <h3>{{ p.title }}</h3>
             <p>{{ p.body }}</p>
+            <a class="link-arrow" :href="p.to"
+              >{{ head(p.label)
+              }}<span class="nw">{{ tail(p.label) }}<Icon name="arrow-right" :size="16" /></span
+            ></a>
           </article>
         </div>
       </div>
@@ -186,8 +260,16 @@ const { m, href } = useSite();
 
     <section id="pricing" class="section alt">
       <div class="wrap">
-        <h2>{{ m.home.pricingTitle }}</h2>
-        <p class="sub">{{ m.home.pricingSub }}</p>
+        <div class="sec-head">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.pricing }}</p>
+            <h2>{{ m.home.pricingTitle }}</h2>
+            <p class="sub">{{ m.home.pricingSub }}</p>
+          </div>
+          <div class="sec-act">
+            <a class="btn" :href="href('/pricing/')">{{ m.home.pricingCta }}</a>
+          </div>
+        </div>
         <div class="plans">
           <article v-for="p in m.pricing.plans" :key="p.name" :class="{ hl: p.highlight }">
             <h3>{{ p.name }}</h3>
@@ -197,21 +279,23 @@ const { m, href } = useSite();
             <p>{{ p.blurb }}</p>
           </article>
         </div>
-        <p class="fine center">{{ m.home.pricingFine }}</p>
-        <p class="center">
-          <a class="btn" :href="href('/pricing/')">{{ m.home.pricingCta }}</a>
-        </p>
+        <p class="fine">{{ m.home.pricingFine }}</p>
       </div>
     </section>
 
-    <section id="faq" class="section">
-      <div class="wrap narrow">
-        <h2>{{ m.home.faqTitle }}</h2>
-        <div class="faq">
-          <details v-for="f in m.home.faq" :key="f.q">
-            <summary>{{ f.q }}</summary>
-            <p>{{ f.a }}</p>
-          </details>
+    <section id="faq" class="section alt join">
+      <div class="wrap">
+        <div class="faq-split">
+          <div class="sec-text">
+            <p class="eyebrow-text">{{ kick.faq }}</p>
+            <h2>{{ m.home.faqTitle }}</h2>
+          </div>
+          <div class="faq">
+            <details v-for="f in m.home.faq" :key="f.q">
+              <summary>{{ f.q }}</summary>
+              <p>{{ f.a }}</p>
+            </details>
+          </div>
         </div>
       </div>
     </section>

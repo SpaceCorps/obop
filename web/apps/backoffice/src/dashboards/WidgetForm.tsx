@@ -30,6 +30,10 @@ const OPS_BY_KIND: Record<FieldMeta["kind"], WidgetOp[]> = {
   number: ["eq", "ne", "gt", "gte", "lt", "lte", "empty", "set"],
   money: ["eq", "ne", "gt", "gte", "lt", "lte", "empty", "set"],
   date: ["eq", "ne", "gt", "gte", "lt", "lte", "empty", "set"],
+  // A widget compares numbers and dates in the browser; an exact decimal or an instant is only
+  // tested for being set until the dashboards learn them (D72).
+  datetime: ["empty", "set"],
+  decimal: ["empty", "set"],
   bool: ["eq"],
   select: ["eq", "ne", "in", "empty", "set"],
   ref: ["eq", "ne", "empty", "set"],

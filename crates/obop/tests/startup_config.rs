@@ -12,6 +12,7 @@ fn obop() -> Command {
         .env("OBOP_REQUIRE_MFA_FOR_ADMINS", "0")
         .env_remove("OBOP_DATABASE_URL")
         .env_remove("OBOP_ALLOWED_ORIGINS")
+        .env_remove("OBOP_ZONE")
         .env_remove("OBOP_METRICS_TOKEN")
         .env_remove("OBOP_SECRET_KEY")
         .env_remove("OBOP_SECRET_KEY_PREVIOUS");
@@ -140,6 +141,97 @@ fn other_invalid_allowed_origins_are_refused_at_startup_too() {
     }
 }
 
+/// `obop serve --dev-auth` with these variables, up and listening.
+fn start_dev(env: &[(&str, &str)]) -> Server {
+    let port = free_port();
+    let child = obop()
+        .args([
+            "serve",
+            "--dev-auth",
+            "--addr",
+            &format!("127.0.0.1:{port}"),
+            "--db",
+            "memory:",
+        ])
+        .envs(env.iter().copied())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn obop serve");
+    let s = Server { child, port };
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while TcpStream::connect(("127.0.0.1", port)).is_err() {
+        assert!(Instant::now() < deadline, "obop serve did not come up");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    s
+}
+
+/// The `time` block of `/api/meta` of a running server.
+fn time_block(s: &Server) -> serde_json::Value {
+    let (st, r) = http(
+        s.port,
+        "GET",
+        "/api/meta",
+        &[("Authorization", "Bearer dev-admin")],
+    );
+    assert_eq!(st, 200, "{r}");
+    let body = r.split("\r\n\r\n").nth(1).unwrap_or_default();
+    serde_json::from_str::<serde_json::Value>(body).unwrap_or_else(|e| panic!("{e}: {body}"))
+        ["time"]
+        .clone()
+}
+
+#[test]
+fn an_unknown_time_zone_stops_the_server_and_a_good_one_is_the_platform_zone() {
+    // D72: a typo is found when the server starts, with the variable named.
+    for bad in [
+        "Mars/Base",
+        "../../etc/passwd",
+        "UTC+2",
+        "localtime",
+        "Europe/",
+    ] {
+        let e = refused(&[("OBOP_ZONE", bad)]);
+        assert!(
+            e.contains("OBOP_ZONE") && e.contains("not a time zone"),
+            "{bad}: {e}"
+        );
+    }
+    // Unset, blank and padded or lower case names work; the zone is the canonical name.
+    let utc = start_dev(&[]);
+    assert_eq!(time_block(&utc)["zone"], "UTC");
+    let blank = start_dev(&[("OBOP_ZONE", "  ")]);
+    assert_eq!(time_block(&blank)["zone"], "UTC");
+    let berlin = start_dev(&[("OBOP_ZONE", " europe/berlin ")]);
+    let t = time_block(&berlin);
+    assert_eq!(t["zone"], "Europe/Berlin");
+    assert!(t["tzdb_version"].as_str().unwrap().starts_with("20"), "{t}");
+}
+
+#[test]
+fn every_command_that_opens_the_database_refuses_a_bad_time_zone() {
+    // Not only `serve`: `obop commands` opens the database too, and says the same.
+    let out = obop()
+        .args(["commands", "--dev-auth", "--db", "memory:"])
+        .env("OBOP_ZONE", "Mars/Base")
+        .output()
+        .expect("run obop");
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("OBOP_ZONE"));
+    // And with a good one it runs.
+    let ok = obop()
+        .args(["commands", "--dev-auth", "--db", "memory:"])
+        .env("OBOP_ZONE", "Asia/Tokyo")
+        .output()
+        .expect("run obop");
+    assert!(
+        ok.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ok.stderr)
+    );
+}
+
 #[test]
 fn a_short_metrics_token_stops_the_server() {
     let e = refused(&[("OBOP_METRICS_TOKEN", "short")]);
@@ -242,4 +334,76 @@ fn a_loopback_server_without_a_token_serves_metrics_to_a_direct_caller_only() {
     );
     assert!(!has_header(&r, "access-control-allow-origin"));
     assert!(!has_header(&r, "vary") || !header_value(&r, "vary").to_lowercase().contains("origin"));
+}
+
+/// A typo in the backup timer's settings stops the start before the database is opened: an old
+/// database that would be migrated (and, without OBOP_BACKUP_DIR, without a backup) is left as it
+/// was, and the message names the setting.
+#[test]
+fn bad_backup_schedule_settings_stop_the_start_before_anything_is_migrated() {
+    let dir = std::env::temp_dir().join(format!("obop-startup-sched-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = dir.join("old.db");
+    let url = format!("sqlite://{}", db.display());
+    {
+        let b = obop_storage::open(&url).unwrap();
+        b.insert("party", "p1", &serde_json::Map::new()).unwrap();
+    }
+    let ran = |env: &[(&str, &str)]| {
+        let out = obop()
+            .args(["serve", "--addr", "127.0.0.1:0", "--db", &url])
+            .env_remove("OBOP_BACKUP_SCHEDULE")
+            .env_remove("OBOP_BACKUP_DIR")
+            .env_remove("OBOP_BACKUP_KEEP_DAILY")
+            .env_remove("OBOP_BACKUP_MAX_AGE_DAYS")
+            .env("OBOP_AUTO_MIGRATE", "1")
+            .envs(env.iter().copied())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .expect("run obop");
+        assert!(!out.status.success(), "must refuse {env:?}");
+        String::from_utf8_lossy(&out.stderr).to_string()
+    };
+    let bk = dir.join("bk").display().to_string();
+    for (env, names) in [
+        (vec![("OBOP_BACKUP_SCHEDULE", "24h")], "OBOP_BACKUP_DIR"),
+        (
+            vec![
+                ("OBOP_BACKUP_SCHEDULE", "soon"),
+                ("OBOP_BACKUP_DIR", bk.as_str()),
+            ],
+            "OBOP_BACKUP_SCHEDULE",
+        ),
+        (
+            vec![
+                ("OBOP_BACKUP_SCHEDULE", "24h"),
+                ("OBOP_BACKUP_DIR", bk.as_str()),
+                ("OBOP_BACKUP_KEEP_DAILY", "many"),
+            ],
+            "OBOP_BACKUP_KEEP_DAILY",
+        ),
+        (
+            vec![
+                ("OBOP_BACKUP_SCHEDULE", "24h"),
+                ("OBOP_BACKUP_DIR", bk.as_str()),
+                ("OBOP_BACKUP_MAX_AGE_DAYS", "a year"),
+            ],
+            "OBOP_BACKUP_MAX_AGE_DAYS",
+        ),
+    ] {
+        let err = ran(&env);
+        assert!(err.contains(names), "{names}: {err}");
+        assert!(
+            !err.contains("migrated to") && !err.contains("database:"),
+            "nothing was migrated or opened: {err}"
+        );
+        let b = obop_storage::open(&url).unwrap();
+        assert!(
+            b.get("obop_meta", "schema").unwrap().is_none(),
+            "the database is as it was"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

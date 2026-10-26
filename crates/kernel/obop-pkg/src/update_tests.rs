@@ -13,10 +13,10 @@ use std::sync::{Arc, Mutex};
 
 /// A marketplace whose shelf the test changes between calls.
 #[derive(Default, Clone)]
-struct Shelf(Arc<Mutex<Vec<String>>>);
+pub(crate) struct Shelf(Arc<Mutex<Vec<String>>>);
 
 impl Shelf {
-    fn offer(&self, text: String) {
+    pub(crate) fn offer(&self, text: String) {
         let id = Manifest::parse(&text).unwrap().module.id;
         let mut s = self.0.lock().unwrap();
         s.retain(|t| Manifest::parse(t).unwrap().module.id != id);
@@ -46,19 +46,26 @@ impl Marketplace for Shelf {
 
 /// Package `id` at `version`: model `<id>_item` with a `title` field, plus `fields` (TOML field
 /// tables), `migrations` (TOML), release notes and dependencies.
-fn pkg(id: &str, version: &str, fields: &str, migrations: &str, notes: &str, deps: &str) -> String {
+pub(crate) fn pkg(
+    id: &str,
+    version: &str,
+    fields: &str,
+    migrations: &str,
+    notes: &str,
+    deps: &str,
+) -> String {
     format!(
         "[module]\nid = \"{id}\"\nversion = \"{version}\"\nname = \"{id}\"\ndescription = \"The {id} module\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\nchangelog = {notes:?}\n{deps}\n[[model]]\nname = \"{id}_item\"\ndescription = \"An item\"\nread_group = \"{id}.user\"\nwrite_group = \"{id}.user\"\n[[model.field]]\nname = \"title\"\ndescription = \"Title\"\nclass = \"none\"\n{fields}\n{migrations}"
     )
 }
 
-fn field(name: &str, extra: &str) -> String {
+pub(crate) fn field(name: &str, extra: &str) -> String {
     format!(
         "[[model.field]]\nname = \"{name}\"\ndescription = \"{name}\"\nclass = \"none\"\n{extra}\n"
     )
 }
 
-fn setup(store: &Store, shelf: &Shelf) -> (Arc<Dispatcher>, Arc<Installer>) {
+pub(crate) fn setup(store: &Store, shelf: &Shelf) -> (Arc<Dispatcher>, Arc<Installer>) {
     let d = Arc::new(Dispatcher::new());
     let inst = Installer::new(
         store.clone(),
@@ -70,47 +77,52 @@ fn setup(store: &Store, shelf: &Shelf) -> (Arc<Dispatcher>, Arc<Installer>) {
     (d, inst)
 }
 
-fn admin() -> Principal {
+pub(crate) fn admin() -> Principal {
     Principal::user("root", &[ADMIN_GROUP])
 }
 
-fn call(d: &Dispatcher, p: &Principal, id: &str, input: Value) -> Result<Response, CallError> {
+pub(crate) fn call(
+    d: &Dispatcher,
+    p: &Principal,
+    id: &str,
+    input: Value,
+) -> Result<Response, CallError> {
     d.call(Surface::Rest, p, &mut Vault::new(), id, &input)
 }
 
-fn by_id(id: &str) -> Value {
+pub(crate) fn by_id(id: &str) -> Value {
     Value::map([("id", Value::text(id))])
 }
 
-fn get<'a>(v: &'a Value, k: &str) -> &'a Value {
+pub(crate) fn get<'a>(v: &'a Value, k: &str) -> &'a Value {
     match v {
         Value::Map(m) => m.get(k).unwrap_or_else(|| panic!("no {k} in {v:?}")),
         _ => panic!("not a map: {v:?}"),
     }
 }
 
-fn text(v: &Value) -> &str {
+pub(crate) fn text(v: &Value) -> &str {
     match v {
         Value::Text(t) => t,
         other => panic!("not text: {other:?}"),
     }
 }
 
-fn list(v: &Value) -> &[Value] {
+pub(crate) fn list(v: &Value) -> &[Value] {
     match v {
         Value::List(l) => l,
         other => panic!("not a list: {other:?}"),
     }
 }
 
-fn err(r: Result<Response, CallError>) -> String {
+pub(crate) fn err(r: Result<Response, CallError>) -> String {
     match r {
         Err(CallError::Handler(m)) => m,
         other => panic!("expected a handler error, got {other:?}"),
     }
 }
 
-fn rec(store: &Store, model: &str, id: &str, pairs: &[(&str, J)]) {
+pub(crate) fn rec(store: &Store, model: &str, id: &str, pairs: &[(&str, J)]) {
     store
         .backend()
         .insert(
@@ -124,11 +136,11 @@ fn rec(store: &Store, model: &str, id: &str, pairs: &[(&str, J)]) {
         .unwrap();
 }
 
-fn stored(store: &Store, model: &str, id: &str) -> serde_json::Map<String, J> {
+pub(crate) fn stored(store: &Store, model: &str, id: &str) -> serde_json::Map<String, J> {
     store.backend().get(model, id).unwrap().unwrap()
 }
 
-fn events(store: &Store) -> Vec<(String, String, String)> {
+pub(crate) fn events(store: &Store) -> Vec<(String, String, String)> {
     store
         .backend()
         .list("security_event")
@@ -144,7 +156,7 @@ fn events(store: &Store) -> Vec<(String, String, String)> {
         .collect()
 }
 
-fn version_of(inst: &Installer, id: &str) -> String {
+pub(crate) fn version_of(inst: &Installer, id: &str) -> String {
     inst.list()
         .into_iter()
         .find(|p| p.id == id)
@@ -262,6 +274,193 @@ fn a_breaking_update_without_a_step_is_refused_and_changes_nothing() {
     assert!(
         err(call(&d, &admin(), "module.upgrade", by_id("upd"))).contains("cannot be converted")
     );
+}
+
+/// D72: a package update that changes the digits of a decimal must say how the stored values
+/// are rewritten; otherwise old records keep an old spelling next to new ones.
+#[test]
+fn a_reinstall_over_the_records_of_an_earlier_install_must_find_them_in_the_new_shape() {
+    let store = Store::new();
+    let shelf = Shelf::default();
+    let (d, inst) = setup(&store, &shelf);
+    let dec = |scale: u8| {
+        field(
+            "price",
+            &format!("kind = \"decimal\"\nprecision = 10\nscale = {scale}"),
+        )
+    };
+    inst.install(
+        &pkg("again", "0.1.0", &dec(2), "", "", ""),
+        "upload",
+        "root",
+    )
+    .unwrap();
+    rec(
+        &store,
+        "again_item",
+        "1",
+        &[("title", json!("a")), ("price", json!("12.50"))],
+    );
+    // An uninstall keeps the data, and the old shape is gone with the package record.
+    call(&d, &admin(), "module.uninstall", by_id("again")).unwrap();
+    let e = inst
+        .install(
+            &pkg("again", "0.2.0", &dec(4), "", "", ""),
+            "upload",
+            "root",
+        )
+        .unwrap_err();
+    assert!(
+        e.contains("again_item 1") && e.contains("12.50") && e.contains("decimal(10, 4)"),
+        "{e}"
+    );
+    assert!(e.contains("reformat_field"), "{e}");
+    assert!(
+        inst.list().iter().all(|p| p.id != "again"),
+        "nothing was installed"
+    );
+    // The same shape comes back fine, and then the update with a step is the way to change it.
+    inst.install(
+        &pkg("again", "0.1.0", &dec(2), "", "", ""),
+        "upload",
+        "root",
+    )
+    .unwrap();
+    shelf.offer(pkg(
+        "again",
+        "0.2.0",
+        &dec(4),
+        "[[migration]]\nfrom = \"<0.2.0\"\nop = \"reformat_field\"\nmodel = \"again_item\"\nfield = \"price\"\n",
+        "",
+        "",
+    ));
+    call(&d, &admin(), "module.upgrade", by_id("again")).unwrap();
+    assert_eq!(stored(&store, "again_item", "1")["price"], "12.5000");
+}
+
+#[test]
+fn changing_the_digits_of_a_decimal_needs_a_rewrite_step_and_the_step_does_it() {
+    let store = Store::new();
+    let shelf = Shelf::default();
+    let (d, inst) = setup(&store, &shelf);
+    let dec = |scale: u8, extra: &str| {
+        field(
+            "price",
+            &format!(
+                "kind = \"decimal\"
+precision = 10
+scale = {scale}
+unique = true
+{extra}"
+            ),
+        )
+    };
+    inst.install(
+        &pkg("upd", "0.1.0", &dec(2, ""), "", "", ""),
+        "upload",
+        "root",
+    )
+    .unwrap();
+    rec(
+        &store,
+        "upd_item",
+        "1",
+        &[("title", json!("a")), ("price", json!("12.50"))],
+    );
+    rec(
+        &store,
+        "upd_item",
+        "2",
+        &[("title", json!("b")), ("price", json!("3.00"))],
+    );
+    // Without a step: refused in the plan and by the upgrade, nothing changes.
+    shelf.offer(pkg("upd", "0.2.0", &dec(4, ""), "", "", ""));
+    let plan = call(&d, &admin(), "module_plan.preview", by_id("upd"))
+        .unwrap()
+        .value;
+    assert_eq!(get(&plan, "ok"), &Value::Bool(false));
+    let all: Vec<&str> = list(get(&plan, "blockers"))
+        .iter()
+        .map(|b| text(get(b, "message")))
+        .collect();
+    assert!(
+        all.iter().any(|m| m.contains("decimal(10, 2) to decimal(10, 4)") && m.contains("reformat_field")),
+        "{all:?}"
+    );
+    assert!(err(call(&d, &admin(), "module.upgrade", by_id("upd"))).contains("reformat_field"));
+    assert_eq!(version_of(&inst, "upd"), "0.1.0");
+    assert_eq!(stored(&store, "upd_item", "1")["price"], "12.50");
+    // With the step: every stored value is rewritten in the new shape, in one batch.
+    shelf.offer(pkg(
+        "upd",
+        "0.3.0",
+        &dec(4, ""),
+        "[[migration]]
+from = \"<0.3.0\"
+op = \"reformat_field\"
+model = \"upd_item\"
+field = \"price\"
+",
+        "",
+        "",
+    ));
+    let plan = call(&d, &admin(), "module_plan.preview", by_id("upd"))
+        .unwrap()
+        .value;
+    assert_eq!(get(&plan, "ok"), &Value::Bool(true), "{plan:?}");
+    call(&d, &admin(), "module.upgrade", by_id("upd")).unwrap();
+    assert_eq!(stored(&store, "upd_item", "1")["price"], "12.5000");
+    assert_eq!(stored(&store, "upd_item", "2")["price"], "3.0000");
+    // One spelling per value again: the command layer takes the same number and a duplicate
+    // is a duplicate.
+    let made = call(
+        &d,
+        &admin(),
+        "upd_item.create",
+        Value::map([("title", Value::text("c")), ("price", Value::text("7.5"))]),
+    )
+    .unwrap()
+    .value;
+    assert_eq!(text(get(&made, "price")), "7.5000");
+    assert!(
+        err(call(
+            &d,
+            &admin(),
+            "upd_item.create",
+            Value::map([
+                ("title", Value::text("dup")),
+                ("price", Value::text("12.5"))
+            ]),
+        ))
+        .contains("must be unique")
+    );
+    // An aggregate over values that predate a narrowing is an error, not a quietly shortened sum.
+    store
+        .backend()
+        .update(
+            "upd_item",
+            "2",
+            &[("price".to_string(), json!("3.123456"))]
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+    let e = err(call(
+        &d,
+        &admin(),
+        "upd_item.search",
+        Value::map([(
+            "aggregate",
+            Value::map([(
+                "measures",
+                Value::List(vec![Value::map([
+                    ("op", Value::text("sum")),
+                    ("field", Value::text("price")),
+                ])]),
+            )]),
+        )]),
+    ));
+    assert!(e.contains("more than the 4 fractional digits"), "{e}");
 }
 
 #[test]

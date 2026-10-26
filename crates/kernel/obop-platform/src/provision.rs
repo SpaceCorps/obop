@@ -165,6 +165,15 @@ impl Provisioner for Local {
             cmd.env("OBOP_UPDATE_TOKEN", &spec.update_token)
                 .env("OBOP_UPDATE_URL", &spec.control_url);
         }
+        // The control plane's own backup schedule, copy target and host name are its own: a tenant
+        // that inherited them would run a second scheduler into the same directory (D73).
+        for own in [
+            "OBOP_BACKUP_SCHEDULE",
+            "OBOP_BACKUP_COPY_DIR",
+            "OBOP_HOST_ID",
+        ] {
+            cmd.env_remove(own);
+        }
         if let Some(s) = &self.static_dir {
             cmd.args(["--static", s]);
         }

@@ -3,10 +3,15 @@ import apps from "../../../.generated/apps.json";
 import { useSite } from "../composables.ts";
 import Tile from "./Tile.vue";
 
-withDefaults(defineProps<{ categories?: boolean }>(), { categories: false });
+withDefaults(defineProps<{ categories?: boolean; grouped?: boolean }>(), {
+  categories: false,
+  grouped: false,
+});
 const { m, href } = useSite();
 const cats = Object.keys(m.value.apps.categories) as (keyof typeof m.value.apps.categories)[];
-const live = apps.filter((a) => a.builtin).length;
+const liveApps = apps.filter((a) => a.builtin);
+const marketApps = apps.filter((a) => !a.builtin);
+const live = liveApps.length;
 </script>
 
 <template>
@@ -32,7 +37,7 @@ const live = apps.filter((a) => a.builtin).length;
         </template>
       </fieldset>
     </div>
-    <ul class="apps">
+    <ul v-if="!grouped" class="apps">
       <li
         v-for="a in apps"
         :key="a.id"
@@ -52,5 +57,40 @@ const live = apps.filter((a) => a.builtin).length;
         <small>{{ m.apps.taglines[a.id] ?? a.tagline }}</small>
       </li>
     </ul>
+    <template v-else>
+      <!-- Two tiers in two labelled groups: the group label says the status once, so the cards carry no pill. -->
+      <div class="apps-group live" role="group" aria-labelledby="apps-g-live">
+        <p id="apps-g-live" class="apps-group-title">
+          {{ m.apps.available }} <em>{{ liveApps.length }}</em>
+        </p>
+        <ul class="apps featured">
+          <li v-for="a in liveApps" :key="a.id" class="app live" :data-cat="a.category">
+            <Tile :id="a.id" :name="a.name" :size="48" />
+            <div class="app-body">
+              <h3>
+                <a :href="href(`/apps/${a.slug}/`)">{{ a.name }}</a>
+              </h3>
+              <small>{{ m.apps.taglines[a.id] ?? a.tagline }}</small>
+            </div>
+          </li>
+        </ul>
+      </div>
+      <div class="apps-group market" role="group" aria-labelledby="apps-g-market">
+        <p id="apps-g-market" class="apps-group-title">
+          {{ m.apps.marketplace }} <em>{{ marketApps.length }}</em>
+        </p>
+        <ul class="apps compact">
+          <li v-for="a in marketApps" :key="a.id" class="app market" :data-cat="a.category">
+            <Tile :id="a.id" :name="a.name" :size="36" />
+            <div class="app-body">
+              <h3>
+                <a :href="href(`/apps/${a.slug}/`)">{{ a.name }}</a>
+              </h3>
+              <small>{{ m.apps.taglines[a.id] ?? a.tagline }}</small>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </template>
   </div>
 </template>

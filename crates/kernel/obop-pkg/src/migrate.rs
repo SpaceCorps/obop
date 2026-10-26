@@ -9,7 +9,13 @@
 //! - `rename_field`: copies the value to the new name and removes the old one;
 //! - `set_default`: writes a value into every record where the field is empty;
 //! - `drop_field`: deletes the values of a field that the new version no longer has
-//!   (needs `confirm = true`).
+//!   (needs `confirm = true`);
+//! - `reformat_field`: rewrites the stored values of a `decimal` or `datetime` field in the form
+//!   of its current shape, after its `scale` or `precision` changed (D72). Digits that would be
+//!   lost are rounded with the field's `round` mode, and without one the update stops.
+//!
+//! A value moved into a `decimal` or `datetime` field by `rename_field` is converted to that
+//! field's canonical text on the way (and refused, naming the record, when it is not one).
 //!
 //! The steps run as one atomic batch together with the new package record, each guarded by a
 //! compare-and-set on the value it read, so a record changed by a user in the meantime makes
@@ -26,7 +32,8 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {
     /// `model_added`, `model_removed`, `field_added`, `field_removed`, `field_retyped`,
-    /// `field_required`, `option_added`, `option_removed`, `action_added`, `action_removed`.
+    /// `field_reshaped`, `field_required`, `option_added`, `option_removed`, `action_added`,
+    /// `action_removed`.
     pub kind: &'static str,
     pub model: String,
     pub field: Option<String>,
@@ -90,6 +97,30 @@ pub fn diff(old: &Manifest, new: &Manifest) -> Vec<Change> {
                             true,
                         ));
                     } else {
+                        // A decimal keeps its kind when its digits change, but the stored text has
+                        // the old number of them (D72): one spelling per value needs a rewrite.
+                        // A computed decimal stores nothing, so there is nothing to rewrite.
+                        if nf.kind == "decimal"
+                            && of.computed.is_none()
+                            && nf.computed.is_none()
+                            && (of.precision, of.scale) != (nf.precision, nf.scale)
+                        {
+                            let shape = |f: &FieldM| {
+                                format!(
+                                    "decimal({}, {})",
+                                    f.precision.unwrap_or(0),
+                                    f.scale.unwrap_or(0)
+                                )
+                            };
+                            out.push(ch(
+                                "field_reshaped",
+                                &nm.name,
+                                Some(&nf.name),
+                                format!("{} changes from {} to {}", nf.name, shape(of), shape(nf)),
+                                // Widening the precision alone leaves every stored value valid.
+                                of.scale != nf.scale || nf.precision < of.precision,
+                            ));
+                        }
                         if nf.required && !of.required && nf.computed.is_none() {
                             out.push(ch(
                                 "field_required",
@@ -207,6 +238,10 @@ impl Step {
                 self.value.as_ref().map_or("?".into(), J::to_string)
             ),
             "drop_field" => format!("delete the values of {}.{}", self.model, self.field),
+            "reformat_field" => format!(
+                "rewrite the values of {}.{} in the form of its current shape",
+                self.model, self.field
+            ),
             other => other.to_string(),
         }
     }
@@ -255,8 +290,122 @@ pub fn steps_for(new: &Manifest, from: &Version) -> Vec<Step> {
     new.migration
         .iter()
         .filter(|m| Req::parse(&m.from).is_ok_and(|r| r.matches(from)))
-        .map(step_of)
+        .map(|m| {
+            let mut s = step_of(m);
+            canonical_default(new, &mut s);
+            carry_shape(new, &mut s);
+            s
+        })
         .collect()
+}
+
+/// The shape of a decimal or datetime field as the steps carry it: the target of a
+/// `rename_field`, or the field a `reformat_field` rewrites. `build_ops` has only the steps, so
+/// the digits and the rounding mode travel in `value`.
+fn shape_of(f: &FieldM) -> Option<J> {
+    match f.kind.as_str() {
+        "decimal" => Some(json!({
+            "kind": "decimal",
+            "precision": f.precision.unwrap_or(0),
+            "scale": f.scale.unwrap_or(0),
+            "round": f.round,
+            "unique": f.unique,
+            "unique_with": f.unique_with,
+        })),
+        "datetime" => Some(json!({
+            "kind": "datetime",
+            "unique": f.unique,
+            "unique_with": f.unique_with,
+        })),
+        _ => None,
+    }
+}
+
+fn carry_shape(new: &Manifest, s: &mut Step) {
+    let target = match s.op.as_str() {
+        "rename_field" => s.to.as_deref(),
+        "reformat_field" => Some(s.field.as_str()),
+        _ => return,
+    };
+    if let Some(f) = target.and_then(|t| field_of(new, &s.model, t)) {
+        s.value = shape_of(f);
+    }
+}
+
+/// `v` written in the canonical form of `shape`: `Ok(None)` for an empty value, an error that
+/// says why for one that is not a decimal or an instant of that shape. A field that declares
+/// `round` rounds extra fractional digits, as an import does; any other refuses them.
+fn in_shape(shape: &J, v: &J) -> Result<Option<J>, String> {
+    let text = match v {
+        J::String(s) if s.is_empty() => return Ok(None),
+        J::String(s) => s.clone(),
+        J::Number(n) if n.is_i64() => n.to_string(),
+        other => return Err(format!("{other} is not a value of that kind")),
+    };
+    match shape["kind"].as_str() {
+        Some("decimal") => {
+            let (p, sc) = (
+                shape["precision"].as_u64().unwrap_or(0) as u8,
+                shape["scale"].as_u64().unwrap_or(0) as u8,
+            );
+            let round = shape["round"].as_str().and_then(obop_values::Round::parse);
+            let shown = |e: obop_values::DecimalError| {
+                format!("{text:?} does not fit decimal({p}, {sc}): {e}")
+            };
+            let d = obop_values::Decimal::parse(&text).map_err(shown)?;
+            // Dropping digits that are all zero loses nothing and needs no rounding mode.
+            let exact = d
+                .rescale(sc, obop_values::Round::Down)
+                .ok()
+                .filter(|x| *x == d);
+            match exact {
+                Some(x) => x.fit(p, sc, obop_values::Round::Down),
+                None => obop_values::Decimal::parse_for(&text, p, sc, round),
+            }
+            .map(|d| Some(J::from(d.to_string())))
+            .map_err(shown)
+        }
+        Some("datetime") => obop_values::Instant::parse(&text)
+            .map(|i| Some(J::from(i.canonical())))
+            .map_err(|e| format!("{text:?} is not an instant: {e}")),
+        _ => Ok(Some(v.clone())),
+    }
+}
+
+/// A `set_default` into a decimal or datetime field writes the canonical text (D72): the
+/// default is written straight into the records, past the checks of the commands, so
+/// `"12.5"` into two decimals must already be `"12.50"` or the record would later be refused.
+fn canonical_default(new: &Manifest, s: &mut Step) {
+    if s.op != "set_default" {
+        return;
+    }
+    let Some(f) = new
+        .model
+        .iter()
+        .find(|m| m.name == s.model)
+        .and_then(|m| m.field.iter().find(|f| f.name == s.field))
+    else {
+        return;
+    };
+    let text = match &s.value {
+        Some(J::String(t)) => t.clone(),
+        Some(J::Number(n)) if f.kind == "decimal" => n.to_string(),
+        _ => return,
+    };
+    let canonical: Option<String> = match (f.kind.as_str(), f.precision, f.scale) {
+        ("decimal", Some(p), Some(sc)) => {
+            obop_values::Decimal::parse_for(&text, p as u8, sc as u8, None)
+                .ok()
+                .map(|d| d.to_string())
+        }
+        ("datetime", _, _) => obop_values::Instant::parse(&text)
+            .ok()
+            .map(obop_values::Instant::canonical),
+        _ => return,
+    };
+    if let Some(c) = canonical {
+        s.value = Some(J::from(c));
+    }
 }
 
 /// The data side of an update: what differs, which steps run, what stops it.
@@ -302,6 +451,9 @@ pub fn plan_data(old: &Manifest, new: &Manifest, count: &dyn Fn(&str) -> usize) 
                     && s.field == field
                     && matches!(s.op.as_str(), "drop_field" | "rename_field")
             }),
+            "field_reshaped" => steps
+                .iter()
+                .find(|s| s.model == c.model && s.field == field && s.op == "reformat_field"),
             "field_added" | "field_required" => steps
                 .iter()
                 .find(|s| s.model == c.model && s.field == field && s.op == "set_default")
@@ -332,6 +484,10 @@ pub fn plan_data(old: &Manifest, new: &Manifest, count: &dyn Fn(&str) -> usize) 
                 "{}: field {field} is removed. Declare a [[migration]] with op = \"drop_field\" and confirm = true to delete its values, or op = \"rename_field\" if it moved",
                 c.model
             )),
+            "field_reshaped" => blockers.push(format!(
+                "{}: {} — the stored values keep the old number of digits. Declare [[migration]] from = \"{}\", op = \"reformat_field\", model = \"{}\", field = \"{field}\" to rewrite them (digits that would be lost need `round` on the field; a value that still does not fit stops the update)",
+                c.model, c.detail, old.module.version, c.model
+            )),
             "field_retyped" => blockers.push(format!(
                 "{}: {} — a stored value cannot be converted automatically. Keep the old field, add the new one under another name, and move the data with your own import",
                 c.model, c.detail
@@ -360,6 +516,12 @@ pub fn plan_data(old: &Manifest, new: &Manifest, count: &dyn Fn(&str) -> usize) 
         if s.op == "drop_field" {
             warnings.push(format!(
                 "this update deletes the values of {}.{}; it cannot be rolled back (a backup can)",
+                s.model, s.field
+            ));
+        }
+        if s.op == "reformat_field" {
+            warnings.push(format!(
+                "this update rewrites the values of {}.{} in the form of its new shape; it cannot be rolled back (a backup can)",
                 s.model, s.field
             ));
         }
@@ -400,7 +562,7 @@ pub fn inverse(steps: &[Step]) -> (Vec<Step>, Vec<String>) {
                 value: None,
                 description: format!("undo: {}", s.summary()),
             }),
-            "drop_field" => irreversible.push(s.summary()),
+            "drop_field" | "reformat_field" => irreversible.push(s.summary()),
             _ => {}
         }
     }
@@ -415,16 +577,112 @@ fn is_empty(v: Option<&J>) -> bool {
     }
 }
 
+/// A record as read, as it will be, and what must change to get there.
+struct Edit {
+    orig: Fields,
+    cur: Fields,
+    patch: Fields,
+}
+
+/// A rewrite that rounds, or a rename that writes canonical text, can turn two different stored
+/// texts into one. Where the target field is `unique`, that would break the promise the update
+/// must keep, so it is refused, naming both records.
+fn check_unique(
+    steps: &[Step],
+    order: &[(String, String)],
+    edits: &BTreeMap<(String, String), Edit>,
+) -> Result<(), String> {
+    for s in steps {
+        let Some(shape) = &s.value else { continue };
+        if shape["unique"].as_bool() != Some(true) {
+            continue;
+        }
+        let target = if s.op == "rename_field" {
+            s.to.as_deref().unwrap_or("")
+        } else {
+            s.field.as_str()
+        };
+        let scope: Vec<&str> = shape["unique_with"]
+            .as_array()
+            .map(|a| a.iter().filter_map(J::as_str).collect())
+            .unwrap_or_default();
+        // value (with the values of the fields that scope it) -> first record, and whether a
+        // step changed it
+        let mut seen: BTreeMap<String, (&str, bool)> = BTreeMap::new();
+        for key in order.iter().filter(|k| k.0 == s.model) {
+            let Some(e) = edits.get(key) else { continue };
+            let Some(v) = e.cur.get(target).filter(|v| !is_empty(Some(v))) else {
+                continue;
+            };
+            let mut id = v.to_string();
+            for w in &scope {
+                id.push('\u{1}');
+                id.push_str(&e.cur.get(*w).map(J::to_string).unwrap_or_default());
+            }
+            let changed = e.patch.contains_key(target);
+            match seen.get(&id) {
+                Some((first, first_changed)) if changed || *first_changed => {
+                    return Err(format!(
+                        "{} {first} and {} would both hold {v} in {target} after this update, and {target} is unique; fix one of them first",
+                        s.model, key.1
+                    ));
+                }
+                Some(_) => {}
+                None => {
+                    seen.insert(id, (key.1.as_str(), changed));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A fresh install over records that an earlier install left behind (an uninstall keeps the
+/// data, and the package record with its old shape is gone): the stored decimals and instants
+/// must already be in the form of this version's fields, or the install is refused.
+pub fn check_stored_shapes(backend: &dyn Backend, new: &Manifest) -> Result<(), String> {
+    for nm in &new.model {
+        let shapes: Vec<(&FieldM, J)> = nm
+            .field
+            .iter()
+            .filter(|f| f.computed.is_none())
+            .filter_map(|f| shape_of(f).map(|s| (f, s)))
+            .collect();
+        if shapes.is_empty() || backend.count(&nm.name).unwrap_or(0) == 0 {
+            continue;
+        }
+        let rows = backend
+            .list(&nm.name)
+            .map_err(|e| format!("reading {}: {e}", nm.name))?;
+        for (id, rec) in rows {
+            for (f, shape) in &shapes {
+                let Some(v) = rec.get(&f.name).filter(|v| !v.is_null()) else {
+                    continue;
+                };
+                if !matches!(in_shape(shape, v), Ok(Some(ref n)) if n == v) {
+                    let want = match f.kind.as_str() {
+                        "decimal" => format!(
+                            "decimal({}, {})",
+                            f.precision.unwrap_or(0),
+                            f.scale.unwrap_or(0)
+                        ),
+                        _ => "an instant in canonical UTC form".to_string(),
+                    };
+                    return Err(format!(
+                        "{} {id} holds {v} in {}, which is not in the form of {want}: the records of an earlier install are still there, so install the version that wrote them first and update it to this one with a [[migration]] op = \"reformat_field\" for {}.{}",
+                        nm.name, f.name, nm.name, f.name
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// The storage operations for `steps`: one compare-and-set per record that needs a change,
 /// guarded by the values the record held when it was read. The whole list is applied in one
 /// transaction by the caller.
 pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, String> {
-    /// A record as read, as it will be, and what must change to get there.
-    struct Edit {
-        orig: Fields,
-        cur: Fields,
-        patch: Fields,
-    }
     let mut edits: BTreeMap<(String, String), Edit> = BTreeMap::new();
     let mut order: Vec<(String, String)> = Vec::new();
     for s in steps {
@@ -432,6 +690,7 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
             .list(&s.model)
             .map_err(|e| format!("reading {}: {e}", s.model))?;
         for (id, orig) in rows {
+            let rec_id = id.clone();
             let key = (s.model.clone(), id);
             if !edits.contains_key(&key) {
                 order.push(key.clone());
@@ -449,11 +708,30 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
                 "rename_field" => {
                     let to = s.to.as_deref().ok_or("rename_field without a target")?;
                     if let Some(v) = e.cur.get(&s.field).cloned().filter(|v| !v.is_null()) {
+                        // Into a decimal or datetime field a value goes in its canonical text.
+                        let moved = match &s.value {
+                            Some(shape) => in_shape(shape, &v).map_err(|why| {
+                                format!("{} {}: {} -> {to}: {why}", s.model, rec_id, s.field)
+                            })?,
+                            None => Some(v),
+                        };
                         // Never overwrite a value already under the new name.
-                        if is_empty(e.cur.get(to)) {
+                        if is_empty(e.cur.get(to))
+                            && let Some(v) = moved
+                        {
                             set(e, to, v);
                         }
                         set(e, &s.field, J::Null);
+                    }
+                }
+                "reformat_field" => {
+                    let shape = s.value.as_ref().ok_or("reformat_field without a shape")?;
+                    if let Some(v) = e.cur.get(&s.field).cloned().filter(|v| !v.is_null())
+                        && let Some(nv) = in_shape(shape, &v)
+                            .map_err(|why| format!("{} {}: {}: {why}", s.model, rec_id, s.field))?
+                        && nv != v
+                    {
+                        set(e, &s.field, nv);
                     }
                 }
                 "set_default" => {
@@ -470,6 +748,7 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
             }
         }
     }
+    check_unique(steps, &order, &edits)?;
     Ok(order
         .into_iter()
         .filter_map(|key| {
@@ -587,6 +866,322 @@ mod tests {
         // A step for another starting version does not apply.
         let p = plan_data(&m("0.3.0", &field("title", ""), ""), &new, &|_| 5);
         assert!(p.steps.is_empty());
+    }
+
+    fn dec(p: u8, s: u8, extra: &str) -> String {
+        field(
+            "price",
+            &format!("kind = \"decimal\"\nprecision = {p}\nscale = {s}\n{extra}"),
+        )
+    }
+
+    fn step_to(from: &str, op: &str, field: &str, to: Option<&str>) -> String {
+        format!(
+            "[[migration]]\nfrom = \"{from}\"\nop = \"{op}\"\nmodel = \"mig_item\"\nfield = \"{field}\"\n{}",
+            to.map_or(String::new(), |t| format!("to = \"{t}\"\n"))
+        )
+    }
+
+    #[test]
+    fn a_changed_decimal_shape_is_found_and_needs_a_rewrite_step() {
+        let old = m("0.1.0", &dec(8, 2, ""), "");
+        let has = |new: &Manifest, breaking: bool| {
+            diff(&old, new)
+                .iter()
+                .any(|c| c.kind == "field_reshaped" && c.breaking == breaking)
+        };
+        // The scale changes either way, the precision narrows: stored text no longer has the
+        // shape of the field.
+        assert!(has(&m("0.2.0", &dec(8, 4, ""), ""), true), "scale up");
+        assert!(has(&m("0.2.0", &dec(8, 1, ""), ""), true), "scale down");
+        assert!(has(&m("0.2.0", &dec(6, 2, ""), ""), true), "precision down");
+        // Wider precision alone leaves every stored value valid and canonical; the rounding
+        // mode only concerns imports.
+        assert!(has(&m("0.2.0", &dec(12, 2, ""), ""), false), "precision up");
+        assert!(diff(&old, &m("0.2.0", &dec(8, 2, "round = \"half_up\""), "")).is_empty());
+        assert!(diff(&old, &m("0.2.0", &dec(8, 2, ""), "")).is_empty());
+        // Without a step the update is refused, saying which step; with records only.
+        let wider = m("0.2.0", &dec(8, 4, ""), "");
+        let p = plan_data(&old, &wider, &|_| 3);
+        assert_eq!(p.blockers.len(), 1, "{:?}", p.blockers);
+        assert!(
+            p.blockers[0].contains("reformat_field") && p.blockers[0].contains("decimal(8, 2)"),
+            "{}",
+            p.blockers[0]
+        );
+        assert!(plan_data(&old, &wider, &|_| 0).blockers.is_empty());
+        // The step resolves it, and the plan warns that it cannot be rolled back.
+        let fixed = m(
+            "0.2.0",
+            &dec(8, 4, ""),
+            &step_to("<0.2.0", "reformat_field", "price", None),
+        );
+        let p = plan_data(&old, &fixed, &|_| 3);
+        assert!(p.blockers.is_empty(), "{:?}", p.blockers);
+        assert!(
+            p.warnings
+                .iter()
+                .any(|w| w.contains("cannot be rolled back"))
+        );
+        assert_eq!(p.steps.len(), 1);
+        assert_eq!(p.steps[0].value.as_ref().unwrap()["scale"], 4);
+    }
+
+    #[test]
+    fn a_computed_decimal_stores_nothing_so_its_digits_may_change_freely() {
+        let calc = |p: u8, s: u8| m("0.2.0", &dec(p, s, "computed = \"1.5\""), "");
+        let old = m("0.1.0", &dec(8, 2, "computed = \"1.5\""), "");
+        for new in [calc(8, 4), calc(8, 1), calc(4, 2)] {
+            assert!(diff(&old, &new).is_empty(), "{:?}", diff(&old, &new));
+            let p = plan_data(&old, &new, &|_| 9);
+            assert!(
+                p.blockers.is_empty() && p.steps.is_empty(),
+                "{:?}",
+                p.blockers
+            );
+        }
+        // Changing a stored decimal into a computed one, or back, leaves nothing to rewrite
+        // either: the computed side has no stored value.
+        let stored = m("0.1.0", &dec(8, 2, ""), "");
+        assert!(
+            diff(&stored, &calc(8, 4))
+                .iter()
+                .all(|c| c.kind != "field_reshaped")
+        );
+        assert!(
+            diff(&old, &m("0.2.0", &dec(8, 4, ""), ""))
+                .iter()
+                .all(|c| c.kind != "field_reshaped")
+        );
+        // And a rewrite step for a computed field is refused when the package is read.
+        let e = Manifest::parse(&format!(
+            "[module]\nid = \"mig\"\nversion = \"0.2.0\"\nname = \"M\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\n[[model]]\nname = \"mig_item\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{}\n{}",
+            dec(8, 4, "computed = \"1.5\""),
+            step_to("<0.2.0", "reformat_field", "price", None)
+        ))
+        .err()
+        .unwrap_or_default();
+        assert!(e.contains("computed and stores nothing"), "{e}");
+    }
+
+    #[test]
+    fn a_rewrite_that_makes_two_values_one_is_refused_where_the_field_is_unique() {
+        let run =
+            |b: &dyn Backend, new: &Manifest| build_ops(b, &steps_for(new, &Version::new(0, 1, 0)));
+        let mem = || {
+            let b = obop_storage::open("memory:").unwrap();
+            // Two different four-digit values that round to the same two-digit one.
+            b.insert("mig_item", "1", &rec(&[("price", json!("12.5049"))]))
+                .unwrap();
+            b.insert("mig_item", "2", &rec(&[("price", json!("12.5001"))]))
+                .unwrap();
+            b.insert("mig_item", "3", &rec(&[("price", json!("7.0000"))]))
+                .unwrap();
+            b
+        };
+        let step = step_to("<0.2.0", "reformat_field", "price", None);
+        let unique = m(
+            "0.2.0",
+            &dec(10, 2, "round = \"half_up\"\nunique = true"),
+            &step,
+        );
+        let e = run(&*mem(), &unique).unwrap_err();
+        assert!(
+            e.contains("mig_item 1 and 2") && e.contains("12.50") && e.contains("unique"),
+            "{e}"
+        );
+        // Without `unique` the same rewrite is fine, and so is a unique field that stays distinct.
+        let plain = m("0.2.0", &dec(10, 2, "round = \"half_up\""), &step);
+        assert_eq!(run(&*mem(), &plain).unwrap().len(), 3);
+        let b = mem();
+        b.update("mig_item", "2", &rec(&[("price", json!("12.6001"))]))
+            .unwrap();
+        assert_eq!(run(&*b, &unique).unwrap().len(), 3);
+        // A rename into a unique decimal writes canonical text, which can also make two values
+        // one ("1" and "1.0" are two texts and one number).
+        let b = obop_storage::open("memory:").unwrap();
+        b.insert("mig_item", "1", &rec(&[("p", json!("1"))]))
+            .unwrap();
+        b.insert("mig_item", "2", &rec(&[("p", json!("1.0"))]))
+            .unwrap();
+        let renamed = m(
+            "0.2.0",
+            &dec(8, 2, "unique = true"),
+            &step_to("<0.2.0", "rename_field", "p", Some("price")),
+        );
+        let e = run(&*b, &renamed).unwrap_err();
+        assert!(e.contains("mig_item 1 and 2") && e.contains("1.00"), "{e}");
+    }
+
+    #[test]
+    fn reformat_field_must_name_a_decimal_or_datetime_field_of_the_package() {
+        let bad = |fields: &str, mig: &str| {
+            Manifest::parse(&format!(
+                "[module]\nid = \"mig\"\nversion = \"0.2.0\"\nname = \"M\"\ndescription = \"d\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\n[[model]]\nname = \"mig_item\"\ndescription = \"d\"\nread_group = \"mig.user\"\nwrite_group = \"mig.user\"\n{fields}\n{mig}"
+            ))
+            .err()
+            .unwrap_or_default()
+        };
+        let step = step_to("<0.2.0", "reformat_field", "price", None);
+        assert!(bad(&dec(8, 2, ""), &step).is_empty());
+        assert!(bad(&field("price", ""), &step).contains("for decimal and datetime fields"));
+        assert!(bad(&field("other", ""), &step).contains("is not a field of mig_item"));
+        assert!(
+            bad(&dec(8, 2, ""), &format!("{step}value = \"1\"\n")).contains("takes no other key")
+        );
+    }
+
+    #[test]
+    fn reformat_rewrites_stored_values_and_rounds_only_where_the_field_says() {
+        let b = obop_storage::open("memory:").unwrap();
+        for (id, v) in [("1", "12.50"), ("2", "0.05"), ("3", "-3.00")] {
+            b.insert("mig_item", id, &rec(&[("price", json!(v))]))
+                .unwrap();
+        }
+        b.insert("mig_item", "4", &rec(&[("title", json!("no price"))]))
+            .unwrap();
+        let run = |new: &Manifest| {
+            let steps = steps_for(new, &Version::new(0, 1, 0));
+            build_ops(&*b, &steps)
+                .and_then(|ops| b.apply_checked(&ops).map_err(|e| format!("{e:?}")))
+        };
+        // Wider scale: padded.
+        let wide = m(
+            "0.2.0",
+            &dec(10, 4, ""),
+            &step_to("<0.2.0", "reformat_field", "price", None),
+        );
+        run(&wide).unwrap();
+        let price = |id: &str| {
+            b.get("mig_item", id)
+                .unwrap()
+                .unwrap()
+                .get("price")
+                .cloned()
+        };
+        assert_eq!(price("1"), Some(json!("12.5000")));
+        assert_eq!(price("3"), Some(json!("-3.0000")));
+        assert_eq!(price("4"), None, "empty stays empty");
+        // Narrower scale needs `round`; without it the update stops and names the record.
+        b.update("mig_item", "2", &rec(&[("price", json!("0.0549"))]))
+            .unwrap();
+        let narrow = m(
+            "0.3.0",
+            &dec(10, 2, ""),
+            &step_to("<0.3.0", "reformat_field", "price", None),
+        );
+        let steps = steps_for(&narrow, &Version::new(0, 2, 0));
+        let e = build_ops(&*b, &steps).unwrap_err();
+        assert!(
+            e.contains("mig_item 2") && e.contains("price") && e.contains("fractional"),
+            "{e}"
+        );
+        let rounding = m(
+            "0.3.0",
+            &dec(10, 2, "round = \"half_up\""),
+            &step_to("<0.3.0", "reformat_field", "price", None),
+        );
+        b.update("mig_item", "1", &rec(&[("price", json!("12.5050"))]))
+            .unwrap();
+        let steps = steps_for(&rounding, &Version::new(0, 2, 0));
+        b.apply_checked(&build_ops(&*b, &steps).unwrap()).unwrap();
+        assert_eq!(price("1"), Some(json!("12.51")));
+        assert_eq!(price("2"), Some(json!("0.05")));
+        assert_eq!(price("3"), Some(json!("-3.00")));
+        // A narrower precision that a value exceeds is refused as well.
+        b.update("mig_item", "3", &rec(&[("price", json!("12345678.00"))]))
+            .unwrap();
+        let small = m(
+            "0.4.0",
+            &dec(4, 2, ""),
+            &step_to("<0.4.0", "reformat_field", "price", None),
+        );
+        let steps = steps_for(&small, &Version::new(0, 3, 0));
+        assert!(build_ops(&*b, &steps).unwrap_err().contains("mig_item 3"));
+    }
+
+    #[test]
+    fn a_renamed_value_goes_into_a_decimal_or_datetime_field_in_canonical_text() {
+        let b = obop_storage::open("memory:").unwrap();
+        b.insert(
+            "mig_item",
+            "1",
+            &rec(&[
+                ("p", json!("12.5")),
+                ("at", json!("2026-03-29T03:30:00+02:00")),
+            ]),
+        )
+        .unwrap();
+        b.insert("mig_item", "2", &rec(&[("p", json!(7)), ("at", json!(""))]))
+            .unwrap();
+        let new = m(
+            "0.2.0",
+            &format!("{}{}", dec(8, 2, ""), field("seen", "kind = \"datetime\"")),
+            &format!(
+                "{}{}",
+                step_to("<0.2.0", "rename_field", "p", Some("price")),
+                step_to("<0.2.0", "rename_field", "at", Some("seen"))
+            ),
+        );
+        let steps = steps_for(&new, &Version::new(0, 1, 0));
+        b.apply_checked(&build_ops(&*b, &steps).unwrap()).unwrap();
+        let one = b.get("mig_item", "1").unwrap().unwrap();
+        assert_eq!(one["price"], "12.50");
+        assert_eq!(one["seen"], "2026-03-29T01:30:00.000000Z");
+        assert!(one["p"].is_null() && one["at"].is_null());
+        let two = b.get("mig_item", "2").unwrap().unwrap();
+        assert_eq!(two["price"], "7.00", "a whole number is a decimal");
+        assert!(
+            two.get("seen").is_none_or(J::is_null),
+            "an empty text moves nothing"
+        );
+        // A value that is not of the kind stops the update and names the record.
+        b.insert("mig_item", "3", &rec(&[("p", json!("twelve"))]))
+            .unwrap();
+        let e = build_ops(&*b, &steps).unwrap_err();
+        assert!(
+            e.contains("mig_item 3") && e.contains("p -> price") && e.contains("twelve"),
+            "{e}"
+        );
+        b.delete("mig_item", "3").unwrap();
+        b.insert("mig_item", "4", &rec(&[("at", json!("2026-03-29"))]))
+            .unwrap();
+        let e = build_ops(&*b, &steps).unwrap_err();
+        assert!(e.contains("mig_item 4") && e.contains("at -> seen"), "{e}");
+        // Into a text field the value still moves untouched.
+        b.delete("mig_item", "4").unwrap();
+        let plain = m(
+            "0.2.0",
+            &field("label", ""),
+            &step_to("<0.2.0", "rename_field", "p", Some("label")),
+        );
+        let steps = steps_for(&plain, &Version::new(0, 1, 0));
+        assert!(steps[0].value.is_none());
+    }
+
+    #[test]
+    fn a_default_for_a_decimal_or_an_instant_is_written_canonically() {
+        let new = m(
+            "0.2.0",
+            &format!(
+                "{}{}{}",
+                field("title", ""),
+                field("price", "kind = \"decimal\"\n  precision = 8\n  scale = 2"),
+                field("seen", "kind = \"datetime\"")
+            ),
+            "[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"price\"\nvalue = \"12.5\"\n[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"seen\"\nvalue = \"2026-03-29T03:30:00+02:00\"\n[[migration]]\nfrom = \"<0.2.0\"\nop = \"set_default\"\nmodel = \"mig_item\"\nfield = \"title\"\nvalue = \"12.5\"\n",
+        );
+        let steps = steps_for(&new, &Version::new(0, 1, 0));
+        let values: Vec<_> = steps.iter().map(|s| s.value.clone().unwrap()).collect();
+        assert_eq!(
+            values,
+            [
+                json!("12.50"),
+                json!("2026-03-29T01:30:00.000000Z"),
+                json!("12.5")
+            ],
+            "only decimal and datetime defaults are rewritten; text stays as written"
+        );
     }
 
     #[test]

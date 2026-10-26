@@ -389,3 +389,110 @@ async fn health_and_metrics_are_not_shadowed_by_the_backoffice_or_the_public_sit
         }
     }
 }
+
+#[tokio::test]
+async fn metrics_report_the_backup_catalogue_and_the_last_drill() {
+    use obop_ops::catalog::{BackupRecord, Catalog, Copy, DrillRecord};
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    // Nothing recorded yet: the age series are absent (alert on absent()), the failure flag is 0.
+    let f = fixture(MetricsAccess::token(TOKEN));
+    let r = send(&f.router, ok_metrics()).await;
+    assert!(!r.body.contains("obop_backup_age_seconds"), "{}", r.body);
+    assert!(!r.body.contains("obop_restore_drill_age_seconds"));
+    assert_eq!(value(&r.body, "obop_backup_last_run_failed"), 0.0);
+    // A verified backup with a copy off the host, a passed drill and a failed run.
+    let f = fixture(MetricsAccess::token(TOKEN));
+    let b = f.app.store.backend();
+    let c = Catalog::new(&*b);
+    c.record_backup(&BackupRecord {
+        id: "obop-backup-x.obbk".into(),
+        path: "/b/x".into(),
+        created_at: now - 3600,
+        format: 2,
+        key_id: Some("abcd1234".into()),
+        bytes: 4096,
+        records: 10,
+        schema_version: 2,
+        duration_ms: 2500,
+        verified: true,
+        authenticated: true,
+        reason: "scheduled".into(),
+        copies: vec![Copy {
+            sink: "fs:/mnt".into(),
+            name: "obop-backup-x.obbk".into(),
+            verified_at: now - 3590,
+            sha256: None,
+        }],
+        host: None,
+    })
+    .unwrap();
+    c.record_drill(&DrillRecord {
+        id: "drill-1".into(),
+        at: now - 86_400,
+        plane: "main".into(),
+        backup_id: "obop-backup-x.obbk".into(),
+        rpo_seconds: 5,
+        rto_seconds: 7,
+        records: 10,
+        checks: Vec::new(),
+        passed: true,
+    })
+    .unwrap();
+    b.kv_put(
+        obop_ops::schedule::FAILURE_KEY,
+        "1: a sink was unreachable",
+        None,
+    )
+    .unwrap();
+    let r = send(&f.router, ok_metrics()).await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    let age = value(&r.body, "obop_backup_age_seconds");
+    assert!((3600.0..3700.0).contains(&age), "{age}");
+    assert_eq!(value(&r.body, "obop_backup_size_bytes"), 4096.0);
+    assert_eq!(value(&r.body, "obop_backup_duration_seconds"), 3.0);
+    assert!((3600.0..3700.0).contains(&value(&r.body, "obop_backup_copy_age_seconds")));
+    assert!((86_400.0..86_500.0).contains(&value(&r.body, "obop_restore_drill_age_seconds")));
+    assert_eq!(value(&r.body, "obop_backup_last_run_failed"), 1.0);
+    // Nothing in the series names a file, a key or a path.
+    assert!(
+        !r.body.contains("obop-backup-x")
+            && !r.body.contains("abcd1234")
+            && !r.body.contains("/mnt")
+    );
+}
+
+#[tokio::test]
+async fn metrics_report_the_wal_archiver_only_when_the_database_is_a_postgres_server() {
+    use obop_ops::pgadmin::{ArchiverStatus, FakeServer};
+    // No server information (SQLite, memory): no WAL series.
+    let f = fixture(MetricsAccess::token(TOKEN));
+    let r = send(&f.router, ok_metrics()).await;
+    assert!(!r.body.contains("obop_wal_archive"), "{}", r.body);
+    // A server that archives: the lag and the failures.
+    let f = fixture(MetricsAccess::token(TOKEN));
+    let mut srv = FakeServer::well_configured();
+    srv.archiver = ArchiverStatus {
+        archived_count: 40,
+        failed_count: 3,
+        last_archived_wal: Some("000000010000000000000009".into()),
+        last_archived_age: Some(42),
+        last_failed_age: Some(9000),
+    };
+    f.state.set_server_info(Arc::new(srv));
+    let r = send(&f.router, ok_metrics()).await;
+    assert_eq!(value(&r.body, "obop_wal_archive_lag_seconds"), 42.0);
+    assert_eq!(value(&r.body, "obop_wal_archive_failed_total"), 3.0);
+    assert!(
+        !r.body.contains("000000010000000000000009"),
+        "no segment names"
+    );
+    // A server that never archived: the failure counter, and no lag series to alert on `absent()`.
+    let f = fixture(MetricsAccess::token(TOKEN));
+    f.state.set_server_info(Arc::new(FakeServer::default()));
+    let r = send(&f.router, ok_metrics()).await;
+    assert!(!r.body.contains("obop_wal_archive_lag_seconds"));
+    assert_eq!(value(&r.body, "obop_wal_archive_failed_total"), 0.0);
+}

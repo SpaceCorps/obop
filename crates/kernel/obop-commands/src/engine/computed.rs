@@ -10,9 +10,10 @@
 //! stored fields.
 
 use super::unit::{R, Reads};
-use obop_registry::ModelDef;
-use obop_registry::expr::{self, AggFn, Env, Expr, V};
+use obop_registry::expr::{self, AggFn, DecCtx, Env, Expr, V};
+use obop_registry::{FieldKind, ModelDef, Round};
 use obop_storage::Fields;
+use obop_values::{Decimal, Instant};
 use serde_json::Value as J;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -24,21 +25,66 @@ pub(crate) type Lookup<'a> = &'a dyn Fn(&str) -> Option<Arc<ModelDef>>;
 /// How deep computed fields may refer to other computed fields and aggregates may nest models.
 const MAX_DEPTH: usize = 8;
 
-pub(crate) fn to_v(j: Option<&J>) -> V {
-    match j {
-        Some(J::Number(n)) => n.as_i64().map_or(V::Null, V::Int),
-        Some(J::String(s)) => V::Text(s.clone()),
-        Some(J::Bool(b)) => V::Bool(*b),
+/// A stored value as the expression language sees it. The kind matters for decimals and
+/// instants, which are stored as text but compute as numbers and points in time (D72); a value
+/// that is not valid for its kind (data that bypassed validation) counts as empty.
+pub(crate) fn to_v(kind: Option<&FieldKind>, j: Option<&J>) -> V {
+    match (kind, j) {
+        (Some(FieldKind::Decimal { .. }), Some(J::String(s))) => {
+            Decimal::parse(s).map_or(V::Null, V::Dec)
+        }
+        (Some(FieldKind::Datetime), Some(J::String(s))) => {
+            Instant::parse(s).map_or(V::Null, |i| V::Instant(i.micros()))
+        }
+        (_, Some(J::Number(n))) => n.as_i64().map_or(V::Null, V::Int),
+        (_, Some(J::String(s))) => V::Text(s.clone()),
+        (_, Some(J::Bool(b))) => V::Bool(*b),
         _ => V::Null,
     }
 }
 
-pub(crate) fn from_v(v: V) -> J {
-    match v {
-        V::Null => J::Null,
-        V::Int(n) => J::from(n),
-        V::Text(s) => J::from(s),
-        V::Bool(b) => J::from(b),
+/// The value of a computed field as stored JSON. A decimal is rounded to the field's scale with
+/// its `round` mode (`half_even` by default) and must fit its precision; a value that cannot be
+/// represented is empty, like any computed value that cannot be computed.
+pub(crate) fn from_v(kind: &FieldKind, v: V) -> J {
+    match (kind, v) {
+        (_, V::Null) => J::Null,
+        (
+            FieldKind::Decimal {
+                precision,
+                scale,
+                round,
+            },
+            v,
+        ) => {
+            let d = match v {
+                V::Dec(d) => d,
+                V::Int(n) => Decimal::from_i64(n),
+                _ => return J::Null,
+            };
+            d.fit(*precision, *scale, round.unwrap_or_default())
+                .map_or(J::Null, |d| J::from(d.to_string()))
+        }
+        (FieldKind::Datetime, V::Instant(us)) => {
+            Instant::from_micros(us).map_or(J::Null, |i| J::from(i.canonical()))
+        }
+        (_, V::Int(n)) => J::from(n),
+        (_, V::Text(s)) => J::from(s),
+        (_, V::Bool(b)) => J::from(b),
+        (_, V::Dec(d)) => J::from(d.to_string()),
+        (_, V::Instant(us)) => Instant::from_micros(us).map_or(J::Null, |i| J::from(i.canonical())),
+    }
+}
+
+/// How a decimal division is cut in the expression of a computed field: at the field's scale,
+/// rounded by its mode.
+fn context_of(kind: &FieldKind) -> DecCtx {
+    match kind {
+        FieldKind::Decimal { scale, round, .. } => DecCtx {
+            scale: *scale,
+            round: round.unwrap_or(Round::HalfEven),
+        },
+        _ => DecCtx::default(),
     }
 }
 
@@ -68,14 +114,9 @@ impl Env for RecEnv<'_, '_> {
         if name == "id" {
             return Ok(V::Text(self.id.to_string()));
         }
-        let computed = self
-            .def
-            .fields
-            .iter()
-            .find(|f| f.name == name)
-            .and_then(|f| f.computed.clone());
-        let Some(c) = computed else {
-            return Ok(to_v(self.rec.get(name)));
+        let field = self.def.fields.iter().find(|f| f.name == name);
+        let Some((c, kind)) = field.and_then(|f| f.computed.clone().map(|c| (c, &f.kind))) else {
+            return Ok(to_v(field.map(|f| &f.kind), self.rec.get(name)));
         };
         if let Some(v) = self.memo.borrow().get(name) {
             return Ok(v.clone());
@@ -84,9 +125,15 @@ impl Env for RecEnv<'_, '_> {
             return Err(format!("{}.{name} depends on itself", self.def.name));
         }
         self.busy.borrow_mut().push(name.to_string());
-        let v = expr::eval(&c.expr, self);
+        let v = expr::eval_in(&c.expr, self, context_of(kind));
         self.busy.borrow_mut().pop();
         let v = v?;
+        // Every reader sees the value the record shows: a computed decimal is rounded to its
+        // own scale and mode before another field, an assertion or an effect reads it.
+        let v = match kind {
+            FieldKind::Decimal { .. } => to_v(Some(kind), Some(&from_v(kind, v))),
+            _ => v,
+        };
         self.memo.borrow_mut().insert(name.to_string(), v.clone());
         Ok(v)
     }
@@ -128,6 +175,32 @@ impl Env for RecEnv<'_, '_> {
         let Some(field) = field else {
             return Err("this aggregate needs a field".into());
         };
+        // A decimal child field sums, minimises and maximises exactly.
+        if let Some(FieldKind::Decimal { .. }) =
+            cm.fields.iter().find(|f| f.name == field).map(|f| &f.kind)
+        {
+            let mut vals: Vec<Decimal> = Vec::new();
+            for r in rows {
+                if let Some(J::String(s)) = r.get(field)
+                    && let Ok(d) = Decimal::parse(s)
+                {
+                    vals.push(d);
+                }
+            }
+            return Ok(match func {
+                AggFn::Sum => {
+                    let scale = vals.iter().map(|d| d.scale()).max().unwrap_or(0);
+                    let mut sum = Decimal::zero(scale);
+                    for d in &vals {
+                        sum = sum.checked_add(*d).map_err(|e| format!("the sum: {e}"))?;
+                    }
+                    V::Dec(sum)
+                }
+                AggFn::Min => vals.iter().min().map_or(V::Null, |d| V::Dec(*d)),
+                AggFn::Max => vals.iter().max().map_or(V::Null, |d| V::Dec(*d)),
+                AggFn::Count => V::Null,
+            });
+        }
         let mut sum: i128 = 0;
         let (mut min, mut max): (Option<i64>, Option<i64>) = (None, None);
         for r in rows {
@@ -229,7 +302,7 @@ impl<'a> Computer<'a> {
                 .map(|f| {
                     (
                         f.name.to_string(),
-                        from_v(env.field(f.name).unwrap_or(V::Null)),
+                        from_v(&f.kind, env.field(f.name).unwrap_or(V::Null)),
                     )
                 })
                 .collect()

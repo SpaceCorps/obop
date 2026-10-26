@@ -1,6 +1,8 @@
 //! Layer 3 registry: model, field and command metadata, and the D41 install gate.
 
 use obop_types::DataClass;
+pub use obop_values::Round;
+use obop_values::{MAX_PRECISION, MAX_SCALE};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -54,6 +56,19 @@ pub enum FieldKind {
     Image(u32),
     /// As `Image`, for a document kept byte for byte and served as a download.
     File(u32),
+    /// JSON string: an exact decimal in its canonical form, always exactly `scale` fractional
+    /// digits (`"12.3400"`), never a JSON number (D72). `precision` (at most 38) counts all
+    /// digits, `scale` (0 to 12) those after the point. `round` is the import path's rounding
+    /// mode for input with too many fractional digits; without it such input is an error. In a
+    /// computed field it is the rounding of the result (default `half_even`).
+    Decimal {
+        precision: u8,
+        scale: u8,
+        round: Option<Round>,
+    },
+    /// JSON string: an instant with microsecond precision, always UTC, always
+    /// `YYYY-MM-DDTHH:MM:SS.ffffffZ` (D72).
+    Datetime,
 }
 
 impl FieldKind {
@@ -70,6 +85,30 @@ impl FieldKind {
             Self::Ref(_) => "ref",
             Self::Image(_) => "image",
             Self::File(_) => "file",
+            Self::Decimal { .. } => "decimal",
+            Self::Datetime => "datetime",
+        }
+    }
+
+    /// A `decimal` of this shape; `None` when the precision or scale is out of range.
+    pub fn decimal(precision: u8, scale: u8, round: Option<Round>) -> Option<Self> {
+        ((1..=MAX_PRECISION).contains(&precision) && scale <= MAX_SCALE && scale <= precision)
+            .then_some(Self::Decimal {
+                precision,
+                scale,
+                round,
+            })
+    }
+
+    /// `(precision, scale, round)` of a `decimal`.
+    pub fn decimal_shape(&self) -> Option<(u8, u8, Option<Round>)> {
+        match self {
+            Self::Decimal {
+                precision,
+                scale,
+                round,
+            } => Some((*precision, *scale, *round)),
+            _ => None,
         }
     }
 
@@ -87,6 +126,8 @@ impl FieldKind {
                 | "ref"
                 | "image"
                 | "file"
+                | "decimal"
+                | "datetime"
         )
     }
 
@@ -118,7 +159,26 @@ impl FieldKind {
             Self::Ref(t) => format!("the id of an existing {t} record"),
             Self::Image(_) => "the id of an uploaded image (upload it with POST /api/blobs)".into(),
             Self::File(_) => "the id of an uploaded file (upload it with POST /api/blobs)".into(),
+            Self::Decimal {
+                precision, scale, ..
+            } => {
+                let example = obop_values::decimal::example(*precision, *scale);
+                format!(
+                    "a decimal number written as a string such as \"{example}\" (at most {precision} digits, {scale} after the point; not a JSON number)"
+                )
+            }
+            Self::Datetime => {
+                "an RFC 3339 instant with an offset or Z such as 2026-03-29T01:30:00Z".into()
+            }
         }
+    }
+
+    /// The regular expression for the text of a decimal of this shape (OpenAPI `pattern`):
+    /// digits that fit the precision, then up to `scale` fractional digits. Responses always
+    /// carry exactly `scale` of them.
+    pub fn decimal_pattern(&self) -> Option<String> {
+        let (precision, scale, _) = self.decimal_shape()?;
+        Some(obop_values::decimal::pattern(precision, scale))
     }
 
     /// The largest upload in bytes this field accepts (`image` and `file` only): the field's own
@@ -295,6 +355,30 @@ impl FieldDef {
     /// A `ref` to records of `model`.
     pub fn reference(self, model: &str) -> Self {
         self.kind(FieldKind::Ref(intern(model)))
+    }
+
+    /// An exact `decimal` of `precision` digits, `scale` of them after the point (D72).
+    pub fn decimal(self, precision: u8, scale: u8) -> Self {
+        self.kind(FieldKind::Decimal {
+            precision,
+            scale,
+            round: None,
+        })
+    }
+
+    /// A `decimal` whose import path rounds extra fractional digits with `round`, and whose
+    /// computed value (if any) is rounded the same way.
+    pub fn decimal_rounded(self, precision: u8, scale: u8, round: Round) -> Self {
+        self.kind(FieldKind::Decimal {
+            precision,
+            scale,
+            round: Some(round),
+        })
+    }
+
+    /// An instant with microsecond precision (D72).
+    pub fn datetime(self) -> Self {
+        self.kind(FieldKind::Datetime)
     }
 
     pub fn required(mut self) -> Self {
@@ -597,6 +681,17 @@ fn check_basics(m: &Module) -> Vec<Violation> {
                 FieldKind::Ref(t) if t.trim().is_empty() => {
                     bad(fp.clone(), "ref field has no target model")
                 }
+                FieldKind::Decimal {
+                    precision, scale, ..
+                } if !(1..=MAX_PRECISION).contains(precision)
+                    || *scale > MAX_SCALE
+                    || scale > precision =>
+                {
+                    bad(
+                        fp.clone(),
+                        "a decimal needs a precision of 1 to 38 and a scale of 0 to 12, not above the precision",
+                    )
+                }
                 _ => {}
             }
         }
@@ -862,6 +957,71 @@ mod tests {
         assert_eq!(f.kind.options(), ["x", "y"]);
         assert_eq!(ok_field().reference("party").kind.target(), Some("party"));
         assert!(FieldKind::is_known("longtext") && !FieldKind::is_known("float"));
+    }
+
+    #[test]
+    fn decimal_and_datetime_kinds_describe_themselves() {
+        assert!(FieldKind::is_known("decimal") && FieldKind::is_known("datetime"));
+        assert_eq!(FieldKind::Datetime.name(), "datetime");
+        let d = FieldKind::decimal(10, 2, None).unwrap();
+        assert_eq!(d.name(), "decimal");
+        assert_eq!(d.decimal_shape(), Some((10, 2, None)));
+        assert!(d.describe().contains("\"12.33\"") && d.describe().contains("not a JSON number"));
+        assert_eq!(
+            d.decimal_pattern().unwrap(),
+            "^-?(0|[1-9][0-9]{0,7})(\\.[0-9]{1,2})?$"
+        );
+        assert_eq!(
+            FieldKind::decimal(2, 2, None)
+                .unwrap()
+                .decimal_pattern()
+                .unwrap(),
+            "^-?0(\\.[0-9]{1,2})?$"
+        );
+        assert_eq!(
+            FieldKind::decimal(5, 0, None)
+                .unwrap()
+                .decimal_pattern()
+                .unwrap(),
+            "^-?(0|[1-9][0-9]{0,4})$"
+        );
+        // The example in the description is a value of the shape, in every shape (it used to
+        // be `12.` for a whole number and `12.33` where only one digit is left of the point).
+        for (p, s, example) in [
+            (5, 0, "12"),
+            (1, 0, "1"),
+            (2, 2, "0.33"),
+            (3, 2, "1.33"),
+            (10, 2, "12.33"),
+            (38, 12, "12.333333333333"),
+        ] {
+            let k = FieldKind::decimal(p, s, None).unwrap();
+            assert!(
+                k.describe().contains(&format!("\"{example}\"")),
+                "decimal({p}, {s}): {}",
+                k.describe()
+            );
+            let parsed = obop_values::Decimal::parse_for(example, p, s, None)
+                .unwrap_or_else(|e| panic!("decimal({p}, {s}) example {example}: {e}"));
+            assert_eq!(parsed.to_string(), example);
+        }
+        for (p, s) in [(0, 0), (39, 2), (10, 13), (2, 3)] {
+            assert!(FieldKind::decimal(p, s, None).is_none(), "{p},{s}");
+        }
+        assert!(FieldKind::Datetime.describe().contains("RFC 3339"));
+        // The gate refuses a decimal declared outside its limits and takes a good one.
+        assert!(gate(ok_field().decimal(38, 12)).is_empty());
+        assert!(gate(ok_field().datetime()).is_empty());
+        assert!(
+            gate(ok_field().decimal(39, 2))[0]
+                .problem
+                .contains("precision of 1 to 38")
+        );
+        assert!(
+            gate(ok_field().decimal(10, 13))[0]
+                .problem
+                .contains("scale of 0 to 12")
+        );
     }
 
     #[test]

@@ -73,13 +73,13 @@ Every model gets these. For model `lead`:
 }
 ```
 
-| Input             | Meaning                                                                                                                                                                                                                                                                            |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rows`            | A list of objects of field names and values, as for `create`. At most 1,000.                                                                                                                                                                                                       |
-| `csv`             | Instead: the text of a CSV file (UTF-8, `,` or `;`, at most 1 MiB, a header of field names). References are record ids; numbers are whole numbers (money in minor units, no decimal point); an empty cell leaves the field out; image and file fields are not accepted.            |
-| `mode`            | `all_or_nothing` (default): one bad row creates nothing and the call answers `400` naming the first rows. `partial`: the good rows are created and the answer lists the bad ones.                                                                                                  |
-| `dry_run`         | Check every row and write nothing. The answer is the full report, even in `all_or_nothing` mode.                                                                                                                                                                                   |
-| `idempotency_key` | Up to 128 visible characters you make up. Repeating the call with the same key and the same rows returns the first answer (`replayed: true`) for 24 hours instead of creating the rows again; other rows with the same key are refused. The key belongs to the person who used it. |
+| Input             | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rows`            | A list of objects of field names and values, as for `create`. At most 1,000.                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `csv`             | Instead: the text of a CSV file (UTF-8, `,` or `;`, at most 1 MiB, a header of field names). References are record ids; `number` cells are whole numbers and `money` cells minor units (no decimal point); a `decimal` cell is written with a point (`12.50`) and is rounded where the field declares a rounding mode, an error where it does not; a `datetime` cell is an RFC 3339 instant with an offset or `Z`; an empty cell leaves the field out; image and file fields are not accepted. |
+| `mode`            | `all_or_nothing` (default): one bad row creates nothing and the call answers `400` naming the first rows. `partial`: the good rows are created and the answer lists the bad ones.                                                                                                                                                                                                                                                                                                              |
+| `dry_run`         | Check every row and write nothing. The answer is the full report, even in `all_or_nothing` mode.                                                                                                                                                                                                                                                                                                                                                                                               |
+| `idempotency_key` | Up to 128 visible characters you make up. Repeating the call with the same key and the same rows returns the first answer (`replayed: true`) for 24 hours instead of creating the rows again; other rows with the same key are refused. The key belongs to the person who used it.                                                                                                                                                                                                             |
 
 Every row is checked exactly as `create` checks a record, and everything is written in one transaction. The answer:
 
@@ -101,7 +101,7 @@ Every row is checked exactly as `create` checks a record, and everything is writ
 }
 ```
 
-`ids` follows the order of the rows (`null` for a row that was not created); with `dry_run` the count is `valid` and there are no ids; `errors` lists at most 100 problems as `{row, line?, error}`, `line` being the line of a CSV file. A person may start `OBOP_BULK_PER_MINUTE` calls a minute (default 12). Limits: no remapping of ids and no reference from one row to another row of the same call, no decimal or date-time kinds yet, no images or files.
+`ids` follows the order of the rows (`null` for a row that was not created); with `dry_run` the count is `valid` and there are no ids; `errors` lists at most 100 problems as `{row, line?, error}`, `line` being the line of a CSV file. A person may start `OBOP_BULK_PER_MINUTE` calls a minute (default 12). Limits: no remapping of ids and no reference from one row to another row of the same call, no images or files.
 
 Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input is `{"id"}`, plus any `required` fields it needs.
 
@@ -128,15 +128,17 @@ Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input 
 
 ## Field values
 
-| Kind               | JSON                                             |
-| ------------------ | ------------------------------------------------ |
-| `text`, `longtext` | string                                           |
-| `number`           | integer (no floats)                              |
-| `money`            | integer in minor currency units: 12.34 is `1234` |
-| `date`             | `"YYYY-MM-DD"`, a real calendar date             |
-| `bool`             | `true` or `false`                                |
-| `select`           | one of the field's options                       |
-| `ref`              | the id of an existing record of the target model |
+| Kind               | JSON                                                                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text`, `longtext` | string                                                                                                                                                                           |
+| `number`           | integer (no floats)                                                                                                                                                              |
+| `money`            | integer in minor currency units: 12.34 is `1234`                                                                                                                                 |
+| `date`             | `"YYYY-MM-DD"`, a real calendar date                                                                                                                                             |
+| `decimal`          | an exact decimal as a **string** with the field's digits: `"12.50"`, never a JSON number; at most 80 characters and 38 significant digits, also where the field rounds on import |
+| `datetime`         | an instant as RFC 3339 text with an offset or `Z`; answered in UTC as `"2026-03-29T01:30:00.000000Z"`                                                                            |
+| `bool`             | `true` or `false`                                                                                                                                                                |
+| `select`           | one of the field's options                                                                                                                                                       |
+| `ref`              | the id of an existing record of the target model                                                                                                                                 |
 
 ## Status codes
 

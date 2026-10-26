@@ -108,6 +108,11 @@ impl HttpState {
         self.ops.set_access(access);
     }
 
+    /// The PostgreSQL server behind the database, for the WAL archive series of `/metrics` (D73).
+    pub fn set_server_info(&self, info: Arc<dyn obop_ops::pgadmin::ServerInfo>) {
+        self.ops.set_server_info(info);
+    }
+
     /// Serve the payment providers' webhook door.
     pub fn set_payments(&self, hooks: Arc<dyn obop_commands::PaymentHooks>) {
         let _ = self.payments.set(hooks);

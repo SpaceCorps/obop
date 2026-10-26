@@ -603,15 +603,81 @@ fn a_database_that_needs_migration_is_refused_by_postgres_servers_until_migrated
         .output()
         .unwrap();
     assert!(String::from_utf8_lossy(&st.stdout).contains("pending"));
-    let run = obop()
+    // On PostgreSQL the migration is gated (D73): without a verified backup, a stored plan and a
+    // rehearsal it is refused, and nothing is changed.
+    let refused = obop()
         .args(["migrate", "run", "--db", &db.url])
         .output()
         .unwrap();
+    assert!(!refused.status.success());
+    let t = String::from_utf8_lossy(&refused.stderr);
     assert!(
-        run.status.success(),
-        "{}",
-        String::from_utf8_lossy(&run.stderr)
+        t.contains("not allowed to run") && t.contains("plan_stored") && t.contains("backup"),
+        "{t}"
     );
+    assert!(!t.contains("obop-test"), "the password is not echoed: {t}");
+    let st = obop()
+        .args(["migrate", "status", "--db", &db.url])
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8_lossy(&st.stdout).contains("pending"),
+        "still pending"
+    );
+    // Read the plan, back up, rehearse on a copy, then run with all of it.
+    let must = |args: &[&str]| -> String {
+        let o = obop().args(args).output().unwrap();
+        assert!(
+            o.status.success(),
+            "{args:?}: {}{}",
+            String::from_utf8_lossy(&o.stdout),
+            String::from_utf8_lossy(&o.stderr)
+        );
+        String::from_utf8_lossy(&o.stdout).to_string()
+    };
+    let dir = std::env::temp_dir().join(format!("obop-mp-gates-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    must(&["migrate", "plan", "--db", &db.url]);
+    must(&["backup", "--db", &db.url, "--out", dir.to_str().unwrap()]);
+    let backup = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.to_string_lossy().ends_with(".obbk"))
+        .expect("a sealed backup");
+    let receipt = dir.join("receipt.json");
+    let t = must(&[
+        "migrate",
+        "rehearse",
+        "--from",
+        backup.to_str().unwrap(),
+        "--db",
+        &db.url,
+        "--out",
+        receipt.to_str().unwrap(),
+    ]);
+    assert!(t.contains("REHEARSAL PASSED"), "{t}");
+    let t = must(&[
+        "migrate",
+        "run",
+        "--db",
+        &db.url,
+        "--backup",
+        backup.to_str().unwrap(),
+        "--rehearsal",
+        receipt.to_str().unwrap(),
+        "--disk-ok",
+    ]);
+    assert!(t.contains("ran 1:") && t.contains("ran 2:"), "{t}");
+    assert!(
+        t.contains("restore point: pre-migration-2"),
+        "a restore point on PostgreSQL: {t}"
+    );
+    let t = must(&["migrate", "status", "--db", &db.url]);
+    assert!(
+        t.contains("core/0002") && t.contains("backup obop-backup-"),
+        "{t}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
     let s = start(&db.url, &[]);
     assert_eq!(
         http(s.port, "GET", "/api/openapi.json", None, &[], None).status,

@@ -3,22 +3,32 @@
 //! ```json
 //! { "filter": [...],
 //!   "aggregate": {
-//!     "group_by": ["status", {"field": "created", "bucket": "month"}],
+//!     "group_by": ["status", {"field": "created", "bucket": "month", "zone": "Europe/Berlin"}],
 //!     "measures": [{"op": "count"}, {"op": "sum", "field": "amount_minor"}] } }
 //! ```
 //!
 //! The answer is `{rows: [], total, groups: [{key, count, measures}]}`: `total` is the number of
 //! records the filter matches, `key` maps each `group_by` field to its value (`null` for empty;
-//! a date bucket is `YYYY-MM-DD` for `day` and `week` (the Monday), `YYYY-MM` for `month`),
-//! `count` is the number of records in the group and `measures` maps `"sum:field"`, `"min:field"`
-//! and `"max:field"` to an integer (`sum` of nothing is 0, `min` and `max` of nothing are `null`).
-//! `count` as a measure only documents intent; every group carries it. Groups are ordered by their
-//! keys in the field's own order (select option order, numbers and dates as such, text by the
-//! `lang` collation, empty last).
+//! a date or datetime bucket is `YYYY-MM-DD` for `day` and `week` (the Monday), `YYYY-Www` for
+//! `iso_week`, `YYYY-MM` for `month` and `YYYY` for `year`), `count` is the number of records in
+//! the group and `measures` maps `"sum:field"`, `"min:field"`, `"max:field"` and `"avg:field"`
+//! to an integer, or for a `decimal` field to a decimal string (`sum` of nothing is 0, `min`,
+//! `max` and `avg` of nothing are `null`). `count` as a measure only documents intent; every
+//! group carries it. Groups are ordered by their keys in the field's own order (select option
+//! order, numbers, decimals, dates and period labels as such, text by the `lang` collation,
+//! empty last).
 //!
-//! Rules: at most 2 `group_by` entries and 8 measures; `sum`, `min` and `max` apply to number and
-//! money fields only; `bucket` applies to date fields only (and a date field must be bucketed to
-//! be grouped); no `order`, `limit` or `offset` (groups are the page). Every field named here is
+//! Decimals (D72) are summed, minimised and maximised exactly, in whole units of the field's
+//! scale (128 bit; an overflow is an error). `avg` is the exact sum divided by the number of
+//! values, rounded once to the measure's `scale` (default: the field's) with its `round`
+//! (`half_even` by default, or `half_up` or `down`); only decimal fields have an `avg`.
+//!
+//! A datetime is grouped by the wall clock of a `zone` (an IANA name; the platform zone when the
+//! entry names none), with weeks starting on Monday.
+//!
+//! Rules: at most 2 `group_by` entries and 8 measures; `sum`, `min` and `max` apply to number,
+//! money and decimal fields; `bucket` applies to date and datetime fields only (and one of them
+//! must be bucketed to be grouped); no `order`, `limit` or `offset` (groups are the page). Every field named here is
 //! checked with the same `usable` test as filters and order, so a field the caller may not read in
 //! clear gets the error of a field that does not exist (D10): no group, sum or count can leak it.
 //!
@@ -32,6 +42,8 @@ use crate::collate::TextOrder;
 use crate::query::{Key, Query};
 use obop_registry::{FieldKind, ModelDef};
 use obop_storage::{Backend, Fields};
+use obop_values::datetime::{bucket_label, parse_date};
+use obop_values::{Bucket, Decimal, Instant, Round, Zone, Zones};
 use serde_json::Value as J;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -41,18 +53,13 @@ pub const MAX_GROUPS: usize = 10_000;
 const MAX_GROUP_BY: usize = 2;
 const MAX_MEASURES: usize = 8;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Bucket {
-    Day,
-    Week,
-    Month,
-}
-
 #[derive(Debug, Clone)]
 struct GroupBy {
     field: String,
     kind: FieldKind,
     bucket: Option<Bucket>,
+    /// The wall clock a datetime is cut on.
+    zone: Option<Zone>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,14 +68,20 @@ enum Agg {
     Sum,
     Min,
     Max,
+    Avg,
 }
 
 #[derive(Debug, Clone)]
 struct Measure {
     f: Agg,
     field: String,
-    /// `sum:amount`, `min:amount`, `max:amount`, or `count`.
+    /// `sum:amount`, `min:amount`, `max:amount`, `avg:amount`, or `count`.
     name: String,
+    /// The scale of a decimal field; none for whole numbers.
+    dec_scale: Option<u8>,
+    /// Scale and rounding of an `avg`.
+    out_scale: u8,
+    round: Round,
 }
 
 type Visit<'a> = dyn FnMut(&str, &Fields) -> obop_storage::Result<bool> + 'a;
@@ -85,8 +98,11 @@ type GKey = Vec<Option<Key>>;
 #[derive(Default)]
 struct Acc {
     count: i64,
-    /// Per measure: running sum, min or max (`None` until a value is seen).
+    /// Per measure: running sum, min or max (`None` until a value is seen). A decimal is held
+    /// as whole units of its field's scale.
     vals: Vec<Option<i128>>,
+    /// Per measure: how many values were seen (for `avg`).
+    seen: Vec<u64>,
 }
 
 impl Aggregate {
@@ -94,6 +110,7 @@ impl Aggregate {
         def: &ModelDef,
         v: &Value,
         field: &dyn Fn(&str) -> Result<FieldKind, String>,
+        zones: &Zones,
     ) -> Result<Self, String> {
         let Value::Map(m) = v else {
             return Err("aggregate must be an object {group_by, measures}".into());
@@ -113,13 +130,13 @@ impl Aggregate {
                     return Err(format!("group_by takes at most {MAX_GROUP_BY} fields"));
                 }
                 for item in items {
-                    let (name, bucket) = match item {
-                        Value::Text(n) => (n.clone(), None),
+                    let (name, bucket, zone_name) = match item {
+                        Value::Text(n) => (n.clone(), None, None),
                         Value::Map(o) => {
                             for k in o.keys() {
-                                if k != "field" && k != "bucket" {
+                                if k != "field" && k != "bucket" && k != "zone" {
                                     return Err(format!(
-                                        "unknown group_by key {k:?} (use field and bucket)"
+                                        "unknown group_by key {k:?} (use field, bucket and zone)"
                                     ));
                                 }
                             }
@@ -128,15 +145,23 @@ impl Aggregate {
                             };
                             let b = match o.get("bucket") {
                                 None | Some(Value::Null) => None,
-                                Some(Value::Text(b)) => Some(match b.as_str() {
-                                    "day" => Bucket::Day,
-                                    "week" => Bucket::Week,
-                                    "month" => Bucket::Month,
-                                    _ => return Err("bucket must be day, week or month".into()),
-                                }),
-                                Some(_) => return Err("bucket must be day, week or month".into()),
+                                Some(Value::Text(b)) => {
+                                    Some(Bucket::parse(b).ok_or_else(|| {
+                                        format!("bucket must be {}", Bucket::NAMES)
+                                    })?)
+                                }
+                                Some(_) => {
+                                    return Err(format!("bucket must be {}", Bucket::NAMES));
+                                }
                             };
-                            (n.clone(), b)
+                            let z = match o.get("zone") {
+                                None | Some(Value::Null) => None,
+                                Some(Value::Text(z)) => Some(z.clone()),
+                                Some(_) => {
+                                    return Err("zone must be an IANA time zone name".into());
+                                }
+                            };
+                            (n.clone(), b, z)
                         }
                         _ => {
                             return Err(
@@ -149,16 +174,18 @@ impl Aggregate {
                         return Err(format!("cannot group {} by id", def.name));
                     }
                     match (&kind, bucket) {
-                        (FieldKind::Date, None) => {
+                        (FieldKind::Date | FieldKind::Datetime, None) => {
                             return Err(format!(
-                                "group_by on {}.{name}: a date needs a bucket (day, week or month)",
-                                def.name
+                                "group_by on {}.{name}: a {} needs a bucket ({})",
+                                def.name,
+                                kind.name(),
+                                Bucket::NAMES
                             ));
                         }
-                        (FieldKind::Date, Some(_)) => {}
+                        (FieldKind::Date | FieldKind::Datetime, Some(_)) => {}
                         (_, Some(_)) => {
                             return Err(format!(
-                                "group_by on {}.{name}: bucket only applies to date fields",
+                                "group_by on {}.{name}: bucket only applies to date and datetime fields",
                                 def.name
                             ));
                         }
@@ -173,10 +200,25 @@ impl Aggregate {
                     if group_by.iter().any(|g: &GroupBy| g.field == name) {
                         return Err(format!("group_by names {name} twice"));
                     }
+                    let zone = match (&kind, zone_name) {
+                        (FieldKind::Datetime, z) => Some(
+                            zones
+                                .zone(z.as_deref())
+                                .map_err(|e| format!("group_by on {}.{name}: {e}", def.name))?,
+                        ),
+                        (_, Some(_)) => {
+                            return Err(format!(
+                                "group_by on {}.{name}: a date has no time zone; zone only applies to datetime fields",
+                                def.name
+                            ));
+                        }
+                        (_, None) => None,
+                    };
                     group_by.push(GroupBy {
                         field: name,
                         kind,
                         bucket,
+                        zone,
                     });
                 }
             }
@@ -194,24 +236,31 @@ impl Aggregate {
                         return Err("measures must be an array of {op, field}".into());
                     };
                     for k in o.keys() {
-                        if k != "op" && k != "field" {
-                            return Err(format!("unknown measure key {k:?} (use op and field)"));
+                        if !["op", "field", "scale", "round"].contains(&k.as_str()) {
+                            return Err(format!(
+                                "unknown measure key {k:?} (use op and field, and for avg scale and round)"
+                            ));
                         }
                     }
                     let Some(Value::Text(op)) = o.get("op") else {
-                        return Err("each measure needs an op (count, sum, min, max)".into());
+                        return Err("each measure needs an op (count, sum, min, max, avg)".into());
                     };
                     let f = match op.as_str() {
                         "count" => Agg::Count,
                         "sum" => Agg::Sum,
                         "min" => Agg::Min,
                         "max" => Agg::Max,
+                        "avg" => Agg::Avg,
                         other => {
                             return Err(format!(
-                                "unknown measure op {other:?} (use count, sum, min, max)"
+                                "unknown measure op {other:?} (use count, sum, min, max, avg)"
                             ));
                         }
                     };
+                    let given = |k: &str| o.get(k).filter(|v| **v != Value::Null);
+                    if f != Agg::Avg && (given("scale").is_some() || given("round").is_some()) {
+                        return Err(format!("{op} takes no scale or round; only avg does"));
+                    }
                     if f == Agg::Count {
                         if o.get("field").is_some_and(|f| *f != Value::Null) {
                             return Err("count takes no field".into());
@@ -220,6 +269,9 @@ impl Aggregate {
                             f,
                             field: String::new(),
                             name: "count".into(),
+                            dec_scale: None,
+                            out_scale: 0,
+                            round: Round::HalfEven,
                         });
                         continue;
                     }
@@ -227,16 +279,62 @@ impl Aggregate {
                         return Err(format!("{op} needs a field"));
                     };
                     let kind = field(name)?;
-                    if !matches!(kind, FieldKind::Number | FieldKind::Money) {
+                    let decimal = kind.decimal_shape();
+                    let allowed = match f {
+                        Agg::Avg => decimal.is_some(),
+                        _ => {
+                            matches!(kind, FieldKind::Number | FieldKind::Money)
+                                || decimal.is_some()
+                        }
+                    };
+                    if !allowed {
+                        return Err(if f == Agg::Avg {
+                            format!(
+                                "avg on {}.{name}: only decimal fields have an average (an average of whole numbers needs a scale; use a decimal field)",
+                                def.name
+                            )
+                        } else {
+                            format!(
+                                "{op} on {}.{name}: only number, money and decimal fields can be summed, minimised or maximised",
+                                def.name
+                            )
+                        });
+                    }
+                    let field_scale = decimal.map(|(_, s, _)| s);
+                    let out_scale = match given("scale") {
+                        None => field_scale.unwrap_or(0),
+                        Some(Value::Int(s))
+                            if (0..=i64::from(obop_values::MAX_SCALE)).contains(s) =>
+                        {
+                            *s as u8
+                        }
+                        Some(_) => {
+                            return Err(format!(
+                                "scale must be a whole number from 0 to {}",
+                                obop_values::MAX_SCALE
+                            ));
+                        }
+                    };
+                    let round = match given("round") {
+                        None => Round::HalfEven,
+                        Some(Value::Text(r)) => Round::parse(r).ok_or_else(|| {
+                            "round must be half_even, half_up or down".to_string()
+                        })?,
+                        Some(_) => return Err("round must be half_even, half_up or down".into()),
+                    };
+                    let key = format!("{op}:{name}");
+                    if measures.iter().any(|x| x.name == key) {
                         return Err(format!(
-                            "{op} on {}.{name}: only number and money fields can be summed, minimised or maximised",
-                            def.name
+                            "the measure {key} is asked for twice; the answer has one {key}"
                         ));
                     }
                     measures.push(Measure {
                         f,
                         field: name.clone(),
-                        name: format!("{op}:{name}"),
+                        name: key,
+                        dec_scale: field_scale,
+                        out_scale,
+                        round,
                     });
                 }
             }
@@ -301,17 +399,20 @@ impl Aggregate {
             let acc = groups.entry(key).or_insert_with(|| Acc {
                 count: 0,
                 vals: vec![None; measured.len()],
+                seen: vec![0; measured.len()],
             });
             acc.count += 1;
             for (i, m) in measured.iter().enumerate() {
-                let Some(n) = f.get(&m.field).and_then(J::as_i64) else {
+                let Some(n) = measured_units(m, f.get(&m.field))? else {
                     continue;
                 };
-                let n = i128::from(n);
                 let slot = &mut acc.vals[i];
+                acc.seen[i] += 1;
                 *slot = Some(match (m.f, *slot) {
                     (_, None) => n,
-                    (Agg::Sum, Some(s)) => s + n,
+                    (Agg::Sum | Agg::Avg, Some(s)) => s
+                        .checked_add(n)
+                        .ok_or_else(|| format!("{} overflows", m.name))?,
                     (Agg::Min, Some(s)) => s.min(n),
                     (_, Some(s)) => s.max(n),
                 });
@@ -329,12 +430,20 @@ impl Aggregate {
             }
             let mut ms = BTreeMap::new();
             for (i, m) in measured.iter().enumerate() {
-                let v = match (m.f, acc.vals[i]) {
-                    (Agg::Sum, None) => Value::Int(0),
-                    (_, None) => Value::Null,
-                    (_, Some(n)) => {
-                        Value::Int(i64::try_from(n).map_err(|_| format!("{} overflows", m.name))?)
+                let overflow = || format!("{} overflows", m.name);
+                let v = match (m.f, acc.vals[i], m.dec_scale) {
+                    (Agg::Sum, None, None) => Value::Int(0),
+                    (Agg::Sum, None, Some(s)) => Value::Text(Decimal::zero(s).to_string()),
+                    (_, None, _) => Value::Null,
+                    (Agg::Avg, Some(n), Some(s)) => Value::Text(
+                        Decimal::average(n, s, acc.seen[i], m.out_scale, m.round)
+                            .map_err(|e| format!("{}: {e}", m.name))?
+                            .to_string(),
+                    ),
+                    (_, Some(n), Some(s)) => {
+                        Value::Text(Decimal::new(n, s).ok_or_else(overflow)?.to_string())
                     }
+                    (_, Some(n), None) => Value::Int(i64::try_from(n).map_err(|_| overflow())?),
                 };
                 ms.insert(m.name.clone(), v);
             }
@@ -366,10 +475,37 @@ impl Aggregate {
     }
 }
 
+/// A value to be summed, compared or averaged, as whole units: an integer, or a decimal in
+/// units of its field's scale. Empty and malformed values (data that bypassed validation) are
+/// skipped; a decimal with more digits than the field keeps is an error and not a quietly
+/// shortened number: it means the field's scale was cut in an update without rewriting the
+/// stored values (a `reformat_field` migration step does that).
+fn measured_units(m: &Measure, v: Option<&J>) -> Result<Option<i128>, String> {
+    Ok(match (m.dec_scale, v) {
+        (None, Some(J::Number(n))) => n.as_i64().map(i128::from),
+        (Some(scale), Some(J::String(s))) => match Decimal::parse(s) {
+            Ok(d) if d.scale() > scale => {
+                return Err(format!(
+                    "{}: a stored value ({s}) has more than the {scale} fractional digits the field keeps; the field was narrowed without rewriting its values",
+                    m.name
+                ));
+            }
+            Ok(d) => d.rescale(scale, Round::Down).ok().map(Decimal::units),
+            Err(_) => None,
+        },
+        _ => None,
+    })
+}
+
 fn group_key(g: &GroupBy, f: &Fields) -> Option<Key> {
     let v = f.get(&g.field)?;
     match (&g.kind, v) {
         (FieldKind::Date, J::String(s)) => bucket_of(s, g.bucket?).map(Key::Str),
+        (FieldKind::Datetime, J::String(s)) => {
+            let at = Instant::parse(s).ok()?;
+            Some(Key::Str(g.zone.as_ref()?.bucket(at, g.bucket?)))
+        }
+        (FieldKind::Decimal { .. }, J::String(s)) => Decimal::parse(s).ok().map(Key::Dec),
         (FieldKind::Number | FieldKind::Money, J::Number(n)) => n.as_i64().map(Key::Int),
         (FieldKind::Bool, J::Bool(b)) => Some(Key::Int(i64::from(*b))),
         (FieldKind::Select(o), J::String(s)) => {
@@ -388,51 +524,19 @@ fn render(g: &GroupBy, k: &Option<Key>) -> Value {
         }
         (Some(Key::Int(i)), FieldKind::Bool) => Value::Bool(*i != 0),
         (Some(Key::Int(i)), _) => Value::Int(*i),
+        (Some(Key::Dec(d)), FieldKind::Decimal { scale, .. }) => Value::Text(
+            d.rescale(*scale, Round::Down)
+                .map_or_else(|_| d.to_string(), |d| d.to_string()),
+        ),
+        (Some(Key::Dec(d)), _) => Value::Text(d.to_string()),
         (Some(Key::Str(s)), _) => Value::text(s),
     }
 }
 
-/// Days since 1970-01-01 of a calendar date (proleptic Gregorian).
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
-}
-
-fn civil_from_days(z: i64) -> (i64, i64, i64) {
-    let z = z + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    (if m <= 2 { y + 1 } else { y }, m, d)
-}
-
 /// The bucket of a stored `YYYY-MM-DD`; `None` for a malformed value (it counts as empty).
 pub(crate) fn bucket_of(s: &str, b: Bucket) -> Option<String> {
-    if !obop_registry::is_valid_date(s) {
-        return None;
-    }
-    let n = |r: std::ops::Range<usize>| s[r].parse::<i64>().ok();
-    let (y, m, d) = (n(0..4)?, n(5..7)?, n(8..10)?);
-    Some(match b {
-        Bucket::Day => s.to_string(),
-        Bucket::Month => format!("{y:04}-{m:02}"),
-        Bucket::Week => {
-            let days = days_from_civil(y, m, d);
-            // 1970-01-01 was a Thursday; Monday is 0.
-            let dow = (days + 3).rem_euclid(7);
-            let (wy, wm, wd) = civil_from_days(days - dow);
-            format!("{wy:04}-{wm:02}-{wd:02}")
-        }
-    })
+    let (y, m, d) = parse_date(s)?;
+    Some(bucket_label(y, m, d, b))
 }
 
 #[cfg(test)]

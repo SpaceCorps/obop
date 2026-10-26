@@ -32,6 +32,8 @@ const KINDS: [Kind, string][] = [
   ["number", msg("Number")],
   ["money", msg("Money")],
   ["date", msg("Date")],
+  ["datetime", msg("Date and time")],
+  ["decimal", msg("Exact decimal number")],
   ["bool", msg("Yes / No")],
   ["select", msg("Choice")],
   ["ref", msg("Link to a record")],
@@ -50,6 +52,10 @@ export type DField = {
   /** Target model, for a link. */
   to: string;
   required: boolean;
+  /** For an exact decimal: digits in all, digits after the point, and the import rounding. */
+  precision: string;
+  scale: string;
+  round: string;
 };
 
 const blank = (): DField => ({
@@ -61,6 +67,9 @@ const blank = (): DField => ({
   options: "",
   to: "",
   required: false,
+  precision: "12",
+  scale: "2",
+  round: "",
 });
 
 const listOf = (s: string) =>
@@ -143,6 +152,11 @@ export function manifest(
     if (f.kind !== "text") lines.push(`  kind = ${q(f.kind)}`);
     if (f.kind === "select") lines.push(`  options = [${listOf(f.options).map(q).join(", ")}]`);
     if (f.kind === "ref" && f.to) lines.push(`  to = ${q(f.to)}`);
+    if (f.kind === "decimal") {
+      lines.push(`  precision = ${Number.parseInt(f.precision, 10) || 12}`);
+      lines.push(`  scale = ${Number.parseInt(f.scale, 10) || 0}`);
+      if (f.round) lines.push(`  round = ${q(f.round)}`);
+    }
   }
   if (hasState)
     for (let i = 1; i < statuses.length; i++) {
@@ -246,6 +260,14 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
         return t("Choices for {name} need at least one option", { name: fieldName(f) });
       if (f.kind === "ref" && !f.to)
         return t("Pick the record type that {name} links to", { name: fieldName(f) });
+      if (f.kind === "decimal") {
+        const p = Number.parseInt(f.precision, 10);
+        const s = Number.parseInt(f.scale, 10);
+        if (!(p >= 1 && p <= 38) || !(s >= 0 && s <= 12 && s <= p))
+          return t("{name} needs 1 to 38 digits, of which 0 to 12 after the point", {
+            name: fieldName(f),
+          });
+      }
     }
     return null;
   }
@@ -329,6 +351,39 @@ export function BuildTab({ token, modules, onModulesChanged, notify }: Props) {
                   placeholder={t("options, comma separated")}
                   aria-label={t("Options")}
                 />
+              )}
+              {f.kind === "decimal" && (
+                <div className="frow">
+                  <input
+                    type="number"
+                    min={1}
+                    max={38}
+                    value={f.precision}
+                    onChange={(e) => upd(i, { precision: e.target.value })}
+                    aria-label={t("Digits in all")}
+                    title={t("Digits in all")}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={12}
+                    value={f.scale}
+                    onChange={(e) => upd(i, { scale: e.target.value })}
+                    aria-label={t("Digits after the point")}
+                    title={t("Digits after the point")}
+                  />
+                  <select
+                    value={f.round}
+                    onChange={(e) => upd(i, { round: e.target.value })}
+                    aria-label={t("Rounding when importing")}
+                    title={t("Rounding when importing")}
+                  >
+                    <option value="">{t("Refuse extra digits")}</option>
+                    <option value="half_even">{t("Round half to even")}</option>
+                    <option value="half_up">{t("Round half up")}</option>
+                    <option value="down">{t("Drop extra digits")}</option>
+                  </select>
+                </div>
               )}
               {f.kind === "ref" && (
                 <select

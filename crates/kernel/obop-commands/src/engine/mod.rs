@@ -20,7 +20,9 @@ pub(crate) mod unit;
 
 use crate::{ADMIN_GROUP, ANY_GROUP, ModelMeta, Principal, Store, Value};
 use obop_registry::ModelDef;
+use obop_values::Zones;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 pub(crate) type Models = Arc<RwLock<HashMap<String, ModelMeta>>>;
@@ -36,12 +38,19 @@ pub(crate) fn system_clock() -> ClockFn {
     })
 }
 
+/// The time zone settings of the instance (D72): the database and the platform zone.
+pub(crate) type SharedZones = Arc<RwLock<Arc<Zones>>>;
+
 /// Everything the generated handlers share.
 #[derive(Clone)]
 pub(crate) struct Engine {
     pub store: Store,
     pub models: Models,
     pub clock: Arc<RwLock<ClockFn>>,
+    pub zones: SharedZones,
+    /// Set when a test replaced the clock: `$now` is then whole seconds of that clock, not the
+    /// system time down to the microsecond.
+    pub clock_replaced: Arc<AtomicBool>,
 }
 
 impl Engine {
@@ -51,6 +60,20 @@ impl Engine {
 
     pub fn now(&self) -> i64 {
         (self.clock.read().unwrap())()
+    }
+
+    /// The current time in microseconds since the epoch.
+    pub fn now_micros(&self) -> i64 {
+        if self.clock_replaced.load(Ordering::Relaxed) {
+            return self.now().saturating_mul(1_000_000);
+        }
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_micros() as i64)
+    }
+
+    pub fn zones(&self) -> Arc<Zones> {
+        self.zones.read().unwrap().clone()
     }
 
     pub fn backend(&self) -> &dyn obop_storage::Backend {

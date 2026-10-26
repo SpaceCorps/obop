@@ -4,6 +4,7 @@ mod accounts_cmd;
 #[cfg(test)]
 mod accounts_tests;
 mod app;
+mod backup_cli;
 #[cfg(test)]
 mod blobs_tests;
 #[cfg(test)]
@@ -16,9 +17,12 @@ mod cors_tests;
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
+mod kinds_tests;
+#[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
+mod migrate_cli;
 #[cfg(test)]
 mod model_tests;
 #[cfg(test)]
@@ -32,6 +36,7 @@ mod passkey_tests;
 mod payments_tests;
 #[cfg(test)]
 mod public_site_tests;
+mod storage_cli;
 mod update_cmd;
 #[cfg(test)]
 mod update_tests;
@@ -98,14 +103,79 @@ const USAGE: &str = "usage: obop <command>
       --public-site                             also serve the public website and shop at / (or OBOP_PUBLIC_SITE=1);
                                                 the backoffice then moves to --admin-prefix (default /admin)
       --trust-proxy                             take the client address from X-Forwarded-For (OBOP_TRUST_PROXY=1)
-  migrate status | plan | run [--dry-run] [--db URL]
-                                                schema version of a database and the steps that upgrade it; `run` applies them
-                                                (take a backup first). `serve` refuses a database that needs steps unless started
-                                                with --auto-migrate (default: on for SQLite, off for PostgreSQL; OBOP_AUTO_MIGRATE=0|1)
-  backup --db URL --out DIR|FILE                consistent logical backup (gzip JSON lines + checksum manifest), streamed
-  backup verify FILE                            check a backup's checksums, format and counts
-  restore --db URL --from FILE [--force] [--dry-run]
-                                                restore into an empty database (--force replaces what is there)
+  migrate status | verify | plan [--dry-run] | run [--dry-run] [--db URL]
+                                                schema version of a database, the migration ledger (what ran, when, by whom, with
+                                                which checksum) and the steps that upgrade it; `verify` compares ledger, code and
+                                                version and exits non-zero on drift (a step edited after it ran); `plan` stores the
+                                                plan in the database (--dry-run only prints it); `run` applies the steps (on PostgreSQL
+                                                only through the gates below; with nothing pending it just says so). `serve` refuses a
+                                                database that needs steps unless started with --auto-migrate (default: on for SQLite,
+                                                off for PostgreSQL; OBOP_AUTO_MIGRATE=0|1), which takes a verified backup first when
+                                                OBOP_BACKUP_DIR is set
+  backup --db URL --out DIR|FILE [--plain | --encrypted]
+                                                consistent logical backup, streamed. With OBOP_BACKUP_KEY (or OBOP_SECRET_KEY) it is
+                                                format 2: gzip JSON lines sealed in chunks with ChaCha20-Poly1305 and a manifest with
+                                                a MAC (.obbk). Without a key it is format 1 (plain gzip + checksums) and says so.
+                                                --plain forces format 1, --encrypted refuses to write without a key
+  backup verify FILE [--structure-only] [--canary TEXT] [--allow-plain]
+                                                check a backup: checksums, format, counts; a sealed backup is opened with its key and
+                                                every chunk and the manifest are authenticated (exit 3, restore_key_required, without
+                                                the key). Where a key is configured a plain backup is refused (exit 4, backup_not_sealed:
+                                                anyone who can write the directory could have made it) unless --allow-plain says you
+                                                vouch for it. --structure-only checks a sealed file without a key (integrity, not
+                                                authenticity). --canary TEXT fails if the text is in a sealed file as stored, and always
+                                                for a plain backup (nothing is hidden in it)
+  restore --db URL --from FILE [--force] [--dry-run] [--allow-plain]
+                                                restore into an empty database (--force replaces what is there); a sealed backup
+                                                needs its key (exit 3, restore_key_required, and nothing is written, not even the
+                                                target database, without it); exit 5, restore_files_failed: the records are in, an
+                                                uploaded file could not be written, run it again with --force
+  backup run [--db URL] [--out DIR] [--copy-to DIR]... [--copy-delete] [--keep-daily N] [--keep-weekly N] [--keep-monthly N]
+      [--max-age-days N] [--reason scheduled|manual] [--plain]
+                                                the whole scheduled job once (cron, or a platform's job): back up, read the backup
+                                                back and authenticate it, record it, copy it to every --copy-to (OBOP_BACKUP_COPY_DIR)
+                                                reading each copy back, and apply retention to the scheduled ones (default 35 daily,
+                                                12 monthly, none older than 400 days). `serve` runs the same job on its own timer
+                                                with OBOP_BACKUP_SCHEDULE=24h. A --copy-to that is the --out directory is refused
+  backup list | prune [--dry-run] [--no-sinks] [--keep-daily N] [--keep-weekly N] [--keep-monthly N] [--max-age-days N] [--copy-to DIR]... [--db URL]
+                                                what the instance recorded having taken; apply retention now (--dry-run prints the
+                                                plan of the real run; without the sink configured nothing recorded as copied off the
+                                                host is removed unless --no-sinks)
+  migrate rehearse --from BACKUP [--scratch URL] [--out RECEIPT] [--allow-plain]
+                                                restore the backup into a scratch database (never the production one), run the plan
+                                                there with the drill's checks, report time, longest transaction and records; --out
+                                                writes a receipt signed with the server key for `migrate run --rehearsal` (it names the
+                                                database the backup came from and the engine it ran on; give --scratch a database of
+                                                the same kind as production to time its statements)
+  migrate run [--dry-run] [--gates strict|relaxed] [--backup FILE | --backup-dir DIR] [--rehearsal RECEIPT] [--window] [--disk-ok] [--allow-plain]
+                                                on PostgreSQL (strict) refuses unless a verified backup of this database under 24
+                                                hours old exists (one is taken into --backup-dir / OBOP_BACKUP_DIR), `migrate plan`
+                                                stored this plan, the disk has room, a rehearsal on a backup of this database passed
+                                                and the ledger is clean; records the backup and a restore point in the ledger and a
+                                                `migration_run` line in the security log. With nothing pending it asks for none of it.
+                                                --dry-run needs none of it: it lists what would refuse a real run and what each
+                                                step would do. On SQLite the same checks warn
+  migrate rollback --from BACKUP --reason TEXT [--yes] [--other-database] [--allow-plain] [--db URL]
+                                                replace the database with a verified backup of it and record why in the ledger and the
+                                                security log, in the same transaction as the restore (forward-only migrations: this
+                                                is the way back); a backup of another database is refused unless --other-database
+  drill BACKUP [--scratch URL|temp] [--keep] [--migrate] [--record-in URL] [--plane NAME] [--allow-plain]
+  drill BACKUP ... --record-later FILE | drill --record-from FILE --server ok|skipped|failed --record-in URL
+                                                restore BACKUP into a scratch database and check the copy (counts, a digest of every
+                                                record, schema, ledger, accounts, sealed secrets, uploaded files, a read/write set);
+                                                prints the measured recovery point and time; exits non-zero unless every check passes
+                                                (3: the sealed backup's key is not configured; 4: a plain backup where a key is
+                                                configured). A lent scratch database is emptied again, uploaded files included.
+                                                --record-later keeps the result for a script that has one more check to make;
+                                                --record-from adds that check and records it
+  storage check [--db URL] [--plane NAME] [--strict]
+                                                WAL archiving, TLS and durability settings of the PostgreSQL host; age of the last
+                                                verified backup, its off-host copy and its drill; the storage-encryption attestation
+  storage attest --host H --provider P --mechanism M --custody C --readers R --evidence E [--plane NAME] [--by WHO]
+  storage show                                  record that the storage of a plane is encrypted at rest (AES-256 or stronger, keys
+                                                held outside the reach of database operators): an attestation by a person (--by, default
+                                                the operating system user), not a verification; written to the security log; lists
+                                                attestations and drills
   update check | status [--db URL]              the running core version, the published releases, whether the installed modules fit each
                                                 (their core ranges), and the state of the last update request; never contacts anything
                                                 but the release feed (OBOP_UPDATE_FEED, default https://obop.dev/api/releases)
@@ -134,11 +204,13 @@ const USAGE: &str = "usage: obop <command>
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
   import MODEL FILE.csv [--token TOKEN] [--mode partial] [--dry-run] [--key KEY]
                                                 create many records of MODEL from a CSV file (header = field names, references by id,
-                                                whole numbers, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
+                                                numbers, decimals and date-times as text, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
                                                 check of create. By default one bad row creates nothing; --mode partial keeps the good
                                                 rows; --dry-run only checks; --key makes a retry return the first answer
   commands [--token TOKEN]                      list the commands visible to a token
   call [--token TOKEN] <model> <command> [k=v...]
+                                                values are text, converted by field type; for list and search
+                                                filter, order and aggregate are JSON text (in single quotes)
 global options
   --db URL              sqlite://obop.db (default, local), postgres://user:pass@host/db, memory:
                         (or OBOP_DATABASE_URL)
@@ -350,7 +422,17 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     eprintln!("database: {}", store.backend_kind());
     let seed = o.demo || store.backend_kind() == "sqlite";
     let app = App::with_store(store);
-    app.updater.set_backup(ops::backup_fn(url.clone()));
+    app.set_zones_from_env()
+        .map_err(|e| fail(&format!("error: {e}")))?;
+    app.updater.set_backup(backup_cli::backup_fn(url.clone()));
+    // A module update that rewrites records is preceded by a verified backup (D73).
+    let gate = backup_cli::GateSettings::from_env(app.store.backend_kind())
+        .map_err(|e| fail(&format!("error: {e}")))?;
+    app.installer.set_gate(Arc::new(backup_cli::ModuleGate::new(
+        store_backend_for_gate(&app),
+        app.store.blobs(),
+        gate,
+    )));
     if seed {
         app.seed_demo();
     }
@@ -367,6 +449,10 @@ fn authenticator(app: &App, o: &Opts) -> Arc<dyn Authenticator> {
         app.register_accounts(auth.clone());
         auth
     }
+}
+
+fn store_backend_for_gate(app: &App) -> Arc<dyn obop_storage::Backend> {
+    app.store.backend()
 }
 
 /// The principal for CLI and MCP use: a real token, or a dev token with `--dev-auth`.
@@ -749,6 +835,21 @@ fn commands(o: &Opts) -> Exit {
 }
 
 fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
+    let (value, denied) = call_json(o, model, command, kv)?;
+    println!("{}", serde_json::to_string_pretty(&value).unwrap());
+    if !denied.is_empty() {
+        println!("withheld: {}", denied.join(", "));
+    }
+    Ok(())
+}
+
+/// `obop call`: the answer as JSON and the names of the fields withheld from it.
+fn call_json(
+    o: &Opts,
+    model: &str,
+    command: &str,
+    kv: &[&str],
+) -> Result<(serde_json::Value, Vec<String>), ExitCode> {
     let app = open_app(o)?;
     let p = principal(&app, o)?;
     let id = names::from_cli(&[model, command]).ok_or(ExitCode::from(2))?;
@@ -774,7 +875,7 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
                                 return (k.to_string(), Value::Int(n));
                             }
                         }
-                        "filter" | "order" => {
+                        "filter" | "order" | "aggregate" => {
                             if let Ok(j) = serde_json::from_str(v) {
                                 return (k.to_string(), Value::from_json(&j));
                             }
@@ -795,16 +896,7 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
         .dispatcher
         .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
     {
-        Ok(r) => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&r.value.to_json()).unwrap()
-            );
-            if !r.denied.is_empty() {
-                println!("withheld: {}", r.denied.join(", "));
-            }
-            Ok(())
-        }
+        Ok(r) => Ok((r.value.to_json(), r.denied.clone())),
         Err(e) => Err(fail(&format!("error: {e:?}"))),
     }
 }
@@ -830,6 +922,9 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
             allowed.join(", ")
         );
     }
+    // The settings of the backup timer are read and checked here too, before the database is
+    // opened (and migrated): a typo in them stops the start with nothing written.
+    let scheduler = backup_cli::scheduler_plan().map_err(|e| fail(&format!("error: {e}")))?;
     let app = open_app(o)?;
     let auth = authenticator(&app, o);
     if !o.dev_auth && Auth::new(app.store.backend()).user_count() == 0 {
@@ -854,7 +949,14 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
         }
     );
     state.set_metrics_access(metrics);
+    // On PostgreSQL the WAL archiver's lag and failures are metrics too (D73).
+    if app.store.backend_kind() == "postgres" {
+        let url = o.db.clone().unwrap_or_else(|| "sqlite://obop.db".into());
+        state.set_server_info(Arc::new(obop_ops::pgadmin::Reconnecting::new(&url)));
+    }
     app.connectors.start();
+    // Scheduled backups with an off-host copy and retention, when OBOP_BACKUP_SCHEDULE is set.
+    backup_cli::start_scheduler(scheduler, app.store.backend(), app.store.blobs());
     // Uploads that no record ever claimed, and bytes without metadata, are removed after a day.
     let blobs = app.store.blobs();
     std::thread::spawn(move || {
@@ -1029,6 +1131,9 @@ pub(crate) fn make_provisioner(
                 server_id: env("OBOP_SLIPLANE_SERVER")?,
                 source,
                 marketplace_url: std::env::var("OBOP_MARKETPLACE_URL").ok(),
+                backup_dir: std::env::var("OBOP_INSTANCE_BACKUP_DIR")
+                    .ok()
+                    .filter(|d| !d.trim().is_empty()),
                 poll: sliplane::Config::DEFAULT_POLL,
                 timeout: sliplane::Config::DEFAULT_TIMEOUT,
                 check_reachable: true,
@@ -2808,6 +2913,11 @@ mod bundled_packages {
                     "number" => Value::Int(1),
                     "money" => Value::Int(12_345),
                     "date" => Value::text("2026-01-31"),
+                    "datetime" => Value::text("2026-01-31T09:30:00Z"),
+                    "decimal" => Value::Text(match f.scale.unwrap_or(0) {
+                        0 => "1".to_string(),
+                        n => format!("1.{}", "5".repeat(usize::from(n))),
+                    }),
                     "bool" => Value::Bool(true),
                     "select" => match (f.name, state) {
                         ("state", Some(s)) => Value::text(s),

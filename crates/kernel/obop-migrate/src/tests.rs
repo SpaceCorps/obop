@@ -3,15 +3,15 @@ use obop_keys::legacy;
 
 const KEY: &str = "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a";
 
-fn ring() -> KeyRing {
+pub(crate) fn ring() -> KeyRing {
     KeyRing::from_secrets(KEY, &[]).unwrap()
 }
 
-fn mem() -> Arc<dyn Backend> {
+pub(crate) fn mem() -> Arc<dyn Backend> {
     obop_storage::open("memory:").unwrap()
 }
 
-fn put_log(id: &str) -> Op {
+pub(crate) fn put_log(id: &str) -> Op {
     let mut f = Fields::new();
     f.insert("n".into(), J::from(1));
     Op::Put {
@@ -22,22 +22,20 @@ fn put_log(id: &str) -> Op {
 }
 
 /// Three steps that each leave a mark in the `log` model.
-fn marking() -> Vec<Step> {
+pub(crate) fn marking() -> Vec<Step> {
     vec![
-        Step {
-            version: 1,
-            name: "one",
-            run: Run::Ops(|_| Ok(vec![put_log("one")])),
-        },
-        Step {
-            version: 2,
-            name: "two",
-            run: Run::Ops(|_| Ok(vec![put_log("two-a"), put_log("two-b")])),
-        },
-        Step {
-            version: 3,
-            name: "three",
-            run: Run::Direct(|c| {
+        Step::new(1, "one", Run::Ops(|_| Ok(vec![put_log("one")]))).source("fn one() {}"),
+        Step::new(
+            2,
+            "two",
+            Run::Ops(|_| Ok(vec![put_log("two-a"), put_log("two-b")])),
+        )
+        .class(Class::Backfill)
+        .source("fn two() {}"),
+        Step::new(
+            3,
+            "three",
+            Run::Direct(|c| {
                 if c.dry_run {
                     return Ok("would mark".into());
                 }
@@ -45,11 +43,12 @@ fn marking() -> Vec<Step> {
                 c.backend.apply(&[put_log("three")])?;
                 Ok("done".into())
             }),
-        },
+        )
+        .source("fn three() {}"),
     ]
 }
 
-fn version(b: &Arc<dyn Backend>) -> Option<u64> {
+pub(crate) fn version(b: &Arc<dyn Backend>) -> Option<u64> {
     b.get(META_MODEL, META_ID)
         .unwrap()
         .and_then(|f| f["version"].as_u64())

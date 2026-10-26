@@ -160,6 +160,9 @@ fn check_value(
             crate::blobs::check_field_value(store, model, name, kind, id)
         }
         (FieldKind::Date, Value::Text(t)) if is_valid_date(t) => Ok(()),
+        (FieldKind::Decimal { .. } | FieldKind::Datetime, Value::Text(t)) => {
+            crate::kinds::check_canonical(model, name, kind, t)
+        }
         (FieldKind::Select(o), Value::Text(t)) if o.contains(&t.as_str()) => Ok(()),
         (FieldKind::Ref(to), Value::Text(id))
             if pending.iter().any(|(m, i)| m == to && i == id) =>
@@ -228,6 +231,8 @@ impl Dispatcher {
             store: store.clone(),
             models: self.models.clone(),
             clock: self.clock.0.clone(),
+            zones: self.zones.clone(),
+            clock_replaced: self.clock_replaced.clone(),
         }
     }
 
@@ -347,7 +352,7 @@ impl Dispatcher {
                     &module.id,
                     &format!("{}.{c}", def.name),
                     false,
-                    guards::query_guard(def),
+                    guards::query_guard(def, &eng),
                 );
             }
         }
@@ -516,7 +521,7 @@ mod tests {
     #[test]
     fn money_must_be_an_integer() {
         let (d, _, u) = setup();
-        // A JSON float reaches the store as non-integer text, so it is not an integer either.
+        // A JSON float reaches the commands as `Value::Num`, which no kind accepts (D72).
         let float: serde_json::Value = serde_json::json!(12.5);
         rejects(
             deal(&d, &u, vec![("price", Value::from_json(&float))]),

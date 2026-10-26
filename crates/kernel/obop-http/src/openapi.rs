@@ -222,17 +222,45 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             let mut required = Vec::new();
             for f in &model.fields {
                 let options: Vec<String> = f.options.iter().map(|o| o.to_string()).collect();
-                let mut sch = kind_schema(
-                    f.kind,
-                    (!options.is_empty()).then_some(options.as_slice()),
-                    f.to,
-                );
+                let mut sch = match f.kind {
+                    // Exact decimals travel as strings (D72), never as JSON numbers.
+                    "decimal" => json!({
+                        "type": "string",
+                        "pattern": f.decimal_pattern(),
+                        "example": f.decimal_example(),
+                    }),
+                    "datetime" => json!({
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-03-29T01:30:00.000000Z",
+                    }),
+                    _ => kind_schema(
+                        f.kind,
+                        (!options.is_empty()).then_some(options.as_slice()),
+                        f.to,
+                    ),
+                };
                 let desc = if f.personal_data {
                     format!("{} (personal data: agents see it masked)", f.description)
                 } else {
                     f.description.to_string()
                 };
                 let mut desc = desc;
+                match f.kind {
+                    "decimal" => desc.push_str(&format!(
+                        " (an exact decimal as a string, never a JSON number: at most {} digits, {} after the point; answers always carry exactly {} fractional digits and input with more is refused{})",
+                        f.precision.unwrap_or(0),
+                        f.scale.unwrap_or(0),
+                        f.scale.unwrap_or(0),
+                        f.round.map_or(String::new(), |r| format!(
+                            ", except in bulk_create and obop import, which round with {r}"
+                        )),
+                    )),
+                    "datetime" => desc.push_str(
+                        " (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    ),
+                    _ => {}
+                }
                 if f.computed {
                     desc.push_str(" (computed when read; read-only)");
                     sch["readOnly"] = J::from(true);
@@ -290,7 +318,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             );
             paths.insert(
                 format!("/api/{name}/search"),
-                op("search", &format!("Search {name} records with filter, order, limit and offset"), Some(json_body(json!({"type": "object", "properties": {"filter": {"type": "array", "items": {"type": "object", "required": ["field", "op"], "properties": {"field": {"type": "string"}, "op": {"type": "string", "enum": ["eq", "ne", "contains", "in", "gt", "gte", "lt", "lte", "is_null"]}, "value": {}}}}, "order": {"type": "array", "items": {"type": "object", "properties": {"field": {"type": "string"}, "dir": {"type": "string", "enum": ["asc", "desc"]}}}}, "limit": {"type": "integer", "minimum": 1, "maximum": 5000}, "offset": {"type": "integer", "minimum": 0}, "lang": {"type": "string", "description": "BCP-47 tag that picks the text collation"}, "aggregate": {"type": "object", "description": "Groups with counts and sums over every matching record instead of rows", "properties": {"group_by": {"type": "array", "maxItems": 2, "items": {"oneOf": [{"type": "string"}, {"type": "object", "required": ["field"], "properties": {"field": {"type": "string"}, "bucket": {"type": "string", "enum": ["day", "week", "month"]}}}]}}, "measures": {"type": "array", "maxItems": 8, "items": {"type": "object", "required": ["op"], "properties": {"op": {"type": "string", "enum": ["count", "sum", "min", "max"]}, "field": {"type": "string"}}}}}}}}))), ok(json!({"type": "object", "properties": {"value": {"type": "object", "properties": {"rows": {"type": "array", "items": {"$ref": format!("#/components/schemas/{name}")}}, "total": {"type": "integer"}, "groups": {"type": "array", "items": {"type": "object", "properties": {"key": {"type": "object"}, "count": {"type": "integer"}, "measures": {"type": "object"}}}}}}}}), "A page of records and the total.")),
+                op("search", &format!("Search {name} records with filter, order, limit and offset"), Some(json_body(json!({"type": "object", "properties": {"filter": {"type": "array", "items": {"type": "object", "required": ["field", "op"], "properties": {"field": {"type": "string"}, "op": {"type": "string", "enum": ["eq", "ne", "contains", "in", "gt", "gte", "lt", "lte", "is_null"]}, "value": {}, "bucket": {"type": "string", "enum": ["day", "week", "iso_week", "month", "year"], "description": "On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion"}, "zone": {"type": "string", "description": "With bucket on a datetime: an IANA zone name, default the platform zone"}}}}, "order": {"type": "array", "items": {"type": "object", "properties": {"field": {"type": "string"}, "dir": {"type": "string", "enum": ["asc", "desc"]}}}}, "limit": {"type": "integer", "minimum": 1, "maximum": 5000}, "offset": {"type": "integer", "minimum": 0}, "lang": {"type": "string", "description": "BCP-47 tag that picks the text collation"}, "aggregate": {"type": "object", "description": "Groups with counts and sums over every matching record instead of rows", "properties": {"group_by": {"type": "array", "maxItems": 2, "items": {"oneOf": [{"type": "string"}, {"type": "object", "required": ["field"], "properties": {"field": {"type": "string"}, "bucket": {"type": "string", "enum": ["day", "week", "iso_week", "month", "year"]}, "zone": {"type": "string", "description": "IANA zone name for a datetime, default the platform zone"}}}]}}, "measures": {"type": "array", "maxItems": 8, "items": {"type": "object", "required": ["op"], "properties": {"op": {"type": "string", "enum": ["count", "sum", "min", "max", "avg"]}, "field": {"type": "string"}, "scale": {"type": "integer", "minimum": 0, "maximum": 12, "description": "avg only"}, "round": {"type": "string", "enum": ["half_even", "half_up", "down"], "description": "avg only"}}}}}}}}))), ok(json!({"type": "object", "properties": {"value": {"type": "object", "properties": {"rows": {"type": "array", "items": {"$ref": format!("#/components/schemas/{name}")}}, "total": {"type": "integer"}, "groups": {"type": "array", "items": {"type": "object", "properties": {"key": {"type": "object"}, "count": {"type": "integer"}, "measures": {"type": "object"}}}}}}}}), "A page of records and the total.")),
             );
             paths.insert(
                 format!("/api/{name}/get"),
@@ -313,7 +341,18 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 );
             }
             if model.can_bulk_create {
-                let mut row = json!({"type": "object", "properties": input_props.clone()});
+                // A decimal that rounds on import takes any number of fractional digits here.
+                let mut row_props = input_props.clone();
+                for f in model
+                    .fields
+                    .iter()
+                    .filter(|f| f.kind == "decimal" && f.round.is_some())
+                {
+                    if let Some(p) = row_props.get_mut(f.name) {
+                        p["pattern"] = json!(f.decimal_import_pattern());
+                    }
+                }
+                let mut row = json!({"type": "object", "properties": row_props});
                 if !required.is_empty() {
                     row["required"] = json!(required);
                 }
@@ -324,7 +363,7 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                         &format!("Create up to 1000 {name} records in one call; all or nothing unless mode is partial"),
                         Some(json_body(json!({"type": "object", "properties": {
                             "rows": {"type": "array", "maxItems": 1000, "items": row},
-                            "csv": {"type": "string", "description": "Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB)"},
+                            "csv": {"type": "string", "description": "Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits"},
                             "mode": {"type": "string", "enum": ["all_or_nothing", "partial"]},
                             "dry_run": {"type": "boolean"},
                             "idempotency_key": {"type": "string", "maxLength": 128}
