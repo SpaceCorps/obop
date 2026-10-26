@@ -30,7 +30,7 @@ jobs:
       - run: cargo test --locked
       - name: Install gate over every linked module
         run: cargo run --locked -q -- modules check
-      - name: Restore drill (B4, D73): back up a PostgreSQL database sealed and plain, restore each into a scratch one, check the copy, serve it
+      - name: "Restore drill (B4, D73): back up a PostgreSQL database sealed and plain, restore each into a scratch one, check the copy, serve it"
         env:
           DRILL_ADMIN_URL: postgres://postgres:obop-test@127.0.0.1:5432/postgres
           OBOP: target/debug/obop
