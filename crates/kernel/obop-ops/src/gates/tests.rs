@@ -189,7 +189,11 @@ fn a_strict_run_with_a_backup_a_stored_plan_and_a_rehearsal_runs_and_records_the
     assert!(!dir.p("backups").exists());
     let dry = g.run(true, &mut |_| {}).unwrap();
     assert!(dry.backup.is_none() && dry.would_refuse.is_empty());
-    assert_eq!(dry.applied.len(), 2, "a dry run says what each step would do");
+    assert_eq!(
+        dry.applied.len(),
+        2,
+        "a dry run says what each step would do"
+    );
     assert_eq!(g.migrator().status().unwrap().stored, None);
     // The run.
     let mut said = Vec::new();
@@ -245,7 +249,9 @@ fn a_receipt_cannot_be_edited_forged_or_used_for_another_plan_or_after_a_week() 
         serde_json::from_str(&std::fs::read_to_string(dir.p("receipt.json")).unwrap()).unwrap();
     // Edited: the plan id swapped for the right one in a receipt of another plan.
     let mut forged = good.clone();
-    forged["longest_step_ms"] = J::from(1);
+    // A value that differs from the measured one whatever it was (a fixed 1 equals it when the
+    // longest step really took 1 ms, and the "forged" receipt would then authenticate).
+    forged["longest_step_ms"] = J::from(good["longest_step_ms"].as_u64().unwrap() + 1);
     std::fs::write(dir.p("receipt.json"), forged.to_string()).unwrap();
     assert!(
         verdict(&g).detail.contains("does not authenticate"),
@@ -452,7 +458,10 @@ fn a_held_lock_a_newer_database_a_drifted_ledger_and_a_missing_window_each_stop_
     let held = b3.lock("obop.migrate").unwrap();
     let (_, c3) = g3.preflight().unwrap();
     assert_eq!(check(&c3, "lock").level, Level::Fail, "{c3:?}");
-    assert!(g3.run(false, &mut |_| {}).is_err(), "a held lock stops the run");
+    assert!(
+        g3.run(false, &mut |_| {}).is_err(),
+        "a held lock stops the run"
+    );
     drop(held);
     g3.options.lock_wait = Duration::from_secs(5);
     assert_eq!(check(&g3.preflight().unwrap().1, "lock").level, Level::Pass);
@@ -603,7 +612,8 @@ fn a_server_that_migrates_itself_takes_a_verified_backup_first_when_it_has_a_dir
     let said = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
     let say = {
         let said = said.clone();
-        Arc::new(move |l: &str| said.lock().unwrap().push(l.to_string())) as Arc<dyn Fn(&str) + Send + Sync>
+        Arc::new(move |l: &str| said.lock().unwrap().push(l.to_string()))
+            as Arc<dyn Fn(&str) + Send + Sync>
     };
     let pending = obop_migrate::Pending {
         stored: 0,
@@ -624,8 +634,15 @@ fn a_server_that_migrates_itself_takes_a_verified_backup_first_when_it_has_a_dir
     };
     // No directory: no backup, and the caller is told so.
     assert_eq!(hook(None, None)(&pending).unwrap(), None);
-    assert!(said.lock().unwrap().iter().any(|l| l.contains("without a backup")));
-    let id = hook(Some(dir.p("backups")), None)(&pending).unwrap().unwrap();
+    assert!(
+        said.lock()
+            .unwrap()
+            .iter()
+            .any(|l| l.contains("without a backup"))
+    );
+    let id = hook(Some(dir.p("backups")), None)(&pending)
+        .unwrap()
+        .unwrap();
     assert!(
         id.starts_with("obop-backup-20261025T120000Z") && id.ends_with(".obbk"),
         "{id}"
@@ -637,8 +654,13 @@ fn a_server_that_migrates_itself_takes_a_verified_backup_first_when_it_has_a_dir
     );
     // A volume with no room for it stops the migration before anything is written.
     let e = hook(Some(dir.p("backups2")), Some(u64::MAX / 4))(&pending).unwrap_err();
-    assert!(e.contains("free") && e.contains("nothing was migrated"), "{e}");
-    assert!(!dir.p("backups2").exists() || std::fs::read_dir(dir.p("backups2")).unwrap().count() == 0);
+    assert!(
+        e.contains("free") && e.contains("nothing was migrated"),
+        "{e}"
+    );
+    assert!(
+        !dir.p("backups2").exists() || std::fs::read_dir(dir.p("backups2")).unwrap().count() == 0
+    );
 }
 
 /// A server that cannot migrate must not write a full backup at every start: a refused start
@@ -737,7 +759,18 @@ fn a_rollback_restores_the_verified_backup_and_records_why_and_what_was_discarde
     // A reason is required, and a backup that does not open changes nothing.
     for bad in ["", "   ", "two\nlines"] {
         assert!(
-            rollback(&b, None, &ring(), &bk, &keys(), bad, "operator", false, &*clock).is_err(),
+            rollback(
+                &b,
+                None,
+                &ring(),
+                &bk,
+                &keys(),
+                bad,
+                "operator",
+                false,
+                &*clock
+            )
+            .is_err(),
             "{bad:?}"
         );
     }
@@ -836,12 +869,21 @@ fn a_strict_run_with_nothing_pending_is_a_successful_no_op_that_asks_for_nothing
         assert!(ran.plan.is_empty() && ran.backup.is_none() && ran.applied.is_empty());
         assert!(ran.would_refuse.is_empty());
         let names: Vec<&str> = ran.checks.iter().map(|c| c.name).collect();
-        assert_eq!(names, ["schema", "ledger"], "only what concerns the database");
+        assert_eq!(
+            names,
+            ["schema", "ledger"],
+            "only what concerns the database"
+        );
     }
     // It still refuses a database that is newer than this build, and a drifted ledger.
     let mut older = Gate {
         steps: Some(obop_migrate::steps()[..1].to_vec()),
-        ..gate(&g.backend, "postgres://u@h/db", &Arc::new(FakeClock::at(T0)), Mode::Strict)
+        ..gate(
+            &g.backend,
+            "postgres://u@h/db",
+            &Arc::new(FakeClock::at(T0)),
+            Mode::Strict,
+        )
     };
     older.server = Some(Arc::new(FakeServer::well_configured()));
     assert!(older.run(false, &mut |_| {}).is_err());
@@ -859,7 +901,12 @@ fn a_dry_run_is_a_preview_that_lists_what_would_refuse_and_what_each_step_would_
     for n in ["plan_stored", "backup", "rehearsal"] {
         assert!(refused.contains(n), "{n}: {refused}");
     }
-    assert_eq!(ran.applied.len(), 2, "what each step would do: {:?}", ran.applied);
+    assert_eq!(
+        ran.applied.len(),
+        2,
+        "what each step would do: {:?}",
+        ran.applied
+    );
     assert!(ran.applied.iter().all(|(_, _, what)| !what.is_empty()));
     // Nothing was written: no version, no ledger row, no plan, no name.
     assert_eq!(g.migrator().status().unwrap().stored, None);
@@ -874,9 +921,13 @@ fn a_backup_and_a_receipt_of_another_database_do_not_satisfy_the_gate() {
     // This database, named; another one, named differently, with different records.
     let (b, url) = old_db(&dir);
     let other = obop_storage::open(&dir.url("other.db")).unwrap();
-    other.insert("party", "x1", &f(json!({"name": "Else"}))).unwrap();
+    other
+        .insert("party", "x1", &f(json!({"name": "Else"})))
+        .unwrap();
     for db in [&b, &other] {
-        Migrator::new(db.clone(), ring()).ensure_instance_id().unwrap();
+        Migrator::new(db.clone(), ring())
+            .ensure_instance_id()
+            .unwrap();
     }
     let clock = Arc::new(FakeClock::at(T0));
     let theirs = backup_now(&other, &dir, "theirs", &clock);
@@ -889,7 +940,11 @@ fn a_backup_and_a_receipt_of_another_database_do_not_satisfy_the_gate() {
     g.options.backup_file = Some(theirs.clone());
     let (_, c) = g.preflight().unwrap();
     assert_eq!(check(&c, "backup").level, Level::Fail);
-    assert!(check(&c, "backup").detail.contains("another database"), "{}", check(&c, "backup").detail);
+    assert!(
+        check(&c, "backup").detail.contains("another database"),
+        "{}",
+        check(&c, "backup").detail
+    );
     // (b) A rehearsal receipt made from the backup of the other database.
     let rr = rehearse_to_receipt(&g, &theirs, &dir.p("r-theirs.json"), None);
     assert!(rr.passed);
@@ -899,7 +954,9 @@ fn a_backup_and_a_receipt_of_another_database_do_not_satisfy_the_gate() {
     assert_eq!(check(&c, "backup").level, Level::Pass);
     assert_eq!(check(&c, "rehearsal").level, Level::Fail);
     assert!(
-        check(&c, "rehearsal").detail.contains("not of this database"),
+        check(&c, "rehearsal")
+            .detail
+            .contains("not of this database"),
         "{}",
         check(&c, "rehearsal").detail
     );
@@ -912,7 +969,8 @@ fn a_backup_and_a_receipt_of_another_database_do_not_satisfy_the_gate() {
     let ran = g.run(false, &mut |_| {}).unwrap();
     assert_eq!(ran.applied.len(), 2);
     // A receipt says what it rehearsed on.
-    let j: J = serde_json::from_str(&std::fs::read_to_string(dir.p("r-mine.json")).unwrap()).unwrap();
+    let j: J =
+        serde_json::from_str(&std::fs::read_to_string(dir.p("r-mine.json")).unwrap()).unwrap();
     assert_eq!(j["engine"], "sqlite");
     assert!(j["records"].as_u64().unwrap() >= 2);
     assert_eq!(j["database_id"].as_str().unwrap().len(), 32);
@@ -925,15 +983,24 @@ fn a_backup_from_before_databases_had_names_cannot_be_tied_to_one_and_is_refused
     let clock = Arc::new(FakeClock::at(T0));
     // Taken before the database had an id: the manifest names none.
     let old = backup_now(&b, &dir, "old", &clock);
-    Migrator::new(b.clone(), ring()).ensure_instance_id().unwrap();
+    Migrator::new(b.clone(), ring())
+        .ensure_instance_id()
+        .unwrap();
     let mut g = gate(&b, &url, &clock, Mode::Strict);
     g.options.backup_file = Some(old);
     let (_, c) = g.preflight().unwrap();
     assert_eq!(check(&c, "backup").level, Level::Fail);
-    assert!(check(&c, "backup").detail.contains("no database id"), "{}", check(&c, "backup").detail);
+    assert!(
+        check(&c, "backup").detail.contains("no database id"),
+        "{}",
+        check(&c, "backup").detail
+    );
     // Relaxed (development) mode only warns.
     g.options.mode = Mode::Relaxed;
-    assert_eq!(check(&g.preflight().unwrap().1, "backup").level, Level::Warn);
+    assert_eq!(
+        check(&g.preflight().unwrap().1, "backup").level,
+        Level::Warn
+    );
 }
 
 #[test]
@@ -941,7 +1008,9 @@ fn a_rehearsal_on_another_engine_than_production_is_said_and_the_gate_warns() {
     let dir = Dir::new("engine");
     let (b, url) = old_db(&dir);
     let clock = Arc::new(FakeClock::at(T0));
-    Migrator::new(b.clone(), ring()).ensure_instance_id().unwrap();
+    Migrator::new(b.clone(), ring())
+        .ensure_instance_id()
+        .unwrap();
     let bk = backup_now(&b, &dir, "r", &clock);
     let mut g = gate(&b, &url, &clock, Mode::Relaxed);
     plan_and_store(&g);
@@ -950,10 +1019,16 @@ fn a_rehearsal_on_another_engine_than_production_is_said_and_the_gate_warns() {
     assert!(r.render().contains("in sqlite"));
     g.options.receipt = Some(dir.p("r.json"));
     let (_, c) = g.preflight().unwrap();
-    assert!(c.iter().all(|x| x.name != "rehearsal_engine"), "same engine: nothing to say");
+    assert!(
+        c.iter().all(|x| x.name != "rehearsal_engine"),
+        "same engine: nothing to say"
+    );
     // The same receipt offered to a production of another kind.
     let pg_like = obop_storage::open("memory:").unwrap();
-    let id = Migrator::new(b.clone(), ring()).instance_id().unwrap().unwrap();
+    let id = Migrator::new(b.clone(), ring())
+        .instance_id()
+        .unwrap()
+        .unwrap();
     pg_like
         .insert(
             obop_migrate::META_MODEL,
@@ -965,10 +1040,16 @@ fn a_rehearsal_on_another_engine_than_production_is_said_and_the_gate_warns() {
     p.options.receipt = Some(dir.p("r.json"));
     // The memory backend is "memory", the receipt says "sqlite".
     let plan = p.migrator().plan().unwrap();
-    assert_eq!(plan.id, r.plan.id, "same pending steps, so the plan id is the same");
+    assert_eq!(
+        plan.id, r.plan.id,
+        "same pending steps, so the plan id is the same"
+    );
     let (_, c) = p.preflight().unwrap();
     assert_eq!(check(&c, "rehearsal_engine").level, Level::Warn);
-    assert!(check(&c, "rehearsal_engine").detail.contains("sqlite") && check(&c, "rehearsal_engine").detail.contains("memory"));
+    assert!(
+        check(&c, "rehearsal_engine").detail.contains("sqlite")
+            && check(&c, "rehearsal_engine").detail.contains("memory")
+    );
 }
 
 #[test]
@@ -982,11 +1063,18 @@ fn a_postgresql_gate_does_not_fail_open_when_the_server_cannot_be_asked() {
     assert!(check(&c, "server").detail.contains("could not be asked"));
     // The attestation of the disk is still asked for, whether or not the server answers.
     assert_eq!(check(&c, "disk_database").level, Level::Fail);
-    assert!(check(&c, "disk_database").detail.contains("could not be asked about itself"));
+    assert!(
+        check(&c, "disk_database")
+            .detail
+            .contains("could not be asked about itself")
+    );
     // Relaxed: a warning.
     let mut r = gate(&b, "postgres://u@h/db", &clock, Mode::Relaxed);
     r.options.disk_attested = true;
-    assert_eq!(check(&r.preflight().unwrap().1, "server").level, Level::Warn);
+    assert_eq!(
+        check(&r.preflight().unwrap().1, "server").level,
+        Level::Warn
+    );
 }
 
 #[test]
@@ -1011,7 +1099,12 @@ fn a_backup_directory_with_too_little_room_blocks_a_strict_run_and_only_warns_a_
     assert_eq!(check(&c, "disk_backup").level, Level::Fail);
     pg.options.mode = Mode::Relaxed;
     let (_, c) = pg.preflight().unwrap();
-    assert_eq!(check(&c, "disk_backup").level, Level::Warn, "{}", check(&c, "disk_backup").detail);
+    assert_eq!(
+        check(&c, "disk_backup").level,
+        Level::Warn,
+        "{}",
+        check(&c, "disk_backup").detail
+    );
     // Not asked at all when a backup file is given instead.
     pg.options.backup_file = Some(dir.p("whatever"));
     let (_, c) = pg.preflight().unwrap();
@@ -1024,20 +1117,51 @@ fn a_rollback_is_one_transaction_with_its_record_and_is_refused_for_another_data
     let dir = Dir::new("rb2");
     let (b, url) = old_db(&dir);
     let clock = Arc::new(FakeClock::at(T0));
-    Migrator::new(b.clone(), ring()).ensure_instance_id().unwrap();
-    gate(&b, &url, &clock, Mode::Relaxed).run(false, &mut |_| {}).unwrap();
-    b.insert("party", "oops", &f(json!({"name": "bad"}))).unwrap();
+    Migrator::new(b.clone(), ring())
+        .ensure_instance_id()
+        .unwrap();
+    gate(&b, &url, &clock, Mode::Relaxed)
+        .run(false, &mut |_| {})
+        .unwrap();
+    b.insert("party", "oops", &f(json!({"name": "bad"})))
+        .unwrap();
     // A backup of another database is refused, whatever the flags of the CLI, and changes nothing.
     let other = obop_storage::open(&dir.url("other.db")).unwrap();
     other.insert("party", "x1", &f(json!({}))).unwrap();
-    Migrator::new(other.clone(), ring()).ensure_instance_id().unwrap();
+    Migrator::new(other.clone(), ring())
+        .ensure_instance_id()
+        .unwrap();
     let theirs = backup_now(&other, &dir, "theirs", &clock);
-    let e = rollback(&b, None, &ring(), &theirs, &keys(), "wrong file", "operator", false, &*clock)
-        .unwrap_err();
-    assert!(e.contains("another database") && e.contains("--other-database"), "{e}");
+    let e = rollback(
+        &b,
+        None,
+        &ring(),
+        &theirs,
+        &keys(),
+        "wrong file",
+        "operator",
+        false,
+        &*clock,
+    )
+    .unwrap_err();
+    assert!(
+        e.contains("another database") && e.contains("--other-database"),
+        "{e}"
+    );
     assert!(b.get("party", "oops").unwrap().is_some(), "untouched");
     // On purpose, with the flag, it goes ahead.
-    let done = rollback(&b, None, &ring(), &theirs, &keys(), "replace by a copy", "operator", true, &*clock).unwrap();
+    let done = rollback(
+        &b,
+        None,
+        &ring(),
+        &theirs,
+        &keys(),
+        "replace by a copy",
+        "operator",
+        true,
+        &*clock,
+    )
+    .unwrap();
     assert!(done.authenticated);
     assert!(b.get("party", "x1").unwrap().is_some());
     // The restore and its two records are one transaction: a failure after the import commits
@@ -1048,21 +1172,48 @@ fn a_rollback_is_one_transaction_with_its_record_and_is_refused_for_another_data
     fb.insert("party", "p1", &f(json!({}))).unwrap();
     let bkm = backup_now(&fb, &dir, "m", &clock);
     fb.insert("party", "p2", &f(json!({}))).unwrap();
-    let e = rollback(&fb, None, &ring(), &bkm, &Keys::none(), "no key", "operator", false, &*clock).unwrap_err();
+    let e = rollback(
+        &fb,
+        None,
+        &ring(),
+        &bkm,
+        &Keys::none(),
+        "no key",
+        "operator",
+        false,
+        &*clock,
+    )
+    .unwrap_err();
     assert!(e.starts_with("restore_key_required"), "{e}");
     assert!(fb.list("security_event").unwrap().is_empty());
     assert!(
-        fb.list(obop_migrate::ledger::MODEL).unwrap().iter().all(|(id, _)| !id.starts_with("core/rollback-"))
+        fb.list(obop_migrate::ledger::MODEL)
+            .unwrap()
+            .iter()
+            .all(|(id, _)| !id.starts_with("core/rollback-"))
     );
     // And the migration lock is held while it runs: another taker cannot interleave.
     let held = fb.lock("obop.migrate").unwrap();
     let fb2 = fb.clone();
     let (bkm2, clock2) = (bkm.clone(), clock.clone());
     let t = std::thread::spawn(move || {
-        rollback(&fb2, None, &ring(), &bkm2, &keys(), "waits", "operator", false, &*clock2)
+        rollback(
+            &fb2,
+            None,
+            &ring(),
+            &bkm2,
+            &keys(),
+            "waits",
+            "operator",
+            false,
+            &*clock2,
+        )
     });
     std::thread::sleep(Duration::from_millis(300));
-    assert!(!t.is_finished(), "the rollback waits for the migration lock");
+    assert!(
+        !t.is_finished(),
+        "the rollback waits for the migration lock"
+    );
     drop(held);
     t.join().unwrap().unwrap();
     assert!(fb.get("party", "p2").unwrap().is_none());

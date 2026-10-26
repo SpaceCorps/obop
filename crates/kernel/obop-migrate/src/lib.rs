@@ -50,8 +50,9 @@ const LOCK: &str = "obop.migrate";
 /// Models only the operator commands write: a database that holds nothing else is still new. The
 /// catalogue models are named in `obop-ops` (`catalog.rs`), which cannot be imported here; a test
 /// there keeps this list equal to them.
-pub const OPERATOR_MODELS: [&str; 5] = [
+pub const OPERATOR_MODELS: [&str; 6] = [
     ledger::PLAN_MODEL,
+    "security_event",
     "obop_backup",
     "obop_restore_drill",
     "obop_storage_attestation",
@@ -794,9 +795,7 @@ impl Migrator {
         // Now it is certain that steps will run and nothing else stops them: the backup of a
         // server that migrates itself is taken here, under the lock, once, and only if needed.
         let mut hooked: Option<RunOptions> = None;
-        if !dry_run
-            && let Some(before) = &opts.before
-        {
+        if !dry_run && let Some(before) = &opts.before {
             let pending: Vec<(u32, &'static str)> = self
                 .steps
                 .iter()

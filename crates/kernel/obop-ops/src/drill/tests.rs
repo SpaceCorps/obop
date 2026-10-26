@@ -458,7 +458,7 @@ fn a_lent_sqlite_scratch_database_loses_the_uploaded_files_of_the_drill_too() {
     };
     let r = run(&o).unwrap();
     assert!(r.passed(), "{}", r.render());
-    assert_eq!(check(&r, "files").ok, true);
+    assert!(check(&r, "files").ok);
     drop(r);
     assert_eq!(obop_storage::open(&url).unwrap().total().unwrap(), 0);
     let files = obop_storage::blob::open_bytes(&url, None)

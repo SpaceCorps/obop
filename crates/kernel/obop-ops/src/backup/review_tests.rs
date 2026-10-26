@@ -76,7 +76,10 @@ fn a_plain_pair_is_refused_when_the_instance_seals_its_backups_and_a_forged_one_
     )
     .unwrap_err();
     assert_eq!(error_code(&e), Some(NOT_SEALED), "{e}");
-    assert!(real.get("auth_user", "ada").unwrap().is_some(), "not replaced");
+    assert!(
+        real.get("auth_user", "ada").unwrap().is_some(),
+        "not replaced"
+    );
 
     // The sealed pair is as before.
     assert!(
@@ -192,9 +195,7 @@ fn a_sealed_backup_is_not_given_a_gz_name() {
         )
         .is_ok()
     );
-    assert!(
-        create_sealed(&src, None, 2, &dir.path("n.obbk"), &keys(KA), &mut |_| {}).is_ok()
-    );
+    assert!(create_sealed(&src, None, 2, &dir.path("n.obbk"), &keys(KA), &mut |_| {}).is_ok());
     let c = create_sealed(&src, None, 2, &dir.path("dir"), &keys(KA), &mut |_| {}).unwrap();
     assert!(c.data_path.to_string_lossy().ends_with(".obbk"));
 }
@@ -249,7 +250,10 @@ fn part_files_of_a_killed_run_are_swept_by_the_next_backup_and_other_files_are_n
     }
     create_sealed(&src, None, 2, &out.join("n.obbk"), &keys(KA), &mut |_| {}).unwrap();
     assert!(!stale.exists(), "idle for hours: a run that died");
-    assert!(fresh.exists(), "written to a moment ago: maybe still running");
+    assert!(
+        fresh.exists(),
+        "written to a moment ago: maybe still running"
+    );
     assert!(other.exists(), "not a backup's part file");
 }
 
@@ -333,9 +337,13 @@ fn an_upload_that_rotted_on_disk_is_left_out_and_named_and_verify_checks_every_f
     )
     .unwrap();
     assert_eq!(c.manifest.blobs, 2, "the damaged file is not in the backup");
-    assert_eq!(c.manifest.blobs_damaged, [rotten.id.clone()]);
+    assert_eq!(c.manifest.blobs_damaged, std::slice::from_ref(&rotten.id));
     let j: J = serde_json::from_str(&std::fs::read_to_string(&c.manifest_path).unwrap()).unwrap();
-    assert_eq!(j["blobs_damaged"][0], rotten.id.as_str(), "named in the manifest");
+    assert_eq!(
+        j["blobs_damaged"][0],
+        rotten.id.as_str(),
+        "named in the manifest"
+    );
     // It verifies, and it restores: both files come back, in one go, not just the first.
     verify_with(&c.data_path, &keys(KA)).unwrap();
     let dst = dir.sqlite("dst.db");
@@ -441,7 +449,10 @@ fn a_restore_can_carry_the_callers_rows_in_its_own_transaction_and_reports_authe
     assert!(r.authenticated);
     assert!(target.get("old", "o1").unwrap().is_none(), "replaced");
     assert_eq!(
-        target.get("obop_migration", "core/rollback-1").unwrap().unwrap()["note"],
+        target
+            .get("obop_migration", "core/rollback-1")
+            .unwrap()
+            .unwrap()["note"],
         "because"
     );
     assert_eq!(target.total().unwrap(), c.manifest.records + 1);
@@ -474,10 +485,7 @@ fn files_failing_to_write_after_the_records_say_so_and_can_be_retried() {
         fn put(&self, _: &str, _: &[u8]) -> obop_storage::Result<()> {
             Err("no space left on device".into())
         }
-        fn open(
-            &self,
-            _: &str,
-        ) -> obop_storage::Result<Option<Box<dyn std::io::Read + Send>>> {
+        fn open(&self, _: &str) -> obop_storage::Result<Option<Box<dyn std::io::Read + Send>>> {
             Ok(None)
         }
         fn delete(&self, _: &str) -> obop_storage::Result<bool> {
@@ -527,7 +535,11 @@ fn files_failing_to_write_after_the_records_say_so_and_can_be_retried() {
         e.contains("records are restored") && e.contains("--force") && e.contains("no space"),
         "{e}"
     );
-    assert_eq!(dst.total().unwrap(), c.manifest.records, "the records are in");
+    assert_eq!(
+        dst.total().unwrap(),
+        c.manifest.records,
+        "the records are in"
+    );
     // Running it again with a store that works writes the files.
     let fresh = Catalog::memory(dst.clone());
     restore_sealed(
@@ -543,7 +555,10 @@ fn files_failing_to_write_after_the_records_say_so_and_can_be_retried() {
         &mut |_| {},
     )
     .unwrap();
-    assert_eq!(fresh.read_all(&info.id, 1 << 20).unwrap().unwrap().len(), 2000);
+    assert_eq!(
+        fresh.read_all(&info.id, 1 << 20).unwrap().unwrap().len(),
+        2000
+    );
 }
 
 #[test]

@@ -423,7 +423,7 @@ impl Updater {
             "1. Back up the database: obop backup --db \"$OBOP_DATABASE_URL\" --out ./backups".into(),
             format!("2. Fetch the new image: docker pull {image}"),
             format!("3. Restart the container (or process) on {image}, with the same environment and OBOP_AUTO_MIGRATE=1 (or run step 4 first)"),
-            "4. Apply the schema steps: obop migrate plan, then obop migrate run".into(),
+            "4. Apply the schema steps: obop migrate plan (stores the plan), obop migrate rehearse on a backup of this database, then obop migrate run --backup FILE --rehearsal RECEIPT --disk-ok; or start once with OBOP_AUTO_MIGRATE=1 (docs/DEPLOY.md)".into(),
             "5. Check: obop update check (the running version should be the new one), and sign in".into(),
             "To go back: restart on the previous image; if it refuses the database, restore step 1 with obop restore.".into(),
         ]

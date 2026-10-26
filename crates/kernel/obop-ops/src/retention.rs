@@ -194,12 +194,7 @@ pub fn decide_at(
     let mut gone: Vec<String> = too_old.into_iter().map(|(id, _)| id).collect();
     gone.reverse();
     gone.extend(std::mem::take(&mut d.delete));
-    gone.sort_by_key(|id| {
-        backups
-            .iter()
-            .find(|(i, _)| i == id)
-            .map_or(0, |(_, t)| *t)
-    });
+    gone.sort_by_key(|id| backups.iter().find(|(i, _)| i == id).map_or(0, |(_, t)| *t));
     d.delete = gone;
     d
 }
@@ -425,7 +420,11 @@ mod tests {
         assert!(!d.delete.is_empty());
         // The newest backup is never deleted, however old it is: it may be all there is.
         let lone = vec![("only".to_string(), START)];
-        let d = decide_at(Retention::default(), &lone, Some((START + 1000 * DAY, limit)));
+        let d = decide_at(
+            Retention::default(),
+            &lone,
+            Some((START + 1000 * DAY, limit)),
+        );
         assert_eq!(d.keep.len(), 1);
         assert!(d.delete.is_empty());
         // No bound given: the counts alone, as before.

@@ -360,7 +360,10 @@ mod tests {
             std::fs::create_dir_all(d.join("sub")).unwrap();
             let sink = FsSink::new(spelled.clone());
             let e = copy_verified(&sink, "backup.obbk", &src).unwrap_err();
-            assert!(e.contains("is the directory the backup is in"), "{spelled:?}: {e}");
+            assert!(
+                e.contains("is the directory the backup is in"),
+                "{spelled:?}: {e}"
+            );
         }
         // Nothing was copied, and nothing was damaged.
         assert_eq!(std::fs::read(&src).unwrap(), b"sealed bytes");
@@ -408,7 +411,10 @@ mod tests {
                 "round {round}: {results:?}"
             );
             let winner = if results[0].is_ok() { &da } else { &db };
-            assert_eq!(&got, winner, "round {round}: the Ok put is the object there");
+            assert_eq!(
+                &got, winner,
+                "round {round}: the Ok put is the object there"
+            );
             let loser = results.iter().find_map(|r| r.as_ref().err()).unwrap();
             assert!(loser.contains("write-once"), "{loser}");
             // No part file is left, and the object is still the winner's after a retry of it.

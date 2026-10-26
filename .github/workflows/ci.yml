@@ -43,8 +43,16 @@ jobs:
           # With a key the backup is format 2 (sealed, .obbk); --plain writes format 1.
           "$OBOP" backup --db "$src" --out "$RUNNER_TEMP/sealed" --encrypted
           "$OBOP" backup --db "$src" --out "$RUNNER_TEMP/plain" --plain
-          deploy/restore-drill.sh "$RUNNER_TEMP"/sealed/*.obbk
+          # The sealed drill is recorded (after its server step) in the source database.
+          DRILL_RECORD_IN="$src" deploy/restore-drill.sh "$RUNNER_TEMP"/sealed/*.obbk
+          "$OBOP" storage show --db "$src" | grep -q "passed"
+          # A plain backup where a key is configured is refused (4) unless the operator vouches.
+          set +e
           deploy/restore-drill.sh "$RUNNER_TEMP"/plain/*.jsonl.gz
+          code=$?
+          set -e
+          test "$code" = 4
+          DRILL_ALLOW_PLAIN=1 deploy/restore-drill.sh "$RUNNER_TEMP"/plain/*.jsonl.gz
           # Failure injection: the wrong key must fail the drill with the stable code (3).
           set +e
           OBOP_SECRET_KEY="1111111111111111111111111111111111111111111111111111111111111111" deploy/restore-drill.sh "$RUNNER_TEMP"/sealed/*.obbk

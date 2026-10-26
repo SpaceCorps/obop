@@ -424,7 +424,9 @@ async fn metrics_report_the_backup_catalogue_and_the_last_drill() {
             sink: "fs:/mnt".into(),
             name: "obop-backup-x.obbk".into(),
             verified_at: now - 3590,
+            sha256: None,
         }],
+        host: None,
     })
     .unwrap();
     c.record_drill(&DrillRecord {

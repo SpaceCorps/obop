@@ -342,8 +342,9 @@ pub fn catch_up(
                 continue;
             }
             let manifest = PathBuf::from(format!("{}.manifest.json", b.path));
-            let done = sink::copy_verified(&**s, &b.id, &data)
-                .and_then(|sha| sink::copy_verified(&**s, &manifest_name(&b.id), &manifest).map(|_| sha));
+            let done = sink::copy_verified(&**s, &b.id, &data).and_then(|sha| {
+                sink::copy_verified(&**s, &manifest_name(&b.id), &manifest).map(|_| sha)
+            });
             match done {
                 Ok(sha256) => rec.copies.push(Copy {
                     sink: s.name(),
@@ -548,10 +549,9 @@ impl Schedule {
     /// up.
     pub fn due(&self, backend: &Arc<dyn Backend>) -> Result<bool, String> {
         let now = self.clock.now();
-        let last = Catalog::new(&**backend)
-            .backups()?
-            .into_iter()
-            .rfind(|b| b.verified && b.reason == "scheduled" && b.created_at <= now + SKEW_TOLERANCE);
+        let last = Catalog::new(&**backend).backups()?.into_iter().rfind(|b| {
+            b.verified && b.reason == "scheduled" && b.created_at <= now + SKEW_TOLERANCE
+        });
         Ok(match last {
             None => true,
             Some(b) => now.saturating_sub(b.created_at) >= self.settings.every.as_secs(),

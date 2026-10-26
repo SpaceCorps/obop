@@ -243,3 +243,75 @@ fn a_loopback_server_without_a_token_serves_metrics_to_a_direct_caller_only() {
     assert!(!has_header(&r, "access-control-allow-origin"));
     assert!(!has_header(&r, "vary") || !header_value(&r, "vary").to_lowercase().contains("origin"));
 }
+
+/// A typo in the backup timer's settings stops the start before the database is opened: an old
+/// database that would be migrated (and, without OBOP_BACKUP_DIR, without a backup) is left as it
+/// was, and the message names the setting.
+#[test]
+fn bad_backup_schedule_settings_stop_the_start_before_anything_is_migrated() {
+    let dir = std::env::temp_dir().join(format!("obop-startup-sched-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = dir.join("old.db");
+    let url = format!("sqlite://{}", db.display());
+    {
+        let b = obop_storage::open(&url).unwrap();
+        b.insert("party", "p1", &serde_json::Map::new()).unwrap();
+    }
+    let ran = |env: &[(&str, &str)]| {
+        let out = obop()
+            .args(["serve", "--addr", "127.0.0.1:0", "--db", &url])
+            .env_remove("OBOP_BACKUP_SCHEDULE")
+            .env_remove("OBOP_BACKUP_DIR")
+            .env_remove("OBOP_BACKUP_KEEP_DAILY")
+            .env_remove("OBOP_BACKUP_MAX_AGE_DAYS")
+            .env("OBOP_AUTO_MIGRATE", "1")
+            .envs(env.iter().copied())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .expect("run obop");
+        assert!(!out.status.success(), "must refuse {env:?}");
+        String::from_utf8_lossy(&out.stderr).to_string()
+    };
+    let bk = dir.join("bk").display().to_string();
+    for (env, names) in [
+        (vec![("OBOP_BACKUP_SCHEDULE", "24h")], "OBOP_BACKUP_DIR"),
+        (
+            vec![
+                ("OBOP_BACKUP_SCHEDULE", "soon"),
+                ("OBOP_BACKUP_DIR", bk.as_str()),
+            ],
+            "OBOP_BACKUP_SCHEDULE",
+        ),
+        (
+            vec![
+                ("OBOP_BACKUP_SCHEDULE", "24h"),
+                ("OBOP_BACKUP_DIR", bk.as_str()),
+                ("OBOP_BACKUP_KEEP_DAILY", "many"),
+            ],
+            "OBOP_BACKUP_KEEP_DAILY",
+        ),
+        (
+            vec![
+                ("OBOP_BACKUP_SCHEDULE", "24h"),
+                ("OBOP_BACKUP_DIR", bk.as_str()),
+                ("OBOP_BACKUP_MAX_AGE_DAYS", "a year"),
+            ],
+            "OBOP_BACKUP_MAX_AGE_DAYS",
+        ),
+    ] {
+        let err = ran(&env);
+        assert!(err.contains(names), "{names}: {err}");
+        assert!(
+            !err.contains("migrated to") && !err.contains("database:"),
+            "nothing was migrated or opened: {err}"
+        );
+        let b = obop_storage::open(&url).unwrap();
+        assert!(
+            b.get("obop_meta", "schema").unwrap().is_none(),
+            "the database is as it was"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -469,11 +469,13 @@ fn clause(c: &[Tok]) -> Option<Class> {
     {
         // An index that already exists, or a constraint added without the scan, is a catalogue
         // change; the scan is then `VALIDATE CONSTRAINT`.
-        return Some(if has(c, &["NOT", "VALID"]) || has(c, &["USING", "INDEX"]) {
-            Class::Instant
-        } else {
-            Class::Blocking
-        });
+        return Some(
+            if has(c, &["NOT", "VALID"]) || has(c, &["USING", "INDEX"]) {
+                Class::Instant
+            } else {
+                Class::Blocking
+            },
+        );
     }
     if starts(c, &["VALIDATE", "CONSTRAINT"]) {
         return Some(Class::Concurrent);
@@ -770,7 +772,10 @@ mod tests {
                 Blocking,
             ),
             // A default that calls anything not known to be stable rewrites.
-            ("ALTER TABLE big ADD COLUMN c uuid DEFAULT uuidv7()", Rewrite),
+            (
+                "ALTER TABLE big ADD COLUMN c uuid DEFAULT uuidv7()",
+                Rewrite,
+            ),
             (
                 "ALTER TABLE big ADD COLUMN c int DEFAULT my_user_fn()",
                 Rewrite,
@@ -830,7 +835,12 @@ mod tests {
             Ok(Instant)
         );
         // Text that does not close is an error, not a guess.
-        for sql in ["SELECT 'abc", "SELECT \"abc", "SELECT /* abc", "SELECT $$ abc"] {
+        for sql in [
+            "SELECT 'abc",
+            "SELECT \"abc",
+            "SELECT /* abc",
+            "SELECT $$ abc",
+        ] {
             assert!(classify(sql).is_err(), "{sql}");
         }
     }

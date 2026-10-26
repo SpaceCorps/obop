@@ -464,8 +464,11 @@ fn prune_without_the_sink_configured_removes_nothing_the_sink_does_not_hold() {
     s.ignore_recorded_sinks = true;
     let plan = prune_plan(&b, &s, &clock).unwrap();
     assert_eq!(
-        plan.remove.iter().map(|r| r.id.clone()).collect::<Vec<_>>(),
-        [a.id.clone()]
+        plan.remove
+            .iter()
+            .map(|r| r.id.as_str())
+            .collect::<Vec<_>>(),
+        [a.id.as_str()]
     );
     let (pruned, _) = prune(&b, &s, &clock).unwrap();
     assert_eq!(pruned, [a.id]);
@@ -482,7 +485,8 @@ fn a_copy_that_is_no_longer_in_the_sink_does_not_license_deleting_the_local_file
         weekly: 0,
         monthly: 0,
     };
-    s.sinks.push(Arc::new(FsSink::new(d.p("off")).allow_delete(true)));
+    s.sinks
+        .push(Arc::new(FsSink::new(d.p("off")).allow_delete(true)));
     let first = take(&b, None, 2, &s, "scheduled", &clock).unwrap().backup;
     assert_eq!(first.copies.len(), 1);
     // A lifecycle rule (or a person) empties the sink.
@@ -497,7 +501,9 @@ fn a_copy_that_is_no_longer_in_the_sink_does_not_license_deleting_the_local_file
     let o = take(&b, None, 2, &s, "scheduled", &clock).unwrap();
     assert!(!o.pruned.contains(&first.id), "{:?}", o.pruned);
     assert!(
-        o.notes.iter().any(|n| n.contains("not there or has changed")),
+        o.notes
+            .iter()
+            .any(|n| n.contains("not there or has changed")),
         "{:?}",
         o.notes
     );
@@ -505,12 +511,7 @@ fn a_copy_that_is_no_longer_in_the_sink_does_not_license_deleting_the_local_file
     // The stale record was corrected, so the next run copies it again and then it may go.
     clock.advance(DAY);
     let o = take(&b, None, 2, &s, "scheduled", &clock).unwrap();
-    assert!(
-        o.pruned.contains(&first.id),
-        "{:?} {:?}",
-        o.pruned,
-        o.notes
-    );
+    assert!(o.pruned.contains(&first.id), "{:?} {:?}", o.pruned, o.notes);
     assert_eq!(
         std::fs::read_dir(d.p("off")).unwrap().count() % 2,
         0,
@@ -529,11 +530,14 @@ fn a_sink_in_the_backup_directory_is_not_an_off_host_copy_and_deletes_nothing() 
         weekly: 0,
         monthly: 0,
     };
-    s.sinks.push(Arc::new(FsSink::new(d.p("local")).allow_delete(true)));
+    s.sinks
+        .push(Arc::new(FsSink::new(d.p("local")).allow_delete(true)));
     let o = take(&b, None, 2, &s, "scheduled", &clock).unwrap();
     assert_eq!(o.copy_failures.len(), 1);
     assert!(
-        o.copy_failures[0].1.contains("is the directory the backup is in"),
+        o.copy_failures[0]
+            .1
+            .contains("is the directory the backup is in"),
         "{:?}",
         o.copy_failures
     );
@@ -543,7 +547,11 @@ fn a_sink_in_the_backup_directory_is_not_an_off_host_copy_and_deletes_nothing() 
     assert!(st.last_failure.is_some());
     clock.advance(DAY);
     let o = take(&b, None, 2, &s, "scheduled", &clock).unwrap();
-    assert!(o.pruned.is_empty(), "the only copy is never removed: {:?}", o.pruned);
+    assert!(
+        o.pruned.is_empty(),
+        "the only copy is never removed: {:?}",
+        o.pruned
+    );
     assert_eq!(ids(&b).len(), 2);
     assert_eq!(d.files("local"), 4);
 }
@@ -560,7 +568,10 @@ fn a_backup_stamped_in_the_future_does_not_silence_the_schedule_or_the_age_metri
     let sched = Schedule::new(settings(&d), Arc::new(FakeClock::at(START + 3 * DAY)));
     assert!(sched.due(&b).unwrap(), "the schedule is not silenced");
     let st = stats(&*b, START + 3 * DAY).unwrap();
-    assert_eq!(st.backup_age_seconds, None, "a future backup is not 0 seconds old");
+    assert_eq!(
+        st.backup_age_seconds, None,
+        "a future backup is not 0 seconds old"
+    );
     assert!(st.backup_overdue(), "so the alert can fire");
     assert_eq!(st.future_backups, 1);
     // And a backup taken now becomes the newest at once, and is not due again for a day.
@@ -570,7 +581,15 @@ fn a_backup_stamped_in_the_future_does_not_silence_the_schedule_or_the_age_metri
     let st = stats(&*b, START + 3 * DAY + 60).unwrap();
     assert_eq!(st.backup_age_seconds, Some(60));
     // A small skew is tolerated: it is not called a fault.
-    let ok = take(&b, None, 2, &s, "scheduled", &FakeClock::at(START + 3 * DAY + 100)).unwrap();
+    let ok = take(
+        &b,
+        None,
+        2,
+        &s,
+        "scheduled",
+        &FakeClock::at(START + 3 * DAY + 100),
+    )
+    .unwrap();
     assert!(ok.backup.verified);
     assert_eq!(stats(&*b, START + 3 * DAY).unwrap().future_backups, 1);
 }
@@ -624,10 +643,18 @@ fn a_persistent_fault_writes_no_backup_a_minute_and_leaves_no_files_behind() {
     clock.advance(30);
     assert!(sched.tick(&b, None, 2).unwrap().is_none(), "backing off");
     clock.advance(30);
-    assert!(sched.tick(&b, None, 2).unwrap_err().contains("could not be recorded"));
+    assert!(
+        sched
+            .tick(&b, None, 2)
+            .unwrap_err()
+            .contains("could not be recorded")
+    );
     for later in [30, 60, 20] {
         clock.advance(later);
-        assert!(sched.tick(&b, None, 2).unwrap().is_none(), "waiting two minutes");
+        assert!(
+            sched.tick(&b, None, 2).unwrap().is_none(),
+            "waiting two minutes"
+        );
     }
     assert_eq!(d.files("local"), 0, "no backup was written while it waited");
     assert!(backoff_seconds(1) == 60 && backoff_seconds(2) == 120 && backoff_seconds(30) == 3600);
@@ -657,7 +684,9 @@ fn a_sink_moved_to_another_path_receives_the_backups_it_missed() {
     assert!(o.copy_failures.is_empty());
     assert_eq!(d.files("off-b"), 8, "all four backups, data and manifest");
     assert!(
-        o.notes.iter().any(|n| n.contains("earlier backup(s) copied")),
+        o.notes
+            .iter()
+            .any(|n| n.contains("earlier backup(s) copied")),
         "{:?}",
         o.notes
     );
@@ -681,7 +710,9 @@ fn no_scheduled_backup_outlives_the_age_bound_even_when_the_counts_would_keep_it
     let clock2 = FakeClock::at(START);
     let mut s2 = settings(&d2);
     s2.max_age = None;
-    let old2 = take(&b2, None, 2, &s2, "scheduled", &clock2).unwrap().backup;
+    let old2 = take(&b2, None, 2, &s2, "scheduled", &clock2)
+        .unwrap()
+        .backup;
     clock2.advance(450 * DAY);
     let o = take(&b2, None, 2, &s2, "scheduled", &clock2).unwrap();
     assert!(!o.pruned.contains(&old2.id));
@@ -698,8 +729,22 @@ fn a_failed_export_removes_what_it_began_and_is_reported_for_a_cron_run_too() {
     let d = Dir::new("export");
     let (flaky, b) = flaky_db();
     crate::testkit::Flaky::set(&flaky.fail_export, true);
-    let e = take(&b, None, 2, &settings(&d), "scheduled", &FakeClock::at(START)).unwrap_err();
+    let e = take(
+        &b,
+        None,
+        2,
+        &settings(&d),
+        "scheduled",
+        &FakeClock::at(START),
+    )
+    .unwrap_err();
     assert!(e.contains("went away"), "{e}");
     assert_eq!(d.files("local"), 0);
-    assert!(stats(&*b, START).unwrap().last_failure.unwrap().contains("went away"));
+    assert!(
+        stats(&*b, START)
+            .unwrap()
+            .last_failure
+            .unwrap()
+            .contains("went away")
+    );
 }

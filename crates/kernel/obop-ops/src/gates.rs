@@ -779,7 +779,9 @@ impl Gate {
             let m = self.migrator();
             match m.adopt().and_then(|_| m.ensure_instance_id()) {
                 Ok(_) => {}
-                Err(e) => progress(&format!("note: could not record the ledger rows or the database id: {e}")),
+                Err(e) => progress(&format!(
+                    "note: could not record the ledger rows or the database id: {e}"
+                )),
             }
             return Ok(ran);
         }
@@ -875,7 +877,9 @@ pub fn auto_backup_hook(
 ) -> obop_migrate::Before {
     Arc::new(move |p: &obop_migrate::Pending| {
         let Some(dir) = &cfg.dir else {
-            say("warning: migrating without a backup: set OBOP_BACKUP_DIR so a verified backup is taken first (docs/DEPLOY.md)");
+            say(
+                "warning: migrating without a backup: set OBOP_BACKUP_DIR so a verified backup is taken first (docs/DEPLOY.md)",
+            );
             return Ok(None);
         };
         let settings = Settings::new(dir, cfg.keys.clone());
@@ -911,7 +915,10 @@ pub fn auto_backup_hook(
         .map_err(|e| {
             format!("the backup before the migration failed, so nothing was migrated: {e}")
         })?;
-        say(&format!("backup before migrating: {} (verified)", o.backup.id));
+        say(&format!(
+            "backup before migrating: {} (verified)",
+            o.backup.id
+        ));
         for n in &o.notes {
             say(&format!("warning: {n}"));
         }
@@ -1221,8 +1228,7 @@ pub fn rollback(
         schema_before.map_or("?".into(), |v| v.to_string()),
         schema_after.map_or("?".into(), |v| v.to_string())
     );
-    let (event_id, event) =
-        crate::audit_row(clock.now(), actor, "migration_rollback", &detail);
+    let (event_id, event) = crate::audit_row(clock.now(), actor, "migration_rollback", &detail);
     let mut extra = vec![
         (obop_migrate::ledger::MODEL.to_string(), row_id, row),
         ("security_event".to_string(), event_id, event),

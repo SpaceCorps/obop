@@ -224,7 +224,12 @@ impl Installer {
                 continue;
             };
             let count = |m: &str| self.backend.count(m).unwrap_or(0);
-            let steps = migrate::plan_data(&om, &step.manifest, &count).steps;
+            // A step on a model that holds no records rewrites nothing: it needs no backup.
+            let steps: Vec<migrate::Step> = migrate::plan_data(&om, &step.manifest, &count)
+                .steps
+                .into_iter()
+                .filter(|s| count(&s.model) > 0)
+                .collect();
             if !steps.is_empty() {
                 out.push((
                     step.id.clone(),
@@ -1188,13 +1193,17 @@ impl Installer {
         let receipt = self
             .run_gate(
                 "module.rollback",
-                if inverse.is_empty() {
-                    Vec::new()
-                } else {
+                if inverse
+                    .iter()
+                    .any(|s| self.backend.count(&s.model).unwrap_or(0) > 0)
+                {
                     vec![format!("{id} {current_v}->{}", prev.module.version)]
+                } else {
+                    Vec::new()
                 },
                 inverse
                     .iter()
+                    .filter(|s| self.backend.count(&s.model).unwrap_or(0) > 0)
                     .map(|s| format!("{id}: {}", s.summary()))
                     .collect(),
                 by,

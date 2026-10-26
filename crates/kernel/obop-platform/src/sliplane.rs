@@ -161,6 +161,12 @@ pub struct Config {
     pub source: Source,
     /// A catalog base URL handed to every instance as `OBOP_MARKETPLACE_URL`.
     pub marketplace_url: Option<String>,
+    /// A directory on a volume the operator has mounted into every instance, handed to each as
+    /// OBOP_BACKUP_DIR: the place the verified backup before a module update that rewrites
+    /// records is taken (D73). Unset, such an update is refused on an instance until its
+    /// operator sets it (OBOP_INSTANCE_BACKUP_DIR on the control plane). Creating the volume is
+    /// the operator's step: the provisioner passes the path and does not make storage.
+    pub backup_dir: Option<String>,
     /// How often to ask Sliplane whether the service is live, and how long to wait.
     pub poll: std::time::Duration,
     pub timeout: std::time::Duration,
@@ -448,6 +454,9 @@ impl Provisioner for Sliplane {
             if let Some(m) = &self.cfg.marketplace_url {
                 args.extend(["--env".into(), format!("OBOP_MARKETPLACE_URL={m}")]);
             }
+            if let Some(d) = &self.cfg.backup_dir {
+                args.extend(["--env".into(), format!("OBOP_BACKUP_DIR={d}")]);
+            }
             // D63: the instance may ask this control plane to upgrade it (and nothing else)
             // with its own token, which is a secret like the key above.
             if !spec.update_token.is_empty() && !spec.control_url.is_empty() {
@@ -617,6 +626,7 @@ mod tests {
             server_id: "server_1".into(),
             source,
             marketplace_url: None,
+            backup_dir: None,
             poll: std::time::Duration::ZERO,
             timeout: std::time::Duration::from_secs(5),
             check_reachable: false,
@@ -777,10 +787,15 @@ mod tests {
             branch: "deploy".into(),
         });
         c.marketplace_url = Some("https://market.example.test".into());
+        c.backup_dir = Some("/data/backups".into());
         Sliplane::new(c, runner.clone(), cell)
             .create(&spec(), NOOP)
             .unwrap();
         let args = runner.calls.lock().unwrap()[0].join(" ");
+        assert!(
+            args.contains("--env OBOP_BACKUP_DIR=/data/backups"),
+            "{args}"
+        );
         assert!(args.contains(
             "--repo https://github.com/SpaceCorps/obop --branch deploy --auto-deploy false"
         ));

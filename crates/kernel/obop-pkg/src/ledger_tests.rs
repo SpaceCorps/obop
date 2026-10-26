@@ -192,3 +192,39 @@ fn a_gate_that_refuses_stops_the_upgrade_and_the_rollback_with_nothing_changed()
     assert_eq!(version_of(&inst, "upd"), "0.2.0");
     assert_eq!(stored(&store, "upd_item", "1")["registration"], "AB-1");
 }
+
+/// A step on a model with no records rewrites nothing, so it needs no backup and a hosted
+/// instance without a backup volume can still update such a module; one with records is gated.
+#[test]
+fn the_gate_is_not_asked_when_the_models_of_the_data_steps_hold_no_records() {
+    let store = Store::new();
+    let shelf = Shelf::default();
+    let (d, inst) = setup(&store, &shelf);
+    inst.install(
+        &pkg("upd", "0.1.0", &field("plate", ""), "", "", ""),
+        "upload",
+        "root",
+    )
+    .unwrap();
+    let gate = Arc::new(TestGate::default());
+    *gate.refuse.lock().unwrap() = Some("there is no place for a backup".into());
+    inst.set_gate(gate.clone());
+    renaming_shelf(&shelf);
+    // No upd_item record exists: the update goes ahead with the gate set to refuse everything.
+    call(&d, &admin(), "module.upgrade", by_id("upd")).unwrap();
+    assert!(gate.asked.lock().unwrap().is_empty());
+    // The ledger rows are still written, and so is the way back.
+    assert_eq!(rows(&store).len(), 2);
+    call(&d, &admin(), "module.rollback", by_id("upd")).unwrap();
+    assert!(gate.asked.lock().unwrap().is_empty());
+    // With a record in the model the same update is refused, nothing changed.
+    rec(
+        &store,
+        "upd_item",
+        "1",
+        &[("title", json!("a")), ("plate", json!("AB-1"))],
+    );
+    let e = err(call(&d, &admin(), "module.upgrade", by_id("upd")));
+    assert!(e.contains("there is no place for a backup"), "{e}");
+    assert_eq!(version_of(&inst, "upd"), "0.1.0");
+}

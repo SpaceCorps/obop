@@ -82,34 +82,31 @@ pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
     let st = m.status().map_err(|e| fail(&e))?;
     if auto && !st.pending.is_empty() && !st.ahead {
         // A server that migrates itself takes the verified backup first when it has a place to
-        // put one; a failed backup stops the migration (OBR-DAT-053).
+        // put one, and a failed backup stops the migration (OBR-DAT-053). The backup is taken by
+        // the migrator itself, under the migration lock, once the drift check and the plan say
+        // that steps will run: a start that is refused takes none, two servers starting together
+        // take one, and a crash loop reuses the backup of the attempt that failed.
         let dir = std::env::var("OBOP_BACKUP_DIR")
             .ok()
             .filter(|d| !d.trim().is_empty());
         let keys = crate::backup_cli::backup_keys().map_err(|e| fail(&e))?;
-        let blobs = blob_catalog(backend, url).ok();
-        let schema = u64::from(st.stored.unwrap_or(0));
-        match obop_ops::gates::auto_backup(
-            backend,
-            blobs.as_ref().map(|b| b as &dyn obop_storage::blob::Blobs),
-            schema,
-            dir.as_deref().map(Path::new),
-            &keys,
-            &obop_ops::schedule::SystemClock,
-        ) {
-            Ok(Some(id)) => {
-                eprintln!("backup before migrating: {id} (verified)");
-                opts.backup_id = Some(id);
-            }
-            Ok(None) => eprintln!(
-                "warning: migrating without a backup: set OBOP_BACKUP_DIR so a verified backup is taken first (docs/DEPLOY.md)"
-            ),
-            Err(e) => {
-                return Err(fail(&format!(
-                    "error: the backup before the migration failed, so nothing was migrated: {e}"
-                )));
-            }
-        }
+        let blobs = blob_catalog(backend, url)
+            .ok()
+            .map(|b| Arc::new(b) as Arc<dyn obop_storage::blob::Blobs>);
+        let need_bytes = dir
+            .as_ref()
+            .and_then(|_| database_bytes(backend.kind(), url));
+        opts.before = Some(obop_ops::gates::auto_backup_hook(
+            backend.clone(),
+            blobs,
+            obop_ops::gates::AutoBackup {
+                dir: dir.map(std::path::PathBuf::from),
+                keys,
+                need_bytes,
+            },
+            Arc::new(obop_ops::schedule::SystemClock),
+            Arc::new(|l: &str| eprintln!("{l}")),
+        ));
     }
     let lines = m
         .check_for_serve_with(auto, &redact(url), &opts)
@@ -118,6 +115,42 @@ pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
         eprintln!("{l}");
     }
     Ok(())
+}
+
+/// About how big the database is, for a check that a backup volume has room: the size of the
+/// SQLite file, or what PostgreSQL reports; `None` when it cannot be told (nothing is checked).
+fn database_bytes(kind: &str, url: &str) -> Option<u64> {
+    if kind == "postgres" {
+        return obop_ops::pgadmin::Pg::connect(url)
+            .ok()
+            .and_then(|p| obop_ops::pgadmin::ServerInfo::database_bytes(&p).ok());
+    }
+    let path = url
+        .strip_prefix("sqlite://")
+        .or_else(|| url.strip_prefix("sqlite:"))?;
+    std::fs::metadata(path).ok().map(|m| m.len())
+}
+
+/// The name an operator command puts in the ledger and the security log: `operator`, and the
+/// operating system user when it can be told, since a command line has no sign-in of its own.
+pub(crate) fn operator_name() -> String {
+    ["USER", "USERNAME"]
+        .iter()
+        .find_map(|v| std::env::var(v).ok().filter(|s| !s.trim().is_empty()))
+        .map_or_else(|| "operator".to_string(), |u| format!("operator:{u}"))
+}
+
+/// Write one line of the security log for an operator command that changes how the instance is
+/// protected or what it holds (`migration_run`, `storage_attested`, `drill_recorded`). The actor
+/// is the operating system user, as far as a command line can tell who ran it.
+pub(crate) fn record_event(backend: &Arc<dyn Backend>, kind: &str, detail: &str) {
+    obop_ops::audit_event(
+        &**backend,
+        obop_ops::schedule::Clock::now(&obop_ops::schedule::SystemClock),
+        &operator_name(),
+        kind,
+        detail,
+    );
 }
 
 pub(crate) fn db_url(db: Option<&str>) -> String {

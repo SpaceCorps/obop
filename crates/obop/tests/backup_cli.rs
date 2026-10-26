@@ -157,11 +157,9 @@ fn a_key_in_the_environment_makes_the_backup_sealed_and_restore_needs_it() {
     );
     assert_eq!(r.status.code(), Some(3), "{}", text(&r));
     assert!(text(&r).contains("restore_key_required"), "{}", text(&r));
-    let m = run(&[], &["migrate", "status", "--db", &dst]);
     assert!(
-        text(&m).contains("empty database") || !m.status.success(),
-        "{}",
-        text(&m)
+        !Path::new(dir.p("dst.db").to_str().unwrap()).exists(),
+        "a refused restore does not even make the target database"
     );
     // With the key it restores, and the account is there.
     let r = run(
@@ -229,13 +227,42 @@ fn the_server_key_seals_when_there_is_no_backup_key_and_no_key_at_all_means_a_pl
         text(&o)
     );
     only_file(&out, ".gz");
-    // A format 1 backup restores whether or not a key is configured.
+    // A format 1 backup restores when no key is configured (it always did) ...
+    let dst0 = dir.url("p0.db");
+    let r = run(
+        &[],
+        &["restore", "--db", &dst0, "--from", plain.to_str().unwrap()],
+    );
+    assert!(r.status.success(), "{}", text(&r));
+    assert!(text(&r).contains("NOT authenticated"), "{}", text(&r));
+    // ... but where a key is configured it is refused (exit 4): a plain pair can be made by
+    // anyone who can write the directory. --allow-plain says the operator vouches for it.
     let dst = dir.url("p.db");
     let r = run(
         &[("OBOP_BACKUP_KEY", KEY_B)],
         &["restore", "--db", &dst, "--from", plain.to_str().unwrap()],
     );
+    assert_eq!(r.status.code(), Some(4), "{}", text(&r));
+    assert!(text(&r).contains("backup_not_sealed"), "{}", text(&r));
+    assert!(!dir.p("p.db").exists(), "nothing was made");
+    let v = run(
+        &[("OBOP_BACKUP_KEY", KEY_B)],
+        &["backup", "verify", plain.to_str().unwrap()],
+    );
+    assert_eq!(v.status.code(), Some(4), "{}", text(&v));
+    let r = run(
+        &[("OBOP_BACKUP_KEY", KEY_B)],
+        &[
+            "restore",
+            "--db",
+            &dst,
+            "--from",
+            plain.to_str().unwrap(),
+            "--allow-plain",
+        ],
+    );
     assert!(r.status.success(), "{}", text(&r));
+    assert!(text(&r).contains("NOT authenticated"), "{}", text(&r));
     // A key that is only the development key does not seal.
     let out = dir.p("e");
     let o = run(
@@ -244,4 +271,152 @@ fn the_server_key_seals_when_there_is_no_backup_key_and_no_key_at_all_means_a_pl
     );
     assert!(o.status.success(), "{}", text(&o));
     only_file(&out, ".gz");
+}
+
+#[test]
+fn a_canary_scan_of_a_plain_backup_fails_and_a_sealed_one_cannot_be_given_a_gz_name() {
+    let dir = Dir::new("canary");
+    let url = seeded(&dir, "src.db");
+    let out = dir.p("plain");
+    let o = run(
+        &[],
+        &["backup", "--db", &url, "--out", out.to_str().unwrap()],
+    );
+    assert!(o.status.success(), "{}", text(&o));
+    let plain = only_file(&out, ".gz");
+    // `gunzip` gives anyone the records: the scan says so and fails, though a scan of the file as
+    // stored finds nothing.
+    let v = run(
+        &[],
+        &[
+            "backup",
+            "verify",
+            plain.to_str().unwrap(),
+            "--canary",
+            "ada",
+        ],
+    );
+    assert!(!v.status.success(), "{}", text(&v));
+    assert!(
+        text(&v).contains("after decompression") && text(&v).contains("not encrypted"),
+        "{}",
+        text(&v)
+    );
+    // A sealed backup is not given a gz name: that would be a file gzip cannot read.
+    let o = run(
+        &[("OBOP_BACKUP_KEY", KEY_A)],
+        &[
+            "backup",
+            "--db",
+            &url,
+            "--out",
+            dir.p("nightly.jsonl.gz").to_str().unwrap(),
+        ],
+    );
+    assert!(!o.status.success(), "{}", text(&o));
+    assert!(
+        text(&o).contains(".obbk") && text(&o).contains("--plain"),
+        "{}",
+        text(&o)
+    );
+    assert!(!dir.p("nightly.jsonl.gz").exists());
+}
+
+#[test]
+fn a_prune_in_a_shell_without_the_sink_removes_nothing_the_sink_does_not_hold_and_the_dry_run_agrees()
+ {
+    let dir = Dir::new("prune");
+    let url = seeded(&dir, "src.db");
+    let (bk, off) = (dir.p("bk"), dir.p("off"));
+    let job = |extra: &[&str]| {
+        let mut a = vec![
+            "backup",
+            "run",
+            "--db",
+            &url,
+            "--out",
+            bk.to_str().unwrap(),
+            "--plain",
+            "--keep-daily",
+            "1",
+            "--keep-monthly",
+            "0",
+            "--max-age-days",
+            "0",
+        ];
+        a.extend_from_slice(extra);
+        run(&[], &a)
+    };
+    // Two scheduled backups, each copied off the host; the first is then past retention.
+    let o = job(&["--copy-to", off.to_str().unwrap()]);
+    assert!(o.status.success(), "{}", text(&o));
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    let o = job(&["--copy-to", off.to_str().unwrap()]);
+    assert!(o.status.success(), "{}", text(&o));
+    // The first was removed by that run (its copy was proved). Take a third without the sink,
+    // so there are backups with no copy, and the catalogue still records copies elsewhere.
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    let o = job(&[]);
+    assert!(o.status.success(), "{}", text(&o));
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    let o = job(&[]);
+    assert!(o.status.success(), "{}", text(&o));
+    let listed = text(&run(&[], &["backup", "list", "--db", &url]));
+    assert!(listed.contains("copies: none"), "{listed}");
+    let args = [
+        "backup",
+        "prune",
+        "--db",
+        &url,
+        "--keep-daily",
+        "1",
+        "--keep-monthly",
+        "0",
+        "--max-age-days",
+        "0",
+    ];
+    // The dry run and the real run agree: with no sink configured here nothing is removed.
+    let mut dry = args.to_vec();
+    dry.push("--dry-run");
+    let d = run(&[], &dry);
+    assert!(
+        text(&d).contains("would remove 0") && text(&d).contains("no sink"),
+        "{}",
+        text(&d)
+    );
+    let r = run(&[], &args);
+    assert!(text(&r).contains("0 backup(s) removed"), "{}", text(&r));
+    let files_before = std::fs::read_dir(&bk).unwrap().count();
+    // With the operator's word the dry run lists them and the real run removes them.
+    let mut dry = args.to_vec();
+    dry.extend(["--no-sinks", "--dry-run"]);
+    let d = run(&[], &dry);
+    assert!(text(&d).contains("would remove"), "{}", text(&d));
+    assert!(!text(&d).contains("would remove 0"), "{}", text(&d));
+    let mut real = args.to_vec();
+    real.push("--no-sinks");
+    let r = run(&[], &real);
+    assert!(r.status.success(), "{}", text(&r));
+    assert!(std::fs::read_dir(&bk).unwrap().count() < files_before);
+    // A copy into the very directory the backup is in is not an off-host copy.
+    let o = run(
+        &[],
+        &[
+            "backup",
+            "run",
+            "--db",
+            &url,
+            "--out",
+            dir.p("same").to_str().unwrap(),
+            "--copy-to",
+            dir.p("same").to_str().unwrap(),
+            "--plain",
+        ],
+    );
+    assert!(!o.status.success(), "{}", text(&o));
+    assert!(
+        text(&o).contains("is the directory the backup is in"),
+        "{}",
+        text(&o)
+    );
 }

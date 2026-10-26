@@ -1,8 +1,10 @@
 //! `obop migrate status|verify|plan|run|rehearse|rollback` (B5, D59, D73): the schema version, the
 //! migration ledger, and the gates around running a migration (OBR-DAT-051, OBR-DAT-053).
 
-use crate::backup_cli::backup_keys;
-use crate::ops::{Exit, db_url, fail, has, open_existing, ring_for, server_info, take, usage};
+use crate::backup_cli::backup_keys_for;
+use crate::ops::{
+    Exit, db_url, fail, has, open_existing, operator_name, ring_for, server_info, take, usage,
+};
 use obop_keys::KeyRing;
 use obop_migrate::Migrator;
 use obop_ops::drill::Scratch;
@@ -57,12 +59,16 @@ fn backup_dir(flag: Option<String>) -> Option<PathBuf> {
 }
 
 pub fn migrate(args: &mut Vec<String>) -> Exit {
-    let url = db_url(take(args, "--db").as_deref());
+    let db_flag = take(args, "--db");
+    // Whether the database was named at all (here or in the environment): without it a command
+    // that needs the server key reads it from the environment only.
+    let db_given = db_flag.is_some() || std::env::var("OBOP_DATABASE_URL").is_ok();
+    let url = db_url(db_flag.as_deref());
     let verb = args.first().cloned();
     match verb.as_deref() {
         Some("rehearse") => {
             args.remove(0);
-            return rehearse(&url, args);
+            return rehearse(&url, db_given, args);
         }
         Some("rollback") => {
             args.remove(0);
@@ -77,6 +83,7 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
     let receipt = take(args, "--rehearsal");
     let window = has(args, "--window");
     let disk_ok = has(args, "--disk-ok");
+    let keys_for_run = backup_keys_for(args);
     if args.len() != 1
         || !matches!(verb.as_deref(), Some("status" | "verify" | "plan" | "run"))
         || (dry && matches!(verb.as_deref(), Some("status" | "verify")))
@@ -124,18 +131,25 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
         Some("plan") => {
             let plan = m.plan().map_err(|e| fail(&format!("error: {e}")))?;
             print!("{}", plan.describe());
-            if !plan.is_empty() {
+            if plan.is_empty() {
+                // Nothing to store, and nothing is written to the database.
+            } else if dry {
+                println!(
+                    "plan {} (not stored: --dry-run writes nothing; run without it to store the plan a production run needs)",
+                    plan.id
+                );
+            } else {
                 m.store_plan(&plan)
                     .map_err(|e| fail(&format!("error: {e}")))?;
                 println!(
-                    "plan {} stored: a production run needs this exact plan (run `obop migrate rehearse` on a copy, then `obop migrate run --rehearsal RECEIPT`)",
+                    "plan {} stored in the database: a production run needs this exact plan (run `obop migrate rehearse` on a backup of this database, then `obop migrate run --backup FILE --rehearsal RECEIPT --disk-ok`)",
                     plan.id
                 );
             }
             Ok(())
         }
         _ => {
-            let keys = backup_keys().map_err(|e| fail(&e))?;
+            let keys = keys_for_run.map_err(|e| fail(&e))?;
             let gate = Gate {
                 backend: backend.clone(),
                 ring,
@@ -146,7 +160,7 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
                 clock: Arc::new(SystemClock),
                 options: Options {
                     mode: mode(gates_flag, backend.kind())?,
-                    actor: "operator".into(),
+                    actor: operator_name(),
                     backup_dir: backup_dir(backup_dir_flag),
                     backup_file: backup_file.map(PathBuf::from),
                     keys,
@@ -154,9 +168,12 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
                     window,
                     disk_attested: disk_ok,
                     url: url.clone(),
+                    lock_wait: obop_ops::gates::LOCK_WAIT,
+                    window_rows: None,
                 },
                 steps: None,
             };
+            let gate_mode = gate.options.mode;
             let ran = gate
                 .run(dry, &mut |l| eprintln!("{l}"))
                 .map_err(|e| fail(&format!("error: {e}")))?;
@@ -170,10 +187,39 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
                 }
             }
             if dry {
+                // A preview: the plan, what each step would do, and which checks would refuse a
+                // real run. It needs no gate and writes nothing.
                 println!("{}", ran.plan.describe().trim_end());
-                println!("dry run: every gate passed or only warned; nothing was taken or run");
+                for (v, name, what) in &ran.applied {
+                    println!("would run {v}: {name} ({what})");
+                }
+                if ran.would_refuse.is_empty() {
+                    println!("dry run: every gate passed or only warned; nothing was taken or run");
+                } else {
+                    println!(
+                        "dry run: a real run would be REFUSED by these checks (nothing was taken or run):"
+                    );
+                    for l in &ran.would_refuse {
+                        println!("{l}");
+                    }
+                }
                 return Ok(());
             }
+            crate::ops::record_event(
+                &backend,
+                "migration_run",
+                &format!(
+                    "ran {} step(s) under gates {}; backup {}; restore point {}",
+                    ran.applied.len(),
+                    if gate_mode == obop_ops::gates::Mode::Strict {
+                        "strict"
+                    } else {
+                        "relaxed"
+                    },
+                    ran.backup.as_ref().map_or("none", |b| b.id.as_str()),
+                    ran.restore_point.as_deref().unwrap_or("none")
+                ),
+            );
             for (v, name, what) in &ran.applied {
                 println!("ran {v}: {name} ({what})");
             }
@@ -192,16 +238,15 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
     }
 }
 
-/// `obop migrate rehearse --from BACKUP [--scratch URL] [--db URL] [--out FILE]`.
-fn rehearse(url: &str, args: &mut Vec<String>) -> Exit {
+/// `obop migrate rehearse --from BACKUP [--scratch URL] [--db URL] [--out FILE] [--allow-plain]`.
+fn rehearse(url: &str, db_given: bool, args: &mut Vec<String>) -> Exit {
     let from = take(args, "--from").ok_or_else(usage)?;
     let scratch = take(args, "--scratch");
     let out = take(args, "--out");
-    let db_given = std::env::var("OBOP_DATABASE_URL").is_ok() || args.iter().any(|a| a == "--db");
+    let keys = backup_keys_for(args).map_err(|e| fail(&e))?;
     if !args.is_empty() {
         return Err(usage());
     }
-    let keys = backup_keys().map_err(|e| fail(&e))?;
     let ring = ring_for(db_given.then_some(url));
     if ring.current().is_none() {
         return Err(fail(
@@ -221,7 +266,7 @@ fn rehearse(url: &str, args: &mut Vec<String>) -> Exit {
         now,
         steps: None,
     })
-    .map_err(|e| fail(&format!("error: {e}")))?;
+    .map_err(|e| crate::backup_cli::failure_of("error", &e))?;
     print!("{}", r.render());
     if let Some(out) = out {
         let j = r
@@ -239,16 +284,17 @@ fn rehearse(url: &str, args: &mut Vec<String>) -> Exit {
     }
 }
 
-/// `obop migrate rollback --from BACKUP --reason TEXT --yes [--db URL]`.
+/// `obop migrate rollback --from BACKUP --reason TEXT --yes [--other-database] [--allow-plain] [--db URL]`.
 fn rollback(url: &str, args: &mut Vec<String>) -> Exit {
     let from = take(args, "--from").ok_or_else(usage)?;
     let reason = take(args, "--reason").ok_or_else(usage)?;
     let yes = has(args, "--yes");
+    let other_database = has(args, "--other-database");
+    let keys = backup_keys_for(args).map_err(|e| fail(&e))?;
     if !args.is_empty() {
         return Err(usage());
     }
     let backend = open_existing(url)?;
-    let keys = backup_keys().map_err(|e| fail(&e))?;
     let ring = KeyRing::for_backend_read_only(&backend).unwrap_or_default();
     let file = Path::new(&from);
     let v = obop_ops::backup::verify_with(file, &keys)
@@ -275,7 +321,8 @@ fn rollback(url: &str, args: &mut Vec<String>) -> Exit {
         file,
         &keys,
         &reason,
-        "operator",
+        &operator_name(),
+        other_database,
         &SystemClock,
     )
     .map_err(|e| crate::backup_cli::failure_of("rollback refused or failed", &e))?;
@@ -286,6 +333,19 @@ fn rollback(url: &str, args: &mut Vec<String>) -> Exit {
         done.schema_before.map_or("?".into(), |v| v.to_string()),
         done.schema_after.map_or("none".into(), |v| v.to_string()),
     );
+    println!(
+        "{}",
+        if done.authenticated {
+            "the backup was opened with its key and authenticated"
+        } else {
+            "the backup is NOT authenticated (plain, format 1): it was only checked against its checksums"
+        }
+    );
+    if done.unnamed {
+        eprintln!(
+            "note: the backup carries no database id (it was made before databases had one), so it could not be checked to belong to this database; this database keeps its own id"
+        );
+    }
     println!(
         "start the obop version that matches the backup's schema, then check `obop migrate status`"
     );

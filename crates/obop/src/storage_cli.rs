@@ -2,34 +2,49 @@
 //! drill, the checks of the host's configuration and evidence, and the attestation that storage is
 //! encrypted at rest.
 
-use crate::backup_cli::backup_keys;
-use crate::ops::{Exit, db_url, fail, has, open_existing, ring_for, server_info, take, usage};
-use obop_ops::catalog::{Attestation, Catalog};
+use crate::backup_cli::{backup_keys_for, exit_for};
+use crate::ops::{
+    Exit, db_url, fail, has, open_existing, operator_name, record_event, ring_for, server_info,
+    take, usage,
+};
+use obop_ops::catalog::{Attestation, Catalog, DrillCheck, DrillRecord};
 use obop_ops::doctor::{self, Level};
 use obop_ops::drill::{self, Scratch};
 use obop_ops::schedule::{Clock, SystemClock};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-/// `obop drill BACKUP [--scratch URL] [--keep] [--migrate] [--record-in URL] [--plane NAME]`.
+/// `obop drill BACKUP [--scratch URL] [--keep] [--migrate] [--record-in URL] [--plane NAME]
+/// [--allow-plain] [--record-later FILE]`, and `obop drill --record-from FILE --server
+/// ok|skipped|failed --record-in URL`.
 ///
 /// Restores BACKUP into a scratch database, checks the copy and exits non-zero unless every check
-/// passed. `--record-in` writes the result (with the measured recovery point and time) into that
-/// database, where `obop storage check` and the metrics read it, and is also the database the
-/// drill refuses to restore into.
+/// passed (status 3 when a sealed backup's key is not configured, 4 for a plain backup offered to
+/// an instance that seals its own). `--record-in` writes the result (with the measured recovery
+/// point and time) into that database, where `obop storage check` and the metrics read it, and
+/// is also the database the drill refuses to restore into.
+///
+/// `--record-later FILE` keeps the result in a file instead of recording it, for a script that
+/// has one more check to make (a server on the copy): `--record-from FILE --server ...` then
+/// adds that check to the result and records it, so a drill whose last check failed is never in
+/// the evidence as a pass.
 pub fn drill_cmd(args: &mut Vec<String>) -> Exit {
+    if let Some(file) = take(args, "--record-from") {
+        return record_from(&file, args);
+    }
     let scratch = take(args, "--scratch");
     let keep = has(args, "--keep");
     let migrate = has(args, "--migrate");
     let record_in = take(args, "--record-in");
+    let record_later = take(args, "--record-later");
     let plane = take(args, "--plane").unwrap_or_else(|| "main".into());
     let db = take(args, "--db");
-    if args.len() != 1 {
+    let keys = backup_keys_for(args).map_err(|e| fail(&e))?;
+    if args.len() != 1 || (record_later.is_some() && record_in.is_some()) {
         return Err(usage());
     }
     let backup = PathBuf::from(&args[0]);
     let production = record_in.clone().or(db);
-    let keys = backup_keys().map_err(|e| fail(&e))?;
     let ring = ring_for(production.as_deref());
     let now = SystemClock.now();
     let scratch = match scratch.as_deref() {
@@ -51,18 +66,72 @@ pub fn drill_cmd(args: &mut Vec<String>) -> Exit {
     })
     .map_err(|e| fail(&format!("error: {e}")))?;
     print!("{}", report.render());
-    if let Some(url) = record_in {
-        let b = open_existing(&url)?;
-        Catalog::new(&*b)
-            .record_drill(&report.record)
-            .map_err(|e| fail(&format!("could not record the drill: {e}")))?;
+    if let Some(file) = record_later {
+        let j = serde_json::json!({"id": report.record.id, "fields": report.record.to_fields()});
+        std::fs::write(&file, format!("{j:#}\n"))
+            .map_err(|e| fail(&format!("cannot write {file}: {e}")))?;
         println!(
-            "recorded as {} in {}",
-            report.record.id,
-            crate::ops::redact(&url)
+            "the result is kept in {file}, not recorded yet: `obop drill --record-from {file} --server ok|skipped|failed --record-in URL` records it"
         );
     }
+    if let Some(url) = record_in {
+        record(&url, &report.record)?;
+    }
     if report.passed() {
+        Ok(())
+    } else {
+        Err(exit_for(report.error_code()))
+    }
+}
+
+fn record(url: &str, rec: &DrillRecord) -> Exit {
+    let b = open_existing(url)?;
+    Catalog::new(&*b)
+        .record_drill(rec)
+        .map_err(|e| fail(&format!("could not record the drill: {e}")))?;
+    record_event(
+        &b,
+        "drill_recorded",
+        &format!(
+            "restore drill of {} recorded as {}: {}",
+            rec.backup_id,
+            rec.id,
+            if rec.passed { "passed" } else { "FAILED" }
+        ),
+    );
+    println!("recorded as {} in {}", rec.id, crate::ops::redact(url));
+    Ok(())
+}
+
+/// `obop drill --record-from FILE --server ok|skipped|failed --record-in URL`.
+fn record_from(file: &str, args: &mut Vec<String>) -> Exit {
+    let server = take(args, "--server").ok_or_else(usage)?;
+    let url = take(args, "--record-in").ok_or_else(usage)?;
+    let detail = take(args, "--detail").unwrap_or_default();
+    if !args.is_empty() || !matches!(server.as_str(), "ok" | "skipped" | "failed") {
+        return Err(usage());
+    }
+    let text =
+        std::fs::read_to_string(file).map_err(|e| fail(&format!("cannot read {file}: {e}")))?;
+    let j: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|e| fail(&format!("{file} is not a drill result: {e}")))?;
+    let id = j["id"].as_str().unwrap_or_default();
+    let fields = j["fields"].as_object().cloned().unwrap_or_default();
+    let mut rec = DrillRecord::from_fields(id, &fields)
+        .ok_or_else(|| fail(&format!("{file} is not a drill result")))?;
+    rec.checks.push(DrillCheck {
+        name: "server".into(),
+        ok: server != "failed",
+        detail: match (server.as_str(), detail.is_empty()) {
+            ("ok", _) => "a server started on the copy and answered".to_string(),
+            ("skipped", _) => "not checked: the server check was skipped".to_string(),
+            (_, true) => "a server on the copy did not start or did not answer".to_string(),
+            (_, false) => detail,
+        },
+    });
+    rec.passed = rec.checks.iter().all(|c| c.ok);
+    record(&url, &rec)?;
+    if rec.passed {
         Ok(())
     } else {
         Err(ExitCode::FAILURE)
@@ -150,7 +219,7 @@ pub fn storage_cmd(args: &mut Vec<String>) -> Exit {
                 })
             }
             let plane = take(args, "--plane").unwrap_or_else(|| "main".into());
-            let attested_by = take(args, "--by").unwrap_or_else(|| "operator".into());
+            let attested_by = take(args, "--by").unwrap_or_else(operator_name);
             let a = Attestation {
                 plane,
                 host: need(args, "--host")?,
@@ -172,6 +241,7 @@ pub fn storage_cmd(args: &mut Vec<String>) -> Exit {
                 ("--custody", &a.key_custody),
                 ("--readers", &a.key_readers),
                 ("--evidence", &a.evidence),
+                ("--by", &a.attested_by),
             ] {
                 if v.trim().is_empty() || v.len() > 300 || v.chars().any(char::is_control) {
                     return Err(fail(&format!(
@@ -189,9 +259,24 @@ pub fn storage_cmd(args: &mut Vec<String>) -> Exit {
             Catalog::new(&*backend)
                 .attest(&a)
                 .map_err(|e| fail(&format!("error: {e}")))?;
+            record_event(
+                &backend,
+                "storage_attested",
+                &format!(
+                    "plane {} on {}: {}; keys held by {}; attested by {}",
+                    a.plane, a.host, a.mechanism, a.key_custody, a.attested_by
+                ),
+            );
             println!(
-                "attested: plane {} on {} ({}) is encrypted at rest with {}; keys held by {}, readable by {}; evidence: {}. Renew within 12 months and after any host change.",
-                a.plane, a.host, a.provider, a.mechanism, a.key_custody, a.key_readers, a.evidence
+                "attested by {}: plane {} on {} ({}) is encrypted at rest with {}; keys held by {}, readable by {}; evidence: {}. This is an attestation, not a verification: obop does not look. Renew within 12 months and after any host change.",
+                a.attested_by,
+                a.plane,
+                a.host,
+                a.provider,
+                a.mechanism,
+                a.key_custody,
+                a.key_readers,
+                a.evidence
             );
             Ok(())
         }

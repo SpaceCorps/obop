@@ -1,9 +1,7 @@
 //! Test support: a backend that can be made to fail, to test what the code around it leaves
 //! behind when storage fails half way.
 
-use obop_storage::{
-    ApplyError, Backend, Fields, LockGuard, Op, Result, Row, RowSink, Swap,
-};
+use obop_storage::{ApplyError, Backend, Fields, LockGuard, Op, Result, Row, RowSink, Swap};
 use serde_json::Value as J;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

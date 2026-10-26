@@ -178,8 +178,9 @@ impl Scratch {
                     N.fetch_add(1, Ordering::SeqCst),
                     obop_keys::hex(&obop_keys::random::<8>())
                 ));
-                crate::fsutil::create_dir_private(&dir)
-                    .map_err(|e| format!("cannot make the scratch directory {}: {e}", dir.display()))?;
+                crate::fsutil::create_dir_private(&dir).map_err(|e| {
+                    format!("cannot make the scratch directory {}: {e}", dir.display())
+                })?;
                 let url = format!("sqlite://{}", dir.join("scratch.db").display());
                 let backend = match obop_storage::open(&url) {
                     Ok(b) => b,

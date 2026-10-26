@@ -878,6 +878,25 @@ fn key_required(key_id: &str) -> String {
     )
 }
 
+/// What can be said about a backup from its manifest alone, before any database is opened or
+/// created for a restore: a sealed backup whose key is not configured, or a plain one offered to
+/// an instance that seals its own, is refused without touching anything.
+pub fn precheck(file: &Path, keys: &Keys) -> Result<(), String> {
+    let (m, _) = read_manifest(file)?;
+    if m.sealed() {
+        let enc = m
+            .encryption
+            .as_ref()
+            .ok_or("the manifest of a sealed backup has no encryption section")?;
+        if keys.ring.find(&enc.key_id).is_none() {
+            return Err(key_required(&enc.key_id));
+        }
+    } else if keys.refuses_plain() {
+        return Err(not_sealed(keys));
+    }
+    Ok(())
+}
+
 fn not_sealed(keys: &Keys) -> String {
     format!(
         "{NOT_SEALED}: this backup is plain (format 1), but this instance seals its backups (key {}). A plain backup is not authenticated: anyone who can write the backup directory could have forged it. If it is an old backup from before a key was set and you trust where it has been, pass --allow-plain",

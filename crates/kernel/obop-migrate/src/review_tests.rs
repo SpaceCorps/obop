@@ -20,6 +20,7 @@ fn a_database_holding_only_operator_records_is_still_new_and_gets_stamped() {
         ("obop_backup", "b1"),
         ("obop_restore_drill", "d1"),
         ("obop_storage_attestation", "a1"),
+        ("security_event", "e1"),
     ] {
         b.insert(model, id, &Fields::new()).unwrap();
     }

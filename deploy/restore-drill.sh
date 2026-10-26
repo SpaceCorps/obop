@@ -16,10 +16,15 @@
 # OBOP              the obop binary (default: obop on the PATH)
 # PSQL              the psql client (default: psql)
 # DRILL_PORT        port for the smoke server (default 18999); DRILL_SERVE=0 skips the server
+# DRILL_ALLOW_PLAIN=1  drill a plain (format 1) backup although a key is configured; without it such a
+#                   backup is refused (exit 4, backup_not_sealed): a plain pair proves nothing about who
+#                   wrote it
 # DRILL_MIGRATE=1   run the pending migration steps on the restored copy when the backup is from an
 #                   older schema (the drill of an upgrade); otherwise the drill fails and says so
 # DRILL_RECORD_IN   a database URL (the real one) to record the result in, with the measured recovery
-#                   point and time; `obop storage check` and /metrics read it
+#                   point and time; `obop storage check` and /metrics read it. It is recorded at the
+#                   END, after the server on the copy has answered (or failed to): a drill whose last
+#                   check failed is in the evidence as FAILED, never as a pass
 #
 # The checks themselves are `obop drill` (counts, a digest of every record, schema, ledger, accounts,
 # sealed secrets, files, a read/write set). This script adds what needs a process: a server on the
@@ -36,7 +41,17 @@ port="${DRILL_PORT:-18999}"
 name="obop_drill_$(date +%s)_$$"
 scratch="${DRILL_ADMIN_URL%/*}/$name"
 server_pid=""
+result_file="${TMPDIR:-/tmp}/obop-drill-result-$$.json"
+recorded=0
+# Record the finished drill (the checks of `obop drill` plus the server check) in the database
+# that DRILL_RECORD_IN names. `$1` is ok, skipped or failed; `$2` says why when it failed.
+record() {
+  [ -n "${DRILL_RECORD_IN:-}" ] && [ -f "$result_file" ] && [ "$recorded" = 0 ] || return 0
+  recorded=1
+  "$obop" drill --record-from "$result_file" --server "$1" --detail "${2:-}" --record-in "$DRILL_RECORD_IN" || true
+}
 cleanup() {
+  rm -f "$result_file"
   if [ -n "$server_pid" ]; then
     kill "$server_pid" 2>/dev/null || true
     wait "$server_pid" 2>/dev/null || true
@@ -44,13 +59,18 @@ cleanup() {
   $psql "$DRILL_ADMIN_URL" -qAt -c "DROP DATABASE IF EXISTS $name WITH (FORCE)" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
-fail() { echo "DRILL FAILED: $*" >&2; exit 1; }
+fail() { record failed "$*"; echo "DRILL FAILED: $*" >&2; exit 1; }
 
 echo "1/4 verify the backup file (sealed backups are opened and authenticated with the key)"
 set +e
-report="$("$obop" backup verify "$backup" 2>&1)"
+report="$("$obop" backup verify "$backup" ${DRILL_ALLOW_PLAIN:+--allow-plain} 2>&1)"
 code=$?
 set -e
+if [ "$code" -eq 4 ]; then
+  echo "DRILL FAILED: the backup is plain and a key is configured (backup_not_sealed); set DRILL_ALLOW_PLAIN=1 to vouch for it" >&2
+  echo "$report" >&2
+  exit 4
+fi
 if [ "$code" -eq 3 ]; then
   echo "DRILL FAILED: the backup is sealed and its key is not configured (restore_key_required)" >&2
   echo "$report" >&2
@@ -64,8 +84,10 @@ $psql "$DRILL_ADMIN_URL" -qAt -c "CREATE DATABASE $name" >/dev/null || fail "can
 
 echo "3/4 restore into it and check the copy (obop drill)"
 args=("$backup" --scratch "$scratch" --keep)
+[ -n "${DRILL_ALLOW_PLAIN:-}" ] && args+=(--allow-plain)
 [ "${DRILL_MIGRATE:-0}" = "1" ] && args+=(--migrate)
-[ -n "${DRILL_RECORD_IN:-}" ] && args+=(--record-in "$DRILL_RECORD_IN")
+# The result is kept in a file and recorded after the server step, so that one drill is one record.
+[ -n "${DRILL_RECORD_IN:-}" ] && args+=(--record-later "$result_file")
 "$obop" drill "${args[@]}" || fail "a check of the restored copy failed (above)"
 
 if [ "${DRILL_SERVE:-1}" = "1" ]; then
@@ -86,7 +108,9 @@ if [ "${DRILL_SERVE:-1}" = "1" ]; then
   [ "$ready" = "200" ] || fail "GET /readyz answered $ready, not 200"
   echo "  GET /readyz -> 200"
   rm -f "${TMPDIR:-/tmp}/obop-drill-$$.log"
+  record ok
 else
   echo "4/4 (server check skipped)"
+  record skipped
 fi
 echo "DRILL OK: $backup restores, verifies, opens and serves."

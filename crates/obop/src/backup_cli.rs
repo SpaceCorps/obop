@@ -17,6 +17,11 @@ use std::time::Duration;
 /// The process exit status of a restore or verify that needs a key that is not configured. Stable:
 /// scripts test for it (OBR-DAT-046).
 pub const EXIT_KEY_REQUIRED: u8 = 3;
+/// A plain backup offered to an instance that seals its own (`backup_not_sealed`; `--allow-plain`).
+pub const EXIT_NOT_SEALED: u8 = 4;
+/// A restore whose records are in but whose uploaded files could not all be written
+/// (`restore_files_failed`; run it again with `--force`).
+pub const EXIT_FILES_FAILED: u8 = 5;
 
 /// The keys of this process for backups: `OBOP_BACKUP_KEY`, else the server key from the
 /// environment (never a key generated into the database; see `Keys::from_env`).
@@ -25,55 +30,98 @@ pub fn backup_keys() -> Result<Keys, String> {
     Keys::from_env(&server)
 }
 
-/// A failed backup or restore as an exit status: code 3 for a missing key, 1 otherwise.
+/// As [`backup_keys`], for a command that opens backups: `--allow-plain` says the operator
+/// vouches for a plain (format 1) backup although this instance seals its own.
+pub fn backup_keys_for(args: &mut Vec<String>) -> Result<Keys, String> {
+    let allow = has(args, "--allow-plain");
+    backup_keys().map(|k| k.allowing_plain(allow))
+}
+
+/// The exit status of a failure with a stable code (`restore_key_required` 3, `backup_not_sealed`
+/// 4, `restore_files_failed` 5), 1 for anything else.
+pub(crate) fn exit_for(code: Option<&str>) -> ExitCode {
+    match code {
+        Some(backup::KEY_REQUIRED) => ExitCode::from(EXIT_KEY_REQUIRED),
+        Some(backup::NOT_SEALED) => ExitCode::from(EXIT_NOT_SEALED),
+        Some(backup::FILES_FAILED) => ExitCode::from(EXIT_FILES_FAILED),
+        _ => ExitCode::FAILURE,
+    }
+}
+
+/// A failed backup or restore as an exit status (see [`exit_for`]).
 pub(crate) fn failure_of(what: &str, e: &str) -> ExitCode {
     eprintln!("{what}: {e}");
-    if backup::error_code(e).is_some() {
-        ExitCode::from(EXIT_KEY_REQUIRED)
-    } else {
-        ExitCode::FAILURE
-    }
+    exit_for(backup::error_code(e))
 }
 
 /// The backup gate of `module.upgrade` and `module.rollback` when they rewrite records
 /// (OBR-DAT-053): a verified backup is taken into `OBOP_BACKUP_DIR` first and its id goes into the
 /// ledger rows. On PostgreSQL (strict) there must be a directory, or the update is refused with
 /// nothing changed; elsewhere it goes ahead with a warning. `OBOP_MIGRATION_GATES=relaxed` lets a
-/// PostgreSQL instance proceed without (its operator then owns the backup).
+/// PostgreSQL instance proceed without (its operator then owns the backup). A tenant of a managed
+/// instance cannot set either: the refusal says whom to ask.
 pub struct ModuleGate {
     pub backend: Arc<dyn obop_storage::Backend>,
     pub blobs: Arc<dyn obop_storage::blob::Blobs>,
+    pub settings: GateSettings,
+}
+
+/// What a [`ModuleGate`] decides by: read from the environment once, handed in by tests.
+#[derive(Clone)]
+pub struct GateSettings {
     pub strict: bool,
+    pub dir: Option<std::path::PathBuf>,
+    pub keys: Keys,
+}
+
+impl GateSettings {
+    /// `OBOP_MIGRATION_GATES` (strict or relaxed; an unknown value is an error, as for
+    /// `obop migrate run`), `OBOP_BACKUP_DIR` and the backup keys.
+    pub fn from_env(backend_kind: &str) -> Result<GateSettings, String> {
+        let chosen = std::env::var("OBOP_MIGRATION_GATES").ok();
+        let strict = match chosen.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            None => backend_kind == "postgres",
+            Some(s) => match obop_ops::gates::Mode::parse(s) {
+                Some(m) => m == obop_ops::gates::Mode::Strict,
+                None => {
+                    return Err(format!(
+                        "OBOP_MIGRATION_GATES takes strict or relaxed, not {s:?}"
+                    ));
+                }
+            },
+        };
+        Ok(GateSettings {
+            strict,
+            dir: std::env::var("OBOP_BACKUP_DIR")
+                .ok()
+                .filter(|d| !d.trim().is_empty())
+                .map(std::path::PathBuf::from),
+            keys: backup_keys()?,
+        })
+    }
 }
 
 impl ModuleGate {
     pub fn new(
         backend: Arc<dyn obop_storage::Backend>,
         blobs: Arc<dyn obop_storage::blob::Blobs>,
+        settings: GateSettings,
     ) -> ModuleGate {
-        let chosen = std::env::var("OBOP_MIGRATION_GATES").ok();
-        let strict = match chosen.as_deref().map(str::trim) {
-            Some("relaxed") => false,
-            Some("strict") => true,
-            _ => backend.kind() == "postgres",
-        };
         ModuleGate {
             backend,
             blobs,
-            strict,
+            settings,
         }
     }
 }
 
 impl obop_pkg::MigrationGate for ModuleGate {
     fn before(&self, what: &obop_pkg::GateRequest) -> Result<obop_pkg::GateReceipt, String> {
-        let dir = std::env::var("OBOP_BACKUP_DIR")
-            .ok()
-            .filter(|d| !d.trim().is_empty());
-        let Some(dir) = dir else {
-            return if self.strict {
+        let s = &self.settings;
+        let Some(dir) = &s.dir else {
+            return if s.strict {
                 Err(format!(
-                    "{} rewrites stored records ({}) and there is no place for the verified backup that must come first. Set OBOP_BACKUP_DIR to a volume (docs/DEPLOY.md), or OBOP_MIGRATION_GATES=relaxed if you take your own",
+                    "{} rewrites stored records ({}) and there is no place for the verified backup that must come first. The operator of this instance sets OBOP_BACKUP_DIR to a volume (docs/DEPLOY.md), or OBOP_MIGRATION_GATES=relaxed if they take their own: ask them; a user of the instance cannot change it",
                     what.command,
                     what.modules.join(", ")
                 ))
@@ -85,12 +133,11 @@ impl obop_pkg::MigrationGate for ModuleGate {
                 Ok(obop_pkg::GateReceipt::default())
             };
         };
-        let keys = backup_keys()?;
         let schema = Migrator::new(self.backend.clone(), KeyRing::default())
             .status()
-            .map(|s| u64::from(s.stored.unwrap_or(0)))
+            .map(|st| u64::from(st.stored.unwrap_or(0)))
             .unwrap_or(0);
-        let settings = Settings::new(dir, keys);
+        let settings = Settings::new(dir, s.keys.clone());
         let o = schedule::take(
             &self.backend,
             Some(&*self.blobs),
@@ -106,12 +153,14 @@ impl obop_pkg::MigrationGate for ModuleGate {
             what.modules.join(", "),
             o.backup.id
         );
+        for n in &o.notes {
+            eprintln!("warning: {n}");
+        }
         Ok(obop_pkg::GateReceipt {
             backup_id: Some(o.backup.id),
         })
     }
 }
-
 /// How the instance takes the backup that comes before an update from inside (D63): the same
 /// consistent, verified backup `obop backup` writes, into a directory.
 pub fn backup_fn(url: String) -> obop_update::BackupFn {
@@ -125,6 +174,11 @@ pub fn backup_fn(url: String) -> obop_update::BackupFn {
         let blobs = blob_catalog(&backend, &url).map_err(|_| "cannot open the uploaded files")?;
         let keys = backup_keys()?;
         let c = backup::create_sealed(&backend, Some(&blobs), schema, dir, &keys, &mut |_| {})?;
+        if !c.manifest.sealed() {
+            eprintln!(
+                "warning: the backup before the update is NOT encrypted: set OBOP_BACKUP_KEY (or OBOP_SECRET_KEY)"
+            );
+        }
         backup::verify_with(&c.data_path, &keys)
             .map_err(|e| format!("the backup was written but does not verify: {e}"))?;
         Ok(c.data_path.display().to_string())
@@ -221,6 +275,13 @@ fn retention(args: &mut Vec<String>) -> Result<Retention, ExitCode> {
     .map_err(|e| fail(&format!("error: {e}")))
 }
 
+/// `--max-age-days N` (or `OBOP_BACKUP_MAX_AGE_DAYS`): the age no scheduled backup outlives; 0 or
+/// `off` removes the bound.
+fn max_age(args: &mut Vec<String>) -> Result<Option<u64>, ExitCode> {
+    let v = take(args, "--max-age-days").or_else(|| std::env::var("OBOP_BACKUP_MAX_AGE_DAYS").ok());
+    obop_ops::retention::max_age_from_var(v.as_deref()).map_err(|e| fail(&format!("error: {e}")))
+}
+
 /// What a scheduled backup is made of, from the environment (the server's timer).
 pub fn settings_from_env(keys: Keys) -> Result<Option<(Settings, Duration)>, String> {
     let Some(every) = std::env::var("OBOP_BACKUP_SCHEDULE")
@@ -240,27 +301,45 @@ pub fn settings_from_env(keys: Keys) -> Result<Option<(Settings, Duration)>, Str
     let mut s = Settings::new(dir, keys);
     s.every = every;
     s.retention = Retention::from_env()?;
+    s.max_age = obop_ops::retention::max_age_from_var(
+        std::env::var("OBOP_BACKUP_MAX_AGE_DAYS").ok().as_deref(),
+    )?;
     let mut none: Vec<String> = Vec::new();
     s.sinks = sinks(&mut none);
     Ok(Some((s, every)))
 }
 
-/// Start the server's timer for scheduled backups when `OBOP_BACKUP_SCHEDULE` is set: one thread
-/// that asks every minute whether a backup is due. The decision lives in the database, so any
-/// number of processes may run it and one of them takes each backup.
-pub fn start_scheduler(
-    backend: Arc<dyn obop_storage::Backend>,
-    blobs: Arc<dyn obop_storage::blob::Blobs>,
-) -> Result<(), String> {
+/// The scheduled-backup settings of this process, read and checked, to start the timer with
+/// once the server is up. `serve` reads them before it opens (and so migrates) the database: a
+/// typo in a duration, a retention number or a key stops the start before anything is written.
+pub struct SchedulerPlan {
+    settings: Settings,
+    every: Duration,
+}
+
+/// Read and check the settings of the timer: `Ok(None)` when `OBOP_BACKUP_SCHEDULE` is unset or
+/// `off`.
+pub fn scheduler_plan() -> Result<Option<SchedulerPlan>, String> {
     if std::env::var_os("OBOP_BACKUP_SCHEDULE").is_none() {
-        return Ok(());
+        return Ok(None);
     }
     let keys = backup_keys()?;
-    let Some((settings, every)) = settings_from_env(keys)? else {
-        return Ok(());
+    Ok(settings_from_env(keys)?.map(|(settings, every)| SchedulerPlan { settings, every }))
+}
+
+/// Start the server's timer for scheduled backups: one thread that asks every minute whether a
+/// backup is due. The decision lives in the database, so any number of processes may run it and
+/// one of them takes each backup.
+pub fn start_scheduler(
+    plan: Option<SchedulerPlan>,
+    backend: Arc<dyn obop_storage::Backend>,
+    blobs: Arc<dyn obop_storage::blob::Blobs>,
+) {
+    let Some(SchedulerPlan { settings, every }) = plan else {
+        return;
     };
     eprintln!(
-        "scheduled backups: every {} into {} ({}); keeping {}{}",
+        "scheduled backups: every {} into {} ({}); keeping {}{}{}",
         obop_ops::doctor::human(every.as_secs()),
         settings.dir.display(),
         if settings.keys.can_seal() {
@@ -269,6 +348,10 @@ pub fn start_scheduler(
             "NOT encrypted: set OBOP_BACKUP_KEY"
         },
         settings.retention.describe(),
+        settings.max_age.map_or(String::new(), |a| format!(
+            ", none older than {} days",
+            a / 86_400
+        )),
         if settings.sinks.is_empty() {
             "; no off-host copy (set OBOP_BACKUP_COPY_DIR)".to_string()
         } else {
@@ -309,15 +392,16 @@ pub fn start_scheduler(
                             format!("; COPY FAILED: {:?}", o.copy_failures)
                         }
                     );
+                    for n in &o.notes {
+                        eprintln!("scheduled backup: {n}");
+                    }
                 }
                 Ok(None) => {}
                 Err(e) => eprintln!("scheduled backup failed: {e}"),
             }
         }
     });
-    Ok(())
 }
-
 pub fn backup_cmd(args: &mut Vec<String>) -> Exit {
     match args.first().map(String::as_str) {
         Some("run") => {
@@ -338,11 +422,11 @@ pub fn backup_cmd(args: &mut Vec<String>) -> Exit {
         args.remove(0);
         let structure_only = has(args, "--structure-only");
         let canary = take(args, "--canary");
+        let keys = backup_keys_for(args).map_err(|e| fail(&e))?;
         if args.len() != 1 {
             return Err(usage());
         }
         let file = Path::new(&args[0]);
-        let keys = backup_keys().map_err(|e| fail(&e))?;
         let verified = if structure_only {
             backup::verify_structure(file)
         } else {
@@ -354,13 +438,22 @@ pub fn backup_cmd(args: &mut Vec<String>) -> Exit {
             println!("  {model}: {n}");
         }
         if let Some(c) = canary {
-            let data = file
-                .to_string_lossy()
-                .trim_end_matches(".manifest.json")
-                .to_string();
-            let hits = backup::count_in_file(Path::new(&data), c.as_bytes())
+            let (hits, sealed) = backup::count_in_backup(file, c.as_bytes())
                 .map_err(|e| fail(&format!("FAILED: {e}")))?;
-            println!("canary scan: {hits} occurrence(s) of the given text in the file as stored");
+            if sealed {
+                println!(
+                    "canary scan: {hits} occurrence(s) of the given text in the sealed file as stored"
+                );
+            } else {
+                println!(
+                    "canary scan: {hits} occurrence(s) of the given text in the file after decompression (this backup is plain: gunzip gives everyone its records)"
+                );
+            }
+            if !sealed {
+                return Err(fail(
+                    "FAILED: this backup is not encrypted (format 1), so a canary scan proves nothing about it; seal backups with OBOP_BACKUP_KEY (or OBOP_SECRET_KEY)",
+                ));
+            }
             if hits > 0 {
                 return Err(fail(
                     "FAILED: the canary text is in the backup file in the clear",
@@ -457,14 +550,18 @@ pub fn restore_cmd(args: &mut Vec<String>) -> Exit {
     let from = take(args, "--from").ok_or_else(usage)?;
     let force = has(args, "--force");
     let dry_run = has(args, "--dry-run");
+    let keys = backup_keys_for(args).map_err(|e| fail(&e))?;
     if !args.is_empty() {
         return Err(usage());
     }
+    // A backup that cannot be opened is refused before the target database is opened, so a
+    // refused restore creates nothing (no file, no tables).
+    backup::precheck(Path::new(&from), &keys)
+        .map_err(|e| failure_of("restore refused or failed", &e))?;
     let backend =
         obop_storage::open(&url).map_err(|e| fail(&format!("cannot open the database: {e}")))?;
     let latest = obop_migrate::steps().len() as u64;
     let blobs = blob_catalog(&backend, &url)?;
-    let keys = backup_keys().map_err(|e| fail(&e))?;
     let r = backup::restore_sealed(
         &backend,
         Some(&blobs),
@@ -495,6 +592,14 @@ pub fn restore_cmd(args: &mut Vec<String>) -> Exit {
             format!("; replacing {} existing records", r.target_records)
         } else {
             String::new()
+        }
+    );
+    println!(
+        "{}",
+        if r.authenticated {
+            "the backup was opened with its key and authenticated"
+        } else {
+            "the backup is NOT authenticated (plain, format 1): it was only checked against its checksums"
         }
     );
     if r.manifest.core_version != obop_types::CORE_VERSION {
@@ -529,6 +634,7 @@ fn run_job(args: &mut Vec<String>) -> Exit {
         ));
     }
     let retention = retention(args)?;
+    let max_age = max_age(args)?;
     let sinks = sinks(args);
     let plain = has(args, "--plain");
     if !args.is_empty() {
@@ -552,6 +658,7 @@ fn run_job(args: &mut Vec<String>) -> Exit {
     let mut settings = Settings::new(out, keys);
     settings.sinks = sinks;
     settings.retention = retention;
+    settings.max_age = max_age;
     let o = schedule::take(
         &backend,
         Some(&blobs),
@@ -649,32 +756,46 @@ fn list(args: &mut Vec<String>) -> Exit {
     Ok(())
 }
 
-/// `obop backup prune [--dry-run]`: apply the retention policy to the scheduled backups now.
+/// `obop backup prune [--dry-run] [--no-sinks]`: apply the retention policy to the scheduled
+/// backups now, by the same rules as the scheduled job (the dry run is the plan of the real run).
 fn prune(args: &mut Vec<String>) -> Exit {
     let url = db_url(take(args, "--db").as_deref());
     let dry = has(args, "--dry-run");
+    let no_sinks = has(args, "--no-sinks");
     let retention = retention(args)?;
+    let max_age = max_age(args)?;
     let sinks = sinks(args);
     if !args.is_empty() {
         return Err(usage());
     }
     let backend = open_existing(&url)?;
-    let mut settings = Settings::new(".", Keys::none());
+    // The files this prune may remove are the ones under the directory the instance backs up
+    // into, when this shell knows it.
+    let dir = std::env::var("OBOP_BACKUP_DIR")
+        .ok()
+        .filter(|d| !d.trim().is_empty())
+        .unwrap_or_default();
+    let mut settings = Settings::new(dir, Keys::none());
     settings.retention = retention;
+    settings.max_age = max_age;
     settings.sinks = sinks;
+    settings.ignore_recorded_sinks = no_sinks;
     if dry {
-        let scheduled: Vec<(String, u64)> = Catalog::new(&*backend)
-            .backups()
-            .map_err(|e| fail(&e))?
-            .into_iter()
-            .filter(|b| b.reason == "scheduled")
-            .map(|b| (b.id, b.created_at))
-            .collect();
-        let d = obop_ops::retention::decide(settings.retention, &scheduled);
-        println!("policy: {}", settings.retention.describe());
-        println!("would keep {} and remove {}:", d.keep.len(), d.delete.len());
-        for id in &d.delete {
-            println!("  remove {id}");
+        let plan = schedule::prune_plan(&backend, &settings, &SystemClock).map_err(|e| fail(&e))?;
+        println!(
+            "policy: {}{}",
+            settings.retention.describe(),
+            settings.max_age.map_or(String::new(), |a| format!(
+                ", none older than {} days",
+                a / 86_400
+            ))
+        );
+        println!("would remove {}:", plan.remove.len());
+        for b in &plan.remove {
+            println!("  remove {}", b.id);
+        }
+        for n in &plan.notes {
+            println!("note: {n}");
         }
         return Ok(());
     }
