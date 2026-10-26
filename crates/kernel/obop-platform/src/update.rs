@@ -551,7 +551,7 @@ impl Platform {
                     }
                 }
             }
-            let _ = me.backend.update(TABLE, &id, &done);
+            me.finish_record(&id, &done);
         });
         Ok(answer)
     }

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { provideCatalogue, setLanguage, type Lang } from "@obop/ui";
 import { NETWORK_MESSAGE, serverFault } from "./net.ts";
-import { registerMeta, serverMessage } from "./serverMessage.ts";
+import { registerMeta, serverMessage, storageFaultMessage } from "./serverMessage.ts";
 
 // Every stable server message pattern (docs/MODULES.md sections 3.5, 4.1, 6.1 and the D55 install
 // errors) is shown in the person's language. For each language the real catalogue is loaded and every
@@ -12,6 +12,9 @@ const LANGS: Lang[] = ["de", "fr", "pl", "fi", "sv", "es"];
 const SAMPLES: string[] = [
   NETWORK_MESSAGE,
   serverFault(500),
+  "storage_busy",
+  "storage_unavailable",
+  "storage_timeout",
   'lead.stage starts as "new" when a record is created; it moves on through the model\'s actions',
   'lead.stage: moving from "new" to "won" is the mark_won action, which needs the crm.manager group',
   'stage must be new to do this, it is "won"',
@@ -62,7 +65,9 @@ afterEach(async () => {
 describe("server messages in every language", () => {
   it("are shown exactly as received in English", async () => {
     await setLanguage("en", false);
-    for (const raw of SAMPLES) expect(serverMessage(raw)).toBe(raw);
+    // (A refused database call is a code word, which is a sentence in English too: see below.)
+    for (const raw of SAMPLES.filter((s) => !s.startsWith("storage_")))
+      expect(serverMessage(raw)).toBe(raw);
   });
 
   for (const lang of LANGS) {
@@ -77,6 +82,20 @@ describe("server messages in every language", () => {
       expect(untranslated).toEqual([]);
     });
   }
+
+  it("shows a refused database call as a sentence, in English too, and not as a wrong password", async () => {
+    await setLanguage("en", false);
+    const busy = "The server is busy. Try again in a moment.";
+    expect(serverMessage("storage_busy")).toBe(busy);
+    expect(serverMessage("storage_timeout")).toContain("took too long");
+    // The sign-in form decides by status: a 503 is the server's trouble, whatever else the form
+    // would have said about a failed sign-in.
+    expect(storageFaultMessage(503, "storage_busy")).toBe(busy);
+    expect(storageFaultMessage(503, "storage_unavailable")).toContain("cannot be reached");
+    expect(storageFaultMessage(401, "")).toBeNull();
+    expect(storageFaultMessage(503, "something_else")).toBeNull();
+    expect(storageFaultMessage(503, undefined)).toBeNull();
+  });
 
   it("names modules, fields and options the way the interface does", async () => {
     provideCatalogue("de", read("de"));

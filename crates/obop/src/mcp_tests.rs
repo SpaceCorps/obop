@@ -375,10 +375,10 @@ async fn origins_that_are_not_allowed_get_403_before_anything_else() {
         ok.header("access-control-allow-origin"),
         "https://client.example"
     );
-    assert!(
-        ok.header("access-control-expose-headers")
-            .contains("Mcp-Session-Id")
-    );
+    let exposed = ok.header("access-control-expose-headers");
+    for name in ["Mcp-Session-Id", "Retry-After", "X-Obop-Applied"] {
+        assert!(exposed.contains(name), "{name} in {exposed}");
+    }
     // Same-origin on a loopback host is fine.
     let local = post_raw(
         &r,
@@ -983,6 +983,297 @@ async fn an_agent_proposes_a_delete_a_human_approves_once() {
             .await
             .0,
         404
+    );
+}
+
+/// A server whose store can be made to refuse calls, behind the guard, as PostgreSQL is.
+fn flaky_router() -> (Arc<obop_storage::testing::Flaky>, axum::Router) {
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    app.seed_demo();
+    let r = obop_http::router(
+        obop_http::HttpState::with_mcp(
+            app.dispatcher.clone(),
+            Arc::new(DevAuth),
+            McpConfig::default(),
+        ),
+        None,
+    );
+    (flaky, r)
+}
+
+#[tokio::test]
+async fn a_tool_call_the_store_refused_is_a_503_that_says_what_was_applied_never_a_200_tool_error()
+{
+    // D74: wherever in a tool call the store starts refusing (after the implicit action of the
+    // update committed, or before anything did), /mcp answers like REST: 503 with Retry-After and
+    // the applied marker, and the marker is true.
+    let (flaky, r) = flaky_router();
+    let sid = session(&r, "dev-admin").await;
+    let (mut none, mut partial) = (0, 0);
+    for k in 1..=10 {
+        let (s, lead) = rest(
+            &r,
+            "dev-admin",
+            "/api/lead/create",
+            json!({"title": format!("Lead {k}")}),
+        )
+        .await;
+        assert_eq!(s, 200, "{lead}");
+        let id = lead["value"]["id"].as_str().unwrap().to_string();
+        // The implicit action commits, the update that follows meets a refusal. (k = 0: the
+        // action's own batch is the one refused.)
+        flaky.refuse_nth_apply(k - 1);
+        let resp = rpc(
+            &r,
+            "dev-admin",
+            &sid,
+            json!({"jsonrpc":"2.0","id":7,"method":"tools/call","params":{
+                "name": "lead__update",
+                "arguments": {"id": id, "stage": "won", "contact_name": "Zed Changed"}}}),
+        )
+        .await;
+        flaky.allow_models();
+        let (_, now) = rest(&r, "dev-admin", "/api/lead/get", json!({"id": id})).await;
+        let stage = now["value"]["stage"].as_str().unwrap_or("").to_string();
+        let body = String::from_utf8_lossy(&resp.body).to_string();
+        if resp.status == 200 {
+            assert!(
+                !(resp.json()["result"]["isError"] == true && body.contains("storage_")),
+                "k={k}: a refusal of the store as a 200 tool error: {body}"
+            );
+            continue;
+        }
+        assert_eq!(resp.status, 503, "k={k}: {body}");
+        assert!(!resp.header("retry-after").is_empty(), "k={k}");
+        let applied = resp.header("x-obop-applied").to_string();
+        assert_eq!(
+            resp.json()["error"]["data"]["applied"],
+            applied.as_str(),
+            "k={k}"
+        );
+        match applied.as_str() {
+            "none" => {
+                none += 1;
+                assert_ne!(stage, "won", "k={k}: said nothing was changed: {body}");
+            }
+            "partial" => {
+                partial += 1;
+                assert_eq!(stage, "won", "k={k}: said part was applied: {body}");
+            }
+            other => panic!("k={k}: applied {other}: {body}"),
+        }
+    }
+    assert!(
+        none >= 1 && partial >= 1,
+        "the sweep saw {none} none and {partial} partial"
+    );
+}
+
+#[tokio::test]
+async fn a_batch_of_tool_calls_that_met_a_refusal_after_a_commit_is_a_partial_503_too() {
+    // A JSON-RPC batch (protocol 2025-03-26) is answered as a list; a refusal in it was a 200 with
+    // a tool error in the list and no marker. The rule goes by the state of the request: a fault
+    // was noted and a tool answered with an error.
+    let (flaky, r) = flaky_router();
+    let (sid, _) = initialize(&r, "dev-admin", "2025-03-26").await;
+    let (s, lead) = rest(
+        &r,
+        "dev-admin",
+        "/api/lead/create",
+        json!({"title": "Batch"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{lead}");
+    let id = lead["value"]["id"].as_str().unwrap().to_string();
+    // The implicit action commits, the update after it is refused.
+    flaky.refuse_nth_apply(1);
+    let resp = rpc(
+        &r,
+        "dev-admin",
+        &sid,
+        json!([{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{
+            "name": "lead__update",
+            "arguments": {"id": id, "stage": "won", "contact_name": "Zed Changed"}}}]),
+    )
+    .await;
+    flaky.allow_models();
+    let body = String::from_utf8_lossy(&resp.body).to_string();
+    assert_eq!(resp.status, 503, "{body}");
+    assert_eq!(resp.header("x-obop-applied"), "partial", "{body}");
+    assert!(!resp.header("retry-after").is_empty());
+    let (_, now) = rest(&r, "dev-admin", "/api/lead/get", json!({"id": id})).await;
+    assert_eq!(
+        now["value"]["stage"], "won",
+        "part of it was applied, as said"
+    );
+}
+
+#[tokio::test]
+async fn an_approval_whose_plan_cannot_be_put_back_says_the_proposal_is_lost_and_logs_it() {
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend.clone()));
+    app.seed_demo();
+    let r = obop_http::router(
+        obop_http::HttpState::with_mcp(
+            app.dispatcher.clone(),
+            Arc::new(DevAuth),
+            McpConfig::default(),
+        ),
+        None,
+    );
+    let sid = session(&r, "dev-agent").await;
+    let mut lost = 0;
+    for k in 0..24 {
+        let (_, lead) = rest(
+            &r,
+            "dev-admin",
+            "/api/lead/create",
+            json!({"title": "Doomed"}),
+        )
+        .await;
+        let id = lead["value"]["id"].as_str().unwrap().to_string();
+        let proposed = call_tool(&r, "dev-agent", &sid, "lead__delete", json!({"id": id})).await;
+        let plan = proposed["result"]["structuredContent"]["plan_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        // A refusal inside the run, and the short-lived values refused for good: the plan cannot
+        // go back.
+        flaky.refuse_call_after(k);
+        flaky.refuse_kv_put(1000);
+        let resp = send(
+            &r,
+            Request::post(format!("/api/approve/{plan}"))
+                .header("host", HOST)
+                .header("authorization", "Bearer dev-admin")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await;
+        flaky.allow_models();
+        if resp.status != 503 || resp.header("x-obop-applied") != "partial" {
+            continue;
+        }
+        lost += 1;
+        let (s, _) = rest(&r, "dev-admin", &format!("/api/approve/{plan}"), json!({})).await;
+        assert_eq!(s, 404, "k={k}: the proposal is gone, as the answer says");
+        let (s, _) = rest(&r, "dev-admin", "/api/lead/get", json!({"id": id})).await;
+        assert_eq!(s, 200, "k={k}: and nothing else was done");
+        let entries = backend.list("security_event").unwrap();
+        assert!(
+            entries
+                .iter()
+                .any(|(_, e)| e["kind"] == "plan_lost"
+                    && e["detail"].as_str().unwrap().contains(&plan)),
+            "k={k}: the log names the plan"
+        );
+    }
+    assert!(lost >= 1, "the sweep never lost a plan");
+}
+
+#[tokio::test]
+async fn an_approval_the_store_refused_before_it_changed_anything_can_be_repeated() {
+    // D74: the plan is taken out before it runs. If the run is refused before any change, the plan
+    // goes back, or the approver's retry (the 503 says to retry) would be a 404 and the agent's
+    // proposal would be lost.
+    let (flaky, r) = flaky_router();
+    let sid = session(&r, "dev-agent").await;
+    let mut repeated = 0;
+    for k in 1..=8 {
+        let (_, lead) = rest(
+            &r,
+            "dev-admin",
+            "/api/lead/create",
+            json!({"title": "Throwaway"}),
+        )
+        .await;
+        let id = lead["value"]["id"].as_str().unwrap().to_string();
+        let proposed = call_tool(&r, "dev-agent", &sid, "lead__delete", json!({"id": id})).await;
+        let plan = proposed["result"]["structuredContent"]["plan_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        flaky.refuse_n_after_the_next_write(k);
+        let resp = send(
+            &r,
+            Request::post(format!("/api/approve/{plan}"))
+                .header("host", HOST)
+                .header("authorization", "Bearer dev-admin")
+                .header("content-type", "application/json")
+                .body(Body::from("{}"))
+                .unwrap(),
+        )
+        .await;
+        flaky.allow_models();
+        if resp.status == 200 {
+            continue;
+        }
+        assert_eq!(
+            resp.status,
+            503,
+            "k={k}: {}",
+            String::from_utf8_lossy(&resp.body)
+        );
+        if resp.header("x-obop-applied") != "none" {
+            continue;
+        }
+        repeated += 1;
+        let (s, b) = rest(&r, "dev-admin", &format!("/api/approve/{plan}"), json!({})).await;
+        assert_eq!(s, 200, "k={k}: the retry finds the plan: {b}");
+        let (s, _) = rest(&r, "dev-admin", "/api/lead/get", json!({"id": id})).await;
+        assert_eq!(s, 400, "k={k}: the record is gone after the retry");
+    }
+    assert!(
+        repeated >= 1,
+        "the sweep never refused an approval before it changed anything"
+    );
+}
+
+#[tokio::test]
+async fn every_generated_operation_of_a_real_instance_document_declares_the_503() {
+    // The unit test of the document builder has no modules; this one has all of them, so it covers
+    // the generated list, search, get, create, update, delete, bulk_create and action operations
+    // (nearly all of a real document), not just the fixed ones.
+    let r = router();
+    let resp = send(
+        &r,
+        Request::get("/api/openapi.json")
+            .header("host", HOST)
+            .header("authorization", "Bearer dev-admin")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(resp.status, 200);
+    let doc = resp.json();
+    let (mut generated, mut checked) = (0, 0);
+    for (path, item) in doc["paths"].as_object().unwrap() {
+        for (method, op) in item.as_object().unwrap() {
+            if op.get("operationId").is_none() {
+                continue;
+            }
+            checked += 1;
+            let r503 = &op["responses"]["503"];
+            assert!(r503.is_object(), "{method} {path} has no 503");
+            assert!(
+                r503["headers"]["Retry-After"].is_object()
+                    && r503["headers"]["X-Obop-Applied"].is_object(),
+                "{method} {path}"
+            );
+            if path.ends_with("/create")
+                || path.ends_with("/bulk_create")
+                || path.ends_with("/update")
+                || path.ends_with("/list")
+            {
+                generated += 1;
+            }
+        }
+    }
+    assert!(
+        checked > 100 && generated > 40,
+        "{checked} checked, {generated} generated"
     );
 }
 

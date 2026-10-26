@@ -57,17 +57,17 @@ impl Catalog for Dispatcher {
 
 /// A keyed pseudonym of `value`: stable for one connection, different for every other, and not
 /// reversible without the master key (and, even with it, only by guessing the plain value).
-pub fn pseudonym(secrets: &SecretBox, connection: &str, value: &J) -> String {
+pub fn pseudonym(secrets: &SecretBox, connection: &str, value: &J) -> Result<String, String> {
     let text = match value {
         J::String(s) => s.clone(),
         other => other.to_string(),
     };
     let mut m =
-        HmacSha256::new_from_slice(&secrets.pseudonym_key(&format!("pseudonym:{connection}")))
+        HmacSha256::new_from_slice(&secrets.pseudonym_key(&format!("pseudonym:{connection}"))?)
             .expect("HMAC takes any key length");
     m.update(b"v1|");
     m.update(text.as_bytes());
-    format!("psn_{}", hex(&m.finalize().into_bytes()[..16]))
+    Ok(format!("psn_{}", hex(&m.finalize().into_bytes()[..16])))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,12 +86,18 @@ pub enum Refusal {
     RateLimited(i64),
     VolumeCap(i64),
     TooManyRows(usize),
+    /// The policy, the connection's consents or the provider's record could not be read because
+    /// the store was busy (D74). Not a refusal of the data flow: try again.
+    StoreBusy,
 }
 
 impl std::fmt::Display for Refusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::FlowsDisabled => write!(f, "flows are switched off for this instance"),
+            Self::StoreBusy => f.write_str(
+                &obop_storage::fault::Fault::Busy.message("the database is busy, try again"),
+            ),
             Self::DirectionNotAllowed => {
                 write!(f, "the provider does not send data in this direction")
             }
@@ -271,7 +277,7 @@ impl Egress {
         provider: &Provider,
         model: &str,
     ) -> Result<Plan, Refusal> {
-        let inst = InstancePolicy::load(&*self.backend);
+        let inst = InstancePolicy::try_load(&*self.backend).map_err(|_| Refusal::StoreBusy)?;
         if !inst.flows_enabled {
             return Err(Refusal::FlowsDisabled);
         }
@@ -281,7 +287,7 @@ impl Egress {
         if !conn.is_connected() {
             return Err(Refusal::NotConnected(conn.state.clone()));
         }
-        let consents = consents_of(&*self.backend, &conn.id);
+        let consents = try_consents_of(&*self.backend, &conn.id).map_err(|_| Refusal::StoreBusy)?;
         let Some(consent) = consents.iter().find(|c| c.is_active()) else {
             return Err(if consents.is_empty() {
                 Refusal::NoConsent
@@ -306,9 +312,10 @@ impl Egress {
             return Err(Refusal::ConsentClasses(uncovered));
         }
         if plan.sends_personal_data() {
-            if inst.require_dpa
-                && !provider_policy(&*self.backend, provider.id).is_some_and(|p| p.dpa_recorded)
-            {
+            // A refused read of the agreement is the store's trouble, not "no agreement recorded".
+            let agreement =
+                try_provider_policy(&*self.backend, provider.id).map_err(|_| Refusal::StoreBusy)?;
+            if inst.require_dpa && !agreement.is_some_and(|p| p.dpa_recorded) {
                 return Err(Refusal::NoDpa(provider.name.into()));
             }
             if inst.eu_only && provider.eu_adequate != "yes" {
@@ -319,9 +326,16 @@ impl Egress {
     }
 
     /// Flows in the last hour and records in the last day that were released for `connection`.
+    /// A log that cannot be read counts as none (for a display); the gate uses [`Egress::try_usage`].
     pub fn usage(&self, connection: &str, at: u64) -> (i64, i64) {
+        self.try_usage(connection, at).unwrap_or_default()
+    }
+
+    /// As [`Egress::usage`], and a refused read of the log is an error: read as "no flows yet" it
+    /// let the rate and volume caps pass.
+    pub fn try_usage(&self, connection: &str, at: u64) -> Result<(i64, i64), String> {
         let (mut flows, mut records) = (0, 0);
-        for (_, f) in self.backend.list(FLOW_LOG).unwrap_or_default() {
+        for (_, f) in self.backend.list(FLOW_LOG)? {
             if str_of(&f, "connection") != connection
                 || str_of(&f, "outcome") != "released"
                 || str_of(&f, "direction") != "outbound"
@@ -338,7 +352,7 @@ impl Egress {
                 records += f.get("record_count").and_then(J::as_i64).unwrap_or(0);
             }
         }
-        (flows, records)
+        Ok((flows, records))
     }
 
     /// The gate. `rows` are records read as the connection's owner (so permissions already
@@ -351,7 +365,9 @@ impl Egress {
         rows: Vec<Map<String, J>>,
     ) -> Result<Prepared, Refusal> {
         let outcome = self.prepare_inner(conn, provider, model, rows);
-        if let Err(r) = &outcome {
+        if let Err(r) = &outcome
+            && !matches!(r, Refusal::StoreBusy)
+        {
             self.log(
                 conn,
                 "outbound",
@@ -380,7 +396,11 @@ impl Egress {
             return Err(Refusal::TooManyRows(MAX_ROWS_PER_FLOW));
         }
         let at = now();
-        let (flows, records) = self.usage(&conn.id, at);
+        // The caps are checked against what the log says: a log that cannot be read is not "no
+        // flows yet", and nothing leaves on a guess (D74).
+        let (flows, records) = self
+            .try_usage(&conn.id, at)
+            .map_err(|_| Refusal::StoreBusy)?;
         if flows >= conn.rate_limit_per_hour {
             return Err(Refusal::RateLimited(conn.rate_limit_per_hour));
         }
@@ -390,7 +410,8 @@ impl Egress {
         let out: Vec<Map<String, J>> = rows
             .iter()
             .map(|r| self.apply(conn, &plan, r, Mode::Live))
-            .collect();
+            .collect::<Result<_, _>>()
+            .map_err(|_| Refusal::StoreBusy)?;
         let hash = sha256_hex(serde_json::to_string(&out).unwrap_or_default().as_bytes());
         let sent: Vec<String> = plan.sent().map(|f| f.name.clone()).collect();
         let denied: Vec<String> = plan
@@ -399,18 +420,22 @@ impl Egress {
             .chain(plan.unknown.iter().cloned())
             .collect();
         let mode = plan.mode_summary();
-        let flow_id = self.log(
-            conn,
-            "outbound",
-            model,
-            out.len(),
-            &sent,
-            &denied,
-            &mode,
-            &hash,
-            "released",
-            "",
-        );
+        // Every flow is recorded before it leaves: a row that cannot be written is a flow that does
+        // not happen (it was released with no trace, and the caller was told "applied none").
+        let flow_id = self
+            .try_log(
+                conn,
+                "outbound",
+                model,
+                out.len(),
+                &sent,
+                &denied,
+                &mode,
+                &hash,
+                "released",
+                "",
+            )
+            .map_err(|_| Refusal::StoreBusy)?;
         Ok(Prepared {
             rows: out,
             report: Report {
@@ -438,7 +463,8 @@ impl Egress {
         let out = rows
             .iter()
             .map(|r| self.apply(conn, &plan, r, Mode::Preview))
-            .collect();
+            .collect::<Result<_, _>>()
+            .map_err(|_| Refusal::StoreBusy)?;
         Ok((plan, out))
     }
 
@@ -448,17 +474,24 @@ impl Egress {
         plan: &Plan,
         row: &Map<String, J>,
         mode: Mode,
-    ) -> Map<String, J> {
+    ) -> Result<Map<String, J>, String> {
         let id = str_of(row, "id");
         let record = format!("{}:{id}", plan.model);
-        let reference = pseudonym(&self.secrets, &conn.id, &J::from(record.clone()));
+        let reference = pseudonym(&self.secrets, &conn.id, &J::from(record.clone()))?;
         if mode == Mode::Live {
             let mut f = Fields::new();
             f.insert("connection".into(), conn.id.clone().into());
             f.insert("record".into(), record.clone().into());
-            let _ = self
+            // The map is what lets erasure and revocation find what was sent. An entry that is
+            // there already (the same record sent before) is as it should be; a store that
+            // refused is not, and nothing leaves without it.
+            match self
                 .backend
-                .insert(PSEUDONYMS, &format!("{}:{reference}", conn.id), &f);
+                .insert(PSEUDONYMS, &format!("{}:{reference}", conn.id), &f)
+            {
+                Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
+                _ => {}
+            }
         }
         let mut out = Map::new();
         out.insert("ref".into(), reference.into());
@@ -468,18 +501,28 @@ impl Egress {
                 (_, J::Null) => J::Null,
                 (Treatment::Allow, v) => v.clone(),
                 (Treatment::Redact, _) => J::from(REDACTED),
-                (Treatment::Pseudonymise, v) => J::from(pseudonym(&self.secrets, &conn.id, v)),
-                (Treatment::Mask, v) => J::from(self.mask(conn, &record, &pf.name, v, mode)),
+                (Treatment::Pseudonymise, v) => J::from(pseudonym(&self.secrets, &conn.id, v)?),
+                (Treatment::Mask, v) => J::from(self.mask(conn, &record, &pf.name, v, mode)?),
                 (Treatment::Deny, _) => continue,
             };
             out.insert(pf.name.clone(), treated);
         }
-        out
+        Ok(out)
     }
 
     /// A reversible stand-in for `v`, stable per connection and value. The value is kept sealed
     /// in the instance so an inbound response that cites the token can be restored.
-    fn mask(&self, conn: &Connection, record: &str, field: &str, v: &J, mode: Mode) -> String {
+    ///
+    /// A token the vault could not store is not sent (a response that cites it could not be
+    /// restored, and the value would be gone): a refusal of the store is an error (D74).
+    fn mask(
+        &self,
+        conn: &Connection,
+        record: &str,
+        field: &str,
+        v: &J,
+        mode: Mode,
+    ) -> Result<String, String> {
         let text = match v {
             J::String(s) => s.clone(),
             other => other.to_string(),
@@ -488,13 +531,18 @@ impl Egress {
             &self.secrets,
             &format!("{}:vault", conn.id),
             &J::from(text.clone()),
-        );
+        )?;
         if mode == Mode::Preview {
-            return format!("TKN_{}", &index[4..16]);
+            return Ok(format!("TKN_{}", &index[4..16]));
         }
         let key = format!("{}:{index}", conn.id);
-        if let Ok(Some(f)) = self.backend.get(VAULT, &key) {
-            return str_of(&f, "token").to_string();
+        if let Some(f) = self.backend.get(VAULT, &key)? {
+            // The entry by value is there: make sure the entry by token is too (an earlier flow
+            // that was refused between the two writes, or one of an older release, left it out),
+            // or the token would be sent and could never be restored.
+            let token = str_of(&f, "token").to_string();
+            self.ensure_token_entry(&token, &f)?;
+            return Ok(token);
         }
         let token = format!("TKN_{}", crate::util::random_hex(6));
         let mut f = Fields::new();
@@ -508,17 +556,45 @@ impl Egress {
                 .seal(&format!("vault:{}", conn.id), &text)
                 .into(),
         );
-        // Two keys, one entry: by value (to stay stable) and by token (to restore).
-        if self.backend.insert(VAULT, &key, &f).is_ok() {
-            let _ = self.backend.insert(VAULT, &format!("tok:{token}"), &f);
-            token
-        } else {
-            self.backend
-                .get(VAULT, &key)
-                .ok()
-                .flatten()
-                .map(|f| str_of(&f, "token").to_string())
-                .unwrap_or(token)
+        // Two keys, one entry: by token (to restore) and by value (to stay stable). The one that
+        // restore reads goes first: if the second write is refused the token was never sent, and
+        // an entry by token that nothing points to is harmless (erasure finds it by its record).
+        let by_token = format!("tok:{token}");
+        self.backend.insert(VAULT, &by_token, &f)?;
+        match self.backend.insert(VAULT, &key, &f) {
+            Ok(()) => Ok(token),
+            Err(e) => {
+                let _ = self.backend.delete(VAULT, &by_token);
+                if obop_storage::fault::Fault::is_transient(&e) {
+                    return Err(e);
+                }
+                // Another flow stored the same value first: its token stands.
+                match self.backend.get(VAULT, &key)? {
+                    Some(f) => {
+                        let token = str_of(&f, "token").to_string();
+                        self.ensure_token_entry(&token, &f)?;
+                        Ok(token)
+                    }
+                    None => Err(e),
+                }
+            }
+        }
+    }
+
+    /// The entry that `restore` reads for `token` is there, written from `f` if it is not.
+    fn ensure_token_entry(&self, token: &str, f: &Fields) -> Result<(), String> {
+        let k = format!("tok:{token}");
+        if self.backend.get(VAULT, &k)?.is_some() {
+            return Ok(());
+        }
+        match self.backend.insert(VAULT, &k, f) {
+            Ok(()) => Ok(()),
+            Err(e) if obop_storage::fault::Fault::is_transient(&e) => Err(e),
+            // Written by another flow in between.
+            Err(e) => match self.backend.get(VAULT, &k)? {
+                Some(_) => Ok(()),
+                None => Err(e),
+            },
         }
     }
 
@@ -539,20 +615,27 @@ impl Egress {
 
     /// Drop everything the instance holds that links a pseudonym or a token to `record`
     /// (`model:id`): the erasure hook. Returns how many entries were removed per connection.
-    pub fn erase_subject(&self, record: &str) -> BTreeMap<String, usize> {
+    ///
+    /// A refusal of the store is an error, never "nothing to erase" (D74): personal data that
+    /// survives must not be answered as erased. Safe to run again.
+    pub fn erase_subject(&self, record: &str) -> Result<BTreeMap<String, usize>, String> {
         let mut per: BTreeMap<String, usize> = BTreeMap::new();
         for table in [PSEUDONYMS, VAULT, EXTMAP] {
-            for (id, f) in self.backend.list(table).unwrap_or_default() {
-                if str_of(&f, "record") == record
-                    && self.backend.delete(table, &id).unwrap_or(false)
-                {
+            for (id, f) in self.backend.list(table)? {
+                if str_of(&f, "record") == record && self.backend.delete(table, &id)? {
                     *per.entry(str_of(&f, "connection").to_string()).or_default() += 1;
                 }
             }
         }
         for (conn, n) in &per {
-            if let Ok(c) = Connection::load(&*self.backend, conn) {
-                self.log(
+            let c = match Connection::load(&*self.backend, conn) {
+                Ok(c) => Some(c),
+                Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
+                // The connection is gone: there is no row to say it on.
+                Err(_) => None,
+            };
+            if let Some(c) = c {
+                self.try_log(
                     &c,
                     "outbound",
                     record.split(':').next().unwrap_or(""),
@@ -563,27 +646,28 @@ impl Egress {
                     "",
                     "erased",
                     &format!("subject erased: {n} pseudonym or token entries removed"),
-                );
+                )?;
             }
         }
-        per
+        Ok(per)
     }
 
     /// Drop everything a connection holds that can be linked back (revocation): its tokens and
     /// pseudonym maps. The pseudonyms already sent stay meaningless without the key.
-    pub fn forget_connection(&self, connection: &str) -> usize {
+    ///
+    /// A refusal of the store is an error (D74); the keys are forgotten only when every entry is
+    /// gone, so a repeat can still find what is left. Safe to run again.
+    pub fn forget_connection(&self, connection: &str) -> Result<usize, String> {
         let mut n = 0;
         for table in [PSEUDONYMS, VAULT, EXTMAP] {
-            for (id, f) in self.backend.list(table).unwrap_or_default() {
-                if str_of(&f, "connection") == connection
-                    && self.backend.delete(table, &id).unwrap_or(false)
-                {
+            for (id, f) in self.backend.list(table)? {
+                if str_of(&f, "connection") == connection && self.backend.delete(table, &id)? {
                     n += 1;
                 }
             }
         }
-        self.secrets.forget_pseudonym_keys(connection);
-        n
+        self.secrets.forget_pseudonym_keys(connection)?;
+        Ok(n)
     }
 
     /// Append one row to the data flow log. Returns its id.
@@ -601,6 +685,28 @@ impl Egress {
         outcome: &str,
         reason: &str,
     ) -> String {
+        self.try_log(
+            conn, direction, model, count, sent, denied, mode, hash, outcome, reason,
+        )
+        .unwrap_or_default()
+    }
+
+    /// As [`Egress::log`], and a row the store refused is an error: the gate does not let a flow
+    /// go that it could not record.
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_log(
+        &self,
+        conn: &Connection,
+        direction: &str,
+        model: &str,
+        count: usize,
+        sent: &[String],
+        denied: &[String],
+        mode: &str,
+        hash: &str,
+        outcome: &str,
+        reason: &str,
+    ) -> Result<String, String> {
         let id = uuid::Uuid::now_v7().to_string();
         let f = json!({
             "connection": conn.id,
@@ -616,10 +722,9 @@ impl Egress {
             "outcome": outcome,
             "reason": reason,
         });
-        let _ = self
-            .backend
-            .insert(FLOW_LOG, &id, f.as_object().expect("object"));
-        id
+        self.backend
+            .insert(FLOW_LOG, &id, f.as_object().expect("object"))?;
+        Ok(id)
     }
 }
 
@@ -735,19 +840,17 @@ pub(crate) mod tests {
     #[test]
     fn pseudonyms_are_stable_per_connection_and_differ_across_connections() {
         let sb = SecretBox::for_tests();
-        let a = pseudonym(&sb, "c1", &J::from("ada@example.test"));
-        assert_eq!(a, pseudonym(&sb, "c1", &J::from("ada@example.test")));
-        assert_ne!(a, pseudonym(&sb, "c2", &J::from("ada@example.test")));
-        assert_ne!(a, pseudonym(&sb, "c1", &J::from("alan@example.test")));
+        let p = |sb: &SecretBox, c: &str, v: J| pseudonym(sb, c, &v).unwrap();
+        let a = p(&sb, "c1", J::from("ada@example.test"));
+        assert_eq!(a, p(&sb, "c1", J::from("ada@example.test")));
+        assert_ne!(a, p(&sb, "c2", J::from("ada@example.test")));
+        assert_ne!(a, p(&sb, "c1", J::from("alan@example.test")));
         assert!(!a.contains("ada") && a.len() == 4 + 32);
         // A different master key gives different pseudonyms: they are not derivable from the value.
         let other = SecretBox::from_secret("another-master-key-with-32-chars!!!").unwrap();
-        assert_ne!(a, pseudonym(&other, "c1", &J::from("ada@example.test")));
+        assert_ne!(a, p(&other, "c1", J::from("ada@example.test")));
         // Numbers and booleans pseudonymise too.
-        assert_ne!(
-            pseudonym(&sb, "c1", &J::from(5)),
-            pseudonym(&sb, "c1", &J::from("6"))
-        );
+        assert_ne!(p(&sb, "c1", J::from(5)), p(&sb, "c1", J::from("6")));
     }
 
     #[test]
@@ -868,6 +971,141 @@ pub(crate) mod tests {
             None,
             "pseudonyms have no way back"
         );
+    }
+
+    #[test]
+    fn a_token_the_vault_could_not_store_is_never_sent_and_the_flow_leaves_no_row() {
+        use obop_storage::testing::{Flaky, Mode};
+        // The vault write is refused: the token would be sent and could not be restored when a
+        // response cites it (and the value is gone). The flow stops, busy, and writes no row.
+        let (b, _, mut conn) = setup();
+        conn.policy
+            .fields
+            .insert("party.name".into(), Treatment::Mask);
+        let flaky = Flaky::new(b.clone());
+        let e = Egress::new(flaky.clone(), SecretBox::for_tests(), Arc::new(Fake));
+        flaky.refuse_model(VAULT, Mode::All);
+        let r = e.prepare(&conn, &webhook(), "party", vec![row("r1")]);
+        flaky.allow_models();
+        assert_eq!(r.unwrap_err(), Refusal::StoreBusy);
+        assert!(
+            b.list(FLOW_LOG).unwrap().is_empty(),
+            "no row for a flow that did not happen, and none that says it was refused by policy"
+        );
+        // With the vault back, the same flow goes and the token restores.
+        let p = e
+            .prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        let tok = p.rows[0]["name"].as_str().unwrap();
+        assert_eq!(e.restore("c1", tok).as_deref(), Some("Ada Lovelace"));
+    }
+
+    #[test]
+    fn a_mask_refused_between_its_two_writes_never_sends_a_token_that_cannot_be_restored() {
+        use obop_storage::testing::Flaky;
+        // The vault holds an entry by value and one by token; `restore` reads only the second. A
+        // refusal between the two writes left the first alone, and the flow that was repeated
+        // found it, sent its token and never wrote the second. One refused call at every
+        // position of the flow in turn, then the same flow again on a healthy store.
+        let mut stopped = 0;
+        for skip in 0..40 {
+            let (b, _, mut conn) = setup();
+            conn.policy
+                .fields
+                .insert("party.name".into(), Treatment::Mask);
+            let flaky = Flaky::new(b.clone());
+            let e = Egress::new(flaky.clone(), SecretBox::for_tests(), Arc::new(Fake));
+            flaky.refuse_call_after(skip);
+            let first = e.prepare(&conn, &webhook(), "party", vec![row("r1")]);
+            flaky.allow_models();
+            stopped += usize::from(first.is_err());
+            let p = e
+                .prepare(&conn, &webhook(), "party", vec![row("r1")])
+                .unwrap();
+            let tok = p.rows[0]["name"].as_str().unwrap();
+            assert_eq!(
+                e.restore("c1", tok).as_deref(),
+                Some("Ada Lovelace"),
+                "skip {skip}: a token was sent that cannot be restored"
+            );
+        }
+        assert!(stopped >= 5, "the sweep reached the flow: {stopped}");
+        // An entry by value that an earlier release left without its entry by token is mended.
+        let (b, e, mut conn) = setup();
+        conn.policy
+            .fields
+            .insert("party.name".into(), Treatment::Mask);
+        let p = e
+            .prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        let tok = p.rows[0]["name"].as_str().unwrap().to_string();
+        b.delete(VAULT, &format!("tok:{tok}")).unwrap();
+        assert_eq!(e.restore("c1", &tok), None);
+        let again = e
+            .prepare(&conn, &webhook(), "party", vec![row("r2")])
+            .unwrap();
+        assert_eq!(again.rows[0]["name"].as_str().unwrap(), tok);
+        assert_eq!(e.restore("c1", &tok).as_deref(), Some("Ada Lovelace"));
+    }
+
+    #[test]
+    fn a_refused_read_of_the_agreement_is_busy_and_never_logged_as_no_agreement() {
+        use obop_storage::testing::{Flaky, Mode};
+        let (b, _, conn) = setup();
+        let flaky = Flaky::new(b.clone());
+        let e = Egress::new(flaky.clone(), SecretBox::for_tests(), Arc::new(Fake));
+        flaky.refuse_model(PROVIDER_POLICY, Mode::Reads);
+        let r = e.prepare(&conn, &webhook(), "party", vec![row("r1")]);
+        flaky.allow_models();
+        assert_eq!(r.unwrap_err(), Refusal::StoreBusy);
+        assert!(
+            b.list(FLOW_LOG).unwrap().is_empty(),
+            "a busy store is not a refusal of the flow, so nothing is logged as one"
+        );
+        assert!(
+            e.prepare(&conn, &webhook(), "party", vec![row("r1")])
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn an_erasure_the_store_refused_is_an_error_and_a_repeat_finishes_it() {
+        use obop_storage::testing::{Flaky, Mode};
+        let (b, _, mut conn) = setup();
+        conn.policy
+            .fields
+            .insert("party.name".into(), Treatment::Mask);
+        let flaky = Flaky::new(b.clone());
+        let e = Egress::new(flaky.clone(), SecretBox::for_tests(), Arc::new(Fake));
+        let p = e
+            .prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        let tok = p.rows[0]["name"].as_str().unwrap().to_string();
+        // The vault cannot be listed: the erasure is not "done, nothing found".
+        flaky.refuse_model(VAULT, Mode::Reads);
+        let first = e.erase_subject("party:r1");
+        flaky.allow_models();
+        assert!(
+            matches!(&first, Err(m) if m.starts_with("storage_busy")),
+            "{first:?}"
+        );
+        assert_eq!(e.restore("c1", &tok).as_deref(), Some("Ada Lovelace"));
+        // The repeat finishes it.
+        let done = e.erase_subject("party:r1").unwrap();
+        assert!(done["c1"] >= 1, "{done:?}");
+        assert_eq!(e.restore("c1", &tok), None);
+        // A refused delete is an error too, and so is a refused forget of a revoked connection.
+        let p = e
+            .prepare(&conn, &webhook(), "party", vec![row("r9")])
+            .unwrap();
+        flaky.refuse_model(VAULT, Mode::All);
+        assert!(e.forget_connection("c1").is_err());
+        flaky.allow_models();
+        assert!(
+            e.restore("c1", p.rows[0]["name"].as_str().unwrap())
+                .is_some()
+        );
+        assert!(e.forget_connection("c1").unwrap() >= 1);
     }
 
     #[test]
@@ -1027,7 +1265,7 @@ pub(crate) mod tests {
             .unwrap();
         let tok = p.rows[0]["name"].as_str().unwrap().to_string();
         assert!(!b.list(PSEUDONYMS).unwrap().is_empty() && !b.list(VAULT).unwrap().is_empty());
-        let removed = e.erase_subject("party:r1");
+        let removed = e.erase_subject("party:r1").unwrap();
         assert!(removed["c1"] >= 3, "{removed:?}");
         assert_eq!(e.restore("c1", &tok), None, "the token no longer resolves");
         // r2's map is untouched, and the erasure itself is in the log.
@@ -1043,7 +1281,7 @@ pub(crate) mod tests {
                 .iter()
                 .any(|(_, f)| f["outcome"] == "erased")
         );
-        let n = e.forget_connection("c1");
+        let n = e.forget_connection("c1").unwrap();
         assert!(n >= 1 && b.list(PSEUDONYMS).unwrap().is_empty());
     }
 }

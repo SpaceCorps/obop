@@ -127,6 +127,7 @@ async fn a_listed_origin_gets_its_own_origin_back_and_never_credentials() {
         for name in [
             "Link",
             "Retry-After",
+            "X-Obop-Applied",
             "WWW-Authenticate",
             "X-Request-Id",
             "ETag",

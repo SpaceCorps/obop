@@ -77,6 +77,16 @@ struct Cached {
     css: Arc<(String, String)>,
 }
 
+/// What claiming an idempotency key came to.
+enum Claim {
+    /// This request owns the key and must give it back if it places no order.
+    Taken,
+    /// An order (this token) already owns it: the submit is a repeat.
+    Existing(String),
+    /// The store refused to say. Nothing is claimed, and nothing may be released.
+    Refused,
+}
+
 pub struct Site {
     api: PublicApi,
     cfg: Config,
@@ -177,32 +187,87 @@ impl Site {
         )
     }
 
-    /// Claim an idempotency key for an order about to be placed: `Ok(())` when this call owns
-    /// it, `Err(token)` with the token of the order that already owns it. Shared by every
-    /// server process, so a double submit that lands on two of them still makes one order.
-    fn claim_idem(&self, key: &str, token: &str) -> Result<(), String> {
+    /// Claim an idempotency key for an order about to be placed: [`Claim::Taken`] when this call
+    /// owns it, [`Claim::Existing`] with the token of the order that already owns it. Shared by
+    /// every server process, so a double submit that lands on two of them still makes one order.
+    /// A claim the store refused is **not** a claim ([`Claim::Refused`]): the submit is answered
+    /// at once (the 503 layer says so) and releases nothing, or it would delete the claim of the
+    /// other submit of the same form and the next one would make a second order (D74).
+    fn claim_idem(&self, key: &str, token: &str) -> Claim {
         let k = format!("idem:site:{key}");
         let b = self.api.backend();
-        if b.kv_put_new(&k, token, Some(86_400_000)).unwrap_or(true) {
-            return Ok(());
+        let at = util::now();
+        let mine = format!("{token}|{at}");
+        // The key can be given back between our failed claim and our read of it (the submit that
+        // held it failed its checkout and released it): then it is free, and this submit claims it
+        // again, instead of being sent to the order of a token that was never used. Three rounds
+        // are far more than a double click can need.
+        for _ in 0..3 {
+            match b.kv_put_new(&k, &mine, Some(86_400_000)) {
+                Ok(true) => return Claim::Taken,
+                Ok(false) => {}
+                Err(_) => return Claim::Refused,
+            }
+            let existing = match b.kv_get(&k) {
+                Ok(Some(v)) => v,
+                Ok(None) => continue,
+                Err(_) => return Claim::Refused,
+            };
+            let (owner, since) = existing
+                .split_once('|')
+                .map_or((existing.as_str(), 0), |(o, t)| {
+                    (o, t.parse::<u64>().unwrap_or(0))
+                });
+            // A claim that is old and has no order behind it is the ghost of a checkout that did
+            // not finish and could not give its key back (the store refused for longer than the
+            // tries): taken over, so the buyer's resubmit makes the order instead of being sent
+            // to a page that does not exist (D74). A young claim is a submit still being
+            // processed.
+            if at.saturating_sub(since) > 120
+                && matches!(self.api.receipt("ecommerce_order", owner), Ok(None))
+                && b.kv_swap(&k, &existing, &mine).unwrap_or(false)
+            {
+                return Claim::Taken;
+            }
+            return Claim::Existing(owner.to_string());
         }
-        Err(b
-            .kv_get(&k)
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| token.to_string()))
+        // Released again and again under our hands: no order is made, and none is promised.
+        Claim::Refused
     }
 
-    /// Give back the key of an order that was not placed, when it had one.
-    fn release_idem_key(&self, key: &Option<String>) {
-        if let Some(k) = key {
-            self.release_idem(k);
+    /// Give back the key of an order that was not placed. `held` is the key this request really
+    /// took (`None` when it took none), `token` the token it claimed it with.
+    fn release_idem_key(&self, held: &Option<String>, token: &str) {
+        if let Some(k) = held {
+            self.release_idem(k, token);
         }
     }
 
-    /// Give a claimed key back (the order was not placed).
-    fn release_idem(&self, key: &str) {
-        let _ = self.api.backend().kv_delete(&format!("idem:site:{key}"));
+    /// Give a claimed key back (the order was not placed), if it is still this request's: a claim
+    /// that another submit owns now (after a takeover) is left alone.
+    ///
+    /// This undoes what the request itself did, so it is allowed after a refused call and tried
+    /// again while the store is busy (D74): a key that stays claimed for a day turns a buyer's
+    /// second submit into a ghost order.
+    fn release_idem(&self, key: &str, token: &str) {
+        let k = format!("idem:site:{key}");
+        let b = self.api.backend();
+        let mine = format!("{token}|");
+        // The site logs nothing (a test holds it to that). A key that still cannot be given back
+        // after the tries expires with its day; the checkout that needed it is answered 503.
+        let _ = obop_storage::fault::patiently(4, Duration::from_millis(150), || {
+            obop_storage::fault::bookkeeping(|| match b.kv_get(&k) {
+                // Another submit's now (this one's was taken over): left alone.
+                Ok(Some(v)) if !v.starts_with(&mine) => Ok(false),
+                Ok(Some(_)) => b.kv_delete(&k),
+                // Gone already (expired, or released by an earlier try whose answer was lost).
+                Ok(None) => Ok(false),
+                // The store would not say whose it is: nothing is deleted on a guess, the read is
+                // tried again, and a key that still cannot be read is a ghost that the next submit
+                // takes over once it is old.
+                Err(e) => Err(e),
+            })
+        });
     }
 
     /// Whether `key` has already had `max` hits in its window (nothing is counted). The count

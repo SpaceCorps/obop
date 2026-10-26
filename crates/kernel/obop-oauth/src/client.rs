@@ -103,10 +103,9 @@ impl OAuth {
         if self.backend.count(CLIENT_MODEL).unwrap_or(0) >= self.cfg.max_clients {
             self.purge_clients();
             if self.backend.count(CLIENT_MODEL).unwrap_or(0) >= self.cfg.max_clients {
-                return Err(OAuthError::new(
-                    503,
-                    "temporarily_unavailable",
+                return Err(OAuthError::unavailable(
                     "this instance cannot register more applications right now",
+                    60,
                 ));
             }
         }
@@ -123,7 +122,7 @@ impl OAuth {
                     "used": false,
                 })),
             )
-            .map_err(|_| OAuthError::new(503, "temporarily_unavailable", "storage is busy"))?;
+            .map_err(|_| OAuthError::storage_busy())?;
         Ok(json!({
             "client_id": id,
             "client_id_issued_at": now,

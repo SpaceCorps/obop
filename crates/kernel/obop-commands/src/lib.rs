@@ -950,8 +950,80 @@ impl Dispatcher {
                 input = i;
             }
         }
-        self.plans.remove(self.shared.get(), plan_id);
-        self.run(&c, &plan.principal, vault, input, pre)
+        // Taken out first, so it runs once; if it is still there the plan would run again.
+        self.plans
+            .remove(self.shared.get(), plan_id)
+            .map_err(CallError::Handler)?;
+        let result = self.run(&c, &plan.principal, vault, input, pre);
+        // The store refused before the call changed anything: the plan goes back, or the
+        // approver's retry (the 503 says to retry) would meet "not found" and the proposal would
+        // be lost (D74). The decision is the one the 503 layer makes to say "nothing was changed"
+        // (a fault was noted and no change committed), whatever the run answered (a run that
+        // swallowed a refusal and answered Ok is turned into that 503 as well), and not a look at
+        // the text of the error, which the engine may wrap. After a change had committed the plan
+        // stays gone: it ran. So it does after `storage_unavailable`, where a change in flight may
+        // have committed before the connection broke: the answer says "unknown", and putting the
+        // plan back would let the retry run an approved action twice.
+        let state = obop_storage::fault::state();
+        if state.fault.is_some() && !state.wrote && !state.in_flight {
+            self.put_plan_back(approver, plan_id, &plan);
+        }
+        result
+    }
+
+    /// Put an approved plan back after the store refused its run before anything changed. Tried
+    /// for two seconds by the clock (each try may wait for a connection). If it cannot be put
+    /// back the proposal is lost, and the answer says so: the request counts as one that did
+    /// something that cannot be taken back (so it is a partial 503), and the security log has an
+    /// entry that names the plan, so that the agent can be asked to propose again.
+    fn put_plan_back(&self, approver: &Principal, plan_id: &str, plan: &Pending) {
+        use obop_storage::fault;
+        let started = std::time::Instant::now();
+        loop {
+            let put = fault::bookkeeping(|| self.plans.put(self.shared.get(), plan_id, plan));
+            if put.is_ok() {
+                return;
+            }
+            if started.elapsed() >= std::time::Duration::from_secs(2) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+        fault::external_change();
+        fault::mark_partial();
+        if let Some(s) = self.shared.get() {
+            let at = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            let what = format!(
+                "the approved plan {plan_id} ({}) could not be put back after the store refused its run: the proposal is lost, ask for it again",
+                plan.id
+            );
+            // Under the same pressure that lost the plan the log is often refused too: then the
+            // line on stderr is the only trace that names it.
+            if let Err(e) = audit::try_record_event(
+                &*s.backend,
+                at,
+                &plan.principal.id,
+                "plan_lost",
+                &approver.id,
+                &what,
+            ) {
+                eprintln!("{what} (and the security log was refused too: {e})");
+            }
+        }
+    }
+
+    /// Run the handler of a command through its wrapper, if one was installed (`around`). Every
+    /// route that runs an action goes through here: the call itself, the transition an `update`
+    /// of a governed field implies, and an approved plan. A route that called the handler
+    /// directly would skip what the wrapper does (returning money, giving units back).
+    fn invoke(&self, c: &Registered, p: &Principal, input: &Value) -> Result<Value, String> {
+        let wrapper = self.around.read().unwrap().get(&c.id).cloned();
+        match wrapper {
+            Some(w) => w(p, input, &|i| (c.handler)(i)),
+            None => (c.handler)(input),
+        }
     }
 
     fn run(
@@ -973,7 +1045,9 @@ impl Dispatcher {
                         Actor::of(p).stamp(m);
                     }
                 }
-                (action.handler)(&i).map_err(CallError::Handler)?;
+                // Through the action's own wrapper, like a call of the action: a drag of an order
+                // to "refunded" must return the money exactly as the refund action does.
+                self.invoke(&action, p, &i).map_err(CallError::Handler)?;
                 if let Value::Map(m) = &mut input {
                     m.remove(step.field);
                 }
@@ -987,12 +1061,7 @@ impl Dispatcher {
                 Actor::of(p).stamp(m);
             }
         }
-        let wrapper = self.around.read().unwrap().get(&c.id).cloned();
-        let out = match wrapper {
-            Some(w) => w(p, &input, &|i| (c.handler)(i)),
-            None => (c.handler)(&input),
-        }
-        .map_err(CallError::Handler)?;
+        let out = self.invoke(c, p, &input).map_err(CallError::Handler)?;
         let observers: Vec<Arc<Observer>> = self
             .observers
             .read()
@@ -1215,6 +1284,11 @@ pub trait OAuthTokens: Send + Sync {
     ) -> Result<(String, String), String>;
     /// Revoke a token by the id `issue_oauth_access` returned.
     fn revoke_token_id(&self, id: &str) -> bool;
+    /// As `revoke_token_id`, but a call the store refused is an error ("try again"), not `false`
+    /// ("there was no such token").
+    fn try_revoke_token_id(&self, id: &str) -> Result<bool, String> {
+        Ok(self.revoke_token_id(id))
+    }
     /// Revoke a session token that was only needed to prove a sign-in.
     fn revoke_session(&self, token: &str) -> bool;
     /// The grant an access token belongs to.

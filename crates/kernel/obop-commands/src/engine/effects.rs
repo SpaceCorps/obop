@@ -228,6 +228,9 @@ impl Runner<'_> {
                 match c.evaluate(def, id, &rec, &a.expr) {
                     Ok(expr::V::Bool(true)) => {}
                     Ok(_) => return Err(a.failure()),
+                    // A refusal of the store is the store's error, not a reason about the record
+                    // (D74): it goes up unchanged, so it is recognised as one.
+                    Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
                     Err(e) => return Err(format!("{} ({e})", a.failure())),
                 }
             }
@@ -247,6 +250,9 @@ impl Runner<'_> {
         for (i, e) in cmd.effects.iter().enumerate() {
             self.effect(unit, def, id, e, &mut created, depth)
                 .map_err(|m| {
+                    if obop_storage::fault::Fault::is_transient(&m) {
+                        return m;
+                    }
                     format!(
                         "{}.{}: effect {} ({}) failed, nothing was changed: {m}",
                         def.name,

@@ -26,3 +26,6 @@ test-support = []
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }

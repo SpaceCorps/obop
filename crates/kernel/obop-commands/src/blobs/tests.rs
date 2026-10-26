@@ -570,3 +570,82 @@ fn erasing_a_record_clears_its_photo_fields_and_deletes_the_blobs() {
     assert!(after["face"].is_null());
     assert_eq!(after["title"], "Person");
 }
+
+/// An `Env` over a store whose backend can refuse calls like a full pool (D74).
+fn flaky_env() -> (Env, Arc<obop_storage::testing::Flaky>) {
+    let flaky = obop_storage::testing::Flaky::new(obop_storage::open("memory:").unwrap());
+    let backend = obop_storage::guarded(flaky.clone());
+    let bytes = obop_storage::blob::open_bytes("memory:", None).unwrap();
+    let s = Store {
+        blobs: Arc::new(obop_storage::blob::Catalog::new(backend.clone(), bytes)),
+        backend,
+    };
+    let d = Arc::new(Dispatcher::new());
+    d.register_crud(&module(), &s);
+    d.register_transition(&module(), "item", "publish", &s);
+    (
+        Env {
+            svc: d.blob_service().unwrap(),
+            api: PublicApi::new(d.clone(), s.clone()),
+            d,
+            s,
+        },
+        flaky,
+    )
+}
+
+#[test]
+fn a_blob_hold_refused_for_a_moment_is_tried_again_and_a_lasting_refusal_is_a_partial_503() {
+    use obop_storage::fault;
+    let (e, flaky) = flaky_env();
+    let ann = user("ann");
+
+    // The pool is full for two calls right after the record committed: the hold is tried again
+    // and goes through, so the file is held and the answer is the plain success.
+    let b1 = up(&e, &ann, "item.photo", &fx::png(64, 48, 1), "image/png");
+    flaky.refuse_n_after_the_next_write(2);
+    fault::begin_request(Default::default());
+    let r = call(
+        &e,
+        &ann,
+        "item.create",
+        map(&[("title", "A"), ("photo", &b1)]),
+    )
+    .unwrap();
+    let out = fault::end_request();
+    flaky.allow_models();
+    let rec = id_of_row(&r);
+    assert!(out.wrote && !out.partial, "{out:?}");
+    assert_eq!(
+        e.s.blobs().info(&b1).unwrap().unwrap().owners.len(),
+        1,
+        "the file is held although the first tries were refused"
+    );
+    e.s.blobs().gc(0).unwrap();
+    assert!(e.s.blobs().info(&b1).unwrap().is_some(), "gc keeps it");
+
+    // The refusal lasts: the record is committed and its file is not held. That must not look
+    // like a success, and the next gc must not be a surprise: the request is marked partial.
+    let b2 = up(&e, &ann, "item.photo", &fx::png(64, 48, 2), "image/png");
+    flaky.refuse_reads_after_the_next_write();
+    fault::begin_request(Default::default());
+    let r = call(
+        &e,
+        &ann,
+        "item.update",
+        map(&[("id", &rec), ("photo", &b2)]),
+    );
+    let out = fault::end_request();
+    flaky.allow_models();
+    assert!(r.is_ok(), "the update itself committed");
+    assert!(out.wrote && out.partial, "{out:?}");
+    assert_eq!(
+        e.s.backend().get("item", &rec).unwrap().unwrap()["photo"],
+        b2.as_str(),
+        "the record names the new file"
+    );
+    assert!(
+        e.s.blobs().info(&b2).unwrap().unwrap().owners.is_empty(),
+        "and nobody holds it: that is what `partial` says"
+    );
+}

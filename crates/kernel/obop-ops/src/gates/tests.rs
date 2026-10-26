@@ -1227,6 +1227,49 @@ fn a_rollback_is_one_transaction_with_its_record_and_is_refused_for_another_data
 }
 
 #[test]
+fn a_rollback_does_not_skip_the_identity_check_when_the_id_of_this_database_cannot_be_read() {
+    // The id of this database is read to see that the backup is of this database. A refused read
+    // was taken for "this database has no id", the comparison was skipped, and the database was
+    // replaced by another one's backup.
+    let dir = Dir::new("rb3");
+    let (b, _url) = old_db(&dir);
+    let clock = Arc::new(FakeClock::at(T0));
+    Migrator::new(b.clone(), ring())
+        .ensure_instance_id()
+        .unwrap();
+    let other = obop_storage::open(&dir.url("other3.db")).unwrap();
+    other.insert("party", "x1", &f(json!({}))).unwrap();
+    Migrator::new(other.clone(), ring())
+        .ensure_instance_id()
+        .unwrap();
+    let theirs = backup_now(&other, &dir, "theirs3", &clock);
+    b.insert("party", "oops", &f(json!({"name": "bad"})))
+        .unwrap();
+    let flaky = crate::testkit::Flaky::new(b.clone());
+    flaky
+        .refuse_reads
+        .lock()
+        .unwrap()
+        .push(obop_migrate::META_MODEL.to_string());
+    let fb: Arc<dyn Backend> = flaky.clone();
+    let e = rollback(
+        &fb,
+        None,
+        &ring(),
+        &theirs,
+        &keys(),
+        "wrong file",
+        "operator",
+        false,
+        &*clock,
+    )
+    .unwrap_err();
+    assert!(e.starts_with("storage_busy"), "{e}");
+    assert!(b.get("party", "oops").unwrap().is_some(), "untouched");
+    assert!(b.get("party", "x1").unwrap().is_none());
+}
+
+#[test]
 fn the_ledger_and_the_gates_work_on_postgresql_when_a_server_is_given() {
     let Ok(base) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
         eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");

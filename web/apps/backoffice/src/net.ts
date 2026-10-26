@@ -55,6 +55,25 @@ export const backoff = { delays: [250, 750] };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const GATEWAY = new Set([502, 503, 504]);
 
+/** How long the server asked a client to wait (`Retry-After`, in seconds, at most 10), in ms. */
+const retryAfterMs = (res: Response) => {
+  const n = Number(res.headers.get("retry-after"));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 10) * 1000 : 0;
+};
+
+/**
+ * The server answered 503 `storage_timeout`: a statement ran into its time limit. Asking again
+ * at once only runs the same heavy statement again, so the read is not repeated (D74).
+ */
+async function timedOut(res: Response): Promise<boolean> {
+  if (res.status !== 503) return false;
+  try {
+    return ((await res.clone().json()) as { code?: string }).code === "storage_timeout";
+  } catch {
+    return false;
+  }
+}
+
 export async function request(
   input: string,
   init: RequestInit,
@@ -64,8 +83,9 @@ export async function request(
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch(input, init);
-      if (GATEWAY.has(res.status) && attempt < delays.length) {
-        await wait(delays[attempt]!);
+      if (GATEWAY.has(res.status) && attempt < delays.length && !(await timedOut(res))) {
+        // Wait for what the server asked (`Retry-After` on a busy database), at least our own delay.
+        await wait(Math.max(delays[attempt]!, retryAfterMs(res)));
         continue;
       }
       set({ unreachable: false });

@@ -24,3 +24,6 @@ icu_locale = "2.3.1"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }

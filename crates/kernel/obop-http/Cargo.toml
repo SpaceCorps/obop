@@ -29,6 +29,7 @@ mime_guess = "2"
 tower = { version = "0.5", features = ["util"] }
 
 [dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 

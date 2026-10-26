@@ -45,7 +45,7 @@ fn instance() -> Arc<dyn Backend> {
     b.insert("connection", "c2", &fields(json!({"credentials": ""})))
         .unwrap();
     // The pseudonym key as the connectors would have derived it, from the old key.
-    let _ = sb.pseudonym_key("pseudonym:c1");
+    let _ = sb.pseudonym_key("pseudonym:c1").unwrap();
     b.kv_put(
         "plan:p1",
         &old.seal("plan:p1", b"{\"x\":1}").unwrap(),
@@ -59,7 +59,8 @@ fn instance() -> Arc<dyn Backend> {
 fn rotation_reseals_everything_and_pseudonyms_do_not_change() {
     let b = instance();
     let before = SecretBox::from_ring_with_store(old_ring(), b.clone()).unwrap();
-    let psn_before = obop_connectors::egress::pseudonym(&before, "c1", &json!("ada@example.test"));
+    let psn_before =
+        obop_connectors::egress::pseudonym(&before, "c1", &json!("ada@example.test")).unwrap();
 
     let mut lines = Vec::new();
     let r = rotate(&b, &rotated_ring(), Options::default(), &mut |l| {
@@ -89,7 +90,7 @@ fn rotation_reseals_everything_and_pseudonyms_do_not_change() {
     // Pseudonyms already given to receivers are the same under the new ring.
     let after = SecretBox::from_ring_with_store(only_new.clone(), b.clone()).unwrap();
     assert_eq!(
-        obop_connectors::egress::pseudonym(&after, "c1", &json!("ada@example.test")),
+        obop_connectors::egress::pseudonym(&after, "c1", &json!("ada@example.test")).unwrap(),
         psn_before
     );
     // A connection that never pseudonymised anything got its key stored too, anchored on the

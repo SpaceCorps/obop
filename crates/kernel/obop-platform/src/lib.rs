@@ -214,7 +214,7 @@ impl Platform {
                     patch.insert("error".into(), J::from(e));
                 }
             }
-            let _ = me.backend.update(TABLE, &rec, &patch);
+            me.finish_record(&rec, &patch);
         });
         Ok(Instance::from_fields(&id, &f))
     }
@@ -305,10 +305,22 @@ impl Platform {
                         report.stopped = true;
                     }
                 }
-                let _ = self.backend.update(TABLE, &id, &patch);
+                self.finish_record(&id, &patch);
             }
         }
         Ok(report)
+    }
+
+    /// The last write of a provisioning, deletion or upgrade that ran on a thread of its own:
+    /// nobody is waiting for an answer, so a refusal by a busy store (D74) is waited out, up to
+    /// about a minute, rather than leaving the instance `provisioning` or `deleting` for good.
+    pub(crate) fn finish_record(&self, id: &str, patch: &Fields) {
+        let r = obop_storage::fault::patiently(60, std::time::Duration::from_secs(1), || {
+            self.backend.update(TABLE, id, patch)
+        });
+        if let Err(e) = r {
+            eprintln!("platform: the record of instance {id} could not be updated: {e}");
+        }
     }
 
     fn set_phase(&self, id: &str, phase: &str) {
@@ -365,7 +377,7 @@ impl Platform {
                     patch.insert("error".into(), J::from(format!("delete failed: {e}")));
                 }
             }
-            let _ = me.backend.update(TABLE, &rec, &patch);
+            me.finish_record(&rec, &patch);
         });
         Ok(i)
     }
@@ -546,6 +558,31 @@ mod tests {
         );
         wait_for_gone(&p, &t, &i.id);
         p.create_instance(&t, "alpha-one").unwrap();
+    }
+
+    #[test]
+    fn a_busy_store_does_not_leave_an_instance_deleting_for_ever() {
+        use obop_storage::testing::{Flaky, Mode};
+        // D74: the provisioner finishes while the store refuses every call. Its last write is
+        // waited out and lands when the store answers again; it is not dropped.
+        let (flaky, backend) = Flaky::memory();
+        let fake = Arc::new(Fake::default());
+        let p = Platform::new(
+            Arc::new(Auth::with_test_params(backend.clone())),
+            backend,
+            fake.clone(),
+        );
+        let t = p.signup("a@example.test", "correct horse battery").unwrap();
+        let i = p.create_instance(&t, "alpha-one").unwrap();
+        let i = wait_for(&p, &t, &i.id, "running");
+        *fake.delete_delay.lock().unwrap() = std::time::Duration::from_millis(300);
+        assert_eq!(p.delete_instance(&t, &i.id).unwrap().status, "deleting");
+        flaky.set(Mode::All);
+        // The provisioner is done after 300 ms; its final write is refused for a while.
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        assert!(flaky.refused() >= 1, "the final write met the busy store");
+        flaky.set(Mode::Healthy);
+        wait_for_gone(&p, &t, &i.id);
     }
 
     fn wait_for_gone(p: &Platform, tok: &str, id: &str) {

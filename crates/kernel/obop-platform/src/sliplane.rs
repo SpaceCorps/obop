@@ -127,7 +127,8 @@ impl CellDb for PgCell {
     }
 
     fn seed_admin(&self, url: &str, email: &str, hash: &str) -> Result<(), String> {
-        let backend = obop_storage::open(url)?;
+        // Another database than the one this process serves from: not under its pool settings.
+        let backend = obop_storage::open_with(url, Some(obop_storage::PgPoolConfig::one_shot()))?;
         Auth::new(backend).create_user_hashed(
             email,
             hash,

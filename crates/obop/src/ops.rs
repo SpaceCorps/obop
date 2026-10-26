@@ -90,9 +90,10 @@ pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
             .ok()
             .filter(|d| !d.trim().is_empty());
         let keys = crate::backup_cli::backup_keys().map_err(|e| fail(&e))?;
-        let blobs = blob_catalog(backend, url)
-            .ok()
-            .map(|b| Arc::new(b) as Arc<dyn obop_storage::blob::Blobs>);
+        // Uploaded files that cannot be opened are not "no files": a backup without them would be
+        // answered as good.
+        let blobs =
+            Some(Arc::new(blob_catalog(backend, url)?) as Arc<dyn obop_storage::blob::Blobs>);
         let need_bytes = dir
             .as_ref()
             .and_then(|_| database_bytes(backend.kind(), url));
@@ -115,6 +116,40 @@ pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
         eprintln!("{l}");
     }
     Ok(())
+}
+
+/// The rule for the address of a command (D74, docs/DEPLOY.md "Which address a command uses").
+///
+/// `OBOP_DB_POOLER` and `OBOP_LOCK_DATABASE_URL` describe how the *server* reaches its database,
+/// `OBOP_DATABASE_URL`. A command that is given an address of its own (`--db URL`, and the other
+/// flags that name a database: `--scratch URL` of `drill` and `migrate rehearse`, `--record-in
+/// URL`) goes where it is told, straight: it is a direct connection, so both variables are
+/// ignored for it (a maintenance command given the direct address that is also the lock address
+/// would otherwise be refused as "the same address as the database URL"). Two exceptions keep the
+/// pooler layout honest: an address that is the very address of `OBOP_DATABASE_URL` is the
+/// server's own and keeps the variables, and `serve` and `platform serve` always do (whatever they
+/// serve from is the server's address). The caller decides which command it is, from the parsed
+/// command line (global options may stand anywhere), and passes the addresses it was given.
+pub fn apply_address_rule(addresses: &[&str]) {
+    let server = std::env::var("OBOP_DATABASE_URL").ok();
+    let server = server.as_deref().map(str::trim);
+    if addresses.iter().any(|a| Some(a.trim()) != server) {
+        obop_storage::PgPoolConfig::address_is_direct();
+    }
+}
+
+/// The addresses a command line of an operator command names: the last value of each flag that
+/// names a database (as `take` reads them).
+fn addresses_of(args: &[String]) -> Vec<&str> {
+    ["--db", "--scratch", "--record-in"]
+        .iter()
+        .filter_map(|f| {
+            args.iter()
+                .rposition(|a| a == f)
+                .and_then(|i| args.get(i + 1))
+                .map(String::as_str)
+        })
+        .collect()
 }
 
 /// About how big the database is, for a check that a backup volume has room: the size of the
@@ -203,6 +238,20 @@ pub fn take_flag(args: &mut Vec<String>, flag: &str) -> Option<String> {
 
 /// Handle `migrate`, `backup`, `restore` and `secrets`; `None` for any other command.
 pub fn dispatch(args: &[String]) -> Option<ExitCode> {
+    // These are the commands that work on a database of their own choosing, never the server.
+    let first_word = args.first().map(String::as_str);
+    let second_word = args.get(1).map(String::as_str);
+    if matches!(
+        first_word,
+        Some("update" | "migrate" | "backup" | "restore" | "secrets" | "drill" | "storage")
+    ) || (first_word == Some("platform")
+        && matches!(
+            second_word,
+            Some("upgrade-instances" | "release" | "register-instance" | "update-token")
+        ))
+    {
+        apply_address_rule(&addresses_of(args));
+    }
     if let Some(code) = crate::update_cmd::dispatch(args) {
         return Some(code);
     }
@@ -425,6 +474,34 @@ mod tests {
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn every_flag_that_names_a_database_is_an_address_of_the_commands_own() {
+        // `drill --scratch URL` and `--record-in URL` name databases as `--db` does; the last of
+        // each flag counts, wherever it stands.
+        let a = args(&[
+            "drill",
+            "--scratch",
+            "postgres://u@h/scratch",
+            "backup.gz",
+            "--record-in",
+            "postgres://u@h/rec",
+            "--db",
+            "postgres://u@h/one",
+            "--db",
+            "postgres://u@h/two",
+        ]);
+        assert_eq!(
+            addresses_of(&a),
+            [
+                "postgres://u@h/two",
+                "postgres://u@h/scratch",
+                "postgres://u@h/rec"
+            ]
+        );
+        assert!(addresses_of(&args(&["migrate", "status"])).is_empty());
+        assert!(addresses_of(&args(&["migrate", "status", "--db"])).is_empty());
     }
 
     /// A platform database with one running instance, as `platform serve --provisioner fake`

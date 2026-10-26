@@ -381,7 +381,16 @@ fn require_with_a_root_certificate_is_checked_like_verify_ca() {
 #[test]
 fn the_storage_backend_uses_tls_for_its_main_and_lock_connections() {
     let pg = tls_pg!();
-    let b = open(&pg.url("verify-full", "localhost", &pg.root())).unwrap();
+    // Several containers start at once on a busy machine: allow a slow first TLS handshake.
+    let patient = PgPoolConfig {
+        acquire_timeout: std::time::Duration::from_secs(30),
+        ..PgPoolConfig::default()
+    };
+    let b = open_with(
+        &pg.url("verify-full", "localhost", &pg.root()),
+        Some(patient),
+    )
+    .unwrap();
     let mut f = Fields::new();
     f.insert("n".into(), J::from(1));
     b.insert("tlsmodel", "a", &f).unwrap();

@@ -244,6 +244,56 @@ mod tests {
         );
     }
 
+    /// An approval the store refuses at any one call of its run, before anything changed: the plan
+    /// is still there for the retry, however the engine worded the error (the assertion of
+    /// `invoice.post` wraps what its read said). Every position of the run is tried in turn.
+    #[test]
+    fn an_approval_refused_before_it_changed_anything_can_be_approved_again() {
+        use obop_storage::fault;
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        let (d, s) = (Dispatcher::new(), Store::over(backend));
+        d.set_clock(std::sync::Arc::new(|| 1_790_000_000));
+        register(&d, &s);
+        let agent = Principal::agent("a", &["invoicing.manager"], &["invoicing.manager"]);
+        let human = Principal::user("h", &["invoicing.manager"]);
+        let (mut refused_before_a_change, mut positions) = (0, 0);
+        for skip in 0..40 {
+            let id = seed(&s, "o1");
+            let i = Value::map([("id", Value::text(&id))]);
+            let mut v = Vault::new();
+            let Err(CallError::ApprovalRequired { plan_id }) =
+                d.call(Surface::Mcp, &agent, &mut v, "invoice.post", &i)
+            else {
+                panic!("a proposal")
+            };
+            positions += 1;
+            fault::begin_request(Default::default());
+            flaky.refuse_call_after(skip);
+            let first = d.approve(&human, &mut v, &plan_id);
+            let out = fault::end_request();
+            flaky.allow_models();
+            match first {
+                Ok(_) => continue,               // the refusal came after the work, or never
+                Err(_) if out.wrote => continue, // it ran: the plan is rightly gone
+                Err(e) => {
+                    refused_before_a_change += 1;
+                    // Nothing was changed, so the retry finds the plan and posts the invoice.
+                    d.approve(&human, &mut v, &plan_id)
+                        .unwrap_or_else(|r| panic!("skip {skip}: {e:?}, then the retry: {r:?}"));
+                    assert_eq!(
+                        s.field("invoice", &id, "state"),
+                        Some(Value::text("posted")),
+                        "skip {skip}"
+                    );
+                }
+            }
+        }
+        assert!(
+            refused_before_a_change >= 3,
+            "the sweep reached the run: {refused_before_a_change} of {positions}"
+        );
+    }
+
     fn msg(r: Result<obop_commands::Response, CallError>) -> String {
         match r {
             Err(CallError::Handler(m)) => m,

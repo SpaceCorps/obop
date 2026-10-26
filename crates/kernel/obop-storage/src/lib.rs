@@ -13,6 +13,10 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 pub type Fields = serde_json::Map<String, J>;
+
+/// The model of the security log (written by `obop-commands::audit`): an entry in it is not
+/// counted as a change of the request that wrote it (see `fault`).
+pub(crate) const LOG_MODEL: &str = "security_event";
 pub type Result<T> = std::result::Result<T, String>;
 
 mod atomic;
@@ -398,6 +402,13 @@ fn ident(s: &str) -> Result<&str> {
 }
 
 pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
+    open_with(url, None)
+}
+
+/// As [`open`], with the connection pool settings given instead of read from the environment
+/// (`OBOP_DB_*`, see docs/DEPLOY.md). Only PostgreSQL has a pool; the setting is ignored for
+/// `memory:` and SQLite.
+pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
     if url == "memory:" {
         Ok(Arc::new(Memory::default()))
     } else if let Some(path) = url
@@ -406,7 +417,12 @@ pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
     {
         Ok(Arc::new(Sqlite::open(path)?))
     } else if url.starts_with("postgres://") || url.starts_with("postgresql://") {
-        Ok(Arc::new(Pg::connect(url)?))
+        let pg = match pool {
+            Some(cfg) => Pg::connect_with(url, cfg)?,
+            None => Pg::connect(url)?,
+        };
+        // The guard keeps the rule of `fault` (no change after a refused call, commits noted).
+        Ok(guarded(Arc::new(pg)))
     } else {
         Err(format!(
             "unsupported database url (use memory:, sqlite://PATH or postgres://...): {url}"
@@ -426,22 +442,35 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
     base
 }
 
+pub mod fault;
+mod guard;
 pub mod limit;
 mod memory;
 mod pg;
 #[cfg(test)]
+mod pg_pool_tests;
+mod pgpool;
+pub mod pool;
+#[cfg(test)]
+mod pool_tests;
+#[cfg(test)]
 mod shared_tests;
 mod sqlite;
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;
 pub mod tls;
 #[cfg(test)]
 mod tls_tests;
+
+pub use guard::guarded;
+pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
 
 use memory::Memory;
 use pg::Pg;
 use sqlite::Sqlite;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn fields(k: &str, v: J) -> Fields {
@@ -452,7 +481,7 @@ mod tests {
 
     /// The contract every backend must meet. Also run against PostgreSQL by
     /// `OBOP_TEST_POSTGRES_URL=postgres://... cargo test -p obop-storage`.
-    fn contract(b: &dyn Backend) {
+    pub(crate) fn contract(b: &dyn Backend) {
         let model = format!("t{}", std::process::id());
         b.insert(&model, "a", &fields("n", J::from(1))).unwrap();
         b.insert(&model, "b", &fields("n", J::Null)).unwrap();
