@@ -1313,6 +1313,11 @@ fn after_a_server_restart_the_pool_serves_again_without_restarting_the_process()
     assert_eq!(n, 2);
 }
 
+/// The PgBouncer image the tests run, by digest: `edoburu/pgbouncer:latest` as pulled on
+/// 2026-10-25, which reports PgBouncer 1.26.1 (the test asks it).
+const PGBOUNCER_IMAGE: &str =
+    "edoburu/pgbouncer@sha256:8638aa563607256d3c7440437534195f1066a92b68015d89ae9d6b935b444a6d";
+
 /// PgBouncer in transaction mode with two server connections, in front of a PostgreSQL of this
 /// test's own; both on a network of their own. `None` (after saying why) without Docker or the
 /// image.
@@ -1364,7 +1369,7 @@ impl Bouncer {
         if let Some(n) = max_prepared {
             args.extend(["-e".into(), format!("MAX_PREPARED_STATEMENTS={n}")]);
         }
-        args.push("edoburu/pgbouncer:latest".into());
+        args.push(PGBOUNCER_IMAGE.into());
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let started = docker(&args);
         let guard = Container(name);
@@ -1541,8 +1546,26 @@ fn behind_pgbouncer_in_transaction_mode_everything_works_with_locks_on_a_direct_
         )
         .unwrap()
         .get(0);
+    // The version the documentation says it was tried against, asked of PgBouncer itself.
+    let console = format!(
+        "postgres://postgres:obop-test@127.0.0.1:{}/pgbouncer",
+        b.port
+    );
+    let version = PgConnector::new(&console)
+        .unwrap()
+        .connect()
+        .unwrap()
+        .simple_query("SHOW VERSION")
+        .unwrap()
+        .iter()
+        .find_map(|m| match m {
+            postgres::SimpleQueryMessage::Row(r) => r.get(0).map(str::to_string),
+            _ => None,
+        })
+        .unwrap_or_default();
+    assert!(version.contains("1.26"), "PgBouncer says {version:?}");
     eprintln!(
-        "D74 PgBouncer: {} client connections of the main pool shared {servers} server connections",
+        "D74 PgBouncer {version}: {} client connections of the main pool shared {servers} server connections",
         pg.main.stats().connections_opened
     );
     assert!(

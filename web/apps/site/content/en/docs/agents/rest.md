@@ -154,15 +154,16 @@ Nothing has changed. Give the plan id to a person; see [The approval loop](/docs
 
 ## Status codes
 
-| Code | Meaning                                                                                                               |
-| ---- | --------------------------------------------------------------------------------------------------------------------- |
-| 200  | Done. Read `value` and `denied`.                                                                                      |
-| 202  | Approval required. `plan_id` is in the body. Nothing changed.                                                         |
-| 400  | The input was refused. `error` says why, for example `lead.title is required` or `invalid token`.                     |
-| 401  | No bearer token, or an unknown, expired or revoked one.                                                               |
-| 404  | The command does not exist, is not visible to this token, or the plan is unknown. All three look the same on purpose. |
-| 415  | The body was not sent as `application/json`.                                                                          |
-| 429  | Too many failed sign-ins (five in a minute lock a username for a minute).                                             |
+| Code | Meaning                                                                                                                                                                                                                                                                                                                       |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 200  | Done. Read `value` and `denied`.                                                                                                                                                                                                                                                                                              |
+| 202  | Approval required. `plan_id` is in the body. Nothing changed.                                                                                                                                                                                                                                                                 |
+| 400  | The input was refused. `error` says why, for example `lead.title is required` or `invalid token`.                                                                                                                                                                                                                             |
+| 401  | No bearer token, or an unknown, expired or revoked one.                                                                                                                                                                                                                                                                       |
+| 404  | The command does not exist, is not visible to this token, or the plan is unknown. All three look the same on purpose.                                                                                                                                                                                                         |
+| 415  | The body was not sent as `application/json`.                                                                                                                                                                                                                                                                                  |
+| 429  | Too many failed sign-ins (five in a minute lock a username for a minute).                                                                                                                                                                                                                                                     |
+| 503  | The database was busy, unreachable or too slow (`storage_busy`, `storage_unavailable`, `storage_timeout`). Read `Retry-After` (seconds) and try again; nothing was changed (after `storage_unavailable` a change in flight may or may not have been applied). A call that had already changed something keeps its own answer. |
 
 ## Tips for agents
 

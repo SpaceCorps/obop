@@ -22,7 +22,7 @@ fn error_responses() -> J {
         "400": {"description": "The input was rejected; the error says which field and why.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
         "401": {"description": "Missing, expired or revoked bearer token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
         "404": {"description": "No such command or record, or it is hidden from this token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-        "503": {"description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. Nothing was started for storage_busy; retry it. After storage_unavailable or storage_timeout a write may or may not have been applied.", "headers": {"Retry-After": {"description": "Seconds to wait before trying again.", "schema": {"type": "integer"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+        "503": {"description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. A 503 is sent only for a request that had not committed any change: nothing was changed, so it may be repeated (after storage_unavailable a change that was in flight when the connection broke may or may not have been applied). A request that had already committed a change keeps its own answer, even if a later step of it was refused.", "headers": {"Retry-After": {"description": "Seconds to wait before trying again.", "schema": {"type": "integer"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
     })
 }
 
@@ -61,7 +61,7 @@ pub fn platform(base: &str) -> J {
         "info": {
             "title": "obop control plane API",
             "version": obop_types::CORE_VERSION,
-            "description": "Sign up, create your own obop instance, watch its setup, and delete it. Each instance then has its own API, described at /api/openapi.json on the instance. Errors are JSON with error, code and hint. A 503 with a Retry-After header (storage_busy, storage_unavailable, storage_timeout) means the database could not serve the request: try again after that many seconds."
+            "description": "Sign up, create your own obop instance, watch its setup, and delete it. Each instance then has its own API, described at /api/openapi.json on the instance. Errors are JSON with error, code and hint. A 503 with a Retry-After header (storage_busy, storage_unavailable, storage_timeout) means the database could not serve the request and nothing was changed (after storage_unavailable a change in flight may or may not have been applied): try again after that many seconds."
         },
         "servers": [{"url": base}],
         "paths": {

@@ -60,7 +60,18 @@ pub fn record_event(
     f.insert("at".into(), J::from(rfc3339(at)));
     // Sortable by time, unique by suffix.
     let id = format!("{at:012}-{}", hex6());
-    if let Err(e) = backend.insert(EVENT_TABLE, &id, &f) {
+    // The entry is about a change that has usually committed already: a store that is busy for a
+    // moment (D74) is waited out a little, unless this request has been refused before (then the
+    // guard refuses the write anyway and waiting would only delay the 503).
+    let tries = if obop_storage::fault::noted().is_some() {
+        1
+    } else {
+        4
+    };
+    let r = obop_storage::fault::patiently(tries, std::time::Duration::from_millis(150), || {
+        backend.insert(EVENT_TABLE, &id, &f)
+    });
+    if let Err(e) = r {
         eprintln!("could not write security event {kind}: {e}");
     }
 }
@@ -68,6 +79,18 @@ pub fn record_event(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_event_is_not_lost_to_a_store_that_is_busy_for_a_moment() {
+        use obop_storage::testing::Flaky;
+        // D74: the entry about a change that committed meets a full pool twice; it is written on
+        // the third try, not dropped.
+        let (flaky, db) = Flaky::memory();
+        flaky.refuse_next(2);
+        record_event(&*db, 30, "ada", "login", "ada", "note");
+        assert_eq!(flaky.refused(), 2);
+        assert_eq!(db.list(EVENT_TABLE).unwrap().len(), 1);
+    }
 
     #[test]
     fn times_format_as_rfc3339_and_events_are_appended_sorted() {
