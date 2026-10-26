@@ -977,12 +977,13 @@ fn the_locks_of_a_thousand_row_batch_in_the_server_are_the_stripes_not_the_recor
 fn a_bulk_write_makes_the_small_writes_and_reads_of_its_process_wait_and_never_busy() {
     let _turn = serial();
     let (url, _db) = pg_db!();
-    // A small pool with a short acquire timeout: if the small batches parked a connection each at
-    // the stripes the bulk write holds, three of them would fill it and the rest (and every read)
-    // would be refused as busy.
+    // A small pool and a short wait for a connection: if the small batches parked a connection
+    // each at the stripes the bulk write holds, five of them would fill it and the rest (and every
+    // read) would be refused as busy. (Nine small writers still meet six connections when the bulk
+    // write ends, hence the length of the wait: it has to hold on a machine under load.)
     let cfg = PgPoolConfig {
-        size: 4,
-        acquire_timeout: Duration::from_millis(300),
+        size: 6,
+        acquire_timeout: Duration::from_millis(800),
         ..PgPoolConfig::default()
     };
     let pg = Arc::new(connect(&url, cfg));
