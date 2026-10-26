@@ -126,7 +126,9 @@ fn the_matcher_reads_the_patterns_it_is_used_for() {
     for ok in ["0", "-0", "7", "999", "-12.5", "0.05", "10.00"] {
         assert!(matches(re, ok), "{ok}");
     }
-    for bad in ["", "-", "00", "01", "1000", "1.", ".5", "1.234", "1,5", " 1", "1 ", "--1"] {
+    for bad in [
+        "", "-", "00", "01", "1000", "1.", ".5", "1.234", "1,5", " 1", "1 ", "--1",
+    ] {
         assert!(!matches(re, bad), "{bad:?}");
     }
     assert!(matches("^a+b?$", "aaab") && !matches("^a+b?$", "b"));
@@ -160,7 +162,9 @@ fn candidates(precision: u8, scale: u8) -> Vec<String> {
 /// and, perhaps, a point and digits. (The parser also takes `007.50` and normalises it.)
 fn is_plain(text: &str) -> bool {
     let t = text.strip_prefix('-').unwrap_or(text);
-    let (int, frac) = t.split_once('.').map_or((t, Some("")), |(i, f)| (i, Some(f)));
+    let (int, frac) = t
+        .split_once('.')
+        .map_or((t, Some("")), |(i, f)| (i, Some(f)));
     let digits = |s: &str| s.chars().all(|c| c.is_ascii_digit());
     !int.is_empty()
         && digits(int)
@@ -173,10 +177,7 @@ fn the_pattern_is_the_language_of_the_parser_for_every_shape() {
     let mut checked = 0;
     for precision in 1..=38u8 {
         for scale in 0..=precision.min(12) {
-            let (strict, lenient) = (
-                pattern(precision, scale),
-                import_pattern(precision, scale),
-            );
+            let (strict, lenient) = (pattern(precision, scale), import_pattern(precision, scale));
             for text in candidates(precision, scale) {
                 let parsed = Decimal::parse_for(&text, precision, scale, None).is_ok();
                 let fits = matches(&strict, &text);
@@ -200,7 +201,8 @@ fn the_pattern_is_the_language_of_the_parser_for_every_shape() {
                     // Rounding 99.5 up carries into a digit the precision does not have: a schema
                     // cannot say that, and the server refuses it with the precision message.
                     let int = text.trim_start_matches('-').split('.').next().unwrap_or("");
-                    let carries = text.contains('.') && !int.is_empty() && int.chars().all(|c| c == '9');
+                    let carries =
+                        text.contains('.') && !int.is_empty() && int.chars().all(|c| c == '9');
                     assert!(
                         !fits || rounds || carries,
                         "decimal({precision}, {scale}) {text:?} matches {lenient} and is refused on import"
@@ -224,7 +226,11 @@ fn the_example_fits_its_own_shape_and_its_pattern() {
             let e = example(precision, scale);
             let d = Decimal::parse_for(&e, precision, scale, None)
                 .unwrap_or_else(|err| panic!("decimal({precision}, {scale}) example {e}: {err}"));
-            assert_eq!(d.to_string(), e, "an example is written the way answers are");
+            assert_eq!(
+                d.to_string(),
+                e,
+                "an example is written the way answers are"
+            );
             assert!(matches(&pattern(precision, scale), &e), "{e}");
             assert!(matches(&import_pattern(precision, scale), &e), "{e}");
         }

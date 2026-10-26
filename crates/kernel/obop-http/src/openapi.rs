@@ -300,7 +300,11 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             if model.can_bulk_create {
                 // A decimal that rounds on import takes any number of fractional digits here.
                 let mut row_props = input_props.clone();
-                for f in model.fields.iter().filter(|f| f.kind == "decimal" && f.round.is_some()) {
+                for f in model
+                    .fields
+                    .iter()
+                    .filter(|f| f.kind == "decimal" && f.round.is_some())
+                {
                     if let Some(p) = row_props.get_mut(f.name) {
                         p["pattern"] = json!(f.decimal_import_pattern());
                     }

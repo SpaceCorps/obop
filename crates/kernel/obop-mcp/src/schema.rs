@@ -191,7 +191,11 @@ pub fn input_schema(model: &ModelInfo, cmd: &str) -> J {
                 .collect();
             // A decimal that rounds on import takes any number of fractional digits in a row.
             let mut row_props = field_properties(model, &governed);
-            for f in model.fields.iter().filter(|f| f.kind == "decimal" && f.round.is_some()) {
+            for f in model
+                .fields
+                .iter()
+                .filter(|f| f.kind == "decimal" && f.round.is_some())
+            {
                 if let Some(p) = row_props.get_mut(f.name) {
                     p["pattern"] = json!(f.decimal_import_pattern());
                 }

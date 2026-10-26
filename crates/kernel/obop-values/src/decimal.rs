@@ -360,11 +360,12 @@ impl Decimal {
         // more than 128 bits even when the quotient is small (a divisor written with many
         // trailing zeros), so it is held in 256 bits.
         let e = i32::from(scale) + i32::from(o.scale) - i32::from(self.scale);
-        let (up, down) = if e >= 0 { (e as u32, 0) } else { (0, e.unsigned_abs()) };
-        Self::checked(
-            scaled_div(self.units, up, o.units, down, mode)?,
-            scale,
-        )
+        let (up, down) = if e >= 0 {
+            (e as u32, 0)
+        } else {
+            (0, e.unsigned_abs())
+        };
+        Self::checked(scaled_div(self.units, up, o.units, down, mode)?, scale)
     }
 
     fn checked(units: i128, scale: u8) -> Result<Self, DecimalError> {
@@ -530,10 +531,7 @@ fn scaled_div(n: i128, up: u32, d: i128, down: u32, mode: Round) -> Result<i128,
     let (q, rem, den) = if down > 0 {
         // The divisor grows. `nm` is below 2^127; when the divisor passes 128 bits the quotient
         // is below one half and rounds to zero in every mode.
-        let Some(den) = 10u128
-            .checked_pow(down)
-            .and_then(|f| dm.checked_mul(f))
-        else {
+        let Some(den) = 10u128.checked_pow(down).and_then(|f| dm.checked_mul(f)) else {
             return Ok(0);
         };
         (nm / den, nm % den, den)
@@ -555,7 +553,11 @@ fn scaled_div(n: i128, up: u32, d: i128, down: u32, mode: Round) -> Result<i128,
             rem > other || (rem == other && q % 2 == 1)
         }
     };
-    let q = if away { q.checked_add(1).ok_or_else(overflow)? } else { q };
+    let q = if away {
+        q.checked_add(1).ok_or_else(overflow)?
+    } else {
+        q
+    };
     let q = i128::try_from(q).map_err(|_| overflow())?;
     Ok(if neg { -q } else { q })
 }
@@ -943,7 +945,9 @@ mod tests {
         );
         let avg = Decimal::average(sum.units(), 2, 1_000_000, 4, Round::HalfEven).unwrap();
         assert_eq!(avg.to_string(), want);
-        // 0.1 + 0.2 is 0.3 where a double says 0.30000000000000004.
+        // 0.1 + 0.2 is 0.3 where a double says 0.30000000000000004: the type itself, and the
+        // oracle that the million values above were checked against.
+        assert_eq!(p("0.1").checked_add(p("0.2")).unwrap().to_string(), "0.3");
         assert_eq!(column_sum(&["0.1".into(), "0.2".into()], 1), "0.3");
     }
 
@@ -954,17 +958,25 @@ mod tests {
         let big = Decimal::parse("200000000000000.00").unwrap();
         let three = Decimal::parse("3.000000000000").unwrap();
         assert_eq!(
-            big.checked_div(three, 12, Round::HalfEven).unwrap().to_string(),
+            big.checked_div(three, 12, Round::HalfEven)
+                .unwrap()
+                .to_string(),
             "66666666666666.666666666667"
         );
         assert_eq!(
-            big.checked_div(Decimal::parse("3").unwrap(), 12, Round::Down).unwrap().to_string(),
+            big.checked_div(Decimal::parse("3").unwrap(), 12, Round::Down)
+                .unwrap()
+                .to_string(),
             "66666666666666.666666666666"
         );
         // A divisor so large that the quotient rounds to zero in every mode.
         let huge = Decimal::parse("99999999999999999999999999999999999999").unwrap();
         assert_eq!(
-            Decimal::parse("1").unwrap().checked_div(huge, 0, Round::HalfUp).unwrap().to_string(),
+            Decimal::parse("1")
+                .unwrap()
+                .checked_div(huge, 0, Round::HalfUp)
+                .unwrap()
+                .to_string(),
             "0"
         );
         // A real overflow is still an error.
@@ -994,7 +1006,11 @@ mod tests {
             let n = (i128::from(next() >> 8) - (1 << 55)) * i128::from(next() % 1_000_000_007);
             let d = i128::from(next() % 1_000_000_007) + 1;
             let d = if next() % 2 == 0 { -d } else { d };
-            let (up, down) = if next() % 2 == 0 { (next() as u32 % 12, 0) } else { (0, next() as u32 % 12) };
+            let (up, down) = if next() % 2 == 0 {
+                (next() as u32 % 12, 0)
+            } else {
+                (0, next() as u32 % 12)
+            };
             for mode in [Round::Down, Round::HalfUp, Round::HalfEven] {
                 let (mut num, mut den) = (n * 10i128.pow(up), d * 10i128.pow(down));
                 if den < 0 {
@@ -1020,7 +1036,10 @@ mod tests {
             } else {
                 assert_eq!(
                     e,
-                    Some(DecimalError::Precision { precision: 38, scale: 12 }),
+                    Some(DecimalError::Precision {
+                        precision: 38,
+                        scale: 12
+                    }),
                     "{digits} digits"
                 );
             }

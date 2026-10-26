@@ -274,20 +274,38 @@ fn changing_the_digits_of_a_decimal_needs_a_rewrite_step_and_the_step_does_it() 
     let dec = |scale: u8, extra: &str| {
         field(
             "price",
-            &format!("kind = \"decimal\"
+            &format!(
+                "kind = \"decimal\"
 precision = 10
 scale = {scale}
 unique = true
-{extra}"),
+{extra}"
+            ),
         )
     };
-    inst.install(&pkg("upd", "0.1.0", &dec(2, ""), "", "", ""), "upload", "root")
-        .unwrap();
-    rec(&store, "upd_item", "1", &[("title", json!("a")), ("price", json!("12.50"))]);
-    rec(&store, "upd_item", "2", &[("title", json!("b")), ("price", json!("3.00"))]);
+    inst.install(
+        &pkg("upd", "0.1.0", &dec(2, ""), "", "", ""),
+        "upload",
+        "root",
+    )
+    .unwrap();
+    rec(
+        &store,
+        "upd_item",
+        "1",
+        &[("title", json!("a")), ("price", json!("12.50"))],
+    );
+    rec(
+        &store,
+        "upd_item",
+        "2",
+        &[("title", json!("b")), ("price", json!("3.00"))],
+    );
     // Without a step: refused in the plan and by the upgrade, nothing changes.
     shelf.offer(pkg("upd", "0.2.0", &dec(4, ""), "", "", ""));
-    let plan = call(&d, &admin(), "module_plan.preview", by_id("upd")).unwrap().value;
+    let plan = call(&d, &admin(), "module_plan.preview", by_id("upd"))
+        .unwrap()
+        .value;
     assert_eq!(get(&plan, "ok"), &Value::Bool(false));
     let all: Vec<&str> = list(get(&plan, "blockers"))
         .iter()
@@ -314,7 +332,9 @@ field = \"price\"
         "",
         "",
     ));
-    let plan = call(&d, &admin(), "module_plan.preview", by_id("upd")).unwrap().value;
+    let plan = call(&d, &admin(), "module_plan.preview", by_id("upd"))
+        .unwrap()
+        .value;
     assert_eq!(get(&plan, "ok"), &Value::Bool(true), "{plan:?}");
     call(&d, &admin(), "module.upgrade", by_id("upd")).unwrap();
     assert_eq!(stored(&store, "upd_item", "1")["price"], "12.5000");
@@ -335,7 +355,10 @@ field = \"price\"
             &d,
             &admin(),
             "upd_item.create",
-            Value::map([("title", Value::text("dup")), ("price", Value::text("12.5"))]),
+            Value::map([
+                ("title", Value::text("dup")),
+                ("price", Value::text("12.5"))
+            ]),
         ))
         .contains("must be unique")
     );
@@ -345,7 +368,9 @@ field = \"price\"
         .update(
             "upd_item",
             "2",
-            &[("price".to_string(), json!("3.123456"))].into_iter().collect(),
+            &[("price".to_string(), json!("3.123456"))]
+                .into_iter()
+                .collect(),
         )
         .unwrap();
     let e = err(call(

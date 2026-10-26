@@ -511,7 +511,7 @@ mod tests {
     #[test]
     fn money_must_be_an_integer() {
         let (d, _, u) = setup();
-        // A JSON float reaches the store as non-integer text, so it is not an integer either.
+        // A JSON float reaches the commands as `Value::Num`, which no kind accepts (D72).
         let float: serde_json::Value = serde_json::json!(12.5);
         rejects(
             deal(&d, &u, vec![("price", Value::from_json(&float))]),

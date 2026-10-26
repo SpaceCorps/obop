@@ -331,8 +331,16 @@ fn a_measure_asked_for_twice_is_refused_and_a_value_wider_than_its_field_is_not_
         // Two averages of one field at different digits would share the name avg:price, and the
         // second would overwrite the first: asking is refused instead.
         let twice = Value::List(vec![
-            m(vec![("op", t("avg")), ("field", t("price")), ("scale", Value::Int(1))]),
-            m(vec![("op", t("avg")), ("field", t("price")), ("scale", Value::Int(3))]),
+            m(vec![
+                ("op", t("avg")),
+                ("field", t("price")),
+                ("scale", Value::Int(1)),
+            ]),
+            m(vec![
+                ("op", t("avg")),
+                ("field", t("price")),
+                ("scale", Value::Int(3)),
+            ]),
         ]);
         let e = r.err(
             "item",
@@ -346,11 +354,7 @@ fn a_measure_asked_for_twice_is_refused_and_a_value_wider_than_its_field_is_not_
         // A value with more digits than the field keeps (the scale was cut without rewriting the
         // stored text) is an error, not a sum of numbers cut to fit.
         r.corrupt("item", &a, "price", serde_json::json!("1.509"));
-        for ops in [
-            [("sum", "price")],
-            [("min", "price")],
-            [("max", "price")],
-        ] {
+        for ops in [[("sum", "price")], [("min", "price")], [("max", "price")]] {
             match sum(&ops) {
                 Err(CallError::Handler(e)) => {
                     assert!(e.contains("more than the 2 fractional digits"), "{e}");

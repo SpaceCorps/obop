@@ -412,6 +412,12 @@ mod tests {
         assert_eq!(kolkata.bucket(first, Bucket::Day), "0001-01-01");
         // Zone rules at the far ends are those of the database's last and first rules.
         assert_eq!(la.offset_secs(inst("9999-07-01T12:00:00Z")), -7 * 3600);
-        assert_eq!(utc.bucket(Instant::from_micros(crate::datetime::MAX_MICROS).unwrap(), Bucket::Day), "9999-12-31");
+        assert_eq!(
+            utc.bucket(
+                Instant::from_micros(crate::datetime::MAX_MICROS).unwrap(),
+                Bucket::Day
+            ),
+            "9999-12-31"
+        );
     }
 }

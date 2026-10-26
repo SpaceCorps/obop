@@ -113,12 +113,7 @@ pub fn diff(old: &Manifest, new: &Manifest) -> Vec<Change> {
                                 "field_reshaped",
                                 &nm.name,
                                 Some(&nf.name),
-                                format!(
-                                    "{} changes from {} to {}",
-                                    nf.name,
-                                    shape(of),
-                                    shape(nf)
-                                ),
+                                format!("{} changes from {} to {}", nf.name, shape(of), shape(nf)),
                                 // Widening the precision alone leaves every stored value valid.
                                 of.scale != nf.scale || nf.precision < of.precision,
                             ));
@@ -447,9 +442,9 @@ pub fn plan_data(old: &Manifest, new: &Manifest, count: &dyn Fn(&str) -> usize) 
                     && s.field == field
                     && matches!(s.op.as_str(), "drop_field" | "rename_field")
             }),
-            "field_reshaped" => steps.iter().find(|s| {
-                s.model == c.model && s.field == field && s.op == "reformat_field"
-            }),
+            "field_reshaped" => steps
+                .iter()
+                .find(|s| s.model == c.model && s.field == field && s.op == "reformat_field"),
             "field_added" | "field_required" => steps
                 .iter()
                 .find(|s| s.model == c.model && s.field == field && s.op == "set_default")
@@ -627,9 +622,8 @@ pub fn build_ops(backend: &dyn Backend, steps: &[Step]) -> Result<Vec<Op>, Strin
                 "reformat_field" => {
                     let shape = s.value.as_ref().ok_or("reformat_field without a shape")?;
                     if let Some(v) = e.cur.get(&s.field).cloned().filter(|v| !v.is_null())
-                        && let Some(nv) = in_shape(shape, &v).map_err(|why| {
-                            format!("{} {}: {}: {why}", s.model, rec_id, s.field)
-                        })?
+                        && let Some(nv) = in_shape(shape, &v)
+                            .map_err(|why| format!("{} {}: {}: {why}", s.model, rec_id, s.field))?
                         && nv != v
                     {
                         set(e, &s.field, nv);
@@ -818,7 +812,11 @@ mod tests {
         );
         let p = plan_data(&old, &fixed, &|_| 3);
         assert!(p.blockers.is_empty(), "{:?}", p.blockers);
-        assert!(p.warnings.iter().any(|w| w.contains("cannot be rolled back")));
+        assert!(
+            p.warnings
+                .iter()
+                .any(|w| w.contains("cannot be rolled back"))
+        );
         assert_eq!(p.steps.len(), 1);
         assert_eq!(p.steps[0].value.as_ref().unwrap()["scale"], 4);
     }
@@ -845,14 +843,15 @@ mod tests {
     fn reformat_rewrites_stored_values_and_rounds_only_where_the_field_says() {
         let b = obop_storage::open("memory:").unwrap();
         for (id, v) in [("1", "12.50"), ("2", "0.05"), ("3", "-3.00")] {
-            b.insert("mig_item", id, &rec(&[("price", json!(v))])).unwrap();
+            b.insert("mig_item", id, &rec(&[("price", json!(v))]))
+                .unwrap();
         }
-        b.insert("mig_item", "4", &rec(&[("title", json!("no price"))])).unwrap();
+        b.insert("mig_item", "4", &rec(&[("title", json!("no price"))]))
+            .unwrap();
         let run = |new: &Manifest| {
             let steps = steps_for(new, &Version::new(0, 1, 0));
-            build_ops(&*b, &steps).and_then(|ops| {
-                b.apply_checked(&ops).map_err(|e| format!("{e:?}"))
-            })
+            build_ops(&*b, &steps)
+                .and_then(|ops| b.apply_checked(&ops).map_err(|e| format!("{e:?}")))
         };
         // Wider scale: padded.
         let wide = m(
@@ -861,12 +860,19 @@ mod tests {
             &step_to("<0.2.0", "reformat_field", "price", None),
         );
         run(&wide).unwrap();
-        let price = |id: &str| b.get("mig_item", id).unwrap().unwrap().get("price").cloned();
+        let price = |id: &str| {
+            b.get("mig_item", id)
+                .unwrap()
+                .unwrap()
+                .get("price")
+                .cloned()
+        };
         assert_eq!(price("1"), Some(json!("12.5000")));
         assert_eq!(price("3"), Some(json!("-3.0000")));
         assert_eq!(price("4"), None, "empty stays empty");
         // Narrower scale needs `round`; without it the update stops and names the record.
-        b.update("mig_item", "2", &rec(&[("price", json!("0.0549"))])).unwrap();
+        b.update("mig_item", "2", &rec(&[("price", json!("0.0549"))]))
+            .unwrap();
         let narrow = m(
             "0.3.0",
             &dec(10, 2, ""),
@@ -874,20 +880,25 @@ mod tests {
         );
         let steps = steps_for(&narrow, &Version::new(0, 2, 0));
         let e = build_ops(&*b, &steps).unwrap_err();
-        assert!(e.contains("mig_item 2") && e.contains("price") && e.contains("fractional"), "{e}");
+        assert!(
+            e.contains("mig_item 2") && e.contains("price") && e.contains("fractional"),
+            "{e}"
+        );
         let rounding = m(
             "0.3.0",
             &dec(10, 2, "round = \"half_up\""),
             &step_to("<0.3.0", "reformat_field", "price", None),
         );
-        b.update("mig_item", "1", &rec(&[("price", json!("12.5050"))])).unwrap();
+        b.update("mig_item", "1", &rec(&[("price", json!("12.5050"))]))
+            .unwrap();
         let steps = steps_for(&rounding, &Version::new(0, 2, 0));
         b.apply_checked(&build_ops(&*b, &steps).unwrap()).unwrap();
         assert_eq!(price("1"), Some(json!("12.51")));
         assert_eq!(price("2"), Some(json!("0.05")));
         assert_eq!(price("3"), Some(json!("-3.00")));
         // A narrower precision that a value exceeds is refused as well.
-        b.update("mig_item", "3", &rec(&[("price", json!("12345678.00"))])).unwrap();
+        b.update("mig_item", "3", &rec(&[("price", json!("12345678.00"))]))
+            .unwrap();
         let small = m(
             "0.4.0",
             &dec(4, 2, ""),
@@ -900,8 +911,17 @@ mod tests {
     #[test]
     fn a_renamed_value_goes_into_a_decimal_or_datetime_field_in_canonical_text() {
         let b = obop_storage::open("memory:").unwrap();
-        b.insert("mig_item", "1", &rec(&[("p", json!("12.5")), ("at", json!("2026-03-29T03:30:00+02:00"))])).unwrap();
-        b.insert("mig_item", "2", &rec(&[("p", json!(7)), ("at", json!(""))])).unwrap();
+        b.insert(
+            "mig_item",
+            "1",
+            &rec(&[
+                ("p", json!("12.5")),
+                ("at", json!("2026-03-29T03:30:00+02:00")),
+            ]),
+        )
+        .unwrap();
+        b.insert("mig_item", "2", &rec(&[("p", json!(7)), ("at", json!(""))]))
+            .unwrap();
         let new = m(
             "0.2.0",
             &format!("{}{}", dec(8, 2, ""), field("seen", "kind = \"datetime\"")),
@@ -919,16 +939,21 @@ mod tests {
         assert!(one["p"].is_null() && one["at"].is_null());
         let two = b.get("mig_item", "2").unwrap().unwrap();
         assert_eq!(two["price"], "7.00", "a whole number is a decimal");
-        assert!(two.get("seen").is_none_or(J::is_null), "an empty text moves nothing");
+        assert!(
+            two.get("seen").is_none_or(J::is_null),
+            "an empty text moves nothing"
+        );
         // A value that is not of the kind stops the update and names the record.
-        b.insert("mig_item", "3", &rec(&[("p", json!("twelve"))])).unwrap();
+        b.insert("mig_item", "3", &rec(&[("p", json!("twelve"))]))
+            .unwrap();
         let e = build_ops(&*b, &steps).unwrap_err();
         assert!(
             e.contains("mig_item 3") && e.contains("p -> price") && e.contains("twelve"),
             "{e}"
         );
         b.delete("mig_item", "3").unwrap();
-        b.insert("mig_item", "4", &rec(&[("at", json!("2026-03-29"))])).unwrap();
+        b.insert("mig_item", "4", &rec(&[("at", json!("2026-03-29"))]))
+            .unwrap();
         let e = build_ops(&*b, &steps).unwrap_err();
         assert!(e.contains("mig_item 4") && e.contains("at -> seen"), "{e}");
         // Into a text field the value still moves untouched.

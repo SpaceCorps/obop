@@ -185,7 +185,13 @@ fn time_block(s: &Server) -> serde_json::Value {
 #[test]
 fn an_unknown_time_zone_stops_the_server_and_a_good_one_is_the_platform_zone() {
     // D72: a typo is found when the server starts, with the variable named.
-    for bad in ["Mars/Base", "../../etc/passwd", "UTC+2", "localtime", "Europe/"] {
+    for bad in [
+        "Mars/Base",
+        "../../etc/passwd",
+        "UTC+2",
+        "localtime",
+        "Europe/",
+    ] {
         let e = refused(&[("OBOP_ZONE", bad)]);
         assert!(
             e.contains("OBOP_ZONE") && e.contains("not a time zone"),
@@ -219,7 +225,11 @@ fn every_command_that_opens_the_database_refuses_a_bad_time_zone() {
         .env("OBOP_ZONE", "Asia/Tokyo")
         .output()
         .expect("run obop");
-    assert!(ok.status.success(), "{}", String::from_utf8_lossy(&ok.stderr));
+    assert!(
+        ok.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ok.stderr)
+    );
 }
 
 #[test]

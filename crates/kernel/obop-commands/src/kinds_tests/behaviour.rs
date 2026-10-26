@@ -76,7 +76,11 @@ fn a_computed_decimal_read_by_another_is_the_rounded_value() {
     each(|r| {
         let id = r.create(
             "item",
-            vec![("name", t("inv")), ("ratio", t("12.3456")), ("qty", Value::Int(3))],
+            vec![
+                ("name", t("inv")),
+                ("ratio", t("12.3456")),
+                ("qty", Value::Int(3)),
+            ],
         );
         let row = r.read("item", &id);
         // 12.3456 * 3 = 37.0368, shown 37.04; 37.04 * 0.19 = 7.0376, shown 7.04; the gross is
@@ -85,22 +89,42 @@ fn a_computed_decimal_read_by_another_is_the_rounded_value() {
         assert_eq!(text(get(&row, "vat")), "7.04");
         assert_eq!(text(get(&row, "gross")), "44.08");
         let sum = |a: &str, b: &str| {
-            let (a, b) = (a.replace('.', "").parse::<i64>().unwrap(), b.replace('.', "").parse::<i64>().unwrap());
+            let (a, b) = (
+                a.replace('.', "").parse::<i64>().unwrap(),
+                b.replace('.', "").parse::<i64>().unwrap(),
+            );
             a + b
         };
         assert_eq!(
             sum(&text(get(&row, "net")), &text(get(&row, "vat"))),
-            text(get(&row, "gross")).replace('.', "").parse::<i64>().unwrap()
+            text(get(&row, "gross"))
+                .replace('.', "")
+                .parse::<i64>()
+                .unwrap()
         );
         // The other example of the review: 0.0149 * 1 shows 0.01, 0.00 and 0.01.
-        let id = r.create("item", vec![("name", t("small")), ("ratio", t("0.0149")), ("qty", Value::Int(1))]);
+        let id = r.create(
+            "item",
+            vec![
+                ("name", t("small")),
+                ("ratio", t("0.0149")),
+                ("qty", Value::Int(1)),
+            ],
+        );
         let row = r.read("item", &id);
         assert_eq!(
-            (text(get(&row, "net")), text(get(&row, "vat")), text(get(&row, "gross"))),
+            (
+                text(get(&row, "net")),
+                text(get(&row, "vat")),
+                text(get(&row, "gross"))
+            ),
             ("0.01".to_string(), "0.00".to_string(), "0.01".to_string())
         );
         // Filtering and sorting see the same rounded value.
-        assert_eq!(r.names(vec![cond("gross", "eq", t("44.08"))], None), ["inv"]);
+        assert_eq!(
+            r.names(vec![cond("gross", "eq", t("44.08"))], None),
+            ["inv"]
+        );
     });
 }
 

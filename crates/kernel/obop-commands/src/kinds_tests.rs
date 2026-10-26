@@ -393,6 +393,8 @@ fn ten_thousand_random_decimals_round_trip_bit_exact() {
     });
 }
 
+/// The same text comes back whichever surface the call is made as (the dispatcher is told which
+/// one it is serving; the transports themselves are tested in the `obop` crate).
 #[test]
 fn every_surface_round_trips_the_same_text() {
     each(|r| {

@@ -274,7 +274,7 @@ fn tool(d: &Dispatcher, p: &Principal, s: &mut Session, name: &str, args: J) -> 
 }
 
 #[tokio::test]
-async fn rest_mcp_and_cli_round_trip_ten_thousand_generated_decimals() {
+async fn rest_and_mcp_round_trip_ten_thousand_generated_decimals() {
     let f = fixture().await;
     let mut rng = Rng(0x00de_c1a7_e5ed);
 
@@ -751,13 +751,15 @@ async fn openapi_and_mcp_examples_are_values_the_server_takes_and_bulk_rows_allo
     let create = &tool("shapes_box__create")["inputSchema"]["properties"];
     let rows_of = |schema: &J| schema["properties"]["rows"]["items"]["properties"].clone();
     let bulk_openapi = rows_of(
-        &doc["paths"]["/api/shapes_box/bulk_create"]["post"]["requestBody"]["content"]
-            ["application/json"]["schema"],
+        &doc["paths"]["/api/shapes_box/bulk_create"]["post"]["requestBody"]["content"]["application/json"]
+            ["schema"],
     );
     let bulk_mcp = rows_of(&tool("shapes_box__bulk_create")["inputSchema"]);
     for (name, p, s, rounds) in SHAPE_FIELDS {
         let what = format!("{name} decimal({p}, {s})");
-        let example = props[name]["example"].as_str().unwrap_or_else(|| panic!("{what}"));
+        let example = props[name]["example"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{what}"));
         taken(example, p, s, &format!("OpenAPI {what}"));
         // The MCP description quotes the example it was built from.
         let description = create[name]["description"].as_str().unwrap();
@@ -789,8 +791,8 @@ async fn openapi_and_mcp_examples_are_values_the_server_takes_and_bulk_rows_allo
     }
     assert!(!csv.contains("Whole numbers only"), "{csv}");
     let csv = bulk_csv_description(
-        &doc["paths"]["/api/shapes_box/bulk_create"]["post"]["requestBody"]["content"]
-            ["application/json"]["schema"],
+        &doc["paths"]["/api/shapes_box/bulk_create"]["post"]["requestBody"]["content"]["application/json"]
+            ["schema"],
     );
     for needle in ["decimal", "datetime", "rounds on import"] {
         assert!(csv.contains(needle), "OpenAPI csv: {needle} in {csv}");
