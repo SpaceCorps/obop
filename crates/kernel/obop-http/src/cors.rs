@@ -35,7 +35,7 @@ const REQUEST_HEADERS: [&str; 8] = [
 const ALLOW_HEADERS: &str = "Authorization, Content-Type, Accept, Accept-Language, Idempotency-Key, If-Match, X-Request-Id, X-App-Version";
 /// Response headers a page may read besides the safelisted ones.
 const EXPOSE_HEADERS: &str =
-    "Link, Retry-After, WWW-Authenticate, X-Request-Id, ETag, Idempotent-Replayed";
+    "Link, Retry-After, X-Obop-Applied, WWW-Authenticate, X-Request-Id, ETag, Idempotent-Replayed";
 /// Seconds a browser may cache a preflight answer (Chrome caps it at 600).
 const MAX_AGE: &str = "600";
 

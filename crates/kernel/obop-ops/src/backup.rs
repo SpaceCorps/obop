@@ -691,10 +691,11 @@ fn write_backup(
         bytes: 0,
     };
     let created_at = rfc3339(at);
+    // A database that was never named has no id; one whose id cannot be read is not that: a backup
+    // without it could not be tied to this database later, and would be refused, unseen until then.
     let database_id = backend
         .get(obop_migrate::META_MODEL, obop_migrate::INSTANCE_ID)
-        .ok()
-        .flatten()
+        .map_err(|e| format!("the id of the database cannot be read: {e}"))?
         .and_then(|f| f.get("id").and_then(J::as_str).map(String::from));
     let io = |e: std::io::Error| format!("write failed: {e}");
     // What a sealed backup needs before the first byte: its id, its data key, and the header.

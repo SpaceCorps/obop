@@ -188,7 +188,7 @@ export const pl: Messages = {
       },
       {
         title: "Kod na GitHubie",
-        body: "Czytaj kod, decyzje i plan rozwoju. Licencja jest w trakcie ustalania; zajrzyj do repozytorium.",
+        body: "Czytaj kod, decyzje i plan rozwoju. Apache-2.0, bezpłatny w użyciu i do samodzielnego hostowania; zajrzyj do repozytorium.",
       },
     ],
     pricingTitle: "Prosty cennik, w planach",
@@ -228,7 +228,7 @@ export const pl: Messages = {
       },
       {
         q: "Czy to oprogramowanie jest otwartoźródłowe?",
-        a: "Kod źródłowy jest publiczny na GitHubie. Ostateczna licencja nie została jeszcze wybrana (projekt proponuje AGPL), więc aktualne warunki sprawdź w repozytorium.",
+        a: "Kod źródłowy jest publiczny na GitHubie na licencji Apache-2.0: można go swobodnie używać, zmieniać i hostować samodzielnie. Pełny tekst znajdziesz w pliku LICENSE w repozytorium.",
       },
     ],
     ctaTitle: "Jedna firma, jedna platforma.",

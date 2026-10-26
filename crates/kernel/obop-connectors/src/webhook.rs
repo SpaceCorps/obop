@@ -50,6 +50,8 @@ pub enum VerifyError {
     Stale,
     BadSignature,
     Replay,
+    /// The store was busy or unreachable: nothing was recorded, the sender should retry (D74).
+    Storage,
 }
 
 impl std::fmt::Display for VerifyError {
@@ -60,6 +62,7 @@ impl std::fmt::Display for VerifyError {
             Self::Stale => "timestamp outside the tolerance",
             Self::BadSignature => "signature does not match",
             Self::Replay => "already received",
+            Self::Storage => "the database is busy, try again",
         })
     }
 }
@@ -228,10 +231,33 @@ impl Seen {
         f.insert("at".into(), now.into());
         match backend.insert("connector_seen", &id, &f) {
             Ok(()) => Ok(()),
-            Err(_) if backend.get("connector_seen", &id).ok().flatten().is_some() => {
-                Err(VerifyError::Replay)
-            }
-            Err(_) => Ok(()), // a storage fault must not turn into a free replay of nothing
+            Err(e) => match backend.get("connector_seen", &id) {
+                Ok(Some(_)) => Err(VerifyError::Replay),
+                // A refused store is neither "new" nor "seen": the event is not taken (D74). The
+                // sender retries, and nothing was recorded that could swallow the retry.
+                Err(_) => Err(VerifyError::Storage),
+                Ok(None) if obop_storage::fault::Fault::is_transient(&e) => {
+                    Err(VerifyError::Storage)
+                }
+                // A refusal that is neither a record nor a fault: do not block the delivery.
+                Ok(None) => Ok(()),
+            },
+        }
+    }
+
+    /// Give a claim back: the event was not applied, so the sender's retry must not be taken for a
+    /// replay. Allowed after a refused call (it undoes what this request did) and tried again
+    /// while the store is busy.
+    pub fn release(backend: &dyn Backend, connection: &str, event_id: &str) {
+        let id = format!(
+            "{connection}:{}",
+            crate::util::sha256_hex(event_id.as_bytes())
+        );
+        let r = obop_storage::fault::patiently(4, std::time::Duration::from_millis(150), || {
+            obop_storage::fault::bookkeeping(|| backend.delete("connector_seen", &id))
+        });
+        if let Err(e) = r {
+            eprintln!("webhooks: could not release the claim of an event: {e}");
         }
     }
 
@@ -419,6 +445,39 @@ mod tests {
         assert_eq!(
             verify(Scheme::Stripe, secret, &bad, body, NOW),
             Err(VerifyError::BadSignature)
+        );
+    }
+
+    #[test]
+    fn a_store_that_refuses_is_neither_a_new_event_nor_a_replay_and_a_claim_can_be_given_back() {
+        use obop_storage::fault;
+        use obop_storage::testing::{Flaky, Mode};
+        // D74: an event met by a busy store is not taken (the sender retries), a claim that was
+        // made can be released even after a refused call, and a released id is new again.
+        let (flaky, b) = Flaky::memory();
+        flaky.set(Mode::All);
+        assert_eq!(
+            Seen::claim(&*b, "c1", "evt_1", NOW),
+            Err(VerifyError::Storage)
+        );
+        flaky.set(Mode::Healthy);
+        assert!(
+            Seen::claim(&*b, "c1", "evt_1", NOW).is_ok(),
+            "nothing was recorded"
+        );
+        assert_eq!(
+            Seen::claim(&*b, "c1", "evt_1", NOW),
+            Err(VerifyError::Replay)
+        );
+        fault::begin_request(Default::default());
+        flaky.refuse_next(1);
+        assert!(b.get("connector_seen", "x").is_err());
+        Seen::release(&*b, "c1", "evt_1");
+        let out = fault::end_request();
+        assert!(!out.wrote, "a dedup marker is not a change: {out:?}");
+        assert!(
+            Seen::claim(&*b, "c1", "evt_1", NOW).is_ok(),
+            "the id is new again"
         );
     }
 

@@ -51,9 +51,13 @@ impl OAuthTokens for Auth {
     }
 
     fn revoke_token_id(&self, id: &str) -> bool {
+        self.try_revoke_token_id(id).unwrap_or(false)
+    }
+
+    fn try_revoke_token_id(&self, id: &str) -> Result<bool, String> {
         let mut p = Fields::new();
         p.insert("revoked".into(), J::Bool(true));
-        self.backend.update("auth_token", id, &p).unwrap_or(false)
+        self.backend.update("auth_token", id, &p)
     }
 
     fn revoke_session(&self, token: &str) -> bool {

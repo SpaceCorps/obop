@@ -167,13 +167,46 @@ impl IntoResponse for AuthRejection {
     }
 }
 
+tokio::task_local! {
+    /// What the blocking parts of the current request did to the store: the first storage fault
+    /// (pool exhausted, database unreachable, statement timed out) and whether a change was
+    /// committed; read by `ops::storage_faults` (D74).
+    pub(crate) static FAULT: std::cell::Cell<obop_storage::fault::Outcome>;
+}
+
 /// Storage backends block (the PostgreSQL client runs its own runtime, which panics if used on an
 /// async worker), so every handler that touches the dispatcher, the authenticator or the platform
-/// runs on the blocking pool.
+/// runs on the blocking pool. A blocking part runs on one thread from start to end, so it is a
+/// request scope of `obop_storage::fault`: a storage fault noted in it, and a change committed in
+/// it, are handed to the request here (and a fault of an earlier part is handed to this one, so
+/// that it, too, changes nothing). The layer `ops::storage_faults` decides the answer.
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
-    tokio::task::spawn_blocking(f)
-        .await
-        .expect("handler panicked")
+    let earlier = FAULT.try_with(std::cell::Cell::get).unwrap_or_default();
+    let (out, outcome) = tokio::task::spawn_blocking(move || {
+        /// Leaves the scope also when the handler panics: the thread goes back to the pool.
+        struct Leave;
+        impl Drop for Leave {
+            fn drop(&mut self) {
+                obop_storage::fault::clear();
+            }
+        }
+        let _leave = Leave;
+        obop_storage::fault::begin_request(earlier);
+        let out = f();
+        (out, obop_storage::fault::end_request())
+    })
+    .await
+    .expect("handler panicked");
+    let _ = FAULT.try_with(|c| {
+        let mut now = c.get();
+        if now.fault.is_none() {
+            now.fault = outcome.fault;
+        }
+        now.wrote |= outcome.wrote;
+        now.partial |= outcome.partial;
+        c.set(now);
+    });
+    out
 }
 
 /// The REST routes under `/api`, without any static or public fallback.
@@ -328,13 +361,14 @@ pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
     instrument(app, state)
 }
 
-/// Count every response, fallbacks included, for `/metrics`.
+/// Count every response, fallbacks included, for `/metrics`, and answer a storage fault with 503.
 pub(crate) fn instrument(app: Router, state: Arc<HttpState>) -> Router {
-    app.layer(axum::middleware::from_fn_with_state(
-        state.clone(),
-        cors::layer,
-    ))
-    .layer(axum::middleware::from_fn_with_state(state, ops::track))
+    app.layer(axum::middleware::from_fn(ops::storage_faults))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            cors::layer,
+        ))
+        .layer(axum::middleware::from_fn_with_state(state, ops::track))
 }
 
 /// The back office single-page app, except that an unknown `/api/...` path answers JSON (agents
@@ -483,12 +517,19 @@ fn approve_blocking(s: Arc<HttpState>, h: HeaderMap, plan_id: String) -> Respons
 /// The shared store could not be reached or a lock was not granted in time.
 fn unavailable(why: &str) -> Response {
     eprintln!("shared state unavailable: {why}");
-    api_error(
+    let fault = obop_storage::fault::Fault::of_message(why);
+    let mut r = api_error(
         StatusCode::SERVICE_UNAVAILABLE,
         "the server is busy, try again",
-        "unavailable",
-        "A lock or the database did not answer in time. Retry the request.",
-    )
+        fault.map_or("unavailable", |f| f.code()),
+        "A lock or the database did not answer in time. Try again after the time in Retry-After.",
+    );
+    // Never a 503 without a time to wait (D74).
+    r.headers_mut().insert(
+        axum::http::header::RETRY_AFTER,
+        axum::http::HeaderValue::from(fault.map_or(1, |f| f.retry_after_secs())),
+    );
+    r
 }
 
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
@@ -511,6 +552,10 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
             Json(json!({"error": "invalid token"})),
         )
             .into_response(),
+        // A refused database call is the server's trouble, never a 4xx the client would not retry.
+        Err(CallError::Handler(m)) if obop_storage::fault::Fault::is_transient(&m) => {
+            unavailable(&m)
+        }
         Err(CallError::Handler(m)) => {
             (StatusCode::BAD_REQUEST, Json(json!({"error": m}))).into_response()
         }
@@ -585,6 +630,10 @@ fn bearer(h: &HeaderMap) -> &str {
 }
 
 fn err(status: StatusCode, e: String) -> Response {
+    // A refused database call is never a 400, 401 or 404 the client would not retry (D74).
+    if obop_storage::fault::Fault::is_transient(&e) {
+        return unavailable(&e);
+    }
     let (code, hint) = match status {
         StatusCode::UNAUTHORIZED => ("unauthorized", "Sign in, or pass a valid bearer token."),
         StatusCode::NOT_FOUND => (
@@ -643,12 +692,15 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         Some(a) => r.merge(mfa::routes("/api/platform", a)),
         None => r,
     };
-    match static_dir {
+    let r = match static_dir {
         // The control plane serves the marketing site: real 404s, clean-URL redirects and
         // Markdown for agents (docs/site/SITE.md, "Server requirements").
         Some(dir) => r.fallback_service(website::service(dir.into())),
         None => r,
-    }
+    };
+    // The control plane's database is pooled too: a refused call is a 503 here as well (D74),
+    // not a 401 "invalid username or password" or a 404.
+    r.layer(axum::middleware::from_fn(ops::storage_faults))
 }
 
 /// The release feed instances read (D63): public, cacheable for a minute.
@@ -765,5 +817,60 @@ fn p_delete_blocking(api: Arc<dyn PlatformApi>, h: HeaderMap, id: String) -> Res
         Err(e) if e == "not signed in" => err(StatusCode::UNAUTHORIZED, e),
         Err(e) if e == "no such instance" => err(StatusCode::NOT_FOUND, e),
         Err(e) => err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+#[cfg(test)]
+mod fault_answers {
+    use super::*;
+    use obop_commands::MfaError;
+
+    fn retry_after(r: &Response) -> Option<String> {
+        r.headers()
+            .get(axum::http::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(String::from)
+    }
+
+    #[test]
+    fn a_handler_error_that_is_the_stores_trouble_is_a_503_and_never_a_400() {
+        let r = respond(Err(CallError::Handler(
+            "storage_busy: every connection is in use".into(),
+        )));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(retry_after(&r).as_deref(), Some("1"));
+        let r = respond(Err(CallError::Handler(
+            "storage_unavailable: the database cannot be reached".into(),
+        )));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(retry_after(&r).as_deref(), Some("5"));
+        // An error of the command itself is still the caller's.
+        let r = respond(Err(CallError::Handler("name is required".into())));
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn two_factor_and_control_plane_errors_that_name_the_store_are_503_with_a_time_to_wait() {
+        let busy = || "storage_timeout: a statement ran into its time limit".to_string();
+        let r = mfa::mfa_error(MfaError::Unavailable(busy()));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(retry_after(&r).as_deref(), Some("5"));
+        // Without the store's code word it is the server-key message as before.
+        let r = mfa::mfa_error(MfaError::Unavailable("OBOP_SECRET_KEY is not set".into()));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(retry_after(&r).is_none());
+        for status in [
+            StatusCode::BAD_REQUEST,
+            StatusCode::UNAUTHORIZED,
+            StatusCode::NOT_FOUND,
+        ] {
+            let r = err(status, busy());
+            assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE, "{status}");
+            assert_eq!(retry_after(&r).as_deref(), Some("5"));
+        }
+        assert_eq!(
+            err(StatusCode::UNAUTHORIZED, "invalid email or password".into()).status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 }

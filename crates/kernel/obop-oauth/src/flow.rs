@@ -246,7 +246,7 @@ impl OAuth {
             "lang": lang,
         });
         self.flow_put(&id, &rec)
-            .map_err(|_| OAuthError::new(503, "temporarily_unavailable", "storage is busy"))?;
+            .map_err(|_| OAuthError::storage_busy())?;
         Ok((id, binder))
     }
 

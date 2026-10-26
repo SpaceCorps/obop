@@ -135,14 +135,22 @@ impl Queue {
         })
     }
 
-    /// Queue a job. A job with the same id replaces nothing: ids are unique per delivery.
-    pub fn push(&self, job: Job) {
+    /// Queue a job. A job with the same id replaces nothing: ids are unique per delivery. A
+    /// refusal of the store is an error: a retry that was not queued is a delivery nobody will
+    /// make, and the caller must say so.
+    pub fn push(&self, job: Job) -> Result<(), String> {
         let f = self.fields_of(&job);
-        if let Err(e) = self.backend.insert(JOBS, &job.id, &f) {
-            // The same id again (a retry pushed twice) is the same job; anything else is logged.
-            if !e.to_lowercase().contains("duplicate") && !e.to_lowercase().contains("unique") {
-                eprintln!("connectors: could not queue delivery {}: {e}", job.id);
+        match self.backend.insert(JOBS, &job.id, &f) {
+            Ok(()) => Ok(()),
+            // The same id again (a retry pushed twice) is the same job.
+            Err(e)
+                if !obop_storage::fault::Fault::is_transient(&e)
+                    && (e.to_lowercase().contains("duplicate")
+                        || e.to_lowercase().contains("unique")) =>
+            {
+                Ok(())
             }
+            Err(e) => Err(e),
         }
     }
 
@@ -215,8 +223,10 @@ impl Queue {
                 p.insert("lease_until".into(), 0.into());
                 p.insert("lease_owner".into(), "".into());
                 if !self.backend.update(JOBS, &job.id, &p).unwrap_or(false) {
-                    // Not there any more (dropped meanwhile, or never pushed): put it back.
-                    self.push(job.clone());
+                    // Not there any more (dropped meanwhile, or never pushed): put it back. If
+                    // that is refused the job keeps its lease and is taken again when the lease
+                    // ends, so nothing is lost; there is nobody to tell here.
+                    let _ = self.push(job.clone());
                 }
                 Requeued::At(job.next_at)
             }
@@ -242,23 +252,30 @@ impl Queue {
         d.insert("dead_at".into(), now.into());
         d.remove("lease_until");
         d.remove("lease_owner");
-        let _ = self.backend.insert(DEAD, id, &d);
+        // The job leaves the queue only once it is in the dead letters: if that write is refused
+        // it stays leased and is taken (and buried) again when the lease ends, never lost.
+        match self.backend.insert(DEAD, id, &d) {
+            Ok(()) => {}
+            Err(e) if obop_storage::fault::Fault::is_transient(&e) => return,
+            // Already buried (an earlier try whose answer was lost): the job can go.
+            Err(_) => {}
+        }
         let _ = self.backend.delete(JOBS, id);
     }
 
-    /// Drop every job of a connection (it was paused or revoked), queued and dead.
-    pub fn drop_connection(&self, connection: &str) -> usize {
+    /// Drop every job of a connection (it was paused or revoked), queued and dead. A refusal of
+    /// the store is an error: the bodies of a revoked connection must not be answered as gone
+    /// while they are still stored. Safe to run again.
+    pub fn drop_connection(&self, connection: &str) -> Result<usize, String> {
         let mut n = 0;
         for model in [JOBS, DEAD] {
-            for (id, f) in self.backend.list(model).unwrap_or_default() {
-                if text(&f, "connection") == connection
-                    && self.backend.delete(model, &id).unwrap_or(false)
-                {
+            for (id, f) in self.backend.list(model)? {
+                if text(&f, "connection") == connection && self.backend.delete(model, &id)? {
                     n += 1;
                 }
             }
         }
-        n
+        Ok(n)
     }
 
     /// The deliveries that gave up, oldest first.
@@ -338,7 +355,7 @@ mod tests {
         let mut j = job("m1", 0);
         j.attempt = 0;
         let mut now = 1000;
-        q.push(j.clone());
+        q.push(j.clone()).unwrap();
         for expected in [5, 30, 300, 1800, 7200] {
             let claimed = q.take_due(now).pop().unwrap();
             assert_eq!(
@@ -372,19 +389,46 @@ mod tests {
     #[test]
     fn only_due_jobs_are_taken_and_a_connection_can_be_dropped() {
         let q = Queue::in_memory();
-        q.push(job("a", 10));
-        q.push(job("b", 50));
+        q.push(job("a", 10)).unwrap();
+        q.push(job("b", 50)).unwrap();
         assert_eq!(q.take_due(20).len(), 1);
         assert_eq!(q.len(), 2, "a claimed job stays until it is completed");
-        assert_eq!(q.drop_connection("c1"), 2);
+        assert_eq!(q.drop_connection("c1"), Ok(2));
         assert!(q.is_empty());
+    }
+
+    #[test]
+    fn a_job_leaves_the_queue_only_once_it_is_in_the_dead_letters() {
+        use obop_storage::testing::{Flaky, Mode};
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let q = Queue::new(flaky.clone(), SecretBox::for_tests());
+        q.push(job("m1", 0)).unwrap();
+        let mut last = q.take_due(0).pop().unwrap();
+        last.attempt = 5;
+        // The dead letters cannot be written: the job must not be deleted behind that.
+        flaky.refuse_model(DEAD, Mode::All);
+        assert_eq!(
+            q.requeue_because(last.clone(), 0, 0, "down"),
+            Requeued::Dead
+        );
+        flaky.allow_models();
+        assert!(
+            b.get(JOBS, "m1").unwrap().is_some(),
+            "still queued, and not lost"
+        );
+        assert!(q.dead().is_empty());
+        // Buried when the store answers.
+        assert_eq!(q.requeue_because(last, 0, 0, "down"), Requeued::Dead);
+        assert!(b.get(JOBS, "m1").unwrap().is_none());
+        assert_eq!(q.dead().len(), 1);
     }
 
     #[test]
     fn the_payload_is_sealed_at_rest_and_round_trips_binary() {
         let b = obop_storage::open("memory:").unwrap();
         let q = Queue::new(b.clone(), SecretBox::for_tests());
-        q.push(job("m1", 0));
+        q.push(job("m1", 0)).unwrap();
         let raw = b.get(JOBS, "m1").unwrap().unwrap();
         let body = raw["body"].as_str().unwrap();
         assert!(body.starts_with("e2.") && !body.contains("eyJ"));
@@ -407,7 +451,7 @@ mod tests {
             Queue::new(b.clone(), SecretBox::for_tests()),
             Queue::new(b.clone(), SecretBox::for_tests()),
         );
-        a.push(job("m1", 100));
+        a.push(job("m1", 100)).unwrap();
         assert_eq!(a.take_due(100).len(), 1, "A claims it");
         assert!(other.take_due(100).is_empty(), "B finds it leased");
         assert!(other.take_due(100 + LEASE_SECS - 1).is_empty());
@@ -422,7 +466,9 @@ mod tests {
     fn concurrent_workers_split_the_jobs_without_overlap() {
         let b = obop_storage::open("memory:").unwrap();
         for i in 0..40 {
-            Queue::new(b.clone(), SecretBox::for_tests()).push(job(&format!("m{i}"), 0));
+            Queue::new(b.clone(), SecretBox::for_tests())
+                .push(job(&format!("m{i}"), 0))
+                .unwrap();
         }
         let got: Vec<Vec<String>> = std::thread::scope(|s| {
             let hs: Vec<_> = (0..4)

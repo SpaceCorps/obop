@@ -23,7 +23,7 @@ fn fields(n: i64) -> Fields {
 /// `a` and `b` are two handles on the same database.
 /// `destructive` also tests the wiping import, which empties the database: only for databases
 /// nothing else is using.
-fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destructive: bool) {
+pub(crate) fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destructive: bool) {
     // ---- counters: fixed window, shared between handles, expiry restarts at 1 ----
     let k = unique("ctr");
     assert_eq!(a.counter_get(&k).unwrap(), 0);
@@ -35,16 +35,23 @@ fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destructive: bool) 
     b.counter_reset(&k).unwrap();
     assert_eq!(a.counter_get(&k).unwrap(), 0);
     let k = unique("ctr-exp");
-    assert_eq!(a.counter_add(&k, 60, false).unwrap(), 1);
-    assert_eq!(b.counter_add(&k, 60, false).unwrap(), 2);
-    std::thread::sleep(Duration::from_millis(150));
+    // The windows are wide against the gaps between calls, so a loaded machine that stalls a
+    // thread for a few hundred milliseconds cannot expire a counter the test still counts on.
+    assert_eq!(a.counter_add(&k, 400, false).unwrap(), 1);
+    assert_eq!(b.counter_add(&k, 400, false).unwrap(), 2);
+    std::thread::sleep(Duration::from_millis(600));
     assert_eq!(a.counter_get(&k).unwrap(), 0, "expired reads as zero");
-    assert_eq!(b.counter_add(&k, 60, false).unwrap(), 1, "and starts again");
-    // `extend` pushes the expiry out on every hit.
+    assert_eq!(
+        b.counter_add(&k, 400, false).unwrap(),
+        1,
+        "and starts again"
+    );
+    // `extend` pushes the expiry out on every hit: four hits 250 ms apart span 750 ms, longer
+    // than the 600 ms window, and every gap is shorter than it.
     let k = unique("ctr-ext");
     for _ in 0..4 {
-        a.counter_add(&k, 120, true).unwrap();
-        std::thread::sleep(Duration::from_millis(60));
+        a.counter_add(&k, 600, true).unwrap();
+        std::thread::sleep(Duration::from_millis(250));
     }
     assert_eq!(a.counter_get(&k).unwrap(), 4);
     // 0 never expires.
@@ -314,6 +321,88 @@ fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destructive: bool) 
         a.export(5, &mut |_| Err("stop".into())).unwrap_err(),
         "stop"
     );
+
+    concurrent_batches(a, b);
+}
+
+/// Batches that run at the same moment, on one handle or two, behave as if they ran one after the
+/// other (D74: the PostgreSQL backend no longer serialises a process's calls on one connection,
+/// so it orders and repeats them itself).
+pub(crate) fn concurrent_batches(a: Arc<dyn Backend>, b: Arc<dyn Backend>) {
+    let model = unique("conc");
+    let put = |db: &Arc<dyn Backend>, id: &str| {
+        db.insert(&model, id, &fields(0)).unwrap();
+    };
+    put(&a, "x");
+    put(&a, "y");
+    let merge = |id: &str, n: i64| Op::Merge {
+        model: model.clone(),
+        id: id.into(),
+        patch: fields(n),
+    };
+    // Two kinds of batch name the same two records in opposite order. Taking row locks in the
+    // order of the steps would let two of them deadlock.
+    std::thread::scope(|s| {
+        for t in 0..6 {
+            let h = if t % 2 == 0 { a.clone() } else { b.clone() };
+            let (merge, model) = (&merge, &model);
+            s.spawn(move || {
+                for round in 0..25 {
+                    let ops = if t % 3 == 0 {
+                        vec![merge("x", round), merge("y", round)]
+                    } else {
+                        vec![
+                            merge("y", round),
+                            merge("x", round),
+                            Op::add(model, "x", "n", 0),
+                        ]
+                    };
+                    h.apply_checked(&ops)
+                        .unwrap_or_else(|e| panic!("thread {t} round {round}: {e}"));
+                }
+            });
+        }
+    });
+    // A counter created by whoever comes first: every increment counts, none is lost, no caller
+    // fails because another created the record at the same moment.
+    let ctr = Fields::new();
+    std::thread::scope(|s| {
+        for t in 0..6 {
+            let h = if t % 2 == 0 { a.clone() } else { b.clone() };
+            let (model, ctr) = (&model, &ctr);
+            s.spawn(move || {
+                for _ in 0..20 {
+                    h.apply_checked(&[Op::add(model, "counter", "n", 1).or_create(ctr.clone())])
+                        .unwrap_or_else(|e| panic!("thread {t}: {e}"));
+                }
+            });
+        }
+    });
+    assert_eq!(a.get(&model, "counter").unwrap().unwrap()["n"], 120);
+    // Several callers insert the same new record at the same moment: exactly one wins and the
+    // others are told the record exists (a conflict, not a storage failure).
+    let winners = AtomicUsize::new(0);
+    std::thread::scope(|s| {
+        for t in 0..6 {
+            let h = if t % 2 == 0 { a.clone() } else { b.clone() };
+            let (model, winners) = (&model, &winners);
+            s.spawn(move || {
+                let r = h.apply_checked(&[Op::Insert {
+                    model: model.clone(),
+                    id: "once".into(),
+                    fields: fields(t),
+                }]);
+                match r {
+                    Ok(()) => {
+                        winners.fetch_add(1, Ordering::SeqCst);
+                    }
+                    Err(ApplyError::Conflict { .. }) => {}
+                    Err(e) => panic!("thread {t}: a refusal was expected, not {e}"),
+                }
+            });
+        }
+    });
+    assert_eq!(winners.load(Ordering::SeqCst), 1);
 }
 
 #[test]

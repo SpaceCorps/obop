@@ -1,6 +1,6 @@
 # obop — one business, one platform
 
-Open-source operating system for businesses: an Odoo-class modular suite (ERP, CRM, accounting, inventory, manufacturing, HR, projects, POS, e-commerce, website, marketing, helpdesk, documents) on one shared data model. Clean-room re-implementation of Odoo's concepts and behaviour, not a code port.
+Open-source operating system for businesses: an Odoo-class modular suite (ERP, CRM, accounting, inventory, manufacturing, HR, projects, POS, e-commerce, website, marketing, helpdesk, documents) on one shared data model. Clean-room re-implementation of Odoo's concepts and behaviour, not a code port. Apache-2.0 and completely free to use and to self-host.
 
 ## Hard tech constraints (set by the owner)
 
@@ -12,9 +12,16 @@ Open-source operating system for businesses: an Odoo-class modular suite (ERP, C
 - Pending owner ruling: whether two narrow cases are allowed as named exceptions to "vp only": the nightly exit drill, which runs upstream Vite tools without `vp` (I-4), and the JavaScript SBOM and licence scan (`pnpm sbom`, `pnpm licenses list`, run through `vp env exec` or a `vp run` task, because `vp pm sbom` and `vp pm licenses` do not exist in vite-plus 1.0.0; I-2). See `docs/DECISIONS.md` (I-2, I-4, Q10). Until ruled, do not add other exceptions.
 - Pin policy (D23, I-3, PROPOSED, Q10): "latest" is provisionally the newest release that passes the pin policy, so the toolchain intentionally runs up to about three weeks behind the newest release until the owner ratifies it. See `docs/DECISIONS.md` section 1.1.
 
+## Licence, price and contributions (set by the owner, RATIFIED)
+
+- **Licence and price** (OR-1, OR-2; D1, D2): the whole project is Apache-2.0 and completely free, with no proprietary layer. No open-core, no enterprise tree, no paid list, plans or price list, no paid marketplace or partner programme, no AGPL layer, no CLA. `LICENSE` and `NOTICE` ("Copyright 2026 SpaceCorps contributors") are at the repository root; every crate (`license.workspace = true`), bundled package (`license = "Apache-2.0"`) and JavaScript manifest declares `Apache-2.0`. A new dependency must be under a licence compatible with Apache-2.0 (no copyleft-only components).
+- **Publisher** (OR-10): SpaceCorps is the publisher, copyright holder and trademark holder. The repository `SpaceCorps/obop` is public.
+- **Contributions** (OR-1, OR-18): DCO sign-off on every commit (`git commit -s`); no CLA. The owner signs off every commit and agents are recorded with a `Co-Authored-By` trailer; agents never add a `Signed-off-by` line.
+- Older text in `docs/` and `docs/research/` that mentions the AGPL, an Application Exception, a CLA, an `ee` tree, paid plans or prices is superseded by `docs/DECISIONS.md`, section "Owner rulings (2026-10-01): licence and publisher". The owner's other rulings of that day are not recorded yet (see that section).
+
 ## Layout
 
-- `README.md` — entry point and document map.
+- `README.md` — entry point and document map. `LICENSE`, `NOTICE` — Apache-2.0 text and attribution (OR-1).
 - `docs/PRODUCT.md` — master product description. `docs/DECISIONS.md` — binding decision register (wins over the research where they differ).
 - `docs/CONVENTIONS.md` — naming and contract authority (identifiers, events, permission groups, data classes, ports); it ranks below `docs/DECISIONS.md` and above every other document.
 - `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/BUSINESS.md`, `docs/LOCALIZATION.md`, `docs/ENGINEERING.md`, `docs/GLOSSARY.md`.

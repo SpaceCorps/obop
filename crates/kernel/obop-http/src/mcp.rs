@@ -268,13 +268,32 @@ impl McpState {
     }
 
     /// Save the session after a request (this also pushes its expiry out) and release it.
+    ///
+    /// The session carries the mask vault: if it cannot be saved, the answer that was built from it
+    /// names tokens nobody stored. The save is tried again, and if it still fails the request is
+    /// answered 503 (`applied` says whether a change had committed), never with those tokens.
     fn finish(&self, entry: Entry, token: &str) {
-        let _ = self.save(&entry.id, token, &entry.state);
-        let _ = self.shared.backend.kv_put(
-            &index_key(&token_id(token), &entry.id),
-            &now_ms().to_string(),
-            Some(self.ttl_ms()),
-        );
+        use obop_storage::fault;
+        let pause = std::time::Duration::from_millis(150);
+        let saved = fault::patiently(4, pause, || {
+            fault::bookkeeping(|| self.save(&entry.id, token, &entry.state))
+        });
+        // The sliding-expiry marker is an optimisation of the sweep; losing it costs nothing.
+        let _ = fault::bookkeeping(|| {
+            self.shared.backend.kv_put(
+                &index_key(&token_id(token), &entry.id),
+                &now_ms().to_string(),
+                Some(self.ttl_ms()),
+            )
+        });
+        if let Err(e) = saved {
+            eprintln!("mcp: the session could not be saved: {e}");
+            if fault::state().wrote {
+                fault::mark_partial();
+            } else if fault::noted().is_none() {
+                fault::note(fault::Fault::Busy);
+            }
+        }
     }
 
     fn close(&self, id: &str, token: &str) -> bool {
@@ -350,7 +369,9 @@ fn with_cors(mut r: Response, origin: Option<&str>) -> Response {
         h.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, o);
         h.insert(
             header::ACCESS_CONTROL_EXPOSE_HEADERS,
-            HeaderValue::from_static("Mcp-Session-Id, WWW-Authenticate"),
+            HeaderValue::from_static(
+                "Mcp-Session-Id, WWW-Authenticate, Retry-After, X-Obop-Applied",
+            ),
         );
         h.append(header::VARY, HeaderValue::from_static("Origin"));
     }
@@ -635,10 +656,30 @@ fn post_blocking(
         Err(r) => return *r,
     };
     let reply = obop_mcp::handle_payload(&s.dispatcher, p, &mut entry.state, &payload);
+    // A tool call that met a refusal of the store is a tool error with HTTP 200 in the protocol.
+    // The 503 layer turns that into the answer REST gives, but only when it knows a step failed
+    // after a change committed: say so, so an agent is told "part of it was applied", never just
+    // "try again" for a change that was made (D74).
+    if let Reply::Json(j) = &reply
+        && obop_storage::fault::noted().is_some()
+        && has_tool_error(j)
+    {
+        obop_storage::fault::mark_partial();
+    }
     s.mcp.finish(entry, token);
     match reply {
         Reply::Accepted => StatusCode::ACCEPTED.into_response(),
         Reply::Json(j) => json_response(status_for(&j), &j),
+    }
+}
+
+/// Does this reply (one message, or a JSON-RPC batch of them, protocol 2025-03-26) carry a tool
+/// error? Whether a store refusal is behind it is the request's state (a fault was noted), not a
+/// look at the words of the error, which the engine may wrap.
+fn has_tool_error(j: &J) -> bool {
+    match j {
+        J::Array(items) => items.iter().any(has_tool_error),
+        _ => j["result"]["isError"] == true || j.get("error").is_some_and(|e| !e.is_null()),
     }
 }
 
@@ -891,6 +932,40 @@ mod tests {
             public_url: Some("https://acme.example.com".into()),
             ..McpConfig::default()
         }
+    }
+
+    /// An MCP session on a store that can be made to refuse calls; a request that commits a record
+    /// and then saves the session (it carries the mask vault) with the next `n` calls refused.
+    fn finish_after_a_commit(n: i64) -> (McpState, obop_storage::fault::Outcome, String) {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        let shared = Arc::new(SharedState {
+            backend: backend.clone(),
+            ring: obop_keys::KeyRing::for_tests(),
+        });
+        let st = McpState::new(cfg(), shared);
+        let id = st.open("obop_agent", Session::new()).unwrap();
+        let entry = st.find(&id, "obop_agent").expect("the session is there");
+        obop_storage::fault::begin_request(Default::default());
+        flaky.refuse_n_after_the_next_write(n);
+        backend
+            .insert("note", "n1", &obop_storage::Fields::new())
+            .unwrap();
+        st.finish(entry, "obop_agent");
+        (st, obop_storage::fault::end_request(), id)
+    }
+
+    #[test]
+    fn a_session_save_refused_for_a_moment_is_tried_again() {
+        let (st, out, id) = finish_after_a_commit(2);
+        assert!(out.wrote && !out.partial, "{out:?}");
+        assert!(st.find(&id, "obop_agent").is_some());
+    }
+
+    #[test]
+    fn a_session_save_that_stays_refused_after_a_commit_is_a_partial_failure() {
+        let (_st, out, _id) = finish_after_a_commit(50);
+        assert!(out.wrote && out.partial, "{out:?}");
+        assert!(out.fault.is_some());
     }
 
     #[test]

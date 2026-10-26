@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Payments for the web shop: a provider trait with manual (bank transfer), Stripe Checkout and a local demo provider, signed webhooks, refunds, and the stock and discount bookkeeping that follows an order that is not paid"
 
 [dependencies]
@@ -16,6 +18,7 @@ getrandom = "0.4"
 url = "2.5.8"
 
 [dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }
 obop-pkg.workspace = true
 obop-site.workspace = true
 obop-media.workspace = true

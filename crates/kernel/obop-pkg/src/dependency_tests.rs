@@ -172,7 +172,7 @@ fn installing_one_module_installs_its_dependencies_in_order_in_one_operation() {
     let platform = row(&l, "platform");
     assert_eq!(text(get(platform, "version")), obop_types::CORE_VERSION);
     assert_eq!(text(get(platform, "source")), "builtin");
-    assert_eq!(text(get(platform, "license")), "AGPL-3.0-or-later");
+    assert_eq!(text(get(platform, "license")), "Apache-2.0");
     assert!(!list(get(platform, "keywords")).is_empty());
 }
 

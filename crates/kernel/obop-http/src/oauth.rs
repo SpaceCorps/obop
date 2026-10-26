@@ -109,7 +109,7 @@ fn cors(r: &mut Response) {
     );
     h.insert(
         header::ACCESS_CONTROL_EXPOSE_HEADERS,
-        HeaderValue::from_static("Retry-After"),
+        HeaderValue::from_static("Retry-After, X-Obop-Applied"),
     );
 }
 
@@ -647,10 +647,11 @@ pub(crate) async fn revoke_grant(
             return disabled();
         };
         match person(&s, &h) {
-            Ok(p) if o.revoke_grant(&p.id, &id) => {
-                axum::Json(json!({"revoked": true})).into_response()
-            }
-            Ok(_) => StatusCode::NOT_FOUND.into_response(),
+            Ok(p) => match o.revoke_grant(&p.id, &id) {
+                Ok(true) => axum::Json(json!({"revoked": true})).into_response(),
+                Ok(false) => StatusCode::NOT_FOUND.into_response(),
+                Err(e) => oauth_error(&e),
+            },
             Err(r) => *r,
         }
     })

@@ -43,6 +43,8 @@ pub fn router(app: Arc<Community>) -> Router {
         .route("/status/", any(handle))
         .route("/status/{*rest}", any(handle))
         .with_state(app)
+        // A refused database call is a 503 with Retry-After here too (D74).
+        .layer(axum::middleware::from_fn(crate::ops::storage_faults))
 }
 
 async fn handle(State(app): State<Arc<Community>>, req: Request) -> Response {

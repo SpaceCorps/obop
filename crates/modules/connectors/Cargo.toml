@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 obop-types.workspace = true
@@ -15,6 +17,7 @@ serde_json = "1"
 uuid = { version = "1", features = ["v7"] }
 
 [dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }
 base.workspace = true
 crm.workspace = true
 invoicing.workspace = true

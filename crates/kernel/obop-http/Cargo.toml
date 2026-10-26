@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 obop-commands.workspace = true
@@ -27,6 +29,7 @@ mime_guess = "2"
 tower = { version = "0.5", features = ["util"] }
 
 [dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 

@@ -594,6 +594,255 @@ fn the_last_second_factor_of_an_administrator_cannot_be_removed() {
 }
 
 #[test]
+fn removing_a_passkey_that_could_not_end_the_other_sessions_is_finished_by_repeating_it() {
+    use crate::admin_tests::{flaky_rig, request};
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    let (mine, p) = session(&r.a, "ada");
+    let (stolen, _) = session(&r.a, "ada");
+    let mut auth = SoftAuthenticator::es256();
+    add(&r, &mine, &p, &mut auth, "k").unwrap();
+    let id = r.a.list(&p, &ctx()).unwrap()["passkeys"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let opts = r.a.proof_options(&p, &ctx()).unwrap();
+    r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
+    // The passkey goes; ending the other sessions is refused.
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| r.a.remove(&p, &mine, &id, &pw()));
+    flaky.allow_models();
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert!(out.wrote && out.partial, "{out:?}");
+    assert_eq!(r.a.passkey_count("ada"), 0);
+    assert!(
+        r.a.resolve(&stolen).is_some(),
+        "the other session still lives"
+    );
+    assert!(
+        events_of(&r, "passkey_remove")
+            .iter()
+            .any(|d| d.contains("removed \"k\"") && d.contains("INCOMPLETE")),
+        "the entry of the removal itself, with what is missing"
+    );
+    // The repeat is not "no such passkey": it ends the other session.
+    let (done, _) = request(|| r.a.remove(&p, &mine, &id, &pw()));
+    done.unwrap();
+    assert!(r.a.resolve(&stolen).is_none());
+    assert!(r.a.resolve(&mine).is_some());
+    // Finished: the usual answer from now on.
+    assert!(matches!(
+        r.a.remove(&p, &mine, &id, &pw()),
+        Err(MfaError::Invalid(m)) if m.contains("no such passkey")
+    ));
+}
+
+#[test]
+fn removing_a_passkey_with_a_refusal_at_any_call_never_panics_and_the_repeat_leaves_nothing_behind()
+{
+    use crate::admin_tests::{flaky_rig, request};
+    // A refused list of the passkeys made `len() - 1` underflow (a panic: the client got a dropped
+    // connection), and a refusal between the removal and the user's record left the recovery codes
+    // of a factor that is gone. Each call of the removal is refused in turn.
+    let mut reached = 0;
+    for skip in 0..60 {
+        let (r, flaky) = flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        let (mine, p) = session(&r.a, "ada");
+        let (stolen, _) = session(&r.a, "ada");
+        let mut auth = SoftAuthenticator::es256();
+        add(&r, &mine, &p, &mut auth, "k").unwrap();
+        let id = r.a.list(&p, &ctx()).unwrap()["passkeys"][0]["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let prove = |r: &Rig, auth: &mut SoftAuthenticator| {
+            let opts = r.a.proof_options(&p, &ctx()).unwrap();
+            r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
+        };
+        prove(&r, &mut auth);
+        flaky.refuse_call_after(skip);
+        let (first, out) = request(|| r.a.remove(&p, &mine, &id, &pw()));
+        flaky.allow_models();
+        if first.is_ok() {
+            continue;
+        }
+        reached += 1;
+        // Before anything changed a refused lookup may surface as another error (the layer says
+        // 503 for it, a fault was noted); once the removal committed it is the store's.
+        assert!(
+            matches!(first, Err(MfaError::Unavailable(_))) || (!out.wrote && first.is_err()),
+            "skip {skip}: {first:?} {out:?}"
+        );
+        // The repeat (a proof first, if the passkey is still there) finishes whatever is left.
+        if r.a.passkey_count("ada") > 0 {
+            prove(&r, &mut auth);
+        }
+        let (second, _) = request(|| r.a.remove(&p, &mine, &id, &pw()));
+        assert!(
+            second.is_ok() || r.a.passkey_count("ada") == 0 && !out.wrote,
+            "skip {skip}: {second:?}"
+        );
+        assert_eq!(r.a.passkey_count("ada"), 0, "skip {skip}");
+        assert!(
+            r.a.resolve(&stolen).is_none(),
+            "skip {skip}: the other session is still live"
+        );
+        assert!(r.a.resolve(&mine).is_some());
+        let u = r.b.get("auth_user", "ada").unwrap().unwrap();
+        assert!(
+            u["recovery"].is_null(),
+            "skip {skip}: recovery codes of a factor that is gone"
+        );
+        assert_eq!(u["passkey_login"], false, "skip {skip}");
+    }
+    assert!(reached >= 4, "the sweep reached the removal: {reached}");
+}
+
+#[test]
+fn an_administrators_reset_never_answers_done_while_the_passkey_list_cannot_be_read() {
+    use crate::admin_tests::{flaky_rig, request};
+    use obop_storage::testing::Mode;
+    // A refused lookup of the passkeys was read as "none", and the repeat of an earlier partial
+    // reset took the finishing branch on its note: the sessions went, the passkey stayed, and the
+    // administrator was told it was done.
+    let (r, flaky) = flaky_rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    user_with(&r.a, "root", &[ADMIN_GROUP]);
+    let (_, root) = session(&r.a, "root");
+    let (mine, p) = session(&r.a, "ada");
+    let (stolen, _) = session(&r.a, "ada");
+    add(&r, &mine, &p, &mut SoftAuthenticator::es256(), "k").unwrap();
+    // An earlier reset left its note (it could not go on).
+    r.a.owe_revocation("ada", "mfa_reset", None).unwrap();
+    flaky.refuse_model(crate::passkey::PASSKEY_TABLE, Mode::Reads);
+    let (done, _) = request(|| r.a.admin_reset(&root, "ada"));
+    flaky.allow_models();
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert_eq!(r.a.passkey_count("ada"), 1, "the passkey is still there");
+    assert!(
+        r.a.resolve(&stolen).is_some(),
+        "and nothing was ended behind a refusal"
+    );
+    // With the list readable the reset does its work.
+    let (done, _) = request(|| r.a.admin_reset(&root, "ada"));
+    done.unwrap();
+    assert_eq!(r.a.passkey_count("ada"), 0);
+    assert!(r.a.resolve(&stolen).is_none());
+}
+
+#[test]
+fn a_reset_that_stopped_after_the_passkeys_went_is_finished_by_repeating_it_recovery_codes_too() {
+    use crate::admin_tests::{flaky_rig, request};
+    // A person whose only second factor is a passkey has no `mfa_enabled` to show that the reset
+    // got no further than deleting the passkeys: the repeat took the finishing branch, ended the
+    // sessions and answered "done" with the recovery codes, the passwordless flag and the proof
+    // still on the account. At every call of the reset in turn, a refusal that lasts.
+    let mut reached = 0;
+    for skip in 0..30 {
+        let (r, flaky) = flaky_rig();
+        user_with(&r.a, "ada", &["base.user"]);
+        user_with(&r.a, "root", &[ADMIN_GROUP]);
+        let (_, root) = session(&r.a, "root");
+        let (mine, p) = session(&r.a, "ada");
+        let (stolen, _) = session(&r.a, "ada");
+        let mut auth = SoftAuthenticator::es256();
+        add(&r, &mine, &p, &mut auth, "k").unwrap();
+        let prove = |r: &Rig, auth: &mut SoftAuthenticator| {
+            let opts = r.a.proof_options(&p, &ctx()).unwrap();
+            r.a.proof(&p, &ctx(), &auth.get(&opts, ORIGIN)).unwrap();
+        };
+        prove(&r, &mut auth);
+        r.a.set_passwordless(&p, true, &pw()).unwrap();
+        prove(&r, &mut auth);
+        flaky.refuse_calls_after(skip, 50);
+        let (first, _) = request(|| r.a.admin_reset(&root, "ada"));
+        flaky.allow_models();
+        if first.is_ok() {
+            continue;
+        }
+        if r.a.passkey_count("ada") == 0 {
+            reached += 1;
+        }
+        let (second, _) = request(|| r.a.admin_reset(&root, "ada"));
+        second.unwrap_or_else(|e| panic!("skip {skip}: the repeat must finish it: {e:?}"));
+        let u = r.b.get("auth_user", "ada").unwrap().unwrap();
+        assert!(
+            u["recovery"].is_null(),
+            "skip {skip}: recovery codes of a factor that is gone"
+        );
+        assert_eq!(u["passkey_login"], false, "skip {skip}");
+        assert_eq!(r.a.passkey_count("ada"), 0, "skip {skip}");
+        assert!(r.a.resolve(&stolen).is_none(), "skip {skip}");
+        assert!(
+            r.b.kv_get(&crate::passkey::proof_key("ada"))
+                .unwrap()
+                .is_none(),
+            "skip {skip}: the proof"
+        );
+    }
+    assert!(reached >= 2, "the sweep got past the deletion: {reached}");
+}
+
+#[test]
+fn a_passkey_second_step_gives_no_session_to_an_account_disabled_in_between() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    user_with(&r.a, "root", &[ADMIN_GROUP]);
+    let (_, root) = session(&r.a, "root");
+    let (mine, p) = session(&r.a, "ada");
+    let mut auth = SoftAuthenticator::es256();
+    add(&r, &mine, &p, &mut auth, "k").unwrap();
+    let tok = mfa_token(&r.a, "ada");
+    let opts = r.a.passkey_login_options(&ctx(), Some(&tok)).unwrap();
+    let answer = auth.get(&opts, ORIGIN);
+    r.a.set_user_disabled(&root, "ada", true).unwrap();
+    let before = r.b.list("auth_token").unwrap().len();
+    let done = r.a.passkey_login(&ctx(), Some(&tok), &answer);
+    assert!(matches!(done, Err(MfaError::Expired)), "{done:?}");
+    assert_eq!(r.b.list("auth_token").unwrap().len(), before);
+}
+
+#[test]
+fn a_passkey_enrolment_whose_limit_could_not_be_lifted_is_never_answered_as_done() {
+    use crate::admin_tests::{flaky_rig_with, request};
+    // The passkey is saved, and then the step that frees the session from "enrolment only" is
+    // refused. It was thrown away: 200 with the recovery codes, and a session that stayed limited
+    // with no word of it. Now it is a needed step: a partial 503 that says so.
+    let (mut limited_ok, mut partial) = (0, 0);
+    for skip in 0..40 {
+        let (r, flaky) = flaky_rig_with(enforcing());
+        user_with(&r.a, "root", &[ADMIN_GROUP]);
+        let (token, p) = session(&r.a, "root");
+        assert!(p.mfa_limited, "an administrator must enrol first");
+        let mut auth = SoftAuthenticator::es256();
+        let opts = r.a.register_options(&p, &ctx(), &pw()).unwrap();
+        let cred = auth.create(&opts, ORIGIN);
+        flaky.refuse_calls_after(skip, 50);
+        let (done, out) = request(|| r.a.register_finish(&p, &token, &ctx(), "k", &cred));
+        flaky.allow_models();
+        match done {
+            Ok(_) => {
+                limited_ok += 1;
+                assert!(
+                    !r.a.resolve(&token).unwrap().mfa_limited,
+                    "skip {skip}: answered done, and the session is still limited"
+                );
+            }
+            Err(_) if r.a.passkey_count("root") == 1 => {
+                // The passkey is there and the request failed: a change was committed and a fault
+                // noted, which the layer answers as partial; the lifting itself says so on its own.
+                assert!(out.wrote && out.fault.is_some(), "skip {skip}: {out:?}");
+                partial += usize::from(out.partial);
+            }
+            Err(_) => {}
+        }
+    }
+    assert!(limited_ok >= 1 && partial >= 1, "{limited_ok} {partial}");
+}
+
+#[test]
 fn removing_the_last_passkey_of_an_ordinary_user_ends_their_two_factor_state() {
     let r = rig();
     user_with(&r.a, "ada", &["base.user"]);

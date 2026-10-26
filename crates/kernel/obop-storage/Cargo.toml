@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 serde_json = "1"
@@ -14,6 +16,11 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["ring",
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 webpki-roots = "1"
 tokio = { version = "1", default-features = false }
+
+[features]
+# The `testing` module (a backend that refuses calls like a full pool). Never enabled in a
+# release build: crates that use it enable it in their dev-dependencies.
+test-support = []
 
 [lints]
 workspace = true

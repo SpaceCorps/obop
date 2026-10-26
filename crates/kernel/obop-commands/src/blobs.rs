@@ -421,12 +421,31 @@ fn text_of(v: Option<&serde_json::Value>) -> Option<&str> {
         .filter(|s| !s.is_empty())
 }
 
+/// A follow-up of a change that has committed and that the change needs: the record points at a
+/// blob, and only a hold keeps the next `gc` from deleting the file. It is tried again while the
+/// store is busy (the write is allowed although an earlier call of the request was refused: it
+/// rests on what was just committed). If it still fails the request is answered 503 with
+/// `"applied":"partial"` (D74), never as a success that leaves the file to be deleted.
+fn follow_up(what: &str, mut step: impl FnMut() -> Result<(), String>) {
+    let r = obop_storage::fault::patiently(5, std::time::Duration::from_millis(150), || {
+        obop_storage::fault::allow(&mut step)
+    });
+    if let Err(e) = r {
+        eprintln!("blobs: could not {what}: {e}");
+        if obop_storage::fault::Fault::is_transient(&e) {
+            obop_storage::fault::mark_partial();
+        }
+    }
+}
+
 /// After a record was created with blob values: hold them. The file name travels from the upload.
 pub(crate) fn hold_created(store: &Store, def: &ModelDef, id: &str, rec: &Fields) {
     for f in blob_fields(def) {
         if let Some(b) = text_of(rec.get(f.name)) {
-            let name = upload_name(store, b);
-            let _ = store.blobs.attach(b, &owner_of(def, id, f.name, &name));
+            follow_up("hold a blob for a new record", || {
+                let name = upload_name(store, b)?;
+                store.blobs.attach(b, &owner_of(def, id, f.name, &name))
+            });
         }
     }
 }
@@ -445,26 +464,30 @@ pub(crate) fn hold_updated(
             continue;
         }
         if let Some(o) = old {
-            let _ = store.blobs.detach(o, &owner_of(def, id, f.name, ""));
+            follow_up("release a replaced blob", || {
+                store.blobs.detach(o, &owner_of(def, id, f.name, ""))
+            });
         }
         if let Some(n) = new {
-            let name = upload_name(store, n);
-            let _ = store.blobs.attach(n, &owner_of(def, id, f.name, &name));
+            follow_up("hold a blob for an updated record", || {
+                let name = upload_name(store, n)?;
+                store.blobs.attach(n, &owner_of(def, id, f.name, &name))
+            });
         }
     }
 }
 
 /// Before a record goes away: release everything it held.
 pub(crate) fn release_record(store: &Store, model: &str, id: &str) {
-    let _ = store.blobs.detach_record(model, id);
+    follow_up("release the blobs of a deleted record", || {
+        store.blobs.detach_record(model, id).map(|_| ())
+    });
 }
 
-fn upload_name(store: &Store, id: &str) -> String {
-    store
+fn upload_name(store: &Store, id: &str) -> Result<String, String> {
+    Ok(store
         .blobs
-        .info(id)
-        .ok()
-        .flatten()
+        .info(id)?
         .and_then(|i| {
             i.pending
                 .iter()
@@ -472,7 +495,7 @@ fn upload_name(store: &Store, id: &str) -> String {
                 .chain(i.owners.iter().map(|o| o.filename.clone()))
                 .find(|f| !f.is_empty())
         })
-        .unwrap_or_default()
+        .unwrap_or_default())
 }
 
 impl Store {

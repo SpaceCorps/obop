@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 obop-commands.workspace = true
@@ -13,6 +15,7 @@ getrandom = "0.4"
 serde_json = "1"
 
 [dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }
 obop-auth.workspace = true
 
 [lints]

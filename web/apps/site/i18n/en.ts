@@ -183,7 +183,7 @@ export const en: Messages = {
       },
       {
         title: "Source on GitHub",
-        body: "Read the code, the decisions and the roadmap. The licence is being finalised; see the repository.",
+        body: "Read the code, the decisions and the roadmap. Apache-2.0, free to use and to self-host; see the repository.",
       },
     ],
     pricingTitle: "Simple pricing, planned",
@@ -223,7 +223,7 @@ export const en: Messages = {
       },
       {
         q: "Is obop open source?",
-        a: "The source code is public on GitHub. The final licence is still being decided (the project proposes the AGPL), so check the repository for the current terms.",
+        a: "The source code is public on GitHub under the Apache-2.0 licence: free to use, change and self-host. The full text is in the LICENSE file of the repository.",
       },
     ],
     ctaTitle: "One business, one platform.",

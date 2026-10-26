@@ -15,12 +15,12 @@ Everything below is Proposed unless a binding decision is cited (section 2); pri
 | What is it? | An open-source operating system for businesses: sales, stock, invoicing, accounting, CRM and more as modules on one shared data model, with Odoo as the functional reference (section 1). |
 | For whom? | Owner-led firms of 5 to 50 people in services and light trade, one company and one country at a time, Germany first (Proposed, D4). See [PRODUCT.md section 3](docs/PRODUCT.md#3-who-it-is-for). |
 | Why would it win? | One open edition, a free generated API, books enforced by the database, upgrades with a local dry-run, signed country packs (section 3). No speed claim until a benchmark exists (D21). |
-| What does it cost? | The open edition is EUR 0 and includes every first-party app, the API, importers and full export (Proposed, D2). Hosted plans per organisation per month, yearly billing (hypotheses): Free EUR 0, Team EUR 49, Growth EUR 249, Scale from EUR 899. Paid: hosting, support and service levels, the per-country Assurance service, and a published, closed `ee` list that only moves to open. See [PRODUCT.md section 9](docs/PRODUCT.md#9-editions-and-pricing-summary) and [BUSINESS.md section 5](docs/BUSINESS.md#5-pricing-hypotheses-proposed-d2). |
+| What does it cost? | Nothing. The whole project is Apache-2.0 and completely free to use and to self-host: no paid tier, no enterprise layer, no price list (RATIFIED, D1, D2, OR-1, OR-2). The hosted plans, prices and paid list that [PRODUCT.md](docs/PRODUCT.md) and [BUSINESS.md](docs/BUSINESS.md) still describe are superseded. |
 | When? | Nothing can be installed today. First delivery is wave W1, 2027-01-01 to 2027-09-30: paid beta 2027-07-06, German pack stable 2027-09-30, 1.0 LTS 2028-04-18 (Proposed, D26). |
 | How is it built? | Rust backend, Vite+ frontend driven only through `vp`, pnpm as the only package manager, one binary plus PostgreSQL (F1, F2, D37). |
 | Where does the project stand? | Pre-code and pre-formation: no seed round closed (about EUR 3M planned), no counsel retained, no design partner signed ([ROADMAP.md section 5.2](docs/ROADMAP.md#52-dependency-register)). |
 | Top risks? | The funding gap (BR-01), the accounting, localisation and payroll burden (BR-02), customisation without recompiling (BR-03), and an uncleared name (section 7). Full register: [BUSINESS.md section 9](docs/BUSINESS.md#9-consolidated-risk-register). |
-| What must the owner decide? | Eighteen Proposed decisions and four Proposed interpretations (I-1 to I-4), none ratified; twenty-one owner questions (Q1 to Q21). First answers are due 2026-10-15 (Q10: interpretations, pin policy and the Rust window; Q15: pnpm major) and 2026-10-20 (Q1 to Q3: licence and CLA, name and public flip, free and paid lists; Q19: operated services). See [DECISIONS.md section 8](docs/DECISIONS.md#8-open-questions-for-the-owner). |
+| What must the owner decide? | The licence is settled (D1, D2: OR-1, OR-2, OR-10, OR-18 of 2026-10-01). Sixteen other decisions and four Proposed interpretations (I-1 to I-4) are not ratified; the owner questions that remain open are listed in [DECISIONS.md section 8](docs/DECISIONS.md#8-open-questions-for-the-owner) (Q1, Q3, Q13 and Q19 are closed). |
 
 ## 1. What obop is
 
@@ -31,14 +31,14 @@ obop is an open-source operating system for businesses: sales, purchasing, stock
 **Pre-code: research and product definition complete as of 2026-10-01; nothing is built yet.** There is nothing to install or run.
 
 - A 28-file fact-checked research corpus exists; the product, architecture, business and domain documents are Draft 0.1.
-- Eighteen decisions (D1 to D5, D12, D13, D14, D16, D17, D20, D23, D25, D26, D40 to D43) and interpretations I-1 to I-4 await the owner, as do the exit-drill clause of D15 and the renames and labels of D24; none is ratified. Unless a binding decision is cited, everything here is Proposed; figures marked (target), (estimate) or (hypothesis) are not measurements.
-- The repository goes public only after gate G0 (Proposed, D26); which counsel advice must exist first, and so the gate's date, is open (Q16).
+- The licence decisions D1 and D2 are RATIFIED (OR-1, OR-2, OR-10, OR-18). Sixteen decisions (D3, D4, D5, D12, D13, D14, D16, D17, D20, D23, D25, D26, D40 to D43) and interpretations I-1 to I-4 await the owner, as do the exit-drill clause of D15 and the renames and labels of D24; none is ratified. Unless a binding decision is cited, everything here is Proposed; figures marked (target), (estimate) or (hypothesis) are not measurements.
+- The repository is public (since 2026-10-26). Counsel advice on the name, the CRA role and the DCO wording is still open (Q16); it is not a condition of the licence.
 
 ## 3. Headline differentiators (design commitments; nothing built yet)
 
 These are commitments of the design, not shipped features. Where no "Proposed" mark appears, the cited decision is binding.
 
-1. **One open edition:** accounting, reconciliation and reports included; a closed paid list that only moves to open (Proposed, D2).
+1. **Completely free:** one open edition under Apache-2.0, accounting, reconciliation and reports included; no paid list and no paid tier (D2, OR-2).
 2. **Books protected by the database:** balance, immutability, gapless numbers and a hash chain enforced in PostgreSQL (D30).
 3. **Upgrades as a product:** a local dry-run, contract migrations only at each `N.0` (Proposed, D16).
 4. **A free generated API:** REST, OpenAPI 3.1, webhooks and MCP on every plan (D31).
@@ -70,14 +70,11 @@ Wave W1, 2027-01-01 to 2027-09-30 (Proposed, D25, D26). Three milestones replace
 - Generated REST, OpenAPI and MCP; declarative packs, CEL, remote apps; Odoo and QuickBooks importers.
 - Not in it: POS, payroll, manufacturing, multi-country tax, multi-company. France and Poland packs follow (2028-03-31, 2028-08-31).
 
-## 6. Licensing intent (Proposed, D1)
+## 6. Licence and contributing (RATIFIED, D1)
 
-Not ratified; counsel must review first. Details: [docs/BUSINESS.md](docs/BUSINESS.md) section 3.
+The whole project is **Apache-2.0** ([LICENSE](LICENSE), [NOTICE](NOTICE)): the core, first-party apps, SDKs and templates alike, with no copyleft layer, no `ee` tree and nothing paid (OR-1, OR-2). SpaceCorps is the publisher, copyright holder and trademark holder (OR-10); Apache-2.0 grants no trademark rights.
 
-- Core and first-party apps: AGPL-3.0-or-later (counsel may choose `-only`) plus an AGPL section 7 Application Exception for extensions [R17 s11].
-- SDKs, WIT worlds, UI SDK and templates: Apache-2.0.
-- A closed paid `ee` tree that converts to open after 24 months (Proposed, D2).
-- Licence-grant CLA with an "OSI licence forever" pledge; a company plus an EU non-profit steward.
+Contributions carry a DCO sign-off (`git commit -s`) and no CLA, so inbound equals outbound. The owner signs off every commit, and agents are recorded with a `Co-Authored-By` trailer and never add a sign-off (OR-18). Nothing here is legal advice; open legal items are listed for counsel in [docs/BUSINESS.md](docs/BUSINESS.md).
 
 ## 7. The name
 
