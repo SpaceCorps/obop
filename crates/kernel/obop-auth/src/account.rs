@@ -118,16 +118,21 @@ impl Auth {
     /// pending offboarding survives a later reset or disable, and taking one note back leaves the
     /// others. The caller holds the account lock (`mfa_guard`), so the object is read, changed and
     /// written without another writer in between.
+    ///
+    /// Returns the note of the same change that was there already (an earlier request of it that
+    /// could not finish): a note that existed is never taken back, see [`Auth::retract_owed`].
     pub(crate) fn owe_revocation(
         &self,
         name: &str,
         op: &str,
         keep: Option<&str>,
-    ) -> Result<(), MfaError> {
+    ) -> Result<Option<J>, MfaError> {
+        let previous = owed_notes(&self.user_record(name)?).remove(op);
         let patch = self.owed_patch(name, op, keep)?;
         // Not a change of the request: if the change it announces is then refused, nothing was
         // changed and the answer says so (it was answered "partial" for a note alone).
-        obop_storage::fault::uncounted(|| self.put(name, &patch))
+        obop_storage::fault::uncounted(|| self.put(name, &patch))?;
+        Ok(previous)
     }
 
     /// The patch that adds the note of `op` to the notes the account has, for a caller that writes
@@ -179,13 +184,43 @@ impl Auth {
     /// unknown (the connection broke while the change was in flight) or after a change that did
     /// commit in part, the note stays: the repeat needs it, and a note for a change that did not
     /// happen only makes that repeat end the older sessions once more.
-    pub(crate) fn retract_owed(&self, name: &str, op: &str, e: &MfaError, changes_before: u32) {
+    ///
+    /// `previous` is what [`Auth::owe_revocation`] replaced: a note an earlier request of the same
+    /// change left (its sessions or tokens are still owed) is put back, not removed.
+    pub(crate) fn retract_owed(
+        &self,
+        name: &str,
+        op: &str,
+        e: &MfaError,
+        changes_before: u32,
+        previous: Option<J>,
+    ) {
         let unknown =
             matches!(e, MfaError::Unavailable(m) if obop_storage::fault::may_have_applied(m));
         if unknown || obop_storage::fault::change_count() != changes_before {
             return;
         }
-        self.clear_owed(name, op);
+        match previous {
+            None => self.clear_owed(name, op),
+            Some(note) => {
+                let _ = obop_storage::fault::patiently(
+                    3,
+                    std::time::Duration::from_millis(100),
+                    || {
+                        obop_storage::fault::uncounted_allowed(|| {
+                            let Some(u) = self.backend.get("auth_user", name)? else {
+                                return Ok(());
+                            };
+                            let mut owed = owed_notes(&J::Object(u));
+                            owed.insert(op.into(), note.clone());
+                            let mut p = Fields::new();
+                            p.insert("sessions_owed".into(), J::Object(owed));
+                            self.backend.update("auth_user", name, &p).map(|_| ())
+                        })
+                    },
+                );
+            }
+        }
     }
 
     /// A repeat of the change `op` that already happened: if it left a revocation owed, do it
@@ -359,14 +394,23 @@ impl Auth {
         // The session that proved the old password may now do everything its person may, unless
         // two-factor enrolment is still owed.
         let groups = str_list(&u["groups"]);
-        let still_limited = self.enrolment_required_for(&groups) && !self.has_second_factor(name);
-        let mut lift = Fields::new();
-        lift.insert("limited".into(), J::Bool(still_limited));
-        // The other sessions are ended by now: what is missing here is not the same as above, and
-        // so is what the person can do about it.
+        // The other sessions are ended by now: what is missing from here on is not the same as
+        // above, and so is what the person can do about it.
         let ch = Change::new(name, "password_change", name, "password changed").then(
             "the other sessions are already ended; this session is still limited: sign in again",
         );
+        // Read until no read of it was refused: a policy read as "not required" because the store
+        // refused the lookup would free a session that still owes its two-factor enrolment.
+        let still_limited = self
+            .settled(|| self.enrolment_required_for(&groups) && !self.has_second_factor(name))
+            .map_err(|e| match e {
+                MfaError::Unavailable(m) => {
+                    self.incomplete(&ch, "reading the two-factor policy", m)
+                }
+                other => other,
+            })?;
+        let mut lift = Fields::new();
+        lift.insert("limited".into(), J::Bool(still_limited));
         self.needed(&ch, "lifting the limit of this session", || {
             self.backend.update("auth_token", &h, &lift)
         })?;
@@ -490,10 +534,11 @@ impl Auth {
         }
         // An account that is already disabled keeps the note it has (an offboarding's is stronger).
         let note = disabled && !was;
+        let mut previous = None;
         if note {
             // Written before the account goes: if ending its sessions is then refused, enabling
             // it later finishes that first (D74).
-            self.owe_revocation(&target, "user_disable", None)?;
+            previous = self.owe_revocation(&target, "user_disable", None)?;
         } else if !disabled {
             // What a disable or an offboarding could not end comes first, or enabling would bring
             // it back; if that is refused the account stays as it is.
@@ -503,7 +548,7 @@ impl Auth {
         let before = obop_storage::fault::change_count();
         if let Err(e) = self.put(&target, &patch) {
             if note {
-                self.retract_owed(&target, "user_disable", &e, before);
+                self.retract_owed(&target, "user_disable", &e, before, previous);
             }
             return Err(e);
         }

@@ -342,6 +342,13 @@ impl Auth {
             self.record_failure(&name);
             return Err("invalid username or password".into());
         }
+        // From here the sign-in and a disable of the account take turns: a session made after the
+        // administrator's revocation ran would be unrevoked, and would come alive when the account
+        // is enabled again.
+        let _g = self.mfa_guard().map_err(|e| match e {
+            MfaError::Unavailable(m) => m,
+            other => format!("{other:?}"),
+        })?;
         // Same answer as a wrong password, so nobody can tell a disabled account from none; the
         // security log says what happened.
         if self.is_disabled(&name) {
@@ -498,12 +505,12 @@ impl Auth {
         self.check_second_factor(name, code, recovery)?;
         let keep = session.map(token_hash);
         // Written before the factor goes: if ending the sessions is then refused, the repeat knows.
-        self.owe_revocation(name, "mfa_disable", keep.as_deref())?;
+        let previous = self.owe_revocation(name, "mfa_disable", keep.as_deref())?;
         let before = obop_storage::fault::change_count();
         if let Err(e) = self.clear_factor(name) {
             // The factor is still on, unless the refusal left it unknown (the connection broke
             // while the change was in flight): then the note stays for the repeat.
-            self.retract_owed(name, "mfa_disable", &e, before);
+            self.retract_owed(name, "mfa_disable", &e, before, previous);
             return Err(e);
         }
         let n = self.revoke_user_sessions(name, keep.as_deref(), &ch)?;
@@ -653,12 +660,18 @@ impl MfaApi for Auth {
         f.insert("totp_last_step".into(), J::from(step));
         f.insert("mfa_enabled".into(), J::Bool(true));
         self.put(name, &f)?;
-        // The session that just proved the factor is no longer limited.
+        // The session that just proved the factor is no longer limited: a needed step, as after a
+        // passkey enrolment (a session that stays limited with no word of it is a request that
+        // lost a step without saying so).
         let mut lift = Fields::new();
         lift.insert("limited".into(), J::Bool(false));
-        let _ = self
-            .backend
-            .update("auth_token", &token_hash(session), &lift);
+        let ch = Change::new(name, "enrol_confirm", name, "two-factor is on").then(
+            "two-factor is on; this session is still limited to enrolment: sign in again (the recovery codes of this request were not shown: make new ones under Security)",
+        );
+        self.needed(&ch, "lifting the enrolment limit of this session", || {
+            self.backend
+                .update("auth_token", &token_hash(session), &lift)
+        })?;
         self.event(name, "enrol_confirm", name, "two-factor is on");
         Ok(json!({"recovery_codes": codes}))
     }
@@ -752,13 +765,13 @@ impl MfaApi for Auth {
                 "{target} has no two-factor to reset"
             )));
         }
-        self.owe_revocation(&target, "mfa_reset", None)?;
+        let previous = self.owe_revocation(&target, "mfa_reset", None)?;
         let before = obop_storage::fault::change_count();
         let passkeys = match self.clear_passkeys(&target) {
             Ok(n) => n,
             Err(e) => {
                 // Refused before anything was removed: nothing is owed.
-                self.retract_owed(&target, "mfa_reset", &e, before);
+                self.retract_owed(&target, "mfa_reset", &e, before, previous);
                 return Err(e);
             }
         };

@@ -506,6 +506,14 @@ impl Auth {
         credential: &J,
     ) -> Result<LoginOutcome, MfaError> {
         let (name, _) = self.verify_assertion(ctx, "login", credential, true)?;
+        // Taking turns with a disable of the account (see `login_step_impl`): the account is
+        // looked at again under the lock, so a disable that ran since the assertion was checked
+        // is not followed by a session nothing would end.
+        let _g = self.mfa_guard()?;
+        if self.user_record(&name)?["disabled"].as_bool() == Some(true) {
+            self.event(&name, "login_refused", &name, "the account is disabled");
+            return Err(denied("this passkey cannot be used to sign in"));
+        }
         self.purge_tokens();
         self.event(
             &name,

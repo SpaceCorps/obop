@@ -955,6 +955,186 @@ fn a_pending_offboarding_survives_a_later_reset_so_enabling_still_finishes_it() 
 }
 
 #[test]
+fn a_repeated_offboarding_refused_at_its_own_write_leaves_the_note_of_the_first_one() {
+    use obop_storage::testing::Mode;
+    // The first offboarding could not end the tokens and left its note. The administrator
+    // repeats it, as the answer says, and the repeat is refused at its own write: its note went
+    // over the first one and was then taken back, which took the first one's with it, so enabling
+    // the account later found nothing owed and the credentials came back. One refused call at
+    // every position of the repeat in turn.
+    let mut refused = 0;
+    for skip in 0..14 {
+        let (r, flaky) = flaky_rig();
+        let root = admin(&r, "root");
+        user_with(&r.a, "ada", &["base.user"]);
+        let (stolen, ada) = session(&r.a, "ada");
+        let agent =
+            r.a.issue_agent_token(&ada, &names(&["base.user"]), "bot")
+                .unwrap();
+        flaky.refuse_model("auth_token", Mode::Reads);
+        let (first, out) = request(|| r.a.offboard_user(&root, "ada", ""));
+        flaky.allow_models();
+        assert!(first.is_err() && out.partial, "{first:?} {out:?}");
+        flaky.refuse_call_after(skip);
+        let (second, _) = request(|| r.a.offboard_user(&root, "ada", ""));
+        flaky.allow_models();
+        if second.is_err() {
+            refused += 1;
+        }
+        // Whatever happened to the repeat, enabling the account (the store healthy) must not
+        // bring back what the offboarding was meant to end.
+        r.a.set_user_disabled(&root, "ada", false).unwrap();
+        assert!(r.a.resolve(&stolen).is_none(), "skip {skip}: a session");
+        assert!(
+            r.a.resolve(&agent).is_none(),
+            "skip {skip}: the agent token"
+        );
+    }
+    assert!(refused >= 3, "the sweep reached the repeat: {refused}");
+}
+
+#[test]
+fn a_note_that_existed_is_put_back_and_not_removed_when_the_repeat_of_its_change_is_refused() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    assert_eq!(
+        r.a.owe_revocation("ada", "mfa_reset", Some("kept"))
+            .unwrap(),
+        None
+    );
+    let first = owed_notes_of(&r, "ada")["mfa_reset"].clone();
+    r.a.set_clock_for_test(T0 + 50);
+    let previous = r.a.owe_revocation("ada", "mfa_reset", None).unwrap();
+    assert_eq!(previous.as_ref(), Some(&first), "what it replaced");
+    assert_ne!(
+        owed_notes_of(&r, "ada")["mfa_reset"],
+        first,
+        "the newer note is there"
+    );
+    // The repeat is refused before it changed anything: the first note is back, as it was.
+    let busy = MfaError::Unavailable("storage_busy: the pool is full".into());
+    r.a.retract_owed(
+        "ada",
+        "mfa_reset",
+        &busy,
+        obop_storage::fault::change_count(),
+        previous,
+    );
+    assert_eq!(owed_notes_of(&r, "ada")["mfa_reset"], first);
+    // With nothing before it, the note goes.
+    let none = r.a.owe_revocation("ada", "mfa_disable", None).unwrap();
+    assert!(none.is_none());
+    r.a.retract_owed(
+        "ada",
+        "mfa_disable",
+        &busy,
+        obop_storage::fault::change_count(),
+        none,
+    );
+    assert!(owed_notes_of(&r, "ada").get("mfa_disable").is_none());
+    assert!(owed_notes_of(&r, "ada").get("mfa_reset").is_some());
+}
+
+fn owed_notes_of(r: &Rig, user: &str) -> serde_json::Map<String, J> {
+    crate::account::owed_notes(&J::Object(r.b.get("auth_user", user).unwrap().unwrap()))
+}
+
+#[test]
+fn a_two_factor_enrolment_whose_limit_could_not_be_lifted_is_never_answered_as_done() {
+    // The sibling of the passkey enrolment: the codes are confirmed and saved, and the step that
+    // frees the session from "enrolment only" is refused. It was thrown away: 200 with the
+    // recovery codes and a session that stayed limited with no word of it.
+    let (mut freed, mut partial) = (0, 0);
+    for skip in 0..40 {
+        let (r, flaky) = flaky_rig_with(enforcing());
+        user_with(&r.a, "root", &[ADMIN_GROUP]);
+        let (token, p) = session(&r.a, "root");
+        assert!(p.mfa_limited, "an administrator must enrol first");
+        let begun = r.a.begin(&p).unwrap();
+        let secret = totp::base32_decode(begun["secret"].as_str().unwrap()).unwrap();
+        let code = totp::code_for_step(&secret, totp::step_at(T0));
+        flaky.refuse_calls_after(skip, 50);
+        let (done, out) = request(|| r.a.confirm(&p, &token, &code));
+        flaky.allow_models();
+        match done {
+            Ok(_) => {
+                freed += 1;
+                assert!(
+                    !r.a.resolve(&token).unwrap().mfa_limited,
+                    "skip {skip}: answered done, and the session is still limited"
+                );
+            }
+            Err(_) if r.a.mfa_enabled("root") => {
+                assert!(out.wrote && out.fault.is_some(), "skip {skip}: {out:?}");
+                partial += usize::from(out.partial);
+            }
+            Err(_) => {}
+        }
+    }
+    assert!(freed >= 1 && partial >= 1, "{freed} {partial}");
+}
+
+#[test]
+fn a_password_change_never_frees_a_session_that_owes_enrolment_because_a_policy_read_was_refused() {
+    use obop_storage::testing::Mode;
+    // Everybody must enrol (a stored setting). The policy read is refused during the password
+    // change: read as "not required" it freed the session of a person who still owes the
+    // enrolment, and answered 200.
+    let (r, flaky) = flaky_rig_with(enforcing());
+    user_with(&r.a, "bob", &["base.user"]);
+    let mut f = Fields::new();
+    f.insert(
+        "value".into(),
+        J::from(json!({"security": {"require_mfa_for_all": true}}).to_string()),
+    );
+    r.b.insert("obop_setting", "instance", &f).unwrap();
+    let (mine, p) = session(&r.a, "bob");
+    assert!(
+        p.mfa_limited,
+        "the policy limits a session without two-factor"
+    );
+    flaky.refuse_model("obop_setting", Mode::Reads);
+    let (done, out) = request(|| {
+        r.a.change_password(&p, &mine, PW, "a brand new passphrase", None, None)
+    });
+    flaky.allow_models();
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert!(out.wrote && out.partial, "the password did change: {out:?}");
+    assert!(
+        r.a.resolve(&mine).unwrap().mfa_limited,
+        "the session still owes its enrolment"
+    );
+}
+
+#[test]
+fn a_sign_in_without_a_second_step_takes_turns_with_a_disable_of_the_account() {
+    use std::time::Duration;
+    // The administrator's disable holds the account lock while it ends the sessions. A sign-in
+    // that passed the "disabled?" check just before it began could issue its session after the
+    // revocation ran: unrevoked, alive again the day the account is enabled. The sign-in now waits
+    // for the lock and looks again.
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    std::thread::scope(|s| {
+        let guard = r.a.mfa_guard().unwrap();
+        let waiting = s.spawn(|| r.a.login_step("ada", PW));
+        std::thread::sleep(Duration::from_millis(600));
+        assert!(
+            !waiting.is_finished(),
+            "the sign-in went on while the account was being changed"
+        );
+        // The disable commits while the sign-in waits.
+        let mut f = Fields::new();
+        f.insert("disabled".into(), J::Bool(true));
+        r.b.update("auth_user", "ada", &f).unwrap();
+        drop(guard);
+        let done = waiting.join().unwrap();
+        assert!(done.is_err(), "no session for a disabled account: {done:?}");
+    });
+    assert!(r.b.list("auth_token").unwrap().is_empty());
+}
+
+#[test]
 fn a_note_is_kept_when_the_outcome_of_the_change_is_unknown_so_the_repeat_still_ends_the_sessions()
 {
     // The connection breaks after the server committed the change and before the acknowledgement

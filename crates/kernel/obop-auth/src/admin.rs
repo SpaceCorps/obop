@@ -374,10 +374,10 @@ impl Auth {
         patch.insert("offboarded_by".into(), J::from(actor));
         // Written before the account goes: if ending its tokens is then refused, enabling the
         // account later finishes that first, so no token the offboarding missed comes back.
-        self.owe_revocation(&target, "user_offboard", None)?;
+        let previous = self.owe_revocation(&target, "user_offboard", None)?;
         let before = obop_storage::fault::change_count();
         if let Err(e) = self.put(&target, &patch) {
-            self.retract_owed(&target, "user_offboard", &e, before);
+            self.retract_owed(&target, "user_offboard", &e, before, previous);
             return Err(e);
         }
 
