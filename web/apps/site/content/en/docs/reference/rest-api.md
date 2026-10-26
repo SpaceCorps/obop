@@ -128,17 +128,17 @@ Each workflow action is one more command: `lead.qualify`, `invoice.post`. Input 
 
 ## Field values
 
-| Kind               | JSON                                                                                                  |
-| ------------------ | ----------------------------------------------------------------------------------------------------- |
-| `text`, `longtext` | string                                                                                                |
-| `number`           | integer (no floats)                                                                                   |
-| `money`            | integer in minor currency units: 12.34 is `1234`                                                      |
-| `date`             | `"YYYY-MM-DD"`, a real calendar date                                                                  |
-| `decimal`          | an exact decimal as a **string** with the field's digits: `"12.50"`, never a JSON number              |
-| `datetime`         | an instant as RFC 3339 text with an offset or `Z`; answered in UTC as `"2026-03-29T01:30:00.000000Z"` |
-| `bool`             | `true` or `false`                                                                                     |
-| `select`           | one of the field's options                                                                            |
-| `ref`              | the id of an existing record of the target model                                                      |
+| Kind               | JSON                                                                                                                                                                             |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text`, `longtext` | string                                                                                                                                                                           |
+| `number`           | integer (no floats)                                                                                                                                                              |
+| `money`            | integer in minor currency units: 12.34 is `1234`                                                                                                                                 |
+| `date`             | `"YYYY-MM-DD"`, a real calendar date                                                                                                                                             |
+| `decimal`          | an exact decimal as a **string** with the field's digits: `"12.50"`, never a JSON number; at most 80 characters and 38 significant digits, also where the field rounds on import |
+| `datetime`         | an instant as RFC 3339 text with an offset or `Z`; answered in UTC as `"2026-03-29T01:30:00.000000Z"`                                                                            |
+| `bool`             | `true` or `false`                                                                                                                                                                |
+| `select`           | one of the field's options                                                                                                                                                       |
+| `ref`              | the id of an existing record of the target model                                                                                                                                 |
 
 ## Status codes
 

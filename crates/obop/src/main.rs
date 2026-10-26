@@ -141,6 +141,8 @@ const USAGE: &str = "usage: obop <command>
                                                 rows; --dry-run only checks; --key makes a retry return the first answer
   commands [--token TOKEN]                      list the commands visible to a token
   call [--token TOKEN] <model> <command> [k=v...]
+                                                values are text, converted by field type; for list and search
+                                                filter, order and aggregate are JSON text (in single quotes)
 global options
   --db URL              sqlite://obop.db (default, local), postgres://user:pass@host/db, memory:
                         (or OBOP_DATABASE_URL)
