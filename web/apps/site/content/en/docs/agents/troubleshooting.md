@@ -30,7 +30,7 @@ The list is the commands the token may use. Add the group that the missing comma
 | `400 ... cannot change from "new" to "won"`        | No action moves it that way. The message lists where the record can go.                                                                                                |
 | `429`                                              | Five failed sign-ins for a username lock it for a minute.                                                                                                              |
 | `202`                                              | Not an error: approval is required. See [The approval loop](/docs/agents/approvals/).                                                                                  |
-| `503 {"error":"storage_busy"}`                     | The instance's database is busy (also `storage_unavailable`, `storage_timeout`). Wait the seconds in the `Retry-After` header and try again; the call changed nothing. |
+| `503 {"error":"storage_busy"}`                     | The instance's database is busy (also `storage_unavailable`, `storage_timeout`). Wait the seconds in the `Retry-After` header and try again, after reading `applied` in the body: `none`, the call changed nothing; `unknown` (only after `storage_unavailable`), a change in flight may or may not have been applied, so read before you repeat a write; `partial`, part of the call was done and a step it needed was refused, so do not repeat it blindly: read what it touched and finish or undo the rest. |
 
 ## An approval plan was lost
 

@@ -12,9 +12,47 @@ fn error_schema() -> J {
         "properties": {
             "error": {"type": "string", "description": "What went wrong, in a sentence."},
             "code": {"type": "string", "description": "Stable machine-readable code such as not_found, unauthorized, invalid_input, forbidden, rate_limited."},
-            "hint": {"type": "string", "description": "What to do next."}
+            "hint": {"type": "string", "description": "What to do next."},
+            "applied": {"type": "string", "enum": ["none", "unknown", "partial"], "description": "Only on a 503 (D74): what became of the request's own changes. none: nothing was changed, repeat the request. unknown: storage_unavailable, a change in flight when the connection broke may or may not have been applied, read before you repeat a write. partial: a change was committed and a step the request needed was refused, do not repeat it blindly. The same word is in the X-Obop-Applied header."}
         }
     })
+}
+
+/// The one description of the 503 every operation can answer (D74). The wording is the rule of
+/// docs/DEPLOY.md "What a 503 means".
+const STORAGE_503: &str = "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.";
+
+/// Declare the 503 on every operation of a document: any call that reaches the database can be
+/// refused with it, so none may leave it out. An operation that already describes a 503 of its own
+/// keeps that text and gains this one.
+fn declare_503(paths: &mut serde_json::Map<String, J>) {
+    let shared = error_responses()["503"].clone();
+    for item in paths.values_mut() {
+        let Some(item) = item.as_object_mut() else {
+            continue;
+        };
+        for (method, op) in item.iter_mut() {
+            if !matches!(method.as_str(), "get" | "post" | "put" | "patch" | "delete") {
+                continue;
+            }
+            let Some(responses) = op.get_mut("responses").and_then(J::as_object_mut) else {
+                continue;
+            };
+            match responses.get_mut("503") {
+                None => {
+                    responses.insert("503".into(), shared.clone());
+                }
+                Some(own) => {
+                    let text = format!(
+                        "{} Also: {STORAGE_503}",
+                        own["description"].as_str().unwrap_or("")
+                    );
+                    *own = shared.clone();
+                    own["description"] = J::from(text);
+                }
+            }
+        }
+    }
 }
 
 fn error_responses() -> J {
@@ -22,7 +60,7 @@ fn error_responses() -> J {
         "400": {"description": "The input was rejected; the error says which field and why.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
         "401": {"description": "Missing, expired or revoked bearer token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
         "404": {"description": "No such command or record, or it is hidden from this token.", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
-        "503": {"description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. A 503 is sent only for a request that had not committed any change: nothing was changed, so it may be repeated (after storage_unavailable a change that was in flight when the connection broke may or may not have been applied). A request that had already committed a change keeps its own answer, even if a later step of it was refused.", "headers": {"Retry-After": {"description": "Seconds to wait before trying again.", "schema": {"type": "integer"}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+        "503": {"description": STORAGE_503, "headers": {"Retry-After": {"description": "Seconds to wait before trying again.", "schema": {"type": "integer"}}, "X-Obop-Applied": {"description": "none, unknown or partial: what became of the request's own changes (see the response description).", "schema": {"type": "string", "enum": ["none", "unknown", "partial"]}}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
     })
 }
 
@@ -56,12 +94,12 @@ pub fn platform(base: &str) -> J {
     let creds = json_body(
         json!({"type": "object", "required": ["email", "password"], "properties": {"email": {"type": "string", "format": "email"}, "password": {"type": "string", "minLength": 12}}}),
     );
-    json!({
+    let mut doc = json!({
         "openapi": "3.1.0",
         "info": {
             "title": "obop control plane API",
             "version": obop_types::CORE_VERSION,
-            "description": "Sign up, create your own obop instance, watch its setup, and delete it. Each instance then has its own API, described at /api/openapi.json on the instance. Errors are JSON with error, code and hint. A 503 with a Retry-After header (storage_busy, storage_unavailable, storage_timeout) means the database could not serve the request and nothing was changed (after storage_unavailable a change in flight may or may not have been applied): try again after that many seconds."
+            "description": "Sign up, create your own obop instance, watch its setup, and delete it. Each instance then has its own API, described at /api/openapi.json on the instance. Errors are JSON with error, code and hint. A 503 with a Retry-After header (storage_busy, storage_unavailable, storage_timeout) means the database could not serve the request; its applied field says what became of the request's own changes (none: repeat it; unknown: after storage_unavailable, read before you repeat a write; partial: a step was refused after a change committed, do not repeat it blindly). Every operation can answer it; try again after Retry-After seconds."
         },
         "servers": [{"url": base}],
         "paths": {
@@ -84,7 +122,11 @@ pub fn platform(base: &str) -> J {
             "/status/api/v2/incidents.json": {"get": {"operationId": "statusIncidents", "summary": "Incidents", "responses": {"200": {"description": "Incidents."}}}}
         },
         "components": {"securitySchemes": bearer(), "schemas": {"Error": error_schema(), "Instance": instance}}
-    })
+    });
+    if let Some(paths) = doc["paths"].as_object_mut() {
+        declare_503(paths);
+    }
+    doc
 }
 
 fn kind_schema(kind: &str, options: Option<&[String]>, to: Option<&str>) -> J {
@@ -340,12 +382,13 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             }
         }
     }
+    declare_503(&mut paths);
     json!({
         "openapi": "3.1.0",
         "info": {
             "title": "obop instance API",
             "version": obop_types::CORE_VERSION,
-            "description": "Every model has the same generated commands: list, search, get, create, update, delete and its own actions, all POST with a JSON body. Personal and financial fields are masked for agent tokens; irreversible steps answer 202 with a plan for a human to approve. Errors are JSON with error, code and hint. Sign in (or present a token) to see the commands your token may use; this document lists only those."
+            "description": "Every model has the same generated commands: list, search, get, create, update, delete and its own actions, all POST with a JSON body. Personal and financial fields are masked for agent tokens; irreversible steps answer 202 with a plan for a human to approve. Errors are JSON with error, code and hint. Every operation can answer 503 (storage_busy, storage_unavailable or storage_timeout) with a Retry-After header; its applied field says what became of the request's own changes: none (repeat it), unknown (after storage_unavailable: read before you repeat a write) or partial (a step was refused after a change committed: do not repeat it blindly). Sign in (or present a token) to see the commands your token may use; this document lists only those."
         },
         "servers": [{"url": base}],
         "x-mcp": crate::mcp::x_mcp(base),
@@ -371,6 +414,57 @@ mod tests {
                     && d["components"]["schemas"][r].is_object()
             );
         }
+    }
+
+    /// Every operation of a document, as `(path, method, operation)`.
+    fn operations(doc: &J) -> Vec<(String, String, J)> {
+        let mut v = Vec::new();
+        for (path, item) in doc["paths"].as_object().unwrap() {
+            for (method, op) in item.as_object().unwrap() {
+                if op.get("operationId").is_some() {
+                    v.push((path.clone(), method.clone(), op.clone()));
+                }
+            }
+        }
+        v
+    }
+
+    #[test]
+    fn every_operation_declares_the_503_with_its_retry_after_and_applied_marker() {
+        let docs = [platform("https://x.test"), instance("https://x.test", &[])];
+        for doc in &docs {
+            let ops = operations(doc);
+            assert!(ops.len() >= 8, "{}", ops.len());
+            for (path, method, op) in ops {
+                let r = &op["responses"]["503"];
+                assert!(r.is_object(), "{method} {path} does not declare a 503");
+                assert!(
+                    r["headers"]["Retry-After"].is_object()
+                        && r["headers"]["X-Obop-Applied"].is_object(),
+                    "{method} {path}"
+                );
+                let text = r["description"].as_str().unwrap();
+                for word in [
+                    "storage_busy",
+                    "storage_unavailable",
+                    "none",
+                    "unknown",
+                    "partial",
+                ] {
+                    assert!(text.contains(word), "{method} {path}: {word}");
+                }
+            }
+            assert_eq!(
+                doc["components"]["schemas"]["Error"]["properties"]["applied"]["enum"],
+                json!(["none", "unknown", "partial"])
+            );
+        }
+        // The operation that had a 503 of its own keeps that sentence and gains the rule.
+        let own =
+            docs[1]["paths"]["/api/auth/mfa/begin"]["post"]["responses"]["503"]["description"]
+                .as_str()
+                .unwrap();
+        assert!(own.starts_with("The server has no OBOP_SECRET_KEY.") && own.contains("partial"));
     }
 
     #[test]

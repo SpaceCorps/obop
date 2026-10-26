@@ -428,7 +428,16 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
         for _ in 0..2 {
             s.spawn(|| http(port, "GET", "/api/meta", Some(&token), None));
         }
-        std::thread::sleep(Duration::from_millis(400));
+        // Ask when both connections are in use, not after a guessed time: a slow machine starts
+        // the two requests late, a fast one may have them finished.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while series(&metrics(port), "obop_db_pool_in_use{pool=\"main\"}") < 2.0 {
+            assert!(
+                Instant::now() < deadline,
+                "the two requests never filled the pool"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
         http(port, "GET", "/readyz", None, None)
     });
     assert_eq!(
@@ -619,7 +628,14 @@ fn a_create_is_never_answered_503_after_it_committed_and_never_stored_after_a_50
     );
     assert!(ok >= 1, "the test needs progress: every create was refused");
     let m = metrics(port);
-    assert!(m.contains("obop_storage_faults_total{fault=\"busy\",answer=\"kept\"}"));
+    // The refusals that came after a commit were counted as such (the series exists and moved).
+    assert!(
+        series(
+            &m,
+            "obop_storage_faults_total{fault=\"busy\",answer=\"kept\"}"
+        ) >= 1.0,
+        "{m}"
+    );
 }
 
 #[test]
