@@ -16,6 +16,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use obop_storage::fault::Fault;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::sync::{
@@ -171,6 +172,190 @@ pub(crate) async fn track(State(s): State<Arc<HttpState>>, req: Request, next: N
     resp
 }
 
+/// How often a storage fault decided the answer of a request, by fault and by what was done:
+/// `[fault][0]` the answer was replaced by a 503 that says nothing was changed (or, after
+/// `storage_unavailable`, that a change in flight may or may not have been applied), `[fault][1]`
+/// the request had already committed a change and kept its own answer, `[fault][2]` the answer
+/// was replaced by a 503 that says part of the request was applied. Process-wide: the instance,
+/// community and control-plane routers all report here.
+static FAULT_ANSWERS: [[AtomicU64; 3]; 3] =
+    [const { [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)] }; 3];
+
+fn fault_index(f: Fault) -> usize {
+    match f {
+        Fault::Busy => 0,
+        Fault::Unavailable => 1,
+        Fault::Timeout => 2,
+    }
+}
+
+/// What the 503 says about the request's own changes (`"applied"` in the body, `X-Obop-Applied` in
+/// the headers), so that a client neither repeats what was done nor believes a half-done request
+/// finished.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Applied {
+    /// Nothing was changed: the request may be repeated.
+    None,
+    /// A change in flight when the connection broke may or may not have been applied.
+    Unknown,
+    /// Part of the request was applied and a step it needed was refused: do not repeat it blindly,
+    /// read the records and finish or undo the rest.
+    Partial,
+}
+
+impl Applied {
+    fn word(self) -> &'static str {
+        match self {
+            Applied::None => "none",
+            Applied::Unknown => "unknown",
+            Applied::Partial => "partial",
+        }
+    }
+}
+
+fn fault_hint(f: Fault, applied: Applied) -> &'static str {
+    match (applied, f) {
+        (Applied::Partial, _) => {
+            "Part of this request was applied and a step it needed was refused. Do not repeat it blindly: read the records it touched, then finish or undo the rest. Retry after the time in Retry-After."
+        }
+        (_, Fault::Busy) => {
+            "Every database connection is in use. Nothing was changed. Retry after the time in Retry-After."
+        }
+        (_, Fault::Unavailable) => {
+            "The database cannot be reached right now. A change that was in flight may or may not have been applied: read before you repeat a write. Retry after the time in Retry-After."
+        }
+        (_, Fault::Timeout) => {
+            "A database statement ran into its time limit. Nothing was changed. Retry later, or ask for less at once."
+        }
+    }
+}
+
+/// Response headers a route set that the replacement must keep: the CORS answer of the OAuth and
+/// MCP endpoints (the OAuth token endpoint exposes `Retry-After` to browsers on purpose) and the
+/// security headers.
+fn keep_header(name: &header::HeaderName) -> bool {
+    let n = name.as_str();
+    n.starts_with("access-control-")
+        || n.starts_with("cross-origin-")
+        || matches!(
+            n,
+            "vary"
+                | "x-content-type-options"
+                | "x-frame-options"
+                | "referrer-policy"
+                | "content-security-policy"
+                | "strict-transport-security"
+                | "permissions-policy"
+        )
+}
+
+/// The 503 that replaces the answer of a request that hit a storage fault: in the shape the route
+/// speaks (an OAuth error for the token endpoints, a JSON-RPC error for `/mcp`, a small page where
+/// a page was coming, the REST error elsewhere).
+fn replacement(fault: Fault, applied: Applied, path: &str, original: &Response) -> Response {
+    let code = fault.code();
+    let hint = fault_hint(fault, applied);
+    let word = applied.word();
+    let is_html = original
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("text/html"));
+    let mut r = if path == "/mcp" || path.starts_with("/mcp/") {
+        let body = serde_json::json!({"jsonrpc": "2.0", "id": null, "error": {
+            "code": -32000, "message": code,
+            "data": {"hint": hint, "retry_after": fault.retry_after_secs(), "applied": word}}});
+        (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
+    } else if matches!(path, "/oauth/token" | "/oauth/register" | "/oauth/revoke") {
+        let body = serde_json::json!({"error": "temporarily_unavailable",
+            "error_description": hint, "applied": word});
+        (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
+    } else if is_html {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            Body::from(
+                "<!doctype html><meta charset=\"utf-8\"><title>Try again in a moment</title><p>The service is busy right now. Try again in a moment, and check before you repeat something you already sent.</p>",
+            ),
+        )
+            .into_response()
+    } else {
+        let body = serde_json::json!({"error": code, "code": code, "hint": hint, "applied": word});
+        (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
+    };
+    for (name, value) in original.headers() {
+        if keep_header(name) {
+            r.headers_mut().append(name.clone(), value.clone());
+        }
+    }
+    r.headers_mut().insert(
+        header::RETRY_AFTER,
+        HeaderValue::from(fault.retry_after_secs()),
+    );
+    r.headers_mut()
+        .insert("x-obop-applied", HeaderValue::from_static(word));
+    no_store(r)
+}
+
+/// What a request that hit a storage fault is answered (D74). The rule, which the documentation
+/// states in the same words:
+///
+/// - **No change committed yet**: 503 with `Retry-After` and `"applied":"none"` (`"unknown"` after
+///   `storage_unavailable`: a change in flight when the connection broke may or may not have been
+///   applied). The handlers above the store turn a refused read into "not signed in", "not
+///   found" or "zero", and the guard (`obop_storage::guarded`) has refused every change after the
+///   first refusal, so nothing was changed and a client may retry.
+/// - **A change committed and a step the request needed was refused** (the code said so with
+///   `fault::mark_partial`, after trying again), or the request committed and ends in an error
+///   answer while a fault was noted: 503 with `"applied":"partial"`. Never a 200, never a 4xx.
+/// - **A change committed and only an optional follow-up was refused** (the read-back of what was
+///   written): the request keeps its own answer; the fault is counted (`answer="kept"`) and logged.
+///
+/// The health and metrics routes decide for themselves.
+pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
+    let path = req.uri().path().to_string();
+    if matches!(path.as_str(), "/healthz" | "/readyz" | "/metrics") {
+        return next.run(req).await;
+    }
+    let (resp, outcome) = super::FAULT
+        .scope(std::cell::Cell::new(Default::default()), async {
+            let resp = next.run(req).await;
+            (resp, super::FAULT.with(std::cell::Cell::get))
+        })
+        .await;
+    let Some(fault) = outcome.fault else {
+        return resp;
+    };
+    // An error answer after a commit (a 4xx or 5xx) says the request failed after it changed
+    // something. A redirect or any other 2xx or 3xx is an answer that worked: a lost optional step
+    // does not turn a purchase or a consent into a failure.
+    let applied = if outcome.partial || (outcome.wrote && resp.status().as_u16() >= 400) {
+        Some(Applied::Partial)
+    } else if !outcome.wrote {
+        Some(if fault == Fault::Unavailable {
+            Applied::Unknown
+        } else {
+            Applied::None
+        })
+    } else {
+        None
+    };
+    let Some(applied) = applied else {
+        let n = FAULT_ANSWERS[fault_index(fault)][1].fetch_add(1, Relaxed);
+        if n.is_multiple_of(100) {
+            eprintln!(
+                "{} after a committed change: the request keeps its own answer ({} so far)",
+                fault.code(),
+                n + 1
+            );
+        }
+        return resp;
+    };
+    let column = if applied == Applied::Partial { 2 } else { 0 };
+    FAULT_ANSWERS[fault_index(fault)][column].fetch_add(1, Relaxed);
+    replacement(fault, applied, &path, &resp)
+}
+
 fn no_store(mut r: Response) -> Response {
     r.headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -199,6 +384,8 @@ fn classify(ping_ok: bool, status: Result<obop_migrate::Status, String>) -> Read
         return Ready::No("database unreachable");
     }
     match status {
+        // Every connection busy is a load signal, not an outage: the pool is full of work.
+        Err(m) if Fault::of_message(&m) == Some(Fault::Busy) => Ready::Yes,
         Err(_) => Ready::No("database unreachable"),
         Ok(st) if st.ahead => Ready::No("database is newer than this server"),
         // A database with no records at all is at the latest version by construction.
@@ -207,11 +394,37 @@ fn classify(ping_ok: bool, status: Result<obop_migrate::Status, String>) -> Read
     }
 }
 
+/// A ping that fails only because the pool is saturated still shows that the database is there.
+fn reachable<T>(ping: &Result<T, String>) -> bool {
+    match ping {
+        Ok(_) => true,
+        Err(m) => Fault::of_message(m) == Some(Fault::Busy),
+    }
+}
+
 fn check_ready(s: &HttpState) -> Ready {
     let backend = &s.shared.backend;
-    let ping_ok = backend.counter_get("health.ping").is_ok();
+    let ping = backend.counter_get("health.ping");
+    // A full pool refuses the ping after the acquire timeout. Ask nothing more of it (a second
+    // refusal would make the probe take twice as long as it is allowed to): the database is there
+    // and busy, which is no reason to take the process out of rotation.
+    if matches!(&ping, Err(m) if Fault::of_message(m) == Some(Fault::Busy)) {
+        return Ready::Yes;
+    }
+    let ping_ok = ping.is_ok();
+    if !ping_ok {
+        return Ready::No("database unreachable");
+    }
     let status = obop_migrate::Migrator::new(backend.clone(), s.shared.ring.clone()).status();
     classify(ping_ok, status)
+}
+
+/// Is the main connection pool of this process full or has callers waiting? Then a probe that did
+/// not finish in time was queued behind work, not stuck on a dead database.
+fn pool_is_saturated() -> bool {
+    obop_storage::pool::stats()
+        .iter()
+        .any(|p| p.name == "main" && (p.waiting > 0 || p.in_use >= p.max_size))
 }
 
 /// `GET /readyz`: 200 when the database answers and its schema is compatible, else 503 with a
@@ -232,6 +445,7 @@ pub(crate) async fn readyz(State(s): State<Arc<HttpState>>) -> Response {
             .await
             {
                 Ok(r) => r,
+                Err(_) if pool_is_saturated() => Ready::Yes,
                 Err(_) => Ready::No("database did not answer in time"),
             };
             *s.ops.ready.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), r));
@@ -354,6 +568,141 @@ fn gauges(s: &HttpState) -> Gauges {
     v
 }
 
+type PoolReading = fn(&obop_storage::pool::PoolStats) -> f64;
+
+/// Pool series that are one number per pool: name, kind, help, reading.
+const POOL_SERIES: [(&str, &str, &str, PoolReading); 9] = [
+    (
+        "obop_db_pool_max_connections",
+        "gauge",
+        "Connections the pool may hold.",
+        |p| p.max_size as f64,
+    ),
+    (
+        "obop_db_pool_in_use",
+        "gauge",
+        "Connections checked out right now.",
+        |p| p.in_use as f64,
+    ),
+    (
+        "obop_db_pool_idle",
+        "gauge",
+        "Connections open and free.",
+        |p| p.idle as f64,
+    ),
+    (
+        "obop_db_pool_waiting",
+        "gauge",
+        "Callers waiting for a connection right now.",
+        |p| p.waiting as f64,
+    ),
+    (
+        "obop_db_pool_acquire_timeouts_total",
+        "counter",
+        "Callers that waited the whole acquire timeout and were refused (storage_busy).",
+        |p| p.timeouts as f64,
+    ),
+    (
+        "obop_db_pool_acquire_rejected_total",
+        "counter",
+        "Callers refused at once because too many already waited (storage_busy).",
+        |p| p.rejected as f64,
+    ),
+    (
+        "obop_db_pool_connect_failures_total",
+        "counter",
+        "Connection attempts that failed.",
+        |p| p.connect_failures as f64,
+    ),
+    (
+        "obop_db_pool_connections_opened_total",
+        "counter",
+        "Connections opened.",
+        |p| p.connections_opened as f64,
+    ),
+    (
+        "obop_db_pool_connections_closed_total",
+        "counter",
+        "Connections closed (too old, idle too long, dead or failed).",
+        |p| p.connections_closed as f64,
+    ),
+];
+
+/// The connection pools of this process (D74): how full they are, how long callers waited, how
+/// often they were refused. Read from the pools' own counters; no connection is needed, so a
+/// saturated pool can still be looked at.
+fn render_pools(t: &mut String) {
+    use std::fmt::Write;
+    let pools = obop_storage::pool::stats();
+    for (name, kind, help, read) in POOL_SERIES {
+        if pools.is_empty() {
+            break;
+        }
+        let _ = writeln!(t, "# HELP {name} {help}");
+        let _ = writeln!(t, "# TYPE {name} {kind}");
+        for p in &pools {
+            let _ = writeln!(t, "{name}{{pool=\"{}\"}} {}", p.name, read(p));
+        }
+    }
+    if !pools.is_empty() {
+        let _ = writeln!(
+            t,
+            "# HELP obop_db_pool_acquire_seconds Time to get a connection, refusals included."
+        );
+        let _ = writeln!(t, "# TYPE obop_db_pool_acquire_seconds histogram");
+        for p in &pools {
+            let mut cumulative = 0;
+            for (i, b) in obop_storage::pool::ACQUIRE_BUCKETS.iter().enumerate() {
+                cumulative += p.acquire_buckets[i];
+                let _ = writeln!(
+                    t,
+                    "obop_db_pool_acquire_seconds_bucket{{pool=\"{}\",le=\"{b}\"}} {cumulative}",
+                    p.name
+                );
+            }
+            let _ = writeln!(
+                t,
+                "obop_db_pool_acquire_seconds_bucket{{pool=\"{}\",le=\"+Inf\"}} {}",
+                p.name, p.acquire_count
+            );
+            let _ = writeln!(
+                t,
+                "obop_db_pool_acquire_seconds_sum{{pool=\"{}\"}} {:.6}",
+                p.name, p.acquire_sum_secs
+            );
+            let _ = writeln!(
+                t,
+                "obop_db_pool_acquire_seconds_count{{pool=\"{}\"}} {}",
+                p.name, p.acquire_count
+            );
+        }
+    }
+    let _ = writeln!(
+        t,
+        "# HELP obop_db_statement_timeouts_total Statements cancelled by their time limit."
+    );
+    let _ = writeln!(t, "# TYPE obop_db_statement_timeouts_total counter");
+    let _ = writeln!(
+        t,
+        "obop_db_statement_timeouts_total {}",
+        obop_storage::statement_timeouts()
+    );
+    let _ = writeln!(
+        t,
+        "# HELP obop_storage_faults_total Requests that hit a storage fault, by fault and by answer: 503 (answered 503 with applied none, or unknown after storage_unavailable: nothing was changed, or a change in flight may or may not have been applied), partial (answered 503 with applied partial: a change was committed and a step the request needed was refused, so somebody should read the records it touched) or kept (a change was committed and only an optional step was lost, so the request kept its own answer)."
+    );
+    let _ = writeln!(t, "# TYPE obop_storage_faults_total counter");
+    for (i, name) in ["busy", "unavailable", "timeout"].iter().enumerate() {
+        for (j, answer) in [(0, "503"), (1, "kept"), (2, "partial")] {
+            let _ = writeln!(
+                t,
+                "obop_storage_faults_total{{fault=\"{name}\",answer=\"{answer}\"}} {}",
+                FAULT_ANSWERS[i][j].load(Relaxed)
+            );
+        }
+    }
+}
+
 fn render(s: &HttpState) -> String {
     use std::fmt::Write;
     let o = &s.ops;
@@ -419,7 +768,7 @@ fn render(s: &HttpState) -> String {
     let _ = writeln!(t, "obop_http_request_duration_seconds_count {count}");
 
     let started = Instant::now();
-    let up = s.shared.backend.counter_get("health.ping").is_ok();
+    let up = reachable(&s.shared.backend.counter_get("health.ping"));
     let ping = started.elapsed().as_secs_f64();
     let _ = writeln!(t, "# HELP obop_db_up 1 when the database answered a ping.");
     let _ = writeln!(t, "# TYPE obop_db_up gauge");
@@ -430,6 +779,8 @@ fn render(s: &HttpState) -> String {
     );
     let _ = writeln!(t, "# TYPE obop_db_ping_seconds gauge");
     let _ = writeln!(t, "obop_db_ping_seconds {ping:.6}");
+
+    render_pools(&mut t);
 
     let g = gauges(s);
     if let Some(n) = g.sessions {
@@ -550,6 +901,297 @@ mod tests {
     use super::*;
     use obop_migrate::Status;
 
+    // ---- the answer to a request that hit a storage fault (D74) ---------------------------
+
+    use axum::Router;
+    use axum::http::Request as HttpRequest;
+    use axum::routing::{get, post};
+    use obop_storage::testing::Flaky;
+    use obop_storage::{Backend, Fields};
+    use tower::ServiceExt;
+
+    fn fields(n: i64) -> Fields {
+        let mut f = Fields::new();
+        f.insert("n".into(), n.into());
+        f
+    }
+
+    /// A router of a few handlers over a store whose reads can be refused, behind the layer.
+    fn app() -> (Arc<Flaky>, Arc<dyn Backend>, Router) {
+        let (flaky, db) = Flaky::memory();
+        db.insert("t", "a", &fields(1)).unwrap();
+        // A handler that swallows a refused read and answers "not signed in", as the layers above
+        // the store do with `.ok()`.
+        let d = db.clone();
+        let swallows = get(move || async move {
+            let d = d.clone();
+            crate::blocking(move || match d.get("t", "a") {
+                Ok(Some(_)) => (StatusCode::OK, "found"),
+                _ => (StatusCode::UNAUTHORIZED, "not signed in"),
+            })
+            .await
+        });
+        // A handler that writes first and then has its read-back refused (swallowed).
+        let d = db.clone();
+        let writes_then_reads = post(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                d.insert("t", "new", &fields(2)).unwrap();
+                let _ = d.get("t", "new");
+                (StatusCode::CREATED, "created")
+            })
+            .await
+        });
+        // A handler that writes, loses an optional read-back and answers a redirect (a checkout,
+        // a consent): the answer worked.
+        let d = db.clone();
+        let writes_then_redirects = post(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                d.insert("t", "redirected", &fields(4)).unwrap();
+                let _ = d.get("t", "redirected");
+                (StatusCode::SEE_OTHER, [("location", "/done")], "")
+            })
+            .await
+        });
+        // A handler that writes and then answers an error (a step it needed failed).
+        let d = db.clone();
+        let writes_then_fails = post(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                d.insert("t", "half", &fields(5)).unwrap();
+                let _ = d.get("t", "half");
+                (StatusCode::BAD_REQUEST, "a step failed")
+            })
+            .await
+        });
+        // A handler that swallows a refused read and goes on to write (a vault, a plan).
+        let d = db.clone();
+        let reads_then_writes = post(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                let _ = d.get("t", "a");
+                let w = d.insert("t", "late", &fields(3));
+                (
+                    StatusCode::OK,
+                    if w.is_ok() { "written" } else { "refused" },
+                )
+            })
+            .await
+        });
+        // The same on routes with their own shapes and headers.
+        let d = db.clone();
+        let shaped = get(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                let _ = d.get("t", "a");
+                (
+                    StatusCode::BAD_REQUEST,
+                    [
+                        ("access-control-allow-origin", "https://app.example"),
+                        ("x-content-type-options", "nosniff"),
+                        ("content-type", "application/json"),
+                    ],
+                    "{}",
+                )
+            })
+            .await
+        });
+        let page = get(|| async {
+            crate::blocking(|| {
+                obop_storage::fault::note(obop_storage::fault::Fault::Busy);
+                (
+                    StatusCode::OK,
+                    [("content-type", "text/html; charset=utf-8")],
+                    "<p>page</p>",
+                )
+            })
+            .await
+        });
+        let router = Router::new()
+            .route("/api/read", swallows)
+            .route("/api/create", writes_then_reads)
+            .route("/api/redirect", writes_then_redirects)
+            .route("/api/shaped_after_write", writes_then_fails)
+            .route("/api/derived", reads_then_writes)
+            .route("/mcp", shaped.clone())
+            .route("/oauth/token", shaped.clone())
+            .route("/api/shaped", shaped)
+            .route("/page", page)
+            .layer(axum::middleware::from_fn(storage_faults));
+        (flaky, db, router)
+    }
+
+    async fn call(
+        r: &Router,
+        method: &str,
+        path: &str,
+    ) -> (StatusCode, axum::http::HeaderMap, String) {
+        let req = HttpRequest::builder()
+            .method(method)
+            .uri(path)
+            .body(Body::empty())
+            .unwrap();
+        let resp = r.clone().oneshot(req).await.unwrap();
+        let (status, headers) = (resp.status(), resp.headers().clone());
+        let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap();
+        (status, headers, String::from_utf8_lossy(&bytes).to_string())
+    }
+
+    #[tokio::test]
+    async fn a_swallowed_refusal_before_any_change_is_answered_503_with_retry_after() {
+        let (flaky, _db, r) = app();
+        let (s, _, body) = call(&r, "GET", "/api/read").await;
+        assert_eq!(
+            (s, body.as_str()),
+            (StatusCode::OK, "found"),
+            "healthy: untouched"
+        );
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/api/read").await;
+        // The handler said "not signed in"; the client is told the truth.
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+        assert_eq!(h["retry-after"], "1");
+        assert_eq!(h["cache-control"], "no-store");
+        let j: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(j["error"], "storage_busy");
+        assert!(j["hint"].as_str().unwrap().contains("Nothing was changed"));
+    }
+
+    #[tokio::test]
+    async fn a_request_that_committed_a_change_keeps_its_answer() {
+        let (flaky, db, r) = app();
+        flaky.refuse_reads_after_the_next_write();
+        let before = FAULT_ANSWERS[0][1].load(Relaxed);
+        let (s, _, body) = call(&r, "POST", "/api/create").await;
+        assert_eq!((s, body.as_str()), (StatusCode::CREATED, "created"));
+        assert!(
+            FAULT_ANSWERS[0][1].load(Relaxed) > before,
+            "the lost fault is counted"
+        );
+        flaky.allow_models();
+        assert!(
+            db.get("t", "new").unwrap().is_some(),
+            "the change is there, once"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_redirect_after_a_commit_is_an_answer_that_worked_and_a_partial_503_is_counted_apart()
+    {
+        let (flaky, db, r) = app();
+        // A redirect after a commit whose optional read-back was refused keeps its answer: it is
+        // not a failure, and not "do not repeat it blindly" (a purchase, a consent).
+        flaky.refuse_reads_after_the_next_write();
+        let before = FAULT_ANSWERS[0][1].load(Relaxed);
+        let (s, h, _) = call(&r, "POST", "/api/redirect").await;
+        assert_eq!(s, StatusCode::SEE_OTHER);
+        assert_eq!(h["location"], "/done");
+        assert!(h.get("x-obop-applied").is_none());
+        assert!(
+            FAULT_ANSWERS[0][1].load(Relaxed) > before,
+            "counted as kept"
+        );
+        flaky.allow_models();
+        assert!(db.get("t", "redirected").unwrap().is_some());
+        // An error answer after a commit is a partial 503, and the metrics count it as such.
+        let partial_before = FAULT_ANSWERS[0][2].load(Relaxed);
+        flaky.refuse_reads_after_the_next_write();
+        let (s, h, _) = call(&r, "POST", "/api/shaped_after_write").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(h["x-obop-applied"], "partial");
+        assert!(FAULT_ANSWERS[0][2].load(Relaxed) > partial_before);
+        let mut text = String::new();
+        render_pools(&mut text);
+        assert!(
+            text.contains("obop_storage_faults_total{fault=\"busy\",answer=\"partial\"}"),
+            "{text}"
+        );
+        assert!(
+            text.contains("applied partial"),
+            "the help text says what partial is"
+        );
+    }
+
+    #[tokio::test]
+    async fn after_a_refused_read_the_request_writes_nothing_and_says_503() {
+        let (flaky, db, r) = app();
+        flaky.refuse_next(1);
+        let (s, h, _) = call(&r, "POST", "/api/derived").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE, "not the handler's 200");
+        assert!(h.contains_key("retry-after"));
+        assert!(
+            db.get("t", "late").unwrap().is_none(),
+            "nothing was written"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_503_speaks_the_shape_of_its_route_and_keeps_its_headers() {
+        let (flaky, _db, r) = app();
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/mcp").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        let j: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(j["jsonrpc"], "2.0");
+        assert_eq!(j["error"]["message"], "storage_busy");
+        assert_eq!(
+            h["access-control-allow-origin"], "https://app.example",
+            "CORS kept"
+        );
+        assert_eq!(h["x-content-type-options"], "nosniff");
+
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/oauth/token").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        let j: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(
+            j["error"], "temporarily_unavailable",
+            "an OAuth error, not a REST one"
+        );
+        assert_eq!(h["access-control-allow-origin"], "https://app.example");
+        assert_eq!(h["retry-after"], "1");
+
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/page").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(h["content-type"].to_str().unwrap().starts_with("text/html"));
+        assert!(body.contains("Try again"), "a page, not raw JSON: {body}");
+
+        // The REST shape elsewhere, and the route's own headers are kept there too.
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/api/shaped").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(body.contains("\"code\":\"storage_busy\""));
+        assert_eq!(h["access-control-allow-origin"], "https://app.example");
+    }
+
+    #[tokio::test]
+    async fn the_health_routes_decide_for_themselves() {
+        // `/healthz`, `/readyz` and `/metrics` are not given a scope: whatever their handlers hit,
+        // the layer does not rewrite their answer.
+        let (flaky, db, _) = app();
+        let d = db.clone();
+        let r = Router::new()
+            .route(
+                "/readyz",
+                get(move || async move {
+                    let d = d.clone();
+                    crate::blocking(move || {
+                        let _ = d.get("t", "a");
+                        (StatusCode::OK, "ready")
+                    })
+                    .await
+                }),
+            )
+            .layer(axum::middleware::from_fn(storage_faults));
+        flaky.refuse_next(1);
+        let (s, _, body) = call(&r, "GET", "/readyz").await;
+        assert_eq!((s, body.as_str()), (StatusCode::OK, "ready"));
+    }
+
     fn status(stored: Option<u32>, latest: u32, empty: bool) -> Status {
         let current = stored.unwrap_or(0);
         Status {
@@ -585,6 +1227,22 @@ mod tests {
         assert_eq!(
             classify(true, Ok(status(None, 3, false))),
             Ready::No("database needs migration")
+        );
+    }
+
+    #[test]
+    fn a_saturated_pool_is_busy_not_down() {
+        let busy = Fault::Busy.message("all database connections are in use, try again");
+        // The database answered the pool's refusal: it is there, and ready.
+        assert!(reachable::<u64>(&Err(busy.clone())));
+        assert!(!reachable::<u64>(&Err("connection refused".into())));
+        assert!(!reachable::<u64>(&Err(
+            Fault::Unavailable.message("cannot reach")
+        )));
+        assert_eq!(classify(true, Err(busy)), Ready::Yes);
+        assert_eq!(
+            classify(true, Err(Fault::Unavailable.message("cannot reach"))),
+            Ready::No("database unreachable")
         );
     }
 

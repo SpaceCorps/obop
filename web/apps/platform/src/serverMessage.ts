@@ -2,6 +2,17 @@
 // mapped to translatable ones; anything else is shown as received.
 import { getLang, t } from "@obop/ui";
 
+/**
+ * The code words of a refused database call (D74), in the person's language. The server sends
+ * `storage_busy` as the error of a 503: a code, not a sentence, so English shows a sentence too.
+ */
+const STORAGE_FAULTS: Record<string, () => string> = {
+  storage_busy: () => t("The server is busy. Try again in a moment."),
+  storage_unavailable: () => t("The database cannot be reached right now. Try again in a moment."),
+  storage_timeout: () =>
+    t("The database took too long to answer. Try again, or ask for less at once."),
+};
+
 type Rule = [RegExp, (m: RegExpExecArray) => string];
 
 const RULES: Rule[] = [
@@ -34,6 +45,8 @@ const RULES: Rule[] = [
 
 export function serverMessage(raw: string | undefined | null): string {
   if (!raw) return "";
+  const fault = STORAGE_FAULTS[raw];
+  if (fault) return fault();
   if (getLang() === "en") return raw;
   for (const [re, fn] of RULES) {
     const m = re.exec(raw);

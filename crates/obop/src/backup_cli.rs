@@ -133,10 +133,17 @@ impl obop_pkg::MigrationGate for ModuleGate {
                 Ok(obop_pkg::GateReceipt::default())
             };
         };
+        // A refused read of the schema version is an error: a backup labelled version 0 would be
+        // restored as if nothing had ever been migrated.
         let schema = Migrator::new(self.backend.clone(), KeyRing::default())
             .status()
             .map(|st| u64::from(st.stored.unwrap_or(0)))
-            .unwrap_or(0);
+            .map_err(|e| {
+                format!(
+                    "the backup before {} cannot be taken: the schema version cannot be read: {e}",
+                    what.command
+                )
+            })?;
         let settings = Settings::new(dir, s.keys.clone());
         let o = schedule::take(
             &self.backend,
@@ -376,10 +383,18 @@ pub fn start_scheduler(
         loop {
             std::thread::sleep(Duration::from_secs(60));
             let schema =
-                obop_migrate::Migrator::new(backend.clone(), obop_keys::KeyRing::default())
+                match obop_migrate::Migrator::new(backend.clone(), obop_keys::KeyRing::default())
                     .status()
-                    .map(|s| u64::from(s.stored.unwrap_or(0)))
-                    .unwrap_or(0);
+                {
+                    Ok(s) => u64::from(s.stored.unwrap_or(0)),
+                    // Not "version 0": the backup waits for the next minute.
+                    Err(e) => {
+                        eprintln!(
+                            "scheduled backup postponed: the schema version cannot be read: {e}"
+                        );
+                        continue;
+                    }
+                };
             match schedule.tick(&backend, Some(&*blobs), schema) {
                 Ok(Some(o)) => {
                     eprintln!(

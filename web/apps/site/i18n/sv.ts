@@ -188,7 +188,7 @@ export const sv: Messages = {
       },
       {
         title: "Källkod på GitHub",
-        body: "Läs koden, besluten och färdplanen. Licensen är inte slutgiltigt fastställd; se arkivet.",
+        body: "Läs koden, besluten och färdplanen. Apache-2.0, fri att använda och köra själv; se arkivet.",
       },
     ],
     pricingTitle: "Enkla priser, planerade",
@@ -228,7 +228,7 @@ export const sv: Messages = {
       },
       {
         q: "Har obop öppen källkod?",
-        a: "Källkoden är offentlig på GitHub. Den slutgiltiga licensen är ännu inte bestämd (projektet föreslår AGPL), så läs i arkivet för att se de villkor som gäller just nu.",
+        a: "Källkoden är offentlig på GitHub under licensen Apache-2.0: fri att använda, ändra och köra själv. Hela texten finns i filen LICENSE i arkivet.",
       },
     ],
     ctaTitle: "Ett företag, en plattform.",

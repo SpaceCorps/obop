@@ -26,6 +26,35 @@ fn names(dir: &Path) -> Vec<String> {
 }
 
 #[test]
+fn a_backup_is_not_made_without_the_id_of_the_database_because_the_store_would_not_say() {
+    let dir = Dir::new();
+    let real = dir.sqlite("real.db");
+    seed(&real);
+    obop_migrate::Migrator::new(real.clone(), KeyRing::default())
+        .ensure_instance_id()
+        .unwrap();
+    let flaky = Flaky::new(real.clone());
+    flaky
+        .refuse_reads
+        .lock()
+        .unwrap()
+        .push(obop_migrate::META_MODEL.to_string());
+    let fb: Arc<dyn Backend> = flaky.clone();
+    // A backup that left its id out would be refused when it is needed (it "carries no database
+    // id"), and nothing said so when it was taken.
+    let e = create(&fb, 2, &dir.path("nameless"), &mut |_| {}).unwrap_err();
+    assert!(e.contains("id of the database cannot be read"), "{e}");
+    assert!(
+        names(&dir.path("nameless")).is_empty(),
+        "nothing was left behind: {:?}",
+        names(&dir.path("nameless"))
+    );
+    flaky.refuse_reads.lock().unwrap().clear();
+    let ok = create(&fb, 2, &dir.path("named"), &mut |_| {}).unwrap();
+    assert!(ok.manifest.database_id.is_some());
+}
+
+#[test]
 fn a_plain_pair_is_refused_when_the_instance_seals_its_backups_and_a_forged_one_restores_nothing() {
     let dir = Dir::new();
     // The real data, sealed.

@@ -126,7 +126,11 @@ test.describe("decimal and datetime fields", () => {
     await expect(problems).toContainText("3 fractional digits");
     await dialog.getByLabel("If a row is wrong").selectOption("partial");
     await dialog.getByRole("button", { name: "Import 1 row" }).click();
+    // The first rows turn the empty list into a table; the dialog must stay open to say what happened.
     await expect(dialog.getByText(/Created: 1\. Skipped: 1\./)).toBeVisible();
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(row(page, good)).toContainText("0.1235");
     const rows = await api.list("root", model);
     const made = rows.find((r) => r.title === good);
     expect(made.ratio).toBe("0.1235");

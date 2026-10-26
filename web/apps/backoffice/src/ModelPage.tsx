@@ -65,7 +65,11 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
   const d = useData();
   const title = modelTitle(model, app.module.id);
   const state = useMemo(() => decodeState(route.st), [route.st]);
+  // The dialogs a view opens (bulk edit and delete) share one slot, which the list view rewrites
+  // whenever it mounts. The import dialog is the page's own, so it has a slot of its own: the first
+  // import into an empty model turns the empty state into the list, and that mount must not close it.
   const [extraDialog, setExtraDialog] = useState<ReactNode>(null);
+  const [importing, setImporting] = useState(false);
   const [newDefaults, setNewDefaults] = useState<Record<string, unknown>>({});
   const [pageSize, setPageSizeState] = useState(() => {
     const n = readPref<number>("obop-pagesize", 100);
@@ -350,18 +354,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
           fields={fields}
           canCreate={model.can_create}
           onNew={() => openNew()}
-          onImport={
-            model.can_bulk_create
-              ? () =>
-                  setExtraDialog(
-                    <ImportDialog
-                      model={model}
-                      title={title}
-                      onClose={() => setExtraDialog(null)}
-                    />,
-                  )
-              : undefined
-          }
+          onImport={model.can_bulk_create ? () => setImporting(true) : undefined}
           state={state}
           setState={setState}
           lookup={d.lookup}
@@ -465,6 +458,9 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
         </div>
       </section>
       {extraDialog}
+      {importing && (
+        <ImportDialog model={model} title={title} onClose={() => setImporting(false)} />
+      )}
       {selected && (
         <RecordPanel
           key={route.id === "new" ? `new-${JSON.stringify(newDefaults)}` : route.id}

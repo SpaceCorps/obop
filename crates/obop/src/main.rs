@@ -265,6 +265,13 @@ fn main() -> ExitCode {
         )
     });
     let has = |f: &str| flags.contains(&f);
+    // An address of the command's own is a direct address, unless the command serves (the rule is
+    // in ops.rs). Decided from the parsed command, not from where the words stand: `obop --db URL
+    // serve` and `obop serve --db URL` are the same command.
+    let serving = matches!(args.as_slice(), ["serve"] | ["platform", "serve"]);
+    if !serving && let Some(d) = db {
+        ops::apply_address_rule(&[d]);
+    }
     let opts = Opts {
         db: db
             .map(String::from)
@@ -1023,7 +1030,14 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
 /// `obop connectors purge`: retention for flow logs, runs and expired webhook and OAuth entries.
 fn connectors_purge(o: &Opts) -> Exit {
     let app = open_app(o)?;
-    let (logs, runs, other) = app.connectors.purge(obop_connectors::util::now());
+    let (logs, runs, other) = app
+        .connectors
+        .purge(obop_connectors::util::now())
+        .map_err(|e| {
+            fail(&format!(
+                "the retention run stopped, nothing more was removed: {e}"
+            ))
+        })?;
     println!("removed {logs} flow log rows, {runs} runs and {other} expired entries");
     Ok(())
 }
@@ -2236,6 +2250,47 @@ mod tests {
         let (s, b) = post(&r, None, "/api/platform/instances", json!({"name": "acme"})).await;
         assert_eq!((s, b["code"].as_str()), (401, Some("unauthorized")));
         assert!(b["hint"].is_string());
+    }
+
+    #[tokio::test]
+    async fn the_control_plane_answers_503_when_the_store_is_busy_not_401_or_404() {
+        use obop_storage::testing::Flaky;
+        // D74: the control plane's database is pooled too. A sign-in that meets a full pool is not
+        // "invalid username or password", and a release feed that cannot be read is not "none".
+        let (flaky, backend) = Flaky::memory();
+        let platform = obop_platform::Platform::new(
+            Arc::new(Auth::with_test_params(backend.clone())),
+            backend,
+            Arc::new(obop_platform::provision::Fake::default()),
+        );
+        let r = obop_http::platform_router(Arc::new(obop_platform::Api(platform)), None);
+        let (s, b) = post(
+            &r,
+            None,
+            "/api/platform/signup",
+            json!({"email": "ada@example.test", "password": "correct horse battery"}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+        let login = json!({"email": "ada@example.test", "password": "correct horse battery"});
+        let (s, _) = post(&r, None, "/api/platform/login", login.clone()).await;
+        assert_eq!(s, 200, "healthy: signed in");
+        flaky.refuse_next(1);
+        let resp = r
+            .clone()
+            .oneshot(
+                Request::post("/api/platform/login")
+                    .header("content-type", "application/json")
+                    .body(Body::from(login.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 503, "not 401 invalid username or password");
+        assert_eq!(resp.headers()["retry-after"], "1");
+        let body: J =
+            serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(body["code"], "storage_busy");
     }
 
     #[tokio::test]

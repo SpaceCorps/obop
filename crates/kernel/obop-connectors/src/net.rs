@@ -178,7 +178,19 @@ pub struct Client {
     cfg: ClientConfig,
     lookup: Arc<dyn Lookup>,
     /// The operator's host allow-list; replaceable while the server runs.
-    hosts: Arc<std::sync::RwLock<Vec<String>>>,
+    hosts: Arc<std::sync::RwLock<OperatorHosts>>,
+}
+
+/// Where a source of the operator's host list is asked again when the list is not known.
+pub type HostSource = dyn Fn() -> Result<Vec<String>, String> + Send + Sync;
+
+/// What the client knows of the operator's host allow-list. An empty list means "no extra
+/// restriction", so a list that could not be read must not be turned into an empty one: it is
+/// `Unknown`, nothing is sent while it is, and the source is asked again at every send until it
+/// answers (D74: a busy store must not lift the operator's restriction).
+enum OperatorHosts {
+    Known(Vec<String>),
+    Unknown(Arc<HostSource>),
 }
 
 /// A host matches an allow-list entry exactly, or `*.suffix` matches any subdomain of suffix.
@@ -205,13 +217,47 @@ impl Client {
     }
 
     pub fn with_lookup(cfg: ClientConfig, lookup: Arc<dyn Lookup>) -> Self {
-        let hosts = Arc::new(std::sync::RwLock::new(cfg.instance_hosts.clone()));
+        let hosts = Arc::new(std::sync::RwLock::new(OperatorHosts::Known(
+            cfg.instance_hosts.clone(),
+        )));
         Self { cfg, lookup, hosts }
     }
 
     /// Replace the operator's host allow-list (empty means no extra restriction).
     pub fn set_instance_hosts(&self, hosts: Vec<String>) {
-        *self.hosts.write().unwrap() = hosts;
+        *self.hosts.write().unwrap() = OperatorHosts::Known(hosts);
+    }
+
+    /// The operator's host list is not known (it could not be read): nothing is sent until
+    /// `source` answers, and it is asked again at every send.
+    pub fn instance_hosts_from(&self, source: Arc<HostSource>) {
+        *self.hosts.write().unwrap() = OperatorHosts::Unknown(source);
+    }
+
+    /// Know the operator's list from `source` now if it answers, and ask it again when it does not.
+    pub fn follow_instance_hosts(&self, source: Arc<HostSource>) {
+        match source() {
+            Ok(h) => self.set_instance_hosts(h),
+            Err(_) => self.instance_hosts_from(source),
+        }
+    }
+
+    /// The operator's list for one send: what is known, or what the source says now; an
+    /// unknown list is an error ("later"), never "no restriction".
+    fn operator_hosts(&self) -> Result<Vec<String>, NetError> {
+        let source = match &*self.hosts.read().unwrap() {
+            OperatorHosts::Known(h) => return Ok(h.clone()),
+            OperatorHosts::Unknown(source) => source.clone(),
+        };
+        match source() {
+            Ok(h) => {
+                *self.hosts.write().unwrap() = OperatorHosts::Known(h.clone());
+                Ok(h)
+            }
+            Err(_) => Err(NetError::Transport(
+                "the operator's list of allowed hosts could not be read, try again".into(),
+            )),
+        }
     }
 
     pub fn config(&self) -> &ClientConfig {
@@ -243,7 +289,7 @@ impl Client {
         if allowed_hosts.is_empty() || !allowed_hosts.iter().any(|p| host_matches(&host, p)) {
             return Err(NetError::HostNotAllowed(host));
         }
-        let operator = self.hosts.read().unwrap();
+        let operator = self.operator_hosts()?;
         if !operator.is_empty() && !operator.iter().any(|p| host_matches(&host, p)) {
             return Err(NetError::HostNotAllowed(host));
         }
@@ -632,6 +678,51 @@ mod tests {
             c.vet("https://hooks.example.com/", &h),
             Err(NetError::Resolve(_))
         ));
+    }
+
+    #[test]
+    fn an_operator_list_that_cannot_be_read_lifts_nothing_and_is_asked_again() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        // An empty list means "no restriction", so a list the store would not give must not
+        // turn into one. While it is unknown nothing is sent (and the refusal is a "later"), and
+        // the source is asked again at every send until it answers.
+        let c = Client::new(ClientConfig {
+            allow_loopback: true,
+            ..ClientConfig::default()
+        });
+        let allowed = vec!["127.0.0.1".to_string()];
+        let url = "http://127.0.0.1:9/hook";
+        let busy = Arc::new(AtomicBool::new(true));
+        let source = {
+            let busy = busy.clone();
+            Arc::new(move || {
+                if busy.load(Ordering::SeqCst) {
+                    Err("storage_busy: the pool is full".to_string())
+                } else {
+                    Ok(vec!["other.example".to_string()])
+                }
+            })
+        };
+        c.follow_instance_hosts(source);
+        for _ in 0..2 {
+            assert!(
+                matches!(c.check_shape(url, &allowed), Err(NetError::Transport(_))),
+                "an unknown list is not an open one"
+            );
+        }
+        busy.store(false, Ordering::SeqCst);
+        assert!(
+            matches!(
+                c.check_shape(url, &allowed),
+                Err(NetError::HostNotAllowed(_))
+            ),
+            "the restriction the operator saved applies"
+        );
+        c.set_instance_hosts(vec![]);
+        assert!(
+            c.check_shape(url, &allowed).is_ok(),
+            "an empty list is open"
+        );
     }
 
     #[test]

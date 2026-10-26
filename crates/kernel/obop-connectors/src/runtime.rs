@@ -4,7 +4,8 @@
 //! returns messages that are safe to show: no credential, token, URL query or payload is ever put
 //! in an error.
 
-use obop_commands::{Dispatcher, Principal, PrincipalKind, Surface, Value, Vault};
+use obop_commands::{CallError, Dispatcher, Principal, PrincipalKind, Surface, Value, Vault};
+use obop_storage::fault::Fault;
 use obop_storage::{Backend, Fields};
 use serde_json::{Map, Value as J, json};
 use std::collections::BTreeSet;
@@ -56,6 +57,8 @@ pub enum HookError {
     Unauthorised,
     Refused(String),
     Rejected(String),
+    /// The store was busy or unreachable: nothing was taken, the sender should retry (D74).
+    Busy,
 }
 
 pub struct Runtime {
@@ -69,6 +72,9 @@ pub struct Runtime {
     pub cfg: Config,
     providers: Vec<Provider>,
 }
+
+/// The key prefix of the notes that an erasure is owed.
+const ERASURE_OWED: &str = "connectors.erase:";
 
 /// Purposes the sealed values are bound to (see `secretbox`).
 pub const PURPOSE_CREDENTIALS: &str = "connection-credentials";
@@ -103,14 +109,19 @@ impl Runtime {
             secrets.clone(),
             dispatcher.clone(),
         ));
-        let inst = InstancePolicy::load(&*backend);
         let client = client.unwrap_or_else(|| {
-            Client::new(ClientConfig {
+            let client = Client::new(ClientConfig {
                 allow_loopback: cfg.allow_loopback,
                 timeout: Duration::from_secs(20),
-                instance_hosts: inst.hosts,
                 ..ClientConfig::default()
-            })
+            });
+            // The operator's allow-list is read now, and again at every send while it could not be
+            // (a database that is away while the process starts must not leave it lifted).
+            let source = backend.clone();
+            client.follow_instance_hosts(Arc::new(move || {
+                InstancePolicy::try_load(&*source).map(|p| p.hosts)
+            }));
+            client
         });
         let queue = Queue::new(backend.clone(), secrets.clone());
         Arc::new(Self {
@@ -158,15 +169,21 @@ impl Runtime {
 
     /// The groups the connection may use: what its owner held when they last changed it, narrowed
     /// to what the owner holds now when the owner is a known user.
+    ///
+    /// Fails closed (D74): when the owner cannot be looked up, the connection holds no groups
+    /// (what it held when it was saved may be more than the owner holds now), and the flow that
+    /// asked is refused. Callers that can say "try later" ask [`Runtime::try_owner_groups`] first.
     pub fn owner_groups(&self, c: &Connection) -> Vec<String> {
-        let now_groups: Option<Vec<String>> = self
-            .backend
-            .get("auth_user", &c.owner_user)
-            .ok()
-            .flatten()
-            .map(|u| {
-                u["groups"]
-                    .as_array()
+        self.try_owner_groups(c).unwrap_or_default()
+    }
+
+    /// As [`Runtime::owner_groups`], but a lookup the store refused is an error ("later"), not
+    /// an answer.
+    pub fn try_owner_groups(&self, c: &Connection) -> Result<Vec<String>, String> {
+        let now_groups: Option<Vec<String>> =
+            self.backend.get("auth_user", &c.owner_user)?.map(|u| {
+                u.get("groups")
+                    .and_then(J::as_array)
                     .map(|a| {
                         a.iter()
                             .filter_map(|x| x.as_str().map(String::from))
@@ -174,7 +191,7 @@ impl Runtime {
                     })
                     .unwrap_or_default()
             });
-        match now_groups {
+        Ok(match now_groups {
             // A deleted or demoted owner narrows the connection; platform.admin keeps its meaning.
             Some(now_groups) => c
                 .owner_groups
@@ -183,7 +200,7 @@ impl Runtime {
                 .cloned()
                 .collect(),
             None => c.owner_groups.clone(),
-        }
+        })
     }
 
     fn groups_for(&self, c: &Connection, model: &str) -> (Vec<String>, Vec<String>) {
@@ -240,7 +257,16 @@ impl Runtime {
         model: &str,
         ids: Option<&[String]>,
     ) -> Result<Vec<Map<String, J>>, String> {
-        let p = self.reader(c, model);
+        // "Later" when the owner cannot be looked up, not "the owner may not read": and the groups
+        // that were just looked up are the ones that read (a second, lenient lookup that is
+        // refused would read as "no groups" and as a refusal of the owner).
+        let held = self.try_owner_groups(c)?;
+        let p = self.reader_for(&c.id, &held, model);
+        // A read the store refused is "later" as well, whatever the call wrapped it in.
+        let refused = |e: CallError| match e {
+            CallError::Handler(m) if Fault::is_transient(&m) => m,
+            _ => format!("the owner of this connection may not read {model}"),
+        };
         let mut out = Vec::new();
         let mut v = Vault::new();
         match ids {
@@ -255,9 +281,7 @@ impl Runtime {
                             &format!("{model}.get"),
                             &Value::map([("id", Value::text(id))]),
                         )
-                        .map_err(|_| {
-                            format!("the owner of this connection may not read {model}")
-                        })?;
+                        .map_err(refused)?;
                     if let J::Object(o) = j(&r.value) {
                         out.push(o);
                     }
@@ -268,7 +292,7 @@ impl Runtime {
                 let r = self
                     .dispatcher
                     .call(Surface::Rest, &p, &mut v, &format!("{model}.list"), &input)
-                    .map_err(|_| format!("the owner of this connection may not read {model}"))?;
+                    .map_err(refused)?;
                 if let J::Array(a) = j(&r.value) {
                     out.extend(a.into_iter().filter_map(|x| x.as_object().cloned()));
                 }
@@ -296,15 +320,37 @@ impl Runtime {
 
     fn start_run(&self, c: &Connection, direction: &str, kind: &str) -> String {
         let id = uuid::Uuid::now_v7().to_string();
+        if let Err(e) = self.record_run_start(&id, c, direction, kind) {
+            eprintln!("connectors: a run could not be recorded: {e}");
+        }
+        id
+    }
+
+    /// As [`Runtime::start_run`], for a run that sends records out: one that cannot be recorded
+    /// does not start, so that nothing leaves without a trace (D74).
+    fn try_start_run(&self, c: &Connection, direction: &str, kind: &str) -> Result<String, String> {
+        let id = uuid::Uuid::now_v7().to_string();
+        self.record_run_start(&id, c, direction, kind)?;
+        Ok(id)
+    }
+
+    fn record_run_start(
+        &self,
+        id: &str,
+        c: &Connection,
+        direction: &str,
+        kind: &str,
+    ) -> Result<(), String> {
         let f = json!({
             "connection": c.id, "owner_user": c.owner_user, "direction": direction, "kind": kind,
             "started_at": iso(now()), "finished_at": "", "status": "running",
             "records": 0, "rejected": 0, "proposed": 0, "error_summary": "",
         });
-        let _ = self
-            .backend
-            .insert(SYNC_RUN, &id, f.as_object().expect("object"));
-        id
+        // The record of a run is not lost to a busy moment: a few more tries, then it is reported.
+        obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+            self.backend
+                .insert(SYNC_RUN, id, f.as_object().expect("object"))
+        })
     }
 
     fn finish_run(
@@ -321,9 +367,19 @@ impl Runtime {
             "rejected": rejected, "proposed": proposed,
             "error_summary": error.chars().take(300).collect::<String>(),
         });
-        let _ = self
-            .backend
-            .update(SYNC_RUN, id, f.as_object().expect("object"));
+        // A run that stays "running" for ever because its last update met a busy store would hide
+        // the failure it is about: a few more tries (the write rests on the run this request
+        // started, so it is allowed after an earlier refusal), then it is reported, and a request
+        // that delivered records and cannot say so is a partial one (D74).
+        if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+            obop_storage::fault::allow(|| {
+                self.backend
+                    .update(SYNC_RUN, id, f.as_object().expect("object"))
+            })
+        }) {
+            eprintln!("connectors: the end of a run could not be recorded: {e}");
+            obop_storage::fault::mark_partial();
+        }
         // The connection shows its last run and its last error.
         if let Ok(Some(run)) = self.backend.get(SYNC_RUN, id) {
             let conn = str_of(&run, "connection").to_string();
@@ -526,21 +582,35 @@ impl Runtime {
                 next_at: 0,
             };
             match self.deliver(c, p, &job) {
-                Ok(s) if (200..300).contains(&s) => sent += 1,
+                Ok(s) if (200..300).contains(&s) => {
+                    sent += 1;
+                    // The records are with the receiver and cannot be taken back: a step of this
+                    // request that the store then refuses makes it a partial one, never "none".
+                    obop_storage::fault::external_change();
+                }
                 Ok(s) if Self::retryable(s) => {
                     failed = format!("the receiver answered {s}; will retry");
-                    self.queue.push(Job {
+                    if let Err(e) = self.queue.push(Job {
                         next_at: now() + crate::queue::backoff(1, 100).unwrap_or(5),
                         ..job
-                    });
+                    }) {
+                        // Nobody will make the retry: the run is not "retrying", it failed.
+                        failed = format!(
+                            "the receiver answered {s} and the retry could not be queued: {e}"
+                        );
+                    }
                 }
                 Ok(s) => failed = format!("the receiver refused the delivery with status {s}"),
                 Err(NetError::Timeout | NetError::Transport(_)) => {
                     failed = "the receiver could not be reached; will retry".into();
-                    self.queue.push(Job {
+                    if let Err(e) = self.queue.push(Job {
                         next_at: now() + crate::queue::backoff(1, 100).unwrap_or(5),
                         ..job
-                    });
+                    }) {
+                        failed = format!(
+                            "the receiver could not be reached and the retry could not be queued: {e}"
+                        );
+                    }
                 }
                 Err(e) => failed = e.to_string(),
             }
@@ -567,7 +637,7 @@ impl Runtime {
             .prepare(&c, &p, model, rows)
             .map_err(|r| r.to_string())?;
         if p.engine == Engine::CsvExport {
-            let run = self.start_run(&c, "outbound", kind);
+            let run = self.try_start_run(&c, "outbound", kind)?;
             let csv = rows_to_csv(&prepared.rows, &prepared.report.fields_sent);
             self.finish_run(&run, "succeeded", prepared.report.record_count, 0, 0, "");
             let name = if c.cfg("filename").is_empty() {
@@ -579,7 +649,7 @@ impl Runtime {
                 json!({"filename": format!("{}.csv", sanitize_name(name)), "csv": csv, "records": prepared.report.record_count}),
             );
         }
-        let run = self.start_run(&c, "outbound", kind);
+        let run = self.try_start_run(&c, "outbound", kind)?;
         let (sent, failed) = self.send_prepared(&c, &p, &run, event, model, &prepared.rows);
         let status = if failed.is_empty() {
             "succeeded"
@@ -643,10 +713,21 @@ impl Runtime {
         let Some((model, _)) = command.split_once('.') else {
             return;
         };
-        let conns: Vec<String> = self
-            .backend
-            .list(CONNECTION)
-            .unwrap_or_default()
+        // The event must not be lost to a busy moment: a few more tries, then it is reported.
+        let all = match obop_storage::fault::patiently(
+            4,
+            std::time::Duration::from_millis(250),
+            || self.backend.list(CONNECTION),
+        ) {
+            Ok(all) => all,
+            Err(e) => {
+                eprintln!(
+                    "connectors: the event {command} was not delivered, the connections could not be read: {e}"
+                );
+                return;
+            }
+        };
+        let conns: Vec<String> = all
             .into_iter()
             .filter(|(_, f)| str_of(f, "state") == "connected")
             .filter(|(_, f)| {
@@ -658,8 +739,15 @@ impl Runtime {
             .map(|(id, _)| id)
             .collect();
         for id in conns {
-            // A refusal is already in the flow log; an event has nobody to tell.
-            let _ = self.send(&id, model, Some(&[record.to_string()]), command, "event");
+            // A refusal of the flow is already in the flow log; an event has nobody to tell. A
+            // busy store is not a refusal of the flow and is not logged as one: the event is tried
+            // again (nothing was sent: the gate fails closed), and reported when it still cannot go.
+            if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+                self.send(&id, model, Some(&[record.to_string()]), command, "event")
+            }) && Fault::is_transient(&e)
+            {
+                eprintln!("connectors: the event {command} was not delivered to {id}: {e}");
+            }
         }
     }
 
@@ -670,23 +758,34 @@ impl Runtime {
         let jobs = self.queue.take_due(at);
         let n = jobs.len();
         for job in jobs {
-            let Ok((c, p)) = self.connection(&job.connection) else {
-                self.finish_run(
-                    &job.run,
-                    "dead_letter",
-                    0,
-                    0,
-                    0,
-                    "the connection no longer exists",
-                );
-                self.queue.complete(&job);
-                continue;
+            // A lookup the store refused (a full pool, a database that is away) is "later", not
+            // "no" (D74): the job stays leased and is taken again when the lease ends. Only an
+            // answer decides that the connection is gone or the basis withdrawn.
+            let (c, p) = match self.connection(&job.connection) {
+                Ok(x) => x,
+                Err(e) if Fault::is_transient(&e) => continue,
+                Err(_) => {
+                    self.finish_run(
+                        &job.run,
+                        "dead_letter",
+                        0,
+                        0,
+                        0,
+                        "the connection no longer exists",
+                    );
+                    self.queue.complete(&job);
+                    continue;
+                }
             };
-            let allowed = c.is_connected()
-                && consents_of(&*self.backend, &c.id)
-                    .iter()
-                    .any(|k| k.is_active())
-                && InstancePolicy::load(&*self.backend).flows_enabled;
+            let (consents, policy) = match (
+                try_consents_of(&*self.backend, &c.id),
+                InstancePolicy::try_load(&*self.backend),
+            ) {
+                (Ok(k), Ok(p)) => (k, p),
+                _ => continue,
+            };
+            let allowed =
+                c.is_connected() && consents.iter().any(|k| k.is_active()) && policy.flows_enabled;
             if !allowed {
                 self.finish_run(&job.run, "dead_letter", 0, 0, 0, "delivery stopped: the connection is no longer connected or its legal basis was withdrawn");
                 self.queue.complete(&job);
@@ -773,6 +872,7 @@ impl Runtime {
         if model.is_empty() {
             return Err("the connection has no target model".into());
         }
+        self.try_owner_groups(c)?;
         let run = self.start_run(c, "inbound", kind);
         let principal = self.connector_principal(c, &model);
         match self.ingress.accept(c, p, &model, items, &principal, &run) {
@@ -840,6 +940,10 @@ impl Runtime {
         self.ingress
             .authorise(&c, &p, c.cfg("target_model"))
             .map_err(|r| {
+                if matches!(r, Refusal::StoreBusy) {
+                    // Not a refusal of the flow: nothing is logged, the sender retries.
+                    return HookError::Busy;
+                }
                 let why = r.to_string();
                 self.egress.log(
                     &c,
@@ -855,8 +959,33 @@ impl Runtime {
                 );
                 HookError::Refused(why)
             })?;
-        Seen::claim(&*self.backend, &c.id, &v.event_id, now())
-            .map_err(|_: VerifyError| HookError::Unauthorised)?;
+        match Seen::claim(&*self.backend, &c.id, &v.event_id, now()) {
+            Ok(()) => {}
+            Err(VerifyError::Storage) => return Err(HookError::Busy),
+            Err(_) => return Err(HookError::Unauthorised),
+        }
+        // From here on the id is spent. If the event is not taken because the store was busy, the
+        // claim is given back, so that the sender's retry is applied and not taken for a replay;
+        // if part of it was applied the request is answered "partial" (D74).
+        let result = self.apply_webhook(&c, &p, header, body);
+        if let Err(HookError::Busy) = result {
+            if obop_storage::fault::state().wrote {
+                obop_storage::fault::mark_partial();
+            } else {
+                Seen::release(&*self.backend, &c.id, &v.event_id);
+            }
+        }
+        result
+    }
+
+    /// The part of an inbound webhook that runs after its id was claimed.
+    fn apply_webhook(
+        &self,
+        c: &Connection,
+        p: &Provider,
+        header: &dyn Fn(&str) -> Option<String>,
+        body: &[u8],
+    ) -> Result<Outcome, HookError> {
         let filter = c.cfg("event_types");
         if !filter.is_empty() {
             let ev = header("x-github-event").unwrap_or_default();
@@ -866,10 +995,16 @@ impl Runtime {
         }
         let doc: J = serde_json::from_slice(body)
             .map_err(|_| HookError::Rejected("the body is not JSON".into()))?;
-        let items = self.items_of(&c, &doc);
-        let (o, _) = self
-            .accept(&c, &p, "webhook", items)
-            .map_err(HookError::Refused)?;
+        let items = self.items_of(c, &doc);
+        let (o, _) = match self.accept(c, p, "webhook", items) {
+            Ok(x) => x,
+            Err(e) if Fault::is_transient(&e) => return Err(HookError::Busy),
+            Err(e) => return Err(HookError::Refused(e)),
+        };
+        // A refusal by a busy store inside the delivery is not the sender's fault and not final.
+        if obop_storage::fault::noted().is_some() && !o.rejected.is_empty() {
+            return Err(HookError::Busy);
+        }
         if o.accepted() + o.proposed.len() == 0 && !o.rejected.is_empty() {
             return Err(HookError::Rejected(o.rejected[0].1.clone()));
         }
@@ -1094,25 +1229,78 @@ impl Runtime {
     }
 
     /// Revocation: forget credentials, tokens, pseudonym maps and queued deliveries.
-    pub fn revoke(&self, connection: &str) -> usize {
+    ///
+    /// Each step is tried again while the store refuses, and a lasting refusal is an error that
+    /// makes the request a partial one: a revocation answered "done" while the sealed credentials
+    /// or the pseudonym maps are still stored would be a lie about personal data. Repeating the
+    /// revocation finishes what is left.
+    pub fn revoke(&self, connection: &str) -> Result<usize, String> {
+        use obop_storage::fault::needed;
         let mut f = Fields::new();
         f.insert("credentials".into(), "".into());
         f.insert("credentials_hint".into(), "revoked".into());
         f.insert("oauth_tokens".into(), "".into());
-        let _ = self.backend.update(CONNECTION, connection, &f);
-        self.queue.drop_connection(connection);
-        self.egress.forget_connection(connection)
+        needed(|| self.backend.update(CONNECTION, connection, &f).map(|_| ()))?;
+        needed(|| self.queue.drop_connection(connection))?;
+        needed(|| self.egress.forget_connection(connection))
+    }
+
+    /// The erasure hook, durable: a note that the erasure of `record` is owed is written first
+    /// and taken back when it is done, and a tick that finds a note does the erasure again, so a
+    /// store that is busy for a moment (the worker has nobody to answer) never leaves the pseudonym
+    /// maps, links and sealed values of an erased person behind in silence (D74).
+    pub fn erase_record(&self, record: &str) {
+        let key = format!("{ERASURE_OWED}{record}");
+        if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+            self.backend.kv_put(&key, "owed", None)
+        }) {
+            eprintln!("connectors: the erasure of {record} could not be noted: {e}");
+        }
+        self.finish_erasure(record);
+    }
+
+    fn finish_erasure(&self, record: &str) {
+        let key = format!("{ERASURE_OWED}{record}");
+        match obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+            self.egress.erase_subject(record)
+        }) {
+            Ok(_) => {
+                let _ = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+                    self.backend.kv_delete(&key)
+                });
+            }
+            Err(e) => eprintln!(
+                "connectors: the erasure of {record} is not complete ({e}); it is repeated at the next tick"
+            ),
+        }
+    }
+
+    /// The erasures that are owed (a note exists): done again.
+    fn finish_owed_erasures(&self) {
+        let Ok(owed) = self.backend.kv_scan(ERASURE_OWED) else {
+            return;
+        };
+        for (key, _) in owed {
+            if let Some(record) = key.strip_prefix(ERASURE_OWED) {
+                self.finish_erasure(record);
+            }
+        }
     }
 
     /// Retention: remove flow-log and sync-run rows older than their connection's retention
     /// (the instance default for a connection that is gone), and expired webhook ids and OAuth
     /// states. Returns `(flow_logs, sync_runs, other)`.
-    pub fn purge(&self, at: u64) -> (usize, usize, usize) {
-        let inst = InstancePolicy::load(&*self.backend);
+    ///
+    /// **Fails closed** (D74): a retention run decides what to delete from the connections and the
+    /// instance policy, so a lookup the store refused (a busy pool) stops the run with an error;
+    /// reading "no connections" would apply the instance default to every row, and deleting data a
+    /// connection keeps longer cannot be undone. A run that stops is repeated, so the data is kept
+    /// a little longer, never shorter. Deleting what has expired is safe to repeat.
+    pub fn purge(&self, at: u64) -> Result<(usize, usize, usize), String> {
+        let inst = InstancePolicy::try_load(&*self.backend)?;
         let days: std::collections::HashMap<String, i64> = self
             .backend
-            .list(CONNECTION)
-            .unwrap_or_default()
+            .list(CONNECTION)?
             .into_iter()
             .map(|(id, f)| {
                 (
@@ -1123,7 +1311,7 @@ impl Runtime {
             .collect();
         let mut counts = [0usize; 2];
         for (i, table) in [FLOW_LOG, SYNC_RUN].into_iter().enumerate() {
-            for (id, f) in self.backend.list(table).unwrap_or_default() {
+            for (id, f) in self.backend.list(table)? {
                 let keep = days
                     .get(str_of(&f, "connection"))
                     .copied()
@@ -1136,20 +1324,19 @@ impl Runtime {
                 let Some(t) = parse_iso(str_of(&f, stamp)) else {
                     continue;
                 };
-                if t + (keep.max(1) as u64) * 86_400 < at
-                    && self.backend.delete(table, &id).unwrap_or(false)
-                {
+                if t + (keep.max(1) as u64) * 86_400 < at && self.backend.delete(table, &id)? {
                     counts[i] += 1;
                 }
             }
         }
         let other = Seen::sweep(&*self.backend, at) + oauth::sweep(&*self.backend);
-        (counts[0], counts[1], other)
+        Ok((counts[0], counts[1], other))
     }
 
     /// Periodic work: due pulls, due retries, the daily purge. Returns a short description.
     pub fn tick(&self, at: u64) -> String {
         let mut did = Vec::new();
+        self.finish_owed_erasures();
         let retried = self.process_queue(at);
         if retried > 0 {
             did.push(format!("{retried} retried"));
@@ -1159,18 +1346,18 @@ impl Runtime {
         let Ok(_tick) = self.backend.lock("connectors.tick") else {
             return did.join("; ");
         };
-        let last_of = |key: &str| -> u64 {
-            self.backend
-                .kv_get(key)
-                .ok()
-                .flatten()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0)
+        // A marker the store refused to give is "later", not "never ran": reading 0 would make
+        // every pull and the retention run due at once, on every tick, while the store is busy.
+        let last_of = |key: &str| -> Option<u64> {
+            match self.backend.kv_get(key) {
+                Ok(v) => Some(v.and_then(|v| v.parse().ok()).unwrap_or(0)),
+                Err(_) => None,
+            }
         };
-        let due: Vec<String> = self
-            .backend
-            .list(CONNECTION)
-            .unwrap_or_default()
+        let Ok(connections) = self.backend.list(CONNECTION) else {
+            return did.join("; ");
+        };
+        let due: Vec<String> = connections
             .into_iter()
             .filter(|(_, f)| str_of(f, "state") == "connected")
             .filter_map(|(id, f)| {
@@ -1183,30 +1370,50 @@ impl Runtime {
                 let engine = self.provider(str_of(&f, "provider")).map(|p| p.engine);
                 (mins > 0 && engine == Some(Engine::RestPull)).then_some((id, mins))
             })
-            .filter(|(id, mins)| last_of(&format!("connectors.pull:{id}")) + mins * 60 <= at)
+            .filter(|(id, mins)| {
+                last_of(&format!("connectors.pull:{id}")).is_some_and(|l| l + mins * 60 <= at)
+            })
             .map(|(id, _)| id)
+            // Due only once it is recorded: a pull whose marker could not be written would be
+            // due again at the next tick, and the next.
+            .filter(|id| {
+                self.backend
+                    .kv_put(&format!("connectors.pull:{id}"), &at.to_string(), None)
+                    .is_ok()
+            })
             .collect();
-        for id in &due {
-            let _ = self
+        let purge_due = last_of("connectors.purge").is_some_and(|l| l + 86_400 <= at)
+            && self
                 .backend
-                .kv_put(&format!("connectors.pull:{id}"), &at.to_string(), None);
-        }
-        let purge_due = last_of("connectors.purge") + 86_400 <= at;
-        if purge_due {
-            let _ = self
-                .backend
-                .kv_put("connectors.purge", &at.to_string(), None);
-        }
+                .kv_put("connectors.purge", &at.to_string(), None)
+                .is_ok();
         drop(_tick);
         for id in due {
             let _ = self.pull(&id);
             did.push(format!("pulled {id}"));
         }
         if purge_due {
-            let (a, b, c) = self.purge(at);
-            did.push(format!(
-                "purged {a} flow logs, {b} runs, {c} expired entries"
-            ));
+            match self.purge(at) {
+                Ok((a, b, c)) => did.push(format!(
+                    "purged {a} flow logs, {b} runs, {c} expired entries"
+                )),
+                Err(e) => {
+                    // Not done, so not recorded as done: try again in a few minutes, not tomorrow.
+                    eprintln!("connectors: the retention run stopped, it is repeated soon: {e}");
+                    let _ = obop_storage::fault::patiently(
+                        4,
+                        std::time::Duration::from_millis(250),
+                        || {
+                            self.backend.kv_put(
+                                "connectors.purge",
+                                &at.saturating_sub(86_400 - 300).to_string(),
+                                None,
+                            )
+                        },
+                    );
+                    did.push("retention run postponed".into());
+                }
+            }
         }
         did.join("; ")
     }
@@ -1253,7 +1460,7 @@ impl Runtime {
                     Ok((command, id)) => {
                         // Erasure first: a party that was erased must not be sent anywhere.
                         if command == "party.erase" {
-                            this.egress.erase_subject(&format!("party:{id}"));
+                            this.erase_record(&format!("party:{id}"));
                         } else {
                             this.handle_event(&command, &id);
                         }

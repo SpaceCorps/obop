@@ -15,6 +15,8 @@ pub struct Flaky {
     pub fail_apply: AtomicBool,
     /// `kv_put_new` fails (the lease of the scheduler).
     pub fail_lease: AtomicBool,
+    /// Models whose reads (`get`, `list`, `find`) are refused as a full pool refuses them.
+    pub refuse_reads: std::sync::Mutex<Vec<String>>,
 }
 
 impl Flaky {
@@ -24,7 +26,16 @@ impl Flaky {
             fail_export: AtomicBool::new(false),
             fail_apply: AtomicBool::new(false),
             fail_lease: AtomicBool::new(false),
+            refuse_reads: std::sync::Mutex::default(),
         })
+    }
+
+    fn refused(&self, model: &str) -> Result<()> {
+        if self.refuse_reads.lock().unwrap().iter().any(|m| m == model) {
+            return Err(obop_storage::fault::Fault::Busy
+                .message("all database connections are in use, try again"));
+        }
+        Ok(())
     }
 
     pub fn set(flag: &AtomicBool, on: bool) {
@@ -41,9 +52,11 @@ impl Backend for Flaky {
         self.inner.insert(model, id, fields)
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
+        self.refused(model)?;
         self.inner.get(model, id)
     }
     fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
+        self.refused(model)?;
         self.inner.list(model)
     }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
@@ -71,6 +84,7 @@ impl Backend for Flaky {
         self.inner.apply_checked(ops)
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
+        self.refused(model)?;
         self.inner.find(model, field, value)
     }
     fn kind(&self) -> &'static str {

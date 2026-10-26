@@ -3,7 +3,7 @@
 //! (see `seal`); recovery codes are stored as SHA-256 hashes of 80-bit random codes; the event
 //! log (`security_event`) never holds a code or a secret.
 
-use crate::{Auth, hex, now_system, random_bytes, str_list, token_hash};
+use crate::{Auth, Change, hex, now_system, random_bytes, str_list, token_hash};
 use crate::{seal, totp};
 use obop_commands::{ADMIN_GROUP, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind};
 use obop_keys::KeyRing;
@@ -185,13 +185,23 @@ impl Auth {
     }
 
     /// The stored user as a JSON object (a missing key reads as null, unlike `Fields`).
+    ///
+    /// A refused lookup is the store's trouble (`Unavailable`, 503), never "no such user".
     pub(crate) fn user_record(&self, name: &str) -> Result<J, MfaError> {
-        self.backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .map(J::Object)
-            .ok_or(MfaError::NotFound)
+        match self.backend.get("auth_user", name) {
+            Ok(Some(u)) => Ok(J::Object(u)),
+            Ok(None) => Err(MfaError::NotFound),
+            Err(e) => Err(MfaError::Unavailable(e)),
+        }
+    }
+
+    /// As [`Auth::user_record`], for the administrator's calls that name the user: a user that
+    /// does not exist is bad input (`Invalid`).
+    pub(crate) fn known_user(&self, name: &str) -> Result<J, MfaError> {
+        match self.user_record(name) {
+            Err(MfaError::NotFound) => Err(MfaError::Invalid(format!("no user {name}"))),
+            other => other,
+        }
     }
 
     pub(crate) fn put(&self, name: &str, patch: &Fields) -> Result<(), MfaError> {
@@ -368,6 +378,25 @@ impl Auth {
         self.session_outcome(&name, limited)
     }
 
+    /// The account was disabled after the person passed the password step: the second step must
+    /// not give them a session, which nothing would end later (it began after the disable, so
+    /// neither the sessions ended by it nor the note that enabling settles would cover it) and
+    /// which would come alive the day the account is enabled. The refused read of the account is
+    /// the store's trouble, not "enabled".
+    pub(crate) fn refuse_if_disabled(&self, name: &str, key: &str) -> Result<(), MfaError> {
+        if self.user_record(name)?["disabled"].as_bool() == Some(true) {
+            let _ = self.backend.delete(MFA_TOKEN_TABLE, key);
+            self.event(
+                name,
+                "login_refused",
+                name,
+                "the account was disabled before the second step of the sign-in",
+            );
+            return Err(MfaError::Expired);
+        }
+        Ok(())
+    }
+
     pub(crate) fn login_mfa_impl(
         &self,
         mfa_token: &str,
@@ -396,6 +425,7 @@ impl Auth {
                 "too many wrong codes for this sign-in; enter your password again".into(),
             ));
         }
+        self.refuse_if_disabled(&name, &key)?;
         match self.check_second_factor(&name, code, recovery) {
             Ok(()) => {
                 // Single use: the token is gone whatever happens next.
@@ -415,9 +445,43 @@ impl Auth {
 
     /// A session for `name`. It is limited to the account routes when two-factor enrolment is
     /// owed (`enrol`) or an administrator reset the password and a new one is owed.
+    ///
+    /// The account is looked at again once the session is written. An administrator's disable
+    /// that ran between the check that let this sign-in begin and the write ended the sessions
+    /// that existed then, and this one did not: it would be unrevoked, and would come alive when
+    /// the account is enabled again. Either the disable has committed by now (this sees it and
+    /// ends the session) or it commits later, and then the list of sessions it ends already holds
+    /// this one: no lock between the two is needed.
     pub(crate) fn session_outcome(&self, name: &str, enrol: bool) -> Result<LoginOutcome, String> {
         let must_change = self.must_change_password(name);
         let token = self.issue_session(name, enrol || must_change)?;
+        let disabled = match self.backend.get("auth_user", name) {
+            Ok(Some(u)) => u.get("disabled").and_then(J::as_bool) == Some(true),
+            // Gone, or not readable: no session is handed out on a guess.
+            _ => true,
+        };
+        if disabled {
+            let h = token_hash(&token);
+            let mut p = Fields::new();
+            p.insert("revoked".into(), J::Bool(true));
+            if let Err(e) =
+                obop_storage::fault::patiently(4, std::time::Duration::from_millis(150), || {
+                    obop_storage::fault::bookkeeping(|| self.backend.update("auth_token", &h, &p))
+                })
+            {
+                // Not handed to anyone, and the account is disabled: it resolves to nothing.
+                eprintln!(
+                    "a session made while its account was being disabled could not be revoked: {e}"
+                );
+            }
+            self.event(
+                name,
+                "login_refused",
+                name,
+                "the account was disabled while the sign-in was finishing",
+            );
+            return Err("invalid username or password".into());
+        }
         if must_change {
             self.event(
                 name,
@@ -446,7 +510,19 @@ impl Auth {
         let name = person(p)?;
         let _g = self.mfa_guard()?;
         let u = self.user_record(name)?;
+        let ch = Change::new(name, "disable", name, "turned off by the user");
         if u["mfa_enabled"].as_bool() != Some(true) {
+            // The repeat of a request that turned it off and could not end the other sessions
+            // finishes that (D74); only a person who never had it on is told it is not on.
+            if let Some(n) = self.finish_owed(name, "mfa_disable", &ch)? {
+                self.event(
+                    name,
+                    "disable",
+                    name,
+                    &format!("turned off by the user; {n} other session(s) signed out (repeated)"),
+                );
+                return Ok(());
+            }
             return Err(MfaError::Invalid("two-factor is not on".into()));
         }
         if !self.password_ok(name, password) {
@@ -454,9 +530,18 @@ impl Auth {
             return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;
-        self.clear_factor(name)?;
         let keep = session.map(token_hash);
-        let n = self.revoke_user_sessions(name, keep.as_deref());
+        // Written before the factor goes: if ending the sessions is then refused, the repeat knows.
+        let previous = self.owe_revocation(name, "mfa_disable", keep.as_deref())?;
+        let before = obop_storage::fault::change_count();
+        if let Err(e) = self.clear_factor(name) {
+            // The factor is still on, unless the refusal left it unknown (the connection broke
+            // while the change was in flight): then the note stays for the repeat.
+            self.retract_owed(name, "mfa_disable", &e, before, previous);
+            return Err(e);
+        }
+        let n = self.revoke_user_sessions(name, keep.as_deref(), &ch)?;
+        self.clear_owed(name, "mfa_disable");
         self.event(
             name,
             "disable",
@@ -469,8 +554,8 @@ impl Auth {
     // ---- operator -----------------------------------------------------------------------
 
     /// Revoke every session of a user (not agent tokens: those are separate credentials).
-    fn revoke_sessions(&self, name: &str) {
-        self.revoke_user_sessions(name, None);
+    fn revoke_sessions(&self, name: &str, ch: &Change) -> Result<usize, MfaError> {
+        self.revoke_user_sessions(name, None, ch)
     }
 
     fn clear_factor(&self, name: &str) -> Result<(), MfaError> {
@@ -491,11 +576,15 @@ impl Auth {
     pub fn operator_reset_mfa(&self, username: &str) -> Result<(), String> {
         let name = username.trim().to_lowercase();
         let _g = self.backend.lock("auth.mfa")?;
-        self.user_record(&name)
-            .map_err(|_| format!("no user {name}"))?;
-        let passkeys = self.clear_passkeys(&name);
+        self.known_user(&name).map_err(|e| match e {
+            MfaError::Invalid(m) | MfaError::Unavailable(m) => m,
+            other => format!("{other:?}"),
+        })?;
+        let passkeys = self.clear_passkeys(&name).map_err(|e| format!("{e:?}"))?;
         self.clear_factor(&name).map_err(|e| format!("{e:?}"))?;
-        self.revoke_sessions(&name);
+        let ch = Change::new(&name, "reset", "operator", "reset from the command line");
+        self.revoke_sessions(&name, &ch)
+            .map_err(|e| format!("{e:?}"))?;
         self.event(
             &name,
             "reset",
@@ -598,12 +687,18 @@ impl MfaApi for Auth {
         f.insert("totp_last_step".into(), J::from(step));
         f.insert("mfa_enabled".into(), J::Bool(true));
         self.put(name, &f)?;
-        // The session that just proved the factor is no longer limited.
+        // The session that just proved the factor is no longer limited: a needed step, as after a
+        // passkey enrolment (a session that stays limited with no word of it is a request that
+        // lost a step without saying so).
         let mut lift = Fields::new();
         lift.insert("limited".into(), J::Bool(false));
-        let _ = self
-            .backend
-            .update("auth_token", &token_hash(session), &lift);
+        let ch = Change::new(name, "enrol_confirm", name, "two-factor is on").then(
+            "two-factor is on; this session is still limited to enrolment: sign in again (the recovery codes of this request were not shown: make new ones under Security)",
+        );
+        self.needed(&ch, "lifting the enrolment limit of this session", || {
+            self.backend
+                .update("auth_token", &token_hash(session), &lift)
+        })?;
         self.event(name, "enrol_confirm", name, "two-factor is on");
         Ok(json!({"recovery_codes": codes}))
     }
@@ -666,24 +761,50 @@ impl MfaApi for Auth {
             ));
         }
         let _g = self.mfa_guard()?;
-        let u = self
-            .backend
-            .get("auth_user", &target)
-            .ok()
-            .flatten()
-            .map(J::Object)
-            .ok_or_else(|| MfaError::Invalid(format!("no user {target}")))?;
+        let u = self.known_user(&target)?;
+        let ch = Change::new(&target, "reset", actor, "reset by an administrator");
+        // The list is read so that a refused lookup is an error: read as "none" it sent the repeat
+        // down the finishing branch with the passkey still there, and answered that it was done.
+        let passkeys_now = self.passkeys_checked(&target)?;
         if u["mfa_enabled"].as_bool() != Some(true)
             && !u["totp_pending"].is_string()
-            && self.passkeys_of(&target).is_empty()
+            && passkeys_now.is_empty()
         {
+            // The repeat of a reset that stopped part of the way finishes it (D74): every step
+            // again, not only the sessions. A person whose only factor was a passkey has no
+            // `mfa_enabled` to tell the first request got no further than deleting the passkeys,
+            // while their recovery codes, the passwordless flag and a passkey proof are still on
+            // the account (and would work again as a second factor once a passkey is enrolled).
+            if crate::account::owed_notes(&u).contains_key("mfa_reset") {
+                self.clear_passkeys(&target)?;
+                self.clear_factor(&target)?;
+            }
+            if let Some(n) = self.finish_owed(&target, "mfa_reset", &ch)? {
+                self.event(
+                    &target,
+                    "reset",
+                    actor,
+                    &format!("reset by an administrator; {n} session(s) signed out (repeated)"),
+                );
+                return Ok(());
+            }
             return Err(MfaError::Invalid(format!(
                 "{target} has no two-factor to reset"
             )));
         }
-        let passkeys = self.clear_passkeys(&target);
+        let previous = self.owe_revocation(&target, "mfa_reset", None)?;
+        let before = obop_storage::fault::change_count();
+        let passkeys = match self.clear_passkeys(&target) {
+            Ok(n) => n,
+            Err(e) => {
+                // Refused before anything was removed: nothing is owed.
+                self.retract_owed(&target, "mfa_reset", &e, before, previous);
+                return Err(e);
+            }
+        };
         self.clear_factor(&target)?;
-        self.revoke_sessions(&target);
+        self.revoke_sessions(&target, &ch)?;
+        self.clear_owed(&target, "mfa_reset");
         self.event(
             &target,
             "reset",

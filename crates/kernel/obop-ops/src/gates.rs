@@ -327,11 +327,10 @@ pub fn reuse_pre_migration(
 }
 
 impl Gate {
-    fn schema(&self) -> u64 {
-        self.migrator()
-            .status()
-            .map(|s| u64::from(s.stored.unwrap_or(0)))
-            .unwrap_or(0)
+    /// The schema version of the database; a refused read is an error, not version 0 (a backup
+    /// labelled 0 would be restored as if nothing had ever been migrated).
+    fn schema(&self) -> Result<u64, String> {
+        Ok(u64::from(self.migrator().status()?.stored.unwrap_or(0)))
     }
 
     fn migrator(&self) -> Migrator {
@@ -399,7 +398,7 @@ impl Gate {
         let o = schedule::take(
             &self.backend,
             blobs,
-            self.schema(),
+            self.schema()?,
             &settings,
             "pre-migration",
             &*self.clock,
@@ -1216,7 +1215,9 @@ pub fn rollback(
     // Everything that can fail without writing happens first (restore does the same).
     let v = backup::verify_with(backup_file, keys)?;
     let before = Migrator::new(backend.clone(), ring.clone());
-    let target_id = before.instance_id().ok().flatten();
+    // A refused read of this database's id is not "it has none": the check that the backup is
+    // of this database must not be skipped because the store was busy.
+    let target_id = before.instance_id()?;
     match (&v.manifest.database_id, &target_id) {
         (Some(b), Some(t)) if b != t && !other_database => {
             return Err(format!(
@@ -1227,11 +1228,10 @@ pub fn rollback(
         }
         _ => {}
     }
-    let schema_before = before.status().ok().and_then(|s| s.stored);
+    let schema_before = before.status()?.stored;
     let created = backup::parse_rfc3339(&v.manifest.created_at).unwrap_or(0);
     let discarded: Vec<obop_migrate::Entry> = before
-        .ledger()
-        .unwrap_or_default()
+        .ledger()?
         .into_iter()
         .filter(|e| e.at >= created)
         .collect();

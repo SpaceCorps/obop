@@ -2,6 +2,7 @@
   "name": "@obop/e2e",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "e2e": "playwright test",

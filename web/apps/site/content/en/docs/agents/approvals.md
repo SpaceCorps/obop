@@ -53,6 +53,8 @@ The invoice is posted and has its legal number. Approving the same plan again is
 
 Approving something that no longer applies, or that the approver may not run, fails with `404` or a `400` that says why. An unknown or already-used plan id is `404`.
 
+If the database refuses the approval before anything was changed (`503` with `"applied":"none"`), the plan is put back and the same approval can be repeated. After `"applied":"unknown"` (the connection broke while a change was in flight) the plan is not put back, so that a repeat cannot run it twice: read the records, and ask the agent to propose again if the change is not there.
+
 ## Over MCP
 
 ```json

@@ -648,7 +648,14 @@ pub fn check_stored_shapes(backend: &dyn Backend, new: &Manifest) -> Result<(), 
             .filter(|f| f.computed.is_none())
             .filter_map(|f| shape_of(f).map(|s| (f, s)))
             .collect();
-        if shapes.is_empty() || backend.count(&nm.name).unwrap_or(0) == 0 {
+        if shapes.is_empty() {
+            continue;
+        }
+        // A refused count is not "no records": the check of what is stored must not be skipped.
+        let held = backend
+            .count(&nm.name)
+            .map_err(|e| format!("counting {}: {e}", nm.name))?;
+        if held == 0 {
             continue;
         }
         let rows = backend

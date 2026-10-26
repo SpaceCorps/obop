@@ -247,11 +247,13 @@ impl Auth {
         format!("auth.fail:{name}")
     }
 
+    /// Too many wrong passwords lately. A counter the store would not give is not "none": the
+    /// answer is "locked", so that the attempts cannot go on unseen while the count cannot be
+    /// kept (D74).
     pub(crate) fn locked_out(&self, name: &str) -> bool {
         self.backend
             .counter_get(&Self::failure_key(name))
-            .unwrap_or(0)
-            >= u64::from(MAX_FAILURES)
+            .map_or(true, |n| n >= u64::from(MAX_FAILURES))
     }
 
     pub(crate) fn record_failure(&self, name: &str) {
@@ -269,6 +271,103 @@ impl Auth {
     /// Serialises read-modify-write of two-factor state across server processes.
     pub(crate) fn mfa_guard(&self) -> Result<obop_storage::LockGuard, MfaError> {
         self.backend.lock("auth.mfa").map_err(MfaError::Unavailable)
+    }
+
+    /// Evaluate `f`, whose store reads cannot report a refusal (they answer "no" or "none" instead:
+    /// `has_second_factor`, `must_change_password`), until it ran without the store refusing a
+    /// call, at most five times. A value computed from a refused read must not be written, so a
+    /// lasting refusal is an error, with the fault noted as before.
+    pub(crate) fn settled<T>(&self, mut f: impl FnMut() -> T) -> Result<T, MfaError> {
+        use obop_storage::fault;
+        let earlier = fault::take();
+        let mut last = None;
+        for attempt in 0..5 {
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            let v = f();
+            match fault::take() {
+                None => {
+                    if let Some(e) = earlier {
+                        fault::note(e);
+                    }
+                    return Ok(v);
+                }
+                Some(fl) => last = Some(fl),
+            }
+        }
+        let fl = last.unwrap_or(fault::Fault::Busy);
+        fault::note(earlier.unwrap_or(fl));
+        Err(MfaError::Unavailable(
+            fl.message("a lookup this change depends on was refused"),
+        ))
+    }
+
+    /// A step the request needs after one of its changes committed (ending the sessions of an
+    /// account that was just disabled, relimiting the sessions of a changed group list). A refused
+    /// step is tried again a few times, with its writes allowed although an earlier call of the
+    /// request was refused (it rests on the change just made, not on a read). If it is still
+    /// refused the request is a partial one: the entry of the change that did commit goes to the
+    /// security log (`kind`, saying the step is missing), the request is marked partial and the
+    /// error is returned, never "nothing to do". The step must be safe to run again: it reads what
+    /// is left to do each time; `f` keeps its own tally.
+    pub(crate) fn needed<T>(
+        &self,
+        ch: &Change,
+        what: &str,
+        mut f: impl FnMut() -> Result<T, String>,
+    ) -> Result<T, MfaError> {
+        obop_storage::fault::patiently(5, std::time::Duration::from_millis(150), || {
+            obop_storage::fault::allow(&mut f)
+        })
+        .map_err(|e| self.incomplete(ch, what, e))
+    }
+
+    /// The request is a partial one: mark it, say so in the security log and return the error that
+    /// ends it. The entry is the one of the change that did commit (its own kind, its own actor
+    /// and what it did), with what is missing added, so a partial failure does not replace it.
+    pub(crate) fn incomplete(&self, ch: &Change, what: &str, e: String) -> MfaError {
+        obop_storage::fault::mark_partial();
+        self.event(
+            &ch.user,
+            ch.kind,
+            &ch.actor,
+            &format!(
+                "{}; INCOMPLETE: {what} was refused by the store ({e}); {}",
+                ch.detail, ch.then
+            ),
+        );
+        MfaError::Unavailable(e)
+    }
+}
+
+/// A change of an account that has committed (or is about to), as the security log names it: who
+/// did what to whom. The steps that follow it and may be refused carry it, so that the entry of a
+/// partial failure is the entry of the change, not a stranger's (D74).
+pub(crate) struct Change {
+    pub user: String,
+    pub kind: &'static str,
+    pub actor: String,
+    pub detail: String,
+    /// What to do about it if a step is missing (the log says so).
+    pub then: &'static str,
+}
+
+impl Change {
+    pub(crate) fn new(user: &str, kind: &'static str, actor: &str, detail: &str) -> Self {
+        Self {
+            user: user.into(),
+            kind,
+            actor: actor.into(),
+            detail: detail.into(),
+            then: "repeat the request",
+        }
+    }
+
+    /// For a change a repeat cannot finish (it needs what the change replaced): say what can.
+    pub(crate) fn then(mut self, what: &'static str) -> Self {
+        self.then = what;
+        self
     }
 }
 

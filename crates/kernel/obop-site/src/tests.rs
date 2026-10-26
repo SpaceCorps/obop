@@ -1074,6 +1074,176 @@ fn security_the_honeypot_creates_nothing_and_looks_like_success() {
 }
 
 #[test]
+fn a_checkout_refused_by_a_busy_store_releases_its_key_and_the_resubmit_makes_the_order() {
+    use obop_storage::fault;
+    use obop_storage::testing::Flaky;
+    // D74: the order batch is refused. The buyer must be told to try again (the layer answers 503
+    // because nothing was changed), and the idempotency key claimed for this submit must be
+    // given back, or the same form sent again lands on an order that does not exist.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let s = build(Store::over(obop_storage::guarded(flaky.clone())), true);
+    let l = listing(&s, "sencha-green-tea");
+    let std = methods(&s).remove(0);
+    let lines = [(l.id.as_str(), "1")];
+    let f = order_fields(&lines, &[("shipping_method_id", &std.id)]);
+
+    flaky.refuse_applies(1);
+    fault::begin_request(Default::default());
+    let first = post(&s, "/shop/checkout", &f);
+    let out = fault::end_request();
+    assert_eq!(new_orders(&s), 0);
+    assert!(out.fault.is_some(), "the refusal was noted: {out:?}");
+    assert!(
+        !out.wrote && !out.partial,
+        "a claimed key is not a change, so the layer answers 503 (applied: none), not this 400: {} {out:?}",
+        first.status
+    );
+
+    // The same form, the same key, a healthy store: one real order.
+    let second = post(&s, "/shop/checkout", &f);
+    assert_eq!(second.status, 303, "{}", text(&second));
+    assert_eq!(
+        new_orders(&s),
+        1,
+        "the key was given back, so this made the order"
+    );
+}
+
+#[test]
+fn a_claim_the_store_refused_is_not_a_claim_and_releases_nothing_of_the_submit_that_owns_the_key() {
+    use obop_storage::fault;
+    use obop_storage::testing::Flaky;
+    // D74: two submits of one form (a double click under load). The first owns the key and makes
+    // the order. The second's claim is refused by the store: it must not go on as if it owned the
+    // key, and its failure must not delete the claim of the first, or the next submit of the same
+    // form makes a second order for one cart.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let s = build(Store::over(obop_storage::guarded(flaky.clone())), true);
+    let l = listing(&s, "sencha-green-tea");
+    let std = methods(&s).remove(0);
+    let lines = [(l.id.as_str(), "1")];
+    let f = order_fields(&lines, &[("shipping_method_id", &std.id)]);
+    let first = post(&s, "/shop/checkout", &f);
+    assert_eq!(first.status, 303);
+    let at = first.get_header("location").unwrap().to_string();
+    assert_eq!(new_orders(&s), 1);
+
+    flaky.refuse_kv_new(1);
+    fault::begin_request(Default::default());
+    let second = post(&s, "/shop/checkout", &f);
+    let out = fault::end_request();
+    assert!(
+        out.fault.is_some() && !out.wrote,
+        "the layer answers 503 (applied none): {} {out:?}",
+        second.status
+    );
+    assert_eq!(new_orders(&s), 1, "no order was made on a refused claim");
+    let claims = s.store.backend().kv_scan("idem:site:").unwrap();
+    assert_eq!(
+        claims.len(),
+        1,
+        "the claim of the first submit is still there"
+    );
+
+    // The same form again, the store healthy: a repeat of the first, not a second order.
+    let third = post(&s, "/shop/checkout", &f);
+    assert_eq!(third.get_header("location"), Some(at.as_str()));
+    assert_eq!(new_orders(&s), 1);
+}
+
+#[test]
+fn a_claim_with_no_order_behind_it_is_taken_over_when_old_and_respected_while_young() {
+    // D74: a checkout that could not give its key back leaves a claim for an order that does not
+    // exist. A young claim is a submit still being processed and keeps its answer; an old one is a
+    // ghost, and the buyer's resubmit makes the order instead of landing on a page that is not there.
+    let s = shop();
+    let l = listing(&s, "sencha-green-tea");
+    let std = methods(&s).remove(0);
+    let lines = [(l.id.as_str(), "1")];
+    let f = order_fields(&lines, &[("shipping_method_id", &std.id)]);
+    let first = post(&s, "/shop/checkout", &f);
+    assert_eq!(first.status, 303);
+    let at = first.get_header("location").unwrap().to_string();
+    let b = s.store.backend();
+    let (key, claim) = b.kv_scan("idem:site:").unwrap().remove(0);
+    let token = claim.split('|').next().unwrap().to_string();
+    assert!(at.contains(&token), "{at} {claim}");
+    for (id, _) in b.list("ecommerce_order").unwrap() {
+        b.delete("ecommerce_order", &id).unwrap();
+    }
+    let young = post(&s, "/shop/checkout", &f);
+    assert_eq!(young.get_header("location"), Some(at.as_str()));
+    assert_eq!(new_orders(&s), 0, "a young claim is respected");
+    b.kv_put(&key, &format!("{token}|1"), Some(60_000)).unwrap();
+    let again = post(&s, "/shop/checkout", &f);
+    assert_eq!(again.status, 303, "{}", text(&again));
+    assert_ne!(again.get_header("location"), Some(at.as_str()));
+    assert_eq!(new_orders(&s), 1, "the ghost claim was taken over");
+}
+
+#[test]
+fn a_key_given_back_between_a_failed_claim_and_the_read_of_it_is_claimed_again() {
+    use obop_storage::testing::Flaky;
+    // Two submits of one form. The second finds the key taken, and the submit that held it fails
+    // its checkout and gives the key back before the second has read who holds it. The second must
+    // claim it again and make the order; it was sent to the order page of its own, unused token.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let s = build(Store::over(obop_storage::guarded(flaky.clone())), true);
+    let l = listing(&s, "sencha-green-tea");
+    let std = methods(&s).remove(0);
+    let lines = [(l.id.as_str(), "1")];
+    let f = order_fields(&lines, &[("shipping_method_id", &std.id)]);
+    let first = post(&s, "/shop/checkout", &f);
+    assert_eq!(first.status, 303);
+    assert_eq!(new_orders(&s), 1);
+    flaky.release_key_before_the_next_kv_get();
+    let second = post(&s, "/shop/checkout", &f);
+    assert_eq!(second.status, 303, "{}", text(&second));
+    assert_eq!(
+        new_orders(&s),
+        2,
+        "the key was free, so this one made the order"
+    );
+    let at = second.get_header("location").unwrap().to_string();
+    assert_eq!(
+        get(&s, &at).status,
+        200,
+        "the page it was sent to exists: {at}"
+    );
+}
+
+#[test]
+fn a_release_whose_own_read_is_refused_deletes_nothing_it_cannot_prove_is_its_own() {
+    use obop_storage::testing::{Flaky, Mode};
+    // Another submit took the key over (this one stalled for minutes) and owns it now. This one
+    // fails and gives its key back; the read that tells whose the key is is refused. Deleting on a
+    // guess would delete the other submit's claim, and a third submit of the form would make a
+    // second order for one cart.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let s = build(Store::over(obop_storage::guarded(flaky.clone())), true);
+    let b = s.store.backend();
+    b.kv_put("idem:site:taken", "other|100", Some(60_000))
+        .unwrap();
+    b.kv_put("idem:site:mine", "me|100", Some(60_000)).unwrap();
+    flaky.set(Mode::Reads);
+    s.site.release_idem("taken", "me");
+    flaky.set(Mode::Healthy);
+    assert_eq!(
+        b.kv_get("idem:site:taken").unwrap().as_deref(),
+        Some("other|100"),
+        "the claim of the other submit is still there"
+    );
+    // Read properly, what is this one's is given back.
+    s.site.release_idem("mine", "me");
+    assert_eq!(b.kv_get("idem:site:mine").unwrap(), None);
+    s.site.release_idem("taken", "me");
+    assert_eq!(
+        b.kv_get("idem:site:taken").unwrap().as_deref(),
+        Some("other|100")
+    );
+}
+
+#[test]
 fn security_a_double_submit_creates_one_order() {
     let s = shop();
     let l = listing(&s, "sencha-green-tea");

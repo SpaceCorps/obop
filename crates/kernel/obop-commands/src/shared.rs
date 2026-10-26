@@ -143,16 +143,17 @@ impl Plans {
         }
     }
 
-    pub fn remove(&self, shared: Option<&Shared>, plan_id: &str) {
+    /// Take the plan out, so it runs once. A refusal of the store is an error: a plan that is
+    /// still there would run again.
+    pub fn remove(&self, shared: Option<&Shared>, plan_id: &str) -> Result<(), String> {
         match shared {
-            Some(s) => {
-                let _ = s.backend.kv_delete(&format!("plan:{plan_id}"));
-            }
+            Some(s) => s.backend.kv_delete(&format!("plan:{plan_id}")).map(|_| ()),
             None => {
                 self.local
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .remove(plan_id);
+                Ok(())
             }
         }
     }
@@ -209,7 +210,7 @@ mod tests {
         let raw = backend.kv_get("plan:p1").unwrap().unwrap();
         assert!(raw.starts_with("e2.") && !raw.contains("sales.order"));
         assert_eq!(pb.get(Some(&b), "p1").unwrap().id, "sales.order.confirm");
-        pb.remove(Some(&b), "p1");
+        pb.remove(Some(&b), "p1").unwrap();
         assert!(
             pa.get(Some(&a), "p1").is_none(),
             "approved or withdrawn once, everywhere"

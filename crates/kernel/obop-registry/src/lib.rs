@@ -603,7 +603,7 @@ impl ModuleMeta {
             summary: summary.to_string(),
             author: "SpaceCorps".into(),
             authors: Vec::new(),
-            license: "AGPL-3.0-or-later".into(),
+            license: "Apache-2.0".into(),
             homepage: "https://github.com/SpaceCorps/obop".into(),
             repository: "https://github.com/SpaceCorps/obop".into(),
             documentation: String::new(),

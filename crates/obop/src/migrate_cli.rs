@@ -153,9 +153,8 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
             let gate = Gate {
                 backend: backend.clone(),
                 ring,
-                blobs: crate::ops::blob_catalog(&backend, &url)
-                    .ok()
-                    .map(|c| Arc::new(c) as Arc<dyn obop_storage::blob::Blobs>),
+                blobs: Some(Arc::new(crate::ops::blob_catalog(&backend, &url)?)
+                    as Arc<dyn obop_storage::blob::Blobs>),
                 server: server_info(&url, backend.kind()),
                 clock: Arc::new(SystemClock),
                 options: Options {

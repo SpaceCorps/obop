@@ -264,20 +264,65 @@ fn each_rig(f: impl Fn(&Rig)) {
         urls.push(u);
     }
     for url in urls {
-        let p = format!("w{}", &uuid::Uuid::now_v7().simple().to_string()[22..]);
-        let store = Store::open(&url).unwrap();
-        let d = Arc::new(Dispatcher::new());
-        let module = workshop(&p);
-        let v = obop_registry::check_module(&module);
-        assert!(v.is_empty(), "{v:?}");
-        d.register_crud(&module, &store);
-        for mo in &module.models {
-            for c in &mo.commands {
-                d.register_transition(&module, mo.name, c.name, &store);
-            }
-        }
-        f(&Rig { d, store, p });
+        f(&rig_for(Store::open(&url).unwrap()));
     }
+}
+
+fn rig_for(store: Store) -> Rig {
+    let p = format!("w{}", &uuid::Uuid::now_v7().simple().to_string()[22..]);
+    let d = Arc::new(Dispatcher::new());
+    let module = workshop(&p);
+    let v = obop_registry::check_module(&module);
+    assert!(v.is_empty(), "{v:?}");
+    d.register_crud(&module, &store);
+    for mo in &module.models {
+        for c in &mo.commands {
+            d.register_transition(&module, mo.name, c.name, &store);
+        }
+    }
+    Rig { d, store, p }
+}
+
+#[test]
+fn a_change_that_committed_is_answered_even_when_its_read_back_is_refused() {
+    use obop_storage::testing::Flaky;
+    // D74: the pool fills up at the moment a create or update has committed. The caller gets the
+    // record that was written, not an error that invites a repeat.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let backend = obop_storage::guarded(flaky.clone());
+    let bytes = obop_storage::blob::open_bytes("memory:", None).unwrap();
+    let store = Store {
+        blobs: Arc::new(obop_storage::blob::Catalog::new(backend.clone(), bytes)),
+        backend,
+    };
+    let r = rig_for(store);
+    flaky.refuse_reads_after_the_next_write();
+    let made = r.ok(&user(), "order", "create", m(vec![("customer", t("Acme"))]));
+    let Value::Map(row) = &made else {
+        panic!("{made:?}")
+    };
+    assert_eq!(row["customer"], t("Acme"), "the answer is what was written");
+    let id = Rig::id(&made);
+    flaky.allow_models();
+    assert_eq!(
+        r.fld(&user(), "order", &id, "customer"),
+        t("Acme"),
+        "and it is stored"
+    );
+    assert_eq!(r.count("order"), 1, "once");
+    flaky.refuse_reads_after_the_next_write();
+    let upd = r.ok(
+        &user(),
+        "order",
+        "update",
+        m(vec![("id", t(&id)), ("note", t("later"))]),
+    );
+    let Value::Map(row) = &upd else {
+        panic!("{upd:?}")
+    };
+    assert_eq!(row["note"], t("later"));
+    flaky.allow_models();
+    assert_eq!(r.fld(&user(), "order", &id, "note"), t("later"));
 }
 
 impl Rig {

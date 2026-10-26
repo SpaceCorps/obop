@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 obop-types.workspace = true
@@ -22,3 +24,6 @@ icu_locale = "2.3.1"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }

@@ -3,6 +3,7 @@ import { LanguageSelect, TwoFactorStep, t, twoFactorMessage, useI18n, type Facto
 import { login, loginMfa } from "./api.ts";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { passkeysSupported, signInWithPasskey } from "./passkeys.ts";
+import { storageFaultMessage } from "./serverMessage.ts";
 import { Button, Icon, Input, Logo, Notice } from "./ui.tsx";
 
 /**
@@ -36,7 +37,7 @@ export function SignIn({
     else if (r.kind === "mfa") setStep({ mfaToken: r.mfaToken, user, methods: r.methods });
     else if (r.status === 429) setError(twoFactorMessage({ status: 429, code: "rate_limited" }));
     else if (r.status === 0) setError(twoFactorMessage({ status: 0, code: "network" }));
-    else setError(t("Invalid username or password"));
+    else setError(storageFaultMessage(r.status, r.code) ?? t("Invalid username or password"));
   }
 
   /** Sign in with a passkey alone (the person allowed it in Security). */
@@ -48,6 +49,8 @@ export function SignIn({
     if (r.ok) onDone(r.value.token, r.value.user ?? "", !!r.value.mfa_enrolment_required);
     else if (r.kind === "cancelled") setError(passkeyMessage(r));
     else if (r.kind === "server" && r.status === 429) setError(passkeyMessage(r));
+    else if (r.kind === "server" && storageFaultMessage(r.status, r.code))
+      setError(storageFaultMessage(r.status, r.code));
     else
       setError(
         r.kind === "server"
@@ -71,6 +74,10 @@ export function SignIn({
       setError(twoFactorMessage(r));
       return null;
     }
+    if (r.kind === "server") {
+      const busy = storageFaultMessage(r.status, r.code);
+      if (busy) return busy;
+    }
     return passkeyMessage(r);
   }
 
@@ -85,6 +92,10 @@ export function SignIn({
       setStep(null);
       setError(twoFactorMessage(r));
       return null;
+    }
+    if (r.kind === "error") {
+      const busy = storageFaultMessage(r.status, r.code);
+      if (busy) return busy;
     }
     return twoFactorMessage(r.kind === "error" ? r : { status: 0, code: "" });
   }

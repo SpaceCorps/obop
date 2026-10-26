@@ -80,6 +80,18 @@ fn hook_blocking(s: &HttpState, id: &str, headers: &HeaderMap, body: &[u8]) -> R
             json!({"error": "invalid signature"}),
         ),
         Err(HookError::Refused(why)) => json_response(StatusCode::FORBIDDEN, json!({"error": why})),
+        // The store was busy: the sender retries (the claim of the event was given back).
+        Err(HookError::Busy) => {
+            let mut r = json_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                json!({"error": "try again later"}),
+            );
+            r.headers_mut().insert(
+                axum::http::header::RETRY_AFTER,
+                axum::http::HeaderValue::from_static("1"),
+            );
+            r
+        }
         Err(HookError::Rejected(why)) => {
             json_response(StatusCode::UNPROCESSABLE_ENTITY, json!({"error": why}))
         }

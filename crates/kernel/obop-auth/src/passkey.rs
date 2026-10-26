@@ -6,12 +6,12 @@
 //! in `webauthn`; this file holds the rules around them.
 
 use crate::webauthn::{self as wa, b64url, b64url_decode, sha256};
-use crate::{Auth, hex, random_bytes, token_hash};
+use crate::{Auth, Change, hex, random_bytes, token_hash};
 use obop_commands::audit::rfc3339;
 use obop_commands::{
     ADMIN_GROUP, LoginOutcome, MfaError, PasskeyApi, Principal, PrincipalKind, Reauth, WebauthnCtx,
 };
-use obop_storage::Fields;
+use obop_storage::{Fields, Op};
 use serde_json::{Value as J, json};
 
 pub const PASSKEY_TABLE: &str = "auth_passkey";
@@ -91,6 +91,18 @@ impl Auth {
             .collect()
     }
 
+    /// The passkeys of a person, with a lookup that reports a refusal of the store: for the places
+    /// that decide something from the list, where "none" read from a refused lookup would be wrong.
+    pub(crate) fn passkeys_checked(&self, name: &str) -> Result<Vec<(String, J)>, MfaError> {
+        Ok(self
+            .backend
+            .find(PASSKEY_TABLE, "user", &J::from(name))
+            .map_err(MfaError::Unavailable)?
+            .into_iter()
+            .map(|(k, f)| (k, J::Object(f)))
+            .collect())
+    }
+
     pub fn passkey_count(&self, name: &str) -> usize {
         self.passkeys_of(&name.trim().to_lowercase()).len()
     }
@@ -101,18 +113,34 @@ impl Auth {
     }
 
     /// Remove every passkey of the person (the break-glass reset and the administrator's reset).
-    pub(crate) fn clear_passkeys(&self, name: &str) -> usize {
+    ///
+    /// A refused lookup or delete is an error, not "none left": a reset that leaves a passkey
+    /// behind must not say it is done.
+    pub(crate) fn clear_passkeys(&self, name: &str) -> Result<usize, MfaError> {
+        let unavailable = MfaError::Unavailable;
         let mut n = 0;
-        for (id, _) in self.passkeys_of(name) {
-            if self.backend.delete(PASSKEY_TABLE, &id).unwrap_or(false) {
+        for (id, _) in self
+            .backend
+            .find(PASSKEY_TABLE, "user", &J::from(name))
+            .map_err(unavailable)?
+        {
+            if self
+                .backend
+                .delete(PASSKEY_TABLE, &id)
+                .map_err(unavailable)?
+            {
                 n += 1;
             }
         }
         let mut p = Fields::new();
         p.insert("passkey_login".into(), J::Bool(false));
-        let _ = self.backend.update("auth_user", name, &p);
-        let _ = self.backend.kv_delete(&proof_key(name));
-        n
+        self.backend
+            .update("auth_user", name, &p)
+            .map_err(unavailable)?;
+        self.backend
+            .kv_delete(&proof_key(name))
+            .map_err(unavailable)?;
+        Ok(n)
     }
 
     fn user_handle(&self, name: &str) -> Result<Vec<u8>, MfaError> {
@@ -440,6 +468,7 @@ impl Auth {
                 "too many attempts, try again in a minute".into(),
             ));
         }
+        self.refuse_if_disabled(&name, &key)?;
         let result = self
             .verify_assertion(ctx, "second", credential, false)
             .and_then(|(user, rec)| {
@@ -664,12 +693,18 @@ impl PasskeyApi for Auth {
             self.put(name, &patch)?;
             out["recovery_codes"] = json!(codes);
         }
-        // The session that just enrolled is no longer limited to enrolment.
+        // The session that just enrolled is no longer limited to enrolment. A needed step, as
+        // after a password change: a session that stays limited with no word of it is a request
+        // that lost a step without saying so.
         let mut lift = Fields::new();
         lift.insert("limited".into(), J::Bool(false));
-        let _ = self
-            .backend
-            .update("auth_token", &token_hash(session), &lift);
+        let ch = Change::new(name, "passkey_register", name, &format!("added \"{label}\"")).then(
+            "the passkey is registered; this session is still limited to enrolment: sign in again (the recovery codes of this request were not shown: make new ones under Security)",
+        );
+        self.needed(&ch, "lifting the enrolment limit of this session", || {
+            self.backend
+                .update("auth_token", &token_hash(session), &lift)
+        })?;
         self.event(
             name,
             "passkey_register",
@@ -728,23 +763,41 @@ impl PasskeyApi for Auth {
         let name = person(p)?;
         let _g = self.mfa_guard()?;
         self.reauth(name, reauth)?;
-        let rec = self.own_passkey(name, id)?;
-        let left = self.passkeys_of(name).len() - 1;
-        let totp = self.mfa_enabled(name);
+        let op = format!("passkey_remove:{id}");
+        let rec = match self.own_passkey(name, id) {
+            Ok(r) => r,
+            // The repeat of a removal that could not end the other sessions finishes that (D74).
+            Err(MfaError::Invalid(m)) if m == "no such passkey" => {
+                let ch = Change::new(name, "passkey_remove", name, "passkey removed");
+                if let Some(n) = self.finish_owed(name, &op, &ch)? {
+                    self.event(
+                        name,
+                        "passkey_remove",
+                        name,
+                        &format!("removed; {n} other session(s) signed out (repeated)"),
+                    );
+                    return Ok(());
+                }
+                return Err(MfaError::Invalid(m));
+            }
+            Err(e) => return Err(e),
+        };
+        // What is left is read with a lookup that reports a refusal: a refused list is not "none"
+        // (it made `len() - 1` underflow, and a person with other factors lose their recovery codes).
+        let all = self.passkeys_checked(name)?;
+        let left = all.len().saturating_sub(1);
+        let totp = self.settled(|| self.mfa_enabled(name))?;
         let groups: Vec<String> = p.groups.iter().cloned().collect();
         if left == 0 && !totp && self.enrolment_required_for(&groups) {
             return Err(MfaError::Invalid(
                 "your administrator requires a second factor, and this is your last one: add another passkey or an authenticator app first".into(),
             ));
         }
-        self.backend
-            .delete(PASSKEY_TABLE, id)
-            .map_err(MfaError::Unavailable)?;
+        let keep = token_hash(session);
         let mut patch = Fields::new();
-        if !self
-            .passkeys_of(name)
+        if !all
             .iter()
-            .any(|(_, r)| r["user_verified"] == true)
+            .any(|(k, r)| k != id && r["user_verified"] == true)
         {
             patch.insert("passkey_login".into(), J::Bool(false));
         }
@@ -752,11 +805,32 @@ impl PasskeyApi for Auth {
             // No second factor left, so recovery codes protect nothing.
             patch.insert("recovery".into(), J::Null);
         }
-        if !patch.is_empty() {
-            self.put(name, &patch)?;
-        }
+        // What the repeat needs to finish the work goes into the same atomic batch as the removal:
+        // the passkey, the user's record and the note that its other sessions are owed an end are
+        // one change, so none of them can be missing (D74).
+        patch.extend(self.owed_patch(name, &op, Some(&keep))?);
+        self.backend
+            .apply(&[
+                Op::Delete {
+                    model: PASSKEY_TABLE.into(),
+                    id: id.into(),
+                },
+                Op::Merge {
+                    model: "auth_user".into(),
+                    id: name.into(),
+                    patch,
+                },
+            ])
+            .map_err(MfaError::Unavailable)?;
         // Like turning off the authenticator app: a stolen session must not outlive the factor.
-        let n = self.revoke_user_sessions(name, Some(&token_hash(session)));
+        let ch = Change::new(
+            name,
+            "passkey_remove",
+            name,
+            &format!("removed \"{}\"", rec["name"].as_str().unwrap_or("")),
+        );
+        let n = self.revoke_user_sessions(name, Some(&keep), &ch)?;
+        self.clear_owed(name, &op);
         self.event(
             name,
             "passkey_remove",
@@ -901,10 +975,10 @@ impl PasskeyApi for Auth {
 impl Auth {
     /// The passkey `id` when it is the person's own.
     fn own_passkey(&self, name: &str, id: &str) -> Result<J, MfaError> {
+        // A refused lookup is the store's trouble, not "no such passkey".
         self.backend
             .get(PASSKEY_TABLE, id)
-            .ok()
-            .flatten()
+            .map_err(MfaError::Unavailable)?
             .map(J::Object)
             .filter(|r| r["user"].as_str() == Some(name))
             .ok_or_else(|| MfaError::Invalid("no such passkey".into()))

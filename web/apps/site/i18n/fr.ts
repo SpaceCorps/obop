@@ -191,7 +191,7 @@ export const fr: Messages = {
       },
       {
         title: "Code source sur GitHub",
-        body: "Lisez le code, les décisions et la feuille de route. La licence est en cours de finalisation ; consultez le dépôt.",
+        body: "Lisez le code, les décisions et la feuille de route. Apache-2.0, libre d'usage et auto-hébergeable ; consultez le dépôt.",
       },
     ],
     pricingTitle: "Une tarification simple, en projet",
@@ -231,7 +231,7 @@ export const fr: Messages = {
       },
       {
         q: "obop est-il open source ?",
-        a: "Le code source est public sur GitHub. La licence définitive n'est pas encore arrêtée (le projet propose l'AGPL) ; consultez le dépôt pour connaître les conditions en vigueur.",
+        a: "Le code source est public sur GitHub sous licence Apache-2.0 : libre d'utilisation, de modification et d'auto-hébergement. Le texte complet figure dans le fichier LICENSE du dépôt.",
       },
     ],
     ctaTitle: "Une entreprise, une plateforme.",
