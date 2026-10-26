@@ -198,31 +198,41 @@ impl Site {
         let b = self.api.backend();
         let at = util::now();
         let mine = format!("{token}|{at}");
-        match b.kv_put_new(&k, &mine, Some(86_400_000)) {
-            Ok(true) => return Claim::Taken,
-            Ok(false) => {}
-            Err(_) => return Claim::Refused,
+        // The key can be given back between our failed claim and our read of it (the submit that
+        // held it failed its checkout and released it): then it is free, and this submit claims it
+        // again, instead of being sent to the order of a token that was never used. Three rounds
+        // are far more than a double click can need.
+        for _ in 0..3 {
+            match b.kv_put_new(&k, &mine, Some(86_400_000)) {
+                Ok(true) => return Claim::Taken,
+                Ok(false) => {}
+                Err(_) => return Claim::Refused,
+            }
+            let existing = match b.kv_get(&k) {
+                Ok(Some(v)) => v,
+                Ok(None) => continue,
+                Err(_) => return Claim::Refused,
+            };
+            let (owner, since) = existing
+                .split_once('|')
+                .map_or((existing.as_str(), 0), |(o, t)| {
+                    (o, t.parse::<u64>().unwrap_or(0))
+                });
+            // A claim that is old and has no order behind it is the ghost of a checkout that did
+            // not finish and could not give its key back (the store refused for longer than the
+            // tries): taken over, so the buyer's resubmit makes the order instead of being sent
+            // to a page that does not exist (D74). A young claim is a submit still being
+            // processed.
+            if at.saturating_sub(since) > 120
+                && matches!(self.api.receipt("ecommerce_order", owner), Ok(None))
+                && b.kv_swap(&k, &existing, &mine).unwrap_or(false)
+            {
+                return Claim::Taken;
+            }
+            return Claim::Existing(owner.to_string());
         }
-        let Ok(found) = b.kv_get(&k) else {
-            return Claim::Refused;
-        };
-        let existing = found.unwrap_or_else(|| mine.clone());
-        let (owner, since) = existing
-            .split_once('|')
-            .map_or((existing.as_str(), 0), |(o, t)| {
-                (o, t.parse::<u64>().unwrap_or(0))
-            });
-        // A claim that is old and has no order behind it is the ghost of a checkout that did not
-        // finish and could not give its key back (the store refused for longer than the tries):
-        // taken over, so the buyer's resubmit makes the order instead of being sent to a page
-        // that does not exist (D74). A young claim is a submit still being processed.
-        if at.saturating_sub(since) > 120
-            && matches!(self.api.receipt("ecommerce_order", owner), Ok(None))
-            && b.kv_swap(&k, &existing, &mine).unwrap_or(false)
-        {
-            return Claim::Taken;
-        }
-        Claim::Existing(owner.to_string())
+        // Released again and again under our hands: no order is made, and none is promised.
+        Claim::Refused
     }
 
     /// Give back the key of an order that was not placed. `held` is the key this request really
@@ -247,9 +257,15 @@ impl Site {
         // after the tries expires with its day; the checkout that needed it is answered 503.
         let _ = obop_storage::fault::patiently(4, Duration::from_millis(150), || {
             obop_storage::fault::bookkeeping(|| match b.kv_get(&k) {
+                // Another submit's now (this one's was taken over): left alone.
                 Ok(Some(v)) if !v.starts_with(&mine) => Ok(false),
-                // Mine, or the store would not say: this request took it, so it gives it back.
-                _ => b.kv_delete(&k),
+                Ok(Some(_)) => b.kv_delete(&k),
+                // Gone already (expired, or released by an earlier try whose answer was lost).
+                Ok(None) => Ok(false),
+                // The store would not say whose it is: nothing is deleted on a guess, the read is
+                // tried again, and a key that still cannot be read is a ghost that the next submit
+                // takes over once it is old.
+                Err(e) => Err(e),
             })
         });
     }
