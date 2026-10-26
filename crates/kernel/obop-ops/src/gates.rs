@@ -5,26 +5,36 @@
 //! has run to its end on a copy, and that going back is one command with a recorded reason.
 //!
 //! **Mode.** On PostgreSQL the gates are *strict*: [`Gate::run`] refuses unless (a) a verified
-//! backup no older than 24 hours is named or can be taken now and its id goes into the ledger,
-//! (b) `obop migrate plan` stored a plan for exactly this database state and build, (c) there is
-//! room on the disk (the backup directory and, for SQLite, the database file's; PostgreSQL's own
-//! volume cannot be seen from a client, so the operator attests it), (d) a rehearsal of the same
-//! plan passed, shown by a receipt the server key authenticates, and the ledger is clean and no
-//! other migration holds the lock. On SQLite and in memory (development, D44) the same checks run
-//! and a failing one is a warning: a developer's database is not a deployment.
+//! backup of *this database* no older than 24 hours is named or can be taken now and its id goes
+//! into the ledger, (b) `obop migrate plan` stored a plan for exactly this database state and
+//! build, (c) there is room on the disk (the backup directory and, for SQLite, the database
+//! file's; PostgreSQL's own volume cannot be seen from a client, so the operator attests it), (d)
+//! a rehearsal of the same plan, on a backup of this database, passed, shown by a receipt the
+//! server key authenticates, and the ledger is clean and no other migration holds the lock. On
+//! SQLite and in memory (development, D44) the same checks run and a failing safeguard is a
+//! warning: a developer's database is not a deployment. A run with nothing pending needs none of
+//! it: it says "up to date" and checks only that the ledger is clean and the database is not
+//! newer than this build.
+//!
+//! "This database" is a name, not a comparison of contents: every database carries a random id
+//! (`obop_meta/instance`, written once) that its backups and rehearsal receipts repeat, and a
+//! backup or receipt that names another database is refused. A backup or receipt made before the
+//! database had an id cannot be tied to it and is refused in strict mode as well: take a new one.
 //!
 //! A server that migrates itself at start (`--auto-migrate`, the choice of a one-process hosted
 //! instance) takes the verified backup first when a backup directory is configured
-//! ([`auto_backup`]) and runs without the plan and rehearsal; an operator who wants all four uses
-//! `obop migrate run` with auto-migrate off.
+//! ([`auto_backup_hook`], called under the migration lock once steps are certain to run, reusing
+//! the backup of an attempt that failed instead of writing another) and runs without the plan and
+//! rehearsal; an operator who wants all four uses `obop migrate run` with auto-migrate off.
 
 use crate::backup::{self, Keys};
+use crate::catalog::{BackupRecord, Catalog};
 use crate::doctor::{Check, Level, human};
 use crate::drill::{self, Scratch};
 use crate::pgadmin::ServerInfo;
 use crate::schedule::{self, Clock, Settings};
 use obop_keys::KeyRing;
-use obop_migrate::{Migrator, Plan, RunOptions};
+use obop_migrate::{EntryStatus, Migrator, Plan, RunOptions};
 use obop_storage::Backend;
 use obop_storage::blob::Blobs;
 use serde_json::{Value as J, json};
@@ -38,6 +48,8 @@ pub const MAX_BACKUP_AGE: Duration = Duration::from_secs(24 * 3600);
 pub const RECEIPT_MAX_AGE: u64 = 7 * 86_400;
 /// The longest a statement that locks a table may take in a rehearsal: one second.
 pub const MAX_LOCK_MS: u64 = 1000;
+/// How long the preflight waits for the migration lock before it says another process holds it.
+pub const LOCK_WAIT: Duration = Duration::from_secs(3);
 const RECEIPT_PURPOSE: &str = "migration-rehearsal";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,6 +98,11 @@ pub struct Options {
     pub disk_attested: bool,
     /// The database URL, to find the SQLite file.
     pub url: String,
+    /// How long the preflight waits for the migration lock ([`LOCK_WAIT`]).
+    pub lock_wait: Duration,
+    /// The table size above which a long-lock step needs `window` (the product's limit when
+    /// unset; tests lower it).
+    pub window_rows: Option<u64>,
 }
 
 pub struct Gate {
@@ -142,7 +159,7 @@ fn sqlite_file(url: &str) -> Option<PathBuf> {
     (!p.is_empty() && p != ":memory:").then(|| PathBuf::from(p))
 }
 
-/// The signed statement that a rehearsal of one plan passed.
+/// The signed statement that a rehearsal of one plan passed, on a backup of one database.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Receipt {
     pub plan_id: String,
@@ -152,6 +169,13 @@ pub struct Receipt {
     pub backup_id: String,
     pub longest_step_ms: u64,
     pub total_ms: u64,
+    /// The database the backup came from (`obop_meta/instance`); `None` for a backup of a
+    /// database that had no id yet.
+    pub database_id: Option<String>,
+    /// The engine of the scratch database the plan ran on (`sqlite`, `postgres`, `memory`).
+    pub engine: String,
+    /// Records in the rehearsed copy before the plan ran.
+    pub records: u64,
 }
 
 impl Receipt {
@@ -161,6 +185,7 @@ impl Receipt {
             "core_version": self.core_version, "passed": self.passed, "at": self.at,
             "backup_id": self.backup_id, "longest_step_ms": self.longest_step_ms,
             "total_ms": self.total_ms, "key_id": key_id,
+            "database_id": self.database_id, "engine": self.engine, "records": self.records,
         })
     }
 
@@ -195,6 +220,9 @@ impl Receipt {
             backup_id: s("backup_id")?,
             longest_step_ms: u("longest_step_ms")?,
             total_ms: u("total_ms")?,
+            database_id: j["database_id"].as_str().map(String::from),
+            engine: s("engine")?,
+            records: u("records")?,
         };
         if j["kind"] != "obop-rehearsal-receipt" {
             return Err("not a rehearsal receipt".into());
@@ -224,6 +252,72 @@ pub struct BackupRef {
     pub age_seconds: u64,
 }
 
+/// Whether the backup and the database it is used for are the same database: `Ok` with a note
+/// when the answer is "not checked" (neither has an id: a database from before ids), `Err` when
+/// they differ or the backup cannot be tied to this database.
+fn same_database(backup: &Option<String>, target: &Option<String>) -> Result<(), String> {
+    match (backup, target) {
+        (Some(b), Some(t)) if b == t => Ok(()),
+        (Some(b), Some(t)) => Err(format!(
+            "it is a backup of another database (id {}), this database is {}",
+            &b[..b.len().min(8)],
+            &t[..t.len().min(8)]
+        )),
+        (None, None) => Ok(()),
+        (None, Some(_)) => Err(
+            "it carries no database id (it was made before this database was named), so it cannot be tied to this database: take a new one with `obop backup`"
+                .into(),
+        ),
+        (Some(_), None) => Err(
+            "it names a database, but this database has no id: this is not the database it came from"
+                .into(),
+        ),
+    }
+}
+
+/// A pre-migration backup that an earlier, failed attempt already used (the ledger names it on a
+/// `failed` or `partial` row), that still verifies, is under 24 hours old, was taken at or before
+/// the schema version the database is at now, and after which nothing was applied that does not
+/// name it too: the data has not moved on since except by the steps of that same migration, so it
+/// is the backup before the migration still, and writing another would only fill the volume.
+pub fn reuse_pre_migration(
+    backend: &Arc<dyn Backend>,
+    settings: &Settings,
+    stored: u32,
+    clock: &dyn Clock,
+) -> Option<BackupRecord> {
+    let rows = obop_migrate::ledger::read_all(&**backend).ok()?;
+    let used: std::collections::BTreeSet<&str> = rows
+        .iter()
+        .filter(|r| matches!(r.status, EntryStatus::Failed | EntryStatus::Partial))
+        .filter_map(|r| r.backup_id.as_deref())
+        .collect();
+    if used.is_empty() {
+        return None;
+    }
+    let now = clock.now();
+    Catalog::new(&**backend)
+        .backups()
+        .ok()?
+        .into_iter()
+        .rev()
+        .find(|b| {
+            b.reason == "pre-migration"
+                && b.verified
+                && used.contains(b.id.as_str())
+                && b.schema_version <= u64::from(stored)
+                && now.saturating_sub(b.created_at) <= MAX_BACKUP_AGE.as_secs()
+                && !rows.iter().any(|r| {
+                    r.status == EntryStatus::Applied
+                        && r.at >= b.created_at
+                        && r.backup_id.as_deref() != Some(b.id.as_str())
+                })
+                && schedule::is_ours(b, settings)
+                && Path::new(&b.path).exists()
+                && backup::verify_with(Path::new(&b.path), &settings.keys).is_ok()
+        })
+}
+
 impl Gate {
     fn schema(&self) -> u64 {
         self.migrator()
@@ -233,15 +327,19 @@ impl Gate {
     }
 
     fn migrator(&self) -> Migrator {
-        match &self.steps {
+        let m = match &self.steps {
             Some(s) => Migrator::with_steps(self.backend.clone(), self.ring.clone(), s.clone()),
             None => Migrator::new(self.backend.clone(), self.ring.clone()),
         }
-        .by(&self.options.actor)
+        .by(&self.options.actor);
+        match self.options.window_rows {
+            Some(n) => m.with_window_rows(n),
+            None => m,
+        }
     }
 
-    /// An existing backup named by the operator: verified (opened with its key when sealed) and
-    /// young enough.
+    /// An existing backup named by the operator: verified (opened with its key when sealed), of
+    /// this database, and young enough.
     fn existing_backup(&self, file: &Path) -> Result<BackupRef, String> {
         let v = backup::verify_with(file, &self.options.keys)?;
         let created =
@@ -257,6 +355,9 @@ impl Gate {
         if v.manifest.schema_version > u64::from(obop_migrate::steps().len() as u32) {
             return Err("the backup is from a newer schema than this build".into());
         }
+        let target = self.migrator().instance_id()?;
+        same_database(&v.manifest.database_id, &target)
+            .map_err(|e| format!("the backup {}: {e}", file.display()))?;
         Ok(BackupRef {
             id: file
                 .file_name()
@@ -272,9 +373,18 @@ impl Gate {
     }
 
     /// Take the backup before the run: sealed when a key is configured, read back and (when
-    /// sealed) authenticated, and recorded.
+    /// sealed) authenticated, and recorded. The backup of an earlier attempt that failed is used
+    /// again instead (see [`reuse_pre_migration`]).
     fn take_backup(&self, dir: &Path) -> Result<BackupRef, String> {
         let settings = Settings::new(dir, self.options.keys.clone());
+        let stored = self.migrator().status()?.stored.unwrap_or(0);
+        if let Some(b) = reuse_pre_migration(&self.backend, &settings, stored, &*self.clock) {
+            return Ok(BackupRef {
+                id: b.id,
+                path: PathBuf::from(b.path),
+                age_seconds: self.clock.now().saturating_sub(b.created_at),
+            });
+        }
         let blobs: Option<&dyn Blobs> = self.blobs.as_deref();
         let o = schedule::take(
             &self.backend,
@@ -291,7 +401,9 @@ impl Gate {
         })
     }
 
-    /// The checks that read and write nothing. Returns the plan they were made for.
+    /// The checks that read and write nothing. Returns the plan they were made for. With nothing
+    /// to run, only the checks that concern the database itself are made (it is not newer than
+    /// this build, its ledger is clean): no backup, plan, rehearsal or disk is asked for.
     pub fn preflight(&self) -> Result<(Plan, Vec<Check>), String> {
         let m = self.migrator();
         let o = &self.options;
@@ -331,6 +443,9 @@ impl Gate {
             },
         );
         let plan = m.plan()?;
+        if plan.is_empty() {
+            return Ok((plan, v));
+        }
         add(
             &mut v,
             "versions",
@@ -356,7 +471,7 @@ impl Gate {
                 "a step is not compatible with the previous release: stop every process before running",
             );
         }
-        let lock = lock_level(&self.backend);
+        let lock = lock_level(&self.backend, o.lock_wait);
         add(
             &mut v,
             "lock",
@@ -380,7 +495,10 @@ impl Gate {
                 if o.window {
                     "a long-lock step on a big table runs in the named window".into()
                 } else {
-                    "a step holds a long lock on a table above 1,000,000 records: run in a maintenance window with --window".into()
+                    format!(
+                        "a step holds a long lock on a table above {} records: run in a maintenance window with --window",
+                        o.window_rows.unwrap_or(obop_migrate::ddl::WINDOW_ROWS)
+                    )
                 }
             } else {
                 "no step holds a long lock on a big table".to_string()
@@ -391,7 +509,7 @@ impl Gate {
         add(
             &mut v,
             "plan_stored",
-            gated(o.mode, !stored && !plan.is_empty()),
+            gated(o.mode, !stored),
             if stored {
                 format!("plan {} was produced by `obop migrate plan`", plan.id)
             } else {
@@ -404,13 +522,13 @@ impl Gate {
         // Backup.
         let (level, detail) = match (&o.backup_file, &o.backup_dir) {
             (Some(f), _) => match self.existing_backup(f) {
-                Ok(b) => (Level::Pass, format!("{} is verified and {} old", b.id, human(b.age_seconds))),
+                Ok(b) => (Level::Pass, format!("{} is verified, of this database and {} old", b.id, human(b.age_seconds))),
                 Err(e) => (gated(o.mode, true), e),
             },
-            (None, Some(d)) => (Level::Pass, format!("a verified backup will be taken into {} before the first step", d.display())),
+            (None, Some(d)) => (Level::Pass, format!("a verified backup will be taken into {} before the first step (or the one a failed attempt already took is used again)", d.display())),
             (None, None) => (
                 gated(o.mode, true),
-                "no backup: give --backup FILE (verified, under 24 hours old) or set OBOP_BACKUP_DIR so one is taken first".into(),
+                "no backup: give --backup FILE (verified, of this database, under 24 hours old) or set OBOP_BACKUP_DIR so one is taken first".into(),
             ),
         };
         add(&mut v, "backup", level, detail);
@@ -428,8 +546,19 @@ impl Gate {
                 "no OBOP_BACKUP_KEY or OBOP_SECRET_KEY: the backup will be plain".to_string()
             },
         );
+        if self.is_postgres() && self.server.is_none() {
+            // Without it there is no restore point and no size of the database: say so, and do
+            // not let a failed second connection quietly drop those gates.
+            add(
+                &mut v,
+                "server",
+                gated(o.mode, true),
+                "the PostgreSQL server could not be asked about itself (the connection failed): the restore point and the size of the database are part of the gate; fix the connection (a connection limit, a pooler that refuses a session) and run again, or --gates relaxed to go ahead without them",
+            );
+        }
         self.disk_checks(&mut v, &plan);
         // Rehearsal.
+        let target_id = m.instance_id()?;
         let rehearsed = match &o.receipt {
             None => Err("no rehearsal receipt: run `obop migrate rehearse --from BACKUP --out receipt.json` on a copy, then pass --rehearsal receipt.json".to_string()),
             Some(p) => std::fs::read_to_string(p)
@@ -443,22 +572,38 @@ impl Gate {
                         Err("the rehearsal of this plan FAILED".into())
                     } else if self.clock.now().saturating_sub(r.at) > RECEIPT_MAX_AGE {
                         Err(format!("the receipt is {} old; rehearse again", human(self.clock.now().saturating_sub(r.at))))
+                    } else if let Err(e) = same_database(&r.database_id, &target_id) {
+                        Err(format!("the rehearsal was made on a backup that is not of this database ({e}); rehearse a backup of this database"))
                     } else {
                         Ok(r)
                     }
                 }),
         };
         match rehearsed {
-            Ok(r) => add(
-                &mut v,
-                "rehearsal",
-                Level::Pass,
-                format!(
-                    "plan {} passed a rehearsal in {} ms (longest step {} ms)",
-                    r.plan_id, r.total_ms, r.longest_step_ms
-                ),
-            ),
-            Err(e) => add(&mut v, "rehearsal", gated(o.mode, !plan.is_empty()), e),
+            Ok(r) => {
+                add(
+                    &mut v,
+                    "rehearsal",
+                    Level::Pass,
+                    format!(
+                        "plan {} passed a rehearsal of {} records in {} ms (longest step {} ms) on {}",
+                        r.plan_id, r.records, r.total_ms, r.longest_step_ms, r.engine
+                    ),
+                );
+                if r.engine != self.backend.kind() {
+                    add(
+                        &mut v,
+                        "rehearsal_engine",
+                        Level::Warn,
+                        format!(
+                            "the rehearsal ran on {}, this database is {}: the time of a statement on this engine, and its locks, were not measured (give `obop migrate rehearse --scratch URL` a scratch database of the same kind)",
+                            r.engine,
+                            self.backend.kind()
+                        ),
+                    );
+                }
+            }
+            Err(e) => add(&mut v, "rehearsal", gated(o.mode, true), e),
         }
         Ok((plan, v))
     }
@@ -466,18 +611,16 @@ impl Gate {
     fn disk_checks(&self, v: &mut Vec<Check>, plan: &Plan) {
         let o = &self.options;
         let largest = plan.largest_table();
-        // The volume the backup goes to.
-        if let Some(dir) = &o.backup_dir {
+        // The volume the backup goes to, when a backup will be taken.
+        if o.backup_file.is_none()
+            && let Some(dir) = &o.backup_dir
+        {
             let need = self.estimated_backup_bytes();
             match free_bytes(dir) {
                 Ok(free) => add(
                     v,
                     "disk_backup",
-                    if free >= need.saturating_mul(2) {
-                        Level::Pass
-                    } else {
-                        Level::Fail
-                    },
+                    gated(o.mode, free < need.saturating_mul(2)),
                     format!(
                         "{} free where the backup goes; the backup needs about {} (twice that is asked)",
                         mib(free),
@@ -503,8 +646,14 @@ impl Gate {
                 ),
                 Err(e) => add(v, "disk_database", Level::Warn, e),
             }
-        } else if let Some(s) = &self.server {
-            let (size, how) = (s.database_bytes().unwrap_or(0), "the database is");
+        } else if self.is_postgres() {
+            // The volume of a PostgreSQL host cannot be seen from here; the operator says. A
+            // server that cannot be asked at all (its connection failed) does not excuse this.
+            let how = match self.server.as_ref().map(|s| s.database_bytes()) {
+                Some(Ok(size)) => format!("the database is {}", mib(size)),
+                Some(Err(e)) => format!("the size of the database could not be read: {e}"),
+                None => "the PostgreSQL server could not be asked about itself".to_string(),
+            };
             add(
                 v,
                 "disk_database",
@@ -515,17 +664,22 @@ impl Gate {
                 },
                 if o.disk_attested {
                     format!(
-                        "the operator attests free disk of at least twice the largest table the plan touches ({largest} records; {how} {})",
-                        mib(size)
+                        "the operator attests free disk of at least twice the largest table the plan touches ({largest} records; {how})"
                     )
                 } else {
                     format!(
-                        "the free disk of the PostgreSQL host cannot be read from here ({how} {}; the plan touches tables of up to {largest} records): check it is at least twice the largest table, then pass --disk-ok",
-                        mib(size)
+                        "the free disk of the PostgreSQL host cannot be read from here ({how}; the plan touches tables of up to {largest} records): check it is at least twice the largest table, then pass --disk-ok"
                     )
                 },
             );
         }
+    }
+
+    fn is_postgres(&self) -> bool {
+        let u = &self.options.url;
+        self.backend.kind() == "postgres"
+            || u.starts_with("postgres://")
+            || u.starts_with("postgresql://")
     }
 
     fn estimated_backup_bytes(&self) -> u64 {
@@ -539,14 +693,14 @@ impl Gate {
     }
 }
 
-fn lock_level(backend: &Arc<dyn Backend>) -> Level {
+fn lock_level(backend: &Arc<dyn Backend>, wait: Duration) -> Level {
     let b = backend.clone();
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let r = b.lock("obop.migrate").map(drop);
         let _ = tx.send(r);
     });
-    match rx.recv_timeout(Duration::from_secs(3)) {
+    match rx.recv_timeout(wait) {
         Ok(Ok(())) => Level::Pass,
         _ => Level::Fail,
     }
@@ -564,32 +718,69 @@ pub struct Ran {
     pub backup: Option<BackupRef>,
     pub restore_point: Option<String>,
     pub applied: Vec<(u32, String, String)>,
+    /// A dry run: the checks that would refuse a real run (`name: why`), and what each step would
+    /// do. A real run that is refused is an `Err` instead.
+    pub would_refuse: Vec<String>,
+    pub dry_run: bool,
 }
 
 impl Gate {
     /// The gated `obop migrate run`: preflight, a verified backup, a restore point, the steps.
-    /// With `dry_run`, the preflight only (nothing is taken or written).
+    ///
+    /// With nothing pending it only checks the database and says so. With `dry_run` it is a
+    /// preview that needs no gate: it names the steps, runs every check and lists those that
+    /// would refuse a real run, and takes and writes nothing.
     pub fn run(&self, dry_run: bool, progress: &mut dyn FnMut(&str)) -> Result<Ran, String> {
         let (plan, checks) = self.preflight()?;
-        let blocked: Vec<&Check> = checks.iter().filter(|c| c.level == Level::Fail).collect();
-        if !blocked.is_empty() {
-            return Err(format!(
-                "the migration is not allowed to run:\n{}",
-                blocked
-                    .iter()
-                    .map(|c| format!("  {}: {}", c.name, c.detail))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ));
-        }
+        let blocked: Vec<String> = checks
+            .iter()
+            .filter(|c| c.level == Level::Fail)
+            .map(|c| format!("  {}: {}", c.name, c.detail))
+            .collect();
         let mut ran = Ran {
             plan: plan.clone(),
             checks,
             backup: None,
             restore_point: None,
             applied: Vec::new(),
+            would_refuse: Vec::new(),
+            dry_run,
         };
-        if plan.is_empty() || dry_run {
+        if dry_run {
+            ran.would_refuse = blocked;
+            if !plan.is_empty() {
+                // What each step would do, as the migrator reports it (nothing is written).
+                match self.migrator().run_with(&RunOptions {
+                    dry_run: true,
+                    window: true,
+                    ..RunOptions::default()
+                }) {
+                    Ok(r) => {
+                        ran.applied = r
+                            .applied
+                            .iter()
+                            .map(|(v, n, d)| (*v, (*n).to_string(), d.clone()))
+                            .collect();
+                    }
+                    Err(e) => ran.would_refuse.push(format!("  steps: {e}")),
+                }
+            }
+            return Ok(ran);
+        }
+        if !blocked.is_empty() {
+            return Err(format!(
+                "the migration is not allowed to run:\n{}",
+                blocked.join("\n")
+            ));
+        }
+        if plan.is_empty() {
+            // Up to date. A database from before the ledger, or restored from a backup of one,
+            // still gets the rows of the steps it has run, and a name.
+            let m = self.migrator();
+            match m.adopt().and_then(|_| m.ensure_instance_id()) {
+                Ok(_) => {}
+                Err(e) => progress(&format!("note: could not record the ledger rows or the database id: {e}")),
+            }
             return Ok(ran);
         }
         // A verified backup first.
@@ -658,22 +849,74 @@ impl Gate {
     }
 }
 
-/// The backup a server takes before it migrates itself at start (`--auto-migrate`), when a backup
-/// directory is configured. `Ok(None)` without one: the caller says so.
-pub fn auto_backup(
-    backend: &Arc<dyn Backend>,
-    blobs: Option<&dyn Blobs>,
-    schema: u64,
-    dir: Option<&Path>,
-    keys: &Keys,
-    clock: &dyn Clock,
-) -> Result<Option<String>, String> {
-    let Some(dir) = dir else {
-        return Ok(None);
-    };
-    let settings = Settings::new(dir, keys.clone());
-    schedule::take(backend, blobs, schema, &settings, "pre-migration", clock)
-        .map(|o| Some(o.backup.id))
+/// What a server that migrates itself at start (`--auto-migrate`) does about a backup.
+pub struct AutoBackup {
+    /// `OBOP_BACKUP_DIR`; `None`: the migration goes ahead and the caller says so.
+    pub dir: Option<PathBuf>,
+    pub keys: Keys,
+    /// About how many bytes the backup will take (the database file, or the size PostgreSQL
+    /// reports), to check the volume has room before writing.
+    pub need_bytes: Option<u64>,
+}
+
+/// The backup a server takes before it migrates itself at start, as a hook for
+/// `RunOptions::before`: called under the migration lock once steps are certain to run, so a
+/// start that is refused (drift, a newer database, a step that needs a window) takes none, two
+/// servers starting together take one, and a crash loop reuses the backup of the attempt that
+/// failed instead of writing another every few seconds. A volume without room for it stops the
+/// migration with that said. `say` is told what happened (and any warning, such as a backup that
+/// is not encrypted).
+pub fn auto_backup_hook(
+    backend: Arc<dyn Backend>,
+    blobs: Option<Arc<dyn Blobs>>,
+    cfg: AutoBackup,
+    clock: Arc<dyn Clock>,
+    say: Arc<dyn Fn(&str) + Send + Sync>,
+) -> obop_migrate::Before {
+    Arc::new(move |p: &obop_migrate::Pending| {
+        let Some(dir) = &cfg.dir else {
+            say("warning: migrating without a backup: set OBOP_BACKUP_DIR so a verified backup is taken first (docs/DEPLOY.md)");
+            return Ok(None);
+        };
+        let settings = Settings::new(dir, cfg.keys.clone());
+        if let Some(b) = reuse_pre_migration(&backend, &settings, p.stored, &*clock) {
+            say(&format!(
+                "backup before migrating: {} (verified; taken by an earlier attempt of this migration and used again)",
+                b.id
+            ));
+            return Ok(Some(b.id));
+        }
+        if let Some(need) = cfg.need_bytes {
+            match free_bytes(dir) {
+                Ok(free) if free < need.saturating_mul(2) => {
+                    return Err(format!(
+                        "the backup before the migration needs about {} and {} has {} free (twice the size is asked): free some space or point OBOP_BACKUP_DIR at a larger volume; nothing was migrated",
+                        mib(need),
+                        dir.display(),
+                        mib(free)
+                    ));
+                }
+                Ok(_) => {}
+                Err(e) => say(&format!("note: {e}")),
+            }
+        }
+        let o = schedule::take(
+            &backend,
+            blobs.as_deref(),
+            u64::from(p.stored),
+            &settings,
+            "pre-migration",
+            &*clock,
+        )
+        .map_err(|e| {
+            format!("the backup before the migration failed, so nothing was migrated: {e}")
+        })?;
+        say(&format!("backup before migrating: {} (verified)", o.backup.id));
+        for n in &o.notes {
+            say(&format!("warning: {n}"));
+        }
+        Ok(Some(o.backup.id))
+    })
 }
 
 // ---- rehearsal -----------------------------------------------------------------------------
@@ -701,6 +944,10 @@ pub struct Rehearsal {
     pub checks: Vec<Check>,
     pub passed: bool,
     pub backup_id: String,
+    /// The database the rehearsed backup came from, if it had an id.
+    pub database_id: Option<String>,
+    /// The engine of the scratch database.
+    pub engine: String,
 }
 
 impl Rehearsal {
@@ -713,13 +960,16 @@ impl Rehearsal {
             backup_id: self.backup_id.clone(),
             longest_step_ms: self.longest_step_ms,
             total_ms: self.total_ms,
+            database_id: self.database_id.clone(),
+            engine: self.engine.clone(),
+            records: self.records_before as u64,
         }
     }
 
     pub fn render(&self) -> String {
         let mut s = format!(
-            "rehearsal of plan {} (schema {} to {}) on a copy of {}:\n",
-            self.plan.id, self.plan.from, self.plan.to, self.backup_id
+            "rehearsal of plan {} (schema {} to {}) on a copy of {} in {}:\n",
+            self.plan.id, self.plan.from, self.plan.to, self.backup_id, self.engine
         );
         for (v, name, ms) in &self.steps {
             s.push_str(&format!("  step {v}: {name}: {ms} ms\n"));
@@ -750,8 +1000,10 @@ impl Rehearsal {
 /// touched. Never touches the database the backup came from.
 pub fn rehearse(o: &RehearseOptions) -> Result<Rehearsal, String> {
     let backup_id = drill::data_name(&o.backup);
-    backup::verify_with(&o.backup, &o.keys)?;
+    let verified = backup::verify_with(&o.backup, &o.keys)?;
+    let database_id = verified.manifest.database_id.clone();
     let scratch = o.scratch.open(o.avoid.as_deref())?;
+    let engine = scratch.backend.kind().to_string();
     let latest = obop_migrate::steps().len() as u64;
     backup::restore_sealed(
         &scratch.backend,
@@ -881,6 +1133,8 @@ pub fn rehearse(o: &RehearseOptions) -> Result<Rehearsal, String> {
         checks,
         passed,
         backup_id,
+        database_id,
+        engine,
     })
 }
 
@@ -894,12 +1148,24 @@ pub struct RolledBack {
     pub schema_after: Option<u32>,
     pub records: usize,
     pub discarded_rows: usize,
+    /// The backup was opened with its key and authenticated; a plain one is not.
+    pub authenticated: bool,
+    /// The backup carried no database id, so it could not be checked to be this database's.
+    pub unnamed: bool,
 }
 
 /// Roll back by restore: verify the backup, replace the database with it in one transaction, and
 /// record why. The reason is required and kept in the ledger of the restored database together
-/// with what the discarded database's ledger said. The older obop binary is the one to start
-/// afterwards if the backup is from an older schema.
+/// with what the discarded database's ledger said, and in the security log: both rows are written
+/// in the same transaction as the restore, so the restored database never exists without them.
+/// The migration lock is held throughout, so no `migrate run` and no starting server migrates
+/// beside it (stop every process first all the same: a server that is running keeps its
+/// connections). The older obop binary is the one to start afterwards if the backup is from an
+/// older schema.
+///
+/// A backup of another database (its id differs from this database's) is refused unless
+/// `other_database` says it is meant. A backup from before databases had ids restores, and says
+/// it could not be checked; the database then keeps the id it had.
 #[allow(clippy::too_many_arguments)]
 pub fn rollback(
     backend: &Arc<dyn Backend>,
@@ -909,6 +1175,7 @@ pub fn rollback(
     keys: &Keys,
     reason: &str,
     actor: &str,
+    other_database: bool,
     clock: &dyn Clock,
 ) -> Result<RolledBack, String> {
     let reason = reason.trim();
@@ -916,9 +1183,22 @@ pub fn rollback(
         return Err("a rollback needs a reason of 1 to 500 characters, on one line".into());
     }
     let latest = obop_migrate::steps().len() as u64;
+    // Nobody migrates while the database is being replaced.
+    let _lock = backend.lock("obop.migrate")?;
     // Everything that can fail without writing happens first (restore does the same).
     let v = backup::verify_with(backup_file, keys)?;
     let before = Migrator::new(backend.clone(), ring.clone());
+    let target_id = before.instance_id().ok().flatten();
+    match (&v.manifest.database_id, &target_id) {
+        (Some(b), Some(t)) if b != t && !other_database => {
+            return Err(format!(
+                "the backup is of another database (id {}), this database is {}. A rollback replaces this database with its own earlier state; pass --other-database if you mean to replace it with a copy of another",
+                &b[..b.len().min(8)],
+                &t[..t.len().min(8)]
+            ));
+        }
+        _ => {}
+    }
     let schema_before = before.status().ok().and_then(|s| s.stored);
     let created = backup::parse_rfc3339(&v.manifest.created_at).unwrap_or(0);
     let discarded: Vec<obop_migrate::Entry> = before
@@ -927,7 +1207,39 @@ pub fn rollback(
         .into_iter()
         .filter(|e| e.at >= created)
         .collect();
-    let r = backup::restore_sealed(
+    let backup_id = drill::data_name(backup_file);
+    let schema_after = u32::try_from(v.manifest.schema_version)
+        .ok()
+        .filter(|s| *s > 0);
+    let unnamed = v.manifest.database_id.is_none();
+    // The rows that go in with the restore.
+    let migrator = Migrator::new(backend.clone(), ring.clone()).by(actor);
+    let (row_id, row) =
+        migrator.rollback_row(reason, &backup_id, schema_before, schema_after, &discarded);
+    let detail = format!(
+        "restored {backup_id} (schema {} to {}); reason: {reason}",
+        schema_before.map_or("?".into(), |v| v.to_string()),
+        schema_after.map_or("?".into(), |v| v.to_string())
+    );
+    let (event_id, event) =
+        crate::audit_row(clock.now(), actor, "migration_rollback", &detail);
+    let mut extra = vec![
+        (obop_migrate::ledger::MODEL.to_string(), row_id, row),
+        ("security_event".to_string(), event_id, event),
+    ];
+    if unnamed && let Some(t) = &target_id {
+        // The backup predates ids: the database keeps its name, so that its other backups still
+        // belong to it.
+        let mut f = obop_storage::Fields::new();
+        f.insert("id".into(), J::from(t.as_str()));
+        f.insert("created_at".into(), J::from(clock.now()));
+        extra.push((
+            obop_migrate::META_MODEL.to_string(),
+            obop_migrate::INSTANCE_ID.to_string(),
+            f,
+        ));
+    }
+    let r = backup::restore_with_rows(
         backend,
         blobs,
         latest,
@@ -937,29 +1249,17 @@ pub fn rollback(
             dry_run: false,
         },
         keys,
+        extra,
         &mut |_| {},
     )?;
-    let backup_id = drill::data_name(backup_file);
-    let after = Migrator::new(backend.clone(), ring.clone()).by(actor);
-    let schema_after = after.status().ok().and_then(|s| s.stored);
-    after.record_rollback(reason, &backup_id, schema_before, schema_after, &discarded)?;
-    crate::audit_event(
-        &**backend,
-        clock.now(),
-        actor,
-        "migration_rollback",
-        &format!(
-            "restored {backup_id} (schema {} to {}); reason: {reason}",
-            schema_before.map_or("?".into(), |v| v.to_string()),
-            schema_after.map_or("?".into(), |v| v.to_string())
-        ),
-    );
     Ok(RolledBack {
         backup_id,
         schema_before,
         schema_after,
         records: r.records,
         discarded_rows: discarded.len(),
+        authenticated: r.authenticated,
+        unnamed,
     })
 }
 
