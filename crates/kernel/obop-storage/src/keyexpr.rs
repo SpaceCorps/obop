@@ -16,19 +16,28 @@
 //! * Names reach the text only as validated literals (`[a-z0-9_]{1,64}`, [`crate::ident`]); values
 //!   never do (they are bound by the caller with an explicit cast).
 //! * One expression per slot and field, byte for byte: an expression index and the query that
-//!   should use it match by text. A change to any expression text must bump [`EXPR_VERSION`]
-//!   (the test `expression_texts_are_pinned` fails until it does), which gives every index built
-//!   from the old text a new name.
-//! * No other file of this crate may spell `jsonb_typeof(` or take a text out of a document with
-//!   `->>`: the test `one_writer_lint` scans the sources and lists the older code that still does.
+//!   should use it match by text. A change to any expression text must bump [`EXPR_VERSION`]:
+//!   the test `expression_texts_are_pinned` keeps a history of (version, digest) pairs and fails
+//!   until the new digest is a new row with a higher version. An index built from the old text
+//!   then gets a new name.
+//! * No other source file of any crate under `crates/` may spell `jsonb_typeof(`, take a text out
+//!   of a document with `->>`, `#>` or `#>>`, or call a `jsonb_extract_path` or `jsonb_path`
+//!   function: the test `one_writer_lint` scans them all and lists, by path, the older code that
+//!   still does.
 //!
 //! The functions are pure and know no connection. PostgreSQL is the only dialect (SQLite has no
 //! pushdown and uses `json_extract` in its own file).
+//!
+//! Server requirements: PostgreSQL 14 or later for the casts (`jsonb` to `numeric` and
+//! `boolean`), and, for the `Lower` slot only, a server built with ICU, which defines the
+//! collation `und-x-icu` (the official images are). Where it is missing a query that uses
+//! `Lower` fails as a whole with "collation does not exist"; the caller probes for it first.
 
 use crate::Result;
 
-/// The version of the expression texts. Index names hash it; bump it with any change of text.
-pub const EXPR_VERSION: u32 = 1;
+/// The version of the expression texts. Index names hash it; bump it with any change of text
+/// (and add the new digest to the history in the test `expression_texts_are_pinned`).
+pub const EXPR_VERSION: u32 = 2;
 
 /// What a field's value is read as. `NULL` means "empty" in every slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -48,7 +57,8 @@ pub enum Slot {
     /// width, so text order is date order).
     Date,
     /// A JSON string in the canonical instant form `YYYY-MM-DDTHH:MM:SS.ffffffZ` and nothing else
-    /// (D72 amendment), as `text` collated `"C"` (text order is time order).
+    /// (the only form the stores write, D72), as `text` collated `"C"` (text order is time
+    /// order).
     Instant,
     /// A JSON string that `obop_values::Decimal::parse` accepts, as `numeric` (80 characters,
     /// 38 significant digits, at most 38 fractional digits).
@@ -56,10 +66,18 @@ pub enum Slot {
     /// The 1-based position of a JSON string in a bound option list, as `integer`; use
     /// [`select_pos`], which takes the list.
     SelPos,
-    /// The tokens of a JSON string list as `text[]` (see [`MEMBER_SEPARATORS`]), for
-    /// `@> ARRAY[$actor]::text[]` and a GIN index.
+    /// The tokens of a JSON string list as `text[]`, exactly the list [`member_tokens`] returns:
+    /// the non-empty pieces between [`MEMBER_SEPARATORS`] (a leading or trailing separator leaves
+    /// no empty element, so the id `''` is in no list). `NULL` for a value that is not a string;
+    /// an empty string gives the empty array. For `@> ARRAY[$actor]::text[]` and a GIN index; the
+    /// caller still refuses an empty actor id, as `Gate::grants` does.
     Members,
     /// The JSON string lower-cased by ICU (`und-x-icu`) as `text`, for `LIKE` and a trigram index.
+    /// It needs a server built with ICU (see the module notes). It equals Rust's
+    /// `str::to_lowercase`, which the in-memory evaluator uses, only while the Unicode version of
+    /// the server's ICU and the one of the Rust standard library agree: a letter that gained a
+    /// case mapping in a newer Unicode release is lower-cased by one side and left alone by the
+    /// other. The parity test checks a corpus of long-stable characters, not the whole standard.
     Lower,
     /// The record id, `text` collated `"C"`. The field must be named `id`.
     Id,
@@ -110,12 +128,13 @@ pub const MEMBER_SEPARATORS: [char; 8] = [',', ';', ' ', '\t', '\n', '\r', '\u{c
 /// The user ids in a `shared_with` list: the non-empty pieces between separators, with nothing
 /// trimmed (a non-breaking space or an em space is part of a token, not a separator).
 ///
-/// **Behaviour change (K5, D76):** before this function `Gate::grants` split on four separators
-/// (`, ; space` and line feed) and then trimmed every piece with Unicode `trim`, so
-/// `"ann\u{a0}"` listed `ann` and a tab, a carriage return, a form feed or a vertical tab did
-/// not separate. Now eight ASCII separators split and nothing is trimmed. User ids contain none
-/// of these characters; a list written with tabs or CRLF now works, and one padded with Unicode
-/// spaces no longer names the person.
+/// **Behaviour change (the member tokenizer of D78, written with the query pushdown D76):**
+/// before this function `Gate::grants` split on four separators (`, ; space` and line feed) and
+/// then trimmed every piece with Unicode `trim`, so `"ann\u{a0}"` listed `ann` and a tab, a
+/// carriage return, a form feed or a vertical tab did not separate. Now eight ASCII separators
+/// split and nothing is trimmed. User ids contain none of these characters; a list written with
+/// tabs or CRLF now works, and one padded with Unicode spaces no longer names the person. Until
+/// the decision record is written, this comment and `docs/MODULES.md` are where it is stated.
 pub fn member_tokens(list: &str) -> Vec<&str> {
     list.split(MEMBER_SEPARATORS)
         .filter(|t| !t.is_empty())
@@ -244,7 +263,13 @@ pub fn field_expr(slot: Slot, field: &str, alias: Option<&str>) -> Result<String
             );
             format!("({})", string(&format!("({inner})")))
         }
-        Slot::Members => format!("regexp_split_to_array({raw}, {})", member_class()),
+        // `regexp_split_to_array` leaves an empty element for a leading or trailing separator;
+        // `member_tokens` has none, so neither may the array (an empty actor id must match
+        // nothing). A NULL (not a string) stays NULL.
+        Slot::Members => format!(
+            "array_remove(regexp_split_to_array({raw}, {}), '')",
+            member_class()
+        ),
         Slot::Lower => format!("lower({raw} COLLATE \"und-x-icu\")"),
         Slot::Id | Slot::SelPos => unreachable!("handled above"),
     })
@@ -268,7 +293,9 @@ pub fn select_pos(field: &str, alias: Option<&str>, options: &str) -> Result<Str
 /// The `LIKE` pattern for "contains `needle`" over a [`Slot::Lower`] expression: `%`, the
 /// needle with `\`, `%` and `_` escaped by a backslash (the default `LIKE` escape), `%`. The
 /// caller lower-cases the needle first with Rust `to_lowercase`, as the in-memory evaluator
-/// does. The pattern is a bound value, never part of the statement text.
+/// does. The pattern is a bound value, never part of the statement text. The text side is
+/// lower-cased by the server's ICU ([`Slot::Lower`]), so the match equals the in-memory one only
+/// while the Unicode versions of Rust and of that ICU agree.
 pub fn like_pattern(needle_lowercase: &str) -> String {
     let mut p = String::with_capacity(needle_lowercase.len() + 2);
     p.push('%');
@@ -303,9 +330,24 @@ mod tests {
         out
     }
 
-    /// The SHA-256 of every expression text. Any change of text fails this test until
-    /// `EXPR_VERSION` is bumped and the digest below is replaced: an index built from the old
-    /// text then gets a new name (D78) and the old one shows as an orphan.
+    /// Every version of the expression texts that has been written, with the SHA-256 of all the
+    /// texts of that version. Never edit a row. A change of any expression text gives a new
+    /// digest, which fails this test until a new row with the next version is appended and
+    /// `EXPR_VERSION` is raised to it: an index built from the old text then has another name
+    /// (D78) and the old one shows as an orphan instead of being silently kept.
+    const HISTORY: &[(u32, &str)] = &[
+        // The first text, in which the member list kept empty tokens; no index was ever built.
+        (
+            1,
+            "a1cb1e1eafa0cb4ab9760d538b70f9834e9d007d8499162951ebbbc9b266a3a1",
+        ),
+        // The member list drops empty tokens (`array_remove`).
+        (
+            2,
+            "386aea455f613b66f53719348db876cb1c58821d8de9c4362b0ff9333d4a12c1",
+        ),
+    ];
+
     #[test]
     fn expression_texts_are_pinned() {
         let mut h = Sha256::new();
@@ -315,13 +357,24 @@ mod tests {
         }
         h.update(like_pattern("a_b%c\\d").as_bytes());
         let digest: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+        for (i, (version, d)) in HISTORY.iter().enumerate() {
+            assert_eq!(*version as usize, i + 1, "the versions are 1, 2, 3, ...");
+            assert!(
+                HISTORY[..i].iter().all(|(_, earlier)| earlier != d),
+                "version {version} has the digest of an earlier version"
+            );
+        }
+        let (latest, pinned) = *HISTORY.last().unwrap();
         assert_eq!(
-            (EXPR_VERSION, digest.as_str()),
-            (
-                1,
-                "a1cb1e1eafa0cb4ab9760d538b70f9834e9d007d8499162951ebbbc9b266a3a1"
-            ),
-            "an expression text changed: bump EXPR_VERSION and replace the digest with {digest}"
+            EXPR_VERSION, latest,
+            "EXPR_VERSION must be the last version of HISTORY"
+        );
+        assert_eq!(
+            digest,
+            pinned,
+            "an expression text changed: raise EXPR_VERSION to {} and append the row ({}, \"{digest}\") to HISTORY",
+            EXPR_VERSION + 1,
+            EXPR_VERSION + 1
         );
     }
 
@@ -354,6 +407,13 @@ mod tests {
         let int = field_expr(Slot::Int, "n", None).unwrap();
         assert!(int.contains("scale((data -> 'n')::numeric) = 0"), "{int}");
         assert!(!int.contains("trunc"), "{int}");
+        // Members: no empty element, so the id '' is in no list.
+        let members = field_expr(Slot::Members, "f", None).unwrap();
+        assert!(
+            members.starts_with("array_remove(regexp_split_to_array(")
+                && members.ends_with(", '')"),
+            "{members}"
+        );
     }
 
     #[test]
@@ -448,7 +508,7 @@ mod tests {
             assert!(t(empty).is_empty(), "{empty:?}");
         }
         // Nothing is trimmed and no Unicode space separates: these were separators or trimmed
-        // before K5.
+        // before the tokenizer changed.
         assert_eq!(t("ann\u{a0}"), ["ann\u{a0}"]);
         assert_eq!(t("\u{2003}ann"), ["\u{2003}ann"]);
         assert_eq!(t("a\u{a0}b"), ["a\u{a0}b"]);
@@ -475,80 +535,159 @@ mod tests {
 
     // ---- the one-writer lint ----------------------------------------------------------------
 
-    /// Older code that still takes a field out of a document itself. Each entry is a file and a
-    /// piece of a source line with all white space removed, and says who converts it. The test
-    /// fails when a line outside this list (or outside this file) spells one of the patterns,
-    /// and when an entry no longer matches anything (delete the entry when its code is gone).
-    const ALLOWED: &[(&str, &str, &str)] = &[
+    /// Whole files that may spell the patterns: the writer itself, and the parity harness, which
+    /// writes the expressions the designs first had, wrong on purpose. Paths are relative to
+    /// `crates/`, with `/`.
+    const ALLOWED_FILES: &[(&str, &str)] = &[
         (
-            "pg.rs",
+            "kernel/obop-storage/src/keyexpr.rs",
+            "the one writer (and the lint that spells the patterns)",
+        ),
+        (
+            "kernel/obop-commands/src/keyexpr_parity.rs",
+            "the parity harness writes the earlier wrong expressions on purpose",
+        ),
+    ];
+
+    /// Older code that still takes a field out of a document itself, by path (relative to
+    /// `crates/`) and a piece of one source line, compared with all white space removed and in
+    /// lower case. The piece is cut out of the line and the rest is checked again, so a second
+    /// read on the same line is still found. The test fails for any other line, and for an entry
+    /// that matches nothing any more (delete the entry when its code is gone).
+    const ALLOWED_LINES: &[(&str, &str, &str)] = &[
+        (
+            "kernel/obop-storage/src/pg.rs",
             "CHECK(jsonb_typeof(data)='object')",
             "the table constraint on the whole document, not a field value",
         ),
         (
-            "pg.rs",
+            "kernel/obop-storage/src/pg.rs",
             "data->$2::text=$3",
-            "Pg::find, converted to the slots by the index and keyset work (D78, K6)",
+            "Pg::find, converted to the slots by the index and keyset work (D78)",
         ),
         (
-            "pg.rs",
+            "kernel/obop-storage/src/pg.rs",
             "NULLIF(data->>'{f}','')",
             "the D57 unique index; its text must stay as deployed databases hold it",
         ),
         (
-            "pg.rs",
+            "kernel/obop-storage/src/pg.rs",
             "COALESCE(data->>'{f}','')",
             "the D57 unique index; its text must stay as deployed databases hold it",
         ),
         (
-            "pg.rs",
+            "kernel/obop-storage/src/pg.rs",
             "data->>$4=$3",
             "swap_fields, a compare and swap of a text under a bound field name (key rotation)",
         ),
+        (
+            "kernel/obop-commands/src/tests.rs",
+            "\"data->>'name'\"",
+            "a hostile field name that the test proves is refused as an unknown field",
+        ),
     ];
 
-    const PATTERNS: [&str; 3] = ["jsonb_typeof(", "->>", "data->"];
+    /// Lower case, white space removed.
+    const PATTERNS: [&str; 9] = [
+        "jsonb_typeof(",
+        "->>",
+        "#>",
+        "data->",
+        // The arrow on a column or alias of another name, with a literal or a bound name after it
+        // (a Rust return type is followed by a type, never by a quote or a placeholder).
+        "->'",
+        "->$",
+        "jsonb_extract_path",
+        "jsonb_path_",
+        "json_extract_path",
+    ];
+
+    fn squeeze(line: &str) -> String {
+        line.chars()
+            .filter(|c| !c.is_whitespace())
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
 
     fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
         for e in std::fs::read_dir(dir).unwrap() {
             let p = e.unwrap().path();
             if p.is_dir() {
-                sources(&p, out);
-            } else if p.extension().is_some_and(|x| x == "rs") {
+                if p.file_name().is_some_and(|n| n != "target") {
+                    sources(&p, out);
+                }
+            } else if p.extension().is_some_and(|x| x == "rs" || x == "sql") {
                 out.push(p);
             }
         }
     }
 
-    #[test]
-    fn one_writer_lint() {
-        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut files = Vec::new();
-        sources(&src, &mut files);
-        assert!(files.len() >= 10, "found {} sources", files.len());
-        let mut used = vec![0usize; ALLOWED.len()];
+    /// The lines of `text` that spell a pattern, minus what an allowed line piece covers.
+    fn offending(
+        text: &str,
+        allowed: &[(&str, &str, &str)],
+        used: &mut [usize],
+    ) -> Vec<(usize, String)> {
         let mut bad = Vec::new();
-        for p in files {
-            let name = p.file_name().unwrap().to_string_lossy().to_string();
-            if name == "keyexpr.rs" {
+        for (n, line) in text.lines().enumerate() {
+            let mut rest = squeeze(line);
+            if !PATTERNS.iter().any(|pat| rest.contains(pat)) {
                 continue;
             }
-            let text = std::fs::read_to_string(&p).unwrap();
-            for (n, line) in text.lines().enumerate() {
-                let squeezed: String = line.chars().filter(|c| !c.is_whitespace()).collect();
-                if !PATTERNS.iter().any(|pat| squeezed.contains(pat)) {
-                    continue;
+            for (i, (_, piece, _)) in allowed.iter().enumerate() {
+                let piece = squeeze(piece);
+                if rest.contains(&piece) {
+                    used[i] += 1;
+                    rest = rest.replace(&piece, "");
                 }
-                let mut allowed = false;
-                for (i, (file, piece, _)) in ALLOWED.iter().enumerate() {
-                    if *file == name && squeezed.contains(piece) {
-                        used[i] += 1;
-                        allowed = true;
-                    }
-                }
-                if !allowed {
-                    bad.push(format!("{name}:{}: {}", n + 1, line.trim()));
-                }
+            }
+            if PATTERNS.iter().any(|pat| rest.contains(pat)) {
+                bad.push((n + 1, line.trim().to_string()));
+            }
+        }
+        bad
+    }
+
+    #[test]
+    fn one_writer_lint() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let crates = manifest.parent().and_then(Path::parent).unwrap();
+        assert!(crates.ends_with("crates"), "{crates:?}");
+        let mut files = Vec::new();
+        sources(crates, &mut files);
+        assert!(files.len() >= 100, "found {} sources", files.len());
+        let rel = |p: &Path| {
+            p.strip_prefix(crates)
+                .unwrap()
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+                .join("/")
+        };
+        for (file, why) in ALLOWED_FILES {
+            assert!(
+                files.iter().any(|p| rel(p) == *file),
+                "the allowed file {file} ({why}) does not exist; fix the path"
+            );
+        }
+        let mut used = vec![0usize; ALLOWED_LINES.len()];
+        let mut bad = Vec::new();
+        for p in &files {
+            let path = rel(p);
+            if ALLOWED_FILES.iter().any(|(f, _)| *f == path) {
+                continue;
+            }
+            let mine: Vec<usize> = (0..ALLOWED_LINES.len())
+                .filter(|i| ALLOWED_LINES[*i].0 == path)
+                .collect();
+            let here: Vec<(&str, &str, &str)> = mine.iter().map(|i| ALLOWED_LINES[*i]).collect();
+            let mut counts = vec![0usize; here.len()];
+            let text = std::fs::read_to_string(p).unwrap();
+            for (n, line) in offending(&text, &here, &mut counts) {
+                bad.push(format!("{path}:{n}: {line}"));
+            }
+            for (j, i) in mine.iter().enumerate() {
+                used[*i] += counts[j];
             }
         }
         assert!(
@@ -560,9 +699,37 @@ mod tests {
             assert!(
                 *n > 0,
                 "the allowed exception {:?} in {} matches nothing any more; delete it",
-                ALLOWED[i].1,
-                ALLOWED[i].0
+                ALLOWED_LINES[i].1,
+                ALLOWED_LINES[i].0
             );
         }
+    }
+
+    /// The lint cannot be satisfied by a file name, a letter case, another JSON operator or a
+    /// second read on a line that already holds an allowed one.
+    #[test]
+    fn the_lint_finds_what_it_is_meant_to_find() {
+        let allowed = [("a/pg.rs", "data->>$4=$3", "swap")];
+        let check = |text: &str| {
+            let mut used = [0usize];
+            (offending(text, &allowed, &mut used), used[0])
+        };
+        let (bad, used) = check("WHERE id = $2 AND data->>$4 = $3");
+        assert!(bad.is_empty() && used == 1);
+        for sneaky in [
+            "WHERE id = $2 AND data->>$4 = $3 AND data ->> 'x' = 'y'",
+            "WHERE JSONB_TYPEOF(d.data) = 'string'",
+            "WHERE data #>> '{f}' = $1",
+            "WHERE data #> '{f}' IS NOT NULL",
+            "WHERE jsonb_extract_path_text(data, 'f') = $1",
+            "WHERE jsonb_path_exists(data, '$.f')",
+            "WHERE (r.data)->'f' = $1",
+            "SELECT 1 FROM t WHERE x ->> 'f' = $1",
+        ] {
+            let (bad, _) = check(sneaky);
+            assert_eq!(bad.len(), 1, "{sneaky}");
+        }
+        let (bad, used) = check("let x = 1; // nothing to see");
+        assert!(bad.is_empty() && used == 0);
     }
 }

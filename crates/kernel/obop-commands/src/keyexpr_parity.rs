@@ -1,6 +1,6 @@
 //! The SQL key expressions of `obop_storage::keyexpr` against the in-memory evaluator
-//! (`query::stored_key`, `Gate::grants`, `Query::matches`), over a real PostgreSQL server (K3,
-//! D76, D78).
+//! (`query::stored_key`, `Gate::grants`, `Query::matches`), over a real PostgreSQL server (D76,
+//! D78).
 //!
 //! The in-memory evaluator is the oracle: a stored value that is not valid for its kind counts as
 //! empty. Every SQL slot must return `NULL` exactly there and the same key everywhere else, and
@@ -10,8 +10,15 @@
 //! instants, over-long decimals, Unicode digits, odd white space), reads every document back the
 //! way the backend does (the `jsonb` text, parsed by `serde_json`) and compares, row by row and
 //! slot by slot, the expression with the oracle. It also compares the order of the collated text
-//! slots with Rust's byte order, the `shared_with` tokens and membership, and `contains` through
+//! slots with Rust's byte order, the `shared_with` token lists (element by element, empty
+//! tokens included) and membership (also of the empty id), and `contains` through
 //! `like_pattern`, then repeats everything in a session with unusual settings.
+//!
+//! The `Lower` slot and the `contains` probes need the collation `und-x-icu`, which a PostgreSQL
+//! built with ICU has (the official images, and the one CI uses). On a server without it the
+//! slot cannot run at all, so this test skips just those two parts and says so on stderr; a CI
+//! image without ICU would therefore hide them. Rust's `to_lowercase` and the server's ICU agree
+//! only while their Unicode versions do, and the corpus holds long-stable characters only.
 //!
 //! It runs when `OBOP_TEST_POSTGRES_URL` is set, in a temporary table of its own that vanishes
 //! with the connection. `OBOP_PARITY_SEED` and `OBOP_PARITY_PER_KIND` (default 2,500 generated
@@ -577,6 +584,14 @@ fn hand() -> Vec<Option<String>> {
         "ann",
         "ann,bob",
         "ann, bob",
+        ",ann",
+        "ann,",
+        " ann ",
+        ";;ann;;",
+        "\tann\n",
+        "\u{b}",
+        ",",
+        " , ; ",
         "ann; bob\tcy\nd",
         "\r\n",
         "a b",
@@ -668,9 +683,10 @@ fn tokens_json(list: &str) -> Key {
 /// What the in-memory evaluator says about a stored value for a slot. `None` is "empty".
 fn expected(slot: Slot, v: Option<&J>) -> Option<Key> {
     if slot == Slot::Members {
-        // `Gate::grants`: a non-empty string is split; anything else lists nobody.
+        // `Gate::grants`: a string is split into its non-empty tokens; anything else lists
+        // nobody.
         return Some(match v {
-            Some(J::String(s)) if !s.is_empty() => tokens_json(s),
+            Some(J::String(s)) => tokens_json(s),
             _ => Key::Str("[]".into()),
         });
     }
@@ -697,7 +713,12 @@ fn expected(slot: Slot, v: Option<&J>) -> Option<Key> {
 /// can never return (a text that is not an integer, a date that changed on the way).
 fn actual(slot: Slot, sql: Option<&str>, v: Option<&J>) -> Result<Option<Key>, String> {
     let Some(t) = sql else {
-        return Ok((slot == Slot::Members).then(|| Key::Str("[]".into())));
+        return match (slot, v) {
+            // NULL is the answer for a value that is not a string, and only for that.
+            (Slot::Members, Some(J::String(_))) => Err("NULL for a string".into()),
+            (Slot::Members, _) => Ok(Some(Key::Str("[]".into()))),
+            _ => Ok(None),
+        };
     };
     let same_text = |t: &str| -> Result<(), String> {
         match v {
@@ -737,14 +758,13 @@ fn actual(slot: Slot, sql: Option<&str>, v: Option<&J>) -> Result<Option<Key>, S
             t.parse::<i64>().map_err(|e| format!("{t:?}: {e}"))? - 1,
         )),
         Slot::Members => {
+            if !matches!(v, Some(J::String(_))) {
+                return Err(format!("the list {t} for a value that is not a string"));
+            }
+            // The array as it is, empty elements included: the slot must not return any.
             let all: Vec<String> =
                 serde_json::from_str(t).map_err(|e| format!("{t:?} is not a list: {e}"))?;
-            let tokens: Vec<&str> = all
-                .iter()
-                .map(String::as_str)
-                .filter(|x| !x.is_empty())
-                .collect();
-            Some(Key::Str(serde_json::to_string(&tokens).unwrap()))
+            Some(Key::Str(serde_json::to_string(&all).unwrap()))
         }
         Slot::Id => None,
     })
@@ -766,6 +786,10 @@ struct Tally {
     orderings: usize,
     probes: usize,
     diffs: Vec<String>,
+    /// Expressions that raised instead of answering.
+    raised: usize,
+    /// The `n` of every row where the expression and the evaluator disagree.
+    bad_rows: Vec<i32>,
 }
 
 impl Tally {
@@ -876,6 +900,7 @@ fn compare_slot(c: &mut Client, rows: &[Row], slot: Slot, expr: &str, t: &mut Ta
     let sql = match run_column(c, slot, expr) {
         Ok(s) => s,
         Err(e) => {
+            t.raised += 1;
             t.diff(format!("{slot:?}: the expression raised: {e}"));
             return;
         }
@@ -886,6 +911,7 @@ fn compare_slot(c: &mut Client, rows: &[Row], slot: Slot, expr: &str, t: &mut Ta
         let have = match actual(slot, got.as_deref(), row.v.as_ref()) {
             Ok(k) => k,
             Err(e) => {
+                t.bad_rows.push(row.n);
                 t.diff(format!(
                     "{slot:?} n={} {:?}: {e}",
                     row.n,
@@ -896,6 +922,7 @@ fn compare_slot(c: &mut Client, rows: &[Row], slot: Slot, expr: &str, t: &mut Ta
         };
         t.comparisons += 1;
         if want != have {
+            t.bad_rows.push(row.n);
             t.diff(format!(
                 "{slot:?} n={} value {}: the oracle says {want:?}, SQL says {have:?}",
                 row.n,
@@ -973,8 +1000,9 @@ fn check_probes(c: &mut Client, rows: &[Row], seed: u64, with_lower: bool, t: &m
     let members = keyexpr::field_expr(Slot::Members, "f", None).unwrap();
     let sql =
         format!("SELECT n FROM obop_parity WHERE ({members}) @> ARRAY[$1]::text[] ORDER BY n");
+    // The empty id is in no list, whatever separators a list starts or ends with.
     let mut ids: Vec<String> = [
-        "ann", "bob", "Åsa", "o'brien", "a.b*c", "100%", "x_y", "joann",
+        "", "ann", "bob", "Åsa", "o'brien", "a.b*c", "100%", "x_y", "joann",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -1125,7 +1153,7 @@ fn keyexpr_parity_on_postgresql() {
     let lower = has_icu(&mut c);
     if !lower {
         eprintln!(
-            "keyexpr_parity: no und-x-icu collation on this server; the Lower slot is not tried"
+            "keyexpr_parity: no und-x-icu collation on this server (built without ICU): the Lower slot and the contains probes cannot run there and are skipped"
         );
     }
     let mut t = Tally::default();
@@ -1151,6 +1179,23 @@ fn keyexpr_parity_on_postgresql() {
         t.comparisons > 100_000,
         "the corpus is too small: {}",
         t.comparisons
+    );
+    // The corpus must hold the lists the empty-token rule is about.
+    let edges = rows
+        .iter()
+        .filter(|r| match &r.v {
+            Some(J::String(s)) => {
+                let tokens = keyexpr::member_tokens(s);
+                !tokens.is_empty()
+                    && (s.starts_with(keyexpr::MEMBER_SEPARATORS)
+                        || s.ends_with(keyexpr::MEMBER_SEPARATORS))
+            }
+            _ => false,
+        })
+        .count();
+    assert!(
+        edges >= 100,
+        "only {edges} lists start or end with a separator"
     );
     assert!(
         t.diffs.is_empty(),
@@ -1187,9 +1232,12 @@ fn the_slots_cover_every_field_kind_the_parity_test_checks() {
     );
 }
 
-/// The harness is not blind: the three expressions that the designs first wrote (an integer
-/// that is `trunc`-equal, so `5.0`; a date without a calendar; a decimal with twelve fractional
-/// digits) and an instant that accepts any spelling each differ from the oracle somewhere.
+/// The harness is not blind. Six expressions that are wrong in one known way each (the three the
+/// designs first wrote: an integer that is `trunc`-equal, so `5.0`, a date without a calendar and
+/// a decimal with twelve fractional digits; an instant that accepts any spelling; a member list
+/// that keeps empty tokens; a 0-based select position) must each run without raising and must
+/// each disagree with the oracle on the very row that shows the mistake. The other five slots
+/// (`Str`, `Raw`, `Bool`, `Lower`, `Id`) have no mutant here; the parity run itself is their test.
 #[test]
 fn the_parity_check_finds_the_expressions_that_were_wrong_before() {
     let Some(mut c) = connect() else { return };
@@ -1197,7 +1245,9 @@ fn the_parity_check_finds_the_expressions_that_were_wrong_before() {
     let rows = load(&mut c, &corpus, 7);
     let v = "(data -> 'f')";
     let t = "(data ->> 'f')";
-    let wrong: [(Slot, String); 4] = [
+    let raw = keyexpr::field_expr(Slot::Raw, "f", None).unwrap();
+    // (slot, the wrong expression, a stored value on which it must be caught)
+    let wrong: Vec<(Slot, String, J)> = vec![
         (
             Slot::Int,
             format!(
@@ -1205,6 +1255,7 @@ fn the_parity_check_finds_the_expressions_that_were_wrong_before() {
                  trunc({v}::numeric) AND {v}::numeric BETWEEN -9223372036854775808 AND \
                  9223372036854775807 THEN ({v}::numeric)::bigint END) END)"
             ),
+            J::from(5.0),
         ),
         (
             Slot::Date,
@@ -1212,6 +1263,7 @@ fn the_parity_check_finds_the_expressions_that_were_wrong_before() {
                 "(CASE WHEN jsonb_typeof({v}) = 'string' THEN (CASE WHEN {t} ~ \
                  '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$' THEN {t} END) END)"
             ),
+            J::from("2026-02-30"),
         ),
         (
             Slot::Dec,
@@ -1219,29 +1271,57 @@ fn the_parity_check_finds_the_expressions_that_were_wrong_before() {
                 "(CASE WHEN jsonb_typeof({v}) = 'string' AND {t} ~ \
                  '^-?[0-9]{{1,38}}([.][0-9]{{1,12}})?$' THEN {t}::numeric END)"
             ),
+            J::from(format!("0.{}1", "0".repeat(37))),
         ),
         (
             Slot::Instant,
             format!("(CASE WHEN jsonb_typeof({v}) = 'string' THEN {t} END)"),
+            J::from("2026-03-29T03:30:00.000000+02:00"),
+        ),
+        (
+            // The expression before the empty tokens were removed.
+            Slot::Members,
+            format!("regexp_split_to_array({raw}, E'[,; \\x09\\x0a\\x0d\\x0c\\x0b]+')"),
+            J::from(",ann"),
+        ),
+        (
+            Slot::SelPos,
+            format!("(array_position($1::text[], {raw}) - 1)"),
+            J::from("open"),
         ),
     ];
-    for (slot, expr) in &wrong {
+    for (slot, expr, value) in &wrong {
         let mut tally = Tally::default();
         compare_slot(&mut c, &rows, *slot, expr, &mut tally);
+        assert_eq!(
+            tally.raised, 0,
+            "{slot:?}: the wrong expression itself raised, so it shows nothing: {:?}",
+            tally.diffs
+        );
+        assert!(rows.len() > 1000, "{slot:?}: too few rows");
+        let shown: Vec<i32> = rows
+            .iter()
+            .filter(|r| r.v.as_ref() == Some(value))
+            .map(|r| r.n)
+            .collect();
         assert!(
-            !tally.diffs.is_empty(),
-            "{slot:?}: the wrong expression was not caught in {} comparisons",
-            tally.comparisons
+            !shown.is_empty(),
+            "{slot:?}: the corpus has no row {value} to show the mistake on"
+        );
+        assert!(
+            shown.iter().all(|n| tally.bad_rows.contains(n)),
+            "{slot:?}: the wrong expression was not caught on {value}; it differed on {} other rows",
+            tally.bad_rows.len()
         );
         eprintln!(
-            "{slot:?}: the old expression differs from the oracle in {} places, e.g. {}",
-            tally.diffs.len(),
+            "{slot:?}: the old expression differs from the oracle on {} rows, e.g. {}",
+            tally.bad_rows.len(),
             tally.diffs[0]
         );
     }
     // And the real ones are clean on the same rows.
     let mut tally = Tally::default();
-    for (slot, _) in &wrong {
+    for (slot, _, _) in &wrong {
         compare_slot(&mut c, &rows, *slot, &expr_of(*slot), &mut tally);
     }
     assert!(tally.diffs.is_empty(), "{:?}", tally.diffs);
