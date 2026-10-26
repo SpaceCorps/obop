@@ -804,6 +804,10 @@ impl Installer {
                 return Err(format!("model {} already exists", m.name));
             }
         }
+        // An uninstall keeps the data: a reinstall must find it in the shape of this version.
+        if existing.is_none() {
+            migrate::check_stored_shapes(&*self.backend, manifest)?;
+        }
         for (at, to) in manifest.external_refs() {
             if !d.has_model(&to) {
                 return Err(format!("{at} refers to model {to}, which is not installed"));

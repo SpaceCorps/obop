@@ -103,7 +103,7 @@ pub struct Meta {
 pub struct MigrationM {
     /// The installed versions the step applies to, a requirement such as `<0.4`.
     pub from: String,
-    /// `rename_field`, `set_default` or `drop_field`.
+    /// `rename_field`, `set_default`, `drop_field` or `reformat_field`.
     pub op: String,
     pub model: String,
     /// The field: the old name for `rename_field`, the field filled for `set_default`, the field
@@ -238,6 +238,14 @@ pub struct FieldM {
     /// Largest upload in bytes; only for `image` (default 5 MiB) and `file` (default 25 MiB),
     /// at most 64 MiB.
     pub max_bytes: Option<u32>,
+    /// `kind = "decimal"`: digits in all, 1 to 38 (D72).
+    pub precision: Option<u32>,
+    /// `kind = "decimal"`: digits after the point, 0 to 12 and not above the precision.
+    pub scale: Option<u32>,
+    /// `kind = "decimal"`: `half_even`, `half_up` or `down`. On a stored field it is how the
+    /// import path rounds input with too many fractional digits (without it such input is an
+    /// error); on a computed field it is how the result and every division are rounded.
+    pub round: Option<String>,
     /// Computed when the record is read, from an expression over its fields and child records
     /// (D57): `sum(lines.amount)`, `quantity * unit_price`. Read-only.
     pub computed: Option<String>,
@@ -264,6 +272,20 @@ fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
     let ok = match (f.kind.as_str(), v) {
         ("text" | "longtext" | "date" | "ref", T::String(_)) => true,
         ("number" | "money", T::Integer(_) | T::Float(_)) => true,
+        ("datetime", T::String(s)) => obop_values::Instant::parse(s).is_ok(),
+        // A decimal default is a string ("12.50") or a whole number; a TOML float is not exact.
+        ("decimal", T::String(s)) => match (f.precision, f.scale) {
+            (Some(p), Some(sc)) => {
+                obop_values::Decimal::parse_for(s, p as u8, sc as u8, None).is_ok()
+            }
+            _ => false,
+        },
+        ("decimal", T::Integer(n)) => match (f.precision, f.scale) {
+            (Some(p), Some(sc)) => {
+                obop_values::Decimal::parse_for(&n.to_string(), p as u8, sc as u8, None).is_ok()
+            }
+            _ => false,
+        },
         ("bool", T::Boolean(_)) => true,
         ("select", T::String(s)) => f.options.iter().any(|o| o == s),
         ("select", _) => false,
@@ -665,9 +687,34 @@ impl Manifest {
                         return Err(format!("{at}: drop_field takes only `confirm`"));
                     }
                 }
+                "reformat_field" => {
+                    // D72: rewrite the stored values of a decimal or datetime field in the form of
+                    // its current shape (after a change of `scale` or `precision`).
+                    let Some(f) = exists(&st.field) else {
+                        return Err(format!(
+                            "{at}: {} is not a field of {} in this version",
+                            st.field, st.model
+                        ));
+                    };
+                    if !matches!(f.kind.as_str(), "decimal" | "datetime") {
+                        return Err(format!(
+                            "{at}: reformat_field is for decimal and datetime fields, and {} is {}",
+                            st.field, f.kind
+                        ));
+                    }
+                    if f.computed.is_some() {
+                        return Err(format!(
+                            "{at}: {} is computed and stores nothing, so there is nothing to reformat",
+                            st.field
+                        ));
+                    }
+                    if st.to.is_some() || st.value.is_some() || st.confirm {
+                        return Err(format!("{at}: reformat_field takes no other key"));
+                    }
+                }
                 other => {
                     return Err(format!(
-                        "{at}: unknown op {other:?} (use rename_field, set_default or drop_field)"
+                        "{at}: unknown op {other:?} (use rename_field, set_default, drop_field or reformat_field)"
                     ));
                 }
             }
@@ -975,7 +1022,7 @@ impl Manifest {
         let at = format!("{}.{}", m.name, f.name);
         if !FieldKind::is_known(&f.kind) && f.kind != "sequence" {
             return Err(format!(
-                "{at}: unknown kind {:?} (use text, longtext, number, money, date, bool, select, ref, sequence, image or file)",
+                "{at}: unknown kind {:?} (use text, longtext, number, money, date, datetime, decimal, bool, select, ref, sequence, image or file)",
                 f.kind
             ));
         }
@@ -1024,6 +1071,32 @@ impl Manifest {
         }
         if f.kind != "ref" && f.to.is_some() {
             return Err(format!("{at}: `to` is only valid for kind \"ref\""));
+        }
+        if f.kind == "decimal" {
+            let (Some(p), Some(sc)) = (f.precision, f.scale) else {
+                return Err(format!(
+                    "{at}: a decimal needs `precision` (digits in all, 1 to 38) and `scale` (digits after the point, 0 to 12), for example precision = 12, scale = 2"
+                ));
+            };
+            if !(1..=u32::from(obop_values::MAX_PRECISION)).contains(&p) {
+                return Err(format!("{at}: `precision` must be from 1 to 38, not {p}"));
+            }
+            if sc > u32::from(obop_values::MAX_SCALE) || sc > p {
+                return Err(format!(
+                    "{at}: `scale` must be from 0 to 12 and not above the precision ({p}), not {sc}"
+                ));
+            }
+            if let Some(r) = &f.round
+                && obop_values::Round::parse(r).is_none()
+            {
+                return Err(format!(
+                    "{at}: `round` must be half_even, half_up or down, not {r:?}"
+                ));
+            }
+        } else if f.precision.is_some() || f.scale.is_some() || f.round.is_some() {
+            return Err(format!(
+                "{at}: `precision`, `scale` and `round` are only valid for kind \"decimal\""
+            ));
         }
         if f.kind == "select" {
             if f.options.is_empty() {
@@ -1355,6 +1428,12 @@ impl Manifest {
             "number" => FieldKind::Number,
             "money" => FieldKind::Money,
             "date" => FieldKind::Date,
+            "datetime" => FieldKind::Datetime,
+            "decimal" => FieldKind::Decimal {
+                precision: f.precision.unwrap_or(0) as u8,
+                scale: f.scale.unwrap_or(0) as u8,
+                round: f.round.as_deref().and_then(obop_values::Round::parse),
+            },
             "bool" => FieldKind::Bool,
             "select" => FieldKind::Select(
                 f.options
@@ -1651,6 +1730,88 @@ write_group = "fleet.manager"
             let module = Manifest::parse(&t).unwrap().to_module().unwrap();
             assert_eq!(module.models[0].fields[0].kind.name(), k);
         }
+    }
+
+    #[test]
+    fn decimal_and_datetime_fields_parse_with_their_shape() {
+        let at = |extra: &str| {
+            FLEET.replace("name = \"plate\"", &format!("name = \"plate\"\n  {extra}"))
+        };
+        let kind_of = |t: &str| {
+            Manifest::parse(t).unwrap().to_module().unwrap().models[0].fields[0]
+                .kind
+                .clone()
+        };
+        assert_eq!(
+            kind_of(&at("kind = \"decimal\"\n  precision = 12\n  scale = 2")),
+            FieldKind::Decimal {
+                precision: 12,
+                scale: 2,
+                round: None
+            }
+        );
+        assert_eq!(
+            kind_of(&at(
+                "kind = \"decimal\"\n  precision = 38\n  scale = 12\n  round = \"half_even\""
+            )),
+            FieldKind::Decimal {
+                precision: 38,
+                scale: 12,
+                round: Some(obop_registry::Round::HalfEven)
+            }
+        );
+        assert_eq!(kind_of(&at("kind = \"datetime\"")), FieldKind::Datetime);
+        for (extra, want) in [
+            ("kind = \"decimal\"", "needs `precision`"),
+            ("kind = \"decimal\"\n  precision = 12", "needs `precision`"),
+            (
+                "kind = \"decimal\"\n  precision = 0\n  scale = 0",
+                "from 1 to 38",
+            ),
+            (
+                "kind = \"decimal\"\n  precision = 39\n  scale = 2",
+                "from 1 to 38",
+            ),
+            (
+                "kind = \"decimal\"\n  precision = 12\n  scale = 13",
+                "0 to 12",
+            ),
+            (
+                "kind = \"decimal\"\n  precision = 2\n  scale = 3",
+                "not above the precision",
+            ),
+            (
+                "kind = \"decimal\"\n  precision = 12\n  scale = 2\n  round = \"up\"",
+                "half_even, half_up or down",
+            ),
+            (
+                "kind = \"money\"\n  precision = 12",
+                "only valid for kind \"decimal\"",
+            ),
+            (
+                "kind = \"datetime\"\n  scale = 2",
+                "only valid for kind \"decimal\"",
+            ),
+            ("round = \"down\"", "only valid for kind \"decimal\""),
+            (
+                "kind = \"decimal\"\n  precision = 12.5\n  scale = 2",
+                "invalid obop.toml",
+            ),
+        ] {
+            let e = err(&at(extra));
+            assert!(e.contains(want), "{extra:?} -> {e}");
+        }
+        // A migration default for a decimal is a string or a whole number, never a float.
+        let t = at("kind = \"decimal\"\n  precision = 6\n  scale = 2");
+        let f = Manifest::parse(&t).unwrap().model[0].field[0].clone();
+        let v = |s: &str| toml::from_str::<toml::Table>(s).unwrap()["v"].clone();
+        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}"))).is_ok();
+        assert!(ok("\"12.5\"") && ok("12"));
+        assert!(!ok("12.5") && !ok("\"1.234\"") && !ok("\"1e3\"") && !ok("true") && !ok("1234567"));
+        let t = at("kind = \"datetime\"");
+        let f = Manifest::parse(&t).unwrap().model[0].field[0].clone();
+        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}"))).is_ok();
+        assert!(ok("\"2026-03-29T01:30:00Z\"") && !ok("\"2026-03-29\"") && !ok("5"));
     }
 
     #[test]

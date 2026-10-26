@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { fmt, getCurrency, msg, t } from "@obop/ui";
-import type { FieldMeta } from "./api.ts";
+import { getTime, type FieldMeta } from "./api.ts";
 import { loadFavorites, saveFavorites, type Favorite } from "./favorites.ts";
 import { FieldInput } from "./fields.tsx";
 import { optionLabel } from "./format.ts";
@@ -120,7 +120,11 @@ const OPS: Record<string, [string, string][]> = {
 };
 const opsFor = (f: FieldMeta) =>
   OPS[
-    f.kind === "number" || f.kind === "money" || f.kind === "date"
+    f.kind === "number" ||
+    f.kind === "money" ||
+    f.kind === "date" ||
+    f.kind === "datetime" ||
+    f.kind === "decimal"
       ? "range"
       : f.kind === "longtext"
         ? "text"
@@ -143,21 +147,20 @@ function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond)
     setMin("");
     setMax("");
   };
-  const numeric = f.kind === "number" || f.kind === "money";
+  const numeric = f.kind === "number" || f.kind === "money" || f.kind === "decimal";
+  // A decimal bound may have more digits than the field keeps: the server compares exactly.
+  const digits = f.kind === "money" ? fmt.exponent() : Math.max(f.scale ?? 0, 6);
   /** A typed bound as the canonical decimal kept in the address: undefined when blank, null when invalid. */
   const bound = (s: string): string | null | undefined => {
     if (!s.trim()) return undefined;
     if (!numeric) return s;
-    const p = fmt.parseNumber(s, f.kind === "money" ? fmt.exponent() : 6);
+    const p = fmt.parseNumber(s, digits);
     return p ? `${p.negative ? "-" : ""}${p.int}${p.frac ? `.${p.frac}` : ""}` : null;
   };
   const lo = bound(min);
   const hi = bound(max);
   const ambiguous =
-    numeric &&
-    [min, max].some(
-      (s) => s.trim() && fmt.parseNumber(s, f.kind === "money" ? fmt.exponent() : 6)?.ambiguous,
-    );
+    numeric && [min, max].some((s) => s.trim() && fmt.parseNumber(s, digits)?.ambiguous);
   const build = (): Cond | null => {
     if (cur === "empty") return { op: "empty", f: f.name };
     if (cur === "contains") return v.trim() ? { op: "contains", f: f.name, v: v.trim() } : null;
@@ -168,7 +171,8 @@ function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond)
     return validRange(f, c) ? c : null;
   };
   const cond = build();
-  const rangeType = f.kind === "date" ? "date" : "text";
+  const dated = f.kind === "date" || f.kind === "datetime";
+  const rangeType = dated ? "date" : "text";
   return (
     <div className="fp-custom">
       {!open ? (
@@ -254,7 +258,7 @@ function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond)
                 <input
                   aria-label={t("From")}
                   type={rangeType}
-                  inputMode={f.kind === "date" ? undefined : "decimal"}
+                  inputMode={dated ? undefined : "decimal"}
                   placeholder={t("From")}
                   value={min}
                   onChange={(e) => setMin(e.target.value)}
@@ -262,7 +266,7 @@ function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond)
                 <input
                   aria-label={t("To")}
                   type={rangeType}
-                  inputMode={f.kind === "date" ? undefined : "decimal"}
+                  inputMode={dated ? undefined : "decimal"}
                   placeholder={t("To")}
                   value={max}
                   onChange={(e) => setMax(e.target.value)}
@@ -275,6 +279,9 @@ function CustomFilter({ fields, onAdd }: { fields: FieldMeta[]; onAdd: (c: Cond)
           </div>
           {f.kind === "money" && cur === "range" && (
             <p className="hint">{t("Amounts in {currency}.", { currency: getCurrency() })}</p>
+          )}
+          {f.kind === "datetime" && cur === "range" && (
+            <p className="hint">{t("Days in {zone}.", { zone: getTime().zone })}</p>
           )}
           {ambiguous && cur === "range" && (
             <p className="hint" role="status">

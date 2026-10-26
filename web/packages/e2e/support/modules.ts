@@ -3,8 +3,22 @@
 
 export type FieldSpec = {
   name: string;
-  kind?: "text" | "longtext" | "number" | "money" | "date" | "bool" | "select" | "ref";
+  kind?:
+    | "text"
+    | "longtext"
+    | "number"
+    | "money"
+    | "date"
+    | "datetime"
+    | "decimal"
+    | "bool"
+    | "select"
+    | "ref";
   required?: boolean;
+  /** For a decimal: digits in all, digits after the point, and the import rounding. */
+  precision?: number;
+  scale?: number;
+  round?: "half_even" | "half_up" | "down";
   options?: string[];
   to?: string;
   class?: string;
@@ -65,6 +79,10 @@ export function manifest(m: ModuleSpec): string {
     if (f.kind && f.kind !== "text") lines.push(`  kind = ${q(f.kind)}`);
     if (f.kind === "select") lines.push(`  options = [${(f.options ?? []).map(q).join(", ")}]`);
     if (f.kind === "ref") lines.push(`  to = ${q(f.to ?? "")}`);
+    if (f.kind === "decimal") {
+      lines.push(`  precision = ${f.precision ?? 12}`, `  scale = ${f.scale ?? 2}`);
+      if (f.round) lines.push(`  round = ${q(f.round)}`);
+    }
   }
   for (const a of m.actions ?? []) {
     lines.push(

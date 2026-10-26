@@ -578,8 +578,10 @@ function weight(f: FieldMeta): number {
   return {
     image: -1,
     money: 0,
+    decimal: 0,
     select: 1,
     date: 2,
+    datetime: 2,
     ref: 3,
     number: 4,
     bool: 5,

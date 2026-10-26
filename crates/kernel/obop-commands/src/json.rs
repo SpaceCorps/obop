@@ -10,7 +10,7 @@ impl Value {
             J::Bool(b) => Value::Bool(*b),
             J::Number(n) => n
                 .as_i64()
-                .map_or_else(|| Value::Text(n.to_string()), Value::Int),
+                .map_or_else(|| Value::Num(n.to_string()), Value::Int),
             J::String(s) => Value::Text(s.clone()),
             J::Array(a) => Value::List(a.iter().map(Value::from_json).collect()),
             J::Object(o) => Value::Map(
@@ -26,6 +26,9 @@ impl Value {
             Value::Null => J::Null,
             Value::Bool(b) => J::Bool(*b),
             Value::Int(i) => J::Number(Number::from(*i)),
+            Value::Num(n) => n
+                .parse::<Number>()
+                .map_or_else(|_| J::String(n.clone()), J::Number),
             Value::Text(t) => J::String(t.clone()),
             Value::List(l) => J::Array(l.iter().map(Value::to_json).collect()),
             Value::Map(m) => J::Object(

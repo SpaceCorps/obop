@@ -134,10 +134,17 @@ export function ImportDialog({
           <>
             <p className="hint">
               {t(
-                "The first line of the file names the fields. References are the id of the record. Whole numbers only; money is in minor units such as cents. Up to {rows} rows and 1 MiB, UTF-8, comma or semicolon.",
+                "The first line of the file names the fields. References are the id of the record. Number fields take whole numbers; money is in minor units such as cents. Up to {rows} rows and 1 MiB, UTF-8, comma or semicolon.",
                 { rows: fmt.integer(MAX_ROWS) },
               )}
             </p>
+            {model.fields.some((f) => f.kind === "decimal" || f.kind === "datetime") && (
+              <p className="hint">
+                {t(
+                  "Decimal numbers are written with a point and no thousands separators (12.50), never with an exponent. A date and time ends with Z or an offset (2026-03-29T01:30:00Z or 2026-03-29T03:30:00+02:00). Too many decimals are refused unless the field rounds when importing.",
+                )}
+              </p>
+            )}
             <p className="hint">
               {t("Fields you can fill: {fields}", {
                 fields: columns
