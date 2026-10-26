@@ -183,14 +183,28 @@ impl Site {
     fn claim_idem(&self, key: &str, token: &str) -> Result<(), String> {
         let k = format!("idem:site:{key}");
         let b = self.api.backend();
-        if b.kv_put_new(&k, token, Some(86_400_000)).unwrap_or(true) {
+        let at = util::now();
+        let mine = format!("{token}|{at}");
+        if b.kv_put_new(&k, &mine, Some(86_400_000)).unwrap_or(true) {
             return Ok(());
         }
-        Err(b
-            .kv_get(&k)
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| token.to_string()))
+        let existing = b.kv_get(&k).ok().flatten().unwrap_or_else(|| mine.clone());
+        let (owner, since) = existing
+            .split_once('|')
+            .map_or((existing.as_str(), 0), |(o, t)| {
+                (o, t.parse::<u64>().unwrap_or(0))
+            });
+        // A claim that is old and has no order behind it is the ghost of a checkout that did not
+        // finish and could not give its key back (the store refused for longer than the tries):
+        // taken over, so the buyer's resubmit makes the order instead of being sent to a page
+        // that does not exist (D74). A young claim is a submit still being processed.
+        if at.saturating_sub(since) > 120
+            && matches!(self.api.receipt("ecommerce_order", owner), Ok(None))
+            && b.kv_swap(&k, &existing, &mine).unwrap_or(false)
+        {
+            return Ok(());
+        }
+        Err(owner.to_string())
     }
 
     /// Give back the key of an order that was not placed, when it had one.

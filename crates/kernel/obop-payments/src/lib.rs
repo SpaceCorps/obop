@@ -40,9 +40,31 @@ use obop_commands::{
 use obop_connectors::net::Client;
 use obop_connectors::runtime::Runtime;
 use obop_connectors::webhook::{Seen, VerifyError};
+use obop_storage::fault::{self, Fault};
 use obop_storage::{ApplyError, Backend, Fields, Op};
 use serde_json::{Value as J, json};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+/// A step that must not be lost once the payment or the order has changed (D74): marking the
+/// order paid, giving the units back, closing the payment. It is tried again while the store
+/// refuses (its writes rest on what the step reads itself, so they are allowed after an earlier
+/// refusal of the request), and a lasting refusal makes the request a partial one: a 503 that says
+/// so, never an answer that looks done. Only a refusal of the store is retried; any other error is
+/// the step's own answer.
+fn needed<T>(mut f: impl FnMut() -> Result<T, String>) -> Result<T, String> {
+    fault::patiently(5, Duration::from_millis(150), || fault::allow(&mut f)).inspect_err(|e| {
+        if Fault::is_transient(e) {
+            fault::mark_partial();
+        }
+    })
+}
+
+/// A refusal of the store, as opposed to an answer: such an error is never taken for "no" (no
+/// refund, no cancellation, no payment on record).
+fn busy(e: &str) -> bool {
+    Fault::is_transient(e)
+}
 
 const PAYMENT: &str = "ecommerce_payment";
 const ORDER: &str = "ecommerce_order";
@@ -189,7 +211,11 @@ impl Payments {
                 &Value::map([("id", Value::text(id))]),
             )
             .map(|_| ())
-            .map_err(|e| format!("{e:?}"))
+            .map_err(|e| match e {
+                // The handler's own text, so a refusal of the store keeps its code word.
+                obop_commands::CallError::Handler(m) => m,
+                other => format!("{other:?}"),
+            })
     }
 
     pub fn provider(&self, id: &str) -> Option<Arc<dyn PaymentProvider>> {
@@ -211,12 +237,20 @@ impl Payments {
 
     // ---- records ---------------------------------------------------------------------------
 
-    fn payment_for_order(&self, order: &str) -> Option<(String, Fields)> {
-        self.backend
-            .list(PAYMENT)
-            .ok()?
+    /// The latest payment of an order. An error is a refused lookup, not "no payment": a caller
+    /// that decides about money (a refund, a cancellation) must not take it for "none" (D74).
+    fn payment_of_order(&self, order: &str) -> Result<Option<(String, Fields)>, String> {
+        Ok(self
+            .backend
+            .list(PAYMENT)?
             .into_iter()
-            .rfind(|(_, f)| text(f, "order_id") == order)
+            .rfind(|(_, f)| text(f, "order_id") == order))
+    }
+
+    /// As [`Payments::payment_of_order`], for the views that show a payment when there is one: a
+    /// refused lookup shows none, and the request's refusal is answered by the 503 layer.
+    fn payment_for_order(&self, order: &str) -> Option<(String, Fields)> {
+        self.payment_of_order(order).ok().flatten()
     }
 
     /// The payment a provider's event is about. An error is a refused lookup, not "none": the
@@ -236,8 +270,10 @@ impl Payments {
             .find(|(_, f)| text(f, "provider") == provider && text(f, "external_id") == external))
     }
 
-    fn order(&self, id: &str) -> Option<Fields> {
-        self.backend.get(ORDER, id).ok().flatten()
+    /// The order, or `None` when there is none. A refused read is an error: it is never "the
+    /// order is gone" (that would refund a paid order, D74).
+    fn order(&self, id: &str) -> Result<Option<Fields>, String> {
+        self.backend.get(ORDER, id)
     }
 
     // ---- start -----------------------------------------------------------------------------
@@ -245,7 +281,12 @@ impl Payments {
     fn start_payment(&self, req: &StartPayment) -> Result<Started, String> {
         let unavailable = || "This payment method is not available.".to_string();
         let provider = self.provider(&req.method).ok_or_else(unavailable)?;
-        let order = self.order(&req.order_id).ok_or_else(unavailable)?;
+        // A refusal of the store keeps its code word (the shop answers 503 and the order that was
+        // just placed waits for its reservation to run out); it is not "not available".
+        let order = self
+            .order(&req.order_id)
+            .map_err(|e| if busy(&e) { e } else { unavailable() })?
+            .ok_or_else(unavailable)?;
         // The amount is the stored total; what the caller says must agree with it.
         let total = order.get("total").and_then(J::as_i64).unwrap_or(-1);
         if total < 0 || total != req.amount {
@@ -263,7 +304,7 @@ impl Payments {
         rec.insert("external_id".into(), json!(""));
         self.backend
             .insert(PAYMENT, &payment_id, &rec)
-            .map_err(|_| unavailable())?;
+            .map_err(|e| if busy(&e) { e } else { unavailable() })?;
         let session = provider.create_session(&SessionRequest {
             payment_id: payment_id.clone(),
             number: req.number.clone(),
@@ -281,6 +322,8 @@ impl Payments {
                 // everything back, so the buyer can try again from a clean cart.
                 let mut f = Fields::new();
                 f.insert("state".into(), json!("failed"));
+                // Best effort: an attempt left open, or an order left pending, is closed by the
+                // sweep when its reservation runs out.
                 let _ = self.backend.update(PAYMENT, &payment_id, &f);
                 let _ = self.cancel_order(&req.order_id);
                 return Err(
@@ -294,9 +337,10 @@ impl Payments {
         if let Some(u) = &session.url {
             f.insert("checkout_url".into(), json!(u));
         }
-        self.backend
-            .update(PAYMENT, &payment_id, &f)
-            .map_err(|_| unavailable())?;
+        // The provider's page exists now: without its reference on the record the webhook that
+        // reports the payment finds nothing to apply it to. A needed step.
+        needed(|| self.backend.update(PAYMENT, &payment_id, &f))
+            .map_err(|e| if busy(&e) { e } else { unavailable() })?;
         Ok(match session.url {
             Some(url) => Started::Redirect(url),
             None => Started::Manual,
@@ -320,6 +364,17 @@ impl Payments {
         };
         let mut seen = events_of(&p);
         if seen.iter().any(|e| e == event_id) {
+            // The event was applied, and its follow-up (the order marked paid, the units given
+            // back) may have been refused after that: the provider's redelivery finishes it. Both
+            // follow-ups are safe to run again.
+            let order = text(&p, "order_id").to_string();
+            match (outcome, text(&p, "state")) {
+                (Outcome::Paid, "succeeded") => needed(|| self.after_paid(&order, id))?,
+                (Outcome::Failed, "failed")
+                | (Outcome::Expired, "expired")
+                | (Outcome::Cancelled, "cancelled") => needed(|| self.cancel_order(&order))?,
+                _ => {}
+            }
             return Ok(Applied::Duplicate);
         }
         // A payment that was given up (cancelled, expired, failed) can still receive money: the
@@ -365,36 +420,52 @@ impl Payments {
             Err(e) => return Err(e.to_string()),
         }
         let order = text(&p, "order_id").to_string();
+        // The payment has changed. What follows is needed: when the store still refuses it after
+        // the tries, the error goes up, the webhook gives the event id back and answers "retry", and
+        // the redelivery finds the event already applied and finishes the follow-up (above).
         match outcome {
-            Outcome::Paid => self.after_paid(&order, id),
-            _ => {
-                let _ = self.cancel_order(&order);
-            }
+            Outcome::Paid => needed(|| self.after_paid(&order, id))?,
+            _ => needed(|| self.cancel_order(&order))?,
         }
         Ok(Applied::Done)
     }
 
     /// The payment succeeded: the order is paid. If the order was cancelled in the meantime
     /// (the buyer paid at the last moment) the money is returned rather than kept for nothing.
-    fn after_paid(&self, order: &str, payment: &str) {
-        let state = self.order(order).map(|o| text(&o, "state").to_string());
+    ///
+    /// **A refused read of the order is never "the order is gone".** Only a read that says the
+    /// order is cancelled (or that there is none) gets the money refunded; a refusal is an error
+    /// and the caller tries again (D74). Safe to run again.
+    fn after_paid(&self, order: &str, payment: &str) -> Result<(), String> {
+        let state = self.order(order)?.map(|o| text(&o, "state").to_string());
         match state.as_deref() {
-            Some("pending") => {
-                let _ = self.run("ecommerce_order.mark_paid", order);
-            }
-            Some("paid" | "shipped" | "delivered") => {}
-            _ => {
-                let _ = self.refund_payment(payment);
-            }
+            Some("pending") => match self.run("ecommerce_order.mark_paid", order) {
+                // Marking it paid met a refusal: it is done when it is tried again. Any other
+                // answer (a refused action) leaves the order for the sweep, as before.
+                Err(e) if busy(&e) => Err(e),
+                _ => Ok(()),
+            },
+            Some("paid" | "shipped" | "delivered") => Ok(()),
+            // A refund the provider could not make is tried again by the provider's redelivery.
+            _ => self.refund_payment(payment),
         }
     }
 
     /// Cancel an order nobody will pay (through the order's own action, so everything that
-    /// follows a cancellation happens), then make sure the units and the code use are back.
+    /// follows a cancellation happens), then make sure the units and the code use are back. A
+    /// refusal of the store is an error; safe to run again.
     fn cancel_order(&self, order: &str) -> Result<(), String> {
-        let state = self.order(order).map(|o| text(&o, "state").to_string());
+        let state = self.order(order)?.map(|o| text(&o, "state").to_string());
         if state.as_deref() == Some("pending") {
-            let _ = self.run("ecommerce_order.cancel", order);
+            match self.run("ecommerce_order.cancel", order) {
+                Err(e) if busy(&e) => return Err(e),
+                _ => {}
+            }
+        }
+        // An order that was paid in the meantime keeps its units.
+        let now_state = self.order(order)?.map(|o| text(&o, "state").to_string());
+        if matches!(now_state.as_deref(), Some("paid" | "shipped" | "delivered")) {
+            return Ok(());
         }
         self.release_order(order, true).map(|_| ())
     }
@@ -405,7 +476,7 @@ impl Payments {
     /// use of its discount code, **once**: the order records that it was done, in the same atomic
     /// batch. `true` if this call did it.
     pub fn release_order(&self, order_id: &str, discount: bool) -> Result<bool, String> {
-        let Some(o) = self.order(order_id) else {
+        let Some(o) = self.order(order_id)? else {
             return Ok(false);
         };
         let returned = o.get("stock_returned").cloned().unwrap_or(J::Null);
@@ -457,10 +528,13 @@ impl Payments {
                 // A counter that cannot go lower must not stop the units from coming back.
                 let mut ops = ops;
                 ops.retain(|op| !matches!(op, Op::Add { model, .. } if model.starts_with("ecommerce_discount")));
-                self.backend
-                    .apply_checked(&ops)
-                    .map(|()| true)
-                    .or(Ok(false))
+                match self.backend.apply_checked(&ops) {
+                    Ok(()) => Ok(true),
+                    // Someone else gave them back first.
+                    Err(ApplyError::Conflict { .. }) => Ok(false),
+                    // A refusal of the store is not "already done": the units are still out.
+                    Err(e) => Err(e.to_string()),
+                }
             }
             Err(e) => Err(e.to_string()),
         }
@@ -542,7 +616,18 @@ impl Payments {
             return 0;
         };
         let mut n = 0;
+        let mut revisited = 0;
         for (id, o) in orders {
+            // A cancelled order whose units were not given back (the step after its cancellation
+            // was refused) is finished here, a few per sweep: nobody else would.
+            if text(&o, "state") == "cancelled"
+                && o.get("stock_returned").and_then(J::as_bool) != Some(true)
+                && revisited < 25
+            {
+                revisited += 1;
+                let _ = self.release_order(&id, true);
+                continue;
+            }
             let until = o
                 .get("reserved_until")
                 .and_then(J::as_u64)
@@ -550,35 +635,44 @@ impl Payments {
             if text(&o, "state") != "pending" || until >= t {
                 continue;
             }
-            if let Some((pid, p)) = self.payment_for_order(&id) {
-                self.poll(&pid, &p);
-                let Some(p) = self.backend.get(PAYMENT, &pid).ok().flatten() else {
-                    continue;
-                };
-                // Paid, but the order was not marked (the earlier attempt failed): finish that
-                // instead of cancelling an order whose money we hold.
-                if text(&p, "state") == "succeeded" {
-                    self.after_paid(&id, &pid);
-                    continue;
+            // Every lookup below that is refused leaves the order for the next sweep: a refused
+            // read is never "no payment record" (that would cancel an order whose money we hold).
+            match self.payment_of_order(&id) {
+                Err(_) => continue,
+                Ok(Some((pid, p))) => {
+                    self.poll(&pid, &p);
+                    let Ok(Some(p)) = self.backend.get(PAYMENT, &pid) else {
+                        continue;
+                    };
+                    // Paid, but the order was not marked (the earlier attempt failed): finish that
+                    // instead of cancelling an order whose money we hold.
+                    if text(&p, "state") == "succeeded" {
+                        let _ = self.after_paid(&id, &pid);
+                        continue;
+                    }
+                    if text(&p, "state") == "open"
+                        && let Some(provider) = self.provider(text(&p, "provider"))
+                    {
+                        let _ = provider.expire(text(&p, "external_id"));
+                        // The attempt is not closed on our side: leave the order, or the buyer
+                        // could still pay for one that was cancelled.
+                        if self
+                            .apply(&pid, &format!("expire:{id}"), Outcome::Expired, None, None)
+                            .is_err()
+                        {
+                            continue;
+                        }
+                    }
                 }
-                if text(&p, "state") == "open"
-                    && let Some(provider) = self.provider(text(&p, "provider"))
-                {
-                    let _ = provider.expire(text(&p, "external_id"));
-                    let _ = self.apply(&pid, &format!("expire:{id}"), Outcome::Expired, None, None);
-                }
+                Ok(None) => {}
             }
             // Still unpaid (or no payment record at all): cancel and give everything back.
-            if self
-                .order(&id)
-                .is_some_and(|o| text(&o, "state") == "pending")
+            if matches!(self.order(&id), Ok(Some(o)) if text(&o, "state") == "pending")
+                && self.cancel_order(&id).is_err()
             {
-                let _ = self.cancel_order(&id);
+                continue;
             }
-            if self
-                .order(&id)
-                .is_some_and(|o| text(&o, "state") == "cancelled")
-            {
+            if matches!(self.order(&id), Ok(Some(o)) if text(&o, "state") == "cancelled") {
                 n += 1;
             }
         }
@@ -604,8 +698,11 @@ impl Payments {
             Box::new(move |_, input, inner| {
                 let out = inner(input)?;
                 if let Some(id) = order_id(input) {
-                    me.close_payment_of(&id);
-                    let _ = me.release_order(&id, true);
+                    // The order is cancelled. Closing its payment and giving the units and the
+                    // code back are needed (nothing else would: the sweep visits pending orders):
+                    // tried again, and a lasting refusal is a partial 503 (D74).
+                    needed(|| me.close_payment_of(&id))?;
+                    needed(|| me.release_order(&id, true).map(|_| ()))?;
                 }
                 Ok(out)
             }),
@@ -617,7 +714,7 @@ impl Payments {
             Box::new(move |_, input, inner| {
                 let out = inner(input)?;
                 if let Some(id) = order_id(input) {
-                    me.settle_by_hand(&id);
+                    needed(|| me.settle_by_hand(&id))?;
                 }
                 Ok(out)
             }),
@@ -632,8 +729,11 @@ impl Payments {
                 cmd,
                 Box::new(move |_, input, inner| {
                     let id = order_id(input);
+                    // A refused lookup of the payment is not "no payment": the order must not be
+                    // refunded without the money (nothing has been changed yet, so this is a
+                    // plain 503).
                     if let Some(id) = &id
-                        && let Some((pid, p)) = me.payment_for_order(id)
+                        && let Some((pid, p)) = me.payment_of_order(id)?
                         && text(&p, "state") == "succeeded"
                     {
                         me.refund_payment(&pid)
@@ -641,7 +741,7 @@ impl Payments {
                     }
                     let out = inner(input)?;
                     if restock && let Some(id) = &id {
-                        let _ = me.release_order(id, false);
+                        needed(|| me.release_order(id, false).map(|_| ()))?;
                     }
                     Ok(out)
                 }),
@@ -649,44 +749,54 @@ impl Payments {
         }
     }
 
-    fn close_payment_of(&self, order: &str) {
-        let Some((pid, p)) = self.payment_for_order(order) else {
-            return;
+    /// Close the open payment of a cancelled order. A refusal of the store is an error (the step
+    /// is tried again); the provider's own answer to `expire` is best effort, because a payment
+    /// that still arrives for a closed attempt is returned (see `apply`).
+    fn close_payment_of(&self, order: &str) -> Result<(), String> {
+        let Some((pid, p)) = self.payment_of_order(order)? else {
+            return Ok(());
         };
         if text(&p, "state") != "open" {
-            return;
+            return Ok(());
         }
         if let Some(provider) = self.provider(text(&p, "provider")) {
             let _ = provider.expire(text(&p, "external_id"));
         }
         let mut patch = Fields::new();
         patch.insert("state".into(), json!("cancelled"));
-        let _ = self.backend.apply_checked(&[Op::Patch {
+        match self.backend.apply_checked(&[Op::Patch {
             model: PAYMENT.into(),
             id: pid,
             patch,
             expect: vec![("state".into(), json!("open"))],
-        }]);
+        }]) {
+            // Somebody settled it between our read and our write: that answer stands.
+            Ok(()) | Err(ApplyError::Conflict { .. }) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
     }
 
-    fn settle_by_hand(&self, order: &str) {
-        let Some((pid, p)) = self.payment_for_order(order) else {
-            return;
+    fn settle_by_hand(&self, order: &str) -> Result<(), String> {
+        let Some((pid, p)) = self.payment_of_order(order)? else {
+            return Ok(());
         };
         if text(&p, "state") != "open" {
-            return;
+            return Ok(());
         }
         let mut seen = events_of(&p);
         seen.push("by-hand".into());
         let mut patch = Fields::new();
         patch.insert("state".into(), json!("succeeded"));
         patch.insert("event_ids".into(), json!(json!(seen).to_string()));
-        let _ = self.backend.apply_checked(&[Op::Patch {
+        match self.backend.apply_checked(&[Op::Patch {
             model: PAYMENT.into(),
             id: pid,
             patch,
             expect: vec![("state".into(), json!("open"))],
-        }]);
+        }]) {
+            Ok(()) | Err(ApplyError::Conflict { .. }) => Ok(()),
+            Err(e) => Err(e.to_string()),
+        }
     }
 
     // ---- webhooks --------------------------------------------------------------------------
@@ -810,7 +920,7 @@ impl PaymentPort for Payments {
         }
         let pid = self.fake.payment_of(session)?;
         let p = self.backend.get(PAYMENT, &pid).ok().flatten()?;
-        let o = self.order(text(&p, "order_id"))?;
+        let o = self.order(text(&p, "order_id")).ok().flatten()?;
         Some(FakeView {
             order_token: text(&o, "access_token").to_string(),
             number: text(&o, "number").to_string(),

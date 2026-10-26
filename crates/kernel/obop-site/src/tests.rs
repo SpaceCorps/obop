@@ -1110,6 +1110,36 @@ fn a_checkout_refused_by_a_busy_store_releases_its_key_and_the_resubmit_makes_th
 }
 
 #[test]
+fn a_claim_with_no_order_behind_it_is_taken_over_when_old_and_respected_while_young() {
+    // D74: a checkout that could not give its key back leaves a claim for an order that does not
+    // exist. A young claim is a submit still being processed and keeps its answer; an old one is a
+    // ghost, and the buyer's resubmit makes the order instead of landing on a page that is not there.
+    let s = shop();
+    let l = listing(&s, "sencha-green-tea");
+    let std = methods(&s).remove(0);
+    let lines = [(l.id.as_str(), "1")];
+    let f = order_fields(&lines, &[("shipping_method_id", &std.id)]);
+    let first = post(&s, "/shop/checkout", &f);
+    assert_eq!(first.status, 303);
+    let at = first.get_header("location").unwrap().to_string();
+    let b = s.store.backend();
+    let (key, claim) = b.kv_scan("idem:site:").unwrap().remove(0);
+    let token = claim.split('|').next().unwrap().to_string();
+    assert!(at.contains(&token), "{at} {claim}");
+    for (id, _) in b.list("ecommerce_order").unwrap() {
+        b.delete("ecommerce_order", &id).unwrap();
+    }
+    let young = post(&s, "/shop/checkout", &f);
+    assert_eq!(young.get_header("location"), Some(at.as_str()));
+    assert_eq!(new_orders(&s), 0, "a young claim is respected");
+    b.kv_put(&key, &format!("{token}|1"), Some(60_000)).unwrap();
+    let again = post(&s, "/shop/checkout", &f);
+    assert_eq!(again.status, 303, "{}", text(&again));
+    assert_ne!(again.get_header("location"), Some(at.as_str()));
+    assert_eq!(new_orders(&s), 1, "the ghost claim was taken over");
+}
+
+#[test]
 fn security_a_double_submit_creates_one_order() {
     let s = shop();
     let l = listing(&s, "sencha-green-tea");

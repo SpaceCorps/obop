@@ -1273,6 +1273,13 @@ impl Site {
             Ok(s) => s,
             Err(msg) => {
                 self.release_idem_key(&idem_key);
+                // The order was placed and the payment could not be started because the store
+                // refused: the order waits for its reservation to run out. The buyer is told so
+                // by a 503 that says part of it was done, not by a cart page that says the
+                // method is "not available" (D74).
+                if obop_storage::fault::Fault::is_transient(&msg) {
+                    obop_storage::fault::mark_partial();
+                }
                 return fail(self, ctx, vec![("", msg)]);
             }
         };
