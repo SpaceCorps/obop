@@ -151,6 +151,13 @@ pub struct Payments {
     cfg: Config,
     fake: Fake,
     last_sweep: Mutex<u64>,
+    /// Stranded payments whose refund failed, by payment id and the time of the failure: the sweep
+    /// leaves them alone for an hour, so a payment that can never be refunded here (refunded in
+    /// the provider's dashboard, the provider connection removed) does not take the places of the
+    /// ones that can.
+    refund_failed: Mutex<std::collections::HashMap<String, u64>>,
+    /// Calls made to a provider to return money, so that the sweep counts what cost a round trip.
+    refund_calls: std::sync::atomic::AtomicU64,
 }
 
 /// What applying one event did.
@@ -190,6 +197,8 @@ impl Payments {
             keys,
             cfg,
             last_sweep: Mutex::new(0),
+            refund_failed: Mutex::default(),
+            refund_calls: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -572,6 +581,8 @@ impl Payments {
             .provider(text(&p, "provider"))
             .ok_or("the payment provider is not available")?;
         let amount = p.get("amount").and_then(J::as_i64).unwrap_or(0);
+        self.refund_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let done = provider
             .refund(
                 text(&p, "external_id"),
@@ -722,16 +733,38 @@ impl Payments {
         let Ok(payments) = self.backend.list(PAYMENT) else {
             return;
         };
+        let t = now();
         let mut tried = 0;
         for (pid, p) in payments {
             if text(&p, "state") != "succeeded" || !cancelled.contains(text(&p, "order_id")) {
                 continue;
             }
-            if tried >= 5 {
-                break;
+            let failed_lately = self
+                .refund_failed
+                .lock()
+                .unwrap()
+                .get(&pid)
+                .is_some_and(|at| t.saturating_sub(*at) < 3600);
+            if failed_lately {
+                continue;
             }
-            tried += 1;
-            let _ = self.refund_payment(&pid);
+            // What costs a round trip to the provider counts towards the few per sweep; a payment
+            // that fails before it gets there (no such provider connection) does not.
+            let calls = self.refund_calls.load(std::sync::atomic::Ordering::Relaxed);
+            match self.refund_payment(&pid) {
+                Ok(()) => {
+                    self.refund_failed.lock().unwrap().remove(&pid);
+                }
+                Err(_) => {
+                    self.refund_failed.lock().unwrap().insert(pid.clone(), t);
+                }
+            }
+            if self.refund_calls.load(std::sync::atomic::Ordering::Relaxed) != calls {
+                tried += 1;
+                if tried >= 5 {
+                    break;
+                }
+            }
         }
     }
 

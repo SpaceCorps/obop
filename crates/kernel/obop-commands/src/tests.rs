@@ -955,24 +955,31 @@ fn an_approved_plan_comes_back_when_nothing_was_applied_and_stays_gone_when_the_
     use obop_storage::fault::{self, Fault};
     // The 503 layer answers "nothing was applied, repeat it" for a request that hit a fault and
     // committed nothing, whether the run ended in an error or swallowed the refusal and answered
-    // Ok. The approver's repeat then needs the plan. After `storage_unavailable` the outcome is
-    // unknown (a change in flight may have committed): the plan stays gone, or the repeat would
-    // run an approved action twice.
+    // Ok. The approver's repeat then needs the plan. After `storage_unavailable` with a statement
+    // on the connection that broke the outcome is unknown (a change in flight may have committed):
+    // the plan stays gone, or the repeat would run an approved action twice. When no connection
+    // could be opened at all nothing was sent, and the plan comes back like after a full pool.
     each_backend(|r| {
         let id = r.id(&r.ok(&user(), "party", "create", m(vec![("name", t("P"))])));
         let cmd = r.cmd("party", "delete");
-        for (kind, answers_ok, back) in [
-            (Fault::Busy, false, true),
-            (Fault::Busy, true, true),
-            (Fault::Timeout, false, true),
-            (Fault::Unavailable, false, false),
-            (Fault::Unavailable, true, false),
+        for (kind, in_flight, answers_ok, back) in [
+            (Fault::Busy, false, false, true),
+            (Fault::Busy, false, true, true),
+            (Fault::Timeout, false, false, true),
+            (Fault::Unavailable, true, false, false),
+            (Fault::Unavailable, true, true, false),
+            (Fault::Unavailable, false, false, true),
+            (Fault::Unavailable, false, true, true),
         ] {
             let plan = plan_of(r.call(&bot(), "party", "delete", by_id(&id)));
             r.d.around(
                 &cmd,
                 Box::new(move |_, _, _| {
-                    fault::note(kind);
+                    if in_flight {
+                        fault::note_in_flight();
+                    } else {
+                        fault::note(kind);
+                    }
                     if answers_ok {
                         Ok(Value::Null)
                     } else {
@@ -991,7 +998,7 @@ fn an_approved_plan_comes_back_when_nothing_was_applied_and_stays_gone_when_the_
             assert_eq!(
                 matches!(probe, Err(CallError::Forbidden(_))),
                 back,
-                "{kind:?} ok={answers_ok}: {probe:?}"
+                "{kind:?} in_flight={in_flight} ok={answers_ok}: {probe:?}"
             );
         }
     });

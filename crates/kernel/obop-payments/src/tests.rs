@@ -27,6 +27,8 @@ struct StandState {
     log: Vec<Logged>,
     fail_create: bool,
     fail_refund: bool,
+    /// Idempotency keys of refunds the provider refuses (a payment refunded in its dashboard).
+    refused_keys: Vec<String>,
     /// Refunds made, by the idempotency key they were asked with: a repeat of the key gets the
     /// same refund back, as the real API does within a day.
     refunds: HashMap<String, (String, i64)>,
@@ -234,7 +236,11 @@ fn respond(st: &Arc<Mutex<StandState>>, r: &Logged) -> (u16, String) {
             }
         }
         ("POST", "/v1/refunds") => {
-            if g.fail_refund {
+            if g.fail_refund
+                || r.headers
+                    .get("idempotency-key")
+                    .is_some_and(|k| g.refused_keys.contains(k))
+            {
                 return err(400, "The charge has already been refunded");
             }
             let key = r
@@ -1638,6 +1644,86 @@ fn the_sweep_returns_the_money_of_a_cancelled_order_whose_payment_succeeded() {
     // Once.
     e.pay.sweep_expired();
     assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 1);
+}
+
+#[test]
+fn payments_that_can_never_be_refunded_do_not_starve_the_ones_that_can() {
+    // Five stranded payments whose refund the provider refuses every time (refunded in its
+    // dashboard) sat at the front of the list and took the five places of every sweep: the sixth,
+    // a late payment that can be returned, was never reached, and every checkout paid for five
+    // doomed round trips. A payment that failed is left alone for an hour.
+    let e = env_with(true, false, "stripe");
+    let mut late = Vec::new();
+    for _ in 0..6 {
+        e.buy("sencha-green-tea", "1", "stripe", &[]);
+        let (oid, _) = e.last_order();
+        let (sid, _) = e.stand.sessions().pop().unwrap();
+        e.call(&e.manager(), "ecommerce_order.cancel", &oid)
+            .unwrap();
+        e.stand.pay(&sid);
+        e.payment_succeeded(&oid);
+        late.push(oid);
+    }
+    {
+        let mut g = e.stand.st.lock().unwrap();
+        for oid in &late[..5] {
+            let pid = e
+                .payments()
+                .into_iter()
+                .find(|(_, p)| p["order_id"] == oid.as_str())
+                .unwrap()
+                .0;
+            g.refused_keys.push(format!("refund-{pid}"));
+        }
+    }
+    let asked = || e.stand.calls("POST", "/v1/refunds").len();
+    e.pay.sweep_expired();
+    assert_eq!(asked(), 5, "five doomed round trips at most, and not more");
+    assert_eq!(e.payment_of(&late[5])["state"], "succeeded");
+    // The next sweep leaves the five alone and reaches the sixth.
+    e.pay.sweep_expired();
+    assert_eq!(asked(), 6, "only the new one was asked");
+    assert_eq!(e.payment_of(&late[5])["state"], "refunded");
+    for oid in &late[..5] {
+        assert_eq!(e.payment_of(oid)["state"], "succeeded");
+    }
+}
+
+#[test]
+fn a_stranded_payment_that_fails_before_the_provider_costs_nothing_against_the_few_per_sweep() {
+    let e = env_with(true, false, "stripe");
+    let mut late = Vec::new();
+    for _ in 0..7 {
+        e.buy("sencha-green-tea", "1", "stripe", &[]);
+        let (oid, _) = e.last_order();
+        let (sid, _) = e.stand.sessions().pop().unwrap();
+        e.call(&e.manager(), "ecommerce_order.cancel", &oid)
+            .unwrap();
+        e.stand.pay(&sid);
+        e.payment_succeeded(&oid);
+        late.push(oid);
+    }
+    // The provider connection of the first three was removed: they fail before they get there.
+    for oid in &late[..3] {
+        let pid = e
+            .payments()
+            .into_iter()
+            .find(|(_, p)| p["order_id"] == oid.as_str())
+            .unwrap()
+            .0;
+        let mut other = Fields::new();
+        other.insert("provider".into(), json!("a_provider_that_was_removed"));
+        e.store.backend().update(PAYMENT, &pid, &other).unwrap();
+    }
+    e.pay.sweep_expired();
+    for oid in &late[3..] {
+        assert_eq!(
+            e.payment_of(oid)["state"],
+            "refunded",
+            "reached in one sweep"
+        );
+    }
+    assert_eq!(e.stand.calls("POST", "/v1/refunds").len(), 4);
 }
 
 #[test]

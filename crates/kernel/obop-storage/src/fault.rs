@@ -123,10 +123,12 @@ struct Scope {
     undo: u32,
     /// Depth of [`uncounted`] calls: what they write does not count as a change of the request.
     quiet: u32,
+    /// A statement was sent on a connection that then broke ([`note_in_flight`]).
+    in_flight: bool,
 }
 
 thread_local! {
-    static SCOPE: Cell<Scope> = const { Cell::new(Scope { active: false, fault: None, changes: 0, partial: false, bypass: 0, undo: 0, quiet: 0 }) };
+    static SCOPE: Cell<Scope> = const { Cell::new(Scope { active: false, fault: None, changes: 0, partial: false, bypass: 0, undo: 0, quiet: 0, in_flight: false }) };
 }
 
 /// Remember on this thread that a storage fault happened. The first one since the last
@@ -138,6 +140,18 @@ pub fn note(f: Fault) {
             s.fault = Some(f);
             c.set(s);
         }
+    });
+}
+
+/// A connection broke while a statement was on it: [`Fault::Unavailable`] is noted, and the
+/// request knows that what the statement did is unknown. A pool that could not open a connection
+/// at all only notes the fault ([`note`]): nothing was sent.
+pub fn note_in_flight() {
+    note(Fault::Unavailable);
+    SCOPE.with(|c| {
+        let mut s = c.get();
+        s.in_flight = true;
+        c.set(s);
     });
 }
 
@@ -195,6 +209,9 @@ pub struct Outcome {
     pub wrote: bool,
     /// A step the request needed was refused after a change had committed ([`mark_partial`]).
     pub partial: bool,
+    /// A statement was on its way when a connection broke ([`note_in_flight`]): what it did is
+    /// unknown. False after `storage_unavailable` that only meant no connection could be opened.
+    pub in_flight: bool,
 }
 
 /// What this thread's request scope has seen so far, without ending it.
@@ -205,6 +222,7 @@ pub fn state() -> Outcome {
             fault: s.fault,
             wrote: s.changes > 0,
             partial: s.partial,
+            in_flight: s.in_flight,
         }
     })
 }
@@ -221,6 +239,7 @@ pub fn begin_request(earlier: Outcome) {
             bypass: 0,
             undo: 0,
             quiet: 0,
+            in_flight: earlier.in_flight,
         })
     });
 }
@@ -483,7 +502,7 @@ mod tests {
             Outcome {
                 fault: Some(Fault::Timeout),
                 wrote: true,
-                partial: false
+                ..Outcome::default()
             }
         );
         // The scope is over: the thread is clean again.
@@ -523,7 +542,8 @@ mod tests {
             Outcome {
                 fault: Some(Fault::Busy),
                 wrote: true,
-                partial: true
+                partial: true,
+                in_flight: false
             }
         );
         // A write that is not counted, and a change outside the store, are what they say.
@@ -541,8 +561,7 @@ mod tests {
             end_request(),
             Outcome {
                 fault: Some(Fault::Busy),
-                wrote: false,
-                partial: false
+                ..Outcome::default()
             }
         );
         // `mark_partial` outside a request scope does nothing.
@@ -577,9 +596,8 @@ mod tests {
         assert_eq!(
             end_request(),
             Outcome {
-                fault: None,
                 wrote: true,
-                partial: false
+                ..Outcome::default()
             }
         );
     }

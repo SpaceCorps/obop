@@ -320,7 +320,7 @@ impl Backend for Flaky {
         let done = self.inner.update(model, id, patch)?;
         if lost == Ok(0) {
             self.refused.fetch_add(1, SeqCst);
-            fault::note(Fault::Unavailable);
+            fault::note_in_flight();
             return Err(
                 Fault::Unavailable.message("the connection broke while the change was in flight")
             );

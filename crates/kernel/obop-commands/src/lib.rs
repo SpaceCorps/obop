@@ -965,11 +965,7 @@ impl Dispatcher {
         // have committed before the connection broke: the answer says "unknown", and putting the
         // plan back would let the retry run an approved action twice.
         let state = obop_storage::fault::state();
-        if state
-            .fault
-            .is_some_and(|f| f != obop_storage::fault::Fault::Unavailable)
-            && !state.wrote
-        {
+        if state.fault.is_some() && !state.wrote && !state.in_flight {
             self.put_plan_back(approver, plan_id, &plan);
         }
         result

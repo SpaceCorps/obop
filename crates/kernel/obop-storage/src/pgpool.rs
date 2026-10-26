@@ -442,7 +442,8 @@ pub(crate) fn describe(e: &postgres::Error) -> String {
         return Fault::Timeout.message("a database statement ran into its time limit");
     }
     if connection_failed(e) {
-        fault::note(Fault::Unavailable);
+        // A statement was on this connection when it broke: what it did is unknown.
+        fault::note_in_flight();
         return Fault::Unavailable.message(&e.to_string());
     }
     match e.as_db_error() {
