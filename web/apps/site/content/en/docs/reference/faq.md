@@ -19,7 +19,7 @@ Self-hosting is free. Hosted plans are planned at €0, €49, €249 and from �
 
 ### Which licence?
 
-The code is on GitHub. The final licence is not decided; the project proposes the AGPL for the core. Check the repository for current terms.
+The code is on GitHub under the Apache-2.0 licence for the whole project: free to use, change and self-host, with no paid edition. The full text is in the [LICENSE](https://github.com/SpaceCorps/obop/blob/main/LICENSE) file.
 
 ### What is it written in?
 

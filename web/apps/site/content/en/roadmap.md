@@ -52,7 +52,7 @@ The product plan names five waves. All dates are proposals.
 
 ## Decisions that are still open
 
-Several choices are recorded as proposals and wait for the project owner, including the licence (AGPL is proposed), the pricing and the exact calendar. Pricing on this site is therefore marked as planned and not charged.
+Several choices are recorded as proposals and wait for the project owner, including the pricing and the exact calendar. The licence is settled: Apache-2.0 for the whole project. Pricing on this site is therefore marked as planned and not charged.
 
 ## How to follow along
 

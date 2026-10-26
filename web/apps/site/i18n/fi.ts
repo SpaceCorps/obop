@@ -191,7 +191,7 @@ export const fi: Messages = {
       },
       {
         title: "Lähdekoodi GitHubissa",
-        body: "Lue koodi, päätökset ja tiekartta. Lisenssi viimeistellään parhaillaan; katso tarkemmat tiedot repositoriosta.",
+        body: "Lue koodi, päätökset ja tiekartta. Apache-2.0, vapaasti käytettävissä ja itse isännöitävissä; katso tarkemmat tiedot repositoriosta.",
       },
     ],
     pricingTitle: "Yksinkertainen hinnoittelu, suunnitteilla",
@@ -232,7 +232,7 @@ export const fi: Messages = {
       },
       {
         q: "Onko obop avointa lähdekoodia?",
-        a: "Lähdekoodi on julkinen GitHubissa. Lopullisesta lisenssistä päätetään vielä (projekti ehdottaa AGPL:ää), joten tarkista voimassa olevat ehdot repositoriosta.",
+        a: "Lähdekoodi on julkinen GitHubissa Apache-2.0-lisenssillä: sitä saa vapaasti käyttää, muokata ja isännöidä itse. Koko teksti on repositorion LICENSE-tiedostossa.",
       },
     ],
     ctaTitle: "Yksi yritys, yksi alusta.",

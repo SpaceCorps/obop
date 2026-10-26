@@ -1,6 +1,6 @@
 # obop decision register
 
-**Status:** Draft 0.1 for owner ratification. **As of:** 2026-10-01, called month 0 (M0). **Scope:** product and architecture. Nothing here is legal advice; items marked "counsel" need a lawyer.
+**Status:** Draft 0.1 for owner ratification; the licence rulings OR-1, OR-2, OR-10 and OR-18 of 2026-10-01 are RATIFIED (section "Owner rulings (2026-10-01): licence and publisher"). **As of:** 2026-10-01, called month 0 (M0). **Scope:** product and architecture. Nothing here is legal advice; items marked "counsel" need a lawyer.
 
 ## 0. Front matter and how to read
 
@@ -9,11 +9,29 @@ This register is authoritative for every other obop document. Where a research n
 | Status | Meaning | Rule for writers |
 |---|---|---|
 | FIXED | Owner-mandated | Never changes without the owner |
+| RATIFIED | Owner ruling of 2026-10-01 (OR-n), recorded as decided; it is binding in effect and keeps this label so the origin stays visible | State as fact and cite the OR number; only a later owner ruling may change it |
 | BINDING | Research-resolved technical decision | State as fact; changing it needs a new ADR (next free D-ID; the old record is marked "Superseded by") |
 | PROPOSED | Needs explicit owner ratification | Write "Proposed (Dn)" wherever you rely on it |
 | DEFERRED | Decide later, with a trigger | Do not design around a guess; cite the trigger |
 
 Conventions. "R23 DR-1" means decision record 1 in research note 23 (section 9 maps tags to files). Dates are ISO-8601, money is EUR ex VAT, "M9" is month 9 after M0. Reversibility is "one-way door" (cannot be undone cheaply once data, licences or outsiders depend on it) or "two-way door". The owner ratifies a PROPOSED record by saying so in chat; the record then gains a "Ratified" line and becomes BINDING. Documents must never write "GA" bare; see D26. Wave (W0-W4), release-number and calendar references inside a BINDING record are placements under D25 and D26, which are PROPOSED: the technical rule is BINDING, the placement stays Proposed until those are ratified. Where a record's own clause rests on a Proposed item (D15 and D23 on I-4 and I-3, D24 on its renames), the record says so.
+
+## Owner rulings (2026-10-01): licence and publisher
+
+<a id="owner-rulings"></a>
+
+**Status: RATIFIED.** The owner gave these rulings in chat on 2026-10-01: OR-1, OR-2 and OR-10 in the first batch, OR-18 later the same day. Quotation marks are the owner's own words; the rest is recorded as relayed. They override every Proposed position in this register, in the companion documents and in the research, among them the AGPL core, the s7 Application Exception, a licence-grant CLA, a closed `ee` tree, the paid list, plans and prices. Where a document disagrees with this section, this section wins.
+
+| OR | Ruling | Decisions and questions touched | Effect |
+|---|---|---|---|
+| OR-1 | **Licence.** The whole project is Apache-2.0 (permissive, no copyleft layer). Contributor terms: DCO sign-off, no CLA. LICENSE and NOTICE exist at the repository root ("Copyright 2026 SpaceCorps contributors"). | F4, F5, D1, D11, D15, D32; Q1, Q16 | No AGPL core, no s7 Application Exception, no Apache-2.0-only-for-SDKs split, no `ee` tree, no licence-grant CLA, no OSI-forever pledge, no steward veto, no investor covenant. The extension boundary is no longer a copyleft question. The dependency allow-list excludes copyleft-only components. Every crate, bundled package and JavaScript manifest of this repository carries the SPDX identifier `Apache-2.0`. DCO sign-off on agent-authored commits: OR-18. |
+| OR-2 | **No proprietary paid software at all.** Owner: "completely free to use, you can self host". No open-core, no enterprise layer, no closed or ratcheting paid list, no paid plans, no price list, no per-seat or per-organisation pricing, no paid partner programme or marketplace commission. There is no revenue model today; any future services (support, hosting, certification) would be separate and must never restrict the free software. | F5, D2, D5, D17; Q3, Q13, Q19 | The paid list, ratchet, conversion rule and operated-service lines are deleted, and section 6 stands only as history. So are Free, Team, Growth and Scale, every price and price test, the Assurance and payroll services, the SLA plan, hosted AI credits, certification fees, partner and marketplace revenue shares and the white-label licence. Every former paid-list capability is an ordinary backlog item: not withheld, not promised. |
+| OR-10 | **Publisher.** SpaceCorps (the owner's existing GitHub organisation and brand) is the publisher, copyright holder and trademark holder; counsel can move it to a foundation later. The CRA manufacturer or steward analysis for a free, non-hosted project with SpaceCorps as publisher goes to counsel. | D1, D3, D17; Q5, Q16, Q20 | The company-plus-EU-non-profit structure is gone. "Steward" is reserved for a foundation that may replace SpaceCorps later. |
+| OR-18 | **DCO with AI agents.** The owner signs off every commit (`git commit -s`); agents are recorded with a `Co-Authored-By` trailer. Counsel is still asked to confirm that this satisfies the DCO; that is a counsel item, not an owner question. | D1; Q16 | RATIFIED. No agent provides a sign-off. The counsel confirmation is BUSINESS CN-02, inside the Q16 list. |
+
+**Repository.** The GitHub repository `SpaceCorps/obop` is public (the owner opened it on 2026-10-26); that replaces the Proposed rule of D26 that it goes public only after gate G0. Counsel work on the name (D3, Q2), the CRA role (Q5) and the DCO wording (OR-18) stays open and is not a condition of the licence.
+
+**What this section does not settle.** The owner gave further rulings on 2026-10-01 (plugin registry, agentic CLI, funding, hosting, support promise, calendar, pin policy and others). They are not recorded in this register yet: the decision numbers they were drafted under (D40 to D46) have since been used here for other decisions (D40 to D79), so they need new numbers first. Until they are recorded, nothing in them is binding in this repository.
 
 ## 1. Fixed constraints
 
@@ -22,7 +40,7 @@ Conventions. "R23 DR-1" means decision record 1 in research note 23 (section 9 m
 | F1 | Backend: exclusively the latest stable Rust, edition 2024. |
 | F2 | Frontend and tooling: exclusively the latest Vite+ (`vite-plus`). Every JS/TS task runs through the `vp` CLI. pnpm is the only package manager; `npm`, `npx`, `yarn` and `bun` are never used (CLIs, CI, docs, examples) and `package-lock.json`, `yarn.lock`, `bun.lock` are never committed. pnpm still installs from the public npm registry, so naming the registry or a package is fine. Research passages saying Vite+ supports several package managers describe the tool, not policy. |
 | F3 | Clean-room relative to Odoo. Odoo is the functional reference. No Enterprise code or assets, no copied Community code, views, translations or assets, no OCA code. Behaviour comes from public docs and Community source read for understanding; charts and rules come from official sources; Odoo may run only as a black-box differential oracle. |
-| F4 | Open source: the core product is OSI-approved open source. Which licence is D1. |
+| F4 | Open source: the core product is OSI-approved open source. The licence is Apache-2.0 (D1, OR-1). |
 
 Interpretations, all Proposed (Q10):
 
@@ -56,8 +74,8 @@ Interpretations, all Proposed (Q10):
 
 | ID | Title | Status | Decision in one line |
 |---|---|---|---|
-| D1 | Licence, CLA, governance | PROPOSED | AGPL-3.0-or-later core, s7 exception, Apache-2.0 SDKs, licence-grant CLA with OSI-forever pledge, company plus EU non-profit |
-| D2 | Open/paid boundary, pricing unit | PROPOSED | Everything open; paid = operation and assurance; closed ratcheting list; per-organisation plans |
+| D1 | Licence, contributor terms, publisher | RATIFIED (OR-1, OR-10, OR-18) | Apache-2.0 for the whole project, DCO sign-off, no CLA, SpaceCorps as publisher and copyright holder |
+| D2 | Open/paid boundary, pricing unit | RATIFIED (OR-2) | Completely free: no paid list, no plans, no prices, no open-core |
 | D3 | Name and trademark | PROPOSED | "obop" is a working name until counsel clears it |
 | D4 | First market, ICP, MVP | PROPOSED | Free invoicing into a seven-app loop; Germany, then France, then Poland |
 | D5 | Funding and hiring gates | PROPOSED | Gated plan; at most 17 FTE before EUR 1M ARR |
@@ -128,23 +146,25 @@ Interpretations, all Proposed (Q10):
 | D73 | Backup, restore and migration gates | PROPOSED | Owner-directed 2026-10-25 (step 1, storage foundations): a migration ledger (`obop_migration`, one row per step in the step's own transaction, SHA-256 of the step definition; a step edited after it ran stops the server; databases from before it are adopted) with a DDL cost classifier, policy and window rule prepared for D77; migration gates (a verified backup under 24 hours old, a stored plan, room on the disk, a signed rehearsal receipt, a restore point; strict on PostgreSQL, warnings elsewhere; a backup before data-rewriting module updates and before auto-migrate; rollback by restore with a recorded reason); backup format 2 (ChaCha20-Poly1305 in chunks under a per-backup key wrapped by `OBOP_BACKUP_KEY` or the server key, a hash chain and an HMAC over the manifest, `restore_key_required` and exit 3, format 1 still restores); scheduled backups with an off-host copy proved by reading it back and retention (35 daily, 12 monthly); restore drills that digest every restored record; `obop storage check|attest` for WAL archiving, TLS, evidence and encryption at rest, and docs/RUNBOOK-RECOVERY.md; asymmetric keys, an S3 sink, the DDL executor and a managed-service trial are not delivered |
 | D79 | Persons, organisation, grants and scoped row rules | PROPOSED | Owner-directed 2026-10-25/26 (step 2): a person registry (`org_person`: id = account key = principal id, a minted UUIDv7 or an existing account key adopted once; sign-in through a renameable alias; account plus person created in one atomic batch; a governed lifecycle with a resumable `leave`); an organisation as dated data (levels, nodes, effective-dated edges, memberships with one main, external identifiers, a feed v0) served to the engine by one fail-closed `OrgDirectory`; effective-dated, scoped, approved grants of roles (bundles of groups) beside the unchanged direct groups, with one permission epoch written in the same batch as every change and read once per request, counted and four-eyes approvals, delegation, separation of duties, a fresh-session rule and one security log; one closed row-rule grammar on `[model.access]` (the five D58 keys plus `scope`, `related`, `restrict`, separate write, delete and action positions, field read and write conditions, `create = "effects"`, aggregate-only access, agent writes as proposals) kept as data and folded into a declarative `Residual` that D76 can compile; blobs, computed totals and effect children follow row visibility; an install-time proof (lints, waivers, roles); one test kit (independent reference oracles, a generated cross-scope matrix, seeded mutants); not tried with several PostgreSQL processes under load, the real Claude apps, a real directory feed or a directory of hundreds of people |
 
-Proposed and awaiting the owner: D1, D2, D3, D4, D5, D12, D13, D14, D16, D17, D20, D23, D25, D26, D40, D41, D42, D43, interpretations I-1 to I-4, the exit-drill clause of D15, and the renames and labels of D24.
+Ratified on 2026-10-01 (owner rulings OR-1, OR-2, OR-10, OR-18): D1 and D2.
+
+Proposed and awaiting the owner: D3, D4, D5, D12, D13, D14, D16, D17, D20, D23, D25, D26, D40, D41, D42, D43, interpretations I-1 to I-4, the exit-drill clause of D15, and the renames and labels of D24.
 
 ### 2.2 Records
 
-#### D1 Core licence, contributor terms, governance
-**Status** PROPOSED. **Reversibility** one-way door. **Owner action** yes (Q1): ratify by 2026-10-20 and instruct counsel.
+#### D1 Core licence, contributor terms, publisher
+**Status** RATIFIED (OR-1, OR-10, OR-18). **Reversibility** one-way door. **Owner action** none; counsel confirms the DCO wording (Q16).
 
-**Decision.** Core and first-party apps under AGPL-3.0-or-later (counsel may choose `-only`) plus an AGPL s7 Application Exception; Apache-2.0 for SDKs, WIT worlds, UI SDK and templates; a commercial `ee` tree in separate artefacts. The CLA is a licence grant (not an assignment) with a patent licence and an irrevocable "OSI licence forever" pledge. A company (CRA manufacturer, cloud, `ee`) plus an EU non-profit steward that holds the trademark and can veto leaving OSI licences.
+**Decision.** The whole project is Apache-2.0: the core, first-party apps, SDKs, WIT worlds, UI SDK and templates. `LICENSE` and `NOTICE` ("Copyright 2026 SpaceCorps contributors") are at the repository root, and every crate, bundled package and JavaScript manifest declares the SPDX identifier `Apache-2.0`. Contributions carry a DCO sign-off and no CLA (inbound equals outbound); the owner signs off every commit and agents are recorded with a `Co-Authored-By` trailer. SpaceCorps is the publisher, copyright holder and trademark holder; "steward" is reserved for a foundation that may replace it.
 
-**Why.** Passes NLnet, Sovereign Tech Fund and public-sector gates; protects against proprietary forks; keeps CRA free-software treatment. **Rejected.** FSL, BUSL, SSPL, ELv2 (not OSI); Odoo-style LGPL plus proprietary EE; permissive core; DCO only; assignment CLA. **Consequences.** Nothing public until counsel covers exception drafting, CLA text, mixed-licence repository, CRA roles, steward form, trademark, patents, dependency compatibility and funder terms (R17 s12). The default Q5 answer date (2027-06-01) falls after the latest public flip (2027-04-06, D26), so the owner must settle in Q16 whether "covers" means written counsel advice or formed entities, or move Q5 earlier. In-process third-party Rust is unsupported. Pledge, veto and investor covenant precede any priced round. **Evidence.** R17 s11-12, R24 s8, R26 C2-C3, R05, R00 D1.
+**Why.** Permissive terms, no copyleft boundary to explain to extension authors, and no contributor paperwork. **Consequences.** The dependency allow-list excludes copyleft-only components. Nothing here is legal advice; the DCO wording, the trademark policy (Apache-2.0 grants no trademark rights) and the CRA role of SpaceCorps go to counsel (Q5, Q16, Q20). **Superseded alternative.** AGPL-3.0-or-later core with an s7 Application Exception, Apache-2.0 SDKs, a commercial `ee` tree, a licence-grant CLA with an "OSI licence forever" pledge, and a company plus EU non-profit steward (R17 s11-12, R24 s8, R26 C2-C3). **Evidence.** OR-1, OR-10, OR-18.
 
 #### D2 Open/paid boundary and pricing unit
-**Status** PROPOSED. **Reversibility** one-way door once published, because the ratchet only moves paid to open. **Owner action** yes (Q3): ratify section 6 before the first public commit; marketplace and white-label terms follow in Q13.
+**Status** RATIFIED (OR-2). **Reversibility** one-way door once published. **Owner action** none.
 
-**Decision.** Every first-party app and every security outcome is open; paid means operator convenience, assurance and operated or warranted services (section 6). The list is published, closed and ratcheting; `ee` code converts to open 24 months after release. Price per organisation (one business), banded by full users; portal users, up to 3 accountant seats and light users (fair use, up to 5x full users) are free. Free, EUR 49, EUR 249 and from EUR 899 are price-test hypotheses. Marketplace: 0% at launch, cap 15%, any rate announced 12 months ahead, never on free packages or sideloads.
+**Decision.** There is no paid software, no open-core, no enterprise layer, no paid list and no ratchet, no plans, no price list, no per-seat or per-organisation pricing, and no paid partner programme or marketplace commission. Every first-party app and every security outcome is open and free to use and to self-host. There is no revenue model today; any future service (support, hosting, certification) would be separate and must never restrict the free software.
 
-**Why.** Odoo's gated accounting and API are the main grievance; R17's gating of SSO, SCIM, audit and white-label as written contradicts the one-edition promise. **Rejected.** Per-user pricing with a moving line; everything free plus services; R17 s11.2 as written. **Consequences.** OIDC, TOTP, passkeys, audit log and export can never be sold; ARPA shortfall is a top-8 risk (R26 risk M9); price tests are needed. **Evidence.** R26 A2-A3, R25 B7, R24 s10, R17 s11.2, R03, R04.
+**Consequences.** Section 6 and the pricing, plan and price-test text of the other documents are history, not a plan. OIDC, TOTP, passkeys, the audit log and export stay free by construction. **Superseded alternative.** A published, closed, ratcheting paid list with `ee` conversion after 24 months, per-organisation plans (Free, EUR 49, EUR 249, from EUR 899) and a marketplace take rate of 0% to 15% (R26 A2-A3, R25 B7, R24 s10, R17 s11.2). **Evidence.** OR-2.
 
 #### D3 Name and trademark
 **Status** PROPOSED. **Reversibility** one-way door once announced or filed. **Owner action** yes (Q2).
@@ -965,9 +985,9 @@ Q1-Q14 are ranked by irreversibility; Q15 onward were added after that ranking a
 
 | Rank | Question | Door | Recommended default | Answer by |
 |---|---|---|---|---|
-| Q1 | Licence suffix, CLA grant and pledge, company plus steward (D1) | One-way | AGPL-3.0-or-later, s7 exception, licence-grant CLA with pledge, counsel instructed | 2026-10-20 |
+| Q1 | Licence suffix, CLA grant and pledge, company plus steward (D1) | One-way | Answered 2026-10-01 (OR-1, OR-10): Apache-2.0 for everything, DCO sign-off, no CLA, SpaceCorps as publisher (D1) | Closed |
 | Q2 | Keep "obop"; when may the repository go public (D3, G0) | One-way | Working name; reserve handles by 2026-10-15; counsel opinion by 2026-12-15; else a fallback name | 2026-10-20 |
-| Q3 | Ratify the free and paid lists and the ratchet, including the operated-service lines (D2, section 6, Q19) | One-way | Ratify as written | 2026-10-20 |
+| Q3 | Ratify the free and paid lists and the ratchet, including the operated-service lines (D2, section 6, Q19) | One-way | Answered 2026-10-01 (OR-2): no paid list and no ratchet; everything is open and free (D2) | Closed |
 | Q4 | Funding path, hiring gate, covenant, NLnet application, and the bridge between the seed and the ARR-gated round (D5; BUSINESS BQ12) | One-way | Gated plan; apply to NLnet; bridge per BQ12 | 2026-10-23 |
 | Q5 | Steward legal form and CRA roles (D1, D17) | One-way | Counsel opinion before the paid beta; the part that gates the public flip is Q16 | 2027-06-01 |
 | Q6 | Spike readout: Free-tier economics and key type (D6, D9) | One-way once data exists | Keep database per business; UUIDv7 if thresholds pass | 2026-11-27 |
@@ -977,13 +997,13 @@ Q1-Q14 are ranked by irreversibility; Q15 onward were added after that ranking a
 | Q10 | Interpretations I-1 to I-4 (I-2 includes whether `vp env exec pnpm sbom` or a `vp run` task around it counts as "`vp` only"; I-4 is the exit-drill exception; ENGINEERING Q-E2), the D23 pin policy, the D24 renames and X and L prefixes, and the Rust 1.99 adoption window | Two-way | Ratify; adopt 1.99.x in 2026-10-15 to 2026-10-22 | 2026-10-15 |
 | Q11 | Offline scope at 1.0 and the wave of POS order capture (D13, D25) | Two-way | Odoo-19 parity for the apps shipped by 1.0: read cache plus degraded-feature list; POS capture with `pos` in W3 | 2027-09-30 |
 | Q12 | Typst only, no browser renderer (D20) | Two-way | Typst only | 2027-09-30 |
-| Q13 | Marketplace terms and white-label licence (D2) | Two-way | 0% at launch, cap 15% | 2028-03-31 |
+| Q13 | Marketplace terms and white-label licence (D2) | Two-way | Answered 2026-10-01 (OR-2): no marketplace commission and no white-label licence | Closed |
 | Q14 | Storefront without Node (D14), and whether Starlight (Astro) may be the docs fallback in D38, which needs the same F2 waiver | Two-way | No Node in production; no Astro without a waiver, and no Starlight fallback without one (VitePress stays the docs generator) | 2028-03-31 |
 | Q15 | Which pnpm major to pin, 11.x or 12.x (D23; ENGINEERING Q-E6) | Two-way | Newest 11.x that is at least 7 days old (11.27.1 today; 12.6.0 if the owner picks 12.x) until the settings are behaviourally verified on 12.x (a parse check passed on 12.8.1) | 2026-10-15 |
 | Q16 | What "counsel covers" means for the public flip, and when Q5 is answered (D1, D26, Q5) | One-way | Written counsel advice on all nine R17 s12 items, due by 2027-03-15; formed entities, E&O cover and signed CRA roles gate the paid beta (Q5), not the flip | 2026-12-15 |
 | Q17 | Runner plan while the repository is private (D36, D26; ENGINEERING Q-E1) | Two-way | One Hetzner CCX43 for Rust builds plus standard runners, no merge queue (ENGINEERING proposal) | 2026-10-23 |
 | Q18 | Identifier families that share letters (section 4): keep and qualify, or rename (UI tiers, integration rules, spikes, goals) | Two-way | Keep and qualify now; rename only on the owner's request, before the first public commit | 2026-11-13 |
-| Q19 | Operated services on the paid list, and later additions to the closed list (D2, section 6; BUSINESS BQ2, BQ11) | One-way | Open code with paid operation for the registry server, brokers, relays, SMS and routing; new capabilities join the paid list only by a published amendment with steward-board consent and 12 months' notice, for capabilities never shipped open | 2026-10-20 |
+| Q19 | Operated services on the paid list, and later additions to the closed list (D2, section 6; BUSINESS BQ2, BQ11) | One-way | Answered 2026-10-01 (OR-2): there is no paid list and SpaceCorps operates no paid service | Closed |
 | Q20 | Where the company is incorporated, which decides the CRA manufacturer role and the dogfood ledger (ROADMAP section 9.3) | Costly | No default in the research; ask counsel with Q5 | 2026-10-23 |
 | Q21 | Ratify D40 to D43: masking at the command boundary, the agent-ready module contract, W1 agent-safety minimum, and hosting-neutral `HostingTarget` with Sliplane as a reference target; also whether mask tokens may be stable across sessions | Two-way (D41 one-way once third parties publish) | Ratify as written; session-stable tokens only | 2026-11-13 |
 
