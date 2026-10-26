@@ -210,7 +210,8 @@ pub(crate) fn query(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<(Vec<
 
 /// `search`: a page of visible records and the total, or, with `aggregate`, the groups over the
 /// records the caller may see. An aggregate over a computed field loads and evaluates the
-/// visible records first (memory grows with the model); otherwise it streams.
+/// visible records first (memory grows with the model), and so does one over a model whose row
+/// rule reads the store (`via`, a computed `public_field`); otherwise it streams.
 pub(crate) fn search(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Value> {
     let q = Query::parse_in(def, input, &|_| true, &eng.zones())?;
     if q.aggregate_fields().is_empty() && !q.has_aggregate() {
@@ -226,17 +227,21 @@ pub(crate) fn search(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     let look = lookup_fn(eng);
     let gate = Gate::new(&reads, &look, &actor);
     let visible = |f: &Fields| gate.visible(def, f);
-    let result =
-        if q.aggregate_fields().iter().any(|n| is_computed(n)) || q.touches(&|n| is_computed(n)) {
-            // A computed field exists only once evaluated, so the visible records are loaded and
-            // filled first; the streaming scan cannot read the store while it holds it.
-            let mut rows = reads.all(def.name)?;
-            gate.retain(def, &mut rows);
-            Computer::new(&reads, &look, rows.len() > 16).fill_all(def, &mut rows);
-            q.run_aggregate_rows(&rows, &|_| true)
-        } else {
-            q.run_aggregate(eng.backend(), def.name, &visible)
-        };
+    let result = if q.aggregate_fields().iter().any(|n| is_computed(n))
+        || q.touches(&|n| is_computed(n))
+        || gate.reads_store(def)
+    {
+        // A computed field exists only once evaluated, and a row rule that follows a parent
+        // (`via`) or a computed `public_field` reads the store to decide; the streaming scan
+        // cannot read the store while it holds it (it would wait for itself). So the records
+        // are loaded, the rule is applied to them and they are filled first.
+        let mut rows = reads.all(def.name)?;
+        gate.retain(def, &mut rows);
+        Computer::new(&reads, &look, rows.len() > 16).fill_all(def, &mut rows);
+        q.run_aggregate_rows(&rows, &|_| true)
+    } else {
+        q.run_aggregate(eng.backend(), def.name, &visible)
+    };
     match result {
         Some(r) => {
             let (groups, total) = r?;

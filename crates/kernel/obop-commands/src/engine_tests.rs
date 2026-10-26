@@ -215,6 +215,21 @@ fn workshop(p: &str) -> Module {
                 ..Access::default()
             }),
         ),
+        // A note on a leave request: visible when its request is (a `via` rule reads the parent).
+        model(
+            p,
+            "leave_note",
+            vec![
+                f("leave_id").reference(&n("leave")),
+                f("kind"),
+                num("hours"),
+            ],
+            vec![],
+            Some(Access {
+                via: Some("leave_id"),
+                ..Access::default()
+            }),
+        ),
         // A shipment: marking it shipped marks its order lines' invoice posted, which needs a
         // manager and approval, and fails on purpose when the note says so.
         model(
@@ -1096,6 +1111,81 @@ fn aggregates_count_only_the_records_the_caller_may_see() {
         assert_eq!(groups(&hr()).0, 3);
         assert_eq!(groups(&hr()).1, 2);
         assert_eq!(groups(&Principal::user("root", &[crate::ADMIN_GROUP])).0, 3);
+    });
+}
+
+/// A non-administrator's aggregate over a model whose row rule follows a parent (`via`) used to
+/// stop the instance: the rule read the parent while the aggregate's streaming scan held the
+/// store. It ran on memory by luck and hung on SQLite and PostgreSQL. The call runs on a thread
+/// with a deadline so that a regression fails the test instead of hanging it.
+#[test]
+fn an_aggregate_over_a_model_that_follows_its_parent_returns_and_counts_only_visible_records() {
+    each_rig(|r| {
+        let eves = r.make(&emp("eve"), "leave", vec![("days", Value::Int(2))]);
+        let bobs = r.make(&emp("bob"), "leave", vec![("days", Value::Int(5))]);
+        let note = |who: &Principal, leave: &str, kind: &str, hours: i64| {
+            r.make(
+                who,
+                "leave_note",
+                vec![
+                    ("leave_id", t(leave)),
+                    ("kind", t(kind)),
+                    ("hours", Value::Int(hours)),
+                ],
+            )
+        };
+        note(&emp("eve"), &eves, "call", 3);
+        note(&emp("eve"), &eves, "mail", 4);
+        note(&emp("bob"), &bobs, "call", 10);
+        let q = || {
+            m(vec![(
+                "aggregate",
+                m(vec![
+                    ("group_by", Value::List(vec![t("kind")])),
+                    (
+                        "measures",
+                        Value::List(vec![m(vec![("op", t("sum")), ("field", t("hours"))])]),
+                    ),
+                ]),
+            )])
+        };
+        let (d, cmd) = (r.d.clone(), r.cmd("leave_note", "search"));
+        let run = |who: Principal| -> Value {
+            let (d, cmd, input) = (d.clone(), cmd.clone(), q());
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let out = d.call(Surface::Rest, &who, &mut Vault::new(), &cmd, &input);
+                let _ = tx.send(out.map(|r| r.value));
+            });
+            match rx.recv_timeout(std::time::Duration::from_secs(20)) {
+                Ok(Ok(v)) => v,
+                Ok(Err(e)) => panic!("the aggregate failed: {e:?}"),
+                Err(_) => panic!("the aggregate did not return in 20 s: the instance is stuck"),
+            }
+        };
+        let summary = |v: Value| -> (i64, String) {
+            let Value::Map(mut out) = v else {
+                panic!("not a map")
+            };
+            let total = int(out.remove("total").unwrap());
+            let Some(Value::List(g)) = out.remove("groups") else {
+                panic!("no groups")
+            };
+            (total, format!("{g:?}"))
+        };
+        // Eve sees her two notes (two groups); Bob's note is neither counted nor summed.
+        let (total, shown) = summary(run(emp("eve")));
+        assert_eq!(total, 2, "{shown}");
+        assert!(shown.contains("call") && shown.contains("mail"), "{shown}");
+        assert!(!shown.contains("13") && !shown.contains("10"), "{shown}");
+        // Bob sees only his; the administrator sees all three.
+        assert_eq!(summary(run(emp("bob"))).0, 1);
+        assert_eq!(
+            summary(run(Principal::user("root", &[crate::ADMIN_GROUP]))).0,
+            3
+        );
+        // The server is still serving afterwards.
+        assert_eq!(r.search_total(&emp("eve"), "leave_note", m(vec![])), 2);
     });
 }
 

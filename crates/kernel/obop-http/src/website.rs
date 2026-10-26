@@ -113,7 +113,8 @@ fn content_type(path: &Path) -> HeaderValue {
 }
 
 fn cache_control(path: &Path) -> &'static str {
-    let p = path.to_string_lossy();
+    // Windows paths use backslashes; the rules below are written with forward slashes.
+    let p = path.to_string_lossy().replace('\\', "/");
     let fingerprinted = p.contains("/assets/")
         && path.file_name().is_some_and(|f| {
             f.to_string_lossy().matches('-').count() >= 1 && f.to_string_lossy().len() > 14
