@@ -361,6 +361,19 @@ pub fn bookkeeping<T>(f: impl FnOnce() -> T) -> T {
     f()
 }
 
+/// Run a step that must not be lost once something has changed: tried again while the store
+/// refuses (five tries, 150 ms apart; its writes rest on what the step reads itself, so they are
+/// allowed after an earlier refusal of the request), and a lasting refusal makes the request a
+/// partial one ([`mark_partial`]): a 503 that says so, never an answer that looks done. Only a
+/// refusal of the store is tried again; any other error is the step's own answer.
+pub fn needed<T>(mut f: impl FnMut() -> Result<T, String>) -> Result<T, String> {
+    patiently(5, std::time::Duration::from_millis(150), || allow(&mut f)).inspect_err(|e| {
+        if Fault::is_transient(e) {
+            mark_partial();
+        }
+    })
+}
+
 /// Run `f` in a request scope of its own and drop what it saw when it ends. For housekeeping that
 /// a request does on nobody's behalf and that has nobody to answer (the sweep of expired orders a
 /// checkout starts with): a call of it that is refused must not make the guard refuse the request's

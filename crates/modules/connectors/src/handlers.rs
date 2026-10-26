@@ -236,7 +236,7 @@ fn precheck_connect(rt: &Runtime, c: &Connection, p: &Provider) -> Result<(), St
 
 fn revoke_connection(rt: &Runtime, id: &str, by: &str) -> Result<usize, String> {
     set(rt, CONNECTION, id, &[("state", "revoked".into())])?;
-    let purged = rt.revoke(id);
+    let purged = rt.revoke(id)?;
     for k in consents_of(&*rt.backend, id)
         .iter()
         .filter(|k| k.is_active())
@@ -270,7 +270,7 @@ fn connection_command(rt: &Arc<Runtime>, d: &Dispatcher, m: &Module, name: &'sta
                     "connected"
                 }
                 "pause" => {
-                    rt.queue.drop_connection(&id);
+                    rt.queue.drop_connection(&id)?;
                     "paused"
                 }
                 _ => {
@@ -739,7 +739,12 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, store: &Store, rt: &Arc<Runtime>
             all.extend(f.clone());
             r.backend.insert(EGRESS_POLICY, INSTANCE, &all)?;
         }
-        r.client.set_instance_hosts(InstancePolicy::load(&*r.backend).hosts);
+        // The list the operator just saved is the one the client holds; if it cannot be read back
+        // the client does not fall back to "no restriction", it asks again at every send.
+        let source = r.backend.clone();
+        r.client.follow_instance_hosts(Arc::new(move || {
+            InstancePolicy::try_load(&*source).map(|p| p.hosts)
+        }));
         Ok(row(INSTANCE, &instance_fields(&r)))
     }));
 

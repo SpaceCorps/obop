@@ -73,6 +73,9 @@ pub struct Runtime {
     providers: Vec<Provider>,
 }
 
+/// The key prefix of the notes that an erasure is owed.
+const ERASURE_OWED: &str = "connectors.erase:";
+
 /// Purposes the sealed values are bound to (see `secretbox`).
 pub const PURPOSE_CREDENTIALS: &str = "connection-credentials";
 pub const PURPOSE_OAUTH: &str = "connection-oauth-tokens";
@@ -106,14 +109,19 @@ impl Runtime {
             secrets.clone(),
             dispatcher.clone(),
         ));
-        let inst = InstancePolicy::load(&*backend);
         let client = client.unwrap_or_else(|| {
-            Client::new(ClientConfig {
+            let client = Client::new(ClientConfig {
                 allow_loopback: cfg.allow_loopback,
                 timeout: Duration::from_secs(20),
-                instance_hosts: inst.hosts,
                 ..ClientConfig::default()
-            })
+            });
+            // The operator's allow-list is read now, and again at every send while it could not be
+            // (a database that is away while the process starts must not leave it lifted).
+            let source = backend.clone();
+            client.follow_instance_hosts(Arc::new(move || {
+                InstancePolicy::try_load(&*source).map(|p| p.hosts)
+            }));
+            client
         });
         let queue = Queue::new(backend.clone(), secrets.clone());
         Arc::new(Self {
@@ -582,18 +590,27 @@ impl Runtime {
                 }
                 Ok(s) if Self::retryable(s) => {
                     failed = format!("the receiver answered {s}; will retry");
-                    self.queue.push(Job {
+                    if let Err(e) = self.queue.push(Job {
                         next_at: now() + crate::queue::backoff(1, 100).unwrap_or(5),
                         ..job
-                    });
+                    }) {
+                        // Nobody will make the retry: the run is not "retrying", it failed.
+                        failed = format!(
+                            "the receiver answered {s} and the retry could not be queued: {e}"
+                        );
+                    }
                 }
                 Ok(s) => failed = format!("the receiver refused the delivery with status {s}"),
                 Err(NetError::Timeout | NetError::Transport(_)) => {
                     failed = "the receiver could not be reached; will retry".into();
-                    self.queue.push(Job {
+                    if let Err(e) = self.queue.push(Job {
                         next_at: now() + crate::queue::backoff(1, 100).unwrap_or(5),
                         ..job
-                    });
+                    }) {
+                        failed = format!(
+                            "the receiver could not be reached and the retry could not be queued: {e}"
+                        );
+                    }
                 }
                 Err(e) => failed = e.to_string(),
             }
@@ -1212,14 +1229,62 @@ impl Runtime {
     }
 
     /// Revocation: forget credentials, tokens, pseudonym maps and queued deliveries.
-    pub fn revoke(&self, connection: &str) -> usize {
+    ///
+    /// Each step is tried again while the store refuses, and a lasting refusal is an error that
+    /// makes the request a partial one: a revocation answered "done" while the sealed credentials
+    /// or the pseudonym maps are still stored would be a lie about personal data. Repeating the
+    /// revocation finishes what is left.
+    pub fn revoke(&self, connection: &str) -> Result<usize, String> {
+        use obop_storage::fault::needed;
         let mut f = Fields::new();
         f.insert("credentials".into(), "".into());
         f.insert("credentials_hint".into(), "revoked".into());
         f.insert("oauth_tokens".into(), "".into());
-        let _ = self.backend.update(CONNECTION, connection, &f);
-        self.queue.drop_connection(connection);
-        self.egress.forget_connection(connection)
+        needed(|| self.backend.update(CONNECTION, connection, &f).map(|_| ()))?;
+        needed(|| self.queue.drop_connection(connection))?;
+        needed(|| self.egress.forget_connection(connection))
+    }
+
+    /// The erasure hook, durable: a note that the erasure of `record` is owed is written first
+    /// and taken back when it is done, and a tick that finds a note does the erasure again, so a
+    /// store that is busy for a moment (the worker has nobody to answer) never leaves the pseudonym
+    /// maps, links and sealed values of an erased person behind in silence (D74).
+    pub fn erase_record(&self, record: &str) {
+        let key = format!("{ERASURE_OWED}{record}");
+        if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+            self.backend.kv_put(&key, "owed", None)
+        }) {
+            eprintln!("connectors: the erasure of {record} could not be noted: {e}");
+        }
+        self.finish_erasure(record);
+    }
+
+    fn finish_erasure(&self, record: &str) {
+        let key = format!("{ERASURE_OWED}{record}");
+        match obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+            self.egress.erase_subject(record)
+        }) {
+            Ok(_) => {
+                let _ = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+                    self.backend.kv_delete(&key)
+                });
+            }
+            Err(e) => eprintln!(
+                "connectors: the erasure of {record} is not complete ({e}); it is repeated at the next tick"
+            ),
+        }
+    }
+
+    /// The erasures that are owed (a note exists): done again.
+    fn finish_owed_erasures(&self) {
+        let Ok(owed) = self.backend.kv_scan(ERASURE_OWED) else {
+            return;
+        };
+        for (key, _) in owed {
+            if let Some(record) = key.strip_prefix(ERASURE_OWED) {
+                self.finish_erasure(record);
+            }
+        }
     }
 
     /// Retention: remove flow-log and sync-run rows older than their connection's retention
@@ -1271,6 +1336,7 @@ impl Runtime {
     /// Periodic work: due pulls, due retries, the daily purge. Returns a short description.
     pub fn tick(&self, at: u64) -> String {
         let mut did = Vec::new();
+        self.finish_owed_erasures();
         let retried = self.process_queue(at);
         if retried > 0 {
             did.push(format!("{retried} retried"));
@@ -1394,7 +1460,7 @@ impl Runtime {
                     Ok((command, id)) => {
                         // Erasure first: a party that was erased must not be sent anywhere.
                         if command == "party.erase" {
-                            this.egress.erase_subject(&format!("party:{id}"));
+                            this.erase_record(&format!("party:{id}"));
                         } else {
                             this.handle_event(&command, &id);
                         }

@@ -45,7 +45,6 @@ use obop_storage::{ApplyError, Backend, Fields, Op};
 use serde_json::{Value as J, json};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 /// A step that must not be lost once the payment or the order has changed (D74): marking the
 /// order paid, giving the units back, closing the payment. It is tried again while the store
@@ -53,12 +52,8 @@ use std::time::Duration;
 /// refusal of the request), and a lasting refusal makes the request a partial one: a 503 that says
 /// so, never an answer that looks done. Only a refusal of the store is retried; any other error is
 /// the step's own answer.
-fn needed<T>(mut f: impl FnMut() -> Result<T, String>) -> Result<T, String> {
-    fault::patiently(5, Duration::from_millis(150), || fault::allow(&mut f)).inspect_err(|e| {
-        if Fault::is_transient(e) {
-            fault::mark_partial();
-        }
-    })
+fn needed<T>(f: impl FnMut() -> Result<T, String>) -> Result<T, String> {
+    fault::needed(f)
 }
 
 /// A refusal of the store, as opposed to an answer: such an error is never taken for "no" (no

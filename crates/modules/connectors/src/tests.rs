@@ -1361,6 +1361,188 @@ fn subscribed_events_deliver_the_record_minimised() {
 }
 
 #[test]
+fn a_delivery_whose_run_cannot_be_closed_is_a_partial_request_and_never_nothing_applied() {
+    use obop_storage::fault::{self, Outcome};
+    use obop_storage::testing::{Flaky, Mode};
+    // The records are with the receiver and then the store refuses the end of the run for good.
+    // The flow-log row is already a change of the request, so only the explicit rule makes this
+    // a partial 503: asserted here by refusing nothing but the update of the run.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+    seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    flaky.refuse_model(obop_connectors::model::SYNC_RUN, Mode::Updates);
+    fault::begin_request(Default::default());
+    let done = raw(&e, &admin(), "connection.sync", json!({"id": id}));
+    let out: Outcome = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    assert_eq!(r.count(), 1, "the records were delivered");
+    assert!(out.wrote && out.partial, "{done:?} {out:?}");
+}
+
+#[test]
+fn a_retry_the_store_would_not_queue_is_a_failed_run_and_an_error_never_retrying() {
+    use obop_storage::testing::{Flaky, Mode};
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+    seed_party(&e);
+    let r = Receiver::new(503);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    flaky.refuse_model("connector_job", Mode::All);
+    let done = raw(&e, &admin(), "connection.sync", json!({"id": id}));
+    flaky.allow_models();
+    assert!(
+        matches!(&done, Err(CallError::Handler(m)) if m.contains("could not be queued")),
+        "{done:?}"
+    );
+    let run = ok(&e, &admin(), "sync_run.list", json!({}))[0].clone();
+    assert_eq!(run["status"], "failed", "nobody will retry it: {run}");
+    assert!(e.rt.queue.is_empty());
+}
+
+#[test]
+fn a_host_list_the_store_could_not_give_at_start_lifts_nothing() {
+    use obop_connectors::net::NetError;
+    use obop_storage::testing::{Flaky, Mode};
+    // The operator allowed one host. The process starts while the policy cannot be read: it ran
+    // with no restriction until somebody saved the policy again. Now nothing is sent while the
+    // list is unknown, and the list that was saved applies as soon as it can be read.
+    let e = env();
+    ok(
+        &e,
+        &admin(),
+        "egress_policy.update",
+        json!({"host_allowlist": "hooks.example.org"}),
+    );
+    let flaky = Flaky::new(e.s.backend());
+    flaky.refuse_model(obop_connectors::model::EGRESS_POLICY, Mode::Reads);
+    let worker = Runtime::with_providers(
+        obop_storage::guarded(flaky.clone()),
+        e.d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: None,
+        },
+        providers(),
+        None,
+    );
+    let (url, hosts) = ("http://127.0.0.1:9/hook", vec!["127.0.0.1".to_string()]);
+    assert!(
+        worker.client.check_shape(url, &hosts).is_err(),
+        "the list is unknown, so the host is not let through"
+    );
+    flaky.allow_models();
+    assert!(
+        matches!(
+            worker.client.check_shape(url, &hosts),
+            Err(NetError::HostNotAllowed(_))
+        ),
+        "the saved list applies"
+    );
+}
+
+#[test]
+fn a_revocation_the_store_refused_is_a_partial_request_and_a_repeat_finishes_it() {
+    use obop_storage::fault;
+    use obop_storage::testing::{Flaky, Mode};
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+    seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    let maps = |e: &Env| {
+        e.s.backend()
+            .list(obop_connectors::model::PSEUDONYMS)
+            .unwrap()
+            .len()
+    };
+    assert!(maps(&e) > 0);
+    // The pseudonym maps cannot be listed: the revocation is not "revoked, nothing to forget".
+    flaky.refuse_model(obop_connectors::model::PSEUDONYMS, Mode::Reads);
+    fault::begin_request(Default::default());
+    let done = raw(&e, &admin(), "connection.revoke", json!({"id": id}));
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    assert!(
+        matches!(&done, Err(CallError::Handler(m)) if m.starts_with("storage_busy")),
+        "{done:?}"
+    );
+    assert!(out.wrote && out.partial, "the state did change: {out:?}");
+    assert!(maps(&e) > 0, "what was not forgotten is still there");
+    // The repeat finishes it.
+    ok(&e, &admin(), "connection.revoke", json!({"id": id}));
+    assert_eq!(maps(&e), 0);
+    let c = e.s.backend().get("connection", &id).unwrap().unwrap();
+    assert_eq!(c["state"], "revoked");
+    assert_eq!(c["credentials"], "");
+}
+
+#[test]
+fn an_erasure_the_worker_could_not_finish_is_noted_and_done_again_at_the_next_tick() {
+    use obop_storage::testing::{Flaky, Mode};
+    // The worker has nobody to answer. A busy store left the pseudonym maps and sealed values of
+    // an erased person behind with no trace and no repeat.
+    let e = env();
+    let b = e.s.backend();
+    let mut f = obop_storage::Fields::new();
+    f.insert("connection".into(), J::from("c1"));
+    f.insert("record".into(), J::from("party:p1"));
+    b.insert(obop_connectors::model::PSEUDONYMS, "c1:psn_a", &f)
+        .unwrap();
+    b.insert(obop_connectors::model::VAULT, "c1:idx", &f)
+        .unwrap();
+    let flaky = Flaky::new(b.clone());
+    let worker = Runtime::with_providers(
+        obop_storage::guarded(flaky.clone()),
+        e.d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: None,
+        },
+        providers(),
+        None,
+    );
+    flaky.refuse_model(obop_connectors::model::VAULT, Mode::Reads);
+    worker.erase_record("party:p1");
+    flaky.allow_models();
+    assert!(
+        b.get(obop_connectors::model::VAULT, "c1:idx")
+            .unwrap()
+            .is_some(),
+        "the sealed value is still there"
+    );
+    assert_eq!(
+        b.kv_scan("connectors.erase:").unwrap().len(),
+        1,
+        "owed, and noted"
+    );
+    worker.tick(obop_connectors::util::now() + 10);
+    assert!(
+        b.get(obop_connectors::model::VAULT, "c1:idx")
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        b.list(obop_connectors::model::PSEUDONYMS)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        b.kv_scan("connectors.erase:").unwrap().is_empty(),
+        "done, and the note is gone"
+    );
+}
+
+#[test]
 fn an_event_met_by_one_refused_call_is_delivered_once_not_lost_and_not_twice() {
     use obop_storage::{fault, testing::Flaky};
     // The event of a command is delivered from a worker with nobody to answer. A flow the store

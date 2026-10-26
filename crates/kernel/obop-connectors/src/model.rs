@@ -248,10 +248,14 @@ pub struct ProviderPolicy {
     pub oauth_client_secret: String,
 }
 
-pub fn provider_policy(backend: &dyn Backend, provider: &str) -> Option<ProviderPolicy> {
-    backend
-        .list(PROVIDER_POLICY)
-        .ok()?
+/// What the admin recorded about `provider`; a store that cannot be read says so (`Err`): it is not
+/// "nothing recorded", which would read as "no agreement" and as "not enabled".
+pub fn try_provider_policy(
+    backend: &dyn Backend,
+    provider: &str,
+) -> Result<Option<ProviderPolicy>, String> {
+    Ok(backend
+        .list(PROVIDER_POLICY)?
         .into_iter()
         .find(|(_, f)| str_of(f, "provider") == provider)
         .map(|(id, f)| ProviderPolicy {
@@ -265,7 +269,13 @@ pub fn provider_policy(backend: &dyn Backend, provider: &str) -> Option<Provider
             default_policy: str_of(&f, "default_policy").into(),
             oauth_client_id: str_of(&f, "oauth_client_id").into(),
             oauth_client_secret: str_of(&f, "oauth_client_secret").into(),
-        })
+        }))
+}
+
+/// As [`try_provider_policy`], for a display or a report that has nobody to refuse: a store that
+/// cannot be read shows as nothing recorded. Never for a decision.
+pub fn provider_policy(backend: &dyn Backend, provider: &str) -> Option<ProviderPolicy> {
+    try_provider_policy(backend, provider).ok().flatten()
 }
 
 #[cfg(test)]
