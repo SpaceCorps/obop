@@ -140,8 +140,9 @@ fn date_key(s: &str) -> Option<i64> {
 /// A stored instant: only the canonical text `YYYY-MM-DDTHH:MM:SS.ffffffZ` counts (D72, as the
 /// stores write it). Any other spelling of an instant, an offset or fewer digits, can only be
 /// data that bypassed validation and counts as empty, exactly as the `Instant` slot of
-/// `obop_storage::keyexpr` reads it in SQL.
-fn stored_instant(s: &str) -> Option<Instant> {
+/// `obop_storage::keyexpr` reads it in SQL. Every place that reads a stored datetime (filters,
+/// order, buckets, the groups of an aggregate and computed fields) goes through this one rule.
+pub(crate) fn stored_instant(s: &str) -> Option<Instant> {
     // The canonical text is 27 bytes: say no to everything else before parsing.
     if s.len() != 27 {
         return None;
