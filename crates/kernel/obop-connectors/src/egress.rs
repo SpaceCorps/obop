@@ -325,9 +325,16 @@ impl Egress {
     }
 
     /// Flows in the last hour and records in the last day that were released for `connection`.
+    /// A log that cannot be read counts as none (for a display); the gate uses [`Egress::try_usage`].
     pub fn usage(&self, connection: &str, at: u64) -> (i64, i64) {
+        self.try_usage(connection, at).unwrap_or_default()
+    }
+
+    /// As [`Egress::usage`], and a refused read of the log is an error: read as "no flows yet" it
+    /// let the rate and volume caps pass.
+    pub fn try_usage(&self, connection: &str, at: u64) -> Result<(i64, i64), String> {
         let (mut flows, mut records) = (0, 0);
-        for (_, f) in self.backend.list(FLOW_LOG).unwrap_or_default() {
+        for (_, f) in self.backend.list(FLOW_LOG)? {
             if str_of(&f, "connection") != connection
                 || str_of(&f, "outcome") != "released"
                 || str_of(&f, "direction") != "outbound"
@@ -344,7 +351,7 @@ impl Egress {
                 records += f.get("record_count").and_then(J::as_i64).unwrap_or(0);
             }
         }
-        (flows, records)
+        Ok((flows, records))
     }
 
     /// The gate. `rows` are records read as the connection's owner (so permissions already
@@ -357,7 +364,9 @@ impl Egress {
         rows: Vec<Map<String, J>>,
     ) -> Result<Prepared, Refusal> {
         let outcome = self.prepare_inner(conn, provider, model, rows);
-        if let Err(r) = &outcome {
+        if let Err(r) = &outcome
+            && !matches!(r, Refusal::StoreBusy)
+        {
             self.log(
                 conn,
                 "outbound",
@@ -386,7 +395,11 @@ impl Egress {
             return Err(Refusal::TooManyRows(MAX_ROWS_PER_FLOW));
         }
         let at = now();
-        let (flows, records) = self.usage(&conn.id, at);
+        // The caps are checked against what the log says: a log that cannot be read is not "no
+        // flows yet", and nothing leaves on a guess (D74).
+        let (flows, records) = self
+            .try_usage(&conn.id, at)
+            .map_err(|_| Refusal::StoreBusy)?;
         if flows >= conn.rate_limit_per_hour {
             return Err(Refusal::RateLimited(conn.rate_limit_per_hour));
         }
@@ -396,7 +409,8 @@ impl Egress {
         let out: Vec<Map<String, J>> = rows
             .iter()
             .map(|r| self.apply(conn, &plan, r, Mode::Live))
-            .collect();
+            .collect::<Result<_, _>>()
+            .map_err(|_| Refusal::StoreBusy)?;
         let hash = sha256_hex(serde_json::to_string(&out).unwrap_or_default().as_bytes());
         let sent: Vec<String> = plan.sent().map(|f| f.name.clone()).collect();
         let denied: Vec<String> = plan
@@ -405,18 +419,22 @@ impl Egress {
             .chain(plan.unknown.iter().cloned())
             .collect();
         let mode = plan.mode_summary();
-        let flow_id = self.log(
-            conn,
-            "outbound",
-            model,
-            out.len(),
-            &sent,
-            &denied,
-            &mode,
-            &hash,
-            "released",
-            "",
-        );
+        // Every flow is recorded before it leaves: a row that cannot be written is a flow that does
+        // not happen (it was released with no trace, and the caller was told "applied none").
+        let flow_id = self
+            .try_log(
+                conn,
+                "outbound",
+                model,
+                out.len(),
+                &sent,
+                &denied,
+                &mode,
+                &hash,
+                "released",
+                "",
+            )
+            .map_err(|_| Refusal::StoreBusy)?;
         Ok(Prepared {
             rows: out,
             report: Report {
@@ -444,7 +462,8 @@ impl Egress {
         let out = rows
             .iter()
             .map(|r| self.apply(conn, &plan, r, Mode::Preview))
-            .collect();
+            .collect::<Result<_, _>>()
+            .map_err(|_| Refusal::StoreBusy)?;
         Ok((plan, out))
     }
 
@@ -454,7 +473,7 @@ impl Egress {
         plan: &Plan,
         row: &Map<String, J>,
         mode: Mode,
-    ) -> Map<String, J> {
+    ) -> Result<Map<String, J>, String> {
         let id = str_of(row, "id");
         let record = format!("{}:{id}", plan.model);
         let reference = pseudonym(&self.secrets, &conn.id, &J::from(record.clone()));
@@ -462,9 +481,16 @@ impl Egress {
             let mut f = Fields::new();
             f.insert("connection".into(), conn.id.clone().into());
             f.insert("record".into(), record.clone().into());
-            let _ = self
+            // The map is what lets erasure and revocation find what was sent. An entry that is
+            // there already (the same record sent before) is as it should be; a store that
+            // refused is not, and nothing leaves without it.
+            match self
                 .backend
-                .insert(PSEUDONYMS, &format!("{}:{reference}", conn.id), &f);
+                .insert(PSEUDONYMS, &format!("{}:{reference}", conn.id), &f)
+            {
+                Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
+                _ => {}
+            }
         }
         let mut out = Map::new();
         out.insert("ref".into(), reference.into());
@@ -480,7 +506,7 @@ impl Egress {
             };
             out.insert(pf.name.clone(), treated);
         }
-        out
+        Ok(out)
     }
 
     /// A reversible stand-in for `v`, stable per connection and value. The value is kept sealed
@@ -607,6 +633,28 @@ impl Egress {
         outcome: &str,
         reason: &str,
     ) -> String {
+        self.try_log(
+            conn, direction, model, count, sent, denied, mode, hash, outcome, reason,
+        )
+        .unwrap_or_default()
+    }
+
+    /// As [`Egress::log`], and a row the store refused is an error: the gate does not let a flow
+    /// go that it could not record.
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_log(
+        &self,
+        conn: &Connection,
+        direction: &str,
+        model: &str,
+        count: usize,
+        sent: &[String],
+        denied: &[String],
+        mode: &str,
+        hash: &str,
+        outcome: &str,
+        reason: &str,
+    ) -> Result<String, String> {
         let id = uuid::Uuid::now_v7().to_string();
         let f = json!({
             "connection": conn.id,
@@ -622,10 +670,9 @@ impl Egress {
             "outcome": outcome,
             "reason": reason,
         });
-        let _ = self
-            .backend
-            .insert(FLOW_LOG, &id, f.as_object().expect("object"));
-        id
+        self.backend
+            .insert(FLOW_LOG, &id, f.as_object().expect("object"))?;
+        Ok(id)
     }
 }
 

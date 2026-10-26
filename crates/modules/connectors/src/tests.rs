@@ -1395,6 +1395,58 @@ fn a_failing_receiver_is_retried_then_dead_lettered_and_a_withdrawal_stops_the_r
 }
 
 #[test]
+fn records_leave_only_with_a_trace_and_a_delivery_is_never_answered_as_nothing_applied() {
+    use obop_storage::{fault, testing::Flaky};
+    // The store refuses from one chosen call of a manual send on, for longer than a step is
+    // tried again. Wherever that is: if the receiver got the records, the flow log has the row that
+    // says so (the usage read that was taken for "no flows yet" and the row that was thrown away
+    // let them leave with no trace), and the answer is never "nothing was applied" after a
+    // delivery.
+    let (mut delivered, mut held_back) = (0, 0);
+    // One refused call, and a refusal that lasts: with one, the guard then refuses the writes that
+    // follow (the request already hit a fault), which is how a flow was released with no trace.
+    for (skip, lasting) in (0..60).flat_map(|s| [(s, false), (s, true)]) {
+        let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+        let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+        seed_party(&e);
+        let r = Receiver::new(200);
+        enable(&e, "webhook_out", false);
+        let id = ready(&e, &admin(), &r);
+        flaky.refuse_calls_after(skip, if lasting { 50 } else { 1 });
+        fault::begin_request(Default::default());
+        let done = raw(&e, &admin(), "connection.sync", json!({"id": id}));
+        let out = fault::end_request();
+        flaky.allow_models();
+        fault::clear();
+        let released =
+            e.s.backend()
+                .list(obop_connectors::model::FLOW_LOG)
+                .unwrap()
+                .iter()
+                .filter(|(_, f)| f["outcome"] == "released")
+                .count();
+        if r.count() == 0 {
+            held_back += 1;
+            assert!(
+                done.is_err() || out.fault.is_none(),
+                "skip {skip}: {done:?}"
+            );
+            continue;
+        }
+        delivered += 1;
+        assert_eq!(
+            released, 1,
+            "skip {skip}: records left with no flow log row"
+        );
+        assert!(
+            done.is_ok() || out.wrote,
+            "skip {skip}: answered as nothing applied after a delivery: {done:?} {out:?}"
+        );
+    }
+    assert!(delivered >= 3 && held_back >= 3, "{delivered} {held_back}");
+}
+
+#[test]
 fn a_store_that_refuses_a_lookup_does_not_dead_letter_a_queued_delivery() {
     use obop_storage::testing::{Flaky, Mode};
     // D74: the connection is read while the pool is full. That is "later", not "the connection no

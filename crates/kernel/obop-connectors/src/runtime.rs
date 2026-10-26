@@ -307,19 +307,37 @@ impl Runtime {
 
     fn start_run(&self, c: &Connection, direction: &str, kind: &str) -> String {
         let id = uuid::Uuid::now_v7().to_string();
+        if let Err(e) = self.record_run_start(&id, c, direction, kind) {
+            eprintln!("connectors: a run could not be recorded: {e}");
+        }
+        id
+    }
+
+    /// As [`Runtime::start_run`], for a run that sends records out: one that cannot be recorded
+    /// does not start, so that nothing leaves without a trace (D74).
+    fn try_start_run(&self, c: &Connection, direction: &str, kind: &str) -> Result<String, String> {
+        let id = uuid::Uuid::now_v7().to_string();
+        self.record_run_start(&id, c, direction, kind)?;
+        Ok(id)
+    }
+
+    fn record_run_start(
+        &self,
+        id: &str,
+        c: &Connection,
+        direction: &str,
+        kind: &str,
+    ) -> Result<(), String> {
         let f = json!({
             "connection": c.id, "owner_user": c.owner_user, "direction": direction, "kind": kind,
             "started_at": iso(now()), "finished_at": "", "status": "running",
             "records": 0, "rejected": 0, "proposed": 0, "error_summary": "",
         });
         // The record of a run is not lost to a busy moment: a few more tries, then it is reported.
-        if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+        obop_storage::fault::patiently(4, Duration::from_millis(250), || {
             self.backend
-                .insert(SYNC_RUN, &id, f.as_object().expect("object"))
-        }) {
-            eprintln!("connectors: a run could not be recorded: {e}");
-        }
-        id
+                .insert(SYNC_RUN, id, f.as_object().expect("object"))
+        })
     }
 
     fn finish_run(
@@ -337,12 +355,17 @@ impl Runtime {
             "error_summary": error.chars().take(300).collect::<String>(),
         });
         // A run that stays "running" for ever because its last update met a busy store would hide
-        // the failure it is about: a few more tries, then it is reported.
+        // the failure it is about: a few more tries (the write rests on the run this request
+        // started, so it is allowed after an earlier refusal), then it is reported, and a request
+        // that delivered records and cannot say so is a partial one (D74).
         if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
-            self.backend
-                .update(SYNC_RUN, id, f.as_object().expect("object"))
+            obop_storage::fault::allow(|| {
+                self.backend
+                    .update(SYNC_RUN, id, f.as_object().expect("object"))
+            })
         }) {
             eprintln!("connectors: the end of a run could not be recorded: {e}");
+            obop_storage::fault::mark_partial();
         }
         // The connection shows its last run and its last error.
         if let Ok(Some(run)) = self.backend.get(SYNC_RUN, id) {
@@ -546,7 +569,12 @@ impl Runtime {
                 next_at: 0,
             };
             match self.deliver(c, p, &job) {
-                Ok(s) if (200..300).contains(&s) => sent += 1,
+                Ok(s) if (200..300).contains(&s) => {
+                    sent += 1;
+                    // The records are with the receiver and cannot be taken back: a step of this
+                    // request that the store then refuses makes it a partial one, never "none".
+                    obop_storage::fault::external_change();
+                }
                 Ok(s) if Self::retryable(s) => {
                     failed = format!("the receiver answered {s}; will retry");
                     self.queue.push(Job {
@@ -587,7 +615,7 @@ impl Runtime {
             .prepare(&c, &p, model, rows)
             .map_err(|r| r.to_string())?;
         if p.engine == Engine::CsvExport {
-            let run = self.start_run(&c, "outbound", kind);
+            let run = self.try_start_run(&c, "outbound", kind)?;
             let csv = rows_to_csv(&prepared.rows, &prepared.report.fields_sent);
             self.finish_run(&run, "succeeded", prepared.report.record_count, 0, 0, "");
             let name = if c.cfg("filename").is_empty() {
@@ -599,7 +627,7 @@ impl Runtime {
                 json!({"filename": format!("{}.csv", sanitize_name(name)), "csv": csv, "records": prepared.report.record_count}),
             );
         }
-        let run = self.start_run(&c, "outbound", kind);
+        let run = self.try_start_run(&c, "outbound", kind)?;
         let (sent, failed) = self.send_prepared(&c, &p, &run, event, model, &prepared.rows);
         let status = if failed.is_empty() {
             "succeeded"
