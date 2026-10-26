@@ -24,6 +24,9 @@ const kick = computed(() => ({
   faq: label("/docs/reference/faq/"),
 }));
 /** The open-source cards, in the order every locale lists them: icon, link text and destination. */
+// The last word of a link label stays on one line with its arrow, so a wrapped link never strands the arrow.
+const head = (s: string) => s.slice(0, s.lastIndexOf(" ") + 1);
+const tail = (s: string) => s.slice(s.lastIndexOf(" ") + 1);
 const OPEN = [
   { icon: "plug", to: () => "/app/", text: () => m.value.home.ctaPrimary },
   {
@@ -247,8 +250,9 @@ const openCards = computed(() =>
             <h3>{{ p.title }}</h3>
             <p>{{ p.body }}</p>
             <a class="link-arrow" :href="p.to"
-              >{{ p.label }}<Icon name="arrow-right" :size="16"
-            /></a>
+              >{{ head(p.label)
+              }}<span class="nw">{{ tail(p.label) }}<Icon name="arrow-right" :size="16" /></span
+            ></a>
           </article>
         </div>
       </div>

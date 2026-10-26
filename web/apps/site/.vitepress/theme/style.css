@@ -1632,6 +1632,9 @@ section.cta p {
   line-height: 1.5;
   text-decoration: none;
 }
+.link-arrow .nw {
+  white-space: nowrap;
+}
 .link-arrow .ico-wrap {
   margin-inline-start: 0.4rem;
   vertical-align: -0.15em;
