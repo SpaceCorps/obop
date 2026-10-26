@@ -13,19 +13,23 @@ use super::unit::{R, Reads};
 use obop_registry::expr::V;
 use obop_registry::{Access, ModelDef};
 use obop_storage::Fields;
+use obop_storage::keyexpr;
 use serde_json::Value as J;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// How far `via` chains are followed.
-const MAX_HOPS: usize = 4;
+/// How far `via` chains are followed. The pushdown (D76) compiles the same limit into SQL.
+pub(crate) const MAX_HOPS: usize = 4;
 
 pub(crate) struct Gate<'a> {
     reads: &'a dyn Reads,
     lookup: &'a dyn Fn(&str) -> Option<Arc<ModelDef>>,
     actor: &'a Actor,
-    cache: RefCell<HashMap<(String, String), bool>>,
+    /// The answer for a parent record, by model, id and the hops already used to reach it: the
+    /// budget left decides whether it follows its own `via`, so one record reached at two
+    /// depths has two answers.
+    cache: RefCell<HashMap<(String, String, usize), bool>>,
 }
 
 fn text<'f>(rec: &'f Fields, key: &str) -> Option<&'f str> {
@@ -104,10 +108,8 @@ impl<'a> Gate<'a> {
         }
         if let Some(f) = a.shared_with
             && !self.actor.id.is_empty()
-            && text(rec, f).is_some_and(|list| {
-                list.split([',', ' ', ';', '\n'])
-                    .any(|u| u.trim() == self.actor.id)
-            })
+            && text(rec, f)
+                .is_some_and(|list| keyexpr::member_tokens(list).contains(&self.actor.id.as_str()))
         {
             return true;
         }
@@ -134,7 +136,7 @@ impl<'a> Gate<'a> {
         if self.actor.admin {
             return self.reads.get(def.name, id).ok().flatten().is_some();
         }
-        let key = (def.name.to_string(), id.to_string());
+        let key = (def.name.to_string(), id.to_string(), hops);
         if let Some(v) = self.cache.borrow().get(&key) {
             return *v;
         }
@@ -309,5 +311,183 @@ mod tests {
         assert!(gate.load(&project, "ghost").unwrap_err() == "no t_project ghost");
         assert!(creator_blocked(&gate, &project, &rec(&[("owner", "bob".into())])).is_some());
         assert!(creator_blocked(&gate, &project, &rec(&[("owner", "ann".into())])).is_none());
+    }
+
+    /// A tree by `via`: `n` is owned by its `owner` and otherwise follows `parent_id`.
+    fn node_model() -> Arc<ModelDef> {
+        Arc::new(ModelDef {
+            name: "t_node",
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            fields: vec![f("owner"), f("parent_id").reference("t_node")],
+            commands: vec![],
+            access: Some(Access {
+                own: Some("owner"),
+                via: Some("parent_id"),
+                ..Access::default()
+            }),
+            ext: Default::default(),
+        })
+    }
+
+    fn put(b: &dyn obop_storage::Backend, id: &str, owner: &str, parent: &str) {
+        let mut r = rec(&[("owner", owner.into())]);
+        if !parent.is_empty() {
+            r.insert("parent_id".into(), parent.into());
+        }
+        b.insert("t_node", id, &r).unwrap();
+    }
+
+    /// The hop limit is a budget that is spent on the way to a parent, so a parent reached at
+    /// two depths has two answers. The cache once ignored the depth: a shallow visit that
+    /// found a record visible let a deeper visit of another path past the limit, and the answer
+    /// depended on which record was asked about first (D76 WP0).
+    #[test]
+    fn the_cache_keeps_one_answer_per_depth_and_the_order_of_questions_changes_nothing() {
+        let node = node_model();
+        let n = node.clone();
+        let lookup = move |name: &str| (name == "t_node").then(|| n.clone());
+        let b = obop_storage::open("memory:").unwrap();
+        // root (ann's) <- c1 <- c2 <- c3 <- c4 <- c5, and d <- c1.
+        put(&*b, "root", "ann", "");
+        let mut parent = "root".to_string();
+        for i in 1..=5 {
+            let id = format!("c{i}");
+            put(&*b, &id, "nobody", &parent);
+            parent = id;
+        }
+        put(&*b, "d", "nobody", "c1");
+        let reads = Plain(&*b);
+        let ann = Actor {
+            id: "ann".into(),
+            ..Actor::default()
+        };
+        let visible = |gate: &Gate<'_>, id: &str| {
+            let rec = reads.get("t_node", id).unwrap().unwrap();
+            gate.visible(&node, &rec)
+        };
+        let fresh = |id: &str| visible(&Gate::new(&reads, &lookup, &ann), id);
+        // Four hops reach the root from c4; five do not reach it from c5.
+        let expected = [
+            ("root", true),
+            ("c1", true),
+            ("c3", true),
+            ("c4", true),
+            ("c5", false),
+            ("d", true),
+        ];
+        for (id, want) in expected {
+            assert_eq!(fresh(id), want, "{id} asked first");
+        }
+        // The same questions on one gate, in both orders: c1 is found visible at depth 1 (from d)
+        // and invisible at depth 4 (from c5) with the same gate.
+        for order in [
+            ["d", "c5", "c4", "c1"],
+            ["c5", "d", "c1", "c4"],
+            ["c1", "c5", "d", "c4"],
+        ] {
+            let gate = Gate::new(&reads, &lookup, &ann);
+            for id in order {
+                let want = expected.iter().find(|(i, _)| *i == id).unwrap().1;
+                assert_eq!(visible(&gate, id), want, "{id} in the order {order:?}");
+            }
+        }
+    }
+
+    /// A cycle of parents ends at the hop limit instead of looping, and a record that is on the
+    /// cycle is visible when somebody on it is the caller's.
+    #[test]
+    fn a_cycle_of_parents_stops_and_a_shared_ancestor_counts_once_per_depth() {
+        let node = node_model();
+        let n = node.clone();
+        let lookup = move |name: &str| (name == "t_node").then(|| n.clone());
+        let b = obop_storage::open("memory:").unwrap();
+        // a -> b -> a with nobody owning either; x -> y -> z -> x where z is ann's.
+        put(&*b, "a", "nobody", "b");
+        put(&*b, "b", "nobody", "a");
+        put(&*b, "x", "nobody", "y");
+        put(&*b, "y", "nobody", "z");
+        put(&*b, "z", "ann", "x");
+        // Two paths to one ancestor: k -> m1 -> top, k2 -> top, k3 -> m1.
+        put(&*b, "top", "ann", "");
+        put(&*b, "m1", "nobody", "top");
+        put(&*b, "k", "nobody", "m1");
+        put(&*b, "k2", "nobody", "top");
+        let reads = Plain(&*b);
+        let ann = Actor {
+            id: "ann".into(),
+            ..Actor::default()
+        };
+        let gate = Gate::new(&reads, &lookup, &ann);
+        let visible = |id: &str| {
+            let rec = reads.get("t_node", id).unwrap().unwrap();
+            gate.visible(&node, &rec)
+        };
+        assert!(!visible("a") && !visible("b"), "a cycle nobody owns");
+        assert!(
+            visible("x") && visible("y") && visible("z"),
+            "a cycle through ann"
+        );
+        assert!(visible("k") && visible("m1") && visible("k2") && visible("top"));
+        // Asking again, now from the cache, changes nothing.
+        assert!(!visible("a") && visible("x") && visible("k"));
+    }
+
+    /// `shared_with` lists are split on eight ASCII separators and nothing is trimmed (K5).
+    #[test]
+    fn shared_with_follows_the_member_tokenizer() {
+        let project = Arc::new(ModelDef {
+            name: "t_project",
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            fields: vec![f("members").kind(FieldKind::LongText)],
+            commands: vec![],
+            access: Some(Access {
+                shared_with: Some("members"),
+                ..Access::default()
+            }),
+            ext: Default::default(),
+        });
+        let lookup = |_: &str| None;
+        let b = obop_storage::open("memory:").unwrap();
+        let reads = Plain(&*b);
+        let ann = Actor {
+            id: "ann".into(),
+            ..Actor::default()
+        };
+        let gate = Gate::new(&reads, &lookup, &ann);
+        let sees = |list: &str| gate.visible(&project, &rec(&[("members", list.into())]));
+        for yes in [
+            "ann",
+            "bob,ann",
+            "bob; ann",
+            "bob\tann",
+            "bob\r\nann\r\n",
+            "bob\u{c}ann",
+            "bob\u{b}ann",
+            "ann ",
+        ] {
+            assert!(sees(yes), "{yes:?}");
+        }
+        // Unicode spaces were trimmed away before K5, and are part of the token now.
+        for no in [
+            "",
+            "bob",
+            "ann\u{a0}",
+            "\u{2003}ann",
+            "a nn",
+            "Ann",
+            "ann.",
+            "anne,joann",
+        ] {
+            assert!(!sees(no), "{no:?}");
+        }
+        assert!(!gate.visible(&project, &Fields::new()), "no list at all");
+        assert!(
+            !gate.visible(&project, &rec(&[("members", J::from(5))])),
+            "not text"
+        );
     }
 }
