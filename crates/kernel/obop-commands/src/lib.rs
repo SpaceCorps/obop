@@ -1158,6 +1158,11 @@ pub trait OAuthTokens: Send + Sync {
     ) -> Result<(String, String), String>;
     /// Revoke a token by the id `issue_oauth_access` returned.
     fn revoke_token_id(&self, id: &str) -> bool;
+    /// As `revoke_token_id`, but a call the store refused is an error ("try again"), not `false`
+    /// ("there was no such token").
+    fn try_revoke_token_id(&self, id: &str) -> Result<bool, String> {
+        Ok(self.revoke_token_id(id))
+    }
     /// Revoke a session token that was only needed to prove a sign-in.
     fn revoke_session(&self, token: &str) -> bool;
     /// The grant an access token belongs to.

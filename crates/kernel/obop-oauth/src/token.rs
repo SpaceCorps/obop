@@ -8,7 +8,7 @@
 use crate::flow::{is_challenge, is_verifier};
 use crate::util::{clean_text, ct_eq, rand_hex, s256, sha_hex};
 use crate::{OAuth, OAuthError, mcp_resource, redirect};
-use obop_storage::fault::Fault;
+use obop_storage::fault::{self, Fault};
 use obop_storage::{ApplyError, Fields, Op};
 use serde_json::{Value as J, json};
 
@@ -17,8 +17,18 @@ pub const REFRESH_MODEL: &str = "oauth_refresh";
 
 /// The store refused a call (full pool, unreachable): a client may retry, nothing was decided.
 fn storage_busy() -> OAuthError {
-    OAuthError::new(503, "temporarily_unavailable", "storage is busy")
+    OAuthError::storage_busy()
 }
+
+/// Is this error text the store's refusal (a full pool, an unreachable database)?
+fn is_busy(e: &str) -> bool {
+    Fault::is_transient(e)
+}
+
+/// How often and how long a step that must not be lost (a revocation, the undoing of a token
+/// that was just issued) is tried again when the store refuses it.
+const TRIES: u32 = 4;
+const PAUSE: std::time::Duration = std::time::Duration::from_millis(150);
 
 fn fields(v: J) -> Fields {
     v.as_object().cloned().unwrap_or_default()
@@ -101,7 +111,7 @@ impl OAuth {
         let redirect_uri = form.required("redirect_uri")?;
         let key = format!("oauth:code:{}", sha_hex(code));
         let used_key = format!("oauth:used:{}", sha_hex(code));
-        let storage = |_| OAuthError::new(503, "temporarily_unavailable", "storage is busy");
+        let storage = |_| storage_busy();
         // The one who deletes the code owns it; a second presentation finds nothing.
         let raw = self.backend.kv_get(&key).map_err(storage)?;
         let consumed = raw.is_some() && self.backend.kv_delete(&key).map_err(storage)?;
@@ -113,14 +123,35 @@ impl OAuth {
                     &g,
                     "oauth_code_reuse",
                     "an authorization code was used twice",
-                );
+                )?;
             }
             return Err(invalid_grant(
                 "the code is invalid, expired or already used",
             ));
         }
-        let rec: J = serde_json::from_str(&raw.unwrap_or_default())
-            .map_err(|_| invalid_grant("the code is invalid"))?;
+        let raw = raw.unwrap_or_default();
+        let rec: J =
+            serde_json::from_str(&raw).map_err(|_| invalid_grant("the code is invalid"))?;
+        // From here on the code is used up. When the store refuses a step and no token came of it,
+        // the code is put back, so the client's retry (the 503 says to retry) is not met with
+        // "invalid_grant", which is final and sends the person through the sign-in again.
+        let give_back = |e: OAuthError| -> OAuthError {
+            let ttl_ms = rec["exp"]
+                .as_u64()
+                .unwrap_or(0)
+                .saturating_sub(self.now())
+                .max(1)
+                * 1000;
+            let put = fault::patiently(TRIES, PAUSE, || {
+                fault::bookkeeping(|| self.backend.kv_put(&key, &raw, Some(ttl_ms)))
+            });
+            if put.is_err() {
+                eprintln!(
+                    "oauth: an authorization code could not be put back, the client signs in again"
+                );
+            }
+            e
+        };
         if rec["exp"].as_u64().unwrap_or(0) <= self.now() {
             return Err(invalid_grant(
                 "the code is invalid, expired or already used",
@@ -148,13 +179,18 @@ impl OAuth {
             return Err(invalid_grant("PKCE verification failed"));
         }
         if self.client(client_id).is_none() {
+            // A lookup the store refused is not "unknown client" (that is final).
+            if fault::noted().is_some() {
+                return Err(give_back(storage_busy()));
+            }
             return Err(OAuthError::new(401, "invalid_client", "unknown client"));
         }
         let owner = rec["owner"].as_str().unwrap_or("");
-        let principal = self
-            .tokens()
-            .principal_of(owner)
-            .ok_or_else(|| invalid_grant("the account is not available"))?;
+        let principal = match self.tokens().principal_of(owner) {
+            Some(p) => p,
+            None if fault::noted().is_some() => return Err(give_back(storage_busy())),
+            None => return Err(invalid_grant("the account is not available")),
+        };
         let scopes: Vec<String> = rec["scopes"]
             .as_array()
             .map(|a| {
@@ -184,7 +220,13 @@ impl OAuth {
                 resource,
                 &grant_id,
             )
-            .map_err(|e| invalid_grant(&e))?;
+            .map_err(|e| {
+                if is_busy(&e) {
+                    give_back(storage_busy())
+                } else {
+                    invalid_grant(&e)
+                }
+            })?;
         let refresh = format!("obor_{}", rand_hex::<32>());
         let refresh_hash = sha_hex(&refresh);
         let expires = now + days * 86_400;
@@ -219,14 +261,16 @@ impl OAuth {
             },
         ];
         if self.backend.apply_checked(&ops).is_err() {
-            self.tokens().revoke_token_id(&access_id);
-            return Err(OAuthError::new(
-                503,
-                "temporarily_unavailable",
-                "storage is busy",
-            ));
+            // The access token was issued for nothing: it is revoked again, although the request
+            // already hit a fault (that is why), and it is tried again if the store refuses.
+            self.unissue(&access_id);
+            return Err(give_back(storage_busy()));
         }
-        let _ = self.backend.kv_put(&used_key, &grant_id, Some(600_000));
+        // The marker that lets a second use of the code end this grant. Losing it only weakens the
+        // detection, so it is tried again but never fails the exchange, which has committed.
+        let _ = fault::patiently(TRIES, PAUSE, || {
+            fault::allow(|| self.backend.kv_put(&used_key, &grant_id, Some(600_000)))
+        });
         Ok(token_response(
             &access,
             &refresh,
@@ -269,11 +313,13 @@ impl OAuth {
         }
         // A used token is being presented again: two parties hold it.
         if rec.get("used").and_then(J::as_bool) == Some(true) {
+            // If the grant cannot be ended now the client is told to try again, and the repeat
+            // meets the same used token: it is never answered as if the grant had been ended.
             self.revoke_grant_internal(
                 &grant_id,
                 "oauth_refresh_reuse",
                 "a refresh token was used twice, so the connection was ended",
-            );
+            )?;
             return Err(gone());
         }
         let owner = grant
@@ -291,7 +337,7 @@ impl OAuth {
                     &grant_id,
                     "oauth_revoked",
                     "the account is not available",
-                );
+                )?;
                 return Err(gone());
             }
         };
@@ -338,7 +384,13 @@ impl OAuth {
                 resource,
                 &grant_id,
             )
-            .map_err(|e| invalid_grant(&e))?;
+            .map_err(|e| {
+                if is_busy(&e) {
+                    storage_busy()
+                } else {
+                    invalid_grant(&e)
+                }
+            })?;
         let new_refresh = format!("obor_{}", rand_hex::<32>());
         let new_hash = sha_hex(&new_refresh);
         let old_access = grant
@@ -376,7 +428,10 @@ impl OAuth {
         ];
         match self.backend.apply_checked(&ops) {
             Ok(()) => {
-                self.tokens().revoke_token_id(&old_access);
+                // The rotation has committed, and the client is given its new tokens whatever
+                // happens next. The access token it replaces is revoked, tried again if the store
+                // refuses; if that is lost the old token ends by itself with its lifetime.
+                self.retire(&old_access);
                 Ok(token_response(
                     &access,
                     &new_refresh,
@@ -387,26 +442,51 @@ impl OAuth {
             Err(ApplyError::Conflict { index: 0, .. }) => {
                 // Somebody used this token between our read and our write: the same case as
                 // presenting it twice.
-                self.tokens().revoke_token_id(&access_id);
+                self.unissue(&access_id);
                 self.revoke_grant_internal(
                     &grant_id,
                     "oauth_refresh_reuse",
                     "a refresh token was used twice, so the connection was ended",
-                );
+                )?;
                 Err(gone())
             }
             Err(ApplyError::Conflict { .. }) => {
-                self.tokens().revoke_token_id(&access_id);
+                self.unissue(&access_id);
                 Err(gone())
             }
             Err(ApplyError::Storage(_)) => {
-                self.tokens().revoke_token_id(&access_id);
-                Err(OAuthError::new(
-                    503,
-                    "temporarily_unavailable",
-                    "storage is busy",
-                ))
+                // The rotation was refused: the access token issued for it is an orphan, revoked
+                // again (the guard lets this through although the request hit a fault).
+                self.unissue(&access_id);
+                Err(storage_busy())
             }
+        }
+    }
+
+    /// Undo an access token that was issued in this request and will never be handed out (the
+    /// grant write that was to go with it was refused). A write that undoes what the request did,
+    /// so the guard lets it through after a fault, and it is tried again while the store refuses;
+    /// an orphan that stays is an access token nobody holds, and ends with its lifetime.
+    fn unissue(&self, access_id: &str) {
+        let r = fault::patiently(TRIES, PAUSE, || {
+            fault::bookkeeping(|| self.tokens().try_revoke_token_id(access_id))
+        });
+        if let Err(e) = r {
+            eprintln!(
+                "oauth: an access token that was issued for a failed request could not be revoked ({e}); it ends with its lifetime"
+            );
+        }
+    }
+
+    /// Revoke the access token a rotation replaced.
+    fn retire(&self, access_id: &str) {
+        let r = fault::patiently(TRIES, PAUSE, || {
+            fault::allow(|| self.tokens().try_revoke_token_id(access_id))
+        });
+        if let Err(e) = r {
+            eprintln!(
+                "oauth: the access token replaced by a refresh could not be revoked ({e}); it ends with its lifetime"
+            );
         }
     }
 
@@ -420,51 +500,90 @@ impl OAuth {
         )?;
         let token = form.required("token")?;
         let client_id = form.required("client_id")?;
-        let grant_id = self
+        // The answer is the same whether or not anything was revoked, but a store that refuses is
+        // not "nothing to revoke": the client is told to ask again (RFC 7009 allows a 503).
+        let busy = |e: String| {
+            if is_busy(&e) {
+                storage_busy()
+            } else {
+                invalid_grant("the token could not be looked up")
+            }
+        };
+        let found = self
             .backend
             .get(REFRESH_MODEL, &sha_hex(token))
-            .ok()
-            .flatten()
-            .and_then(|r| r.get("grant").and_then(J::as_str).map(String::from))
-            .or_else(|| self.tokens().grant_of(token));
+            .map_err(busy)?
+            .and_then(|r| r.get("grant").and_then(J::as_str).map(String::from));
+        let grant_id = match found {
+            Some(g) => Some(g),
+            None => {
+                let g = self.tokens().grant_of(token);
+                // `grant_of` cannot say "refused": it answers "none". The fault noted tells.
+                if g.is_none() && fault::noted().is_some() {
+                    return Err(storage_busy());
+                }
+                g
+            }
+        };
         if let Some(g) = grant_id
-            && let Some(grant) = self.backend.get(GRANT_MODEL, &g).ok().flatten()
+            && let Some(grant) = self.backend.get(GRANT_MODEL, &g).map_err(busy)?
             && grant.get("client_id").and_then(J::as_str) == Some(client_id)
         {
             self.revoke_grant_internal(
                 &g,
                 "oauth_revoked",
                 "the application revoked its own access",
-            );
+            )?;
         }
         Ok(())
     }
 
     /// End a grant: no new tokens, and the access token in circulation stops working.
-    fn revoke_grant_internal(&self, grant_id: &str, kind: &str, why: &str) -> bool {
-        let Some(grant) = self.backend.get(GRANT_MODEL, grant_id).ok().flatten() else {
-            return false;
+    ///
+    /// A revocation is a security decision, so a step the store refuses is tried again, and if it
+    /// still cannot be made the caller gets a 503, never an answer that says it was done. What was
+    /// done stays done, and doing the rest again is safe: the grant is marked once, the access token
+    /// it names is revoked every time.
+    fn revoke_grant_internal(
+        &self,
+        grant_id: &str,
+        kind: &str,
+        why: &str,
+    ) -> Result<bool, OAuthError> {
+        let grant = match fault::patiently(TRIES, PAUSE, || self.backend.get(GRANT_MODEL, grant_id))
+        {
+            Ok(Some(g)) => g,
+            Ok(None) => return Ok(false),
+            Err(_) => return Err(storage_busy()),
         };
-        if grant.get("revoked").and_then(J::as_bool) == Some(true) {
-            return true;
+        let already = grant.get("revoked").and_then(J::as_bool) == Some(true);
+        if !already {
+            let patch = fields(json!({"revoked": true, "revoked_at": self.now()}));
+            fault::patiently(TRIES, PAUSE, || {
+                fault::allow(|| self.backend.update(GRANT_MODEL, grant_id, &patch))
+            })
+            .map_err(|_| storage_busy())?;
         }
-        let _ = self.backend.update(
-            GRANT_MODEL,
-            grant_id,
-            &fields(json!({"revoked": true, "revoked_at": self.now()})),
-        );
         // The access token may have been replaced by a refresh while we looked: revoke what the
         // record names now.
-        let current = self
-            .backend
-            .get(GRANT_MODEL, grant_id)
+        let current = fault::patiently(TRIES, PAUSE, || self.backend.get(GRANT_MODEL, grant_id))
             .ok()
             .flatten()
             .unwrap_or(grant);
-        if let Some(a) = current.get("access_id").and_then(J::as_str) {
-            self.tokens().revoke_token_id(a);
-        }
         let owner = current.get("owner").and_then(J::as_str).unwrap_or("");
+        if !already {
+            self.audit_grant(owner, kind, &current, why);
+        }
+        if let Some(a) = current.get("access_id").and_then(J::as_str) {
+            fault::patiently(TRIES, PAUSE, || {
+                fault::allow(|| self.tokens().try_revoke_token_id(a))
+            })
+            .map_err(|_| storage_busy())?;
+        }
+        Ok(true)
+    }
+
+    fn audit_grant(&self, owner: &str, kind: &str, current: &Fields, why: &str) {
         self.audit(
             owner,
             kind,
@@ -475,7 +594,6 @@ impl OAuth {
                 why
             ),
         );
-        true
     }
 
     /// The person's connected applications that are still in force, newest first.
@@ -512,15 +630,18 @@ impl OAuth {
     }
 
     /// The person revokes one of their connected applications. `false` when there is none by
-    /// that id (or it belongs to somebody else: the answer is the same).
-    pub fn revoke_grant(&self, owner: &str, grant_id: &str) -> bool {
+    /// that id (or it belongs to somebody else: the answer is the same). A store that refuses is
+    /// an error (503), never "revoked" and never "no such grant".
+    pub fn revoke_grant(&self, owner: &str, grant_id: &str) -> Result<bool, OAuthError> {
         let mine = self
             .backend
             .get(GRANT_MODEL, grant_id)
-            .ok()
-            .flatten()
+            .map_err(|_| storage_busy())?
             .is_some_and(|g| g.get("owner").and_then(J::as_str) == Some(owner));
-        mine && self.revoke_grant_internal(grant_id, "oauth_revoked", "revoked by the owner")
+        if !mine {
+            return Ok(false);
+        }
+        self.revoke_grant_internal(grant_id, "oauth_revoked", "revoked by the owner")
     }
 
     /// Forget grants that ended a week ago and their refresh tokens.

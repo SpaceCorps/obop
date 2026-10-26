@@ -721,13 +721,13 @@ fn revocation_by_the_application_and_by_the_owner() {
     // The owner revokes from the list; somebody else cannot.
     let t = r.tokens(&c);
     let gid = r.o.grants_of("ada")[0]["id"].as_str().unwrap().to_string();
-    assert!(!r.o.revoke_grant("bob", &gid));
+    assert!(!r.o.revoke_grant("bob", &gid).unwrap());
     assert!(
         r.auth
             .resolve(t["access_token"].as_str().unwrap())
             .is_some()
     );
-    assert!(r.o.revoke_grant("ada", &gid));
+    assert!(r.o.revoke_grant("ada", &gid).unwrap());
     assert!(
         r.auth
             .resolve(t["access_token"].as_str().unwrap())
@@ -810,13 +810,122 @@ fn a_refused_lookup_never_ends_a_grant_and_a_refused_follow_up_never_loses_the_n
     assert!(t3["access_token"].as_str().is_some());
 }
 
+/// The access tokens of connected applications that still work.
+fn live_oauth_tokens(r: &Rig) -> usize {
+    r.backend
+        .list("auth_token")
+        .unwrap()
+        .into_iter()
+        .filter(|(_, t)| {
+            t.get("oauth_grant").is_some() && t.get("revoked").and_then(J::as_bool) != Some(true)
+        })
+        .count()
+}
+
+#[test]
+fn a_rotation_the_store_refuses_leaves_no_live_access_token_behind_and_says_when_to_retry() {
+    use obop_storage::fault;
+    // D74: the grant write of a refresh is refused after its new access token was issued. The
+    // token is an orphan: nobody is given it. It is revoked again although the request already hit
+    // a fault (the guard lets the compensation through), and the 503 says when to retry.
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let c = r.client();
+    let t1 = r.tokens(&c);
+    let r1 = t1["refresh_token"].as_str().unwrap().to_string();
+    assert_eq!(live_oauth_tokens(&r), 1);
+
+    fault::begin_request(Default::default());
+    flaky.refuse_applies(1);
+    let e = r.refresh(&c, &r1).unwrap_err();
+    let out = fault::end_request();
+    assert_eq!((e.status, e.error), (503, "temporarily_unavailable"));
+    assert_eq!(e.retry_after, Some(1), "a 503 always says when to retry");
+    assert_eq!(live_oauth_tokens(&r), 1, "the orphan was revoked again");
+    assert!(
+        !out.wrote,
+        "the issue was undone: nothing was changed ({out:?})"
+    );
+    // The refresh token was not used up: the retry works and rotates once.
+    let t2 = r.refresh(&c, &r1).unwrap();
+    assert_eq!(live_oauth_tokens(&r), 1);
+    assert!(t2["access_token"].as_str().is_some());
+}
+
+#[test]
+fn a_code_exchange_the_store_refuses_gives_the_code_back_and_leaves_nothing_behind() {
+    use obop_storage::fault;
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let c = r.client();
+    let code = r.code(&c, &["sales.user"]);
+
+    fault::begin_request(Default::default());
+    flaky.refuse_applies(1);
+    let e = r.exchange(&c, &code, &verifier(), REDIRECT).unwrap_err();
+    let out = fault::end_request();
+    assert_eq!((e.status, e.retry_after), (503, Some(1)));
+    assert_eq!(live_oauth_tokens(&r), 0, "no orphan access token");
+    assert!(!out.wrote, "{out:?}");
+    // The code was put back, so the client's retry is not "invalid_grant" (which is final).
+    let t = r.exchange(&c, &code, &verifier(), REDIRECT).unwrap();
+    assert!(t["access_token"].as_str().is_some());
+    assert_eq!(live_oauth_tokens(&r), 1);
+    // And it is used up now: a third use is the usual reuse.
+    assert_eq!(
+        r.exchange(&c, &code, &verifier(), REDIRECT)
+            .unwrap_err()
+            .error,
+        "invalid_grant"
+    );
+}
+
+#[test]
+fn ending_a_grant_is_never_reported_when_the_store_refused_it() {
+    use obop_storage::testing::Mode;
+    let (flaky, backend) = obop_storage::testing::Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let c = r.client();
+    let t = r.tokens(&c);
+    let access = t["access_token"].as_str().unwrap().to_string();
+    let gid = r.o.grants_of("ada")[0]["id"].as_str().unwrap().to_string();
+    flaky.refuse_model(crate::token::GRANT_MODEL, Mode::Updates);
+    let e = r.o.revoke_grant("ada", &gid).unwrap_err();
+    assert_eq!((e.status, e.retry_after), (503, Some(1)));
+    flaky.allow_models();
+    assert_eq!(r.o.grants_of("ada").len(), 1, "the grant is still in force");
+    assert!(r.auth.resolve(&access).is_some());
+    // Asked again, it ends, with its access token.
+    assert!(r.o.revoke_grant("ada", &gid).unwrap());
+    assert!(r.o.grants_of("ada").is_empty());
+    assert!(r.auth.resolve(&access).is_none());
+    // A refresh token used twice ends the grant, or the client is told to ask again.
+    let t = r.tokens(&c);
+    let used = t["refresh_token"].as_str().unwrap().to_string();
+    r.refresh(&c, &used).unwrap();
+    flaky.refuse_model(crate::token::GRANT_MODEL, Mode::Updates);
+    let e = r.refresh(&c, &used).unwrap_err();
+    assert_eq!(
+        (e.status, e.error),
+        (503, "temporarily_unavailable"),
+        "not the final invalid_grant while the grant is still in force"
+    );
+    flaky.allow_models();
+    assert_eq!(
+        r.refresh(&c, &used).unwrap_err().error,
+        "invalid_grant",
+        "the repeat meets the used token again and ends the grant"
+    );
+    assert!(r.o.grants_of("ada").is_empty());
+}
+
 #[test]
 fn events_are_recorded_without_secrets() {
     let r = rig();
     let c = r.client();
     let t = r.tokens(&c);
     let gid = r.o.grants_of("ada")[0]["id"].as_str().unwrap().to_string();
-    r.o.revoke_grant("ada", &gid);
+    r.o.revoke_grant("ada", &gid).unwrap();
     let events: Vec<String> = r
         .backend
         .list("security_event")

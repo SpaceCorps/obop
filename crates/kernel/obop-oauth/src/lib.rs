@@ -92,6 +92,20 @@ impl OAuthError {
         }
     }
 
+    /// The store refused a call (a full pool, an unreachable database): nothing was decided and
+    /// the client may try again. A 503 always says for how long to wait (D74).
+    pub fn storage_busy() -> Self {
+        Self::unavailable("storage is busy", 1)
+    }
+
+    /// A 503 with the seconds to wait before the client asks again.
+    pub fn unavailable(description: &str, wait: u64) -> Self {
+        Self {
+            retry_after: Some(wait),
+            ..Self::new(503, "temporarily_unavailable", description)
+        }
+    }
+
     pub fn busy(wait: u64) -> Self {
         Self {
             retry_after: Some(wait),
