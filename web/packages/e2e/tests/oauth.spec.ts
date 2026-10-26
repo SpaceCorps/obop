@@ -1,13 +1,21 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { APIRequestContext, Page } from "@playwright/test";
+import { listenForCallback, type Callback } from "../support/callback.ts";
 import { users } from "../support/env.ts";
-import { expect, test, unnamedControls } from "../support/fixtures.ts";
+import { expect, test as base, unnamedControls } from "../support/fixtures.ts";
 
 // D64: an MCP client (Claude Desktop, claude.ai, Claude Code) connects with a browser sign-in. The
 // browser half is real: the consent page of the instance, the form posts and the redirect back to
-// the client. The client half is played by the test (registration, PKCE, code exchange). The
-// callback address is a loopback port nothing listens on; the test answers it itself.
-const CALLBACK = "http://127.0.0.1:53682/callback";
+// the client. The client half is played by the test (registration, PKCE, code exchange) and by a
+// real listener on a free loopback port that receives the redirect (support/callback.ts).
+const test = base.extend<{ callback: Callback }>({
+  // eslint-disable-next-line no-empty-pattern -- Playwright needs a destructured first argument
+  callback: async ({}, use) => {
+    const callback = await listenForCallback();
+    await use(callback);
+    await callback.close();
+  },
+});
 const SECURITY = "/customize/security?tab=security";
 
 function pkce() {
@@ -16,37 +24,35 @@ function pkce() {
   return { verifier, challenge };
 }
 
-async function registerClient(request: APIRequestContext, name: string): Promise<string> {
+async function registerClient(
+  request: APIRequestContext,
+  name: string,
+  redirect: string,
+): Promise<string> {
   const res = await request.post("/oauth/register", {
-    data: { client_name: name, redirect_uris: [CALLBACK], token_endpoint_auth_method: "none" },
+    data: { client_name: name, redirect_uris: [redirect], token_endpoint_auth_method: "none" },
   });
   expect(res.status()).toBe(201);
   return (await res.json()).client_id as string;
 }
 
-function authorizeUrl(clientId: string, challenge: string, resource: string, extra = {}) {
+function authorizeUrl(
+  clientId: string,
+  redirect: string,
+  challenge: string,
+  resource: string,
+  extra = {},
+) {
   return `/oauth/authorize?${new URLSearchParams({
     response_type: "code",
     client_id: clientId,
-    redirect_uri: CALLBACK,
+    redirect_uri: redirect,
     state: "state-1",
     code_challenge: challenge,
     code_challenge_method: "S256",
     resource,
     ...extra,
   })}`;
-}
-
-/** Answer the callback ourselves and remember where the browser was sent. */
-async function catchCallback(page: Page): Promise<() => Promise<URL>> {
-  const arrived = new Promise<URL>((resolve) => {
-    void page.route(`${new URL(CALLBACK).origin}/**`, async (route) => {
-      resolve(new URL(route.request().url()));
-      // 204: the browser stays on the page it was on, so no document (and no favicon) is fetched.
-      await route.fulfill({ status: 204 });
-    });
-  });
-  return () => arrived;
 }
 
 async function mcpStatus(request: APIRequestContext, token: string) {
@@ -94,15 +100,13 @@ const HELD = ["base.user", "crm.user", "sales.user", "product.user"];
  */
 async function connect(
   page: Page,
-  request: APIRequestContext,
+  callback: Callback,
   clientId: string,
   resource: string,
   opts: { only?: string[]; days?: string; inspect?: boolean } = {},
 ) {
   const { verifier, challenge } = pkce();
-  await page.unroute(`${new URL(CALLBACK).origin}/**`);
-  const callback = await catchCallback(page);
-  await page.goto(authorizeUrl(clientId, challenge, resource));
+  await page.goto(authorizeUrl(clientId, callback.url, challenge, resource));
   await expect(page.getByRole("heading", { name: "Sign in to continue" })).toBeVisible();
   if (opts.inspect) {
     await expect(page.getByText("E2E Claude wants to connect")).toBeVisible();
@@ -119,7 +123,7 @@ async function connect(
   const groups = page.getByRole("group", { name: /permission groups/ });
   if (opts.inspect) {
     await expect(page.getByText("Signed in as sam.")).toBeVisible();
-    await expect(page.getByText("127.0.0.1:53682").first()).toBeVisible();
+    await expect(page.getByText(callback.host).first()).toBeVisible();
     await expect(page.getByText("cannot approve its own proposals")).toBeVisible();
     expect(await unnamedControls(page)).toEqual([]);
     // Only the groups the person holds are offered, and all start ticked.
@@ -130,7 +134,7 @@ async function connect(
     await groups.getByRole("checkbox", { name: g }).uncheck();
   if (opts.days) await page.getByLabel("Access ends after").selectOption({ label: opts.days });
   await page.getByRole("button", { name: "Allow" }).click();
-  const back = await callback();
+  const back = await callback.next();
   if (opts.inspect) {
     // The browser went back to the client with the code and the state it sent.
     expect(back.searchParams.get("state")).toBe("state-1");
@@ -145,17 +149,18 @@ test.describe("MCP authorization (OAuth)", () => {
   test("a client connects with a browser sign-in, the person narrows it, and revoking ends it", async ({
     page,
     request,
+    callback,
     api,
     signIn,
     baseURL,
   }) => {
     test.setTimeout(120_000);
     const resource = `${baseURL}/mcp`;
-    const clientId = await registerClient(request, "E2E Claude");
+    const clientId = await registerClient(request, "E2E Claude", callback.url);
     const form = {
       grant_type: "authorization_code",
       client_id: clientId,
-      redirect_uri: CALLBACK,
+      redirect_uri: callback.url,
       resource,
     };
     const exchange = (code: string, code_verifier: string) =>
@@ -166,7 +171,7 @@ test.describe("MCP authorization (OAuth)", () => {
       });
 
     // A wrong verifier is refused, and the code is burnt by the attempt.
-    const first = await connect(page, request, clientId, resource, {
+    const first = await connect(page, callback, clientId, resource, {
       only: ["sales.user"],
       days: "7 days",
       inspect: true,
@@ -175,7 +180,7 @@ test.describe("MCP authorization (OAuth)", () => {
     expect((await exchange(first.code, first.verifier)).status()).toBe(400);
 
     // A code works once; using it again ends the connection it produced.
-    const second = await connect(page, request, clientId, resource, { only: ["sales.user"] });
+    const second = await connect(page, callback, clientId, resource, { only: ["sales.user"] });
     const ok = await exchange(second.code, second.verifier);
     expect(ok.status()).toBe(200);
     expect(ok.headers()["cache-control"]).toBe("no-store");
@@ -186,7 +191,7 @@ test.describe("MCP authorization (OAuth)", () => {
     expect((await mcpStatus(request, t2.access_token)).status).toBe(401);
 
     // The token works on /mcp with fewer tools than sam has, and it is not a REST token.
-    const third = await connect(page, request, clientId, resource, { only: ["sales.user"] });
+    const third = await connect(page, callback, clientId, resource, { only: ["sales.user"] });
     const t3 = await (await exchange(third.code, third.verifier)).json();
     const samTools = await toolNames(request, await api.token("sam"));
     const appTools = await toolNames(request, t3.access_token);
@@ -208,15 +213,14 @@ test.describe("MCP authorization (OAuth)", () => {
     expect((await mcpStatus(request, t4.access_token)).status).toBe(401);
 
     // A fresh connection; the person revokes it in Customize > Security > Connected apps.
-    const fifth = await connect(page, request, clientId, resource);
+    const fifth = await connect(page, callback, clientId, resource);
     const t5 = await (await exchange(fifth.code, fifth.verifier)).json();
     expect((await mcpStatus(request, t5.access_token)).status).toBe(200);
-    await page.unroute(`${new URL(CALLBACK).origin}/**`);
     await signIn("sam", SECURITY);
     const apps = page.getByRole("table", { name: "Connected apps" });
     await expect(apps).toBeVisible();
     await expect(apps.getByText("E2E Claude")).toHaveCount(1);
-    await expect(apps.getByText("127.0.0.1:53682")).toBeVisible();
+    await expect(apps.getByText(callback.host)).toBeVisible();
     expect(await apps.textContent()).not.toContain(t5.access_token);
     expect(await apps.textContent()).not.toContain(t5.refresh_token);
     await apps.getByRole("button", { name: "Revoke E2E Claude" }).click();
@@ -230,28 +234,29 @@ test.describe("MCP authorization (OAuth)", () => {
   test("denying sends access_denied; a forged redirect gets a page, never a redirect", async ({
     page,
     request,
+    callback,
     baseURL,
     allowHttpErrors,
   }) => {
     allowHttpErrors(400);
     const resource = `${baseURL}/mcp`;
-    const clientId = await registerClient(request, "E2E refused");
+    const clientId = await registerClient(request, "E2E refused", callback.url);
     const { challenge } = pkce();
-    const callback = await catchCallback(page);
-    await page.goto(authorizeUrl(clientId, challenge, resource));
+    await page.goto(authorizeUrl(clientId, callback.url, challenge, resource));
     await page.getByLabel("Username").fill(users.sam.name);
     await page.getByLabel("Password").fill(users.sam.password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await page.getByRole("button", { name: "Deny" }).click();
-    const back = await callback();
+    const back = await callback.next();
     expect(back.searchParams.get("error")).toBe("access_denied");
     expect(back.searchParams.get("state")).toBe("state-1");
     expect(back.searchParams.get("code")).toBeNull();
 
     // A redirect address the client did not register is never followed.
-    await page.unroute(`${new URL(CALLBACK).origin}/**`);
     await page.goto(
-      authorizeUrl(clientId, challenge, resource, { redirect_uri: "https://evil.example/cb" }),
+      authorizeUrl(clientId, callback.url, challenge, resource, {
+        redirect_uri: "https://evil.example/cb",
+      }),
     );
     await expect(page.getByRole("heading", { name: "This cannot continue" })).toBeVisible();
     await expect(page.getByText("not one the application registered")).toBeVisible();
@@ -261,12 +266,15 @@ test.describe("MCP authorization (OAuth)", () => {
   test("the consent page speaks the language of the browser and fits a phone", async ({
     page,
     request,
+    callback,
     baseURL,
   }) => {
-    const clientId = await registerClient(request, "E2E Sprache");
+    const clientId = await registerClient(request, "E2E Sprache", callback.url);
     const { challenge } = pkce();
     await page.setViewportSize({ width: 375, height: 700 });
-    await page.goto(authorizeUrl(clientId, challenge, `${baseURL}/mcp`, { lang: "de" }));
+    await page.goto(
+      authorizeUrl(clientId, callback.url, challenge, `${baseURL}/mcp`, { lang: "de" }),
+    );
     await expect(page.getByRole("heading", { name: "Zum Fortfahren anmelden" })).toBeVisible();
     await page.getByLabel("Benutzername").fill(users.sam.name);
     await page.getByLabel("Passwort").fill(users.sam.password);
@@ -278,5 +286,6 @@ test.describe("MCP authorization (OAuth)", () => {
     );
     expect(overflow).toBeLessThanOrEqual(0);
     await page.getByRole("button", { name: "Ablehnen" }).click();
+    expect((await callback.next()).searchParams.get("error")).toBe("access_denied");
   });
 });
