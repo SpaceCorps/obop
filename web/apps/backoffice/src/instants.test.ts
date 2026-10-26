@@ -99,6 +99,29 @@ describe("instants in the platform zone", () => {
     }
   });
 
+  it("shows the instants at the ends of the range in a form that is accepted again, in any zone", () => {
+    // In New York the wall clock of 0001-01-01T00:00Z is in the year 0000, and in Tokyo that of
+    // 9999-12-31T23:59:59Z is in the year 10000: those are shown in UTC with a Z.
+    for (const zone of ["UTC", SE, "America/New_York", "Asia/Tokyo", "Pacific/Kiritimati"])
+      for (const iso of [
+        "0001-01-01T00:00:00.000000Z",
+        "0001-01-01T00:00:00.000001Z",
+        "0001-01-02T00:00:00.000000Z",
+        "9999-12-30T23:59:59.999999Z",
+        "9999-12-31T23:59:59.999999Z",
+      ]) {
+        const shown = toZonedInput(iso, zone);
+        expect(shown, `${iso} in ${zone}`).not.toBe("");
+        expect(fromZonedInput(shown, zone), `${iso} in ${zone} shown as ${shown}`).toEqual({
+          value: iso,
+        });
+      }
+    expect(toZonedInput("0001-01-01T00:00:00.000000Z", "America/New_York")).toBe(
+      "0001-01-01 00:00Z",
+    );
+    expect(toZonedInput("0001-01-01T00:00:00.000000Z", "UTC")).toBe("0001-01-01 00:00");
+  });
+
   it("names the date of an instant in the zone", () => {
     expect(dayInZone("2026-03-31T22:30:00.000000Z", SE)).toBe("2026-04-01");
     expect(dayInZone("2026-03-31T22:30:00.000000Z", "UTC")).toBe("2026-03-31");

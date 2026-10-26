@@ -26,6 +26,8 @@ function zoneFormat(zone: string): Intl.DateTimeFormat {
     f = new Intl.DateTimeFormat("en-US", {
       timeZone: zone,
       hourCycle: "h23",
+      // The era tells the year 0000 (1 BC) from 0001: without it both read "1".
+      era: "short",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -54,10 +56,20 @@ export function knownZone(zone: string): boolean {
  */
 function wall(zone: string, ms: number) {
   const p: Record<string, number> = {};
+  let bc = false;
   for (const x of zoneFormat(knownZone(zone) ? zone : "UTC").formatToParts(new Date(ms)))
-    if (x.type !== "literal") p[x.type] = Number(x.value);
-  // The era is not asked for: negative years do not occur in 0001 to 9999.
-  return { y: p.year!, mo: p.month!, d: p.day!, h: p.hour!, mi: p.minute!, s: p.second! };
+    if (x.type === "era") bc = /^B/i.test(x.value);
+    else if (x.type !== "literal") p[x.type] = Number(x.value);
+  // Within a day of the ends of the range a zone's wall clock can be in the year 0 (1 BC) or
+  // 10000, which `toZonedInput` and `fromZonedInput` handle.
+  return {
+    y: bc ? 1 - p.year! : p.year!,
+    mo: p.month!,
+    d: p.day!,
+    h: p.hour!,
+    mi: p.minute!,
+    s: p.second!,
+  };
 }
 
 /** Seconds the wall clock of `zone` is ahead of UTC at the instant `ms`. */
@@ -102,10 +114,17 @@ export function toZonedInput(iso: unknown, zone: string): string {
   if (typeof iso !== "string") return "";
   const p = parseCanonical(iso);
   if (!p) return "";
-  const w = wall(zone, Math.floor(p.ms / 1000) * 1000);
+  let w = wall(zone, Math.floor(p.ms / 1000) * 1000);
+  // Within a day of the ends of the range the wall clock of a zone can fall in the year 0000 or
+  // 10000, which no input accepts: show those in UTC, with the Z that says so.
+  let z = "";
+  if (w.y < 1 || w.y > 9999) {
+    w = wall("UTC", Math.floor(p.ms / 1000) * 1000);
+    z = "Z";
+  }
   const frac = String(p.micros).padStart(6, "0").replace(/0+$/, "");
   const sec = w.s !== 0 || frac ? `:${pad(w.s)}${frac ? `.${frac}` : ""}` : "";
-  return `${pad(w.y, 4)}-${pad(w.mo)}-${pad(w.d)} ${pad(w.h)}:${pad(w.mi)}${sec}`;
+  return `${pad(w.y, 4)}-${pad(w.mo)}-${pad(w.d)} ${pad(w.h)}:${pad(w.mi)}${sec}${z}`;
 }
 
 export type Parsed = { value: string } | { error: "format" | "range" | "gap" | "zone" };
