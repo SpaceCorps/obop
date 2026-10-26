@@ -5,6 +5,7 @@
 //! in an error.
 
 use obop_commands::{Dispatcher, Principal, PrincipalKind, Surface, Value, Vault};
+use obop_storage::fault::Fault;
 use obop_storage::{Backend, Fields};
 use serde_json::{Map, Value as J, json};
 use std::collections::BTreeSet;
@@ -643,10 +644,21 @@ impl Runtime {
         let Some((model, _)) = command.split_once('.') else {
             return;
         };
-        let conns: Vec<String> = self
-            .backend
-            .list(CONNECTION)
-            .unwrap_or_default()
+        // The event must not be lost to a busy moment: a few more tries, then it is reported.
+        let all = match obop_storage::fault::patiently(
+            4,
+            std::time::Duration::from_millis(250),
+            || self.backend.list(CONNECTION),
+        ) {
+            Ok(all) => all,
+            Err(e) => {
+                eprintln!(
+                    "connectors: the event {command} was not delivered, the connections could not be read: {e}"
+                );
+                return;
+            }
+        };
+        let conns: Vec<String> = all
             .into_iter()
             .filter(|(_, f)| str_of(f, "state") == "connected")
             .filter(|(_, f)| {
@@ -670,23 +682,34 @@ impl Runtime {
         let jobs = self.queue.take_due(at);
         let n = jobs.len();
         for job in jobs {
-            let Ok((c, p)) = self.connection(&job.connection) else {
-                self.finish_run(
-                    &job.run,
-                    "dead_letter",
-                    0,
-                    0,
-                    0,
-                    "the connection no longer exists",
-                );
-                self.queue.complete(&job);
-                continue;
+            // A lookup the store refused (a full pool, a database that is away) is "later", not
+            // "no" (D74): the job stays leased and is taken again when the lease ends. Only an
+            // answer decides that the connection is gone or the basis withdrawn.
+            let (c, p) = match self.connection(&job.connection) {
+                Ok(x) => x,
+                Err(e) if Fault::is_transient(&e) => continue,
+                Err(_) => {
+                    self.finish_run(
+                        &job.run,
+                        "dead_letter",
+                        0,
+                        0,
+                        0,
+                        "the connection no longer exists",
+                    );
+                    self.queue.complete(&job);
+                    continue;
+                }
             };
-            let allowed = c.is_connected()
-                && consents_of(&*self.backend, &c.id)
-                    .iter()
-                    .any(|k| k.is_active())
-                && InstancePolicy::load(&*self.backend).flows_enabled;
+            let (consents, policy) = match (
+                try_consents_of(&*self.backend, &c.id),
+                InstancePolicy::try_load(&*self.backend),
+            ) {
+                (Ok(k), Ok(p)) => (k, p),
+                _ => continue,
+            };
+            let allowed =
+                c.is_connected() && consents.iter().any(|k| k.is_active()) && policy.flows_enabled;
             if !allowed {
                 self.finish_run(&job.run, "dead_letter", 0, 0, 0, "delivery stopped: the connection is no longer connected or its legal basis was withdrawn");
                 self.queue.complete(&job);

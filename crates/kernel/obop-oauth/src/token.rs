@@ -8,11 +8,17 @@
 use crate::flow::{is_challenge, is_verifier};
 use crate::util::{clean_text, ct_eq, rand_hex, s256, sha_hex};
 use crate::{OAuth, OAuthError, mcp_resource, redirect};
+use obop_storage::fault::Fault;
 use obop_storage::{ApplyError, Fields, Op};
 use serde_json::{Value as J, json};
 
 pub const GRANT_MODEL: &str = "oauth_grant";
 pub const REFRESH_MODEL: &str = "oauth_refresh";
+
+/// The store refused a call (full pool, unreachable): a client may retry, nothing was decided.
+fn storage_busy() -> OAuthError {
+    OAuthError::new(503, "temporarily_unavailable", "storage is busy")
+}
 
 fn fields(v: J) -> Fields {
     v.as_object().cloned().unwrap_or_default()
@@ -234,23 +240,22 @@ impl OAuth {
         let client_id = form.required("client_id")?;
         let hash = sha_hex(presented);
         let gone = || invalid_grant("the refresh token is invalid, expired or revoked");
-        let rec = self
-            .backend
-            .get(REFRESH_MODEL, &hash)
-            .ok()
-            .flatten()
-            .ok_or_else(gone)?;
+        // A lookup that was refused because the store is busy is not "no such token": the client
+        // would drop a refresh token that is fine (invalid_grant is final), so it is told to try
+        // again (D74).
+        let found = |r: Result<Option<Fields>, String>| match r {
+            Ok(Some(x)) => Ok(x),
+            Ok(None) => Err(gone()),
+            Err(e) if Fault::is_transient(&e) => Err(storage_busy()),
+            Err(_) => Err(gone()),
+        };
+        let rec = found(self.backend.get(REFRESH_MODEL, &hash))?;
         let grant_id = rec
             .get("grant")
             .and_then(J::as_str)
             .unwrap_or("")
             .to_string();
-        let grant = self
-            .backend
-            .get(GRANT_MODEL, &grant_id)
-            .ok()
-            .flatten()
-            .ok_or_else(gone)?;
+        let grant = found(self.backend.get(GRANT_MODEL, &grant_id))?;
         if rec.get("client_id").and_then(J::as_str) != Some(client_id)
             || grant.get("client_id").and_then(J::as_str) != Some(client_id)
         {
@@ -278,6 +283,9 @@ impl OAuth {
             .to_string();
         let principal = match self.tokens().principal_of(&owner) {
             Some(p) => p,
+            // The lookup was refused, not answered: the account may be perfectly fine. Ending the
+            // grant for good because the store was busy for a moment would disconnect the person.
+            None if obop_storage::fault::noted().is_some() => return Err(storage_busy()),
             None => {
                 self.revoke_grant_internal(
                     &grant_id,

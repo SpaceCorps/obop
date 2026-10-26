@@ -4,7 +4,10 @@
 //! session advisory locks on connections of a pool of their own.
 
 use super::*;
-use crate::pgpool::{Class, PR, PgManager, PgPool, PgPoolConfig, Session, describe, tune};
+use crate::pgpool::{
+    Class, MAX_REPEATS, PR, PgManager, PgPool, PgPoolConfig, Pooler, Session, describe,
+    repeat_pause, tune,
+};
 use crate::pool::{Pool, Pooled};
 use crate::tls::PgConnector;
 use postgres::Client;
@@ -55,13 +58,19 @@ fn e(err: postgres::Error) -> String {
 
 /// What identifies the server a connection reached: the database and when its server started.
 fn identity(c: &mut Client) -> Result<String> {
-    let row = c
-        .query_one(
+    // The simple protocol: one round trip, no named statement that a pooler in transaction mode
+    // could send to another server connection.
+    let rows = c
+        .simple_query(
             "SELECT current_database()::text || ' @ ' || pg_postmaster_start_time()::text",
-            &[],
         )
         .map_err(e)?;
-    Ok(row.get(0))
+    rows.iter()
+        .find_map(|m| match m {
+            postgres::SimpleQueryMessage::Row(r) => r.get(0).map(str::to_string),
+            _ => None,
+        })
+        .ok_or_else(|| "the database did not say which database it is".to_string())
 }
 
 impl Pg {
@@ -71,6 +80,22 @@ impl Pg {
 
     pub(crate) fn connect_with(url: &str, cfg: PgPoolConfig) -> Result<Self> {
         static IDS: AtomicU64 = AtomicU64::new(1);
+        // Behind a pooler in transaction mode the locks need a direct address of their own
+        // (D74); an address that is the pooler's own would take them through it.
+        if cfg.pooler == Pooler::Transaction {
+            match cfg.lock_url.as_deref() {
+                None => return Err(PgPoolConfig::NEEDS_LOCK_URL.into()),
+                Some(l) if l == url.trim() => {
+                    return Err(
+                        "OBOP_LOCK_DATABASE_URL is the same address as the database URL; \
+                                with OBOP_DB_POOLER=transaction it must be a direct address of \
+                                the database, not the pooler's"
+                            .into(),
+                    );
+                }
+                Some(_) => {}
+            }
+        }
         let cfg = Arc::new(cfg);
         let connector = PgConnector::new(url)?;
         let mut client = tune(connector.clone(), "obop-main", &cfg).connect()?;
@@ -187,6 +212,33 @@ impl Drop for LockSession {
     }
 }
 
+/// The first integer of the two-integer advisory keys that order batches. The one-integer keys
+/// of `Backend::lock` are a separate key space, so the two never meet.
+const BATCH_LOCK_NAMESPACE: i32 = 0x6f62;
+
+/// The record an op works on.
+fn op_target(op: &Op) -> (&str, &str) {
+    match op {
+        Op::Insert { model, id, .. }
+        | Op::Put { model, id, .. }
+        | Op::Merge { model, id, .. }
+        | Op::Delete { model, id }
+        | Op::Add { model, id, .. }
+        | Op::Patch { model, id, .. } => (model, id),
+    }
+}
+
+/// A 32-bit FNV-1a hash of a record's identity. Two records that collide share a lock, which
+/// only makes their batches queue.
+fn batch_key((model, id): (&str, &str)) -> i32 {
+    let mut h: u32 = 0x811c_9dc5;
+    for b in model.bytes().chain(std::iter::once(0xff)).chain(id.bytes()) {
+        h ^= u32::from(b);
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    h as i32
+}
+
 fn pg_fields(v: J) -> Result<Fields> {
     match v {
         J::Object(m) => Ok(m),
@@ -278,7 +330,7 @@ impl Backend for Pg {
         })
     }
     fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
-        self.main.tx(Class::Batch, |c| {
+        self.main.tx_retry(Class::Batch, |c| {
             for (model, id, fields) in rows {
                 let data = J::Object(fields.clone());
                 c.execute(
@@ -364,15 +416,40 @@ impl Backend for Pg {
                     .map_err(e)
             }
         }
-        // A refused batch is a value, not an error of the connection: roll back, report it.
-        let outcome = self.main.tx_decide(Class::Batch, false, |c| {
-            let r = run_ops(&mut P(c), ops);
-            let commit = r.is_ok();
-            Ok((r, commit))
-        });
-        match outcome {
-            Ok(r) => r,
-            Err(m) => Err(ApplyError::Storage(m)),
+        // Two batches that touch the same records must not hold them in opposite order (they
+        // would deadlock), and two that create the same record must not both think it is
+        // missing: every batch first takes a transaction-level advisory lock for each record it
+        // names, in one statement and in sorted order. Nothing else takes these locks, so
+        // overlapping batches simply queue; should the server still find a deadlock (a plain
+        // write or a bulk statement of another process), the batch was rolled back whole and is
+        // run again.
+        let mut keys: Vec<i32> = ops.iter().map(|o| batch_key(op_target(o))).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        let mut attempt = 0;
+        loop {
+            // A refused batch is a value, not an error of the connection: roll back, report it.
+            let outcome = self.main.tx_decide(Class::Batch, false, |c| {
+                if !keys.is_empty() {
+                    c.execute(
+                        "SELECT pg_advisory_xact_lock($1, k)
+                         FROM (SELECT k FROM unnest($2::int4[]) AS t(k) ORDER BY k) s",
+                        &[&BATCH_LOCK_NAMESPACE, &keys],
+                    )?;
+                }
+                let r = run_ops(&mut P(c), ops);
+                let commit = r.is_ok();
+                Ok((r, commit))
+            });
+            let again = |m: &str| m.contains("SQLSTATE 40P01") || m.contains("SQLSTATE 40001");
+            match outcome {
+                Ok(Err(ApplyError::Storage(m))) if attempt < MAX_REPEATS && again(&m) => {}
+                Err(m) if attempt < MAX_REPEATS && again(&m) => {}
+                Ok(r) => return r,
+                Err(m) => return Err(ApplyError::Storage(m)),
+            }
+            attempt += 1;
+            repeat_pause(attempt);
         }
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
@@ -594,7 +671,7 @@ impl Backend for Pg {
     }
 
     fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
-        self.main.tx(Class::Batch, |c| {
+        self.main.tx_retry(Class::Batch, |c| {
             let mut n = 0;
             for s in swaps {
                 let new = J::from(s.new.clone());

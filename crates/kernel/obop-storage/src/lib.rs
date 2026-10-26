@@ -13,6 +13,10 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 pub type Fields = serde_json::Map<String, J>;
+
+/// The model of the security log (written by `obop-commands::audit`): an entry in it is not
+/// counted as a change of the request that wrote it (see `fault`).
+pub(crate) const LOG_MODEL: &str = "security_event";
 pub type Result<T> = std::result::Result<T, String>;
 
 mod atomic;
@@ -413,10 +417,12 @@ pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backen
     {
         Ok(Arc::new(Sqlite::open(path)?))
     } else if url.starts_with("postgres://") || url.starts_with("postgresql://") {
-        Ok(Arc::new(match pool {
+        let pg = match pool {
             Some(cfg) => Pg::connect_with(url, cfg)?,
             None => Pg::connect(url)?,
-        }))
+        };
+        // The guard keeps the rule of `fault` (no change after a refused call, commits noted).
+        Ok(guarded(Arc::new(pg)))
     } else {
         Err(format!(
             "unsupported database url (use memory:, sqlite://PATH or postgres://...): {url}"
@@ -437,6 +443,7 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
 }
 
 pub mod fault;
+mod guard;
 pub mod limit;
 mod memory;
 mod pg;
@@ -449,10 +456,12 @@ mod pool_tests;
 #[cfg(test)]
 mod shared_tests;
 mod sqlite;
+pub mod testing;
 pub mod tls;
 #[cfg(test)]
 mod tls_tests;
 
+pub use guard::guarded;
 pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
 
 use memory::Memory;

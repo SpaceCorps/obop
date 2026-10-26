@@ -19,19 +19,30 @@ struct Fake {
     fail: AtomicBool,
     delay_ms: AtomicU64,
     dead: Mutex<HashSet<usize>>,
+    /// The next connect panics (once).
+    panic_connect: AtomicBool,
+    /// A ping hangs for as long as it is allowed to, then reports failure.
+    hang_ping: AtomicBool,
 }
 
 impl Manager for Arc<Fake> {
     type Conn = usize;
     fn connect(&self) -> Result<usize, String> {
         std::thread::sleep(Duration::from_millis(self.delay_ms.load(SeqCst)));
+        if self.panic_connect.swap(false, SeqCst) {
+            panic!("the driver could not build its runtime");
+        }
         if self.fail.load(SeqCst) {
             return Err("connection refused".into());
         }
         Ok(self.made.fetch_add(1, SeqCst))
     }
-    fn ping(&self, conn: &mut usize, _: Duration) -> bool {
+    fn ping(&self, conn: &mut usize, timeout: Duration) -> bool {
         self.pings.fetch_add(1, SeqCst);
+        if self.hang_ping.load(SeqCst) {
+            std::thread::sleep(timeout);
+            return false;
+        }
         !self.dead.lock().unwrap().contains(conn)
     }
 }
@@ -377,10 +388,109 @@ fn a_slow_connect_does_not_hold_the_caller_past_its_timeout() {
         "{:?}",
         t.elapsed()
     );
-    // The connection that was being opened is not lost: it arrives and serves the next caller.
+    // The connection that was being opened is not lost: it arrives and serves the next caller,
+    // which is not given a second one.
     fake.delay_ms.store(0, SeqCst);
     wait_for("the slow connection to arrive", || mine("t-slow").idle == 1);
-    assert!(p.get(false).unwrap().reused() || fake.made.load(SeqCst) >= 1);
+    let c = p.get(false).unwrap();
+    assert_eq!(*c, 0, "the very connection that was being opened");
+    assert_eq!(fake.made.load(SeqCst), 1, "and no other was made for it");
+}
+
+#[test]
+fn a_panic_while_connecting_gives_the_slot_back() {
+    let fake = Arc::new(Fake::default());
+    let p = Pool::new(
+        fake.clone(),
+        settings("t-panic", 1, Duration::from_millis(500)),
+    );
+    fake.panic_connect.store(true, SeqCst);
+    // The only slot was reserved for a connect that panicked: the caller is told the database
+    // cannot be reached, not left to wait for a slot that never comes back.
+    let r = p.get(false);
+    assert!(matches!(r, Err(PoolError::Unavailable(_))), "{:?}", r.err());
+    // ... and the next caller gets that slot.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let c = loop {
+        match p.get(false) {
+            Ok(c) => break c,
+            Err(e) if Instant::now() < deadline => {
+                let _ = e;
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Err(e) => panic!("the slot was never given back: {e}"),
+        }
+    };
+    drop(c);
+    let s = mine("t-panic");
+    assert_eq!(s.connect_failures, 1);
+    assert_eq!(s.in_use, 0);
+}
+
+#[test]
+fn a_waiter_tries_again_when_the_pause_after_a_failed_connect_is_over() {
+    let fake = Arc::new(Fake::default());
+    let mut cfg = settings("t-retry", 2, Duration::from_secs(5));
+    cfg.connect_backoff = Duration::from_millis(100);
+    let p = Pool::new(fake.clone(), cfg);
+    // One connection is out, so the waiter does not give up on the first failed attempt ...
+    let held = p.get(false).unwrap();
+    fake.fail.store(true, SeqCst);
+    let waiter = {
+        let p = p.clone();
+        std::thread::spawn(move || {
+            let t = Instant::now();
+            let r = p.get(false).map(|c| *c);
+            (r, t.elapsed())
+        })
+    };
+    wait_for("the first attempt to fail", || {
+        mine("t-retry").connect_failures >= 1
+    });
+    // ... the database comes back, and nothing else happens in the pool: no connection is
+    // returned, no new caller arrives. The waiter must wake by itself and open one.
+    fake.fail.store(false, SeqCst);
+    let (r, took) = waiter.join().unwrap();
+    assert!(r.is_ok(), "{r:?}");
+    assert!(took < Duration::from_secs(3), "{took:?}");
+    drop(held);
+}
+
+#[test]
+fn a_seeded_connection_is_checked_like_any_other_that_sat_idle() {
+    let fake = Arc::new(Fake::default());
+    let mut cfg = settings("t-seedping", 2, Duration::from_secs(5));
+    cfg.health_check_idle = Duration::ZERO;
+    let p = Pool::new(fake.clone(), cfg);
+    p.seed(77);
+    fake.dead.lock().unwrap().insert(77);
+    let c = p.get(false).unwrap();
+    assert_ne!(*c, 77, "the dead seeded connection was replaced");
+    assert_eq!(fake.pings.load(SeqCst), 1);
+    // And a read that finds a seeded connection dead may be repeated: it counts as having served.
+    let p2 = Pool::new(
+        fake.clone(),
+        settings("t-seedreuse", 1, Duration::from_secs(5)),
+    );
+    p2.seed(5);
+    assert!(p2.get(false).unwrap().reused());
+}
+
+#[test]
+fn a_hanging_ping_holds_the_caller_no_longer_than_its_time_allows() {
+    let fake = Arc::new(Fake::default());
+    let mut cfg = settings("t-ping", 2, Duration::from_millis(400));
+    cfg.health_check_idle = Duration::ZERO;
+    let p = Pool::new(fake.clone(), cfg);
+    drop(p.get(false).unwrap());
+    fake.hang_ping.store(true, SeqCst);
+    let t = Instant::now();
+    let _ = p.get(false);
+    assert!(
+        t.elapsed() < Duration::from_millis(1500),
+        "the ping was allowed three seconds although the caller had 400 ms: {:?}",
+        t.elapsed()
+    );
 }
 
 #[test]
@@ -449,12 +559,17 @@ fn pools_of_the_same_name_add_up_in_the_report() {
 }
 
 #[test]
-fn a_dropped_pool_leaves_the_report_and_stops_its_sweeper() {
-    let (p, _) = pool("t-gone", 1);
+fn a_dropped_pool_leaves_the_report_and_lets_go_of_its_manager() {
+    let (p, fake) = pool("t-gone", 1);
     drop(p.get(false).unwrap());
     assert!(stats().iter().any(|s| s.name == "t-gone"));
     drop(p);
     wait_for("the pool to leave the report", || {
         !stats().iter().any(|s| s.name == "t-gone")
+    });
+    // The sweeper holds the pool only weakly, so nothing keeps the manager (and its connections)
+    // alive once the pool is gone.
+    wait_for("the manager to be released", || {
+        Arc::strong_count(&fake) == 1
     });
 }

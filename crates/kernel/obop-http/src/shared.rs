@@ -86,15 +86,20 @@ pub(crate) struct VaultRef {
 }
 
 impl VaultRef {
-    fn load(&self) -> Vault {
-        self.state
-            .backend
-            .kv_get(&format!("vault:{}", self.id))
-            .ok()
-            .flatten()
-            .and_then(|sealed| self.state.open_json(&format!("vault:{}", self.id), &sealed))
+    /// The stored vault, or an empty one when there is none. **A read that failed is an error,
+    /// never an empty vault** (D74): a command run on an empty vault numbers its mask tokens from
+    /// 1 again and the save then replaces the stored vault, so tokens the agent already holds would
+    /// point at other people.
+    fn load(&self) -> Result<Vault, String> {
+        let key = format!("vault:{}", self.id);
+        let Some(sealed) = self.state.backend.kv_get(&key)? else {
+            return Ok(Vault::default());
+        };
+        Ok(self
+            .state
+            .open_json(&key, &sealed)
             .map(|j| Vault::from_json(&j))
-            .unwrap_or_default()
+            .unwrap_or_default())
     }
 
     fn save(&self, v: &Vault) -> Result<(), String> {
@@ -113,7 +118,7 @@ impl VaultRef {
         } else {
             None
         };
-        let mut vault = self.load();
+        let mut vault = self.load()?;
         let out = f(&mut vault);
         if vault.is_dirty() {
             if guard.is_none() {
@@ -165,6 +170,40 @@ mod tests {
         // Another token has its own, empty vault.
         let other = s.vault("obop_other", false);
         assert!(other.with(|v| v.restore(&t, |_| true).is_err()).unwrap());
+    }
+
+    #[test]
+    fn a_refused_read_of_the_vault_fails_the_call_and_leaves_the_stored_vault_alone() {
+        // D74: a full pool refuses the read of the vault. The call must fail; it must not run on an
+        // empty vault and save that over the stored one (the agent's tokens would then point at
+        // other people).
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        let s = Arc::new(SharedState {
+            backend,
+            ring: KeyRing::for_tests(),
+        });
+        let a = s.vault("obop_agent", true);
+        let t1 = a.with(|v| v.mask("PERSON", "party:1", "Ada")).unwrap();
+        let t2 = a.with(|v| v.mask("PERSON", "party:2", "Alan")).unwrap();
+        flaky.refuse_next(1);
+        let refused = a.with(|v| v.mask("PERSON", "party:3", "Grace"));
+        let Err(e) = refused else {
+            panic!("the call must fail");
+        };
+        assert!(obop_storage::fault::Fault::is_transient(&e), "{e}");
+        // The stored vault is as it was: numbering goes on, and the old tokens still resolve.
+        let t3 = a.with(|v| v.mask("PERSON", "party:3", "Grace")).unwrap();
+        assert!(t3 != t1 && t3 != t2, "{t1} {t2} {t3}");
+        assert_eq!(
+            a.with(|v| v.restore(&t1, |_| true).map(String::from))
+                .unwrap(),
+            Ok("Ada".to_string())
+        );
+        assert_eq!(
+            a.with(|v| v.restore(&t2, |_| true).map(String::from))
+                .unwrap(),
+            Ok("Alan".to_string())
+        );
     }
 
     #[test]

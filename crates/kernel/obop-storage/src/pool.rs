@@ -376,11 +376,13 @@ impl<M: Manager> Pool<M> {
         let mut st = self.inner.lock();
         if st.total < self.inner.cfg.max_size && !st.closed {
             st.total += 1;
+            // A seeded connection has served already (it prepared the schema), so it is checked
+            // when it has been idle and a read that finds it dead is repeated.
             st.idle.push(Idle {
                 conn,
                 born: now,
                 since: now,
-                used: false,
+                used: true,
             });
             self.inner.counters.opened.fetch_add(1, Relaxed);
         }
@@ -425,6 +427,7 @@ impl<M: Manager> Pool<M> {
         mut st: MutexGuard<'a, State<M::Conn>>,
         cv: &Condvar,
         deadline: Instant,
+        wake_at: Option<Instant>,
         waiting: &mut bool,
     ) -> Parked<'a, M> {
         if !*waiting {
@@ -440,8 +443,10 @@ impl<M: Manager> Pool<M> {
             let e = self.timeout_error(&st);
             return Err((st, e));
         }
+        // Wake at `wake_at` too (the end of a connect backoff), to try again then.
+        let until = wake_at.map_or(deadline, |w| w.min(deadline));
         let (st, _) = cv
-            .wait_timeout(st, deadline - now)
+            .wait_timeout(st, until.saturating_duration_since(now))
             .unwrap_or_else(|e| e.into_inner());
         Ok(st)
     }
@@ -472,7 +477,7 @@ impl<M: Manager> Pool<M> {
                     permit = true;
                     continue;
                 }
-                match self.park(st, &inner.cv_long, deadline, &mut waiting) {
+                match self.park(st, &inner.cv_long, deadline, None, &mut waiting) {
                     Ok(g) => st = g,
                     Err((g, e)) => {
                         st = g;
@@ -496,7 +501,11 @@ impl<M: Manager> Pool<M> {
                 }
                 drop(st);
                 let mut conn = idle.conn;
-                let alive = inner.manager.ping(&mut conn, PING_TIMEOUT);
+                // A ping that hangs holds the caller no longer than the time it has left.
+                let patience = deadline
+                    .saturating_duration_since(Instant::now())
+                    .clamp(Duration::from_millis(100), PING_TIMEOUT);
+                let alive = inner.manager.ping(&mut conn, patience);
                 st = inner.lock();
                 if alive {
                     break 'acquire Ok((conn, idle.born, idle.used));
@@ -534,7 +543,13 @@ impl<M: Manager> Pool<M> {
                     ));
                 }
             }
-            match self.park(st, &inner.cv, deadline, &mut waiting) {
+            // While the database is away and the pause after the last failed attempt is not over,
+            // wake when it is, to try again.
+            let wake_at = (st.last_connect_error.is_some()
+                && st.connecting == 0
+                && st.total < inner.cfg.max_size)
+                .then_some(st.backoff_until);
+            match self.park(st, &inner.cv, deadline, wake_at, &mut waiting) {
                 Ok(g) => st = g,
                 Err((g, e)) => {
                     st = g;
@@ -588,7 +603,12 @@ impl<M: Manager> Pool<M> {
             .spawn({
                 let inner = inner.clone();
                 move || {
-                    let r = inner.manager.connect();
+                    // A panic while connecting (the driver builds a runtime and can fail when the
+                    // process is short of file descriptors) must still give the slot back.
+                    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        inner.manager.connect()
+                    }))
+                    .unwrap_or_else(|_| Err("opening a connection failed unexpectedly".into()));
                     finish_connect(&inner, r);
                 }
             });

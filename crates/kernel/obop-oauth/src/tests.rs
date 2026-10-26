@@ -757,6 +757,60 @@ fn grants_end_on_their_date_and_a_disabled_owner_cannot_refresh() {
 }
 
 #[test]
+fn a_refused_lookup_never_ends_a_grant_and_a_refused_follow_up_never_loses_the_new_tokens() {
+    use obop_storage::fault;
+    use obop_storage::testing::{Flaky, Mode};
+    // D74: the store is busy for a moment while a client refreshes.
+    let (flaky, backend) = Flaky::memory();
+    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let c = r.client();
+    let t1 = r.tokens(&c);
+    let (a1, r1) = (
+        t1["access_token"].as_str().unwrap().to_string(),
+        t1["refresh_token"].as_str().unwrap().to_string(),
+    );
+
+    // The account lookup is refused (the request scope is what `obop-http` opens around a call).
+    fault::begin_request(None, false);
+    flaky.refuse_model("auth_user", Mode::Reads);
+    let e = r.refresh(&c, &r1).unwrap_err();
+    let outcome = fault::end_request();
+    assert_eq!(
+        e.error, "temporarily_unavailable",
+        "retryable, not invalid_grant"
+    );
+    assert_eq!(e.status, 503);
+    assert_eq!(outcome.fault, Some(fault::Fault::Busy));
+    assert!(!outcome.wrote, "nothing was changed");
+    flaky.allow_models();
+    assert_eq!(r.o.grants_of("ada").len(), 1, "the grant is still there");
+    assert!(r.auth.resolve(&a1).is_some(), "and so is its access token");
+
+    // The refresh token itself is looked up while the store is busy: also retryable.
+    fault::begin_request(None, false);
+    flaky.refuse_model(crate::token::REFRESH_MODEL, Mode::Reads);
+    let e = r.refresh(&c, &r1).unwrap_err();
+    fault::end_request();
+    assert_eq!(e.error, "temporarily_unavailable");
+    flaky.allow_models();
+
+    // Once the store answers, the same refresh token works: it was never marked used.
+    // The follow-up that ends the old access token is then refused; the new tokens are kept.
+    fault::begin_request(None, false);
+    flaky.refuse_model("auth_token", Mode::Updates);
+    let t2 = r.refresh(&c, &r1);
+    let outcome = fault::end_request();
+    flaky.allow_models();
+    let t2 = t2.expect("the rotation committed, so the client gets its new tokens");
+    assert!(outcome.wrote, "the rotation was committed");
+    let _ = outcome;
+    let r2 = t2["refresh_token"].as_str().unwrap();
+    // The new refresh token is good, and the replay of the old one is the usual reuse.
+    let t3 = r.refresh(&c, r2).unwrap();
+    assert!(t3["access_token"].as_str().is_some());
+}
+
+#[test]
 fn events_are_recorded_without_secrets() {
     let r = rig();
     let c = r.client();

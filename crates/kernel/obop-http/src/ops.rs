@@ -97,8 +97,6 @@ pub(crate) struct Ops {
     ready: Mutex<Option<(Instant, Ready)>>,
     gauges: Mutex<Option<(Instant, Gauges)>>,
     access: Mutex<MetricsAccess>,
-    /// Requests answered 503 because of a storage fault: busy, unavailable, timeout (D74).
-    faults: [AtomicU64; 3],
 }
 
 impl Ops {
@@ -112,7 +110,6 @@ impl Ops {
             ready: Mutex::new(None),
             gauges: Mutex::new(None),
             access: Mutex::new(MetricsAccess::Disabled),
-            faults: Default::default(),
         }
     }
 
@@ -148,53 +145,136 @@ pub(crate) async fn track(State(s): State<Arc<HttpState>>, req: Request, next: N
     resp
 }
 
-/// Answer 503 with `Retry-After` when anything the request did hit a storage fault (D74): the
-/// pool had no connection for it within the acquire timeout (`storage_busy`), the database could
-/// not be reached (`storage_unavailable`) or a statement ran into its limit (`storage_timeout`).
-/// The handler's own answer is dropped, because the layers above the store turn a failed read
-/// into "not signed in", "not found" or "zero", and a client must not take those for the truth.
-/// The health and metrics routes decide for themselves.
-pub(crate) async fn storage_faults(
-    State(s): State<Arc<HttpState>>,
-    req: Request,
-    next: Next,
-) -> Response {
-    if matches!(req.uri().path(), "/healthz" | "/readyz" | "/metrics") {
-        return next.run(req).await;
+/// How often a storage fault decided the answer of a request, by fault and by what was done:
+/// `[fault][0]` the answer was replaced by a 503, `[fault][1]` the request had already committed a
+/// change and kept its own answer. Process-wide: the instance, community and control-plane routers
+/// all report here.
+static FAULT_ANSWERS: [[AtomicU64; 2]; 3] = [const { [AtomicU64::new(0), AtomicU64::new(0)] }; 3];
+
+fn fault_index(f: Fault) -> usize {
+    match f {
+        Fault::Busy => 0,
+        Fault::Unavailable => 1,
+        Fault::Timeout => 2,
     }
-    let (resp, fault) = super::FAULT
-        .scope(std::cell::Cell::new(None), async {
-            let resp = next.run(req).await;
-            (resp, super::FAULT.with(std::cell::Cell::get))
-        })
-        .await;
-    let Some(fault) = fault else { return resp };
-    let (i, hint) = match fault {
-        Fault::Busy => (
-            0,
-            "Every database connection is in use. Retry after the time in Retry-After.",
-        ),
-        Fault::Unavailable => (
-            1,
-            "The database cannot be reached right now. Retry after the time in Retry-After.",
-        ),
-        Fault::Timeout => (
-            2,
-            "A database statement ran into its time limit. Retry later, or ask for less at once.",
-        ),
+}
+
+fn fault_hint(f: Fault) -> &'static str {
+    match f {
+        Fault::Busy => {
+            "Every database connection is in use. Nothing was changed. Retry after the time in Retry-After."
+        }
+        Fault::Unavailable => {
+            "The database cannot be reached right now. A change that was in flight may or may not have been applied. Retry after the time in Retry-After."
+        }
+        Fault::Timeout => {
+            "A database statement ran into its time limit. Nothing was changed. Retry later, or ask for less at once."
+        }
+    }
+}
+
+/// Response headers a route set that the replacement must keep: the CORS answer of the OAuth and
+/// MCP endpoints (the OAuth token endpoint exposes `Retry-After` to browsers on purpose) and the
+/// security headers.
+fn keep_header(name: &header::HeaderName) -> bool {
+    let n = name.as_str();
+    n.starts_with("access-control-")
+        || n.starts_with("cross-origin-")
+        || matches!(
+            n,
+            "vary"
+                | "x-content-type-options"
+                | "x-frame-options"
+                | "referrer-policy"
+                | "content-security-policy"
+                | "strict-transport-security"
+                | "permissions-policy"
+        )
+}
+
+/// The 503 that replaces the answer of a request that hit a storage fault before it changed
+/// anything: in the shape the route speaks (an OAuth error for the token endpoints, a JSON-RPC
+/// error for `/mcp`, a small page where a page was coming, the REST error elsewhere).
+fn replacement(fault: Fault, path: &str, original: &Response) -> Response {
+    let code = fault.code();
+    let hint = fault_hint(fault);
+    let is_html = original
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("text/html"));
+    let mut r = if path == "/mcp" || path.starts_with("/mcp/") {
+        let body = serde_json::json!({"jsonrpc": "2.0", "id": null, "error": {
+            "code": -32000, "message": code, "data": {"hint": hint, "retry_after": fault.retry_after_secs()}}});
+        (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
+    } else if matches!(path, "/oauth/token" | "/oauth/register" | "/oauth/revoke") {
+        let body =
+            serde_json::json!({"error": "temporarily_unavailable", "error_description": hint});
+        (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
+    } else if is_html {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            Body::from(
+                "<!doctype html><meta charset=\"utf-8\"><title>Try again in a moment</title><p>The service is busy right now. Nothing was lost or changed. Try again in a moment.</p>",
+            ),
+        )
+            .into_response()
+    } else {
+        super::api_error(StatusCode::SERVICE_UNAVAILABLE, code, code, hint)
     };
-    s.ops.faults[i].fetch_add(1, Relaxed);
-    let mut r = super::api_error(
-        StatusCode::SERVICE_UNAVAILABLE,
-        fault.code(),
-        fault.code(),
-        hint,
-    );
+    for (name, value) in original.headers() {
+        if keep_header(name) {
+            r.headers_mut().append(name.clone(), value.clone());
+        }
+    }
     r.headers_mut().insert(
         header::RETRY_AFTER,
         HeaderValue::from(fault.retry_after_secs()),
     );
     no_store(r)
+}
+
+/// What a request that hit a storage fault is answered (D74). The rule, which the documentation
+/// states in the same words:
+///
+/// - **No change committed yet**: the answer is replaced by 503 with `Retry-After`. The handlers
+///   above the store turn a refused read into "not signed in", "not found" or "zero", and the guard
+///   (`obop_storage::guarded`) has refused every change after the first refusal, so nothing was
+///   changed and a client may retry (`storage_unavailable` excepted: a change in flight when the
+///   connection broke may or may not have been applied).
+/// - **A change was already committed**: the request keeps its own answer. The fault only cost a
+///   best-effort step (a read-back, a log entry, a counter); a 503 there would make the client
+///   repeat a change that was made. The fault is counted (`answer="kept"`) and logged.
+///
+/// The health and metrics routes decide for themselves.
+pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
+    let path = req.uri().path().to_string();
+    if matches!(path.as_str(), "/healthz" | "/readyz" | "/metrics") {
+        return next.run(req).await;
+    }
+    let (resp, outcome) = super::FAULT
+        .scope(std::cell::Cell::new(Default::default()), async {
+            let resp = next.run(req).await;
+            (resp, super::FAULT.with(std::cell::Cell::get))
+        })
+        .await;
+    let Some(fault) = outcome.fault else {
+        return resp;
+    };
+    if outcome.wrote {
+        let n = FAULT_ANSWERS[fault_index(fault)][1].fetch_add(1, Relaxed);
+        if n.is_multiple_of(100) {
+            eprintln!(
+                "{} after a committed change: the request keeps its own answer ({} so far)",
+                fault.code(),
+                n + 1
+            );
+        }
+        return resp;
+    }
+    FAULT_ANSWERS[fault_index(fault)][0].fetch_add(1, Relaxed);
+    replacement(fault, &path, &resp)
 }
 
 fn no_store(mut r: Response) -> Response {
@@ -245,9 +325,27 @@ fn reachable<T>(ping: &Result<T, String>) -> bool {
 
 fn check_ready(s: &HttpState) -> Ready {
     let backend = &s.shared.backend;
-    let ping_ok = reachable(&backend.counter_get("health.ping"));
+    let ping = backend.counter_get("health.ping");
+    // A full pool refuses the ping after the acquire timeout. Ask nothing more of it (a second
+    // refusal would make the probe take twice as long as it is allowed to): the database is there
+    // and busy, which is no reason to take the process out of rotation.
+    if matches!(&ping, Err(m) if Fault::of_message(m) == Some(Fault::Busy)) {
+        return Ready::Yes;
+    }
+    let ping_ok = ping.is_ok();
+    if !ping_ok {
+        return Ready::No("database unreachable");
+    }
     let status = obop_migrate::Migrator::new(backend.clone(), s.shared.ring.clone()).status();
     classify(ping_ok, status)
+}
+
+/// Is the main connection pool of this process full or has callers waiting? Then a probe that did
+/// not finish in time was queued behind work, not stuck on a dead database.
+fn pool_is_saturated() -> bool {
+    obop_storage::pool::stats()
+        .iter()
+        .any(|p| p.name == "main" && (p.waiting > 0 || p.in_use >= p.max_size))
 }
 
 /// `GET /readyz`: 200 when the database answers and its schema is compatible, else 503 with a
@@ -268,6 +366,7 @@ pub(crate) async fn readyz(State(s): State<Arc<HttpState>>) -> Response {
             .await
             {
                 Ok(r) => r,
+                Err(_) if pool_is_saturated() => Ready::Yes,
                 Err(_) => Ready::No("database did not answer in time"),
             };
             *s.ops.ready.lock().unwrap_or_else(|e| e.into_inner()) = Some((Instant::now(), r));
@@ -434,7 +533,7 @@ const POOL_SERIES: [(&str, &str, &str, PoolReading); 9] = [
 /// The connection pools of this process (D74): how full they are, how long callers waited, how
 /// often they were refused. Read from the pools' own counters; no connection is needed, so a
 /// saturated pool can still be looked at.
-fn render_pools(t: &mut String, o: &Ops) {
+fn render_pools(t: &mut String) {
     use std::fmt::Write;
     let pools = obop_storage::pool::stats();
     for (name, kind, help, read) in POOL_SERIES {
@@ -492,15 +591,17 @@ fn render_pools(t: &mut String, o: &Ops) {
     );
     let _ = writeln!(
         t,
-        "# HELP obop_storage_faults_total Requests answered 503 because the store was busy, unreachable or too slow."
+        "# HELP obop_storage_faults_total Requests that hit a storage fault, by fault and by answer: 503 (nothing had been changed) or kept (a change was already committed, so the request kept its own answer)."
     );
     let _ = writeln!(t, "# TYPE obop_storage_faults_total counter");
     for (i, name) in ["busy", "unavailable", "timeout"].iter().enumerate() {
-        let _ = writeln!(
-            t,
-            "obop_storage_faults_total{{fault=\"{name}\"}} {}",
-            o.faults[i].load(Relaxed)
-        );
+        for (j, answer) in ["503", "kept"].iter().enumerate() {
+            let _ = writeln!(
+                t,
+                "obop_storage_faults_total{{fault=\"{name}\",answer=\"{answer}\"}} {}",
+                FAULT_ANSWERS[i][j].load(Relaxed)
+            );
+        }
     }
 }
 
@@ -581,7 +682,7 @@ fn render(s: &HttpState) -> String {
     let _ = writeln!(t, "# TYPE obop_db_ping_seconds gauge");
     let _ = writeln!(t, "obop_db_ping_seconds {ping:.6}");
 
-    render_pools(&mut t, o);
+    render_pools(&mut t);
 
     let g = gauges(s);
     if let Some(n) = g.sessions {

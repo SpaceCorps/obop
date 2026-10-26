@@ -113,18 +113,43 @@ fn lookup(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Op
 
 #[test]
 fn the_defaults_are_the_documented_ones() {
+    // Every default of docs/DEPLOY.md as a literal, read from an empty environment (a default that
+    // drifts in code must fail here, not be compared with itself).
     let c = PgPoolConfig::from_lookup(&|_| None).unwrap();
     assert_eq!(c, PgPoolConfig::default());
     assert_eq!(c.size, 8);
-    assert_eq!(c.acquire_timeout, Duration::from_secs(2));
+    assert_eq!(c.acquire_timeout, Duration::from_millis(2_000));
+    assert_eq!(c.idle_timeout, Duration::from_secs(300));
+    assert_eq!(c.max_lifetime, Duration::from_secs(1_800));
+    assert_eq!(c.health_check_idle, Duration::from_millis(1_000));
+    assert_eq!(c.connect_timeout, Duration::from_millis(10_000));
+    assert_eq!(c.max_waiters, 256);
     assert_eq!(c.max_long, 4);
     assert_eq!(
         (c.point_ms, c.list_ms, c.aggregate_ms, c.batch_ms),
         (Some(5_000), Some(10_000), Some(15_000), Some(60_000))
     );
+    assert_eq!(c.idle_in_tx_ms, Some(120_000));
     assert_eq!(c.pooler, Pooler::Direct);
     assert_eq!((c.lock_size, c.blob_size), (8, 4));
     assert_eq!(c.lock_url, None);
+}
+
+#[test]
+fn a_database_opened_for_a_moment_does_not_take_the_process_settings() {
+    // The control plane seeds the database of each new instance through `open_with`; the
+    // `OBOP_DB_*` and `OBOP_LOCK_DATABASE_URL` variables describe the control plane's own
+    // database (a lock address that is another database's would be refused at start-up).
+    let c = PgPoolConfig::one_shot();
+    assert_eq!((c.size, c.lock_size, c.blob_size, c.max_long), (1, 1, 1, 1));
+    assert_eq!(c.lock_url, None);
+    assert_eq!(c.pooler, Pooler::Direct);
+    assert_eq!(c.acquire_timeout, PgPoolConfig::default().acquire_timeout);
+    // And it is what `open_with` takes: this one opens (a second database on the test server).
+    let (url, _db) = pg_db!();
+    let b = open_with(&url, Some(c)).unwrap();
+    b.insert("oneshot", "a", &fields(1)).unwrap();
+    assert_eq!(b.get("oneshot", "a").unwrap().unwrap()["n"], 1);
 }
 
 #[test]
@@ -183,6 +208,43 @@ fn a_bad_value_stops_start_up_and_names_the_variable_without_echoing_a_url() {
         let e = PgPoolConfig::from_lookup(&get).unwrap_err();
         assert!(e.contains(name), "{name}={value}: {e}");
     }
+    // A database address put into the wrong variable is not echoed (it carries a password).
+    for name in ["OBOP_DB_POOL_SIZE", "OBOP_DB_POOLER", "OBOP_DB_MAX_WAITERS"] {
+        let secret = "postgres://obop:hunter2-secret@db.internal/obop";
+        let get = |k: &str| (k == name).then(|| secret.to_string());
+        let e = PgPoolConfig::from_lookup(&get).unwrap_err();
+        assert!(
+            e.contains(name) && !e.contains("hunter2") && !e.contains("db.internal"),
+            "{e}"
+        );
+    }
+    // A pooler in transaction mode without a direct address for the locks is refused: locks taken
+    // through it exclude nobody.
+    let e = PgPoolConfig::from_lookup(&lookup(&[("OBOP_DB_POOLER", "transaction")])).unwrap_err();
+    assert!(e.contains("OBOP_LOCK_DATABASE_URL"), "{e}");
+    assert!(
+        PgPoolConfig::from_lookup(&lookup(&[
+            ("OBOP_DB_POOLER", "transaction"),
+            ("OBOP_LOCK_DATABASE_URL", "postgres://u@direct/db"),
+        ]))
+        .is_ok()
+    );
+    // The same refusal when the configuration is built by hand, before any connection is tried;
+    // and a lock address that is the pooler's own address is no direct address.
+    let url = "postgres://u:p@127.0.0.1:1/db";
+    let hand = |lock_url: Option<&str>| PgPoolConfig {
+        pooler: Pooler::Transaction,
+        lock_url: lock_url.map(str::to_string),
+        ..PgPoolConfig::default()
+    };
+    let Err(e) = Pg::connect_with(url, hand(None)) else {
+        panic!("a pooler without a lock address must be refused");
+    };
+    assert!(e.contains("OBOP_LOCK_DATABASE_URL"), "{e}");
+    let Err(e) = Pg::connect_with(url, hand(Some(url))) else {
+        panic!("the pooler's own address is no lock address");
+    };
+    assert!(e.contains("same address") && !e.contains(":p@"), "{e}");
     // The lock pool can never be larger than eight, the long-read lane never larger than the pool.
     let c = PgPoolConfig::from_lookup(&lookup(&[
         ("OBOP_DB_POOL_SIZE", "2"),
@@ -288,11 +350,27 @@ fn a_streaming_scan_holds_one_connection_and_nothing_else() {
     while scanning.load(Ordering::SeqCst) == 0 {
         std::thread::sleep(Duration::from_millis(5));
     }
+    // The scan holds exactly one connection of the main pool and nothing of the lock pool.
+    assert_eq!(
+        pg.main.stats().in_use,
+        1,
+        "the scan's connection and no other"
+    );
+    assert_eq!(pg.lock_pool.report().in_use, 0);
     let t = Instant::now();
     for i in 0..20 {
         assert_eq!(pg.get(&model, &format!("{i:03}")).unwrap().unwrap()["n"], i);
     }
     pg.insert(&model, "late", &fields(99)).unwrap();
+    assert_eq!(
+        pg.main.stats().in_use,
+        1,
+        "the others went back; the scan still holds its own"
+    );
+    assert!(
+        pg.main.stats().connections_opened <= 2,
+        "one connection for the scan, one for everything else"
+    );
     assert!(
         t.elapsed() < Duration::from_secs(2),
         "reads and writes went on while the scan was running: {:?}",
@@ -437,7 +515,7 @@ fn two_hundred_requests_on_a_pool_of_eight_refuse_the_surplus_within_the_acquire
 }
 
 #[test]
-fn a_full_queue_refuses_without_waiting_and_memory_follows_the_bound_not_the_load() {
+fn a_full_queue_refuses_without_waiting_and_parks_no_more_than_its_bound() {
     let _turn = serial();
     let (url, _db) = pg_db!();
     let cfg = PgPoolConfig {
@@ -732,6 +810,127 @@ fn time_limits_follow_the_command_class_and_never_leak_between_callers() {
         server_default,
         "RESET, not a left-over of the point class"
     );
+    // The same for a transaction and a snapshot of a class without a limit, run on a connection
+    // whose session still carries the point class's limit: `SET LOCAL ... TO DEFAULT`.
+    assert_eq!(get0(Class::Point), "1111ms");
+    let in_tx = pg0
+        .main
+        .tx(Class::List, |c| {
+            Ok(c.query_one("SHOW statement_timeout", &[])?
+                .get::<_, String>(0))
+        })
+        .unwrap();
+    assert_eq!(in_tx, server_default, "a transaction of an unlimited class");
+    assert_eq!(
+        get0(Class::Point),
+        "1111ms",
+        "and the session was not touched"
+    );
+    let in_snapshot = pg0
+        .main
+        .snapshot(Class::List, |tx| {
+            Ok(tx
+                .query_one("SHOW statement_timeout", &[])?
+                .get::<_, String>(0))
+        })
+        .unwrap();
+    assert_eq!(
+        in_snapshot, server_default,
+        "a snapshot of an unlimited class"
+    );
+    assert_eq!(
+        pg0.main.stats().connections_opened,
+        1,
+        "all on one connection"
+    );
+}
+
+#[test]
+fn a_cancelled_statement_is_recognised_by_its_code_not_by_the_words_of_the_server() {
+    let (url, _db) = pg_db!();
+    let pg = connect(&url, PgPoolConfig::default());
+    // A server whose messages are in another language (lc_messages) words a cancelled statement
+    // differently; what it always sends is SQLSTATE 57014.
+    fault::clear();
+    let e = pg
+        .main
+        .run(Class::Point, |c| {
+            c.batch_execute(
+                "DO $$ BEGIN RAISE EXCEPTION 'storniere Anfrage wegen Zeit\u{fc}berschreitung der Anfrage' USING ERRCODE = '57014'; END $$",
+            )?;
+            Ok(())
+        })
+        .unwrap_err();
+    assert_eq!(Fault::of_message(&e), Some(Fault::Timeout), "{e}");
+    assert_eq!(fault::take(), Some(Fault::Timeout));
+    // Another server error is neither a timeout nor an outage, and says what it was.
+    let e = pg
+        .main
+        .run(Class::Point, |c| {
+            c.batch_execute("DO $$ BEGIN RAISE EXCEPTION 'nope' USING ERRCODE = '23505'; END $$")?;
+            Ok(())
+        })
+        .unwrap_err();
+    assert!(
+        Fault::of_message(&e).is_none() && e.contains("23505") && e.contains("nope"),
+        "{e}"
+    );
+    assert_eq!(fault::take(), None);
+}
+
+#[test]
+fn batches_that_name_the_same_records_in_opposite_order_do_not_deadlock() {
+    let _turn = serial();
+    let (url, _db) = pg_db!();
+    // Two handles on one database and several threads on each: the same shape as one handle in
+    // two processes, and as the one process that used to serialise them behind one connection.
+    let a = open(&url).unwrap();
+    let b = open(&url).unwrap();
+    crate::shared_tests::concurrent_batches(a, b);
+}
+
+#[test]
+fn a_transaction_the_server_rolled_back_for_a_deadlock_is_run_again() {
+    let (url, _db) = pg_db!();
+    let pg = Arc::new(connect(&url, PgPoolConfig::default()));
+    let model = unique("deadlock");
+    pg.insert(&model, "p", &fields(0)).unwrap();
+    pg.insert(&model, "q", &fields(0)).unwrap();
+    // Two swaps that update the two records in opposite order with a pause between the two
+    // updates: the server finds the deadlock, rolls one of them back, and the pool runs it again.
+    let barrier = Arc::new(std::sync::Barrier::new(2));
+    let runs = Arc::new(AtomicUsize::new(0));
+    let handles: Vec<_> = [("p", "q"), ("q", "p")]
+        .into_iter()
+        .map(|(first, second)| {
+            let (pg, barrier, runs, model) =
+                (pg.clone(), barrier.clone(), runs.clone(), model.clone());
+            std::thread::spawn(move || {
+                pg.main.tx_retry(Class::Batch, |c| {
+                    let attempt = runs.fetch_add(1, Ordering::SeqCst);
+                    for (i, id) in [first, second].into_iter().enumerate() {
+                        c.execute(
+                            "UPDATE obop_record SET data = data || '{\"n\": 1}'::jsonb \
+                             WHERE model = $1 AND id = $2",
+                            &[&model, &id],
+                        )?;
+                        if i == 0 && attempt < 2 {
+                            // Both hold their first record before either asks for the second.
+                            barrier.wait();
+                            std::thread::sleep(Duration::from_millis(100));
+                        }
+                    }
+                    Ok(())
+                })
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap().unwrap();
+    }
+    assert!(runs.load(Ordering::SeqCst) >= 3, "one of the two ran again");
+    assert_eq!(pg.get(&model, "p").unwrap().unwrap()["n"], 1);
+    assert_eq!(pg.get(&model, "q").unwrap().unwrap()["n"], 1);
 }
 
 #[test]

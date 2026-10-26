@@ -123,12 +123,40 @@ fn number(
     match raw.parse::<u64>() {
         Ok(n) if (min..=max).contains(&n) => Ok(n),
         _ => Err(format!(
-            "{name} must be a whole number from {min} to {max} (got {raw:?})"
+            "{name} must be a whole number from {min} to {max} (got {})",
+            shown(&raw)
         )),
     }
 }
 
+/// A rejected value as it may appear in a message: short and not shaped like an address (a
+/// database URL put into the wrong variable carries a password).
+fn shown(raw: &str) -> String {
+    if raw.len() > 24 || raw.contains('@') || raw.contains("://") {
+        "a value that is not shown".into()
+    } else {
+        format!("{raw:?}")
+    }
+}
+
 impl PgPoolConfig {
+    /// The settings for a database the process opens once, for a moment, that is not the one it
+    /// serves from (the control plane seeding a new instance's database): one connection, and
+    /// nothing from the `OBOP_DB_*` or `OBOP_LOCK_DATABASE_URL` variables, which describe the
+    /// process's own database and would be applied to the wrong one.
+    pub fn one_shot() -> Self {
+        Self {
+            size: 1,
+            max_long: 1,
+            lock_size: 1,
+            blob_size: 1,
+            ..Self::default()
+        }
+    }
+
+    /// Why a pooler in transaction mode is refused without a direct address for the locks.
+    pub(crate) const NEEDS_LOCK_URL: &'static str = "OBOP_DB_POOLER=transaction needs OBOP_LOCK_DATABASE_URL: a session advisory lock belongs to one server session, which a transaction-mode pooler hands to somebody else between statements, so locks taken through it exclude nobody; give the lock connections a direct address of the same database";
+
     /// Read the settings from the process environment. A value that is not a number in range is
     /// an error that names the variable, so a typo stops the server at start-up.
     pub fn from_env() -> Result<Self, String> {
@@ -148,13 +176,17 @@ impl PgPoolConfig {
             Some(v) if v == "transaction" => Pooler::Transaction,
             Some(v) => {
                 return Err(format!(
-                    "OBOP_DB_POOLER must be \"direct\" or \"transaction\" (got {v:?})"
+                    "OBOP_DB_POOLER must be \"direct\" or \"transaction\" (got {})",
+                    shown(&v)
                 ));
             }
         };
         let lock_url = get("OBOP_LOCK_DATABASE_URL")
             .map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty());
+        if pooler == Pooler::Transaction && lock_url.is_none() {
+            return Err(Self::NEEDS_LOCK_URL.into());
+        }
         let max_long = number(get, "OBOP_DB_LONG_READS", (size as u64 / 2).max(1), 1, 64)? as usize;
         Ok(Self {
             size,
@@ -228,6 +260,14 @@ impl PgPoolConfig {
     }
 }
 
+/// `SET LOCAL statement_timeout` to the class's limit, or to the server's own value.
+fn local_limit(want: Option<u64>) -> String {
+    match want {
+        Some(ms) => format!("SET LOCAL statement_timeout = {ms}"),
+        None => "SET LOCAL statement_timeout TO DEFAULT".into(),
+    }
+}
+
 /// A connection with what the pool remembers about its session.
 pub(crate) struct Session {
     pub(crate) client: Client,
@@ -260,13 +300,12 @@ impl Session {
         Ok(())
     }
 
-    /// `BEGIN` with the limit for this transaction only, in one round trip.
+    /// `BEGIN` with the limit for this transaction only, in one round trip. A class without a
+    /// limit gets `DEFAULT`: the server's own value, whatever a single-statement call left on
+    /// this session before.
     fn begin(&mut self, want: Option<u64>, extra: &str) -> Result<(), postgres::Error> {
-        let mut sql = format!("BEGIN{extra}");
-        if let Some(ms) = want {
-            sql.push_str(&format!("; SET LOCAL statement_timeout = {ms}"));
-        }
-        self.client.batch_execute(&sql)
+        self.client
+            .batch_execute(&format!("BEGIN{extra}; {}", local_limit(want)))
     }
 
     fn rollback(&mut self) {
@@ -334,11 +373,12 @@ pub fn statement_timeouts() -> u64 {
     STATEMENT_TIMEOUTS.load(Relaxed)
 }
 
-/// The server cancelled the statement because of `statement_timeout`.
+/// The server cancelled the statement (SQLSTATE 57014, `query_canceled`). The message text is
+/// localised by the server's `lc_messages`, so only the code is trusted. obop sets no
+/// `lock_timeout` (that is 55P03) and never cancels another backend, so within the application a
+/// cancelled statement is a statement that ran into `statement_timeout`.
 fn is_statement_timeout(e: &postgres::Error) -> bool {
     e.code() == Some(&SqlState::QUERY_CANCELED)
-        && e.as_db_error()
-            .is_some_and(|d| d.message().contains("statement timeout"))
 }
 
 /// Errors the driver raises on the client side about one statement, with the connection still
@@ -384,7 +424,22 @@ pub(crate) fn describe(e: &postgres::Error) -> String {
         fault::note(Fault::Unavailable);
         return Fault::Unavailable.message(&e.to_string());
     }
-    e.to_string()
+    match e.as_db_error() {
+        // The driver's own text for a server error is only "db error"; the code and the message
+        // of the server (no detail, which may carry values) say what happened.
+        Some(d) => format!("db error (SQLSTATE {}): {}", d.code().code(), d.message()),
+        None => e.to_string(),
+    }
+}
+
+/// The server rolled the transaction back because it was part of a deadlock (40P01) or could not
+/// be serialised (40001): nothing of it was applied, so the whole transaction may be run again.
+pub(crate) fn rolled_back_for_retry(e: &PErr) -> bool {
+    let code_is_retryable = |c: &str| c == "40P01" || c == "40001";
+    match e {
+        PErr::Pg(e) => e.code().is_some_and(|c| code_is_retryable(c.code())),
+        PErr::Msg(m) => m.contains("SQLSTATE 40P01") || m.contains("SQLSTATE 40001"),
+    }
 }
 
 /// A checked-out connection with the pool's rules attached.
@@ -494,22 +549,29 @@ impl Lease {
             .isolation_level(postgres::IsolationLevel::RepeatableRead)
             .read_only(true)
             .start()?;
-        let mut set = String::new();
-        if let Some(ms) = want {
-            set.push_str(&format!("SET LOCAL statement_timeout = {ms};"));
-        }
+        let mut set = format!("{};", local_limit(want));
         if let Some(ms) = idle {
             set.push_str(&format!(
                 "SET LOCAL idle_in_transaction_session_timeout = {ms};"
             ));
         }
-        if !set.is_empty() {
-            tx.batch_execute(&set)?;
-        }
+        tx.batch_execute(&set)?;
         let v = f(&mut tx)?;
         tx.commit()?;
         Ok(v)
     }
+}
+
+/// How many more times a transaction the server rolled back for a deadlock is run.
+pub(crate) const MAX_REPEATS: u32 = 3;
+
+/// A short, slightly random pause before a rolled-back transaction is run again, so the two that
+/// collided do not collide again in step.
+pub(crate) fn repeat_pause(attempt: u32) {
+    let jitter = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::from(d.subsec_nanos()) % 15);
+    std::thread::sleep(Duration::from_millis(5 * u64::from(attempt) + jitter));
 }
 
 /// A pool of PostgreSQL connections for one purpose (the records, the blobs).
@@ -523,10 +585,18 @@ pub(crate) struct PgPool {
 /// noticed, and a name that shows in `pg_stat_activity`.
 pub(crate) fn tune(mut c: PgConnector, application: &str, cfg: &PgPoolConfig) -> PgConnector {
     let conf = c.config_mut();
-    conf.connect_timeout(cfg.connect_timeout);
+    // What the URL sets itself wins over the defaults of the pool.
+    if conf.get_connect_timeout().is_none() {
+        conf.connect_timeout(cfg.connect_timeout);
+    }
     conf.keepalives(true);
-    conf.keepalives_idle(Duration::from_secs(60));
-    conf.tcp_user_timeout(Duration::from_secs(30));
+    // The driver's own default idle time is two hours: a value other than that was chosen.
+    if conf.get_keepalives_idle() == Duration::from_secs(2 * 60 * 60) {
+        conf.keepalives_idle(Duration::from_secs(60));
+    }
+    if conf.get_tcp_user_timeout().is_none() {
+        conf.tcp_user_timeout(Duration::from_secs(30));
+    }
     if conf.get_application_name().is_none() {
         conf.application_name(application);
     }
@@ -633,6 +703,28 @@ impl PgPool {
         let mut lease = self.lease(long)?;
         let r = lease.transaction(class, f);
         lease.finish(r)
+    }
+
+    /// As [`PgPool::tx`] for a transaction that can be run again from its start: when the server
+    /// rolled it back for a deadlock (40P01) or a serialisation failure (40001) nothing of it was
+    /// applied, and it is run again, at most three more times after a short pause.
+    pub(crate) fn tx_retry<T>(
+        &self,
+        class: Class,
+        mut f: impl FnMut(&mut Client) -> PR<T>,
+    ) -> Result<T, String> {
+        let mut attempt = 0;
+        loop {
+            let mut lease = self.lease(false)?;
+            let r = lease.transaction(class, |c| f(c).map(|v| (v, true)));
+            if attempt < MAX_REPEATS && r.as_ref().is_err_and(rolled_back_for_retry) {
+                drop(lease);
+                attempt += 1;
+                repeat_pause(attempt);
+                continue;
+            }
+            return lease.finish(r);
+        }
     }
 
     /// A consistent view of the whole database for a long read, in the long-read lane.

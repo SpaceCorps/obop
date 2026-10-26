@@ -163,31 +163,43 @@ impl IntoResponse for AuthRejection {
 }
 
 tokio::task_local! {
-    /// The first storage fault (pool exhausted, database unreachable, statement timed out) that
-    /// any blocking part of the current request ran into; read by `ops::storage_faults` (D74).
-    pub(crate) static FAULT: std::cell::Cell<Option<obop_storage::fault::Fault>>;
+    /// What the blocking parts of the current request did to the store: the first storage fault
+    /// (pool exhausted, database unreachable, statement timed out) and whether a change was
+    /// committed; read by `ops::storage_faults` (D74).
+    pub(crate) static FAULT: std::cell::Cell<obop_storage::fault::Outcome>;
 }
 
 /// Storage backends block (the PostgreSQL client runs its own runtime, which panics if used on an
 /// async worker), so every handler that touches the dispatcher, the authenticator or the platform
-/// runs on the blocking pool. A handler runs on one thread from start to end, so a storage fault
-/// the pool noted on that thread (see `obop_storage::fault`) is handed to the request here, and
-/// the layer `ops::storage_faults` turns it into a 503 whatever the handler made of the error.
+/// runs on the blocking pool. A blocking part runs on one thread from start to end, so it is a
+/// request scope of `obop_storage::fault`: a storage fault noted in it, and a change committed in
+/// it, are handed to the request here (and a fault of an earlier part is handed to this one, so
+/// that it, too, changes nothing). The layer `ops::storage_faults` decides the answer.
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
-    let (out, fault) = tokio::task::spawn_blocking(move || {
-        obop_storage::fault::clear();
+    let earlier = FAULT.try_with(std::cell::Cell::get).unwrap_or_default();
+    let (out, outcome) = tokio::task::spawn_blocking(move || {
+        /// Leaves the scope also when the handler panics: the thread goes back to the pool.
+        struct Leave;
+        impl Drop for Leave {
+            fn drop(&mut self) {
+                obop_storage::fault::clear();
+            }
+        }
+        let _leave = Leave;
+        obop_storage::fault::begin_request(earlier.fault, earlier.wrote);
         let out = f();
-        (out, obop_storage::fault::take())
+        (out, obop_storage::fault::end_request())
     })
     .await
     .expect("handler panicked");
-    if let Some(fault) = fault {
-        let _ = FAULT.try_with(|c| {
-            if c.get().is_none() {
-                c.set(Some(fault));
-            }
-        });
-    }
+    let _ = FAULT.try_with(|c| {
+        let mut now = c.get();
+        if now.fault.is_none() {
+            now.fault = outcome.fault;
+        }
+        now.wrote |= outcome.wrote;
+        c.set(now);
+    });
     out
 }
 
@@ -345,15 +357,12 @@ pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
 
 /// Count every response, fallbacks included, for `/metrics`, and answer a storage fault with 503.
 pub(crate) fn instrument(app: Router, state: Arc<HttpState>) -> Router {
-    app.layer(axum::middleware::from_fn_with_state(
-        state.clone(),
-        ops::storage_faults,
-    ))
-    .layer(axum::middleware::from_fn_with_state(
-        state.clone(),
-        cors::layer,
-    ))
-    .layer(axum::middleware::from_fn_with_state(state, ops::track))
+    app.layer(axum::middleware::from_fn(ops::storage_faults))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            cors::layer,
+        ))
+        .layer(axum::middleware::from_fn_with_state(state, ops::track))
 }
 
 /// The back office single-page app, except that an unknown `/api/...` path answers JSON (agents
@@ -662,12 +671,15 @@ pub fn platform_router(api: Arc<dyn PlatformApi>, static_dir: Option<&str>) -> R
         Some(a) => r.merge(mfa::routes("/api/platform", a)),
         None => r,
     };
-    match static_dir {
+    let r = match static_dir {
         // The control plane serves the marketing site: real 404s, clean-URL redirects and
         // Markdown for agents (docs/site/SITE.md, "Server requirements").
         Some(dir) => r.fallback_service(website::service(dir.into())),
         None => r,
-    }
+    };
+    // The control plane's database is pooled too: a refused call is a 503 here as well (D74),
+    // not a 401 "invalid username or password" or a 404.
+    r.layer(axum::middleware::from_fn(ops::storage_faults))
 }
 
 /// The release feed instances read (D63): public, cacheable for a minute.

@@ -154,15 +154,20 @@ impl Consent {
 
 /// The consent records of a connection, newest first by id (ids are time-ordered UUIDv7).
 pub fn consents_of(backend: &dyn Backend, connection: &str) -> Vec<Consent> {
+    try_consents_of(backend, connection).unwrap_or_default()
+}
+
+/// As [`consents_of`], but a storage error is an error, not "no consent": a caller that must tell
+/// "withdrawn" from "could not look" (the delivery worker) uses this.
+pub fn try_consents_of(backend: &dyn Backend, connection: &str) -> Result<Vec<Consent>, String> {
     let mut v: Vec<Consent> = backend
-        .list(CONSENT)
-        .unwrap_or_default()
+        .list(CONSENT)?
         .iter()
         .filter(|(_, f)| str_of(f, "connection") == connection)
         .map(|(id, f)| Consent::from_fields(id, f))
         .collect();
     v.sort_by(|a, b| b.id.cmp(&a.id));
-    v
+    Ok(v)
 }
 
 /// The instance-wide switches (`egress_policy`, a single record).
@@ -192,9 +197,11 @@ impl Default for InstancePolicy {
 }
 
 impl InstancePolicy {
-    pub fn load(backend: &dyn Backend) -> Self {
-        match backend.get(EGRESS_POLICY, INSTANCE) {
-            Ok(Some(f)) => Self {
+    /// The policy, or the reason it could not be read. A policy that was never saved is the
+    /// default (flows allowed); a storage error is not that.
+    pub fn try_load(backend: &dyn Backend) -> Result<Self, String> {
+        Ok(match backend.get(EGRESS_POLICY, INSTANCE)? {
+            Some(f) => Self {
                 flows_enabled: f.get("flows_enabled").and_then(J::as_bool).unwrap_or(true),
                 eu_only: bool_of(&f, "eu_only"),
                 require_dpa: f.get("require_dpa").and_then(J::as_bool).unwrap_or(true),
@@ -205,8 +212,24 @@ impl InstancePolicy {
                     DEFAULT_RETENTION_DAYS,
                 ),
             },
-            _ => Self::default(),
+            None => Self::default(),
+        })
+    }
+
+    /// The policy that holds when it could not be read: nothing leaves and nothing is accepted
+    /// until it can be (D74: a busy database must not switch the operator's master switch off
+    /// "off", nor widen who may receive data).
+    pub fn closed() -> Self {
+        Self {
+            flows_enabled: false,
+            eu_only: true,
+            ..Self::default()
         }
+    }
+
+    /// The policy, failing closed ([`InstancePolicy::closed`]) when the store cannot be read.
+    pub fn load(backend: &dyn Backend) -> Self {
+        Self::try_load(backend).unwrap_or_else(|_| Self::closed())
     }
 }
 
@@ -252,6 +275,28 @@ mod tests {
 
     fn fields(v: J) -> Fields {
         v.as_object().unwrap().clone()
+    }
+
+    #[test]
+    fn a_policy_that_cannot_be_read_closes_the_gates_instead_of_opening_them() {
+        use obop_storage::testing::{Flaky, Mode};
+        // D74: a busy store is not "the operator never saved a policy".
+        let (flaky, db) = Flaky::memory();
+        let open = InstancePolicy::load(&*db);
+        assert!(
+            open.flows_enabled && !open.eu_only,
+            "never saved: the default"
+        );
+        flaky.set(Mode::Reads);
+        let closed = InstancePolicy::load(&*db);
+        assert!(
+            !closed.flows_enabled,
+            "nothing leaves while it cannot be read"
+        );
+        assert!(closed.eu_only);
+        assert!(InstancePolicy::try_load(&*db).is_err());
+        assert!(try_consents_of(&*db, "c").is_err(), "not 'no consent'");
+        assert!(consents_of(&*db, "c").is_empty());
     }
 
     #[test]

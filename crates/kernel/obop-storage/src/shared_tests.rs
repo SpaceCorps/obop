@@ -314,6 +314,88 @@ pub(crate) fn shared_contract(a: Arc<dyn Backend>, b: Arc<dyn Backend>, destruct
         a.export(5, &mut |_| Err("stop".into())).unwrap_err(),
         "stop"
     );
+
+    concurrent_batches(a, b);
+}
+
+/// Batches that run at the same moment, on one handle or two, behave as if they ran one after the
+/// other (D74: the PostgreSQL backend no longer serialises a process's calls on one connection,
+/// so it orders and repeats them itself).
+pub(crate) fn concurrent_batches(a: Arc<dyn Backend>, b: Arc<dyn Backend>) {
+    let model = unique("conc");
+    let put = |db: &Arc<dyn Backend>, id: &str| {
+        db.insert(&model, id, &fields(0)).unwrap();
+    };
+    put(&a, "x");
+    put(&a, "y");
+    let merge = |id: &str, n: i64| Op::Merge {
+        model: model.clone(),
+        id: id.into(),
+        patch: fields(n),
+    };
+    // Two kinds of batch name the same two records in opposite order. Taking row locks in the
+    // order of the steps would let two of them deadlock.
+    std::thread::scope(|s| {
+        for t in 0..6 {
+            let h = if t % 2 == 0 { a.clone() } else { b.clone() };
+            let (merge, model) = (&merge, &model);
+            s.spawn(move || {
+                for round in 0..25 {
+                    let ops = if t % 3 == 0 {
+                        vec![merge("x", round), merge("y", round)]
+                    } else {
+                        vec![
+                            merge("y", round),
+                            merge("x", round),
+                            Op::add(model, "x", "n", 0),
+                        ]
+                    };
+                    h.apply_checked(&ops)
+                        .unwrap_or_else(|e| panic!("thread {t} round {round}: {e}"));
+                }
+            });
+        }
+    });
+    // A counter created by whoever comes first: every increment counts, none is lost, no caller
+    // fails because another created the record at the same moment.
+    let ctr = Fields::new();
+    std::thread::scope(|s| {
+        for t in 0..6 {
+            let h = if t % 2 == 0 { a.clone() } else { b.clone() };
+            let (model, ctr) = (&model, &ctr);
+            s.spawn(move || {
+                for _ in 0..20 {
+                    h.apply_checked(&[Op::add(model, "counter", "n", 1).or_create(ctr.clone())])
+                        .unwrap_or_else(|e| panic!("thread {t}: {e}"));
+                }
+            });
+        }
+    });
+    assert_eq!(a.get(&model, "counter").unwrap().unwrap()["n"], 120);
+    // Several callers insert the same new record at the same moment: exactly one wins and the
+    // others are told the record exists (a conflict, not a storage failure).
+    let winners = AtomicUsize::new(0);
+    std::thread::scope(|s| {
+        for t in 0..6 {
+            let h = if t % 2 == 0 { a.clone() } else { b.clone() };
+            let (model, winners) = (&model, &winners);
+            s.spawn(move || {
+                let r = h.apply_checked(&[Op::Insert {
+                    model: model.clone(),
+                    id: "once".into(),
+                    fields: fields(t),
+                }]);
+                match r {
+                    Ok(()) => {
+                        winners.fetch_add(1, Ordering::SeqCst);
+                    }
+                    Err(ApplyError::Conflict { .. }) => {}
+                    Err(e) => panic!("thread {t}: a refusal was expected, not {e}"),
+                }
+            });
+        }
+    });
+    assert_eq!(winners.load(Ordering::SeqCst), 1);
 }
 
 #[test]

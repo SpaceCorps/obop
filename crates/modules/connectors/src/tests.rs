@@ -1315,6 +1315,45 @@ fn a_failing_receiver_is_retried_then_dead_lettered_and_a_withdrawal_stops_the_r
     assert_eq!(r.count(), before);
 }
 
+#[test]
+fn a_store_that_refuses_a_lookup_does_not_dead_letter_a_queued_delivery() {
+    use obop_storage::testing::{Flaky, Mode};
+    // D74: the connection is read while the pool is full. That is "later", not "the connection no
+    // longer exists": the delivery stays queued and goes out when the store answers.
+    let e = env();
+    seed_party(&e);
+    let r = Receiver::new(503);
+    enable(&e, "webhook_out", true);
+    let id = ready(&e, &admin(), &r);
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert_eq!(e.rt.queue.len(), 1);
+    let run = ok(&e, &admin(), "sync_run.list", json!({}))[0].clone();
+    assert_eq!(run["status"], "retrying");
+    let flaky = Flaky::new(e.s.backend());
+    let worker = Runtime::with_providers(
+        obop_storage::guarded(flaky.clone()),
+        e.d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: Some("http://127.0.0.1:8080".into()),
+        },
+        providers(),
+        None,
+    );
+    let at = obop_connectors::util::now() + 100_000;
+    flaky.refuse_model(obop_connectors::model::CONNECTION, Mode::Reads);
+    worker.process_queue(at);
+    flaky.refuse_model(obop_connectors::model::CONSENT, Mode::Reads);
+    worker.process_queue(at + 200);
+    flaky.refuse_model(obop_connectors::model::EGRESS_POLICY, Mode::Reads);
+    worker.process_queue(at + 400);
+    flaky.allow_models();
+    let run = ok(&e, &admin(), "sync_run.get", json!({"id": run["id"]}));
+    assert_eq!(run["status"], "retrying", "not dead-lettered: {run}");
+    assert!(!e.rt.queue.is_empty(), "the delivery is still queued");
+}
+
 /// A second `Runtime` over the same store, as a restarted or a second server process has.
 fn another_process(e: &Env) -> Arc<Runtime> {
     Runtime::with_providers(
