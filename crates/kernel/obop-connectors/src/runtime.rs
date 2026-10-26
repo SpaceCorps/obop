@@ -4,7 +4,7 @@
 //! returns messages that are safe to show: no credential, token, URL query or payload is ever put
 //! in an error.
 
-use obop_commands::{Dispatcher, Principal, PrincipalKind, Surface, Value, Vault};
+use obop_commands::{CallError, Dispatcher, Principal, PrincipalKind, Surface, Value, Vault};
 use obop_storage::fault::Fault;
 use obop_storage::{Backend, Fields};
 use serde_json::{Map, Value as J, json};
@@ -249,9 +249,16 @@ impl Runtime {
         model: &str,
         ids: Option<&[String]>,
     ) -> Result<Vec<Map<String, J>>, String> {
-        // "Later" when the owner cannot be looked up, not "the owner may not read".
-        self.try_owner_groups(c)?;
-        let p = self.reader(c, model);
+        // "Later" when the owner cannot be looked up, not "the owner may not read": and the groups
+        // that were just looked up are the ones that read (a second, lenient lookup that is
+        // refused would read as "no groups" and as a refusal of the owner).
+        let held = self.try_owner_groups(c)?;
+        let p = self.reader_for(&c.id, &held, model);
+        // A read the store refused is "later" as well, whatever the call wrapped it in.
+        let refused = |e: CallError| match e {
+            CallError::Handler(m) if Fault::is_transient(&m) => m,
+            _ => format!("the owner of this connection may not read {model}"),
+        };
         let mut out = Vec::new();
         let mut v = Vault::new();
         match ids {
@@ -266,9 +273,7 @@ impl Runtime {
                             &format!("{model}.get"),
                             &Value::map([("id", Value::text(id))]),
                         )
-                        .map_err(|_| {
-                            format!("the owner of this connection may not read {model}")
-                        })?;
+                        .map_err(refused)?;
                     if let J::Object(o) = j(&r.value) {
                         out.push(o);
                     }
@@ -279,7 +284,7 @@ impl Runtime {
                 let r = self
                     .dispatcher
                     .call(Surface::Rest, &p, &mut v, &format!("{model}.list"), &input)
-                    .map_err(|_| format!("the owner of this connection may not read {model}"))?;
+                    .map_err(refused)?;
                 if let J::Array(a) = j(&r.value) {
                     out.extend(a.into_iter().filter_map(|x| x.as_object().cloned()));
                 }
@@ -717,8 +722,15 @@ impl Runtime {
             .map(|(id, _)| id)
             .collect();
         for id in conns {
-            // A refusal is already in the flow log; an event has nobody to tell.
-            let _ = self.send(&id, model, Some(&[record.to_string()]), command, "event");
+            // A refusal of the flow is already in the flow log; an event has nobody to tell. A
+            // busy store is not a refusal of the flow and is not logged as one: the event is tried
+            // again (nothing was sent: the gate fails closed), and reported when it still cannot go.
+            if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
+                self.send(&id, model, Some(&[record.to_string()]), command, "event")
+            }) && Fault::is_transient(&e)
+            {
+                eprintln!("connectors: the event {command} was not delivered to {id}: {e}");
+            }
         }
     }
 

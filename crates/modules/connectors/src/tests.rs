@@ -1361,6 +1361,42 @@ fn subscribed_events_deliver_the_record_minimised() {
 }
 
 #[test]
+fn an_event_met_by_one_refused_call_is_delivered_once_not_lost_and_not_twice() {
+    use obop_storage::{fault, testing::Flaky};
+    // The event of a command is delivered from a worker with nobody to answer. A flow the store
+    // cannot record is not released any more and is no longer logged as a refusal of the flow, so
+    // an event that met a busy store at the gate would have gone with no trace at all: it is tried
+    // again. A refusal after the delivery must not send it twice. One refused call at each
+    // position of the delivery in turn.
+    for skip in 0..14 {
+        let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+        let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+        let r = Receiver::new(200);
+        enable(&e, "webhook_out", true);
+        let c = ok(
+            &e,
+            &admin(),
+            "connection.create",
+            json!({
+            "name": "Won deals", "provider": "webhook_out",
+            "config": json!({"url": r.url(), "events": "lead.mark_won"}).to_string(),
+            "credentials": json!({"signing_secret": SECRET}).to_string(),
+            "field_allowlist": json!({"lead": ["title"]}).to_string()}),
+        );
+        let id = c["id"].as_str().unwrap().to_string();
+        give_basis(&e, &admin(), &id);
+        ok(&e, &admin(), "connection.connect", json!({"id": id}));
+        let lead = ok(&e, &admin(), "lead.create", json!({"title": "Big deal"}));
+        let lead_id = lead["id"].as_str().unwrap().to_string();
+        flaky.refuse_call_after(skip);
+        e.rt.handle_event("lead.mark_won", &lead_id);
+        flaky.allow_models();
+        fault::clear();
+        assert_eq!(r.count(), 1, "skip {skip}: delivered once");
+    }
+}
+
+#[test]
 fn a_failing_receiver_is_retried_then_dead_lettered_and_a_withdrawal_stops_the_retries() {
     let e = env();
     seed_party(&e);
