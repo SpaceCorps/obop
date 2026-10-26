@@ -947,7 +947,7 @@ fn the_locks_of_a_thousand_row_batch_in_the_server_are_the_stripes_not_the_recor
     assert_eq!(held as usize, keys.len(), "{held}");
     // The number the record documents, not the constant of the code under test.
     assert!(held <= 128, "{held}");
-    assert!(BATCH_LOCK_STRIPES <= 128);
+    const { assert!(BATCH_LOCK_STRIPES <= 128) };
     // A batch of three records holds one to three.
     let few: Vec<Op> = (0..3)
         .map(|i| Op::Insert {
