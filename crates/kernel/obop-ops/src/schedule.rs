@@ -329,7 +329,9 @@ pub fn catch_up(
     let catalog = Catalog::new(&**backend);
     let (mut copied, mut failed) = (0usize, Vec::new());
     for b in catalog.backups()? {
-        if !b.verified || !is_ours(&b, settings) {
+        // Only scheduled backups are caught up: they are the ones retention holds back until a
+        // copy exists. A restore point somebody asked for is copied when its run had a sink.
+        if !b.verified || b.reason != "scheduled" || !is_ours(&b, settings) {
             continue;
         }
         let data = PathBuf::from(&b.path);

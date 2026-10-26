@@ -799,6 +799,17 @@ fn the_module_upgrade_gate_of_the_binary_refuses_without_a_directory_and_backs_u
     .unwrap();
     let strict = [("OBOP_MIGRATION_GATES", "strict"), ("OBOP_BACKUP_KEY", KEY)];
     ok(&run(&strict, &["modules", "install", &v1, "--db", &url]));
+    // A step over a model that holds no records rewrites nothing and is not gated: give it one.
+    {
+        let b = obop_storage::open(&url).unwrap();
+        let f = |v: serde_json::Value| v.as_object().unwrap().clone();
+        b.insert(
+            "rvx_item",
+            "1",
+            &f(serde_json::json!({"title": "a", "plate": "AB-1"})),
+        )
+        .unwrap();
+    }
     // Strict, no directory: refused, nothing changed, and the text says whom to ask.
     let o = run(&strict, &["modules", "install", &v2, "--db", &url]);
     let t = text(&o);

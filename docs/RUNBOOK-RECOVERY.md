@@ -1,7 +1,7 @@
 # Recovery runbook: losing data, a host or a key
 
 - **Status:** working document, 2026-10-25. Decision record: D73 in [DECISIONS.md](DECISIONS.md). The commands are in [DEPLOY.md](DEPLOY.md) ("Backups", "Upgrades"); this page is the order to use them in, who does what, and what to decide on the way.
-- **What it covers:** one instance database (the "main" plane) and the keys around it. Other stores that may hold your data (an object store for uploaded files beyond `OBOP_BLOB_DIR`, a reverse proxy, DNS) need their own lines in your copy of this page.
+- **What it covers:** one instance database (the "main" plane: one store of your data that you back up, drill and attest on its own; see the glossary) and the keys around it. Other stores that may hold your data (an object store for uploaded files beyond `OBOP_BLOB_DIR`, a reverse proxy, DNS) need their own lines in your copy of this page.
 - **What it is not:** a promise. The recovery point and the recovery time below are **measured by your drills on your data and your hardware**, written into the table by the person who ran them. Nothing in the product guarantees a number, and none of the numbers in this repository was measured against a managed PostgreSQL service.
 
 ## 1. The numbers this runbook is judged by
@@ -51,8 +51,8 @@ Write the names and numbers into your copy. A runbook with a role nobody holds i
 Forward-only migrations: the way back is the verified backup that came before (D59, D73).
 
 1. Stop every process that uses the database. Note the failed run: `obop migrate status --db URL` (the ledger rows, with the backup file name and any restore point).
-2. `obop backup verify FILE` (the key must be configured; exit 3 and `restore_key_required` mean it is not).
-3. `obop migrate rollback --db URL --from FILE --reason "what went wrong, in one line" --yes`. The database is replaced by the backup in one transaction; the reason, the backup and what the discarded ledger said are recorded in the ledger and the security log.
+2. `obop backup verify FILE` (the key must be configured; exit 3 and `restore_key_required` mean it is not; exit 4 and `backup_not_sealed` mean the file is plain although a key is configured: do not trust it unless you know where it has been, then `--allow-plain`. **Only restore a file that says AUTHENTICATED**, or a `.obbk` you took yourself: a plain pair proves nothing about who wrote it.)
+3. `obop migrate rollback --db URL --from FILE --reason "what went wrong, in one line" --yes`. The migration lock is taken and the database is replaced by the backup; the reason, the backup and what the discarded ledger said are recorded in the ledger and the security log in the same transaction as the restore (a backup of another database is refused unless `--other-database`; if an uploaded file cannot be written afterwards the command says `restore_files_failed`, exit 5: the records are in, run it again with `--force`).
 4. Start the obop **version that matches the backup's schema** (the old binary or image). `obop migrate status` agrees with it; `obop storage check`.
 5. Decide with the release owner whether the new version may be tried again. The next `obop migrate run` is gated again (backup, plan, rehearsal): rehearse the fix first.
 
@@ -95,22 +95,22 @@ A copy you have not restored is not a backup. Each drill is recorded (`obop dril
 
 | Drill | How often | How | Passes when |
 |---|---|---|---|
-| Logical restore from the off-host copy | monthly | fetch the newest backup and manifest from the copy to a scratch host; `deploy/restore-drill.sh FILE` (a scratch PostgreSQL, a server on the copy) with `DRILL_RECORD_IN` | every check passes; the time is written to section 1 |
+| Logical restore from the off-host copy | monthly | fetch the newest backup and manifest from the copy to a scratch host; `deploy/restore-drill.sh FILE` (a scratch PostgreSQL, a server on the copy) with `DRILL_RECORD_IN` (recorded after the server step: a server that did not answer is recorded as FAILED) | every check passes; the time is written to section 1 |
 | Point-in-time | quarterly | on a fresh server: write a marker row at T0, write more rows, restore to T0 + 1 s, expect the marker and none of the later rows; also a restore point 34 days back | the marker is there, the later rows are not, `obop storage check` and the drill's checks pass |
 | Loss of primary | twice a year | section 6 from the off-host copy alone, on a new host, with a stopwatch | serving, with the measured recovery time and the age of the newest backup (recovery point) in section 1 |
-| Failure injection | each time the backup job or key handling changes (CI does it on every change) | the wrong key (`restore_key_required`, exit 3), a corrupt copy, a truncated copy: `obop drill` must fail for each, loudly | all three fail the drill |
+| Failure injection | each time the backup job or key handling changes (CI does it on every change) | the wrong key (`restore_key_required`, `obop drill` itself exits 3), a plain copy where a key is configured (exit 4), a corrupt copy, a truncated copy: `obop drill` must fail for each, loudly | all three fail the drill |
 
 After each drill: the record exists (`obop storage show`), the table in section 1 is updated, and anything that surprised you becomes a line in this page.
 
 ## 9. After any recovery
 
-- The ledger and the log tell the story: `obop migrate status`, the security log (`migration_rollback`).
+- The ledger and the log tell the story: `obop migrate status`, the security log (`migration_rollback`, `migration_run`, `storage_attested`, `drill_recorded`, each under the operating system user that ran the command).
 - Re-take a backup and drill it; check the schedule is on; check the alerts (DEPLOY.md, "Alerts") are quiet.
 - Write down what was lost, for how long, and what would have prevented it.
 
 ## 10. Not delivered / not tried
 
-- A resumable chunked restore (required above 10 GB). The restore is one transaction.
+- A resumable chunked restore (required above 10 GB). The records of a restore are one transaction; the uploaded files follow it.
 - Erasures recorded after a backup are not replayed on restore (there is no erasure ledger yet): after a restore, re-apply erasures from your own records before going live.
 - Recovery of other stores (object storage beyond the blob directory, other planes).
 - Any managed PostgreSQL service, the Sliplane cell, a real object store with object lock, a real pgBackRest or wal-g: the settings and checks were written from their documentation and run against the stock `postgres:17` image and a fake server.
