@@ -343,6 +343,25 @@ impl<'a> Catalog<'a> {
 mod tests {
     use super::*;
 
+    /// `obop-migrate` cannot import these names (it sits below this crate), so it lists them: the
+    /// list must hold every model the operator commands write before a database's first start.
+    #[test]
+    fn the_models_that_do_not_make_a_database_old_are_the_ones_operator_commands_write() {
+        for m in [
+            BACKUP_MODEL,
+            DRILL_MODEL,
+            ATTESTATION_MODEL,
+            obop_migrate::ledger::PLAN_MODEL,
+            "security_event",
+        ] {
+            assert!(
+                obop_migrate::OPERATOR_MODELS.contains(&m),
+                "{m} is written by an operator command but would make a new database look old"
+            );
+        }
+        assert!(obop_migrate::OPERATOR_MODELS.contains(&obop_migrate::META_MODEL));
+    }
+
     fn backup(id: &str, at: u64, verified: bool) -> BackupRecord {
         BackupRecord {
             id: id.into(),

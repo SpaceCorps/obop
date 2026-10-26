@@ -867,3 +867,111 @@ fn the_module_upgrade_gate_of_the_binary_refuses_without_a_directory_and_backs_u
     ));
     assert!(t.contains("no backup was taken"), "{t}");
 }
+
+/// What the operator commands leave in the security log, and the exit status a gate gives for a
+/// backup it cannot take: the lines exist, name the operating system user, and a refusal for a
+/// plain backup where a key is configured is status 4, like `verify` and `restore`.
+#[test]
+fn operator_commands_write_security_log_lines_and_a_refused_gate_has_the_stable_status() {
+    let dir = Dir::new("events");
+    let url = old_db(&dir, "ev.db");
+    let key = [("OBOP_BACKUP_KEY", KEY), ("OBOP_SECRET_KEY", KEY)];
+    let events = |url: &str| -> Vec<(String, String)> {
+        obop_storage::open(url)
+            .unwrap()
+            .list("security_event")
+            .unwrap()
+            .into_iter()
+            .map(|(_, f)| {
+                (
+                    f["kind"].as_str().unwrap_or_default().to_string(),
+                    f["actor"].as_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect()
+    };
+    // A plain backup of the old database, and a gate that wants a sealed one: status 4.
+    let plain_dir = dir.s("plain");
+    ok(&run(&[], &["backup", "--db", &url, "--out", &plain_dir]));
+    let plain = only_file(&dir.p("plain"), ".gz");
+    ok(&run(&key, &["migrate", "plan", "--db", &url]));
+    let o = run(
+        &key,
+        &[
+            "migrate",
+            "run",
+            "--gates",
+            "strict",
+            "--backup",
+            plain.to_str().unwrap(),
+            "--db",
+            &url,
+        ],
+    );
+    assert_eq!(o.status.code(), Some(4), "{}", text(&o));
+    assert!(text(&o).contains("backup_not_sealed"), "{}", text(&o));
+    // ... and a sealed backup the gate cannot open (no key) is status 3.
+    let sealed_dir = dir.s("sealed");
+    ok(&run(&key, &["backup", "--db", &url, "--out", &sealed_dir]));
+    let sealed = only_file(&dir.p("sealed"), ".obbk");
+    let o = run(
+        &[],
+        &[
+            "migrate",
+            "run",
+            "--gates",
+            "strict",
+            "--backup",
+            sealed.to_str().unwrap(),
+            "--db",
+            &url,
+        ],
+    );
+    assert_eq!(o.status.code(), Some(3), "{}", text(&o));
+    // A migration run, an attestation and a recorded drill each leave one line.
+    ok(&run(
+        &key,
+        &["migrate", "run", "--gates", "relaxed", "--db", &url],
+    ));
+    ok(&run(
+        &key,
+        &[
+            "storage",
+            "attest",
+            "--db",
+            &url,
+            "--host",
+            "db1",
+            "--provider",
+            "Acme",
+            "--mechanism",
+            "volume encryption, AES-256",
+            "--custody",
+            "KMS",
+            "--readers",
+            "KMS only",
+            "--evidence",
+            "ticket 1",
+        ],
+    ));
+    ok(&run(
+        &key,
+        &[
+            "drill",
+            sealed.to_str().unwrap(),
+            "--migrate",
+            "--record-in",
+            &url,
+        ],
+    ));
+    let seen = events(&url);
+    for kind in ["migration_run", "storage_attested", "drill_recorded"] {
+        let who: Vec<&String> = seen
+            .iter()
+            .filter(|(k, _)| k == kind)
+            .map(|(_, a)| a)
+            .collect();
+        assert_eq!(who.len(), 1, "{kind}: {seen:?}");
+        assert!(who[0].starts_with("operator"), "{kind}: {}", who[0]);
+    }
+}

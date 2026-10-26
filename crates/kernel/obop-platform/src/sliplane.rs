@@ -541,8 +541,13 @@ impl Provisioner for Sliplane {
             // Add to the environment, never replace it: the secrets stay as they are.
             "--env".into(),
             "OBOP_AUTO_MIGRATE=1".into(),
-            "--merge-env".into(),
         ]);
+        // Instances created before the control plane knew its backup directory get it with the
+        // next upgrade (D73): merged in like the line above, so nothing else is replaced.
+        if let Some(d) = &self.cfg.backup_dir {
+            upd.extend(["--env".into(), format!("OBOP_BACKUP_DIR={d}")]);
+        }
+        upd.push("--merge-env".into());
         if let Some(c) = &self.cfg.registry_credential {
             upd.extend(["--registry-credential-id".into(), c.clone()]);
         }
@@ -1098,6 +1103,54 @@ mod tests {
         assert!(
             seen[0].contains(IMG) && seen.last().unwrap().contains("answer"),
             "{seen:?}"
+        );
+    }
+
+    /// An instance made before the control plane knew its backup directory gets it with its next
+    /// upgrade, merged into the environment like the rest (nothing replaced).
+    #[test]
+    fn an_upgrade_also_hands_a_configured_backup_directory_to_older_instances() {
+        let live = format!(r#"{{"status":"live","image":"{IMG}"}}"#);
+        let runner = Arc::new(FakeRunner::default());
+        runner.reply.lock().unwrap().extend(vec![
+            Ok(CREATED.into()),
+            Ok("{}".into()),
+            Ok("{}".into()),
+            Ok(LIVE.into()),
+            Ok(live),
+        ]);
+        let mut c = cfg(Source::Image("ghcr.io/spacecorps/obop:old".into()));
+        c.backup_dir = Some("/data/backups".into());
+        let s = Sliplane::new(c, runner.clone(), Arc::new(FakeCell::default()))
+            .with_health(Arc::new(Healthy(Mutex::default(), Ok(()))));
+        s.upgrade("acme", "service_9", IMG, &|_| {}).unwrap();
+        let update = runner.calls.lock().unwrap()[1].join(" ");
+        assert!(
+            update.contains("--env OBOP_BACKUP_DIR=/data/backups"),
+            "{update}"
+        );
+        assert!(update.contains("--merge-env") && !update.contains("--replace-env"));
+        // Without a configured directory nothing is added.
+        let runner2 = Arc::new(FakeRunner::default());
+        let live = format!(r#"{{"status":"live","image":"{IMG}"}}"#);
+        runner2.reply.lock().unwrap().extend(vec![
+            Ok(CREATED.into()),
+            Ok("{}".into()),
+            Ok("{}".into()),
+            Ok(LIVE.into()),
+            Ok(live),
+        ]);
+        let s2 = Sliplane::new(
+            cfg(Source::Image("ghcr.io/spacecorps/obop:old".into())),
+            runner2.clone(),
+            Arc::new(FakeCell::default()),
+        )
+        .with_health(Arc::new(Healthy(Mutex::default(), Ok(()))));
+        s2.upgrade("acme", "service_9", IMG, &|_| {}).unwrap();
+        assert!(
+            !runner2.calls.lock().unwrap()[1]
+                .join(" ")
+                .contains("OBOP_BACKUP_DIR")
         );
     }
 

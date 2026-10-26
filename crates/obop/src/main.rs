@@ -135,7 +135,7 @@ const USAGE: &str = "usage: obop <command>
                                                 reading each copy back, and apply retention to the scheduled ones (default 35 daily,
                                                 12 monthly, none older than 400 days). `serve` runs the same job on its own timer
                                                 with OBOP_BACKUP_SCHEDULE=24h. A --copy-to that is the --out directory is refused
-  backup list | prune [--dry-run] [--no-sinks] [--db URL]
+  backup list | prune [--dry-run] [--no-sinks] [--keep-daily N] [--keep-weekly N] [--keep-monthly N] [--max-age-days N] [--copy-to DIR]... [--db URL]
                                                 what the instance recorded having taken; apply retention now (--dry-run prints the
                                                 plan of the real run; without the sink configured nothing recorded as copied off the
                                                 host is removed unless --no-sinks)
@@ -145,7 +145,7 @@ const USAGE: &str = "usage: obop <command>
                                                 writes a receipt signed with the server key for `migrate run --rehearsal` (it names the
                                                 database the backup came from and the engine it ran on; give --scratch a database of
                                                 the same kind as production to time its statements)
-  migrate run [--dry-run] [--gates strict|relaxed] [--backup FILE | --backup-dir DIR] [--rehearsal RECEIPT] [--window] [--disk-ok]
+  migrate run [--dry-run] [--gates strict|relaxed] [--backup FILE | --backup-dir DIR] [--rehearsal RECEIPT] [--window] [--disk-ok] [--allow-plain]
                                                 on PostgreSQL (strict) refuses unless a verified backup of this database under 24
                                                 hours old exists (one is taken into --backup-dir / OBOP_BACKUP_DIR), `migrate plan`
                                                 stored this plan, the disk has room, a rehearsal on a backup of this database passed

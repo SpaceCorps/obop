@@ -198,7 +198,7 @@ fn describe(m: &backup::Manifest, authenticated: bool, keys: &Keys) -> String {
         (None, _) => format!(
             ", plain: checksums detect damage but do not authenticate or hide anything{}",
             if keys.can_seal() {
-                " (restores fine; take a new backup to get a sealed one)"
+                " (accepted only because --allow-plain says you vouch for it; take a new backup to get a sealed one)"
             } else {
                 ""
             }

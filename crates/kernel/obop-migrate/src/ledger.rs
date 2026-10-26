@@ -100,7 +100,7 @@ pub struct Entry {
     /// `core`, or the id of the package.
     pub module: String,
     /// `rust` (a step of obop-migrate), `package` (a `[[migration]]` of a package) or `sql`
-    /// (reserved for SQL packages, OBR-DAT-029).
+    /// (reserved for packages that ship SQL).
     pub kind: String,
     /// The step within its module: `0002`, or `0.1.0->0.2.0#1`.
     pub step: String,

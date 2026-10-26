@@ -1,7 +1,7 @@
 //! `obop migrate status|verify|plan|run|rehearse|rollback` (B5, D59, D73): the schema version, the
 //! migration ledger, and the gates around running a migration (OBR-DAT-051, OBR-DAT-053).
 
-use crate::backup_cli::backup_keys_for;
+use crate::backup_cli::{backup_keys_for, exit_for};
 use crate::ops::{
     Exit, db_url, fail, has, open_existing, operator_name, ring_for, server_info, take, usage,
 };
@@ -174,9 +174,12 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
                 steps: None,
             };
             let gate_mode = gate.options.mode;
-            let ran = gate
-                .run(dry, &mut |l| eprintln!("{l}"))
-                .map_err(|e| fail(&format!("error: {e}")))?;
+            let ran = gate.run(dry, &mut |l| eprintln!("{l}")).map_err(|e| {
+                // The same stable statuses as `backup verify` and `restore`: a gate refused for a
+                // key that is not configured (3) or a plain backup where a key is (4).
+                eprintln!("error: {e}");
+                exit_for(obop_ops::backup::code_in(&e))
+            })?;
             if ran.plan.is_empty() {
                 println!("{}", st.describe());
                 return Ok(());

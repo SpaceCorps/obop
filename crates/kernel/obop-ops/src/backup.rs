@@ -67,6 +67,14 @@ const BATCH: usize = 1000;
 const CIPHER: &str = "chacha20poly1305-stream-v1";
 const MAC_PURPOSE: &str = "backup-manifest";
 
+/// The stable code named anywhere in a message (a gate lists the failing checks, each with the
+/// error of its own), if there is one.
+pub fn code_in(e: &str) -> Option<&'static str> {
+    [KEY_REQUIRED, NOT_SEALED, FILES_FAILED]
+        .into_iter()
+        .find(|c| e.contains(c))
+}
+
 /// The code at the start of an error of this module (`restore_key_required: ...`), if it has one.
 pub fn error_code(e: &str) -> Option<&'static str> {
     [KEY_REQUIRED, NOT_SEALED, FILES_FAILED]
@@ -480,7 +488,22 @@ impl Manifest {
                         .collect()
                 })
                 .unwrap_or_default(),
-            database_id: j["database_id"].as_str().map(String::from),
+            database_id: match j.get("database_id") {
+                None | Some(J::Null) => None,
+                Some(J::String(d))
+                    if !d.is_empty()
+                        && d.len() <= 64
+                        && d.bytes().all(|c| c.is_ascii_hexdigit()) =>
+                {
+                    Some(d.clone())
+                }
+                Some(_) => {
+                    return Err(
+                        "the manifest's database_id is not a database id (hex, at most 64 characters): not a backup this obop wrote"
+                            .into(),
+                    );
+                }
+            },
             backup_id: j["backup_id"].as_str().map(String::from),
             encryption,
             mac: j["mac"].as_str().map(String::from),
@@ -1456,7 +1479,7 @@ pub fn restore_with_rows(
         };
         let files_failed = |id: &str, e: String| {
             format!(
-                "{FILES_FAILED}: the {} records are restored, but the uploaded file {id} could not be written: {e}. Run the restore again with --force to write the files",
+                "{FILES_FAILED}: the {} records are restored, but the uploaded file {id} could not be written: {e}. Run the same command again to write the files (a restore needs --force then, because the records are already in; a rollback does not)",
                 n.saturating_sub(extra_len)
             )
         };

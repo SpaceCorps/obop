@@ -28,6 +28,12 @@ const TABLE: &str = "obop_package";
 /// D73): the binary plugs in the automatic verified backup, so the data steps of a module
 /// upgrade never run without a way back. It runs with the module lock held and before any write;
 /// an `Err` stops the operation with nothing changed.
+/// Whether a model holds records, for deciding that a data step rewrites something: a count that
+/// could not be read is taken to mean it does (the gate fails closed, never open).
+pub(crate) fn holds_records(count: Result<usize, String>) -> bool {
+    count.map_or(true, |n| n > 0)
+}
+
 pub trait MigrationGate: Send + Sync {
     fn before(&self, what: &GateRequest) -> Result<GateReceipt, String>;
 }
@@ -228,7 +234,7 @@ impl Installer {
             let steps: Vec<migrate::Step> = migrate::plan_data(&om, &step.manifest, &count)
                 .steps
                 .into_iter()
-                .filter(|s| count(&s.model) > 0)
+                .filter(|s| holds_records(self.backend.count(&s.model)))
                 .collect();
             if !steps.is_empty() {
                 out.push((
@@ -1195,7 +1201,7 @@ impl Installer {
                 "module.rollback",
                 if inverse
                     .iter()
-                    .any(|s| self.backend.count(&s.model).unwrap_or(0) > 0)
+                    .any(|s| holds_records(self.backend.count(&s.model)))
                 {
                     vec![format!("{id} {current_v}->{}", prev.module.version)]
                 } else {
@@ -1203,7 +1209,7 @@ impl Installer {
                 },
                 inverse
                     .iter()
-                    .filter(|s| self.backend.count(&s.model).unwrap_or(0) > 0)
+                    .filter(|s| holds_records(self.backend.count(&s.model)))
                     .map(|s| format!("{id}: {}", s.summary()))
                     .collect(),
                 by,

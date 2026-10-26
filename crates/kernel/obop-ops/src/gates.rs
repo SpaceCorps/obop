@@ -250,20 +250,28 @@ pub struct BackupRef {
     pub id: String,
     pub path: PathBuf,
     pub age_seconds: u64,
+    /// The backup's database id was compared with this database's and matched. False when
+    /// neither has an id (both predate ids): the backup could not be tied to this database.
+    pub identity_checked: bool,
 }
 
-/// Whether the backup and the database it is used for are the same database: `Ok` with a note
-/// when the answer is "not checked" (neither has an id: a database from before ids), `Err` when
-/// they differ or the backup cannot be tied to this database.
-fn same_database(backup: &Option<String>, target: &Option<String>) -> Result<(), String> {
+/// The first characters of a database id, for messages (by characters, never by bytes).
+fn short(id: &str) -> String {
+    id.chars().take(8).collect()
+}
+
+/// Whether the backup and the database it is used for are the same database. `Ok(true)`: both
+/// carry an id and they are equal. `Ok(false)`: neither has an id (a database from before ids),
+/// so nothing was compared. `Err` when they differ or the backup cannot be tied to this database.
+fn same_database(backup: &Option<String>, target: &Option<String>) -> Result<bool, String> {
     match (backup, target) {
-        (Some(b), Some(t)) if b == t => Ok(()),
+        (Some(b), Some(t)) if b == t => Ok(true),
         (Some(b), Some(t)) => Err(format!(
             "it is a backup of another database (id {}), this database is {}",
-            &b[..b.len().min(8)],
-            &t[..t.len().min(8)]
+            short(b),
+            short(t)
         )),
-        (None, None) => Ok(()),
+        (None, None) => Ok(false),
         (None, Some(_)) => Err(
             "it carries no database id (it was made before this database was named), so it cannot be tied to this database: take a new one with `obop backup`"
                 .into(),
@@ -356,7 +364,7 @@ impl Gate {
             return Err("the backup is from a newer schema than this build".into());
         }
         let target = self.migrator().instance_id()?;
-        same_database(&v.manifest.database_id, &target)
+        let identity_checked = same_database(&v.manifest.database_id, &target)
             .map_err(|e| format!("the backup {}: {e}", file.display()))?;
         Ok(BackupRef {
             id: file
@@ -369,6 +377,7 @@ impl Gate {
                 .unwrap_or_default(),
             path: file.to_path_buf(),
             age_seconds: age,
+            identity_checked,
         })
     }
 
@@ -383,6 +392,7 @@ impl Gate {
                 id: b.id,
                 path: PathBuf::from(b.path),
                 age_seconds: self.clock.now().saturating_sub(b.created_at),
+                identity_checked: true,
             });
         }
         let blobs: Option<&dyn Blobs> = self.blobs.as_deref();
@@ -398,6 +408,7 @@ impl Gate {
             id: o.backup.id.clone(),
             path: PathBuf::from(&o.backup.path),
             age_seconds: 0,
+            identity_checked: true,
         })
     }
 
@@ -522,7 +533,9 @@ impl Gate {
         // Backup.
         let (level, detail) = match (&o.backup_file, &o.backup_dir) {
             (Some(f), _) => match self.existing_backup(f) {
-                Ok(b) => (Level::Pass, format!("{} is verified, of this database and {} old", b.id, human(b.age_seconds))),
+                Ok(b) if b.identity_checked => (Level::Pass, format!("{} is verified, of this database and {} old", b.id, human(b.age_seconds))),
+                // Neither the backup nor the database has an id yet: nothing says it is of this one.
+                Ok(b) => (Level::Warn, format!("{} is verified and {} old, but neither it nor this database has an id (both predate ids), so it could not be tied to this database: make sure it is this database's own; the next run names the database", b.id, human(b.age_seconds))),
                 Err(e) => (gated(o.mode, true), e),
             },
             (None, Some(d)) => (Level::Pass, format!("a verified backup will be taken into {} before the first step (or the one a failed attempt already took is used again)", d.display())),
@@ -572,15 +585,23 @@ impl Gate {
                         Err("the rehearsal of this plan FAILED".into())
                     } else if self.clock.now().saturating_sub(r.at) > RECEIPT_MAX_AGE {
                         Err(format!("the receipt is {} old; rehearse again", human(self.clock.now().saturating_sub(r.at))))
-                    } else if let Err(e) = same_database(&r.database_id, &target_id) {
-                        Err(format!("the rehearsal was made on a backup that is not of this database ({e}); rehearse a backup of this database"))
                     } else {
-                        Ok(r)
+                        same_database(&r.database_id, &target_id)
+                            .map(|checked| (r.clone(), checked))
+                            .map_err(|e| format!("the rehearsal was made on a backup that is not of this database ({e}); rehearse a backup of this database"))
                     }
                 }),
         };
         match rehearsed {
-            Ok(r) => {
+            Ok((r, checked)) => {
+                if !checked {
+                    add(
+                        &mut v,
+                        "rehearsal_identity",
+                        Level::Warn,
+                        "neither the rehearsed backup nor this database has an id (both predate ids): the receipt could not be tied to this database; the next run names the database",
+                    );
+                }
                 add(
                     &mut v,
                     "rehearsal",
@@ -1200,8 +1221,8 @@ pub fn rollback(
         (Some(b), Some(t)) if b != t && !other_database => {
             return Err(format!(
                 "the backup is of another database (id {}), this database is {}. A rollback replaces this database with its own earlier state; pass --other-database if you mean to replace it with a copy of another",
-                &b[..b.len().min(8)],
-                &t[..t.len().min(8)]
+                short(b),
+                short(t)
             ));
         }
         _ => {}

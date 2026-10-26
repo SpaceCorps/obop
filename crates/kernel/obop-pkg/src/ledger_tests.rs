@@ -228,3 +228,13 @@ fn the_gate_is_not_asked_when_the_models_of_the_data_steps_hold_no_records() {
     assert!(e.contains("there is no place for a backup"), "{e}");
     assert_eq!(version_of(&inst, "upd"), "0.1.0");
 }
+
+/// A model whose record count cannot be read is taken to hold records: the backup gate fails
+/// closed, never open.
+#[test]
+fn a_count_that_cannot_be_read_counts_as_records_for_the_gate() {
+    use crate::installer::holds_records;
+    assert!(holds_records(Err("the database went away".into())));
+    assert!(holds_records(Ok(3)));
+    assert!(!holds_records(Ok(0)));
+}

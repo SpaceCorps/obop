@@ -423,7 +423,7 @@ fn on_sqlite_the_same_checks_only_warn_and_the_run_goes_ahead() {
 }
 
 #[test]
-fn a_held_lock_a_newer_database_a_drifted_ledger_and_a_missing_window_each_stop_the_run() {
+fn a_held_lock_a_newer_database_and_a_drifted_ledger_each_stop_the_run() {
     let dir = Dir::new("stops");
     let (b, url) = old_db(&dir);
     let clock = Arc::new(FakeClock::at(T0));
@@ -1280,4 +1280,69 @@ fn the_ledger_and_the_gates_work_on_postgresql_when_a_server_is_given() {
         .batch_execute(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)"))
         .unwrap();
     r.unwrap();
+}
+
+/// Two databases that both predate ids cannot be compared: the gate does not pretend it did, and
+/// does not refuse either (that would block every upgrade of an old database): it warns.
+#[test]
+fn a_backup_and_a_database_that_both_predate_ids_are_not_called_compared() {
+    let dir = Dir::new("noids");
+    let (b, url) = old_db(&dir);
+    let clock = Arc::new(FakeClock::at(T0));
+    let bk = backup_now(&b, &dir, "old", &clock);
+    let mut g = gate(&b, &url, &clock, Mode::Strict);
+    g.options.backup_file = Some(bk.clone());
+    plan_and_store(&g);
+    let (_, c) = g.preflight().unwrap();
+    assert_eq!(
+        check(&c, "backup").level,
+        Level::Warn,
+        "{}",
+        check(&c, "backup").detail
+    );
+    assert!(check(&c, "backup").detail.contains("could not be tied"));
+    // A receipt of the same unnamed pair says so too.
+    rehearse_to_receipt(&g, &bk, &dir.p("r.json"), None);
+    g.options.receipt = Some(dir.p("r.json"));
+    let (_, c) = g.preflight().unwrap();
+    assert_eq!(check(&c, "rehearsal_identity").level, Level::Warn);
+    // Once the database is named, the same unnamed backup is refused.
+    Migrator::new(b.clone(), ring())
+        .ensure_instance_id()
+        .unwrap();
+    let (_, c) = g.preflight().unwrap();
+    assert_eq!(check(&c, "backup").level, Level::Fail);
+}
+
+/// Ids in messages are cut by characters: a manifest cannot make a message panic, and a manifest
+/// whose database id is not a database id is not a backup this obop wrote.
+#[test]
+fn a_database_id_is_cut_by_characters_and_a_manifest_with_a_foreign_one_is_refused() {
+    assert_eq!(
+        short("\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}")
+            .chars()
+            .count(),
+        8
+    );
+    assert_eq!(short("ab"), "ab");
+    let dir = Dir::new("foreignid");
+    let (b, _) = old_db(&dir);
+    Migrator::new(b.clone(), ring())
+        .ensure_instance_id()
+        .unwrap();
+    let clock = Arc::new(FakeClock::at(T0));
+    let bk = backup_now(&b, &dir, "named", &clock);
+    let manifest = PathBuf::from(format!("{}.manifest.json", bk.display()));
+    let mut j: J = serde_json::from_str(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+    for bad in [
+        J::from("\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}\u{e9}"),
+        J::from(7),
+        J::from("g".repeat(33)),
+        J::from("a".repeat(65)),
+    ] {
+        j["database_id"] = bad.clone();
+        std::fs::write(&manifest, j.to_string()).unwrap();
+        let e = backup::verify_with(&bk, &keys()).unwrap_err();
+        assert!(e.contains("not a database id"), "{bad}: {e}");
+    }
 }
