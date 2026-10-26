@@ -828,6 +828,7 @@ fn load(c: &mut Client, corpus: &[Option<String>], seed: u64) -> Vec<Row> {
         corpus.len()
     );
     let mut rows = Vec::new();
+    let mut unreadable = 0;
     for row in c
         .query("SELECT n, id, data::text FROM obop_parity ORDER BY n", &[])
         .unwrap()
@@ -839,6 +840,7 @@ fn load(c: &mut Client, corpus: &[Option<String>], seed: u64) -> Vec<Row> {
             Err(_) => {
                 // A document `serde_json` cannot read (a number beyond a double) cannot be a
                 // record of this system either; as far as the oracle goes the field is empty.
+                unreadable += 1;
                 None
             }
         };
@@ -848,6 +850,7 @@ fn load(c: &mut Client, corpus: &[Option<String>], seed: u64) -> Vec<Row> {
             v,
         });
     }
+    eprintln!("keyexpr_parity: {unreadable} documents hold a number that serde_json cannot read");
     rows
 }
 
