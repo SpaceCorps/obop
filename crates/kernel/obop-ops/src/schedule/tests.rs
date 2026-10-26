@@ -55,6 +55,23 @@ fn settings(d: &Dir) -> Settings {
 }
 
 #[test]
+fn two_runs_in_the_same_second_leave_two_backups() {
+    // A module update takes a backup before it and its rollback takes one before that, within the
+    // same second on a fast machine: the second must not be refused for taking the first's name.
+    let d = Dir::new("same-second");
+    let b = db();
+    let clock = FakeClock::at(START);
+    let s = settings(&d);
+    let first = take(&b, None, 2, &s, "pre-update", &clock).unwrap().backup;
+    let second = take(&b, None, 2, &s, "pre-rollback", &clock)
+        .unwrap()
+        .backup;
+    assert_ne!(first.id, second.id);
+    assert!(Path::new(&first.path).exists() && Path::new(&second.path).exists());
+    assert_eq!(Catalog::new(&*b).backups().unwrap().len(), 2);
+}
+
+#[test]
 fn a_run_backs_up_verifies_records_copies_and_proves_the_copy() {
     let d = Dir::new("run");
     let b = db();
