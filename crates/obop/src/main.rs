@@ -751,6 +751,21 @@ fn commands(o: &Opts) -> Exit {
 }
 
 fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
+    let (value, denied) = call_json(o, model, command, kv)?;
+    println!("{}", serde_json::to_string_pretty(&value).unwrap());
+    if !denied.is_empty() {
+        println!("withheld: {}", denied.join(", "));
+    }
+    Ok(())
+}
+
+/// `obop call`: the answer as JSON and the names of the fields withheld from it.
+fn call_json(
+    o: &Opts,
+    model: &str,
+    command: &str,
+    kv: &[&str],
+) -> Result<(serde_json::Value, Vec<String>), ExitCode> {
     let app = open_app(o)?;
     let p = principal(&app, o)?;
     let id = names::from_cli(&[model, command]).ok_or(ExitCode::from(2))?;
@@ -797,16 +812,7 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
         .dispatcher
         .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
     {
-        Ok(r) => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&r.value.to_json()).unwrap()
-            );
-            if !r.denied.is_empty() {
-                println!("withheld: {}", r.denied.join(", "));
-            }
-            Ok(())
-        }
+        Ok(r) => Ok((r.value.to_json(), r.denied.clone())),
         Err(e) => Err(fail(&format!("error: {e:?}"))),
     }
 }

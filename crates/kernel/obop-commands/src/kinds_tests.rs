@@ -22,6 +22,7 @@ struct Rig {
     d: Arc<Dispatcher>,
     p: String,
     who: Principal,
+    store: Store,
 }
 
 fn m(pairs: Vec<(&str, Value)>) -> Value {
@@ -191,7 +192,7 @@ fn each(f: impl Fn(&Rig)) {
             }
         }
         let who = Principal::user(&format!("u-{p}"), &[U]);
-        f(&Rig { d, p, who });
+        f(&Rig { d, p, who, store });
     }
 }
 
@@ -227,6 +228,17 @@ impl Rig {
     }
     fn create(&self, model: &str, pairs: Vec<(&str, Value)>) -> String {
         text(get(&self.ok(model, "create", m(pairs)), "id"))
+    }
+    /// Write a field of a stored record behind the commands' back, as an older version of the
+    /// package or a bad restore could have left it.
+    fn corrupt(&self, model: &str, id: &str, field: &str, value: serde_json::Value) {
+        let patch = [(field.to_string(), value)].into_iter().collect();
+        assert!(
+            self.store
+                .backend()
+                .update(&format!("{}_{model}", self.p), id, &patch)
+                .unwrap()
+        );
     }
     fn read(&self, model: &str, id: &str) -> Value {
         self.ok(model, "get", m(vec![("id", t(id))]))

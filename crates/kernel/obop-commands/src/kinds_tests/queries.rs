@@ -317,6 +317,54 @@ fn decimal_aggregates_match_an_i128_oracle() {
 }
 
 #[test]
+fn a_measure_asked_for_twice_is_refused_and_a_value_wider_than_its_field_is_not_cut() {
+    each(|r| {
+        let a = r.create("item", vec![("name", t("a")), ("price", t("1.50"))]);
+        r.create("item", vec![("name", t("b")), ("price", t("2.25"))]);
+        let sum = |ops: &[(&str, &str)]| {
+            r.call(
+                "item",
+                "search",
+                m(vec![("aggregate", m(vec![("measures", measures(ops))]))]),
+            )
+        };
+        // Two averages of one field at different digits would share the name avg:price, and the
+        // second would overwrite the first: asking is refused instead.
+        let twice = Value::List(vec![
+            m(vec![("op", t("avg")), ("field", t("price")), ("scale", Value::Int(1))]),
+            m(vec![("op", t("avg")), ("field", t("price")), ("scale", Value::Int(3))]),
+        ]);
+        let e = r.err(
+            "item",
+            "search",
+            m(vec![("aggregate", m(vec![("measures", twice)]))]),
+        );
+        assert!(e.contains("avg:price") && e.contains("twice"), "{e}");
+        let ok = sum(&[("sum", "price"), ("avg", "price")]).unwrap().value;
+        let g = &list(get(&ok, "groups"))[0];
+        assert_eq!(text(get(get(g, "measures"), "sum:price")), "3.75");
+        // A value with more digits than the field keeps (the scale was cut without rewriting the
+        // stored text) is an error, not a sum of numbers cut to fit.
+        r.corrupt("item", &a, "price", serde_json::json!("1.509"));
+        for ops in [
+            [("sum", "price")],
+            [("min", "price")],
+            [("max", "price")],
+        ] {
+            match sum(&ops) {
+                Err(CallError::Handler(e)) => {
+                    assert!(e.contains("more than the 2 fractional digits"), "{e}");
+                    assert!(e.contains(ops[0].0) && e.contains("1.509"), "{e}");
+                }
+                other => panic!("{ops:?}: {other:?}"),
+            }
+        }
+        // Counting needs no digits.
+        assert!(sum(&[("count", "")]).is_ok());
+    });
+}
+
+#[test]
 fn aggregate_input_for_decimals_is_validated() {
     each(|r| {
         let bad = |a: Value| r.err("item", "search", m(vec![("aggregate", a)]));

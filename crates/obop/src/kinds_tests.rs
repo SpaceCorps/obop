@@ -112,6 +112,103 @@ async fn fixture() -> Fx {
     }
 }
 
+/// A package whose decimals have the awkward shapes: whole numbers, nothing before the point,
+/// one digit before it, and each of them with and without a rounding mode.
+const SHAPES: &str = r#"
+[module]
+id = "shapes"
+version = "0.1.0"
+name = "Shapes"
+summary = "Decimals of every awkward shape."
+description = "Decimal fields of several precisions and scales, for the examples and patterns the surfaces print."
+author = "Test"
+license = "Apache-2.0"
+homepage = "https://example.com/shapes"
+keywords = ["decimal"]
+categories = ["productivity"]
+maturity = "beta"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
+
+[[model]]
+name = "shapes_box"
+description = "One of each shape"
+read_group = "base.user"
+write_group = "base.user"
+
+  [[model.field]]
+  name = "whole"
+  description = "Five digits, none after the point"
+  class = "none"
+  kind = "decimal"
+  precision = 5
+  scale = 0
+
+  [[model.field]]
+  name = "fraction"
+  description = "Nothing before the point"
+  class = "none"
+  kind = "decimal"
+  precision = 2
+  scale = 2
+
+  [[model.field]]
+  name = "narrow"
+  description = "One digit before the point"
+  class = "none"
+  kind = "decimal"
+  precision = 3
+  scale = 2
+
+  [[model.field]]
+  name = "whole_rounding"
+  description = "Whole numbers, rounded half even when imported"
+  class = "none"
+  kind = "decimal"
+  precision = 4
+  scale = 0
+  round = "half_even"
+
+  [[model.field]]
+  name = "rounding"
+  description = "Two decimals, rounded half up when imported"
+  class = "none"
+  kind = "decimal"
+  precision = 8
+  scale = 2
+  round = "half_up"
+"#;
+
+/// (field, precision, scale, rounds on import) of the fields of [`SHAPES`].
+const SHAPE_FIELDS: [(&str, u8, u8, bool); 5] = [
+    ("whole", 5, 0, false),
+    ("fraction", 2, 2, false),
+    ("narrow", 3, 2, false),
+    ("whole_rounding", 4, 0, true),
+    ("rounding", 8, 2, true),
+];
+
+/// A canonical decimal of scale 4 written with one more fractional digit, and what rounding that
+/// half up (away from zero at the half) gives, worked out on the digits and not by the parser.
+fn round_half_up_from_one_more_digit(base: &str, digit: u64) -> (String, String) {
+    let negative = base.starts_with('-');
+    let mut units: u128 = base
+        .chars()
+        .filter(char::is_ascii_digit)
+        .collect::<String>()
+        .parse()
+        .unwrap();
+    if digit >= 5 {
+        units += 1;
+    }
+    let s = format!("{units:05}");
+    let (int, frac) = s.split_at(s.len() - 4);
+    let sign = if negative && units != 0 { "-" } else { "" };
+    (format!("{base}{digit}"), format!("{sign}{int}.{frac}"))
+}
+
 /// xorshift64*
 struct Rng(u64);
 impl Rng {
@@ -311,16 +408,22 @@ fn cli_import_and_call_round_trip_decimals_and_instants() {
             .list("ledger_entry")
             .unwrap()
     };
-    // obop import: 1,000 generated rows in one file; ratio has three digits too many for
-    // scale 4 on every fifth row and rounds half up because the field says so.
+    // obop import: 1,000 generated rows in one file; ratio has one digit too many for scale 4 on
+    // every fifth row and is rounded half up, because the field says so.
     let mut rng = Rng(99);
     let mut csv = String::from("memo,amount,ratio,weight,booked_at\n");
     let mut want = Vec::new();
     for i in 0..1000 {
         let (a, w) = (rng.decimal(12, 2), rng.decimal(24, 8));
-        let ratio = rng.decimal(9, 4);
+        let base = rng.decimal(9, 4);
+        let (given, ratio) = if i % 5 == 0 {
+            let digit = rng.next() % 10;
+            round_half_up_from_one_more_digit(&base, digit)
+        } else {
+            (base.clone(), base)
+        };
         csv.push_str(&format!(
-            "cli-{i},{a},{ratio},{w},2026-03-29T03:30:00+02:00\n"
+            "cli-{i},{a},{given},{w},2026-03-29T03:30:00+02:00\n"
         ));
         want.push((format!("cli-{i}"), a, ratio, w));
     }
@@ -397,6 +500,56 @@ fn cli_import_and_call_round_trip_decimals_and_instants() {
         .collect();
     amounts.sort();
     assert_eq!(amounts, ["-0.07", "12.50", "999999999.99"]);
+    // The aggregate options of search are reachable from the command line: an average of a
+    // decimal at three digits per ISO week of the instance zone, and a sum per year.
+    let (answer, _) = crate::call_json(
+        &o,
+        "ledger_entry",
+        "search",
+        &[r#"aggregate={"group_by":[{"field":"booked_at","bucket":"iso_week"}],"measures":[{"op":"count"},{"op":"avg","field":"amount","scale":3},{"op":"sum","field":"amount"}]}"#],
+    )
+    .unwrap();
+    let groups = answer["groups"].as_array().unwrap();
+    // The thousand imported rows are on Sunday 2026-03-29 (ISO week 13 in every zone), the three
+    // called ones on Sunday 2026-10-25 (week 43), and the rounding row has no instant.
+    assert_eq!(groups.len(), 3, "{answer}");
+    let week13 = groups
+        .iter()
+        .find(|g| g["key"]["booked_at"] == "2026-W13")
+        .unwrap_or_else(|| panic!("{answer}"));
+    assert_eq!(week13["count"], 1000);
+    assert_eq!(
+        groups
+            .iter()
+            .find(|g| g["key"]["booked_at"] == "2026-W43")
+            .map(|g| g["count"].clone()),
+        Some(3.into())
+    );
+    let avg = week13["measures"]["avg:amount"].as_str().unwrap();
+    assert_eq!(avg.split_once('.').map(|(_, f)| f.len()), Some(3), "{avg}");
+    assert!(week13["measures"]["sum:amount"].is_string());
+    let (yearly, _) = crate::call_json(
+        &o,
+        "ledger_entry",
+        "search",
+        &[r#"aggregate={"group_by":[{"field":"booked_at","bucket":"year"}],"measures":[{"op":"max","field":"amount"}]}"#],
+    )
+    .unwrap();
+    assert_eq!(yearly["groups"][0]["key"]["booked_at"], "2026");
+    assert!(
+        crate::call_json(
+            &o,
+            "ledger_entry",
+            "search",
+            &[r#"aggregate={"group_by":[],"measures":[{"op":"avg","field":"amount"},{"op":"avg","field":"amount"}]}"#],
+        )
+        .is_err(),
+        "a measure asked for twice is refused"
+    );
+    assert!(
+        crate::call_json(&o, "ledger_entry", "search", &["aggregate={nope"]).is_err(),
+        "text that is not JSON is not an aggregate"
+    );
     // And a bad one is an error, with nothing written.
     assert!(crate::call(&o, "ledger_entry", "create", &["memo=bad", "amount=1e3"]).is_err());
     assert!(
@@ -541,27 +694,8 @@ async fn openapi_and_mcp_describe_decimals_as_strings_and_instants_as_date_time(
         props["share"]["readOnly"], true,
         "a computed decimal is read-only"
     );
-    // The regular expression really is the language of the canonical text.
-    let re_ok = |s: &str| -> bool {
-        // ^-?(0|[1-9][0-9]{0,9})(\.[0-9]{1,2})?$, written out
-        let b = s.strip_prefix('-').unwrap_or(s);
-        let (i, fr) = b.split_once('.').map_or((b, ""), |(i, f)| (i, f));
-        let int_ok = i == "0"
-            || (!i.is_empty()
-                && !i.starts_with('0')
-                && i.len() <= 10
-                && i.bytes().all(|c| c.is_ascii_digit()));
-        let frac_ok = !b.contains('.')
-            || (1..=2).contains(&fr.len()) && fr.bytes().all(|c| c.is_ascii_digit());
-        int_ok && frac_ok
-    };
-    assert!(
-        re_ok("12.50")
-            && re_ok("-0.07")
-            && re_ok("9999999999.99")
-            && !re_ok("01.5")
-            && !re_ok("1.234")
-    );
+    // That the pattern is the language of the parser is checked against the parser itself, over
+    // every shape, in obop-values (pattern_tests).
     // MCP: the same shape in the tool schema.
     let tools = obop_mcp::schema::tools(&f.app.dispatcher, &f.who);
     let create = tools
@@ -591,6 +725,83 @@ async fn openapi_and_mcp_describe_decimals_as_strings_and_instants_as_date_time(
     for needle in ["iso_week", "\"zone\"", "\"avg\"", "half_even"] {
         assert!(text.contains(needle), "{needle}");
     }
+}
+
+/// Every example the surfaces print is a value the server takes, in the spelling it answers with;
+/// and a row of bulk_create allows the extra digits that the field rounds away.
+#[tokio::test]
+async fn openapi_and_mcp_examples_are_values_the_server_takes_and_bulk_rows_allow_rounding() {
+    let f = fixture().await;
+    f.app.installer.install(SHAPES, "upload", "test").unwrap();
+    let taken = |text: &str, p: u8, s: u8, what: &str| {
+        let d = obop_values::Decimal::parse_for(text, p, s, None)
+            .unwrap_or_else(|e| panic!("{what}: {text:?} is refused: {e}"));
+        assert_eq!(d.to_string(), text, "{what}: written the way answers are");
+    };
+    let (s, doc) = send(&f.r, "GET", Some(&f.ada), "/api/openapi.json", json!({})).await;
+    assert_eq!(s, 200);
+    let props = &doc["components"]["schemas"]["shapes_box"]["properties"];
+    let tools = obop_mcp::schema::tools(&f.app.dispatcher, &f.who);
+    let tool = |name: &str| {
+        tools
+            .iter()
+            .find(|t| t["name"] == name)
+            .unwrap_or_else(|| panic!("{name}"))
+    };
+    let create = &tool("shapes_box__create")["inputSchema"]["properties"];
+    let rows_of = |schema: &J| schema["properties"]["rows"]["items"]["properties"].clone();
+    let bulk_openapi = rows_of(
+        &doc["paths"]["/api/shapes_box/bulk_create"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"],
+    );
+    let bulk_mcp = rows_of(&tool("shapes_box__bulk_create")["inputSchema"]);
+    for (name, p, s, rounds) in SHAPE_FIELDS {
+        let what = format!("{name} decimal({p}, {s})");
+        let example = props[name]["example"].as_str().unwrap_or_else(|| panic!("{what}"));
+        taken(example, p, s, &format!("OpenAPI {what}"));
+        // The MCP description quotes the example it was built from.
+        let description = create[name]["description"].as_str().unwrap();
+        assert!(
+            description.contains(&format!("\"{example}\"")),
+            "{what}: {description}"
+        );
+        // The row of a bulk call: the schema of create, or any digits where the field rounds.
+        for (surface, rows) in [("OpenAPI", &bulk_openapi), ("MCP", &bulk_mcp)] {
+            let pattern = rows[name]["pattern"].as_str().unwrap();
+            assert_eq!(
+                pattern.contains("+)?$"),
+                rounds,
+                "{surface} bulk row of {what}: {pattern}"
+            );
+            if !rounds {
+                assert_eq!(pattern, props[name]["pattern"].as_str().unwrap());
+            }
+        }
+    }
+    // The shapes that used to print a spelling the server refuses.
+    assert_eq!(props["whole"]["example"], "12");
+    assert_eq!(props["fraction"]["example"], "0.33");
+    assert_eq!(props["narrow"]["example"], "1.33");
+    // The csv text says what a cell may hold now that decimals and instants exist.
+    let csv = bulk_csv_description(&tool("shapes_box__bulk_create")["inputSchema"]);
+    for needle in ["decimal", "datetime", "rounds on import"] {
+        assert!(csv.contains(needle), "MCP csv: {needle} in {csv}");
+    }
+    assert!(!csv.contains("Whole numbers only"), "{csv}");
+    let csv = bulk_csv_description(
+        &doc["paths"]["/api/shapes_box/bulk_create"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"],
+    );
+    for needle in ["decimal", "datetime", "rounds on import"] {
+        assert!(csv.contains(needle), "OpenAPI csv: {needle} in {csv}");
+    }
+}
+
+fn bulk_csv_description(schema: &J) -> String {
+    schema["properties"]["csv"]["description"]
+        .as_str()
+        .unwrap()
+        .to_string()
 }
 
 #[tokio::test]

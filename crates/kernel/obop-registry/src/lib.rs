@@ -985,6 +985,26 @@ mod tests {
                 .unwrap(),
             "^-?(0|[1-9][0-9]{0,4})$"
         );
+        // The example in the description is a value of the shape, in every shape (it used to
+        // be `12.` for a whole number and `12.33` where only one digit is left of the point).
+        for (p, s, example) in [
+            (5, 0, "12"),
+            (1, 0, "1"),
+            (2, 2, "0.33"),
+            (3, 2, "1.33"),
+            (10, 2, "12.33"),
+            (38, 12, "12.333333333333"),
+        ] {
+            let k = FieldKind::decimal(p, s, None).unwrap();
+            assert!(
+                k.describe().contains(&format!("\"{example}\"")),
+                "decimal({p}, {s}): {}",
+                k.describe()
+            );
+            let parsed = obop_values::Decimal::parse_for(example, p, s, None)
+                .unwrap_or_else(|e| panic!("decimal({p}, {s}) example {example}: {e}"));
+            assert_eq!(parsed.to_string(), example);
+        }
         for (p, s) in [(0, 0), (39, 2), (10, 13), (2, 3)] {
             assert!(FieldKind::decimal(p, s, None).is_none(), "{p},{s}");
         }
