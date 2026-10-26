@@ -1,7 +1,7 @@
 [package]
 name = "obop-migrate"
 version.workspace = true
-description = "Schema version of a database and the ordered, idempotent, transactional steps that upgrade it"
+description = "Schema version of a database, the ordered, idempotent, transactional steps that upgrade it, and the ledger that records them"
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
@@ -11,6 +11,10 @@ obop-types.workspace = true
 obop-storage.workspace = true
 obop-keys.workspace = true
 serde_json = "1"
+sha2 = "0.11"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+postgres = "0.19"

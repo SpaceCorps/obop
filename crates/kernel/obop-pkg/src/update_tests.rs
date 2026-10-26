@@ -13,10 +13,10 @@ use std::sync::{Arc, Mutex};
 
 /// A marketplace whose shelf the test changes between calls.
 #[derive(Default, Clone)]
-struct Shelf(Arc<Mutex<Vec<String>>>);
+pub(crate) struct Shelf(Arc<Mutex<Vec<String>>>);
 
 impl Shelf {
-    fn offer(&self, text: String) {
+    pub(crate) fn offer(&self, text: String) {
         let id = Manifest::parse(&text).unwrap().module.id;
         let mut s = self.0.lock().unwrap();
         s.retain(|t| Manifest::parse(t).unwrap().module.id != id);
@@ -46,19 +46,26 @@ impl Marketplace for Shelf {
 
 /// Package `id` at `version`: model `<id>_item` with a `title` field, plus `fields` (TOML field
 /// tables), `migrations` (TOML), release notes and dependencies.
-fn pkg(id: &str, version: &str, fields: &str, migrations: &str, notes: &str, deps: &str) -> String {
+pub(crate) fn pkg(
+    id: &str,
+    version: &str,
+    fields: &str,
+    migrations: &str,
+    notes: &str,
+    deps: &str,
+) -> String {
     format!(
         "[module]\nid = \"{id}\"\nversion = \"{version}\"\nname = \"{id}\"\ndescription = \"The {id} module\"\nlicense = \"MIT\"\nrequires_core = \"^0.2\"\nchangelog = {notes:?}\n{deps}\n[[model]]\nname = \"{id}_item\"\ndescription = \"An item\"\nread_group = \"{id}.user\"\nwrite_group = \"{id}.user\"\n[[model.field]]\nname = \"title\"\ndescription = \"Title\"\nclass = \"none\"\n{fields}\n{migrations}"
     )
 }
 
-fn field(name: &str, extra: &str) -> String {
+pub(crate) fn field(name: &str, extra: &str) -> String {
     format!(
         "[[model.field]]\nname = \"{name}\"\ndescription = \"{name}\"\nclass = \"none\"\n{extra}\n"
     )
 }
 
-fn setup(store: &Store, shelf: &Shelf) -> (Arc<Dispatcher>, Arc<Installer>) {
+pub(crate) fn setup(store: &Store, shelf: &Shelf) -> (Arc<Dispatcher>, Arc<Installer>) {
     let d = Arc::new(Dispatcher::new());
     let inst = Installer::new(
         store.clone(),
@@ -70,47 +77,52 @@ fn setup(store: &Store, shelf: &Shelf) -> (Arc<Dispatcher>, Arc<Installer>) {
     (d, inst)
 }
 
-fn admin() -> Principal {
+pub(crate) fn admin() -> Principal {
     Principal::user("root", &[ADMIN_GROUP])
 }
 
-fn call(d: &Dispatcher, p: &Principal, id: &str, input: Value) -> Result<Response, CallError> {
+pub(crate) fn call(
+    d: &Dispatcher,
+    p: &Principal,
+    id: &str,
+    input: Value,
+) -> Result<Response, CallError> {
     d.call(Surface::Rest, p, &mut Vault::new(), id, &input)
 }
 
-fn by_id(id: &str) -> Value {
+pub(crate) fn by_id(id: &str) -> Value {
     Value::map([("id", Value::text(id))])
 }
 
-fn get<'a>(v: &'a Value, k: &str) -> &'a Value {
+pub(crate) fn get<'a>(v: &'a Value, k: &str) -> &'a Value {
     match v {
         Value::Map(m) => m.get(k).unwrap_or_else(|| panic!("no {k} in {v:?}")),
         _ => panic!("not a map: {v:?}"),
     }
 }
 
-fn text(v: &Value) -> &str {
+pub(crate) fn text(v: &Value) -> &str {
     match v {
         Value::Text(t) => t,
         other => panic!("not text: {other:?}"),
     }
 }
 
-fn list(v: &Value) -> &[Value] {
+pub(crate) fn list(v: &Value) -> &[Value] {
     match v {
         Value::List(l) => l,
         other => panic!("not a list: {other:?}"),
     }
 }
 
-fn err(r: Result<Response, CallError>) -> String {
+pub(crate) fn err(r: Result<Response, CallError>) -> String {
     match r {
         Err(CallError::Handler(m)) => m,
         other => panic!("expected a handler error, got {other:?}"),
     }
 }
 
-fn rec(store: &Store, model: &str, id: &str, pairs: &[(&str, J)]) {
+pub(crate) fn rec(store: &Store, model: &str, id: &str, pairs: &[(&str, J)]) {
     store
         .backend()
         .insert(
@@ -124,11 +136,11 @@ fn rec(store: &Store, model: &str, id: &str, pairs: &[(&str, J)]) {
         .unwrap();
 }
 
-fn stored(store: &Store, model: &str, id: &str) -> serde_json::Map<String, J> {
+pub(crate) fn stored(store: &Store, model: &str, id: &str) -> serde_json::Map<String, J> {
     store.backend().get(model, id).unwrap().unwrap()
 }
 
-fn events(store: &Store) -> Vec<(String, String, String)> {
+pub(crate) fn events(store: &Store) -> Vec<(String, String, String)> {
     store
         .backend()
         .list("security_event")
@@ -144,7 +156,7 @@ fn events(store: &Store) -> Vec<(String, String, String)> {
         .collect()
 }
 
-fn version_of(inst: &Installer, id: &str) -> String {
+pub(crate) fn version_of(inst: &Installer, id: &str) -> String {
     inst.list()
         .into_iter()
         .find(|p| p.id == id)
