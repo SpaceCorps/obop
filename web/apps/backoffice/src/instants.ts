@@ -6,9 +6,6 @@
  * chosen). Nothing here goes through floating point except whole milliseconds of a Date.
  */
 
-const MIN_MS = Date.UTC(1, 0, 1);
-const MAX_MS = Date.UTC(9999, 11, 31, 23, 59, 59, 999);
-
 /** `new Date(Date.UTC(...))` without the two-digit-year rule of `Date.UTC`. */
 function utcMs(y: number, mo: number, d: number, h: number, mi: number, s: number): number {
   const dt = new Date(0);
@@ -16,6 +13,11 @@ function utcMs(y: number, mo: number, d: number, h: number, mi: number, s: numbe
   dt.setUTCHours(h, mi, s, 0);
   return dt.getTime();
 }
+
+// The server takes the years 0001 to 9999. `Date.UTC(1, 0, 1)` would be 1901 (years 0 to 99 mean
+// 1900 to 1999 there), so the lower end goes through `utcMs` as well.
+const MIN_MS = utcMs(1, 1, 1, 0, 0, 0);
+const MAX_MS = utcMs(9999, 12, 31, 23, 59, 59) + 999;
 
 const partsCache = new Map<string, Intl.DateTimeFormat>();
 function zoneFormat(zone: string): Intl.DateTimeFormat {

@@ -52,6 +52,17 @@ describe("instants in the platform zone", () => {
       expect(fromZonedInput(bad, SE), bad).toEqual({ error: "format" });
     expect(fromZonedInput("2026-03-29 10:00", "Mars/Base")).toEqual({ error: "zone" });
     expect(fromZonedInput("0001-01-01 00:00+01:00", SE)).toEqual({ error: "range" });
+    expect(fromZonedInput("9999-12-31 23:59:59.999999-01:00", SE)).toEqual({ error: "range" });
+  });
+
+  it("takes every instant from the first of 0001 to the last of 9999, as the server does", () => {
+    // Date.UTC would read the years 0 to 99 as 1900 to 1999 and the ends would be 1901.
+    expect(value("0001-01-01 00:00Z")).toBe("0001-01-01T00:00:00.000000Z");
+    expect(value("0099-06-01 12:00", "UTC")).toBe("0099-06-01T12:00:00.000000Z");
+    expect(value("0100-06-01 12:00", "UTC")).toBe("0100-06-01T12:00:00.000000Z");
+    expect(value("1850-06-01 12:00", "UTC")).toBe("1850-06-01T12:00:00.000000Z");
+    expect(value("1900-12-31 23:59Z")).toBe("1900-12-31T23:59:00.000000Z");
+    expect(value("9999-12-31 23:59:59.999999Z")).toBe("9999-12-31T23:59:59.999999Z");
   });
 
   it("shows an instant on the wall clock of the zone and round trips", () => {
@@ -70,9 +81,21 @@ describe("instants in the platform zone", () => {
     ]) {
       const shown = toZonedInput(iso, SE);
       // Writing back what is shown keeps the instant, except for the repeated autumn hour,
-      // which the offset resolves.
+      // which the offset resolves. What is shown must always be accepted.
       const back = fromZonedInput(shown, SE);
+      expect("value" in back, `${iso} shown as ${shown}: ${JSON.stringify(back)}`).toBe(true);
       if ("value" in back && !iso.startsWith("2026-10-25T01")) expect(back.value).toBe(iso);
+    }
+    // Instants before the zone had standard time are shown with the offset it had, to the second,
+    // and come back whole.
+    for (const iso of [
+      "0001-01-01T00:00:00.000000Z",
+      "0099-06-01T12:00:00.000000Z",
+      "1850-06-01T12:00:00.000000Z",
+      "1900-12-31T23:59:00.000000Z",
+    ]) {
+      const back = fromZonedInput(toZonedInput(iso, SE), SE);
+      expect(back, iso).toEqual({ value: iso });
     }
   });
 

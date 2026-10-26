@@ -88,7 +88,7 @@ test.describe("decimal and datetime fields", () => {
     // The instance runs in UTC in the test suite; an offset says another zone outright.
     await panel.getByLabel("Booked at").fill("2026-03-29 03:30+02:00");
     await panel.getByRole("button", { name: "Create" }).click();
-    await expect(page.locator(".toast")).toContainText("created");
+    await expect(page.locator(".toast").filter({ hasText: "created" })).toBeVisible();
     const saved = (await api.list("root", model)).find((r) => r.title === title);
     expect(saved.amount).toBe("12.50");
     expect(saved.booked_at).toBe("2026-03-29T01:30:00.000000Z");

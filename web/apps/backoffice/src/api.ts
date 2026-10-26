@@ -106,6 +106,11 @@ let tzdbVersion = "";
 export function getTime(): { zone: string; tzdb: string } {
   return { zone: platformZone, tzdb: tzdbVersion };
 }
+/** Set what `/api/meta` said about time; the meta call and the tests of zone-aware code use it. */
+export function setTime(zone: string | undefined, tzdb = ""): void {
+  platformZone = zone || "UTC";
+  tzdbVersion = tzdb;
+}
 /** The running core version, from the last `/api/meta` (empty until it has been read). */
 export function getCoreVersion(): string {
   return coreVersion;
@@ -157,8 +162,7 @@ export async function meta(
   } | null;
   if (!body || !Array.isArray(body.modules)) return "failed";
   if (body.core_version) coreVersion = body.core_version;
-  platformZone = body.time?.zone || "UTC";
-  tzdbVersion = body.time?.tzdb_version ?? "";
+  setTime(body.time?.zone, body.time?.tzdb_version);
   const modules = body.modules;
   // An older server may not send the kind yet: money by name, everything else text.
   for (const m of modules)

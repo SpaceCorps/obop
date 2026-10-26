@@ -134,7 +134,7 @@ export function ImportDialog({
           <>
             <p className="hint">
               {t(
-                "The first line of the file names the fields. References are the id of the record. Whole numbers only; money is in minor units such as cents. Up to {rows} rows and 1 MiB, UTF-8, comma or semicolon.",
+                "The first line of the file names the fields. References are the id of the record. Number fields take whole numbers; money is in minor units such as cents. Up to {rows} rows and 1 MiB, UTF-8, comma or semicolon.",
                 { rows: fmt.integer(MAX_ROWS) },
               )}
             </p>

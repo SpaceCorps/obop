@@ -51,17 +51,21 @@ export function fromEdit(
       const scale = f.scale ?? 0;
       const digits = (f.precision ?? 38) - scale;
       const p = fmt.parseNumber(s, scale);
-      if (!p)
-        return {
-          error:
-            scale === 0
-              ? t("{field} must be a whole number", { field })
-              : t("{field} must be a number with at most {scale} digits after the point", {
-                  field,
-                  scale,
-                }),
-        };
-      // "1.234" in a field of two decimals could be 1,234 or a mistake: never guess for an exact value.
+      const tooManyDigits = {
+        error:
+          scale === 0
+            ? t("{field} must be a whole number", { field })
+            : t("{field} must be a number with at most {scale} digits after the point", {
+                field,
+                scale,
+              }),
+      };
+      if (!p) return tooManyDigits;
+      // "1.234" in a field of two decimals could be 1,234 or a mistake: never guess for an exact
+      // value. But a lone mark that is this locale's own decimal separator is a decimal point
+      // with too many digits, and is told so, not offered a thousands reading it does not have.
+      if (p.ambiguous && s.replace(/[\d\s+\-\u2212]/g, "") === fmt.separators().decimal)
+        return tooManyDigits;
       if (p.ambiguous)
         return {
           error: t(

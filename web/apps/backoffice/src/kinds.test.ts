@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
-import type { FieldMeta, Row } from "./api.ts";
+import { afterEach, describe, expect, it } from "vite-plus/test";
+import { setTime, type FieldMeta, type Row } from "./api.ts";
 import { fromEdit, toEdit } from "./edit.ts";
 import {
   matchCond,
@@ -44,6 +44,12 @@ describe("decimal fields in forms", () => {
     for (const bad of ["1.234", "abc", "1e3", "1..2", "99999999999.00"])
       expect(fromEdit(price, bad), bad).toHaveProperty("error");
     expect(fromEdit(whole, "1.5")).toHaveProperty("error");
+    // Extra digits after the locale's own decimal point are said to be extra digits (the
+    // thousands reading "1.234 = 1234" does not exist in a locale whose point is the dot).
+    expect(fromEdit(price, "12.345")).toEqual({
+      error: expect.stringContaining("at most 2 digits after the point"),
+    });
+    expect(fromEdit(whole, "1.234")).toEqual({ error: expect.stringContaining("whole number") });
     expect(fromEdit(price, "  ")).toEqual({ value: null });
     expect(fromEdit({ ...price, required: true }, "")).toHaveProperty("error");
     expect(toEdit(price, "12.50")).toBe("12.50");
@@ -51,7 +57,21 @@ describe("decimal fields in forms", () => {
   });
 });
 
+// The instance's zone is module state set from /api/meta; every test starts in UTC again.
+afterEach(() => setTime("UTC"));
+
 describe("datetime fields in forms", () => {
+  it("read the wall clock of the instance's zone in another zone than UTC", () => {
+    setTime("Europe/Berlin");
+    expect(fromEdit(at, "2026-03-29 03:30")).toEqual({ value: "2026-03-29T01:30:00.000000Z" });
+    expect(fromEdit(at, "2026-03-29 02:30")).toEqual({
+      error: expect.stringContaining("Europe/Berlin"),
+    });
+    expect(toEdit(at, "2026-03-29T01:30:00.000000Z")).toBe("2026-03-29 03:30");
+    setTime("Asia/Tokyo");
+    expect(toEdit(at, "2026-03-29T01:30:00.000000Z")).toBe("2026-03-29 10:30");
+  });
+
   it("read the wall clock of the instance's zone (UTC until /api/meta says otherwise)", () => {
     expect(fromEdit(at, "2026-03-29 03:30")).toEqual({ value: "2026-03-29T03:30:00.000000Z" });
     expect(fromEdit(at, "2026-03-29 03:30+02:00")).toEqual({
@@ -82,7 +102,14 @@ describe("range filters on decimals and instants", () => {
 
   it("compare instants by their day in the zone", () => {
     const r = row({ booked_at: "2026-03-31T22:30:00.000000Z" });
+    // In UTC the instant is on the 31st; in Berlin (UTC+2 in summer time) it is on April 1st.
     expect(matchCond(range("booked_at", "2026-03-31", "2026-03-31"), r, fields, lk)).toBe(true);
+    expect(matchCond(range("booked_at", "2026-04-01"), r, fields, lk)).toBe(false);
+    setTime("Europe/Berlin");
+    expect(matchCond(range("booked_at", "2026-03-31", "2026-03-31"), r, fields, lk)).toBe(false);
+    expect(matchCond(range("booked_at", "2026-04-01", "2026-04-01"), r, fields, lk)).toBe(true);
+    setTime("America/New_York");
+    expect(matchCond(range("booked_at", undefined, "2026-03-31"), r, fields, lk)).toBe(true);
     expect(matchCond(range("booked_at", "2026-04-01"), r, fields, lk)).toBe(false);
   });
 
