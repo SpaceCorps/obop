@@ -181,6 +181,8 @@ fn a_refused_tool_call_of_the_stdio_server_is_a_tool_error_with_the_wait_and_app
     flaky.refuse_next(1);
     let refused = call("lead__list", json!({}));
     flaky.allow_models();
+    // This thread has no request scope: forget the fault the store noted on it.
+    obop_storage::fault::clear();
     // A tool error the model can read, not a JSON-RPC error and not a success.
     assert!(refused.get("error").is_none(), "{refused}");
     assert_eq!(refused["result"]["isError"], true, "{refused}");
@@ -218,6 +220,7 @@ fn a_refused_command_line_call_prints_the_word_and_exits_with_75() {
     flaky.refuse_next(1);
     let e = call("lead.get", &by_id).unwrap_err();
     flaky.allow_models();
+    obop_storage::fault::clear();
     assert!(
         matches!(&e, CallError::Handler(m) if m.starts_with("storage_busy:")),
         "{e:?}"
