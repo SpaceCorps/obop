@@ -310,12 +310,32 @@ fn take_inner(
             }
         }
     }
+    for (sink, parts) in sink_strays(&settings.sinks) {
+        out.notes.push(format!(
+            "{sink} holds {} unfinished upload(s) ({}): a copy was killed; parts idle for hours are removed by the next copy",
+            parts.len(),
+            parts.join(", ")
+        ));
+    }
     if reason == "scheduled" {
-        let (pruned, notes) = prune(backend, settings, clock)?;
+        // The timer and `obop backup run` are the operator's standing configuration: with no sink
+        // given, retention does not wait for copies an earlier run recorded.
+        let (pruned, notes) = prune_with(backend, settings, clock, true)?;
         out.pruned = pruned;
         out.notes.extend(notes);
     }
     Ok(out)
+}
+
+/// `(sink name, unfinished uploads)` for the sinks that hold any.
+pub fn sink_strays(sinks: &[Arc<dyn BackupSink>]) -> Vec<(String, Vec<String>)> {
+    sinks
+        .iter()
+        .filter_map(|s| {
+            let parts = s.stray().ok().filter(|p| !p.is_empty())?;
+            Some((s.name(), parts))
+        })
+        .collect()
 }
 
 /// Copy the backups that lack a verified copy in a configured sink, and whose files are on this
@@ -403,6 +423,20 @@ pub fn prune_plan(
     settings: &Settings,
     clock: &dyn Clock,
 ) -> Result<PrunePlan, String> {
+    prune_plan_with(backend, settings, clock, false)
+}
+
+/// As [`prune_plan`]. With `own_config_is_authoritative` (the timer and `obop backup run`, which
+/// are configured by the operator for good) a process with no sink retains by what it was given:
+/// no sink means no copy is required, and a copy an earlier run recorded does not hold backups
+/// back for ever. Without it (a shell that may simply lack the variable) the recorded copies are
+/// a reason to remove nothing.
+pub fn prune_plan_with(
+    backend: &Arc<dyn Backend>,
+    settings: &Settings,
+    clock: &dyn Clock,
+    own_config_is_authoritative: bool,
+) -> Result<PrunePlan, String> {
     let catalog = Catalog::new(&**backend);
     let all = catalog.backups()?;
     let scheduled: Vec<&BackupRecord> = all.iter().filter(|b| b.reason == "scheduled").collect();
@@ -417,7 +451,14 @@ pub fn prune_plan(
     );
     let mut plan = PrunePlan::default();
     let recorded_sinks = all.iter().any(|b| !b.copies.is_empty());
-    if settings.sinks.is_empty() && recorded_sinks && !settings.ignore_recorded_sinks {
+    let ignore = settings.ignore_recorded_sinks || own_config_is_authoritative;
+    if settings.sinks.is_empty() && recorded_sinks && own_config_is_authoritative {
+        plan.notes.push(
+            "no sink is configured here, so retention does not wait for the copies an earlier run recorded: configure the sink again if backups must be copied off the host first"
+                .into(),
+        );
+    }
+    if settings.sinks.is_empty() && recorded_sinks && !ignore {
         if !d.delete.is_empty() {
             plan.notes.push(format!(
                 "{} backup(s) are past retention, but the catalogue records copies off this host and this run was given no sink (--copy-to or OBOP_BACKUP_COPY_DIR): nothing is removed, because a backup goes only once every sink holds a verified copy. Give the sink, or pass --no-sinks to remove them anyway",
@@ -474,8 +515,18 @@ pub fn prune(
     settings: &Settings,
     clock: &dyn Clock,
 ) -> Result<(Vec<String>, Vec<String>), String> {
+    prune_with(backend, settings, clock, false)
+}
+
+/// As [`prune`], see [`prune_plan_with`] for `own_config_is_authoritative`.
+pub fn prune_with(
+    backend: &Arc<dyn Backend>,
+    settings: &Settings,
+    clock: &dyn Clock,
+    own_config_is_authoritative: bool,
+) -> Result<(Vec<String>, Vec<String>), String> {
     let catalog = Catalog::new(&**backend);
-    let plan = prune_plan(backend, settings, clock)?;
+    let plan = prune_plan_with(backend, settings, clock, own_config_is_authoritative)?;
     let (mut pruned, mut notes) = (Vec::new(), plan.notes.clone());
     for (id, sink) in &plan.stale_copies {
         if let Some(mut b) = catalog.backups()?.into_iter().find(|b| &b.id == id) {

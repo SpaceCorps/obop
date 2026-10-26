@@ -116,6 +116,9 @@ pub struct Inputs<'a> {
     pub host_is_local: bool,
     pub plane: &'a str,
     pub now: u64,
+    /// `(sink, unfinished uploads)` of the sinks this process is configured with that hold any
+    /// (`schedule::sink_strays`): a copy was killed.
+    pub sink_strays: &'a [(String, Vec<String>)],
 }
 
 fn on(v: &Option<String>) -> bool {
@@ -246,6 +249,18 @@ pub fn check(i: &Inputs) -> Result<Report, String> {
             Level::Pass,
             format!("last passed restore drill {} ago", human(a)),
         ),
+    }
+    for (sink, parts) in i.sink_strays {
+        r.add(
+            "backup_sink_parts",
+            "OBR-DAT-047",
+            Level::Warn,
+            format!(
+                "{sink} holds {} unfinished upload(s) ({}): a copy was killed; the next copy removes parts idle for hours",
+                parts.len(),
+                parts.join(", ")
+            ),
+        );
     }
     if let Some(f) = &stats.last_failure {
         r.add(

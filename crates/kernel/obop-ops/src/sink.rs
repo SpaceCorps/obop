@@ -37,6 +37,11 @@ pub trait BackupSink: Send + Sync {
     fn list(&self) -> Result<Vec<String>, String>;
     /// Remove an object. Sinks whose credential may not delete refuse.
     fn delete(&self, name: &str) -> Result<(), String>;
+    /// Names of unfinished uploads the sink holds (what a copy that was killed left): `list`
+    /// hides them, a person should hear of them. A sink that has none to leave says so.
+    fn stray(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
 }
 
 fn safe_name(name: &str) -> Result<(), String> {
@@ -133,6 +138,8 @@ impl BackupSink for FsSink {
         let to = self.path(name)?;
         fsutil::create_dir_private(&self.dir)
             .map_err(|e| format!("cannot create {}: {e}", self.dir.display()))?;
+        // What a copy that was killed left here: only parts nothing has written to for hours.
+        fsutil::sweep_parts(&self.dir, fsutil::STALE_PART);
         // A sink in the directory the backup is already in is not a second copy: reading it
         // back would prove nothing, and retention would then delete the only one.
         if is_same_place(src, &to, &self.dir) {
@@ -203,6 +210,10 @@ impl BackupSink for FsSink {
             .collect();
         v.sort();
         Ok(v)
+    }
+
+    fn stray(&self) -> Result<Vec<String>, String> {
+        Ok(fsutil::part_files(&self.dir))
     }
 
     fn delete(&self, name: &str) -> Result<(), String> {
@@ -420,6 +431,42 @@ mod tests {
             // No part file is left, and the object is still the winner's after a retry of it.
             assert_eq!(sink.list().unwrap(), ["same.obbk"]);
         }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A copy that was killed leaves `<name>.<pid>-<n>.part` in the sink: the next put sweeps what
+    /// has been idle for hours, leaves what may still be written, and `stray` names what is left.
+    #[test]
+    fn a_killed_copy_leaves_a_part_file_that_is_reported_and_swept_when_stale() {
+        let d = tmp("stray");
+        let src = d.join("obop-backup-20260101T000000Z.obbk");
+        std::fs::write(&src, b"sealed bytes").unwrap();
+        let off = d.join("off");
+        std::fs::create_dir_all(&off).unwrap();
+        let stale = off.join("obop-backup-20250101T000000Z.obbk.77-0.part");
+        let fresh = off.join("obop-backup-20250102T000000Z.obbk.77-1.part");
+        for p in [&stale, &fresh] {
+            std::fs::write(p, b"half").unwrap();
+        }
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&stale)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(8 * 3600))
+            .unwrap();
+        let sink = FsSink::new(&off);
+        // `list` hides them; `stray` does not.
+        assert!(sink.list().unwrap().is_empty());
+        assert_eq!(sink.stray().unwrap().len(), 2);
+        // A put sweeps the stale one and keeps the one that may still be written.
+        copy_verified(&sink, "obop-backup-20260101T000000Z.obbk", &src).unwrap();
+        assert!(!stale.exists());
+        assert!(fresh.exists());
+        assert_eq!(
+            sink.stray().unwrap(),
+            ["obop-backup-20250102T000000Z.obbk.77-1.part"]
+        );
+        assert_eq!(sink.list().unwrap(), ["obop-backup-20260101T000000Z.obbk"]);
         let _ = std::fs::remove_dir_all(&d);
     }
 

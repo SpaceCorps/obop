@@ -17,6 +17,23 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// The suffix of a file that is still being written.
 pub const PART: &str = ".part";
+/// A part file that nothing has written to for this long belongs to a run that died.
+pub const STALE_PART: Duration = Duration::from_secs(6 * 3600);
+
+/// The names of the part files of backups in `dir` (what a killed run left, or a copy that is
+/// still going on), sorted. A directory that does not exist has none.
+pub fn part_files(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(dir)
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .filter(|n| n.starts_with("obop-backup-") && n.ends_with(PART))
+                .collect()
+        })
+        .unwrap_or_default();
+    v.sort();
+    v
+}
 
 /// A name for a partial file next to `target` that no other writer uses.
 pub fn part_name(target: &Path) -> PathBuf {

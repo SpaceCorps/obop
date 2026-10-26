@@ -259,6 +259,11 @@ fn sinks(args: &mut Vec<String>) -> Vec<Arc<dyn BackupSink>> {
         .collect()
 }
 
+/// The sinks this process is configured with (`OBOP_BACKUP_COPY_DIR`).
+pub fn configured_sinks() -> Vec<Arc<dyn BackupSink>> {
+    sinks(&mut Vec::new())
+}
+
 fn retention(args: &mut Vec<String>) -> Result<Retention, ExitCode> {
     let var = |n: &str| std::env::var(n).ok();
     Retention::from_vars(
@@ -747,6 +752,13 @@ fn list(args: &mut Vec<String>) -> Exit {
                     .join(", ")
             },
             b.reason,
+        );
+    }
+    for (sink, parts) in schedule::sink_strays(&configured_sinks()) {
+        println!(
+            "{sink} holds {} unfinished upload(s): {} (a copy was killed; the next copy removes parts idle for hours)",
+            parts.len(),
+            parts.join(", ")
         );
     }
     let st = schedule::stats(&*backend, now).map_err(|e| fail(&e))?;

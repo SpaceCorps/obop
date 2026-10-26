@@ -84,6 +84,7 @@ fn run(
         host_is_local: local,
         plane: "main",
         now: NOW,
+        sink_strays: &[],
     })
     .unwrap()
 }
@@ -263,6 +264,7 @@ fn old_or_missing_evidence_fails_and_a_young_database_that_is_not_postgresql_onl
         host_is_local: true,
         plane: "main",
         now: NOW,
+        sink_strays: &[],
     })
     .unwrap();
     assert!(!dev.failed(), "{}", dev.render());
@@ -326,4 +328,38 @@ fn an_attestation_says_it_is_attested_and_not_verified() {
         "{}",
         r.render()
     );
+}
+
+#[test]
+fn unfinished_uploads_in_a_sink_are_a_warning_that_names_them() {
+    let b = healthy();
+    let s = FakeServer::well_configured();
+    let strays = vec![(
+        "fs:/mnt/offsite".to_string(),
+        vec!["obop-backup-x.obbk.9-0.part".to_string()],
+    )];
+    let r = check(&Inputs {
+        backend: &*b,
+        production: true,
+        server: Some(&s),
+        sslmode: Some("verify-full"),
+        host_is_local: false,
+        plane: "main",
+        now: NOW,
+        sink_strays: &strays,
+    })
+    .unwrap();
+    assert_eq!(
+        level(&r, "backup_sink_parts"),
+        Level::Warn,
+        "{}",
+        r.render()
+    );
+    assert!(
+        r.find("backup_sink_parts")
+            .unwrap()
+            .detail
+            .contains("obop-backup-x.obbk.9-0.part")
+    );
+    assert!(!r.failed());
 }

@@ -337,8 +337,6 @@ fn a_prune_in_a_shell_without_the_sink_removes_nothing_the_sink_does_not_hold_an
             "--out",
             bk.to_str().unwrap(),
             "--plain",
-            "--keep-daily",
-            "1",
             "--keep-monthly",
             "0",
             "--max-age-days",
@@ -347,22 +345,22 @@ fn a_prune_in_a_shell_without_the_sink_removes_nothing_the_sink_does_not_hold_an
         a.extend_from_slice(extra);
         run(&[], &a)
     };
-    // Two scheduled backups, each copied off the host; the first is then past retention.
-    let o = job(&["--copy-to", off.to_str().unwrap()]);
+    // A is copied off the host. B's run is given a sink that cannot take a copy (a file where a
+    // directory should be), so A, now past retention (one backup is kept per day), has no
+    // verified copy in every configured sink and stays, while the catalogue records a copy of it.
+    let broken = dir.p("not-a-directory");
+    std::fs::write(&broken, b"x").unwrap();
+    let o = job(&["--keep-daily", "5", "--copy-to", off.to_str().unwrap()]);
     assert!(o.status.success(), "{}", text(&o));
     std::thread::sleep(std::time::Duration::from_millis(1200));
-    let o = job(&["--copy-to", off.to_str().unwrap()]);
-    assert!(o.status.success(), "{}", text(&o));
-    // The first was removed by that run (its copy was proved). Take a third without the sink,
-    // so there are backups with no copy, and the catalogue still records copies elsewhere.
-    std::thread::sleep(std::time::Duration::from_millis(1200));
-    let o = job(&[]);
-    assert!(o.status.success(), "{}", text(&o));
-    std::thread::sleep(std::time::Duration::from_millis(1200));
-    let o = job(&[]);
-    assert!(o.status.success(), "{}", text(&o));
+    let o = job(&["--keep-daily", "5", "--copy-to", broken.to_str().unwrap()]);
+    assert!(
+        !o.status.success() && text(&o).contains("COPY FAILED"),
+        "{}",
+        text(&o)
+    );
     let listed = text(&run(&[], &["backup", "list", "--db", &url]));
-    assert!(listed.contains("copies: none"), "{listed}");
+    assert_eq!(listed.matches("format 1").count(), 2, "{listed}");
     let args = [
         "backup",
         "prune",
@@ -375,7 +373,8 @@ fn a_prune_in_a_shell_without_the_sink_removes_nothing_the_sink_does_not_hold_an
         "--max-age-days",
         "0",
     ];
-    // The dry run and the real run agree: with no sink configured here nothing is removed.
+    // A shell that was not given the sink: the dry run and the real run agree, and remove
+    // nothing, because the catalogue records a copy off the host that this shell cannot see.
     let mut dry = args.to_vec();
     dry.push("--dry-run");
     let d = run(&[], &dry);
@@ -386,18 +385,25 @@ fn a_prune_in_a_shell_without_the_sink_removes_nothing_the_sink_does_not_hold_an
     );
     let r = run(&[], &args);
     assert!(text(&r).contains("0 backup(s) removed"), "{}", text(&r));
-    let files_before = std::fs::read_dir(&bk).unwrap().count();
-    // With the operator's word the dry run lists them and the real run removes them.
+    // With the operator's word the dry run lists what a real run would remove.
     let mut dry = args.to_vec();
     dry.extend(["--no-sinks", "--dry-run"]);
     let d = run(&[], &dry);
     assert!(text(&d).contains("would remove"), "{}", text(&d));
     assert!(!text(&d).contains("would remove 0"), "{}", text(&d));
-    let mut real = args.to_vec();
-    real.push("--no-sinks");
-    let r = run(&[], &real);
-    assert!(r.status.success(), "{}", text(&r));
-    assert!(std::fs::read_dir(&bk).unwrap().count() < files_before);
+    // The timer and `backup run` are the operator's standing configuration: a run with no sink
+    // given retains by that, and does not wait for the copy an earlier run recorded.
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    let o = job(&["--keep-daily", "1"]);
+    assert!(o.status.success(), "{}", text(&o));
+    assert!(
+        text(&o).contains("no sink is configured here"),
+        "{}",
+        text(&o)
+    );
+    assert!(text(&o).contains("removed obop-backup-"), "{}", text(&o));
+    let listed = text(&run(&[], &["backup", "list", "--db", &url]));
+    assert_eq!(listed.matches("format 1").count(), 1, "{listed}");
     // A copy into the very directory the backup is in is not an off-host copy.
     let o = run(
         &[],

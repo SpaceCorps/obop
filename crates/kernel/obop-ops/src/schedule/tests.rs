@@ -748,3 +748,86 @@ fn a_failed_export_removes_what_it_began_and_is_reported_for_a_cron_run_too() {
             .contains("went away")
     );
 }
+
+/// The timer and `obop backup run` are the operator's standing configuration: with no sink given
+/// they retain by that, so one recorded copy never stops retention for good. A bare `prune` in a
+/// shell that may just lack the variable stays protective.
+#[test]
+fn a_process_with_no_sink_retains_by_its_own_configuration_and_a_bare_prune_does_not() {
+    let d = Dir::new("authority");
+    let b = db();
+    let clock = FakeClock::at(START);
+    let mut with_sink = settings(&d);
+    with_sink.retention = Retention {
+        daily: 5,
+        weekly: 0,
+        monthly: 0,
+    };
+    with_sink.sinks.push(Arc::new(FsSink::new(d.p("off"))));
+    let a = take(&b, None, 2, &with_sink, "scheduled", &clock)
+        .unwrap()
+        .backup;
+    clock.advance(DAY);
+    take(&b, None, 2, &with_sink, "scheduled", &clock).unwrap();
+    assert!(
+        Catalog::new(&*b)
+            .backups()
+            .unwrap()
+            .iter()
+            .all(|r| !r.copies.is_empty())
+    );
+    // No sink configured here, and retention now keeps one day.
+    let mut bare = settings(&d);
+    bare.retention = Retention {
+        daily: 1,
+        weekly: 0,
+        monthly: 0,
+    };
+    let plan = prune_plan(&b, &bare, &clock).unwrap();
+    assert!(
+        plan.remove.is_empty(),
+        "a bare prune removes nothing it cannot prove copied"
+    );
+    assert!(
+        plan.notes.iter().any(|n| n.contains("no sink")),
+        "{:?}",
+        plan.notes
+    );
+    // The timer / `backup run`: its own (empty) configuration is the rule.
+    clock.advance(DAY);
+    let o = take(&b, None, 2, &bare, "scheduled", &clock).unwrap();
+    assert!(o.pruned.contains(&a.id), "{:?} {:?}", o.pruned, o.notes);
+    assert!(
+        o.notes
+            .iter()
+            .any(|n| n.contains("no sink is configured here")),
+        "{:?}",
+        o.notes
+    );
+    assert_eq!(
+        Catalog::new(&*b).backups().unwrap().len(),
+        1,
+        "only the newest is left"
+    );
+}
+
+#[test]
+fn a_take_reports_the_unfinished_uploads_a_sink_holds() {
+    let d = Dir::new("strays");
+    let b = db();
+    let off = d.p("off");
+    std::fs::create_dir_all(&off).unwrap();
+    std::fs::write(
+        off.join("obop-backup-20240101T000000Z.obbk.5-0.part"),
+        b"half",
+    )
+    .unwrap();
+    let mut s = settings(&d);
+    s.sinks.push(Arc::new(FsSink::new(&off)));
+    let o = take(&b, None, 2, &s, "scheduled", &FakeClock::at(START)).unwrap();
+    assert!(
+        o.notes.iter().any(|n| n.contains("unfinished upload")),
+        "{:?}",
+        o.notes
+    );
+}

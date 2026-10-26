@@ -66,8 +66,6 @@ pub const FILES_FAILED: &str = "restore_files_failed";
 const BATCH: usize = 1000;
 const CIPHER: &str = "chacha20poly1305-stream-v1";
 const MAC_PURPOSE: &str = "backup-manifest";
-/// Part files of backups that nothing has written to for this long belong to a run that died.
-const STALE_PART: std::time::Duration = std::time::Duration::from_secs(6 * 3600);
 
 /// The code at the start of an error of this module (`restore_key_required: ...`), if it has one.
 pub fn error_code(e: &str) -> Option<&'static str> {
@@ -598,7 +596,7 @@ pub fn create_at(
         fsutil::create_dir_private(dir)
             .map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
         // What an earlier run that was killed left behind.
-        fsutil::sweep_parts(dir, STALE_PART);
+        fsutil::sweep_parts(dir, fsutil::STALE_PART);
     }
     let manifest_path = manifest_path_for(&data_path);
     for p in [&data_path, &manifest_path] {

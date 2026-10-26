@@ -183,6 +183,7 @@ pub fn storage_cmd(args: &mut Vec<String>) -> Exit {
             }
             let backend = open_existing(&url)?;
             let server = server_info(&url, backend.kind());
+            let strays = obop_ops::schedule::sink_strays(&crate::backup_cli::configured_sinks());
             let report = doctor::check(&doctor::Inputs {
                 backend: &*backend,
                 production: backend.kind() == "postgres",
@@ -191,6 +192,7 @@ pub fn storage_cmd(args: &mut Vec<String>) -> Exit {
                 host_is_local: host_is_local(&url),
                 plane: &plane,
                 now: SystemClock.now(),
+                sink_strays: &strays,
             })
             .map_err(|e| fail(&format!("error: {e}")))?;
             print!("{}", report.render());
