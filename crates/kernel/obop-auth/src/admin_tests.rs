@@ -510,6 +510,129 @@ fn offboard_by_the_operator_has_no_self_check_and_logs_the_operator() {
     assert_eq!(events(&r, "user_groups")[0].1, "operator");
 }
 
+// ---- a refused store is never "nothing to do" (D74) ---------------------------------------
+
+/// A rig whose storage can be made to refuse calls, behind the request guard as in a server.
+fn flaky_rig() -> (Rig, std::sync::Arc<obop_storage::testing::Flaky>) {
+    let (flaky, b) = obop_storage::testing::Flaky::memory();
+    let a = Auth::with_test_config(b.clone(), AuthConfig::insecure_dev());
+    a.set_clock_for_test(T0);
+    (Rig { a, b }, flaky)
+}
+
+fn request<T>(f: impl FnOnce() -> T) -> (T, obop_storage::fault::Outcome) {
+    obop_storage::fault::begin_request(Default::default());
+    let v = f();
+    (v, obop_storage::fault::end_request())
+}
+
+#[test]
+fn offboarding_with_a_token_list_that_is_refused_fails_as_partial_and_can_be_repeated() {
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig();
+    let root = admin(&r, "root");
+    user_with(&r.a, "ada", &["base.user"]);
+    let (t1, _) = session(&r.a, "ada");
+    let (agent_owner_session, ada) = session(&r.a, "ada");
+    let agent =
+        r.a.issue_agent_token(&ada, &names(&["base.user"]), "bot")
+            .unwrap();
+    // The reviewer's probe: the account is disabled, then the list of its tokens is refused.
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| r.a.offboard_user(&root, "ada", "left"));
+    assert!(
+        matches!(&done, Err(MfaError::Unavailable(m)) if m.starts_with("storage_busy")),
+        "never Ok with 0 revoked: {done:?}"
+    );
+    assert!(
+        out.wrote && out.partial,
+        "the account was disabled: {out:?}"
+    );
+    assert_eq!(out.fault, Some(obop_storage::fault::Fault::Busy));
+    flaky.allow_models();
+    // The disable did commit, so no token of the account resolves, and the log says what is missing.
+    assert!(r.a.resolve(&t1).is_none() && r.a.resolve(&agent).is_none());
+    let logged = events(&r, "user_offboard");
+    assert!(
+        logged.iter().any(|e| e.2.contains("INCOMPLETE")),
+        "{logged:?}"
+    );
+    // Repeating the request finishes what is left and reports it.
+    let (done, out) = request(|| r.a.offboard_user(&root, "ada", "left"));
+    let done = done.unwrap();
+    assert_eq!(done["revoked_sessions"], 2, "{done}");
+    assert_eq!(done["revoked_agent_tokens"], 1);
+    assert!(!out.partial);
+    let _ = agent_owner_session;
+}
+
+#[test]
+fn offboarding_goes_on_when_the_store_refuses_for_a_moment() {
+    let (r, flaky) = flaky_rig();
+    let root = admin(&r, "root");
+    user_with(&r.a, "ada", &["base.user"]);
+    let (t1, _) = session(&r.a, "ada");
+    // The pool is full for a moment right after the account was disabled.
+    flaky.refuse_n_after_the_next_write(2);
+    let (done, out) = request(|| r.a.offboard_user(&root, "ada", ""));
+    let done = done.unwrap();
+    assert_eq!(done["revoked_sessions"], 1, "{done}");
+    assert!(r.a.resolve(&t1).is_none());
+    assert!(out.wrote && !out.partial, "{out:?}");
+    assert!(flaky.refused() >= 2);
+}
+
+#[test]
+fn a_password_reset_whose_sessions_cannot_be_listed_is_a_partial_failure() {
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig();
+    let root = admin(&r, "root");
+    user_with(&r.a, "ada", &["base.user"]);
+    let (t1, _) = session(&r.a, "ada");
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, out) = request(|| r.a.reset_user_password(&root, "ada", "a-new-temporary-pw"));
+    assert!(matches!(done, Err(MfaError::Unavailable(_))), "{done:?}");
+    assert!(out.partial, "{out:?}");
+    flaky.allow_models();
+    // The password did change, and the session that was not ended is still there for the retry.
+    assert!(r.a.login_step("ada", PW).is_err());
+    assert!(r.a.resolve(&t1).is_some());
+    let (done, _) = request(|| {
+        r.a.reset_user_password(&root, "ada", "another-temporary-pw")
+    });
+    done.unwrap();
+    assert!(r.a.resolve(&t1).is_none());
+}
+
+#[test]
+fn a_lookup_that_is_refused_is_the_stores_trouble_and_not_a_400_or_a_404() {
+    use obop_storage::testing::Mode;
+    let (r, flaky) = flaky_rig();
+    let root = admin(&r, "root");
+    user_with(&r.a, "ada", &["base.user"]);
+    flaky.refuse_model("auth_user", Mode::Reads);
+    for done in [
+        request(|| r.a.offboard_user(&root, "ada", ""))
+            .0
+            .map(|_| ()),
+        request(|| r.a.set_user_disabled(&root, "ada", true)).0,
+        request(|| {
+            r.a.set_user_groups(&root, "ada", &names(&["base.user"]), &known())
+        })
+        .0
+        .map(|_| ()),
+    ] {
+        assert!(
+            matches!(&done, Err(MfaError::Unavailable(m)) if m.starts_with("storage_busy")),
+            "{done:?}"
+        );
+    }
+    flaky.allow_models();
+    assert!(
+        matches!(request(|| r.a.offboard_user(&root, "ghost", "")).0, Err(MfaError::Invalid(m)) if m.contains("no user"))
+    );
+}
+
 #[test]
 fn import_checks_every_row_first_and_creates_all_or_nothing() {
     let r = rig();

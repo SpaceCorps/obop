@@ -137,29 +137,43 @@ impl Auth {
     /// enrolment (or to the owed password change) or not. Returns how many changed. Called after
     /// the groups change, so an account that just became an administrator on an instance that
     /// demands two-factor for administrators cannot keep using a session that never proved one.
-    fn resync_limits(&self, name: &str, groups: &[String]) -> usize {
-        let limited = self.must_change_password(name)
-            || (self.enrolment_required_for(groups) && !self.has_second_factor(name));
+    fn resync_limits(&self, name: &str, groups: &[String]) -> Result<usize, MfaError> {
+        let limited = self
+            .settled(|| {
+                self.must_change_password(name)
+                    || (self.enrolment_required_for(groups) && !self.has_second_factor(name))
+            })
+            .map_err(|e| match e {
+                MfaError::Unavailable(m) => {
+                    self.incomplete(name, "user_groups", "reading the two-factor policy", m)
+                }
+                other => other,
+            })?;
         let now = self.now();
         let mut n = 0;
-        for (id, t) in self.backend.list("auth_token").unwrap_or_default() {
-            let live = t.get("revoked").and_then(J::as_bool) != Some(true)
-                && t.get("expires_at")
-                    .and_then(J::as_u64)
-                    .is_none_or(|e| e > now);
-            if live
-                && t.get("owner").and_then(J::as_str) == Some(name)
-                && t.get("kind").and_then(J::as_str) == Some("user")
-                && t.get("limited").and_then(J::as_bool) != Some(limited)
-            {
-                let mut p = Fields::new();
-                p.insert("limited".into(), J::Bool(limited));
-                if self.backend.update("auth_token", &id, &p).unwrap_or(false) {
-                    n += 1;
+        // A session that is not limited stays so unless this step runs: refused, it fails the
+        // request (the groups did change) instead of reporting "no session needed a change".
+        self.needed(name, "user_groups", "relimiting the sessions", || {
+            for (id, t) in self.backend.list("auth_token")? {
+                let live = t.get("revoked").and_then(J::as_bool) != Some(true)
+                    && t.get("expires_at")
+                        .and_then(J::as_u64)
+                        .is_none_or(|e| e > now);
+                if live
+                    && t.get("owner").and_then(J::as_str) == Some(name)
+                    && t.get("kind").and_then(J::as_str) == Some("user")
+                    && t.get("limited").and_then(J::as_bool) != Some(limited)
+                {
+                    let mut p = Fields::new();
+                    p.insert("limited".into(), J::Bool(limited));
+                    if self.backend.update("auth_token", &id, &p)? {
+                        n += 1;
+                    }
                 }
             }
-        }
-        n
+            Ok(())
+        })?;
+        Ok(n)
     }
 
     // ---- create ---------------------------------------------------------------------------
@@ -246,9 +260,7 @@ impl Auth {
         let target = target.trim().to_lowercase();
         let after = clean_groups(groups)?;
         let _g = self.mfa_guard()?;
-        let u = self
-            .user_record(&target)
-            .map_err(|_| MfaError::Invalid(format!("no user {target}")))?;
+        let u = self.known_user(&target)?;
         let before = str_list(&u["groups"]);
         Self::check_known(&after, known, &before)?;
         let added: Vec<String> = after
@@ -273,7 +285,7 @@ impl Auth {
                         .into(),
                 ));
             }
-            if u["disabled"].as_bool() != Some(true) && self.enabled_admins() <= 1 {
+            if u["disabled"].as_bool() != Some(true) && self.enabled_admins()? <= 1 {
                 return Err(MfaError::Invalid(
                     "the last enabled administrator keeps the group; make another administrator first"
                         .into(),
@@ -283,7 +295,7 @@ impl Auth {
         let mut patch = Fields::new();
         patch.insert("groups".into(), json!(after));
         self.put(&target, &patch)?;
-        let relimited = self.resync_limits(&target, &after);
+        let relimited = self.resync_limits(&target, &after)?;
         let mut detail = format!(
             "groups changed: added {}; removed {}; now {}",
             list(&added),
@@ -322,11 +334,9 @@ impl Auth {
             ));
         }
         let _g = self.mfa_guard()?;
-        let u = self
-            .user_record(&target)
-            .map_err(|_| MfaError::Invalid(format!("no user {target}")))?;
+        let u = self.known_user(&target)?;
         let is_admin = str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP);
-        if is_admin && u["disabled"].as_bool() != Some(true) && self.enabled_admins() <= 1 {
+        if is_admin && u["disabled"].as_bool() != Some(true) && self.enabled_admins()? <= 1 {
             return Err(MfaError::Invalid(
                 "the last enabled administrator cannot be offboarded".into(),
             ));
@@ -343,68 +353,68 @@ impl Auth {
         // Every token of the account: sessions, agent tokens, and the access tokens of connected
         // applications. They are marked revoked, so enabling the account later does not bring
         // any of them back.
-        let (mut sessions, mut agents) = (0usize, 0usize);
-        for (id, t) in self.backend.list("auth_token").unwrap_or_default() {
-            if t.get("owner").and_then(J::as_str) != Some(target.as_str())
-                || t.get("revoked").and_then(J::as_bool) == Some(true)
-            {
-                continue;
-            }
-            let mut p = Fields::new();
-            p.insert("revoked".into(), J::Bool(true));
-            if !self.backend.update("auth_token", &id, &p).unwrap_or(false) {
-                continue;
-            }
-            // The access token of a connected application is counted with its grant below.
-            if t.get("oauth_grant").is_some() {
-                continue;
-            }
-            if t.get("kind").and_then(J::as_str) == Some("agent") {
-                agents += 1;
-            } else {
-                sessions += 1;
-            }
-        }
-        // Connected applications: end each grant and forget its refresh tokens, or a refresh
-        // token would mint a new access token the day the account is enabled again.
-        let mut apps = 0usize;
-        for (gid, g) in self
-            .backend
-            .find("oauth_grant", "owner", &J::from(target.as_str()))
-            .unwrap_or_default()
-        {
-            if g.get("revoked").and_then(J::as_bool) != Some(true) {
-                let mut p = Fields::new();
-                p.insert("revoked".into(), J::Bool(true));
-                p.insert("revoked_at".into(), J::from(self.now()));
-                if self
-                    .backend
-                    .update("oauth_grant", &gid, &p)
-                    .unwrap_or(false)
-                {
-                    apps += 1;
+        //
+        // The account is already disabled and what follows is a list of things to end, each read
+        // again when the step runs again: a refused list or write is tried again, and if it is
+        // still refused the offboarding fails as a partial request (503) and says so in the log,
+        // never "0 sessions ended". Offboarding the same account again finishes the rest.
+        let (mut sessions, mut agents, mut apps, mut pending) = (0usize, 0usize, 0usize, 0usize);
+        let tid = target.as_str();
+        self.needed(
+            tid,
+            "user_offboard",
+            "ending the tokens of the account",
+            || {
+                for (id, t) in self.backend.list("auth_token")? {
+                    if t.get("owner").and_then(J::as_str) != Some(tid)
+                        || t.get("revoked").and_then(J::as_bool) == Some(true)
+                    {
+                        continue;
+                    }
+                    let mut p = Fields::new();
+                    p.insert("revoked".into(), J::Bool(true));
+                    if !self.backend.update("auth_token", &id, &p)? {
+                        continue;
+                    }
+                    // The access token of a connected application is counted with its grant below.
+                    if t.get("oauth_grant").is_some() {
+                        continue;
+                    }
+                    if t.get("kind").and_then(J::as_str) == Some("agent") {
+                        agents += 1;
+                    } else {
+                        sessions += 1;
+                    }
                 }
-            }
-            for (rid, _) in self
-                .backend
-                .find("oauth_refresh", "grant", &J::from(gid.as_str()))
-                .unwrap_or_default()
-            {
-                let _ = self.backend.delete("oauth_refresh", &rid);
-            }
-        }
-        // A half-finished sign-in and a passkey proof given a moment ago.
-        let mut pending = 0usize;
-        for (id, _) in self
-            .backend
-            .find("auth_mfa_token", "user", &J::from(target.as_str()))
-            .unwrap_or_default()
-        {
-            if self.backend.delete("auth_mfa_token", &id).unwrap_or(false) {
-                pending += 1;
-            }
-        }
-        let _ = self.backend.kv_delete(&crate::passkey::proof_key(&target));
+                // Connected applications: end each grant and forget its refresh tokens, or a refresh
+                // token would mint a new access token the day the account is enabled again.
+                for (gid, g) in self.backend.find("oauth_grant", "owner", &J::from(tid))? {
+                    if g.get("revoked").and_then(J::as_bool) != Some(true) {
+                        let mut p = Fields::new();
+                        p.insert("revoked".into(), J::Bool(true));
+                        p.insert("revoked_at".into(), J::from(self.now()));
+                        if self.backend.update("oauth_grant", &gid, &p)? {
+                            apps += 1;
+                        }
+                    }
+                    for (rid, _) in
+                        self.backend
+                            .find("oauth_refresh", "grant", &J::from(gid.as_str()))?
+                    {
+                        self.backend.delete("oauth_refresh", &rid)?;
+                    }
+                }
+                // A half-finished sign-in and a passkey proof given a moment ago.
+                for (id, _) in self.backend.find("auth_mfa_token", "user", &J::from(tid))? {
+                    if self.backend.delete("auth_mfa_token", &id)? {
+                        pending += 1;
+                    }
+                }
+                self.backend.kv_delete(&crate::passkey::proof_key(tid))?;
+                Ok(())
+            },
+        )?;
+        // A lockout counter is not worth failing for: it expires by itself.
         let _ = self.backend.counter_reset(&Self::failure_key(&target));
         let mut detail = format!(
             "account disabled and offboarded; {sessions} session(s), {agents} agent token(s) and {apps} connected app(s) ended for good; {pending} half-finished sign-in(s) dropped"

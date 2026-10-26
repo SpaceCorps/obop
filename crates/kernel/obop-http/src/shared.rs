@@ -221,6 +221,55 @@ mod tests {
         );
     }
 
+    /// A call that changed a record and masked a value, with the save of the vault refused `n`
+    /// times right after the change. Returns the call's result and what the request did.
+    fn masked_call_after_a_commit(
+        n: i64,
+    ) -> (
+        Arc<SharedState>,
+        Result<String, String>,
+        obop_storage::fault::Outcome,
+    ) {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        let s = Arc::new(SharedState {
+            backend: backend.clone(),
+            ring: KeyRing::for_tests(),
+        });
+        let a = s.vault("obop_agent", true);
+        obop_storage::fault::begin_request(Default::default());
+        flaky.refuse_n_after_the_next_write(n);
+        let r = a.with(|v| {
+            backend
+                .insert("note", "n1", &obop_storage::Fields::new())
+                .unwrap();
+            v.mask("PERSON", "party:1", "Ada")
+        });
+        (s, r, obop_storage::fault::end_request())
+    }
+
+    #[test]
+    fn a_vault_save_refused_for_a_moment_is_tried_again() {
+        // The call committed a change and its answer names a token only the saved vault restores.
+        let (s, r, out) = masked_call_after_a_commit(2);
+        let token = r.expect("the save went through on the third try");
+        assert!(out.wrote && !out.partial, "{out:?}");
+        let again = s.vault("obop_agent", true);
+        assert_eq!(
+            again
+                .with(|v| v.restore(&token, |_| true).map(String::from))
+                .unwrap(),
+            Ok("Ada".to_string())
+        );
+    }
+
+    #[test]
+    fn a_vault_save_that_stays_refused_after_a_commit_is_a_partial_failure() {
+        let (_s, r, out) = masked_call_after_a_commit(50);
+        let e = r.expect_err("the answer would name a token nobody stored");
+        assert!(obop_storage::fault::Fault::is_transient(&e), "{e}");
+        assert!(out.wrote && out.partial, "{out:?}");
+    }
+
     #[test]
     fn a_person_who_masks_nothing_writes_nothing() {
         let s = state();

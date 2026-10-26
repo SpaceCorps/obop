@@ -150,6 +150,10 @@ pub(crate) fn mfa_error(e: MfaError) -> Response {
             "not_found",
             "The API is described at /api/openapi.json.",
         ),
+        // The store refused a call: busy or unreachable is the server's trouble, with a time to wait.
+        MfaError::Unavailable(m) if obop_storage::fault::Fault::is_transient(&m) => {
+            crate::unavailable(&m)
+        }
         MfaError::Unavailable(m) => api_error(
             StatusCode::SERVICE_UNAVAILABLE,
             &m,

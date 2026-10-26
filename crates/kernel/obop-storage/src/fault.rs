@@ -251,7 +251,8 @@ pub fn mark_partial() {
     SCOPE.with(|c| {
         let mut s = c.get();
         if s.active {
-            s.partial = true;
+            // Before any change committed the request is not partial, it is plainly refused.
+            s.partial = s.partial || s.changes > 0;
             if s.fault.is_none() {
                 s.fault = Some(Fault::Busy);
             }
@@ -410,6 +411,17 @@ mod tests {
                 fault: Some(Fault::Busy),
                 wrote: true,
                 partial: true
+            }
+        );
+        // Before any change committed a refused step is a plain refusal, not a partial request.
+        begin_request(Outcome::default());
+        mark_partial();
+        assert_eq!(
+            end_request(),
+            Outcome {
+                fault: Some(Fault::Busy),
+                wrote: false,
+                partial: false
             }
         );
         // `mark_partial` outside a request scope does nothing.

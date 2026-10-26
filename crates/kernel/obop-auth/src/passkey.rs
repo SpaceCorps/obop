@@ -101,18 +101,34 @@ impl Auth {
     }
 
     /// Remove every passkey of the person (the break-glass reset and the administrator's reset).
-    pub(crate) fn clear_passkeys(&self, name: &str) -> usize {
+    ///
+    /// A refused lookup or delete is an error, not "none left": a reset that leaves a passkey
+    /// behind must not say it is done.
+    pub(crate) fn clear_passkeys(&self, name: &str) -> Result<usize, MfaError> {
+        let unavailable = MfaError::Unavailable;
         let mut n = 0;
-        for (id, _) in self.passkeys_of(name) {
-            if self.backend.delete(PASSKEY_TABLE, &id).unwrap_or(false) {
+        for (id, _) in self
+            .backend
+            .find(PASSKEY_TABLE, "user", &J::from(name))
+            .map_err(unavailable)?
+        {
+            if self
+                .backend
+                .delete(PASSKEY_TABLE, &id)
+                .map_err(unavailable)?
+            {
                 n += 1;
             }
         }
         let mut p = Fields::new();
         p.insert("passkey_login".into(), J::Bool(false));
-        let _ = self.backend.update("auth_user", name, &p);
-        let _ = self.backend.kv_delete(&proof_key(name));
-        n
+        self.backend
+            .update("auth_user", name, &p)
+            .map_err(unavailable)?;
+        self.backend
+            .kv_delete(&proof_key(name))
+            .map_err(unavailable)?;
+        Ok(n)
     }
 
     fn user_handle(&self, name: &str) -> Result<Vec<u8>, MfaError> {
@@ -756,7 +772,7 @@ impl PasskeyApi for Auth {
             self.put(name, &patch)?;
         }
         // Like turning off the authenticator app: a stolen session must not outlive the factor.
-        let n = self.revoke_user_sessions(name, Some(&token_hash(session)));
+        let n = self.revoke_user_sessions(name, Some(&token_hash(session)))?;
         self.event(
             name,
             "passkey_remove",

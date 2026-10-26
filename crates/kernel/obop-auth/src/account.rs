@@ -49,23 +49,35 @@ impl Auth {
 
     /// Revoke the sessions of a user, all but the one whose token hash is `keep`. Agent tokens
     /// are separate credentials and are not touched. Returns how many ended.
-    pub(crate) fn revoke_user_sessions(&self, name: &str, keep: Option<&str>) -> usize {
+    ///
+    /// Every caller has just changed something (a password, the groups, the account itself) that
+    /// the other sessions must not outlive, so a refused list or revoke is never "0 ended": it is
+    /// tried again, and if it is still refused the request fails as a partial one
+    /// ([`Auth::needed`]).
+    pub(crate) fn revoke_user_sessions(
+        &self,
+        name: &str,
+        keep: Option<&str>,
+    ) -> Result<usize, MfaError> {
         let mut n = 0;
-        for (id, t) in self.backend.list("auth_token").unwrap_or_default() {
-            let t = J::Object(t);
-            if t["owner"].as_str() == Some(name)
-                && t["kind"].as_str() == Some("user")
-                && t["revoked"].as_bool() != Some(true)
-                && keep != Some(id.as_str())
-            {
-                let mut p = Fields::new();
-                p.insert("revoked".into(), J::Bool(true));
-                if self.backend.update("auth_token", &id, &p).unwrap_or(false) {
-                    n += 1;
+        self.needed(name, "sessions_revoked", "ending the sessions", || {
+            for (id, t) in self.backend.list("auth_token")? {
+                let t = J::Object(t);
+                if t["owner"].as_str() == Some(name)
+                    && t["kind"].as_str() == Some("user")
+                    && t["revoked"].as_bool() != Some(true)
+                    && keep != Some(id.as_str())
+                {
+                    let mut p = Fields::new();
+                    p.insert("revoked".into(), J::Bool(true));
+                    if self.backend.update("auth_token", &id, &p)? {
+                        n += 1;
+                    }
                 }
             }
-        }
-        n
+            Ok(())
+        })?;
+        Ok(n)
     }
 
     /// Remove tokens that ended a day ago or more, and spent second-step tokens. Runs at most
@@ -147,7 +159,7 @@ impl Auth {
     ) -> Result<usize, MfaError> {
         let name = person(p)?;
         let h = token_hash(session);
-        let n = self.revoke_user_sessions(name, keep_current.then_some(h.as_str()));
+        let n = self.revoke_user_sessions(name, keep_current.then_some(h.as_str()))?;
         self.event(
             name,
             "sessions_revoked",
@@ -210,14 +222,19 @@ impl Auth {
         patch.insert("password_changed_at".into(), J::from(self.now()));
         self.put(name, &patch)?;
         let h = token_hash(session);
-        let n = self.revoke_user_sessions(name, Some(&h));
+        let n = self.revoke_user_sessions(name, Some(&h))?;
         // The session that proved the old password may now do everything its person may, unless
         // two-factor enrolment is still owed.
         let groups = str_list(&u["groups"]);
         let still_limited = self.enrolment_required_for(&groups) && !self.has_second_factor(name);
         let mut lift = Fields::new();
         lift.insert("limited".into(), J::Bool(still_limited));
-        let _ = self.backend.update("auth_token", &h, &lift);
+        self.needed(
+            name,
+            "password_change",
+            "lifting the limit of this session",
+            || self.backend.update("auth_token", &h, &lift),
+        )?;
         self.event(
             name,
             "password_change",
@@ -278,16 +295,20 @@ impl Auth {
         Ok(json!({"users": users}))
     }
 
-    pub(crate) fn enabled_admins(&self) -> usize {
-        self.backend
+    /// How many enabled administrators there are. A refused list is the store's trouble, not
+    /// "none": the callers refuse to take the last administrator away, and must not do that (a 400)
+    /// or skip it (a lockout) because the lookup failed.
+    pub(crate) fn enabled_admins(&self) -> Result<usize, MfaError> {
+        Ok(self
+            .backend
             .list("auth_user")
-            .unwrap_or_default()
+            .map_err(MfaError::Unavailable)?
             .into_iter()
             .filter(|(_, u)| {
                 str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP)
                     && u.get("disabled").and_then(J::as_bool) != Some(true)
             })
-            .count()
+            .count())
     }
 
     pub(crate) fn set_user_disabled_impl(
@@ -318,16 +339,10 @@ impl Auth {
             ));
         }
         let _g = self.mfa_guard()?;
-        let u = self
-            .backend
-            .get("auth_user", &target)
-            .ok()
-            .flatten()
-            .map(J::Object)
-            .ok_or_else(|| MfaError::Invalid(format!("no user {target}")))?;
+        let u = self.known_user(&target)?;
         let is_admin = str_list(&u["groups"]).iter().any(|g| g == ADMIN_GROUP);
         let was = u["disabled"].as_bool() == Some(true);
-        if disabled && !was && is_admin && self.enabled_admins() <= 1 {
+        if disabled && !was && is_admin && self.enabled_admins()? <= 1 {
             return Err(MfaError::Invalid(
                 "the last enabled administrator cannot be disabled".into(),
             ));
@@ -340,7 +355,7 @@ impl Auth {
         }
         self.put(&target, &patch)?;
         if disabled {
-            let n = self.revoke_user_sessions(&target, None);
+            let n = self.revoke_user_sessions(&target, None)?;
             self.event(
                 &target,
                 "user_disable",
@@ -379,8 +394,7 @@ impl Auth {
             )));
         }
         let _g = self.mfa_guard()?;
-        self.user_record(&target)
-            .map_err(|_| MfaError::Invalid(format!("no user {target}")))?;
+        self.known_user(&target)?;
         let hash = self
             .hash_password(temporary)
             .map_err(MfaError::Unavailable)?;
@@ -388,7 +402,7 @@ impl Auth {
         patch.insert("password_hash".into(), J::from(hash));
         patch.insert("must_change_password".into(), J::Bool(true));
         self.put(&target, &patch)?;
-        let n = self.revoke_user_sessions(&target, None);
+        let n = self.revoke_user_sessions(&target, None)?;
         // A person locked out by wrong guesses may need this to get back in at all.
         let _ = self.backend.counter_reset(&Self::failure_key(&target));
         self.event(

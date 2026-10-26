@@ -185,13 +185,23 @@ impl Auth {
     }
 
     /// The stored user as a JSON object (a missing key reads as null, unlike `Fields`).
+    ///
+    /// A refused lookup is the store's trouble (`Unavailable`, 503), never "no such user".
     pub(crate) fn user_record(&self, name: &str) -> Result<J, MfaError> {
-        self.backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .map(J::Object)
-            .ok_or(MfaError::NotFound)
+        match self.backend.get("auth_user", name) {
+            Ok(Some(u)) => Ok(J::Object(u)),
+            Ok(None) => Err(MfaError::NotFound),
+            Err(e) => Err(MfaError::Unavailable(e)),
+        }
+    }
+
+    /// As [`Auth::user_record`], for the administrator's calls that name the user: a user that
+    /// does not exist is bad input (`Invalid`).
+    pub(crate) fn known_user(&self, name: &str) -> Result<J, MfaError> {
+        match self.user_record(name) {
+            Err(MfaError::NotFound) => Err(MfaError::Invalid(format!("no user {name}"))),
+            other => other,
+        }
     }
 
     pub(crate) fn put(&self, name: &str, patch: &Fields) -> Result<(), MfaError> {
@@ -456,7 +466,7 @@ impl Auth {
         self.check_second_factor(name, code, recovery)?;
         self.clear_factor(name)?;
         let keep = session.map(token_hash);
-        let n = self.revoke_user_sessions(name, keep.as_deref());
+        let n = self.revoke_user_sessions(name, keep.as_deref())?;
         self.event(
             name,
             "disable",
@@ -469,8 +479,8 @@ impl Auth {
     // ---- operator -----------------------------------------------------------------------
 
     /// Revoke every session of a user (not agent tokens: those are separate credentials).
-    fn revoke_sessions(&self, name: &str) {
-        self.revoke_user_sessions(name, None);
+    fn revoke_sessions(&self, name: &str) -> Result<usize, MfaError> {
+        self.revoke_user_sessions(name, None)
     }
 
     fn clear_factor(&self, name: &str) -> Result<(), MfaError> {
@@ -491,11 +501,13 @@ impl Auth {
     pub fn operator_reset_mfa(&self, username: &str) -> Result<(), String> {
         let name = username.trim().to_lowercase();
         let _g = self.backend.lock("auth.mfa")?;
-        self.user_record(&name)
-            .map_err(|_| format!("no user {name}"))?;
-        let passkeys = self.clear_passkeys(&name);
+        self.known_user(&name).map_err(|e| match e {
+            MfaError::Invalid(m) | MfaError::Unavailable(m) => m,
+            other => format!("{other:?}"),
+        })?;
+        let passkeys = self.clear_passkeys(&name).map_err(|e| format!("{e:?}"))?;
         self.clear_factor(&name).map_err(|e| format!("{e:?}"))?;
-        self.revoke_sessions(&name);
+        self.revoke_sessions(&name).map_err(|e| format!("{e:?}"))?;
         self.event(
             &name,
             "reset",
@@ -666,13 +678,7 @@ impl MfaApi for Auth {
             ));
         }
         let _g = self.mfa_guard()?;
-        let u = self
-            .backend
-            .get("auth_user", &target)
-            .ok()
-            .flatten()
-            .map(J::Object)
-            .ok_or_else(|| MfaError::Invalid(format!("no user {target}")))?;
+        let u = self.known_user(&target)?;
         if u["mfa_enabled"].as_bool() != Some(true)
             && !u["totp_pending"].is_string()
             && self.passkeys_of(&target).is_empty()
@@ -681,9 +687,9 @@ impl MfaApi for Auth {
                 "{target} has no two-factor to reset"
             )));
         }
-        let passkeys = self.clear_passkeys(&target);
+        let passkeys = self.clear_passkeys(&target)?;
         self.clear_factor(&target)?;
-        self.revoke_sessions(&target);
+        self.revoke_sessions(&target)?;
         self.event(
             &target,
             "reset",

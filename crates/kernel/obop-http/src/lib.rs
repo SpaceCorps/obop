@@ -625,6 +625,10 @@ fn bearer(h: &HeaderMap) -> &str {
 }
 
 fn err(status: StatusCode, e: String) -> Response {
+    // A refused database call is never a 400, 401 or 404 the client would not retry (D74).
+    if obop_storage::fault::Fault::is_transient(&e) {
+        return unavailable(&e);
+    }
     let (code, hint) = match status {
         StatusCode::UNAUTHORIZED => ("unauthorized", "Sign in, or pass a valid bearer token."),
         StatusCode::NOT_FOUND => (
@@ -808,5 +812,60 @@ fn p_delete_blocking(api: Arc<dyn PlatformApi>, h: HeaderMap, id: String) -> Res
         Err(e) if e == "not signed in" => err(StatusCode::UNAUTHORIZED, e),
         Err(e) if e == "no such instance" => err(StatusCode::NOT_FOUND, e),
         Err(e) => err(StatusCode::BAD_REQUEST, e),
+    }
+}
+
+#[cfg(test)]
+mod fault_answers {
+    use super::*;
+    use obop_commands::MfaError;
+
+    fn retry_after(r: &Response) -> Option<String> {
+        r.headers()
+            .get(axum::http::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok())
+            .map(String::from)
+    }
+
+    #[test]
+    fn a_handler_error_that_is_the_stores_trouble_is_a_503_and_never_a_400() {
+        let r = respond(Err(CallError::Handler(
+            "storage_busy: every connection is in use".into(),
+        )));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(retry_after(&r).as_deref(), Some("1"));
+        let r = respond(Err(CallError::Handler(
+            "storage_unavailable: the database cannot be reached".into(),
+        )));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(retry_after(&r).as_deref(), Some("5"));
+        // An error of the command itself is still the caller's.
+        let r = respond(Err(CallError::Handler("name is required".into())));
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn two_factor_and_control_plane_errors_that_name_the_store_are_503_with_a_time_to_wait() {
+        let busy = || "storage_timeout: a statement ran into its time limit".to_string();
+        let r = mfa::mfa_error(MfaError::Unavailable(busy()));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(retry_after(&r).as_deref(), Some("5"));
+        // Without the store's code word it is the server-key message as before.
+        let r = mfa::mfa_error(MfaError::Unavailable("OBOP_SECRET_KEY is not set".into()));
+        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(retry_after(&r).is_none());
+        for status in [
+            StatusCode::BAD_REQUEST,
+            StatusCode::UNAUTHORIZED,
+            StatusCode::NOT_FOUND,
+        ] {
+            let r = err(status, busy());
+            assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE, "{status}");
+            assert_eq!(retry_after(&r).as_deref(), Some("5"));
+        }
+        assert_eq!(
+            err(StatusCode::UNAUTHORIZED, "invalid email or password".into()).status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 }

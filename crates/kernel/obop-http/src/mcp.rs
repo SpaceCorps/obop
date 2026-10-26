@@ -912,6 +912,40 @@ mod tests {
         }
     }
 
+    /// An MCP session on a store that can be made to refuse calls; a request that commits a record
+    /// and then saves the session (it carries the mask vault) with the next `n` calls refused.
+    fn finish_after_a_commit(n: i64) -> (McpState, obop_storage::fault::Outcome, String) {
+        let (flaky, backend) = obop_storage::testing::Flaky::memory();
+        let shared = Arc::new(SharedState {
+            backend: backend.clone(),
+            ring: obop_keys::KeyRing::for_tests(),
+        });
+        let st = McpState::new(cfg(), shared);
+        let id = st.open("obop_agent", Session::new()).unwrap();
+        let entry = st.find(&id, "obop_agent").expect("the session is there");
+        obop_storage::fault::begin_request(Default::default());
+        flaky.refuse_n_after_the_next_write(n);
+        backend
+            .insert("note", "n1", &obop_storage::Fields::new())
+            .unwrap();
+        st.finish(entry, "obop_agent");
+        (st, obop_storage::fault::end_request(), id)
+    }
+
+    #[test]
+    fn a_session_save_refused_for_a_moment_is_tried_again() {
+        let (st, out, id) = finish_after_a_commit(2);
+        assert!(out.wrote && !out.partial, "{out:?}");
+        assert!(st.find(&id, "obop_agent").is_some());
+    }
+
+    #[test]
+    fn a_session_save_that_stays_refused_after_a_commit_is_a_partial_failure() {
+        let (_st, out, _id) = finish_after_a_commit(50);
+        assert!(out.wrote && out.partial, "{out:?}");
+        assert!(out.fault.is_some());
+    }
+
     #[test]
     fn origins_are_checked_against_the_list_public_url_and_loopback() {
         let c = cfg();

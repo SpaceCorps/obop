@@ -270,6 +270,70 @@ impl Auth {
     pub(crate) fn mfa_guard(&self) -> Result<obop_storage::LockGuard, MfaError> {
         self.backend.lock("auth.mfa").map_err(MfaError::Unavailable)
     }
+
+    /// Evaluate `f`, whose store reads cannot report a refusal (they answer "no" or "none" instead:
+    /// `has_second_factor`, `must_change_password`), until it ran without the store refusing a
+    /// call, at most five times. A value computed from a refused read must not be written, so a
+    /// lasting refusal is an error, with the fault noted as before.
+    pub(crate) fn settled<T>(&self, mut f: impl FnMut() -> T) -> Result<T, MfaError> {
+        use obop_storage::fault;
+        let earlier = fault::take();
+        let mut last = None;
+        for attempt in 0..5 {
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+            let v = f();
+            match fault::take() {
+                None => {
+                    if let Some(e) = earlier {
+                        fault::note(e);
+                    }
+                    return Ok(v);
+                }
+                Some(fl) => last = Some(fl),
+            }
+        }
+        let fl = last.unwrap_or(fault::Fault::Busy);
+        fault::note(earlier.unwrap_or(fl));
+        Err(MfaError::Unavailable(
+            fl.message("a lookup this change depends on was refused"),
+        ))
+    }
+
+    /// A step the request needs after one of its changes committed (ending the sessions of an
+    /// account that was just disabled, relimiting the sessions of a changed group list). A refused
+    /// step is tried again a few times, with its writes allowed although an earlier call of the
+    /// request was refused (it rests on the change just made, not on a read). If it is still
+    /// refused the request is a partial one: the entry of the change that did commit goes to the
+    /// security log (`kind`, saying the step is missing), the request is marked partial and the
+    /// error is returned, never "nothing to do". The step must be safe to run again: it reads what
+    /// is left to do each time; `f` keeps its own tally.
+    pub(crate) fn needed<T>(
+        &self,
+        user: &str,
+        kind: &str,
+        what: &str,
+        mut f: impl FnMut() -> Result<T, String>,
+    ) -> Result<T, MfaError> {
+        obop_storage::fault::patiently(5, std::time::Duration::from_millis(150), || {
+            obop_storage::fault::allow(&mut f)
+        })
+        .map_err(|e| self.incomplete(user, kind, what, e))
+    }
+
+    /// The request is a partial one: mark it, say so in the security log (the entry of the change
+    /// that did commit must not be lost) and return the error that ends it.
+    pub(crate) fn incomplete(&self, user: &str, kind: &str, what: &str, e: String) -> MfaError {
+        obop_storage::fault::mark_partial();
+        self.event(
+            user,
+            kind,
+            "system",
+            &format!("INCOMPLETE: {what} was refused by the store ({e}); repeat the request"),
+        );
+        MfaError::Unavailable(e)
+    }
 }
 
 impl Auth {
