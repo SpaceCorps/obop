@@ -9,7 +9,7 @@
 
 pub mod schema;
 
-use obop_commands::{CallError, Dispatcher, Principal, Surface, Value, Vault, names};
+use obop_commands::{CallError, Dispatcher, Principal, Surface, Value, Vault, errors, names};
 use serde_json::{Value as J, json};
 use std::io::{BufRead, Write};
 
@@ -307,7 +307,16 @@ fn call_tool(d: &Dispatcher, p: &Principal, s: &mut Session, params: &J) -> Resu
             }
             Ok(tool_result(out, false))
         }
-        Err(CallError::ApprovalRequired { plan_id }) => Ok(tool_result(
+        Err(e) => error_reply(name, &e),
+    }
+}
+
+/// The MCP answer for a failed call. `errors::classify` decides what kind of failure it is; this
+/// only shapes it for a tool result.
+fn error_reply(name: &str, e: &CallError) -> Result<J, RpcError> {
+    let c = errors::classify(e);
+    match c.kind {
+        errors::Kind::Proposed { plan_id } => Ok(tool_result(
             json!({
                 "status": "approval_required",
                 "plan_id": plan_id,
@@ -315,12 +324,9 @@ fn call_tool(d: &Dispatcher, p: &Principal, s: &mut Session, params: &J) -> Resu
             }),
             false,
         )),
-        Err(
-            CallError::Forbidden(_) | CallError::UnknownCommand(_) | CallError::NotOnSurface(_),
-        ) => Err(unknown_tool(name)),
-        Err(CallError::UnknownPlan(_)) => Err(unknown_tool(name)),
-        Err(CallError::Restore(_)) => Ok(tool_result(json!({"error": "invalid token"}), true)),
-        Err(CallError::Handler(m)) => Ok(tool_result(json!({"error": m}), true)),
+        // Unknown, hidden, forbidden and not-on-this-surface all answer the same.
+        errors::Kind::Hidden => Err(unknown_tool(name)),
+        errors::Kind::Failed => Ok(tool_result(c.body, true)),
     }
 }
 
@@ -529,5 +535,55 @@ mod tests {
         .unwrap();
         assert!(init.contains("\"protocolVersion\":\"2025-06-18\""));
         assert_eq!(s.protocol, Some("2025-06-18"));
+    }
+
+    #[test]
+    fn failed_calls_answer_as_the_classification_says() {
+        let is_error = |r: &Result<J, RpcError>| r.as_ref().unwrap()["isError"].clone();
+        let body = |r: &Result<J, RpcError>| r.as_ref().unwrap()["structuredContent"].clone();
+
+        // The answers that have always existed.
+        let r = error_reply(
+            "party__create",
+            &CallError::Handler("name is required".into()),
+        );
+        assert_eq!(is_error(&r), json!(true));
+        assert_eq!(body(&r), json!({"error": "name is required"}));
+        let restore = obop_commands::RestoreError::UnknownToken("t1".into());
+        let r = error_reply("t", &CallError::Restore(restore));
+        assert_eq!(body(&r), json!({"error": "invalid token"}));
+        let plan = CallError::ApprovalRequired {
+            plan_id: "plan-1".into(),
+        };
+        let r = error_reply("t", &plan);
+        assert_eq!(is_error(&r), json!(false));
+        assert_eq!(body(&r)["status"], "approval_required");
+        assert_eq!(body(&r)["plan_id"], "plan-1");
+        for e in [
+            CallError::Forbidden("a.b".into()),
+            CallError::UnknownCommand("a.b".into()),
+            CallError::NotOnSurface("a.b".into()),
+            CallError::UnknownPlan("p".into()),
+        ] {
+            assert_eq!(
+                error_reply("a__b", &e).unwrap_err(),
+                (-32602, "unknown tool: a__b".to_string())
+            );
+        }
+
+        // A code of the table is an error result that carries it.
+        let r = error_reply(
+            "t",
+            &CallError::Handler("use_search: after is a search option".into()),
+        );
+        assert_eq!(is_error(&r), json!(true));
+        assert_eq!(body(&r)["code"], "use_search");
+        assert_eq!(body(&r)["error"], "after is a search option");
+
+        // A failed precondition says which version the record has now.
+        let r = error_reply("t", &CallError::PreconditionFailed { current: 8 });
+        assert_eq!(is_error(&r), json!(true));
+        assert_eq!(body(&r)["code"], "precondition_failed");
+        assert_eq!(body(&r)["current_version"], 8);
     }
 }

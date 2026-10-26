@@ -120,6 +120,13 @@ pub enum CallError {
         plan_id: String,
     },
     UnknownPlan(String),
+    /// The record is no longer at the version the caller read (D75). `current` is the version it
+    /// has now. Nothing was written. No producer yet.
+    PreconditionFailed {
+        current: i64,
+    },
+    /// The call ran and was refused. The text may start with a code of `errors::TABLE`
+    /// (`code: message`); `errors::classify` is the only reader of it.
     Handler(String),
 }
 
@@ -1464,6 +1471,7 @@ pub mod blobs;
 pub mod collate;
 pub mod csv;
 mod engine;
+pub mod errors;
 mod guards;
 pub mod json;
 mod kinds;

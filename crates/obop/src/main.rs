@@ -895,7 +895,11 @@ fn call_json(
         .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
     {
         Ok(r) => Ok((r.value.to_json(), r.denied.clone())),
-        Err(e) => Err(fail(&format!("error: {e:?}"))),
+        // What the line says is decided with the other surfaces' answers (`errors::classify`).
+        Err(e) => Err(fail(&format!(
+            "error: {}",
+            obop_commands::errors::classify(&e).cli
+        ))),
     }
 }
 

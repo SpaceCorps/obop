@@ -55,7 +55,12 @@ pub fn run(o: &Opts, a: &Args) -> Exit {
                 a.model
             )));
         }
-        Err(e) => return Err(fail(&format!("error: {e:?}"))),
+        Err(e) => {
+            return Err(fail(&format!(
+                "error: {}",
+                obop_commands::errors::classify(&e).cli
+            )));
+        }
     };
     let Value::Map(m) = &out else {
         return Err(fail("error: unexpected answer"));

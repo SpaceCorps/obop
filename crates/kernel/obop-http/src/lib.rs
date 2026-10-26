@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{any, get, post},
 };
-use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value};
+use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value, errors};
 use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
@@ -30,6 +30,9 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod website;
+
+#[cfg(test)]
+mod error_tests;
 
 pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
@@ -494,27 +497,29 @@ fn unavailable(why: &str) -> Response {
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
     match r {
         Ok(r) => Json(json!({"value": r.value.to_json(), "denied": r.denied})).into_response(),
-        Err(CallError::ApprovalRequired { plan_id }) => (
-            StatusCode::ACCEPTED,
-            Json(json!({"approval_required": true, "plan_id": plan_id})),
-        )
-            .into_response(),
-        // Unknown, hidden and forbidden look the same, so a caller cannot probe for commands.
-        Err(
-            CallError::Forbidden(_) | CallError::UnknownCommand(_) | CallError::NotOnSurface(_),
-        ) => (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response(),
-        Err(CallError::UnknownPlan(_)) => {
-            (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response()
-        }
-        Err(CallError::Restore(_)) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": "invalid token"})),
-        )
-            .into_response(),
-        Err(CallError::Handler(m)) => {
-            (StatusCode::BAD_REQUEST, Json(json!({"error": m}))).into_response()
-        }
+        Err(e) => classified(errors::classify(&e)),
     }
+}
+
+/// The answer for a classified call error: its status and body (`obop_commands::errors` decides
+/// both; unknown, hidden and forbidden look the same there, so a caller cannot probe for
+/// commands), `ETag` for the version a failed precondition found, `Retry-After` when it says
+/// "later".
+fn classified(c: errors::Classified) -> Response {
+    let status = StatusCode::from_u16(c.status).unwrap_or(StatusCode::BAD_REQUEST);
+    let mut r = (status, Json(c.body)).into_response();
+    if let Some(v) = c.current_version
+        && let Ok(v) = axum::http::HeaderValue::from_str(&format!("\"{v}\""))
+    {
+        r.headers_mut().insert(axum::http::header::ETAG, v);
+    }
+    if let Some(s) = c.retry_after {
+        r.headers_mut().insert(
+            axum::http::header::RETRY_AFTER,
+            axum::http::HeaderValue::from(s),
+        );
+    }
+    r
 }
 
 pub async fn serve(addr: &str, app: Router) -> std::io::Result<()> {
