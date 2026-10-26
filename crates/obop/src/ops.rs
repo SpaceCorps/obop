@@ -90,9 +90,10 @@ pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
             .ok()
             .filter(|d| !d.trim().is_empty());
         let keys = crate::backup_cli::backup_keys().map_err(|e| fail(&e))?;
-        let blobs = blob_catalog(backend, url)
-            .ok()
-            .map(|b| Arc::new(b) as Arc<dyn obop_storage::blob::Blobs>);
+        // Uploaded files that cannot be opened are not "no files": a backup without them would be
+        // answered as good.
+        let blobs =
+            Some(Arc::new(blob_catalog(backend, url)?) as Arc<dyn obop_storage::blob::Blobs>);
         let need_bytes = dir
             .as_ref()
             .and_then(|_| database_bytes(backend.kind(), url));
