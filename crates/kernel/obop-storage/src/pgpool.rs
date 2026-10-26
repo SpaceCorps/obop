@@ -478,11 +478,7 @@ impl Lease {
     /// Turn a statement's outcome into the storage contract's, discarding the connection when it
     /// can no longer be trusted.
     pub(crate) fn finish<T>(&mut self, r: PR<T>) -> Result<T, String> {
-        // A failed rollback, or a socket that is gone, spoils the connection whatever `r` says
-        // (a batch that reports its own failure as a value still ends up here as `Ok`).
-        if self.pooled.dirty || self.pooled.client.is_closed() {
-            self.broken();
-        }
+        self.vet();
         match r {
             Ok(v) => Ok(v),
             Err(PErr::Msg(m)) => Err(m),
@@ -493,6 +489,15 @@ impl Lease {
                 }
                 Err(text)
             }
+        }
+    }
+
+    /// A failed rollback, or a socket that is gone, spoils the connection whatever the statement
+    /// said (a batch that reports its own failure as a value still ends up here as `Ok`). Every
+    /// way a lease ends goes through here, also the one that runs a transaction again.
+    fn vet(&mut self) {
+        if self.pooled.dirty || self.pooled.client.is_closed() {
+            self.broken();
         }
     }
 
@@ -741,6 +746,9 @@ impl PgPool {
             let mut lease = self.lease(false)?;
             let r = lease.transaction(class, |c| f(c).map(|v| (v, true)));
             if attempt < MAX_REPEATS && r.as_ref().is_err_and(rolled_back_for_retry) {
+                // The rollback that ended this attempt may have failed (the socket died): such a
+                // connection must not go back to the pool for the next attempt to find.
+                lease.vet();
                 drop(lease);
                 attempt += 1;
                 repeat_pause(attempt);

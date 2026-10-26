@@ -1198,6 +1198,46 @@ fn a_transaction_the_server_rolled_back_for_a_deadlock_is_run_again() {
 }
 
 #[test]
+fn a_connection_that_died_under_a_deadlocked_transaction_is_not_given_to_its_rerun() {
+    use crate::pgpool::PErr;
+    // The server rolled the transaction back for a deadlock, and the rollback the pool sends
+    // after it failed (the socket is gone): the connection was put back as idle for the rerun to
+    // find, which then failed on it as "unavailable" (a 503 that says the outcome is unknown, for
+    // a transaction that applied nothing).
+    let (url, _db) = pg_db!();
+    let pg = connect(&url, PgPoolConfig::default());
+    let model = unique("rerun");
+    pg.insert(&model, "p", &fields(0)).unwrap();
+    let runs = AtomicUsize::new(0);
+    let done = pg.main.tx_retry(Class::Batch, |c| {
+        if runs.fetch_add(1, Ordering::SeqCst) == 0 {
+            // Kill this session from another one, then report what the server reports for a
+            // deadlock.
+            let pid: i32 = c.query_one("SELECT pg_backend_pid()", &[])?.get(0);
+            let mut other = PgConnector::new(&url).unwrap().connect().unwrap();
+            other
+                .execute("SELECT pg_terminate_backend($1)", &[&pid])
+                .unwrap();
+            return Err(PErr::Msg(
+                "db error (SQLSTATE 40P01): deadlock detected".into(),
+            ));
+        }
+        c.execute(
+            "UPDATE obop_record SET data = data || '{\"n\": 1}'::jsonb WHERE model = $1 AND id = 'p'",
+            &[&model],
+        )?;
+        Ok(())
+    });
+    assert!(done.is_ok(), "{done:?}");
+    assert_eq!(
+        runs.load(Ordering::SeqCst),
+        2,
+        "run again once, on a good connection"
+    );
+    assert_eq!(pg.get(&model, "p").unwrap().unwrap()["n"], 1);
+}
+
+#[test]
 fn a_statement_over_its_limit_is_cancelled_and_the_connection_stays_in_the_pool() {
     let _turn = serial();
     let (url, _db) = pg_db!();
