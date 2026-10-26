@@ -87,6 +87,34 @@ pub fn guard_database(backend: &Arc<dyn Backend>, url: &str) -> Exit {
     Ok(())
 }
 
+/// The rule for the address of a command (D74, docs/DEPLOY.md "Which address a command uses").
+///
+/// `OBOP_DB_POOLER` and `OBOP_LOCK_DATABASE_URL` describe how the *server* reaches its database,
+/// `OBOP_DATABASE_URL`. A command that is given an address of its own with `--db URL` goes where
+/// it is told, straight: it is a direct connection, so both variables are ignored for it (a
+/// maintenance command given the direct address that is also the lock address would otherwise be
+/// refused as "the same address as the database URL"). Two exceptions keep the pooler layout
+/// honest: a `--db` that is the very address of `OBOP_DATABASE_URL` is the server's own address
+/// and keeps the variables, and `serve` and `platform serve` always do (whatever they serve from
+/// is the server's address).
+pub fn apply_address_rule(args: &[String]) {
+    let serving = args.first().map(String::as_str) == Some("serve")
+        || (args.first().map(String::as_str) == Some("platform")
+            && args.get(1).map(String::as_str) == Some("serve"));
+    let explicit = args
+        .iter()
+        .position(|a| a == "--db")
+        .and_then(|i| args.get(i + 1));
+    if serving {
+        return;
+    }
+    let Some(explicit) = explicit else { return };
+    let server = std::env::var("OBOP_DATABASE_URL").ok();
+    if server.as_deref().map(str::trim) != Some(explicit.trim()) {
+        obop_storage::PgPoolConfig::address_is_direct();
+    }
+}
+
 fn db_url(db: Option<&str>) -> String {
     db.map(String::from)
         .or_else(|| std::env::var("OBOP_DATABASE_URL").ok())

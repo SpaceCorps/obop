@@ -154,6 +154,18 @@ impl PgPoolConfig {
         }
     }
 
+    /// Say that the database this process opens is reached by an address of the operator's own
+    /// choosing, not through the pooler the `OBOP_DB_POOLER` and `OBOP_LOCK_DATABASE_URL`
+    /// variables describe: those two describe how the server reaches *its* database
+    /// (`OBOP_DATABASE_URL`). A command line tool that was given another address with `--db`
+    /// (a maintenance command that goes straight to the database) calls this, and from then on
+    /// both variables are ignored in this process; it is a direct connection, so a session
+    /// advisory lock taken on it excludes everybody, and there is no second address to keep
+    /// apart. The server itself (`obop serve`) never calls this.
+    pub fn address_is_direct() {
+        DIRECT_ADDRESS.store(true, Relaxed);
+    }
+
     /// Why a pooler in transaction mode is refused without a direct address for the locks.
     pub(crate) const NEEDS_LOCK_URL: &'static str = "OBOP_DB_POOLER=transaction needs OBOP_LOCK_DATABASE_URL: a session advisory lock belongs to one server session, which a transaction-mode pooler hands to somebody else between statements, so locks taken through it exclude nobody; give the lock connections a direct address of the same database";
 
@@ -184,6 +196,12 @@ impl PgPoolConfig {
         let lock_url = get("OBOP_LOCK_DATABASE_URL")
             .map(|v| v.trim().to_string())
             .filter(|v| !v.is_empty());
+        // See `address_is_direct`: a direct address has neither a pooler nor a second address.
+        let (pooler, lock_url) = if DIRECT_ADDRESS.load(Relaxed) {
+            (Pooler::Direct, None)
+        } else {
+            (pooler, lock_url)
+        };
         if pooler == Pooler::Transaction && lock_url.is_none() {
             return Err(Self::NEEDS_LOCK_URL.into());
         }
@@ -367,6 +385,9 @@ impl From<&str> for PErr {
 pub(crate) type PR<T> = std::result::Result<T, PErr>;
 
 static STATEMENT_TIMEOUTS: AtomicU64 = AtomicU64::new(0);
+
+/// Set by [`PgPoolConfig::address_is_direct`].
+static DIRECT_ADDRESS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Statements cancelled by their time limit since the process started.
 pub fn statement_timeouts() -> u64 {
@@ -683,7 +704,9 @@ impl PgPool {
         }
     }
 
-    /// Several statements in one transaction, committed when `f` returns `Ok`.
+    /// Several statements in one transaction, committed when `f` returns `Ok`. (The callers that
+    /// can be run again from the start use [`PgPool::tx_retry`]; this one is for the tests.)
+    #[cfg(test)]
     pub(crate) fn tx<T>(
         &self,
         class: Class,

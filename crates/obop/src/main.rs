@@ -154,6 +154,8 @@ fn fail(msg: &str) -> ExitCode {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // A `--db` address of the command's own is a direct address (see the rule in ops.rs).
+    ops::apply_address_rule(&args);
     // Operator commands that work on a whole database: migrate, backup, restore, secrets.
     if let Some(code) = ops::dispatch(&args) {
         return code;

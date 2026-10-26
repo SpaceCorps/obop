@@ -623,6 +623,62 @@ fn a_create_is_never_answered_503_after_it_committed_and_never_stored_after_a_50
 }
 
 #[test]
+fn a_command_given_its_own_direct_address_is_not_refused_in_a_transaction_pooler_layout() {
+    let Some(base) = pg_base() else { return };
+    let db = Scratch::new(&base);
+    // The layout of docs/DEPLOY.md: the server's own address (`OBOP_DATABASE_URL`) is the pooler's
+    // (nothing listens there in this test: a command that names its own address never uses it) and
+    // the locks go to the direct address of the database.
+    let pooler = "postgres://u:p@127.0.0.1:1/via_the_pooler";
+    let layout = |server: &str| {
+        [
+            ("OBOP_DB_POOLER", "transaction".to_string()),
+            ("OBOP_LOCK_DATABASE_URL", db.url.clone()),
+            ("OBOP_DATABASE_URL", server.to_string()),
+        ]
+    };
+    let run = |args: &[&str], server: &str| {
+        let out = obop()
+            .args(args)
+            .envs(layout(server))
+            .output()
+            .expect("run obop");
+        (
+            out.status.success(),
+            String::from_utf8_lossy(&out.stderr).to_string()
+                + &String::from_utf8_lossy(&out.stdout),
+        )
+    };
+    // A maintenance command given the direct address (also the lock address) works.
+    let (ok, text) = run(&["migrate", "status", "--db", &db.url], pooler);
+    assert!(
+        ok,
+        "refused although it names its own direct address: {text}"
+    );
+    // The rule keeps the guard where it belongs: the server's own address may not be the lock
+    // address, with or without `--db` naming it, and `serve` keeps the variables for whatever it
+    // serves from.
+    for args in [
+        vec!["migrate", "status"],
+        vec!["migrate", "status", "--db", db.url.as_str()],
+    ] {
+        let (ok, text) = run(&args, &db.url);
+        assert!(!ok && text.contains("same address"), "{args:?}: {text}");
+    }
+    let (ok, text) = run(
+        &[
+            "serve",
+            "--addr",
+            &format!("127.0.0.1:{}", free_port()),
+            "--db",
+            &db.url,
+        ],
+        pooler,
+    );
+    assert!(!ok && text.contains("same address"), "serve: {text}");
+}
+
+#[test]
 fn a_bad_pool_setting_stops_the_server_at_start_up_and_names_the_variable() {
     let Some(base) = pg_base() else { return };
     let db = Scratch::new(&base);
