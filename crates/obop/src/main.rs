@@ -17,6 +17,8 @@ mod cors_tests;
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
+mod kinds_tests;
+#[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
 mod mfa_tests;
@@ -202,11 +204,13 @@ const USAGE: &str = "usage: obop <command>
   mcp [--token TOKEN]                           MCP server on stdio (token or OBOP_TOKEN)
   import MODEL FILE.csv [--token TOKEN] [--mode partial] [--dry-run] [--key KEY]
                                                 create many records of MODEL from a CSV file (header = field names, references by id,
-                                                whole numbers, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
+                                                numbers, decimals and date-times as text, UTF-8, at most 1000 rows and 1 MiB) through bulk_create, with every
                                                 check of create. By default one bad row creates nothing; --mode partial keeps the good
                                                 rows; --dry-run only checks; --key makes a retry return the first answer
   commands [--token TOKEN]                      list the commands visible to a token
   call [--token TOKEN] <model> <command> [k=v...]
+                                                values are text, converted by field type; for list and search
+                                                filter, order and aggregate are JSON text (in single quotes)
 global options
   --db URL              sqlite://obop.db (default, local), postgres://user:pass@host/db, memory:
                         (or OBOP_DATABASE_URL)
@@ -416,6 +420,8 @@ fn open_app(o: &Opts) -> Result<App, ExitCode> {
     eprintln!("database: {}", store.backend_kind());
     let seed = o.demo || store.backend_kind() == "sqlite";
     let app = App::with_store(store);
+    app.set_zones_from_env()
+        .map_err(|e| fail(&format!("error: {e}")))?;
     app.updater.set_backup(backup_cli::backup_fn(url.clone()));
     // A module update that rewrites records is preceded by a verified backup (D73).
     let gate = backup_cli::GateSettings::from_env(app.store.backend_kind())
@@ -827,6 +833,21 @@ fn commands(o: &Opts) -> Exit {
 }
 
 fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
+    let (value, denied) = call_json(o, model, command, kv)?;
+    println!("{}", serde_json::to_string_pretty(&value).unwrap());
+    if !denied.is_empty() {
+        println!("withheld: {}", denied.join(", "));
+    }
+    Ok(())
+}
+
+/// `obop call`: the answer as JSON and the names of the fields withheld from it.
+fn call_json(
+    o: &Opts,
+    model: &str,
+    command: &str,
+    kv: &[&str],
+) -> Result<(serde_json::Value, Vec<String>), ExitCode> {
     let app = open_app(o)?;
     let p = principal(&app, o)?;
     let id = names::from_cli(&[model, command]).ok_or(ExitCode::from(2))?;
@@ -852,7 +873,7 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
                                 return (k.to_string(), Value::Int(n));
                             }
                         }
-                        "filter" | "order" => {
+                        "filter" | "order" | "aggregate" => {
                             if let Ok(j) = serde_json::from_str(v) {
                                 return (k.to_string(), Value::from_json(&j));
                             }
@@ -873,16 +894,7 @@ fn call(o: &Opts, model: &str, command: &str, kv: &[&str]) -> Exit {
         .dispatcher
         .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
     {
-        Ok(r) => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&r.value.to_json()).unwrap()
-            );
-            if !r.denied.is_empty() {
-                println!("withheld: {}", r.denied.join(", "));
-            }
-            Ok(())
-        }
+        Ok(r) => Ok((r.value.to_json(), r.denied.clone())),
         Err(e) => Err(fail(&format!("error: {e:?}"))),
     }
 }
@@ -2851,6 +2863,11 @@ mod bundled_packages {
                     "number" => Value::Int(1),
                     "money" => Value::Int(12_345),
                     "date" => Value::text("2026-01-31"),
+                    "datetime" => Value::text("2026-01-31T09:30:00Z"),
+                    "decimal" => Value::Text(match f.scale.unwrap_or(0) {
+                        0 => "1".to_string(),
+                        n => format!("1.{}", "5".repeat(usize::from(n))),
+                    }),
                     "bool" => Value::Bool(true),
                     "select" => match (f.name, state) {
                         ("state", Some(s)) => Value::text(s),

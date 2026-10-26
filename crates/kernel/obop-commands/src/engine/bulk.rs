@@ -27,6 +27,7 @@ use super::{Actor, Engine};
 use crate::Value;
 use crate::csv;
 use crate::guards::create_guard;
+use crate::kinds::{self, Path};
 use crate::store::declared_fields;
 use obop_registry::{FieldKind, MAX_BULK_ROWS, ModelDef};
 use obop_storage::{Fields, Op};
@@ -91,6 +92,11 @@ fn cell(def: &ModelDef, name: &str, raw: &str) -> Result<Option<Value>, String> 
         .ok_or_else(|| format!("unknown field {}.{name}", def.name))?;
     let t = raw.trim();
     if t.is_empty() {
+        // Spaces are not "nothing" in a decimal or datetime column: the strict parser refuses
+        // them, as it does everywhere else (D72).
+        if !raw.is_empty() && matches!(f.kind, FieldKind::Decimal { .. } | FieldKind::Datetime) {
+            return Ok(Some(Value::Text(raw.to_string())));
+        }
         return Ok(None);
     }
     let bad = |what: &str| format!("{}.{name} must be {what}, not {t:?}", def.name);
@@ -106,6 +112,10 @@ fn cell(def: &ModelDef, name: &str, raw: &str) -> Result<Option<Value>, String> 
             _ => return Err(bad("true or false")),
         },
         FieldKind::Date | FieldKind::Select(_) | FieldKind::Ref(_) => Value::Text(t.to_string()),
+        // A decimal or an instant stays text, exactly as the file has it (spaces included, so
+        // they are refused as everywhere else); `create_row` checks it, and rounds it when the
+        // field declares a mode, with the very code every other write uses (D72).
+        FieldKind::Decimal { .. } | FieldKind::Datetime => Value::Text(raw.to_string()),
         FieldKind::Image(_) | FieldKind::File(_) => {
             return Err(blob_error(def, name));
         }
@@ -270,6 +280,9 @@ fn create_row(
         return Err(system_error(def, k));
     }
     let mut f = to_fields(&given);
+    // An import rounds a decimal that has too many fractional digits when its field declares
+    // how (`round`); a create never does.
+    kinds::canonicalise(def, &mut f, Path::Import)?;
     default_governed(def, &mut f);
     own_default(def, &mut f, actor);
     check_fields(unit, look, actor, def, &f, true)?;

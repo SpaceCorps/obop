@@ -627,6 +627,15 @@ fn kind_class_ok(target: &FieldKind, src: &FieldKind) -> bool {
         FieldKind::Text | FieldKind::LongText => !matches!(src, FieldKind::Bool),
         FieldKind::Number | FieldKind::Money => matches!(src, FieldKind::Number | FieldKind::Money),
         FieldKind::Date => matches!(src, FieldKind::Date),
+        FieldKind::Datetime => matches!(src, FieldKind::Datetime),
+        // A decimal goes into a decimal that keeps every digit: no more fractional digits than
+        // the target holds and no more integer digits.
+        FieldKind::Decimal {
+            precision: tp,
+            scale: ts,
+            ..
+        } => matches!(src, FieldKind::Decimal { precision: sp, scale: ss, .. }
+            if ss <= ts && sp.saturating_sub(*ss) <= tp.saturating_sub(*ts)),
         FieldKind::Bool => matches!(src, FieldKind::Bool),
         FieldKind::Select(to) => match src {
             FieldKind::Select(from) => from.iter().all(|o| to.contains(o)),
@@ -654,10 +663,20 @@ fn shape_ok(target: &FieldKind, s: &Shape) -> bool {
         Shape::Kind(k) => kind_class_ok(target, k),
         Shape::Lit(Lit::Null) => true,
         Shape::Lit(Lit::Bool(_)) => matches!(target, FieldKind::Bool),
-        Shape::Lit(Lit::Int(_)) => matches!(target, FieldKind::Number | FieldKind::Money),
+        Shape::Lit(Lit::Int(n)) => match target {
+            FieldKind::Number | FieldKind::Money => true,
+            FieldKind::Decimal {
+                precision, scale, ..
+            } => obop_values::Decimal::parse_for(&n.to_string(), *precision, *scale, None).is_ok(),
+            _ => false,
+        },
         Shape::Lit(Lit::Text(t)) => match target {
             FieldKind::Text | FieldKind::LongText => true,
             FieldKind::Date => crate::is_valid_date(t),
+            FieldKind::Datetime => obop_values::Instant::parse(t).is_ok(),
+            FieldKind::Decimal {
+                precision, scale, ..
+            } => obop_values::Decimal::parse_for(t, *precision, *scale, None).is_ok(),
             FieldKind::Select(o) => o.contains(&t.as_str()),
             _ => false,
         },
@@ -666,7 +685,11 @@ fn shape_ok(target: &FieldKind, s: &Shape) -> bool {
             FieldKind::Text | FieldKind::LongText => true,
             _ => false,
         },
-        Shape::Now | Shape::Caller => matches!(target, FieldKind::Text | FieldKind::LongText),
+        Shape::Now => matches!(
+            target,
+            FieldKind::Datetime | FieldKind::Text | FieldKind::LongText
+        ),
+        Shape::Caller => matches!(target, FieldKind::Text | FieldKind::LongText),
         Shape::Today => matches!(
             target,
             FieldKind::Date | FieldKind::Text | FieldKind::LongText
@@ -1015,10 +1038,15 @@ fn check_computed(
     }
     if !matches!(
         f.kind,
-        FieldKind::Text | FieldKind::Number | FieldKind::Money | FieldKind::Bool
+        FieldKind::Text
+            | FieldKind::Number
+            | FieldKind::Money
+            | FieldKind::Bool
+            | FieldKind::Decimal { .. }
+            | FieldKind::Datetime
     ) {
         bad(format!(
-            "a computed field is text, number, money or bool, not {}",
+            "a computed field is text, number, money, bool, decimal or datetime, not {}",
             f.kind.name()
         ));
     }
@@ -1032,6 +1060,8 @@ fn check_computed(
     };
     match expr::check(&c.expr, &scope) {
         Err(e) => bad(format!("computed `{}`: {e}", c.source)),
+        // A whole number fits a decimal field (it is promoted); nothing else mixes.
+        Ok(Ty::Int) if matches!(f.kind, FieldKind::Decimal { .. }) => {}
         Ok(ty) if ty != Ty::of_kind(&f.kind) => bad(format!(
             "computed `{}` is {}, but the field is {}",
             c.source,
@@ -1760,7 +1790,7 @@ mod tests {
         assert!(p.iter().any(|x| x.contains("no field `ghost`")), "{p:?}");
         assert!(
             p.iter()
-                .any(|x| x.contains("needs a number or money field")),
+                .any(|x| x.contains("needs a number, money or decimal field")),
             "{p:?}"
         );
         assert_eq!(p.len(), 3, "{p:?}");
@@ -1783,7 +1813,10 @@ mod tests {
             &mk("n * 2", FieldKind::Text),
             "is a number, but the field is text",
         );
-        has(&mk("n * 2", FieldKind::Date), "text, number, money or bool");
+        has(
+            &mk("n * 2", FieldKind::Date),
+            "text, number, money, bool, decimal or datetime",
+        );
         // Two computed fields that read each other.
         let cyc = module(vec![model(
             "t_doc",

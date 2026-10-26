@@ -173,6 +173,14 @@ export function toServerFilter(
       filter.push({ field: "id", op: c.op === "ne" ? "ne" : "eq", value: c.value });
       continue;
     }
+    // An exact decimal or an instant is only tested for being set until the dashboards learn to
+    // open the list narrowed alike (D72): a tile and the list behind it must count the same.
+    if ((f.kind === "decimal" || f.kind === "datetime") && c.op !== "empty" && c.op !== "set")
+      return {
+        error: t("{field} can only be tested for being empty or set in a widget filter", {
+          field: fieldTitle(f),
+        }),
+      };
     switch (c.op) {
       case "empty":
         filter.push({ field: f.name, op: "is_null", value: true });

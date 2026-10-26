@@ -24,6 +24,8 @@ const model: ModelMeta = {
     f("amount_minor", "money"),
     f("due", "date"),
     f("done", "bool"),
+    f("rate", "decimal"),
+    f("seen_at", "datetime"),
   ],
 };
 
@@ -76,6 +78,24 @@ describe("widget filter text", () => {
 
 describe("widget filter to the server", () => {
   const server = (text: string) => toServerFilter(ok(text), model);
+
+  it("tests a decimal or an instant only for being empty or set, as the form offers", () => {
+    expect(server("rate is set; seen_at is empty")).toEqual({
+      filter: [
+        { field: "rate", op: "is_null", value: false },
+        { field: "seen_at", op: "is_null", value: true },
+      ],
+    });
+    // Any other operator would count on the server what the list behind the tile cannot show.
+    for (const text of [
+      "rate >= 5.5",
+      "rate = 5.50",
+      "seen_at > 2026-03-29T00:00:00Z",
+      "rate in 1|2",
+    ])
+      expect(server(text), text).toHaveProperty("error");
+    expect(toServerFilter(ok('{"rate":"5.50"}'), model)).toHaveProperty("error");
+  });
 
   it("types the values by the field's kind", () => {
     expect(server("amount_minor >= 100000; done = true; state in draft|paid")).toEqual({

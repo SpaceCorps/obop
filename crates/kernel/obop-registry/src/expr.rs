@@ -1,9 +1,10 @@
 //! The expression language of computed fields, action assertions and effect conditions
-//! (D56, D57). It is deliberately tiny and total: integers, text and booleans, five arithmetic
-//! operators, comparisons, `if`, `concat`, `is_set` and four aggregates over child records. There
-//! are no floats, no loops, no function definitions and no way to call anything. An expression is
-//! parsed once, type-checked against the model it belongs to, and then evaluated over data it is
-//! handed; evaluation cannot fail except by dividing by zero or overflowing 64 bits.
+//! (D56, D57, D72). It is deliberately tiny and total: integers, exact decimals, text and
+//! booleans, five arithmetic operators, comparisons, `if`, `concat`, `is_set` and four aggregates
+//! over child records. There are no floats, no loops, no function definitions and no way to call
+//! anything. An expression is parsed once, type-checked against the model it belongs to, and then
+//! evaluated over data it is handed; evaluation cannot fail except by dividing by zero or
+//! overflowing 64 bits (128 bits and 38 digits for decimals).
 //!
 //! ```text
 //! or     := and ( "||" and )*
@@ -13,17 +14,32 @@
 //! add    := mul ( ("+" | "-") mul )*
 //! mul    := unary ( ("*" | "/") unary )*
 //! unary  := "-" unary | primary
-//! primary:= INTEGER | "text" | true | false | field | "(" or ")"
+//! primary:= INTEGER | DECIMAL | "text" | true | false | field | "(" or ")"
 //!         | if(or, or, or) | concat(or, ...) | is_set(field)
 //!         | sum(child.field) | min(child.field) | max(child.field) | count(child)
 //! child  := name [ "[" ref_field "]" ]
 //! ```
 //!
 //! Rules that are the same everywhere: an empty (null) value is `0`, `""` or `false` according to
-//! the other operand; `/` rounds half away from zero; `min` and `max` of no children are empty;
-//! `sum` and `count` of no children are `0`.
+//! the other operand; integer `/` rounds half away from zero; `min` and `max` of no children are
+//! empty; `sum` and `count` of no children are `0`.
+//!
+//! *Decimals.* A literal is digits, a point and digits (`0.25`, `12.50`); a `decimal` field is a
+//! decimal. A whole number mixed with a decimal becomes a decimal, so `qty * 0.25` and `rate > 1`
+//! work, and `0.1 + 0.2 == 0.3` is true: `+`, `-` and `*` are exact (the scale of a sum is the
+//! larger, of a product the sum of the two) and comparison is numeric. `/` of decimals is the one
+//! operation that has to cut digits: its result has the scale of the computed field being
+//! evaluated (12 in an assertion) and is rounded once with that field's `round` mode (default
+//! `half_even`). The value of a computed `decimal` field is then rounded to the field's scale the
+//! same way. A decimal does not mix with money or number fields in a computed field of that kind:
+//! a decimal expression needs a `decimal` result.
+//!
+//! *Instants.* A `datetime` field is an instant. Instants compare with instants and with a text
+//! literal that is a valid RFC 3339 instant (`created_at < "2026-01-01T00:00:00Z"`); they do not
+//! compare with dates or other text, and have no arithmetic.
 
 use crate::{FieldKind, ModelDef};
+use obop_values::{Decimal, Instant, Round};
 use std::sync::Arc;
 
 /// One aggregate of an expression, as written.
@@ -44,6 +60,10 @@ const MAX_DEPTH: usize = 12;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ty {
     Int,
+    /// An exact decimal (D72).
+    Dec,
+    /// An instant (D72).
+    Instant,
     Text,
     Bool,
 }
@@ -52,6 +72,8 @@ impl Ty {
     pub fn name(self) -> &'static str {
         match self {
             Ty::Int => "a number",
+            Ty::Dec => "a decimal number",
+            Ty::Instant => "a date and time",
             Ty::Text => "text",
             Ty::Bool => "a true/false value",
         }
@@ -61,8 +83,32 @@ impl Ty {
     pub fn of_kind(kind: &FieldKind) -> Ty {
         match kind {
             FieldKind::Number | FieldKind::Money => Ty::Int,
+            FieldKind::Decimal { .. } => Ty::Dec,
+            FieldKind::Datetime => Ty::Instant,
             FieldKind::Bool => Ty::Bool,
             _ => Ty::Text,
+        }
+    }
+
+    /// Whole numbers and decimals: the types arithmetic applies to.
+    fn numeric(self) -> bool {
+        matches!(self, Ty::Int | Ty::Dec)
+    }
+}
+
+/// What a decimal division produces and how it rounds: the scale and mode of the field being
+/// computed (12 and `half_even` when the expression is not a field's, such as an assertion).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecCtx {
+    pub scale: u8,
+    pub round: Round,
+}
+
+impl Default for DecCtx {
+    fn default() -> Self {
+        Self {
+            scale: obop_values::MAX_SCALE,
+            round: Round::HalfEven,
         }
     }
 }
@@ -105,6 +151,7 @@ pub enum BinOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     Int(i64),
+    Dec(Decimal),
     Text(String),
     Bool(bool),
     /// A field of the record the expression belongs to.
@@ -132,6 +179,7 @@ pub enum Expr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Tok {
     Int(i64),
+    Dec(Decimal),
     Str(String),
     Ident(String),
     Op(&'static str),
@@ -148,18 +196,47 @@ fn lex(src: &str) -> Result<Vec<(Tok, usize)>, String> {
             i += 1;
         } else if c.is_ascii_digit() {
             let mut n: i64 = 0;
+            let mut overflow = false;
             while i < chars.len() && chars[i].is_ascii_digit() {
-                n = n
+                match n
                     .checked_mul(10)
                     .and_then(|n| n.checked_add(i64::from(chars[i] as u8 - b'0')))
-                    .ok_or_else(|| format!("number too large at position {}", at + 1))?;
+                {
+                    Some(m) => n = m,
+                    None => overflow = true,
+                }
                 i += 1;
+            }
+            // `12.50`: a decimal literal is digits, a point and at least one digit.
+            if i + 1 < chars.len() && chars[i] == '.' && chars[i + 1].is_ascii_digit() {
+                i += 1;
+                while i < chars.len() && chars[i].is_ascii_digit() {
+                    i += 1;
+                }
+                let text: String = chars[at..i].iter().collect();
+                if i < chars.len() && (chars[i].is_ascii_alphabetic() || chars[i] == '_') {
+                    return Err(format!(
+                        "a number cannot be followed by letters (no units) at position {}",
+                        at + 1
+                    ));
+                }
+                let d = Decimal::parse(&text).map_err(|e| {
+                    format!(
+                        "the decimal {text} at position {} is not valid: {e}",
+                        at + 1
+                    )
+                })?;
+                out.push((Tok::Dec(d), at));
+                continue;
+            }
+            if overflow {
+                return Err(format!("number too large at position {}", at + 1));
             }
             if i < chars.len()
                 && (chars[i].is_ascii_alphabetic() || chars[i] == '.' || chars[i] == '_')
             {
                 return Err(format!(
-                    "only whole numbers exist (no decimals or units) at position {}",
+                    "a number cannot be followed by letters or a lone point (write 1.5, not 1. or 1x) at position {}",
                     at + 1
                 ));
             }
@@ -403,6 +480,10 @@ impl Parser {
                 self.pos += 1;
                 Ok(Expr::Int(n))
             }
+            Some(Tok::Dec(d)) => {
+                self.pos += 1;
+                Ok(Expr::Dec(d))
+            }
             Some(Tok::Str(s)) => {
                 self.pos += 1;
                 Ok(Expr::Text(s))
@@ -500,6 +581,7 @@ impl Parser {
 fn show(t: &Tok) -> String {
     match t {
         Tok::Int(n) => n.to_string(),
+        Tok::Dec(d) => d.to_string(),
         Tok::Str(s) => format!("{s:?}"),
         Tok::Ident(s) => format!("`{s}`"),
         Tok::Op(o) => format!("`{o}`"),
@@ -653,6 +735,18 @@ impl Scope<'_> {
     }
 }
 
+/// Whether two types may be compared: equal types, a number with a decimal, or an instant with a
+/// text literal that is a valid instant (the only text an instant compares with).
+fn comparable(ta: Ty, tb: Ty, a: &Expr, b: &Expr) -> bool {
+    let instant_text = |t: Ty, other: &Expr| {
+        t == Ty::Instant && matches!(other, Expr::Text(s) if Instant::parse(s).is_ok())
+    };
+    ta == tb
+        || (ta.numeric() && tb.numeric())
+        || (instant_text(ta, b) && tb == Ty::Text)
+        || (instant_text(tb, a) && ta == Ty::Text)
+}
+
 /// Type-check `e` in `scope` and return its type.
 pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
     let want = |t: Ty, got: Ty, what: &str| -> Result<(), String> {
@@ -662,15 +756,27 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
             Err(format!("{what} must be {}, not {}", t.name(), got.name()))
         }
     };
+    let number = |got: Ty, what: &str| -> Result<(), String> {
+        if got.numeric() {
+            Ok(())
+        } else {
+            Err(format!(
+                "{what} must be a number, not {} (decimals are numbers too)",
+                got.name()
+            ))
+        }
+    };
     match e {
         Expr::Int(_) => Ok(Ty::Int),
+        Expr::Dec(_) => Ok(Ty::Dec),
         Expr::Text(_) => Ok(Ty::Text),
         Expr::Bool(_) => Ok(Ty::Bool),
         Expr::Field(f) => scope.field_ty(f),
         Expr::IsSet(f) => scope.field_ty(f).map(|_| Ty::Bool),
         Expr::Neg(a) => {
-            want(Ty::Int, check(a, scope)?, "the operand of `-`")?;
-            Ok(Ty::Int)
+            let t = check(a, scope)?;
+            number(t, "the operand of `-`")?;
+            Ok(t)
         }
         Expr::Not(a) => {
             want(Ty::Bool, check(a, scope)?, "the operand of `!`")?;
@@ -680,9 +786,13 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
             let (ta, tb) = (check(a, scope)?, check(b, scope)?);
             match op {
                 BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => {
-                    want(Ty::Int, ta, "the left side of an arithmetic operator")?;
-                    want(Ty::Int, tb, "the right side of an arithmetic operator")?;
-                    Ok(Ty::Int)
+                    number(ta, "the left side of an arithmetic operator")?;
+                    number(tb, "the right side of an arithmetic operator")?;
+                    Ok(if ta == Ty::Dec || tb == Ty::Dec {
+                        Ty::Dec
+                    } else {
+                        Ty::Int
+                    })
                 }
                 BinOp::And | BinOp::Or => {
                     want(Ty::Bool, ta, "the left side of `&&`/`||`")?;
@@ -690,13 +800,13 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
                     Ok(Ty::Bool)
                 }
                 BinOp::Eq | BinOp::Ne => {
-                    if ta != tb {
+                    if !comparable(ta, tb, a, b) {
                         return Err(format!("cannot compare {} with {}", ta.name(), tb.name()));
                     }
                     Ok(Ty::Bool)
                 }
                 BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                    if ta != tb || ta == Ty::Bool {
+                    if !comparable(ta, tb, a, b) || ta == Ty::Bool {
                         return Err(format!("cannot order {} against {}", ta.name(), tb.name()));
                     }
                     Ok(Ty::Bool)
@@ -739,20 +849,22 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
                     return Err("where must be a comparison or other true/false expression".into());
                 }
             }
+            let mut ty = Ty::Int;
             if let Some(f) = field {
                 let Some(def) = cm.fields.iter().find(|d| d.name == f) else {
                     return Err(format!("{} has no field `{f}`", cm.name));
                 };
-                if Ty::of_kind(&def.kind) != Ty::Int {
+                ty = Ty::of_kind(&def.kind);
+                if !ty.numeric() {
                     return Err(format!(
-                        "{}() needs a number or money field; {}.{f} is {}",
+                        "{}() needs a number, money or decimal field; {}.{f} is {}",
                         func.name(),
                         cm.name,
                         def.kind.name()
                     ));
                 }
             }
-            Ok(Ty::Int)
+            Ok(ty)
         }
     }
 }
@@ -763,6 +875,10 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
 pub enum V {
     Null,
     Int(i64),
+    /// An exact decimal (D72).
+    Dec(Decimal),
+    /// An instant, microseconds since the epoch (D72).
+    Instant(i64),
     Text(String),
     Bool(bool),
 }
@@ -786,8 +902,38 @@ impl V {
         match self {
             V::Null => String::new(),
             V::Int(n) => n.to_string(),
+            V::Dec(d) => d.to_string(),
+            V::Instant(us) => Instant::from_micros(*us)
+                .map(Instant::canonical)
+                .unwrap_or_default(),
             V::Text(s) => s.clone(),
             V::Bool(b) => b.to_string(),
+        }
+    }
+    fn is_dec(&self) -> bool {
+        matches!(self, V::Dec(_))
+    }
+    /// As a decimal: a whole number is a decimal of scale 0, empty is zero. Text is accepted when
+    /// it is a decimal in canonical form (a stored decimal read without its kind).
+    fn dec(&self) -> Result<Decimal, String> {
+        match self {
+            V::Dec(d) => Ok(*d),
+            V::Int(n) => Ok(Decimal::from_i64(*n)),
+            V::Null => Ok(Decimal::zero(0)),
+            V::Bool(b) => Ok(Decimal::from_i64(i64::from(*b))),
+            V::Text(s) => Decimal::parse(s).map_err(|e| format!("{s:?} is not a decimal: {e}")),
+            V::Instant(_) => Err("an instant is not a number".into()),
+        }
+    }
+    /// As microseconds; empty is before everything.
+    fn instant(&self) -> Result<i64, String> {
+        match self {
+            V::Instant(us) => Ok(*us),
+            V::Null => Ok(i64::MIN),
+            V::Text(s) => Instant::parse(s)
+                .map(Instant::micros)
+                .map_err(|e| format!("{s:?} is not an instant: {e}")),
+            _ => Err("that is not an instant".into()),
         }
     }
 }
@@ -821,9 +967,18 @@ pub fn div_round(n: i64, d: i64) -> Result<i64, String> {
     big(sign * ((n.abs() * 2 + d.abs()) / (2 * d.abs())))
 }
 
+/// Evaluate with the default decimal context (an assertion or condition).
 pub fn eval(e: &Expr, env: &dyn Env) -> Result<V, String> {
+    eval_in(e, env, DecCtx::default())
+}
+
+/// Evaluate; a decimal division produces `ctx.scale` digits after the point, rounded by
+/// `ctx.round`.
+pub fn eval_in(e: &Expr, env: &dyn Env, ctx: DecCtx) -> Result<V, String> {
+    let ev = |e: &Expr| eval_in(e, env, ctx);
     Ok(match e {
         Expr::Int(n) => V::Int(*n),
+        Expr::Dec(d) => V::Dec(*d),
         Expr::Text(s) => V::Text(s.clone()),
         Expr::Bool(b) => V::Bool(*b),
         Expr::Field(f) => env.field(f)?,
@@ -832,26 +987,46 @@ pub fn eval(e: &Expr, env: &dyn Env) -> Result<V, String> {
             V::Text(s) => !s.is_empty(),
             _ => true,
         }),
-        Expr::Neg(a) => V::Int(big(-i128::from(eval(a, env)?.int()))?),
-        Expr::Not(a) => V::Bool(!eval(a, env)?.truthy()),
+        Expr::Neg(a) => match ev(a)? {
+            V::Dec(d) => V::Dec(d.negated()),
+            v => V::Int(big(-i128::from(v.int()))?),
+        },
+        Expr::Not(a) => V::Bool(!ev(a)?.truthy()),
         Expr::Bin(op, a, b) => {
             // `&&` and `||` stop early, so a guard such as `is_set(x) && ...` is meaningful.
             if *op == BinOp::And {
-                return Ok(V::Bool(eval(a, env)?.truthy() && eval(b, env)?.truthy()));
+                return Ok(V::Bool(ev(a)?.truthy() && ev(b)?.truthy()));
             }
             if *op == BinOp::Or {
-                return Ok(V::Bool(eval(a, env)?.truthy() || eval(b, env)?.truthy()));
+                return Ok(V::Bool(ev(a)?.truthy() || ev(b)?.truthy()));
             }
-            let (x, y) = (eval(a, env)?, eval(b, env)?);
+            let (x, y) = (ev(a)?, ev(b)?);
+            let arithmetic = matches!(op, BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div);
+            if arithmetic && (x.is_dec() || y.is_dec()) {
+                let (p, q) = (x.dec()?, y.dec()?);
+                let r = match op {
+                    BinOp::Add => p.checked_add(q),
+                    BinOp::Sub => p.checked_sub(q),
+                    BinOp::Mul => p.checked_mul(q),
+                    _ => p.checked_div(q, ctx.scale, ctx.round),
+                };
+                return r.map(V::Dec).map_err(|e| e.to_string());
+            }
             match op {
                 BinOp::Add => V::Int(big(i128::from(x.int()) + i128::from(y.int()))?),
                 BinOp::Sub => V::Int(big(i128::from(x.int()) - i128::from(y.int()))?),
                 BinOp::Mul => V::Int(big(i128::from(x.int()) * i128::from(y.int()))?),
                 BinOp::Div => V::Int(div_round(x.int(), y.int())?),
                 _ => {
-                    let ord = match (&x, &y) {
-                        (V::Text(_), _) | (_, V::Text(_)) => x.text().cmp(&y.text()),
-                        _ => x.int().cmp(&y.int()),
+                    let ord = if x.is_dec() || y.is_dec() {
+                        x.dec()?.cmp(&y.dec()?)
+                    } else if matches!(x, V::Instant(_)) || matches!(y, V::Instant(_)) {
+                        x.instant()?.cmp(&y.instant()?)
+                    } else {
+                        match (&x, &y) {
+                            (V::Text(_), _) | (_, V::Text(_)) => x.text().cmp(&y.text()),
+                            _ => x.int().cmp(&y.int()),
+                        }
                     };
                     V::Bool(match op {
                         BinOp::Eq => ord.is_eq(),
@@ -865,16 +1040,16 @@ pub fn eval(e: &Expr, env: &dyn Env) -> Result<V, String> {
             }
         }
         Expr::If(c, a, b) => {
-            if eval(c, env)?.truthy() {
-                eval(a, env)?
+            if ev(c)?.truthy() {
+                ev(a)?
             } else {
-                eval(b, env)?
+                ev(b)?
             }
         }
         Expr::Concat(parts) => {
             let mut s = String::new();
             for p in parts {
-                s.push_str(&eval(p, env)?.text());
+                s.push_str(&ev(p)?.text());
             }
             V::Text(s)
         }
@@ -957,6 +1132,72 @@ mod tests {
         assert_eq!(run("missing == \"\"", &r), Ok(V::Bool(true)));
     }
 
+    fn dec(s: &str) -> V {
+        V::Dec(Decimal::parse(s).unwrap())
+    }
+
+    #[test]
+    fn decimals_are_exact() {
+        let mut r = rec();
+        r.0.insert("rate", dec("0.075"));
+        r.0.insert("net", dec("19.99"));
+        r.0.insert("seen_at", V::Instant(1_000_000));
+        // The classic.
+        assert_eq!(run("0.1 + 0.2", &r), Ok(dec("0.3")));
+        assert_eq!(run("0.1 + 0.2 == 0.3", &r), Ok(V::Bool(true)));
+        assert_eq!(run("0.30 == 0.3", &r), Ok(V::Bool(true)));
+        // A whole number mixes in; the scale of a sum is the larger, of a product the sum.
+        assert_eq!(run("net * qty", &r), Ok(dec("59.97")));
+        assert_eq!(run("net * rate", &r), Ok(dec("1.49925")));
+        assert_eq!(run("net + 1", &r), Ok(dec("20.99")));
+        assert_eq!(run("-net", &r), Ok(dec("-19.99")));
+        assert_eq!(run("net - 20", &r), Ok(dec("-0.01")));
+        // Order is numeric: "9.5" < "10.25".
+        assert_eq!(run("9.5 < 10.25", &r), Ok(V::Bool(true)));
+        assert_eq!(run("net > 19.9 && net < 20", &r), Ok(V::Bool(true)));
+        assert_eq!(run("rate > 0", &r), Ok(V::Bool(true)));
+        assert_eq!(run("missing * 2.5", &r), Ok(dec("0.0")), "null is zero");
+        // Division uses the context: 12 digits and half_even unless a field says otherwise.
+        assert_eq!(run("1 / 3.0", &r), Ok(dec("0.333333333333")));
+        let ctx = DecCtx {
+            scale: 2,
+            round: Round::HalfUp,
+        };
+        let e = Expr::parse("net / 3").unwrap();
+        assert_eq!(eval_in(&e, &r, ctx), Ok(dec("6.66")));
+        let e = Expr::parse("2 / 3.0").unwrap();
+        assert_eq!(eval_in(&e, &r, ctx), Ok(dec("0.67")));
+        let down = DecCtx {
+            scale: 2,
+            round: Round::Down,
+        };
+        assert_eq!(eval_in(&e, &r, down), Ok(dec("0.66")));
+        // The result of a whole-number division is still a whole number.
+        assert_eq!(run("7 / 2", &r), Ok(V::Int(4)));
+        assert!(run("net / 0", &r).unwrap_err().contains("division by zero"));
+        assert!(
+            run("9999999999999999999999999999999999999.0 * 100", &r)
+                .unwrap_err()
+                .contains("too large")
+        );
+        assert_eq!(
+            run("concat(net, \"|\", 1.50)", &r),
+            Ok(V::Text("19.99|1.50".into()))
+        );
+        assert_eq!(run("is_set(net)", &r), Ok(V::Bool(true)));
+        // Instants compare with instants and with an instant written as text.
+        assert_eq!(
+            run("seen_at < \"2026-01-01T00:00:00Z\"", &r),
+            Ok(V::Bool(true))
+        );
+        assert_eq!(run("seen_at == seen_at", &r), Ok(V::Bool(true)));
+        assert_eq!(
+            run("missing_at < seen_at", &r),
+            Ok(V::Bool(true)),
+            "empty is before everything"
+        );
+    }
+
     #[test]
     fn functions() {
         let r = rec();
@@ -1008,8 +1249,8 @@ mod tests {
         for (src, want) in [
             ("", "empty"),
             ("1 +", "ends"),
-            ("1.5", "whole numbers"),
-            ("2x", "whole numbers"),
+            ("1.", "lone point"),
+            ("2x", "followed by letters"),
             ("a b", "end of the expression"),
             ("\"abc", "unterminated"),
             ("\"a\\n\"", "escaped"),
@@ -1055,6 +1296,9 @@ mod tests {
                 f("title"),
                 f("ok").kind(FieldKind::Bool),
                 f("state").select(&["a", "b"]),
+                f("rate").decimal(10, 4),
+                f("seen").datetime(),
+                f("due").kind(FieldKind::Date),
             ],
             commands: Vec::<CommandDef>::new(),
         };
@@ -1069,6 +1313,7 @@ mod tests {
                 f("other_id").reference("t_move"),
                 f("debit").kind(FieldKind::Money),
                 f("label"),
+                f("weight").decimal(12, 3),
             ],
             commands: vec![],
         };
@@ -1103,6 +1348,21 @@ mod tests {
         assert_eq!(typed("sum(t_move_line[move_id].debit)"), Ok(Ty::Int));
         assert_eq!(typed("sum(t_move_line[move_id].debit) == m"), Ok(Ty::Bool));
         assert_eq!(typed("count(t_move_lines[other_id])"), Ok(Ty::Int));
+        // Decimals (D72): a number mixed with a decimal is a decimal.
+        assert_eq!(typed("rate * 2"), Ok(Ty::Dec));
+        assert_eq!(typed("rate / 3 + 0.5"), Ok(Ty::Dec));
+        assert_eq!(typed("rate > 1"), Ok(Ty::Bool));
+        assert_eq!(typed("n < rate"), Ok(Ty::Bool));
+        assert_eq!(typed("-rate"), Ok(Ty::Dec));
+        assert_eq!(typed("sum(t_move_line[move_id].weight)"), Ok(Ty::Dec));
+        assert_eq!(
+            typed("max(t_move_line[move_id].weight) * rate"),
+            Ok(Ty::Dec)
+        );
+        assert_eq!(typed("if(ok, rate, 0.0)"), Ok(Ty::Dec));
+        assert_eq!(typed("seen"), Ok(Ty::Instant));
+        assert_eq!(typed("seen < seen"), Ok(Ty::Bool));
+        assert_eq!(typed("seen >= \"2026-03-29T01:30:00Z\""), Ok(Ty::Bool));
         for (src, want) in [
             ("ghost + 1", "no field `ghost`"),
             ("title + 1", "must be a number, not text"),
@@ -1120,9 +1380,19 @@ mod tests {
             ("sum(t_move_line[title].debit)", "is not a ref"),
             (
                 "sum(t_move_line[move_id].label)",
-                "needs a number or money field",
+                "needs a number, money or decimal field",
             ),
             ("sum(t_move_line[move_id].nope)", "has no field"),
+            ("rate == title", "cannot compare"),
+            ("rate + title", "must be a number"),
+            ("seen + 1", "must be a number"),
+            ("seen < due", "cannot order a date and time against text"),
+            ("seen == title", "cannot compare"),
+            ("seen < \"2026-03-29\"", "cannot order"),
+            ("seen < \"yesterday\"", "cannot order"),
+            ("seen < 5", "cannot order"),
+            ("rate && ok", "must be a true/false value"),
+            ("sum(t_move_line[move_id].label)", "decimal field"),
         ] {
             let e = typed(src).unwrap_err();
             assert!(e.contains(want), "{src:?} -> {e}");

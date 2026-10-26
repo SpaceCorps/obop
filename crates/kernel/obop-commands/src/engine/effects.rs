@@ -13,9 +13,13 @@ use super::crud::{check_fields, default_governed, own_default};
 use super::seq;
 use super::unit::{R, Reads, Unit};
 use super::{Actor, Engine, civil};
+use crate::kinds::{self, Path};
 use obop_registry::rules::{MAX_EFFECT_DEPTH, MAX_EFFECT_RECORDS};
-use obop_registry::{CommandDef, Effect, EffectKind, Lit, Locator, ModelDef, Src, Target, expr};
+use obop_registry::{
+    CommandDef, Effect, EffectKind, FieldKind, Lit, Locator, ModelDef, Src, Target, expr,
+};
 use obop_storage::Fields;
+use obop_values::Instant;
 use serde_json::Value as J;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -79,10 +83,40 @@ struct Vars<'a> {
     line: Option<(&'a str, &'a Fields)>,
     created: &'a HashMap<String, String>,
     now: i64,
+    /// The same instant in microseconds, for a datetime field.
+    now_us: i64,
+    /// Today's date in the platform zone (D72).
+    today: &'a str,
     actor: &'a Actor,
 }
 
 impl Vars<'_> {
+    /// The value for field `field` of `def`: `$now` is the instant to the microsecond for a
+    /// datetime field, and a decimal or instant copied from another field is written in the
+    /// canonical form of the field it goes into (a decimal of another scale is padded).
+    fn value_for(&self, s: &Src, def: &ModelDef, field: &str) -> R<J> {
+        let kind = def.fields.iter().find(|f| f.name == field).map(|f| &f.kind);
+        let v = match (s, kind) {
+            (Src::Now, Some(FieldKind::Datetime)) => {
+                Instant::from_micros(self.now_us).map_or(J::Null, |i| J::from(i.canonical()))
+            }
+            _ => self.value(s)?,
+        };
+        // A whole-number constant (`rate = 0`) into a decimal is that decimal's text: the gate
+        // accepts it, and a JSON number is never a decimal.
+        let v = match (&v, kind) {
+            (J::Number(n), Some(FieldKind::Decimal { .. })) if n.is_i64() => J::from(n.to_string()),
+            _ => v,
+        };
+        if matches!(kind, Some(FieldKind::Decimal { .. } | FieldKind::Datetime)) && v.is_string() {
+            let mut one = Fields::new();
+            one.insert(field.to_string(), v);
+            kinds::canonicalise(def, &mut one, Path::Write)?;
+            return Ok(one.remove(field).unwrap_or(J::Null));
+        }
+        Ok(v)
+    }
+
     fn value(&self, s: &Src) -> R<J> {
         Ok(match s {
             Src::Const(l) => lit(l),
@@ -97,7 +131,7 @@ impl Vars<'_> {
                 None => return Err(format!("no record named {n} was created yet")),
             },
             Src::Now => J::from(civil(self.now).rfc3339()),
-            Src::Today => J::from(civil(self.now).date()),
+            Src::Today => J::from(self.today.to_string()),
             Src::Caller => J::from(self.actor.caller.clone()),
         })
     }
@@ -121,6 +155,9 @@ struct Runner<'e> {
     eng: &'e Engine,
     actor: &'e Actor,
     now: i64,
+    now_us: i64,
+    /// Today's date on the wall clock of the platform zone.
+    today: String,
 }
 
 /// Run the action `cmd` of `def` on record `id` inside `unit`. `depth` is 0 for the action the
@@ -134,10 +171,16 @@ pub(crate) fn run_action(
     id: &str,
     depth: usize,
 ) -> R<Fields> {
+    let now = eng.now();
+    let now_us = eng.now_micros();
+    let today =
+        Instant::from_micros(now_us).map_or_else(|| civil(now).date(), |at| eng.zones().today(at));
     let r = Runner {
         eng,
         actor,
-        now: eng.now(),
+        now,
+        now_us,
+        today,
     };
     r.action(unit, def, cmd, id, depth)
 }
@@ -273,13 +316,15 @@ impl Runner<'_> {
                 line,
                 created,
                 now: self.now,
+                now_us: self.now_us,
+                today: &self.today,
                 actor: self.actor,
             };
             match &e.kind {
                 EffectKind::Create { map, name, .. } => {
                     let mut f = Fields::new();
                     for (k, s) in map {
-                        let v = vars.value(s)?;
+                        let v = vars.value_for(s, &target, k)?;
                         // An empty ref is an unset ref.
                         let unset_ref = v.as_str() == Some("")
                             && target
@@ -299,7 +344,7 @@ impl Runner<'_> {
                     let ids = self.targets(unit, def, &me, id, &target, t)?;
                     let mut patch = Fields::new();
                     for (k, s) in set {
-                        patch.insert((*k).into(), vars.value(s)?);
+                        patch.insert((*k).into(), vars.value_for(s, &target, k)?);
                     }
                     for tid in ids {
                         self.change(unit, &target, &tid, patch.clone())?;
@@ -332,7 +377,7 @@ impl Runner<'_> {
                         Locator::Match(m) => {
                             let mut want = Vec::new();
                             for (k, s) in m {
-                                let v = vars.value(s)?;
+                                let v = vars.value_for(s, &target, k)?;
                                 if is_empty(&v) {
                                     return Err(format!(
                                         "the value to match {}.{k} is empty",
@@ -491,6 +536,7 @@ impl Runner<'_> {
                 def.name, def.write_group
             ));
         }
+        kinds::canonicalise(def, &mut f, Path::Write)?;
         default_governed(def, &mut f);
         own_default(def, &mut f, self.actor);
         let look = |n: &str| self.look(n);
@@ -505,7 +551,13 @@ impl Runner<'_> {
     }
 
     /// Change fields of a record the way the generated `update` does, for the caller.
-    fn change(&self, unit: &mut Unit<'_>, def: &Arc<ModelDef>, id: &str, patch: Fields) -> R<()> {
+    fn change(
+        &self,
+        unit: &mut Unit<'_>,
+        def: &Arc<ModelDef>,
+        id: &str,
+        mut patch: Fields,
+    ) -> R<()> {
         if !self.actor.holds(def.write_group) {
             return Err(format!(
                 "changing a {} needs the {} group",
@@ -516,6 +568,7 @@ impl Runner<'_> {
         let cur = Gate::new(&*unit, &look, self.actor)
             .load(def, id)
             .map_err(|_| self.unavailable(def))?;
+        kinds::canonicalise(def, &mut patch, Path::Write)?;
         check_fields(&*unit, &look, self.actor, def, &patch, false)?;
         let mut after = cur;
         after.extend(patch.clone());

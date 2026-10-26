@@ -37,7 +37,7 @@ function defaultColumns(fields: FieldMeta[]): string[] {
   return picked.map((f) => f.name);
 }
 
-const isAgg = (f: FieldMeta) => f.kind === "number" || f.kind === "money";
+const isAgg = (f: FieldMeta) => f.kind === "number" || f.kind === "money" || f.kind === "decimal";
 
 export function ListView(p: ViewProps) {
   const d = useData();

@@ -386,11 +386,20 @@ fn aggregate_input_is_validated() {
         );
         assert!(bad(agg(vec![t("born")], vec![])).contains("needs a bucket"));
         assert!(bad(agg(vec![bucketed("tier", "day")], vec![])).contains("only applies to date"));
-        assert!(bad(agg(vec![bucketed("born", "year")], vec![])).contains("day, week or month"));
+        assert!(
+            bad(agg(vec![bucketed("born", "decade")], vec![]))
+                .contains("day, week, iso_week, month or year")
+        );
         assert!(bad(agg(vec![t("tier"), t("tier")], vec![])).contains("twice"));
         assert!(bad(agg(vec![t("id")], vec![])).contains("id"));
-        assert!(bad(agg(vec![], vec![measure("sum", "city")])).contains("number and money"));
-        assert!(bad(agg(vec![], vec![measure("avg", "age")])).contains("unknown measure op"));
+        assert!(
+            bad(agg(vec![], vec![measure("sum", "city")])).contains("number, money and decimal")
+        );
+        assert!(
+            bad(agg(vec![], vec![measure("avg", "age")]))
+                .contains("only decimal fields have an average")
+        );
+        assert!(bad(agg(vec![], vec![measure("median", "age")])).contains("unknown measure op"));
         assert!(bad(agg(vec![], vec![m(vec![("op", t("sum"))])])).contains("needs a field"));
         assert!(
             search_err(

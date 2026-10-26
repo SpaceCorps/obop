@@ -541,7 +541,8 @@ impl PublicApi {
         if offset > 0 {
             input.insert("offset".into(), Value::Int(offset as i64));
         }
-        let q = crate::query::Query::parse(&def, &Value::Map(input), &|_| true)?;
+        let q =
+            crate::query::Query::parse_in(&def, &Value::Map(input), &|_| true, &self.d.zones())?;
         q.no_aggregate()?;
         let (page, total) = q.apply(self.store.backend.list(model)?);
         Ok((
@@ -943,7 +944,9 @@ impl PublicApi {
                     input = i;
                 }
             }
-            let fields = declared_fields(&def, &input).map_err(SubmitError::Rejected)?;
+            let mut fields = declared_fields(&def, &input).map_err(SubmitError::Rejected)?;
+            crate::kinds::canonicalise_values(&def, &mut fields, crate::kinds::Path::Write)
+                .map_err(SubmitError::Rejected)?;
             validate_with(&def, &self.store, &fields, true, &pending)
                 .map_err(SubmitError::Rejected)?;
             let id = uuid::Uuid::now_v7().to_string();

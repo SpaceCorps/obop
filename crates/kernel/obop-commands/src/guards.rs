@@ -200,10 +200,12 @@ fn update_guard(def: &ModelDef, eng: &Engine) -> Option<Guard> {
             }
             // The actions run before the update does, so everything the update would refuse
             // is refused now, before any of them has written.
-            let given: serde_json::Map<String, serde_json::Value> = declared_fields(&def, input)?
-                .into_iter()
-                .map(|(k, v)| (k, v.to_json()))
-                .collect();
+            let mut given: serde_json::Map<String, serde_json::Value> =
+                declared_fields(&def, input)?
+                    .into_iter()
+                    .map(|(k, v)| (k, v.to_json()))
+                    .collect();
+            crate::kinds::canonicalise(&def, &mut given, crate::kinds::Path::Write)?;
             check_fields(&reads, &look, &actor, &def, &given, false)?;
         }
         Ok(verdict)
@@ -273,8 +275,9 @@ fn action_guard(def: &ModelDef, eng: &Engine, command: &'static str) -> Guard {
 /// `list` and `search`: refuse a filter or order on a field the caller cannot read in clear
 /// (masked, withheld or not permitted). The error is the one for a field that does not exist, so
 /// the refusal is no oracle for the values behind it (D10).
-pub(crate) fn query_guard(def: &ModelDef) -> Guard {
+pub(crate) fn query_guard(def: &ModelDef, eng: &Engine) -> Guard {
     let def = def.clone();
+    let eng = eng.clone();
     Box::new(move |p, input| {
         let usable = |name: &str| {
             name == "id"
@@ -288,7 +291,7 @@ pub(crate) fn query_guard(def: &ModelDef) -> Guard {
                         ) == MaskMode::Allow
                 })
         };
-        Query::parse(&def, input, &usable).map(|_| Verdict::default())
+        Query::parse_in(&def, input, &usable, &eng.zones()).map(|_| Verdict::default())
     })
 }
 
@@ -414,7 +417,7 @@ impl Dispatcher {
             }
             self.register_guard(&module.id, &id("delete"), true, delete_guard(def, &eng));
             for c in ["list", "search"] {
-                self.register_guard(&module.id, &id(c), false, query_guard(def));
+                self.register_guard(&module.id, &id(c), false, query_guard(def, &eng));
             }
         }
     }
