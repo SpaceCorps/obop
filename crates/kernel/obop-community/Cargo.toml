@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Server-rendered community forum and status page of the control plane"
 
 [dependencies]

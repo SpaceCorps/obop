@@ -5,6 +5,8 @@ description = "Framework-neutral core of the connectors app: compliant data flow
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 obop-types.workspace = true

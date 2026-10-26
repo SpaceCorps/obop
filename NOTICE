@@ -1,0 +1,14 @@
+obop
+Copyright 2026 SpaceCorps contributors
+
+This product includes software developed by SpaceCorps and contributors
+(https://github.com/SpaceCorps/obop).
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party components that obop redistributes in its web interface and website:
+
+  Geist and Geist Mono fonts
+  Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font)
+  Licensed under the SIL Open Font License, Version 1.1
+  (https://openfontlicense.org/open-font-license-official-text/).
