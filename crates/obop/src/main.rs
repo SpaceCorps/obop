@@ -226,8 +226,6 @@ fn fail(msg: &str) -> ExitCode {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    // A `--db` address of the command's own is a direct address (see the rule in ops.rs).
-    ops::apply_address_rule(&args);
     // Operator commands that work on a whole database: migrate, backup, restore, secrets.
     if let Some(code) = ops::dispatch(&args) {
         return code;
@@ -267,6 +265,13 @@ fn main() -> ExitCode {
         )
     });
     let has = |f: &str| flags.contains(&f);
+    // An address of the command's own is a direct address, unless the command serves (the rule is
+    // in ops.rs). Decided from the parsed command, not from where the words stand: `obop --db URL
+    // serve` and `obop serve --db URL` are the same command.
+    let serving = matches!(args.as_slice(), ["serve"] | ["platform", "serve"]);
+    if !serving && let Some(d) = db {
+        ops::apply_address_rule(&[d]);
+    }
     let opts = Opts {
         db: db
             .map(String::from)

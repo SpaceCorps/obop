@@ -939,8 +939,26 @@ fn the_locks_of_a_thousand_row_batch_in_the_server_are_the_stripes_not_the_recor
         })
         .collect();
     let keys = batch_lock_keys(&ops);
-    // The server's own count of the advisory locks this transaction holds after the statement the
-    // batch runs: one per stripe. (One per record would be 1,000.)
+    // The server's own count of the advisory locks the transaction of the REAL `apply_checked`
+    // holds after it took its locks (the backend asks, in test builds, inside that path): one per
+    // stripe. One per record would be 1,000, and this fails for a backend that goes back to that.
+    pg.apply_checked(&ops).unwrap();
+    let held = crate::pg::BATCH_LOCKS_HELD.with(std::cell::Cell::get);
+    assert_eq!(held as usize, keys.len(), "{held}");
+    // The number the record documents, not the constant of the code under test.
+    assert!(held <= 128, "{held}");
+    assert!(BATCH_LOCK_STRIPES <= 128);
+    // A batch of three records holds one to three.
+    let few: Vec<Op> = (0..3)
+        .map(|i| Op::Insert {
+            model: "m".into(),
+            id: format!("few{i}"),
+            fields: Fields::new(),
+        })
+        .collect();
+    pg.apply_checked(&few).unwrap();
+    assert!((1..=3).contains(&crate::pg::BATCH_LOCKS_HELD.with(std::cell::Cell::get)));
+    // The helper itself takes what it is given, in one statement.
     let held = pg
         .main
         .tx_retry(Class::Batch, |c| {
@@ -953,7 +971,64 @@ fn the_locks_of_a_thousand_row_batch_in_the_server_are_the_stripes_not_the_recor
         })
         .unwrap();
     assert_eq!(held as usize, keys.len());
-    assert!(held <= i64::from(BATCH_LOCK_STRIPES), "{held}");
+}
+
+#[test]
+fn a_bulk_write_makes_the_small_writes_and_reads_of_its_process_wait_and_never_busy() {
+    let _turn = serial();
+    let (url, _db) = pg_db!();
+    // A small pool with a short acquire timeout: if the small batches parked a connection each at
+    // the stripes the bulk write holds, three of them would fill it and the rest (and every read)
+    // would be refused as busy.
+    let cfg = PgPoolConfig {
+        size: 4,
+        acquire_timeout: Duration::from_millis(300),
+        ..PgPoolConfig::default()
+    };
+    let pg = Arc::new(connect(&url, cfg));
+    pg.insert("seed", "r", &fields(0)).unwrap();
+    let model = unique("mixed");
+    let bulk: Vec<Op> = (0..1000)
+        .map(|i| Op::Insert {
+            model: model.clone(),
+            id: format!("bulk{i}"),
+            fields: fields(i),
+        })
+        .collect();
+    let started = Arc::new(std::sync::Barrier::new(2));
+    let big = {
+        let (pg, started) = (pg.clone(), started.clone());
+        std::thread::spawn(move || {
+            started.wait();
+            pg.apply_checked(&bulk).map_err(|e| e.to_string())
+        })
+    };
+    started.wait();
+    std::thread::sleep(Duration::from_millis(50));
+    let smalls: Vec<_> = (0..9)
+        .map(|t| {
+            let (pg, model) = (pg.clone(), model.clone());
+            std::thread::spawn(move || {
+                pg.apply_checked(&[Op::Insert {
+                    model: format!("{model}-small"),
+                    id: format!("s{t}"),
+                    fields: fields(t),
+                }])
+                .map_err(|e| format!("small write {t}: {e}"))
+            })
+        })
+        .collect();
+    // Reads of the same process are not refused while the bulk write runs.
+    for _ in 0..20 {
+        pg.get("seed", "r").expect("a read while a bulk write runs");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    big.join().unwrap().unwrap();
+    for s in smalls {
+        s.join().unwrap().unwrap();
+    }
+    assert_eq!(pg.count(&model).unwrap(), 1000);
+    assert_eq!(pg.count(&format!("{model}-small")).unwrap(), 9);
 }
 
 #[test]
@@ -1044,6 +1119,36 @@ fn large_batches_that_name_the_same_records_in_opposite_order_do_not_deadlock() 
     // Every batch was applied once, whichever way it was named: 8 threads of 4 rounds.
     for id in &ids {
         assert_eq!(a.get(&model, id).unwrap().unwrap()["n"], 32, "{id}");
+    }
+}
+
+#[test]
+fn processes_that_open_the_blob_store_together_on_a_fresh_database_all_start() {
+    use crate::blob::DbBytes;
+    // Two replicas started together on a new database: both create the table of the blob store.
+    // Without the schema lock one of them failed with a duplicate-object error that came out as
+    // "db error".
+    let Ok(base) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+        eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
+        return;
+    };
+    for round in 0..4 {
+        let db = Scratch::new(&base);
+        let barrier = Arc::new(std::sync::Barrier::new(6));
+        let hs: Vec<_> = (0..6)
+            .map(|t| {
+                let (url, barrier) = (db.url.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    DbBytes::open_with(&url, Some(PgPoolConfig::one_shot()))
+                        .map(|_| ())
+                        .map_err(|e| format!("round {round} opener {t}: {e}"))
+                })
+            })
+            .collect();
+        for h in hs {
+            h.join().unwrap().unwrap();
+        }
     }
 }
 

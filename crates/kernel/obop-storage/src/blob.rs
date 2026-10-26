@@ -20,7 +20,7 @@
 //! Nothing here looks inside the bytes: sniffing, decoding limits and re-encoding are done by the
 //! caller (`obop-media`) before `put`. A virus scanner plugs in as [`Scanner`].
 
-use crate::pgpool::{Class, PgPool, PgPoolConfig, tune};
+use crate::pgpool::{Class, PgPool, PgPoolConfig, describe, tune};
 use crate::tls::PgConnector;
 use crate::{ApplyError, Backend, Fields, Op, Result};
 use serde_json::{Value as J, json};
@@ -301,6 +301,21 @@ enum Db {
 /// instead of large objects: they are covered by ordinary dumps and replication.
 pub struct DbBytes {
     db: Arc<Db>,
+    /// Writers of one key in this process queue here, before they lease a connection: the same
+    /// content uploaded several times at once must not park a pooled connection per waiter at the
+    /// advisory lock of its key (the pool is small, and reads of other files would meet `busy`).
+    /// Keys share a gate by their hash; the advisory lock stays for other processes.
+    gate: Arc<Vec<Mutex<()>>>,
+}
+
+/// How many gates writers of keys are spread over.
+const GATES: usize = 64;
+
+/// A small stable hash of a key (FNV-1a), to pick its gate.
+fn hash32(key: &str) -> u32 {
+    key.bytes().fold(0x811c_9dc5u32, |h, b| {
+        (h ^ u32::from(b)).wrapping_mul(0x0100_0193)
+    })
 }
 
 impl DbBytes {
@@ -339,23 +354,33 @@ impl DbBytes {
             });
             let connector = PgConnector::new(url)?;
             let mut client = tune(connector.clone(), "obop-blob", &cfg).connect()?;
-            client
-                .batch_execute(
-                    "CREATE TABLE IF NOT EXISTS obop_blob_data (
-                         key  TEXT NOT NULL,
-                         seq  INTEGER NOT NULL,
-                         data BYTEA NOT NULL,
-                         PRIMARY KEY (key, seq)
-                     );",
-                )
-                .map_err(|e| e.to_string())?;
+            // Several processes may open the store at once on a database that does not have the
+            // table yet: creating it is serialised with the same lock the record schema uses
+            // (`pg.rs`), or one of them fails with a duplicate-object error. The error says what
+            // it was (SQLSTATE and the server's message), not just "db error".
+            let mut tx = client.transaction().map_err(|e| describe(&e))?;
+            tx.batch_execute("SELECT pg_advisory_xact_lock(hashtextextended('obop-schema', 0))")
+                .map_err(|e| describe(&e))?;
+            tx.batch_execute(
+                "CREATE TABLE IF NOT EXISTS obop_blob_data (
+                     key  TEXT NOT NULL,
+                     seq  INTEGER NOT NULL,
+                     data BYTEA NOT NULL,
+                     PRIMARY KEY (key, seq)
+                 );",
+            )
+            .map_err(|e| describe(&e))?;
+            tx.commit().map_err(|e| describe(&e))?;
             let pool = PgPool::new("blob", connector, cfg.blob_size, &cfg);
             pool.seed(client);
             Db::Pg(pool)
         } else {
             return Err("unsupported database url for blobs".into());
         };
-        Ok(Self { db: Arc::new(db) })
+        Ok(Self {
+            db: Arc::new(db),
+            gate: Arc::new((0..GATES).map(|_| Mutex::new(())).collect()),
+        })
     }
 
     fn chunk(&self, key: &str, seq: i32) -> Result<Option<Vec<u8>>> {
@@ -440,24 +465,32 @@ impl BlobBytes for DbBytes {
             // the advisory lock of the key first, so the second one waits, then replaces the
             // rows of the first with the same bytes. The lock is the transaction's own, so it is
             // gone with the commit; it is in a key space of its own (not the batch locks').
-            Db::Pg(p) => p.tx_retry(Class::Batch, |c| {
-                c.execute(
-                    "SELECT pg_advisory_xact_lock($1, hashtext($2))",
-                    &[&BLOB_LOCK_NAMESPACE, &key],
-                )?;
-                c.execute("DELETE FROM obop_blob_data WHERE key = $1", &[&key])?;
-                let mut parts: Vec<&[u8]> = bytes.chunks(CHUNK).collect();
-                if parts.is_empty() {
-                    parts.push(&[]);
-                }
-                for (seq, part) in parts.into_iter().enumerate() {
+            Db::Pg(p) => {
+                // The writers of this process queue at a gate, without a connection; only one per
+                // gate meets the advisory lock, which is for the writers of other processes. (A
+                // waiter after the first still rewrites the same bytes: that is the cost of "the
+                // last writer wins" for a key that may hold other content.)
+                let gate = &self.gate[hash32(key) as usize % GATES];
+                let _turn = gate.lock().unwrap_or_else(|e| e.into_inner());
+                p.tx_retry(Class::Batch, |c| {
                     c.execute(
-                        "INSERT INTO obop_blob_data (key, seq, data) VALUES ($1, $2, $3)",
-                        &[&key, &(seq as i32), &part],
+                        "SELECT pg_advisory_xact_lock($1, hashtext($2))",
+                        &[&BLOB_LOCK_NAMESPACE, &key],
                     )?;
-                }
-                Ok(())
-            }),
+                    c.execute("DELETE FROM obop_blob_data WHERE key = $1", &[&key])?;
+                    let mut parts: Vec<&[u8]> = bytes.chunks(CHUNK).collect();
+                    if parts.is_empty() {
+                        parts.push(&[]);
+                    }
+                    for (seq, part) in parts.into_iter().enumerate() {
+                        c.execute(
+                            "INSERT INTO obop_blob_data (key, seq, data) VALUES ($1, $2, $3)",
+                            &[&key, &(seq as i32), &part],
+                        )?;
+                    }
+                    Ok(())
+                })
+            }
         }
     }
     fn open(&self, key: &str) -> Result<Option<Box<dyn Read + Send>>> {
@@ -468,6 +501,7 @@ impl BlobBytes for DbBytes {
         Ok(Some(Box::new(DbReader {
             db: DbBytes {
                 db: self.db.clone(),
+                gate: self.gate.clone(),
             },
             key: key.into(),
             seq: 1,
@@ -1119,7 +1153,16 @@ mod tests {
         };
         // D74: the key is the hash of the bytes, so two uploads of one file race on one key. The
         // second used to wait for the first at the primary key and fail with a duplicate key.
-        let b = Arc::new(DbBytes::open(&url).unwrap());
+        //
+        // A pool of two connections that waits 300 ms for one: the writers that wait for the first
+        // must not hold a connection while they wait (they queue before they lease one), or the
+        // third of them is refused as busy.
+        let cfg = PgPoolConfig {
+            blob_size: 2,
+            acquire_timeout: std::time::Duration::from_millis(300),
+            ..PgPoolConfig::default()
+        };
+        let b = Arc::new(DbBytes::open_with(&url, Some(cfg)).unwrap());
         // Several chunks, so the writers overlap for a while.
         let bytes: Arc<Vec<u8>> = Arc::new(
             (0..(CHUNK * 24 + 5))

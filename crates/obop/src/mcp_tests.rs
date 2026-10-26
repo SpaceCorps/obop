@@ -375,10 +375,10 @@ async fn origins_that_are_not_allowed_get_403_before_anything_else() {
         ok.header("access-control-allow-origin"),
         "https://client.example"
     );
-    assert!(
-        ok.header("access-control-expose-headers")
-            .contains("Mcp-Session-Id")
-    );
+    let exposed = ok.header("access-control-expose-headers");
+    for name in ["Mcp-Session-Id", "Retry-After", "X-Obop-Applied"] {
+        assert!(exposed.contains(name), "{name} in {exposed}");
+    }
     // Same-origin on a loopback host is fine.
     let local = post_raw(
         &r,
@@ -1125,6 +1125,52 @@ async fn an_approval_the_store_refused_before_it_changed_anything_can_be_repeate
     assert!(
         repeated >= 1,
         "the sweep never refused an approval before it changed anything"
+    );
+}
+
+#[tokio::test]
+async fn every_generated_operation_of_a_real_instance_document_declares_the_503() {
+    // The unit test of the document builder has no modules; this one has all of them, so it covers
+    // the generated list, search, get, create, update, delete, bulk_create and action operations
+    // (nearly all of a real document), not just the fixed ones.
+    let r = router();
+    let resp = send(
+        &r,
+        Request::get("/api/openapi.json")
+            .header("host", HOST)
+            .header("authorization", "Bearer dev-admin")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(resp.status, 200);
+    let doc = resp.json();
+    let (mut generated, mut checked) = (0, 0);
+    for (path, item) in doc["paths"].as_object().unwrap() {
+        for (method, op) in item.as_object().unwrap() {
+            if op.get("operationId").is_none() {
+                continue;
+            }
+            checked += 1;
+            let r503 = &op["responses"]["503"];
+            assert!(r503.is_object(), "{method} {path} has no 503");
+            assert!(
+                r503["headers"]["Retry-After"].is_object()
+                    && r503["headers"]["X-Obop-Applied"].is_object(),
+                "{method} {path}"
+            );
+            if path.ends_with("/create")
+                || path.ends_with("/bulk_create")
+                || path.ends_with("/update")
+                || path.ends_with("/list")
+            {
+                generated += 1;
+            }
+        }
+    }
+    assert!(
+        checked > 100 && generated > 40,
+        "{checked} checked, {generated} generated"
     );
 }
 

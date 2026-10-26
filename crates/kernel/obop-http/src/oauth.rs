@@ -109,7 +109,7 @@ fn cors(r: &mut Response) {
     );
     h.insert(
         header::ACCESS_CONTROL_EXPOSE_HEADERS,
-        HeaderValue::from_static("Retry-After"),
+        HeaderValue::from_static("Retry-After, X-Obop-Applied"),
     );
 }
 

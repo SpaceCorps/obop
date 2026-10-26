@@ -369,7 +369,9 @@ fn with_cors(mut r: Response, origin: Option<&str>) -> Response {
         h.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, o);
         h.insert(
             header::ACCESS_CONTROL_EXPOSE_HEADERS,
-            HeaderValue::from_static("Mcp-Session-Id, WWW-Authenticate"),
+            HeaderValue::from_static(
+                "Mcp-Session-Id, WWW-Authenticate, Retry-After, X-Obop-Applied",
+            ),
         );
         h.append(header::VARY, HeaderValue::from_static("Origin"));
     }

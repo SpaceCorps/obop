@@ -23,7 +23,15 @@ pub(crate) struct Pg {
     /// Connections that hold advisory locks (a lock lives as long as its session).
     pub(crate) lock_pool: Pool<PgManager>,
     locks: Arc<LocalLocks>,
+    /// Atomic batches of this process wait here before they lease a connection: a batch that
+    /// names many records (a bulk write) holds almost every stripe, so the others would each park
+    /// a pooled connection at the advisory locks and the pool, then reads too, would run dry
+    /// (D74). Large batches take it exclusively, small ones share it.
+    batches: std::sync::RwLock<()>,
 }
+
+/// A batch that locks more stripes than this is a bulk write.
+const BULK_STRIPES: usize = 32;
 
 /// The database's clock in milliseconds, so processes with different clocks agree on expiry.
 const NOW: &str = "(extract(epoch from clock_timestamp()) * 1000)::bigint";
@@ -147,6 +155,7 @@ impl Pg {
             main,
             lock_pool,
             locks: Arc::default(),
+            batches: std::sync::RwLock::new(()),
         })
     }
 
@@ -259,6 +268,12 @@ pub(crate) fn batch_lock_keys(ops: &[Op]) -> Vec<i32> {
     keys.sort_unstable();
     keys.dedup();
     keys
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The advisory locks the server held for the last batch this thread applied (tests only).
+    pub(crate) static BATCH_LOCKS_HELD: std::cell::Cell<i64> = const { std::cell::Cell::new(-1) };
 }
 
 /// Take the transaction-level advisory locks of a batch (see [`batch_lock_keys`]) in one
@@ -459,11 +474,37 @@ impl Backend for Pg {
         // batches simply queue; should the server still find a deadlock (a plain write or a bulk
         // statement of another process), the batch was rolled back whole and is run again.
         let keys = batch_lock_keys(ops);
+        // Wait for a turn without a connection (see `Pg::batches`). Neither guard is held across
+        // anything that waits for another batch of this process.
+        let _turn = if keys.len() > BULK_STRIPES {
+            (
+                None,
+                Some(self.batches.write().unwrap_or_else(|e| e.into_inner())),
+            )
+        } else {
+            (
+                Some(self.batches.read().unwrap_or_else(|e| e.into_inner())),
+                None,
+            )
+        };
         let mut attempt = 0;
         loop {
             // A refused batch is a value, not an error of the connection: roll back, report it.
             let outcome = self.main.tx_decide(Class::Batch, false, |c| {
                 lock_batch(c, &keys)?;
+                // For the tests: what the server really holds for this batch, asked inside the
+                // real path, so a change that goes back to one lock per record cannot hide.
+                #[cfg(test)]
+                {
+                    let n: i64 = c
+                        .query_one(
+                            "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' \
+                             AND pid = pg_backend_pid()",
+                            &[],
+                        )?
+                        .get(0);
+                    BATCH_LOCKS_HELD.with(|h| h.set(n));
+                }
                 let r = run_ops(&mut P(c), ops);
                 let commit = r.is_ok();
                 Ok((r, commit))

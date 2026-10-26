@@ -173,10 +173,13 @@ pub(crate) async fn track(State(s): State<Arc<HttpState>>, req: Request, next: N
 }
 
 /// How often a storage fault decided the answer of a request, by fault and by what was done:
-/// `[fault][0]` the answer was replaced by a 503, `[fault][1]` the request had already committed a
-/// change and kept its own answer. Process-wide: the instance, community and control-plane routers
-/// all report here.
-static FAULT_ANSWERS: [[AtomicU64; 2]; 3] = [const { [AtomicU64::new(0), AtomicU64::new(0)] }; 3];
+/// `[fault][0]` the answer was replaced by a 503 that says nothing was changed (or, after
+/// `storage_unavailable`, that a change in flight may or may not have been applied), `[fault][1]`
+/// the request had already committed a change and kept its own answer, `[fault][2]` the answer
+/// was replaced by a 503 that says part of the request was applied. Process-wide: the instance,
+/// community and control-plane routers all report here.
+static FAULT_ANSWERS: [[AtomicU64; 3]; 3] =
+    [const { [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)] }; 3];
 
 fn fault_index(f: Fault) -> usize {
     match f {
@@ -323,7 +326,10 @@ pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
     let Some(fault) = outcome.fault else {
         return resp;
     };
-    let applied = if outcome.partial || (outcome.wrote && !resp.status().is_success()) {
+    // An error answer after a commit (a 4xx or 5xx) says the request failed after it changed
+    // something. A redirect or any other 2xx or 3xx is an answer that worked: a lost optional step
+    // does not turn a purchase or a consent into a failure.
+    let applied = if outcome.partial || (outcome.wrote && resp.status().as_u16() >= 400) {
         Some(Applied::Partial)
     } else if !outcome.wrote {
         Some(if fault == Fault::Unavailable {
@@ -345,7 +351,8 @@ pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
         }
         return resp;
     };
-    FAULT_ANSWERS[fault_index(fault)][0].fetch_add(1, Relaxed);
+    let column = if applied == Applied::Partial { 2 } else { 0 };
+    FAULT_ANSWERS[fault_index(fault)][column].fetch_add(1, Relaxed);
     replacement(fault, applied, &path, &resp)
 }
 
@@ -682,11 +689,11 @@ fn render_pools(t: &mut String) {
     );
     let _ = writeln!(
         t,
-        "# HELP obop_storage_faults_total Requests that hit a storage fault, by fault and by answer: 503 (nothing had been changed) or kept (a change was already committed, so the request kept its own answer)."
+        "# HELP obop_storage_faults_total Requests that hit a storage fault, by fault and by answer: 503 (answered 503 with applied none, or unknown after storage_unavailable: nothing was changed, or a change in flight may or may not have been applied), partial (answered 503 with applied partial: a change was committed and a step the request needed was refused, so somebody should read the records it touched) or kept (a change was committed and only an optional step was lost, so the request kept its own answer)."
     );
     let _ = writeln!(t, "# TYPE obop_storage_faults_total counter");
     for (i, name) in ["busy", "unavailable", "timeout"].iter().enumerate() {
-        for (j, answer) in ["503", "kept"].iter().enumerate() {
+        for (j, answer) in [(0, "503"), (1, "kept"), (2, "partial")] {
             let _ = writeln!(
                 t,
                 "obop_storage_faults_total{{fault=\"{name}\",answer=\"{answer}\"}} {}",
@@ -935,6 +942,29 @@ mod tests {
             })
             .await
         });
+        // A handler that writes, loses an optional read-back and answers a redirect (a checkout,
+        // a consent): the answer worked.
+        let d = db.clone();
+        let writes_then_redirects = post(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                d.insert("t", "redirected", &fields(4)).unwrap();
+                let _ = d.get("t", "redirected");
+                (StatusCode::SEE_OTHER, [("location", "/done")], "")
+            })
+            .await
+        });
+        // A handler that writes and then answers an error (a step it needed failed).
+        let d = db.clone();
+        let writes_then_fails = post(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                d.insert("t", "half", &fields(5)).unwrap();
+                let _ = d.get("t", "half");
+                (StatusCode::BAD_REQUEST, "a step failed")
+            })
+            .await
+        });
         // A handler that swallows a refused read and goes on to write (a vault, a plan).
         let d = db.clone();
         let reads_then_writes = post(move || async move {
@@ -981,6 +1011,8 @@ mod tests {
         let router = Router::new()
             .route("/api/read", swallows)
             .route("/api/create", writes_then_reads)
+            .route("/api/redirect", writes_then_redirects)
+            .route("/api/shaped_after_write", writes_then_fails)
             .route("/api/derived", reads_then_writes)
             .route("/mcp", shaped.clone())
             .route("/oauth/token", shaped.clone())
@@ -1043,6 +1075,43 @@ mod tests {
         assert!(
             db.get("t", "new").unwrap().is_some(),
             "the change is there, once"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_redirect_after_a_commit_is_an_answer_that_worked_and_a_partial_503_is_counted_apart()
+    {
+        let (flaky, db, r) = app();
+        // A redirect after a commit whose optional read-back was refused keeps its answer: it is
+        // not a failure, and not "do not repeat it blindly" (a purchase, a consent).
+        flaky.refuse_reads_after_the_next_write();
+        let before = FAULT_ANSWERS[0][1].load(Relaxed);
+        let (s, h, _) = call(&r, "POST", "/api/redirect").await;
+        assert_eq!(s, StatusCode::SEE_OTHER);
+        assert_eq!(h["location"], "/done");
+        assert!(h.get("x-obop-applied").is_none());
+        assert!(
+            FAULT_ANSWERS[0][1].load(Relaxed) > before,
+            "counted as kept"
+        );
+        flaky.allow_models();
+        assert!(db.get("t", "redirected").unwrap().is_some());
+        // An error answer after a commit is a partial 503, and the metrics count it as such.
+        let partial_before = FAULT_ANSWERS[0][2].load(Relaxed);
+        flaky.refuse_reads_after_the_next_write();
+        let (s, h, _) = call(&r, "POST", "/api/shaped_after_write").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(h["x-obop-applied"], "partial");
+        assert!(FAULT_ANSWERS[0][2].load(Relaxed) > partial_before);
+        let mut text = String::new();
+        render_pools(&mut text);
+        assert!(
+            text.contains("obop_storage_faults_total{fault=\"busy\",answer=\"partial\"}"),
+            "{text}"
+        );
+        assert!(
+            text.contains("applied partial"),
+            "the help text says what partial is"
         );
     }
 
