@@ -44,7 +44,13 @@ pub struct Flaky {
     vanish: AtomicBool,
     /// -1: off; n: updates to let through before the acknowledgement of one is lost.
     lose_ack: AtomicI64,
+    /// Run once, right after the next successful insert into the model (another process doing
+    /// its part between two steps of this one).
+    after_insert: std::sync::Mutex<Option<(String, AfterInsert)>>,
 }
+
+/// What [`Flaky::after_the_next_insert_into`] runs, with the wrapped backend.
+pub type AfterInsert = Box<dyn FnOnce(&dyn Backend) + Send>;
 
 impl Flaky {
     pub fn new(inner: Arc<dyn Backend>) -> Arc<Self> {
@@ -65,6 +71,7 @@ impl Flaky {
             run_len: AtomicI64::new(0),
             vanish: AtomicBool::new(false),
             lose_ack: AtomicI64::new(-1),
+            after_insert: std::sync::Mutex::new(None),
         })
     }
 
@@ -117,6 +124,11 @@ impl Flaky {
         self.run_len.store(0, SeqCst);
         self.vanish.store(false, SeqCst);
         self.lose_ack.store(-1, SeqCst);
+    }
+
+    /// Run `then` once, right after the next successful insert into `model`.
+    pub fn after_the_next_insert_into(&self, model: &str, then: AfterInsert) {
+        *self.after_insert.lock().unwrap() = Some((model.to_string(), then));
     }
 
     /// Let `skip` updates through, then make the next one commit and answer `storage_unavailable`:
@@ -292,7 +304,18 @@ impl Flaky {
 impl Backend for Flaky {
     fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
         self.gate_m(true, model)?;
-        self.inner.insert(model, id, fields)
+        self.inner.insert(model, id, fields)?;
+        let hook = {
+            let mut g = self.after_insert.lock().unwrap();
+            match &*g {
+                Some((m, _)) if m == model => g.take().map(|(_, f)| f),
+                _ => None,
+            }
+        };
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
+        Ok(())
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
         self.gate_m(false, model)?;

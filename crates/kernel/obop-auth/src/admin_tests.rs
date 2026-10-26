@@ -1132,31 +1132,36 @@ fn a_lockout_counter_the_store_would_not_give_is_a_lockout_and_not_no_attempts()
 }
 
 #[test]
-fn a_sign_in_without_a_second_step_takes_turns_with_a_disable_of_the_account() {
-    use std::time::Duration;
-    // The administrator's disable holds the account lock while it ends the sessions. A sign-in
-    // that passed the "disabled?" check just before it began could issue its session after the
-    // revocation ran: unrevoked, alive again the day the account is enabled. The sign-in now waits
-    // for the lock and looks again.
-    let r = rig();
+fn a_session_made_while_its_account_is_being_disabled_is_revoked_and_not_left_to_wake_up() {
+    // The administrator's disable ended the sessions that existed, and a sign-in that had passed
+    // the "disabled?" check made its session just after: unrevoked, alive again the day the
+    // account is enabled. The account is looked at again once the session is written.
+    let (r, flaky) = flaky_rig();
+    let root = admin(&r, "root");
     user_with(&r.a, "ada", &["base.user"]);
-    std::thread::scope(|s| {
-        let guard = r.a.mfa_guard().unwrap();
-        let waiting = s.spawn(|| r.a.login_step("ada", PW));
-        std::thread::sleep(Duration::from_millis(600));
-        assert!(
-            !waiting.is_finished(),
-            "the sign-in went on while the account was being changed"
-        );
-        // The disable commits while the sign-in waits.
-        let mut f = Fields::new();
-        f.insert("disabled".into(), J::Bool(true));
-        r.b.update("auth_user", "ada", &f).unwrap();
-        drop(guard);
-        let done = waiting.join().unwrap();
-        assert!(done.is_err(), "no session for a disabled account: {done:?}");
-    });
-    assert!(r.b.list("auth_token").unwrap().is_empty());
+    // The disable commits right after the sign-in wrote its session.
+    flaky.after_the_next_insert_into(
+        "auth_token",
+        Box::new(|inner| {
+            let mut f = Fields::new();
+            f.insert("disabled".into(), J::Bool(true));
+            inner.update("auth_user", "ada", &f).unwrap();
+        }),
+    );
+    let done = r.a.login_step("ada", PW);
+    assert!(done.is_err(), "no session for a disabled account: {done:?}");
+    let live = |r: &Rig| {
+        r.b.list("auth_token")
+            .unwrap()
+            .iter()
+            .filter(|(_, t)| t["owner"] == "ada" && t["revoked"] != true)
+            .count()
+    };
+    assert_eq!(live(&r), 0, "the session that was made is revoked");
+    // The day the account is enabled nothing wakes up.
+    r.a.set_user_disabled(&root, "ada", false).unwrap();
+    assert_eq!(live(&r), 0);
+    assert!(r.a.login_step("ada", PW).is_ok(), "and a new sign-in works");
 }
 
 #[test]

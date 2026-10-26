@@ -342,13 +342,6 @@ impl Auth {
             self.record_failure(&name);
             return Err("invalid username or password".into());
         }
-        // From here the sign-in and a disable of the account take turns: a session made after the
-        // administrator's revocation ran would be unrevoked, and would come alive when the account
-        // is enabled again.
-        let _g = self.mfa_guard().map_err(|e| match e {
-            MfaError::Unavailable(m) => m,
-            other => format!("{other:?}"),
-        })?;
         // Same answer as a wrong password, so nobody can tell a disabled account from none; the
         // security log says what happened.
         if self.is_disabled(&name) {
@@ -452,9 +445,43 @@ impl Auth {
 
     /// A session for `name`. It is limited to the account routes when two-factor enrolment is
     /// owed (`enrol`) or an administrator reset the password and a new one is owed.
+    ///
+    /// The account is looked at again once the session is written. An administrator's disable
+    /// that ran between the check that let this sign-in begin and the write ended the sessions
+    /// that existed then, and this one did not: it would be unrevoked, and would come alive when
+    /// the account is enabled again. Either the disable has committed by now (this sees it and
+    /// ends the session) or it commits later, and then the list of sessions it ends already holds
+    /// this one: no lock between the two is needed.
     pub(crate) fn session_outcome(&self, name: &str, enrol: bool) -> Result<LoginOutcome, String> {
         let must_change = self.must_change_password(name);
         let token = self.issue_session(name, enrol || must_change)?;
+        let disabled = match self.backend.get("auth_user", name) {
+            Ok(Some(u)) => u.get("disabled").and_then(J::as_bool) == Some(true),
+            // Gone, or not readable: no session is handed out on a guess.
+            _ => true,
+        };
+        if disabled {
+            let h = token_hash(&token);
+            let mut p = Fields::new();
+            p.insert("revoked".into(), J::Bool(true));
+            if let Err(e) =
+                obop_storage::fault::patiently(4, std::time::Duration::from_millis(150), || {
+                    obop_storage::fault::bookkeeping(|| self.backend.update("auth_token", &h, &p))
+                })
+            {
+                // Not handed to anyone, and the account is disabled: it resolves to nothing.
+                eprintln!(
+                    "a session made while its account was being disabled could not be revoked: {e}"
+                );
+            }
+            self.event(
+                name,
+                "login_refused",
+                name,
+                "the account was disabled while the sign-in was finishing",
+            );
+            return Err("invalid username or password".into());
+        }
         if must_change {
             self.event(
                 name,
