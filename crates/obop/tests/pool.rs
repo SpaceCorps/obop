@@ -591,6 +591,26 @@ fn a_create_is_never_answered_503_after_it_committed_and_never_stored_after_a_50
         for c in creators {
             c.join().unwrap();
         }
+        // The test needs both an answered and a refused create. The refused ones come with the
+        // pressure above; on a loaded machine the answered ones can be missing from the fixed
+        // batch, so go on, one at a time, until one is answered.
+        let answered = |r: &std::sync::Mutex<Vec<(String, u16, String)>>| {
+            r.lock().unwrap().iter().any(|x| x.1 == 200)
+        };
+        let mut extra = 0;
+        while !answered(&results) && extra < 600 {
+            let name = format!("probe-extra-{extra}");
+            let r = http(
+                port,
+                "POST",
+                "/api/party/create",
+                Some(&token),
+                Some(&json!({"name": name})),
+            );
+            results.lock().unwrap().push((name, r.status, r.body));
+            extra += 1;
+            std::thread::sleep(Duration::from_millis(5));
+        }
     });
     // Calm again: read everything that was stored.
     std::thread::sleep(Duration::from_millis(300));

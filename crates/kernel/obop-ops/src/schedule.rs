@@ -218,10 +218,10 @@ fn take_inner(
     clock: &dyn Clock,
 ) -> Result<Outcome, String> {
     let started = Instant::now();
-    // The name carries the clock's time, so a simulated clock gives distinct, ordered names.
-    let target = settings
-        .dir
-        .join(backup::default_name(clock.now(), settings.keys.can_seal()));
+    // The name carries the clock's time, so a simulated clock gives distinct, ordered names; a
+    // second backup in the same second gets a `-2` (the one before a module update and the one
+    // before its rollback can fall in the same second).
+    let target = backup::free_path(&settings.dir, clock.now(), settings.keys.can_seal());
     let c = backup::create_at(
         backend,
         blobs,
