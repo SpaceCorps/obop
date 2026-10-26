@@ -452,7 +452,10 @@ fn a_held_lock_a_newer_database_and_a_drifted_ledger_each_stop_the_run() {
     // a loaded machine cannot make the test flaky.
     // (The migrated database above has nothing pending, which asks nothing of the lock: use one
     // with steps to run.)
-    let (b3, url3) = old_db(&Dir::new("lockheld"));
+    // Bound to a name: a temporary Dir is dropped, and its directory removed, at the end of the
+    // statement; an open file keeps the directory alive on Windows only.
+    let held_dir = Dir::new("lockheld");
+    let (b3, url3) = old_db(&held_dir);
     let mut g3 = gate(&b3, &url3, &clock, Mode::Relaxed);
     g3.options.lock_wait = Duration::from_millis(200);
     let held = b3.lock("obop.migrate").unwrap();
@@ -498,7 +501,8 @@ fn a_missing_window_stops_the_run_through_the_gate_and_a_named_window_lets_it_th
     let ran = g.run(false, &mut |_| {}).unwrap();
     assert_eq!(ran.applied.len(), 1);
     // Below the limit no window is asked for.
-    let (b2, url2) = old_db(&Dir::new("window-small"));
+    let small_dir = Dir::new("window-small");
+    let (b2, url2) = old_db(&small_dir);
     let mut small = gate(&b2, &url2, &clock, Mode::Relaxed);
     small.steps = g.steps.clone();
     small.options.window_rows = Some(5);
@@ -533,7 +537,8 @@ fn a_restore_point_is_made_on_a_postgresql_host_and_required_when_archiving_is_o
             .all(|r| r.restore_point.as_deref() == Some("pre-migration-2@0/16B3748"))
     );
     // The role may not call it and WAL archiving is on: strict refuses before any step.
-    let (b2, url2) = old_db(&Dir::new("rp2"));
+    let rp2_dir = Dir::new("rp2");
+    let (b2, url2) = old_db(&rp2_dir);
     let mut s = FakeServer::well_configured();
     s.restore_point_error = Some("permission denied for function pg_create_restore_point".into());
     let mut strict = gate(&b2, &url2, &clock, Mode::Strict);
@@ -557,7 +562,8 @@ fn a_restore_point_is_made_on_a_postgresql_host_and_required_when_archiving_is_o
         "no step ran"
     );
     // With archiving off it is a note, not a stop.
-    let (b3, url3) = old_db(&Dir::new("rp3"));
+    let rp3_dir = Dir::new("rp3");
+    let (b3, url3) = old_db(&rp3_dir);
     let mut s = FakeServer::well_configured().with("archive_mode", "off");
     s.restore_point_error = Some("permission denied".into());
     let mut g3 = gate(&b3, &url3, &clock, Mode::Relaxed);
