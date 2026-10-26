@@ -426,6 +426,7 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
     base
 }
 
+pub mod keyexpr;
 pub mod limit;
 mod memory;
 mod pg;
