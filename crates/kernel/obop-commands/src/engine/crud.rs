@@ -278,7 +278,18 @@ pub(crate) fn create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
     seq::check_unique(&unit, &look)?;
     commit(eng, unit)?;
     crate::blobs::hold_created(&eng.store, def, &id, &held);
-    row(eng, def, &id)
+    row_after_commit(eng, def, &id, &held)
+}
+
+/// The record as the caller gets it back after a change that has committed: read again, so that
+/// computed fields are filled. If the store refuses that read (a full pool, D74) the change has
+/// been made all the same, and failing the call would only tempt a client to repeat it; the answer
+/// is then built from what was written (computed fields missing).
+fn row_after_commit(eng: &Engine, def: &ModelDef, id: &str, written: &Fields) -> R<Value> {
+    match row(eng, def, id) {
+        Err(e) if obop_storage::fault::Fault::is_transient(&e) => Ok(to_row(id, written)),
+        other => other,
+    }
 }
 
 pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Value> {
@@ -326,6 +337,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         seq::check_unique(&unit, &look)?;
         commit(eng, unit)?;
         crate::blobs::hold_updated(&eng.store, def, &id, &cur, &after);
+        return row_after_commit(eng, def, &id, &after);
     }
     row(eng, def, &id)
 }

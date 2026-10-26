@@ -748,6 +748,235 @@ mod tests {
     use super::*;
     use obop_migrate::Status;
 
+    // ---- the answer to a request that hit a storage fault (D74) ---------------------------
+
+    use axum::Router;
+    use axum::http::Request as HttpRequest;
+    use axum::routing::{get, post};
+    use obop_storage::testing::Flaky;
+    use obop_storage::{Backend, Fields};
+    use tower::ServiceExt;
+
+    fn fields(n: i64) -> Fields {
+        let mut f = Fields::new();
+        f.insert("n".into(), n.into());
+        f
+    }
+
+    /// A router of a few handlers over a store whose reads can be refused, behind the layer.
+    fn app() -> (Arc<Flaky>, Arc<dyn Backend>, Router) {
+        let (flaky, db) = Flaky::memory();
+        db.insert("t", "a", &fields(1)).unwrap();
+        // A handler that swallows a refused read and answers "not signed in", as the layers above
+        // the store do with `.ok()`.
+        let d = db.clone();
+        let swallows = get(move || async move {
+            let d = d.clone();
+            crate::blocking(move || match d.get("t", "a") {
+                Ok(Some(_)) => (StatusCode::OK, "found"),
+                _ => (StatusCode::UNAUTHORIZED, "not signed in"),
+            })
+            .await
+        });
+        // A handler that writes first and then has its read-back refused (swallowed).
+        let d = db.clone();
+        let writes_then_reads = post(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                d.insert("t", "new", &fields(2)).unwrap();
+                let _ = d.get("t", "new");
+                (StatusCode::CREATED, "created")
+            })
+            .await
+        });
+        // A handler that swallows a refused read and goes on to write (a vault, a plan).
+        let d = db.clone();
+        let reads_then_writes = post(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                let _ = d.get("t", "a");
+                let w = d.insert("t", "late", &fields(3));
+                (
+                    StatusCode::OK,
+                    if w.is_ok() { "written" } else { "refused" },
+                )
+            })
+            .await
+        });
+        // The same on routes with their own shapes and headers.
+        let d = db.clone();
+        let shaped = get(move || async move {
+            let d = d.clone();
+            crate::blocking(move || {
+                let _ = d.get("t", "a");
+                (
+                    StatusCode::BAD_REQUEST,
+                    [
+                        ("access-control-allow-origin", "https://app.example"),
+                        ("x-content-type-options", "nosniff"),
+                        ("content-type", "application/json"),
+                    ],
+                    "{}",
+                )
+            })
+            .await
+        });
+        let page = get(|| async {
+            crate::blocking(|| {
+                obop_storage::fault::note(obop_storage::fault::Fault::Busy);
+                (
+                    StatusCode::OK,
+                    [("content-type", "text/html; charset=utf-8")],
+                    "<p>page</p>",
+                )
+            })
+            .await
+        });
+        let router = Router::new()
+            .route("/api/read", swallows)
+            .route("/api/create", writes_then_reads)
+            .route("/api/derived", reads_then_writes)
+            .route("/mcp", shaped.clone())
+            .route("/oauth/token", shaped.clone())
+            .route("/api/shaped", shaped)
+            .route("/page", page)
+            .layer(axum::middleware::from_fn(storage_faults));
+        (flaky, db, router)
+    }
+
+    async fn call(
+        r: &Router,
+        method: &str,
+        path: &str,
+    ) -> (StatusCode, axum::http::HeaderMap, String) {
+        let req = HttpRequest::builder()
+            .method(method)
+            .uri(path)
+            .body(Body::empty())
+            .unwrap();
+        let resp = r.clone().oneshot(req).await.unwrap();
+        let (status, headers) = (resp.status(), resp.headers().clone());
+        let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+            .await
+            .unwrap();
+        (status, headers, String::from_utf8_lossy(&bytes).to_string())
+    }
+
+    #[tokio::test]
+    async fn a_swallowed_refusal_before_any_change_is_answered_503_with_retry_after() {
+        let (flaky, _db, r) = app();
+        let (s, _, body) = call(&r, "GET", "/api/read").await;
+        assert_eq!(
+            (s, body.as_str()),
+            (StatusCode::OK, "found"),
+            "healthy: untouched"
+        );
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/api/read").await;
+        // The handler said "not signed in"; the client is told the truth.
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+        assert_eq!(h["retry-after"], "1");
+        assert_eq!(h["cache-control"], "no-store");
+        let j: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(j["error"], "storage_busy");
+        assert!(j["hint"].as_str().unwrap().contains("Nothing was changed"));
+    }
+
+    #[tokio::test]
+    async fn a_request_that_committed_a_change_keeps_its_answer() {
+        let (flaky, db, r) = app();
+        flaky.refuse_reads_after_the_next_write();
+        let before = FAULT_ANSWERS[0][1].load(Relaxed);
+        let (s, _, body) = call(&r, "POST", "/api/create").await;
+        assert_eq!((s, body.as_str()), (StatusCode::CREATED, "created"));
+        assert!(
+            FAULT_ANSWERS[0][1].load(Relaxed) > before,
+            "the lost fault is counted"
+        );
+        flaky.allow_models();
+        assert!(
+            db.get("t", "new").unwrap().is_some(),
+            "the change is there, once"
+        );
+    }
+
+    #[tokio::test]
+    async fn after_a_refused_read_the_request_writes_nothing_and_says_503() {
+        let (flaky, db, r) = app();
+        flaky.refuse_next(1);
+        let (s, h, _) = call(&r, "POST", "/api/derived").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE, "not the handler's 200");
+        assert!(h.contains_key("retry-after"));
+        assert!(
+            db.get("t", "late").unwrap().is_none(),
+            "nothing was written"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_503_speaks_the_shape_of_its_route_and_keeps_its_headers() {
+        let (flaky, _db, r) = app();
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/mcp").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        let j: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(j["jsonrpc"], "2.0");
+        assert_eq!(j["error"]["message"], "storage_busy");
+        assert_eq!(
+            h["access-control-allow-origin"], "https://app.example",
+            "CORS kept"
+        );
+        assert_eq!(h["x-content-type-options"], "nosniff");
+
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/oauth/token").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        let j: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(
+            j["error"], "temporarily_unavailable",
+            "an OAuth error, not a REST one"
+        );
+        assert_eq!(h["access-control-allow-origin"], "https://app.example");
+        assert_eq!(h["retry-after"], "1");
+
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/page").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(h["content-type"].to_str().unwrap().starts_with("text/html"));
+        assert!(body.contains("Try again"), "a page, not raw JSON: {body}");
+
+        // The REST shape elsewhere, and the route's own headers are kept there too.
+        flaky.refuse_next(1);
+        let (s, h, body) = call(&r, "GET", "/api/shaped").await;
+        assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(body.contains("\"code\":\"storage_busy\""));
+        assert_eq!(h["access-control-allow-origin"], "https://app.example");
+    }
+
+    #[tokio::test]
+    async fn the_health_routes_decide_for_themselves() {
+        // `/healthz`, `/readyz` and `/metrics` are not given a scope: whatever their handlers hit,
+        // the layer does not rewrite their answer.
+        let (flaky, db, _) = app();
+        let d = db.clone();
+        let r = Router::new()
+            .route(
+                "/readyz",
+                get(move || async move {
+                    let d = d.clone();
+                    crate::blocking(move || {
+                        let _ = d.get("t", "a");
+                        (StatusCode::OK, "ready")
+                    })
+                    .await
+                }),
+            )
+            .layer(axum::middleware::from_fn(storage_faults));
+        flaky.refuse_next(1);
+        let (s, _, body) = call(&r, "GET", "/readyz").await;
+        assert_eq!((s, body.as_str()), (StatusCode::OK, "ready"));
+    }
+
     fn status(stored: Option<u32>, latest: u32, empty: bool) -> Status {
         let current = stored.unwrap_or(0);
         Status {

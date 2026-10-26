@@ -48,6 +48,27 @@ function values(list: string): string {
     .join(", ");
 }
 
+/**
+ * The translated message for a 503 that says the database was busy, unreachable or too slow
+ * (D74), or `null` for any other answer. Screens that decide by status (sign-in) use it so that
+ * a busy server is not shown as a wrong password.
+ */
+export function storageFaultMessage(status: number, code: string | undefined): string | null {
+  if (status !== 503) return null;
+  return STORAGE_FAULTS[code ?? ""]?.() ?? null;
+}
+
+/**
+ * The code words of a refused database call (D74), in the person's language. They are also shown
+ * in English: the server's `storage_busy` is a code, not a sentence.
+ */
+const STORAGE_FAULTS: Record<string, () => string> = {
+  storage_busy: () => t("The server is busy. Try again in a moment."),
+  storage_unavailable: () => t("The database cannot be reached right now. Try again in a moment."),
+  storage_timeout: () =>
+    t("The database took too long to answer. Try again, or ask for less at once."),
+};
+
 type Rule = [RegExp, (m: RegExpExecArray) => string];
 
 const RULES: Rule[] = [
@@ -143,16 +164,6 @@ const RULES: Rule[] = [
     /^The server had a problem \(status (\d+)\)$/,
     (m) =>
       t("The server had a problem (status {status}). Try again in a moment.", { status: m[1]! }),
-  ],
-  // The store was full, unreachable or too slow (D74): a 503 whose error is a code word.
-  [/^storage_busy$/, () => t("The server is busy. Try again in a moment.")],
-  [
-    /^storage_unavailable$/,
-    () => t("The database cannot be reached right now. Try again in a moment."),
-  ],
-  [
-    /^storage_timeout$/,
-    () => t("The database took too long to answer. Try again, or ask for less at once."),
   ],
   // Governed fields (D48).
   [
@@ -363,6 +374,9 @@ const RULES: Rule[] = [
 /** Translate a server message when its pattern is known, else return it unchanged. */
 export function serverMessage(raw: string | undefined | null): string {
   if (!raw) return "";
+  // A refused database call is a code word (D74), a sentence in every language, English too.
+  const fault = STORAGE_FAULTS[raw];
+  if (fault) return fault();
   // The server's own words are English: in English they are shown exactly as received.
   if (getLang() === "en") return raw;
   for (const [re, fn] of RULES) {

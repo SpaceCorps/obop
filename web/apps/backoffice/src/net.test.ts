@@ -37,6 +37,36 @@ describe("request", () => {
     expect(bad).toHaveBeenCalledTimes(1);
   });
 
+  it("waits for the Retry-After of a busy database before it reads again", async () => {
+    const busy = () =>
+      new Response(JSON.stringify({ error: "storage_busy", code: "storage_busy" }), {
+        status: 503,
+        headers: { "content-type": "application/json", "retry-after": "0.06" },
+      });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(busy())
+      .mockResolvedValueOnce(json(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const t0 = Date.now();
+    expect((await request("/x", {}, { retry: true })).status).toBe(200);
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(50);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not run a statement again that ran into its time limit", async () => {
+    const timeout = () =>
+      new Response(JSON.stringify({ error: "storage_timeout", code: "storage_timeout" }), {
+        status: 503,
+        headers: { "content-type": "application/json", "retry-after": "5" },
+      });
+    const fetchMock = vi.fn().mockResolvedValue(timeout());
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await request("/x", {}, { retry: true });
+    expect(res.status).toBe(503);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("gives up after the delays and throws a NetworkError", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     vi.stubGlobal("fetch", fetchMock);

@@ -256,7 +256,16 @@ fn metrics(port: u16) -> String {
 fn stampede(port: u16, token: &str, pid: u32, n: usize) -> (Vec<Reply>, Option<u64>, Option<u64>) {
     let before = rss_kib(pid);
     let sampling = std::sync::atomic::AtomicBool::new(true);
+    /// Stops the sampler when the scope is left, also by a panic of a request thread (otherwise
+    /// `thread::scope` would wait for the sampler for ever and the test would hang, not fail).
+    struct Stop<'a>(&'a std::sync::atomic::AtomicBool);
+    impl Drop for Stop<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
     let (replies, peak) = std::thread::scope(|s| {
+        let _stop = Stop(&sampling);
         let sampler = s.spawn(|| {
             let mut peak = rss_kib(pid);
             while sampling.load(std::sync::atomic::Ordering::Relaxed) {
@@ -321,7 +330,7 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
     );
     assert_eq!(series(&m, "obop_db_pool_waiting{pool=\"main\"}"), 0.0);
     assert!(m.contains("obop_db_pool_acquire_seconds_bucket{pool=\"main\",le=\"+Inf\"}"));
-    assert!(m.contains("obop_storage_faults_total{fault=\"busy\"} 0"));
+    assert!(m.contains("obop_storage_faults_total{fault=\"busy\",answer=\"503\"} 0"));
 
     // Make every statement wait: another session locks the tables the server works on.
     let mut locker = postgres::Client::connect(&db.url, postgres::NoTls).unwrap();
@@ -395,7 +404,10 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
     assert_eq!(http(port, "GET", "/healthz", None, None).status, 200);
     let m = metrics(port);
     assert!(
-        series(&m, "obop_storage_faults_total{fault=\"busy\"}") >= 190.0,
+        series(
+            &m,
+            "obop_storage_faults_total{fault=\"busy\",answer=\"503\"}"
+        ) >= 190.0,
         "{m}"
     );
     assert!(
@@ -409,6 +421,23 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
         0.0,
         "{m}"
     );
+
+    // `/readyz` stays ready while every connection is busy: the database is there, it is only
+    // full of work. (Two requests hold both connections until their time limit.)
+    let ready = std::thread::scope(|s| {
+        for _ in 0..2 {
+            s.spawn(|| http(port, "GET", "/api/meta", Some(&token), None));
+        }
+        std::thread::sleep(Duration::from_millis(400));
+        http(port, "GET", "/readyz", None, None)
+    });
+    assert_eq!(
+        (ready.status, ready.json()["status"].as_str()),
+        (200, Some("ready")),
+        "{}",
+        ready.body
+    );
+    assert!(ready.took < Duration::from_secs(3), "{:?}", ready.took);
 
     // Four times as many requests: the wait queue is bounded, so memory does not follow the load.
     let (more, _, rss_peak_more) = stampede(port, &token, pid, 800);
@@ -471,6 +500,126 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
         !log.contains("panicked"),
         "the server did not panic:\n{log}"
     );
+}
+
+#[test]
+fn a_create_is_never_answered_503_after_it_committed_and_never_stored_after_a_503() {
+    let Some(base) = pg_base() else { return };
+    let db = Scratch::new(&base);
+    create_admin(&db.url, "ada");
+    // One connection and no queue: every request that meets another is refused at once, which
+    // includes the read-back that follows a create's commit.
+    let server = start(
+        &db.url,
+        &[
+            ("OBOP_DB_POOL_SIZE", "1"),
+            ("OBOP_DB_MAX_WAITERS", "0"),
+            ("OBOP_DB_ACQUIRE_TIMEOUT_MS", "50"),
+            ("OBOP_METRICS_TOKEN", METRICS_TOKEN),
+        ],
+    );
+    let port = server.port;
+    let login = http(
+        port,
+        "POST",
+        "/api/auth/login",
+        None,
+        Some(&json!({"username": "ada", "password": PASSWORD})),
+    );
+    assert_eq!(login.status, 200, "{}", login.body);
+    let token = login.json()["token"].as_str().unwrap().to_string();
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let results = std::sync::Mutex::new(Vec::<(String, u16, String)>::new());
+    std::thread::scope(|s| {
+        struct Stop<'a>(&'a std::sync::atomic::AtomicBool);
+        impl Drop for Stop<'_> {
+            fn drop(&mut self) {
+                self.0.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+        let _stop = Stop(&stop);
+        // Background reads keep the one connection busy.
+        for _ in 0..2 {
+            s.spawn(|| {
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    http(port, "GET", "/api/meta", Some(&token), None);
+                }
+            });
+        }
+        let creators: Vec<_> = (0..6)
+            .map(|t| {
+                let (token, results) = (&token, &results);
+                s.spawn(move || {
+                    for i in 0..60 {
+                        let name = format!("probe-{t}-{i}");
+                        let r = http(
+                            port,
+                            "POST",
+                            "/api/party/create",
+                            Some(token),
+                            Some(&json!({"name": name})),
+                        );
+                        results.lock().unwrap().push((name, r.status, r.body));
+                    }
+                })
+            })
+            .collect();
+        for c in creators {
+            c.join().unwrap();
+        }
+    });
+    // Calm again: read everything that was stored.
+    std::thread::sleep(Duration::from_millis(300));
+    let mut stored = std::collections::HashSet::new();
+    for _ in 0..50 {
+        let r = http(
+            port,
+            "POST",
+            "/api/party/list",
+            Some(&token),
+            Some(&json!({"limit": 5000})),
+        );
+        if r.status == 200 {
+            for row in r.json()["value"].as_array().cloned().unwrap_or_default() {
+                if let Some(n) = row["name"].as_str() {
+                    stored.insert(n.to_string());
+                }
+            }
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    let results = results.into_inner().unwrap();
+    let (mut ok, mut refused) = (0, 0);
+    for (name, status, body) in &results {
+        match status {
+            200 => {
+                ok += 1;
+                assert!(
+                    stored.contains(name),
+                    "{name} was answered 200 but is not stored"
+                );
+            }
+            503 => {
+                refused += 1;
+                assert!(
+                    !stored.contains(name),
+                    "{name} was answered 503 (\"nothing was changed, retry\") but is stored: {body}"
+                );
+            }
+            other => panic!("{name}: {other} {body}"),
+        }
+    }
+    eprintln!(
+        "D74 creates under a pool of one: {ok} answered 200, {refused} answered 503 and not stored"
+    );
+    assert!(
+        refused >= 1,
+        "the test needs pressure: no create was refused"
+    );
+    assert!(ok >= 1, "the test needs progress: every create was refused");
+    let m = metrics(port);
+    assert!(m.contains("obop_storage_faults_total{fault=\"busy\",answer=\"kept\"}"));
 }
 
 #[test]

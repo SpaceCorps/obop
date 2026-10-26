@@ -29,6 +29,7 @@ pub struct Flaky {
     next: AtomicI64,
     refused: AtomicI64,
     target: std::sync::Mutex<Option<(String, Mode)>>,
+    after_write: AtomicU8,
 }
 
 impl Flaky {
@@ -39,6 +40,7 @@ impl Flaky {
             next: AtomicI64::new(0),
             refused: AtomicI64::new(0),
             target: std::sync::Mutex::new(None),
+            after_write: AtomicU8::new(0),
         })
     }
 
@@ -76,9 +78,16 @@ impl Flaky {
         *self.target.lock().unwrap() = Some((model.to_string(), mode));
     }
 
-    /// Stop refusing a model (see [`Flaky::refuse_model`]).
+    /// Stop refusing a model (see [`Flaky::refuse_model`]) and the reads after a write.
     pub fn allow_models(&self) {
         *self.target.lock().unwrap() = None;
+        self.after_write.store(0, SeqCst);
+    }
+
+    /// From the next successful change on, refuse every read: the pool fills up at the very
+    /// moment a request has committed, so its read-back is refused.
+    pub fn refuse_reads_after_the_next_write(&self) {
+        self.after_write.store(1, SeqCst);
     }
 
     fn gate(&self, write: bool) -> Result<()> {
@@ -105,12 +114,19 @@ impl Flaky {
             2 => true,
             _ => false,
         };
+        // 0: off, 1: armed (waiting for a change), 2: a change went through, reads are refused.
+        let by_after_write = if write {
+            let _ = self.after_write.compare_exchange(1, 2, SeqCst, SeqCst);
+            false
+        } else {
+            self.after_write.load(SeqCst) == 2
+        };
         let by_model = match &*self.target.lock().unwrap() {
             Some((m, Mode::Reads)) => m == model && !write,
             Some((m, Mode::All)) => m == model,
             _ => false,
         };
-        if by_budget || by_mode || by_model {
+        if by_budget || by_mode || by_model || by_after_write {
             self.refused.fetch_add(1, SeqCst);
             fault::note(Fault::Busy);
             return Err(Fault::Busy.message("all database connections are in use, try again"));
