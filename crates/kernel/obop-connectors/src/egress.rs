@@ -501,7 +501,7 @@ impl Egress {
                 (Treatment::Allow, v) => v.clone(),
                 (Treatment::Redact, _) => J::from(REDACTED),
                 (Treatment::Pseudonymise, v) => J::from(pseudonym(&self.secrets, &conn.id, v)),
-                (Treatment::Mask, v) => J::from(self.mask(conn, &record, &pf.name, v, mode)),
+                (Treatment::Mask, v) => J::from(self.mask(conn, &record, &pf.name, v, mode)?),
                 (Treatment::Deny, _) => continue,
             };
             out.insert(pf.name.clone(), treated);
@@ -511,7 +511,17 @@ impl Egress {
 
     /// A reversible stand-in for `v`, stable per connection and value. The value is kept sealed
     /// in the instance so an inbound response that cites the token can be restored.
-    fn mask(&self, conn: &Connection, record: &str, field: &str, v: &J, mode: Mode) -> String {
+    ///
+    /// A token the vault could not store is not sent (a response that cites it could not be
+    /// restored, and the value would be gone): a refusal of the store is an error (D74).
+    fn mask(
+        &self,
+        conn: &Connection,
+        record: &str,
+        field: &str,
+        v: &J,
+        mode: Mode,
+    ) -> Result<String, String> {
         let text = match v {
             J::String(s) => s.clone(),
             other => other.to_string(),
@@ -522,11 +532,11 @@ impl Egress {
             &J::from(text.clone()),
         );
         if mode == Mode::Preview {
-            return format!("TKN_{}", &index[4..16]);
+            return Ok(format!("TKN_{}", &index[4..16]));
         }
         let key = format!("{}:{index}", conn.id);
-        if let Ok(Some(f)) = self.backend.get(VAULT, &key) {
-            return str_of(&f, "token").to_string();
+        if let Some(f) = self.backend.get(VAULT, &key)? {
+            return Ok(str_of(&f, "token").to_string());
         }
         let token = format!("TKN_{}", crate::util::random_hex(6));
         let mut f = Fields::new();
@@ -541,16 +551,17 @@ impl Egress {
                 .into(),
         );
         // Two keys, one entry: by value (to stay stable) and by token (to restore).
-        if self.backend.insert(VAULT, &key, &f).is_ok() {
-            let _ = self.backend.insert(VAULT, &format!("tok:{token}"), &f);
-            token
-        } else {
-            self.backend
-                .get(VAULT, &key)
-                .ok()
-                .flatten()
-                .map(|f| str_of(&f, "token").to_string())
-                .unwrap_or(token)
+        match self.backend.insert(VAULT, &key, &f) {
+            Ok(()) => {
+                self.backend.insert(VAULT, &format!("tok:{token}"), &f)?;
+                Ok(token)
+            }
+            Err(e) if obop_storage::fault::Fault::is_transient(&e) => Err(e),
+            // Another flow stored the same value first: its token stands.
+            Err(e) => match self.backend.get(VAULT, &key)? {
+                Some(f) => Ok(str_of(&f, "token").to_string()),
+                None => Err(e),
+            },
         }
     }
 
@@ -921,6 +932,33 @@ pub(crate) mod tests {
             None,
             "pseudonyms have no way back"
         );
+    }
+
+    #[test]
+    fn a_token_the_vault_could_not_store_is_never_sent_and_the_flow_leaves_no_row() {
+        use obop_storage::testing::{Flaky, Mode};
+        // The vault write is refused: the token would be sent and could not be restored when a
+        // response cites it (and the value is gone). The flow stops, busy, and writes no row.
+        let (b, _, mut conn) = setup();
+        conn.policy
+            .fields
+            .insert("party.name".into(), Treatment::Mask);
+        let flaky = Flaky::new(b.clone());
+        let e = Egress::new(flaky.clone(), SecretBox::for_tests(), Arc::new(Fake));
+        flaky.refuse_model(VAULT, Mode::All);
+        let r = e.prepare(&conn, &webhook(), "party", vec![row("r1")]);
+        flaky.allow_models();
+        assert_eq!(r.unwrap_err(), Refusal::StoreBusy);
+        assert!(
+            b.list(FLOW_LOG).unwrap().is_empty(),
+            "no row for a flow that did not happen, and none that says it was refused by policy"
+        );
+        // With the vault back, the same flow goes and the token restores.
+        let p = e
+            .prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        let tok = p.rows[0]["name"].as_str().unwrap();
+        assert_eq!(e.restore("c1", tok).as_deref(), Some("Ada Lovelace"));
     }
 
     #[test]
