@@ -517,20 +517,24 @@ fn approve_blocking(s: Arc<HttpState>, h: HeaderMap, plan_id: String) -> Respons
     }
 }
 
-/// The shared store could not be reached or a lock was not granted in time.
+/// The shared store could not be reached or a lock was not granted in time. A refusal that names
+/// its code word is a storage fault and answers as one (`errors::of_storage_text`); anything else
+/// is a lock that was not granted in time.
 fn unavailable(why: &str) -> Response {
     eprintln!("shared state unavailable: {why}");
-    let fault = obop_storage::fault::Fault::of_message(why);
+    if let Some(c) = errors::of_storage_text(why) {
+        return classified(c);
+    }
     let mut r = api_error(
         StatusCode::SERVICE_UNAVAILABLE,
         "the server is busy, try again",
-        fault.map_or("unavailable", |f| f.code()),
+        "unavailable",
         "A lock or the database did not answer in time. Try again after the time in Retry-After.",
     );
     // Never a 503 without a time to wait (D74).
     r.headers_mut().insert(
         axum::http::header::RETRY_AFTER,
-        axum::http::HeaderValue::from(fault.map_or(1, |f| f.retry_after_secs())),
+        axum::http::HeaderValue::from(1),
     );
     r
 }
@@ -544,11 +548,18 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
 
 /// The answer for a classified call error: its status and body (`obop_commands::errors` decides
 /// both; unknown, hidden and forbidden look the same there, so a caller cannot probe for
-/// commands), `ETag` for the version a failed precondition found, `Retry-After` when it says
-/// "later".
+/// commands), and the headers `classified_headers` sets.
 fn classified(c: errors::Classified) -> Response {
     let status = StatusCode::from_u16(c.status).unwrap_or(StatusCode::BAD_REQUEST);
-    let mut r = (status, Json(c.body)).into_response();
+    let mut r = (status, Json(c.body.clone())).into_response();
+    classified_headers(&c, &mut r);
+    r
+}
+
+/// The headers a classification asks for: `ETag` for the version a failed precondition found,
+/// `Retry-After` when it says "later" and `X-Obop-Applied` for a storage fault (D74: what became of
+/// the request's own changes, the word that is also in the body).
+pub(crate) fn classified_headers(c: &errors::Classified, r: &mut Response) {
     if let Some(v) = c.current_version
         && let Ok(v) = axum::http::HeaderValue::from_str(&format!("\"{v}\""))
     {
@@ -560,7 +571,12 @@ fn classified(c: errors::Classified) -> Response {
             axum::http::HeaderValue::from(s),
         );
     }
-    r
+    if let Some(a) = c.applied {
+        r.headers_mut().insert(
+            "x-obop-applied",
+            axum::http::HeaderValue::from_static(a.word()),
+        );
+    }
 }
 
 pub async fn serve(addr: &str, app: Router) -> std::io::Result<()> {

@@ -3,7 +3,7 @@
 //! permission, row rule and limit applies. Without a token a person with database access can
 //! use `--dev-auth` on a local database, as with `obop call`.
 
-use super::{Exit, Opts, fail, open_app, principal};
+use super::{Exit, Opts, call_failure, fail, open_app, principal};
 use obop_commands::{CallError, Surface, Value, Vault};
 
 pub struct Args<'a> {
@@ -42,7 +42,11 @@ pub fn run(o: &Opts, a: &Args) -> Exit {
         .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
     {
         Ok(r) => r.value,
-        Err(CallError::Handler(m)) => return Err(fail(&format!("error: {m}"))),
+        // The refusal of a command is printed as it is; the store's own refusal (D74) is not the
+        // command's: it has its own line and exit status (`errors::classify`).
+        Err(CallError::Handler(m)) if obop_commands::errors::of_storage_text(&m).is_none() => {
+            return Err(fail(&format!("error: {m}")));
+        }
         Err(CallError::ApprovalRequired { plan_id }) => {
             println!("proposed, not run: a person with the right must approve plan {plan_id}");
             return Ok(());
@@ -55,12 +59,7 @@ pub fn run(o: &Opts, a: &Args) -> Exit {
                 a.model
             )));
         }
-        Err(e) => {
-            return Err(fail(&format!(
-                "error: {}",
-                obop_commands::errors::classify(&e).cli
-            )));
-        }
+        Err(e) => return Err(call_failure(&e)),
     };
     let Value::Map(m) = &out else {
         return Err(fail("error: unexpected answer"));

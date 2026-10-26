@@ -326,7 +326,15 @@ fn error_reply(name: &str, e: &CallError) -> Result<J, RpcError> {
         )),
         // Unknown, hidden, forbidden and not-on-this-surface all answer the same.
         errors::Kind::Hidden => Err(unknown_tool(name)),
-        errors::Kind::Failed => Ok(tool_result(c.body, true)),
+        errors::Kind::Failed => {
+            // A tool result has no headers: the seconds to wait (a storage fault, D74) go in the
+            // body, next to `applied`.
+            let mut body = c.body;
+            if let (Some(wait), Some(o)) = (c.retry_after, body.as_object_mut()) {
+                o.insert("retry_after".into(), json!(wait));
+            }
+            Ok(tool_result(body, true))
+        }
     }
 }
 
@@ -585,5 +593,45 @@ mod tests {
         assert_eq!(is_error(&r), json!(true));
         assert_eq!(body(&r)["code"], "precondition_failed");
         assert_eq!(body(&r)["current_version"], 8);
+        assert!(body(&r).get("retry_after").is_none() && body(&r).get("applied").is_none());
+    }
+
+    /// D74: the store's refusal is a tool error that says when to come back and what became of the
+    /// call's own changes, with the words of every other surface (`errors::storage_fault`).
+    #[test]
+    fn a_storage_fault_is_a_tool_error_with_the_wait_and_what_was_applied() {
+        let is_error = |r: &Result<J, RpcError>| r.as_ref().unwrap()["isError"].clone();
+        let body = |r: &Result<J, RpcError>| r.as_ref().unwrap()["structuredContent"].clone();
+        for (word, wait, applied) in [
+            ("storage_busy", 1, "none"),
+            ("storage_timeout", 5, "none"),
+            ("storage_unavailable", 5, "unknown"),
+        ] {
+            let text = format!("{word}: every connection is in use");
+            let r = error_reply("lead__update", &CallError::Handler(text));
+            assert_eq!(is_error(&r), json!(true), "{word}");
+            let b = body(&r);
+            assert_eq!(b["error"], word);
+            assert_eq!(b["code"], word);
+            assert_eq!(b["applied"], applied, "{word}");
+            assert_eq!(b["retry_after"], wait, "{word}");
+            assert!(b["hint"].as_str().is_some_and(|h| !h.is_empty()), "{word}");
+            // The same body as REST, plus the wait that REST puts in a header.
+            let mut rest = errors::classify(&CallError::Handler(format!("{word}: x"))).body;
+            rest["retry_after"] = json!(wait);
+            assert_eq!(b, rest, "{word}");
+            // The text of the result is the structured content, as for every tool result.
+            let text = r.as_ref().unwrap()["content"][0]["text"].as_str().unwrap();
+            assert_eq!(serde_json::from_str::<J>(text).unwrap(), b);
+        }
+        // The caller's own echoed input is not a fault.
+        let r = error_reply(
+            "t",
+            &CallError::Handler("unknown option \"a: storage_busy: b\"".into()),
+        );
+        assert_eq!(
+            body(&r),
+            json!({"error": "unknown option \"a: storage_busy: b\""})
+        );
     }
 }

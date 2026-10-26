@@ -16,6 +16,7 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use obop_commands::errors::{self, Applied};
 use obop_storage::fault::Fault;
 use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
@@ -189,47 +190,6 @@ fn fault_index(f: Fault) -> usize {
     }
 }
 
-/// What the 503 says about the request's own changes (`"applied"` in the body, `X-Obop-Applied` in
-/// the headers), so that a client neither repeats what was done nor believes a half-done request
-/// finished.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Applied {
-    /// Nothing was changed: the request may be repeated.
-    None,
-    /// A change in flight when the connection broke may or may not have been applied.
-    Unknown,
-    /// Part of the request was applied and a step it needed was refused: do not repeat it blindly,
-    /// read the records and finish or undo the rest.
-    Partial,
-}
-
-impl Applied {
-    fn word(self) -> &'static str {
-        match self {
-            Applied::None => "none",
-            Applied::Unknown => "unknown",
-            Applied::Partial => "partial",
-        }
-    }
-}
-
-fn fault_hint(f: Fault, applied: Applied) -> &'static str {
-    match (applied, f) {
-        (Applied::Partial, _) => {
-            "Part of this request was applied and a step it needed was refused. Do not repeat it blindly: read the records it touched, then finish or undo the rest. Retry after the time in Retry-After."
-        }
-        (_, Fault::Busy) => {
-            "Every database connection is in use. Nothing was changed. Retry after the time in Retry-After."
-        }
-        (_, Fault::Unavailable) => {
-            "The database cannot be reached right now. A change that was in flight may or may not have been applied: read before you repeat a write. Retry after the time in Retry-After."
-        }
-        (_, Fault::Timeout) => {
-            "A database statement ran into its time limit. Nothing was changed. Retry later, or ask for less at once."
-        }
-    }
-}
-
 /// Response headers a route set that the replacement must keep: the CORS answer of the OAuth and
 /// MCP endpoints (the OAuth token endpoint exposes `Retry-After` to browsers on purpose) and the
 /// security headers.
@@ -251,10 +211,12 @@ fn keep_header(name: &header::HeaderName) -> bool {
 
 /// The 503 that replaces the answer of a request that hit a storage fault: in the shape the route
 /// speaks (an OAuth error for the token endpoints, a JSON-RPC error for `/mcp`, a small page where
-/// a page was coming, the REST error elsewhere).
+/// a page was coming, the REST error elsewhere). What the 503 says (the code word, the hint, the
+/// seconds to wait, `applied`) is `obop_commands::errors::storage_fault`, the same for every
+/// surface; this only gives it the shape of the route and keeps the route's own headers.
 fn replacement(fault: Fault, applied: Applied, path: &str, original: &Response) -> Response {
-    let code = fault.code();
-    let hint = fault_hint(fault, applied);
+    let c = errors::storage_fault(fault, applied, None);
+    let hint = c.hint.unwrap_or_default();
     let word = applied.word();
     let is_html = original
         .headers()
@@ -263,8 +225,7 @@ fn replacement(fault: Fault, applied: Applied, path: &str, original: &Response) 
         .is_some_and(|v| v.starts_with("text/html"));
     let mut r = if path == "/mcp" || path.starts_with("/mcp/") {
         let body = serde_json::json!({"jsonrpc": "2.0", "id": null, "error": {
-            "code": -32000, "message": code,
-            "data": {"hint": hint, "retry_after": fault.retry_after_secs(), "applied": word}}});
+            "code": -32000, "message": c.code, "data": c.rpc_data()}});
         (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
     } else if matches!(path, "/oauth/token" | "/oauth/register" | "/oauth/revoke") {
         let body = serde_json::json!({"error": "temporarily_unavailable",
@@ -280,20 +241,14 @@ fn replacement(fault: Fault, applied: Applied, path: &str, original: &Response) 
         )
             .into_response()
     } else {
-        let body = serde_json::json!({"error": code, "code": code, "hint": hint, "applied": word});
-        (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
+        (StatusCode::SERVICE_UNAVAILABLE, axum::Json(c.body.clone())).into_response()
     };
     for (name, value) in original.headers() {
         if keep_header(name) {
             r.headers_mut().append(name.clone(), value.clone());
         }
     }
-    r.headers_mut().insert(
-        header::RETRY_AFTER,
-        HeaderValue::from(fault.retry_after_secs()),
-    );
-    r.headers_mut()
-        .insert("x-obop-applied", HeaderValue::from_static(word));
+    super::classified_headers(&c, &mut r);
     no_store(r)
 }
 
@@ -328,18 +283,8 @@ pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
     };
     // An error answer after a commit (a 4xx or 5xx) says the request failed after it changed
     // something. A redirect or any other 2xx or 3xx is an answer that worked: a lost optional step
-    // does not turn a purchase or a consent into a failure.
-    let applied = if outcome.partial || (outcome.wrote && resp.status().as_u16() >= 400) {
-        Some(Applied::Partial)
-    } else if !outcome.wrote {
-        Some(if fault == Fault::Unavailable {
-            Applied::Unknown
-        } else {
-            Applied::None
-        })
-    } else {
-        None
-    };
+    // does not turn a purchase or a consent into a failure. The rule is `errors::applied`.
+    let applied = errors::applied(fault, &outcome, resp.status().as_u16() >= 400);
     let Some(applied) = applied else {
         let n = FAULT_ANSWERS[fault_index(fault)][1].fetch_add(1, Relaxed);
         if n.is_multiple_of(100) {
@@ -1166,6 +1111,114 @@ mod tests {
         assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
         assert!(body.contains("\"code\":\"storage_busy\""));
         assert_eq!(h["access-control-allow-origin"], "https://app.example");
+    }
+
+    /// The three things a 503 can say about the request's own changes, said by the seam
+    /// (`errors::storage_fault`) in the shape of each route: the REST body and headers, and the
+    /// `data` of the JSON-RPC error of `/mcp`. A handler answers with the store's own words
+    /// (`CallError::Handler("storage_busy: ...")`, as the engine does) after the pool noted the
+    /// fault; the layer knows more than the text (a commit, a connection that broke in flight).
+    #[tokio::test]
+    async fn the_three_outcomes_are_said_alike_on_rest_and_json_rpc() {
+        use obop_commands::CallError;
+        use obop_storage::fault;
+
+        let (_flaky, db) = Flaky::memory();
+        fn refused(f: Fault) -> Response {
+            crate::respond(Err(CallError::Handler(f.message("x"))))
+        }
+        // Nothing changed: a pool that was full.
+        let none = || {
+            fault::note(Fault::Busy);
+            refused(Fault::Busy)
+        };
+        // A connection that broke with a change on it.
+        let unknown = || {
+            fault::note_in_flight();
+            refused(Fault::Unavailable)
+        };
+        // A change committed, then a step the request needed was refused.
+        let d = db.clone();
+        let partial = move || {
+            // Each call writes a record of its own (the route is called once per shape).
+            static CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let n = CALLS.fetch_add(1, Relaxed);
+            d.insert("t", &format!("half{n}"), &fields(5)).unwrap();
+            fault::note(Fault::Timeout);
+            refused(Fault::Timeout)
+        };
+        let mut router = Router::new();
+        for (name, f) in [
+            (
+                "none",
+                Arc::new(none) as Arc<dyn Fn() -> Response + Send + Sync>,
+            ),
+            ("unknown", Arc::new(unknown)),
+            ("partial", Arc::new(partial)),
+        ] {
+            for prefix in ["/api/", "/mcp/"] {
+                let f = f.clone();
+                router = router.route(
+                    &format!("{prefix}{name}"),
+                    get(move || {
+                        let f = f.clone();
+                        async move { crate::blocking(move || f()).await }
+                    }),
+                );
+            }
+        }
+        let router = router.layer(axum::middleware::from_fn(storage_faults));
+
+        for (name, fault, applied, wait) in [
+            ("none", Fault::Busy, Applied::None, "1"),
+            ("unknown", Fault::Unavailable, Applied::Unknown, "5"),
+            ("partial", Fault::Timeout, Applied::Partial, "5"),
+        ] {
+            let c = errors::storage_fault(fault, applied, None);
+
+            // REST: the body of the seam, the wait and the word in the headers.
+            let (s, h, body) = call(&router, "GET", &format!("/api/{name}")).await;
+            assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE, "{name}: {body}");
+            assert_eq!(h["retry-after"], wait, "{name}");
+            assert_eq!(h["x-obop-applied"], applied.word(), "{name}");
+            assert_eq!(h["cache-control"], "no-store", "{name}");
+            let j: serde_json::Value = serde_json::from_str(&body).unwrap();
+            assert_eq!(j, c.body, "{name}");
+            assert_eq!(j["applied"], applied.word());
+            assert_eq!(j["code"], fault.code());
+
+            // JSON-RPC: the same words in `error.data`, the code word as the message.
+            let (s, h, body) = call(&router, "GET", &format!("/mcp/{name}")).await;
+            assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE, "{name}: {body}");
+            assert_eq!(h["retry-after"], wait, "{name}");
+            assert_eq!(h["x-obop-applied"], applied.word(), "{name}");
+            let j: serde_json::Value = serde_json::from_str(&body).unwrap();
+            assert_eq!(j["jsonrpc"], "2.0");
+            assert_eq!(j["error"]["code"], -32000);
+            assert_eq!(j["error"]["message"], fault.code(), "{name}");
+            assert_eq!(j["error"]["data"], c.rpc_data(), "{name}");
+            assert_eq!(j["error"]["data"]["applied"], applied.word());
+            assert_eq!(
+                j["error"]["data"]["retry_after"]
+                    .as_u64()
+                    .map(|n| n.to_string()),
+                Some(wait.to_string())
+            );
+        }
+
+        // What the handler's own text said (the seam's answer when no layer is in front, for
+        // `none` and `unknown`) is the answer the layer gives too: one function made both.
+        for (f, applied) in [
+            (Fault::Busy, Applied::None),
+            (Fault::Unavailable, Applied::Unknown),
+        ] {
+            let direct = crate::respond(Err(CallError::Handler(f.message("x"))));
+            let bytes = axum::body::to_bytes(direct.into_body(), 1 << 20)
+                .await
+                .unwrap();
+            let j: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(j, errors::storage_fault(f, applied, None).body);
+        }
     }
 
     #[tokio::test]

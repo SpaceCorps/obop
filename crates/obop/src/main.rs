@@ -14,6 +14,8 @@ mod connectors_tests;
 #[cfg(test)]
 mod cors_tests;
 #[cfg(test)]
+mod error_seam_tests;
+#[cfg(test)]
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
@@ -222,6 +224,22 @@ type Exit = Result<(), ExitCode>;
 fn fail(msg: &str) -> ExitCode {
     eprintln!("{msg}");
     ExitCode::FAILURE
+}
+
+/// The line and the exit status of a command whose call failed. Both are decided with the
+/// answers of the other surfaces (`obop_commands::errors::classify`): the documented
+/// `error: Handler("...")` line and status 1 for the errors that have always existed, and for a
+/// refusal of the store (D74) the code word, what became of the call's own changes and status 75,
+/// "try again later".
+fn call_failure_line(e: &obop_commands::CallError) -> (String, u8) {
+    let c = obop_commands::errors::classify(e);
+    (format!("error: {}", c.cli), c.exit)
+}
+
+fn call_failure(e: &obop_commands::CallError) -> ExitCode {
+    let (line, status) = call_failure_line(e);
+    eprintln!("{line}");
+    ExitCode::from(status)
 }
 
 fn main() -> ExitCode {
@@ -902,11 +920,8 @@ fn call_json(
         .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
     {
         Ok(r) => Ok((r.value.to_json(), r.denied.clone())),
-        // What the line says is decided with the other surfaces' answers (`errors::classify`).
-        Err(e) => Err(fail(&format!(
-            "error: {}",
-            obop_commands::errors::classify(&e).cli
-        ))),
+        // What the line says, and the exit status, are decided with the other surfaces' answers.
+        Err(e) => Err(call_failure(&e)),
     }
 }
 
