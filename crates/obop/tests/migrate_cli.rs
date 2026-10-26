@@ -385,7 +385,8 @@ fn the_scheduled_job_backs_up_copies_off_the_host_and_applies_retention() {
         &["restore", "--db", &dst, "--from", copy.to_str().unwrap()],
     ));
     assert!(ok(&run(&env, &["admin", "users", "--db", &dst])).contains("ada"));
-    // A manual backup is never pruned.
+    // A manual backup is never pruned. (Backup names carry the second: wait for the next one.)
+    std::thread::sleep(std::time::Duration::from_millis(1200));
     ok(&run(
         &env,
         &[
