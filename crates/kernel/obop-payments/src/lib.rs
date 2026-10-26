@@ -675,7 +675,7 @@ impl Payments {
             }
             // Every lookup below that is refused leaves the order for the next sweep: a refused
             // read is never "no payment record" (that would cancel an order whose money we hold).
-            match self.payment_of_order(&id) {
+            match self.payment_of_order(id) {
                 Err(_) => continue,
                 Ok(Some((pid, p))) => {
                     self.poll(&pid, &p);
@@ -685,7 +685,7 @@ impl Payments {
                     // Paid, but the order was not marked (the earlier attempt failed): finish that
                     // instead of cancelling an order whose money we hold.
                     if text(&p, "state") == "succeeded" {
-                        let _ = self.after_paid(&id, &pid);
+                        let _ = self.after_paid(id, &pid);
                         continue;
                     }
                     if text(&p, "state") == "open"
@@ -705,12 +705,12 @@ impl Payments {
                 Ok(None) => {}
             }
             // Still unpaid (or no payment record at all): cancel and give everything back.
-            if matches!(self.order(&id), Ok(Some(o)) if text(&o, "state") == "pending")
-                && self.cancel_order(&id).is_err()
+            if matches!(self.order(id), Ok(Some(o)) if text(&o, "state") == "pending")
+                && self.cancel_order(id).is_err()
             {
                 continue;
             }
-            if matches!(self.order(&id), Ok(Some(o)) if text(&o, "state") == "cancelled") {
+            if matches!(self.order(id), Ok(Some(o)) if text(&o, "state") == "cancelled") {
                 n += 1;
             }
         }
