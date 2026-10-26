@@ -424,17 +424,31 @@ fn an_exhausted_pool_answers_503_with_retry_after_never_a_401_and_the_server_rec
 
     // `/readyz` stays ready while every connection is busy: the database is there, it is only
     // full of work. (Two requests hold both connections until their time limit.)
+    let mut watcher = postgres::Client::connect(&db.url, postgres::NoTls).unwrap();
     let ready = std::thread::scope(|s| {
         for _ in 0..2 {
             s.spawn(|| http(port, "GET", "/api/meta", Some(&token), None));
         }
-        // Ask when both connections are in use, not after a guessed time: a slow machine starts
-        // the two requests late, a fast one may have them finished.
+        // Ask when both connections are held, not after a guessed time: a slow machine starts the
+        // two requests late, a fast one may have them finished. The database says it exactly: both
+        // `obop-main` sessions wait for the table lock. (The server's own `/metrics` is no probe
+        // here: its `obop_db_up` ping takes a connection of the full pool too and waits as long.)
         let deadline = Instant::now() + Duration::from_secs(10);
-        while series(&metrics(port), "obop_db_pool_in_use{pool=\"main\"}") < 2.0 {
+        loop {
+            let held: i64 = watcher
+                .query_one(
+                    "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() \
+                     AND application_name = 'obop-main' AND wait_event_type = 'Lock'",
+                    &[],
+                )
+                .unwrap()
+                .get(0);
+            if held >= 2 {
+                break;
+            }
             assert!(
                 Instant::now() < deadline,
-                "the two requests never filled the pool"
+                "the two requests never held both connections ({held} waiting for the lock)"
             );
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -538,6 +552,7 @@ fn a_create_is_never_answered_503_after_it_committed_and_never_stored_after_a_50
     assert_eq!(login.status, 200, "{}", login.body);
     let token = login.json()["token"].as_str().unwrap().to_string();
     let stop = std::sync::atomic::AtomicBool::new(false);
+    let enough = std::sync::atomic::AtomicBool::new(false);
     let results = std::sync::Mutex::new(Vec::<(String, u16, String)>::new());
     std::thread::scope(|s| {
         struct Stop<'a>(&'a std::sync::atomic::AtomicBool);
@@ -548,18 +563,34 @@ fn a_create_is_never_answered_503_after_it_committed_and_never_stored_after_a_50
         }
         let _stop = Stop(&stop);
         // Background reads keep the one connection busy.
-        for _ in 0..2 {
-            s.spawn(|| {
-                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
-                    http(port, "GET", "/api/meta", Some(&token), None);
-                }
-            });
-        }
-        let creators: Vec<_> = (0..6)
+        s.spawn(|| {
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                http(port, "GET", "/api/meta", Some(&token), None);
+            }
+        });
+        // The creates go on until the server has counted a refusal that came after a commit (the
+        // read-back of a create that was committed), so the "kept" series is proved, not hoped
+        // for; for two minutes at most (it takes seconds).
+        let began = Instant::now();
+        let creators: Vec<_> = (0..4)
             .map(|t| {
-                let (token, results) = (&token, &results);
+                let (token, results, enough) = (&token, &results, &enough);
                 s.spawn(move || {
-                    for i in 0..60 {
+                    for i in 0.. {
+                        if enough.load(std::sync::atomic::Ordering::Relaxed)
+                            || began.elapsed() > Duration::from_secs(120)
+                        {
+                            break;
+                        }
+                        if t == 0
+                            && i % 20 == 19
+                            && series(
+                                &metrics(port),
+                                "obop_storage_faults_total{fault=\"busy\",answer=\"kept\"}",
+                            ) >= 1.0
+                        {
+                            enough.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
                         let name = format!("probe-{t}-{i}");
                         let r = http(
                             port,

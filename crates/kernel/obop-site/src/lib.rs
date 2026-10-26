@@ -208,12 +208,11 @@ impl Site {
     fn release_idem(&self, key: &str) {
         let k = format!("idem:site:{key}");
         let b = self.api.backend();
-        let r = obop_storage::fault::patiently(4, Duration::from_millis(150), || {
+        // The site logs nothing (a test holds it to that). A key that still cannot be given back
+        // after the tries expires with its day; the checkout that needed it is answered 503.
+        let _ = obop_storage::fault::patiently(4, Duration::from_millis(150), || {
             obop_storage::fault::bookkeeping(|| b.kv_delete(&k))
         });
-        if let Err(e) = r {
-            eprintln!("shop: could not release an idempotency key: {e}");
-        }
     }
 
     /// Whether `key` has already had `max` hits in its window (nothing is counted). The count
