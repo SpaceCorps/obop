@@ -86,12 +86,18 @@ pub enum Refusal {
     RateLimited(i64),
     VolumeCap(i64),
     TooManyRows(usize),
+    /// The policy, the connection's consents or the provider's record could not be read because
+    /// the store was busy (D74). Not a refusal of the data flow: try again.
+    StoreBusy,
 }
 
 impl std::fmt::Display for Refusal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::FlowsDisabled => write!(f, "flows are switched off for this instance"),
+            Self::StoreBusy => f.write_str(
+                &obop_storage::fault::Fault::Busy.message("the database is busy, try again"),
+            ),
             Self::DirectionNotAllowed => {
                 write!(f, "the provider does not send data in this direction")
             }
@@ -271,7 +277,7 @@ impl Egress {
         provider: &Provider,
         model: &str,
     ) -> Result<Plan, Refusal> {
-        let inst = InstancePolicy::load(&*self.backend);
+        let inst = InstancePolicy::try_load(&*self.backend).map_err(|_| Refusal::StoreBusy)?;
         if !inst.flows_enabled {
             return Err(Refusal::FlowsDisabled);
         }
@@ -281,7 +287,7 @@ impl Egress {
         if !conn.is_connected() {
             return Err(Refusal::NotConnected(conn.state.clone()));
         }
-        let consents = consents_of(&*self.backend, &conn.id);
+        let consents = try_consents_of(&*self.backend, &conn.id).map_err(|_| Refusal::StoreBusy)?;
         let Some(consent) = consents.iter().find(|c| c.is_active()) else {
             return Err(if consents.is_empty() {
                 Refusal::NoConsent

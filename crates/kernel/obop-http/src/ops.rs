@@ -159,15 +159,42 @@ fn fault_index(f: Fault) -> usize {
     }
 }
 
-fn fault_hint(f: Fault) -> &'static str {
-    match f {
-        Fault::Busy => {
+/// What the 503 says about the request's own changes (`"applied"` in the body, `X-Obop-Applied` in
+/// the headers), so that a client neither repeats what was done nor believes a half-done request
+/// finished.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Applied {
+    /// Nothing was changed: the request may be repeated.
+    None,
+    /// A change in flight when the connection broke may or may not have been applied.
+    Unknown,
+    /// Part of the request was applied and a step it needed was refused: do not repeat it blindly,
+    /// read the records and finish or undo the rest.
+    Partial,
+}
+
+impl Applied {
+    fn word(self) -> &'static str {
+        match self {
+            Applied::None => "none",
+            Applied::Unknown => "unknown",
+            Applied::Partial => "partial",
+        }
+    }
+}
+
+fn fault_hint(f: Fault, applied: Applied) -> &'static str {
+    match (applied, f) {
+        (Applied::Partial, _) => {
+            "Part of this request was applied and a step it needed was refused. Do not repeat it blindly: read the records it touched, then finish or undo the rest. Retry after the time in Retry-After."
+        }
+        (_, Fault::Busy) => {
             "Every database connection is in use. Nothing was changed. Retry after the time in Retry-After."
         }
-        Fault::Unavailable => {
-            "The database cannot be reached right now. A change that was in flight may or may not have been applied. Retry after the time in Retry-After."
+        (_, Fault::Unavailable) => {
+            "The database cannot be reached right now. A change that was in flight may or may not have been applied: read before you repeat a write. Retry after the time in Retry-After."
         }
-        Fault::Timeout => {
+        (_, Fault::Timeout) => {
             "A database statement ran into its time limit. Nothing was changed. Retry later, or ask for less at once."
         }
     }
@@ -192,12 +219,13 @@ fn keep_header(name: &header::HeaderName) -> bool {
         )
 }
 
-/// The 503 that replaces the answer of a request that hit a storage fault before it changed
-/// anything: in the shape the route speaks (an OAuth error for the token endpoints, a JSON-RPC
-/// error for `/mcp`, a small page where a page was coming, the REST error elsewhere).
-fn replacement(fault: Fault, path: &str, original: &Response) -> Response {
+/// The 503 that replaces the answer of a request that hit a storage fault: in the shape the route
+/// speaks (an OAuth error for the token endpoints, a JSON-RPC error for `/mcp`, a small page where
+/// a page was coming, the REST error elsewhere).
+fn replacement(fault: Fault, applied: Applied, path: &str, original: &Response) -> Response {
     let code = fault.code();
-    let hint = fault_hint(fault);
+    let hint = fault_hint(fault, applied);
+    let word = applied.word();
     let is_html = original
         .headers()
         .get(header::CONTENT_TYPE)
@@ -205,23 +233,25 @@ fn replacement(fault: Fault, path: &str, original: &Response) -> Response {
         .is_some_and(|v| v.starts_with("text/html"));
     let mut r = if path == "/mcp" || path.starts_with("/mcp/") {
         let body = serde_json::json!({"jsonrpc": "2.0", "id": null, "error": {
-            "code": -32000, "message": code, "data": {"hint": hint, "retry_after": fault.retry_after_secs()}}});
+            "code": -32000, "message": code,
+            "data": {"hint": hint, "retry_after": fault.retry_after_secs(), "applied": word}}});
         (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
     } else if matches!(path, "/oauth/token" | "/oauth/register" | "/oauth/revoke") {
-        let body =
-            serde_json::json!({"error": "temporarily_unavailable", "error_description": hint});
+        let body = serde_json::json!({"error": "temporarily_unavailable",
+            "error_description": hint, "applied": word});
         (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
     } else if is_html {
         (
             StatusCode::SERVICE_UNAVAILABLE,
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
             Body::from(
-                "<!doctype html><meta charset=\"utf-8\"><title>Try again in a moment</title><p>The service is busy right now. Nothing was lost or changed. Try again in a moment.</p>",
+                "<!doctype html><meta charset=\"utf-8\"><title>Try again in a moment</title><p>The service is busy right now. Try again in a moment, and check before you repeat something you already sent.</p>",
             ),
         )
             .into_response()
     } else {
-        super::api_error(StatusCode::SERVICE_UNAVAILABLE, code, code, hint)
+        let body = serde_json::json!({"error": code, "code": code, "hint": hint, "applied": word});
+        (StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)).into_response()
     };
     for (name, value) in original.headers() {
         if keep_header(name) {
@@ -232,20 +262,24 @@ fn replacement(fault: Fault, path: &str, original: &Response) -> Response {
         header::RETRY_AFTER,
         HeaderValue::from(fault.retry_after_secs()),
     );
+    r.headers_mut()
+        .insert("x-obop-applied", HeaderValue::from_static(word));
     no_store(r)
 }
 
 /// What a request that hit a storage fault is answered (D74). The rule, which the documentation
 /// states in the same words:
 ///
-/// - **No change committed yet**: the answer is replaced by 503 with `Retry-After`. The handlers
-///   above the store turn a refused read into "not signed in", "not found" or "zero", and the guard
-///   (`obop_storage::guarded`) has refused every change after the first refusal, so nothing was
-///   changed and a client may retry (`storage_unavailable` excepted: a change in flight when the
-///   connection broke may or may not have been applied).
-/// - **A change was already committed**: the request keeps its own answer. The fault only cost a
-///   best-effort step (a read-back, a log entry, a counter); a 503 there would make the client
-///   repeat a change that was made. The fault is counted (`answer="kept"`) and logged.
+/// - **No change committed yet**: 503 with `Retry-After` and `"applied":"none"` (`"unknown"` after
+///   `storage_unavailable`: a change in flight when the connection broke may or may not have been
+///   applied). The handlers above the store turn a refused read into "not signed in", "not
+///   found" or "zero", and the guard (`obop_storage::guarded`) has refused every change after the
+///   first refusal, so nothing was changed and a client may retry.
+/// - **A change committed and a step the request needed was refused** (the code said so with
+///   `fault::mark_partial`, after trying again), or the request committed and ends in an error
+///   answer while a fault was noted: 503 with `"applied":"partial"`. Never a 200, never a 4xx.
+/// - **A change committed and only an optional follow-up was refused** (the read-back of what was
+///   written): the request keeps its own answer; the fault is counted (`answer="kept"`) and logged.
 ///
 /// The health and metrics routes decide for themselves.
 pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
@@ -262,7 +296,18 @@ pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
     let Some(fault) = outcome.fault else {
         return resp;
     };
-    if outcome.wrote {
+    let applied = if outcome.partial || (outcome.wrote && !resp.status().is_success()) {
+        Some(Applied::Partial)
+    } else if !outcome.wrote {
+        Some(if fault == Fault::Unavailable {
+            Applied::Unknown
+        } else {
+            Applied::None
+        })
+    } else {
+        None
+    };
+    let Some(applied) = applied else {
         let n = FAULT_ANSWERS[fault_index(fault)][1].fetch_add(1, Relaxed);
         if n.is_multiple_of(100) {
             eprintln!(
@@ -272,9 +317,9 @@ pub(crate) async fn storage_faults(req: Request, next: Next) -> Response {
             );
         }
         return resp;
-    }
+    };
     FAULT_ANSWERS[fault_index(fault)][0].fetch_add(1, Relaxed);
-    replacement(fault, &path, &resp)
+    replacement(fault, applied, &path, &resp)
 }
 
 fn no_store(mut r: Response) -> Response {

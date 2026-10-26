@@ -268,13 +268,32 @@ impl McpState {
     }
 
     /// Save the session after a request (this also pushes its expiry out) and release it.
+    ///
+    /// The session carries the mask vault: if it cannot be saved, the answer that was built from it
+    /// names tokens nobody stored. The save is tried again, and if it still fails the request is
+    /// answered 503 (`applied` says whether a change had committed), never with those tokens.
     fn finish(&self, entry: Entry, token: &str) {
-        let _ = self.save(&entry.id, token, &entry.state);
-        let _ = self.shared.backend.kv_put(
-            &index_key(&token_id(token), &entry.id),
-            &now_ms().to_string(),
-            Some(self.ttl_ms()),
-        );
+        use obop_storage::fault;
+        let pause = std::time::Duration::from_millis(150);
+        let saved = fault::patiently(4, pause, || {
+            fault::bookkeeping(|| self.save(&entry.id, token, &entry.state))
+        });
+        // The sliding-expiry marker is an optimisation of the sweep; losing it costs nothing.
+        let _ = fault::bookkeeping(|| {
+            self.shared.backend.kv_put(
+                &index_key(&token_id(token), &entry.id),
+                &now_ms().to_string(),
+                Some(self.ttl_ms()),
+            )
+        });
+        if let Err(e) = saved {
+            eprintln!("mcp: the session could not be saved: {e}");
+            if fault::state().wrote {
+                fault::mark_partial();
+            } else if fault::noted().is_none() {
+                fault::note(fault::Fault::Busy);
+            }
+        }
     }
 
     fn close(&self, id: &str, token: &str) -> bool {

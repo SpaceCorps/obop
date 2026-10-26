@@ -201,8 +201,19 @@ impl Site {
     }
 
     /// Give a claimed key back (the order was not placed).
+    ///
+    /// This undoes what the request itself did, so it is allowed after a refused call and tried
+    /// again while the store is busy (D74): a key that stays claimed for a day turns a buyer's
+    /// second submit into a ghost order.
     fn release_idem(&self, key: &str) {
-        let _ = self.api.backend().kv_delete(&format!("idem:site:{key}"));
+        let k = format!("idem:site:{key}");
+        let b = self.api.backend();
+        let r = obop_storage::fault::patiently(4, Duration::from_millis(150), || {
+            obop_storage::fault::bookkeeping(|| b.kv_delete(&k))
+        });
+        if let Err(e) = r {
+            eprintln!("shop: could not release an idempotency key: {e}");
+        }
     }
 
     /// Whether `key` has already had `max` hits in its window (nothing is counted). The count

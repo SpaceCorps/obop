@@ -121,10 +121,25 @@ impl VaultRef {
         let mut vault = self.load()?;
         let out = f(&mut vault);
         if vault.is_dirty() {
-            if guard.is_none() {
-                guard = Some(self.state.backend.lock(&lock_key)?);
+            // The answer that `f` built names tokens that only the saved vault can restore. Save
+            // it, trying again if the store is busy; the write is bookkeeping (it rests on what
+            // `f` just did, not on a read that may have failed), so it is not refused for an
+            // earlier refusal. If it still fails the request is answered 503, and when `f` had
+            // already committed a change the 503 says so (`"applied":"partial"`).
+            let saved = (|| {
+                if guard.is_none() {
+                    guard = Some(self.state.backend.lock(&lock_key)?);
+                }
+                obop_storage::fault::patiently(4, std::time::Duration::from_millis(150), || {
+                    obop_storage::fault::bookkeeping(|| self.save(&vault))
+                })
+            })();
+            if let Err(e) = saved {
+                if obop_storage::fault::state().wrote {
+                    obop_storage::fault::mark_partial();
+                }
+                return Err(e);
             }
-            self.save(&vault)?;
         }
         drop(guard);
         Ok(out)

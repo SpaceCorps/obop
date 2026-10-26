@@ -39,7 +39,7 @@ use obop_commands::{
 };
 use obop_connectors::net::Client;
 use obop_connectors::runtime::Runtime;
-use obop_connectors::webhook::Seen;
+use obop_connectors::webhook::{Seen, VerifyError};
 use obop_storage::{ApplyError, Backend, Fields, Op};
 use serde_json::{Value as J, json};
 use std::sync::{Arc, Mutex};
@@ -219,15 +219,21 @@ impl Payments {
             .rfind(|(_, f)| text(f, "order_id") == order)
     }
 
-    fn payment_by_external(&self, provider: &str, external: &str) -> Option<(String, Fields)> {
+    /// The payment a provider's event is about. An error is a refused lookup, not "none": the
+    /// caller must not take it for an event about something else (D74).
+    fn payment_by_external(
+        &self,
+        provider: &str,
+        external: &str,
+    ) -> Result<Option<(String, Fields)>, String> {
         if external.is_empty() {
-            return None;
+            return Ok(None);
         }
-        self.backend
-            .list(PAYMENT)
-            .ok()?
+        Ok(self
+            .backend
+            .list(PAYMENT)?
             .into_iter()
-            .find(|(_, f)| text(f, "provider") == provider && text(f, "external_id") == external)
+            .find(|(_, f)| text(f, "provider") == provider && text(f, "external_id") == external))
     }
 
     fn order(&self, id: &str) -> Option<Fields> {
@@ -704,18 +710,35 @@ impl Payments {
         let mut reply = HookReply::Ignored;
         for ev in events {
             // The delivery log remembers an event for the signature window, across restarts.
-            if Seen::claim(&*self.backend, &format!("pay:{provider}"), &ev.id, now()).is_err() {
-                reply = reply_max(reply, HookReply::Duplicate);
-                continue;
+            let connection = format!("pay:{provider}");
+            match Seen::claim(&*self.backend, &connection, &ev.id, now()) {
+                Ok(()) => {}
+                // The store was busy: nothing was recorded, the provider retries.
+                Err(VerifyError::Storage) => return HookReply::Retry,
+                Err(_) => {
+                    reply = reply_max(reply, HookReply::Duplicate);
+                    continue;
+                }
             }
-            let Some((pid, _)) = self.payment_by_external(provider, &ev.external_id) else {
-                continue;
+            // The id is spent from here on. Anything that stops the event from being applied
+            // gives it back, or the provider's retry would be answered as a duplicate and the
+            // payment would stay open for ever (D74).
+            let pid = match self.payment_by_external(provider, &ev.external_id) {
+                Ok(Some((pid, _))) => pid,
+                Ok(None) => continue,
+                Err(_) => {
+                    Seen::release(&*self.backend, &connection, &ev.id);
+                    return HookReply::Retry;
+                }
             };
             match self.apply(&pid, &ev.id, ev.outcome, ev.amount, ev.currency.as_deref()) {
                 Ok(Applied::Done) => reply = reply_max(reply, HookReply::Done),
                 Ok(Applied::Duplicate) => reply = reply_max(reply, HookReply::Duplicate),
                 Ok(Applied::Ignored) => {}
-                Err(_) => return HookReply::Retry,
+                Err(_) => {
+                    Seen::release(&*self.backend, &connection, &ev.id);
+                    return HookReply::Retry;
+                }
             }
         }
         reply

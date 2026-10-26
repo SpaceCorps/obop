@@ -870,6 +870,85 @@ fn connectors_cannot_touch_their_own_records_or_the_platforms_and_secrets_cannot
 }
 
 #[test]
+fn an_inbound_webhook_met_by_a_busy_store_is_not_swallowed_and_its_retry_is_applied() {
+    use obop_storage::testing::{Flaky, Mode};
+    // D74: the delivery arrives while the store refuses. The sender is told to retry (Busy, which
+    // the route answers 503 with Retry-After), the event id is not used up, and the same event
+    // delivered again is applied once.
+    let e = env();
+    enable(&e, "webhook_in", true);
+    let c = ok(
+        &e,
+        &sam(),
+        "connection.create",
+        json!({
+        "name": "Leads from the form", "provider": "webhook_in",
+        "config": json!({"target_model": "lead", "mapping": json!({"data.title": "title"}).to_string(), "external_id_key": "data.id"}).to_string(),
+        "credentials": json!({"signing_secret": SECRET}).to_string(),
+        "field_allowlist": json!({"lead": ["title"]}).to_string()}),
+    );
+    let id = c["id"].as_str().unwrap().to_string();
+    ok(
+        &e,
+        &sam(),
+        "consent.create",
+        json!({"connection": id, "purpose": "Create leads from the website form", "legal_basis": "legitimate_interest", "note": "Balancing test: the visitor asked us to get in touch."}),
+    );
+    ok(&e, &sam(), "connection.connect", json!({"id": id}));
+    let flaky = Flaky::new(e.s.backend());
+    let worker = Runtime::with_providers(
+        obop_storage::guarded(flaky.clone()),
+        e.d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: Some("http://127.0.0.1:8080".into()),
+        },
+        providers(),
+        None,
+    );
+    let send = |body: &J, evt: &str| {
+        let b = body.to_string();
+        let ts = obop_connectors::util::now();
+        let sig = webhook::sign_standard(SECRET, evt, ts, b.as_bytes());
+        let evt = evt.to_string();
+        let hdr = move |k: &str| match k {
+            "webhook-id" => Some(evt.clone()),
+            "webhook-timestamp" => Some(ts.to_string()),
+            "webhook-signature" => Some(sig.clone()),
+            _ => None,
+        };
+        worker.receive_webhook(&id, &hdr, b.as_bytes())
+    };
+    let payload = json!({"data": {"id": 11, "title": "Quote for 12 seats"}});
+
+    flaky.refuse_model(obop_connectors::model::EGRESS_POLICY, Mode::Reads);
+    let r = send(&payload, "evt_busy");
+    flaky.allow_models();
+    assert_eq!(
+        r.unwrap_err(),
+        obop_connectors::runtime::HookError::Busy,
+        "retry, not 401 and not 200"
+    );
+    assert!(e.s.backend().list("lead").unwrap().is_empty());
+
+    flaky.refuse_model("connector_seen", Mode::All);
+    let r = send(&payload, "evt_busy");
+    flaky.allow_models();
+    assert_eq!(r.unwrap_err(), obop_connectors::runtime::HookError::Busy);
+
+    // The same event again, store healthy: applied (the id was never used up), once.
+    let o = send(&payload, "evt_busy").unwrap();
+    assert_eq!((o.created, o.updated), (1, 0));
+    assert_eq!(e.s.backend().list("lead").unwrap().len(), 1);
+    assert_eq!(
+        send(&payload, "evt_busy").unwrap_err(),
+        obop_connectors::runtime::HookError::Unauthorised,
+        "and now it is a replay"
+    );
+}
+
+#[test]
 fn a_signed_webhook_creates_records_through_the_governed_commands() {
     let e = env();
     enable(&e, "webhook_in", true);

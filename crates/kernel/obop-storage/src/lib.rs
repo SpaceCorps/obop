@@ -456,6 +456,7 @@ mod pool_tests;
 #[cfg(test)]
 mod shared_tests;
 mod sqlite;
+#[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 pub mod tls;
 #[cfg(test)]

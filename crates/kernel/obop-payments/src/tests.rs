@@ -253,7 +253,10 @@ struct Env {
 }
 
 fn env_with(stripe: bool, demo: bool, methods: &str) -> Env {
-    let store = Store::new();
+    env_on(Store::new(), stripe, demo, methods)
+}
+
+fn env_on(store: Store, stripe: bool, demo: bool, methods: &str) -> Env {
     let d = Arc::new(Dispatcher::new());
     base::register(&d, &store);
     product::register(&d, &store);
@@ -844,6 +847,48 @@ fn stripe_checkout_creates_a_session_from_the_server_total_and_nothing_personal(
     assert_eq!(e.stock("sencha-green-tea"), before - 2);
     assert_eq!(e.last_payment().1["external_id"], sid.as_str());
     assert_eq!(e.last_order().0, oid);
+}
+
+#[test]
+fn a_completion_met_by_a_busy_store_is_retried_not_swallowed_and_not_taken_for_a_duplicate() {
+    use obop_storage::fault;
+    use obop_storage::testing::Flaky;
+    // D74: the provider's event arrives while the pool is full. The lookup of the payment is
+    // refused. The event must not be marked as seen and answered 200 (the provider would never
+    // send it again and the order would stay pending for ever): the reply is Retry, the claim
+    // is given back, and the provider's next delivery of the same event is applied.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let e = env_on(
+        Store::over(obop_storage::guarded(flaky.clone())),
+        true,
+        false,
+        "stripe",
+    );
+    e.buy("sencha-green-tea", "1", "stripe", &[]);
+    let (oid, order) = e.last_order();
+    let (sid, _) = e.stand.sessions().remove(0);
+    let total = order["total"].as_i64().unwrap();
+    let body = event(
+        "evt_busy",
+        "checkout.session.completed",
+        &sid,
+        total,
+        "paid",
+    );
+    let ts = obop_connectors::util::now();
+
+    flaky.refuse_model(PAYMENT, obop_storage::testing::Mode::Reads);
+    fault::begin_request(Default::default());
+    assert_eq!(e.hook(&body, ts, SECRET), HookReply::Retry);
+    let out = fault::end_request();
+    flaky.allow_models();
+    assert!(out.fault.is_some() && !out.wrote, "{out:?}");
+    assert_eq!(e.order_state(&oid), "pending");
+
+    // The store answers again: the same event, same id, is applied (it was not used up).
+    assert_eq!(e.hook(&body, ts + 1, SECRET), HookReply::Done);
+    assert_eq!(e.order_state(&oid), "paid");
+    assert_eq!(e.hook(&body, ts + 2, SECRET), HookReply::Duplicate);
 }
 
 #[test]

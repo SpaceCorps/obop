@@ -57,6 +57,8 @@ pub enum HookError {
     Unauthorised,
     Refused(String),
     Rejected(String),
+    /// The store was busy or unreachable: nothing was taken, the sender should retry (D74).
+    Busy,
 }
 
 pub struct Runtime {
@@ -863,6 +865,10 @@ impl Runtime {
         self.ingress
             .authorise(&c, &p, c.cfg("target_model"))
             .map_err(|r| {
+                if matches!(r, Refusal::StoreBusy) {
+                    // Not a refusal of the flow: nothing is logged, the sender retries.
+                    return HookError::Busy;
+                }
                 let why = r.to_string();
                 self.egress.log(
                     &c,
@@ -878,8 +884,33 @@ impl Runtime {
                 );
                 HookError::Refused(why)
             })?;
-        Seen::claim(&*self.backend, &c.id, &v.event_id, now())
-            .map_err(|_: VerifyError| HookError::Unauthorised)?;
+        match Seen::claim(&*self.backend, &c.id, &v.event_id, now()) {
+            Ok(()) => {}
+            Err(VerifyError::Storage) => return Err(HookError::Busy),
+            Err(_) => return Err(HookError::Unauthorised),
+        }
+        // From here on the id is spent. If the event is not taken because the store was busy, the
+        // claim is given back, so that the sender's retry is applied and not taken for a replay;
+        // if part of it was applied the request is answered "partial" (D74).
+        let result = self.apply_webhook(&c, &p, header, body);
+        if let Err(HookError::Busy) = result {
+            if obop_storage::fault::state().wrote {
+                obop_storage::fault::mark_partial();
+            } else {
+                Seen::release(&*self.backend, &c.id, &v.event_id);
+            }
+        }
+        result
+    }
+
+    /// The part of an inbound webhook that runs after its id was claimed.
+    fn apply_webhook(
+        &self,
+        c: &Connection,
+        p: &Provider,
+        header: &dyn Fn(&str) -> Option<String>,
+        body: &[u8],
+    ) -> Result<Outcome, HookError> {
         let filter = c.cfg("event_types");
         if !filter.is_empty() {
             let ev = header("x-github-event").unwrap_or_default();
@@ -889,10 +920,16 @@ impl Runtime {
         }
         let doc: J = serde_json::from_slice(body)
             .map_err(|_| HookError::Rejected("the body is not JSON".into()))?;
-        let items = self.items_of(&c, &doc);
-        let (o, _) = self
-            .accept(&c, &p, "webhook", items)
-            .map_err(HookError::Refused)?;
+        let items = self.items_of(c, &doc);
+        let (o, _) = match self.accept(c, p, "webhook", items) {
+            Ok(x) => x,
+            Err(e) if Fault::is_transient(&e) => return Err(HookError::Busy),
+            Err(e) => return Err(HookError::Refused(e)),
+        };
+        // A refusal by a busy store inside the delivery is not the sender's fault and not final.
+        if obop_storage::fault::noted().is_some() && !o.rejected.is_empty() {
+            return Err(HookError::Busy);
+        }
         if o.accepted() + o.proposed.len() == 0 && !o.rejected.is_empty() {
             return Err(HookError::Rejected(o.rejected[0].1.clone()));
         }

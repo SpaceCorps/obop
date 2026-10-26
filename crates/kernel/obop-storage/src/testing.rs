@@ -30,6 +30,8 @@ pub struct Flaky {
     refused: AtomicI64,
     target: std::sync::Mutex<Option<(String, Mode)>>,
     after_write: AtomicU8,
+    after_budget: AtomicI64,
+    apply_budget: AtomicI64,
 }
 
 impl Flaky {
@@ -41,6 +43,8 @@ impl Flaky {
             refused: AtomicI64::new(0),
             target: std::sync::Mutex::new(None),
             after_write: AtomicU8::new(0),
+            after_budget: AtomicI64::new(0),
+            apply_budget: AtomicI64::new(0),
         })
     }
 
@@ -90,6 +94,31 @@ impl Flaky {
         self.after_write.store(1, SeqCst);
     }
 
+    /// After the next successful change, refuse the next `n` calls of any kind, then go on: the
+    /// pool is full for a moment right after a request committed.
+    pub fn refuse_n_after_the_next_write(&self, n: i64) {
+        self.after_budget.store(n, SeqCst);
+        self.after_write.store(3, SeqCst);
+    }
+
+    /// Refuse the next `n` atomic batches (`apply`, `apply_checked`) and nothing else.
+    pub fn refuse_applies(&self, n: i64) {
+        self.apply_budget.store(n, SeqCst);
+    }
+
+    fn gate_apply(&self) -> Result<()> {
+        let hit = self
+            .apply_budget
+            .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
+            .is_ok();
+        if hit {
+            self.refused.fetch_add(1, SeqCst);
+            fault::note(Fault::Busy);
+            return Err(Fault::Busy.message("all database connections are in use, try again"));
+        }
+        self.gate(true)
+    }
+
     fn gate(&self, write: bool) -> Result<()> {
         self.gate_m(write, "")
     }
@@ -102,6 +131,14 @@ impl Flaky {
             return Err(Fault::Busy.message("all database connections are in use, try again"));
         }
         self.gate_m(true, model)
+    }
+
+    fn counted_after(&self) -> bool {
+        self.after_write.load(SeqCst) == 4
+            && self
+                .after_budget
+                .try_update(SeqCst, SeqCst, |n| (n > 0).then_some(n - 1))
+                .is_ok()
     }
 
     fn gate_m(&self, write: bool, model: &str) -> Result<()> {
@@ -117,9 +154,18 @@ impl Flaky {
         // 0: off, 1: armed (waiting for a change), 2: a change went through, reads are refused.
         let by_after_write = if write {
             let _ = self.after_write.compare_exchange(1, 2, SeqCst, SeqCst);
-            false
+            // The change that arms a counted refusal passes; the calls after it are refused.
+            if self
+                .after_write
+                .compare_exchange(3, 4, SeqCst, SeqCst)
+                .is_ok()
+            {
+                false
+            } else {
+                self.counted_after()
+            }
         } else {
-            self.after_write.load(SeqCst) == 2
+            self.after_write.load(SeqCst) == 2 || self.counted_after()
         };
         let by_model = match &*self.target.lock().unwrap() {
             Some((m, Mode::Reads)) => m == model && !write,
@@ -173,11 +219,11 @@ impl Backend for Flaky {
         self.inner.insert_many(rows)
     }
     fn apply(&self, ops: &[Op]) -> Result<()> {
-        self.gate(true)?;
+        self.gate_apply()?;
         self.inner.apply(ops)
     }
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
-        self.gate(true).map_err(ApplyError::Storage)?;
+        self.gate_apply().map_err(ApplyError::Storage)?;
         self.inner.apply_checked(ops)
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
@@ -274,7 +320,7 @@ mod tests {
         let (flaky, db) = Flaky::memory();
         db.insert("t", "a", &fields(json!({"n": 1}))).unwrap();
         // A request: the read is refused and swallowed, the caller goes on to write.
-        fault::begin_request(None, false);
+        fault::begin_request(Default::default());
         flaky.refuse_next(1);
         assert!(db.get("t", "a").is_err());
         let w = db.update("t", "a", &fields(json!({"n": 2})));
@@ -301,23 +347,64 @@ mod tests {
     }
 
     #[test]
-    fn commits_are_noted_except_counters_and_the_security_log() {
+    fn bookkeeping_is_allowed_after_a_refusal_and_the_log_and_dedup_markers_are_not_changes() {
+        let (flaky, db) = Flaky::memory();
+        db.insert("t", "a", &Fields::new()).unwrap();
+        fault::begin_request(Default::default());
+        // A request claims an idempotency key and issues a token, commits a record, and is then
+        // refused a read.
+        assert!(db.kv_put_new("idem", "1", None).unwrap());
+        db.insert("tok", "t1", &fields(json!({"live": true})))
+            .unwrap();
+        assert!(fault::state().wrote);
+        flaky.refuse_next(1);
+        assert!(db.get("t", "a").is_err());
+        // Ordinary writes are refused now ...
+        assert!(db.insert("t", "b", &Fields::new()).is_err());
+        assert!(db.kv_delete("idem").is_err());
+        // ... the security log is not (the entry of a committed change must not be lost) ...
+        db.insert("security_event", "e1", &Fields::new()).unwrap();
+        // ... and compensations are: the key is released, the token revoked (which undoes the
+        // change it counted), and the dedup marker of a webhook is released.
+        fault::bookkeeping(|| {
+            assert!(db.kv_delete("idem").unwrap());
+            assert!(
+                db.update("tok", "t1", &fields(json!({"live": false})))
+                    .unwrap()
+            );
+        });
+        assert!(
+            db.kv_put_new("idem", "2", None).is_err(),
+            "outside it is refused again"
+        );
+        assert!(!fault::state().wrote, "the only change was undone");
+        let out = fault::end_request();
+        assert_eq!(out.fault, Some(Fault::Busy));
+        assert!(!out.wrote && !out.partial);
+        assert_eq!(db.get("tok", "t1").unwrap().unwrap()["live"], false);
+        assert_eq!(db.list("security_event").unwrap().len(), 1);
+        // A webhook's dedup marker is not a change.
+        fault::begin_request(Default::default());
+        db.insert("connector_seen", "c:1", &Fields::new()).unwrap();
+        assert!(!fault::end_request().wrote);
+    }
+
+    #[test]
+    fn commits_are_noted_except_counters_values_dedup_markers_and_the_security_log() {
         let (_flaky, db) = Flaky::memory();
-        fault::begin_request(None, false);
+        fault::begin_request(Default::default());
         db.insert("security_event", "e1", &Fields::new()).unwrap();
         db.counter_add("c", 1000, false).unwrap();
+        db.kv_put("k", "v", None).unwrap();
+        db.kv_put_new("k2", "v", None).unwrap();
         assert!(!fault::end_request().wrote);
 
-        fault::begin_request(None, false);
+        fault::begin_request(Default::default());
         db.insert("t", "a", &Fields::new()).unwrap();
         assert!(fault::end_request().wrote);
 
-        fault::begin_request(None, false);
-        db.kv_put("k", "v", None).unwrap();
-        assert!(fault::end_request().wrote);
-
         // A change that did nothing (no such record) is not a commit.
-        fault::begin_request(None, false);
+        fault::begin_request(Default::default());
         assert!(!db.update("t", "ghost", &Fields::new()).unwrap());
         assert!(!db.delete("t", "ghost").unwrap());
         assert!(!fault::end_request().wrote);

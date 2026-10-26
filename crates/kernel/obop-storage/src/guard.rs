@@ -5,9 +5,13 @@
 //!   already hit a storage fault the change is refused with the same fault. Callers that swallow a
 //!   refused read (`.ok()`, `unwrap_or_default()`) and carry on to write what they derived from
 //!   it can therefore not overwrite anything; the request ends as a 503 and changed nothing.
-//! - Every change that commits is reported with [`fault::wrote`] (counters and the security log
-//!   excepted: they are bookkeeping, and a repeat of them does no harm), so the HTTP layer knows
-//!   when a fault came too late to say "nothing was changed".
+//! - Every change of a record that commits is reported with [`fault::wrote`], so the HTTP layer
+//!   knows when a fault came too late to say "nothing was changed". Not counted: counters, the
+//!   short-lived values (sessions, vaults, plans, idempotency claims), the security log and the
+//!   dedup markers of webhooks. They record or protect, and a repeat does no harm. A write inside
+//!   [`fault::bookkeeping`] (a compensation) undoes one counted change instead of adding one.
+//! - The security log is append-only with unique ids, so appending to it is never refused for an
+//!   earlier fault: the entry of a change that committed must not be lost.
 //!
 //! Outside a request scope (the connector worker, provisioning threads, the CLI) the guard does
 //! nothing but delegate.
@@ -17,6 +21,13 @@ use std::sync::Arc;
 
 /// The model the security log is written to: its entries do not count as a change.
 const LOG_MODEL: &str = crate::LOG_MODEL;
+/// The ids of inbound webhooks already received: a marker that protects against replay.
+const DEDUP_MODEL: &str = "connector_seen";
+
+/// Does a committed change of this model count as a change of the request?
+fn counts(model: &str) -> bool {
+    model != LOG_MODEL && model != DEDUP_MODEL
+}
 
 pub(crate) struct Guarded {
     inner: Arc<dyn Backend>,
@@ -35,7 +46,7 @@ pub fn guarded(inner: Arc<dyn Backend>) -> Arc<dyn Backend> {
 
 fn done<T>(r: Result<T>, changed: impl FnOnce(&T) -> bool, model: &str) -> Result<T> {
     if let Ok(v) = &r
-        && model != LOG_MODEL
+        && counts(model)
         && changed(v)
     {
         fault::wrote();
@@ -43,9 +54,27 @@ fn done<T>(r: Result<T>, changed: impl FnOnce(&T) -> bool, model: &str) -> Resul
     r
 }
 
+/// A short-lived value was written: not a change of a record, so it is not counted.
+fn done_kv<T>(r: Result<T>) -> Result<T> {
+    r
+}
+
+fn op_model(op: &Op) -> &str {
+    match op {
+        Op::Insert { model, .. }
+        | Op::Put { model, .. }
+        | Op::Merge { model, .. }
+        | Op::Delete { model, .. }
+        | Op::Add { model, .. }
+        | Op::Patch { model, .. } => model,
+    }
+}
+
 impl Backend for Guarded {
     fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
-        fault::before_write()?;
+        if model != LOG_MODEL {
+            fault::before_write()?;
+        }
         done(self.inner.insert(model, id, fields), |_| true, model)
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
@@ -75,7 +104,7 @@ impl Backend for Guarded {
     fn insert_many(&self, rows: &[(String, String, Fields)]) -> Result<()> {
         fault::before_write()?;
         let r = self.inner.insert_many(rows);
-        if r.is_ok() && rows.iter().any(|(m, _, _)| m != LOG_MODEL) {
+        if r.is_ok() && rows.iter().any(|(m, _, _)| counts(m)) {
             fault::wrote();
         }
         r
@@ -83,7 +112,7 @@ impl Backend for Guarded {
     fn apply(&self, ops: &[Op]) -> Result<()> {
         fault::before_write()?;
         let r = self.inner.apply(ops);
-        if r.is_ok() && !ops.is_empty() {
+        if r.is_ok() && ops.iter().any(|o| counts(op_model(o))) {
             fault::wrote();
         }
         r
@@ -91,7 +120,7 @@ impl Backend for Guarded {
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
         fault::before_write().map_err(ApplyError::Storage)?;
         let r = self.inner.apply_checked(ops);
-        if r.is_ok() && !ops.is_empty() {
+        if r.is_ok() && ops.iter().any(|o| counts(op_model(o))) {
             fault::wrote();
         }
         r
@@ -130,18 +159,18 @@ impl Backend for Guarded {
 
     fn kv_put(&self, key: &str, value: &str, ttl_ms: Option<u64>) -> Result<()> {
         fault::before_write()?;
-        done(self.inner.kv_put(key, value, ttl_ms), |_| true, "")
+        done_kv(self.inner.kv_put(key, value, ttl_ms))
     }
     fn kv_put_new(&self, key: &str, value: &str, ttl_ms: Option<u64>) -> Result<bool> {
         fault::before_write()?;
-        done(self.inner.kv_put_new(key, value, ttl_ms), |n| *n, "")
+        done_kv(self.inner.kv_put_new(key, value, ttl_ms))
     }
     fn kv_get(&self, key: &str) -> Result<Option<String>> {
         self.inner.kv_get(key)
     }
     fn kv_delete(&self, key: &str) -> Result<bool> {
         fault::before_write()?;
-        done(self.inner.kv_delete(key), |n| *n, "")
+        done_kv(self.inner.kv_delete(key))
     }
     fn kv_scan(&self, prefix: &str) -> Result<Vec<(String, String)>> {
         self.inner.kv_scan(prefix)
@@ -159,11 +188,11 @@ impl Backend for Guarded {
 
     fn swap_fields(&self, swaps: &[Swap]) -> Result<usize> {
         fault::before_write()?;
-        done(self.inner.swap_fields(swaps), |n| *n > 0, "")
+        done(self.inner.swap_fields(swaps), |n| *n > 0, "swap")
     }
     fn kv_swap(&self, key: &str, old: &str, new: &str) -> Result<bool> {
         fault::before_write()?;
-        done(self.inner.kv_swap(key, old, new), |n| *n, "")
+        done_kv(self.inner.kv_swap(key, old, new))
     }
 
     fn import(

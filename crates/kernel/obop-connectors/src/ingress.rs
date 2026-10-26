@@ -67,7 +67,7 @@ impl Ingress {
         provider: &Provider,
         model: &str,
     ) -> Result<(), Refusal> {
-        let inst = InstancePolicy::load(&*self.backend);
+        let inst = InstancePolicy::try_load(&*self.backend).map_err(|_| Refusal::StoreBusy)?;
         if !inst.flows_enabled {
             return Err(Refusal::FlowsDisabled);
         }
@@ -77,7 +77,7 @@ impl Ingress {
         if !conn.is_connected() {
             return Err(Refusal::NotConnected(conn.state.clone()));
         }
-        let consents = consents_of(&*self.backend, &conn.id);
+        let consents = try_consents_of(&*self.backend, &conn.id).map_err(|_| Refusal::StoreBusy)?;
         let Some(consent) = consents.iter().find(|c| c.is_active()) else {
             return Err(if consents.is_empty() {
                 Refusal::NoConsent

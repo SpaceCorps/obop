@@ -1074,6 +1074,42 @@ fn security_the_honeypot_creates_nothing_and_looks_like_success() {
 }
 
 #[test]
+fn a_checkout_refused_by_a_busy_store_releases_its_key_and_the_resubmit_makes_the_order() {
+    use obop_storage::fault;
+    use obop_storage::testing::Flaky;
+    // D74: the order batch is refused. The buyer must be told to try again (the layer answers 503
+    // because nothing was changed), and the idempotency key claimed for this submit must be
+    // given back, or the same form sent again lands on an order that does not exist.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let s = build(Store::over(obop_storage::guarded(flaky.clone())), true);
+    let l = listing(&s, "sencha-green-tea");
+    let std = methods(&s).remove(0);
+    let lines = [(l.id.as_str(), "1")];
+    let f = order_fields(&lines, &[("shipping_method_id", &std.id)]);
+
+    flaky.refuse_applies(1);
+    fault::begin_request(Default::default());
+    let first = post(&s, "/shop/checkout", &f);
+    let out = fault::end_request();
+    assert_eq!(new_orders(&s), 0);
+    assert!(out.fault.is_some(), "the refusal was noted: {out:?}");
+    assert!(
+        !out.wrote && !out.partial,
+        "a claimed key is not a change, so the layer answers 503 (applied: none), not this 400: {} {out:?}",
+        first.status
+    );
+
+    // The same form, the same key, a healthy store: one real order.
+    let second = post(&s, "/shop/checkout", &f);
+    assert_eq!(second.status, 303, "{}", text(&second));
+    assert_eq!(
+        new_orders(&s),
+        1,
+        "the key was given back, so this made the order"
+    );
+}
+
+#[test]
 fn security_a_double_submit_creates_one_order() {
     let s = shop();
     let l = listing(&s, "sencha-green-tea");

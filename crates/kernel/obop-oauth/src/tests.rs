@@ -771,7 +771,7 @@ fn a_refused_lookup_never_ends_a_grant_and_a_refused_follow_up_never_loses_the_n
     );
 
     // The account lookup is refused (the request scope is what `obop-http` opens around a call).
-    fault::begin_request(None, false);
+    fault::begin_request(Default::default());
     flaky.refuse_model("auth_user", Mode::Reads);
     let e = r.refresh(&c, &r1).unwrap_err();
     let outcome = fault::end_request();
@@ -787,7 +787,7 @@ fn a_refused_lookup_never_ends_a_grant_and_a_refused_follow_up_never_loses_the_n
     assert!(r.auth.resolve(&a1).is_some(), "and so is its access token");
 
     // The refresh token itself is looked up while the store is busy: also retryable.
-    fault::begin_request(None, false);
+    fault::begin_request(Default::default());
     flaky.refuse_model(crate::token::REFRESH_MODEL, Mode::Reads);
     let e = r.refresh(&c, &r1).unwrap_err();
     fault::end_request();
@@ -796,7 +796,7 @@ fn a_refused_lookup_never_ends_a_grant_and_a_refused_follow_up_never_loses_the_n
 
     // Once the store answers, the same refresh token works: it was never marked used.
     // The follow-up that ends the old access token is then refused; the new tokens are kept.
-    fault::begin_request(None, false);
+    fault::begin_request(Default::default());
     flaky.refuse_model("auth_token", Mode::Updates);
     let t2 = r.refresh(&c, &r1);
     let outcome = fault::end_request();

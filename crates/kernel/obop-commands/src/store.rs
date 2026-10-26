@@ -46,6 +46,16 @@ impl Store {
         })
     }
 
+    /// A store over a backend that already exists (a wrapped or shared one), with the blob bytes
+    /// held in memory. For tests and tools that supply the backend themselves.
+    pub fn over(backend: Arc<dyn Backend>) -> Self {
+        let bytes = obop_storage::blob::open_bytes("memory:", None).expect("memory bytes");
+        Self {
+            blobs: Arc::new(Catalog::new(backend.clone(), bytes)),
+            backend,
+        }
+    }
+
     /// The blob store (images and files).
     pub fn blobs(&self) -> Arc<dyn Blobs> {
         self.blobs.clone()

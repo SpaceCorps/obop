@@ -186,7 +186,7 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
             }
         }
         let _leave = Leave;
-        obop_storage::fault::begin_request(earlier.fault, earlier.wrote);
+        obop_storage::fault::begin_request(earlier);
         let out = f();
         (out, obop_storage::fault::end_request())
     })
@@ -198,6 +198,7 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
             now.fault = outcome.fault;
         }
         now.wrote |= outcome.wrote;
+        now.partial |= outcome.partial;
         c.set(now);
     });
     out
@@ -511,12 +512,19 @@ fn approve_blocking(s: Arc<HttpState>, h: HeaderMap, plan_id: String) -> Respons
 /// The shared store could not be reached or a lock was not granted in time.
 fn unavailable(why: &str) -> Response {
     eprintln!("shared state unavailable: {why}");
-    api_error(
+    let fault = obop_storage::fault::Fault::of_message(why);
+    let mut r = api_error(
         StatusCode::SERVICE_UNAVAILABLE,
         "the server is busy, try again",
-        "unavailable",
-        "A lock or the database did not answer in time. Retry the request.",
-    )
+        fault.map_or("unavailable", |f| f.code()),
+        "A lock or the database did not answer in time. Try again after the time in Retry-After.",
+    );
+    // Never a 503 without a time to wait (D74).
+    r.headers_mut().insert(
+        axum::http::header::RETRY_AFTER,
+        axum::http::HeaderValue::from(fault.map_or(1, |f| f.retry_after_secs())),
+    );
+    r
 }
 
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
@@ -539,6 +547,10 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
             Json(json!({"error": "invalid token"})),
         )
             .into_response(),
+        // A refused database call is the server's trouble, never a 4xx the client would not retry.
+        Err(CallError::Handler(m)) if obop_storage::fault::Fault::is_transient(&m) => {
+            unavailable(&m)
+        }
         Err(CallError::Handler(m)) => {
             (StatusCode::BAD_REQUEST, Json(json!({"error": m}))).into_response()
         }
