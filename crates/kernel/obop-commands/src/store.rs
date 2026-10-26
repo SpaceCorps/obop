@@ -399,6 +399,7 @@ mod tests {
             access: None,
             fields,
             commands: vec![],
+            ext: Default::default(),
         };
         let module = Module {
             id: "t".into(),

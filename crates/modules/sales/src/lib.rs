@@ -100,6 +100,7 @@ pub fn module() -> Module {
                     )
                     .transition("state", Some("cancelled"), "draft"),
                 ],
+                ext: Default::default(),
             },
             ModelDef {
                 name: "sale_order_line",
@@ -155,6 +156,7 @@ pub fn module() -> Module {
                     .computed("quantity * unit_price_minor"),
                 ],
                 commands: vec![],
+                ext: Default::default(),
             },
         ],
         network_destinations: vec![],

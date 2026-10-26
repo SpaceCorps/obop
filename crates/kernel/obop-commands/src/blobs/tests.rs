@@ -32,6 +32,7 @@ fn module() -> Module {
             Some("draft"),
             "published",
         )],
+        ext: Default::default(),
     };
     Module {
         id: "t".into(),

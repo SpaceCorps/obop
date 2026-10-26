@@ -84,6 +84,7 @@ pub fn module() -> Module {
                     CommandDef::new("cancel", "Cancel a draft invoice", "invoicing.user")
                         .transition("state", Some("draft"), "cancelled"),
                 ],
+                ext: Default::default(),
             },
             ModelDef {
                 name: "invoice_line",
@@ -145,6 +146,7 @@ pub fn module() -> Module {
                     .computed("quantity * unit_price_minor"),
                 ],
                 commands: vec![],
+                ext: Default::default(),
             },
         ],
         network_destinations: vec![],

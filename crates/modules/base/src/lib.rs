@@ -55,6 +55,7 @@ pub fn module() -> Module {
                 )
                 .approval(),
             ],
+            ext: Default::default(),
         }],
         network_destinations: vec![],
         description: String::new(),

@@ -2216,6 +2216,7 @@ pub fn admin_module() -> Module {
                     )
                     .approval(),
                 ],
+                ext: Default::default(),
             },
             crate::accounts::user_account_model(),
             ModelDef {
@@ -2233,6 +2234,7 @@ pub fn admin_module() -> Module {
                     )
                     .approval(),
                 ],
+                ext: Default::default(),
             },
             ModelDef {
                 name: "module_plan",
@@ -2254,6 +2256,7 @@ pub fn admin_module() -> Module {
                     "Plan an install without doing it: the steps in order with versions and licences, blockers and warnings. Give id (marketplace) or manifest (obop.toml text)",
                     ADMIN_GROUP,
                 )],
+                ext: Default::default(),
             },
             ModelDef {
                 name: "instance_update",
@@ -2315,6 +2318,7 @@ pub fn admin_module() -> Module {
                     )
                     .approval(),
                 ],
+                ext: Default::default(),
             },
             ModelDef {
                 name: "setting",
@@ -2330,6 +2334,7 @@ pub fn admin_module() -> Module {
                     ANY_GROUP,
                 )],
                 commands: vec![],
+                ext: Default::default(),
             },
             // Written by obop-auth (D53), append-only: only get, list and search exist.
             ModelDef {
@@ -2352,6 +2357,7 @@ pub fn admin_module() -> Module {
                     f("at", "When it happened, in UTC (RFC 3339)"),
                 ],
                 commands: vec![],
+                ext: Default::default(),
             },
         ],
         network_destinations: vec![],
@@ -3353,6 +3359,7 @@ write_group = "notes.user"
                 access: None,
                 fields: vec![],
                 commands: vec![],
+                ext: Default::default(),
             }],
             network_destinations: vec![],
             description: String::new(),

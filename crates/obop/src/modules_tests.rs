@@ -10,7 +10,7 @@ use obop_commands::{ADMIN_GROUP, Principal, Surface, Value, Vault};
 use obop_pkg::installer::Request as PlanRequest;
 use obop_pkg::semver::{Req, Version};
 use obop_pkg::{Bundled, Manifest, Marketplace};
-use obop_registry::{MATURITIES, MODULE_CATEGORIES};
+use obop_registry::{MATURITIES, MODULE_CATEGORIES, ModelExt};
 use serde_json::{Value as J, json};
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -27,6 +27,32 @@ fn bundled() -> Vec<Manifest> {
 
 fn root() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+/// Every model that exists today, built in or parsed from a bundled package, carries the default
+/// per-model extensions: no history setting, no declared index, no guard. The record history,
+/// index and guard features read `ModelDef::ext`; until each lands, nothing may set it.
+#[test]
+fn every_existing_model_has_the_default_extensions() {
+    let mut seen = 0;
+    for m in &App::new().modules {
+        for def in &m.models {
+            assert_eq!(def.ext, ModelExt::default(), "built-in model {}", def.name);
+            seen += 1;
+        }
+    }
+    for manifest in bundled() {
+        let module = manifest.to_module().unwrap();
+        for def in &module.models {
+            assert_eq!(def.ext, ModelExt::default(), "package model {}", def.name);
+            seen += 1;
+        }
+    }
+    assert!(seen > 40, "only {seen} models were checked");
+    assert_eq!(ModelExt::default().history.off_reason, None);
+    assert_eq!(ModelExt::default().history.retention_days, None);
+    assert!(ModelExt::default().indexes.is_empty());
+    assert!(ModelExt::default().guard.is_none());
 }
 
 #[test]
