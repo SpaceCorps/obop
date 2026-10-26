@@ -70,7 +70,7 @@ Pseudonymised data is still personal data (GDPR Article 4(5)). That is why, by d
 6. if personal data would leave: the agreement with the provider is recorded (`require_dpa`, on by default) and, if the instance is EU-only, the provider is adequate;
 7. the rate cap (flows per hour) and the volume cap (records per day) hold, and at most 1,000 rows per flow.
 
-It then keeps only the allowlisted fields, treats each, replaces the record id by a keyed pseudonym (`ref`; the instance remembers which record it stands for, so inbound events that cite it can be matched), and writes one `data_flow_log` row. The rows it was given were read as the connection's owner, so the owner's permissions have already applied.
+It then keeps only the allowlisted fields, treats each, replaces the record id by a keyed pseudonym (`ref`; the instance remembers which record it stands for, so inbound events that cite it can be matched), and writes one `data_flow_log` row. The rows it was given were read as the connection's owner, so the owner's permissions have already applied. The gate fails closed (D74): the usage read behind the rate and volume caps, the pseudonym map and the flow-log row are all written before anything is sent, and when the store refuses one of them the flow does not happen (the request is answered `503` with `"applied":"none"`, and a busy store is not logged as a refusal of the flow); a run that cannot be recorded does not start. Once records have been delivered, a step the store then refuses is retried and makes the request a partial `503`, never "none".
 
 ### 2.3 Privacy preview
 
