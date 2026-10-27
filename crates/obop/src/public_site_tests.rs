@@ -236,3 +236,77 @@ async fn an_order_placed_in_the_browser_shows_up_in_the_backoffice_api() {
     assert_eq!(lines["value"][0]["quantity"], 2);
     assert_eq!(f.app.store.count("ecommerce_order"), 1);
 }
+
+/// A back office build in a directory of its own, removed again when the guard is dropped.
+struct Build(std::path::PathBuf);
+
+impl Drop for Build {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[tokio::test]
+async fn the_back_office_carries_the_default_language_where_it_is_mounted_and_nowhere_else() {
+    const SHELL: &str =
+        "<html><head><title>obop</title></head><body>BACKOFFICE-SHELL</body></html>";
+    const TAG: &str = "<meta name=\"obop-default-language\" content=\"sv\">";
+    let build = Build(std::env::temp_dir().join(format!("obop-admin-lang-{}", std::process::id())));
+    std::fs::create_dir_all(build.0.join("assets")).unwrap();
+    std::fs::write(build.0.join("index.html"), SHELL).unwrap();
+    std::fs::write(build.0.join("assets/app.js"), "console.log('admin')").unwrap();
+    for (public, language) in [
+        (true, Some("sv")),
+        (false, Some("sv")),
+        (true, None),
+        (false, None),
+    ] {
+        let app = App::new();
+        let auth = Arc::new(Auth::with_test_params(app.store.backend()));
+        let state = obop_http::HttpState::new(app.dispatcher.clone(), auth);
+        state.set_default_language(language);
+        let dir = build.0.to_str();
+        let (router, mount) = if public {
+            let site = Arc::new(obop_site::Site::new(
+                obop_commands::PublicApi::new(app.dispatcher.clone(), app.store.clone()),
+                obop_site::Config::default(),
+            ));
+            let cfg = obop_http::public::PublicConfig::default();
+            (obop_http::public::router(state, dir, site, cfg), "/admin")
+        } else {
+            (obop_http::router(state, dir), "")
+        };
+        for path in [
+            format!("{mount}/"),
+            format!("{mount}/index.html"),
+            format!("{mount}/shop/orders/42"),
+        ] {
+            let (s, body, h) = get(&router, &path).await;
+            assert_eq!(s, 200, "public={public} {path}");
+            match language {
+                Some(_) => {
+                    assert_eq!(
+                        body.matches(TAG).count(),
+                        1,
+                        "public={public} {path}: {body}"
+                    );
+                    assert_eq!(body.matches("obop-default-language").count(), 1);
+                }
+                None => assert_eq!(body, SHELL, "public={public} {path}"),
+            }
+            assert_eq!(h["cache-control"], "no-cache", "public={public} {path}");
+        }
+        let (s, js, _) = get(&router, &format!("{mount}/assets/app.js")).await;
+        assert_eq!((s, js.as_str()), (200, "console.log('admin')"));
+        if public {
+            // The public site is not the back office and never carries the tag.
+            let (_, home, _) = get(&router, "/").await;
+            assert!(!home.contains("obop-default-language"), "{home}");
+            assert!(!home.contains("BACKOFFICE-SHELL"));
+        }
+        // An unknown API path is the JSON 404, not the shell.
+        let (s, body, _) = get(&router, "/api/nothing").await;
+        assert_eq!(s, 404);
+        assert!(!body.contains("obop-default-language"));
+    }
+}

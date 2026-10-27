@@ -109,6 +109,8 @@ const USAGE: &str = "usage: obop <command>
       --public-site                             also serve the public website and shop at / (or OBOP_PUBLIC_SITE=1);
                                                 the backoffice then moves to --admin-prefix (default /admin)
       --trust-proxy                             take the client address from X-Forwarded-For (OBOP_TRUST_PROXY=1)
+      OBOP_DEFAULT_LANGUAGE=sv                  the language of the sign-in screens before anyone is signed in
+                                                (en, de, fr, pl, fi, sv or es; the setting under Customize wins after sign-in)
   migrate status | verify | plan [--dry-run] | run [--dry-run] [--db URL]
                                                 schema version of a database, the migration ledger (what ran, when, by whom, with
                                                 which checksum) and the steps that upgrade it; `verify` compares ledger, code and
@@ -998,6 +1000,9 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     // The settings of the backup timer are read and checked here too, before the database is
     // opened (and migrated): a typo in them stops the start with nothing written.
     let scheduler = backup_cli::scheduler_plan().map_err(|e| fail(&format!("error: {e}")))?;
+    // So is a bad OBOP_DEFAULT_LANGUAGE, the language of the screens before sign-in.
+    let default_language =
+        obop_http::shell::from_env().map_err(|e| fail(&format!("error: {e}")))?;
     let app = open_app(o)?;
     let auth = authenticator(&app, o);
     if !o.dev_auth && Auth::new(app.store.backend()).user_count() == 0 {
@@ -1009,6 +1014,17 @@ fn serve(o: &Opts, addr: Option<&str>, static_dir: Option<&str>) -> Exit {
     state.set_connectors(app.connectors.clone());
     state.set_payments(app.payments.clone());
     state.set_trust_proxy(o.trust_proxy);
+    state.set_default_language(default_language);
+    if let Some(l) = default_language {
+        eprintln!(
+            "default language of the sign-in screens: {l} (OBOP_DEFAULT_LANGUAGE){}",
+            if static_dir.is_some() {
+                ""
+            } else {
+                "; no --static directory, so no back office is served here"
+            }
+        );
+    }
     // /metrics is closed unless OBOP_METRICS_TOKEN is set or the server listens on loopback (D67).
     let metrics =
         obop_http::ops::MetricsAccess::from_env(is_loopback(addr)).map_err(|e| fail(&e))?;

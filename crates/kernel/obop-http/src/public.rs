@@ -17,7 +17,6 @@ use axum::{
 use obop_site::{MAX_BODY, Site, http::Req};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tower_http::services::{ServeDir, ServeFile};
 
 /// Request headers handed to the site (everything else is dropped).
 const FORWARDED: [&str; 9] = [
@@ -84,7 +83,7 @@ pub fn router(
 ) -> Router {
     let mut app = api_routes(state.clone());
     if let Some(dir) = static_dir {
-        let admin = ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html")));
+        let admin = super::shell::Shell::new(dir, state.default_language()).into_router();
         app = app.nest_service(&cfg.admin_prefix, admin);
     }
     let h = Arc::new((site, cfg));
