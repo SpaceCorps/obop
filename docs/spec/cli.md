@@ -38,7 +38,7 @@ OR-4 is "AGENTIC FIRST EVERYTHING CLI FOR EVERYTHING". This spec turns it into t
 
 ### 1.3 What the CLI is not
 
-- **Not a second implementation.** It is a thin typed client of the same command registry. Every business command is an HTTP call to `/api/v1`, so authentication, rate limits, idempotency, the permission compiler and the audit trail are identical for every caller (Proposed). There is no direct-database mode, which would be a second path around D10 and D33. The binary is also the server (D37), so bootstrap commands link the server crates and run in process.
+- **Not a second implementation.** It is a thin typed client of the same command registry (Proposed; today the built CLI runs the same dispatcher in process, 1.4). Every business command is an HTTP call to `/api/v1`, so authentication, rate limits, idempotency, the permission compiler and the audit trail are identical for every caller (Proposed). There is no direct-database mode, which would be a second path around D10 and D33. The binary is also the server (D37), so bootstrap commands link the server crates and run in process.
 - **Not a wrapper of the frontend toolchain.** Frontend work is `vp` with pnpm (F2, [R07 s1.4]). The CLI has no `obop web`, `obop build` or UI `obop test`, and never calls `npm`, `npx`, `yarn` or `bun`. Nor does it wrap `cargo`; a plugin UI build delegates to `vp` (3.10).
 - **Not a query language, shell or AI client.** Filters are the Odoo domain syntax (D22), expressions are CEL (D11), and there is no `obop sql`, because RLS cannot express the access algebra (D10, D18). It embeds no model; `ai` features arrive in W3 as commands like any other.
 
@@ -51,8 +51,8 @@ The `obop` binary exists (`crates/obop`, `obop --help` prints one usage page; th
 | Built today | Proposed counterpart in this file |
 |---|---|
 | `serve [--addr] [--static DIR] [--public-site] [--trust-proxy]`; `platform serve ...` (the control plane: sign-up, instances, forum, status page) | `serve` (3.1); the control plane is operator tooling outside this catalogue |
-| `call [--token T] <model> <command> [key=value ...]` (POST `/api/{model}/{command}`; values converted by field type; `filter`, `order`, `aggregate` as JSON text) | `<subject> <action>` (2.1), `api` (2.8) |
-| `commands [--token T]` (the commands this token may see; `GET /api/commands`); `GET /api/meta` and `GET /api/openapi.json` | `catalogue list`, `schema` (2.9) |
+| `call [--token T] <model> <command> [key=value ...]` (runs in process against the database of `--db`, through the same dispatcher that serves `POST /api/{model}/{command}`; values converted by field type; `filter`, `order`, `aggregate` as JSON text) | `<subject> <action>` (2.1), `api` (2.8) |
+| `commands [--token T]` (the commands this token may see, read in process from the registry; the server serves the same list at `GET /api/commands`, and `GET /api/meta` and `GET /api/openapi.json`) | `catalogue list`, `schema` (2.9) |
 | `import <model> FILE.csv [--mode partial] [--dry-run] [--key K]` (through the generated `bulk_create`, D70) | `data import` (3.4) |
 | `mcp [--token T]` (stdio); hosted MCP at `/mcp` with OAuth sign-in (D51, D64) | `mcp bridge` (2.11, 3.9), the hosted endpoint is the server's |
 | `admin create\|users\|groups\|offboard\|disable\|enable\|import\|reset-mfa`; `agent-token USER --scopes ...` | `agent` and security commands (3.7, 3.9) |
@@ -60,7 +60,7 @@ The `obop` binary exists (`crates/obop`, `obop --help` prints one usage page; th
 | `migrate status\|verify\|plan\|run\|rehearse\|rollback`; `update check\|status\|start\|rollback`; `platform release ...`, `platform upgrade-instances` | `migrate`, `upgrade` (3.1) |
 | `backup`, `backup verify`, `backup run\|list\|prune`, `restore`, `drill`, `storage check\|attest\|show`, `secrets status\|rotate` | `backup create\|verify\|list\|restore`, `doctor` (3.1) |
 
-Global options built today: `--db URL` (or `OBOP_DATABASE_URL`), `--token` (or `OBOP_TOKEN`), `--demo`, `--dev-auth`, `--version`. None of the global flags of 2.2, no profiles, no `--format`, no `--dry-run` as a global flag (several commands have their own `--dry-run`), no `--plan`, no `--idempotency-key` (only `import --key`), no shell completions, no `config.toml` and no login flow exist yet. Output is the command's own text or JSON; there is no common envelope (2.3). The REST surface is `POST /api/{model}/{command}` with bearer tokens, not the dated `/api/v1` of 2.1. The commands of this table that act on a database (`migrate`, `backup`, `restore`, `drill`, `storage`, `secrets`) work without a running server, which is why 1.1 proposes `migrate` and the backup family as CLI-only entries. Exit statuses built today are in 2.4.
+Global options built today: `--db URL` (or `OBOP_DATABASE_URL`), `--token` (or `OBOP_TOKEN`), `--demo`, `--dev-auth`, `--version`. None of the global flags of 2.2, no profiles, no `--format`, no `--dry-run` as a global flag (several commands have their own `--dry-run`), no `--plan`, no `--idempotency-key` (only `import --key`), no shell completions, no `config.toml` and no login flow exist yet. Output is the command's own text or JSON; there is no common envelope (2.3). The REST surface is `POST /api/{model}/{command}` with bearer tokens, not the dated `/api/v1` of 2.1. Every command of this table except `serve`, `platform serve` and the hosted `/mcp` endpoint opens the database itself (`--db` or `OBOP_DATABASE_URL`, with a token for the business commands) and works without a running server; the CLI has no HTTP client yet, so section 1.3 (a thin HTTP client of `/api/v1`, no direct-database mode) is a Proposed change from today's design. The commands that act on a database and have no API route or page (`migrate`, `backup`, `restore`, `drill`, `storage`, `secrets`) are why 1.1 proposes them as CLI-only entries. Exit statuses built today are in 2.4.
 
 Everything else in sections 2 to 11 (the plugin registry client, `obop.lock`, `init`, `upgrade`, `business`, `pack`, `plan`, `schema`, `login`, completions, man pages, telemetry choices, the golden paths) is Proposed and not built.
 
@@ -413,7 +413,7 @@ The configured assistants of `ai` (`ai_agent`, skills, runs) are W3 (D25).
 
 | Command | What it does | Kind | Wave |
 |---|---|---|---|
-| `obop dev up\|down\|reset\|logs`; `obop dev parity` | An optional local demo or development business on embedded PostgreSQL, seeded from the same sample data as the hosted sandbox (D83, OR-20); print the parity matrix (6) | M; `parity` R | W1 |
+| `obop dev up\|down\|reset\|logs`; `obop dev parity` | An optional local demo or development business on SQLite (D44; embedded PostgreSQL is a possible later profile), seeded from the same sample data as the hosted sandbox (D83, OR-20); print the parity matrix (6) | M; `parity` R | W1 |
 | `obop dev new module <id>` | In a repository checkout, scaffolds the `<id>-api` and implementation crates, manifest, permission seed and structural-suite hookup (Proposed) | M | W2 (Proposed); contributors use the repository's own tooling until then |
 | `obop plugin new\|lint\|test\|package` | Scaffold a pack; lint manifest, licence, capabilities and accessibility; run the inherited structural suite in a scratch business; build the OCI artefact | M; `lint`, `test` R | W2 (Proposed), with the registry; the first-party packs are checked by the repository's CI until then |
 | `obop plugin dev` | Watch and sync to a dev business with plan and apply and hot reload | M | W2 |

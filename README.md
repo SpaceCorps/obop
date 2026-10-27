@@ -19,7 +19,7 @@ These are design commitments of the documents; the Status section says what exis
 1. **Everything is open and free,** including full accounting, reconciliation, reports and the API.
 2. **Agents are first-class.** Agents draft, humans post. Bring your own AI key; everything also works without AI.
 3. **The books are protected by the database:** balance, immutability, gapless numbers and a hash chain are enforced in PostgreSQL, not only in application code.
-4. **Upgrades are a feature:** migrations are planned and rehearsed before they run (`obop migrate plan|rehearse`), and from 1.0 an N-1 upgrade path and a published deprecation window are promised.
+4. **Upgrades are a feature:** migrations are planned and rehearsed before they run (`obop migrate plan|rehearse`), and before 1.0 an N-1 upgrade path and a 12-month deprecation window are promised; from 1.0 the promise is a 2-year security-fix window (the deprecation window after 1.0 is open).
 5. **Compliance is signed, tested country packs,** Germany first (XRechnung, Factur-X, DATEV export, GoBD).
 6. **A free plugin registry.** From the CLI you can search, install (version-pinned) or copy a plugin's source into your own instance. Only plugins with an OSI-approved licence are listed, and there are no payments.
 7. **Leaving is easy:** full export on every install and an Odoo importer.
@@ -39,7 +39,7 @@ Details and current versions: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [
 
 ## First delivery
 
-Wave W1, 2027-01-01 to 2027-09-30, cut to the smallest honest loop: the kernel, invoicing, accounting with tax, German e-invoicing, CRM and sales, and one-warehouse stock, with CLI, REST and MCP for all of it and a thin web UI. The 0.5 public beta (2027-07-06, proposed) opens a free hosted sandbox with sample data (OR-20). The German pack is targeted stable on 2027-09-30, ahead of Germany's all-issuer e-invoicing mandate on 2028-01-01, and 1.0 (the first stable release, with a 2-year security-fix window) on 2028-04-18. Purchase orders, portal, payment providers, Peppol transport, project and timesheet, POS, manufacturing and payroll come later. Full calendar: [docs/ROADMAP.md](docs/ROADMAP.md).
+Wave W1, 2027-01-01 to 2027-09-30, cut to the smallest honest loop: the kernel, invoicing, accounting with tax, German e-invoicing, CRM and sales, and one-warehouse stock, with CLI, REST and MCP for all of it and a thin web UI. The 0.5 public beta (2027-07-06, proposed) is meant to open a free hosted sandbox with sample data (OR-20); the sandbox opens with it only if its duties are in place and the 2027-06-01 go/no-go passes, and the beta does not wait for it. The German pack is targeted stable on 2027-09-30, ahead of Germany's all-issuer e-invoicing mandate on 2028-01-01, and 1.0 (the first stable release, with a 2-year security-fix window) on 2028-04-18. Purchase orders, portal, payment providers, Peppol transport, project and timesheet, POS, manufacturing and payroll come later. Full calendar: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Licence and contributing
 
