@@ -12,7 +12,7 @@
 //! context to `Backend::apply_ctx`, and the backends ignore it until a model is tracked.
 
 use serde_json::json;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
 use std::sync::OnceLock;
 
@@ -141,37 +141,58 @@ pub(crate) fn system_ctx() -> &'static WriteCtx {
 }
 
 thread_local! {
-    static CURRENT: RefCell<Option<WriteCtx>> = const { RefCell::new(None) };
+    /// The open scopes of this thread, oldest first, each with the token of its [`Scope`]. The
+    /// context in force is the newest one.
+    static OPEN: RefCell<Vec<(u64, WriteCtx)>> = const { RefCell::new(Vec::new()) };
+    static NEXT_TOKEN: Cell<u64> = const { Cell::new(1) };
 }
 
-/// Restores the context that was current before [`scope`] when it is dropped, also when the
-/// thread unwinds. Scopes nest; drop them in the reverse order of opening (the natural order of
-/// local variables). Not `Send`: the context belongs to the thread that set it.
+/// Ends the context of [`scope`] when it is dropped, also when the thread unwinds. Scopes nest.
+/// A scope removes its own entry, by its token, wherever it stands: dropped out of order
+/// (`drop(outer)` while an inner one is alive) the inner context stays in force until the inner
+/// scope is dropped, and no context outlives the scope that made it. A scope that is forgotten
+/// (`std::mem::forget`) is never removed: that is a bug of the caller, the one thing this cannot
+/// repair. Not `Send`: the context belongs to the thread that set it.
 #[must_use = "the context is only current while the scope is alive"]
 pub struct Scope {
-    previous: Option<WriteCtx>,
+    token: u64,
     _not_send: PhantomData<*const ()>,
 }
 
 /// Make `ctx` the context of the writes this thread makes until the returned scope is dropped.
 pub fn scope(ctx: WriteCtx) -> Scope {
-    let previous = CURRENT.with(|c| c.borrow_mut().replace(ctx));
+    let token = NEXT_TOKEN.with(|n| {
+        let t = n.get();
+        n.set(t + 1);
+        t
+    });
+    OPEN.with(|o| o.borrow_mut().push((token, ctx)));
     Scope {
-        previous,
+        token,
         _not_send: PhantomData,
     }
 }
 
 impl Drop for Scope {
     fn drop(&mut self) {
-        let previous = self.previous.take();
-        CURRENT.with(|c| *c.borrow_mut() = previous);
+        OPEN.with(|o| {
+            let mut open = o.borrow_mut();
+            if let Some(at) = open.iter().rposition(|(t, _)| *t == self.token) {
+                open.remove(at);
+            }
+        });
     }
 }
 
 /// The context of this thread, if a scope is open.
 pub fn current() -> Option<WriteCtx> {
-    CURRENT.with(|c| c.borrow().clone())
+    OPEN.with(|o| o.borrow().last().map(|(_, c)| c.clone()))
+}
+
+/// How many scopes are open on this thread (tests).
+#[cfg(test)]
+fn open_scopes() -> usize {
+    OPEN.with(|o| o.borrow().len())
 }
 
 /// The context of this thread, or the system's when no scope is open.
@@ -214,6 +235,36 @@ mod tests {
         );
         drop(a);
         assert_eq!(current(), None);
+    }
+
+    #[test]
+    fn scopes_dropped_out_of_order_leave_no_stale_context() {
+        let (c1, c2, c3) = (
+            WriteCtx::new("ann", "rest", "a").ticket("m", "1", "post"),
+            WriteCtx::new("bob", "mcp", "b"),
+            WriteCtx::new("cy", "cli", "c"),
+        );
+        let a = scope(c1.clone());
+        let b = scope(c2.clone());
+        let c = scope(c3.clone());
+        // The middle one goes first: the newest context stays in force.
+        drop(b);
+        assert_eq!(current(), Some(c3.clone()));
+        // The oldest goes next: still the newest.
+        drop(a);
+        assert_eq!(current(), Some(c3));
+        drop(c);
+        assert_eq!(current(), None, "no context of a dropped scope outlives it");
+        assert_eq!(open_scopes(), 0);
+        // The other order that went wrong before: the outer scope dropped while the inner lives
+        // must not take the inner context away, and the inner one must not bring the outer back.
+        let outer = scope(c1);
+        let inner = scope(c2.clone());
+        drop(outer);
+        assert_eq!(current(), Some(c2), "the inner scope is alive");
+        drop(inner);
+        assert_eq!(current(), None, "and the outer context does not come back");
+        assert_eq!(current_or_system().by, ACTOR_SYSTEM);
     }
 
     #[test]
