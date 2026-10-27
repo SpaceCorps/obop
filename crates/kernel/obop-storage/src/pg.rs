@@ -39,27 +39,6 @@ const NOW: &str = "(extract(epoch from clock_timestamp()) * 1000)::bigint";
 /// Rows fetched from the server at a time by a streaming scan.
 const SCAN_CHUNK: i32 = 500;
 
-const SCHEMA: &str = "CREATE TABLE IF NOT EXISTS obop_record (
-         seq   BIGINT GENERATED ALWAYS AS IDENTITY,
-         model TEXT NOT NULL,
-         id    TEXT NOT NULL,
-         data  JSONB NOT NULL CHECK (jsonb_typeof(data) = 'object'),
-         PRIMARY KEY (model, id)
-     );
-     CREATE INDEX IF NOT EXISTS obop_record_seq ON obop_record (model, seq);
-     CREATE INDEX IF NOT EXISTS obop_record_seq_all ON obop_record (seq);
-     CREATE TABLE IF NOT EXISTS obop_counter (
-         key        TEXT PRIMARY KEY,
-         n          BIGINT NOT NULL,
-         expires_ms BIGINT NOT NULL
-     );
-     CREATE TABLE IF NOT EXISTS obop_kv (
-         key        TEXT PRIMARY KEY,
-         value      TEXT NOT NULL,
-         expires_ms BIGINT NOT NULL
-     );
-     CREATE INDEX IF NOT EXISTS obop_kv_expiry ON obop_kv (expires_ms);";
-
 fn e(err: postgres::Error) -> String {
     describe(&err)
 }
@@ -82,11 +61,20 @@ fn identity(c: &mut Client) -> Result<String> {
 }
 
 impl Pg {
-    pub(crate) fn connect(url: &str) -> Result<Self> {
-        Self::connect_with(url, PgPoolConfig::from_env()?)
+    /// As `connect_options` with the schema created when missing: what the tests of the pool
+    /// connect with.
+    #[cfg(test)]
+    pub(crate) fn connect_with(url: &str, cfg: PgPoolConfig) -> Result<Self> {
+        Self::connect_options(url, Some(cfg), Ddl::IfMissing)
     }
 
-    pub(crate) fn connect_with(url: &str, cfg: PgPoolConfig) -> Result<Self> {
+    /// Connect with the pool settings given (`None`: read `OBOP_DB_*`) and say whether the schema
+    /// may be created.
+    pub(crate) fn connect_options(url: &str, cfg: Option<PgPoolConfig>, ddl: Ddl) -> Result<Self> {
+        let cfg = match cfg {
+            Some(c) => c,
+            None => PgPoolConfig::from_env()?,
+        };
         static IDS: AtomicU64 = AtomicU64::new(1);
         // Behind a pooler in transaction mode the locks need a direct address of their own
         // (D74); an address that is the pooler's own would take them through it.
@@ -108,12 +96,9 @@ impl Pg {
         let connector = PgConnector::new(url)?;
         let mut client = tune(connector.clone(), "obop-main", &cfg).connect()?;
         // Several processes may start at once; schema creation is serialised so they do not
-        // trip over each other creating the same objects.
-        let mut tx = client.transaction().map_err(e)?;
-        tx.batch_execute("SELECT pg_advisory_xact_lock(hashtextextended('obop-schema', 0))")
-            .map_err(e)?;
-        tx.batch_execute(SCHEMA).map_err(e)?;
-        tx.commit().map_err(e)?;
+        // trip over each other creating the same objects. The schema is the parts of `schema`:
+        // what is missing is created under `Ddl::IfMissing`, and `Ddl::Never` only checks.
+        schema::with_lock(&mut client, |c| schema::ensure(c, ddl))?;
 
         // Advisory locks need a session that lasts: behind a pooler in transaction mode they go
         // to a direct address. That address must reach the same server and database.

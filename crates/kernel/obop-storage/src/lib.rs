@@ -446,15 +446,94 @@ fn ident(s: &str) -> Result<&str> {
     }
 }
 
+/// Whether the process may issue DDL (create tables) when it opens a PostgreSQL database.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ddl {
+    /// Create what is missing, under the lock that serialises processes starting together.
+    IfMissing,
+    /// Create nothing: a database that lacks the schema is an error that says so. For a
+    /// deployment whose serving role may not create tables.
+    Never,
+}
+
+impl Ddl {
+    /// What [`open`] uses: `Never` in a production process (see [`production`]), else `IfMissing`.
+    pub fn for_process() -> Ddl {
+        if production() {
+            Ddl::Never
+        } else {
+            Ddl::IfMissing
+        }
+    }
+}
+
+/// How [`open_options`] opens a database.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenOptions {
+    /// The connection pool settings; `None` reads them from the environment (`OBOP_DB_*`, see
+    /// docs/DEPLOY.md). Only PostgreSQL has a pool.
+    pub pool: Option<PgPoolConfig>,
+    /// Whether opening may create the schema. Only PostgreSQL has one to create.
+    pub ddl: Ddl,
+}
+
+impl Default for OpenOptions {
+    fn default() -> Self {
+        Self {
+            pool: None,
+            ddl: Ddl::for_process(),
+        }
+    }
+}
+
+static PRODUCTION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Declare this process a production process (`obop serve --production`): from then on [`open`]
+/// does not create the schema.
+pub fn set_production(on: bool) {
+    PRODUCTION.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Is this a production process: [`set_production`] was called, or `OBOP_PRODUCTION=1` is set?
+/// Read by [`open`] and by nothing else.
+pub fn production() -> bool {
+    production_from(
+        PRODUCTION.load(std::sync::atomic::Ordering::Relaxed),
+        std::env::var("OBOP_PRODUCTION").ok().as_deref(),
+    )
+}
+
+/// The rule of [`production`] for a given flag and variable: only the value `1` counts.
+fn production_from(flag: bool, variable: Option<&str>) -> bool {
+    flag || variable.is_some_and(|v| v.trim() == "1")
+}
+
+/// Open the database `url` names: `memory:`, `sqlite://PATH` or `postgres://...`. A production
+/// process (see [`production`]) does not create the PostgreSQL schema; any other does.
 pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
-    open_with(url, None)
+    open_options(url, &OpenOptions::default())
 }
 
 /// As [`open`], with the connection pool settings given instead of read from the environment
-/// (`OBOP_DB_*`, see docs/DEPLOY.md). Only PostgreSQL has a pool; the setting is ignored for
-/// `memory:` and SQLite.
+/// (`OBOP_DB_*`, see docs/DEPLOY.md), and the schema created when it is missing whatever
+/// `OBOP_PRODUCTION` says: for the commands that set a database up (the control plane seeding a
+/// new instance, tests). Only PostgreSQL has a pool; the setting is ignored for `memory:` and
+/// SQLite.
 pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
-    let backend = open_backend(url, pool)?;
+    open_options(
+        url,
+        &OpenOptions {
+            pool,
+            ddl: Ddl::IfMissing,
+        },
+    )
+}
+
+/// Open a database with every setting given. The backend it returns is the [`Tracked`] wrapper
+/// around the store (and the guard of `fault` around PostgreSQL), so a caller that holds only
+/// `Arc<dyn Backend>` reaches `apply_ctx` and the list of tracked models.
+pub fn open_options(url: &str, options: &OpenOptions) -> Result<Arc<dyn Backend>> {
+    let backend = open_backend(url, options)?;
     // In a build with `test-support` (the tests of the workspace, never a release) the process
     // tests can make the binary's store refuse calls: `OBOP_TEST_FAULTS`, see `testing`.
     #[cfg(feature = "test-support")]
@@ -462,7 +541,7 @@ pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backen
     Ok(Tracked::wrap(backend))
 }
 
-fn open_backend(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
+fn open_backend(url: &str, options: &OpenOptions) -> Result<Arc<dyn Backend>> {
     if url == "memory:" {
         Ok(Arc::new(Memory::default()))
     } else if let Some(path) = url
@@ -471,10 +550,7 @@ fn open_backend(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend
     {
         Ok(Arc::new(Sqlite::open(path)?))
     } else if url.starts_with("postgres://") || url.starts_with("postgresql://") {
-        let pg = match pool {
-            Some(cfg) => Pg::connect_with(url, cfg)?,
-            None => Pg::connect(url)?,
-        };
+        let pg = Pg::connect_options(url, options.pool.clone(), options.ddl)?;
         // The guard keeps the rule of `fault` (no change after a refused call, commits noted).
         Ok(guarded(Arc::new(pg)))
     } else {
@@ -510,10 +586,11 @@ pub mod pool;
 #[cfg(test)]
 mod pool_tests;
 pub mod refusal;
-#[cfg(test)]
-mod shared_tests;
+pub mod schema;
 #[cfg(test)]
 mod seams_tests;
+#[cfg(test)]
+mod shared_tests;
 mod sqlite;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;

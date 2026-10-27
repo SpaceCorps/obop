@@ -556,9 +556,9 @@ mod tests {
     /// that matches nothing any more (delete the entry when its code is gone).
     const ALLOWED_LINES: &[(&str, &str, &str)] = &[
         (
-            "kernel/obop-storage/src/pg.rs",
+            "kernel/obop-storage/src/schema.rs",
             "CHECK(jsonb_typeof(data)='object')",
-            "the table constraint on the whole document, not a field value",
+            "the table constraint on the whole document, not a field value (the DDL of the base              part, and the text it was moved from, which a test compares it with)",
         ),
         (
             "kernel/obop-storage/src/pg.rs",

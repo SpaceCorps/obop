@@ -323,3 +323,240 @@ fn read_tx_runs_again_once_on_a_fresh_connection_when_the_reused_one_is_dead() {
     assert_eq!(again.unwrap(), 1);
 }
 
+// ---- the schema parts ----------------------------------------------------------------------------
+
+fn tables(c: &mut postgres::Client) -> Vec<String> {
+    c.query(
+        "SELECT relname::text FROM pg_class WHERE relnamespace = 'public'::regnamespace \
+         AND relkind = 'r' ORDER BY 1",
+        &[],
+    )
+    .unwrap()
+    .iter()
+    .map(|r| r.get(0))
+    .collect()
+}
+
+#[test]
+fn ensure_creates_what_is_missing_only_when_allowed() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let mut c = db.connect();
+    assert!(tables(&mut c).is_empty());
+    // Never: an empty database is an error that names the part, and nothing was created.
+    let e = crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::Never)).unwrap_err();
+    assert!(e.contains("missing: base"), "{e}");
+    assert!(tables(&mut c).is_empty());
+    let e = open_options(
+        db.url(),
+        &OpenOptions {
+            pool: Some(one()),
+            ddl: Ddl::Never,
+        },
+    )
+    .err()
+    .expect("an empty database cannot be opened without DDL");
+    assert!(
+        e.contains("missing: base") && e.contains("OBOP_PRODUCTION"),
+        "{e}"
+    );
+    assert!(tables(&mut c).is_empty());
+    // IfMissing creates it; a second time there is nothing to do.
+    crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
+    assert_eq!(tables(&mut c), ["obop_counter", "obop_kv", "obop_record"]);
+    assert!(crate::schema::inspect(&mut c).is_empty());
+    crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
+    // Now Never is fine, and the store works.
+    let b = open_options(
+        db.url(),
+        &OpenOptions {
+            pool: Some(one()),
+            ddl: Ddl::Never,
+        },
+    )
+    .unwrap();
+    b.insert("m", "a", &fields(1)).unwrap();
+    assert_eq!(b.get("m", "a").unwrap().unwrap()["n"], 1);
+}
+
+#[test]
+fn a_missing_object_is_reported_and_put_back() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    drop(open_with(db.url(), Some(one())).unwrap());
+    let mut c = db.connect();
+    c.batch_execute("INSERT INTO obop_kv (key, value, expires_ms) VALUES ('k', 'v', 0)")
+        .unwrap();
+    for broken in ["DROP INDEX obop_kv_expiry", "DROP TABLE obop_counter"] {
+        c.batch_execute(broken).unwrap();
+        let found = crate::schema::inspect(&mut c);
+        assert_eq!(found.len(), 1, "{broken}: {found:?}");
+        assert_eq!(
+            (found[0].code, found[0].object.as_str(), found[0].error),
+            ("schema_part_missing", "base", true)
+        );
+        let e = open_options(
+            db.url(),
+            &OpenOptions {
+                pool: Some(one()),
+                ddl: Ddl::Never,
+            },
+        )
+        .err()
+        .expect("Never does not repair");
+        assert!(e.contains("missing: base"), "{e}");
+        // IfMissing repairs it, and does not touch what is there.
+        drop(open_with(db.url(), Some(one())).unwrap());
+        assert!(crate::schema::inspect(&mut c).is_empty(), "{broken}");
+        let kept: i64 = c
+            .query_one("SELECT count(*) FROM obop_kv WHERE key = 'k'", &[])
+            .unwrap()
+            .get(0);
+        assert_eq!(kept, 1, "existing rows are untouched");
+    }
+}
+
+#[test]
+fn a_serving_role_that_may_not_create_tables_opens_an_installed_database() {
+    let Some(mut db) = TestDb::new() else {
+        return;
+    };
+    // The owner installs; the serving role gets DML and nothing else.
+    crate::schema::owner_install(db.url()).unwrap();
+    let rt = db
+        .role("rt", "NOSUPERUSER NOCREATEDB NOCREATEROLE")
+        .unwrap();
+    db.connect()
+        .batch_execute(&format!(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role};
+             GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO {role};
+             REVOKE CREATE ON SCHEMA public FROM PUBLIC",
+            role = db.role_name("rt")
+        ))
+        .unwrap();
+    // With either mode: nothing to create, so no right to create is needed.
+    for ddl in [Ddl::Never, Ddl::IfMissing] {
+        let b = open_options(
+            &rt,
+            &OpenOptions {
+                pool: Some(one()),
+                ddl,
+            },
+        )
+        .unwrap_or_else(|e| panic!("{ddl:?}: {e}"));
+        b.insert("m", &format!("{ddl:?}"), &fields(1)).unwrap();
+    }
+    assert_eq!(
+        db.connect()
+            .query_one("SELECT count(*) FROM obop_record", &[])
+            .unwrap()
+            .get::<_, i64>(0),
+        2
+    );
+}
+
+#[test]
+fn a_role_that_may_not_create_tables_is_told_how_to_install_the_schema() {
+    let Some(mut db) = TestDb::new() else {
+        return;
+    };
+    let rt = db.role("rt", "NOSUPERUSER").unwrap();
+    db.connect()
+        .batch_execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
+        .unwrap();
+    let e = open_with(&rt, Some(one()))
+        .err()
+        .expect("no right to create");
+    assert!(e.contains("SQLSTATE 42501"), "{e}");
+    assert!(e.contains("owner_install"), "{e}");
+    let e = open_options(
+        &rt,
+        &OpenOptions {
+            pool: Some(one()),
+            ddl: Ddl::Never,
+        },
+    )
+    .err()
+    .expect("no schema");
+    assert!(e.contains("missing: base"), "{e}");
+}
+
+#[test]
+fn processes_that_start_together_on_an_empty_database_all_start() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let barrier = std::sync::Barrier::new(6);
+    std::thread::scope(|s| {
+        let hs: Vec<_> = (0..6)
+            .map(|_| {
+                s.spawn(|| {
+                    barrier.wait();
+                    open_with(db.url(), Some(one())).map(|_| ())
+                })
+            })
+            .collect();
+        for h in hs {
+            h.join().unwrap().unwrap();
+        }
+    });
+    assert!(crate::schema::inspect(&mut db.connect()).is_empty());
+}
+
+#[test]
+fn the_schema_of_a_non_default_search_path_is_used() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    db.connect()
+        .batch_execute(&format!(
+            "CREATE SCHEMA \"Odd Schema\"; \
+             ALTER DATABASE {} SET search_path TO \"Odd Schema\", public",
+            db.name()
+        ))
+        .unwrap();
+    let b = open_with(db.url(), Some(one())).unwrap();
+    b.insert("m", "a", &fields(1)).unwrap();
+    let mut c = db.connect();
+    let in_odd: i64 = c
+        .query_one(
+            "SELECT count(*) FROM pg_class WHERE relnamespace = '\"Odd Schema\"'::regnamespace \
+             AND relname = 'obop_record'",
+            &[],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(in_odd, 1);
+    assert!(tables(&mut c).is_empty(), "nothing in public");
+}
+
+// ---- production ----------------------------------------------------------------------------------
+
+#[test]
+fn production_is_a_flag_or_the_variable_set_to_one() {
+    assert!(!production_from(false, None));
+    assert!(production_from(true, None));
+    assert!(production_from(false, Some("1")));
+    assert!(production_from(false, Some(" 1\n")));
+    for no in ["", "0", "true", "yes", "11"] {
+        assert!(!production_from(false, Some(no)), "{no:?}");
+    }
+}
+
+#[test]
+fn open_with_and_the_options_name_the_ddl_they_use() {
+    assert_eq!(
+        OpenOptions {
+            pool: None,
+            ddl: Ddl::Never
+        }
+        .ddl,
+        Ddl::Never
+    );
+    // In a process that is not production (no test here sets the flag), the default creates.
+    assert_eq!(Ddl::for_process(), Ddl::IfMissing);
+    assert_eq!(OpenOptions::default().ddl, Ddl::IfMissing);
+    assert_eq!(OpenOptions::default().pool, None);
+}
