@@ -60,22 +60,23 @@ function run(args: string[], input?: string) {
 
 let args: string[];
 const extraEnv: Record<string, string> = {};
-if (kind === "app" || kind === "passkeys") {
-  const db = `sqlite://${join(dir, kind === "app" ? "app.sqlite" : "passkeys.sqlite")}`;
-  for (const u of Object.values(users))
+if (kind === "app" || kind === "passkeys" || kind === "language") {
+  const db = `sqlite://${join(dir, `${kind}.sqlite`)}`;
+  // The language instance needs an administrator and a restricted person, nobody else.
+  const accounts = kind === "language" ? [users.root, users.sam] : Object.values(users);
+  for (const u of accounts)
     run(["admin", "create", u.name, "--groups", u.groups, "--db", db], `${u.password}\n`);
-  args = [
-    "serve",
-    "--addr",
-    `127.0.0.1:${kind === "app" ? process.env.OBOP_E2E_APP_PORT : process.env.OBOP_E2E_PASSKEY_PORT}`,
-    "--db",
-    db,
-    "--static",
-    backofficeDist,
-  ];
+  const port = {
+    app: process.env.OBOP_E2E_APP_PORT,
+    passkeys: process.env.OBOP_E2E_PASSKEY_PORT,
+    language: process.env.OBOP_E2E_LANGUAGE_PORT,
+  }[kind];
+  args = ["serve", "--addr", `127.0.0.1:${port}`, "--db", db, "--static", backofficeDist];
   if (kind === "passkeys") {
     // Reached as http://localhost:<port> by the browser; the instance says so.
     extraEnv.OBOP_PUBLIC_URL = `http://localhost:${process.env.OBOP_E2E_PASSKEY_PORT}`;
+  } else if (kind === "language") {
+    extraEnv.OBOP_PUBLIC_URL = `http://127.0.0.1:${process.env.OBOP_E2E_LANGUAGE_PORT}`;
   } else {
     // Updating the instance (D63): it holds the update token of an instance the control plane
     // knows, a directory for the backup before an update, and a marketplace the specs fill.
@@ -172,7 +173,7 @@ if (kind === "app" || kind === "passkeys") {
     "--static",
     siteDir,
   ];
-} else throw new Error("usage: serve.ts app|shop|platform");
+} else throw new Error("usage: serve.ts app|passkeys|language|shop|platform|market");
 
 // Connectors: the specs run a receiver on loopback, which is refused unless the operator allows it.
 // The secret key is a 32-byte key in the form two-factor authentication and connectors both accept.
@@ -185,6 +186,9 @@ const child = spawn(bin, args, {
     OBOP_REQUIRE_MFA_FOR_ADMINS: "0",
     OBOP_CONNECTORS_ALLOW_LOOPBACK: "1",
     OBOP_DEMO_PAYMENTS: "1",
+    // Only the language instance has a default language; a value in the developer's shell must
+    // not reach the others, whose specs read English.
+    OBOP_DEFAULT_LANGUAGE: kind === "language" ? "sv" : "",
     OBOP_PUBLIC_URL:
       kind === "shop"
         ? `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`
