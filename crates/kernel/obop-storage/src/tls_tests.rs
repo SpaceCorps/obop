@@ -235,7 +235,10 @@ impl TlsPg {
         for (f, slot) in [("server.crt", 0), ("other.crt", 1)] {
             let mut pem = None;
             for _ in 0..60 {
-                pem = docker(&["exec", &name, "cat", &format!("/certs/{f}")]);
+                // The file exists as soon as `openssl` opens it, before it holds the certificate:
+                // wait for the whole PEM, not for a `cat` that succeeds on an empty file.
+                pem = docker(&["exec", &name, "cat", &format!("/certs/{f}")])
+                    .filter(|p| p.contains("END CERTIFICATE"));
                 if pem.is_some() {
                     break;
                 }
