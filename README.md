@@ -31,7 +31,7 @@ Honest limits: Odoo Community has 642 addon directories and obop starts with a f
 | Layer | Rule |
 |---|---|
 | Backend | Latest stable Rust, adopted after a 7 to 14 day cooldown or its `x.y.1` patch |
-| Frontend and tooling | Latest Vite+, driven only through the `vp` CLI. Two named exceptions: the nightly exit drill and `pnpm sbom` |
+| Frontend and tooling | Latest Vite+, driven only through the `vp` CLI. Three named exceptions: the nightly exit drill, `pnpm sbom` and the mobile toolchain of React Native apps |
 | Package manager | pnpm only. Never `npm`, `npx`, `yarn` or `bun`; only `pnpm-lock.yaml` is committed |
 | Database | PostgreSQL 17 and 18 (D8), one database per business; SQLite for local use (D44) |
 
