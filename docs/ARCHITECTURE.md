@@ -32,7 +32,7 @@
 | F5 | Licence and price (OR-1, OR-2) | Code, SDKs, WIT worlds, UI SDK, templates and documentation are Apache-2.0 and completely free to use and to self-host. There is no proprietary layer: no `ee` tree, no open-core, no paid list, no plans or prices, no marketplace commission, and nothing is withheld. Contributions carry a DCO sign-off; there is no CLA (D82) |
 | F6 | Agentic first, CLI for everything (OR-4) | Every capability is a typed command reachable through the `obop` CLI, the REST API and MCP; the web UI is a client of the same commands; a feature is not done until it exists in all three (D80, sections 8.6 and 8.7) |
 
-"Latest" means the pin policy (D23): a Rust release is eligible at x.y.1, or at x.y.0 after 14 days without an open stable-to-stable regression. Today the pin is 1.98.1 (RATIFIED, D23, OR-8; 1.98.0 is skipped for a vtable miscompilation). Rust 1.99.0 was published on 2026-10-01 (the release post is dated that day and `channel-rust-stable.toml` serves it, with a manifest `Last-Modified` of 12:38 UTC after a 404 at about 10:10 UTC). The pin stays 1.98.1 because of the D23 rule (x.y.0 plus 14 days is 2026-10-15), not because the channel lacks 1.99.0, so 1.99.x is adopted between 2026-10-15 and 2026-10-22, or at 1.99.1 if that comes first, not immediately as R06 MUST 1 proposed [R06 s1.1]. The toolchain therefore intentionally runs up to about three weeks behind the newest release (OR-8, I-3). `vite-plus` 1.0.0 (2026-09-28, MIT) becomes eligible on 2026-10-05 under the 7-day rule (RATIFIED, D23, OR-8). `rust-toolchain.toml` carries an exact `channel = "x.y.z"`, builds use `--locked`, and release builds set `overflow-checks = true`.
+"Latest" means the pin policy (D23): a Rust release is eligible at x.y.1, or at x.y.0 after 14 days without an open stable-to-stable regression. Today (2026-10-27) the pin is 1.99.0 in `rust-toolchain.toml` (rule RATIFIED, D23, OR-8; 1.98.1 was the pin until 1.99.0 became eligible on 2026-10-15, and 1.98.0 was skipped for a vtable miscompilation). Rust 1.99.0 was published on 2026-10-01 (the release post is dated that day and `channel-rust-stable.toml` serves it, with a manifest `Last-Modified` of 12:38 UTC after a 404 at about 10:10 UTC). The pin stayed 1.98.1 until the D23 rule allowed 1.99.0 (x.y.0 plus 14 days is 2026-10-15), not because the channel lacked it, so 1.99.0 was adopted after that date and not immediately as R06 MUST 1 proposed [R06 s1.1]. The toolchain therefore intentionally runs up to about three weeks behind the newest release (OR-8, I-3). `vite-plus` 1.0.0 (2026-09-28, MIT) becomes eligible on 2026-10-05 under the 7-day rule (RATIFIED, D23, OR-8). `rust-toolchain.toml` carries an exact `channel = "x.y.z"`, builds use `--locked`, and release builds set `overflow-checks = true`.
 
 ### 1.3 Technology stack at a glance
 
@@ -40,7 +40,7 @@ Pins are the verified versions of [R00 s3]; Proposed rows wait for the owner.
 
 | Area | Choice | Pin as of 2026-10-01 | Status |
 |---|---|---|---|
-| Language | Rust stable, edition 2024, resolver 3 | 1.98.1 (then 1.99.x; 1.99.0 was released 2026-10-01) | FIXED F1; pin policy D23 (RATIFIED, OR-8) |
+| Language | Rust stable, edition 2024, resolver 3 | 1.99.0 (`rust-toolchain.toml`, 2026-10-27; released 2026-10-01, adopted after the D23 waiting period) | FIXED F1; pin policy D23 (RATIFIED, OR-8) |
 | Runtime, HTTP | tokio only; axum behind one crate `obop-http` | tokio 1.53.1; axum 0.8.9 (0.9 pending) | D29 |
 | Data access | In-house ORM on sqlx and sea-query; SeaORM only for fixed system tables | sqlx 0.9.0; sea-query 1.0.2; SeaORM 2.0.4 | D29 |
 | Database | PostgreSQL 17 and 18 (18 reference), CI also on 19 from RC; PgBouncer 1.26+; pgBackRest | 18.6, 17.11 (19 in Beta 4); 1.26.0; 2.59.2 | D8, D37 |
@@ -894,7 +894,7 @@ One repository: a Cargo workspace plus a pnpm workspace whose packages live unde
 ```
 obop/
   Cargo.toml  Cargo.lock  # workspace: edition 2024, resolver 3, [workspace.dependencies], [workspace.lints]
-  rust-toolchain.toml     # exact channel (1.98.1 today)
+  rust-toolchain.toml     # exact channel (1.99.0 on 2026-10-27)
   deny.toml  clippy.toml  .cargo/config.toml
   SECURITY.md  CONTRIBUTING.md  LICENSE  NOTICE   # LICENSE (Apache-2.0) and NOTICE exist (OR-1); SECURITY.md before the first public release (D33)
   CLAUDE.md  AGENTS.md*   # instructions for agents that contribute (AGENTS.md Proposed, spec/cli.md 5.4)

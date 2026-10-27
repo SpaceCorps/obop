@@ -288,7 +288,7 @@ Rows 11, 12, 13, 14, 15, 16 and 17 and the Free-tier remark in row 2 now carry t
 
 | ID | Decision | Outcome | Basis |
 |---|---|---|---|
-| D23 | Pin policy | RATIFIED (OR-8): "latest" is the newest release past a cooldown of 7 to 14 days, or its `x.y.1` patch; the toolchain runs up to about three weeks behind (Rust pin stays 1.98.1 until 1.99.x is adopted, 2026-10-15 to 2026-10-22). Exactly two exceptions to "vp only" (OR-9): the nightly exit drill and `pnpm sbom` through the vp-managed pnpm. | DECISIONS 1.1, D23 |
+| D23 | Pin policy | RATIFIED (OR-8): "latest" is the newest release past a cooldown of 7 to 14 days, or its `x.y.1` patch; the toolchain runs up to about three weeks behind (Rust pin was 1.98.1 until 1.99.0 became eligible on 2026-10-15; `rust-toolchain.toml` pins 1.99.0 now). Exactly two exceptions to "vp only" (OR-9): the nightly exit drill and `pnpm sbom` through the vp-managed pnpm. | DECISIONS 1.1, D23 |
 | D80 | Agentic-first surface | RATIFIED (OR-4): every capability is a typed command reachable through the `obop` CLI, the REST API and MCP; the web UI is a client and reaches parity before the first stable release; a feature is not done until it exists in CLI, API and MCP. Grammar and catalogue: [../spec/cli.md](../spec/cli.md) (details Proposed until Q22). | DECISIONS D80 |
 | D81 | Free, open plugin registry | RATIFIED (OR-3): the CLI searches, installs (version-pinned) or copies plugin source; community and verified tiers; no payments. Staged delivery (a git-backed index first) is Proposed. | DECISIONS D81 |
 | D82 | Contribution model | RATIFIED (OR-1): DCO sign-off, no CLA, Apache-2.0 in and out. | DECISIONS D82 |
