@@ -1,0 +1,1550 @@
+{
+  "memory": {
+    "raw_after_restore": null,
+    "raw_before_restore": null,
+    "restored": 28,
+    "rows": [
+      [
+        "order",
+        "o1",
+        {
+          "created_at": "2026-01-01T00:00:00Z",
+          "nested": {
+            "a": [
+              1,
+              2,
+              {
+                "b": null
+              }
+            ],
+            "ü": "ñ"
+          },
+          "note": "x",
+          "number": "SO-1",
+          "row_version": 7,
+          "state": "closed",
+          "sys_backfilled": true,
+          "total": 120,
+          "updated_by": "someone"
+        }
+      ],
+      [
+        "line",
+        "l1",
+        {
+          "order": "o1",
+          "qty": 1
+        }
+      ],
+      [
+        "line",
+        "l2",
+        {
+          "order": "o1",
+          "qty": 2
+        }
+      ],
+      [
+        "order",
+        "o3",
+        {
+          "n": 2,
+          "number": "SO-3b"
+        }
+      ],
+      [
+        "stock",
+        "s1",
+        {
+          "qty": 8,
+          "sku": "S-1"
+        }
+      ],
+      [
+        "stock",
+        "s9",
+        {
+          "qty": 1,
+          "sku": "Z"
+        }
+      ],
+      [
+        "num",
+        "n1",
+        {
+          "big": 9007199254740993,
+          "float": 3.75,
+          "huge": 1.5e+300,
+          "max": 9223372036854775807,
+          "min": -9223372036854775808,
+          "neg": -0.25,
+          "tenth": 0.1,
+          "tiny": 1e-7,
+          "umax": 18446744073709551615,
+          "zero": 0
+        }
+      ],
+      [
+        "num",
+        "n2",
+        {
+          "big": 9007199254740993,
+          "float": 2.25,
+          "umax": 18446744073709551615
+        }
+      ],
+      [
+        "odd",
+        "",
+        {
+          "i": 0,
+          "touched": true
+        }
+      ],
+      [
+        "odd",
+        "with space",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd",
+        "ünï/cødé ☃",
+        {
+          "i": 2
+        }
+      ],
+      [
+        "odd",
+        "quote\"id",
+        {
+          "i": 3
+        }
+      ],
+      [
+        "odd",
+        "back\\slash",
+        {
+          "i": 5
+        }
+      ],
+      [
+        "odd",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        {
+          "i": 6
+        }
+      ],
+      [
+        "odd2",
+        "",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "with space",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "ünï/cødé ☃",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "quote\"id",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "it's",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "back\\slash",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "sysk",
+        "sys-i",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "row_version": 4,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-p",
+        {
+          "name": "again",
+          "row_version": 8
+        }
+      ],
+      [
+        "sysk",
+        "sys-m",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "name": "m",
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-c",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "name": "c",
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-a",
+        {
+          "row_version": 2
+        }
+      ],
+      [
+        "sysk",
+        "sys-n",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "secret",
+        "k1",
+        {
+          "other": "kept",
+          "token": "sealed:2"
+        }
+      ]
+    ],
+    "total_after_restore": 28,
+    "trace": [
+      "ok ()",
+      "refused",
+      "ok ()",
+      "ok true",
+      "ok false",
+      "ok true",
+      "ok true",
+      "ok false",
+      "ok ()",
+      "refused",
+      "ok false",
+      "ok ()",
+      "stale expect: conflict 3 the record changed",
+      "stale expect: unchanged true",
+      "row_version expect: conflict 3 the record changed",
+      "row_version expect: unchanged true",
+      "below the minimum: conflict 3 below the minimum",
+      "below the minimum: unchanged true",
+      "above the maximum: conflict 3 above the maximum",
+      "above the maximum: unchanged true",
+      "overflow: conflict 3 overflow",
+      "overflow: unchanged true",
+      "not an integer: conflict 3 the field is not an integer",
+      "not an integer: unchanged true",
+      "missing counter: conflict 3 no such record",
+      "missing counter: unchanged true",
+      "merge missing: conflict 3 no such record",
+      "merge missing: unchanged true",
+      "patch missing: conflict 3 no such record",
+      "patch missing: unchanged true",
+      "delete missing: conflict 3 no such record",
+      "delete missing: unchanged true",
+      "insert existing: conflict 3 already exists",
+      "insert existing: unchanged true",
+      "refused",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok true",
+      "ok true",
+      "ok true",
+      "ok ()",
+      "conflict 0 the record changed",
+      "ok ()",
+      "ok true",
+      "ok ()",
+      "ok 0",
+      "ok 1",
+      "ok [\"s1\"]",
+      "ok 2",
+      "ok 0",
+      "ok 28"
+    ]
+  },
+  "postgres": {
+    "raw_after_restore": [
+      [
+        "order",
+        "o1",
+        "{\"note\": \"x\", \"state\": \"closed\", \"total\": 120, \"nested\": {\"a\": [1, 2, {\"b\": null}], \"ü\": \"ñ\"}, \"number\": \"SO-1\", \"created_at\": \"2026-01-01T00:00:00Z\", \"updated_by\": \"someone\", \"row_version\": 7, \"sys_backfilled\": true}"
+      ],
+      [
+        "line",
+        "l1",
+        "{\"qty\": 1, \"order\": \"o1\"}"
+      ],
+      [
+        "line",
+        "l2",
+        "{\"qty\": 2, \"order\": \"o1\"}"
+      ],
+      [
+        "stock",
+        "s1",
+        "{\"qty\": 8, \"sku\": \"S-1\"}"
+      ],
+      [
+        "stock",
+        "s9",
+        "{\"qty\": 1, \"sku\": \"Z\"}"
+      ],
+      [
+        "order",
+        "o3",
+        "{\"n\": 2, \"number\": \"SO-3b\"}"
+      ],
+      [
+        "num",
+        "n1",
+        "{\"big\": 9007199254740993, \"max\": 9223372036854775807, \"min\": -9223372036854775808, \"neg\": -0.25, \"huge\": 1500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, \"tiny\": 0.0000001, \"umax\": 18446744073709551615, \"zero\": 0, \"float\": 3.75, \"tenth\": 0.1}"
+      ],
+      [
+        "num",
+        "n2",
+        "{\"big\": 9007199254740993, \"umax\": 18446744073709551615, \"float\": 2.25}"
+      ],
+      [
+        "odd",
+        "",
+        "{\"i\": 0, \"touched\": true}"
+      ],
+      [
+        "odd",
+        "with space",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd",
+        "ünï/cødé ☃",
+        "{\"i\": 2}"
+      ],
+      [
+        "odd",
+        "quote\"id",
+        "{\"i\": 3}"
+      ],
+      [
+        "odd",
+        "back\\slash",
+        "{\"i\": 5}"
+      ],
+      [
+        "odd",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "{\"i\": 6}"
+      ],
+      [
+        "odd2",
+        "",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "with space",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "ünï/cødé ☃",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "quote\"id",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "it's",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "back\\slash",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "{\"i\": 1}"
+      ],
+      [
+        "sysk",
+        "sys-i",
+        "{\"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 4, \"sys_backfilled\": true}"
+      ],
+      [
+        "sysk",
+        "sys-p",
+        "{\"name\": \"again\", \"row_version\": 8}"
+      ],
+      [
+        "sysk",
+        "sys-m",
+        "{\"name\": \"m\", \"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
+      ],
+      [
+        "sysk",
+        "sys-c",
+        "{\"name\": \"c\", \"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
+      ],
+      [
+        "sysk",
+        "sys-a",
+        "{\"row_version\": 2}"
+      ],
+      [
+        "sysk",
+        "sys-n",
+        "{\"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
+      ],
+      [
+        "secret",
+        "k1",
+        "{\"other\": \"kept\", \"token\": \"sealed:2\"}"
+      ]
+    ],
+    "raw_before_restore": [
+      [
+        "order",
+        "o1",
+        "{\"note\": \"x\", \"state\": \"closed\", \"total\": 120, \"nested\": {\"a\": [1, 2, {\"b\": null}], \"ü\": \"ñ\"}, \"number\": \"SO-1\", \"created_at\": \"2026-01-01T00:00:00Z\", \"updated_by\": \"someone\", \"row_version\": 7, \"sys_backfilled\": true}"
+      ],
+      [
+        "line",
+        "l1",
+        "{\"qty\": 1, \"order\": \"o1\"}"
+      ],
+      [
+        "line",
+        "l2",
+        "{\"qty\": 2, \"order\": \"o1\"}"
+      ],
+      [
+        "stock",
+        "s1",
+        "{\"qty\": 8, \"sku\": \"S-1\"}"
+      ],
+      [
+        "stock",
+        "s9",
+        "{\"qty\": 1, \"sku\": \"Z\"}"
+      ],
+      [
+        "order",
+        "o3",
+        "{\"n\": 2, \"number\": \"SO-3b\"}"
+      ],
+      [
+        "num",
+        "n1",
+        "{\"big\": 9007199254740993, \"max\": 9223372036854775807, \"min\": -9223372036854775808, \"neg\": -0.25, \"huge\": 1500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, \"tiny\": 0.0000001, \"umax\": 18446744073709551615, \"zero\": 0, \"float\": 3.75, \"tenth\": 0.1}"
+      ],
+      [
+        "num",
+        "n2",
+        "{\"big\": 9007199254740993, \"umax\": 18446744073709551615, \"float\": 2.25}"
+      ],
+      [
+        "odd",
+        "",
+        "{\"i\": 0, \"touched\": true}"
+      ],
+      [
+        "odd",
+        "with space",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd",
+        "ünï/cødé ☃",
+        "{\"i\": 2}"
+      ],
+      [
+        "odd",
+        "quote\"id",
+        "{\"i\": 3}"
+      ],
+      [
+        "odd",
+        "back\\slash",
+        "{\"i\": 5}"
+      ],
+      [
+        "odd",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "{\"i\": 6}"
+      ],
+      [
+        "odd2",
+        "",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "with space",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "ünï/cødé ☃",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "quote\"id",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "it's",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "back\\slash",
+        "{\"i\": 1}"
+      ],
+      [
+        "odd2",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "{\"i\": 1}"
+      ],
+      [
+        "sysk",
+        "sys-i",
+        "{\"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 4, \"sys_backfilled\": true}"
+      ],
+      [
+        "sysk",
+        "sys-p",
+        "{\"name\": \"again\", \"row_version\": 8}"
+      ],
+      [
+        "sysk",
+        "sys-m",
+        "{\"name\": \"m\", \"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
+      ],
+      [
+        "sysk",
+        "sys-c",
+        "{\"name\": \"c\", \"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
+      ],
+      [
+        "sysk",
+        "sys-a",
+        "{\"row_version\": 2}"
+      ],
+      [
+        "sysk",
+        "sys-n",
+        "{\"created_at\": \"c\", \"created_by\": \"cb\", \"if_version\": 9, \"updated_at\": \"u\", \"updated_by\": \"ub\", \"row_version\": 3, \"sys_backfilled\": true}"
+      ],
+      [
+        "secret",
+        "k1",
+        "{\"other\": \"kept\", \"token\": \"sealed:2\"}"
+      ]
+    ],
+    "restored": 28,
+    "rows": [
+      [
+        "order",
+        "o1",
+        {
+          "created_at": "2026-01-01T00:00:00Z",
+          "nested": {
+            "a": [
+              1,
+              2,
+              {
+                "b": null
+              }
+            ],
+            "ü": "ñ"
+          },
+          "note": "x",
+          "number": "SO-1",
+          "row_version": 7,
+          "state": "closed",
+          "sys_backfilled": true,
+          "total": 120,
+          "updated_by": "someone"
+        }
+      ],
+      [
+        "line",
+        "l1",
+        {
+          "order": "o1",
+          "qty": 1
+        }
+      ],
+      [
+        "line",
+        "l2",
+        {
+          "order": "o1",
+          "qty": 2
+        }
+      ],
+      [
+        "stock",
+        "s1",
+        {
+          "qty": 8,
+          "sku": "S-1"
+        }
+      ],
+      [
+        "stock",
+        "s9",
+        {
+          "qty": 1,
+          "sku": "Z"
+        }
+      ],
+      [
+        "order",
+        "o3",
+        {
+          "n": 2,
+          "number": "SO-3b"
+        }
+      ],
+      [
+        "num",
+        "n1",
+        {
+          "big": 9007199254740993,
+          "float": 3.75,
+          "huge": 1.5e+300,
+          "max": 9223372036854775807,
+          "min": -9223372036854775808,
+          "neg": -0.25,
+          "tenth": 0.1,
+          "tiny": 1e-7,
+          "umax": 18446744073709551615,
+          "zero": 0
+        }
+      ],
+      [
+        "num",
+        "n2",
+        {
+          "big": 9007199254740993,
+          "float": 2.25,
+          "umax": 18446744073709551615
+        }
+      ],
+      [
+        "odd",
+        "",
+        {
+          "i": 0,
+          "touched": true
+        }
+      ],
+      [
+        "odd",
+        "with space",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd",
+        "ünï/cødé ☃",
+        {
+          "i": 2
+        }
+      ],
+      [
+        "odd",
+        "quote\"id",
+        {
+          "i": 3
+        }
+      ],
+      [
+        "odd",
+        "back\\slash",
+        {
+          "i": 5
+        }
+      ],
+      [
+        "odd",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        {
+          "i": 6
+        }
+      ],
+      [
+        "odd2",
+        "",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "with space",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "ünï/cødé ☃",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "quote\"id",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "it's",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "back\\slash",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "sysk",
+        "sys-i",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "row_version": 4,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-p",
+        {
+          "name": "again",
+          "row_version": 8
+        }
+      ],
+      [
+        "sysk",
+        "sys-m",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "name": "m",
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-c",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "name": "c",
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-a",
+        {
+          "row_version": 2
+        }
+      ],
+      [
+        "sysk",
+        "sys-n",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "secret",
+        "k1",
+        {
+          "other": "kept",
+          "token": "sealed:2"
+        }
+      ]
+    ],
+    "total_after_restore": 28,
+    "trace": [
+      "ok ()",
+      "refused",
+      "ok ()",
+      "ok true",
+      "ok false",
+      "ok true",
+      "ok true",
+      "ok false",
+      "ok ()",
+      "refused",
+      "ok false",
+      "ok ()",
+      "stale expect: conflict 3 the record changed",
+      "stale expect: unchanged true",
+      "row_version expect: conflict 3 the record changed",
+      "row_version expect: unchanged true",
+      "below the minimum: conflict 3 below the minimum",
+      "below the minimum: unchanged true",
+      "above the maximum: conflict 3 above the maximum",
+      "above the maximum: unchanged true",
+      "overflow: conflict 3 overflow",
+      "overflow: unchanged true",
+      "not an integer: conflict 3 the field is not an integer",
+      "not an integer: unchanged true",
+      "missing counter: conflict 3 no such record",
+      "missing counter: unchanged true",
+      "merge missing: conflict 3 no such record",
+      "merge missing: unchanged true",
+      "patch missing: conflict 3 no such record",
+      "patch missing: unchanged true",
+      "delete missing: conflict 3 no such record",
+      "delete missing: unchanged true",
+      "insert existing: conflict 3 already exists",
+      "insert existing: unchanged true",
+      "refused",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok true",
+      "ok true",
+      "ok true",
+      "ok ()",
+      "conflict 0 the record changed",
+      "ok ()",
+      "ok true",
+      "ok ()",
+      "ok 0",
+      "ok 1",
+      "ok [\"s1\"]",
+      "ok 2",
+      "ok 0",
+      "ok 28"
+    ]
+  },
+  "sqlite": {
+    "raw_after_restore": [
+      [
+        "order",
+        "o1",
+        "{\"created_at\":\"2026-01-01T00:00:00Z\",\"nested\":{\"a\":[1,2,{\"b\":null}],\"ü\":\"ñ\"},\"note\":\"x\",\"number\":\"SO-1\",\"row_version\":7,\"state\":\"closed\",\"sys_backfilled\":true,\"total\":120,\"updated_by\":\"someone\"}"
+      ],
+      [
+        "line",
+        "l1",
+        "{\"order\":\"o1\",\"qty\":1}"
+      ],
+      [
+        "line",
+        "l2",
+        "{\"order\":\"o1\",\"qty\":2}"
+      ],
+      [
+        "stock",
+        "s1",
+        "{\"qty\":8,\"sku\":\"S-1\"}"
+      ],
+      [
+        "stock",
+        "s9",
+        "{\"qty\":1,\"sku\":\"Z\"}"
+      ],
+      [
+        "order",
+        "o3",
+        "{\"n\":2,\"number\":\"SO-3b\"}"
+      ],
+      [
+        "num",
+        "n1",
+        "{\"big\":9007199254740993,\"float\":3.75,\"huge\":1.5e+300,\"max\":9223372036854775807,\"min\":-9223372036854775808,\"neg\":-0.25,\"tenth\":0.1,\"tiny\":1e-7,\"umax\":18446744073709551615,\"zero\":0}"
+      ],
+      [
+        "num",
+        "n2",
+        "{\"big\":9007199254740993,\"float\":2.25,\"umax\":18446744073709551615}"
+      ],
+      [
+        "odd",
+        "",
+        "{\"i\":0,\"touched\":true}"
+      ],
+      [
+        "odd",
+        "with space",
+        "{\"i\":1}"
+      ],
+      [
+        "odd",
+        "ünï/cødé ☃",
+        "{\"i\":2}"
+      ],
+      [
+        "odd",
+        "quote\"id",
+        "{\"i\":3}"
+      ],
+      [
+        "odd",
+        "back\\slash",
+        "{\"i\":5}"
+      ],
+      [
+        "odd",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "{\"i\":6}"
+      ],
+      [
+        "odd2",
+        "",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "with space",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "ünï/cødé ☃",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "quote\"id",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "it's",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "back\\slash",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "{\"i\":1}"
+      ],
+      [
+        "sysk",
+        "sys-i",
+        "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"row_version\":4,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
+      ],
+      [
+        "sysk",
+        "sys-p",
+        "{\"name\":\"again\",\"row_version\":8}"
+      ],
+      [
+        "sysk",
+        "sys-m",
+        "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"name\":\"m\",\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
+      ],
+      [
+        "sysk",
+        "sys-c",
+        "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"name\":\"c\",\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
+      ],
+      [
+        "sysk",
+        "sys-a",
+        "{\"row_version\":2}"
+      ],
+      [
+        "sysk",
+        "sys-n",
+        "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
+      ],
+      [
+        "secret",
+        "k1",
+        "{\"other\":\"kept\",\"token\":\"sealed:2\"}"
+      ]
+    ],
+    "raw_before_restore": [
+      [
+        "order",
+        "o1",
+        "{\"created_at\":\"2026-01-01T00:00:00Z\",\"nested\":{\"a\":[1,2,{\"b\":null}],\"ü\":\"ñ\"},\"note\":\"x\",\"number\":\"SO-1\",\"row_version\":7,\"state\":\"closed\",\"sys_backfilled\":true,\"total\":120,\"updated_by\":\"someone\"}"
+      ],
+      [
+        "line",
+        "l1",
+        "{\"order\":\"o1\",\"qty\":1}"
+      ],
+      [
+        "line",
+        "l2",
+        "{\"order\":\"o1\",\"qty\":2}"
+      ],
+      [
+        "stock",
+        "s1",
+        "{\"qty\":8,\"sku\":\"S-1\"}"
+      ],
+      [
+        "stock",
+        "s9",
+        "{\"qty\":1,\"sku\":\"Z\"}"
+      ],
+      [
+        "order",
+        "o3",
+        "{\"n\":2,\"number\":\"SO-3b\"}"
+      ],
+      [
+        "num",
+        "n1",
+        "{\"big\":9007199254740993,\"float\":3.75,\"huge\":1.5e+300,\"max\":9223372036854775807,\"min\":-9223372036854775808,\"neg\":-0.25,\"tenth\":0.1,\"tiny\":1e-7,\"umax\":18446744073709551615,\"zero\":0}"
+      ],
+      [
+        "num",
+        "n2",
+        "{\"big\":9007199254740993,\"float\":2.25,\"umax\":18446744073709551615}"
+      ],
+      [
+        "odd",
+        "",
+        "{\"i\":0,\"touched\":true}"
+      ],
+      [
+        "odd",
+        "with space",
+        "{\"i\":1}"
+      ],
+      [
+        "odd",
+        "ünï/cødé ☃",
+        "{\"i\":2}"
+      ],
+      [
+        "odd",
+        "quote\"id",
+        "{\"i\":3}"
+      ],
+      [
+        "odd",
+        "back\\slash",
+        "{\"i\":5}"
+      ],
+      [
+        "odd",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "{\"i\":6}"
+      ],
+      [
+        "odd2",
+        "",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "with space",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "ünï/cødé ☃",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "quote\"id",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "it's",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "back\\slash",
+        "{\"i\":1}"
+      ],
+      [
+        "odd2",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "{\"i\":1}"
+      ],
+      [
+        "sysk",
+        "sys-i",
+        "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"row_version\":4,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
+      ],
+      [
+        "sysk",
+        "sys-p",
+        "{\"name\":\"again\",\"row_version\":8}"
+      ],
+      [
+        "sysk",
+        "sys-m",
+        "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"name\":\"m\",\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
+      ],
+      [
+        "sysk",
+        "sys-c",
+        "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"name\":\"c\",\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
+      ],
+      [
+        "sysk",
+        "sys-a",
+        "{\"row_version\":2}"
+      ],
+      [
+        "sysk",
+        "sys-n",
+        "{\"created_at\":\"c\",\"created_by\":\"cb\",\"if_version\":9,\"row_version\":3,\"sys_backfilled\":true,\"updated_at\":\"u\",\"updated_by\":\"ub\"}"
+      ],
+      [
+        "secret",
+        "k1",
+        "{\"other\":\"kept\",\"token\":\"sealed:2\"}"
+      ]
+    ],
+    "restored": 28,
+    "rows": [
+      [
+        "order",
+        "o1",
+        {
+          "created_at": "2026-01-01T00:00:00Z",
+          "nested": {
+            "a": [
+              1,
+              2,
+              {
+                "b": null
+              }
+            ],
+            "ü": "ñ"
+          },
+          "note": "x",
+          "number": "SO-1",
+          "row_version": 7,
+          "state": "closed",
+          "sys_backfilled": true,
+          "total": 120,
+          "updated_by": "someone"
+        }
+      ],
+      [
+        "line",
+        "l1",
+        {
+          "order": "o1",
+          "qty": 1
+        }
+      ],
+      [
+        "line",
+        "l2",
+        {
+          "order": "o1",
+          "qty": 2
+        }
+      ],
+      [
+        "stock",
+        "s1",
+        {
+          "qty": 8,
+          "sku": "S-1"
+        }
+      ],
+      [
+        "stock",
+        "s9",
+        {
+          "qty": 1,
+          "sku": "Z"
+        }
+      ],
+      [
+        "order",
+        "o3",
+        {
+          "n": 2,
+          "number": "SO-3b"
+        }
+      ],
+      [
+        "num",
+        "n1",
+        {
+          "big": 9007199254740993,
+          "float": 3.75,
+          "huge": 1.5e+300,
+          "max": 9223372036854775807,
+          "min": -9223372036854775808,
+          "neg": -0.25,
+          "tenth": 0.1,
+          "tiny": 1e-7,
+          "umax": 18446744073709551615,
+          "zero": 0
+        }
+      ],
+      [
+        "num",
+        "n2",
+        {
+          "big": 9007199254740993,
+          "float": 2.25,
+          "umax": 18446744073709551615
+        }
+      ],
+      [
+        "odd",
+        "",
+        {
+          "i": 0,
+          "touched": true
+        }
+      ],
+      [
+        "odd",
+        "with space",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd",
+        "ünï/cødé ☃",
+        {
+          "i": 2
+        }
+      ],
+      [
+        "odd",
+        "quote\"id",
+        {
+          "i": 3
+        }
+      ],
+      [
+        "odd",
+        "back\\slash",
+        {
+          "i": 5
+        }
+      ],
+      [
+        "odd",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        {
+          "i": 6
+        }
+      ],
+      [
+        "odd2",
+        "",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "with space",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "ünï/cødé ☃",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "quote\"id",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "it's",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "back\\slash",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "odd2",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        {
+          "i": 1
+        }
+      ],
+      [
+        "sysk",
+        "sys-i",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "row_version": 4,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-p",
+        {
+          "name": "again",
+          "row_version": 8
+        }
+      ],
+      [
+        "sysk",
+        "sys-m",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "name": "m",
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-c",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "name": "c",
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "sysk",
+        "sys-a",
+        {
+          "row_version": 2
+        }
+      ],
+      [
+        "sysk",
+        "sys-n",
+        {
+          "created_at": "c",
+          "created_by": "cb",
+          "if_version": 9,
+          "row_version": 3,
+          "sys_backfilled": true,
+          "updated_at": "u",
+          "updated_by": "ub"
+        }
+      ],
+      [
+        "secret",
+        "k1",
+        {
+          "other": "kept",
+          "token": "sealed:2"
+        }
+      ]
+    ],
+    "total_after_restore": 28,
+    "trace": [
+      "ok ()",
+      "refused",
+      "ok ()",
+      "ok true",
+      "ok false",
+      "ok true",
+      "ok true",
+      "ok false",
+      "ok ()",
+      "refused",
+      "ok false",
+      "ok ()",
+      "stale expect: conflict 3 the record changed",
+      "stale expect: unchanged true",
+      "row_version expect: conflict 3 the record changed",
+      "row_version expect: unchanged true",
+      "below the minimum: conflict 3 below the minimum",
+      "below the minimum: unchanged true",
+      "above the maximum: conflict 3 above the maximum",
+      "above the maximum: unchanged true",
+      "overflow: conflict 3 overflow",
+      "overflow: unchanged true",
+      "not an integer: conflict 3 the field is not an integer",
+      "not an integer: unchanged true",
+      "missing counter: conflict 3 no such record",
+      "missing counter: unchanged true",
+      "merge missing: conflict 3 no such record",
+      "merge missing: unchanged true",
+      "patch missing: conflict 3 no such record",
+      "patch missing: unchanged true",
+      "delete missing: conflict 3 no such record",
+      "delete missing: unchanged true",
+      "insert existing: conflict 3 already exists",
+      "insert existing: unchanged true",
+      "refused",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok ()",
+      "ok true",
+      "ok true",
+      "ok true",
+      "ok ()",
+      "conflict 0 the record changed",
+      "ok ()",
+      "ok true",
+      "ok ()",
+      "ok 0",
+      "ok 1",
+      "ok [\"s1\"]",
+      "ok 2",
+      "ok 0",
+      "ok 28"
+    ]
+  }
+}

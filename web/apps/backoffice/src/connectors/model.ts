@@ -48,7 +48,6 @@ export type Connection = Row & {
   field_allowlist: string;
   policy: string;
   retention_days: number;
-  created_at: string;
   last_sync_at: string;
   last_error: string;
 };

@@ -349,7 +349,7 @@ description = "Anmärkningar som inte hindrar något, till exempel en proprietä
 label = "Ändringslogg"
 description = "Versionsanteckningar för den här versionen"
 
-[labels.sv.model.module.field.updated_at]
+[labels.sv.model.module.field.upgraded_at]
 label = "Uppdaterad den"
 description = "När den senast uppdaterades (Unix-sekunder); tom om aldrig"
 

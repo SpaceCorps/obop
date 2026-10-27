@@ -11,7 +11,7 @@ use shared::{Pending, Plans};
 use obop_masking::mode_for;
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
 use obop_registry::labels::Texts;
-use obop_registry::{FieldDef, GENERATED_COMMANDS, Module, Transition, Translations};
+use obop_registry::{FieldDef, Module, Transition, Translations};
 use obop_types::MaskMode;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -488,7 +488,7 @@ impl Dispatcher {
                     .filter(|(id, c)| {
                         c.model == name.as_str()
                             && id.starts_with(&format!("{name}."))
-                            && !GENERATED_COMMANDS.contains(&&id[name.len() + 1..])
+                            && !m.def.is_generated_command(&id[name.len() + 1..])
                             && visible(c)
                     })
                     .map(|(id, c)| {
@@ -1162,8 +1162,14 @@ impl Dispatcher {
                     let Some(def) = defs.as_ref().and_then(|f| f.iter().find(|f| f.name == k))
                     else {
                         // Unclassified output is withheld: the gate guarantees declared fields only.
+                        // A key with the name of a system field (D75) on a model that has no
+                        // definition for it is what a field of that name left behind in records
+                        // written before the model dropped it (`connection.created_at`): it is
+                        // withheld too, but nobody was denied it, so it is not reported as denied.
                         if k != "id" {
-                            denied.push(format!("{model}.{k}"));
+                            if !obop_registry::is_system_name(&k) {
+                                denied.push(format!("{model}.{k}"));
+                            }
                             continue;
                         }
                         shaped.insert(k, v);
@@ -1601,5 +1607,7 @@ mod engine_tests;
 mod keyexpr_parity;
 #[cfg(test)]
 mod kinds_tests;
+#[cfg(test)]
+mod sysfields_tests;
 #[cfg(test)]
 mod tests;

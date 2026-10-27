@@ -282,10 +282,6 @@ description = "Máximo de registros por día"
 label = "Días de conservación"
 description = "Días que se conservan los registros de flujos y las ejecuciones"
 
-[labels.es.model.connection.field.created_at]
-label = "Creada el"
-description = "Cuándo se creó la conexión"
-
 [labels.es.model.connection.field.last_sync_at]
 label = "Última ejecución el"
 description = "Cuándo se ejecutó la conexión por última vez"

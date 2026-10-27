@@ -109,7 +109,7 @@ export type Row = {
   installed_by?: string | null;
   /** Release notes of the installed version (D63). */
   changelog?: string;
-  updated_at?: number | null;
+  upgraded_at?: number | null;
   /** What the version on offer would do here: notes, fit, blockers and data changes. */
   update_changelog?: string;
   update_compatible?: boolean;

@@ -349,7 +349,7 @@ description = "Remarques qui n'empêchent rien, par exemple une licence proprié
 label = "Journal des modifications"
 description = "Notes de version de cette version"
 
-[labels.fr.model.module.field.updated_at]
+[labels.fr.model.module.field.upgraded_at]
 label = "Mis à jour le"
 description = "Date de la dernière mise à jour (secondes Unix) ; vide si jamais"
 

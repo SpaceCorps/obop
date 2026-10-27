@@ -605,6 +605,10 @@ fn rename_and_set_default_run_in_one_batch_and_rename_rolls_back() {
         .unwrap();
     assert_eq!(get(row, "rollback_available"), &Value::Bool(true));
     assert_eq!(text(get(row, "rollback_version")), "0.1.0");
+    // The time of the update is `upgraded_at`: `updated_at` is a system field of every record
+    // (D75) and the platform's own module record must not use it. A real time, in seconds.
+    assert!(matches!(get(row, "upgraded_at"), Value::Int(t) if *t > 1_600_000_000));
+    assert!(!matches!(row, Value::Map(m) if m.contains_key("updated_at")));
     let back = call(&d, &admin(), "module.rollback", by_id("upd"))
         .unwrap()
         .value;

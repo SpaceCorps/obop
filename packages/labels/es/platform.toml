@@ -349,7 +349,7 @@ description = "Notas que no impiden nada, por ejemplo una licencia propietaria (
 label = "Registro de cambios"
 description = "Notas de la versión de esta versión"
 
-[labels.es.model.module.field.updated_at]
+[labels.es.model.module.field.upgraded_at]
 label = "Actualizado el"
 description = "Cuándo se actualizó por última vez (segundos Unix); vacío si nunca"
 

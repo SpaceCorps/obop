@@ -282,10 +282,6 @@ description = "Högsta antal poster per dag"
 label = "Lagringsdagar"
 description = "Antal dagar som flödesloggar och körningar sparas"
 
-[labels.sv.model.connection.field.created_at]
-label = "Skapad"
-description = "När anslutningen skapades"
-
 [labels.sv.model.connection.field.last_sync_at]
 label = "Senast körd"
 description = "När anslutningen senast kördes"

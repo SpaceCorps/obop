@@ -2,8 +2,8 @@
 //! behind when storage fails half way.
 
 use obop_storage::{
-    ApplyError, Backend, Fields, LockGuard, Op, Result, Row, RowSink, Swap, Track, Tracking,
-    WriteCtx,
+    ApplyError, Backend, Backfilled, ChangeRow, Fields, HistoryQuery, LockGuard, Op, Result, Row,
+    RowSink, Sealer, Swap, Track, Tracking, WriteCtx,
 };
 use serde_json::Value as J;
 use std::sync::Arc;
@@ -137,6 +137,24 @@ impl Backend for Flaky {
     }
     fn tracked_models(&self) -> Vec<String> {
         self.inner.tracked_models()
+    }
+    fn set_sealer(&self, sealer: Arc<dyn Sealer>) {
+        self.inner.set_sealer(sealer)
+    }
+    fn sealer(&self) -> Option<Arc<dyn Sealer>> {
+        self.inner.sealer()
+    }
+    fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
+        self.refused(&q.model)?;
+        self.inner.history(q)
+    }
+    fn backfill_sysfields(
+        &self,
+        models: &[String],
+        fallback_at: &str,
+        batch: usize,
+    ) -> Result<Backfilled> {
+        self.inner.backfill_sysfields(models, fallback_at, batch)
     }
     fn scan(
         &self,

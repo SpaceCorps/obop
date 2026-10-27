@@ -2,6 +2,7 @@
 //! voucher's last use, a state that changes once). Each backend runs [`run_ops`] inside its own
 //! transaction (a lock in memory, `BEGIN IMMEDIATE` in SQLite, row locks in PostgreSQL).
 
+use crate::sysfields::{ChangeRow, Stage};
 use crate::tracked::Tracking;
 use crate::{Fields, Op, Result, WriteCtx};
 use serde_json::Value as J;
@@ -38,27 +39,87 @@ pub(crate) trait TxView {
     fn tx_context(&mut self, _json: &str) -> Result<()> {
         Ok(())
     }
+    /// The first read of a record of a tracked model in a transaction (D75): the record, locked.
+    /// A backend that can learn the clock in the same statement may do so here and answer from it
+    /// in `tx_now`; none does yet (PostgreSQL has this default and the clock of the process until
+    /// its history store is written).
+    fn tx_get_clock(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+        self.tx_get(model, id)
+    }
+    /// The instant a stamp takes, in microseconds since 1970: later at every call. A backend with
+    /// a clock of its own answers with it; the default is the clock of the process.
+    fn tx_now(&mut self) -> Result<i64> {
+        Ok(crate::sysfields::process_micros())
+    }
+    /// Append entries to the change history, in order, in this transaction. A backend that keeps
+    /// no history refuses, so that a model that records history cannot lose it unnoticed.
+    fn tx_history(&mut self, rows: &[ChangeRow]) -> Result<()> {
+        let _ = rows;
+        Err("this storage backend keeps no change history".into())
+    }
+    /// Erase the values from the entries of the history of a record, except the fields in `keep`,
+    /// and append the entry that says it was done (`at` is microseconds since 1970). Returns how
+    /// many entries were rewritten.
+    #[allow(clippy::too_many_arguments)]
+    fn tx_scrub(
+        &mut self,
+        model: &str,
+        id: &str,
+        keep: &[String],
+        actor: &str,
+        via: &Fields,
+        row_version: i64,
+        at: i64,
+    ) -> Result<u64> {
+        let _ = (model, id, keep, actor, via, row_version, at);
+        Err("this storage backend keeps no change history".into())
+    }
 }
 
 /// Run `ops` in the transaction `tx`. `ctx` says who writes and with which tickets; `tracking`
-/// says which models keep system fields and history. Neither changes what a step does yet: the
-/// record layer that uses them (D75) builds on this signature, and the tickets of `ctx` reach
-/// the database before the first step (D77).
+/// says which models keep system fields and history (D75): a step on a model that is not tracked
+/// does exactly what it always did, a step on a tracked one goes through the planner of
+/// `sysfields`, which stamps the record, compares it with what it was and writes the history. The
+/// tickets of `ctx` reach the database before the first step (D77).
 pub(crate) fn run_ops(
     tx: &mut dyn TxView,
     ops: &[Op],
     ctx: &WriteCtx,
-    _tracking: &Tracking,
+    tracking: &Tracking,
 ) -> std::result::Result<(), ApplyError> {
     if let Some(setting) = ctx.setting() {
         tx.tx_context(&setting).map_err(ApplyError::Storage)?;
     }
+    let erases = ops.iter().any(|o| matches!(o, Op::EraseHistory { .. }));
+    // The common case, no model tracked and nothing to erase, keeps no state at all.
+    let mut stage = (!tracking.is_empty() || erases).then(|| Stage::new(ctx, tracking));
+    for (index, op) in ops.iter().enumerate() {
+        if let Some(stage) = stage.as_mut() {
+            if let Some(track) = stage.track_of(op.model()) {
+                stage.op(tx, index, op, &track)?;
+                continue;
+            }
+            if let Op::EraseHistory { model, id } = op {
+                stage.queue_erase(model, id);
+                continue;
+            }
+        }
+        plain(tx, index, op)?;
+    }
+    match stage {
+        Some(stage) => stage.finish(tx),
+        None => Ok(()),
+    }
+}
+
+/// One step on a record of a model that is not tracked.
+fn plain(tx: &mut dyn TxView, index: usize, op: &Op) -> std::result::Result<(), ApplyError> {
     let conflict = |index: usize, reason: &str| ApplyError::Conflict {
         index,
         reason: reason.into(),
     };
     let st = ApplyError::Storage;
-    for (index, op) in ops.iter().enumerate() {
+    {
         match op {
             Op::Insert { model, id, fields } => {
                 if tx.tx_get(model, id).map_err(st)?.is_some() {
@@ -141,6 +202,12 @@ pub(crate) fn run_ops(
                     return Err(conflict(index, "no such record"));
                 }
                 tx.tx_delete(model, id).map_err(st)?;
+            }
+            // `run_ops` takes these before this function, whenever the batch has one.
+            Op::EraseHistory { .. } => {
+                return Err(ApplyError::Storage(
+                    "an erasure of history reached the plain path".into(),
+                ));
             }
         }
     }

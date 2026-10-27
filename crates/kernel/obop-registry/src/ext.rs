@@ -16,12 +16,24 @@ pub struct ModelExt {
     pub indexes: Vec<IndexDef>,
     /// Database-enforced immutability (D77); none: the model is not guarded.
     pub guard: Option<Guard>,
+    /// The fields of the model include the platform's system fields (D75). Set by
+    /// `ModelDef::with_system_fields` and by nothing else: a model whose own declared field has a
+    /// reserved name (a module installed before the name was reserved) never has it, so that
+    /// field stays an ordinary, writable field.
+    pub system_fields: bool,
 }
 
-/// Record history of one model (D75). The default is full history, kept for ever.
+/// Record history of one model (D75). A model that does not turn it off keeps the full history,
+/// for ever.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct History {
-    /// Why the model keeps no history; `None` means it keeps the full history.
+    /// Whether the platform keeps history for this model and offers the generated command
+    /// `<model>.history`. `false` in `History::default()`, and no manifest key sets it: the
+    /// command layer switches it on for the models it records history for, which it does not yet
+    /// (the first slice of D75 only prepares the storage), so no model has the command yet.
+    pub enabled: bool,
+    /// Why the model keeps no history (`history = "none"` and `history_reason` in the manifest);
+    /// `None` means it keeps the full history.
     pub off_reason: Option<&'static str>,
     /// Days to keep history entries; `None` keeps them for ever.
     pub retention_days: Option<u32>,

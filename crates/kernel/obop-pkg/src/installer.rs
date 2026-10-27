@@ -81,8 +81,10 @@ pub struct PackageInfo {
     pub changelog: String,
     /// The version an update replaced, kept so the update can be undone.
     pub rollback: Option<RollbackInfo>,
-    /// Unix seconds of the last update, if there was one.
-    pub updated_at: Option<u64>,
+    /// Unix seconds of the last update, if there was one. The stored package record keeps it under
+    /// the key `updated_at` (it is not a model's record, so the name is free there); the module
+    /// list shows it as `upgraded_at`, because `updated_at` is a system field of every record (D75).
+    pub upgraded_at: Option<u64>,
 }
 
 /// What a package remembers of the version before its last update (D63).
@@ -232,7 +234,7 @@ impl Installer {
             let Some(om) = old
                 .get("manifest")
                 .and_then(J::as_str)
-                .and_then(|t| Manifest::parse(t).ok())
+                .and_then(|t| Manifest::parse_installed(t).ok())
             else {
                 continue;
             };
@@ -302,7 +304,9 @@ impl Installer {
     }
 
     fn info(m: &Manifest, source: &str, at: Option<u64>, by: Option<String>) -> PackageInfo {
-        let module = m.to_module().unwrap_or_default();
+        // A summary of a package that may be installed already: a name that is reserved now
+        // must not empty the contents list of a module that was fine when it was installed.
+        let module = m.to_module_installed().unwrap_or_default();
         PackageInfo {
             id: m.module.id.clone(),
             name: m.module.name.clone(),
@@ -317,7 +321,7 @@ impl Installer {
             module,
             changelog: m.module.changelog.clone(),
             rollback: None,
-            updated_at: None,
+            upgraded_at: None,
         }
     }
 
@@ -329,7 +333,7 @@ impl Installer {
             f.get("installed_at").and_then(J::as_u64),
             f.get("installed_by").and_then(J::as_str).map(String::from),
         );
-        p.updated_at = f.get("updated_at").and_then(J::as_u64);
+        p.upgraded_at = f.get("updated_at").and_then(J::as_u64);
         p.rollback = f
             .get("previous_version")
             .and_then(J::as_str)
@@ -376,7 +380,7 @@ impl Installer {
             module: m.clone(),
             changelog: String::new(),
             rollback: None,
-            updated_at: None,
+            upgraded_at: None,
         }
     }
 
@@ -390,7 +394,7 @@ impl Installer {
             if let Some(m) = f
                 .get("manifest")
                 .and_then(J::as_str)
-                .and_then(|t| Manifest::parse(t).ok())
+                .and_then(|t| Manifest::parse_installed(t).ok())
             {
                 v.push(Self::info_stored(&m, &f));
             }
@@ -405,7 +409,7 @@ impl Installer {
             .filter_map(|(id, f)| {
                 f.get("manifest")
                     .and_then(J::as_str)
-                    .and_then(|t| Manifest::parse(t).ok())
+                    .and_then(|t| Manifest::parse_installed(t).ok())
                     .map(|m| (id, m))
             })
             .collect()
@@ -415,7 +419,8 @@ impl Installer {
     /// When the bundled catalog offers the same version with labels, they are added in memory (the
     /// stored text is left alone); a mismatch that fails validation keeps the stored manifest.
     fn with_bundled_labels(text: &str, source: &str) -> Result<Manifest, String> {
-        let m = Manifest::parse(text)?;
+        // The text is that of an installed package (every caller reads it from the store).
+        let m = Manifest::parse_installed(text)?;
         if source == "marketplace" && m.labels.is_empty() {
             let labels = crate::marketplace::Bundled::labels_text(&m.module.id);
             let bundled_same = Bundled
@@ -425,7 +430,7 @@ impl Installer {
                 .is_some_and(|b| b.module.version == m.module.version);
             if bundled_same
                 && !labels.is_empty()
-                && let Ok(with) = Manifest::parse(&Manifest::combine(text, &labels))
+                && let Ok(with) = Manifest::parse_installed(&Manifest::combine(text, &labels))
             {
                 return Ok(with);
             }
@@ -921,7 +926,8 @@ impl Installer {
                     manifest.module.version
                 ));
             }
-            let om = Manifest::parse(old_text).map_err(|e| format!("the installed copy: {e}"))?;
+            let om = Manifest::parse_installed(old_text)
+                .map_err(|e| format!("the installed copy: {e}"))?;
             let refused = std::cell::RefCell::new(None::<String>);
             let count = |m: &str| match self.backend.count(m) {
                 Ok(n) => n,
@@ -1106,7 +1112,10 @@ impl Installer {
             .and_then(J::as_str)
             .ok_or_else(|| "no manifest".to_string())
             .and_then(|t| Self::with_bundled_labels(t, source))
-            .and_then(|m| m.to_module().and_then(|module| self.register(&m, &module)));
+            .and_then(|m| {
+                m.to_module_installed()
+                    .and_then(|module| self.register(&m, &module))
+            });
         if let Err(e) = r {
             eprintln!("could not restore module {id}: {e}");
         }
@@ -1167,7 +1176,8 @@ impl Installer {
                 irreversible.join("; ")
             ));
         }
-        let prev = Manifest::parse(prev_text).map_err(|e| format!("the earlier copy: {e}"))?;
+        let prev =
+            Manifest::parse_installed(prev_text).map_err(|e| format!("the earlier copy: {e}"))?;
         let core = self.core_version();
         let pv = prev.semver();
         if !prev.core_req().matches(&core) {
@@ -1235,7 +1245,8 @@ impl Installer {
             .map(|a| a.iter().filter_map(migrate::Step::from_json).collect())
             .unwrap_or_default();
         let prev = Self::with_bundled_labels(prev_text, &source).map_err(Failure::Refused)?;
-        let prev_module = prev.to_module().map_err(Failure::Refused)?;
+        // The version being put back was installed once: it may have a name that is reserved now.
+        let prev_module = prev.to_module_installed().map_err(Failure::Refused)?;
         let d = self.d().map_err(Failure::Refused)?;
         let receipt = self
             .run_gate(
@@ -1338,7 +1349,7 @@ impl Installer {
             .filter_map(|(id, f)| {
                 f.get("manifest")
                     .and_then(J::as_str)
-                    .and_then(|t| Manifest::parse(t).ok())
+                    .and_then(|t| Manifest::parse_installed(t).ok())
                     .map(|m| (id, m))
             })
             .collect();
@@ -1435,7 +1446,10 @@ impl Installer {
                 .and_then(J::as_str)
                 .ok_or_else(|| "no manifest".to_string())
                 .and_then(|t| Self::with_bundled_labels(t, source))
-                .and_then(|m| m.to_module().and_then(|module| self.register(&m, &module)));
+                .and_then(|m| {
+                    m.to_module_installed()
+                        .and_then(|module| self.register(&m, &module))
+                });
             if let Err(e) = r {
                 failed.push((id, e));
             }
@@ -1783,8 +1797,8 @@ impl Installer {
         views::put_meta(&mut m, &p.meta, &p.id, &p.version, ctx);
         m.insert("changelog".into(), views::text(&p.changelog));
         m.insert(
-            "updated_at".into(),
-            p.updated_at.map_or(Value::Null, |t| Value::Int(t as i64)),
+            "upgraded_at".into(),
+            p.upgraded_at.map_or(Value::Null, |t| Value::Int(t as i64)),
         );
         let rb = p.rollback.as_ref();
         let rb_blocker = rb.and_then(|_| self.rollback_blocker(&p.id));
@@ -2143,8 +2157,8 @@ pub fn admin_module() -> Module {
         ),
         list("installed_by", "Who installed it"),
         list(
-            "updated_at",
-            "When it was last updated (Unix seconds); empty if never",
+            "upgraded_at",
+            "When it was last upgraded (Unix seconds); empty if never",
         ),
         list(
             "rollback_version",
@@ -3085,6 +3099,222 @@ mod tests {
         assert!(!d2.has_model("helpdesk_ticket"));
         assert!(inst2.load_installed().is_empty());
         assert!(d2.has_model("helpdesk_ticket"));
+    }
+
+    /// A package that declares a name the platform reserves later (D75): installing it is
+    /// refused, but one that was installed before is registered again at start and keeps its
+    /// field, until an upgrade has to rename it.
+    #[test]
+    fn a_package_installed_before_a_name_was_reserved_still_loads_and_its_upgrade_is_refused() {
+        let package = |version: &str, field: &str| {
+            format!(
+                r#"
+[module]
+id = "gadget"
+version = "{version}"
+name = "Gadget"
+description = "Gadgets"
+requires_core = "^0.2"
+
+[[model]]
+name = "gadget_item"
+description = "A gadget"
+read_group = "gadget.user"
+write_group = "gadget.manager"
+
+  [[model.field]]
+  name = "{field}"
+  description = "When the gadget was made"
+  class = "none"
+"#
+            )
+        };
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        // Installing it today is refused, and says what to use instead.
+        let e = inst
+            .install(&package("0.1.0", "created_at"), "upload", "root")
+            .unwrap_err();
+        assert!(
+            e.contains("`created_at`") && e.contains("`recorded_at`"),
+            "{e}"
+        );
+        assert!(!d.has_model("gadget_item"));
+        // An instance that has had it since before: the stored record, as the installer writes it.
+        let old = package("0.1.0", "created_at");
+        let record: Fields = [
+            ("manifest".to_string(), J::from(old.as_str())),
+            ("version".to_string(), J::from("0.1.0")),
+            ("source".to_string(), J::from("upload")),
+            ("installed_by".to_string(), J::from("root")),
+            ("installed_at".to_string(), J::from(1_700_000_000_u64)),
+        ]
+        .into_iter()
+        .collect();
+        store.backend().insert(TABLE, "gadget", &record).unwrap();
+        let (d2, inst2) = setup(&store);
+        assert!(inst2.load_installed().is_empty(), "it is registered again");
+        assert!(d2.has_model("gadget_item"));
+        // The Modules page still lists what it contains.
+        let listed = inst2.list();
+        let mine = listed.iter().find(|p| p.id == "gadget").unwrap();
+        assert_eq!(mine.module.models.len(), 1, "the contents are not emptied");
+        // The data it belongs to is writable with its own field: the name is not read-only there.
+        assert!(
+            !mine.module.models[0].is_system_field("created_at"),
+            "an installed package's own field stays its own"
+        );
+        // An upgrade that keeps the name is refused; renaming it lets the upgrade through.
+        let e = inst2
+            .install(&package("0.1.1", "created_at"), "upload", "root")
+            .unwrap_err();
+        assert!(e.contains("`created_at`"), "{e}");
+        let renamed = inst2
+            .install(&package("0.1.1", "recorded_at"), "upload", "root")
+            .unwrap();
+        assert_eq!(renamed.version, "0.1.1");
+    }
+
+    /// `history` became a generated command name (D75). A package that was installed with an
+    /// action of that name loads at start with its data reachable, shows the action, installing
+    /// or upgrading to a version that keeps the name is refused with the name to use, and rolling
+    /// back to the version that has it works.
+    #[test]
+    fn a_package_installed_with_an_action_called_history_keeps_working_until_it_is_renamed() {
+        let package = |version: &str, action: &str| {
+            format!(
+                r#"
+[module]
+id = "gadget"
+version = "{version}"
+name = "Gadget"
+description = "Gadgets"
+requires_core = "^0.2"
+
+[[model]]
+name = "gadget_item"
+description = "A gadget"
+read_group = "gadget.user"
+write_group = "gadget.manager"
+
+  [[model.field]]
+  name = "title"
+  description = "What it is"
+  class = "none"
+
+  [[model.field]]
+  name = "state"
+  description = "new or done"
+  class = "none"
+  kind = "select"
+  options = ["new", "done"]
+
+  [[model.action]]
+  name = "{action}"
+  description = "Mark the gadget done"
+  field = "state"
+  from = "new"
+  to = "done"
+"#
+            )
+        };
+        let mgr = Principal::user("mgr", &["gadget.manager", "gadget.user"]);
+        let old = package("0.1.0", "history");
+        // A fresh install of it is refused, and says what to call the action.
+        let (_d0, inst0) = setup(&Store::new());
+        let e = inst0.install(&old, "upload", "root").unwrap_err();
+        assert!(e.contains("bad action name \"history\""), "{e}");
+        assert!(e.contains("`show_history`"), "{e}");
+        // An instance that has had it since before: the stored record, as the installer writes it.
+        let record: Fields = [
+            ("manifest".to_string(), J::from(old.as_str())),
+            ("version".to_string(), J::from("0.1.0")),
+            ("source".to_string(), J::from("upload")),
+            ("installed_by".to_string(), J::from("root")),
+            ("installed_at".to_string(), J::from(1_700_000_000_u64)),
+        ]
+        .into_iter()
+        .collect();
+        let store = Store::new();
+        store.backend().insert(TABLE, "gadget", &record).unwrap();
+        let (d, inst) = setup(&store);
+        assert!(inst.load_installed().is_empty(), "it is registered again");
+        assert!(d.has_model("gadget_item"));
+        // The list, the dependency view and the summary all still know the package.
+        assert!(inst.list().iter().any(|p| p.id == "gadget"));
+        assert!(inst.installed_manifests().contains_key("gadget"));
+        // Its data is reachable, and the action is an action: it is on the surface and it works.
+        let made = call(
+            &d,
+            &mgr,
+            "gadget_item.create",
+            Value::map([("title", Value::text("lamp"))]),
+        )
+        .unwrap();
+        let id = id_of(&made);
+        let info = d.meta(Surface::Rest, &mgr);
+        let model = info
+            .iter()
+            .flat_map(|m| m.models.iter())
+            .find(|m| m.name == "gadget_item")
+            .expect("the model is in the metadata");
+        assert!(
+            model.actions.iter().any(|a| a.id == "gadget_item.history"),
+            "{:?}",
+            model.actions.iter().map(|a| &a.id).collect::<Vec<_>>()
+        );
+        let moved = call(&d, &mgr, "gadget_item.history", by_id(&id)).unwrap();
+        match &moved.value {
+            Value::Map(m) => assert_eq!(m["state"], Value::text("done")),
+            other => panic!("{other:?}"),
+        }
+        let listed = call(&d, &mgr, "gadget_item.list", Value::map([])).unwrap();
+        match &listed.value {
+            Value::List(rows) => assert_eq!(rows.len(), 1),
+            other => panic!("{other:?}"),
+        }
+        // An upgrade that keeps the name is refused, with the name to use; renaming lets it
+        // through; and the way back to the version that has the action works.
+        let e = inst
+            .install(&package("0.1.1", "history"), "upload", "root")
+            .unwrap_err();
+        assert!(e.contains("`show_history`"), "{e}");
+        assert_eq!(version_of_package(&inst, "gadget"), "0.1.0");
+        let up = inst
+            .install(&package("0.1.1", "show_history"), "upload", "root")
+            .unwrap();
+        assert_eq!(up.version, "0.1.1");
+        assert!(d.has_model("gadget_item"));
+        let back = call(&d, &admin(), "module.rollback", by_id("gadget")).unwrap();
+        match &back.value {
+            Value::Map(m) => assert_eq!(m["version"], Value::text("0.1.0")),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(version_of_package(&inst, "gadget"), "0.1.0");
+        let again = call(
+            &d,
+            &mgr,
+            "gadget_item.create",
+            Value::map([("title", Value::text("b"))]),
+        )
+        .unwrap();
+        let moved = call(&d, &mgr, "gadget_item.history", by_id(&id_of(&again))).unwrap();
+        match &moved.value {
+            Value::Map(m) => assert_eq!(m["state"], Value::text("done")),
+            other => panic!("{other:?}"),
+        }
+        // And a restart after the rollback still loads it.
+        let (d3, inst3) = setup(&store);
+        assert!(inst3.load_installed().is_empty());
+        assert!(d3.has_model("gadget_item"));
+    }
+
+    fn version_of_package(inst: &Installer, id: &str) -> String {
+        inst.list()
+            .into_iter()
+            .find(|p| p.id == id)
+            .map(|p| p.version)
+            .unwrap_or_default()
     }
 
     #[test]

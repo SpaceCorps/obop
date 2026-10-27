@@ -371,7 +371,6 @@ fn normalise(
             "owner_scope",
             "owner_user",
             "owner_groups",
-            "created_at",
             "credentials_hint",
             "last_sync_at",
             "last_error",
@@ -434,7 +433,6 @@ fn normalise(
         let mut groups: Vec<String> = p.groups.iter().filter(|g| p.allows(g)).cloned().collect();
         groups.sort();
         m.insert("owner_groups".into(), Value::text(&groups.join(",")));
-        m.insert("created_at".into(), Value::text(&iso(now())));
         m.entry("rate_limit_per_hour".into())
             .or_insert(Value::Int(DEFAULT_RATE_PER_HOUR));
         m.entry("volume_cap_per_day".into())

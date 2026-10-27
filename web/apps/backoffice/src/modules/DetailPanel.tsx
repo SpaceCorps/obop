@@ -561,9 +561,9 @@ function Versions({
           </h3>
           <p>
             {t("Version {version} is kept.", { version: row.rollback_version })}{" "}
-            {row.updated_at ? (
+            {row.upgraded_at ? (
               <span className="hint">
-                {fmt.dateOf(new Date(row.updated_at * 1000), {
+                {fmt.dateOf(new Date(row.upgraded_at * 1000), {
                   dateStyle: "medium",
                   timeStyle: "short",
                 })}

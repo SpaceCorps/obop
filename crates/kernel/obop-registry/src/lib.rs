@@ -423,8 +423,9 @@ pub struct ModelDef {
 }
 
 impl ModelDef {
-    /// Generated `get`, `list`, `search`, `create`, `bulk_create`, `update` and `delete`, followed
-    /// by the custom commands. The REST, MCP and CLI surfaces are derived from this list (D29, D41, D49).
+    /// Generated `get`, `list`, `search`, `create`, `bulk_create`, `update` and `delete` (and
+    /// `history` for a model whose history is on, see [`ModelDef::history_on`]), followed by the
+    /// custom commands. The REST, MCP and CLI surfaces are derived from this list (D29, D41, D49).
     pub fn all_commands(&self) -> Vec<CommandDef> {
         let crud = CommandDef::new;
         let create = crud("create", "Create a record", self.write_group);
@@ -457,8 +458,48 @@ impl ModelDef {
             )
             .approval(),
         ];
+        if self.history_on() {
+            v.push(crud(
+                "history",
+                "Read the change history of one record, newest first: who changed what and when (id, limit up to 200, after)",
+                self.read_group,
+            ));
+        }
         v.extend(self.commands.iter().cloned());
         v
+    }
+
+    /// Whether the platform keeps the change history of this model and so offers the generated
+    /// command `history`: the command layer has switched it on (`ext.history.enabled`; none does
+    /// yet), the package did not turn it off, and the model has no action of its own called
+    /// `history` (a package installed before the name was taken keeps its action, and so has no
+    /// generated command of that name).
+    pub fn history_on(&self) -> bool {
+        self.ext.history.enabled
+            && self.ext.history.off_reason.is_none()
+            && !self.commands.iter().any(|c| c.name == "history")
+    }
+
+    /// Whether `name` is a command the platform generates for this model: one of
+    /// [`GENERATED_COMMANDS`], except `history` on a model that declares an action of that name
+    /// itself (see [`ModelDef::history_on`]), which is that action.
+    pub fn is_generated_command(&self, name: &str) -> bool {
+        GENERATED_COMMANDS.contains(&name)
+            && !(name == "history" && self.commands.iter().any(|c| c.name == "history"))
+    }
+
+    /// This definition with the [`system_defs`] appended (the fields the platform adds to every
+    /// tracked model, read by the model's read group), and `ext.system_fields` set. Doing it
+    /// again changes nothing. A model that declares one of the names itself (a module installed
+    /// before the names were reserved) is returned as it is: its field stays its own.
+    pub fn with_system_fields(&self) -> ModelDef {
+        let mut def = self.clone();
+        if def.ext.system_fields || self.fields.iter().any(|f| is_system_name(f.name)) {
+            return def;
+        }
+        def.fields.extend(system_defs(self.read_group));
+        def.ext.system_fields = true;
+        def
     }
 
     /// The transitions declared by this model's commands, with the command that runs each.
@@ -477,8 +518,9 @@ impl ModelDef {
     }
 }
 
-/// Command names the platform generates for every model; a custom command cannot use them.
-pub const GENERATED_COMMANDS: [&str; 7] = [
+/// Command names the platform generates; a custom command cannot use them. `history` is one of
+/// them (D75), but a model has it only when its history is on (`ModelDef::history_on`).
+pub const GENERATED_COMMANDS: [&str; 8] = [
     "get",
     "list",
     "search",
@@ -486,10 +528,11 @@ pub const GENERATED_COMMANDS: [&str; 7] = [
     "bulk_create",
     "update",
     "delete",
+    "history",
 ];
 
-/// Record keys the platform sets itself on every tracked record (D75), in storage order. Not yet
-/// refused by the install gate; the record-history step does that.
+/// Record keys the platform sets itself on every tracked record (D75), in storage order. The
+/// install gate refuses a field of this name (see [`RESERVED_FIELDS`]).
 pub const SYSTEM_FIELDS: [&str; 6] = [
     "created_at",
     "updated_at",
@@ -499,8 +542,8 @@ pub const SYSTEM_FIELDS: [&str; 6] = [
     "sys_backfilled",
 ];
 
-/// Names a package field cannot take once the system fields exist: the system fields, the record
-/// id (the gate refuses `id` today) and `if_version`, the optimistic-lock input of `update`.
+/// Names a field cannot take (the install gate refuses them, with [`rename_hint`]): the system
+/// fields, the record id and `if_version`, the optimistic-lock input of `update`.
 pub const RESERVED_FIELDS: [&str; 8] = [
     "created_at",
     "updated_at",
@@ -512,14 +555,68 @@ pub const RESERVED_FIELDS: [&str; 8] = [
     "if_version",
 ];
 
-/// Model names the platform keeps for its own records (D75, D76, D77, D78); a package cannot
-/// declare a model of this name once the install gate enforces the list.
+/// Model names the platform keeps for its own records (D75, D76, D77, D78); the install gate
+/// refuses a model of this name.
 pub const RESERVED_MODELS: [&str; 4] = [
     "record_change",
     "storage_event",
     "storage_index",
     "data_guard",
 ];
+
+/// Whether `name` is one of the [`SYSTEM_FIELDS`].
+pub fn is_system_name(name: &str) -> bool {
+    SYSTEM_FIELDS.contains(&name)
+}
+
+/// A name a package can use instead of a reserved field name, for the message of the gate.
+/// Empty for a name that is not reserved.
+pub fn rename_hint(name: &str) -> &'static str {
+    match name {
+        "created_at" => "recorded_at",
+        "updated_at" => "modified_at",
+        "created_by" => "author",
+        "updated_by" => "last_editor",
+        "row_version" => "revision",
+        "sys_backfilled" => "estimated",
+        "if_version" => "expected_version",
+        "id" => "reference",
+        // Not a field: the name to use for an action that would be called `history`.
+        "history" => "show_history",
+        _ => "",
+    }
+}
+
+/// The definitions of the [`SYSTEM_FIELDS`], in that order, for a model whose read group is
+/// `read_group`: every one is read-only for everybody and is read by the holders of that group.
+/// The timestamps are `Text` for now, holding `YYYY-MM-DDTHH:MM:SS.ffffffZ` (the canonical text of
+/// a `datetime` sorts as the instant it names, so filter and order already work); they become
+/// `Datetime` when the query pushdown (D76) knows that kind for them.
+pub fn system_defs(read_group: &'static str) -> Vec<FieldDef> {
+    let at =
+        |name, description| FieldDef::new(name, description, DataClass::None, false, read_group);
+    let who =
+        |name, description| FieldDef::new(name, description, DataClass::Internal, true, read_group);
+    vec![
+        at("created_at", "When the record was created (set by the system)"),
+        at("updated_at", "When the record last changed (set by the system)"),
+        who(
+            "created_by",
+            "Who created the record: a login, or system:internal, public:anonymous or connector:<id>",
+        ),
+        who("updated_by", "Who changed the record last (same values as created_by)"),
+        at(
+            "row_version",
+            "Counts the changes of the record, starting at 1; send it back as if_version to refuse a change made on an older state",
+        )
+        .kind(FieldKind::Number),
+        at(
+            "sys_backfilled",
+            "True when created_at is an estimate because the record is older than the change tracking",
+        )
+        .kind(FieldKind::Bool),
+    ]
+}
 
 /// Most rows one `bulk_create` call takes (D70).
 pub const MAX_BULK_ROWS: usize = 1000;
@@ -651,9 +748,20 @@ pub struct Violation {
 /// The D41 install gate: every model, field and command carries a description, a permission
 /// group and a data class; personal data cannot be classed `none`; surfaces are all or none.
 pub fn check_module(m: &Module) -> Vec<Violation> {
-    let mut v = check_basics(m);
+    let mut v = check_basics(m, true);
     // Rules (D56 to D58). Effects on models outside the module cannot be resolved here; the
     // install checks them against the dependencies (`check_module_in`).
+    v.extend(rules::check_rules(m, &|_| None, false));
+    v
+}
+
+/// As [`check_module`], for a module that is already installed and is registered again when the
+/// server starts (or put back after a failed upgrade): a field or model that has a reserved name
+/// (D75) is left alone, because the module was installed when the name was free. It stays an
+/// ordinary field of an untracked model, and the next upgrade of the module is refused by
+/// [`check_module`] until the name is changed. Everything else is checked as before.
+pub fn check_installed_module(m: &Module) -> Vec<Violation> {
+    let mut v = check_basics(m, false);
     v.extend(rules::check_rules(m, &|_| None, false));
     v
 }
@@ -664,12 +772,31 @@ pub fn check_module_in(
     m: &Module,
     lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
 ) -> Vec<Violation> {
-    let mut v = check_basics(m);
+    let mut v = check_basics(m, true);
     v.extend(rules::check_rules(m, lookup, true));
     v
 }
 
-fn check_basics(m: &Module) -> Vec<Violation> {
+/// What the gate says about a field of a reserved name, if the name is reserved.
+fn reserved_field_problem(name: &str) -> Option<String> {
+    let hint = rename_hint(name);
+    match name {
+        "id" => Some(format!(
+            "a field cannot be named `id`; it is the record id (call it `{hint}` instead)"
+        )),
+        "if_version" => Some(format!(
+            "a field cannot be named `if_version`; update, delete and actions take it to refuse a change made on an older state of the record (call the field `{hint}` instead)"
+        )),
+        n if is_system_name(n) => Some(format!(
+            "a field cannot be named `{n}`; the platform sets it on every record and it is read-only (call the field `{hint}` instead)"
+        )),
+        _ => None,
+    }
+}
+
+/// `reserved`: refuse the names of the system fields, `if_version` and the reserved models
+/// (a module being installed or upgraded); `false` for one that is only being registered again.
+fn check_basics(m: &Module, reserved: bool) -> Vec<Violation> {
     let mut v = Vec::new();
     let mut bad = |path: String, problem: &str| {
         v.push(Violation {
@@ -685,6 +812,16 @@ fn check_basics(m: &Module) -> Vec<Violation> {
         if model.read_group.trim().is_empty() || model.write_group.trim().is_empty() {
             bad(mp.clone(), "model has no read or write permission group");
         }
+        if reserved && RESERVED_MODELS.contains(&model.name) {
+            bad(
+                mp.clone(),
+                &format!(
+                    "a model cannot be named `{}`; the platform keeps that name for its own records (D75 to D78), so give the model another name",
+                    model.name
+                ),
+            );
+        }
+        check_history_setting(model, &mp, &mut bad);
         for f in &model.fields {
             let fp = format!("{mp}.{}", f.name);
             if f.description.trim().is_empty() {
@@ -703,11 +840,11 @@ fn check_basics(m: &Module) -> Vec<Violation> {
                 }
                 _ => {}
             }
-            if f.name == "id" {
-                bad(
-                    fp.clone(),
-                    "a field cannot be named `id`; it is the record id",
-                );
+            // `id` was never allowed; the other reserved names are new (D75).
+            if (reserved || f.name == "id")
+                && let Some(problem) = reserved_field_problem(f.name)
+            {
+                bad(fp.clone(), &problem);
             }
             match &f.kind {
                 FieldKind::Select(o) if o.is_empty() => {
@@ -738,7 +875,20 @@ fn check_basics(m: &Module) -> Vec<Violation> {
         }
         let mut command_names = HashSet::new();
         for c in &model.commands {
-            if GENERATED_COMMANDS.contains(&c.name) || !command_names.insert(c.name) {
+            // `history` became a generated name with D75: an action of that name in a package
+            // that is already installed is let through, like the reserved field names.
+            let generated =
+                GENERATED_COMMANDS.contains(&c.name) && (reserved || c.name != "history");
+            let twice = !command_names.insert(c.name);
+            if generated && c.name == "history" && !twice {
+                bad(
+                    format!("{mp}::history"),
+                    &format!(
+                        "an action cannot be named `history`: it is the generated command that reads the change history of a record (call the action `{}` instead)",
+                        rename_hint("history")
+                    ),
+                );
+            } else if generated || twice {
                 bad(
                     format!("{mp}::{}", c.name),
                     "command name is generated or declared twice",
@@ -776,6 +926,55 @@ fn check_basics(m: &Module) -> Vec<Violation> {
         }
     }
     v
+}
+
+/// The history setting of a model (D75): turning it off needs a reason, and is refused where the
+/// record of what changed is the point: a model with personal data of a sensitive class, or with
+/// a state field that actions move.
+fn check_history_setting(model: &ModelDef, mp: &str, bad: &mut impl FnMut(String, &str)) {
+    let h = &model.ext.history;
+    if let Some(reason) = h.off_reason {
+        let path = format!("{mp}.history");
+        if reason.trim().is_empty() {
+            bad(
+                path.clone(),
+                "history = \"none\" needs a reason (history_reason)",
+            );
+        }
+        if let Some(f) = model
+            .fields
+            .iter()
+            .find(|f| f.class.is_some_and(DataClass::is_sensitive))
+        {
+            bad(
+                path.clone(),
+                &format!(
+                    "history cannot be turned off for a model with a sensitive field ({} is class {})",
+                    f.name,
+                    f.class.map_or("none", DataClass::as_str)
+                ),
+            );
+        }
+        if let Some(g) = model.governed_fields().first() {
+            bad(
+                path.clone(),
+                &format!(
+                    "history cannot be turned off for a model whose state field {g} actions move"
+                ),
+            );
+        }
+        if h.retention_days.is_some() {
+            bad(
+                path,
+                "a retention in days means nothing when history is turned off",
+            );
+        }
+    } else if h.retention_days == Some(0) {
+        bad(
+            format!("{mp}.history"),
+            "history_retention_days must be at least 1",
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1024,13 +1223,337 @@ mod tests {
             let set: HashSet<_> = list.iter().collect();
             assert_eq!(set.len(), list.len());
         }
-        // The generated commands do not change until the history command lands (D75).
-        assert_eq!(GENERATED_COMMANDS.len(), 7);
-        // The gate refuses `id` already and does not yet refuse the other reserved names.
-        assert!(RESERVED_FIELDS.contains(&"id"));
+        // `history` is the eighth generated command: its name is taken, but a model has it only
+        // when its history is on (below).
+        assert_eq!(
+            GENERATED_COMMANDS,
+            [
+                "get",
+                "list",
+                "search",
+                "create",
+                "bulk_create",
+                "update",
+                "delete",
+                "history"
+            ]
+        );
+        // Every reserved name has a hint for a name to use instead, and the hint is free.
+        for n in RESERVED_FIELDS {
+            let hint = rename_hint(n);
+            assert!(!hint.is_empty(), "{n}");
+            assert!(!RESERVED_FIELDS.contains(&hint), "{n} -> {hint}");
+        }
+        assert_eq!(rename_hint("created_at"), "recorded_at");
+        assert_eq!(rename_hint("if_version"), "expected_version");
+        assert_eq!(rename_hint("history"), "show_history");
+        assert_eq!(rename_hint("email"), "");
+        assert!(is_system_name("row_version"));
+        assert!(!is_system_name("id") && !is_system_name("if_version"));
+    }
+
+    #[test]
+    fn the_gate_refuses_every_reserved_field_name_and_says_what_to_use() {
+        for name in RESERVED_FIELDS {
+            let mut f = ok_field();
+            f.name = name;
+            let v = gate(f);
+            assert_eq!(v.len(), 1, "{name}: {v:?}");
+            assert_eq!(v[0].path, format!("t.party.{name}"));
+            assert!(
+                v[0].problem.contains(&format!("`{name}`")),
+                "{}",
+                v[0].problem
+            );
+            assert!(
+                v[0].problem.contains(&format!("`{}`", rename_hint(name))),
+                "{}",
+                v[0].problem
+            );
+        }
+        // Names that merely contain a reserved one are ordinary.
+        for name in [
+            "created_at_utc",
+            "row_versions",
+            "my_updated_by",
+            "identifier",
+        ] {
+            let mut f = ok_field();
+            f.name = name;
+            assert!(gate(f).is_empty(), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_module_that_is_already_installed_keeps_a_name_that_was_free() {
         let mut f = ok_field();
         f.name = "created_at";
-        assert!(gate(f).is_empty());
+        let m = module(f);
+        assert_eq!(check_module(&m).len(), 1, "installing it is refused");
+        assert!(
+            check_installed_module(&m).is_empty(),
+            "registering it again is not"
+        );
+        // `id` was never free, so it is refused in both.
+        let mut id = ok_field();
+        id.name = "id";
+        assert_eq!(check_installed_module(&module(id)).len(), 1);
+        // Nor does the exemption cover the other rules.
+        let mut bad = module(field(None, false));
+        bad.models[0].fields[0].name = "updated_at";
+        assert_eq!(check_installed_module(&bad).len(), 1);
+        assert_eq!(check_module(&bad).len(), 2);
+        // A model of a reserved name likewise.
+        let mut model = module(ok_field());
+        model.models[0].name = "record_change";
+        assert_eq!(check_module(&model).len(), 1);
+        assert!(check_module(&model)[0].problem.contains("`record_change`"));
+        assert!(check_installed_module(&model).is_empty());
+        for reserved in RESERVED_MODELS {
+            model.models[0].name = reserved;
+            assert_eq!(check_module(&model).len(), 1, "{reserved}");
+        }
+    }
+
+    #[test]
+    fn history_is_a_generated_command_only_where_it_is_on() {
+        let mut m = module(ok_field());
+        let names = |m: &Module| -> Vec<&'static str> {
+            m.models[0].all_commands().iter().map(|c| c.name).collect()
+        };
+        // Nothing switches it on yet: no model has it, whatever its settings say.
+        assert!(!m.models[0].history_on());
+        assert_eq!(names(&m).len(), 7);
+        assert!(!names(&m).contains(&"history"));
+        m.models[0].ext.history.retention_days = Some(30);
+        assert!(!names(&m).contains(&"history"));
+        // Switched on (by the command layer), it comes after `delete` and before the custom ones,
+        // read by the read group, and the gate accepts the model.
+        m.models[0].ext.history.enabled = true;
+        m.models[0].commands = vec![CommandDef::new("merge", "Merge", "g")];
+        assert!(m.models[0].history_on());
+        let all = m.models[0].all_commands();
+        assert_eq!(
+            all.iter().map(|c| c.name).collect::<Vec<_>>(),
+            [
+                "get",
+                "list",
+                "search",
+                "create",
+                "bulk_create",
+                "update",
+                "delete",
+                "history",
+                "merge"
+            ]
+        );
+        let h = all.iter().find(|c| c.name == "history").unwrap();
+        assert_eq!(h.permission_group, "g");
+        assert!(!h.needs_approval && h.surfaces == Surfaces::ALL && h.transition.is_none());
+        assert!(check_module(&m).is_empty(), "{:?}", check_module(&m));
+        // Turned off with a reason, it is not there.
+        m.models[0].ext.history.off_reason = Some("a counter nobody audits");
+        m.models[0].ext.history.retention_days = None;
+        assert!(!m.models[0].history_on());
+        assert!(!names(&m).contains(&"history"));
+        assert!(check_module(&m).is_empty(), "{:?}", check_module(&m));
+        // A custom command cannot take the name, on or off, and the message says what to use.
+        m.models[0].commands = vec![CommandDef::new("history", "x", "g")];
+        let v = check_module(&m);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert_eq!(v[0].path, "t.party::history");
+        assert!(v[0].problem.contains("`history`"), "{}", v[0].problem);
+        assert!(v[0].problem.contains("`show_history`"), "{}", v[0].problem);
+    }
+
+    #[test]
+    fn an_installed_model_keeps_an_action_called_history_and_so_has_no_generated_one() {
+        let mut m = module(ok_field().select(&["a", "b"]));
+        m.models[0].fields[0].name = "state";
+        m.models[0].commands =
+            vec![CommandDef::new("history", "Mine", "g").transition("state", Some("a"), "b")];
+        // Installing or upgrading it is refused; registering it again is not.
+        assert_eq!(check_module(&m).len(), 1);
+        let v = check_installed_module(&m);
+        assert!(v.is_empty(), "{v:?}");
+        // Twice is still twice, and the other generated names were never free.
+        m.models[0]
+            .commands
+            .push(CommandDef::new("history", "Again", "g"));
+        assert_eq!(check_installed_module(&m).len(), 1);
+        m.models[0].commands = vec![CommandDef::new("delete", "x", "g")];
+        assert_eq!(check_installed_module(&m).len(), 1);
+        // The action is the action: it is not a generated command, the platform does not add
+        // its own `history` beside it even when the history of the model is switched on, and
+        // there is one command of that name.
+        m.models[0].commands = vec![CommandDef::new("history", "Mine", "g")];
+        m.models[0].ext.history.enabled = true;
+        assert!(!m.models[0].is_generated_command("history"));
+        assert!(m.models[0].is_generated_command("delete"));
+        assert!(!m.models[0].history_on());
+        let names: Vec<_> = m.models[0].all_commands().iter().map(|c| c.name).collect();
+        assert_eq!(
+            names.iter().filter(|n| **n == "history").count(),
+            1,
+            "{names:?}"
+        );
+        assert_eq!(
+            m.models[0]
+                .all_commands()
+                .iter()
+                .find(|c| c.name == "history")
+                .unwrap()
+                .description,
+            "Mine"
+        );
+        // A model without such an action sees `history` as a generated name.
+        let plain = module(ok_field());
+        assert!(plain.models[0].is_generated_command("history"));
+    }
+
+    #[test]
+    fn history_may_not_be_turned_off_where_the_record_of_changes_is_the_point() {
+        let off = |mut m: Module, reason: &'static str| {
+            m.models[0].ext.history.off_reason = Some(reason);
+            check_module(&m)
+        };
+        assert!(off(module(ok_field()), "a counter").is_empty());
+        // No reason.
+        let v = off(module(ok_field()), "  ");
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].path, "t.party.history");
+        assert!(v[0].problem.contains("needs a reason"));
+        // A sensitive class, in each of the three.
+        for class in [
+            DataClass::ConfidentialHr,
+            DataClass::SpecialCategory,
+            DataClass::Financial,
+        ] {
+            let v = off(module(field(Some(class), true)), "not needed");
+            assert_eq!(v.len(), 1, "{class:?}");
+            assert!(
+                v[0].problem.contains("sensitive field (email"),
+                "{}",
+                v[0].problem
+            );
+        }
+        // The other classes are fine, including `secret` (its values are never recorded anyway).
+        for class in [
+            DataClass::None,
+            DataClass::Internal,
+            DataClass::Secret,
+            DataClass::PublicDirectory,
+        ] {
+            assert!(
+                off(module(field(Some(class), false)), "not needed").is_empty(),
+                "{class:?}"
+            );
+        }
+        // A state field that actions move.
+        let mut m = module(ok_field().select(&["a", "b"]));
+        m.models[0].fields[0].name = "state";
+        m.models[0].commands =
+            vec![CommandDef::new("go", "Go", "g").transition("state", Some("a"), "b")];
+        let v = off(m, "not needed");
+        assert_eq!(v.len(), 1);
+        assert!(
+            v[0].problem.contains("state field state"),
+            "{}",
+            v[0].problem
+        );
+        // A retention means nothing without history, and must be at least a day with it.
+        let mut r = module(ok_field());
+        r.models[0].ext.history.retention_days = Some(0);
+        assert!(check_module(&r)[0].problem.contains("at least 1"));
+        r.models[0].ext.history.retention_days = Some(7);
+        r.models[0].ext.history.off_reason = Some("a counter");
+        assert!(check_module(&r)[0].problem.contains("retention"));
+    }
+
+    #[test]
+    fn system_defs_are_complete_definitions_of_the_right_kind_and_class() {
+        let defs = system_defs("g");
+        assert_eq!(
+            defs.iter().map(|d| d.name).collect::<Vec<_>>(),
+            SYSTEM_FIELDS
+        );
+        let by = |n: &str| defs.iter().find(|d| d.name == n).unwrap();
+        for d in &defs {
+            assert_eq!(d.permission_group, "g");
+            assert!(!d.description.is_empty() && d.computed.is_none() && d.sequence.is_none());
+            assert!(!d.required && d.unique.is_none());
+        }
+        assert_eq!(by("created_at").kind, FieldKind::Text);
+        assert_eq!(by("updated_at").kind, FieldKind::Text);
+        assert_eq!(by("row_version").kind, FieldKind::Number);
+        assert_eq!(by("sys_backfilled").kind, FieldKind::Bool);
+        // Who is personal data of class internal, so an agent sees a mask token (D40).
+        for n in ["created_by", "updated_by"] {
+            assert_eq!(
+                (by(n).class, by(n).personal_data),
+                (Some(DataClass::Internal), true)
+            );
+        }
+        for n in ["created_at", "updated_at", "row_version", "sys_backfilled"] {
+            assert_eq!(
+                (by(n).class, by(n).personal_data),
+                (Some(DataClass::None), false)
+            );
+        }
+        // The definitions pass the rest of the gate (they are not for packages to declare).
+        let mut m = module(ok_field());
+        m.models[0].fields = defs;
+        let v = check_installed_module(&m);
+        assert!(v.is_empty(), "{v:?}");
+    }
+
+    #[test]
+    fn with_system_fields_appends_once_and_marks_the_model() {
+        let m = module(ok_field());
+        let plain = &m.models[0];
+        assert!(
+            !plain.is_system_field("created_at"),
+            "an ordinary model has no such field"
+        );
+        let tracked = plain.with_system_fields();
+        assert_eq!(tracked.fields.len(), 1 + 6);
+        assert_eq!(
+            tracked
+                .fields
+                .iter()
+                .skip(1)
+                .map(|f| f.name)
+                .collect::<Vec<_>>(),
+            SYSTEM_FIELDS
+        );
+        assert!(tracked.ext.system_fields && !plain.ext.system_fields);
+        assert!(
+            tracked
+                .fields
+                .iter()
+                .skip(1)
+                .all(|f| f.permission_group == "g")
+        );
+        // Again: the same.
+        let twice = tracked.with_system_fields();
+        assert_eq!(twice.fields.len(), tracked.fields.len());
+        assert_eq!(twice.ext, tracked.ext);
+        // Every system name is a system field of it, and `if_version` is not (it is reserved, but
+        // it is an input, not a field); other fields are as before.
+        for n in SYSTEM_FIELDS {
+            assert!(tracked.is_system_field(n), "{n}");
+        }
+        assert!(!tracked.is_system_field("email") && !tracked.is_system_field("if_version"));
+        // A model that declares one of the names itself (a module from before the name was
+        // reserved) is left alone and its field stays an ordinary one.
+        let mut own = ok_field();
+        own.name = "created_at";
+        let mine = module(own);
+        let left = mine.models[0].with_system_fields();
+        assert_eq!(left.fields.len(), 1);
+        assert!(!left.ext.system_fields);
+        assert!(!left.is_system_field("created_at"));
+        assert!(!left.is_system_field("updated_at"));
     }
 
     #[test]

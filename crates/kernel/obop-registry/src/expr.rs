@@ -35,7 +35,7 @@
 //! a decimal expression needs a `decimal` result.
 //!
 //! *Instants.* A `datetime` field is an instant. Instants compare with instants and with a text
-//! literal that is a valid RFC 3339 instant (`created_at < "2026-01-01T00:00:00Z"`); they do not
+//! literal that is a valid RFC 3339 instant (`signed_at < "2026-01-01T00:00:00Z"`); they do not
 //! compare with dates or other text, and have no arithmetic.
 
 use crate::{FieldKind, ModelDef};
