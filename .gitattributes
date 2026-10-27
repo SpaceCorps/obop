@@ -10,3 +10,7 @@
 *.pdf binary
 *.woff2 binary
 *.wasm binary
+
+# Generated: written by `obop openapi` and `vp run generate:types` (web/packages/client), checked by CI.
+web/packages/client/openapi.json linguist-generated
+web/packages/client/src/generated/** linguist-generated

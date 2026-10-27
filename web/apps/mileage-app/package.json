@@ -14,6 +14,7 @@
     "android:build:release": "node scripts/gradle.mjs assembleRelease"
   },
   "dependencies": {
+    "@obop/client": "workspace:*",
     "@obop/trip-core": "workspace:*",
     "expo": "57.0.30",
     "expo-dev-client": "57.0.20",

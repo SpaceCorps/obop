@@ -72,22 +72,28 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.21.2
       - run: vp install --frozen-lockfile
+      - name: The generated client types are current (regenerate from openapi.json, fail on any difference)
+        run: |
+          (cd web/packages/client && vp run generate:types)
+          git diff --exit-code -- web/packages/client
       - name: Check, lint and type-check every app and the design system
         run: |
-          for app in apps/backoffice apps/platform apps/site apps/mileage-app packages/trip-core packages/ui; do
+          for app in apps/backoffice apps/platform apps/site apps/mileage-app packages/client packages/trip-core packages/ui; do
             (cd web/$app && vp check)
           done
-      - name: Unit tests (design system, trip logic and back office)
+      - name: Unit tests (design system, client, trip logic and back office)
         run: |
-          for app in packages/ui packages/trip-core apps/backoffice; do
+          for app in packages/ui packages/client packages/trip-core apps/backoffice; do
             (cd web/$app && vp test)
           done
-      - name: Build every app and the shared trip logic
+      - name: Build every app and the shared packages
         run: |
           for app in backoffice platform site; do
             (cd web/apps/$app && vp build)
           done
-          (cd web/packages/trip-core && vp build)
+          for pkg in client trip-core; do
+            (cd web/packages/$pkg && vp build)
+          done
 
   e2e:
     runs-on: ubuntu-latest
@@ -100,6 +106,8 @@ jobs:
       - run: vp install --frozen-lockfile
       - name: Build the binary under test
         run: cargo build --locked
+      - name: The client against a running instance (obop serve on a free port, a throwaway database)
+        run: cd web/packages/client && OBOP_BIN="$GITHUB_WORKSPACE/target/debug/obop" vp test integration
       - name: Build the apps and assemble the site
         run: |
           (cd web/apps/backoffice && vp build)
