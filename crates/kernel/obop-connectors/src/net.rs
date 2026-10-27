@@ -134,6 +134,9 @@ pub struct ClientConfig {
     pub max_response: usize,
     /// Instance-wide host allow-list kept by the operator; empty means no extra restriction.
     pub instance_hosts: Vec<String>,
+    /// How old the operator's list that came from a source may get before the source is asked
+    /// again (a save through another server process applies to this one within this time).
+    pub hosts_refresh: Duration,
 }
 
 impl Default for ClientConfig {
@@ -144,6 +147,7 @@ impl Default for ClientConfig {
             max_request: 1024 * 1024,
             max_response: 2 * 1024 * 1024,
             instance_hosts: Vec::new(),
+            hosts_refresh: Duration::from_secs(5),
         }
     }
 }
@@ -188,8 +192,19 @@ pub type HostSource = dyn Fn() -> Result<Vec<String>, String> + Send + Sync;
 /// restriction", so a list that could not be read must not be turned into an empty one: it is
 /// `Unknown`, nothing is sent while it is, and the source is asked again at every send until it
 /// answers (D74: a busy store must not lift the operator's restriction).
+///
+/// A list that came from a source is `Known` for `ClientConfig::hosts_refresh` and then read again,
+/// so that what the operator saved through another server process applies here too (a list kept
+/// for the life of the process went on delivering to a host that had been removed, or refusing one
+/// that had been added, until a restart). A refresh the store refuses keeps the list known before,
+/// which was the operator's restriction a moment ago, and asks again after the same time.
 enum OperatorHosts {
-    Known(Vec<String>),
+    Known {
+        list: Vec<String>,
+        read_at: std::time::Instant,
+        /// Where the list is read again; `None` for a list that was set and is not followed.
+        source: Option<Arc<HostSource>>,
+    },
     Unknown(Arc<HostSource>),
 }
 
@@ -217,15 +232,22 @@ impl Client {
     }
 
     pub fn with_lookup(cfg: ClientConfig, lookup: Arc<dyn Lookup>) -> Self {
-        let hosts = Arc::new(std::sync::RwLock::new(OperatorHosts::Known(
-            cfg.instance_hosts.clone(),
-        )));
+        let hosts = Arc::new(std::sync::RwLock::new(OperatorHosts::Known {
+            list: cfg.instance_hosts.clone(),
+            read_at: std::time::Instant::now(),
+            source: None,
+        }));
         Self { cfg, lookup, hosts }
     }
 
-    /// Replace the operator's host allow-list (empty means no extra restriction).
+    /// Replace the operator's host allow-list (empty means no extra restriction) with one that is
+    /// not followed any more.
     pub fn set_instance_hosts(&self, hosts: Vec<String>) {
-        *self.hosts.write().unwrap() = OperatorHosts::Known(hosts);
+        *self.hosts.write().unwrap() = OperatorHosts::Known {
+            list: hosts,
+            read_at: std::time::Instant::now(),
+            source: None,
+        };
     }
 
     /// The operator's host list is not known (it could not be read): nothing is sent until
@@ -234,10 +256,17 @@ impl Client {
         *self.hosts.write().unwrap() = OperatorHosts::Unknown(source);
     }
 
-    /// Know the operator's list from `source` now if it answers, and ask it again when it does not.
+    /// Know the operator's list from `source` now if it answers, ask it again when it does not,
+    /// and read it again whenever the list known has aged `hosts_refresh`.
     pub fn follow_instance_hosts(&self, source: Arc<HostSource>) {
         match source() {
-            Ok(h) => self.set_instance_hosts(h),
+            Ok(list) => {
+                *self.hosts.write().unwrap() = OperatorHosts::Known {
+                    list,
+                    read_at: std::time::Instant::now(),
+                    source: Some(source),
+                };
+            }
             Err(_) => self.instance_hosts_from(source),
         }
     }
@@ -245,14 +274,37 @@ impl Client {
     /// The operator's list for one send: what is known, or what the source says now; an
     /// unknown list is an error ("later"), never "no restriction".
     fn operator_hosts(&self) -> Result<Vec<String>, NetError> {
-        let source = match &*self.hosts.read().unwrap() {
-            OperatorHosts::Known(h) => return Ok(h.clone()),
-            OperatorHosts::Unknown(source) => source.clone(),
+        let (source, known) = match &*self.hosts.read().unwrap() {
+            OperatorHosts::Known {
+                list,
+                read_at,
+                source,
+            } => match source {
+                Some(s) if read_at.elapsed() >= self.cfg.hosts_refresh => {
+                    (s.clone(), Some(list.clone()))
+                }
+                _ => return Ok(list.clone()),
+            },
+            OperatorHosts::Unknown(source) => (source.clone(), None),
         };
         match source() {
-            Ok(h) => {
-                *self.hosts.write().unwrap() = OperatorHosts::Known(h.clone());
-                Ok(h)
+            Ok(list) => {
+                *self.hosts.write().unwrap() = OperatorHosts::Known {
+                    list: list.clone(),
+                    read_at: std::time::Instant::now(),
+                    source: Some(source),
+                };
+                Ok(list)
+            }
+            // The list known a moment ago is still the operator's restriction; ask again later.
+            Err(_) if known.is_some() => {
+                let list = known.unwrap_or_default();
+                *self.hosts.write().unwrap() = OperatorHosts::Known {
+                    list: list.clone(),
+                    read_at: std::time::Instant::now(),
+                    source: Some(source),
+                };
+                Ok(list)
             }
             Err(_) => Err(NetError::Transport(
                 "the operator's list of allowed hosts could not be read, try again".into(),
@@ -723,6 +775,73 @@ mod tests {
             c.check_shape(url, &allowed).is_ok(),
             "an empty list is open"
         );
+    }
+
+    #[test]
+    fn a_list_the_operator_saved_elsewhere_applies_within_the_refresh_time() {
+        use std::sync::Mutex;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        // Two server processes on one database: the other one saved a new list. This one went on
+        // with the list it had read at start, for as long as it ran.
+        let stored = Arc::new(Mutex::new(vec!["a.example".to_string()]));
+        let reads = Arc::new(AtomicUsize::new(0));
+        let source = {
+            let (stored, reads) = (stored.clone(), reads.clone());
+            Arc::new(move || {
+                reads.fetch_add(1, Ordering::SeqCst);
+                Ok(stored.lock().unwrap().clone())
+            })
+        };
+        let url = |h: &str| format!("https://{h}/hook");
+        let both = vec!["a.example".to_string(), "b.example".to_string()];
+        let make = |refresh: Duration| {
+            let c = Client::new(ClientConfig {
+                hosts_refresh: refresh,
+                ..ClientConfig::default()
+            });
+            c.follow_instance_hosts(source.clone());
+            c
+        };
+        // Refreshed at every send: the save applies at once, and so does the removal.
+        let c = make(Duration::ZERO);
+        assert!(c.check_shape(&url("a.example"), &both).is_ok());
+        assert!(c.check_shape(&url("b.example"), &both).is_err());
+        *stored.lock().unwrap() = vec!["b.example".to_string()];
+        assert!(c.check_shape(&url("b.example"), &both).is_ok());
+        assert!(
+            c.check_shape(&url("a.example"), &both).is_err(),
+            "a host the operator removed is no longer reached"
+        );
+        // A refresh the store refuses keeps the list known before (and does not lift it).
+        let down = Arc::new(Mutex::new(false));
+        let flaky = {
+            let (stored, down) = (stored.clone(), down.clone());
+            Arc::new(move || {
+                if *down.lock().unwrap() {
+                    Err("storage_busy: the pool is full".to_string())
+                } else {
+                    Ok(stored.lock().unwrap().clone())
+                }
+            })
+        };
+        let c = Client::new(ClientConfig {
+            hosts_refresh: Duration::ZERO,
+            ..ClientConfig::default()
+        });
+        c.follow_instance_hosts(flaky);
+        *down.lock().unwrap() = true;
+        assert!(c.check_shape(&url("b.example"), &both).is_ok());
+        assert!(
+            c.check_shape(&url("a.example"), &both).is_err(),
+            "the restriction stands while the store is away"
+        );
+        // Within the refresh time the source is not asked again.
+        let c = make(Duration::from_secs(3600));
+        let after_start = reads.load(Ordering::SeqCst);
+        for _ in 0..5 {
+            let _ = c.check_shape(&url("b.example"), &both);
+        }
+        assert_eq!(reads.load(Ordering::SeqCst), after_start);
     }
 
     #[test]
