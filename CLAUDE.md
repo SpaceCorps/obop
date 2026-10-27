@@ -15,7 +15,7 @@ The owner's rulings of 2026-10-01 (OR-1 to OR-21) and 2026-10-27 (OR-22 to OR-34
 - **Three named exceptions to "vp only"** (RATIFIED: the first two by OR-9, I-2, I-4, D15; the third by OR-34, D87):
   1. the nightly exit drill, which runs upstream Vite tools without `vp` in a throwaway copy of the tree that never ships;
   2. `pnpm sbom` for the JavaScript SBOM, run through `vp env exec` or a `vp run` task until `vp` gains an SBOM wrapper (the exception lapses then);
-  3. the mobile toolchain of React Native (Expo) apps: Metro, the Expo CLI, Gradle and Xcode cannot be run by Vite+, so they are started through `vp env exec` or `vp run` tasks. pnpm stays the only package manager, and `vp check`, `vp test` and `vp build` still cover every shared TypeScript package.
+  3. the mobile toolchain of React Native (Expo) apps (the owner said "with the mobile-toolchain exception"; these conditions are its recorded form): Metro, the Expo CLI, Gradle and Xcode cannot be run by Vite+, so they are started through `vp env exec` or `vp run` tasks. pnpm stays the only package manager, and `vp check`, `vp test` and `vp build` still cover every shared TypeScript package.
 
   There are no other exceptions. In particular `pnpm licenses list` is not one (OR-9; Q33 is answered); read licence fields from the SBOM or go through `vp`.
 - **Pin policy** (RATIFIED, D23, I-3, OR-8): "latest" means the newest release that has passed a cooldown of 7 to 14 days, or its `x.y.1` patch. The toolchain therefore intentionally runs up to about three weeks behind the newest release. Pins are exact; the pnpm major is 12.x (OR-28; `package.json` pins `pnpm@12.6.0`). Adopting Rust 1.99.x follows mechanically from this policy and needs no separate ruling. See `docs/DECISIONS.md` section 1.1.

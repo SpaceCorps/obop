@@ -8,7 +8,7 @@ Reading notes. "Adopted" means this file fixes the spelling or contract for ever
 
 ## 1. Purpose, authority and change procedure
 
-**Purpose.** The other twenty-one documents of the set, the twelve specs (with [spec/cli.md](spec/cli.md)) among them, share identifiers that cross files: event types, permission groups, data classes, entities and states, port implementers, and the names the `obop` CLI, the REST API and MCP have in common. This file is the one place where such a name is spelled, so a conforming document can be checked against it.
+**Purpose.** The other documents of the set, the thirteen specs (with [spec/cli.md](spec/cli.md) and [spec/mobile.md](spec/mobile.md)) among them, share identifiers that cross files: event types, permission groups, data classes, entities and states, port implementers, and the names the `obop` CLI, the REST API and MCP have in common. This file is the one place where such a name is spelled, so a conforming document can be checked against it.
 
 **Authority.** Order of precedence: DECISIONS.md (its "Owner rulings (2026-10-01)" section included), then this file, then [ARCHITECTURE.md](ARCHITECTURE.md), then every other document. Where a research note, a spec or ARCHITECTURE.md differs from this file on a name or a shared contract, this file wins. Where this file differs from DECISIONS.md, DECISIONS.md wins and this file is corrected in the same change. This file never settles an owner decision: whatever DECISIONS section 8 lists or marks PROPOSED stays open here and is collected in section 9.
 
