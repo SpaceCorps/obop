@@ -31,8 +31,16 @@
 //!   lost after a commit;
 //! - `storage_fault`, the answer for a fault with its `applied`: status, body, hint, `Retry-After`,
 //!   the line the command line prints and its exit status;
-//! - `classify`, which reads the code word of a handler string and answers the same way, with
-//!   `applied` from the text alone (`none`, or `unknown` after `storage_unavailable`).
+//! - `classify_with`, which answers a failed call knowing what its request did to the store
+//!   (`Outcome`, the fault scope of the thread that ran it): when a storage fault was noted for the
+//!   request, the failure is the store's whatever words the error carries (the engine wraps the
+//!   text of a refusal), and `applied` comes from `applied`, exactly as the layer of the HTTP server
+//!   decides. The text of an error is never read for a storage word: a message that merely begins
+//!   with `storage_busy: ` (a name the caller chose, echoed first) is the ordinary 400 it is.
+//!
+//! Every surface that runs a call is a request: `obop-http` opens the scope (`blocking`), and the
+//! command line and the stdio MCP server open it with `requested`, so the guard that refuses
+//! changes after a refused call holds there too and `applied` can say `partial` there as well.
 //!
 //! The surfaces only shape it: REST sets the status, the body and the headers (`Retry-After`,
 //! `X-Obop-Applied`); `obop-http`'s layer `storage_faults` knows what the whole request did and
@@ -40,9 +48,20 @@
 //! (OAuth error, JSON-RPC error with `error.data`, a page); an MCP tool call that fails is an error
 //! result with the same body and `retry_after`; the command line prints `Classified::cli` and
 //! exits with `Classified::exit` (75, "try again later", for a storage fault).
+//!
+//! # What a text can and cannot select
+//!
+//! A handler string that begins with a code of `TABLE` (`code: message`) is read as that row; that
+//! is the convention of the producers. The three storage rows are not selectable by text at all
+//! (they need a fault the pool noted). For the others, a refusal that echoes what the caller sent
+//! must not begin with the echo: `unforge`, which the dispatcher applies to every refusal text it
+//! makes from a call, sets such a text apart (`input refused: ...`) when the call's own input
+//! begins with the same `code: `, so input cannot choose a row. The message of a package assertion
+//! is the package author's text and is trusted as such.
 
-use crate::CallError;
-use obop_storage::fault::{self, Fault, Outcome};
+use crate::{CallError, Value};
+use obop_storage::fault;
+pub use obop_storage::fault::{Fault, Outcome};
 use serde_json::{Value as J, json};
 
 /// The codes of `TABLE` as constants, for the handlers that produce them.
@@ -274,6 +293,9 @@ pub struct Classified {
     pub applied: Option<Applied>,
     /// The exit status of the command line: 1, or `EXIT_TRY_AGAIN` for a storage fault.
     pub exit: u8,
+    /// A storage fault only: the explanation that came with it (the text of the error), for the
+    /// log of the server and the line of the command line. No surface shows it to a caller.
+    pub detail: Option<String>,
 }
 
 /// The exit status of the command line after a storage fault: "temporary failure, try again"
@@ -293,6 +315,7 @@ impl Classified {
             hint: None,
             applied: None,
             exit: 1,
+            detail: None,
         }
     }
 
@@ -408,13 +431,19 @@ pub fn storage_fault(fault: Fault, applied: Applied, detail: Option<&str>) -> Cl
     c.hint = Some(hint);
     c.applied = Some(applied);
     c.exit = EXIT_TRY_AGAIN;
+    c.detail = detail
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty());
     c
 }
 
-/// The answer for an error text that starts with the code word of a storage fault, or `None` for
-/// any other text. The text says nothing about the rest of the request, so `applied` is what the
-/// text alone allows: `unknown` after `storage_unavailable` (unless it is the guard's refusal of a
-/// change after an earlier fault, which changed nothing), else `none`.
+/// The answer for a bare error text that starts with the code word of a storage fault, or `None`
+/// for any other text. For the places that hold a string and not a call (a session lock, the
+/// two-factor and control-plane errors) and have no `Outcome` to ask. The text says nothing about
+/// the rest of the request, so `applied` is what the text alone allows: `unknown` after
+/// `storage_unavailable` (unless it is the guard's refusal of a change after an earlier fault,
+/// which changed nothing), else `none`. A call error is never classified this way: see
+/// `classify_with`.
 pub fn of_storage_text(msg: &str) -> Option<Classified> {
     let fault = Fault::of_message(msg)?;
     let applied = if fault::may_have_applied(msg) {
@@ -426,8 +455,55 @@ pub fn of_storage_text(msg: &str) -> Option<Classified> {
     Some(storage_fault(fault, applied, detail))
 }
 
-/// Classify a call error. The only function that does.
+/// Run `f` as one request on this thread: the fault scope that `obop-http` opens for a handler
+/// (`blocking`) is opened here for a surface that has no HTTP layer, the command line and the stdio
+/// MCP server. A fault noted before is forgotten; the guard refuses every change after the first
+/// refused call of `f`; what `f` changed is counted. The `Outcome` says what `f` did to the store,
+/// for `classify_with` and `storage_outcome`.
+pub fn requested<T>(f: impl FnOnce() -> T) -> (T, Outcome) {
+    /// Leaves the scope also when `f` panics.
+    struct Leave;
+    impl Drop for Leave {
+        fn drop(&mut self) {
+            fault::clear();
+        }
+    }
+    fault::begin_request(Outcome::default());
+    let _leave = Leave;
+    let out = f();
+    (out, fault::end_request())
+}
+
+/// What this thread's request has done to the store so far (the open scope of `requested` or of
+/// `obop-http`), without ending it.
+pub fn seen() -> Outcome {
+    fault::state()
+}
+
+/// Classify a failed call that ran on this thread, inside a request scope (`seen`). Use
+/// `classify_with` when the scope has ended.
 pub fn classify(e: &CallError) -> Classified {
+    classify_with(e, &seen())
+}
+
+/// Classify a failed call, knowing what its request did to the store. The only function that does.
+///
+/// If a storage fault was noted for the request, the failure is the store's, whatever the error
+/// says (a refused read becomes "not found" above the store, a refusal is wrapped in the text of
+/// the step that met it): a 503 with `applied` from `applied`, the rule the layer of the HTTP
+/// server uses. Otherwise the error is the call's own, and its text is read for the codes of the
+/// table, never for a storage word.
+pub fn classify_with(e: &CallError, seen: &Outcome) -> Classified {
+    if let Some(fault) = seen.fault {
+        let applied = applied(fault, seen, true).unwrap_or(Applied::Partial);
+        let detail = match e {
+            CallError::Handler(m) => {
+                Some(m.strip_prefix(&format!("{}:", fault.code())).unwrap_or(m))
+            }
+            _ => None,
+        };
+        return storage_fault(fault, applied, detail);
+    }
     let debug = || format!("{e:?}");
     match e {
         CallError::ApprovalRequired { plan_id } => Classified::new(
@@ -461,6 +537,46 @@ pub fn classify(e: &CallError) -> Classified {
     }
 }
 
+/// What a call that returned a result must still say when its request hit a storage fault (the
+/// layer of the HTTP server does the same): the 503 of a refusal that left nothing changed, or of
+/// a needed step that was lost after a change; `None` when the fault touched nothing the answer
+/// rests on (a change committed and only something optional was lost).
+pub fn storage_outcome(seen: &Outcome, own_answer_failed: bool) -> Option<Classified> {
+    let fault = seen.fault?;
+    applied(fault, seen, own_answer_failed).map(|a| storage_fault(fault, a, None))
+}
+
+/// The text of a refusal made while a call ran with `input`: unchanged, unless it begins with a
+/// code of the table that the input itself begins with (`code: `), which would let the caller
+/// choose the row of its own answer. Such a text is set apart (`input refused: ...`), and the
+/// seam reads it as the ordinary refusal it is.
+pub fn unforge(message: String, input: &Value) -> String {
+    let Some((head, _)) = message.split_once(": ") else {
+        return message;
+    };
+    if row(head).is_none() {
+        return message;
+    }
+    let prefix = &message[..head.len() + 2];
+    if begins_with(input, prefix) {
+        format!("input refused: {message}")
+    } else {
+        message
+    }
+}
+
+/// Does a text, or a name, anywhere in `v` begin with `prefix`?
+fn begins_with(v: &Value, prefix: &str) -> bool {
+    match v {
+        Value::Text(t) | Value::Num(t) => t.starts_with(prefix),
+        Value::List(items) => items.iter().any(|i| begins_with(i, prefix)),
+        Value::Map(m) => m
+            .iter()
+            .any(|(k, i)| k.starts_with(prefix) || begins_with(i, prefix)),
+        Value::Null | Value::Bool(_) | Value::Int(_) => false,
+    }
+}
+
 /// The refusal for a record that is not at the version the caller read.
 fn precondition(current: i64) -> Classified {
     let r = row(code::PRECONDITION_FAILED).expect("the table has precondition_failed");
@@ -487,11 +603,6 @@ fn precondition(current: i64) -> Classified {
 }
 
 fn handler(m: &str, debug: impl Fn() -> String) -> Classified {
-    // D74: the store's own refusal, recognised by the code word at the very start (the one rule of
-    // `Fault::of_message`).
-    if let Some(c) = of_storage_text(m) {
-        return c;
-    }
     if let Some((r, rest)) = split_code(m) {
         // D75 writes the version into the message (`precondition_failed: current_version 8`);
         // that is the same refusal as the variant.
@@ -522,11 +633,17 @@ fn handler(m: &str, debug: impl Fn() -> String) -> Classified {
     )
 }
 
-/// `code: message` with a code of the table: the row and the message.
+/// `code: message` with a code of the table: the row and the message. The storage rows are not
+/// read from text (they need a noted fault, see `classify_with`).
 fn split_code(m: &str) -> Option<(&'static Row, &str)> {
     let (head, rest) = m.split_once(": ")?;
-    row(head).map(|r| (r, rest))
+    row(head)
+        .filter(|r| r.origin != STORAGE_ORIGIN)
+        .map(|r| (r, rest))
 }
+
+/// The `origin` of the three storage rows.
+const STORAGE_ORIGIN: &str = "D74";
 
 #[cfg(test)]
 mod tests {
@@ -642,6 +759,12 @@ mod tests {
             "storage_timeout",
             "Storage_busy: capital letters are another word",
             " storage_busy: not at the start",
+            // Without a fault noted for the request the words are text like any other, also at
+            // the very start: input echoed first cannot make a 503 or an exit status of 75.
+            "storage_busy: a name the caller chose",
+            "storage_unavailable: cannot reach the database",
+            "storage_timeout: a statement ran into its time limit",
+            "storage_busy:",
         ] {
             let e = CallError::Handler(m.into());
             let c = classify(&e);
@@ -665,25 +788,23 @@ mod tests {
     }
 
     /// The table is data: every row, mapped as the row says when a handler string carries its
-    /// prefix. The storage rows add `applied` and name the code word in `error` (D74); the test
-    /// of their own shape is `a_storage_word_answers_503_with_what_the_text_allows_to_say`.
+    /// prefix. The storage rows (D74) are not read from text: see
+    /// `a_noted_fault_makes_the_failure_the_stores_whatever_the_text_says`.
     #[test]
     fn each_row_maps_as_the_table_says() {
         for r in TABLE {
             let e = CallError::Handler(coded(r.code, "the reason, with: a colon"));
             let c = classify(&e);
+            if r.origin == STORAGE_ORIGIN {
+                // Only a fault noted for the request selects them, never a text.
+                assert_eq!((c.status, c.code), (400, "bad_request"), "{}", r.code);
+                continue;
+            }
             assert_eq!(c.kind, Kind::Failed, "{}", r.code);
             assert_eq!(c.status, r.status, "{}", r.code);
             assert_eq!(c.code, r.code);
             assert_eq!(c.retry_after, r.retry_after, "{}", r.code);
             assert_eq!(c.current_version, None);
-            if r.origin == "D74" {
-                assert_eq!(c.body["error"], r.code);
-                assert_eq!(c.body["code"], r.code);
-                assert_eq!(c.body["hint"], json!(c.hint), "{}", r.code);
-                assert!(c.applied.is_some(), "{}", r.code);
-                continue;
-            }
             // The prefix is the code; the body carries the rest.
             assert_eq!(
                 c.body,
@@ -807,42 +928,65 @@ mod tests {
         assert_eq!(TABLE.iter().filter(|r| r.origin == "D74").count(), 3);
     }
 
-    /// What a handler string with a storage word answers: 503, the wait, `applied` from the text
-    /// alone, the line and the exit status of the command line.
-    #[test]
-    fn a_storage_word_answers_503_with_what_the_text_allows_to_say() {
-        let answer = |m: &str| classify(&CallError::Handler(m.into()));
+    fn met(fault: Fault, wrote: bool) -> Outcome {
+        Outcome {
+            fault: Some(fault),
+            wrote,
+            ..Outcome::default()
+        }
+    }
 
+    /// What a failed call answers when its request met a storage fault: 503, the wait, `applied`
+    /// from what the request did, the line and the exit status of the command line.
+    #[test]
+    fn a_noted_fault_makes_the_failure_the_stores_whatever_the_text_says() {
+        // The same answer whether the error carries the word, wraps it or says something else:
+        // the request met the fault, the text does not decide.
+        let texts = [
+            "every connection is in use".to_string(),
+            "lead.win: effect 1 (set_state) failed, nothing was changed: x on the related record: storage_busy: gone".to_string(),
+            "2 of 3 row(s) are invalid, so nothing was created. row 3: storage_timeout: x".to_string(),
+        ];
         // A full pool and a statement that ran into its limit changed nothing.
         for (f, wait) in [(Fault::Busy, 1), (Fault::Timeout, 5)] {
-            let c = answer(&f.message("every connection is in use"));
-            assert_eq!(c.kind, Kind::Failed);
-            assert_eq!((c.status, c.code), (503, f.code()));
-            assert_eq!(
-                (c.retry_after, c.applied, c.exit),
-                (Some(wait), Some(Applied::None), 75)
-            );
-            assert_eq!(
-                c.body,
-                json!({"error": f.code(), "code": f.code(), "hint": c.hint, "applied": "none"})
-            );
-            assert!(
-                c.hint.unwrap().contains("Nothing was changed"),
-                "{:?}",
-                c.hint
-            );
-            assert_eq!(c.current_version, None);
-            assert_eq!(
-                c.cli,
-                format!(
-                    "{}: every connection is in use (nothing was changed; try again in {wait} s)",
-                    f.code()
-                )
-            );
+            for text in &texts {
+                let c = classify_with(&CallError::Handler(text.clone()), &met(f, false));
+                assert_eq!(c.kind, Kind::Failed);
+                assert_eq!((c.status, c.code), (503, f.code()));
+                assert_eq!(
+                    (c.retry_after, c.applied, c.exit),
+                    (Some(wait), Some(Applied::None), 75)
+                );
+                assert_eq!(
+                    c.body,
+                    json!({"error": f.code(), "code": f.code(), "hint": c.hint, "applied": "none"})
+                );
+                assert!(c.hint.unwrap().contains("Nothing was changed"));
+                assert_eq!(c.current_version, None);
+                assert!(
+                    c.cli
+                        .ends_with(&format!("(nothing was changed; try again in {wait} s)")),
+                    "{}",
+                    c.cli
+                );
+            }
         }
+        // The line carries the explanation that came with the fault, without the word twice.
+        let c = classify_with(
+            &CallError::Handler(Fault::Busy.message("every connection is in use")),
+            &met(Fault::Busy, false),
+        );
+        assert_eq!(
+            c.cli,
+            "storage_busy: every connection is in use (nothing was changed; try again in 1 s)"
+        );
+        assert_eq!(c.detail.as_deref(), Some("every connection is in use"));
 
         // A connection that broke may have taken a change with it: unknown.
-        let c = answer(&Fault::Unavailable.message("the database cannot be reached"));
+        let c = classify_with(
+            &CallError::Handler("x".into()),
+            &met(Fault::Unavailable, false),
+        );
         assert_eq!((c.status, c.code), (503, "storage_unavailable"));
         assert_eq!(
             (c.retry_after, c.applied, c.exit),
@@ -851,27 +995,83 @@ mod tests {
         assert_eq!(c.body["applied"], "unknown");
         assert_eq!(c.hint, Some(row("storage_unavailable").unwrap().hint));
         assert!(c.hint.unwrap().contains("read before you repeat a write"));
-        assert_eq!(
-            c.cli,
-            "storage_unavailable: the database cannot be reached (a change in flight may or may \
-             not have been applied: read before you repeat a write; try again in 5 s)"
-        );
 
-        // The guard's own refusal of a change after an earlier fault changed nothing, whatever
-        // the first fault was.
-        let c = answer(&Fault::Unavailable.message(
-            "an earlier storage call of this request was refused, so this change was not made",
-        ));
-        assert_eq!((c.status, c.applied), (503, Some(Applied::None)));
-        assert_eq!(c.body["applied"], "none");
-        assert!(c.hint.unwrap().contains("Nothing was changed"));
+        // A change had committed: part of the call was applied, on every surface.
+        for f in FAULTS {
+            let c = classify_with(&CallError::Handler("x".into()), &met(f, true));
+            assert_eq!(
+                (c.status, c.code, c.applied),
+                (503, f.code(), Some(Applied::Partial))
+            );
+            assert_eq!(c.body["applied"], "partial");
+            assert!(
+                c.cli
+                    .contains("part of it was applied: do not repeat it blindly")
+            );
+            assert_eq!(c.exit, 75);
+        }
+
+        // Every kind of failure is the store's when the store refused: a refused read above the
+        // store turns into "not found", and the layer of the HTTP server answers 503 for it too.
+        for e in every_variant() {
+            let c = classify_with(&e, &met(Fault::Busy, false));
+            assert_eq!((c.status, c.code), (503, "storage_busy"), "{e:?}");
+        }
 
         // No explanation after the word: the line is the word and what to do.
-        let c = answer("storage_busy:");
+        let c = classify_with(
+            &CallError::Handler("storage_busy:".into()),
+            &met(Fault::Busy, false),
+        );
         assert_eq!(
             c.cli,
             "storage_busy (nothing was changed; try again in 1 s)"
         );
+    }
+
+    /// A text that begins with a code word is not a fault: it takes a fault noted for the request.
+    /// Input echoed first (a name, an id, a key) is an ordinary 400, and a code of another row is
+    /// set apart from the input that carries it (`unforge`).
+    #[test]
+    fn a_text_alone_never_makes_a_storage_fault_and_input_cannot_choose_a_row() {
+        for r in TABLE {
+            for m in [
+                format!("{}: x is not a credential of P", r.code),
+                format!("{}:", r.code),
+            ] {
+                let c = classify_with(&CallError::Handler(m.clone()), &Outcome::default());
+                if r.origin == STORAGE_ORIGIN {
+                    assert_eq!((c.status, c.code), (400, "bad_request"), "{m}");
+                    assert_eq!(c.body, json!({"error": m}));
+                    assert_eq!((c.applied, c.exit), (None, 1));
+                }
+            }
+            // The refusal text echoes the input first: the dispatcher sets it apart.
+            let sent = Value::map([
+                ("id", Value::text(&format!("{}: x", r.code))),
+                ("list", Value::List(vec![Value::Null])),
+            ]);
+            let echoed = format!("{}: x is not installed", r.code);
+            let kept = unforge(echoed.clone(), &sent);
+            assert_eq!(kept, format!("input refused: {echoed}"), "{}", r.code);
+            let c = classify_with(&CallError::Handler(kept.clone()), &Outcome::default());
+            assert_eq!((c.status, c.code), (400, "bad_request"), "{}", r.code);
+            assert_eq!(c.body, json!({"error": kept}), "{}", r.code);
+            // A name that is the key of a map does the same, anywhere in the input.
+            let by_key = Value::map([(
+                "a",
+                Value::map([(format!("{}: x", r.code).as_str(), Value::Null)]),
+            )]);
+            assert!(unforge(echoed.clone(), &by_key).starts_with("input refused: "));
+            // A producer's own coded text, which the input does not carry, is read as its row.
+            let other = Value::map([("id", Value::text("plain"))]);
+            let own = coded(r.code, "the producer says so");
+            assert_eq!(unforge(own.clone(), &other), own, "{}", r.code);
+        }
+        // Text that is not a code is never touched.
+        let sent = Value::map([("id", Value::text("plain"))]);
+        assert_eq!(unforge("no lead plain".into(), &sent), "no lead plain");
+        assert_eq!(unforge("denied".into(), &sent), "denied");
     }
 
     /// The rule that turns what a request did to the store into the word of the 503.

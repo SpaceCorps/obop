@@ -542,7 +542,19 @@ fn unavailable(why: &str) -> Response {
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
     match r {
         Ok(r) => Json(json!({"value": r.value.to_json(), "denied": r.denied})).into_response(),
-        Err(e) => classified(errors::classify(&e)),
+        Err(e) => {
+            // `classify` reads what this request did to the store (the scope `blocking` opened).
+            let c = errors::classify(&e);
+            if c.applied.is_some() {
+                // The explanation of a refusal reaches no caller, but the operator needs it.
+                eprintln!(
+                    "storage fault on a call: {} {}",
+                    c.code,
+                    c.detail.as_deref().unwrap_or("")
+                );
+            }
+            classified(c)
+        }
     }
 }
 
@@ -851,16 +863,31 @@ mod fault_answers {
 
     #[test]
     fn a_handler_error_that_is_the_stores_trouble_is_a_503_and_never_a_400() {
-        let r = respond(Err(CallError::Handler(
-            "storage_busy: every connection is in use".into(),
-        )));
-        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(retry_after(&r).as_deref(), Some("1"));
-        let r = respond(Err(CallError::Handler(
-            "storage_unavailable: the database cannot be reached".into(),
-        )));
-        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(retry_after(&r).as_deref(), Some("5"));
+        use obop_storage::fault::{self, Fault};
+        // The pool notes the refusal on the thread of the request; the answer rests on that, so a
+        // text that merely begins with the word is the caller's own.
+        let words = [
+            ("storage_busy: every connection is in use", Fault::Busy, "1"),
+            (
+                "storage_unavailable: the database cannot be reached",
+                Fault::Unavailable,
+                "5",
+            ),
+        ];
+        for (text, f, wait) in words {
+            fault::clear();
+            fault::note(f);
+            let r = respond(Err(CallError::Handler(text.into())));
+            assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE, "{text}");
+            assert_eq!(retry_after(&r).as_deref(), Some(wait), "{text}");
+            fault::clear();
+            let r = respond(Err(CallError::Handler(text.into())));
+            assert_eq!(
+                r.status(),
+                StatusCode::BAD_REQUEST,
+                "no fault was noted: {text}"
+            );
+        }
         // An error of the command itself is still the caller's.
         let r = respond(Err(CallError::Handler("name is required".into())));
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);

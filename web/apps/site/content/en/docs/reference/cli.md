@@ -112,7 +112,7 @@ The commands above are command line only for now: none has a page or an API rout
 
 ## Exit status
 
-`0` on success. Anything else prints a line starting with `error:` on standard error. The backup commands have stable statuses: `3` a sealed backup's key is not configured (`restore_key_required`), `4` a plain backup where a key is configured (`backup_not_sealed`), `5` records restored but an uploaded file could not be written (`restore_files_failed`). `75` a call (`obop call`, `obop import`) met a refusal of the database (`storage_busy`, `storage_unavailable` or `storage_timeout`): the line says what became of the call's changes and how long to wait, and the call can be repeated unless it says a change in flight may or may not have been applied. A command that needs approval is reported as `error: ApprovalRequired { plan_id: ... }`.
+`0` on success. Anything else prints a line starting with `error:` on standard error. The backup commands have stable statuses: `3` a sealed backup's key is not configured (`restore_key_required`), `4` a plain backup where a key is configured (`backup_not_sealed`), `5` records restored but an uploaded file could not be written (`restore_files_failed`). `75` a call (`obop call`, `obop import`) met a refusal of the database (`storage_busy`, `storage_unavailable` or `storage_timeout`): the line says what became of the call's changes and how long to wait. Repeat the call only when the line says nothing was changed; when it says part of it was applied, or that a change in flight may or may not have been applied, read what the call touched first. A command that needs approval is reported as `error: ApprovalRequired { plan_id: ... }`.
 
 ## Defaults worth knowing
 

@@ -289,7 +289,7 @@ impl Ingress {
             }
             // An inbound record carries no version to compare, so this cannot happen today.
             Err(e @ CallError::PreconditionFailed { .. }) => {
-                Err(obop_commands::errors::classify(&e).cli)
+                Err(obop_commands::errors::classify_with(&e, &Default::default()).cli)
             }
         }
     }

@@ -154,7 +154,10 @@ pub fn handle(d: &Dispatcher, p: &Principal, s: &mut Session, line: &str) -> Opt
         Ok(v) => v,
         Err(_) => return Some(error(&J::Null, -32700, "parse error").to_string()),
     };
-    match handle_payload(d, p, s, &payload) {
+    // One line is one request: the scope of `obop-http` is opened here, so that the guard holds
+    // and a failed call can say what it changed (D74).
+    let (reply, _) = errors::requested(|| handle_payload(d, p, s, &payload));
+    match reply {
         Reply::Accepted => None,
         Reply::Json(j) => Some(j.to_string()),
     }
@@ -293,28 +296,37 @@ fn call_tool(d: &Dispatcher, p: &Principal, s: &mut Session, params: &J) -> Resu
     // Unknown, hidden, forbidden and not-on-this-surface all answer the same, so a caller cannot
     // probe for commands it may not see.
     let cmd = names::from_mcp(name).ok_or_else(|| unknown_tool(name))?;
-    match d.call(
+    let result = d.call(
         Surface::Mcp,
         p,
         &mut s.vault,
         &cmd,
         &Value::from_json(&args),
-    ) {
+    );
+    // What the request did to the store so far: the scope of `obop-http` for `/mcp`, the one
+    // `handle` opens for the stdio server.
+    let seen = errors::seen();
+    match result {
         Ok(r) => {
+            // A refused read that the command turned into an empty answer is still a refusal
+            // (D74), as on the HTTP surfaces.
+            if let Some(c) = errors::storage_outcome(&seen, false) {
+                return Ok(tool_result(failed_body(c), true));
+            }
             let mut out = json!({"status": "ok", "value": r.value.to_json()});
             if !r.denied.is_empty() {
                 out["denied"] = json!(r.denied);
             }
             Ok(tool_result(out, false))
         }
-        Err(e) => error_reply(name, &e),
+        Err(e) => error_reply(name, &e, &seen),
     }
 }
 
-/// The MCP answer for a failed call. `errors::classify` decides what kind of failure it is; this
-/// only shapes it for a tool result.
-fn error_reply(name: &str, e: &CallError) -> Result<J, RpcError> {
-    let c = errors::classify(e);
+/// The MCP answer for a failed call. `errors::classify_with` decides what kind of failure it is,
+/// knowing what the request did to the store (`seen`); this only shapes it for a tool result.
+fn error_reply(name: &str, e: &CallError, seen: &errors::Outcome) -> Result<J, RpcError> {
+    let c = errors::classify_with(e, seen);
     match c.kind {
         errors::Kind::Proposed { plan_id } => Ok(tool_result(
             json!({
@@ -326,16 +338,18 @@ fn error_reply(name: &str, e: &CallError) -> Result<J, RpcError> {
         )),
         // Unknown, hidden, forbidden and not-on-this-surface all answer the same.
         errors::Kind::Hidden => Err(unknown_tool(name)),
-        errors::Kind::Failed => {
-            // A tool result has no headers: the seconds to wait (a storage fault, D74) go in the
-            // body, next to `applied`.
-            let mut body = c.body;
-            if let (Some(wait), Some(o)) = (c.retry_after, body.as_object_mut()) {
-                o.insert("retry_after".into(), json!(wait));
-            }
-            Ok(tool_result(body, true))
-        }
+        errors::Kind::Failed => Ok(tool_result(failed_body(c), true)),
     }
+}
+
+/// The structured content of a tool error. A tool result has no headers: the seconds to wait (a
+/// storage fault, D74) go in the body, next to `applied`.
+fn failed_body(c: errors::Classified) -> J {
+    let mut body = c.body;
+    if let (Some(wait), Some(o)) = (c.retry_after, body.as_object_mut()) {
+        o.insert("retry_after".into(), json!(wait));
+    }
+    body
 }
 
 /// The metadata `GET /api/meta` and the `obop__meta` tool return: modules, models, readable
@@ -545,6 +559,25 @@ mod tests {
         assert_eq!(s.protocol, Some("2025-06-18"));
     }
 
+    /// A request that met no storage fault.
+    fn none() -> errors::Outcome {
+        errors::Outcome::default()
+    }
+
+    /// A request that met `fault` after it had (`wrote`) or had not changed something.
+    fn met(fault: &str, wrote: bool) -> errors::Outcome {
+        let fault = match fault {
+            "storage_busy" => errors::Fault::Busy,
+            "storage_unavailable" => errors::Fault::Unavailable,
+            _ => errors::Fault::Timeout,
+        };
+        errors::Outcome {
+            fault: Some(fault),
+            wrote,
+            ..errors::Outcome::default()
+        }
+    }
+
     #[test]
     fn failed_calls_answer_as_the_classification_says() {
         let is_error = |r: &Result<J, RpcError>| r.as_ref().unwrap()["isError"].clone();
@@ -554,16 +587,17 @@ mod tests {
         let r = error_reply(
             "party__create",
             &CallError::Handler("name is required".into()),
+            &none(),
         );
         assert_eq!(is_error(&r), json!(true));
         assert_eq!(body(&r), json!({"error": "name is required"}));
         let restore = obop_commands::RestoreError::UnknownToken("t1".into());
-        let r = error_reply("t", &CallError::Restore(restore));
+        let r = error_reply("t", &CallError::Restore(restore), &none());
         assert_eq!(body(&r), json!({"error": "invalid token"}));
         let plan = CallError::ApprovalRequired {
             plan_id: "plan-1".into(),
         };
-        let r = error_reply("t", &plan);
+        let r = error_reply("t", &plan, &none());
         assert_eq!(is_error(&r), json!(false));
         assert_eq!(body(&r)["status"], "approval_required");
         assert_eq!(body(&r)["plan_id"], "plan-1");
@@ -574,7 +608,7 @@ mod tests {
             CallError::UnknownPlan("p".into()),
         ] {
             assert_eq!(
-                error_reply("a__b", &e).unwrap_err(),
+                error_reply("a__b", &e, &none()).unwrap_err(),
                 (-32602, "unknown tool: a__b".to_string())
             );
         }
@@ -583,13 +617,14 @@ mod tests {
         let r = error_reply(
             "t",
             &CallError::Handler("use_search: after is a search option".into()),
+            &none(),
         );
         assert_eq!(is_error(&r), json!(true));
         assert_eq!(body(&r)["code"], "use_search");
         assert_eq!(body(&r)["error"], "after is a search option");
 
         // A failed precondition says which version the record has now.
-        let r = error_reply("t", &CallError::PreconditionFailed { current: 8 });
+        let r = error_reply("t", &CallError::PreconditionFailed { current: 8 }, &none());
         assert_eq!(is_error(&r), json!(true));
         assert_eq!(body(&r)["code"], "precondition_failed");
         assert_eq!(body(&r)["current_version"], 8);
@@ -597,7 +632,8 @@ mod tests {
     }
 
     /// D74: the store's refusal is a tool error that says when to come back and what became of the
-    /// call's own changes, with the words of every other surface (`errors::storage_fault`).
+    /// call's own changes, with the words of every other surface (`errors::storage_fault`). The
+    /// request says it, not the words of the error.
     #[test]
     fn a_storage_fault_is_a_tool_error_with_the_wait_and_what_was_applied() {
         let is_error = |r: &Result<J, RpcError>| r.as_ref().unwrap()["isError"].clone();
@@ -608,7 +644,7 @@ mod tests {
             ("storage_unavailable", 5, "unknown"),
         ] {
             let text = format!("{word}: every connection is in use");
-            let r = error_reply("lead__update", &CallError::Handler(text));
+            let r = error_reply("lead__update", &CallError::Handler(text), &met(word, false));
             assert_eq!(is_error(&r), json!(true), "{word}");
             let b = body(&r);
             assert_eq!(b["error"], word);
@@ -617,21 +653,60 @@ mod tests {
             assert_eq!(b["retry_after"], wait, "{word}");
             assert!(b["hint"].as_str().is_some_and(|h| !h.is_empty()), "{word}");
             // The same body as REST, plus the wait that REST puts in a header.
-            let mut rest = errors::classify(&CallError::Handler(format!("{word}: x"))).body;
+            let mut rest =
+                errors::classify_with(&CallError::Handler(format!("{word}: x")), &met(word, false))
+                    .body;
             rest["retry_after"] = json!(wait);
             assert_eq!(b, rest, "{word}");
             // The text of the result is the structured content, as for every tool result.
             let text = r.as_ref().unwrap()["content"][0]["text"].as_str().unwrap();
             assert_eq!(serde_json::from_str::<J>(text).unwrap(), b);
+
+            // A change had committed before the refusal: part of it was applied.
+            let r = error_reply(
+                "lead__update",
+                &CallError::Handler(format!("{word}: x")),
+                &met(word, true),
+            );
+            assert_eq!(body(&r)["applied"], "partial", "{word}");
+            assert!(
+                body(&r)["hint"]
+                    .as_str()
+                    .is_some_and(|h| h.contains("Do not repeat it blindly")),
+                "{word}"
+            );
+            // The words of the error do not matter: a wrapped refusal is the store's too.
+            let r = error_reply(
+                "lead__update",
+                &CallError::Handler("lead.win: effect 1 (set_state) failed: x".into()),
+                &met(word, false),
+            );
+            assert_eq!(body(&r)["code"], word);
         }
-        // The caller's own echoed input is not a fault.
-        let r = error_reply(
-            "t",
-            &CallError::Handler("unknown option \"a: storage_busy: b\"".into()),
-        );
+
+        // The words alone are not a fault: a text that begins with one is the call's own error.
+        for text in [
+            "storage_busy: a name the caller chose",
+            "unknown option \"a: storage_busy: b\"",
+        ] {
+            let r = error_reply("t", &CallError::Handler(text.into()), &none());
+            assert_eq!(is_error(&r), json!(true));
+            assert_eq!(body(&r), json!({"error": text}));
+        }
+    }
+
+    /// A refusal the command turned into an answer is still a refusal on this surface.
+    #[test]
+    fn a_result_that_rests_on_a_refused_read_is_a_tool_error_too() {
+        let c = errors::storage_outcome(&met("storage_busy", false), false).unwrap();
+        let b = failed_body(c);
         assert_eq!(
-            body(&r),
-            json!({"error": "unknown option \"a: storage_busy: b\""})
+            (b["code"].clone(), b["applied"].clone()),
+            (json!("storage_busy"), json!("none"))
         );
+        assert_eq!(b["retry_after"], 1);
+        // Something optional was lost after a change: the result stands.
+        assert!(errors::storage_outcome(&met("storage_busy", true), false).is_none());
+        assert!(errors::storage_outcome(&none(), false).is_none());
     }
 }

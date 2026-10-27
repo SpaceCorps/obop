@@ -1212,7 +1212,10 @@ mod tests {
             (Fault::Busy, Applied::None),
             (Fault::Unavailable, Applied::Unknown),
         ] {
+            fault::clear();
+            fault::note(f);
             let direct = crate::respond(Err(CallError::Handler(f.message("x"))));
+            fault::clear();
             let bytes = axum::body::to_bytes(direct.into_body(), 1 << 20)
                 .await
                 .unwrap();

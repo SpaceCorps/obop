@@ -59,13 +59,15 @@ async fn the_errors_that_always_existed_keep_their_status_and_body() {
 async fn a_handler_string_with_a_code_of_the_table_answers_as_its_row() {
     for r in errors::TABLE {
         let (s, h, b) = answer(CallError::Handler(errors::coded(r.code, "the reason"))).await;
-        assert_eq!(s.as_u16(), r.status, "{}", r.code);
-        assert_eq!(h.get("retry-after").is_some(), r.retry_after.is_some());
-        // The storage rows (D74) name the code word in `error` and add `applied`; their own test
-        // is `a_storage_word_is_a_503_with_a_wait_and_what_became_of_the_changes`.
+        // The storage rows (D74) are not read from text: a fault the pool noted makes them, and
+        // `a_storage_word_is_a_503_with_a_wait_and_what_became_of_the_changes` has them.
         if r.origin == "D74" {
+            assert_eq!(s, StatusCode::BAD_REQUEST, "{}", r.code);
+            assert!(h.get("retry-after").is_none() && b.get("code").is_none());
             continue;
         }
+        assert_eq!(s.as_u16(), r.status, "{}", r.code);
+        assert_eq!(h.get("retry-after").is_some(), r.retry_after.is_some());
         assert_eq!(
             b,
             json!({"error": "the reason", "code": r.code, "hint": r.hint}),
@@ -115,12 +117,15 @@ async fn retry_after_is_sent_when_the_classification_has_one() {
 /// 400 the client would not repeat.
 #[tokio::test]
 async fn a_storage_word_is_a_503_with_a_wait_and_what_became_of_the_changes() {
-    use obop_storage::fault::Fault;
+    use obop_storage::fault::{self, Fault};
     for (f, wait, applied) in [
         (Fault::Busy, "1", "none"),
         (Fault::Timeout, "5", "none"),
         (Fault::Unavailable, "5", "unknown"),
     ] {
+        // The pool noted the refusal on the thread of the request.
+        fault::clear();
+        fault::note(f);
         let (s, h, b) = answer(CallError::Handler(f.message("every connection is in use"))).await;
         assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE, "{f:?}");
         assert_eq!(h["retry-after"], wait, "{f:?}");
@@ -136,30 +141,41 @@ async fn a_storage_word_is_a_503_with_a_wait_and_what_became_of_the_changes() {
             "error, code, hint, applied: {b}"
         );
     }
-    // The guard's refusal of a later change changed nothing, whatever the first fault was.
-    let guard = Fault::Unavailable.message(
-        "an earlier storage call of this request was refused, so this change was not made",
-    );
-    let (s, h, b) = answer(CallError::Handler(guard)).await;
-    assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(h["x-obop-applied"], "none");
-    assert_eq!(b["applied"], "none");
-    // The word counts at the start of the text only: the caller's own echoed input stays a 400.
-    let (s, h, b) = answer(CallError::Handler(
-        "unknown option \"a: storage_busy: b\" (use filter, order)".into(),
+    // The answer rests on the fault, not on the words: a refusal wrapped in the text of the step
+    // that met it is the store's too, and a change that had committed makes it a partial one.
+    fault::clear();
+    fault::note(Fault::Busy);
+    let (s, h, _) = answer(CallError::Handler(
+        "lead.win: effect 1 failed: storage_busy: x".into(),
     ))
     .await;
-    assert_eq!(s, StatusCode::BAD_REQUEST);
-    assert!(h.get("retry-after").is_none() && h.get("x-obop-applied").is_none());
-    assert!(b.get("applied").is_none());
+    assert_eq!(s, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(h["x-obop-applied"], "none");
+    fault::clear();
+    // Without a fault noted for the request the words are the caller's own text, at the start of
+    // it too (an id, a name, a key echoed first): an ordinary 400, never a 503 to retry.
+    for text in [
+        "unknown option \"a: storage_busy: b\" (use filter, order)",
+        "storage_busy: a name the caller chose is not a credential",
+        "storage_unavailable: x",
+        "storage_timeout: x",
+    ] {
+        let (s, h, b) = answer(CallError::Handler(text.into())).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST, "{text}");
+        assert!(h.get("retry-after").is_none() && h.get("x-obop-applied").is_none());
+        assert_eq!(b, json!({"error": text}), "{text}");
+    }
 }
 
 /// The fallbacks that hold a bare error text (a session lock, the control plane, two-factor)
 /// answer a storage fault in the same words as the call does.
 #[tokio::test]
 async fn a_bare_error_text_with_a_storage_word_answers_as_a_call_does() {
-    use obop_storage::fault::Fault;
+    use obop_storage::fault::{self, Fault};
+    fault::clear();
+    fault::note(Fault::Timeout);
     let via_call = answer(CallError::Handler(Fault::Timeout.message("too slow"))).await;
+    fault::clear();
     let (s, h, b) = read(unavailable(&Fault::Timeout.message("too slow"))).await;
     assert_eq!(
         (s, &h["retry-after"], &h["x-obop-applied"]),
