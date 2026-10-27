@@ -277,14 +277,19 @@ The core follows semantic versioning. While it is below 1.0, a **minor** bump (`
 | `field` | array of tables | no | See 3.3. |
 | `action` | array of tables | no | See 3.4. |
 | `access` | table | no | Row-level access, see 3.9. |
+| `history`, `history_reason`, `history_retention_days` | string, string, integer | `full` | Change history of the records (D75), see below. |
 
 `[[model.field]]` and `[[model.action]]` are written after their model, indented by convention.
+
+**Reserved names (D75).** The platform sets six keys itself on every record it tracks, and keeps some names for its own use, so a package cannot declare them: the install gate refuses a field named `created_at`, `updated_at`, `created_by`, `updated_by`, `row_version`, `sys_backfilled`, `if_version` (the input that makes an update refuse a record that has changed since the client read it) or `id`, and a model named `record_change`, `storage_event`, `storage_index` or `data_guard`. The error names the field and a name to use instead: `recorded_at`, `modified_at`, `author`, `last_editor`, `revision`, `estimated`, `expected_version`, `reference`. The same goes for an action called `history`, which is the name of the generated command that reads the history of one record (a model has it only once the platform records the history of its records, which it does not yet). A package that is already installed and declares one of these names keeps working: it is registered again when the server starts and its field stays an ordinary field, but an upgrade of it is refused until the name is changed (a `[[migration]]` with `rename_field`, section 7.1, moves the data).
+
+`history = "none"` turns the change history of the records of a model off. It needs `history_reason`, a sentence that says why the changes need not be kept (a counter, a cache), and the gate refuses it for a model that has a field of class `confidential_hr`, `special_category` or `financial`, or a state field that actions move. `history_retention_days` (at least 1, not with `none`) is the number of days to keep the entries; without it they are kept for ever. The keys are read and checked now and change nothing yet: no records are tracked in this version.
 
 ### 3.3 `[[model.field]]`
 
 | Key | Type | Default | Rules |
 |---|---|---|---|
-| `name` | string | required | Identifier, unique in the model, never `id`. |
+| `name` | string | required | Identifier, unique in the model, never `id` or another reserved name (3.2). |
 | `description` | string | required | Not blank (the gate refuses `field has no description`). |
 | `class` | string | required | One of `none`, `public_directory`, `internal`, `confidential_hr`, `special_category`, `financial`, `secret`. See section 5. |
 | `personal_data` | bool | `false` | `true` if the value is about an identifiable person. Not allowed with `class = "none"`. |
@@ -307,7 +312,7 @@ The core follows semantic versioning. While it is below 1.0, a **minor** bump (`
 
 | Key | Type | Default | Rules |
 |---|---|---|---|
-| `name` | string | required | Identifier; not `get`, `list`, `search`, `create`, `bulk_create`, `update` or `delete`; unique within the model (a duplicate is refused). The command id is `<model>.<name>`. |
+| `name` | string | required | Identifier; not `get`, `list`, `search`, `create`, `bulk_create`, `update`, `delete` or `history`; unique within the model (a duplicate is refused). The command id is `<model>.<name>`. |
 | `description` | string | required | Not blank. |
 | `field` | string | required | A `select` field declared in the same model; any select field, not only `state` (the UI draws `state` as the status bar and kanban, other selects are governed the same way). That field becomes *governed* (section 6.1). |
 | `from` | string | none | The value the field must have now; one of the options. Without `from` the action works from any value; the bundled packages always set it. Must differ from `to`. |
