@@ -409,6 +409,15 @@ pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
 /// (`OBOP_DB_*`, see docs/DEPLOY.md). Only PostgreSQL has a pool; the setting is ignored for
 /// `memory:` and SQLite.
 pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
+    let backend = open_backend(url, pool)?;
+    // In a build with `test-support` (the tests of the workspace, never a release) the process
+    // tests can make the binary's store refuse calls: `OBOP_TEST_FAULTS`, see `testing`.
+    #[cfg(feature = "test-support")]
+    let backend = testing::faults_from_env(backend);
+    Ok(backend)
+}
+
+fn open_backend(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
     if url == "memory:" {
         Ok(Arc::new(Memory::default()))
     } else if let Some(path) = url

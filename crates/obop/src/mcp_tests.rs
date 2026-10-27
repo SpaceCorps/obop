@@ -1054,6 +1054,18 @@ async fn a_tool_call_the_store_refused_is_a_503_that_says_what_was_applied_never
             applied.as_str(),
             "k={k}"
         );
+        // The rest of the JSON-RPC error is what `errors::storage_fault` says for REST as well.
+        let err = &resp.json()["error"];
+        assert_eq!(err["message"], "storage_busy", "k={k}");
+        assert_eq!(
+            err["data"]["retry_after"].to_string(),
+            resp.header("retry-after"),
+            "k={k}"
+        );
+        assert!(
+            err["data"]["hint"].as_str().is_some_and(|h| !h.is_empty()),
+            "k={k}"
+        );
         match applied.as_str() {
             "none" => {
                 none += 1;

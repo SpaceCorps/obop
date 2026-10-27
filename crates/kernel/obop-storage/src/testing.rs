@@ -21,6 +21,27 @@ pub enum Mode {
     Updates,
 }
 
+/// For the process tests of the binary: `OBOP_TEST_FAULTS=apply:SKIP[:N]` lets the first `SKIP`
+/// atomic batches of the process through and refuses the next `N` (default 1) as `storage_busy`,
+/// behind the request guard, as the PostgreSQL pool would. Without the variable the backend is
+/// returned as it is. Only built with the `test-support` feature, which a release build never
+/// enables; a text that is not of this form stops the process, so a test cannot run unarmed.
+pub fn faults_from_env(inner: Arc<dyn Backend>) -> Arc<dyn Backend> {
+    let Ok(spec) = std::env::var("OBOP_TEST_FAULTS") else {
+        return inner;
+    };
+    let mut parts = spec.split(':');
+    let number = |p: Option<&str>| p.and_then(|n| n.parse::<i64>().ok());
+    let flaky = Flaky::new(inner);
+    match (parts.next(), number(parts.next())) {
+        (Some("apply"), Some(skip)) => {
+            flaky.refuse_applies_after(skip, number(parts.next()).unwrap_or(1));
+        }
+        _ => panic!("OBOP_TEST_FAULTS must be apply:SKIP[:N], got {spec:?}"),
+    }
+    guarded(flaky)
+}
+
 /// Wraps a backend; refuses calls as `storage_busy` while a mode or a budget says so, noting the
 /// fault on the calling thread exactly as the PostgreSQL pool does.
 pub struct Flaky {

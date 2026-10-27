@@ -3,8 +3,8 @@
 //! permission, row rule and limit applies. Without a token a person with database access can
 //! use `--dev-auth` on a local database, as with `obop call`.
 
-use super::{Exit, Opts, fail, open_app, principal};
-use obop_commands::{CallError, Surface, Value, Vault};
+use super::{Exit, Opts, call_failure, fail, open_app, principal, refused_answer};
+use obop_commands::{CallError, Surface, Value, Vault, errors};
 
 pub struct Args<'a> {
     pub model: &'a str,
@@ -37,11 +37,22 @@ pub fn run(o: &Opts, a: &Args) -> Exit {
     }
     let input = Value::Map(input.into_iter().map(|(k, v)| (k.to_string(), v)).collect());
     let id = format!("{}.bulk_create", a.model);
-    let out = match app
-        .dispatcher
-        .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
-    {
-        Ok(r) => r.value,
+    // The call is one request (see `call_json`).
+    let (result, seen) = errors::requested(|| {
+        app.dispatcher
+            .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
+    });
+    let out = match result {
+        Ok(r) => {
+            if let Some(code) = refused_answer(&seen) {
+                return Err(code);
+            }
+            r.value
+        }
+        // The store refused: the answer is the store's, whatever the rows or the text say (a row
+        // whose lookup was refused is not an invalid row).
+        Err(e) if seen.fault.is_some() => return Err(call_failure(&e, &seen)),
+        // The refusal of a command is printed as it is.
         Err(CallError::Handler(m)) => return Err(fail(&format!("error: {m}"))),
         Err(CallError::ApprovalRequired { plan_id }) => {
             println!("proposed, not run: a person with the right must approve plan {plan_id}");
@@ -55,7 +66,7 @@ pub fn run(o: &Opts, a: &Args) -> Exit {
                 a.model
             )));
         }
-        Err(e) => return Err(fail(&format!("error: {e:?}"))),
+        Err(e) => return Err(call_failure(&e, &seen)),
     };
     let Value::Map(m) = &out else {
         return Err(fail("error: unexpected answer"));

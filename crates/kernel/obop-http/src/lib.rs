@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{any, get, post},
 };
-use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value};
+use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value, errors};
 use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower_http::services::{ServeDir, ServeFile};
@@ -30,6 +30,9 @@ pub mod payments;
 pub mod public;
 pub(crate) mod shared;
 pub mod website;
+
+#[cfg(test)]
+mod error_tests;
 
 pub struct HttpState {
     dispatcher: Arc<Dispatcher>,
@@ -514,20 +517,24 @@ fn approve_blocking(s: Arc<HttpState>, h: HeaderMap, plan_id: String) -> Respons
     }
 }
 
-/// The shared store could not be reached or a lock was not granted in time.
+/// The shared store could not be reached or a lock was not granted in time. A refusal that names
+/// its code word is a storage fault and answers as one (`errors::of_storage_text`); anything else
+/// is a lock that was not granted in time.
 fn unavailable(why: &str) -> Response {
     eprintln!("shared state unavailable: {why}");
-    let fault = obop_storage::fault::Fault::of_message(why);
+    if let Some(c) = errors::of_storage_text(why) {
+        return classified(c);
+    }
     let mut r = api_error(
         StatusCode::SERVICE_UNAVAILABLE,
         "the server is busy, try again",
-        fault.map_or("unavailable", |f| f.code()),
+        "unavailable",
         "A lock or the database did not answer in time. Try again after the time in Retry-After.",
     );
     // Never a 503 without a time to wait (D74).
     r.headers_mut().insert(
         axum::http::header::RETRY_AFTER,
-        axum::http::HeaderValue::from(fault.map_or(1, |f| f.retry_after_secs())),
+        axum::http::HeaderValue::from(1),
     );
     r
 }
@@ -535,30 +542,52 @@ fn unavailable(why: &str) -> Response {
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
     match r {
         Ok(r) => Json(json!({"value": r.value.to_json(), "denied": r.denied})).into_response(),
-        Err(CallError::ApprovalRequired { plan_id }) => (
-            StatusCode::ACCEPTED,
-            Json(json!({"approval_required": true, "plan_id": plan_id})),
-        )
-            .into_response(),
-        // Unknown, hidden and forbidden look the same, so a caller cannot probe for commands.
-        Err(
-            CallError::Forbidden(_) | CallError::UnknownCommand(_) | CallError::NotOnSurface(_),
-        ) => (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response(),
-        Err(CallError::UnknownPlan(_)) => {
-            (StatusCode::NOT_FOUND, Json(json!({"error": "not found"}))).into_response()
+        Err(e) => {
+            // `classify` reads what this request did to the store (the scope `blocking` opened).
+            let c = errors::classify(&e);
+            if c.applied.is_some() {
+                // The explanation of a refusal reaches no caller, but the operator needs it.
+                eprintln!(
+                    "storage fault on a call: {} {}",
+                    c.code,
+                    c.detail.as_deref().unwrap_or("")
+                );
+            }
+            classified(c)
         }
-        Err(CallError::Restore(_)) => (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": "invalid token"})),
-        )
-            .into_response(),
-        // A refused database call is the server's trouble, never a 4xx the client would not retry.
-        Err(CallError::Handler(m)) if obop_storage::fault::Fault::is_transient(&m) => {
-            unavailable(&m)
-        }
-        Err(CallError::Handler(m)) => {
-            (StatusCode::BAD_REQUEST, Json(json!({"error": m}))).into_response()
-        }
+    }
+}
+
+/// The answer for a classified call error: its status and body (`obop_commands::errors` decides
+/// both; unknown, hidden and forbidden look the same there, so a caller cannot probe for
+/// commands), and the headers `classified_headers` sets.
+fn classified(c: errors::Classified) -> Response {
+    let status = StatusCode::from_u16(c.status).unwrap_or(StatusCode::BAD_REQUEST);
+    let mut r = (status, Json(c.body.clone())).into_response();
+    classified_headers(&c, &mut r);
+    r
+}
+
+/// The headers a classification asks for: `ETag` for the version a failed precondition found,
+/// `Retry-After` when it says "later" and `X-Obop-Applied` for a storage fault (D74: what became of
+/// the request's own changes, the word that is also in the body).
+pub(crate) fn classified_headers(c: &errors::Classified, r: &mut Response) {
+    if let Some(v) = c.current_version
+        && let Ok(v) = axum::http::HeaderValue::from_str(&format!("\"{v}\""))
+    {
+        r.headers_mut().insert(axum::http::header::ETAG, v);
+    }
+    if let Some(s) = c.retry_after {
+        r.headers_mut().insert(
+            axum::http::header::RETRY_AFTER,
+            axum::http::HeaderValue::from(s),
+        );
+    }
+    if let Some(a) = c.applied {
+        r.headers_mut().insert(
+            "x-obop-applied",
+            axum::http::HeaderValue::from_static(a.word()),
+        );
     }
 }
 
@@ -834,16 +863,31 @@ mod fault_answers {
 
     #[test]
     fn a_handler_error_that_is_the_stores_trouble_is_a_503_and_never_a_400() {
-        let r = respond(Err(CallError::Handler(
-            "storage_busy: every connection is in use".into(),
-        )));
-        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(retry_after(&r).as_deref(), Some("1"));
-        let r = respond(Err(CallError::Handler(
-            "storage_unavailable: the database cannot be reached".into(),
-        )));
-        assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(retry_after(&r).as_deref(), Some("5"));
+        use obop_storage::fault::{self, Fault};
+        // The pool notes the refusal on the thread of the request; the answer rests on that, so a
+        // text that merely begins with the word is the caller's own.
+        let words = [
+            ("storage_busy: every connection is in use", Fault::Busy, "1"),
+            (
+                "storage_unavailable: the database cannot be reached",
+                Fault::Unavailable,
+                "5",
+            ),
+        ];
+        for (text, f, wait) in words {
+            fault::clear();
+            fault::note(f);
+            let r = respond(Err(CallError::Handler(text.into())));
+            assert_eq!(r.status(), StatusCode::SERVICE_UNAVAILABLE, "{text}");
+            assert_eq!(retry_after(&r).as_deref(), Some(wait), "{text}");
+            fault::clear();
+            let r = respond(Err(CallError::Handler(text.into())));
+            assert_eq!(
+                r.status(),
+                StatusCode::BAD_REQUEST,
+                "no fault was noted: {text}"
+            );
+        }
         // An error of the command itself is still the caller's.
         let r = respond(Err(CallError::Handler("name is required".into())));
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);

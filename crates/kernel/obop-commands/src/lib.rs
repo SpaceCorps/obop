@@ -120,7 +120,22 @@ pub enum CallError {
         plan_id: String,
     },
     UnknownPlan(String),
+    /// The record is no longer at the version the caller read (D75). `current` is the version it
+    /// has now. Nothing was written. No producer yet.
+    PreconditionFailed {
+        current: i64,
+    },
+    /// The call ran and was refused. The text may start with a code of `errors::TABLE`
+    /// (`code: message`); `errors::classify` is the only reader of it.
     Handler(String),
+}
+
+/// A refusal of a command or guard, as the error of the call. The text is the producer's, except
+/// that a text which begins with a code of `errors::TABLE` that the call's own input begins with is
+/// set apart (`errors::unforge`): the caller cannot choose the row of its own answer by what it
+/// sends.
+fn refusal(message: String, input: &Value) -> CallError {
+    CallError::Handler(errors::unforge(message, input))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -882,7 +897,7 @@ impl Dispatcher {
         let mut guard_approval = false;
         let mut pre = Vec::new();
         if let Some(g) = &guard {
-            let v = (g.guard)(p, &input).map_err(CallError::Handler)?;
+            let v = (g.guard)(p, &input).map_err(|m| refusal(m, &input))?;
             guard_approval = v.approval;
             pre = v.pre;
             if let Some(i) = v.input {
@@ -941,7 +956,7 @@ impl Dispatcher {
         let mut pre = Vec::new();
         let guard = self.guards.read().unwrap().get(&plan.id).cloned();
         if let Some(g) = guard {
-            let v = (g.guard)(&plan.principal, &input).map_err(CallError::Handler)?;
+            let v = (g.guard)(&plan.principal, &input).map_err(|m| refusal(m, &input))?;
             if v.requires.iter().any(|r| !approver.allows(r)) {
                 return Err(CallError::Forbidden(plan.id.clone()));
             }
@@ -1047,7 +1062,7 @@ impl Dispatcher {
                 }
                 // Through the action's own wrapper, like a call of the action: a drag of an order
                 // to "refunded" must return the money exactly as the refund action does.
-                self.invoke(&action, p, &i).map_err(CallError::Handler)?;
+                self.invoke(&action, p, &i).map_err(|m| refusal(m, &i))?;
                 if let Value::Map(m) = &mut input {
                     m.remove(step.field);
                 }
@@ -1061,7 +1076,7 @@ impl Dispatcher {
                 Actor::of(p).stamp(m);
             }
         }
-        let out = self.invoke(c, p, &input).map_err(CallError::Handler)?;
+        let out = self.invoke(c, p, &input).map_err(|m| refusal(m, &input))?;
         let observers: Vec<Arc<Observer>> = self
             .observers
             .read()
@@ -1538,6 +1553,7 @@ pub mod blobs;
 pub mod collate;
 pub mod csv;
 mod engine;
+pub mod errors;
 mod guards;
 pub mod json;
 mod kinds;

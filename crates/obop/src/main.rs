@@ -14,6 +14,8 @@ mod connectors_tests;
 #[cfg(test)]
 mod cors_tests;
 #[cfg(test)]
+mod error_seam_tests;
+#[cfg(test)]
 mod health_tests;
 mod import_cmd;
 #[cfg(test)]
@@ -43,7 +45,7 @@ mod update_tests;
 
 use app::{App, DevAuth};
 use obop_auth::Auth;
-use obop_commands::{Authenticator, Principal, Surface, Value, Vault, names};
+use obop_commands::{Authenticator, Principal, Surface, Value, Vault, errors, names};
 use std::io::BufRead;
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -222,6 +224,32 @@ type Exit = Result<(), ExitCode>;
 fn fail(msg: &str) -> ExitCode {
     eprintln!("{msg}");
     ExitCode::FAILURE
+}
+
+/// The line and the exit status of a command whose call failed. Both are decided with the
+/// answers of the other surfaces (`obop_commands::errors::classify_with`): the documented
+/// `error: Handler("...")` line and status 1 for the errors that have always existed, and for a
+/// call whose request met a refusal of the store (D74) the code word, what became of the call's
+/// own changes and status 75, "try again later". `seen` is what the request did to the store
+/// (`errors::requested` ran the call).
+fn call_failure_line(e: &obop_commands::CallError, seen: &errors::Outcome) -> (String, u8) {
+    let c = errors::classify_with(e, seen);
+    (format!("error: {}", c.cli), c.exit)
+}
+
+fn call_failure(e: &obop_commands::CallError, seen: &errors::Outcome) -> ExitCode {
+    let (line, status) = call_failure_line(e, seen);
+    eprintln!("{line}");
+    ExitCode::from(status)
+}
+
+/// A call that returned an answer, but whose request met a refusal of the store that the answer
+/// rests on (a read that came back empty): the same line and status as a failed call, never a
+/// result that looks complete. `None` when the answer stands.
+fn refused_answer(seen: &errors::Outcome) -> Option<ExitCode> {
+    let c = errors::storage_outcome(seen, false)?;
+    eprintln!("error: {}", c.cli);
+    Some(ExitCode::from(c.exit))
 }
 
 fn main() -> ExitCode {
@@ -897,12 +925,33 @@ fn call_json(
             })
             .collect(),
     );
-    match app
-        .dispatcher
-        .call(Surface::Cli, &p, &mut Vault::new(), &id, &input)
-    {
-        Ok(r) => Ok((r.value.to_json(), r.denied.clone())),
-        Err(e) => Err(fail(&format!("error: {e:?}"))),
+    dispatch_call(&app, &p, &id, &input).map_err(|(line, status)| {
+        eprintln!("{line}");
+        ExitCode::from(status)
+    })
+}
+
+/// The call of `obop call`: the answer and the names of the fields withheld from it, or the line
+/// and the exit status to print. The call is one request, with the scope the HTTP server opens for
+/// a handler, so that the guard holds and a failure can say what the call changed (D74).
+fn dispatch_call(
+    app: &App,
+    p: &Principal,
+    id: &str,
+    input: &Value,
+) -> Result<(serde_json::Value, Vec<String>), (String, u8)> {
+    let (result, seen) = errors::requested(|| {
+        app.dispatcher
+            .call(Surface::Cli, p, &mut Vault::new(), id, input)
+    });
+    match result {
+        // A read that was refused and came back empty is not a complete answer either.
+        Ok(r) => match errors::storage_outcome(&seen, false) {
+            Some(c) => Err((format!("error: {}", c.cli), c.exit)),
+            None => Ok((r.value.to_json(), r.denied.clone())),
+        },
+        // What the line says, and the exit status, are decided with the other surfaces' answers.
+        Err(e) => Err(call_failure_line(&e, &seen)),
     }
 }
 

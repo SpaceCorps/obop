@@ -79,6 +79,25 @@ impl Engine {
     pub fn backend(&self) -> &dyn obop_storage::Backend {
         &*self.store.backend
     }
+
+    /// A unit of work over this engine's backend, with the usual cap on the records it may touch.
+    ///
+    /// Every handler starts its unit here and not with `Unit::new(eng.backend())`, so what a unit
+    /// needs to know about the call it serves (who writes, which rules guard the records) is
+    /// added in this one place later and no handler changes (K18).
+    pub fn unit(&self) -> unit::Unit<'_> {
+        unit::Unit::new(self.backend())
+    }
+
+    /// As `unit`, with another cap on the records the unit may touch (bulk work).
+    pub fn unit_with_cap(&self, cap: usize) -> unit::Unit<'_> {
+        unit::Unit::with_cap(self.backend(), cap)
+    }
+
+    /// As `unit`, with no cap (sequence and counter work that is bounded by its own rules).
+    pub fn unit_unbounded(&self) -> unit::Unit<'_> {
+        unit::Unit::unbounded(self.backend())
+    }
 }
 
 /// Who is calling, as far as the engine needs to know: for row-level access and for the group
@@ -226,5 +245,107 @@ mod tests {
         assert_eq!(civil(1_735_689_599).rfc3339(), "2024-12-31T23:59:59Z");
         assert_eq!(civil(1_735_689_600).date(), "2025-01-01");
         assert_eq!(civil(-1).rfc3339(), "1969-12-31T23:59:59Z");
+    }
+
+    /// The three constructors of a unit differ only in the cap on the records it may touch.
+    #[test]
+    fn the_unit_constructors_differ_only_in_their_cap() {
+        use obop_registry::rules::MAX_EFFECT_RECORDS;
+        let eng = crate::Dispatcher::new().engine(&Store::new());
+
+        let mut u = eng.unit();
+        u.spend(MAX_EFFECT_RECORDS).unwrap();
+        assert!(u.spend(1).is_err());
+
+        let mut u = eng.unit_with_cap(3);
+        u.spend(3).unwrap();
+        assert!(u.spend(1).is_err());
+
+        let mut u = eng.unit_unbounded();
+        u.spend(MAX_EFFECT_RECORDS * 10).unwrap();
+    }
+
+    /// Every unit of work, in every handler, starts from the engine (`Engine::unit*`), and the
+    /// engine is built in one place (`Dispatcher::engine`). A path that built its own would be a
+    /// unit the next change to the constructor does not reach, in the one place where the request
+    /// guard and the unit's rules have to be the same for every handler. The scan reads the source
+    /// of this crate and ignores the test code (what follows `#[cfg(test)]`, and the files of
+    /// tests).
+    #[test]
+    fn no_handler_builds_its_own_unit_or_engine() {
+        use std::path::Path;
+
+        fn sources(dir: &Path, out: &mut Vec<(String, String)>) {
+            for entry in std::fs::read_dir(dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    sources(&path, out);
+                    continue;
+                }
+                let name = path.file_name().unwrap().to_string_lossy().to_string();
+                if !name.ends_with(".rs") || name == "tests.rs" || name.ends_with("_tests.rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).unwrap();
+                let live = text.split("#[cfg(test)]").next().unwrap().to_string();
+                out.push((path.to_string_lossy().replace('\\', "/"), live));
+            }
+        }
+        let mut files = Vec::new();
+        sources(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+            &mut files,
+        );
+        assert!(files.len() > 20, "the scan found {} files", files.len());
+
+        // What is built, how a line says so (the definitions `struct Engine {` and `impl Engine {`
+        // are not constructions), and the only files that may say it.
+        struct Rule {
+            what: &'static str,
+            says_so: fn(&str) -> bool,
+            allowed: &'static [&'static str],
+        }
+        let rules = [
+            Rule {
+                what: "a unit",
+                says_so: |l| {
+                    ["Unit::new(", "Unit::with_cap(", "Unit::unbounded("]
+                        .iter()
+                        .any(|n| l.contains(n))
+                },
+                allowed: &["src/engine/mod.rs", "src/engine/unit.rs"],
+            },
+            Rule {
+                what: "an engine",
+                says_so: |l| {
+                    let t = l.trim_start();
+                    t.starts_with("Engine {") || t.contains("= Engine {") || t.contains("(Engine {")
+                },
+                allowed: &["src/store.rs"],
+            },
+        ];
+        for Rule {
+            what,
+            says_so,
+            allowed,
+        } in rules
+        {
+            let mut seen_where_allowed = false;
+            for (path, live) in &files {
+                let hits = live
+                    .lines()
+                    .filter(|l| !l.trim_start().starts_with("//") && says_so(l))
+                    .count();
+                if allowed.iter().any(|a| path.ends_with(a)) {
+                    seen_where_allowed |= hits > 0;
+                } else {
+                    assert_eq!(hits, 0, "{path} builds {what} of its own");
+                }
+            }
+            assert!(
+                seen_where_allowed,
+                "nothing builds {what} where it should: the scan looks at the wrong thing"
+            );
+        }
     }
 }
