@@ -1,3 +1,8 @@
 packages:
   - web/apps/*
   - web/packages/*
+
+# D23 (docs/DECISIONS.md 1.1, docs/ENGINEERING.md 2.3): a JavaScript package version may be installed
+# only when it has been published for at least 7 days (minutes), and resolution fails otherwise.
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
