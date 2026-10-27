@@ -452,12 +452,14 @@ pub enum Ddl {
     /// Create what is missing, under the lock that serialises processes starting together.
     IfMissing,
     /// Create nothing: a database that lacks the schema is an error that says so. For a
-    /// deployment whose serving role may not create tables.
+    /// deployment whose serving role may not create tables. It covers the record store
+    /// (`schema::parts`) and the byte store's table (`blob::DbBytes`).
     Never,
 }
 
 impl Ddl {
-    /// What [`open`] uses: `Never` in a production process (see [`production`]), else `IfMissing`.
+    /// What [`open`] uses: `Never` in a production process (see [`production`], which no process
+    /// is yet), else `IfMissing`.
     pub fn for_process() -> Ddl {
         if production() {
             Ddl::Never
@@ -488,35 +490,43 @@ impl Default for OpenOptions {
 
 static PRODUCTION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Declare this process a production process (`obop serve --production`): from then on [`open`]
-/// does not create the schema.
+/// Declare this process a production process: from then on [`open`] does not create the schema.
+/// Nothing calls it yet. The start-up of the roles work (D77) will, for a server started as a
+/// production server, once there is a command that installs the schema as the owner (until
+/// then a production process could not be given a database to open).
 pub fn set_production(on: bool) {
     PRODUCTION.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Is this a production process: [`set_production`] was called, or `OBOP_PRODUCTION=1` is set?
-/// Read by [`open`] and by nothing else.
+/// Is this a production process, that is, was [`set_production`] called? Read by [`open`] and by
+/// nothing else.
+///
+/// The environment variable `OBOP_PRODUCTION=1` is deliberately not read yet ([`production_from`]
+/// is the rule it will follow). Reading it now would make every command that opens a database
+/// with [`open`] refuse an empty PostgreSQL database (`obop restore` into a fresh one, the
+/// restore drill, `obop migrate rehearse --scratch`, the control plane's first start), and no
+/// command installs the schema as the owner yet (`schema::owner_install` is a Rust function).
 pub fn production() -> bool {
-    production_from(
-        PRODUCTION.load(std::sync::atomic::Ordering::Relaxed),
-        std::env::var("OBOP_PRODUCTION").ok().as_deref(),
-    )
+    PRODUCTION.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// The rule of [`production`] for a given flag and variable: only the value `1` counts.
+/// The rule by which the variable will be read once it is: the flag, or `OBOP_PRODUCTION` set to
+/// `1`. Tested; not used by [`production`] yet.
+#[cfg(test)]
 fn production_from(flag: bool, variable: Option<&str>) -> bool {
     flag || variable.is_some_and(|v| v.trim() == "1")
 }
 
 /// Open the database `url` names: `memory:`, `sqlite://PATH` or `postgres://...`. A production
-/// process (see [`production`]) does not create the PostgreSQL schema; any other does.
+/// process (see [`production`]; none is yet) does not create the PostgreSQL schema; any other
+/// does.
 pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
     open_options(url, &OpenOptions::default())
 }
 
 /// As [`open`], with the connection pool settings given instead of read from the environment
 /// (`OBOP_DB_*`, see docs/DEPLOY.md), and the schema created when it is missing whatever
-/// `OBOP_PRODUCTION` says: for the commands that set a database up (the control plane seeding a
+/// `set_production` says: for the commands that set a database up (the control plane seeding a
 /// new instance, tests). Only PostgreSQL has a pool; the setting is ignored for `memory:` and
 /// SQLite.
 pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {

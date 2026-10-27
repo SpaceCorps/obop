@@ -373,14 +373,14 @@ fn ensure_creates_what_is_missing_only_when_allowed() {
     .err()
     .expect("an empty database cannot be opened without DDL");
     assert!(
-        e.contains("missing: base") && e.contains("OBOP_PRODUCTION"),
+        e.contains("missing: base") && e.contains("may not create it"),
         "{e}"
     );
     assert!(tables(&mut c).is_empty());
     // IfMissing creates it; a second time there is nothing to do.
     crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
     assert_eq!(tables(&mut c), ["obop_counter", "obop_kv", "obop_record"]);
-    assert!(crate::schema::inspect(&mut c).is_empty());
+    assert!(crate::schema::inspect(&mut c).unwrap().is_empty());
     crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
     // Now Never is fine, and the store works.
     let b = open_options(
@@ -406,7 +406,7 @@ fn a_missing_object_is_reported_and_put_back() {
         .unwrap();
     for broken in ["DROP INDEX obop_kv_expiry", "DROP TABLE obop_counter"] {
         c.batch_execute(broken).unwrap();
-        let found = crate::schema::inspect(&mut c);
+        let found = crate::schema::inspect(&mut c).unwrap();
         assert_eq!(found.len(), 1, "{broken}: {found:?}");
         assert_eq!(
             (found[0].code, found[0].object.as_str(), found[0].error),
@@ -424,7 +424,10 @@ fn a_missing_object_is_reported_and_put_back() {
         assert!(e.contains("missing: base"), "{e}");
         // IfMissing repairs it, and does not touch what is there.
         drop(open_with(db.url(), Some(one())).unwrap());
-        assert!(crate::schema::inspect(&mut c).is_empty(), "{broken}");
+        assert!(
+            crate::schema::inspect(&mut c).unwrap().is_empty(),
+            "{broken}"
+        );
         let kept: i64 = c
             .query_one("SELECT count(*) FROM obop_kv WHERE key = 'k'", &[])
             .unwrap()
@@ -517,7 +520,11 @@ fn processes_that_start_together_on_an_empty_database_all_start() {
             h.join().unwrap().unwrap();
         }
     });
-    assert!(crate::schema::inspect(&mut db.connect()).is_empty());
+    assert!(
+        crate::schema::inspect(&mut db.connect())
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -545,6 +552,112 @@ fn the_schema_of_a_non_default_search_path_is_used() {
         .get(0);
     assert_eq!(in_odd, 1);
     assert!(tables(&mut c).is_empty(), "nothing in public");
+}
+
+// ---- a check that cannot be answered is not "missing" ---------------------------------------------
+
+#[test]
+fn a_catalogue_query_that_fails_is_an_error_and_never_a_missing_part() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    drop(open_with(db.url(), Some(one())).unwrap()); // a complete schema
+    // 1. The transaction is already aborted (25P02): every query is refused. Reading that as "the
+    // part is not there" would advise DDL for a complete database under `Never`, and hide the
+    // real cause under `IfMissing`.
+    let mut c = db.connect();
+    c.batch_execute("BEGIN").unwrap();
+    assert!(c.batch_execute("SELECT 1/0").is_err());
+    for ddl in [Ddl::Never, Ddl::IfMissing] {
+        let e = crate::schema::ensure(&mut c, ddl).unwrap_err();
+        assert!(e.contains("SQLSTATE 25P02"), "{ddl:?}: {e}");
+        assert!(
+            !e.contains("missing") && !e.contains("may not create"),
+            "{ddl:?}: {e}"
+        );
+    }
+    let e = crate::schema::inspect(&mut c).unwrap_err();
+    assert!(e.contains("SQLSTATE 25P02"), "{e}");
+    c.batch_execute("ROLLBACK").unwrap();
+    // The same connection answers once the transaction is over: the schema is complete.
+    crate::schema::ensure(&mut c, Ddl::Never).unwrap();
+    assert!(crate::schema::inspect(&mut c).unwrap().is_empty());
+    // 2. The server ends the session between the lock and the check: the connection is gone, which
+    // is `storage_unavailable` and not a verdict on the schema.
+    let mut gone = db.connect();
+    db.terminate_sessions();
+    fault::clear();
+    for result in [
+        crate::schema::ensure(&mut gone, Ddl::Never),
+        crate::schema::inspect(&mut gone).map(|_| ()),
+    ] {
+        let e = result.unwrap_err();
+        assert_eq!(Fault::of_message(&e), Some(Fault::Unavailable), "{e}");
+    }
+    fault::clear();
+}
+
+// ---- the byte store follows Ddl like the rest -------------------------------------------------------
+
+#[test]
+fn the_byte_stores_table_is_created_or_required_like_the_rest_of_the_schema() {
+    use crate::blob::DbBytes;
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let never = OpenOptions {
+        pool: Some(one()),
+        ddl: Ddl::Never,
+    };
+    let regclass = |c: &mut postgres::Client| -> bool {
+        c.query_one("SELECT to_regclass('obop_blob_data') IS NOT NULL", &[])
+            .unwrap()
+            .get(0)
+    };
+    let mut c = db.connect();
+    // Never on an empty database: an error that names the table, and nothing is made.
+    let e = DbBytes::open_options(db.url(), &never)
+        .err()
+        .expect("no table, no right to make one");
+    assert!(e.contains("missing: blob"), "{e}");
+    assert!(!regclass(&mut c));
+    // The record store alone does not make it (a deployment with a blob directory has no use for
+    // it) and is complete without it.
+    drop(open_with(db.url(), Some(one())).unwrap());
+    assert!(!regclass(&mut c));
+    assert!(crate::schema::inspect(&mut c).unwrap().is_empty());
+    assert!(DbBytes::open_options(db.url(), &never).is_err());
+    // `open_with` makes it, as before.
+    DbBytes::open_with(db.url(), Some(one())).unwrap();
+    assert!(regclass(&mut c));
+    DbBytes::open_options(db.url(), &never).unwrap();
+}
+
+#[test]
+fn a_serving_role_that_may_not_create_tables_opens_the_byte_store_of_an_installed_database() {
+    use crate::blob::DbBytes;
+    let Some(mut db) = TestDb::new() else {
+        return;
+    };
+    // The owner installs everything, the byte store's table included.
+    crate::schema::owner_install(db.url()).unwrap();
+    let rt = db
+        .role("rt", "NOSUPERUSER NOCREATEDB NOCREATEROLE")
+        .unwrap();
+    db.connect()
+        .batch_execute(&format!(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role};
+             REVOKE CREATE ON SCHEMA public FROM PUBLIC",
+            role = db.role_name("rt")
+        ))
+        .unwrap();
+    for ddl in [Ddl::Never, Ddl::IfMissing] {
+        let o = OpenOptions {
+            pool: Some(one()),
+            ddl,
+        };
+        DbBytes::open_options(&rt, &o).unwrap_or_else(|e| panic!("{ddl:?}: {e}"));
+    }
 }
 
 // ---- a refusal is never run again because of the words in it ----------------------------------------
@@ -631,17 +744,15 @@ fn production_is_a_flag_or_the_variable_set_to_one() {
 }
 
 #[test]
-fn open_with_and_the_options_name_the_ddl_they_use() {
-    assert_eq!(
-        OpenOptions {
-            pool: None,
-            ddl: Ddl::Never
-        }
-        .ddl,
-        Ddl::Never
-    );
-    // In a process that is not production (no test here sets the flag), the default creates.
+fn a_process_that_is_not_a_production_process_creates_the_schema_whatever_the_environment_says() {
+    // `production()` is the flag only: the variable is not read yet (see its documentation), so
+    // an environment that sets it changes nothing here. (That `open_with` creates the schema in
+    // a production process is tests/production.rs: it needs a process of its own.)
+    assert!(!production());
     assert_eq!(Ddl::for_process(), Ddl::IfMissing);
     assert_eq!(OpenOptions::default().ddl, Ddl::IfMissing);
     assert_eq!(OpenOptions::default().pool, None);
+    // The rule the variable will follow once it is read.
+    assert!(!production_from(false, None));
+    assert!(production_from(false, Some("1")));
 }

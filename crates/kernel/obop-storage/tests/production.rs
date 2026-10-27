@@ -80,6 +80,15 @@ fn a_production_process_does_not_create_the_schema_but_a_setup_command_still_can
     let b = open(&db.url).unwrap();
     b.insert("m", "a", &Default::default()).unwrap();
     assert!(b.get("m", "a").unwrap().is_some());
+    // The byte store follows the same rule: its table is not made by a production process, and
+    // the database was set up without it (`open_with` makes the record store's tables only).
+    let e = obop_storage::blob::open_bytes(&db.url, None)
+        .err()
+        .expect("production does not create the byte store's table");
+    assert!(e.contains("missing: blob"), "{e}");
+    // `schema::owner_install` is what makes every table, and then it opens.
+    obop_storage::schema::owner_install(&db.url).unwrap();
+    obop_storage::blob::open_bytes(&db.url, None).unwrap();
     // The other stores have no schema to create.
     open("memory:").unwrap();
     open("sqlite::memory:").unwrap();

@@ -5,19 +5,29 @@
 //! A [`Part`] is one group of objects: how to create it (`render`, idempotent SQL with a
 //! `{schema}` placeholder), how to tell that it is there (`check`, a catalogue lookup that issues
 //! no DDL) and a digest of the SQL it renders (see [`Part::digest`]), which a migration step
-//! pins so that edited SQL cannot reach existing databases unannounced. Today there is one part,
-//! `base`, the tables of the record store; the record history, the guards and the query support
-//! of waves D75 to D78 each add a part.
+//! pins so that edited SQL cannot reach existing databases unannounced. Today there is one part
+//! of the record store, `base` (see [`parts`]), and one that only some deployments use, [`BLOB`],
+//! the table of the byte store; the record history, the guards and the query support of waves
+//! D75 to D78 each add a part.
 //!
 //! Who calls what:
 //!
-//! - `Pg::connect` calls [`ensure`] inside the `obop-schema` advisory lock, so that processes
-//!   that start together do not trip over each other: with [`Ddl::IfMissing`] a part that is not
-//!   there is created, with [`Ddl::Never`] a part that is not there is an error and no DDL is
-//!   issued (a serving role that may not create tables).
-//! - [`owner_install`] / [`install_all`] create every part unconditionally, as the role that owns
-//!   the objects (tests, the control plane, a migration step).
-//! - [`inspect`] compares a live database with the parts and reports what is wrong.
+//! - `Pg::connect_options` calls [`ensure`] inside the `obop-schema` advisory lock, so that
+//!   processes that start together do not trip over each other, and the byte store
+//!   (`blob::DbBytes`) does the same for [`BLOB`]. With [`Ddl::IfMissing`] a part that is not
+//!   completely there is created; with [`Ddl::Never`] a part that is not there is an error and
+//!   no DDL is issued (a serving role that may not create tables).
+//! - [`owner_install`] / [`install_all`] create every part, the byte store's too, unconditionally,
+//!   as the role that owns the objects (tests, the control plane, a migration step).
+//! - [`inspect`] compares a live database with the parts of the record store and reports what is
+//!   wrong. It leaves [`BLOB`] out: a deployment that keeps its files in a directory has no such
+//!   table.
+//!
+//! A check that cannot be answered is an error, never "the part is missing": a refused or failed
+//! catalogue query (the connection broke, the statement ran into its limit, the transaction was
+//! already aborted) says nothing about the schema, and reading it as "missing" would advise DDL
+//! for a complete database. The errors come through `describe`, so a broken connection is a
+//! noted `storage_unavailable`.
 
 use crate::pgpool::describe;
 use crate::{Ddl, Result};
@@ -38,8 +48,8 @@ pub struct Part {
     /// by it.
     pub render: fn(schema: &str) -> String,
     /// Is the part there? A catalogue lookup: it issues no DDL and needs no privilege beyond
-    /// connecting.
-    pub check: fn(&mut Client) -> bool,
+    /// connecting. `Err` when the lookup itself failed.
+    pub check: fn(&mut Client) -> Result<bool>,
 }
 
 impl Part {
@@ -89,22 +99,51 @@ fn render_base(schema: &str) -> String {
     BASE_SQL.replace("{schema}", schema)
 }
 
-/// Are all `names` relations the server finds (through the search path)?
-fn present(c: &mut Client, names: &[&str]) -> bool {
-    c.query_one(
-        "SELECT bool_and(to_regclass(n) IS NOT NULL) FROM unnest($1::text[]) AS t(n)",
-        &[&names],
-    )
-    .ok()
-    .and_then(|r| r.get::<_, Option<bool>>(0))
-    .unwrap_or(false)
+/// Are all `names` relations the server finds (through the search path)? An error when the
+/// question could not be asked.
+fn present(c: &mut Client, names: &[&str]) -> Result<bool> {
+    let row = c
+        .query_one(
+            "SELECT bool_and(to_regclass(n) IS NOT NULL) FROM unnest($1::text[]) AS t(n)",
+            &[&names],
+        )
+        .map_err(|e| describe(&e))?;
+    // `names` is never empty, so the aggregate is a value.
+    Ok(row.get::<_, Option<bool>>(0).unwrap_or(false))
 }
 
-fn base_present(c: &mut Client) -> bool {
+fn base_present(c: &mut Client) -> Result<bool> {
     present(c, &BASE_OBJECTS)
 }
 
-/// The parts of the schema, in the order they are created.
+/// The byte store's table (`blob::DbBytes`): chunks of the files kept in the database.
+const BLOB_SQL: &str = "CREATE TABLE IF NOT EXISTS {schema}.obop_blob_data (
+         key  TEXT NOT NULL,
+         seq  INTEGER NOT NULL,
+         data BYTEA NOT NULL,
+         PRIMARY KEY (key, seq)
+     );";
+
+const BLOB_OBJECTS: [&str; 1] = ["obop_blob_data"];
+
+fn render_blob(schema: &str) -> String {
+    BLOB_SQL.replace("{schema}", schema)
+}
+
+fn blob_present(c: &mut Client) -> Result<bool> {
+    present(c, &BLOB_OBJECTS)
+}
+
+/// The table of the byte store. Not one of [`parts`]: a deployment that keeps its files in a
+/// directory (`OBOP_BLOB_DIR`) never needs it, so the record store does not require it. The
+/// byte store ensures it under the `Ddl` it was opened with, and [`install_all`] creates it.
+pub static BLOB: Part = Part {
+    name: "blob",
+    render: render_blob,
+    check: blob_present,
+};
+
+/// The parts of the record store, in the order they are created.
 pub fn parts() -> &'static [Part] {
     static PARTS: [Part; 1] = [Part {
         name: "base",
@@ -149,14 +188,19 @@ pub fn ensure(c: &mut Client, ddl: Ddl) -> Result<()> {
 }
 
 pub(crate) fn ensure_parts(c: &mut Client, parts: &[Part], ddl: Ddl) -> Result<()> {
-    let missing: Vec<&Part> = parts.iter().filter(|p| !(p.check)(c)).collect();
+    let mut missing: Vec<&Part> = Vec::new();
+    for p in parts {
+        if !(p.check)(c)? {
+            missing.push(p);
+        }
+    }
     if missing.is_empty() {
         return Ok(());
     }
     match ddl {
         Ddl::Never => Err(format!(
             "the database does not have the obop schema (missing: {}), and this process may not \
-             create it (OBOP_PRODUCTION): create it first with a role that may create tables",
+             create it: create it first with a role that may create tables",
             missing
                 .iter()
                 .map(|p| p.name)
@@ -174,11 +218,12 @@ pub(crate) fn ensure_parts(c: &mut Client, parts: &[Part], ddl: Ddl) -> Result<(
     }
 }
 
-/// Create every part, whether or not it is there (the SQL is idempotent). For the role that owns
-/// the objects; the caller holds the schema lock (see [`owner_install`]).
+/// Create every part, the byte store's [`BLOB`] included, whether or not it is there (the SQL is
+/// idempotent). For the role that owns the objects; the caller holds the schema lock (see
+/// [`owner_install`]).
 pub fn install_all(c: &mut Client) -> Result<()> {
     let schema = current_schema(c)?;
-    for p in parts() {
+    for p in parts().iter().chain(std::iter::once(&BLOB)) {
         c.batch_execute(&(p.render)(&schema))
             .map_err(|e| ddl_error(p.name, &e))?;
     }
@@ -222,33 +267,36 @@ pub struct Finding {
     pub error: bool,
 }
 
-/// Compare a live database with the parts and report what differs. Today that is whether each
-/// part is there; roles, triggers, functions and indexes join as their parts do.
-pub fn inspect(c: &mut Client) -> Vec<Finding> {
+/// Compare a live database with the parts of the record store and report what differs. Today
+/// that is whether each part is there; roles, triggers, functions and indexes join as their parts
+/// do. `Err` when the database could not be asked: that is not a finding about the schema.
+pub fn inspect(c: &mut Client) -> Result<Vec<Finding>> {
     inspect_parts(c, parts())
 }
 
-pub(crate) fn inspect_parts(c: &mut Client, parts: &[Part]) -> Vec<Finding> {
-    parts
-        .iter()
-        .filter(|p| !(p.check)(c))
-        .map(|p| Finding {
-            code: "schema_part_missing",
-            object: p.name.to_string(),
-            detail: format!(
-                "part {} of the obop schema is not (completely) there",
-                p.name
-            ),
-            error: true,
-        })
-        .collect()
+pub(crate) fn inspect_parts(c: &mut Client, parts: &[Part]) -> Result<Vec<Finding>> {
+    let mut found = Vec::new();
+    for p in parts {
+        if !(p.check)(c)? {
+            found.push(Finding {
+                code: "schema_part_missing",
+                object: p.name.to_string(),
+                detail: format!(
+                    "part {} of the obop schema is not (completely) there",
+                    p.name
+                ),
+                error: true,
+            });
+        }
+    }
+    Ok(found)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The statements `Pg::connect` ran before the schema moved here, to prove the move changed
+    /// The statements `Pg::connect` (now `connect_options`) ran before the schema moved here, to prove the move changed
     /// nothing but the qualification.
     const OLD_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS obop_record (
          seq   BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -288,17 +336,71 @@ mod tests {
         assert!(!other.contains("public"));
     }
 
+    /// The tables and indexes a part's SQL creates, by name, read from its statements: `CREATE
+    /// TABLE IF NOT EXISTS schema.name (` and `CREATE INDEX IF NOT EXISTS name ON`. Panics on a
+    /// statement it cannot read, so that a new kind of statement has to teach this test about it.
+    fn created_by(sql: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        for stmt in sql.split(';') {
+            let words: Vec<&str> = stmt.split_whitespace().collect();
+            if words.is_empty() {
+                continue;
+            }
+            let is = |i: usize, w: &str| words.get(i) == Some(&w);
+            if is(0, "CREATE") && is(1, "TABLE") && is(2, "IF") && is(3, "NOT") && is(4, "EXISTS") {
+                // The index of a primary key is made with its table and is not listed apart.
+                out.push(words[5].rsplit('.').next().unwrap().to_string());
+            } else if is(0, "CREATE") && is(1, "INDEX") && is(2, "IF") && is(3, "NOT") {
+                out.push(words[5].to_string());
+            } else {
+                panic!("a statement this test cannot read: {stmt}");
+            }
+        }
+        out.sort();
+        out
+    }
+
     #[test]
-    fn what_the_base_part_checks_is_what_it_creates() {
-        let sql = (parts()[0].render)("public");
-        for name in BASE_OBJECTS {
-            assert!(
-                sql.contains(&format!("EXISTS {name} "))
-                    || sql.contains(&format!("EXISTS public.{name} "))
-                    || sql.contains(&format!("INDEX IF NOT EXISTS {name} ")),
-                "{name} is checked but not created"
+    fn what_a_part_checks_is_exactly_what_it_creates() {
+        // Both directions: an object the SQL creates and the check does not list would be
+        // reported as complete when it is missing; one the check lists and the SQL does not
+        // create could never be repaired.
+        let sorted = |names: &[&str]| {
+            let mut v: Vec<String> = names.iter().map(|s| (*s).to_string()).collect();
+            v.sort();
+            v
+        };
+        for (part, listed) in [(&parts()[0], &BASE_OBJECTS[..]), (&BLOB, &BLOB_OBJECTS[..])] {
+            assert_eq!(
+                sorted(listed),
+                created_by(&(part.render)("public")),
+                "part {}",
+                part.name
             );
         }
+        // And the reading sees a table or an index somebody adds to the SQL.
+        let more =
+            format!("{BASE_SQL} CREATE INDEX IF NOT EXISTS zz_new ON {{schema}}.obop_kv (key);");
+        let read = created_by(&more.replace("{schema}", "public"));
+        assert!(read.contains(&"zz_new".to_string()));
+        assert_ne!(read, sorted(&BASE_OBJECTS));
+    }
+
+    #[test]
+    fn the_blob_part_is_the_old_table_with_the_schema_filled_in() {
+        const OLD: &str = "CREATE TABLE IF NOT EXISTS obop_blob_data (
+                     key  TEXT NOT NULL,
+                     seq  INTEGER NOT NULL,
+                     data BYTEA NOT NULL,
+                     PRIMARY KEY (key, seq)
+                 );";
+        let sql = (BLOB.render)("public");
+        assert!(!sql.contains('{'));
+        assert_eq!(squeeze(&sql.replace("public.", "")), squeeze(OLD));
+        assert_eq!(BLOB.name, "blob");
+        // It is not part of the record store: the store does not require it.
+        assert!(parts().iter().all(|p| p.name != "blob"));
+        assert_ne!(BLOB.digest(), parts()[0].digest());
     }
 
     #[test]
