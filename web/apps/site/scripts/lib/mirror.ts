@@ -24,7 +24,8 @@ export function homeMirror(m: Messages, prefix: string, apps: App[]): string {
   out.push("", `## ${h.openTitle}`, "", h.openBody, "");
   for (const p of h.openPoints) out.push(`- **${p.title}.** ${p.body}`);
   out.push("", `## ${h.pricingTitle}`, "", h.pricingSub, "");
-  for (const p of m.pricing.plans) out.push(`- **${p.name}**: ${p.price}${p.period}. ${p.blurb}`);
+  for (const p of m.pricing.plans.slice(0, 4))
+    out.push(`- **${p.name}**: ${p.price}${p.period}. ${p.blurb}`);
   out.push("", `*${h.pricingFine}*`, "", `[${h.pricingCta}](${prefix}/pricing/)`, "");
   out.push(`## ${h.faqTitle}`, "");
   for (const f of h.faq) out.push(`### ${f.q}`, "", f.a, "");
@@ -57,7 +58,20 @@ export function pricingMirror(m: Messages): string {
     for (const f of plan.features) out.push(`- ${f}`);
     out.push("");
   }
-  out.push(p.note, "", `## ${p.selfHostTitle}`, "", p.selfHostBody, "", `## ${p.faqTitle}`, "");
+  out.push(
+    p.note,
+    "",
+    `## ${p.selfHostTitle}`,
+    "",
+    p.selfHostBody,
+    "",
+    `## ${p.hostingTitle}`,
+    "",
+    p.hostingBody,
+    "",
+    `## ${p.faqTitle}`,
+    "",
+  );
   for (const f of p.faq) out.push(`### ${f.q}`, "", f.a, "");
   return out.join("\n");
 }

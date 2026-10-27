@@ -1,4 +1,8 @@
+import { HOSTING } from "../data/hosting.ts";
+import { hostedPlans } from "./hosting.ts";
 import type { Messages } from "./types.ts";
+
+const eur = (n: number) => `€${n}`;
 
 export const fi: Messages = {
   htmlLang: "fi",
@@ -194,12 +198,11 @@ export const fi: Messages = {
         body: "Lue koodi, päätökset ja tiekartta. Apache-2.0, vapaasti käytettävissä ja itse isännöitävissä; katso tarkemmat tiedot repositoriosta.",
       },
     ],
-    pricingTitle: "Yksinkertainen hinnoittelu, suunnitteilla",
-    pricingSub:
-      "Avoimen lähdekoodin version ylläpito omalla palvelimella on ilmaista. Isännöidyt paketit hinnoitellaan organisaatiota kohti. Hinnat ovat suunniteltuja, eikä mitään veloiteta beta-vaiheen aikana.",
+    pricingTitle: "Ilmainen käyttää. Palvelinhotellointi, jos haluat.",
+    pricingSub: `obop on ilmainen ja avointa lähdekoodia: aja sitä itse omalla palvelimellasi. Jos et halua, oma palvelin on suunnitteilla alkaen ${eur(HOSTING.servers[0].eur)} kuukaudessa. Tänään mitään ei laskuteta.`,
     pricingFine:
-      "Suunnitellut hinnat, laskutus vuosittain, ilman arvonlisäveroa. Ei vielä veloiteta.",
-    pricingCta: "Katso, mitä kukin paketti sisältää",
+      "Suunnitellut hinnat palvelinta ja kuukautta kohti, ilman arvonlisäveroa. Palvelinhotellointia ei vielä tarjota eikä laskuteta.",
+    pricingCta: "Katso suunnitellut hinnat",
     faqTitle: "Kysymyksiä",
     faq: [
       {
@@ -212,7 +215,7 @@ export const fi: Messages = {
       },
       {
         q: "Paljonko se maksaa?",
-        a: "Ylläpito omalla palvelimella on ilmaista. Isännöidyt paketit on suunniteltu hintoihin 0 €, 49 €, 249 € ja alkaen 899 € kuukaudessa organisaatiota kohti, mutta mitään ei veloiteta beta-vaiheen aikana, ja hinnat voivat muuttua.",
+        a: `obop on ilmainen käyttää ja ajaa itse. Oma palvelin on suunnitteilla alkaen ${eur(HOSTING.servers[0].eur)} kuukaudessa, lisäksi ${eur(HOSTING.extraStorage.eur)} jokaista lisättyä ${HOSTING.extraStorage.blockGb} GB:n tallennustilaa kohti, mutta sitä ei vielä tarjota eikä laskuteta, ja hinnat voivat muuttua.`,
       },
       {
         q: "Missä tietoni sijaitsevat?",
@@ -241,73 +244,54 @@ export const fi: Messages = {
   },
   pricing: {
     title: "Hinnoittelu",
-    description:
-      "obop-alustan suunniteltu hinnoittelu: Free, Team (49 €), Growth (249 €) ja Scale (alkaen 899 €) organisaatiota ja kuukautta kohti. Vain suunnitelma, mitään ei veloiteta beta-vaiheen aikana. Ylläpito omalla palvelimella on ilmaista.",
-    lead: "Avoimen lähdekoodin version ylläpito omalla palvelimella on ilmaista. Isännöidyt paketit hinnoitellaan organisaatiota, ei käyttäjää kohti. Hinnat ovat suunniteltuja: mitään ei veloiteta beta-vaiheen aikana, ja ne voivat muuttua ennen veloituksen alkua.",
-    plans: [
-      {
-        name: "Free",
-        price: "€0",
+    description: `obop on ilmainen ja avointa lähdekoodia (Apache-2.0). Suunniteltu oma palvelin: alkaen ${eur(HOSTING.servers[0].eur)} kuukaudessa, lisätilaa ${eur(HOSTING.extraStorage.eur)} / ${HOSTING.extraStorage.blockGb} GB. Ei vielä tarjolla eikä laskutuksessa.`,
+    lead: "obop on ilmainen käyttää ja ajaa itse. Jos et halua ylläpitää palvelinta, suunnittelemme ylläpitävämme sellaista puolestasi: yksi oma palvelin yritystä kohti, hinnoiteltuna palvelimen koon ja lisätyn tallennustilan mukaan, ei käyttäjämäärän mukaan. Nämä ovat suunniteltuja hintoja; palvelinhotellointia ei vielä tarjota eikä laskuteta.",
+    plans: hostedPlans({
+      eur,
+      unit: "GB",
+      period: "/kk",
+      selfHost: {
+        name: "Itse ajettu",
+        price: eur(0),
         period: "",
-        blurb: "Oma isännöity instanssi laskutuksen perusteiden kokeiluun.",
-        features: ["Laskutuspaketti", "Yhteisötuki", "Täysi tietojen vienti suunnitteilla"],
-      },
-      {
-        name: "Team",
-        price: "€49",
-        period: "/kk",
-        blurb: "Koko seitsemän sovelluksen kokonaisuus kasvavalle tiimille.",
+        blurb: "Koko projekti omalla palvelimellasi. Apache-2.0, ilmainen ikuisesti.",
         features: [
-          "Viisi täyttä käyttäjää",
-          "Kaikki kokonaisuuden sovellukset",
-          "Varmuuskopiot ja EU-alue",
-          "Sähköpostituki",
+          "Kaikki mukana tulevat sovellukset",
+          "REST-rajapinta, MCP ja komentorivi",
+          "SQLite tai PostgreSQL",
+          "Apua GitHubissa",
         ],
         highlight: true,
       },
-      {
-        name: "Growth",
-        price: "€249",
-        period: "/kk",
-        blurb: "Enemmän kapasiteettia, tukea ja palvelutasoja.",
-        features: [
-          "25 täyttä käyttäjää",
-          "Kaikki sovellukset, 100 Gt",
-          "Palautus mihin tahansa ajanhetkeen, testiympäristö",
-          "Tuki seuraavana arkipäivänä",
-        ],
-      },
-      {
-        name: "Scale",
-        price: "alkaen €899",
-        period: "/kk",
-        blurb: "Oma kapasiteetti ja nimetty yhteyshenkilö.",
-        features: [
-          "100 tai useampi käyttäjä",
-          "Oma solu, sijainnin kiinnitys",
-          "SAML ja SCIM",
-          "99,9 prosentin tavoite, 24x5",
-        ],
-      },
-    ],
-    plannedBadge: "Suunniteltu, ei vielä veloiteta",
-    note: "Hinnat ovat suunniteltuja, organisaatiota ja kuukautta kohti, laskutus vuosittain, ilman arvonlisäveroa. Ne ovat tuotesuunnitelman oletuksia, eivät sopimus.",
-    selfHostTitle: "Ylläpito omalla palvelimella on ilmaista",
+      serverBlurb: "Oma palvelin yhtä yritystä varten.",
+      serverFeatures: (storageGb) => [
+        "Oma palvelin, ei jaettu muiden asiakkaiden kanssa",
+        "obop ja sen PostgreSQL-tietokanta samalla palvelimella",
+        `${storageGb} GB NVMe-tallennustilaa sisältyy`,
+        "Sama vapaa ohjelmisto: lähde milloin haluat ja aja itse",
+      ],
+    }),
+    plannedBadge: "Suunniteltu, ei vielä tarjolla eikä laskutuksessa",
+    note: `Suunnitellut hinnat euroina palvelinta ja kuukautta kohti, ilman arvonlisäveroa. Lisää NVMe-tallennustilaa: ${eur(HOSTING.extraStorage.eur)} / ${HOSTING.extraStorage.blockGb} GB kuukaudessa. Nämä ovat suunnitelmia, eivät tarjous eivätkä sopimus.`,
+    selfHostTitle: "Ilmainen, ja ajat sitä itse",
     selfHostBody:
-      "Avoimen lähdekoodin versiossa ovat kaikki mukana tulevat sovellukset, REST-rajapinta, MCP ja CLI. Ajat sitä itse SQLitellä tai PostgreSQL:llä. Maksullinen tuki ja palvelut omalla palvelimella ylläpitäville on suunnitteilla, mutta niitä ei vielä tarjota.",
+      "obopissa ei ole maksullista versiota eikä pantattuja ominaisuuksia: jokainen sovellus, REST-rajapinta, MCP ja komentorivi kuuluvat ilmaiseen Apache-2.0-julkaisuun. Ajat sitä itse SQLitellä tai PostgreSQL:llä.",
+    hostingTitle: "Palvelinhotellointi, jos haluat",
+    hostingBody:
+      "Suunniteltu palvelu: SpaceCorps ylläpitää yrityksellesi omaa palvelinta Sliplanen infrastruktuurissa, jolla ovat obop ja PostgreSQL. Hinta määräytyy palvelimen koon mukaan; käyttäjäkohtaisia maksuja ei ole.",
     faqTitle: "Hinnoittelun kysymyksiä",
     faq: [
       {
-        q: "Veloitetaanko minulta jotain nyt?",
-        a: "Ei. Isännöity palvelu on ilmainen beta. Kun laskutus alkaa, siitä ilmoitetaan, eikä mitään veloiteta ilman suostumustasi.",
+        q: "Laskutetaanko minulta jotain tänään?",
+        a: "Ei. obop on ilmainen, eikä palvelinhotellointia muille vielä tarjota. Kun se alkaa, ilmoitamme siitä täällä, eikä mitään laskuteta ilman suostumustasi.",
       },
       {
-        q: "Miksi hinta määräytyy organisaation eikä käyttäjän mukaan?",
-        a: "Tarkoituksena on hinnoitella yritys, ei yksittäisiä paikkoja, käyttäjämäärän mukaan porrastettuna. Portaalin käyttäjien ja muutaman tilitoimiston paikan on tarkoitus olla ilmaisia.",
+        q: "Miksi hinta määräytyy palvelimen eikä käyttäjien mukaan?",
+        a: "Jokainen isännöity yritys saa oman palvelimen, joten hinta seuraa palvelimen kokoa ja lisättyä tallennustilaa. Lisää ihmisiä ei maksa mitään.",
       },
       {
-        q: "Voinko lähteä ja viedä tietoni mukanani?",
-        a: "Voit, jos ylläpidät alustaa itse: tietokanta on sinun. Täysi tietojen vienti kaikissa paketeissa on sitova tuotepäätös, mutta vientityökalu on vielä rakentamatta.",
+        q: "Voinko lähteä ja ottaa tietoni mukaan?",
+        a: "Kyllä. obop on Apache-2.0-lisenssin alla ja sen tietokanta on tavallinen PostgreSQL, joten voit ajaa samaa ohjelmistoa itse; obop backup ja obop restore ovat mukana.",
       },
     ],
     cta: "Hanki oma instanssi",

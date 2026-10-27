@@ -28,6 +28,8 @@ const { m } = useSite();
     <div class="narrow-block">
       <h2>{{ m.pricing.selfHostTitle }}</h2>
       <p>{{ m.pricing.selfHostBody }}</p>
+      <h2>{{ m.pricing.hostingTitle }}</h2>
+      <p>{{ m.pricing.hostingBody }}</p>
       <h2>{{ m.pricing.faqTitle }}</h2>
       <div class="faq">
         <details v-for="f in m.pricing.faq" :key="f.q">
