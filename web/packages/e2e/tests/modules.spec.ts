@@ -87,7 +87,7 @@ test.describe("Customize > Modules", () => {
     await expect(card(page, "Field Service")).toContainText(
       "Needs: Contacts, Human Resources, Products",
     );
-    await expect(page.getByRole("tab", { name: /^Marketplace/ })).toContainText("22");
+    await expect(page.getByRole("tab", { name: /^Marketplace/ })).toContainText("23");
   });
 
   test("search, category and sort narrow the list", async ({ page, signIn }) => {

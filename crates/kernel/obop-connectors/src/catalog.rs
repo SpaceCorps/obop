@@ -103,9 +103,11 @@ pub struct Provider {
     pub allowed_hosts: Vec<&'static str>,
     pub config: Vec<ConfigField>,
     pub setup: &'static str,
-    /// standard | github | stripe, for inbound webhooks.
+    /// standard | github | stripe | header, for inbound webhooks.
     pub webhook_scheme: &'static str,
-    /// json | form | slack, how an outbound record is encoded.
+    /// The header that carries `api_key` when the connection names none; empty means `Authorization: Bearer`.
+    pub api_key_header: &'static str,
+    /// json | form | slack | docuseal, how an outbound record is encoded.
     pub body_format: &'static str,
     pub oauth: Option<OAuthDef>,
 }
@@ -198,6 +200,7 @@ fn base() -> Provider {
         config: vec![],
         setup: "",
         webhook_scheme: "standard",
+        api_key_header: "",
         body_format: "json",
         oauth: None,
     }
@@ -483,6 +486,99 @@ pub fn providers() -> Vec<Provider> {
                 ),
             ],
             setup: "1. Create a restricted key in Stripe. 2. Enter it with the customers URL. 3. Allow only the fields Stripe needs, and decide per field whether they leave as a pseudonym or in clear (not needed for shop payments, which send no customer data). 4. Record the Stripe DPA and your legal basis (contract is typical). 5. For the web shop, enter the webhook signing secret, connect, and add stripe to the site setting payment_methods.",
+            ..base()
+        },
+        Provider {
+            id: "docuseal",
+            name: "DocuSeal (e-signature)",
+            category: "documents",
+            maturity: Maturity::GenericAdapter,
+            engine: Engine::WebhookOut,
+            auth_kind: "api_key",
+            direction: "both",
+            max_classes: vec![NoClass, PublicDirectory, Internal],
+            purpose: "Send a document for signature from a DocuSeal template, and receive the result when the signer has signed, declined or the request has expired.",
+            description: "Outbound: one DocuSeal submission per record (POST /api/submissions, X-Auth-Token) for the template you name; the signer's name and email must leave in clear, which the default policy does not allow, so you allow those two fields and record the agreement. The record's reference travels as the submitter's external_id. Inbound: DocuSeal's webhook with a shared secret in the x-docuseal-secret header (DocuSeal cannot sign deliveries, so the body is not integrity-protected) is mapped into the model you name; the signed document stays in DocuSeal and obop keeps the link. Self-hosted DocuSeal is AGPL software that runs as its own service next to obop; obop talks to it over HTTPS only and bundles none of it. Use only DocuSeal's free features. Not tested against DocuSeal itself; the request body, the header and the webhook are tested against a local stand-in.",
+            legal_name: "Your own DocuSeal server (you are the controller and operate it) or DocuSeal's cloud service (confirm the contracting entity)",
+            country: "Set by you: where your DocuSeal runs",
+            dpa_url: "",
+            eu_adequate: "verify",
+            webhook_scheme: "header",
+            api_key_header: "X-Auth-Token",
+            body_format: "docuseal",
+            config: vec![
+                f(
+                    "url",
+                    "Submissions URL",
+                    false,
+                    true,
+                    "Your DocuSeal address plus /api/submissions, for example https://sign.example.com/api/submissions. An https:// address; plain http is refused.",
+                ),
+                f(
+                    "api_key",
+                    "DocuSeal API key",
+                    true,
+                    true,
+                    "From DocuSeal, Settings, API. Sent as X-Auth-Token. Stored encrypted and never shown again.",
+                ),
+                f(
+                    "signing_secret",
+                    "Webhook secret",
+                    true,
+                    true,
+                    "A long random value you choose. Put the same value in DocuSeal's webhook settings as a custom header named x-docuseal-secret. At least 16 characters.",
+                ),
+                f(
+                    "template_id",
+                    "DocuSeal template id",
+                    false,
+                    true,
+                    "The number in the template's address in DocuSeal. Its signing party must be named as in the role below.",
+                ),
+                f(
+                    "role",
+                    "Signing party role",
+                    false,
+                    false,
+                    "The role name of the signer in the template. Defaults to First Party.",
+                ),
+                f(
+                    "send_email",
+                    "Let DocuSeal email the signer",
+                    false,
+                    false,
+                    "true (default) or false. With false nothing is emailed and you share the link yourself.",
+                ),
+                f(
+                    "events",
+                    "Events",
+                    false,
+                    false,
+                    "Command ids that start a signature, comma separated, for example sign_request.send.",
+                ),
+                f(
+                    "target_model",
+                    "Model for inbound events",
+                    false,
+                    false,
+                    "The model that receives DocuSeal events, for example docuseal_event. Leave empty to only send.",
+                ),
+                f(
+                    "resolve_refs",
+                    "Resolve references",
+                    false,
+                    false,
+                    "true to turn the reference DocuSeal sends back (the submitter's external_id) into the id of the record it was sent for. Without it the event holds the pseudonym, which cannot be matched to a record.",
+                ),
+                f(
+                    "mapping",
+                    "Field mapping for events",
+                    false,
+                    false,
+                    "JSON object: payload path to field, for example {\"event_type\": \"event\", \"data.submission.id\": \"submission_id\"}.",
+                ),
+            ],
+            setup: "1. Run DocuSeal (see docs/DEPLOY.md) and create the NDA or contract as a template with one signing party. 2. Create an API key. 3. Enter the submissions URL, key, template id and a webhook secret; set resolve_refs to true so events name their record. 4. Allow the signer's name and email to leave in clear and record the agreement with whoever runs DocuSeal. 5. In DocuSeal add a webhook to this connection's address with the header x-docuseal-secret. 6. Test, then connect.",
             ..base()
         },
         Provider {
@@ -778,6 +874,7 @@ mod tests {
         for id in [
             "slack_webhook",
             "stripe",
+            "docuseal",
             "github_webhook",
             "zapier",
             "make",

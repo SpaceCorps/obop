@@ -1,0 +1,32 @@
+[labels.fi.module]
+name = "Allekirjoitus DocuSealilla"
+description = "Vastaanottaa DocuSeal-palvelimen tapahtumat (katsottu, allekirjoitettu, hylätty, vanhentunut) tietueina Sign-sovelluksen pyyntöjen rinnalle. Tapahtuma ei siirrä pyyntöä eteenpäin: henkilö kirjaa allekirjoituksen edelleen sign-toiminnolla, joka vaatii hyväksynnän."
+summary = "Vastaanottaa DocuSealin allekirjoitustapahtumat pyyntöjen rinnalle. Henkilö kirjaa allekirjoituksen edelleen."
+
+[labels.fi.model.sign_docuseal_event]
+name = "DocuSeal-tapahtuma"
+description = "DocuSealin ilmoittama tapahtuma allekirjoituspyynnöstä, DocuSeal-liittimen kirjoittama"
+
+[labels.fi.model.sign_docuseal_event.field.event]
+label = "Tapahtuma"
+description = "DocuSealin tapahtumatyyppi, esimerkiksi form.completed, form.declined tai submission.expired"
+
+[labels.fi.model.sign_docuseal_event.field.request_ref]
+label = "Pyynnön viite"
+description = "Sen allekirjoituspyynnön viite, jota tapahtuma koskee, sellaisena kuin liitin sen lähetti (external_id DocuSealissa)"
+
+[labels.fi.model.sign_docuseal_event.field.submission_id]
+label = "Submission-tunnus"
+description = "Submissionin tunnus DocuSealissa, jotta sen löytää sieltä"
+
+[labels.fi.model.sign_docuseal_event.field.status]
+label = "Tila"
+description = "Tila DocuSealissa sillä hetkellä, esimerkiksi completed tai declined"
+
+[labels.fi.model.sign_docuseal_event.field.document_url]
+label = "Asiakirjan osoite"
+description = "Allekirjoitetun asiakirjan osoite DocuSeal-palvelimella; avaaminen vaatii pääsyn DocuSealiin"
+
+[labels.fi.model.sign_docuseal_event.field.completed_at]
+label = "Valmistui"
+description = "Milloin allekirjoittaja DocuSealin mukaan valmistui, sellaisena kuin DocuSeal sen kirjoitti"

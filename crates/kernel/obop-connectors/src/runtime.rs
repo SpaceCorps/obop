@@ -462,6 +462,7 @@ impl Runtime {
     /// Encode prepared rows for the provider: one body per request.
     fn encode(
         &self,
+        c: &Connection,
         p: &Provider,
         event: &str,
         id: &str,
@@ -469,6 +470,38 @@ impl Runtime {
         model: &str,
     ) -> Vec<(String, Vec<u8>)> {
         match p.body_format {
+            // One DocuSeal submission per record. The reference travels as the submitter's
+            // external_id, so the event that comes back names the record it belongs to.
+            "docuseal" => prepared
+                .iter()
+                .map(|r| {
+                    let text = |keys: &[&str]| {
+                        keys.iter()
+                            .find_map(|k| r.get(*k).and_then(J::as_str))
+                            .unwrap_or_default()
+                            .to_string()
+                    };
+                    let template = c.cfg("template_id");
+                    let template: J = template
+                        .parse::<u64>()
+                        .map_or_else(|_| J::from(template), J::from);
+                    let role = match c.cfg("role") {
+                        "" => "First Party",
+                        role => role,
+                    };
+                    let doc = json!({
+                        "template_id": template,
+                        "send_email": c.cfg("send_email") != "false",
+                        "submitters": [{
+                            "role": role,
+                            "email": text(&["signer_email", "email"]),
+                            "name": text(&["signer_name", "name"]),
+                            "external_id": text(&["ref"]),
+                        }],
+                    });
+                    ("application/json".to_string(), doc.to_string().into_bytes())
+                })
+                .collect(),
             "form" => prepared
                 .iter()
                 .map(|r| {
@@ -536,7 +569,10 @@ impl Runtime {
         }
         let key = str_of(&creds, "api_key");
         if !key.is_empty() {
-            let name = c.cfg("header_name");
+            let name = match c.cfg("header_name") {
+                "" => p.api_key_header,
+                name => name,
+            };
             if name.is_empty() {
                 headers.push(("authorization".into(), format!("Bearer {key}")));
             } else {
@@ -568,7 +604,7 @@ impl Runtime {
         prepared: &[Map<String, J>],
     ) -> (usize, String) {
         let id = format!("msg_{}", random_hex(12));
-        let bodies = self.encode(p, event, &id, prepared, model);
+        let bodies = self.encode(c, p, event, &id, prepared, model);
         let mut failed = String::new();
         let mut sent = 0;
         let n = bodies.len();
@@ -1202,7 +1238,7 @@ impl Runtime {
                     "the address passed the egress checks (https, allowed host, public address)"
                         .into(),
                 );
-                if p.engine == Engine::WebhookOut && p.body_format == "form" {
+                if p.engine == Engine::WebhookOut && matches!(p.body_format, "form" | "docuseal") {
                     notes.push("no test request is sent: this service takes records only".into());
                 } else if p.engine == Engine::WebhookOut {
                     // A test event carries no record and no personal data.

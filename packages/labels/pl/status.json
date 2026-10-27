@@ -25,6 +25,7 @@
   "purchase": "machine-drafted",
   "sales": "machine-drafted",
   "sign": "machine-drafted",
+  "sign_docuseal": "machine-drafted",
   "subscriptions": "machine-drafted",
   "timesheets": "machine-drafted",
   "website": "machine-drafted"
