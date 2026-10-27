@@ -52,6 +52,7 @@ The `obop` binary exists (`crates/obop`, `obop --help` prints one usage page; th
 |---|---|
 | `serve [--addr] [--static DIR] [--public-site] [--trust-proxy]`; `platform serve ...` (the control plane: sign-up, instances, forum, status page) | `serve` (3.1); the control plane is operator tooling outside this catalogue |
 | `call [--token T] <model> <command> [key=value ...]` (runs in process against the database of `--db`, through the same dispatcher that serves `POST /api/{model}/{command}`; values converted by field type; `filter`, `order`, `aggregate` as JSON text) | `<subject> <action>` (2.1), `api` (2.8) |
+| `openapi [--out FILE]` (the OpenAPI 3.1 document of the linked modules for an account that holds every group, a placeholder address, sorted keys, the same bytes on every run, no database; `GET /api/openapi.json` serves the document of the caller. It feeds `web/packages/client`, [mobile.md](mobile.md) 8.4) | `api` (2.8), `schema --all` (2.9) |
 | `commands [--token T]` (the commands this token may see, read in process from the registry; the server serves the same list at `GET /api/commands`, and `GET /api/meta` and `GET /api/openapi.json`) | `catalogue list`, `schema` (2.9) |
 | `import <model> FILE.csv [--mode partial] [--dry-run] [--key K]` (through the generated `bulk_create`, D70) | `data import` (3.4) |
 | `mcp [--token T]` (stdio); hosted MCP at `/mcp` with OAuth sign-in (D51, D64) | `mcp bridge` (2.11, 3.9), the hosted endpoint is the server's |
