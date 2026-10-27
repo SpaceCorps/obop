@@ -6,6 +6,8 @@ mod accounts_tests;
 mod app;
 mod backup_cli;
 #[cfg(test)]
+mod backup_gate_tests;
+#[cfg(test)]
 mod blobs_tests;
 #[cfg(test)]
 mod bulk_tests;

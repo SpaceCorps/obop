@@ -1324,6 +1324,137 @@ fn a_rollback_does_not_skip_the_identity_check_when_the_id_of_this_database_cann
 }
 
 #[test]
+fn a_backup_is_never_labelled_with_a_schema_version_the_store_would_not_give() {
+    // The version is read twice on the way to a backup (the status, then the label). One refusal
+    // at each read in turn: the backup is not made, or it carries the version the database has,
+    // never the 0 that a refused read was taken for (it would be restored as never migrated).
+    let dir = Dir::new("schema-label");
+    let (b, _url) = old_db(&dir);
+    let clock = Arc::new(FakeClock::at(T0));
+    Migrator::new(b.clone(), ring())
+        .run_with(&obop_migrate::RunOptions::default())
+        .unwrap();
+    let real = u64::from(
+        Migrator::new(b.clone(), ring())
+            .status()
+            .unwrap()
+            .stored
+            .unwrap(),
+    );
+    assert!(real > 0);
+    let (mut refused, mut made) = (0, 0);
+    for allowed in 0..8 {
+        let flaky = crate::testkit::Flaky::new(b.clone());
+        // Only the schema version: the id of the database is read too, and its refusal would stop
+        // the backup before the label could matter.
+        flaky.refuse_gets.lock().unwrap().push((
+            obop_migrate::META_MODEL.to_string(),
+            obop_migrate::META_ID.to_string(),
+        ));
+        flaky
+            .allow_reads
+            .store(allowed, std::sync::atomic::Ordering::SeqCst);
+        let fb: Arc<dyn Backend> = flaky.clone();
+        let g = gate(&fb, &dir.url("prod.db"), &clock, Mode::Relaxed);
+        let to = dir.p(&format!("labels{allowed}"));
+        match g.take_backup(&to) {
+            Err(e) => {
+                refused += 1;
+                assert!(e.contains("storage_busy"), "after {allowed} reads: {e}");
+            }
+            Ok(r) => {
+                made += 1;
+                let v = backup::verify_with(&r.path, &keys()).unwrap();
+                assert_eq!(
+                    u64::from(v.manifest.schema_version),
+                    real,
+                    "after {allowed} reads"
+                );
+            }
+        }
+    }
+    assert!(refused >= 1 && made >= 1, "{refused} refused, {made} made");
+}
+
+#[test]
+fn a_rollback_whose_ledger_or_status_the_store_would_not_give_changes_nothing() {
+    // The ledger rows after the backup are the ones the rollback discards and records; a status or
+    // a ledger that was refused read as "empty" replaced the database and kept no account of it.
+    let dir = Dir::new("rb-ledger");
+    let (b, _url) = old_db(&dir);
+    let clock = Arc::new(FakeClock::at(T0));
+    let backup = backup_now(&b, &dir, "before", &clock);
+    Migrator::new(b.clone(), ring())
+        .run_with(&obop_migrate::RunOptions::default())
+        .unwrap();
+    b.insert("party", "oops", &f(json!({"name": "after the backup"})))
+        .unwrap();
+    let attempt = |model: &str, allowed: usize| {
+        let flaky = crate::testkit::Flaky::new(b.clone());
+        flaky.refuse_reads.lock().unwrap().push(model.to_string());
+        flaky
+            .allow_reads
+            .store(allowed, std::sync::atomic::Ordering::SeqCst);
+        let fb: Arc<dyn Backend> = flaky.clone();
+        rollback(
+            &fb,
+            None,
+            &ring(),
+            &backup,
+            &keys(),
+            "undo",
+            "operator",
+            false,
+            &*clock,
+        )
+    };
+    // The ledger cannot be listed: the rollback is refused whole, and nothing is replaced.
+    let e = attempt(obop_migrate::ledger::MODEL, 0).unwrap_err();
+    assert!(e.contains("storage_busy"), "{e}");
+    assert!(b.get("party", "oops").unwrap().is_some(), "untouched");
+    // The status is refused from the Nth read on: an error and an untouched database, until the
+    // reads it needs are all let through.
+    let mut refused = 0;
+    for allowed in 0..8 {
+        let flaky = crate::testkit::Flaky::new(b.clone());
+        flaky.refuse_gets.lock().unwrap().push((
+            obop_migrate::META_MODEL.to_string(),
+            obop_migrate::META_ID.to_string(),
+        ));
+        flaky
+            .allow_reads
+            .store(allowed, std::sync::atomic::Ordering::SeqCst);
+        let fb: Arc<dyn Backend> = flaky.clone();
+        match rollback(
+            &fb,
+            None,
+            &ring(),
+            &backup,
+            &keys(),
+            "undo",
+            "operator",
+            false,
+            &*clock,
+        ) {
+            Err(e) => {
+                refused += 1;
+                assert!(e.contains("storage_busy"), "after {allowed} reads: {e}");
+                assert!(
+                    b.get("party", "oops").unwrap().is_some(),
+                    "after {allowed} reads: replaced although the answer was an error"
+                );
+            }
+            Ok(done) => {
+                assert!(done.records > 0);
+                assert!(b.get("party", "oops").unwrap().is_none(), "restored");
+                break;
+            }
+        }
+    }
+    assert!(refused >= 1, "the status was refused once");
+}
+
+#[test]
 fn the_ledger_and_the_gates_work_on_postgresql_when_a_server_is_given() {
     let Ok(base) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
         eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
