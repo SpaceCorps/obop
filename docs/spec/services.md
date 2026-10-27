@@ -466,7 +466,7 @@ stateDiagram-v2
 
 **Workflows.** (1) Register a vehicle and assign a driver. (2) Attach contracts; an automation rule raises `VehicleContractExpiring` 30 days ahead (Proposed default, taken from the `delay_alert_contract` default in Odoo 20's `fleet` source, read 2026-10-01; configurable). (3) Drivers log odometer and fuel; a schedule by date or distance raises `VehicleServiceDue`. (4) Bill lines carry a vehicle dimension on the analytic ledger. (5) A vehicle linked to a `resource` of kind vehicle can be booked onto field shifts.
 
-**Flows.** Emits `VehicleContractExpiring`, `VehicleServiceDue`, `OdometerRecorded` (D); consumes none by event. **Permissions.** Drivers see only their vehicle; assignment history is personal data; no telematics or location tracking. **Reports.** Cost per vehicle and per distance, contract calendar, service compliance. **Configuration.** Service types, reminder lead times, odometer unit. **Localization.** Company-car taxation and inspection intervals are country rules for packs (counsel). **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
+**Flows.** Emits `VehicleContractExpiring`, `VehicleServiceDue`, `OdometerRecorded` (D); consumes none by event. **Permissions.** Drivers see only their vehicle; assignment history is personal data; Fleet itself has no telematics or location tracking (the Mileage app, Proposed in D87, would record a trip's route only while a driver has started it, [mobile.md](mobile.md)). **Reports.** Cost per vehicle and per distance, contract calendar, service compliance. **Configuration.** Service types, reminder lead times, odometer unit. **Localization.** Company-car taxation and inspection intervals are country rules for packs (counsel). **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
 
 ### 4.8 Service contracts (Proposed)
 
@@ -636,7 +636,7 @@ The last column names an [R04] pain rank only where one applies.
 ## 8. Out of scope, non-goals and later
 
 - **Elsewhere:** repairs and internal equipment maintenance (supply-chain; a helpdesk button calls `repair` when present); subscriptions and rental (sales-crm); payroll and time off (people); the calendar sync engine and knowledge (platform).
-- **Non-goals:** screen or activity tracking, GPS tracking of staff or vehicles, telematics, a PBX or softphone stack (CTI through provider APIs, [R15 s13; R21 s6.6]), embedding Cal.com, a bundled routing vendor, per-country working-time law in core, a routing, tile, SMS or messaging service run by SpaceCorps (OR-11, D83), and a service feature that exists only in the UI (OR-4).
+- **Non-goals:** screen or activity tracking, continuous GPS tracking of staff or vehicles (a trip that a driver started in the Mileage app is not that, D87, [mobile.md](mobile.md)), telematics, a PBX or softphone stack (CTI through provider APIs, [R15 s13; R21 s6.6]), embedding Cal.com, a bundled routing vendor, per-country working-time law in core, a routing, tile, SMS or messaging service run by SpaceCorps (OR-11, D83), and a service feature that exists only in the UI (OR-4).
 - **Later:** sprints, intake triage, other relation types, resource levelling, portfolio views, skills, territories, VROOM optimisation, WhatsApp and social channels (W4), waitlists, group seats, timesheet rounding, billing-target dashboards, projects from CRM opportunities (an Odoo 20 feature, [R14 s3.1]).
 
 ## 9. Open questions
@@ -662,7 +662,7 @@ The last column names an [R04] pain rank only where one applies.
 
 ## 10. Sources
 
-Decision IDs (D1-D86), the owner rulings OR-1 to OR-21, register sections and vocabulary come from [DECISIONS.md](../DECISIONS.md). Names of events, permission groups, data classes and entities follow [CONVENTIONS.md](../CONVENTIONS.md); command names and the CLI grammar follow [cli.md](cli.md) (Proposed until Q22).
+Decision IDs (D1-D87), the owner rulings OR-1 to OR-34, register sections and vocabulary come from [DECISIONS.md](../DECISIONS.md). Names of events, permission groups, data classes and entities follow [CONVENTIONS.md](../CONVENTIONS.md); command names and the CLI grammar follow [cli.md](cli.md) (Proposed until Q22).
 
 | Tag | File |
 |---|---|

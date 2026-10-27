@@ -261,7 +261,7 @@ Stage is a user-defined column (sequence, fold, hired flag, mail template); stat
 
 **Purpose.** Capture, police and approve out-of-pocket costs, then hand a clean draft bill to finance or a reimbursement input to payroll. Accounting is in [Finance](finance.md).
 
-**MVP.** Claims with lines, receipts, categories, per diem and mileage via rate tables, policy checks, approval, draft vendor bill, bank or payroll reimbursement, project and customer re-invoicing (bridge). **Later.** Company-card feeds, cash advances, OCR of receipts (optional AI).
+**MVP.** Claims with lines, receipts, categories, per diem and mileage via rate tables, policy checks, approval, draft vendor bill, bank or payroll reimbursement, project and customer re-invoicing (bridge). **Later.** Company-card feeds, cash advances, OCR of receipts (optional AI), and expense lines of kind `mileage` made from the confirmed trips of the `mileage` package (D87, [mobile.md](mobile.md) 5.9).
 
 | Entity | Key fields | States |
 |---|---|---|
@@ -348,7 +348,7 @@ Progress `reimbursement_state` (`not_due`, `to_reimburse`, `in_payroll`, `reimbu
 
 **Purpose.** Everything an employee does for themselves, for any number of employees at no cost (there are no seats, OR-2). Each page is a UI client of the commands of its backing module (4.13).
 
-**MVP.** The pages below. **Later.** Native mobile shells.
+**MVP.** The pages below. **Later.** Native apps: React Native (Expo) apps are allowed as obop clients (OR-34) and the proposal limits them to cases a PWA cannot serve (Proposed, D87, [mobile.md](mobile.md)); the first is Mileage, which is not a self-service page.
 
 | Page | Backing module | Scope |
 |---|---|---|
@@ -587,7 +587,7 @@ Illustrative; flag spellings are Proposed ([CLI](cli.md) 2.2). The path is a gol
 - Employer-of-record and global payroll; benefits administration; learning management (T3).
 - First-party candidate ranking, performance scoring and biometric capture.
 - Shift planning and field work ([Services](services.md)); fleet, lunch, referrals, frontdesk (T3).
-- Native mobile apps (PWA baseline); hardware clocks beyond extensions.
+- Native mobile apps other than React Native (Expo) apps, which OR-34 allows as obop clients (the first is Mileage, [mobile.md](mobile.md); the limits to first-party apps and to cases a PWA cannot serve are Proposed, D87); employee self-service stays a PWA baseline. Hardware clocks beyond extensions.
 - Later: concurrent contracts, cross-company secondment, headcount budgets, company cards, cash advances.
 
 ## 9. Open questions

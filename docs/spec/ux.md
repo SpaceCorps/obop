@@ -37,7 +37,7 @@ Fixed by the owner's Vite+ and pnpm constraint (F2), D15 and D35; not re-argued 
 | Concern | Choice (as of 2026-10-01) |
 |---|---|
 | Framework | React 19 (19.3.0, 2026-09-09) and TypeScript 7 (stable release 2026-07-08), TSX only; React Compiler via `@rolldown/plugin-babel`; no `baseUrl` (D15) [R00 s3.3; R07 s3.2] |
-| Toolchain | Vite+ through the `vp` CLI only, with exactly two ratified exceptions (OR-9), neither of which builds the UI that ships: the nightly exit drill and `pnpm sbom`; `vite-plus` 1.0.0 (2026-09-28, MIT) bundling Vite 8.3.1, Rolldown 1.2.11, Vitest 5.0.1, Oxlint 1.85.0, Oxfmt 0.70.0, tsdown 0.23.0; eligible under the ratified pin policy (OR-8, D23) from 2026-10-05. pnpm only; CI runs `vp install --frozen-lockfile` |
+| Toolchain | Vite+ through the `vp` CLI only, with two ratified exceptions (OR-9), neither of which builds the UI that ships (the nightly exit drill and `pnpm sbom`), and a third for the mobile toolchain (OR-34), which builds the native app of D87 and not the web UI; `vite-plus` 1.0.0 (2026-09-28, MIT) bundling Vite 8.3.1, Rolldown 1.2.11, Vitest 5.0.1, Oxlint 1.85.0, Oxfmt 0.70.0, tsdown 0.23.0; eligible under the ratified pin policy (OR-8, D23) from 2026-10-05. pnpm only; CI runs `vp install --frozen-lockfile` |
 | Data, tables, primitives | TanStack Query, Router, Table 9.2.4 and Virtual (Start excluded while a release candidate); React Aria Components 1.21.1; Tailwind 4.3.3 logical utilities; ECharts 6.1.0; Tiptap 3.31 core; Lingui 6.8 (D15, D34) [R00 s3.3] |
 | Tests | Vitest Browser Mode, Playwright 1.63, `@axe-core/playwright` 4.13.0; visual baselines from one pinned container [R27 A2] |
 | Contracts | Rust owns them: OpenAPI 3.1 (utoipa 6.0.0), meta-model types (ts-rs 12.0.1 or specta), JSON Schema (schemars 1.2.2); generated files are committed and diff-gated [R19 s5.1; R07 s3.7] |
@@ -420,7 +420,7 @@ Basis: Proposed (D13) targets Odoo 19 parity at 1.0, the first stable release, f
 
 **States.** `online`, `degraded`, `offline`, `syncing`, shown in words and icon in the status strip; a banner links the degraded-feature list; a "N changes pending" counter appears from W3. Nothing drops silently, and users are told not to clear site data before sync completes.
 
-**Storage.** IndexedDB or OPFS with a quota and LRU purge (Odoo caps at 2 GB; obop sets its own cap, Proposed). Background Sync is not Baseline, so sync runs while the app is open; Safari storage is best-effort unless `navigator.storage.persist()` is granted [R19 s11]. Shell caching: `vite-plugin-pwa` 1.3.0 with Workbox 7.4.1. Sign-out, session revocation and account switch purge the cache. Fields in sensitive classes (`confidential_hr`, `special_category`, `financial`) are excluded from the browser cache by default (Proposed). A per-view "data caching" switch can disable caching, as in Odoo 20 [R22 s2].
+**Storage.** IndexedDB or OPFS with a quota and LRU purge (Odoo caps at 2 GB; obop sets its own cap, Proposed). Background Sync is not Baseline, so sync runs while the app is open; Safari storage is best-effort unless `navigator.storage.persist()` is granted [R19 s11]. Shell caching: `vite-plugin-pwa` 1.3.0 with Workbox 7.4.1. Sign-out, session revocation and account switch purge the cache. Fields in sensitive classes (`confidential_hr`, `special_category`, `financial`) are excluded from the browser cache by default (Proposed). A per-view "data caching" switch can disable caching, as in Odoo 20 [R22 s2]. A native app (D87, Proposed) would be a separate client family: its offline store is an encrypted SQLite command outbox on the device ([mobile.md](mobile.md) 3), not this PWA contract.
 
 ### 4.14 Onboarding, setup, sample data, import
 
@@ -626,7 +626,7 @@ Pain ranks are from the voice-of-customer study [R04 s1]: 1 upgrades, 2 open-cor
 
 ## 8. Out of scope, non-goals and later
 
-- Native store apps beyond PWA and Tauri shells; Tauri mobile maturity is unverified [R07 s3.9].
+- Native apps other than React Native (Expo) apps, which OR-34 allows as obop clients ([mobile.md](mobile.md); the first is Mileage). Proposed (D87): first-party apps only, only where a PWA cannot serve, the PWA stays the default client, and Tauri mobile is not pursued (its maturity is unverified [R07 s3.9]).
 - Local-first sync engines or CRDTs for business data, Proposed (D13); Yjs only for documents (D39).
 - Queued writes, Gantt, map, cohort (W3+); spreadsheet view (not scheduled).
 - Canvas and commercial grids, FullCalendar Premium resource views (D15); custom CSS and fonts in the back office.
@@ -660,7 +660,7 @@ Pain ranks are from the voice-of-customer study [R04 s1]: 1 upgrades, 2 open-cor
 
 ## 10. Sources
 
-Decision IDs (D1 to D86), owner rulings (OR-1 to OR-21) and owner questions (Q1 to Q36) refer to [DECISIONS.md](../DECISIONS.md); the spellings of shared names are those of [CONVENTIONS.md](../CONVENTIONS.md). Research tags map to the files below; "s" numbers are section numbers inside each file, and "Implications n" refers to the numbered list in its "Implications for obop" section.
+Decision IDs (D1 to D87), owner rulings (OR-1 to OR-34) and owner questions (Q1 to Q42) refer to [DECISIONS.md](../DECISIONS.md); the spellings of shared names are those of [CONVENTIONS.md](../CONVENTIONS.md). Research tags map to the files below; "s" numbers are section numbers inside each file, and "Implications n" refers to the numbered list in its "Implications for obop" section.
 
 | Tag | File |
 |---|---|
