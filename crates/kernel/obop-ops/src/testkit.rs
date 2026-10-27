@@ -1,7 +1,10 @@
 //! Test support: a backend that can be made to fail, to test what the code around it leaves
 //! behind when storage fails half way.
 
-use obop_storage::{ApplyError, Backend, Fields, LockGuard, Op, Result, Row, RowSink, Swap};
+use obop_storage::{
+    ApplyError, Backend, Fields, LockGuard, Op, Result, Row, RowSink, Swap, Track, Tracking,
+    WriteCtx,
+};
 use serde_json::Value as J;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -108,6 +111,43 @@ impl Backend for Flaky {
             return Err(ApplyError::Storage("disk full (simulated)".into()));
         }
         self.inner.apply_checked(ops)
+    }
+    fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        if Self::on(&self.fail_apply) {
+            return Err(ApplyError::Storage("disk full (simulated)".into()));
+        }
+        self.inner.apply_ctx(ctx, ops)
+    }
+    fn apply_tracked(
+        &self,
+        ctx: &WriteCtx,
+        ops: &[Op],
+        tracking: &Tracking,
+    ) -> std::result::Result<(), ApplyError> {
+        if Self::on(&self.fail_apply) {
+            return Err(ApplyError::Storage("disk full (simulated)".into()));
+        }
+        self.inner.apply_tracked(ctx, ops, tracking)
+    }
+    fn track(&self, model: &str, how: Track) {
+        self.inner.track(model, how)
+    }
+    fn untrack(&self, model: &str) {
+        self.inner.untrack(model)
+    }
+    fn tracked_models(&self) -> Vec<String> {
+        self.inner.tracked_models()
+    }
+    fn scan(
+        &self,
+        model: &str,
+        visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
+    ) -> Result<()> {
+        self.refused(model)?;
+        self.inner.scan(model, visit)
+    }
+    fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
+        self.inner.ensure_unique(name, model, fields)
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.refused(model)?;

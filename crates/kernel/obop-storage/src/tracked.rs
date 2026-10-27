@@ -20,8 +20,9 @@
 //! Every method of [`Backend`] must be forwarded here: a method that is left out silently uses the
 //! trait's default, which for a feature that lives in the store (pushdown, history, guards) means
 //! the feature is off and nothing says so. The test `tracked_forwards_every_backend_method` reads
-//! the trait and this file and fails for any method that is not in the list below; the same test
-//! runs on the other wrappers (`Guarded`, `Flaky`).
+//! the trait and this file and fails for any method that is not in the list below; its sibling
+//! `the_other_wrappers_forward_every_backend_method_too` does the same for `Guarded`, for the
+//! `Flaky` of `testing` and for the `Flaky` of `obop-ops` (it reads that file by path).
 
 use crate::ctx::{self, WriteCtx};
 use crate::{ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap};
@@ -32,9 +33,14 @@ use std::sync::{Arc, RwLock};
 /// elsewhere (the change history of D75 travels as `record_change` rows). A write to one of them
 /// would create a real record that collides with the exported rows, so [`Tracked`] refuses it.
 /// Reads are not refused (they find nothing), and `import` is not either: it is how those rows
-/// come back. The install gate refuses the same name in a package (`RESERVED_MODELS` of
-/// `obop-registry`, which also lists the names of three models that are stored as records or are
-/// virtual and so are not refused here).
+/// come back.
+///
+/// The install gate will refuse the same name in a package: `RESERVED_MODELS` of `obop-registry`
+/// lists it, together with three names of models that are stored as records or are virtual and
+/// so are not refused here, but the gate does not enforce the list yet (the D75 package does).
+/// Until then a package or a module-builder model named `record_change` still installs, and its
+/// writes are refused here with this message: an interim behaviour change, recorded in
+/// docs/ISSUES.md (K21).
 pub const PSEUDO_MODELS: [&str; 1] = ["record_change"];
 
 fn is_pseudo(model: &str) -> bool {
@@ -431,20 +437,28 @@ mod tests {
             .collect()
     }
 
-    fn backend_fns() -> Vec<String> {
-        let all = fns_of(include_str!("lib.rs"), "pub trait Backend: Send + Sync {");
+    const TRAIT: &str = "pub trait Backend: Send + Sync {";
+
+    /// The methods of the trait in `lib_src`.
+    fn backend_fns(lib_src: &str) -> Vec<String> {
+        let all = fns_of(lib_src, TRAIT);
         assert!(all.len() >= 30, "the scan of the trait found {all:?}");
         all
     }
 
-    /// The methods of `Backend` that the `impl` at `header` in `src` does not have.
-    fn missing_forwards(src: &str, header: &str) -> Vec<String> {
+    /// The methods of the trait in `lib_src` that the `impl` at `header` in `src` does not have.
+    fn missing_in(lib_src: &str, src: &str, header: &str) -> Vec<String> {
         let have = fns_of(src, header);
         assert!(!have.is_empty(), "no methods found in `{header}`");
-        backend_fns()
+        backend_fns(lib_src)
             .into_iter()
             .filter(|f| !have.contains(f))
             .collect()
+    }
+
+    /// The methods of the real trait that the `impl` at `header` in `src` does not have.
+    fn missing_forwards(src: &str, header: &str) -> Vec<String> {
+        missing_in(include_str!("lib.rs"), src, header)
     }
 
     #[test]
@@ -462,6 +476,12 @@ mod tests {
         for (src, header) in [
             (include_str!("guard.rs"), "impl Backend for Guarded {"),
             (include_str!("testing.rs"), "impl Backend for Flaky {"),
+            // The test double of obop-ops wraps stores that `open` returns (Tracked ones), so a
+            // method it does not forward is silently the trait's default for its tests.
+            (
+                include_str!("../../obop-ops/src/testkit.rs"),
+                "impl Backend for Flaky {",
+            ),
         ] {
             let missing = missing_forwards(src, header);
             assert!(
@@ -487,15 +507,29 @@ mod tests {
             missing_forwards(&cut, "impl Backend for Tracked {"),
             ["kv_scan"]
         );
-        // And a method of the trait nobody forwards yet (a new default) is named too.
+        // And a method added to the trait (with a default, as every new one is) is named for
+        // every wrapper that has not been taught about it.
         let with_new = include_str!("lib.rs").replacen(
             "    fn kind(&self) -> &'static str;\n",
             "    fn kind(&self) -> &'static str;\n    fn brand_new(&self) {}\n",
             1,
         );
-        assert!(
-            fns_of(&with_new, "pub trait Backend: Send + Sync {").contains(&"brand_new".into())
+        assert_ne!(
+            with_new,
+            include_str!("lib.rs"),
+            "the anchor line was not found"
         );
+        for (src, header) in [
+            (include_str!("tracked.rs"), "impl Backend for Tracked {"),
+            (include_str!("guard.rs"), "impl Backend for Guarded {"),
+            (include_str!("testing.rs"), "impl Backend for Flaky {"),
+        ] {
+            assert_eq!(
+                missing_in(&with_new, src, header),
+                ["brand_new"],
+                "{header}"
+            );
+        }
     }
 
     #[test]
