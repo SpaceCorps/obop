@@ -5,8 +5,9 @@
 //! leaves behind is compared with `golden/untracked.json`, which was written by this same script
 //! on the code as it stood before D75 touched the storage layer (`main` at the merge of the storage
 //! seams): the outcome of every call, the export of the database, and the bytes the record
-//! columns hold (SQLite and PostgreSQL). With nothing tracked a record must not get a system
-//! key, a refused batch must say what it said, and an export must carry the same rows.
+//! column holds (SQLite and PostgreSQL), read right after the script and again after the restore.
+//! With nothing tracked a record must not get a system key, a refused batch must say what it said,
+//! and an export must carry the same rows.
 //!
 //! To write the file again (only when the contract changes on purpose, never to make a failure
 //! go away): `OBOP_WRITE_GOLDEN=1 cargo test -p obop-storage golden`, with
@@ -252,6 +253,108 @@ fn script(b: &dyn Backend) -> Vec<String> {
         patch: f(json!({"n": 2})),
     }])));
 
+    // ---- numbers, odd ids and the reserved names through every write entry point ----------------
+    t.push(refused(b.insert(
+        "num",
+        "n1",
+        &f(json!({
+            "float": 1.5, "neg": -0.25, "tiny": 1e-7, "huge": 1.0e300, "tenth": 0.1,
+            "big": 9007199254740993_i64, "max": i64::MAX, "min": i64::MIN, "umax": u64::MAX,
+            "zero": 0
+        })),
+    )));
+    t.push(show(b.apply_checked(&[
+        Op::Put {
+            model: "num".into(),
+            id: "n2".into(),
+            fields: f(json!({"float": 2.25, "big": 9007199254740993_i64, "umax": u64::MAX})),
+        },
+        Op::Merge {
+            model: "num".into(),
+            id: "n1".into(),
+            patch: f(json!({"float": 3.75, "huge": 1.5e300})),
+        },
+    ])));
+    let odd = [
+        "",
+        "with space",
+        "ünï/cødé ☃",
+        "quote\"id",
+        "it's",
+        "back\\slash",
+        &"x".repeat(200),
+    ];
+    for (i, id) in odd.iter().enumerate() {
+        t.push(refused(b.insert("odd", id, &f(json!({"i": i})))));
+    }
+    t.push(refused(
+        b.insert_many(
+            &odd.iter()
+                .map(|id| ("odd2".to_string(), id.to_string(), f(json!({"i": 1}))))
+                .collect::<Vec<_>>(),
+        ),
+    ));
+    t.push(refused(b.update("odd", "", &f(json!({"touched": true})))));
+    t.push(refused(b.delete("odd", "it's")));
+    t.push(refused(b.get("odd", "ünï/cødé ☃").map(|r| r.is_some())));
+    let sys = || {
+        json!({
+            "created_at": "c", "updated_at": "u", "created_by": "cb", "updated_by": "ub",
+            "row_version": 3, "sys_backfilled": true, "if_version": 9
+        })
+    };
+    t.push(show(b.apply_checked(&[
+        Op::Insert {
+            model: "sysk".into(),
+            id: "sys-i".into(),
+            fields: f(sys()),
+        },
+        Op::Put {
+            model: "sysk".into(),
+            id: "sys-p".into(),
+            fields: f(sys()),
+        },
+        Op::Put {
+            model: "sysk".into(),
+            id: "sys-p".into(),
+            fields: f(json!({"name": "again", "row_version": 8})),
+        },
+        Op::Insert {
+            model: "sysk".into(),
+            id: "sys-m".into(),
+            fields: f(json!({"name": "m"})),
+        },
+        Op::Merge {
+            model: "sysk".into(),
+            id: "sys-m".into(),
+            patch: f(sys()),
+        },
+        Op::Insert {
+            model: "sysk".into(),
+            id: "sys-c".into(),
+            fields: f(json!({"name": "c"})),
+        },
+        Op::Patch {
+            model: "sysk".into(),
+            id: "sys-c".into(),
+            patch: f(sys()),
+            expect: vec![("row_version".into(), J::Null)],
+        },
+        Op::add("sysk", "sys-a", "row_version", 2).or_create(Fields::new()),
+    ])));
+    t.push(show(b.apply_checked(&[Op::Patch {
+        model: "sysk".into(),
+        id: "sys-i".into(),
+        patch: Fields::new(),
+        expect: vec![("row_version".into(), json!(1))],
+    }])));
+    t.push(refused(b.insert("sysk", "sys-n", &f(sys()))));
+    t.push(refused(b.update(
+        "sysk",
+        "sys-i",
+        &f(json!({"row_version": 4})),
+    )));
+
     // ---- compare-and-set of a secret, lookups ----------------------------------------------
     t.push(refused(b.insert(
         "secret",
@@ -277,8 +380,11 @@ fn script(b: &dyn Backend) -> Vec<String> {
     t
 }
 
-/// What a backend holds after the script, in the order it exports it.
-fn snapshot(b: &dyn Backend, trace: Vec<String>) -> J {
+/// What a backend holds after the script, in the order it exports it. `raw` reads the bytes of the
+/// record column, as the writes of the script left them (before the export) and again after the
+/// restore, which writes every row again from the parsed export.
+fn snapshot(b: &dyn Backend, trace: Vec<String>, raw: &dyn Fn() -> J) -> J {
+    let raw_before = raw();
     let mut rows: Vec<J> = Vec::new();
     b.export(2, &mut |batch| {
         rows.extend(
@@ -319,8 +425,10 @@ fn snapshot(b: &dyn Backend, trace: Vec<String>) -> J {
     json!({
         "trace": trace,
         "rows": rows,
+        "raw_before_restore": raw_before,
         "restored": n,
         "total_after_restore": b.total().unwrap(),
+        "raw_after_restore": raw(),
     })
 }
 
@@ -420,7 +528,7 @@ fn check(name: &str, got: J) {
 fn memory_with_nothing_tracked_is_as_before() {
     let b = open("memory:").unwrap();
     assert!(b.tracked_models().is_empty());
-    let snap = snapshot(&*b, script(&*b));
+    let snap = snapshot(&*b, script(&*b), &|| J::Null);
     check("memory", snap);
 }
 
@@ -431,8 +539,7 @@ fn sqlite_with_nothing_tracked_is_as_before() {
     let path = dir.join("golden.db");
     let url = format!("sqlite://{}", path.display());
     let b = open(&url).unwrap();
-    let mut snap = snapshot(&*b, script(&*b));
-    snap["raw"] = sqlite_raw(&path);
+    let snap = snapshot(&*b, script(&*b), &|| sqlite_raw(&path));
     check("sqlite", snap);
     drop(b);
     for ext in ["", "-wal", "-shm"] {
@@ -441,7 +548,7 @@ fn sqlite_with_nothing_tracked_is_as_before() {
     let _ = std::fs::remove_dir(&dir);
     // An in-memory SQLite database does the same.
     let m = open("sqlite::memory:").unwrap();
-    let again = snapshot(&*m, script(&*m));
+    let again = snapshot(&*m, script(&*m), &|| J::Null);
     let g = golden();
     if !writing() {
         assert_eq!(again["rows"], g["sqlite"]["rows"]);
@@ -455,8 +562,7 @@ fn postgres_with_nothing_tracked_is_as_before() {
         return;
     };
     let b = open(db.url()).unwrap();
-    let mut snap = snapshot(&*b, script(&*b));
-    snap["raw"] = postgres_raw(&db);
+    let snap = snapshot(&*b, script(&*b), &|| postgres_raw(&db));
     check("postgres", snap);
 }
 
@@ -482,7 +588,8 @@ fn the_backends_hold_the_same_records() {
         for row in g[part]["rows"].as_array().unwrap() {
             let data = row[2].as_object().unwrap();
             let id = row[1].as_str().unwrap();
-            if id != "o1" {
+            // The records the script gave system names itself (o1, and the sys- ones) keep them.
+            if id != "o1" && !id.starts_with("sys-") {
                 for k in [
                     "created_at",
                     "updated_at",
