@@ -184,6 +184,8 @@ K11 is listed in time order; K1 to K10 keep their earlier numbers.
 
 "Dated" lists anchors and D26 dates; "Work" is (proposal) and is an ordered backlog for the owner and the agents, not a staffing plan. Answer dates follow section 8 of DECISIONS.md.
 
+**Beside the quarters (D87, OR-34; no calendar date).** The first native slice, "one background-recorded trip from a real phone" ([spec/mobile.md](spec/mobile.md) 9), is client work beside the waves: Android first, development builds, synthetic data only. It is outside the W1 cut (D86), is an exit criterion of no wave and displaces nothing in the slip order; it starts on the owner's word (OR-34) and carries no date of its own (the calendar's labels are milestones, OR-32). Work, in order: the Expo and Metro spike on the pnpm workspace; `@obop/client` generated from `/api/openapi.json`; the mobile client class of `obop-oauth`, the `device` model and revocation; the `mileage` package with ingestion and validation; the app (sign-in, Start, foreground service, SQLite outbox, upload, Stop, review); label tables and docs. The real-phone acceptance test is the owner's to run or to witness. Auto-stop, maps, push, reimbursement and iOS are not in it.
+
 **2026-Q4 (M0 to M2), W0.**
 - Dated: 10-05 vite-plus 1.0.0 eligible (D23). 10-15 handles reserved; 10-15 to 10-22 Rust 1.99.x window (1.99.0 adopted). 10-23 Q20. 10-28 Node 26 enters LTS. 11-12 Rust 1.100.0 expected. 11-13 Q8 and Q18. 11-16 CEN code lists take effect. 11-27 spike readout, Q6. 12-01 0.1 preview, migration ledger starts. 12-09 Product Liability Directive: software counts as a product for anything placed on the market after this date (counsel). 12-15 counsel opinion on the name (Q2), Q16 and Q26. 12-31 Q9 and Q22, W0 exit, throughput review; SMTP AUTH basic off by default.
 - Work: K1 in month 1; K2 and the K11 skeleton in month 2; `base`, `obop-jobs`, `-i18n`, `-storage` in month 3; the DCO check; security policy and vulnerability-handling runbook v0; design-partner search; DATEV and SKR requests; counsel engaged; KoSIT goldens refreshed by 11-09 ([R27 C10]).
@@ -292,7 +294,7 @@ Before the cut, these three items alone took about 78% to 96% of the research's 
 
 ### 5.1 Owner decisions on the calendar
 
-The open questions of section 8 of DECISIONS.md (Q1 to Q36), in order of answer date. Closed by the rulings and not listed: Q1 (OR-1, OR-10), Q3 and Q19 (OR-2), Q4 (OR-6), Q7 (OR-12), Q10 (OR-8, OR-9, OR-14), Q13 (OR-2, OR-3), Q23 (OR-17), Q27 (OR-20), Q29 (OR-18), Q30 (OR-16) and Q31 (OR-21). Q32 (npm-registry publication) stays open and is decided at W2 (OR-19), with the default of no publication until then. Q2, Q5, Q16 and Q20 are reduced to what counsel or the owner still has to settle for SpaceCorps as publisher of a free Apache-2.0 project. Proposed records stay Proposed until the owner says so. Besides the questions, the owner approves the entries of the UI-parity exemption list one by one (OR-16); the Proposed timing is an initial list before the UI parity work starts on 2027-10-01 (D80).
+The open questions of section 8 of DECISIONS.md (Q1 to Q42), in order of answer date. Closed by the rulings and not listed: Q1 (OR-1, OR-10), Q3 and Q19 (OR-2), Q4 (OR-6), Q7 (OR-12), Q10 (OR-8, OR-9, OR-14), Q13 (OR-2, OR-3), Q23 (OR-17), Q27 (OR-20), Q29 (OR-18), Q30 (OR-16) and Q31 (OR-21). Q32 (npm-registry publication) stays open and is decided at W2 (OR-19), with the default of no publication until then. Q2, Q5, Q16 and Q20 are reduced to what counsel or the owner still has to settle for SpaceCorps as publisher of a free Apache-2.0 project. Proposed records stay Proposed until the owner says so. Besides the questions, the owner approves the entries of the UI-parity exemption list one by one (OR-16); the Proposed timing is an initial list before the UI parity work starts on 2027-10-01 (D80).
 
 | Q | Decision | Answer by | Blocks |
 |---|---|---|---|
@@ -316,6 +318,7 @@ The open questions of section 8 of DECISIONS.md (Q1 to Q36), in order of answer 
 | Q24, Q25 | D81 who operates what; copy-mode provenance | 2027-09-30 | Registry stage 1 in W2 |
 | Q14 | D14 storefront without Node (and the docs fallback of D38) | 2028-03-31 | `website` |
 | Q32 | Whether obop publishes anything to the npm registry; until the owner rules, the default is no publication (OR-19) | W2 (2027-10-01 to 2028-06-30) | SDK distribution ([spec/cli.md](spec/cli.md#7-distribution)) |
+| Q37 to Q42 | D87 native apps: Apple and Google accounts and store listings (Q37), push (Q38), map tiles and geocoding (Q39), a data class `location` (Q40), legal sign-off for an automatic trip end (Q41), Storybook for the app (Q42) | Each before the thing it blocks; no calendar date | A store or TestFlight build (Q37), push (Q38), any map (Q39), the release of the `mileage` package (Q40), auto-stop work (Q41), the app's component library (Q42) |
 
 ### 5.2 Dependency register
 
@@ -388,6 +391,8 @@ The W1 cut and its in and out calls are RATIFIED (OR-13, OR-15, D86); the slip o
 | W2 | All T2 apps (`mrp`, `pos`, `website`, `ecommerce`, `helpdesk`, `planning`, `subscriptions`, `ai` agents and the rest); the services variant; `hr` beyond the employee core, `expenses`, payroll, `documents`; PL stable; F3; custom domains; `intercompany`; X3 and the extension platform; registry stage 2 | W3, except `consolidation` (W4) |
 | W3 | `consolidation`; barcode depth (GS1, batch and wave screens; the plain scan screens are W3) and WMS depth; payroll reference pack (country decided 2029-04-01); BE, NL, ES, IT and Nordic packs (third-party maintainers, L2; Spain gated behind counsel, D17); WhatsApp and marketplace connectors; the public-sector track; all T3 | W4 or contributors |
 | W4 | Nothing is promised; T3 arrives as X3 or X4 packages, plugins from the registry (D81) or contributor work | |
+
+**Native apps (D87).** The Mileage slice is not in the scope of any wave above and is not part of the W1 cut; it is client work beside the waves (3.4).
 
 Never, under the register: XML-RPC (D22), in-process third-party Rust (D11), metered or hosted AI credits (D18, OR-2), statutory filing in core payroll (D19), Electric, PowerSync or Zero (D37), Odoo Enterprise code or assets (F3), any paid tier, price list or payment handling in the registry (OR-2, OR-3), hosting for others by SpaceCorps apart from the free sample-data sandbox and the hosting service planned by OR-22 (OR-11, OR-20, D83), and a feature that exists on one surface only (OR-4).
 
@@ -509,7 +514,7 @@ Items 1, 3 and 4 of the earlier list (headcount definition, the seed-to-Series-A
 
 ## 10. Sources
 
-Tags map to files relative to this document. D-tags (D1 to D86), F-tags, Q-tags, OR-tags and the sections of DECISIONS.md refer to [DECISIONS.md](DECISIONS.md). Pinned versions and the regulatory calendar come from [R00 s3.2, s3.3, s3.7]. Dates computed in this document (weekdays, day counts, cut and RC dates, the six-week Rust train) were checked by calendar arithmetic. The one other outside fact is the Rust 1.99.0 publication in 5.4, checked on 2026-10-01 against the Rust stable-channel manifest and the release announcement (verified). Module ids and names follow [CONVENTIONS.md](CONVENTIONS.md); command names follow [spec/cli.md](spec/cli.md).
+Tags map to files relative to this document. D-tags (D1 to D87), F-tags, Q-tags, OR-tags and the sections of DECISIONS.md refer to [DECISIONS.md](DECISIONS.md). Pinned versions and the regulatory calendar come from [R00 s3.2, s3.3, s3.7]. Dates computed in this document (weekdays, day counts, cut and RC dates, the six-week Rust train) were checked by calendar arithmetic. The one other outside fact is the Rust 1.99.0 publication in 5.4, checked on 2026-10-01 against the Rust stable-channel manifest and the release announcement (verified). Module ids and names follow [CONVENTIONS.md](CONVENTIONS.md); command names follow [spec/cli.md](spec/cli.md).
 
 | Tag | File |
 |---|---|

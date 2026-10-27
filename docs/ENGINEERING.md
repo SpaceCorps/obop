@@ -554,7 +554,7 @@ Numbers are stable because other documents cite them.
 
 ## 12. Open questions
 
-For the owner, in addition to the register's Q1-Q36 (DECISIONS.md section 8). The register folds Q-E1 and Q-E6 into Q17 and Q15, both closed (OR-29, OR-28); the rulings of 2026-10-01 closed or made moot Q-E2, Q-E3, Q-E8 and Q-E9; Q-E11 is also an F1/D23 question that the closure of Q10 (OR-8, OR-9, OR-14) did not cover. Q-E4, Q-E5, Q-E7, Q-E10 and Q-E11 live only here. Other documents cite these numbers, so they stay.
+For the owner, in addition to the register's Q1-Q42 (DECISIONS.md section 8). The register folds Q-E1 and Q-E6 into Q17 and Q15, both closed (OR-29, OR-28); the rulings of 2026-10-01 closed or made moot Q-E2, Q-E3, Q-E8 and Q-E9; Q-E11 is also an F1/D23 question that the closure of Q10 (OR-8, OR-9, OR-14) did not cover. Q-E4, Q-E5, Q-E7, Q-E10 and Q-E11 live only here. Other documents cite these numbers, so they stay.
 
 | # | Question | Status | Where |
 |---|---|---|---|

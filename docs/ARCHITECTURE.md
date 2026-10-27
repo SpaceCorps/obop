@@ -105,6 +105,7 @@ Pins are the verified versions of [R00 s3]; Proposed rows wait for the owner.
 flowchart LR
   subgraph people["People"]
     U["Business users: SPA and PWA"]
+    NA["Native apps: React Native, where a PWA cannot do the job (D87)"]
     PO["Portal users and guests"]
     OP["CLI users: operators, implementers, scripts and agents (obop CLI)"]
   end
@@ -131,6 +132,7 @@ flowchart LR
   CP["Operator tooling: business directory, fleet, releases (open; only for whoever runs many businesses)"]
   PKG["Plugin registry: git-backed index, signed OCI artefacts in publishers' registries"]
   U --> CORE
+  NA --> CORE
   PO --> CORE
   INT --> CORE
   AG --> CORE
@@ -209,7 +211,7 @@ Dependencies point down only. The layer model is R08's s13, updated for D6-D10. 
 
 | Layer | Responsibility | Crates | Rule |
 |---|---|---|---|
-| Layer 8 Clients | SPA, PWA, Tauri shells, the `obop` CLI, integrations, agents | `web/` packages, `obop-cli*` | Talk to Layer 7 only; the bootstrap CLI commands (`init`, `serve`, `migrate`, `upgrade`) link server crates and run in process (section 8.6). The UI is a client of the typed commands and holds no business logic (D80) |
+| Layer 8 Clients | SPA, PWA, Tauri shells, native React Native apps (D87), the `obop` CLI, integrations, agents | `web/` packages, `obop-cli*` | Talk to Layer 7 only; the bootstrap CLI commands (`init`, `serve`, `migrate`, `upgrade`) link server crates and run in process (section 8.6). The UI is a client of the typed commands and holds no business logic (D80) |
 | Layer 7 API surface | Generic REST, `$batch`, OAuth and OIDC, MCP, webhooks, WebSocket, OpenAPI, the published command catalogue | `obop-http`, `obop-mcp*` | Only `obop-http` depends on axum; dispatches through registry-resolved commands; REST, MCP and CLI bindings are generated from the same catalogue (section 8.6) |
 | Layer 6 Application | Module services and commands, automation and approvals, jobs, outbox dispatch, reports, Wasm host, packages, importers | module implementation crates, `obop-jobs`, `obop-bus-notifier`, `obop-report`, `obop-wasm-host`, `obop-pkg`, `obop-importers`, `obop-compat` | May call Layer 5 and other modules' ports only |
 | Layer 5 Model runtime | `Env`, unit of work, CRUD pipeline, access algebra, sequences, `row_version`, retries, TxEvents and outbox writes | `obop-orm`, `obop-security`, `obop-events`, `obop-i18n`, `obop-telemetry` (cross-cutting) | The only layer that holds a database pool |
@@ -782,7 +784,7 @@ Vite+ 1.0 is days old and the alias layer is the risk [R07 s2]. Controls (D15): 
 
 React 19 and TypeScript 7, TSX only, React Compiler through `@rolldown/plugin-babel`, no `baseUrl`, no `.vue` or `.svelte` in core (D15). Data: TanStack Query (normalised cache keyed by model, id and field set), Router (the URL carries action, view type, domain, group-by and breadcrumbs), Table 9 and Virtual, Form for the schema-driven renderer; Zustand for small UI stores; TanStack Start stays out until it leaves RC. Primitives: React Aria Components, Tailwind 4 with logical utilities, ECharts, Tiptap core, FullCalendar core, `@dnd-kit/react` behind a facade pinned to an exact 0.x. A CI licence allow-list excludes AG Grid Enterprise, Handsontable, FullCalendar Premium, Univer Pro, Tiptap cloud features, BlockNote XL and HyperFormula [R07 s3.3].
 
-Metadata layers stay framework-neutral (no React import): `@obop/meta`, `@obop/rpc`, `@obop/domain`, `@obop/i18n-core`; only `@obop/ui-*` import React (section 15). The workspace package scope is `@obop/*`. obop publishes nothing to the npm registry until the owner rules at W2 (OR-19, Q32; the default stays no publication): the name `obop` is taken there, which is a clearance fact only (D3), and the extension-facing SDKs ship as versioned release tarballs on GitHub Releases and as OCI artefacts, installed with `vp add <url>` ([spec/cli.md](spec/cli.md) 3.10).
+Metadata layers stay framework-neutral (no React import): `@obop/meta`, `@obop/rpc`, `@obop/domain`, `@obop/i18n-core`; only `@obop/ui-*` import React (section 15). The React Native app of D87 adds a shared client, a tokens package with a native target and a pure-TypeScript trip package to the same workspace (Proposed; [spec/mobile.md](spec/mobile.md) 8.1; whether the client is `@obop/rpc` is open there). The workspace package scope is `@obop/*`. obop publishes nothing to the npm registry until the owner rules at W2 (OR-19, Q32; the default stays no publication): the name `obop` is taken there, which is a clearance fact only (D3), and the extension-facing SDKs ship as versioned release tarballs on GitHub Releases and as OCI artefacts, installed with `vp add <url>` ([spec/cli.md](spec/cli.md) 3.10).
 
 ### 10.3 Metadata-driven UI
 
@@ -804,7 +806,7 @@ Rust owns contracts (D15): OpenAPI 3.1 from utoipa feeds generated TypeScript ty
 
 ### 10.5 Shells, offline, i18n, accessibility
 
-- **Shells.** PWA baseline (`vite-plugin-pwa`, Workbox), online-first; Tauri 2 plus a Rust hardware agent for POS and desktop (W3). Nothing depends on browser hardware APIs: Safari has no WebUSB, Web Serial or WebHID [R12 s3.4].
+- **Shells.** PWA baseline (`vite-plugin-pwa`, Workbox), online-first; Tauri 2 plus a Rust hardware agent for POS and desktop (W3). **Native apps (D87, OR-34):** first-party React Native (Expo) apps are clients of the same REST and OpenAPI surface, only where a PWA cannot do the job (recording a trip while the phone is locked is the first case); the first is Mileage ([spec/mobile.md](spec/mobile.md)). They sign in through the system browser and `obop-oauth` (the D64 amendment), keep a SQLite command outbox on the device (the D13 amendment) and are revocable as `device` records; Tauri mobile is not pursued. Nothing depends on browser hardware APIs: Safari has no WebUSB, Web Serial or WebHID [R12 s3.4].
 - **i18n.** Lingui, PO catalogs, an ICU MessageFormat 1 subset; PO parser and `icu` in Rust; Weblate; 12 target locales at first pack stable; machine translation is a suggestion and banned for statutory labels; RTL and CJK fixtures in CI (D34). Inputs accept `.` and `,` as decimal separators, key handling is IME-safe (`isComposing` plus a keyCode 229 guard), and totals use the shared Rust decimal crate compiled to Wasm so client and server agree (spike S4).
 - **Accessibility.** WCAG 2.2 AA is a release gate: React Aria, Oxlint `jsx-a11y`, axe in Playwright, manual screen-reader passes on five flows, every drag with a non-drag path, remappable single-key shortcuts. Logical CSS only (CI bans physical margins); DTCG 2025.10 tokens compile to runtime CSS custom properties with `data-theme` and `data-density`, no per-theme bundles (D35).
 - **Storefront** (Proposed, D14). Pages are versioned block JSON compiled into immutable snapshots, rendered in Rust with minijinja (also built to Wasm for editor preview) plus Vite islands hydrated through the Vite manifest; cart, account and checkout are uncached islands; checkout uses hosted payment fields, a script allow-list and CSP [R12 s7]. No Node in production; Astro, Leptos or Dioxus would each need an explicit owner waiver of the Vite+ rule (D14; Q14).
@@ -924,9 +926,11 @@ obop/
       backoffice/         # React 19 SPA
       storefront/         # Vite islands plus Rust-rendered blocks (Proposed, D14)
       pos-shell/          # Tauri 2 shell (W3)
+      mileage-app/        # React Native (Expo) app, the first native app (D87, Proposed; spec/mobile.md)
       docs/               # VitePress 2, plain Markdown, pages generated from the registry
     packages/
       meta  rpc  domain  i18n-core            # framework-neutral TypeScript
+      client  tokens  trip-core                # D87, Proposed: shared by the web and the mobile app (spec/mobile.md 8.1)
       ui-kit  ui-views  ui-widgets            # React
       ui-sdk  ext-sdk  vite-plugin-ext        # extension-facing; released as tarballs, no npm-registry publication until the owner rules at W2 (OR-19, Q32)
       e2e                                      # Playwright suites

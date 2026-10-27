@@ -466,7 +466,7 @@ stateDiagram-v2
 
 **Workflows.** (1) Register a vehicle and assign a driver. (2) Attach contracts; an automation rule raises `VehicleContractExpiring` 30 days ahead (Proposed default, taken from the `delay_alert_contract` default in Odoo 20's `fleet` source, read 2026-10-01; configurable). (3) Drivers log odometer and fuel; a schedule by date or distance raises `VehicleServiceDue`. (4) Bill lines carry a vehicle dimension on the analytic ledger. (5) A vehicle linked to a `resource` of kind vehicle can be booked onto field shifts.
 
-**Flows.** Emits `VehicleContractExpiring`, `VehicleServiceDue`, `OdometerRecorded` (D); consumes none by event. **Permissions.** Drivers see only their vehicle; assignment history is personal data; no telematics or location tracking. **Reports.** Cost per vehicle and per distance, contract calendar, service compliance. **Configuration.** Service types, reminder lead times, odometer unit. **Localization.** Company-car taxation and inspection intervals are country rules for packs (counsel). **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
+**Flows.** Emits `VehicleContractExpiring`, `VehicleServiceDue`, `OdometerRecorded` (D); consumes none by event. **Permissions.** Drivers see only their vehicle; assignment history is personal data; Fleet itself has no telematics or location tracking (the Mileage app of D87 records a trip's route only while a driver has started it, [mobile.md](mobile.md)). **Reports.** Cost per vehicle and per distance, contract calendar, service compliance. **Configuration.** Service types, reminder lead times, odometer unit. **Localization.** Company-car taxation and inspection intervals are country rules for packs (counsel). **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
 
 ### 4.8 Service contracts (Proposed)
 
@@ -662,7 +662,7 @@ The last column names an [R04] pain rank only where one applies.
 
 ## 10. Sources
 
-Decision IDs (D1-D86), the owner rulings OR-1 to OR-21, register sections and vocabulary come from [DECISIONS.md](../DECISIONS.md). Names of events, permission groups, data classes and entities follow [CONVENTIONS.md](../CONVENTIONS.md); command names and the CLI grammar follow [cli.md](cli.md) (Proposed until Q22).
+Decision IDs (D1-D87), the owner rulings OR-1 to OR-21, register sections and vocabulary come from [DECISIONS.md](../DECISIONS.md). Names of events, permission groups, data classes and entities follow [CONVENTIONS.md](../CONVENTIONS.md); command names and the CLI grammar follow [cli.md](cli.md) (Proposed until Q22).
 
 | Tag | File |
 |---|---|

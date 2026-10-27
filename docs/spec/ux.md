@@ -420,7 +420,7 @@ Basis: Proposed (D13) targets Odoo 19 parity at 1.0, the first stable release, f
 
 **States.** `online`, `degraded`, `offline`, `syncing`, shown in words and icon in the status strip; a banner links the degraded-feature list; a "N changes pending" counter appears from W3. Nothing drops silently, and users are told not to clear site data before sync completes.
 
-**Storage.** IndexedDB or OPFS with a quota and LRU purge (Odoo caps at 2 GB; obop sets its own cap, Proposed). Background Sync is not Baseline, so sync runs while the app is open; Safari storage is best-effort unless `navigator.storage.persist()` is granted [R19 s11]. Shell caching: `vite-plugin-pwa` 1.3.0 with Workbox 7.4.1. Sign-out, session revocation and account switch purge the cache. Fields in sensitive classes (`confidential_hr`, `special_category`, `financial`) are excluded from the browser cache by default (Proposed). A per-view "data caching" switch can disable caching, as in Odoo 20 [R22 s2].
+**Storage.** IndexedDB or OPFS with a quota and LRU purge (Odoo caps at 2 GB; obop sets its own cap, Proposed). Background Sync is not Baseline, so sync runs while the app is open; Safari storage is best-effort unless `navigator.storage.persist()` is granted [R19 s11]. Shell caching: `vite-plugin-pwa` 1.3.0 with Workbox 7.4.1. Sign-out, session revocation and account switch purge the cache. Fields in sensitive classes (`confidential_hr`, `special_category`, `financial`) are excluded from the browser cache by default (Proposed). A per-view "data caching" switch can disable caching, as in Odoo 20 [R22 s2]. Native apps (D87) are a separate client family: their offline store is a SQLite command outbox on the device ([mobile.md](mobile.md) 3), not this PWA contract.
 
 ### 4.14 Onboarding, setup, sample data, import
 
@@ -626,7 +626,7 @@ Pain ranks are from the voice-of-customer study [R04 s1]: 1 upgrades, 2 open-cor
 
 ## 8. Out of scope, non-goals and later
 
-- Native store apps beyond PWA and Tauri shells; Tauri mobile maturity is unverified [R07 s3.9].
+- Native apps other than the first-party React Native (Expo) apps that D87 allows where a PWA cannot do the job ([mobile.md](mobile.md); the first is Mileage). The PWA stays the default client, and Tauri mobile is not pursued (its maturity is unverified [R07 s3.9]).
 - Local-first sync engines or CRDTs for business data, Proposed (D13); Yjs only for documents (D39).
 - Queued writes, Gantt, map, cohort (W3+); spreadsheet view (not scheduled).
 - Canvas and commercial grids, FullCalendar Premium resource views (D15); custom CSS and fonts in the back office.
@@ -660,7 +660,7 @@ Pain ranks are from the voice-of-customer study [R04 s1]: 1 upgrades, 2 open-cor
 
 ## 10. Sources
 
-Decision IDs (D1 to D86), owner rulings (OR-1 to OR-21) and owner questions (Q1 to Q36) refer to [DECISIONS.md](../DECISIONS.md); the spellings of shared names are those of [CONVENTIONS.md](../CONVENTIONS.md). Research tags map to the files below; "s" numbers are section numbers inside each file, and "Implications n" refers to the numbered list in its "Implications for obop" section.
+Decision IDs (D1 to D87), owner rulings (OR-1 to OR-34) and owner questions (Q1 to Q42) refer to [DECISIONS.md](../DECISIONS.md); the spellings of shared names are those of [CONVENTIONS.md](../CONVENTIONS.md). Research tags map to the files below; "s" numbers are section numbers inside each file, and "Implications n" refers to the numbered list in its "Implications for obop" section.
 
 | Tag | File |
 |---|---|
