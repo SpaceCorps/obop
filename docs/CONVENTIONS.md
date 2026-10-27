@@ -69,7 +69,7 @@ An event type lives in the emitting module's `*-api` crate; a port in the implem
 
 ### 2.4 CLI grammar and naming (Proposed until Q22)
 
-The `obop` CLI, the REST API and MCP are three surfaces of one command catalogue (OR-4, D80). This section fixes the spelling they share, so a name is written once. [spec/cli.md](spec/cli.md) owns the behaviour and restates nothing here; where the two differ on a spelling, this file is corrected first (section 1). The whole section is Proposed until the owner answers Q22 (binary name, grammar, and the freeze point (before 0.3, to be confirmed)); no name in it is frozen earlier. The rows follow the naming rules N1 to N8 that cli 2.1 proposes for this file.
+The `obop` CLI, the REST API and MCP are three surfaces of one command catalogue (OR-4, D80). This section fixes the spelling they share, so a name is written once. [spec/cli.md](spec/cli.md) owns the behaviour and restates nothing here; where the two differ on a spelling, this file is corrected first (section 1). The whole section is Proposed until the owner answers Q22 (binary name, grammar, and the freeze point (before the 0.3 public alpha, OR-31)); no name in it is frozen earlier. The rows follow the naming rules N1 to N8 that cli 2.1 proposes for this file.
 
 | Element | Form | Notes |
 |---|---|---|

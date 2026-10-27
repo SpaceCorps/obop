@@ -596,7 +596,7 @@ External thresholds: Core Web Vitals INP at most 200 ms, LCP at most 2.5 s, CLS 
 | List | 100 DOM rows or fewer in the render window; a 100,000-row list scrolls at 60 fps on the reference laptop; keyset pages of 200 to 500; count capped and labelled |
 | Interaction | Cell edit echo within 50 ms; optimistic commit visible within 100 ms; server round trip p95 within 300 ms |
 | Navigation | List to side-panel record within 150 ms from cache |
-| Gate | A 100k-row Playwright test and Lighthouse and INP checks as `vp run` tasks (names Proposed), nightly on a dedicated machine with a plus or minus 10 % alarm because shared runners are noisy [R27 A2], if the runner plan funds one (Q17; the project is self-funded, OR-6), otherwise on the best available runner with a wider alarm band (Proposed); field INP collection is opt-in, Proposed (D85; `obop telemetry preview` shows the payload, [cli.md](cli.md) 3.1) |
+| Gate | A 100k-row Playwright test and Lighthouse and INP checks as `vp run` tasks (names Proposed), nightly on a dedicated machine with a plus or minus 10 % alarm because shared runners are noisy [R27 A2], if the runner plan funds one (CI stays on GitHub-hosted runners, OR-29; the project is self-funded, OR-6), otherwise on the best available runner with a wider alarm band (Proposed); field INP collection is opt-in, Proposed (D85; `obop telemetry preview` shows the payload, [cli.md](cli.md) 3.1) |
 
 Whether the Wasm modules fit the per-view budget is unknown until the R07 spike (Open question 7), and "reference laptop" is undefined (Open question 4). Jumping to an arbitrary position beyond the count cap is unsupported with keyset pages; users narrow by search, sort, filter and group (Proposed; Open question 5).
 

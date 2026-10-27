@@ -117,7 +117,7 @@ Limits:
 
 ## 3. Licensing and governance (RATIFIED: OR-1, OR-10, OR-18; policy Proposed)
 
-Licence, contributor terms and publisher are RATIFIED (OR-1, OR-10, OR-18; D1, D82). They are one-way doors once the repository is public, and the owner opened it on 2026-10-26, so the gate G0 of D26 (the name cleared or a fallback adopted, the licence and publisher matters settled, the DCO check required in CI, the D33 P1 files present: `SECURITY.md`, signed releases, SBOM) is overtaken and stays as the checklist before the 0.3 public alpha. What counsel must cover is Q16 (section 10).
+Licence, contributor terms and publisher are RATIFIED (OR-1, OR-10, OR-18; D1, D82). They are one-way doors once the repository is public, and the owner opened it on 2026-10-26, so the gate G0 of D26 (the name cleared or a fallback adopted, the licence and publisher matters settled, the DCO check (a CI job, built when outside contributors appear, OR-30), the D33 P1 files present: `SECURITY.md`, signed releases, SBOM) is overtaken and stays as the checklist before the 0.3 public alpha. What counsel must cover is Q16 (section 10).
 
 ### 3.1 Structure
 
@@ -253,7 +253,7 @@ Nothing in the plan depends on revenue; the owner pays (D84).
 |---|---|---|
 | Counsel: name clearance, CRA role, publisher and trademark, DCO wording, dependency licences, sandbox terms and privacy notice (section 10) | The owner | No quote exists. R26's EUR 120k year-1 counsel-and-compliance line assumed a hosted commercial company and is historical |
 | Trademark filing fees, classes 9, 35, 42 in the EU, UK and US | The owner | About EUR 2.3-2.5k official fees (estimate, exchange rates unchecked) [R28 A.1-A.7]; filing waits for clearance |
-| CI runners | The owner | The repository is public since 2026-10-26 and CI runs on GitHub-hosted runners, free for a public repository (a budget of USD 300-800 a month for larger runners is an estimate, D36). The Hetzner CCX43 proposal of Q17 (EUR 275.99 a month at list from 2026-06-15 [R26 B1]) was written for the private period |
+| CI runners | The owner | The repository is public since 2026-10-26 and CI runs on GitHub-hosted runners, free for a public repository (a budget of USD 300-800 a month for larger runners is an estimate, D36). The Hetzner CCX43 proposal of Q17 (EUR 275.99 a month at list from 2026-06-15 [R26 B1]) was written for the private period and is withdrawn (OR-29) |
 | Domains and handles | The owner | Small; reserve now (Q2) |
 | AI agent and developer tooling | The owner | Not estimated anywhere in the corpus; it is the largest unpriced cost of an agent-built project (proposal) |
 | Hosting the sandbox | The owner | A small running cost, Proposed ceiling EUR 100 a month all-in (Q35, estimate), plus counsel review of the terms of use and the privacy notice (D83, CN-22) |
