@@ -241,21 +241,25 @@ impl Auth {
         }
     }
 
-    pub(crate) fn password_ok(&self, name: &str, password: &str) -> bool {
-        self.password_check(name, password).0
+    /// Whether `password` is the account's. A read of the account that the store refused is the
+    /// store's trouble (`Unavailable`), not a wrong password: it must not be counted toward the
+    /// lockout of a person who typed the right one.
+    pub(crate) fn password_ok(&self, name: &str, password: &str) -> Result<bool, MfaError> {
+        self.password_check(name, password)
+            .map(|c| c.0)
+            .map_err(MfaError::Unavailable)
     }
 
     /// As [`Auth::password_ok`], and the credential epoch of the account as it was read together
     /// with the hash that was checked: the sign-in that this starts carries it to
     /// [`Auth::session_outcome`] (see [`crate::Epoch`]).
-    pub(crate) fn password_check(&self, name: &str, password: &str) -> (bool, Epoch) {
+    pub(crate) fn password_check(
+        &self,
+        name: &str,
+        password: &str,
+    ) -> Result<(bool, Epoch), String> {
         use argon2::password_hash::{PasswordVerifier, phc::PasswordHash};
-        let stored = self
-            .backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .map(J::Object);
+        let stored = self.backend.get("auth_user", name)?.map(J::Object);
         let dummy = self
             .hash_password("dummy-password-for-timing")
             .unwrap_or_default();
@@ -267,7 +271,7 @@ impl Auth {
             .parse::<PasswordHash>()
             .is_ok_and(|h| self.hasher.verify_password(password.as_bytes(), &h).is_ok());
         let epoch = stored.as_ref().and_then(epoch_of);
-        (ok && stored.is_some(), epoch)
+        Ok((ok && stored.is_some(), epoch))
     }
 
     /// Check a TOTP code or a recovery code for `name`. Consumes what it accepts (the step, or
@@ -339,9 +343,9 @@ impl Auth {
         if ok {
             Ok(())
         } else {
-            self.record_failure(name);
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             self.failed_code_event(name);
-            if self.locked_out(name) {
+            if self.lockout_reached(name) {
                 self.event(name, "lockout", name, "too many failed attempts");
             }
             Err(MfaError::Denied("that code is not valid".into()))
@@ -377,9 +381,9 @@ impl Auth {
         }
         // The epoch comes with the hash: nothing that changes a credential after this read can be
         // missed by the comparison in `session_outcome`.
-        let (ok, epoch) = self.password_check(&name, password);
+        let (ok, epoch) = self.password_check(&name, password)?;
         if !ok {
-            self.record_failure(&name);
+            self.record_failure(&name)?;
             return Err("invalid username or password".into());
         }
         // Same answer as a wrong password, so nobody can tell a disabled account from none; the
@@ -619,8 +623,8 @@ impl Auth {
             }
             return Err(MfaError::Invalid("two-factor is not on".into()));
         }
-        if !self.password_ok(name, password) {
-            self.record_failure(name);
+        if !self.password_ok(name, password)? {
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;
@@ -769,9 +773,9 @@ impl MfaApi for Auth {
             .ok_or_else(|| MfaError::Invalid("start enrolment first".into()))?;
         let secret = self.open_secret(name, pending)?;
         let Some(step) = totp::verify(&secret, code, self.now(), None) else {
-            self.record_failure(name);
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             self.failed_code_event(name);
-            if self.locked_out(name) {
+            if self.lockout_reached(name) {
                 self.event(name, "lockout", name, "too many failed attempts");
             }
             return Err(MfaError::Denied(
@@ -834,8 +838,8 @@ impl MfaApi for Auth {
         if !self.has_second_factor(name) {
             return Err(MfaError::Invalid("two-factor is not on".into()));
         }
-        if !self.password_ok(name, password) {
-            self.record_failure(name);
+        if !self.password_ok(name, password)? {
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;

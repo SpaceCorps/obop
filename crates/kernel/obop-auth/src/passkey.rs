@@ -257,8 +257,8 @@ impl Auth {
                 "too many attempts, try again in a minute".into(),
             ));
         }
-        if !self.password_ok(name, r.password) {
-            self.record_failure(name);
+        if !self.password_ok(name, r.password)? {
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             self.event(
                 name,
                 "passkey_failed",
@@ -507,13 +507,15 @@ impl Auth {
                 self.session_outcome(&name, false, &pending)
                     .map_err(SessionError::mfa)
             }
+            // The store's trouble is no wrong answer: it is not counted against the person.
+            Err(e @ MfaError::Unavailable(_)) => Err(e),
             Err(e) => {
                 let mut p = Fields::new();
                 p.insert("attempts".into(), J::from(attempts + 1));
                 let _ = self.backend.update("auth_mfa_token", &key, &p);
-                self.record_failure(&name);
+                self.record_failure(&name).map_err(MfaError::Unavailable)?;
                 self.failed_pk_event(&name, "a passkey answer was refused in the second step");
-                if self.locked_out(&name) {
+                if self.lockout_reached(&name) {
                     self.event(&name, "lockout", &name, "too many failed attempts");
                 }
                 Err(e)
@@ -933,8 +935,9 @@ impl PasskeyApi for Auth {
                 Ok(())
             }
             Ok(_) => Err(denied("this passkey belongs to a different account")),
+            Err(e @ MfaError::Unavailable(_)) => Err(e),
             Err(e) => {
-                self.record_failure(name);
+                self.record_failure(name).map_err(MfaError::Unavailable)?;
                 self.failed_pk_event(name, "a passkey proof was refused");
                 Err(e)
             }

@@ -354,8 +354,8 @@ impl Auth {
             ));
         }
         let u = self.user_record(name)?;
-        if !self.password_ok(name, current) {
-            self.record_failure(name);
+        if !self.password_ok(name, current)? {
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             self.event(
                 name,
                 "password_change_failed",

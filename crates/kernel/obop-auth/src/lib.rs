@@ -274,10 +274,24 @@ impl Auth {
             .map_or(true, |n| n >= u64::from(MAX_FAILURES))
     }
 
-    pub(crate) fn record_failure(&self, name: &str) {
-        let _ =
+    /// The count was read and has reached the limit. This, not [`Auth::locked_out`], is what a
+    /// log entry that says "too many failed attempts" may be written from: a count the store would
+    /// not give locks the sign-in (fail closed) but is no fact for the log.
+    pub(crate) fn lockout_reached(&self, name: &str) -> bool {
+        self.backend
+            .counter_get(&Self::failure_key(name))
+            .is_ok_and(|n| n >= u64::from(MAX_FAILURES))
+    }
+
+    /// Count a wrong guess. A guess that could not be counted is an error, tried again first: the
+    /// answer is the store's trouble, not a plain "wrong password" that leaves the attempt
+    /// uncounted for whoever is guessing while the pool is full.
+    pub(crate) fn record_failure(&self, name: &str) -> Result<(), String> {
+        obop_storage::fault::patiently(3, Duration::from_millis(100), || {
             self.backend
-                .counter_add(&Self::failure_key(name), LOCKOUT.as_millis() as u64, true);
+                .counter_add(&Self::failure_key(name), LOCKOUT.as_millis() as u64, true)
+                .map(|_| ())
+        })
     }
 
     /// For tests: lift every lockout of `name`.
@@ -499,6 +513,8 @@ impl Authenticator for Auth {
 mod admin_tests;
 #[cfg(test)]
 mod epoch_tests;
+#[cfg(test)]
+mod lockout_tests;
 #[cfg(test)]
 mod mfa_tests;
 #[cfg(test)]
