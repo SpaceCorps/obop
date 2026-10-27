@@ -755,6 +755,10 @@ impl Payments {
                 Ok(()) => {
                     self.refund_failed.lock().unwrap().remove(&pid);
                 }
+                // The store is away, not the provider: this is no failed refund (it would be left
+                // alone for an hour), and asking about the others only waits for the pool once more
+                // each, inside the checkout that started the sweep. The next sweep tries it again.
+                Err(e) if busy(&e) || fault::noted().is_some() => break,
                 Err(_) => {
                     self.refund_failed.lock().unwrap().insert(pid.clone(), t);
                 }
