@@ -806,8 +806,27 @@ mod tests {
         assert_eq!(t.import(false, &mut || Ok(rows.take())).unwrap(), 1);
         let kept = t.history(&crate::HistoryQuery::of("m", "r", 10)).unwrap();
         assert_eq!(kept, [entry]);
-        let mut junk = Some(vec![row()]);
-        assert!(t.import(false, &mut || Ok(junk.take())).is_err());
+        // A row of that name with the marker that is not an entry is refused, not taken for a
+        // record; one without the marker is an ordinary record, as it was before the history.
+        let mut marked = Some(vec![(
+            "record_change".to_string(),
+            "2".to_string(),
+            f_marked(),
+        )]);
+        assert!(t.import(false, &mut || Ok(marked.take())).is_err());
+        let mut plain = Some(vec![row()]);
+        assert_eq!(t.import(false, &mut || Ok(plain.take())).unwrap(), 1);
+        assert!(t.get("record_change", "1").unwrap().is_some());
+    }
+
+    /// A row of the backup stream that claims to be an entry and is not one.
+    fn f_marked() -> Fields {
+        let mut f = Fields::new();
+        f.insert(
+            crate::sysfields::ENTRY_KEY.into(),
+            J::from(crate::sysfields::ENTRY_KIND),
+        );
+        f
     }
 
     #[test]

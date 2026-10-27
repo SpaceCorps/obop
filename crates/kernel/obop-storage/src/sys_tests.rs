@@ -1700,10 +1700,17 @@ fn the_history_rides_the_export_and_comes_back_with_its_numbers() {
             next.seq
         );
         assert_eq!(next.row_version, 3);
-        // An import that meets a number it has refuses, and changes nothing.
+        // An import that meets a number it has refuses, and changes nothing. Only the entries are
+        // fed, so it is the number that is met and not a record that is there twice.
         let before = target.rows();
-        let mut dup = Some(rows.clone());
-        assert!(target.b.import(false, &mut || Ok(dup.take())).is_err());
+        let only_entries: Vec<Row> = rows
+            .iter()
+            .filter(|(m, _, _)| m == "record_change")
+            .cloned()
+            .collect();
+        let mut dup = Some(only_entries);
+        let e = target.b.import(false, &mut || Ok(dup.take())).unwrap_err();
+        assert!(e.contains("record_change"), "{}: {e}", target.name);
         assert_eq!(target.rows(), before);
     }
     // A file, opened again: the history is on disk.
@@ -1719,24 +1726,131 @@ fn the_history_rides_the_export_and_comes_back_with_its_numbers() {
             .len(),
         1
     );
-    // An entry that is not one is refused when it is read in, and nothing is changed.
-    for (id, fields) in [
-        ("not-a-number", json!({})),
-        ("0", json!({})),
-        ("7", json!({"at": "yesterday"})),
+    // A row that says it is an entry and is not one is refused when it is read in, whatever
+    // else is wrong with it, and nothing is changed; the stores agree on what an entry is.
+    let marker = || (sysfields::ENTRY_KEY, json!(sysfields::ENTRY_KIND));
+    let entry = |extra: J| {
+        let mut e = f(extra);
+        e.insert(marker().0.into(), marker().1);
+        e
+    };
+    let good = src.hist("deal", "d1")[0].to_fields();
+    let with = |k: &str, v: J| {
+        let mut g = good.clone();
+        g.insert(k.into(), v);
+        g
+    };
+    for (what, id, fields) in [
+        (
+            "an id that is not a number",
+            "not-a-number",
+            entry(json!({})),
+        ),
+        ("number 0", "0", entry(json!({}))),
+        (
+            "a time that is not canonical",
+            "7",
+            entry(json!({"at": "yesterday"})),
+        ),
+        ("an operation nobody has", "7", with("op", json!("bogus"))),
+        (
+            "another version of the row",
+            "7",
+            with(sysfields::ENTRY_KEY, json!("history.v2")),
+        ),
+        (
+            "a marker that is not text",
+            "7",
+            with(sysfields::ENTRY_KEY, json!(true)),
+        ),
     ] {
-        let fresh = Fx::memory();
-        let mut feed = Some(vec![(
-            "record_change".to_string(),
-            id.to_string(),
-            f(fields),
-        )]);
-        assert!(
-            fresh.b.import(true, &mut || Ok(feed.take())).is_err(),
-            "{id}"
-        );
-        assert_eq!(fresh.b.total().unwrap(), 0);
+        for fresh in [Fx::memory(), Fx::sqlite()] {
+            let mut feed = Some(vec![(
+                "record_change".to_string(),
+                id.to_string(),
+                fields.clone(),
+            )]);
+            assert!(
+                fresh.b.import(true, &mut || Ok(feed.take())).is_err(),
+                "{what} into {}",
+                fresh.name
+            );
+            assert_eq!(fresh.b.total().unwrap(), 0, "{what} into {}", fresh.name);
+        }
     }
+}
+
+#[test]
+fn a_backup_with_records_of_a_model_called_record_change_and_with_history_restores_both() {
+    // A package installed before the name was reserved can hold records of a model of that name;
+    // they are exported under it, and so are the entries of the history. The marker on an entry
+    // tells them apart, so a backup made by an earlier version still restores, one made now
+    // restores both kinds, and neither is taken for the other.
+    let src = Fx::memory();
+    src.track_plain("deal", &["n"]);
+    src.ok("ann", &[ins("deal", "d1", json!({"n": 1}))]);
+    src.tick(1_000);
+    src.ok("bob", &[merge("deal", "d1", json!({"n": 2}))]);
+    let own = |id: &str, v: J| ("record_change".to_string(), id.to_string(), f(v));
+    let legacy = vec![
+        // The look of an entry without the marker is still a record, and so is a number as an id.
+        own(
+            "0194c9a8-b3d2-7abc-8def-0123456789ab",
+            json!({"title": "mine", "at": "yesterday", "op": "bogus"}),
+        ),
+        own("5", json!({"n": 1})),
+        own("1", json!({"model": "deal", "record_id": "d1"})),
+    ];
+    let mut rows = legacy.clone();
+    rows.extend(src.rows());
+    assert_eq!(
+        rows.iter().filter(|r| r.0 == "record_change").count(),
+        3 + 2
+    );
+    for target in [Fx::memory(), Fx::sqlite(), Fx::sqlite_file()] {
+        eprintln!("--- into {}", target.name);
+        target.track_plain("deal", &["n"]);
+        let mut feed = Some(rows.clone());
+        assert_eq!(
+            target.b.import(true, &mut || Ok(feed.take())).unwrap(),
+            rows.len()
+        );
+        // The records are records, the entries are entries.
+        for (_, id, fields) in &legacy {
+            assert_eq!(&target.get("record_change", id), fields, "{id}");
+        }
+        assert_eq!(target.hist("deal", "d1"), src.hist("deal", "d1"));
+        assert_eq!(
+            target.hist("record_change", "5").len(),
+            0,
+            "a record has no entries"
+        );
+        assert_eq!(target.b.total().unwrap(), rows.len());
+        assert_eq!(target.rows(), rows, "and they export as they came");
+        // The same backup restores again from what this store exports.
+        let again = Fx::sqlite();
+        let mut feed = Some(target.rows());
+        assert_eq!(
+            again.b.import(true, &mut || Ok(feed.take())).unwrap(),
+            rows.len()
+        );
+        assert_eq!(again.rows(), rows);
+        // The model is still not writable through the store: it is a reserved name.
+        assert!(
+            target
+                .b
+                .insert("record_change", "x", &Fields::new())
+                .is_err()
+        );
+    }
+    // A backup of an earlier version has no entries at all.
+    let old = Fx::sqlite();
+    let mut feed = Some(legacy.clone());
+    assert_eq!(
+        old.b.import(true, &mut || Ok(feed.take())).unwrap(),
+        legacy.len()
+    );
+    assert_eq!(old.rows(), legacy);
 }
 
 // ---- a random run ---------------------------------------------------------------------------------

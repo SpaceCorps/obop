@@ -276,12 +276,39 @@ pub struct ChangeRow {
     pub txid: i64,
 }
 
+/// The model name of the rows of a backup stream that are entries of the change history.
+pub const ENTRY_MODEL: &str = "record_change";
+/// The key that marks such a row as an entry. No field of a model can have this name (they are
+/// identifiers), so a record of a model that happens to be called `record_change` (a package
+/// installed before the name was reserved) is told from an entry by the key, not by its look.
+pub const ENTRY_KEY: &str = "$kind";
+/// The value of [`ENTRY_KEY`] in this version of the row.
+pub const ENTRY_KIND: &str = "history.v1";
+/// What `op` of an entry can be.
+pub const ENTRY_OPS: [&str; 6] = [
+    "create",
+    "update",
+    "delete",
+    "transition",
+    "erase",
+    "import",
+];
+
+/// Whether a row `(model, fields)` of a backup stream is an entry of the change history: its
+/// model is [`ENTRY_MODEL`] and it carries the marker. A row of that model without the marker is
+/// an ordinary record, as it was before the history existed. A row with the marker that is not
+/// an entry of this version is refused by [`ChangeRow::from_fields`], never taken for a record.
+pub fn is_entry_row(model: &str, fields: &Fields) -> bool {
+    model == ENTRY_MODEL && fields.contains_key(ENTRY_KEY)
+}
+
 impl ChangeRow {
-    /// The entry as the record of a backup stream: model `record_change`, id the `seq`. The `seq`
-    /// and `txid` are not in it.
+    /// The entry as the record of a backup stream: model [`ENTRY_MODEL`], id the `seq`, the
+    /// marker [`ENTRY_KEY`]. The `seq` and `txid` are not in it.
     pub fn to_fields(&self) -> Fields {
         let text = |v: &Option<String>| v.as_ref().map_or(J::Null, |s| J::from(s.as_str()));
         let mut f = Fields::new();
+        f.insert(ENTRY_KEY.into(), J::from(ENTRY_KIND));
         f.insert("at".into(), J::from(self.at.as_str()));
         f.insert("model".into(), J::from(self.model.as_str()));
         f.insert("record_id".into(), J::from(self.record_id.as_str()));
@@ -319,16 +346,27 @@ impl ChangeRow {
                 .cloned()
                 .ok_or_else(|| bad(&format!("`{k}` is not an object")))
         };
+        if f.get(ENTRY_KEY).and_then(J::as_str) != Some(ENTRY_KIND) {
+            return Err(bad(&format!(
+                "`{ENTRY_KEY}` is not {ENTRY_KIND:?}: not an entry of this version"
+            )));
+        }
         let at = text("at")?;
         if parse_micros(&at).is_none() {
             return Err(bad("`at` is not a canonical instant"));
+        }
+        let op = text("op")?;
+        if !ENTRY_OPS.contains(&op.as_str()) {
+            return Err(bad(&format!(
+                "`op` {op:?} is not an operation of the history"
+            )));
         }
         Ok(ChangeRow {
             seq,
             at,
             model: text("model")?,
             record_id: text("record_id")?,
-            op: text("op")?,
+            op,
             actor: text("actor")?,
             via: object("via")?,
             row_version: f
@@ -1133,7 +1171,16 @@ mod tests {
         };
         let f = row.to_fields();
         assert_eq!(ChangeRow::from_fields(42, &f).unwrap(), row);
+        assert!(is_entry_row(ENTRY_MODEL, &f));
+        assert!(
+            !is_entry_row("deal", &f),
+            "only rows of the model record_change"
+        );
+        assert!(!is_entry_row(ENTRY_MODEL, &Fields::new()));
         for (key, value) in [
+            (ENTRY_KEY, json!("history.v2")),
+            (ENTRY_KEY, json!(1)),
+            ("op", json!("bogus")),
             ("at", json!("yesterday")),
             ("model", json!(5)),
             ("via", json!([])),
@@ -1145,6 +1192,9 @@ mod tests {
             bad.insert(key.into(), value);
             assert!(ChangeRow::from_fields(42, &bad).is_err(), "{key}");
         }
+        let mut unmarked = f.clone();
+        unmarked.remove(ENTRY_KEY);
+        assert!(ChangeRow::from_fields(42, &unmarked).is_err());
         let mut missing = f.clone();
         missing.remove("changed");
         assert!(

@@ -6,7 +6,9 @@ use crate::sysfields::{self, ChangeRow, Clock};
 
 /// The change history (D75): a list that only grows, except that an erasure rewrites the values
 /// of the entries of one record. Nothing else changes or removes an entry (`import` with a wipe
-/// replaces the lot).
+/// replaces the lot). Locks are taken in the order `rows`, `history`, `order` (`order` only when
+/// a batch has succeeded), and `export` and `import` take `rows`, `order`, `history`; no
+/// function holds `order` or `history` while it waits for `rows`, so the orders do not cross.
 #[derive(Default, Clone)]
 struct MemHistory {
     rows: Vec<ChangeRow>,
@@ -31,7 +33,7 @@ pub(crate) struct Memory {
     rows: Mutex<BTreeMap<String, Vec<(String, Fields)>>>,
     /// Insertion order across models, for `export`.
     order: Mutex<Vec<(String, String)>>,
-    /// Always taken after `rows` and `order`.
+    /// Taken after `rows`; see [`MemHistory`].
     history: Mutex<MemHistory>,
     clock: Clock,
     locks: Arc<LocalLocks>,
@@ -406,7 +408,7 @@ impl Backend for Memory {
                 })
                 .chain(history.rows.iter().map(|r| {
                     (
-                        "record_change".to_string(),
+                        sysfields::ENTRY_MODEL.to_string(),
                         r.seq.to_string(),
                         r.to_fields(),
                     )
@@ -438,8 +440,9 @@ impl Backend for Memory {
         let mut n = 0;
         while let Some(batch) = next()? {
             for (model, id, fields) in batch {
-                if model == "record_change" {
-                    // An entry of the change history: the id is its number.
+                if sysfields::is_entry_row(&model, &fields) {
+                    // An entry of the change history: the id is its number. (A row of that model
+                    // without the marker is an ordinary record and is read in below.)
                     let seq = id
                         .parse::<i64>()
                         .ok()

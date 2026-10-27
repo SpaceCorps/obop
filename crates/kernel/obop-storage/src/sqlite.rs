@@ -701,8 +701,9 @@ impl Backend for Sqlite {
         let mut n = 0;
         while let Some(batch) = next()? {
             for (model, id, fields) in batch {
-                if model == "record_change" {
-                    // An entry of the change history: the id is its number, kept.
+                if sysfields::is_entry_row(&model, &fields) {
+                    // An entry of the change history: the id is its number, kept. (A row of that
+                    // model without the marker is an ordinary record and is inserted below.)
                     let seq = id
                         .parse::<i64>()
                         .ok()
@@ -911,7 +912,7 @@ fn export_from(conn: &mut Connection, batch: usize, sink: &mut RowSink<'_>) -> R
             .iter()
             .map(|r| {
                 (
-                    "record_change".to_string(),
+                    sysfields::ENTRY_MODEL.to_string(),
                     r.seq.to_string(),
                     r.to_fields(),
                 )
