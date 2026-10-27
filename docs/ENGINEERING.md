@@ -177,6 +177,7 @@ vp env exec pnpm sbom --sbom-format cyclonedx --sbom-spec-version 1.5   # ratifi
 
 ```yaml
 # pnpm-workspace.yaml: D23 values; which pnpm majors have been checked against these keys is recorded in DECISIONS.md 1.1 [R07 s3.13, R27 B8]
+# Status 2026-10-27: the file sets only the first two keys (checked on pnpm 12.6.0); the other four are not set yet
 minimumReleaseAge: 10080        # minutes = 7 days
 minimumReleaseAgeStrict: true
 trustPolicy: no-downgrade
@@ -554,7 +555,7 @@ Numbers are stable because other documents cite them.
 
 ## 12. Open questions
 
-For the owner, in addition to the register's Q1-Q42 (DECISIONS.md section 8). The register folds Q-E1 and Q-E6 into Q17 and Q15, both closed (OR-29, OR-28); the rulings of 2026-10-01 closed or made moot Q-E2, Q-E3, Q-E8 and Q-E9; Q-E11 is also an F1/D23 question that the closure of Q10 (OR-8, OR-9, OR-14) did not cover. Q-E4, Q-E5, Q-E7, Q-E10 and Q-E11 live only here. Other documents cite these numbers, so they stay.
+For the owner, in addition to the register's Q1-Q43 (DECISIONS.md section 8). The register folds Q-E1 and Q-E6 into Q17 and Q15, both closed (OR-29, OR-28); the rulings of 2026-10-01 closed or made moot Q-E2, Q-E3, Q-E8 and Q-E9; Q-E11 is also an F1/D23 question that the closure of Q10 (OR-8, OR-9, OR-14) did not cover. Q-E4, Q-E5, Q-E7, Q-E10 and Q-E11 live only here. Other documents cite these numbers, so they stay.
 
 | # | Question | Status | Where |
 |---|---|---|---|
