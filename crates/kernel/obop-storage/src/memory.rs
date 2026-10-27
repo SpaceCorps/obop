@@ -116,6 +116,14 @@ impl Backend for Memory {
         self.apply_checked(ops).map_err(|e| e.to_string())
     }
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        self.apply_tracked(ctx::system_ctx(), ops, Tracking::empty())
+    }
+    fn apply_tracked(
+        &self,
+        ctx: &WriteCtx,
+        ops: &[Op],
+        tracking: &Tracking,
+    ) -> std::result::Result<(), ApplyError> {
         struct M<'a>(&'a mut BTreeMap<String, Vec<(String, Fields)>>);
         impl TxView for M<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
@@ -151,7 +159,7 @@ impl Backend for Memory {
         }
         let mut g = self.rows.lock().unwrap();
         let backup = g.clone();
-        let r = run_ops(&mut M(&mut g), ops);
+        let r = run_ops(&mut M(&mut g), ops, ctx, tracking);
         if r.is_err() {
             *g = backup;
         } else {

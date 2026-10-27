@@ -16,7 +16,10 @@
 //! Outside a request scope (the connector worker, provisioning threads, the CLI) the guard does
 //! nothing but delegate.
 
-use crate::{ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap, fault};
+use crate::{
+    ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap, Track, Tracking,
+    WriteCtx, fault,
+};
 use std::sync::Arc;
 
 /// The model the security log is written to: its entries do not count as a change.
@@ -124,6 +127,36 @@ impl Backend for Guarded {
             fault::wrote();
         }
         r
+    }
+    fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        fault::before_write().map_err(ApplyError::Storage)?;
+        let r = self.inner.apply_ctx(ctx, ops);
+        if r.is_ok() && ops.iter().any(|o| counts(op_model(o))) {
+            fault::wrote();
+        }
+        r
+    }
+    fn apply_tracked(
+        &self,
+        ctx: &WriteCtx,
+        ops: &[Op],
+        tracking: &Tracking,
+    ) -> std::result::Result<(), ApplyError> {
+        fault::before_write().map_err(ApplyError::Storage)?;
+        let r = self.inner.apply_tracked(ctx, ops, tracking);
+        if r.is_ok() && ops.iter().any(|o| counts(op_model(o))) {
+            fault::wrote();
+        }
+        r
+    }
+    fn track(&self, model: &str, how: Track) {
+        self.inner.track(model, how)
+    }
+    fn untrack(&self, model: &str) {
+        self.inner.untrack(model)
+    }
+    fn tracked_models(&self) -> Vec<String> {
+        self.inner.tracked_models()
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.inner.find(model, field, value)
