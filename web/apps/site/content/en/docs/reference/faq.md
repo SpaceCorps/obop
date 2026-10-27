@@ -15,7 +15,7 @@ Not yet. obop is in beta. Read the [roadmap](/roadmap/) and the limits on [Secur
 
 ### What does it cost?
 
-obop is free to use and to self-host. Dedicated hosting on a server of its own is planned from €19 a month, plus €10 for each extra 50 GB of storage; it is not offered or charged yet. See [Pricing](/pricing/).
+obop is free to use and to self-host. Dedicated hosting on a server of its own is planned from €29 a month, plus €15 for each extra 50 GB of storage; it is not offered or charged yet. See [Pricing](/pricing/).
 
 ### Which licence?
 

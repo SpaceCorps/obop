@@ -166,18 +166,18 @@ test.describe("website without JavaScript", () => {
     await page.goto(`${base()}/pricing/`);
     await expect(page.getByText("Planned, not yet offered or charged")).toBeVisible();
     // Self-hosting is free; the six planned servers follow data/hosting.ts (the provider's price
-    // times two, rounded up to the next price that ends in 9).
+    // times three, rounded up to the next price that ends in 9).
     expect(await page.locator(".plans .price").allTextContents()).toEqual([
       "€0",
-      "€19/month",
-      "€39/month",
+      "€29/month",
       "€59/month",
-      "€99/month",
-      "€179/month",
-      "€449/month",
+      "€89/month",
+      "€139/month",
+      "€269/month",
+      "€679/month",
     ]);
     await expect(page.locator(".plans article")).toHaveCount(7);
-    await expect(page.getByText("Extra NVMe storage: €10 per 50 GB and month.")).toBeVisible();
+    await expect(page.getByText("Extra NVMe storage: €15 per 50 GB and month.")).toBeVisible();
     // The old paid plans are gone.
     for (const old of ["€49", "€249", "€899"])
       await expect(page.locator(".plans")).not.toContainText(old);

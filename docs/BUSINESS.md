@@ -1,6 +1,6 @@
 # Business: licensing, governance, editions and pricing, economics, go-to-market, risk register
 
-> **Licence and price are settled.** The owner ruled on 2026-10-01 that the whole project is Apache-2.0 and completely free: no AGPL, Application Exception, CLA, `ee` tree, paid list, plans or prices (D1, D2; [DECISIONS.md](DECISIONS.md#owner-rulings)), and on 2026-10-27 that the one planned paid thing is a hosting service of SpaceCorps on dedicated Sliplane servers at about twice Sliplane's price, extra storage extra, not yet offered ([OR-22](DECISIONS.md#owner-rulings-2)). Where this document describes the old plans (Free, Team, Growth, Scale), prices, an `ee` list or a paid list, the rulings win and the text is history.
+> **Licence and price are settled.** The owner ruled on 2026-10-01 that the whole project is Apache-2.0 and completely free: no AGPL, Application Exception, CLA, `ee` tree, paid list, plans or prices (D1, D2; [DECISIONS.md](DECISIONS.md#owner-rulings)), and on 2026-10-27 that the one planned paid thing is a hosting service of SpaceCorps on dedicated Sliplane servers at about three times Sliplane's price, extra storage extra, not yet offered ([OR-22](DECISIONS.md#owner-rulings-2)). Where this document describes the old plans (Free, Team, Growth, Scale), prices, an `ee` list or a paid list, the rulings win and the text is history.
 
 - **Status:** Draft 0.1
 - **Date:** 2026-10-01 (month 0, "M0")
