@@ -81,6 +81,7 @@ Apache-2.0 for the whole project ([LICENSE](LICENSE), [NOTICE](NOTICE)), with no
 | [docs/spec/cli.md](docs/spec/cli.md) | The `obop` CLI, CLI/API/MCP parity, the plugin registry |
 | [docs/spec/integrations.md](docs/spec/integrations.md) | API, connectors, portability |
 | [docs/spec/security-privacy.md](docs/spec/security-privacy.md) | Identity, audit, privacy |
+| [docs/spec/mobile.md](docs/spec/mobile.md) | React Native apps, background location, the mileage package |
 | [docs/research/](docs/research/README.md) | 28-file research corpus (predates the owner rulings; the rulings win) |
 | [docs/HANDOFF.md](docs/HANDOFF.md) | Handoff and operations guide for the next agent or a new machine |
 | [docs/DEPLOY.md](docs/DEPLOY.md) | Operator guide: run, back up, upgrade and update obop |
