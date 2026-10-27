@@ -360,9 +360,7 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
     };
     let mut doc = openapi::instance(&base, &modules);
     if s.oauth.is_some() {
-        doc["x-mcp"]["authorization"] = J::from("oauth2 or bearer");
-        doc["x-mcp"]["authorizationServerMetadata"] =
-            J::from(format!("{base}/.well-known/oauth-authorization-server"));
+        openapi::describe_oauth(&mut doc, &base);
     }
     let mut r = Json(doc).into_response();
     r.headers_mut().insert(
