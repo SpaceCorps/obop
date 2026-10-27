@@ -9,3 +9,10 @@ node_modules
 docs
 !docs/MODULES.md
 *.db.lock-*
+# Generated native projects and their build output (web/apps/mileage-app, `expo prebuild` and Gradle)
+**/android
+**/ios
+**/.expo
+**/.gradle
+**/.cxx
+*.apk
