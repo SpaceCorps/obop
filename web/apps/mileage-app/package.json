@@ -1,0 +1,31 @@
+{
+  "name": "@obop/mileage-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "obop Mileage: React Native (Expo SDK 57) app that records a trip. Spike: one screen that calls @obop/trip-core.",
+  "license": "Apache-2.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "prebuild:android": "expo prebuild --platform android",
+    "export:android": "expo export --platform android",
+    "check:sdk": "expo install --check",
+    "doctor": "expo-doctor"
+  },
+  "dependencies": {
+    "@obop/trip-core": "workspace:*",
+    "expo": "57.0.30",
+    "expo-dev-client": "~57.0.20",
+    "expo-location": "~57.0.21",
+    "expo-secure-store": "~57.0.4",
+    "expo-sqlite": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "expo-task-manager": "~57.0.21",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  }
+}
