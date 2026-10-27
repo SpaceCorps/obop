@@ -18,12 +18,12 @@ An app is a client and nothing more. It has no private backdoor: it calls REST a
 
 | Item | State |
 |---|---|
-| React Native (Expo) apps allowed as clients, where a PWA cannot do the job | RATIFIED (OR-34 a, D87) |
+| React Native (Expo) apps allowed as obop clients | RATIFIED (OR-34 a, D87) |
+| The scope limits: first-party apps only, only where a PWA cannot do the job; the PWA stays the default; Tauri mobile is not pursued (Tauri 2 desktop shells for POS stay, D37) | PROPOSED (D87); they came with the proposal and are not in the owner's words |
 | The mobile-toolchain exception to "`vp` only" (section 8.2) | RATIFIED (OR-34 b) |
-| Manual start and stop is the baseline; an automatic trip end needs product, works-council and legal sign-off first | RATIFIED (OR-34 c) |
+| Manual start and stop is the baseline; auto-stop only after legal sign-off | RATIFIED (OR-34 c). The proposal adds product and works-council sign-off, and this document requires all three (Proposed) |
 | The Transistorsoft library is excluded as the default path; an optional adapter later is not forbidden | RATIFIED (OR-34 d) |
 | Expo SDK 57 (React Native 0.86) for now; SDK 58 (React Native 0.88, released 2026-10-21) when it is three weeks old, around 2026-11-11 | RATIFIED (OR-34 e); the date follows from D23 as read by the ruling |
-| The PWA stays the default client; Tauri mobile is not pursued | D87, with OR-34 a (Tauri 2 desktop shells for POS stay, D37) |
 | Mobile sign-in class, `device` model, device outbox, the `mileage` package, privacy points, repository layout, the first slice | PROPOSED (D87, D13 and D64 amendments); built nothing |
 | Apple and Google accounts, store listings, publishing, push, map tiles, a data class `location`, legal sign-off for auto-stop, Storybook for the app | Open: Q37 to Q42 |
 
@@ -139,10 +139,12 @@ Not legal advice; obop supports compliance and is not a certification. The point
 - No third-party geocoder or map tiles by default (Q39); a prior mileage app sent exact coordinates to two public geocoding services. Start and end addresses are typed, or they come through a connector that passes the egress gate (D54).
 - Every read of a route is audited (the audit log, [security-privacy.md](security-privacy.md) 4.4).
 - Recording is active only while the driver started it and is visible: an Android notification, the iOS indicator.
-- **An automatic trip end (auto-stop) ends a trip the driver did not end. It needs product, works-council and legal sign-off first (OR-34 c) and stays out until then (Q41).** The prior research named guidance of the Swedish data-protection authority (IMY); it was not read here. Manual start and stop is the baseline, with the review gate and the open-trip warning as safeguards.
+- **An automatic trip end (auto-stop) ends a trip the driver did not end. The owner's condition is legal sign-off (OR-34 c); the proposal adds product and works-council sign-off. All three come first, and it stays out until then (Q41).** The prior research named guidance of the Swedish data-protection authority (IMY); it was not read here. Manual start and stop is the baseline, with the review gate and the open-trip warning as safeguards.
 - Tests use synthetic data only.
 
 ### 5.6 Permissions and data class
+
+The proposal names no permission groups. The groups of section 2 and this matrix are this document's reading of it (Proposed).
 
 | Model | Driver | Reviewer | Administrator |
 |---|---|---|---|
