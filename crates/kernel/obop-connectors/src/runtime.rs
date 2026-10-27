@@ -9,6 +9,7 @@ use obop_storage::fault::Fault;
 use obop_storage::{Backend, Fields};
 use serde_json::{Map, Value as J, json};
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -71,6 +72,9 @@ pub struct Runtime {
     pub queue: Queue,
     pub cfg: Config,
     providers: Vec<Provider>,
+    /// The worker thread of [`Runtime::start`] runs in this process: it finishes erasures and
+    /// delivers events, so a call that erases a party leaves the work to it.
+    started: AtomicBool,
 }
 
 /// The key prefix of the notes that an erasure is owed.
@@ -134,6 +138,7 @@ impl Runtime {
             queue,
             cfg,
             providers,
+            started: AtomicBool::new(false),
         })
     }
 
@@ -1111,12 +1116,24 @@ impl Runtime {
         Ok(c.id)
     }
 
-    fn store_tokens(&self, c: &Connection, t: &Tokens) -> Result<(), String> {
+    /// Keep the tokens the provider has just issued. Needed, not best effort: for a provider that
+    /// rotates the refresh token the old one is spent, so a pair that is not stored leaves the
+    /// connection with nothing to refresh by until a person authorises it again. Tried again
+    /// while the store refuses (also in a request that has met a refusal already), a lasting
+    /// refusal makes the request a partial one, and a connection that is gone is an error.
+    pub fn store_tokens(&self, c: &Connection, t: &Tokens) -> Result<(), String> {
         let sealed = self.secrets.seal(PURPOSE_OAUTH, &t.to_json().to_string());
         let mut f = Fields::new();
         f.insert("oauth_tokens".into(), sealed.into());
-        self.backend.update(CONNECTION, &c.id, &f)?;
-        Ok(())
+        // What the provider did cannot be taken back.
+        obop_storage::fault::external_change();
+        obop_storage::fault::needed(|| {
+            if self.backend.update(CONNECTION, &c.id, &f)? {
+                Ok(())
+            } else {
+                Err(format!("no connection {}", c.id))
+            }
+        })
     }
 
     /// A usable access token, refreshed when it is about to expire.
@@ -1249,14 +1266,56 @@ impl Runtime {
     /// and taken back when it is done, and a tick that finds a note does the erasure again, so a
     /// store that is busy for a moment (the worker has nobody to answer) never leaves the pseudonym
     /// maps, links and sealed values of an erased person behind in silence (D74).
+    ///
+    /// The note is first written in the call that erased the party ([`Runtime::observe_erasures`]),
+    /// before anything is queued in memory; this writes it again (a restart or a crash between the
+    /// call and the worker cannot lose it) and does the erasure.
     pub fn erase_record(&self, record: &str) {
-        let key = format!("{ERASURE_OWED}{record}");
-        if let Err(e) = obop_storage::fault::patiently(4, Duration::from_millis(250), || {
-            self.backend.kv_put(&key, "owed", None)
-        }) {
+        if let Err(e) = self.note_erasure(record) {
             eprintln!("connectors: the erasure of {record} could not be noted: {e}");
         }
         self.finish_erasure(record);
+    }
+
+    /// Write the note that the erasure of `record` is owed. A lasting refusal is an error and,
+    /// in a request, makes it a partial one (the party is erased, nothing remembers that the
+    /// pseudonym maps are owed): erasing again is safe and writes the note.
+    fn note_erasure(&self, record: &str) -> Result<(), String> {
+        let key = format!("{ERASURE_OWED}{record}");
+        obop_storage::fault::needed(|| self.backend.kv_put(&key, "owed", None))
+    }
+
+    /// Be told of an erased party in the very call that erased it, whether or not this process
+    /// runs the worker (`obop call party erase` does not): the note that the erasure is owed is
+    /// written to the store before the call returns, and a process that has no worker finishes the
+    /// erasure itself. Without the note a restart between the call and the worker, a worker busy
+    /// with slow receivers, or a command line that never started one, left the pseudonym maps,
+    /// sealed values and external-id links of the person for ever with no trace.
+    pub fn observe_erasures(self: &Arc<Self>) {
+        let this = Arc::downgrade(self);
+        self.dispatcher.observe(
+            "connectors",
+            Box::new(move |command, _p, input, out| {
+                if command != "party.erase" {
+                    return;
+                }
+                let Some(Value::Text(id)) = event_id(input, out) else {
+                    return;
+                };
+                let Some(rt) = this.upgrade() else {
+                    return;
+                };
+                let record = format!("party:{id}");
+                if let Err(e) = rt.note_erasure(&record) {
+                    eprintln!("connectors: the erasure of {record} could not be noted: {e}");
+                    return;
+                }
+                if !rt.started.load(Ordering::SeqCst) {
+                    // Nobody else will do it soon. What this leaves undone is on the note.
+                    obop_storage::fault::detached(|| rt.finish_erasure(&record));
+                }
+            }),
+        );
     }
 
     fn finish_erasure(&self, record: &str) {
@@ -1329,7 +1388,10 @@ impl Runtime {
                 }
             }
         }
-        let other = Seen::sweep(&*self.backend, at) + oauth::sweep(&*self.backend);
+        let dead = self.queue.purge_dead(at, |c| {
+            days.get(c).copied().unwrap_or(inst.default_retention_days)
+        })?;
+        let other = Seen::sweep(&*self.backend, at) + oauth::sweep(&*self.backend) + dead;
         Ok((counts[0], counts[1], other))
     }
 
@@ -1421,6 +1483,7 @@ impl Runtime {
     /// Wire the runtime to the dispatcher (events for subscribed connections, the erasure hook)
     /// and start the worker thread that delivers events and runs `tick`.
     pub fn start(self: &Arc<Self>) {
+        self.started.store(true, Ordering::SeqCst);
         let (tx, rx) = std::sync::mpsc::channel::<(String, String)>();
         let tx = Mutex::new(tx);
         self.dispatcher.observe(
@@ -1440,15 +1503,7 @@ impl Runtime {
                     }
                     return;
                 }
-                let id = match out {
-                    Value::Map(m) => m.get("id"),
-                    _ => None,
-                }
-                .or(match input {
-                    Value::Map(m) => m.get("id"),
-                    _ => None,
-                });
-                if let Some(Value::Text(id)) = id {
+                if let Some(Value::Text(id)) = event_id(input, out) {
                     let _ = tx.lock().map(|t| t.send((command.to_string(), id.clone())));
                 }
             }),
@@ -1473,6 +1528,18 @@ impl Runtime {
             }
         });
     }
+}
+
+/// The id a command's event is about: the one it answered, else the one it was given.
+fn event_id<'a>(input: &'a Value, out: &'a Value) -> Option<&'a Value> {
+    match out {
+        Value::Map(m) => m.get("id"),
+        _ => None,
+    }
+    .or(match input {
+        Value::Map(m) => m.get("id"),
+        _ => None,
+    })
 }
 
 fn sanitize_name(s: &str) -> String {

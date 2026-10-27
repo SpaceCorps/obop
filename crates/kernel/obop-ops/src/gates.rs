@@ -635,9 +635,8 @@ impl Gate {
         if o.backup_file.is_none()
             && let Some(dir) = &o.backup_dir
         {
-            let need = self.estimated_backup_bytes();
-            match free_bytes(dir) {
-                Ok(free) => add(
+            match (free_bytes(dir), self.estimated_backup_bytes()) {
+                (Ok(free), Ok(need)) => add(
                     v,
                     "disk_backup",
                     gated(o.mode, free < need.saturating_mul(2)),
@@ -647,7 +646,17 @@ impl Gate {
                         mib(need)
                     ),
                 ),
-                Err(e) => add(v, "disk_backup", Level::Warn, e),
+                // A size that could not be read is not "needs 0.0 MiB, so there is room".
+                (Ok(free), Err(e)) => add(
+                    v,
+                    "disk_backup",
+                    Level::Warn,
+                    format!(
+                        "{} free where the backup goes; how large the backup will be could not be read ({e}): check there is room for twice the database",
+                        mib(free)
+                    ),
+                ),
+                (Err(e), _) => add(v, "disk_backup", Level::Warn, e),
             }
         }
         // The volume the database lives on.
@@ -702,14 +711,21 @@ impl Gate {
             || u.starts_with("postgresql://")
     }
 
-    fn estimated_backup_bytes(&self) -> u64 {
+    /// About how many bytes the backup will take, or why that is not known.
+    fn estimated_backup_bytes(&self) -> Result<u64, String> {
         if let Some(f) = sqlite_file(&self.options.url) {
-            return std::fs::metadata(f).map_or(0, |m| m.len());
+            return std::fs::metadata(f)
+                .map(|m| m.len())
+                .map_err(|e| e.to_string());
         }
-        self.server
-            .as_ref()
-            .and_then(|s| s.database_bytes().ok())
-            .unwrap_or(0)
+        if !self.is_postgres() {
+            // An in-memory database has no file to fill a volume with.
+            return Ok(0);
+        }
+        match &self.server {
+            Some(s) => s.database_bytes(),
+            None => Err("the PostgreSQL server could not be asked about itself".into()),
+        }
     }
 }
 
@@ -819,11 +835,18 @@ impl Gate {
         // A restore point on PostgreSQL, so point-in-time recovery can come back to this moment.
         if let Some(server) = &self.server {
             let name = format!("pre-migration-{}", plan.to);
-            let archiving = server
-                .setting("archive_mode")
-                .ok()
-                .flatten()
-                .is_some_and(|m| matches!(m.as_str(), "on" | "always"));
+            // A setting that could not be read is not "archiving is off": the recovery point stays
+            // part of the strict gate unless the server said it is off.
+            let archive_mode = server.setting("archive_mode");
+            let archiving = match &archive_mode {
+                Ok(m) => m.as_deref().is_some_and(|m| matches!(m, "on" | "always")),
+                Err(_) => true,
+            };
+            let state = match &archive_mode {
+                Ok(_) if archiving => "on",
+                Ok(_) => "off",
+                Err(_) => "unknown (the setting could not be read)",
+            };
             match server.create_restore_point(&name) {
                 Ok(lsn) => {
                     progress(&format!("restore point {name} at {lsn}"));
@@ -831,13 +854,10 @@ impl Gate {
                 }
                 Err(e) if archiving && o.mode == Mode::Strict => {
                     return Err(format!(
-                        "cannot create the restore point {name}: {e}. WAL archiving is on, so the recovery point is part of the gate; grant the role EXECUTE on pg_create_restore_point or run as a role that may"
+                        "cannot create the restore point {name}: {e}. WAL archiving is {state}, so the recovery point is part of the gate; grant the role EXECUTE on pg_create_restore_point or run as a role that may"
                     ));
                 }
-                Err(e) => progress(&format!(
-                    "no restore point ({e}); WAL archiving is {}",
-                    if archiving { "on" } else { "off" }
-                )),
+                Err(e) => progress(&format!("no restore point ({e}); WAL archiving is {state}")),
             }
         }
         let report = self.migrator().run_with(&RunOptions {

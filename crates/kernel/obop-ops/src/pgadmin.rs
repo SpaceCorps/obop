@@ -175,6 +175,9 @@ pub struct FakeServer {
     pub restore_point_error: Option<String>,
     pub recovering: bool,
     pub bytes: u64,
+    /// `SHOW` and the size of the database answer this error (the server cannot be asked).
+    pub setting_error: Option<String>,
+    pub bytes_error: Option<String>,
 }
 
 impl FakeServer {
@@ -215,6 +218,9 @@ impl FakeServer {
 
 impl ServerInfo for FakeServer {
     fn setting(&self, name: &str) -> Result<Option<String>, String> {
+        if let Some(e) = &self.setting_error {
+            return Err(e.clone());
+        }
         Ok(self.settings.get(name).cloned())
     }
     fn archiver(&self) -> Result<ArchiverStatus, String> {
@@ -231,6 +237,9 @@ impl ServerInfo for FakeServer {
         Ok(self.recovering)
     }
     fn database_bytes(&self) -> Result<u64, String> {
+        if let Some(e) = &self.bytes_error {
+            return Err(e.clone());
+        }
         Ok(self.bytes)
     }
     fn version(&self) -> Result<String, String> {

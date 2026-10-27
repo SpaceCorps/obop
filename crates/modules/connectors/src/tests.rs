@@ -1324,6 +1324,105 @@ fn retention_removes_old_flow_logs_and_runs() {
 }
 
 #[test]
+fn the_tokens_a_provider_just_issued_are_kept_although_the_store_refuses_once() {
+    use obop_connectors::oauth::Tokens;
+    use obop_storage::fault;
+    // The old refresh token is spent when the new pair arrives: a pair that is not stored leaves
+    // nothing to refresh by. In a request that has met a refusal already, a plain retry is refused
+    // by the guard, so the write is a needed step.
+    let (e, flaky, inner) = flaky_env();
+    seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    let (conn, _) = e.rt.connection(&id).unwrap();
+    let fresh = Tokens {
+        access_token: "at-new".into(),
+        refresh_token: Some("rt-new".into()),
+        expires_at: obop_connectors::util::now() + 3600,
+        scope: "read".into(),
+    };
+    flaky.refuse_call_after(0);
+    fault::begin_request(Default::default());
+    let done = e.rt.store_tokens(&conn, &fresh);
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    assert!(done.is_ok(), "{done:?} {out:?}");
+    assert!(
+        inner.get("connection", &id).unwrap().unwrap()["oauth_tokens"]
+            .as_str()
+            .unwrap()
+            .starts_with("e2."),
+        "sealed and stored"
+    );
+    // A lasting refusal is an error and a partial request: the provider has moved on.
+    flaky.refuse_calls_after(0, 20);
+    fault::begin_request(Default::default());
+    let done = e.rt.store_tokens(&conn, &fresh);
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    assert!(done.is_err());
+    assert!(out.partial, "{out:?}");
+}
+
+#[test]
+fn a_refusal_that_names_a_key_of_the_credentials_does_not_begin_with_it() {
+    // The key came first, from inside the JSON text of the `credentials` field, so the caller
+    // chose the first words of its own refusal (and, with a code of the table there, its row).
+    let e = env();
+    enable(&e, "webhook_out", false);
+    for key in ["denied: x", "cursor_expired: x", "storage_busy: x"] {
+        let m = err(
+            &e,
+            &admin(),
+            "connection.create",
+            json!({"name": "Hook", "provider": "webhook_out",
+                   "config": json!({"url": "https://hooks.example.org/in"}).to_string(),
+                   "credentials": json!({key: "v"}).to_string(),
+                   "field_allowlist": json!({"party": ["name"]}).to_string()}),
+        );
+        assert!(m.contains(key), "{m}");
+        assert!(!m.starts_with(key.split(':').next().unwrap()), "{m}");
+    }
+}
+
+#[test]
+fn the_retention_run_removes_old_dead_letters_too() {
+    // A dead letter keeps the treated payload of a delivery that gave up, and only an operator
+    // who looked at it ever removed it.
+    let e = env();
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", true);
+    let id = ready(&e, &admin(), &r);
+    let job = obop_connectors::queue::Job {
+        id: "msg_dead".into(),
+        connection: id.clone(),
+        run: "r1".into(),
+        content_type: "application/json".into(),
+        body: b"{}".to_vec(),
+        attempt: 5,
+        next_at: 0,
+    };
+    let at = obop_connectors::util::now();
+    e.rt.queue.requeue_because(job, at, 0, "down");
+    assert_eq!(e.rt.queue.dead().len(), 1);
+    let (_, _, young) = e.rt.purge(at + 86_400).unwrap();
+    assert_eq!(young, 0);
+    assert_eq!(e.rt.queue.dead().len(), 1, "inside its retention");
+    ok(
+        &e,
+        &admin(),
+        "connection.update",
+        json!({"id": id, "retention_days": 30}),
+    );
+    let (_, _, old) = e.rt.purge(at + 40 * 86_400).unwrap();
+    assert_eq!(old, 1);
+    assert!(e.rt.queue.dead().is_empty());
+}
+
+#[test]
 fn subscribed_events_deliver_the_record_minimised() {
     let e = env();
     let r = Receiver::new(200);
@@ -2077,6 +2176,50 @@ fn a_pull_keeps_the_link_of_every_record_it_made_whichever_call_the_store_refuse
 }
 
 #[test]
+fn a_pull_in_a_request_keeps_the_link_of_every_record_it_made_whichever_call_the_store_refuses() {
+    use obop_storage::fault;
+    use obop_storage::testing::Flaky;
+    // The same sweep inside a request scope (a manual sync, an inbound webhook): the pool notes
+    // the first refusal and the guard then refuses every later change of the request, the retry
+    // of the link included, unless the link is a needed step. The record was there and the link
+    // was not, and the next run added it again.
+    for skip in 0..60 {
+        let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+        let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+        let id = pull_env(&e);
+        flaky.refuse_call_after(skip);
+        fault::begin_request(Default::default());
+        let _ = raw(&e, &sam(), "connection.sync", json!({"id": id}));
+        let _ = fault::end_request();
+        flaky.allow_models();
+        fault::clear();
+        let _ = pull_result(&e, &id);
+        let leads = e.s.backend().list("lead").unwrap().len();
+        assert_eq!(leads, 2, "skip {skip}: a record was added twice");
+    }
+}
+
+#[test]
+fn a_link_the_server_failed_to_write_is_not_taken_for_one_that_was_already_there() {
+    use obop_connectors::model::EXTMAP;
+    use obop_storage::testing::Flaky;
+    // Any insert error that was not a refusal of the pool was read as "already linked", and the
+    // update that followed, of a row that did not exist, answered Ok: no link, and a duplicate on
+    // the next run, with the item reported as accepted.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+    let id = pull_env(&e);
+    flaky.fail_inserts_into(EXTMAP, "could not extend file: No space left on device");
+    let res = pull_result(&e, &id);
+    flaky.allow_models();
+    assert_eq!(
+        (res["created"].as_u64(), res["rejected"].as_u64()),
+        (Some(0), Some(2)),
+        "the records were saved without their links, and the run says so: {res}"
+    );
+}
+
+#[test]
 fn csv_export_goes_through_the_same_policy() {
     let e = env();
     seed_party(&e);
@@ -2401,4 +2544,287 @@ fn stripe_takes_form_encoded_customers_and_signed_events_through_one_connection(
             .unwrap_err(),
         obop_connectors::runtime::HookError::Unauthorised
     );
+}
+
+// ---- a refusal of the store in a withdrawal, a revocation and an erasure (D74) --------------------
+
+fn flaky_env() -> (
+    Env,
+    Arc<obop_storage::testing::Flaky>,
+    Arc<dyn obop_storage::Backend>,
+) {
+    let inner = obop_storage::open("memory:").unwrap();
+    let flaky = obop_storage::testing::Flaky::new(inner.clone());
+    let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+    (e, flaky, inner)
+}
+
+fn consent_state(inner: &Arc<dyn obop_storage::Backend>, k: &str) -> String {
+    inner.get("consent", k).unwrap().unwrap()["state"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+#[test]
+fn a_withdrawal_the_store_refused_is_a_partial_request_and_repeating_it_finishes_it() {
+    use obop_storage::fault;
+    use obop_storage::testing::Mode;
+    let (e, flaky, inner) = flaky_env();
+    seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    let k = ok(&e, &admin(), "consent.list", json!({}))[0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let maps = || {
+        inner
+            .list(obop_connectors::model::PSEUDONYMS)
+            .unwrap()
+            .len()
+    };
+    assert!(maps() > 0);
+    // The pseudonym maps cannot be listed: the connection is revoked, what it holds is not yet
+    // forgotten, and the answer says so.
+    flaky.refuse_model(obop_connectors::model::PSEUDONYMS, Mode::Reads);
+    fault::begin_request(Default::default());
+    let done = raw(&e, &admin(), "consent.withdraw", json!({"id": k}));
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    assert!(
+        matches!(&done, Err(CallError::Handler(m)) if m.starts_with("storage_busy")),
+        "{done:?}"
+    );
+    assert!(out.wrote && out.partial, "{out:?}");
+    assert!(maps() > 0);
+    assert_eq!(
+        consent_state(&inner, &k),
+        "active",
+        "the consent is withdrawn last, so the command can be repeated"
+    );
+    // The repeat is not "only the active record can be withdrawn": it finishes the work.
+    ok(&e, &admin(), "consent.withdraw", json!({"id": k}));
+    assert_eq!(maps(), 0);
+    assert_eq!(consent_state(&inner, &k), "withdrawn");
+    let c = inner.get("connection", &id).unwrap().unwrap();
+    assert_eq!(
+        (c["state"].as_str(), c["credentials"].as_str()),
+        (Some("revoked"), Some(""))
+    );
+}
+
+#[test]
+fn a_revocation_that_could_not_read_the_consents_is_a_partial_request_and_not_revoked() {
+    use obop_storage::fault;
+    use obop_storage::testing::Mode;
+    let (e, flaky, inner) = flaky_env();
+    seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    let k = ok(&e, &admin(), "consent.list", json!({}))[0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    flaky.refuse_model(obop_connectors::model::CONSENT, Mode::Reads);
+    fault::begin_request(Default::default());
+    let done = raw(&e, &admin(), "connection.revoke", json!({"id": id}));
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    // Answered "revoked" with the consent still active before: the register showed a live legal
+    // basis for a revoked connection and nobody was told to repeat.
+    assert!(
+        matches!(&done, Err(CallError::Handler(m)) if m.starts_with("storage_busy")),
+        "{done:?}"
+    );
+    assert!(out.wrote && out.partial, "{out:?}");
+    assert_eq!(consent_state(&inner, &k), "active");
+    ok(&e, &admin(), "connection.revoke", json!({"id": id}));
+    assert_eq!(consent_state(&inner, &k), "withdrawn");
+    let rec = inner.get("consent", &k).unwrap().unwrap();
+    assert_eq!(rec["withdrawn_by"], "root");
+    assert!(!rec["withdrawn_at"].as_str().unwrap().is_empty());
+}
+
+#[test]
+fn an_erased_party_is_noted_in_the_call_and_a_process_without_a_worker_finishes_it() {
+    use obop_storage::testing::Mode;
+    // No `rt.start()`: this is `obop call party erase`. Nothing was told about the erasure
+    // before, so the pseudonym maps and sealed values of the person stayed for ever.
+    let (e, flaky, inner) = flaky_env();
+    let party = seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    ok(
+        &e,
+        &admin(),
+        "connection.update",
+        json!({"id": id, "policy": json!({"fields": {"party.name": "mask"}}).to_string()}),
+    );
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    let linked = |party: &str| {
+        [
+            obop_connectors::model::PSEUDONYMS,
+            obop_connectors::model::VAULT,
+        ]
+        .iter()
+        .map(|m| {
+            inner
+                .list(m)
+                .unwrap()
+                .iter()
+                .filter(|(_, f)| f["record"] == format!("party:{party}"))
+                .count()
+        })
+        .sum::<usize>()
+    };
+    assert!(linked(&party) > 0);
+    let privacy = Principal::user("dpo", &["privacy.officer", "base.user"]);
+    // The vault cannot be read while the party is erased: the call answers, the note stays.
+    flaky.refuse_model(obop_connectors::model::VAULT, Mode::Reads);
+    ok(&e, &privacy, "party.erase", json!({"id": party}));
+    flaky.allow_models();
+    assert_eq!(
+        inner.kv_scan("connectors.erase:").unwrap().len(),
+        1,
+        "owed, and noted before the call returned"
+    );
+    assert!(linked(&party) > 0);
+    // A tick (any process) finishes it, and the note goes.
+    e.rt.tick(obop_connectors::util::now() + 10);
+    assert_eq!(linked(&party), 0);
+    assert!(inner.kv_scan("connectors.erase:").unwrap().is_empty());
+    // Healthy store, no worker: the call itself does all of it.
+    let party2 = seed_party(&e);
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    assert!(linked(&party2) > 0);
+    ok(&e, &privacy, "party.erase", json!({"id": party2}));
+    assert_eq!(linked(&party2), 0);
+    assert!(inner.kv_scan("connectors.erase:").unwrap().is_empty());
+}
+
+#[test]
+fn an_erasure_whose_note_the_store_refused_is_a_partial_request_that_a_repeat_finishes() {
+    use obop_storage::fault;
+    let (e, flaky, inner) = flaky_env();
+    let party = seed_party(&e);
+    let privacy = Principal::user("dpo", &["privacy.officer", "base.user"]);
+    flaky.refuse_kv_put(50);
+    fault::begin_request(Default::default());
+    let done = raw(&e, &privacy, "party.erase", json!({"id": party}));
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    // The party is erased and nothing remembers that its maps are owed: never "done".
+    assert!(out.wrote && out.partial, "{done:?} {out:?}");
+    assert!(inner.kv_scan("connectors.erase:").unwrap().is_empty());
+    ok(&e, &privacy, "party.erase", json!({"id": party}));
+    assert!(
+        inner.kv_scan("connectors.erase:").unwrap().is_empty(),
+        "noted, finished and taken back"
+    );
+}
+
+#[test]
+fn the_erased_row_of_the_flow_log_is_never_lost_to_one_refused_call_at_any_point() {
+    // The entries were deleted first and the row written after: a refusal in between left the
+    // data gone and no row, and the repeat found nothing to say. One refused call at each
+    // position of the erasure in turn: the entries go, and exactly one row says so.
+    for skip in 0..40 {
+        let (e, flaky, inner) = flaky_env();
+        let party = seed_party(&e);
+        let r = Receiver::new(200);
+        enable(&e, "webhook_out", false);
+        let id = ready(&e, &admin(), &r);
+        ok(
+            &e,
+            &admin(),
+            "connection.update",
+            json!({"id": id, "policy": json!({"fields": {"party.name": "mask"}}).to_string()}),
+        );
+        ok(&e, &admin(), "connection.sync", json!({"id": id}));
+        let record = format!("party:{party}");
+        flaky.refuse_call_after(skip);
+        e.rt.erase_record(&record);
+        flaky.allow_models();
+        e.rt.tick(obop_connectors::util::now() + 10);
+        for m in [
+            obop_connectors::model::PSEUDONYMS,
+            obop_connectors::model::VAULT,
+            obop_connectors::model::EXTMAP,
+        ] {
+            assert!(
+                inner
+                    .list(m)
+                    .unwrap()
+                    .iter()
+                    .all(|(_, f)| f["record"] != record),
+                "skip {skip}: {m} still links {record}"
+            );
+        }
+        let rows = inner
+            .list("data_flow_log")
+            .unwrap()
+            .iter()
+            .filter(|(_, f)| f["outcome"] == "erased" && f["connection"] == id.as_str())
+            .count();
+        assert_eq!(rows, 1, "skip {skip}: exactly one erased row");
+        assert!(
+            inner.kv_scan("connectors.erase:").unwrap().is_empty(),
+            "skip {skip}: done, and the note is gone"
+        );
+    }
+}
+
+#[test]
+fn an_unreadable_policy_is_never_shown_or_stored_as_the_closed_default() {
+    use obop_storage::testing::Mode;
+    let (e, flaky, inner) = flaky_env();
+    // A first save on an instance that never saved a policy, while the policy cannot be read:
+    // the closed values (flows off, EU only) were stored as the operator's choice.
+    flaky.refuse_model(obop_connectors::model::EGRESS_POLICY, Mode::Reads);
+    let done = raw(
+        &e,
+        &admin(),
+        "egress_policy.update",
+        json!({"default_retention_days": 30}),
+    );
+    flaky.allow_models();
+    assert!(
+        matches!(&done, Err(CallError::Handler(m)) if m.starts_with("storage_busy")),
+        "{done:?}"
+    );
+    assert!(
+        inner
+            .get(
+                obop_connectors::model::EGRESS_POLICY,
+                obop_connectors::model::INSTANCE
+            )
+            .unwrap()
+            .is_none(),
+        "nothing was stored"
+    );
+    // The save of an existing policy whose read-back is refused answers what was saved.
+    ok(
+        &e,
+        &admin(),
+        "egress_policy.update",
+        json!({"flows_enabled": true, "eu_only": false}),
+    );
+    flaky.refuse_reads_after_the_next_write();
+    let saved = ok(
+        &e,
+        &admin(),
+        "egress_policy.update",
+        json!({"flows_enabled": true, "eu_only": false, "default_retention_days": 45}),
+    );
+    flaky.allow_models();
+    assert_eq!(saved["flows_enabled"], true, "{saved}");
+    assert_eq!(saved["eu_only"], false, "{saved}");
 }

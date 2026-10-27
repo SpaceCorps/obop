@@ -24,6 +24,8 @@ pub fn register(d: &Arc<Dispatcher>, store: &Store, rt: &Arc<Runtime>) {
     let m = module();
     handlers::install(d, &m, store, rt);
     guards::install(d, rt);
+    // The note that an erased party's maps are owed is written in the call that erased it.
+    rt.observe_erasures();
 }
 
 #[cfg(test)]

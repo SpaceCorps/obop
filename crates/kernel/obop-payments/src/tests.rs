@@ -1690,6 +1690,38 @@ fn payments_that_can_never_be_refunded_do_not_starve_the_ones_that_can() {
 }
 
 #[test]
+fn a_store_that_refuses_a_call_of_the_sweep_is_not_a_failed_refund() {
+    // The sweep marked a payment whose lookup the store refused as one that cannot be refunded, and
+    // left it alone for an hour: the buyer's money stayed with the shop after the busy moment. One
+    // refused call at each position of the sweep: a second sweep, right after, returns it.
+    for skip in 0..8 {
+        let (flaky, e) = flaky_env();
+        let mut late = Vec::new();
+        for _ in 0..1 {
+            e.buy("sencha-green-tea", "1", "stripe", &[]);
+            let (oid, _) = e.last_order();
+            let (sid, _) = e.stand.sessions().pop().unwrap();
+            e.call(&e.manager(), "ecommerce_order.cancel", &oid)
+                .unwrap();
+            e.stand.pay(&sid);
+            e.payment_succeeded(&oid);
+            late.push(oid);
+        }
+        flaky.refuse_call_after(skip);
+        e.pay.sweep_expired();
+        flaky.allow_models();
+        e.pay.sweep_expired();
+        for oid in &late {
+            assert_eq!(
+                e.payment_of(oid)["state"],
+                "refunded",
+                "skip {skip}: left alone for an hour after a busy moment"
+            );
+        }
+    }
+}
+
+#[test]
 fn a_stranded_payment_that_fails_before_the_provider_costs_nothing_against_the_few_per_sweep() {
     let e = env_with(true, false, "stripe");
     let mut late = Vec::new();

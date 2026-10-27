@@ -112,8 +112,11 @@ fn provider_fields(rt: &Runtime, p: &Provider) -> Fields {
     f
 }
 
-fn instance_fields(rt: &Runtime) -> Fields {
-    let p = InstancePolicy::load(&*rt.backend);
+/// The instance policy as the record shows it. A policy the store would not give is an error, not
+/// the closed default (D74): an operator who sees, or a first save that stores, "flows off, EU
+/// only, no hosts" has been shown a policy nobody chose.
+fn instance_fields(rt: &Runtime) -> Result<Fields, String> {
+    let p = InstancePolicy::try_load(&*rt.backend)?;
     let mut f = Fields::new();
     f.insert("flows_enabled".into(), p.flows_enabled.into());
     f.insert("eu_only".into(), p.eu_only.into());
@@ -123,7 +126,7 @@ fn instance_fields(rt: &Runtime) -> Fields {
         "default_retention_days".into(),
         p.default_retention_days.into(),
     );
-    f
+    Ok(f)
 }
 
 fn result(id: &str, extra: &[(&str, Value)], res: &J) -> Value {
@@ -182,7 +185,7 @@ fn precheck_connect(rt: &Runtime, c: &Connection, p: &Provider) -> Result<(), St
             p.name
         ));
     }
-    let consents = consents_of(&*rt.backend, &c.id);
+    let consents = try_consents_of(&*rt.backend, &c.id)?;
     let Some(consent) = consents.iter().find(|k| k.is_active()) else {
         return Err(
             "record the legal basis first: purpose, basis and the data that would flow".into(),
@@ -234,25 +237,36 @@ fn precheck_connect(rt: &Runtime, c: &Connection, p: &Provider) -> Result<(), St
     Ok(())
 }
 
+/// Revoke a connection: it stops (state first, from here nothing flows), what it holds is
+/// forgotten, and the consent records of it are withdrawn, which are the evidence that the basis
+/// ended. Every step after the first is needed once the state has changed: tried again while the
+/// store refuses, and a lasting refusal makes the request a partial one (503) whose repeat
+/// finishes what is left. The consents are read with the lookup that reports a refusal: read as
+/// "none" they stayed active on a revoked connection under an answer of "revoked".
 fn revoke_connection(rt: &Runtime, id: &str, by: &str) -> Result<usize, String> {
+    use obop_storage::fault::needed;
     set(rt, CONNECTION, id, &[("state", "revoked".into())])?;
     let purged = rt.revoke(id)?;
-    for k in consents_of(&*rt.backend, id)
+    for k in needed(|| try_consents_of(&*rt.backend, id))?
         .iter()
         .filter(|k| k.is_active())
     {
-        set(
-            rt,
-            CONSENT,
-            &k.id,
-            &[
-                ("state", "withdrawn".into()),
-                ("withdrawn_at", iso(now()).into()),
-                ("withdrawn_by", by.into()),
-            ],
-        )?;
+        needed(|| withdraw_consent(rt, &k.id, by))?;
     }
     Ok(purged)
+}
+
+fn withdraw_consent(rt: &Runtime, id: &str, by: &str) -> Result<(), String> {
+    set(
+        rt,
+        CONSENT,
+        id,
+        &[
+            ("state", "withdrawn".into()),
+            ("withdrawn_at", iso(now()).into()),
+            ("withdrawn_by", by.into()),
+        ],
+    )
 }
 
 fn connection_command(rt: &Arc<Runtime>, d: &Dispatcher, m: &Module, name: &'static str) {
@@ -357,7 +371,9 @@ fn consent_create(rt: &Runtime, input: &Value) -> Result<Value, String> {
         "recorded_at": iso(now()), "withdrawn_at": "", "withdrawn_by": "",
     });
     // The new record replaces the old one as the basis; the old one stays as history.
-    for k in consents_of(&*rt.backend, &c.id)
+    // Read so that a refusal stops the record here, before the new basis is stored beside an old
+    // one that stays active.
+    for k in try_consents_of(&*rt.backend, &c.id)?
         .iter()
         .filter(|k| k.is_active())
     {
@@ -563,7 +579,13 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, store: &Store, rt: &Arc<Runtime>
         d,
         m,
         "egress_policy",
-        Arc::new(move |_| vec![(INSTANCE.to_string(), instance_fields(&r))]),
+        // A policy that cannot be read is no row (the request is answered 503 by the layer, which
+        // saw the refusal), never a row of the closed default.
+        Arc::new(move |_| {
+            instance_fields(&r)
+                .map(|f| vec![(INSTANCE.to_string(), f)])
+                .unwrap_or_default()
+        }),
     );
     d.register(
         m,
@@ -648,22 +670,21 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, store: &Store, rt: &Arc<Runtime>
                 return Err("only the active record can be withdrawn".into());
             }
             let who = caller(input);
-            set(
-                &r,
-                CONSENT,
-                &id,
-                &[
-                    ("state", "withdrawn".into()),
-                    ("withdrawn_at", iso(now()).into()),
-                    ("withdrawn_by", who.clone().into()),
-                ],
-            )?;
+            // The connection is revoked first, and that withdraws every active consent of it,
+            // this one included. The consent itself is the last step: a request that stops
+            // half way leaves it active, so the command can be repeated (it is the only one that
+            // can finish the work, and "only the active record can be withdrawn").
             let conn = str_of(&rec, "connection").to_string();
-            if r.backend
-                .get(CONNECTION, &conn)?
-                .is_some_and(|c| str_of(&c, "state") != "revoked")
-            {
+            if r.backend.get(CONNECTION, &conn)?.is_some() {
                 revoke_connection(&r, &conn, &who)?;
+            }
+            // A consent of a connection that is gone, or one that the revocation did not reach.
+            let still_active = r
+                .backend
+                .get(CONSENT, &id)?
+                .is_some_and(|k| str_of(&k, "state") == "active");
+            if still_active {
+                obop_storage::fault::needed(|| withdraw_consent(&r, &id, &who))?;
             }
             Ok(Value::map([
                 ("id", Value::text(&id)),
@@ -735,7 +756,9 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, store: &Store, rt: &Arc<Runtime>
             }
         }
         if !r.backend.update(EGRESS_POLICY, INSTANCE, &f)? {
-            let mut all = instance_fields(&r);
+            // Never saved before: the defaults, with what was just chosen over them. A refused
+            // read stops the save; it must not store the closed policy as the operator's.
+            let mut all = instance_fields(&r)?;
             all.extend(f.clone());
             r.backend.insert(EGRESS_POLICY, INSTANCE, &all)?;
         }
@@ -745,7 +768,10 @@ pub fn install(d: &Arc<Dispatcher>, m: &Module, store: &Store, rt: &Arc<Runtime>
         r.client.follow_instance_hosts(Arc::new(move || {
             InstancePolicy::try_load(&*source).map(|p| p.hosts)
         }));
-        Ok(row(INSTANCE, &instance_fields(&r)))
+        // The answer is the saved policy. If it cannot be read back, it is what was just written
+        // (true, and less), not the closed default.
+        let saved = instance_fields(&r).unwrap_or(f);
+        Ok(row(INSTANCE, &saved))
     }));
 
     let r = rt.clone();

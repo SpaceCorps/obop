@@ -1400,6 +1400,68 @@ fn a_connection_killed_by_the_server_is_noticed_and_replaced() {
     pg.insert(&model, "d", &fields(4)).unwrap();
 }
 
+#[test]
+fn only_a_statement_on_a_connection_that_broke_is_in_flight() {
+    // The rule that decides whether an approved plan is put back (nothing was sent) or stays gone
+    // (a change may have been applied): the pool marks `in_flight` for a statement that was on a
+    // connection when it broke, and not for a connection found dead before the statement of the
+    // caller was sent (the limit of the session, BEGIN), where nothing is in doubt.
+    let (url, _db) = pg_db!();
+    let sep = if url.contains('?') { '&' } else { '?' };
+    let kill = |app: &str| {
+        let mut admin = PgConnector::new(&url).unwrap().connect().unwrap();
+        admin
+            .execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity                  WHERE application_name = $1 AND pid <> pg_backend_pid()",
+                &[&app],
+            )
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+    };
+    let model = unique("inflight");
+    let cfg = || PgPoolConfig {
+        health_check_idle: Duration::from_secs(3600),
+        ..PgPoolConfig::default()
+    };
+    // A write on a pooled connection that was killed: the statement itself meets the dead
+    // socket, and whether it was applied is not known.
+    let app = unique("inflight-write");
+    let pg = connect(&format!("{url}{sep}application_name={app}"), cfg());
+    pg.insert(&model, "a", &fields(1)).unwrap();
+    kill(&app);
+    fault::begin_request(Default::default());
+    let r = pg.insert(&model, "b", &fields(2));
+    let out = fault::end_request();
+    assert!(r.is_err());
+    assert!(out.in_flight, "a statement was on the connection: {out:?}");
+    // An atomic batch on a killed connection: BEGIN is what fails, and nothing was sent.
+    let app = unique("inflight-begin");
+    let pg = connect(&format!("{url}{sep}application_name={app}"), cfg());
+    pg.insert(&model, "c", &fields(3)).unwrap();
+    kill(&app);
+    fault::begin_request(Default::default());
+    let r = pg.apply(&[Op::Insert {
+        model: model.clone(),
+        id: "d".into(),
+        fields: fields(4),
+    }]);
+    let out = fault::end_request();
+    let e = r.unwrap_err();
+    assert_eq!(Fault::of_message(&e), Some(Fault::Unavailable), "{e}");
+    assert_eq!(out.fault, Some(Fault::Unavailable), "{out:?}");
+    assert!(
+        !out.in_flight,
+        "the batch never left the client, so its plan may be put back: {out:?}"
+    );
+    // And the pool healed: the batch can be made now.
+    pg.apply(&[Op::Insert {
+        model,
+        id: "d".into(),
+        fields: fields(4),
+    }])
+    .unwrap();
+}
+
 // ---- containers: a restart, and PgBouncer in front -------------------------------------------
 
 fn docker(args: &[&str]) -> Option<String> {

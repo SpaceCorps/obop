@@ -195,9 +195,21 @@ impl Queue {
         claimed
     }
 
-    /// The delivery is finished (succeeded, or refused for good): forget the job.
+    /// The delivery is finished (succeeded, or refused for good): forget the job. A refusal of the
+    /// store is tried again a few times; if it lasts, the job stays leased and is delivered again
+    /// when the lease ends (delivery is at least once, and the receiver can deduplicate by the
+    /// job id it is sent), which the line says.
     pub fn complete(&self, job: &Job) {
-        let _ = self.backend.delete(JOBS, &job.id);
+        if let Err(e) =
+            obop_storage::fault::patiently(4, std::time::Duration::from_millis(250), || {
+                self.backend.delete(JOBS, &job.id).map(|_| ())
+            })
+        {
+            eprintln!(
+                "connectors: the finished delivery {} could not be removed from the queue ({e}); it is sent again when its lease ends",
+                job.id
+            );
+        }
     }
 
     /// A delivery failed: schedule the next try (releasing the lease) or give up and keep the
@@ -254,11 +266,13 @@ impl Queue {
         d.remove("lease_owner");
         // The job leaves the queue only once it is in the dead letters: if that write is refused
         // it stays leased and is taken (and buried) again when the lease ends, never lost.
-        match self.backend.insert(DEAD, id, &d) {
-            Ok(()) => {}
-            Err(e) if obop_storage::fault::Fault::is_transient(&e) => return,
-            // Already buried (an earlier try whose answer was lost): the job can go.
-            Err(_) => {}
+        if let Err(e) = self.backend.insert(DEAD, id, &d) {
+            // Already buried (an earlier try whose answer was lost): the job can go. Any other
+            // refusal, a full disk included, is not "already buried": the job stays leased and is
+            // taken and buried again when the lease ends, never lost.
+            if crate::util::row_exists_or(&*self.backend, DEAD, id, e).is_err() {
+                return;
+            }
         }
         let _ = self.backend.delete(JOBS, id);
     }
@@ -273,6 +287,23 @@ impl Queue {
                 if text(&f, "connection") == connection && self.backend.delete(model, &id)? {
                     n += 1;
                 }
+            }
+        }
+        Ok(n)
+    }
+
+    /// Remove the dead letters that gave up more than `keep_days(connection)` days before `at`.
+    /// A dead letter keeps the treated payload of a delivery (what the policy let through, in
+    /// clear where the owner allowed it) and, unlike the flow log, nothing else ever removed it:
+    /// it is held for as long as the connection's retention, like the rest of its records. A
+    /// refusal of the store is an error (the run is repeated). Returns how many were removed.
+    pub fn purge_dead(&self, at: u64, keep_days: impl Fn(&str) -> i64) -> Result<usize, String> {
+        let mut n = 0;
+        for (id, f) in self.backend.list(DEAD)? {
+            let kept_until =
+                num(&f, "dead_at") + (keep_days(text(&f, "connection")).max(1) as u64) * 86_400;
+            if kept_until < at && self.backend.delete(DEAD, &id)? {
+                n += 1;
             }
         }
         Ok(n)
@@ -384,6 +415,72 @@ mod tests {
         let again = q.take_due(now + 1).pop().unwrap();
         assert_eq!((again.id.as_str(), again.attempt), ("m1", 1));
         assert!(!q.revive("m1", now));
+    }
+
+    #[test]
+    fn a_dead_letter_is_held_for_the_retention_of_its_connection_and_then_removed() {
+        let q = Queue::in_memory();
+        let bury = |id: &str, connection: &str, at: u64| {
+            let mut j = job(id, 0);
+            j.connection = connection.into();
+            j.attempt = 5;
+            assert_eq!(q.requeue_because(j, at, 0, "down"), Requeued::Dead);
+        };
+        let day = 86_400;
+        bury("old", "c1", 1_000);
+        bury("young", "c1", 1_000 + 20 * day);
+        bury("long", "c2", 1_000);
+        let keep = |c: &str| if c == "c2" { 90 } else { 10 };
+        // Nothing is older than its connection's retention yet.
+        assert_eq!(q.purge_dead(1_000 + 9 * day, keep), Ok(0));
+        // Eleven days on, the first letter of c1 is past ten days; the one of c2 (90 days) is not.
+        assert_eq!(q.purge_dead(1_000 + 11 * day, keep), Ok(1));
+        let left: Vec<String> = q.dead().into_iter().map(|d| d.id).collect();
+        assert!(left.contains(&"young".to_string()) && left.contains(&"long".to_string()));
+        assert!(!left.contains(&"old".to_string()));
+        assert_eq!(q.purge_dead(1_000 + 91 * day, keep), Ok(2));
+        assert!(q.dead().is_empty());
+    }
+
+    #[test]
+    fn a_job_stays_when_the_dead_letter_could_not_be_written_for_a_reason_that_is_no_duplicate() {
+        use obop_storage::testing::Flaky;
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let q = Queue::new(obop_storage::guarded(flaky.clone()), SecretBox::for_tests());
+        let mut j = job("m1", 0);
+        j.attempt = 5;
+        q.push(j).unwrap();
+        let claimed = q.take_due(10).pop().unwrap();
+        // A full disk is not "already buried": deleting the job then lost the delivery with no
+        // trace at all.
+        flaky.fail_inserts_into(DEAD, "could not extend file: No space left on device");
+        assert_eq!(q.requeue_because(claimed, 10, 0, "down"), Requeued::Dead);
+        assert_eq!(b.count(JOBS).unwrap(), 1, "the job is still queued");
+        assert_eq!(b.count(DEAD).unwrap(), 0);
+        flaky.allow_models();
+        // Once the lease ends it is taken again and buried.
+        let again = q.take_due(10 + LEASE_SECS + 1).pop().unwrap();
+        assert_eq!(q.requeue_because(again, 200, 0, "down"), Requeued::Dead);
+        assert_eq!(b.count(JOBS).unwrap(), 0);
+        assert_eq!(b.count(DEAD).unwrap(), 1);
+    }
+
+    #[test]
+    fn a_finished_delivery_is_removed_although_the_store_refuses_once() {
+        use obop_storage::testing::Flaky;
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let q = Queue::new(obop_storage::guarded(flaky.clone()), SecretBox::for_tests());
+        q.push(job("m1", 0)).unwrap();
+        let claimed = q.take_due(10).pop().unwrap();
+        // One busy moment right when the delivery is done: the job stayed, and was sent again
+        // when its lease ended.
+        flaky.refuse_call_after(0);
+        q.complete(&claimed);
+        flaky.allow_models();
+        assert_eq!(b.count(JOBS).unwrap(), 0);
+        assert!(q.take_due(10 + LEASE_SECS + 1).is_empty(), "not sent again");
     }
 
     #[test]

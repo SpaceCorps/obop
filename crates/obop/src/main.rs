@@ -6,6 +6,8 @@ mod accounts_tests;
 mod app;
 mod backup_cli;
 #[cfg(test)]
+mod backup_gate_tests;
+#[cfg(test)]
 mod blobs_tests;
 #[cfg(test)]
 mod bulk_tests;
@@ -38,6 +40,8 @@ mod passkey_tests;
 mod payments_tests;
 #[cfg(test)]
 mod public_site_tests;
+#[cfg(test)]
+mod settings_cmd_tests;
 mod storage_cli;
 mod update_cmd;
 #[cfg(test)]
@@ -494,7 +498,22 @@ fn principal(app: &App, o: &Opts) -> Result<Principal, ExitCode> {
         .token
         .as_deref()
         .unwrap_or(if o.dev_auth { "dev-admin" } else { "" });
-    authenticator(app, o).resolve(token).ok_or_else(|| fail("no valid token: pass --token (or OBOP_TOKEN); see `obop admin create` and `obop agent-token`"))
+    // The lookup is a request of its own, so that a refusal of the store is told from a token that
+    // is not valid: "no valid token", exit 1, sent a script that repeats on 75 away for ever, and
+    // told the person that a good token was bad.
+    let (found, seen) = errors::requested(|| authenticator(app, o).resolve(token));
+    match found {
+        Some(p) => Ok(p),
+        None => match errors::storage_outcome(&seen, false) {
+            Some(c) => {
+                eprintln!("error: {}", c.cli);
+                Err(ExitCode::from(c.exit))
+            }
+            None => Err(fail(
+                "no valid token: pass --token (or OBOP_TOKEN); see `obop admin create` and `obop agent-token`",
+            )),
+        },
+    }
 }
 
 /// The D41 install gate over every linked first-party module.
@@ -1101,17 +1120,30 @@ fn site_seed(o: &Opts) -> Exit {
     Ok(())
 }
 
+/// The instance settings as stored, for a command that writes them back. A read the store
+/// refused, and text that is not an object, are errors: both read as "no settings" and the write
+/// that followed replaced the theme, the app order and the security policy with one key.
+fn instance_settings(app: &App) -> Result<serde_json::Map<String, serde_json::Value>, ExitCode> {
+    let text = app.installer.try_settings().map_err(|e| fail(&e))?;
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(serde_json::Value::Object(m)) => Ok(m),
+        _ => Err(fail(
+            "the stored instance settings are not a JSON object; nothing was changed",
+        )),
+    }
+}
+
 /// The `site` object of the instance settings, as stored.
-fn site_settings(app: &App) -> serde_json::Map<String, serde_json::Value> {
-    serde_json::from_str::<serde_json::Value>(&app.installer.settings())
-        .ok()
-        .and_then(|v| v.get("site").and_then(|s| s.as_object().cloned()))
-        .unwrap_or_default()
+fn site_settings(app: &App) -> Result<serde_json::Map<String, serde_json::Value>, ExitCode> {
+    Ok(instance_settings(app)?
+        .get("site")
+        .and_then(|s| s.as_object().cloned())
+        .unwrap_or_default())
 }
 
 fn site_show(o: &Opts) -> Exit {
     let app = open_app(o)?;
-    let set = site_settings(&app);
+    let set = site_settings(&app)?;
     for (key, help) in obop_site::settings::KEYS {
         match set.get(*key) {
             Some(v) => println!("{key} = {v}"),
@@ -1125,9 +1157,15 @@ fn site_show(o: &Opts) -> Exit {
 fn site_set(o: &Opts, key: &str, value: &str) -> Exit {
     let value = obop_site::settings::parse_value(key, value).map_err(|e| fail(&e))?;
     let app = open_app(o)?;
-    let mut all: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(&app.installer.settings()).unwrap_or_default();
-    let mut site = site_settings(&app);
+    site_set_in(&app, key, value)
+}
+
+fn site_set_in(app: &App, key: &str, value: serde_json::Value) -> Exit {
+    let mut all = instance_settings(app)?;
+    let mut site = all
+        .get("site")
+        .and_then(|s| s.as_object().cloned())
+        .unwrap_or_default();
     site.insert(key.to_string(), value);
     all.insert("site".into(), serde_json::Value::Object(site));
     app.installer

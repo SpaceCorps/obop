@@ -118,6 +118,27 @@ pub fn is_initialize_request(payload: &J) -> bool {
 /// Handle one parsed payload: a message, or a batch where the negotiated revision allows it
 /// (only `2025-03-26`; later revisions removed batching).
 pub fn handle_payload(d: &Dispatcher, p: &Principal, s: &mut Session, payload: &J) -> Reply {
+    payload_with(d, p, s, payload, false)
+}
+
+/// As [`handle_payload`]; with `own_scope` every message of the payload is a request of its own
+/// (the stdio server: a line may be a batch, and a fault met by one call must not fail, refuse or
+/// label as partial the independent calls that follow it). The HTTP transport leaves it off: it
+/// answers a whole payload as one request, in the scope of its layer.
+fn payload_with(
+    d: &Dispatcher,
+    p: &Principal,
+    s: &mut Session,
+    payload: &J,
+    own_scope: bool,
+) -> Reply {
+    let message = |s: &mut Session, m: &J| {
+        if own_scope {
+            errors::requested(|| handle_message(d, p, s, m)).0
+        } else {
+            handle_message(d, p, s, m)
+        }
+    };
     match payload {
         J::Array(items) => {
             if s.protocol != Some("2025-03-26") {
@@ -134,17 +155,14 @@ pub fn handle_payload(d: &Dispatcher, p: &Principal, s: &mut Session, payload: &
                     "invalid batch: it must be non-empty and must not contain initialize",
                 ));
             }
-            let out: Vec<J> = items
-                .iter()
-                .filter_map(|m| handle_message(d, p, s, m))
-                .collect();
+            let out: Vec<J> = items.iter().filter_map(|m| message(s, m)).collect();
             if out.is_empty() {
                 Reply::Accepted
             } else {
                 Reply::Json(J::Array(out))
             }
         }
-        m => handle_message(d, p, s, m).map_or(Reply::Accepted, Reply::Json),
+        m => message(s, m).map_or(Reply::Accepted, Reply::Json),
     }
 }
 
@@ -154,9 +172,10 @@ pub fn handle(d: &Dispatcher, p: &Principal, s: &mut Session, line: &str) -> Opt
         Ok(v) => v,
         Err(_) => return Some(error(&J::Null, -32700, "parse error").to_string()),
     };
-    // One line is one request: the scope of `obop-http` is opened here, so that the guard holds
-    // and a failed call can say what it changed (D74).
-    let (reply, _) = errors::requested(|| handle_payload(d, p, s, &payload));
+    // Every message of the line is one request: the scope of `obop-http` is opened for each, so that
+    // the guard holds and a failed call can say what it changed (D74), and the calls of a batch
+    // do not answer for one another.
+    let reply = payload_with(d, p, s, &payload, true);
     match reply {
         Reply::Accepted => None,
         Reply::Json(j) => Some(j.to_string()),

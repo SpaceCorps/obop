@@ -174,17 +174,28 @@ fn a_refused_call_of_the_binary_exits_75_and_says_what_was_changed() {
     assert_eq!(o.status.code(), Some(0), "{}", stderr(&o));
     assert_eq!(stage(&db, &id), "won");
 
-    // A call of its own that fails is still the documented line and status 1, refusals or not.
+    // A call of its own that fails is still the documented line and status 1, with a refusal armed
+    // that the call never reaches: it is validated before any batch, and the armed refusal of the
+    // process is for a batch that does not come. Exit 75 here would be the armed fault (or a text)
+    // being taken for the call's failure.
+    let id = new_lead(&db, "Not a stage");
     let o = call(
         &db,
-        Some("apply:5"),
-        &["lead", "get", "id=storage_busy: nope"],
+        Some("apply:0"),
+        &["lead", "update", &format!("id={id}"), "stage=not-a-stage"],
     );
     assert_eq!(o.status.code(), Some(1), "{}", stderr(&o));
-    assert_eq!(
-        error_line(&o),
-        "error: Handler(\"no lead storage_busy: nope\")"
+    let line = error_line(&o);
+    assert!(
+        line.starts_with("error: Handler(\"") && !line.contains("storage_"),
+        "{line}"
     );
+    assert_ne!(stage(&db, &id), "not-a-stage");
+    // That a text which begins with the word of a storage fault (or any other code of the table)
+    // is not read as one is tested where a command that echoes its input first can be called: with
+    // a token that may uninstall a module, in `error_seam_tests` of the binary's own crate
+    // (`input_that_begins_with_a_code_word_cannot_forge_a_fault_or_a_row`). No command a dev token
+    // may call puts the caller's text first, so there is nothing to ask the binary here.
 }
 
 /// `obop import` goes through the same seam: a refused batch is exit 75 and the line, not "the

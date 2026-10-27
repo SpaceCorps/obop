@@ -3,7 +3,9 @@
 //! (see `seal`); recovery codes are stored as SHA-256 hashes of 80-bit random codes; the event
 //! log (`security_event`) never holds a code or a secret.
 
-use crate::{Auth, Change, hex, now_system, random_bytes, str_list, token_hash};
+use crate::{
+    Auth, Change, Epoch, bump_epoch, epoch_of, hex, now_system, random_bytes, str_list, token_hash,
+};
 use crate::{seal, totp};
 use obop_commands::{ADMIN_GROUP, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind};
 use obop_keys::KeyRing;
@@ -24,6 +26,33 @@ const FAILED_EVENT_EVERY: Duration = Duration::from_secs(10);
 /// reads it.
 pub const EVENT_TABLE: &str = obop_commands::audit::EVENT_TABLE;
 const MFA_TOKEN_TABLE: &str = "auth_mfa_token";
+
+/// Why a sign-in that passed its checks got no session (see [`Auth::session_outcome`]).
+pub(crate) enum SessionError {
+    /// The account was disabled, removed or had its credentials changed while the sign-in was
+    /// finishing. Answered as a wrong password is, so that nobody can tell the cases apart.
+    Refused,
+    /// The store refused a call: the store's trouble, not the person's.
+    Store(String),
+}
+
+impl SessionError {
+    /// The answer of the password step.
+    pub(crate) fn message(self) -> String {
+        match self {
+            Self::Refused => "invalid username or password".into(),
+            Self::Store(e) => e,
+        }
+    }
+
+    /// The answer of a second step (a code, a recovery code or a passkey) and of a passkey alone.
+    pub(crate) fn mfa(self) -> MfaError {
+        match self {
+            Self::Refused => MfaError::Expired,
+            Self::Store(e) => MfaError::Unavailable(e),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct AuthConfig {
@@ -212,14 +241,25 @@ impl Auth {
         }
     }
 
-    pub(crate) fn password_ok(&self, name: &str, password: &str) -> bool {
+    /// Whether `password` is the account's. A read of the account that the store refused is the
+    /// store's trouble (`Unavailable`), not a wrong password: it must not be counted toward the
+    /// lockout of a person who typed the right one.
+    pub(crate) fn password_ok(&self, name: &str, password: &str) -> Result<bool, MfaError> {
+        self.password_check(name, password)
+            .map(|c| c.0)
+            .map_err(MfaError::Unavailable)
+    }
+
+    /// As [`Auth::password_ok`], and the credential epoch of the account as it was read together
+    /// with the hash that was checked: the sign-in that this starts carries it to
+    /// [`Auth::session_outcome`] (see [`crate::Epoch`]).
+    pub(crate) fn password_check(
+        &self,
+        name: &str,
+        password: &str,
+    ) -> Result<(bool, Epoch), String> {
         use argon2::password_hash::{PasswordVerifier, phc::PasswordHash};
-        let stored = self
-            .backend
-            .get("auth_user", name)
-            .ok()
-            .flatten()
-            .map(J::Object);
+        let stored = self.backend.get("auth_user", name)?.map(J::Object);
         let dummy = self
             .hash_password("dummy-password-for-timing")
             .unwrap_or_default();
@@ -230,7 +270,8 @@ impl Auth {
         let ok = hash
             .parse::<PasswordHash>()
             .is_ok_and(|h| self.hasher.verify_password(password.as_bytes(), &h).is_ok());
-        ok && stored.is_some()
+        let epoch = stored.as_ref().and_then(epoch_of);
+        Ok((ok && stored.is_some(), epoch))
     }
 
     /// Check a TOTP code or a recovery code for `name`. Consumes what it accepts (the step, or
@@ -302,9 +343,9 @@ impl Auth {
         if ok {
             Ok(())
         } else {
-            self.record_failure(name);
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             self.failed_code_event(name);
-            if self.locked_out(name) {
+            if self.lockout_reached(name) {
                 self.event(name, "lockout", name, "too many failed attempts");
             }
             Err(MfaError::Denied("that code is not valid".into()))
@@ -338,8 +379,11 @@ impl Auth {
         if self.locked_out(&name) {
             return Err("too many attempts, try again in a minute".into());
         }
-        if !self.password_ok(&name, password) {
-            self.record_failure(&name);
+        // The epoch comes with the hash: nothing that changes a credential after this read can be
+        // missed by the comparison in `session_outcome`.
+        let (ok, epoch) = self.password_check(&name, password)?;
+        if !ok {
+            self.record_failure(&name)?;
             return Err("invalid username or password".into());
         }
         // Same answer as a wrong password, so nobody can tell a disabled account from none; the
@@ -355,6 +399,9 @@ impl Auth {
             f.insert("user".into(), J::from(name.as_str()));
             f.insert("expires_at".into(), J::from(self.now() + MFA_TOKEN_SECS));
             f.insert("attempts".into(), J::from(0u64));
+            // What the password was checked against: a change of the credentials before the
+            // second step ends this sign-in (`refuse_if_disabled`).
+            f.insert("epoch".into(), epoch.map_or(J::Null, J::from));
             self.backend
                 .insert(MFA_TOKEN_TABLE, &token_hash(&token), &f)?;
             return Ok(LoginOutcome::MfaRequired { mfa_token: token });
@@ -375,7 +422,8 @@ impl Auth {
                 "signed in without two-factor; only enrolment is allowed",
             );
         }
-        self.session_outcome(&name, limited)
+        self.session_outcome(&name, limited, &epoch)
+            .map_err(SessionError::message)
     }
 
     /// The account was disabled after the person passed the password step: the second step must
@@ -383,14 +431,35 @@ impl Auth {
     /// neither the sessions ended by it nor the note that enabling settles would cover it) and
     /// which would come alive the day the account is enabled. The refused read of the account is
     /// the store's trouble, not "enabled".
-    pub(crate) fn refuse_if_disabled(&self, name: &str, key: &str) -> Result<(), MfaError> {
-        if self.user_record(name)?["disabled"].as_bool() == Some(true) {
+    ///
+    /// The same for any change of the credentials since the password was checked (`pending` is
+    /// the epoch the first step read, see [`crate::Epoch`]): a new password, a reset, new groups or
+    /// a removed factor end the half-finished sign-in of the person who held the old ones. Every
+    /// such change takes the lock the second step holds, so none can run after this check.
+    pub(crate) fn refuse_if_disabled(
+        &self,
+        name: &str,
+        key: &str,
+        pending: &Epoch,
+    ) -> Result<(), MfaError> {
+        let u = self.user_record(name)?;
+        if u["disabled"].as_bool() == Some(true) {
             let _ = self.backend.delete(MFA_TOKEN_TABLE, key);
             self.event(
                 name,
                 "login_refused",
                 name,
                 "the account was disabled before the second step of the sign-in",
+            );
+            return Err(MfaError::Expired);
+        }
+        if epoch_of(&u) != *pending {
+            let _ = self.backend.delete(MFA_TOKEN_TABLE, key);
+            self.event(
+                name,
+                "login_refused",
+                name,
+                "the credentials of the account changed before the second step of the sign-in",
             );
             return Err(MfaError::Expired);
         }
@@ -425,13 +494,14 @@ impl Auth {
                 "too many wrong codes for this sign-in; enter your password again".into(),
             ));
         }
-        self.refuse_if_disabled(&name, &key)?;
+        let pending: Epoch = rec["epoch"].as_str().map(String::from);
+        self.refuse_if_disabled(&name, &key, &pending)?;
         match self.check_second_factor(&name, code, recovery) {
             Ok(()) => {
                 // Single use: the token is gone whatever happens next.
                 let _ = self.backend.delete(MFA_TOKEN_TABLE, &key);
-                self.session_outcome(&name, false)
-                    .map_err(MfaError::Unavailable)
+                self.session_outcome(&name, false, &pending)
+                    .map_err(SessionError::mfa)
             }
             Err(e @ (MfaError::Denied(_) | MfaError::Locked(_))) => {
                 let mut p = Fields::new();
@@ -446,21 +516,55 @@ impl Auth {
     /// A session for `name`. It is limited to the account routes when two-factor enrolment is
     /// owed (`enrol`) or an administrator reset the password and a new one is owed.
     ///
-    /// The account is looked at again once the session is written. An administrator's disable
-    /// that ran between the check that let this sign-in begin and the write ended the sessions
-    /// that existed then, and this one did not: it would be unrevoked, and would come alive when
-    /// the account is enabled again. Either the disable has committed by now (this sees it and
-    /// ends the session) or it commits later, and then the list of sessions it ends already holds
-    /// this one: no lock between the two is needed.
-    pub(crate) fn session_outcome(&self, name: &str, enrol: bool) -> Result<LoginOutcome, String> {
+    /// `epoch` is the credential epoch of the account as the sign-in read it before it looked at
+    /// any credential (see [`crate::Epoch`]). The account is looked at again once the session is
+    /// written, and the session is ended and refused if the account was disabled or its epoch is
+    /// another one. A disable, a new password, a reset, new groups or a removed factor that ran
+    /// between the check that let this sign-in begin and the write ended the sessions that existed
+    /// then, and this one would not be among them: it would live its twelve hours with the
+    /// password that was just changed, or come alive when the account is enabled again. Either the
+    /// change has committed by now (this sees it and ends the session) or it commits later, and
+    /// then the list of sessions it ends already holds this one: no lock between the two is needed.
+    pub(crate) fn session_outcome(
+        &self,
+        name: &str,
+        enrol: bool,
+        epoch: &Epoch,
+    ) -> Result<LoginOutcome, SessionError> {
         let must_change = self.must_change_password(name);
-        let token = self.issue_session(name, enrol || must_change)?;
-        let disabled = match self.backend.get("auth_user", name) {
-            Ok(Some(u)) => u.get("disabled").and_then(J::as_bool) == Some(true),
-            // Gone, or not readable: no session is handed out on a guess.
-            _ => true,
+        let token = self
+            .issue_session(name, enrol || must_change)
+            .map_err(SessionError::Store)?;
+        let refused = match self.backend.get("auth_user", name) {
+            Ok(Some(u)) => {
+                let u = J::Object(u);
+                if u["disabled"].as_bool() == Some(true) {
+                    Some((
+                        "the account was disabled while the sign-in was finishing",
+                        SessionError::Refused,
+                    ))
+                } else if epoch_of(&u) != *epoch {
+                    Some((
+                        "the credentials of the account changed while the sign-in was finishing",
+                        SessionError::Refused,
+                    ))
+                } else {
+                    None
+                }
+            }
+            // Gone: no session is handed out.
+            Ok(None) => Some((
+                "the account was removed while the sign-in was finishing",
+                SessionError::Refused,
+            )),
+            // Not readable: no session is handed out on a guess, and the store's refusal is the
+            // answer (not "wrong password": nothing is known to be wrong).
+            Err(e) => Some((
+                "the account could not be read while the sign-in was finishing",
+                SessionError::Store(e),
+            )),
         };
-        if disabled {
+        if let Some((why, error)) = refused {
             let h = token_hash(&token);
             let mut p = Fields::new();
             p.insert("revoked".into(), J::Bool(true));
@@ -469,18 +573,12 @@ impl Auth {
                     obop_storage::fault::bookkeeping(|| self.backend.update("auth_token", &h, &p))
                 })
             {
-                // Not handed to anyone, and the account is disabled: it resolves to nothing.
-                eprintln!(
-                    "a session made while its account was being disabled could not be revoked: {e}"
-                );
+                // Nobody knows the token (it is returned to no one), so a session record that stays
+                // is harmless; the line is for the operator.
+                eprintln!("a session made while the sign-in was refused could not be revoked: {e}");
             }
-            self.event(
-                name,
-                "login_refused",
-                name,
-                "the account was disabled while the sign-in was finishing",
-            );
-            return Err("invalid username or password".into());
+            self.event(name, "login_refused", name, why);
+            return Err(error);
         }
         if must_change {
             self.event(
@@ -525,8 +623,8 @@ impl Auth {
             }
             return Err(MfaError::Invalid("two-factor is not on".into()));
         }
-        if !self.password_ok(name, password) {
-            self.record_failure(name);
+        if !self.password_ok(name, password)? {
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;
@@ -568,6 +666,9 @@ impl Auth {
             p.insert("recovery".into(), J::Null);
         }
         p.insert("mfa_enabled".into(), J::Bool(false));
+        // Written with the change: a sign-in in flight that checked the factor before this
+        // cannot hand out a session that the revocation after it would miss.
+        bump_epoch(&mut p);
         self.put(name, &p)
     }
 
@@ -672,9 +773,9 @@ impl MfaApi for Auth {
             .ok_or_else(|| MfaError::Invalid("start enrolment first".into()))?;
         let secret = self.open_secret(name, pending)?;
         let Some(step) = totp::verify(&secret, code, self.now(), None) else {
-            self.record_failure(name);
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             self.failed_code_event(name);
-            if self.locked_out(name) {
+            if self.lockout_reached(name) {
                 self.event(name, "lockout", name, "too many failed attempts");
             }
             return Err(MfaError::Denied(
@@ -737,8 +838,8 @@ impl MfaApi for Auth {
         if !self.has_second_factor(name) {
             return Err(MfaError::Invalid("two-factor is not on".into()));
         }
-        if !self.password_ok(name, password) {
-            self.record_failure(name);
+        if !self.password_ok(name, password)? {
+            self.record_failure(name).map_err(MfaError::Unavailable)?;
             return Err(MfaError::BadPassword);
         }
         self.check_second_factor(name, code, recovery)?;

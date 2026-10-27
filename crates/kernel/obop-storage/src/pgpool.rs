@@ -351,7 +351,8 @@ impl Manager for PgManager {
     fn connect(&self) -> Result<Session, String> {
         let mut s = Session::new(self.connector.connect()?);
         if self.initial.is_some() {
-            s.set_timeout(self.initial).map_err(|e| describe(&e))?;
+            s.set_timeout(self.initial)
+                .map_err(|e| describe_unsent(&e))?;
         }
         Ok(s)
     }
@@ -363,6 +364,9 @@ impl Manager for PgManager {
 /// The error of a pooled statement: the driver's, or a message made by the backend.
 pub(crate) enum PErr {
     Pg(postgres::Error),
+    /// The connection failed before the statement of the caller was sent (setting the session's
+    /// limit, `BEGIN`): nothing of the caller's was on it, so no change is in doubt.
+    Setup(postgres::Error),
     Msg(String),
 }
 
@@ -436,14 +440,29 @@ pub(crate) fn connection_failed(e: &postgres::Error) -> bool {
 
 /// The error text of a driver error, noting a storage fault for the HTTP layer when it is one.
 pub(crate) fn describe(e: &postgres::Error) -> String {
+    describe_with(e, true)
+}
+
+/// As [`describe`], for an error raised before any statement of the caller was sent on the
+/// connection (the limit of the session, `BEGIN`): a connection found dead there changed nothing,
+/// which is "unavailable" and not "a change may or may not have been applied".
+pub(crate) fn describe_unsent(e: &postgres::Error) -> String {
+    describe_with(e, false)
+}
+
+fn describe_with(e: &postgres::Error, sent: bool) -> String {
     if is_statement_timeout(e) {
         STATEMENT_TIMEOUTS.fetch_add(1, Relaxed);
         fault::note(Fault::Timeout);
         return Fault::Timeout.message("a database statement ran into its time limit");
     }
     if connection_failed(e) {
-        // A statement was on this connection when it broke: what it did is unknown.
-        fault::note_in_flight();
+        if sent {
+            // A statement was on this connection when it broke: what it did is unknown.
+            fault::note_in_flight();
+        } else {
+            fault::note(Fault::Unavailable);
+        }
         return Fault::Unavailable.message(&e.to_string());
     }
     match e.as_db_error() {
@@ -460,6 +479,7 @@ pub(crate) fn rolled_back_for_retry(e: &PErr) -> bool {
     let code_is_retryable = |c: &str| c == "40P01" || c == "40001";
     match e {
         PErr::Pg(e) => e.code().is_some_and(|c| code_is_retryable(c.code())),
+        PErr::Setup(_) => false,
         PErr::Msg(m) => m.contains("SQLSTATE 40P01") || m.contains("SQLSTATE 40001"),
     }
 }
@@ -490,6 +510,13 @@ impl Lease {
                 }
                 Err(text)
             }
+            Err(PErr::Setup(e)) => {
+                let text = describe_unsent(&e);
+                if connection_failed(&e) {
+                    self.broken();
+                }
+                Err(text)
+            }
         }
     }
 
@@ -515,11 +542,11 @@ impl Lease {
         let s = self.session();
         match pooler {
             Pooler::Direct => {
-                s.set_timeout(want)?;
+                s.set_timeout(want).map_err(PErr::Setup)?;
                 f(&mut s.client)
             }
             Pooler::Transaction => {
-                s.begin(want, "")?;
+                s.begin(want, "").map_err(PErr::Setup)?;
                 match f(&mut s.client) {
                     Ok(v) => {
                         s.client.batch_execute("COMMIT")?;
@@ -542,7 +569,7 @@ impl Lease {
     ) -> PR<T> {
         let want = self.cfg.limit(class);
         let s = self.session();
-        s.begin(want, "")?;
+        s.begin(want, "").map_err(PErr::Setup)?;
         match f(&mut s.client) {
             Ok((v, true)) => {
                 s.client.batch_execute("COMMIT")?;
@@ -701,7 +728,10 @@ impl PgPool {
             let mut lease = self.lease(false)?;
             let reused = lease.pooled.reused();
             let r = lease.exec(class, &mut f);
-            if attempt == 0 && reused && matches!(&r, Err(PErr::Pg(e)) if connection_failed(e)) {
+            if attempt == 0
+                && reused
+                && matches!(&r, Err(PErr::Pg(e) | PErr::Setup(e)) if connection_failed(e))
+            {
                 lease.broken();
                 attempt += 1;
                 continue;

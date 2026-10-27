@@ -539,6 +539,14 @@ fn unavailable(why: &str) -> Response {
     r
 }
 
+/// A text for one line of the log: no control characters, no more than 300 characters.
+fn log_safe(text: &str) -> String {
+    text.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(300)
+        .collect()
+}
+
 fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
     match r {
         Ok(r) => Json(json!({"value": r.value.to_json(), "denied": r.denied})).into_response(),
@@ -546,11 +554,22 @@ fn respond(r: Result<obop_commands::Response, CallError>) -> Response {
             // `classify` reads what this request did to the store (the scope `blocking` opened).
             let c = errors::classify(&e);
             if c.applied.is_some() {
-                // The explanation of a refusal reaches no caller, but the operator needs it.
+                // The explanation of a refusal reaches no caller, but the operator needs it. Only
+                // the text the store itself made is printed: the text of a call that failed of its
+                // own after a fault was noted can carry what the caller sent (a name, an address,
+                // line breaks that forge log lines).
+                let genuine = matches!(
+                    &e,
+                    CallError::Handler(m) if obop_storage::fault::Fault::of_message(m).is_some()
+                );
                 eprintln!(
                     "storage fault on a call: {} {}",
                     c.code,
-                    c.detail.as_deref().unwrap_or("")
+                    if genuine {
+                        log_safe(c.detail.as_deref().unwrap_or(""))
+                    } else {
+                        String::new()
+                    }
                 );
             }
             classified(c)
@@ -915,6 +934,24 @@ mod fault_answers {
         assert_eq!(
             err(StatusCode::UNAUTHORIZED, "invalid email or password".into()).status(),
             StatusCode::UNAUTHORIZED
+        );
+    }
+}
+
+#[cfg(test)]
+mod log_tests {
+    use super::log_safe;
+
+    #[test]
+    fn a_line_of_the_log_has_no_control_characters_and_a_bound() {
+        assert_eq!(
+            log_safe("a\nstorage fault on a call: forged\r\tb"),
+            "a storage fault on a call: forged  b"
+        );
+        assert_eq!(log_safe(&"x".repeat(1000)).chars().count(), 300);
+        assert_eq!(
+            log_safe("all database connections are in use"),
+            "all database connections are in use"
         );
     }
 }

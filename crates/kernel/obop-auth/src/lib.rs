@@ -58,6 +58,24 @@ fn token_hash(token: &str) -> String {
     hex(&Sha256::digest(token.as_bytes()))
 }
 
+/// The credential epoch of an account: a random value that every change which ends sessions
+/// writes in the same atomic write as the change itself (a new password, a reset, a disable or an
+/// offboarding, new groups, a removed second factor or passkey). A sign-in reads it before it
+/// looks at any credential and compares it once more after its session is written: if it is
+/// another value, a revocation ran in between whose list of sessions may not hold this one, so
+/// the session is ended and not handed out. If it is the same, the revocation has not committed
+/// yet, and the list it takes afterwards holds the session. No lock is needed between the two.
+pub(crate) type Epoch = Option<String>;
+
+pub(crate) fn epoch_of(u: &J) -> Epoch {
+    u.get("epoch").and_then(J::as_str).map(String::from)
+}
+
+/// Put a new credential epoch into `patch` (see [`Epoch`]).
+pub(crate) fn bump_epoch(patch: &mut Fields) {
+    patch.insert("epoch".into(), J::from(hex(&random_bytes::<12>())));
+}
+
 fn str_list(v: &J) -> Vec<String> {
     v.as_array()
         .map(|a| {
@@ -256,10 +274,24 @@ impl Auth {
             .map_or(true, |n| n >= u64::from(MAX_FAILURES))
     }
 
-    pub(crate) fn record_failure(&self, name: &str) {
-        let _ =
+    /// The count was read and has reached the limit. This, not [`Auth::locked_out`], is what a
+    /// log entry that says "too many failed attempts" may be written from: a count the store would
+    /// not give locks the sign-in (fail closed) but is no fact for the log.
+    pub(crate) fn lockout_reached(&self, name: &str) -> bool {
+        self.backend
+            .counter_get(&Self::failure_key(name))
+            .is_ok_and(|n| n >= u64::from(MAX_FAILURES))
+    }
+
+    /// Count a wrong guess. A guess that could not be counted is an error, tried again first: the
+    /// answer is the store's trouble, not a plain "wrong password" that leaves the attempt
+    /// uncounted for whoever is guessing while the pool is full.
+    pub(crate) fn record_failure(&self, name: &str) -> Result<(), String> {
+        obop_storage::fault::patiently(3, Duration::from_millis(100), || {
             self.backend
-                .counter_add(&Self::failure_key(name), LOCKOUT.as_millis() as u64, true);
+                .counter_add(&Self::failure_key(name), LOCKOUT.as_millis() as u64, true)
+                .map(|_| ())
+        })
     }
 
     /// For tests: lift every lockout of `name`.
@@ -479,6 +511,10 @@ impl Authenticator for Auth {
 
 #[cfg(test)]
 mod admin_tests;
+#[cfg(test)]
+mod epoch_tests;
+#[cfg(test)]
+mod lockout_tests;
 #[cfg(test)]
 mod mfa_tests;
 #[cfg(test)]

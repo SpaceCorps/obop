@@ -68,6 +68,13 @@ pub struct Flaky {
     /// Run once, right after the next successful insert into the model (another process doing
     /// its part between two steps of this one).
     after_insert: std::sync::Mutex<Option<(String, AfterInsert)>>,
+    /// Run once, right after a successful `get` of the model, before its answer is returned: the
+    /// state the reader holds is old by the time it uses it. `i64` is the gets of the model to let
+    /// pass first.
+    after_get: std::sync::Mutex<Option<(String, i64, AfterInsert)>>,
+    /// Inserts into the model fail with this server error (no fault noted: it is not a refusal of
+    /// the pool but a statement that failed, such as a full disk) until `allow_models`.
+    insert_error: std::sync::Mutex<Option<(String, String)>>,
 }
 
 /// What [`Flaky::after_the_next_insert_into`] runs, with the wrapped backend.
@@ -93,6 +100,8 @@ impl Flaky {
             vanish: AtomicBool::new(false),
             lose_ack: AtomicI64::new(-1),
             after_insert: std::sync::Mutex::new(None),
+            after_get: std::sync::Mutex::new(None),
+            insert_error: std::sync::Mutex::new(None),
         })
     }
 
@@ -133,6 +142,8 @@ impl Flaky {
     /// Stop refusing a model (see [`Flaky::refuse_model`]) and the reads after a write.
     pub fn allow_models(&self) {
         *self.target.lock().unwrap() = None;
+        *self.after_get.lock().unwrap() = None;
+        *self.insert_error.lock().unwrap() = None;
         self.after_write.store(0, SeqCst);
         self.after_budget.store(0, SeqCst);
         self.next.store(0, SeqCst);
@@ -150,6 +161,20 @@ impl Flaky {
     /// Run `then` once, right after the next successful insert into `model`.
     pub fn after_the_next_insert_into(&self, model: &str, then: AfterInsert) {
         *self.after_insert.lock().unwrap() = Some((model.to_string(), then));
+    }
+
+    /// Fail every insert into `model` with `message`, a server error that is neither a duplicate
+    /// nor a refusal of the pool (`could not extend file: No space left on device`).
+    pub fn fail_inserts_into(&self, model: &str, message: &str) {
+        *self.insert_error.lock().unwrap() = Some((model.to_string(), message.to_string()));
+    }
+
+    /// Let `skip` successful `get`s of `model` through, then run `then` right after the next one,
+    /// before its answer is returned: another request doing its part between the read and the
+    /// next step of this one, with no thread and no sleep (the answer the reader gets is the state
+    /// from before `then` ran).
+    pub fn after_the_get_of(&self, model: &str, skip: i64, then: AfterInsert) {
+        *self.after_get.lock().unwrap() = Some((model.to_string(), skip, then));
     }
 
     /// Let `skip` updates through, then make the next one commit and answer `storage_unavailable`:
@@ -325,6 +350,11 @@ impl Flaky {
 impl Backend for Flaky {
     fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
         self.gate_m(true, model)?;
+        if let Some((m, message)) = &*self.insert_error.lock().unwrap()
+            && m == model
+        {
+            return Err(message.clone());
+        }
         self.inner.insert(model, id, fields)?;
         let hook = {
             let mut g = self.after_insert.lock().unwrap();
@@ -340,7 +370,25 @@ impl Backend for Flaky {
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
         self.gate_m(false, model)?;
-        self.inner.get(model, id)
+        let found = self.inner.get(model, id)?;
+        let hook = {
+            let mut g = self.after_get.lock().unwrap();
+            match g.as_mut() {
+                Some((m, skip, _)) if m == model => {
+                    if *skip > 0 {
+                        *skip -= 1;
+                        None
+                    } else {
+                        g.take().map(|(_, _, f)| f)
+                    }
+                }
+                _ => None,
+            }
+        };
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
+        Ok(found)
     }
     fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
         self.gate_m(false, model)?;

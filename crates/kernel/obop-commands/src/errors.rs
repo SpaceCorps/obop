@@ -547,32 +547,40 @@ pub fn storage_outcome(seen: &Outcome, own_answer_failed: bool) -> Option<Classi
 }
 
 /// The text of a refusal made while a call ran with `input`: unchanged, unless it begins with a
-/// code of the table that the input itself begins with (`code: `), which would let the caller
-/// choose the row of its own answer. Such a text is set apart (`input refused: ...`), and the
-/// seam reads it as the ordinary refusal it is.
+/// code of the table (`code: `) that the input carries, which would let the caller choose the row
+/// of its own answer. Such a text is set apart (`input refused: ...`), and the seam reads it as
+/// the ordinary refusal it is.
+///
+/// "Carries" is any text or name of the input that contains the code and its colon, whatever the
+/// case: a producer that echoes input first can echo it from inside another text (a key of the JSON
+/// in a `credentials` field), trimmed or in other letters. A text the input does not carry at all,
+/// such as the explanation of a refusal made by a producer, is read as its row. The three storage
+/// rows are not read from text (the seam needs a noted fault for them), so the text of a genuine
+/// refusal of the store passes unchanged: the code that reads it off a request scope
+/// (`Fault::of_message`) must still find it.
 pub fn unforge(message: String, input: &Value) -> String {
     let Some((head, _)) = message.split_once(": ") else {
         return message;
     };
-    if row(head).is_none() {
+    if row(head).is_none_or(|r| r.origin == STORAGE_ORIGIN) {
         return message;
     }
-    let prefix = &message[..head.len() + 2];
-    if begins_with(input, prefix) {
+    let prefix = message[..head.len() + 2].to_ascii_lowercase();
+    if mentions(input, &prefix) {
         format!("input refused: {message}")
     } else {
         message
     }
 }
 
-/// Does a text, or a name, anywhere in `v` begin with `prefix`?
-fn begins_with(v: &Value, prefix: &str) -> bool {
+/// Does a text, or a name, anywhere in `v` contain `needle` (lower case), whatever its case?
+fn mentions(v: &Value, needle: &str) -> bool {
     match v {
-        Value::Text(t) | Value::Num(t) => t.starts_with(prefix),
-        Value::List(items) => items.iter().any(|i| begins_with(i, prefix)),
+        Value::Text(t) | Value::Num(t) => t.to_ascii_lowercase().contains(needle),
+        Value::List(items) => items.iter().any(|i| mentions(i, needle)),
         Value::Map(m) => m
             .iter()
-            .any(|(k, i)| k.starts_with(prefix) || begins_with(i, prefix)),
+            .any(|(k, i)| k.to_ascii_lowercase().contains(needle) || mentions(i, needle)),
         Value::Null | Value::Bool(_) | Value::Int(_) => false,
     }
 }
@@ -1035,6 +1043,14 @@ mod tests {
     #[test]
     fn a_text_alone_never_makes_a_storage_fault_and_input_cannot_choose_a_row() {
         for r in TABLE {
+            // The text of a refusal of the store passes through unchanged (nothing reads a storage
+            // row from text, and the readers that do need the word at the start).
+            if r.origin == STORAGE_ORIGIN {
+                let sent = Value::map([("id", Value::text(&format!("{}: x", r.code)))]);
+                let genuine = format!("{}: all database connections are in use", r.code);
+                assert_eq!(unforge(genuine.clone(), &sent), genuine, "{}", r.code);
+                continue;
+            }
             for m in [
                 format!("{}: x is not a credential of P", r.code),
                 format!("{}:", r.code),
@@ -1063,6 +1079,22 @@ mod tests {
                 Value::map([(format!("{}: x", r.code).as_str(), Value::Null)]),
             )]);
             assert!(unforge(echoed.clone(), &by_key).starts_with("input refused: "));
+            // The input may carry the code inside a text of another shape: a key of the JSON in a
+            // field, in other letters, after other words.
+            let json_field = Value::map([(
+                "credentials",
+                Value::text(&format!("{{\"{}: x\":\"v\"}}", r.code)),
+            )]);
+            assert!(
+                unforge(echoed.clone(), &json_field).starts_with("input refused: "),
+                "{}",
+                r.code
+            );
+            let shouted = Value::map([(
+                "id",
+                Value::text(&format!("  {}: X", r.code.to_uppercase())),
+            )]);
+            assert!(unforge(echoed.clone(), &shouted).starts_with("input refused: "));
             // A producer's own coded text, which the input does not carry, is read as its row.
             let other = Value::map([("id", Value::text("plain"))]);
             let own = coded(r.code, "the producer says so");

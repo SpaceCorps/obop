@@ -150,17 +150,29 @@ pub fn migrate(args: &mut Vec<String>) -> Exit {
         }
         _ => {
             let keys = keys_for_run.map_err(|e| fail(&e))?;
+            let backup_dir = backup_dir(backup_dir_flag);
+            // The uploaded files are opened for the run that takes the backup itself, and a store
+            // that cannot be opened stops that run (a backup without them would be answered as
+            // good). A preview, a run with a backup made elsewhere and a database with nothing
+            // pending do not need them and no longer fail for them.
+            let takes_backup =
+                !dry && backup_file.is_none() && backup_dir.is_some() && !st.pending.is_empty();
+            let blobs = if takes_backup {
+                Some(Arc::new(crate::ops::blob_catalog(&backend, &url)?)
+                    as Arc<dyn obop_storage::blob::Blobs>)
+            } else {
+                None
+            };
             let gate = Gate {
                 backend: backend.clone(),
                 ring,
-                blobs: Some(Arc::new(crate::ops::blob_catalog(&backend, &url)?)
-                    as Arc<dyn obop_storage::blob::Blobs>),
+                blobs,
                 server: server_info(&url, backend.kind()),
                 clock: Arc::new(SystemClock),
                 options: Options {
                     mode: mode(gates_flag, backend.kind())?,
                     actor: operator_name(),
-                    backup_dir: backup_dir(backup_dir_flag),
+                    backup_dir,
                     backup_file: backup_file.map(PathBuf::from),
                     keys,
                     receipt: receipt.map(PathBuf::from),

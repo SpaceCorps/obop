@@ -168,6 +168,16 @@ impl obop_pkg::MigrationGate for ModuleGate {
         })
     }
 }
+/// The schema version a scheduled backup is labelled with, or why it has to wait: a version the
+/// store would not give is not version 0 (a backup labelled 0 would be restored as if nothing had
+/// ever been migrated).
+pub(crate) fn schema_for_backup(backend: &Arc<dyn obop_storage::Backend>) -> Result<u64, String> {
+    obop_migrate::Migrator::new(backend.clone(), obop_keys::KeyRing::default())
+        .status()
+        .map(|s| u64::from(s.stored.unwrap_or(0)))
+        .map_err(|e| format!("the schema version cannot be read: {e}"))
+}
+
 /// How the instance takes the backup that comes before an update from inside (D63): the same
 /// consistent, verified backup `obop backup` writes, into a directory.
 pub fn backup_fn(url: String) -> obop_update::BackupFn {
@@ -382,19 +392,14 @@ pub fn start_scheduler(
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_secs(60));
-            let schema =
-                match obop_migrate::Migrator::new(backend.clone(), obop_keys::KeyRing::default())
-                    .status()
-                {
-                    Ok(s) => u64::from(s.stored.unwrap_or(0)),
-                    // Not "version 0": the backup waits for the next minute.
-                    Err(e) => {
-                        eprintln!(
-                            "scheduled backup postponed: the schema version cannot be read: {e}"
-                        );
-                        continue;
-                    }
-                };
+            let schema = match schema_for_backup(&backend) {
+                Ok(v) => v,
+                // Not "version 0": the backup waits for the next minute.
+                Err(e) => {
+                    eprintln!("scheduled backup postponed: {e}");
+                    continue;
+                }
+            };
             match schedule.tick(&backend, Some(&*blobs), schema) {
                 Ok(Some(o)) => {
                     eprintln!(

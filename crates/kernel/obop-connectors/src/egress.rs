@@ -11,7 +11,7 @@
 
 use hmac::{Hmac, KeyInit, Mac};
 use obop_commands::Dispatcher;
-use obop_storage::{Backend, Fields};
+use obop_storage::{ApplyError, Backend, Fields, Op};
 use obop_types::DataClass;
 use serde_json::{Map, Value as J, json};
 use sha2::Sha256;
@@ -485,12 +485,9 @@ impl Egress {
             // The map is what lets erasure and revocation find what was sent. An entry that is
             // there already (the same record sent before) is as it should be; a store that
             // refused is not, and nothing leaves without it.
-            match self
-                .backend
-                .insert(PSEUDONYMS, &format!("{}:{reference}", conn.id), &f)
-            {
-                Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
-                _ => {}
+            let key = format!("{}:{reference}", conn.id);
+            if let Err(e) = self.backend.insert(PSEUDONYMS, &key, &f) {
+                crate::util::row_exists_or(&*self.backend, PSEUDONYMS, &key, e)?;
             }
         }
         let mut out = Map::new();
@@ -618,35 +615,76 @@ impl Egress {
     ///
     /// A refusal of the store is an error, never "nothing to erase" (D74): personal data that
     /// survives must not be answered as erased. Safe to run again.
+    ///
+    /// The entries of one connection and the `erased` row of the data flow log that says so go in
+    /// one atomic batch: either both are done or neither is, so a row refused after the deletes
+    /// can no longer be lost (the repeat found nothing to delete and wrote no row).
     pub fn erase_subject(&self, record: &str) -> Result<BTreeMap<String, usize>, String> {
         let mut per: BTreeMap<String, usize> = BTreeMap::new();
-        for table in [PSEUDONYMS, VAULT, EXTMAP] {
-            for (id, f) in self.backend.list(table)? {
-                if str_of(&f, "record") == record && self.backend.delete(table, &id)? {
-                    *per.entry(str_of(&f, "connection").to_string()).or_default() += 1;
+        // Another process may remove an entry between the list and the batch: the batch is then
+        // refused whole (nothing changed) and the entries are listed again.
+        for attempt in 0..3 {
+            let mut found: BTreeMap<String, Vec<(&'static str, String)>> = BTreeMap::new();
+            for table in [PSEUDONYMS, VAULT, EXTMAP] {
+                for (id, f) in self.backend.list(table)? {
+                    if str_of(&f, "record") == record {
+                        found
+                            .entry(str_of(&f, "connection").to_string())
+                            .or_default()
+                            .push((table, id));
+                    }
                 }
             }
-        }
-        for (conn, n) in &per {
-            let c = match Connection::load(&*self.backend, conn) {
-                Ok(c) => Some(c),
-                Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
-                // The connection is gone: there is no row to say it on.
-                Err(_) => None,
-            };
-            if let Some(c) = c {
-                self.try_log(
-                    &c,
-                    "outbound",
-                    record.split(':').next().unwrap_or(""),
-                    0,
-                    &[],
-                    &[],
-                    "",
-                    "",
-                    "erased",
-                    &format!("subject erased: {n} pseudonym or token entries removed"),
-                )?;
+            let mut raced = false;
+            for (conn, entries) in found {
+                let mut ops: Vec<Op> = entries
+                    .iter()
+                    .map(|(table, id)| Op::Delete {
+                        model: (*table).into(),
+                        id: id.clone(),
+                    })
+                    .collect();
+                match Connection::load(&*self.backend, &conn) {
+                    Ok(c) => {
+                        let (id, fields) = Self::log_row(
+                            &c,
+                            "outbound",
+                            record.split(':').next().unwrap_or(""),
+                            0,
+                            &[],
+                            &[],
+                            "",
+                            "",
+                            "erased",
+                            &format!(
+                                "subject erased: {} pseudonym or token entries removed",
+                                entries.len()
+                            ),
+                        );
+                        ops.push(Op::Insert {
+                            model: FLOW_LOG.into(),
+                            id,
+                            fields,
+                        });
+                    }
+                    Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
+                    // The connection is gone: there is no row to say it on.
+                    Err(_) => {}
+                }
+                match self.backend.apply_checked(&ops) {
+                    Ok(()) => {
+                        *per.entry(conn).or_default() += entries.len();
+                    }
+                    Err(ApplyError::Conflict { .. }) if attempt < 2 => {
+                        raced = true;
+                        break;
+                    }
+                    Err(ApplyError::Conflict { reason, .. }) => return Err(reason),
+                    Err(ApplyError::Storage(e)) => return Err(e),
+                }
+            }
+            if !raced {
+                return Ok(per);
             }
         }
         Ok(per)
@@ -707,6 +745,27 @@ impl Egress {
         outcome: &str,
         reason: &str,
     ) -> Result<String, String> {
+        let (id, f) = Self::log_row(
+            conn, direction, model, count, sent, denied, mode, hash, outcome, reason,
+        );
+        self.backend.insert(FLOW_LOG, &id, &f)?;
+        Ok(id)
+    }
+
+    /// The id and the fields of a data flow log row.
+    #[allow(clippy::too_many_arguments)]
+    fn log_row(
+        conn: &Connection,
+        direction: &str,
+        model: &str,
+        count: usize,
+        sent: &[String],
+        denied: &[String],
+        mode: &str,
+        hash: &str,
+        outcome: &str,
+        reason: &str,
+    ) -> (String, Fields) {
         let id = uuid::Uuid::now_v7().to_string();
         let f = json!({
             "connection": conn.id,
@@ -722,9 +781,7 @@ impl Egress {
             "outcome": outcome,
             "reason": reason,
         });
-        self.backend
-            .insert(FLOW_LOG, &id, f.as_object().expect("object"))?;
-        Ok(id)
+        (id, f.as_object().expect("object").clone())
     }
 }
 
@@ -1106,6 +1163,27 @@ pub(crate) mod tests {
                 .is_some()
         );
         assert!(e.forget_connection("c1").unwrap() >= 1);
+    }
+
+    #[test]
+    fn a_pseudonym_map_the_server_failed_to_write_is_not_taken_for_one_that_was_there() {
+        use obop_storage::testing::Flaky;
+        let (b, _, conn) = setup();
+        let flaky = Flaky::new(b.clone());
+        let e = Egress::new(flaky.clone(), SecretBox::for_tests(), Arc::new(Fake));
+        // Any insert error that was not a duplicate was read as "the same record sent before", and
+        // the record left with a reference that erasure and revocation could not find.
+        flaky.fail_inserts_into(PSEUDONYMS, "could not extend file: No space left on device");
+        let sent = e.prepare(&conn, &webhook(), "party", vec![row("r1")]);
+        assert!(sent.is_err(), "nothing leaves without its map");
+        assert!(b.list(PSEUDONYMS).unwrap().is_empty());
+        flaky.allow_models();
+        // The same record sent twice is a duplicate, and that is as it should be.
+        e.prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        e.prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        assert_eq!(b.list(PSEUDONYMS).unwrap().len(), 1);
     }
 
     #[test]

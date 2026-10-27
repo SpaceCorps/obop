@@ -323,6 +323,7 @@ impl Auth {
         }
         let mut patch = Fields::new();
         patch.insert("groups".into(), json!(after));
+        crate::bump_epoch(&mut patch);
         self.put(&target, &patch)?;
         let ch = Change::new(&target, "user_groups", actor, &detail);
         let relimited = self.resync_limits(&target, &after, &ch)?;
@@ -372,6 +373,7 @@ impl Auth {
         patch.insert("offboarded".into(), J::Bool(true));
         patch.insert("offboarded_at".into(), J::from(self.now()));
         patch.insert("offboarded_by".into(), J::from(actor));
+        crate::bump_epoch(&mut patch);
         // Written before the account goes: if ending its tokens is then refused, enabling the
         // account later finishes that first, so no token the offboarding missed comes back.
         let previous = self.owe_revocation(&target, "user_offboard", None)?;

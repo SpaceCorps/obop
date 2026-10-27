@@ -293,7 +293,8 @@ fn credentials(
     };
     for (k, v) in new {
         if !p.config.iter().any(|f| f.secret && f.key == k) {
-            return Err(format!("{k} is not a credential of {}", p.name));
+            // The caller's key goes last, so that the text never begins with what the caller wrote.
+            return Err(format!("{} has no credential called {k}", p.name));
         }
         let s = v
             .as_str()

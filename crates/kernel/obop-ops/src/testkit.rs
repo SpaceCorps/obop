@@ -17,6 +17,11 @@ pub struct Flaky {
     pub fail_lease: AtomicBool,
     /// Models whose reads (`get`, `list`, `find`) are refused as a full pool refuses them.
     pub refuse_reads: std::sync::Mutex<Vec<String>>,
+    /// Reads of those models to let through first (a refusal that starts at the Nth read).
+    pub allow_reads: std::sync::atomic::AtomicUsize,
+    /// `(model, id)` pairs whose `get` is refused, the same way (a record of a model that others
+    /// read, such as the schema version beside the id of the database).
+    pub refuse_gets: std::sync::Mutex<Vec<(String, String)>>,
 }
 
 impl Flaky {
@@ -27,11 +32,18 @@ impl Flaky {
             fail_apply: AtomicBool::new(false),
             fail_lease: AtomicBool::new(false),
             refuse_reads: std::sync::Mutex::default(),
+            allow_reads: std::sync::atomic::AtomicUsize::new(0),
+            refuse_gets: std::sync::Mutex::default(),
         })
     }
 
     fn refused(&self, model: &str) -> Result<()> {
-        if self.refuse_reads.lock().unwrap().iter().any(|m| m == model) {
+        if self.refuse_reads.lock().unwrap().iter().any(|m| m == model)
+            && self
+                .allow_reads
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+                .is_err()
+        {
             return Err(obop_storage::fault::Fault::Busy
                 .message("all database connections are in use, try again"));
         }
@@ -53,6 +65,20 @@ impl Backend for Flaky {
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
         self.refused(model)?;
+        if self
+            .refuse_gets
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(m, i)| m == model && i == id)
+            && self
+                .allow_reads
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+                .is_err()
+        {
+            return Err(obop_storage::fault::Fault::Busy
+                .message("all database connections are in use, try again"));
+        }
         self.inner.get(model, id)
     }
     fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {

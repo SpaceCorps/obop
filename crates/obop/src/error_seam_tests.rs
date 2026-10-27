@@ -462,15 +462,18 @@ async fn input_that_begins_with_a_code_word_cannot_forge_a_fault_or_a_row() {
         assert_eq!(s, 400, "{w}: {b}");
         assert_eq!(b, json!({"error": format!("no lead {value}")}), "{w}");
         assert!(h.get("retry-after").is_none() && h.get("x-obop-applied").is_none());
-        // A refusal that echoes the input first is set apart, and is a 400 too.
+        // A refusal that echoes the input first is set apart, and is a 400 too. The text of a
+        // storage row is not read from text at all (a fault needs a fault noted), so it is left
+        // as it is: the readers off a request scope still find the word of a genuine refusal.
         let (s, h, b) = post(&r, "/api/module/uninstall", json!({"id": value})).await;
         assert_eq!(s, 400, "{w}: {b}");
         assert!(b.get("code").is_none(), "{w}: {b}");
-        assert_eq!(
-            b["error"],
-            format!("input refused: {value} is not installed"),
-            "{w}"
-        );
+        let wanted = if row.origin == "D74" {
+            format!("{value} is not installed")
+        } else {
+            format!("input refused: {value} is not installed")
+        };
+        assert_eq!(b["error"], wanted, "{w}");
         assert!(h.get("retry-after").is_none() && h.get("x-obop-applied").is_none());
 
         // The command line.
@@ -485,10 +488,18 @@ async fn input_that_begins_with_a_code_word_cannot_forge_a_fault_or_a_row() {
             crate::dispatch_call(&app, &p, "module.uninstall", &input(&[("id", &value)]))
                 .unwrap_err();
         assert_eq!(status, 1, "{w}: {line}");
-        assert!(
-            line.starts_with("error: Handler(\"input refused: "),
-            "{w}: {line}"
-        );
+        if row.origin == "D74" {
+            assert_eq!(
+                line,
+                format!("error: Handler(\"{value} is not installed\")"),
+                "{w}"
+            );
+        } else {
+            assert!(
+                line.starts_with("error: Handler(\"input refused: "),
+                "{w}: {line}"
+            );
+        }
 
         // The stdio server.
         let reply = stdio_call(&app, &p, "lead__get", json!({"id": value}));
@@ -563,4 +574,86 @@ fn the_exit_status_and_line_of_every_failed_call_come_from_the_table() {
             "{l}"
         );
     }
+}
+
+/// The stdio server answers a batch line (revision 2025-03-26) call by call: the refusal met by
+/// one call is not the answer of the independent calls that follow it in the same line.
+#[test]
+fn the_calls_of_a_batch_line_of_the_stdio_server_do_not_answer_for_one_another() {
+    let (flaky, app) = flaky_app();
+    let p = admin();
+    let mut session = obop_mcp::Session::new();
+    let init = json!({"jsonrpc":"2.0","id":1,"method":"initialize",
+        "params":{"protocolVersion":"2025-03-26"}})
+    .to_string();
+    obop_mcp::handle(&app.dispatcher, &p, &mut session, &init).unwrap();
+    let call = |id: i64, name: &str, args: J| {
+        json!({"jsonrpc":"2.0","id":id,"method":"tools/call",
+            "params":{"name": name, "arguments": args}})
+    };
+    // The first call meets a refusal; the second is a plain read, the third a valid write.
+    flaky.refuse_next(1);
+    let line = J::Array(vec![
+        call(10, "lead__list", json!({})),
+        call(11, "lead__list", json!({})),
+        call(12, "lead__create", json!({"title": "Created in a batch"})),
+    ])
+    .to_string();
+    let out = obop_mcp::handle(&app.dispatcher, &p, &mut session, &line).unwrap();
+    flaky.allow_models();
+    let replies: Vec<J> = serde_json::from_str(&out).unwrap();
+    let by_id = |id: i64| replies.iter().find(|r| r["id"] == id).unwrap();
+    assert_eq!(by_id(10)["result"]["isError"], true, "{out}");
+    assert_eq!(
+        by_id(10)["result"]["structuredContent"]["code"],
+        "storage_busy"
+    );
+    assert_eq!(
+        by_id(11)["result"]["isError"],
+        false,
+        "a read that succeeded is not the refusal of its neighbour: {out}"
+    );
+    assert_eq!(
+        by_id(12)["result"]["isError"],
+        false,
+        "a valid write is attempted: {out}"
+    );
+}
+
+/// The lookup of the token of `obop call`, `obop import` and `obop mcp` is part of the call: the
+/// store's refusal is told from a token that is not valid (exit 75, the word), and a token that
+/// is not valid stays exit 1.
+#[test]
+fn a_refused_token_lookup_is_not_a_token_that_is_not_valid() {
+    use obop_commands::Authenticator;
+    let (flaky, backend) = Flaky::memory();
+    let app = App::with_store(obop_commands::Store::over(backend));
+    let auth = obop_auth::Auth::with_test_params(app.store.backend());
+    auth.create_user("ada", "correct horse battery", &app.all_groups())
+        .unwrap();
+    let token = auth.login("ada", "correct horse battery").unwrap();
+    let opts = |token: &str| crate::Opts {
+        db: Some("memory:".into()),
+        token: Some(token.to_string()),
+        demo: false,
+        dev_auth: false,
+        public_site: false,
+        trust_proxy: false,
+        admin_prefix: "/admin/".into(),
+    };
+    assert!(crate::principal(&app, &opts(&token)).is_ok());
+    // The store refuses the read of the token: not "no valid token" (exit 1), the word (exit 75).
+    flaky.refuse_next(1);
+    let refused = crate::principal(&app, &opts(&token));
+    flaky.allow_models();
+    assert_eq!(
+        refused.err().map(|c| format!("{c:?}")),
+        Some(format!("{:?}", std::process::ExitCode::from(75)))
+    );
+    // A token that is not one stays exit 1, with the store healthy.
+    let bad = crate::principal(&app, &opts("obop_made_up"));
+    assert_eq!(
+        bad.err().map(|c| format!("{c:?}")),
+        Some(format!("{:?}", std::process::ExitCode::FAILURE))
+    );
 }

@@ -1317,14 +1317,32 @@ impl Installer {
 
     /// What stops `id` from being removed: the installed packages that need it.
     pub fn uninstall_blocker(&self, id: &str) -> Option<resolve::Blocker> {
+        self.try_uninstall_blocker(id).ok().flatten()
+    }
+
+    /// As [`Installer::uninstall_blocker`], and a list of the installed packages that the store
+    /// refused is an error: read as "nothing is installed" it said that nothing depends on `id`,
+    /// and the package was removed from under the ones that need it.
+    pub fn try_uninstall_blocker(&self, id: &str) -> Result<Option<resolve::Blocker>, String> {
         if self.builtin.iter().any(|b| b.id == id) {
-            return Some(resolve::Blocker {
+            return Ok(Some(resolve::Blocker {
                 module: id.into(),
                 kind: "builtin",
                 message: format!("{id} is a built-in module"),
-            });
+            }));
         }
-        resolve::uninstall_blocker(&self.installed_manifests(), id)
+        let installed: BTreeMap<String, Manifest> = self
+            .backend
+            .list(TABLE)?
+            .into_iter()
+            .filter_map(|(id, f)| {
+                f.get("manifest")
+                    .and_then(J::as_str)
+                    .and_then(|t| Manifest::parse(t).ok())
+                    .map(|m| (id, m))
+            })
+            .collect();
+        Ok(resolve::uninstall_blocker(&installed, id))
     }
 
     /// Remove a package. Its commands disappear at once; its records stay in the database, so a
@@ -1335,7 +1353,7 @@ impl Installer {
 
     pub fn uninstall_as(&self, id: &str, by: &str) -> Result<(), String> {
         let _x = self.exclusive()?;
-        if let Some(b) = self.uninstall_blocker(id) {
+        if let Some(b) = self.try_uninstall_blocker(id)? {
             return Err(b.message);
         }
         if !self.backend.delete(TABLE, id)? {
@@ -2545,9 +2563,11 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
         "setting",
         "get",
         Box::new(move |_| {
+            // A refused read is an error: shown as "{}" it was saved back by the settings page
+            // over the theme, the app order and the security policy.
             Ok(Value::map([
                 ("id", s("instance")),
-                ("value", s(&i.settings())),
+                ("value", s(&i.try_settings()?)),
             ]))
         }),
     );
