@@ -133,7 +133,7 @@ A pack release consists of:
 - **Keys.** Pack-signing keys are separate from core-release keys and threshold-signed with the compliance lead. Revocation and freeze lists exist. Mirrors serve air-gapped sites [R25 B5]; a supported air-gap bundle is an unpromised backlog item, not a paid one (DECISIONS section 6). The plugin index of the registry may reuse the same trust root ([spec/cli.md](spec/cli.md) open question 5, Proposed).
 - **Compatibility.** The pack schema is a public contract with a 12-month deprecation window before 1.0 (RATIFIED, OR-12, D85; after 1.0 the window stays 12 months unless the owner rules otherwise, Proposed, Q28; the 24-month floor of [R24 s5.3] is withdrawn). Nightly compatibility runs cover packs: 30 days of failure earns a warning, 90 days holds the pack from install on that core version [R24 s5.3]. The runner, `obop-compat`, arrives in W3 (D86 cut, Proposed D25), so W1 and W2 packs rely on the localisation suite in section 4.3.
 
-Signed releases and SBOMs also serve CRA duties [R25 B5]; whether pack code is within the CRA scope of SpaceCorps as publisher of a free project that hosts nothing for others apart from the sample-data sandbox is a counsel question (Q5, OR-10).
+Signed releases and SBOMs also serve CRA duties [R25 B5]; whether pack code is within the CRA scope of SpaceCorps as publisher of a free project that hosts nothing for others today apart from the sample-data sandbox, and plans a hosting service (OR-22), is a counsel question (Q5, OR-10).
 
 ### 1.6 Effective dating, provenance, reproducibility
 
@@ -422,7 +422,7 @@ The role split is Proposed except where a row cites the research or a ruling. A 
 | Compliance lead | Owns feeds and threshold signing. A French-speaking lead or a platform integration is needed by 2027-03-31 (flip rule, section 3.1). There is no SLA to own (D17) |
 | Local accountant or counsel | Sign-off for finance, tax and HR strings and for `stable`, recorded in the release notes [R25 B3, C3]. An external expert; the German accountant sign-off is a named risk (LZ-17) |
 | Counsel | Engaged in W0 (exit criterion of D26); fees are paid by the owner (D84); required before any pack claims conformance (CN-16); Spain first (D17) |
-| Publisher (SpaceCorps) | Publishes signed packs as is under Apache-2.0 and claims no conformance (D38); copyright and trademark holder (OR-10). Whether it is a CRA manufacturer, an open-source steward or neither for a free project that hosts nothing for others apart from the sample-data sandbox is for counsel (Q5). No producer declaration is signed and no E&O cover is planned (the E&O item of the old operating model fell away, D17) |
+| Publisher (SpaceCorps) | Publishes signed packs as is under Apache-2.0 and claims no conformance (D38); copyright and trademark holder (OR-10). Whether it is a CRA manufacturer, an open-source steward or neither for a free project that hosts nothing for others today apart from the sample-data sandbox, and plans a hosting service (OR-22), is for counsel (Q5). No producer declaration is signed and no E&O cover is planned (the E&O item of the old operating model fell away, D17) |
 | Third-party maintainers (L2) | Author and sign packs under their own publisher identity and key. Any local declaration, insurance or warranty is theirs alone (R25 B6, recast; counsel, LZ-3). SpaceCorps lists the pack in the registry index and nothing more (D81) |
 | Security lead | Covers pack code in the vulnerability-handling runbook (24 hours, 72 hours, 14 days), prepared as if SpaceCorps were the CRA manufacturer until counsel advises (D17, Q5) |
 | Docs | A `/l10n/<country>/` section per pack: dated citations, "last verified", named maintainer, six-month staleness alert [R28 B.2] |
@@ -613,7 +613,7 @@ External dates come from the research; obop dates are D26 and R25 milestones (th
 | 2027-10-01 | W2 starts; ES B2B first tier (projection, secondary) | obop; law | Items displaced from W1 return in reverse slip order (DECISIONS 5.3); Spain not shippable (counsel) |
 | 2027-11-15 | CEN code-list cycle effective | Standard | |
 | 2027-12-02 | AI Act high-risk date (hiring tools; Regulation (EU) 2026/1744, Digital Omnibus on AI, per R13 s9.1; corrigendum of 2026-09-29 not read, counsel confirms scope) | Law | HR features AI-optional (D18) |
-| 2027-12-11 | CRA main obligations | Law | Signed packs, SBOM; whether they reach a free project that hosts nothing for others apart from the sample-data sandbox with SpaceCorps as publisher is for counsel (Q5) |
+| 2027-12-11 | CRA main obligations | Law | Signed packs, SBOM; whether they reach a free project that hosts nothing for others today apart from the sample-data sandbox, and plans a hosting service (OR-22), with SpaceCorps as publisher is for counsel (Q5) |
 | 2027-12-31 | IT derogation ends; PL: end of the announced KSeF penalty deferral, if enacted (penalties from 2028-01-01; gov.pl announcement of 2026-09-16, statute pending) | Law | |
 | 2028-01-01 | DE: all issuers; BE near-real-time reporting planned (secondary) | Law | The only hard external driver of the calendar (OR-13); the Peppol adapter should be back by then if capacity allows (question 20) |
 | 2028-03-31 | FR pack stable | obop | |
@@ -688,7 +688,7 @@ Numbers are kept stable because other documents cite them (questions 8 and 19). 
 | 8 | `pt` versus `pt-BR`, and reconciling R25's twelve locales with R28's eight-locale launch set. Only en and de are committed in W1 (D86), so this is settled before the first community locale beyond them is accepted | Before the first community locale beyond en and de |
 | 9 | What is the authoritative source of public-holiday data per country? | Before `hr` (W3) |
 | 10 | Does an Odoo licence allow running Odoo Enterprise returns as a black-box differential oracle? | Before golden-case design |
-| 12 | Does distributing a Spanish pack free of charge through the open channel (by SpaceCorps, or by a third-party maintainer through the registry index) count as "producing" or "marketing" (comercializacion) under Art. 201 bis LGT? Are pack vulnerabilities inside CRA scope for a free project that hosts nothing for others apart from the sample-data sandbox (Q5)? | Before any Spanish work |
+| 12 | Does distributing a Spanish pack free of charge through the open channel (by SpaceCorps, or by a third-party maintainer through the registry index) count as "producing" or "marketing" (comercializacion) under Art. 201 bis LGT? Are pack vulnerabilities inside CRA scope for a free project that hosts nothing for others today apart from the sample-data sandbox and plans a hosting service (Q5, OR-22)? | Before any Spanish work |
 | 14 | How many ICP firms exceed EUR 800,000 turnover in Germany? | Design-partner selection |
 | 16 | Which extensions (PGroonga, `pg_bigm`) are available on target managed PostgreSQL services? | Before a CJK market |
 | 17 | Has the amending act deferring KSeF penalties (VAT Act Art. 106ni) to 2028-01-01 been published? Current law starts them on 2027-01-01; the deferral was announced on 2026-09-16 and is pending (legislative watch, counsel). | Before PL start, 2027-10 |
