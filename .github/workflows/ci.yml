@@ -74,19 +74,20 @@ jobs:
       - run: vp install --frozen-lockfile
       - name: Check, lint and type-check every app and the design system
         run: |
-          for app in apps/backoffice apps/platform apps/site packages/ui; do
+          for app in apps/backoffice apps/platform apps/site apps/mileage-app packages/trip-core packages/ui; do
             (cd web/$app && vp check)
           done
-      - name: Unit tests (design system and back office)
+      - name: Unit tests (design system, trip logic and back office)
         run: |
-          for app in packages/ui apps/backoffice; do
+          for app in packages/ui packages/trip-core apps/backoffice; do
             (cd web/$app && vp test)
           done
-      - name: Build every app
+      - name: Build every app and the shared trip logic
         run: |
           for app in backoffice platform site; do
             (cd web/apps/$app && vp build)
           done
+          (cd web/packages/trip-core && vp build)
 
   e2e:
     runs-on: ubuntu-latest
