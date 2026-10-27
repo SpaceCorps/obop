@@ -92,6 +92,9 @@ export function App() {
     setReady(false);
     setLimited(false);
     setMustChange(false);
+    // The settings belonged to the person who signed in: the sign-in screen that follows speaks the
+    // language of the server's default (or the browser's), not the one an administrator set.
+    void setInstanceDefaults({});
   }, []);
 
   const refresh = useCallback(async () => {

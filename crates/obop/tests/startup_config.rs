@@ -12,6 +12,7 @@ fn obop() -> Command {
         .env("OBOP_REQUIRE_MFA_FOR_ADMINS", "0")
         .env_remove("OBOP_DATABASE_URL")
         .env_remove("OBOP_ALLOWED_ORIGINS")
+        .env_remove("OBOP_DEFAULT_LANGUAGE")
         .env_remove("OBOP_ZONE")
         .env_remove("OBOP_METRICS_TOKEN")
         .env_remove("OBOP_SECRET_KEY")
@@ -406,4 +407,117 @@ fn bad_backup_schedule_settings_stop_the_start_before_anything_is_migrated() {
         );
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A back office build in a directory of its own, removed again when the guard is dropped.
+struct Build(std::path::PathBuf);
+
+impl Build {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("obop-startup-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("assets")).unwrap();
+        std::fs::write(dir.join("index.html"), SHELL).unwrap();
+        std::fs::write(dir.join("assets/app.js"), "console.log('<head>')").unwrap();
+        Build(dir)
+    }
+}
+
+impl Drop for Build {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+const SHELL: &str = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>obop</title></head><body><div id=\"root\"></div></body></html>";
+const TAG: &str = "<meta name=\"obop-default-language\" content=\"sv\">";
+
+/// `obop serve --static DIR` with these variables, up and listening.
+fn start_static(build: &Build, env: &[(&str, &str)]) -> Server {
+    let port = free_port();
+    let child = obop()
+        .args([
+            "serve",
+            "--static",
+            build.0.to_str().unwrap(),
+            "--addr",
+            &format!("127.0.0.1:{port}"),
+            "--db",
+            "memory:",
+        ])
+        .envs(env.iter().copied())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn obop serve");
+    let s = Server { child, port };
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while TcpStream::connect(("127.0.0.1", port)).is_err() {
+        assert!(Instant::now() < deadline, "obop serve did not come up");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    s
+}
+
+fn body_of(resp: &str) -> &str {
+    resp.split("\r\n\r\n").nth(1).unwrap_or_default()
+}
+
+#[test]
+fn an_unknown_default_language_stops_the_server_and_names_the_variable() {
+    // The seven languages the interface ships; anything else is a typo found at start.
+    for bad in ["xx", "ja", "swedish", "sv_SE", "pt-BR", "sv,fi", "-sv"] {
+        let e = refused(&[("OBOP_DEFAULT_LANGUAGE", bad)]);
+        assert!(
+            e.contains("OBOP_DEFAULT_LANGUAGE") && e.contains("en, de, fr, pl, fi, sv, es"),
+            "{bad}: {e}"
+        );
+    }
+}
+
+#[test]
+fn the_served_back_office_carries_the_default_language_for_the_screens_before_sign_in() {
+    let build = Build::new("language");
+    // A tag with a region names its language; case and padding do not matter.
+    for value in ["sv", " SV-se "] {
+        let s = start_static(&build, &[("OBOP_DEFAULT_LANGUAGE", value)]);
+        for path in ["/", "/index.html", "/crm/lead/42"] {
+            let (st, r) = http(s.port, "GET", path, &[]);
+            assert_eq!(st, 200, "{value:?} {path}: {r}");
+            assert_eq!(body_of(&r).matches(TAG).count(), 1, "{value:?} {path}: {r}");
+            assert_eq!(body_of(&r).matches("obop-default-language").count(), 1);
+            assert_eq!(header_value(&r, "cache-control"), "no-cache", "{path}");
+            assert_eq!(
+                header_value(&r, "content-length"),
+                body_of(&r).len().to_string(),
+                "{path}"
+            );
+        }
+        // A file that is not the shell is served as it is.
+        let (st, r) = http(s.port, "GET", "/assets/app.js", &[]);
+        assert_eq!((st, body_of(&r)), (200, "console.log('<head>')"));
+        // The API is not the shell and carries no tag.
+        let (st, r) = http(s.port, "GET", "/api/nothing-here", &[]);
+        assert_eq!(st, 404, "{r}");
+        assert!(!r.contains("obop-default-language"));
+    }
+}
+
+#[test]
+fn without_a_default_language_the_served_shell_is_the_build_as_it_is() {
+    let build = Build::new("plain");
+    // Not set, and set to nothing: the same, and no error.
+    for env in [
+        vec![],
+        vec![("OBOP_DEFAULT_LANGUAGE", "")],
+        vec![("OBOP_DEFAULT_LANGUAGE", "   ")],
+    ] {
+        let s = start_static(&build, &env);
+        for path in ["/", "/index.html", "/crm/lead/42"] {
+            let (st, r) = http(s.port, "GET", path, &[]);
+            assert_eq!(st, 200, "{env:?} {path}: {r}");
+            assert_eq!(body_of(&r), SHELL, "{env:?} {path}");
+            assert_eq!(header_value(&r, "cache-control"), "no-cache");
+        }
+    }
 }

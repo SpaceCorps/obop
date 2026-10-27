@@ -31,6 +31,7 @@ export { hasPseudoChars, pseudo } from "./pseudo.ts";
 export * from "./react.tsx";
 export {
   CTX,
+  DEFAULT_LANGUAGE_META,
   compareText,
   fmt,
   formatLocale,
@@ -43,6 +44,7 @@ export {
   instanceLang,
   msg,
   msgx,
+  pageDefaultLang,
   personalLang,
   provideCatalogue,
   rawMessage,
@@ -55,5 +57,6 @@ export {
   tx,
   type Catalogue,
   type Loaders,
+  type PageDocument,
   type Vars,
 } from "./store.ts";

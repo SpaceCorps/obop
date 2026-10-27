@@ -1,22 +1,8 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
-import { platformUrl, repoRoot } from "../support/env.ts";
+import { tr } from "../support/catalogue.ts";
+import { platformUrl } from "../support/env.ts";
 import { expect, test } from "../support/fixtures.ts";
 import { layoutProblems } from "../support/layout.ts";
-
-/** What the catalogue says for an English message: the tests follow the wording, not a copy of it. */
-function catalogue(lang: string, bundle = "backoffice"): Record<string, string> {
-  const dir = bundle === "ui" ? "packages/ui" : `apps/${bundle}`;
-  return JSON.parse(
-    readFileSync(resolve(repoRoot, `web/${dir}/locales/${lang}/messages.json`), "utf8"),
-  );
-}
-const tr = (lang: string, id: string, bundle = "backoffice") => {
-  const text = catalogue(lang, bundle)[id];
-  if (!text) throw new Error(`no ${lang} translation of ${JSON.stringify(id)}`);
-  return text;
-};
 
 /** Open a screen of the signed-in app in a language (`?lang=` overrides the saved choice). */
 async function visit(page: Page, lang: string, hash = "/") {

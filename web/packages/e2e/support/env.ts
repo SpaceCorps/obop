@@ -106,6 +106,8 @@ export const shopOwner = { name: "owner", password: "e2e shop owner 1", groups: 
 
 export const appUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_APP_PORT}`;
 export const shopUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_SHOP_PORT}`;
+/** The instance with `OBOP_DEFAULT_LANGUAGE=sv` (tests/default-language.spec.ts). */
+export const languageUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_LANGUAGE_PORT}`;
 export const platformUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_PLATFORM_PORT}`;
 /** A small marketplace the specs fill (D63): packages the app instance can update to. */
 export const marketUrl = () => `http://127.0.0.1:${process.env.OBOP_E2E_MARKET_PORT}`;

@@ -53,6 +53,10 @@ The suite pins English: the `language` option (default `en`) stores `obop-lang` 
 runs, and `locale` is `en-US`. `tests/i18n.spec.ts` opts out per test (`test.use({ language: null })`) or
 opens a language with `?lang=de`. It reads the expected wording from the catalogues in
 `web/apps/*/locales/<lang>/messages.json`, so a reworded translation does not break it.
+`tests/default-language.spec.ts` opens a further instance (`serve.ts language`, its own port and database, only
+`root` and `sam`) that starts with `OBOP_DEFAULT_LANGUAGE=sv`, in a browser that asks for English: the screens
+before sign-in must speak Swedish. The launcher clears the variable for every other instance, so a value in
+your shell cannot turn their English into something else.
 `support/layout.ts` finds sideways scroll, controls outside the viewport and cut-off text from element boxes.
 
 ## The QA sweep

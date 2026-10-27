@@ -13,7 +13,6 @@ use axum::{
 use obop_commands::{Authenticator, CallError, Dispatcher, Principal, Surface, Value, errors};
 use serde_json::{Value as J, json};
 use std::sync::Arc;
-use tower_http::services::{ServeDir, ServeFile};
 
 mod accounts;
 pub mod blobs;
@@ -29,6 +28,7 @@ pub(crate) mod passkeys;
 pub mod payments;
 pub mod public;
 pub(crate) mod shared;
+pub mod shell;
 pub mod website;
 
 #[cfg(test)]
@@ -52,6 +52,9 @@ pub struct HttpState {
     ops: ops::Ops,
     /// Browser origins allowed to call `/api` from another origin (D68); empty means none.
     cors: cors::Cors,
+    /// The instance default language (`OBOP_DEFAULT_LANGUAGE`), added to the served back office
+    /// shell for the screens that come before sign-in; set once by the composition root.
+    default_language: std::sync::OnceLock<&'static str>,
 }
 
 impl HttpState {
@@ -82,6 +85,7 @@ impl HttpState {
             connectors: std::sync::OnceLock::new(),
             payments: std::sync::OnceLock::new(),
             ops: ops::Ops::new(),
+            default_language: std::sync::OnceLock::new(),
         })
     }
 
@@ -104,6 +108,19 @@ impl HttpState {
     pub fn set_trust_proxy(&self, on: bool) {
         self.trust_proxy
             .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// The language the sign-in screens of the served back office start in (`OBOP_DEFAULT_LANGUAGE`,
+    /// from `shell::parse` or `shell::from_env`). Call before `router`; `None` leaves the shell as built.
+    pub fn set_default_language(&self, language: Option<&'static str>) {
+        if let Some(l) = language {
+            let _ = self.default_language.set(l);
+        }
+    }
+
+    /// The default language the served shell carries, if one was set.
+    pub fn default_language(&self) -> Option<&'static str> {
+        self.default_language.get().copied()
     }
 
     /// Who may read `/metrics` (D67). The default is nobody: the route answers 404.
@@ -358,7 +375,7 @@ fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
 pub fn router(state: Arc<HttpState>, static_dir: Option<&str>) -> Router {
     let api = api_routes(state.clone());
     let app = match static_dir {
-        Some(dir) => api.fallback_service(spa_with_json_api_404(dir)),
+        Some(dir) => api.fallback_service(spa_with_json_api_404(dir, state.default_language())),
         None => api.fallback(api_not_found),
     };
     instrument(app, state)
@@ -376,16 +393,15 @@ pub(crate) fn instrument(app: Router, state: Arc<HttpState>) -> Router {
 
 /// The back office single-page app, except that an unknown `/api/...` path answers JSON (agents
 /// cannot parse the HTML shell) instead of falling through to it.
-fn spa_with_json_api_404(dir: &str) -> Router {
-    use tower::ServiceExt;
-    let files = ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html")));
+fn spa_with_json_api_404(dir: &str, language: Option<&'static str>) -> Router {
+    let shell = shell::Shell::new(dir, language);
     Router::new().fallback(move |req: axum::extract::Request| {
-        let files = files.clone();
+        let shell = shell.clone();
         async move {
             if req.uri().path().starts_with("/api/") {
                 return api_not_found().await;
             }
-            files.oneshot(req).await.into_response()
+            shell.serve(req).await
         }
     })
 }
