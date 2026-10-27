@@ -453,6 +453,7 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
 
 pub mod fault;
 mod guard;
+pub mod keyexpr;
 pub mod limit;
 mod memory;
 mod pg;

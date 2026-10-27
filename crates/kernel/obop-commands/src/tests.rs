@@ -1652,12 +1652,23 @@ fn names_that_are_injection_attempts_are_just_unknown_fields() {
             "%",
             "_",
             "\\",
-            "\0",
             "\u{1F600}",
             "{\"a\":1}",
         ] {
             assert!(q(r, vec![cond("name", "eq", t(v))]).is_empty());
             assert!(q(r, vec![cond("name", "contains", t(v))]).is_empty());
+        }
+        // A NUL cannot be stored in PostgreSQL and fails a statement that binds one, so no
+        // backend takes it in a filter value (D76).
+        for op in ["eq", "contains"] {
+            let e = search_err(r, &u, filter(vec![cond("name", op, t("\0"))]));
+            assert_eq!(
+                e,
+                format!(
+                    "filter on {}.name: text cannot contain NUL",
+                    r.model("party")
+                )
+            );
         }
         // LIKE wildcards are not wildcards.
         assert!(q(r, vec![cond("name", "contains", t("%"))]).is_empty());

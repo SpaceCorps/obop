@@ -1598,6 +1598,8 @@ pub mod names {
 #[cfg(test)]
 mod engine_tests;
 #[cfg(test)]
+mod keyexpr_parity;
+#[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
 mod tests;
