@@ -423,6 +423,14 @@ impl Backend for Pg {
         self.apply_checked(ops).map_err(|e| e.to_string())
     }
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        self.apply_tracked(ctx::system_ctx(), ops, Tracking::empty())
+    }
+    fn apply_tracked(
+        &self,
+        ctx: &WriteCtx,
+        ops: &[Op],
+        tracking: &Tracking,
+    ) -> std::result::Result<(), ApplyError> {
         struct P<'a>(&'a mut Client);
         impl TxView for P<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
@@ -462,6 +470,14 @@ impl Backend for Pg {
                         "DELETE FROM obop_record WHERE model = $1 AND id = $2",
                         &[&model, &id],
                     )
+                    .map(|_| ())
+                    .map_err(e)
+            }
+            fn tx_context(&mut self, json: &str) -> Result<()> {
+                // Local to this transaction: gone at COMMIT or ROLLBACK, so a pooled connection
+                // never carries one write's tickets to the next.
+                self.0
+                    .query_one("SELECT set_config('obop.ctx', $1, true)", &[&json])
                     .map(|_| ())
                     .map_err(e)
             }
@@ -505,7 +521,7 @@ impl Backend for Pg {
                         .get(0);
                     BATCH_LOCKS_HELD.with(|h| h.set(n));
                 }
-                let r = run_ops(&mut P(c), ops);
+                let r = run_ops(&mut P(c), ops, ctx, tracking);
                 let commit = r.is_ok();
                 Ok((r, commit))
             });

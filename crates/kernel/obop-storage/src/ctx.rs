@@ -121,7 +121,6 @@ impl WriteCtx {
     /// What the database sees of this context: the transaction-local setting `obop.ctx`. Only the
     /// tickets are sent (`{"actions":[{"m":..,"i":..,"a":..}]}`); the actor and the route stay in
     /// Rust, so an ordinary write costs no extra round trip. `None` when there are no tickets.
-    #[cfg_attr(not(test), allow(dead_code))] // the Tracked write path uses it
     pub(crate) fn setting(&self) -> Option<String> {
         if self.actions.is_empty() {
             return None;

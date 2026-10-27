@@ -3,7 +3,10 @@
 //! that gets it try again later. Not for production use.
 
 use crate::fault::{self, Fault};
-use crate::{ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap, guarded};
+use crate::{
+    ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap, Track, Tracking,
+    WriteCtx, guarded,
+};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering::SeqCst};
 
@@ -75,7 +78,12 @@ pub struct Flaky {
     /// Inserts into the model fail with this server error (no fault noted: it is not a refusal of
     /// the pool but a statement that failed, such as a full disk) until `allow_models`.
     insert_error: std::sync::Mutex<Option<(String, String)>>,
+    /// The batches that reached `apply_tracked`: see [`Flaky::seen_writes`].
+    seen: std::sync::Mutex<Vec<SeenWrite>>,
 }
+
+/// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
+pub type SeenWrite = (WriteCtx, Vec<Op>, Vec<String>);
 
 /// What [`Flaky::after_the_next_insert_into`] runs, with the wrapped backend.
 pub type AfterInsert = Box<dyn FnOnce(&dyn Backend) + Send>;
@@ -102,6 +110,7 @@ impl Flaky {
             after_insert: std::sync::Mutex::new(None),
             after_get: std::sync::Mutex::new(None),
             insert_error: std::sync::Mutex::new(None),
+            seen: std::sync::Mutex::new(Vec::new()),
         })
     }
 
@@ -127,6 +136,13 @@ impl Flaky {
     /// Refuse the next `n` calls of any kind (locks and `kind` excepted), then go on as before.
     pub fn refuse_next(&self, n: i64) {
         self.next.store(n, SeqCst);
+    }
+
+    /// The batches that reached `apply_tracked` (the end of `Tracked::apply_ctx`, whoever sent
+    /// them, refused ones included once the gate let them through), oldest first: for a test of
+    /// the layers above that asks "did the write carry the context I expect?".
+    pub fn seen_writes(&self) -> Vec<SeenWrite> {
+        self.seen.lock().unwrap().clone()
     }
 
     /// How many calls were refused so far.
@@ -438,6 +454,32 @@ impl Backend for Flaky {
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
         self.gate_apply().map_err(ApplyError::Storage)?;
         self.inner.apply_checked(ops)
+    }
+    fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        self.gate_apply().map_err(ApplyError::Storage)?;
+        self.inner.apply_ctx(ctx, ops)
+    }
+    fn apply_tracked(
+        &self,
+        ctx: &WriteCtx,
+        ops: &[Op],
+        tracking: &Tracking,
+    ) -> std::result::Result<(), ApplyError> {
+        self.gate_apply().map_err(ApplyError::Storage)?;
+        self.seen
+            .lock()
+            .unwrap()
+            .push((ctx.clone(), ops.to_vec(), tracking.models()));
+        self.inner.apply_tracked(ctx, ops, tracking)
+    }
+    fn track(&self, model: &str, how: Track) {
+        self.inner.track(model, how)
+    }
+    fn untrack(&self, model: &str) {
+        self.inner.untrack(model)
+    }
+    fn tracked_models(&self) -> Vec<String> {
+        self.inner.tracked_models()
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.gate_m(false, model)?;

@@ -73,6 +73,18 @@ pub enum Op {
 }
 
 impl Op {
+    /// The model of the record this step works on.
+    pub fn model(&self) -> &str {
+        match self {
+            Op::Insert { model, .. }
+            | Op::Put { model, .. }
+            | Op::Merge { model, .. }
+            | Op::Delete { model, .. }
+            | Op::Add { model, .. }
+            | Op::Patch { model, .. } => model,
+        }
+    }
+
     pub fn add(model: &str, id: &str, field: &str, delta: i64) -> Op {
         Op::Add {
             model: model.into(),
@@ -212,6 +224,39 @@ pub trait Backend: Send + Sync {
         Err(ApplyError::Storage(
             "this storage backend has no atomic batches".into(),
         ))
+    }
+    /// Like [`Backend::apply_checked`], for a write that knows who makes it and with which tickets
+    /// (D75, D77). Only [`Tracked`] implements it, by handing the context and its own list of
+    /// tracked models to the backend underneath (`apply_tracked`); every other backend leaves
+    /// this default, which drops the context, and a wrapper that sits above a `Tracked` must
+    /// forward it (the lint `tracked_forwards_every_backend_method` and its siblings check that).
+    fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        let _ = ctx;
+        self.apply_checked(ops)
+    }
+    /// What the three shipped backends implement instead of `apply_checked`, which they define as
+    /// this call with the system's context and no tracked models. Not for callers: they use
+    /// `apply_ctx` or `apply_checked`. The default refuses, so a backend that forgets it fails
+    /// loudly instead of calling itself.
+    #[doc(hidden)]
+    fn apply_tracked(
+        &self,
+        ctx: &WriteCtx,
+        ops: &[Op],
+        tracking: &Tracking,
+    ) -> std::result::Result<(), ApplyError> {
+        let _ = (ctx, ops, tracking);
+        Err(ApplyError::Storage(
+            "this storage backend has no atomic batches".into(),
+        ))
+    }
+    /// Keep system fields and history for `model` from now on (D75). Only [`Tracked`] has a list.
+    fn track(&self, _model: &str, _how: Track) {}
+    /// Stop tracking `model`.
+    fn untrack(&self, _model: &str) {}
+    /// The models that are tracked, sorted.
+    fn tracked_models(&self) -> Vec<String> {
+        Vec::new()
     }
     /// Records of `model` whose `field` equals `value`, in insertion order. The shipped backends
     /// answer it in the database; the default reads the model.
@@ -414,7 +459,7 @@ pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backen
     // tests can make the binary's store refuse calls: `OBOP_TEST_FAULTS`, see `testing`.
     #[cfg(feature = "test-support")]
     let backend = testing::faults_from_env(backend);
-    Ok(backend)
+    Ok(Tracked::wrap(backend))
 }
 
 fn open_backend(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
@@ -475,10 +520,12 @@ pub mod testing;
 pub mod tls;
 #[cfg(test)]
 mod tls_tests;
+pub mod tracked;
 
 pub use ctx::{ACTOR_PUBLIC, ACTOR_SYSTEM, ActionRun, Via, WriteCtx};
 pub use guard::guarded;
 pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
+pub use tracked::{Track, Tracked, Tracking, Treat};
 
 use memory::Memory;
 use pg::Pg;
