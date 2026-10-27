@@ -243,6 +243,47 @@ describe("server messages use the package's own option labels", () => {
     );
   });
 
+  it("keeps the shared option words but not a title the models do not share", async () => {
+    await swedish();
+    // The same option words, but one model calls the field "Läge" and the other "Fas": the
+    // sentence does not say which model it means, so it must not name the first one's title.
+    registerMeta(
+      desk(
+        model("desk_ticket", [status(), owner]),
+        model("desk_task", [status({ labels: { sv: "Fas" } }), owner]),
+      ),
+    );
+    const out = serverMessage('status must be new to do this, it is "closed"');
+    expect(out).toBe("Status måste vara Öppnad för att göra detta, det är Avslutad");
+    expect(out).not.toMatch(/Läge|Fas/);
+    // Either order of the models gives the same answer.
+    registerMeta(
+      desk(
+        model("desk_task", [status({ labels: { sv: "Fas" } }), owner]),
+        model("desk_ticket", [status(), owner]),
+      ),
+    );
+    expect(serverMessage('status must be new to do this, it is "closed"')).toBe(out);
+    // A title is the same in every model that has the field: it is used.
+    registerMeta(
+      desk(
+        model("desk_ticket", [status(), owner]),
+        model("desk_task", [status({ labels: { sv: "Läge" } }), owner]),
+      ),
+    );
+    expect(serverMessage('status must be new to do this, it is "closed"')).toBe(
+      "Läge måste vara Öppnad för att göra detta, det är Avslutad",
+    );
+    // Titles that differ only in another language do not matter in this one.
+    registerMeta(
+      desk(
+        model("desk_ticket", [status(), owner]),
+        model("desk_task", [status({ labels: { sv: "Läge", fi: "Tila" } }), owner]),
+      ),
+    );
+    expect(serverMessage('status must be new to do this, it is "closed"')).toContain("Läge måste");
+  });
+
   it("falls back to the generic table when the field cannot be known", async () => {
     await swedish();
     // Unknown model, and unknown field of a known model.

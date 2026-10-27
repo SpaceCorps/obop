@@ -53,12 +53,15 @@ function opt(raw: string, field?: FieldMeta): string {
 }
 
 /**
- * The select field a sentence means when it names the field but not the model ("stage must be new
- * to do this", from a state change): a select of that name in the registered modules that offers
- * every value the sentence quotes. It is used only when all such fields would show those values
- * the same way; when models disagree the field is unknown and the generic table applies.
+ * What a sentence means when it names a select field but not its model ("stage must be new to do
+ * this", from a state change): every select of that name in the registered modules that offers each
+ * value the sentence quotes. Models may agree on the option words and not on the field's title (or
+ * the other way round), so the two are decided apart: `options` is a field to take the option words
+ * from and `title` one to take the title from, each only when all those fields show it the same way
+ * in the current language. Where they disagree, or there is no such field, it is `undefined` and
+ * the generic table (or the humanised name) applies.
  */
-function selectNamed(name: string, ...raws: string[]): FieldMeta | undefined {
+function selectNamed(name: string, ...raws: string[]): { options?: FieldMeta; title?: FieldMeta } {
   const wanted = raws.filter((r) => r !== "(empty)" && r !== "empty").map(unquote);
   const hits: FieldMeta[] = [];
   for (const m of modules)
@@ -66,10 +69,14 @@ function selectNamed(name: string, ...raws: string[]): FieldMeta | undefined {
       const f = model.fields.find((x) => x.name === name && x.kind === "select");
       if (f && wanted.every((v) => f.options?.includes(v))) hits.push(f);
     }
-  const first = hits[0];
-  if (!first) return undefined;
-  const same = hits.every((f) => wanted.every((v) => optionLabel(v, f) === optionLabel(v, first)));
-  return same ? first : undefined;
+  const agreeing = (show: (f: FieldMeta) => string): FieldMeta | undefined => {
+    const first = hits[0];
+    return first && hits.every((f) => show(f) === show(first)) ? first : undefined;
+  };
+  return {
+    options: agreeing((f) => wanted.map((v) => optionLabel(v, f)).join("\u0000")),
+    title: agreeing((f) => fieldTitle(f)),
+  };
 }
 
 /** A module by the name the interface gives it (its id when it is not installed). */
@@ -228,13 +235,14 @@ const RULES: Rule[] = [
   [
     /^(\w+) must be (\S+) to do this, it is (.+)$/,
     (m) => {
-      // The sentence names the field but not its model: use the field of the metadata when it is the
-      // same one wherever it occurs, else the generic option table.
+      // The sentence names the field but not its model: take the title and the option words from
+      // the metadata where every model that has such a field shows them alike, else the generic
+      // table and the humanised name.
       const f = selectNamed(m[1]!, m[2]!, m[3]!);
       return t("{field} must be {from} to do this, it is {current}", {
-        field: f ? fieldTitle(f) : tx("field", label(m[1]!)),
-        from: opt(m[2]!, f),
-        current: opt(m[3]!, f),
+        field: f.title ? fieldTitle(f.title) : tx("field", label(m[1]!)),
+        from: opt(m[2]!, f.options),
+        current: opt(m[3]!, f.options),
       });
     },
   ],
