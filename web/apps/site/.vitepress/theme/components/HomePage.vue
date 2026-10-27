@@ -271,7 +271,11 @@ const openCards = computed(() =>
           </div>
         </div>
         <div class="plans">
-          <article v-for="p in m.pricing.plans" :key="p.name" :class="{ hl: p.highlight }">
+          <article
+            v-for="p in m.pricing.plans.slice(0, 4)"
+            :key="p.name"
+            :class="{ hl: p.highlight }"
+          >
             <h3>{{ p.name }}</h3>
             <p class="price">
               {{ p.price }}<small>{{ p.period }}</small>

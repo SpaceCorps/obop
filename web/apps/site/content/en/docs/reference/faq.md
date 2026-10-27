@@ -15,7 +15,7 @@ Not yet. obop is in beta. Read the [roadmap](/roadmap/) and the limits on [Secur
 
 ### What does it cost?
 
-Self-hosting is free. Hosted plans are planned at €0, €49, €249 and from €899 a month per organisation. Nothing is charged during the beta. See [Pricing](/pricing/).
+obop is free to use and to self-host. Dedicated hosting on a server of its own is planned from €29 a month, plus €15 for each extra 50 GB of storage; it is not offered or charged yet. See [Pricing](/pricing/).
 
 ### Which licence?
 
