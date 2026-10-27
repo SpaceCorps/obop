@@ -377,7 +377,7 @@ Classes are those of the Odoo 20 catalogue [R01 s3, s4]. Dispositions: *Ships*, 
 | Helpdesk (EE) | Ships: `helpdesk` | W3 |
 | Studio (EE); Properties (CE) | Ships, open: `customize`; custom fields with three-tier storage | W1-W3 |
 | Developer platform, external API, apps store | Ships: free generated API, CLI and MCP; the free plugin registry (search, install, copy; only OSI-approved-licence plugins are listed, OR-17); no marketplace commerce (OR-3) | W1; W2; n/a |
-| Odoo mobile apps (EE) | No suite of native apps. The PWA is the default client; one first-party React Native (Expo) app, Mileage, is allowed because a PWA cannot record a trip while the phone is locked (D87, [spec/mobile.md](spec/mobile.md)); Tauri mobile is not pursued ([ux s8](spec/ux.md#8-out-of-scope-non-goals-and-later)) | Beside the waves (ROADMAP 3.4) |
+| Odoo mobile apps (EE) | *Not planned*: a suite of native apps; the PWA stays the default client. *Ships* (Proposed, D87): one React Native (Expo) app, Mileage, since React Native (Expo) apps are allowed as obop clients (OR-34) and a PWA is not known to be able to record a trip while the phone is locked (general knowledge, not tested; [spec/mobile.md](spec/mobile.md)). The limits to first-party apps and to cases a PWA cannot serve, and keeping Tauri mobile out, are Proposed ([ux s8](spec/ux.md#8-out-of-scope-non-goals-and-later)) | Beside the waves (ROADMAP 3.4) |
 | AI: agents, skills, MCP, AI fields (EE) | Ships: MCP W1, `ai` W3; voice, image and web-page generation and AI live-chat agents not planned through W3 (revisited in W4) | W1, W3 |
 | Industries, 60 plus bundles (EE) | Deferred: industry bundles as data packs | W4+ |
 | Fiscal localisations, 229 `l10n_*` modules | Ships: DE W1, FR W2, PL W3; AT, CH W3 (CH unresearched); BE, NL, ES, IT, Nordics W4 via third-party maintainers; rest community | W1-W4 |
@@ -613,7 +613,7 @@ D26 splits what the research called "GA" into three dated milestones. The German
 - No statutory filing in core payroll (D19); no obop-run payment processor, bank-aggregator licence, fiscal signer or qualified trust service provider.
 - No Electric, PowerSync or Zero, no CRDT for transactional data, no SQLite as the domain database, no microservices, no pool-mode multi-tenancy (D6, D13, D27, D37).
 - No Odoo Enterprise code or assets, and no copied Odoo Community code, views, translations or assets (F3).
-- No full WMS, multi-vendor marketplace, product information management, softphone, IoT box, staff screen or continuous GPS monitoring, or native apps other than a first-party React Native app that D87 allows where a PWA cannot do the job (the first is Mileage, which records a trip only while a driver has started it).
+- No full WMS, multi-vendor marketplace, product information management, softphone, IoT box, staff screen or continuous GPS monitoring, or native apps other than React Native (Expo) apps, which OR-34 allows as obop clients (Proposed, D87: first-party apps only, and only where a PWA cannot serve; the first is Mileage, which records a trip only while a driver has started it).
 - No HIPAA marketing, FIPS 140 operation or SMS one-time codes in v1 ([spec/security-privacy.md s8](spec/security-privacy.md#8-out-of-scope-non-goals-and-later)).
 
 ## 12. Roadmap summary
