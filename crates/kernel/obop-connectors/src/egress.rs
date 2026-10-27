@@ -613,17 +613,22 @@ impl Egress {
     /// The id of the record a reference pseudonym stood for, for a connection that asked for it
     /// (`resolve_refs`): the way an event from the receiver finds the record it is about. It reads
     /// the map the erasure hook already clears, so once a subject is erased the pseudonym stays
-    /// unresolvable. `None` for anything that is not a reference this connection issued.
-    pub fn resolve_ref(&self, connection: &str, text: &str) -> Option<String> {
+    /// unresolvable. `Ok(None)` for anything that is not a reference this connection issued; a
+    /// refusal of the store is an error, never "not one of ours" (D74), or the caller would keep
+    /// the pseudonym text as if it were the answer.
+    pub fn resolve_ref(&self, connection: &str, text: &str) -> Result<Option<String>, String> {
         if !text.starts_with("psn_") {
-            return None;
+            return Ok(None);
         }
-        let f = self
+        let Some(f) = self
             .backend
-            .get(PSEUDONYMS, &format!("{connection}:{text}"))
-            .ok()??;
-        let (_, id) = str_of(&f, "record").split_once(':')?;
-        Some(id.to_string())
+            .get(PSEUDONYMS, &format!("{connection}:{text}"))?
+        else {
+            return Ok(None);
+        };
+        Ok(str_of(&f, "record")
+            .split_once(':')
+            .map(|(_, id)| id.to_string()))
     }
 
     /// Drop everything the instance holds that links a pseudonym or a token to `record`
@@ -1044,6 +1049,35 @@ pub(crate) mod tests {
             None,
             "pseudonyms have no way back"
         );
+    }
+
+    #[test]
+    fn a_reference_resolves_for_its_own_connection_only_and_a_refused_read_is_an_error() {
+        use obop_storage::testing::{Flaky, Mode};
+        let (b, _, conn) = setup();
+        let flaky = Flaky::new(b.clone());
+        let e = Egress::new(flaky.clone(), SecretBox::for_tests(), Arc::new(Fake));
+        let p = e
+            .prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        let psn = p.rows[0]["ref"].as_str().unwrap().to_string();
+        assert!(psn.starts_with("psn_"));
+        assert_eq!(e.resolve_ref("c1", &psn), Ok(Some("r1".to_string())));
+        // Another connection, a value that is no pseudonym and one that was never issued.
+        assert_eq!(e.resolve_ref("c2", &psn), Ok(None));
+        assert_eq!(e.resolve_ref("c1", "r1"), Ok(None));
+        assert_eq!(e.resolve_ref("c1", "psn_nothere"), Ok(None));
+        // The pseudonym itself still has no way back through `restore`.
+        assert_eq!(e.restore("c1", &psn), None);
+        // A store that refuses the read is not "not one of ours".
+        flaky.refuse_model(PSEUDONYMS, Mode::Reads);
+        let r = e.resolve_ref("c1", &psn);
+        flaky.allow_models();
+        assert!(r.is_err(), "{r:?}");
+        assert_eq!(e.resolve_ref("c1", &psn), Ok(Some("r1".to_string())));
+        // Erased, it no longer resolves.
+        e.erase_subject("party:r1").unwrap();
+        assert_eq!(e.resolve_ref("c1", &psn), Ok(None));
     }
 
     #[test]

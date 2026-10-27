@@ -46,12 +46,13 @@ DocuSeal's open edition is AGPL software. It runs as its own service next to obo
 
 The record's reference goes to DocuSeal as the submitter's `external_id`. By default that reference is a pseudonym (`psn_...`, a keyed HMAC) that cannot be turned back into a record. With `resolve_refs = true` the inbound side looks the pseudonym up in the instance's own pseudonym map, which the erasure hook already clears, and stores the record id in `request_ref`. After a subject is erased the lookup fails and the event keeps only the pseudonym. `sign_docuseal_event.request_ref` equals the id of the `sign_request`.
 
-The option exists only on connections that set it. The general rule that pseudonyms have no way back (CONNECTORS.md section 2) is unchanged, and the test that asserts it still passes.
+A refused read of the pseudonym map is not taken for "not one of ours" (D74): the delivery is answered as busy, DocuSeal retries, and nothing holding the pseudonym text is stored. The option exists only on connections that set it. The general rule that pseudonyms have no way back (CONNECTORS.md section 2) is unchanged, and the test that asserts it still passes.
 
 ## Tests
 
 - `webhook::tests::header_scheme`: the secret check, the replay id, a wrong and a missing secret.
 - `connectors::tests::docuseal_gets_a_submission_with_the_key_header_and_reports_back_with_a_shared_secret`: the submission body (template id, role, name, email, external id), the `X-Auth-Token` header and no bearer header, the event creating a record whose `request_ref` is the original party id, and the refusals (replay, wrong secret, no secret).
+- `egress::tests::a_reference_resolves_for_its_own_connection_only_and_a_refused_read_is_an_error` and `connectors::tests::a_refused_read_of_the_pseudonym_map_makes_docuseal_retry_and_stores_no_pseudonym`: the lookup per connection, after erasure and with a store that refuses the read.
 - `catalog` tests: the entry is `generic_adapter`, so the catalogue says it is not tested against DocuSeal itself.
 - `obop-pkg` marketplace tests and `modules check --complete packages/sign_docuseal.toml`: the package and its labels in all six languages.
 

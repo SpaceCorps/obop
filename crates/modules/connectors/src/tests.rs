@@ -2662,6 +2662,63 @@ fn consent_state(inner: &Arc<dyn obop_storage::Backend>, k: &str) -> String {
 }
 
 #[test]
+fn a_refused_read_of_the_pseudonym_map_makes_docuseal_retry_and_stores_no_pseudonym() {
+    use obop_storage::testing::Mode;
+    let (e, flaky, _inner) = flaky_env();
+    let party = seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "docuseal", false);
+    let secret = "docuseal-shared-secret-0002";
+    let c = ok(
+        &e,
+        &admin(),
+        "connection.create",
+        json!({"name": "DocuSeal", "provider": "docuseal",
+               "config": json!({"url": r.url(), "template_id": "7", "resolve_refs": "true",
+                                "target_model": "lead",
+                                "mapping": json!({"event_type": "title", "data.external_id": "contact_name"}).to_string()}).to_string(),
+               "credentials": json!({"api_key": "ds_api_key_for_the_test_0002", "signing_secret": secret}).to_string(),
+               "field_allowlist": json!({"party": ["name", "email"], "lead": ["title", "contact_name"]}).to_string(),
+               "policy": json!({"classes": {"public_directory": "allow", "internal": "allow"}}).to_string()}),
+    );
+    let id = c["id"].as_str().unwrap().to_string();
+    ok(
+        &e,
+        &admin(),
+        "consent.create",
+        json!({"connection": id, "purpose": "Get contracts signed", "legal_basis": "contract"}),
+    );
+    ok(&e, &admin(), "connection.connect", json!({"id": id}));
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    let hit = r.last();
+    let doc: serde_json::Value =
+        serde_json::from_str(hit.split_once("\r\n\r\n").unwrap().1).unwrap();
+    let token = doc["submitters"][0]["external_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let event = json!({"event_type": "form.completed", "data": {"external_id": token}}).to_string();
+    let hdr = |k: &str| (k == "x-docuseal-secret").then(|| secret.to_string());
+
+    // The map cannot be read: the event is not taken, the sender is told to retry, and no lead
+    // holds the pseudonym text.
+    flaky.refuse_model(obop_connectors::model::PSEUDONYMS, Mode::Reads);
+    let refused = e.rt.receive_webhook(&id, &hdr, event.as_bytes());
+    flaky.allow_models();
+    assert_eq!(
+        refused.unwrap_err(),
+        obop_connectors::runtime::HookError::Busy
+    );
+    assert!(e.s.backend().list("lead").unwrap().is_empty());
+
+    // The retry is applied, not taken for a replay, and names the record.
+    let o = e.rt.receive_webhook(&id, &hdr, event.as_bytes()).unwrap();
+    assert_eq!(o.created, 1);
+    let lead = &e.s.backend().list("lead").unwrap()[0].1;
+    assert_eq!(lead["contact_name"].as_str(), Some(party.as_str()));
+}
+
+#[test]
 fn a_withdrawal_the_store_refused_is_a_partial_request_and_repeating_it_finishes_it() {
     use obop_storage::fault;
     use obop_storage::testing::Mode;
