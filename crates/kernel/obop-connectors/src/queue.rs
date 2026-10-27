@@ -254,11 +254,13 @@ impl Queue {
         d.remove("lease_owner");
         // The job leaves the queue only once it is in the dead letters: if that write is refused
         // it stays leased and is taken (and buried) again when the lease ends, never lost.
-        match self.backend.insert(DEAD, id, &d) {
-            Ok(()) => {}
-            Err(e) if obop_storage::fault::Fault::is_transient(&e) => return,
-            // Already buried (an earlier try whose answer was lost): the job can go.
-            Err(_) => {}
+        if let Err(e) = self.backend.insert(DEAD, id, &d) {
+            // Already buried (an earlier try whose answer was lost): the job can go. Any other
+            // refusal, a full disk included, is not "already buried": the job stays leased and is
+            // taken and buried again when the lease ends, never lost.
+            if crate::util::row_exists_or(&*self.backend, DEAD, id, e).is_err() {
+                return;
+            }
         }
         let _ = self.backend.delete(JOBS, id);
     }
@@ -426,6 +428,30 @@ mod tests {
         assert!(!left.contains(&"old".to_string()));
         assert_eq!(q.purge_dead(1_000 + 91 * day, keep), Ok(2));
         assert!(q.dead().is_empty());
+    }
+
+    #[test]
+    fn a_job_stays_when_the_dead_letter_could_not_be_written_for_a_reason_that_is_no_duplicate() {
+        use obop_storage::testing::Flaky;
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let q = Queue::new(obop_storage::guarded(flaky.clone()), SecretBox::for_tests());
+        let mut j = job("m1", 0);
+        j.attempt = 5;
+        q.push(j).unwrap();
+        let claimed = q.take_due(10).pop().unwrap();
+        // A full disk is not "already buried": deleting the job then lost the delivery with no
+        // trace at all.
+        flaky.fail_inserts_into(DEAD, "could not extend file: No space left on device");
+        assert_eq!(q.requeue_because(claimed, 10, 0, "down"), Requeued::Dead);
+        assert_eq!(b.count(JOBS).unwrap(), 1, "the job is still queued");
+        assert_eq!(b.count(DEAD).unwrap(), 0);
+        flaky.allow_models();
+        // Once the lease ends it is taken again and buried.
+        let again = q.take_due(10 + LEASE_SECS + 1).pop().unwrap();
+        assert_eq!(q.requeue_because(again, 200, 0, "down"), Requeued::Dead);
+        assert_eq!(b.count(JOBS).unwrap(), 0);
+        assert_eq!(b.count(DEAD).unwrap(), 1);
     }
 
     #[test]

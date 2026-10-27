@@ -294,6 +294,12 @@ impl Ingress {
         }
     }
 
+    /// The record exists. What links it back is needed from here on: the link to the sender's id
+    /// makes the next run update it instead of adding it again, and the entry of its origin is what
+    /// an erasure and a revocation find it by. Each is a needed step (tried again although an
+    /// earlier call of the request was refused, which the guard would not let a plain retry do, and
+    /// a lasting refusal makes the request a partial one). The link to the sender's id goes first:
+    /// it is the one whose loss shows as a duplicate.
     fn remember(
         &self,
         conn: &Connection,
@@ -302,36 +308,39 @@ impl Ingress {
         ext_key: Option<&str>,
         run_id: &str,
     ) -> Result<(), String> {
-        use obop_storage::fault::{Fault, patiently};
+        use obop_storage::fault::needed;
         if id.is_empty() {
             return Ok(());
         }
         let record = format!("{model}:{id}");
-        let pause = std::time::Duration::from_millis(250);
+        if let Some(k) = ext_key {
+            let mut m = Fields::new();
+            m.insert("connection".into(), conn.id.clone().into());
+            m.insert("record".into(), record.clone().into());
+            // Already linked (an earlier run): the link is brought up to date.
+            needed(|| self.put_link(EXTMAP, k, &m, true))?;
+        }
         let mut f = Fields::new();
         f.insert("connection".into(), conn.id.clone().into());
         f.insert("run".into(), run_id.into());
         f.insert("at".into(), iso(now()).into());
-        // Where the record came from (erasure and revocation find it by this): an entry that is
-        // there already is the same record seen again.
-        match patiently(4, pause, || self.backend.insert(ORIGIN, &record, &f)) {
-            Ok(()) => {}
-            Err(e) if Fault::is_transient(&e) => return Err(e),
-            Err(_) => {}
+        // An entry that is there already is the same record seen again.
+        needed(|| self.put_link(ORIGIN, &record, &f, false))
+    }
+
+    /// Insert a link. An insert refused for any reason other than "the row exists" is an error:
+    /// the row is looked at before the failure is taken for a repeat (a full disk or a read-only
+    /// server is not "already linked"). With `refresh` an existing row is brought up to date.
+    fn put_link(&self, model: &str, id: &str, f: &Fields, refresh: bool) -> Result<(), String> {
+        match self.backend.insert(model, id, f) {
+            Ok(()) => Ok(()),
+            Err(e) if obop_storage::fault::Fault::is_transient(&e) => Err(e),
+            Err(e) => match self.backend.get(model, id)? {
+                Some(_) if refresh => self.backend.update(model, id, f).map(|_| ()),
+                Some(_) => Ok(()),
+                None => Err(e),
+            },
         }
-        if let Some(k) = ext_key {
-            let mut m = Fields::new();
-            m.insert("connection".into(), conn.id.clone().into());
-            m.insert("record".into(), record.into());
-            // The link that makes the next run update this record instead of adding it again.
-            patiently(4, pause, || match self.backend.insert(EXTMAP, k, &m) {
-                Ok(()) => Ok(()),
-                Err(e) if Fault::is_transient(&e) => Err(e),
-                // Already linked (an earlier run): the link is brought up to date.
-                Err(_) => self.backend.update(EXTMAP, k, &m).map(|_| ()),
-            })?;
-        }
-        Ok(())
     }
 }
 

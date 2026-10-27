@@ -2111,6 +2111,50 @@ fn a_pull_keeps_the_link_of_every_record_it_made_whichever_call_the_store_refuse
 }
 
 #[test]
+fn a_pull_in_a_request_keeps_the_link_of_every_record_it_made_whichever_call_the_store_refuses() {
+    use obop_storage::fault;
+    use obop_storage::testing::Flaky;
+    // The same sweep inside a request scope (a manual sync, an inbound webhook): the pool notes
+    // the first refusal and the guard then refuses every later change of the request, the retry
+    // of the link included, unless the link is a needed step. The record was there and the link
+    // was not, and the next run added it again.
+    for skip in 0..60 {
+        let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+        let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+        let id = pull_env(&e);
+        flaky.refuse_call_after(skip);
+        fault::begin_request(Default::default());
+        let _ = raw(&e, &sam(), "connection.sync", json!({"id": id}));
+        let _ = fault::end_request();
+        flaky.allow_models();
+        fault::clear();
+        let _ = pull_result(&e, &id);
+        let leads = e.s.backend().list("lead").unwrap().len();
+        assert_eq!(leads, 2, "skip {skip}: a record was added twice");
+    }
+}
+
+#[test]
+fn a_link_the_server_failed_to_write_is_not_taken_for_one_that_was_already_there() {
+    use obop_connectors::model::EXTMAP;
+    use obop_storage::testing::Flaky;
+    // Any insert error that was not a refusal of the pool was read as "already linked", and the
+    // update that followed, of a row that did not exist, answered Ok: no link, and a duplicate on
+    // the next run, with the item reported as accepted.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let e = env_on(Store::over(obop_storage::guarded(flaky.clone())));
+    let id = pull_env(&e);
+    flaky.fail_inserts_into(EXTMAP, "could not extend file: No space left on device");
+    let res = pull_result(&e, &id);
+    flaky.allow_models();
+    assert_eq!(
+        (res["created"].as_u64(), res["rejected"].as_u64()),
+        (Some(0), Some(2)),
+        "the records were saved without their links, and the run says so: {res}"
+    );
+}
+
+#[test]
 fn csv_export_goes_through_the_same_policy() {
     let e = env();
     seed_party(&e);

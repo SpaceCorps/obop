@@ -5,6 +5,25 @@ use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
 
+/// An insert into `model` failed with `error`: `Ok` only when the row is there (the same insert
+/// made before), the error when it is not. A server error that is not a duplicate (a full disk, a
+/// read-only server after a failover) was taken for "already there" by exclusion, and the row it
+/// stood for was never written.
+pub fn row_exists_or(
+    backend: &dyn obop_storage::Backend,
+    model: &str,
+    id: &str,
+    error: String,
+) -> Result<(), String> {
+    if obop_storage::fault::Fault::is_transient(&error) {
+        return Err(error);
+    }
+    match backend.get(model, id)? {
+        Some(_) => Ok(()),
+        None => Err(error),
+    }
+}
+
 pub fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

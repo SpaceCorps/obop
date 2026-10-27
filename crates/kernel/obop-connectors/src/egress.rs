@@ -485,12 +485,9 @@ impl Egress {
             // The map is what lets erasure and revocation find what was sent. An entry that is
             // there already (the same record sent before) is as it should be; a store that
             // refused is not, and nothing leaves without it.
-            match self
-                .backend
-                .insert(PSEUDONYMS, &format!("{}:{reference}", conn.id), &f)
-            {
-                Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
-                _ => {}
+            let key = format!("{}:{reference}", conn.id);
+            if let Err(e) = self.backend.insert(PSEUDONYMS, &key, &f) {
+                crate::util::row_exists_or(&*self.backend, PSEUDONYMS, &key, e)?;
             }
         }
         let mut out = Map::new();
@@ -1166,6 +1163,27 @@ pub(crate) mod tests {
                 .is_some()
         );
         assert!(e.forget_connection("c1").unwrap() >= 1);
+    }
+
+    #[test]
+    fn a_pseudonym_map_the_server_failed_to_write_is_not_taken_for_one_that_was_there() {
+        use obop_storage::testing::Flaky;
+        let (b, _, conn) = setup();
+        let flaky = Flaky::new(b.clone());
+        let e = Egress::new(flaky.clone(), SecretBox::for_tests(), Arc::new(Fake));
+        // Any insert error that was not a duplicate was read as "the same record sent before", and
+        // the record left with a reference that erasure and revocation could not find.
+        flaky.fail_inserts_into(PSEUDONYMS, "could not extend file: No space left on device");
+        let sent = e.prepare(&conn, &webhook(), "party", vec![row("r1")]);
+        assert!(sent.is_err(), "nothing leaves without its map");
+        assert!(b.list(PSEUDONYMS).unwrap().is_empty());
+        flaky.allow_models();
+        // The same record sent twice is a duplicate, and that is as it should be.
+        e.prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        e.prepare(&conn, &webhook(), "party", vec![row("r1")])
+            .unwrap();
+        assert_eq!(b.list(PSEUDONYMS).unwrap().len(), 1);
     }
 
     #[test]
