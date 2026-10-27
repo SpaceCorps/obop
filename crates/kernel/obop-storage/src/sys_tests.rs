@@ -1949,6 +1949,114 @@ fn a_backup_with_records_of_a_model_called_record_change_and_with_history_restor
     assert_eq!(old.rows(), legacy);
 }
 
+/// The tables of a SQLite database as the version before the history made them.
+const SCHEMA_BEFORE_THE_HISTORY: &str = "PRAGMA journal_mode = WAL;
+     CREATE TABLE IF NOT EXISTS obop_record (
+         seq   INTEGER PRIMARY KEY AUTOINCREMENT,
+         model TEXT NOT NULL,
+         id    TEXT NOT NULL,
+         data  TEXT NOT NULL CHECK (json_valid(data)),
+         UNIQUE (model, id)
+     );
+     CREATE TABLE IF NOT EXISTS obop_counter (
+         key TEXT PRIMARY KEY, n INTEGER NOT NULL, expires_ms INTEGER NOT NULL
+     );
+     CREATE TABLE IF NOT EXISTS obop_kv (
+         key TEXT PRIMARY KEY, value TEXT NOT NULL, expires_ms INTEGER NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS obop_kv_expiry ON obop_kv (expires_ms);";
+
+#[test]
+fn a_database_from_before_the_history_opens_without_a_schema_change_and_gets_the_table_when_needed()
+{
+    let dir = TempDir::new();
+    let path = dir.0.join("old.db");
+    {
+        let c = rusqlite::Connection::open(&path).unwrap();
+        c.execute_batch(SCHEMA_BEFORE_THE_HISTORY).unwrap();
+        c.execute(
+            "INSERT INTO obop_record (model, id, data) VALUES ('deal', 'd1', '{\"n\":1}')",
+            (),
+        )
+        .unwrap();
+    }
+    // What a second connection sees of the schema: its version counter and the tables.
+    let schema = || -> (i64, Vec<String>) {
+        let c = rusqlite::Connection::open(&path).unwrap();
+        let version = c
+            .query_row("PRAGMA schema_version", (), |r| r.get::<_, i64>(0))
+            .unwrap();
+        let mut st = c
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            .unwrap();
+        let names = st
+            .query_map((), |r| r.get::<_, String>(0))
+            .unwrap()
+            .map(|n| n.unwrap())
+            .collect();
+        (version, names)
+    };
+    let before = schema();
+    assert!(!before.1.contains(&"obop_record_change".to_string()));
+    let (now, clock) = clock();
+    let db = Fx {
+        b: Tracked::new(Arc::new(
+            Sqlite::open_with_clock(&path.display().to_string(), clock).unwrap(),
+        )),
+        now,
+        name: "an old file",
+        _dir: None,
+    };
+    assert_eq!(
+        schema(),
+        before,
+        "opening created nothing and changed nothing"
+    );
+    // Everything that reads works, and finds no history, without creating the table.
+    assert_eq!(db.b.total().unwrap(), 1);
+    assert_eq!(db.rows().len(), 1);
+    assert!(db.hist("deal", "d1").is_empty());
+    assert_eq!(db.get("deal", "d1")["n"], 1);
+    assert_eq!(schema(), before);
+    // Writes to models nobody tracks do not need it either.
+    db.ok("ann", &[ins("deal", "d2", json!({"n": 2}))]);
+    db.b.insert("note", "n1", &f(json!({"x": 1}))).unwrap();
+    assert_eq!(schema(), before);
+    // The first write that records history creates it, in its own transaction.
+    db.track_plain("deal", &["n"]);
+    db.ok("bob", &[merge("deal", "d1", json!({"n": 3}))]);
+    let after = schema();
+    assert!(
+        after.1.contains(&"obop_record_change".to_string()),
+        "{after:?}"
+    );
+    let entries = db.hist("deal", "d1");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        (entries[0].op.as_str(), entries[0].row_version),
+        ("update", 2)
+    );
+    assert_eq!(db.b.total().unwrap(), 4, "three records, one entry");
+    // A refused batch leaves no table behind that it made (the creation is part of it).
+    let fresh = Fx::sqlite_file();
+    fresh.track_plain("deal", &["n"]);
+    let r = fresh.by("ann", &[ins("deal", "d1", json!({})), del("deal", "ghost")]);
+    assert!(r.is_err());
+    assert_eq!(fresh.b.total().unwrap(), 0);
+    assert!(fresh.hist("deal", "d1").is_empty());
+    // A restore that carries entries creates it too; one that carries none and wipes does not
+    // need it.
+    let src = Fx::memory();
+    src.track_plain("deal", &["n"]);
+    src.ok("ann", &[ins("deal", "d1", json!({"n": 1}))]);
+    let mut feed = Some(src.rows());
+    assert_eq!(db.b.import(true, &mut || Ok(feed.take())).unwrap(), 2);
+    assert_eq!(db.hist("deal", "d1").len(), 1);
+    let mut empty = Some(Vec::new());
+    assert_eq!(db.b.import(true, &mut || Ok(empty.take())).unwrap(), 0);
+    assert_eq!(db.b.total().unwrap(), 0, "the history went with the wipe");
+}
+
 // ---- a random run ---------------------------------------------------------------------------------
 
 /// A small deterministic generator, so that a failure can be replayed.

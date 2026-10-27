@@ -34,8 +34,12 @@ const SCHEMA: &str = "PRAGMA journal_mode = WAL;
          value      TEXT NOT NULL,
          expires_ms INTEGER NOT NULL
      );
-     CREATE INDEX IF NOT EXISTS obop_kv_expiry ON obop_kv (expires_ms);
-     CREATE TABLE IF NOT EXISTS obop_record_change (
+     CREATE INDEX IF NOT EXISTS obop_kv_expiry ON obop_kv (expires_ms);";
+
+/// The change history (D75). It is created by the first write that needs it, not when the file is
+/// opened, so that a database from before the history opens as it always did (a read-only copy
+/// can be opened, inspected and backed up), and a database nothing tracks never gets the table.
+const HISTORY_SCHEMA: &str = "CREATE TABLE IF NOT EXISTS obop_record_change (
          seq        INTEGER PRIMARY KEY AUTOINCREMENT,
          at         TEXT NOT NULL,
          model      TEXT NOT NULL,
@@ -52,6 +56,27 @@ const SCHEMA: &str = "PRAGMA journal_mode = WAL;
      );
      CREATE INDEX IF NOT EXISTS obop_record_change_rec
          ON obop_record_change (model, record_id, seq DESC);";
+
+/// Whether the history table exists. A database where it does not has never recorded a change.
+fn has_history(conn: &Connection) -> Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM sqlite_master
+                         WHERE type = 'table' AND name = 'obop_record_change')",
+        (),
+        |r| r.get::<_, i64>(0),
+    )
+    .map(|n| n != 0)
+    .map_err(e)
+}
+
+/// Create the history table if it is not there (inside the transaction of the write that needs it).
+fn ensure_history(conn: &Connection) -> Result<()> {
+    conn.execute_batch(HISTORY_SCHEMA).map_err(e)
+}
+
+/// The records that have no usable `row_version`: what the backfill stamps.
+const UNSTAMPED: &str = "(json_type(data, '$.row_version') IS NOT 'integer'
+                          OR json_extract(data, '$.row_version') < 1)";
 
 /// The columns of an entry of the change history, in the order [`read_change`] reads them.
 const CHANGE_COLUMNS: &str = "seq, at, model, record_id, op, actor, via, row_version, changed, sealed, batch_id, run_id, txid";
@@ -342,6 +367,7 @@ impl Backend for Sqlite {
                 Ok(self.1.tick())
             }
             fn tx_history(&mut self, rows: &[ChangeRow]) -> Result<()> {
+                ensure_history(self.0)?;
                 for r in rows {
                     insert_change(
                         self.0,
@@ -364,6 +390,7 @@ impl Backend for Sqlite {
                 row_version: i64,
                 at: i64,
             ) -> Result<u64> {
+                ensure_history(self.0)?;
                 let stored: Vec<(i64, String)> = {
                     let mut st = self
                         .0
@@ -689,16 +716,16 @@ impl Backend for Sqlite {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(e)?;
         if wipe {
-            for t in [
-                "obop_record",
-                "obop_kv",
-                "obop_counter",
-                "obop_record_change",
-            ] {
+            for t in ["obop_record", "obop_kv", "obop_counter"] {
                 tx.execute(&format!("DELETE FROM {t}"), ()).map_err(e)?;
+            }
+            if has_history(&tx)? {
+                tx.execute("DELETE FROM obop_record_change", ())
+                    .map_err(e)?;
             }
         }
         let mut n = 0;
+        let mut history_ready = false;
         while let Some(batch) = next()? {
             for (model, id, fields) in batch {
                 if sysfields::is_entry_row(&model, &fields) {
@@ -710,6 +737,10 @@ impl Backend for Sqlite {
                         .filter(|s| *s >= 1)
                         .ok_or_else(|| format!("record_change {id}: the id is not a number"))?;
                     let row = ChangeRow::from_fields(seq, &fields)?;
+                    if !history_ready {
+                        ensure_history(&tx)?;
+                        history_ready = true;
+                    }
                     insert_change(&tx, &row).map_err(|x| format!("record_change {seq}: {x}"))?;
                     n += 1;
                     continue;
@@ -771,21 +802,28 @@ impl Backend for Sqlite {
             .map_err(e)
     }
     fn total(&self) -> Result<usize> {
-        self.conn
-            .lock()
-            .unwrap()
-            .query_row(
-                "SELECT (SELECT COUNT(*) FROM obop_record)
-                      + (SELECT COUNT(*) FROM obop_record_change)",
-                (),
-                |r| r.get::<_, i64>(0),
-            )
+        let g = self.conn.lock().unwrap();
+        let count = |table: &str| -> Result<usize> {
+            g.query_row(&format!("SELECT COUNT(*) FROM {table}"), (), |r| {
+                r.get::<_, i64>(0)
+            })
             .map(|n| n as usize)
             .map_err(e)
+        };
+        let records = count("obop_record")?;
+        Ok(if has_history(&g)? {
+            records + count("obop_record_change")?
+        } else {
+            records
+        })
     }
 
     fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
         let g = self.conn.lock().unwrap();
+        // No table: nothing was ever recorded in this database (a failed check is an error).
+        if !has_history(&g)? {
+            return Ok(Vec::new());
+        }
         let mut st = g
             .prepare(&format!(
                 "SELECT {CHANGE_COLUMNS} FROM obop_record_change
@@ -826,18 +864,22 @@ impl Backend for Sqlite {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(e)?;
         let mut out = Backfilled::default();
+        let batch = batch.max(1);
+        // At most `batch` records are read and stamped, whatever the size of the model.
         for model in models {
+            let room = batch - out.stamped;
+            if room == 0 {
+                break;
+            }
             let candidates: Vec<(String, String)> = {
                 let mut st = tx
-                    .prepare(
-                        "SELECT id, data FROM obop_record WHERE model = ?1
-                           AND (json_type(data, '$.row_version') IS NOT 'integer'
-                                OR json_extract(data, '$.row_version') < 1)
-                         ORDER BY seq",
-                    )
+                    .prepare(&format!(
+                        "SELECT id, data FROM obop_record
+                         WHERE model = ?1 AND {UNSTAMPED} ORDER BY seq LIMIT ?2"
+                    ))
                     .map_err(e)?;
                 let it = st
-                    .query_map((model,), |r| Ok((r.get(0)?, r.get(1)?)))
+                    .query_map((model, room as i64), |r| Ok((r.get(0)?, r.get(1)?)))
                     .map_err(e)?;
                 it.collect::<std::result::Result<_, _>>().map_err(e)?
             };
@@ -845,10 +887,6 @@ impl Backend for Sqlite {
                 let Some(stamped) = sysfields::backfilled(&id, &parse(&data)?, fallback_at) else {
                     continue;
                 };
-                if out.stamped >= batch.max(1) {
-                    out.remaining += 1;
-                    continue;
-                }
                 tx.execute(
                     "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
                     (model, &id, J::Object(stamped).to_string()),
@@ -856,6 +894,17 @@ impl Backend for Sqlite {
                 .map_err(e)?;
                 out.stamped += 1;
             }
+        }
+        // What is left, counted (not read), in the same transaction.
+        for model in models {
+            let n: i64 = tx
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM obop_record WHERE model = ?1 AND {UNSTAMPED}"),
+                    (model,),
+                    |r| r.get(0),
+                )
+                .map_err(e)?;
+            out.remaining += n as usize;
         }
         tx.commit().map_err(e)?;
         Ok(out)
@@ -889,7 +938,11 @@ fn export_from(conn: &mut Connection, batch: usize, sink: &mut RowSink<'_>) -> R
         sink(&out)?;
     }
     // The history comes after the records, from the same snapshot, as rows of the model
-    // `record_change` (D75) whose id is the number of the entry.
+    // `record_change` (D75) whose id is the number of the entry. A database without the table has
+    // never recorded a change.
+    if !has_history(&tx)? {
+        return Ok(());
+    }
     let mut after = 0i64;
     loop {
         let entries: Vec<ChangeRow> = {
