@@ -1368,6 +1368,27 @@ fn the_tokens_a_provider_just_issued_are_kept_although_the_store_refuses_once() 
 }
 
 #[test]
+fn a_refusal_that_names_a_key_of_the_credentials_does_not_begin_with_it() {
+    // The key came first, from inside the JSON text of the `credentials` field, so the caller
+    // chose the first words of its own refusal (and, with a code of the table there, its row).
+    let e = env();
+    enable(&e, "webhook_out", false);
+    for key in ["denied: x", "cursor_expired: x", "storage_busy: x"] {
+        let m = err(
+            &e,
+            &admin(),
+            "connection.create",
+            json!({"name": "Hook", "provider": "webhook_out",
+                   "config": json!({"url": "https://hooks.example.org/in"}).to_string(),
+                   "credentials": json!({key: "v"}).to_string(),
+                   "field_allowlist": json!({"party": ["name"]}).to_string()}),
+        );
+        assert!(m.contains(key), "{m}");
+        assert!(!m.starts_with(key.split(':').next().unwrap()), "{m}");
+    }
+}
+
+#[test]
 fn the_retention_run_removes_old_dead_letters_too() {
     // A dead letter keeps the treated payload of a delivery that gave up, and only an operator
     // who looked at it ever removed it.

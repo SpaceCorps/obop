@@ -496,7 +496,22 @@ fn principal(app: &App, o: &Opts) -> Result<Principal, ExitCode> {
         .token
         .as_deref()
         .unwrap_or(if o.dev_auth { "dev-admin" } else { "" });
-    authenticator(app, o).resolve(token).ok_or_else(|| fail("no valid token: pass --token (or OBOP_TOKEN); see `obop admin create` and `obop agent-token`"))
+    // The lookup is a request of its own, so that a refusal of the store is told from a token that
+    // is not valid: "no valid token", exit 1, sent a script that repeats on 75 away for ever, and
+    // told the person that a good token was bad.
+    let (found, seen) = errors::requested(|| authenticator(app, o).resolve(token));
+    match found {
+        Some(p) => Ok(p),
+        None => match errors::storage_outcome(&seen, false) {
+            Some(c) => {
+                eprintln!("error: {}", c.cli);
+                Err(ExitCode::from(c.exit))
+            }
+            None => Err(fail(
+                "no valid token: pass --token (or OBOP_TOKEN); see `obop admin create` and `obop agent-token`",
+            )),
+        },
+    }
 }
 
 /// The D41 install gate over every linked first-party module.
