@@ -538,13 +538,31 @@ pub fn default_name(t: u64, sealed: bool) -> String {
     )
 }
 
+/// A file name in `dir` for a backup taken at `t` that no earlier backup holds: the default name,
+/// or the default name with `-2`, `-3` ... before the extension when that one is taken (two backups
+/// in the same second, for example the one before a module update and the one before its rollback,
+/// must not refuse each other). The data file and its manifest are both checked.
+pub fn free_path(dir: &Path, t: u64, sealed: bool) -> PathBuf {
+    let first = dir.join(default_name(t, sealed));
+    let taken = |p: &Path| p.exists() || manifest_path_for(p).exists();
+    if !taken(&first) {
+        return first;
+    }
+    let name = default_name(t, sealed);
+    let (stem, ext) = name.split_once('.').unwrap_or((name.as_str(), ""));
+    (2u32..)
+        .map(|n| dir.join(format!("{stem}-{n}.{ext}")))
+        .find(|p| !taken(p))
+        .unwrap_or(first)
+}
+
 /// Where the backup goes: a path ending in `.gz` or `.obbk` is the data file; anything else is a
 /// directory (created if needed) that gets a timestamped file name. A sealed backup is not gzip:
 /// it cannot be given a `.gz` name, which tools would take for a file they can read.
 fn resolve_out(out: &Path, sealed: bool, at: u64) -> Result<PathBuf, String> {
     let name = out.to_string_lossy();
     if out.is_dir() || !(name.ends_with(".gz") || name.ends_with(".obbk")) {
-        return Ok(out.join(default_name(at, sealed)));
+        return Ok(free_path(out, at, sealed));
     }
     if sealed && name.ends_with(".gz") {
         return Err(format!(

@@ -207,6 +207,49 @@ fn a_directory_gets_a_timestamped_file_and_nothing_is_overwritten() {
 }
 
 #[test]
+fn two_backups_into_one_directory_in_the_same_second_get_two_names() {
+    // The one before a module update and the one before its rollback can fall in the same second.
+    let dir = Dir::new();
+    let src = dir.sqlite("src.db");
+    seed(&src);
+    let out = dir.path("backups");
+    std::fs::create_dir_all(&out).unwrap();
+    let keys = Keys::none();
+    let at = 1_735_689_600;
+    let one = create_at(&src, None, 2, &out, &keys, at, &mut |_| {}).unwrap();
+    let two = create_at(&src, None, 2, &out, &keys, at, &mut |_| {}).unwrap();
+    let three = create_at(&src, None, 2, &out, &keys, at, &mut |_| {}).unwrap();
+    let names: Vec<String> = [&one, &two, &three]
+        .iter()
+        .map(|c| {
+            c.data_path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
+        })
+        .collect();
+    assert_eq!(names[0], "obop-backup-20250101T000000Z.jsonl.gz");
+    assert_eq!(names[1], "obop-backup-20250101T000000Z-2.jsonl.gz");
+    assert_eq!(names[2], "obop-backup-20250101T000000Z-3.jsonl.gz");
+    for c in [&one, &two, &three] {
+        assert!(c.data_path.exists() && c.manifest_path.exists());
+        verify(&c.data_path).unwrap();
+    }
+    // A file named by the caller is still never overwritten.
+    let again = create_at(&src, None, 2, &one.data_path, &keys, at, &mut |_| {}).unwrap_err();
+    assert!(again.contains("never overwritten"), "{again}");
+    // The sealed names follow the same rule.
+    assert_eq!(
+        free_path(&out, at, true)
+            .file_name()
+            .unwrap()
+            .to_string_lossy(),
+        "obop-backup-20250101T000000Z.obbk"
+    );
+}
+
+#[test]
 fn damage_and_edits_are_detected() {
     let dir = Dir::new();
     let src = dir.sqlite("src.db");
