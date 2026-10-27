@@ -573,3 +573,34 @@ fn a_dropped_pool_leaves_the_report_and_lets_go_of_its_manager() {
         Arc::strong_count(&fake) == 1
     });
 }
+
+#[test]
+fn a_connection_that_could_not_be_had_is_unavailable_and_nothing_was_in_flight() {
+    // Whether an approved plan may be put back after a refused run rests on this: a pool that
+    // could not hand out a connection sent nothing, so the change is not in doubt. Only a
+    // statement on a connection that then broke is (`note_in_flight`, pgpool `describe`).
+    let (p, fake) = pool("noflight", 1);
+    fake.fail.store(true, SeqCst);
+    fault::begin_request(Default::default());
+    let r = p.get(false);
+    let out = fault::end_request();
+    assert!(r.is_err());
+    assert_eq!(out.fault, Some(Fault::Unavailable), "{out:?}");
+    assert!(
+        !out.in_flight,
+        "a failed connect is not a statement in flight"
+    );
+    // A full pool (the second get has to wait and gives up) is busy, and also sends nothing.
+    let p2 = Pool::new(
+        Arc::new(Fake::default()),
+        settings("noflight-full", 1, Duration::from_millis(100)),
+    );
+    let held = p2.get(false).unwrap();
+    fault::begin_request(Default::default());
+    let r = p2.get(false);
+    let out = fault::end_request();
+    assert!(r.is_err());
+    assert_eq!(out.fault, Some(Fault::Busy), "{out:?}");
+    assert!(!out.in_flight, "{out:?}");
+    drop(held);
+}
