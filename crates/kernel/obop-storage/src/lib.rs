@@ -344,7 +344,9 @@ pub trait Backend: Send + Sync {
 
     /// Every record, in insertion order, in batches of at most `batch` rows, from one consistent
     /// snapshot (a repeatable-read transaction on PostgreSQL, a read transaction on SQLite).
-    /// Memory is bounded by the batch. For `obop backup`.
+    /// Memory is bounded by the batch. For `obop backup`. A store that keeps the change history
+    /// of records (D75) delivers it after the records, as rows of the model `record_change` whose
+    /// id is the number of the entry (`ChangeRow::to_fields`), and `import` takes them back.
     fn export(&self, batch: usize, sink: &mut RowSink<'_>) -> Result<()>;
     /// Number of records of every model.
     fn total(&self) -> Result<usize>;

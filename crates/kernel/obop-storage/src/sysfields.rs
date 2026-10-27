@@ -458,6 +458,22 @@ fn stripped(f: &Fields) -> Fields {
     c
 }
 
+/// The instant and the version a record the planner has stamped carries. The planner stamps
+/// every record it writes, so a record without them is a defect here, and the batch is refused
+/// rather than given an entry with a made-up instant or version.
+fn stamp_of(rec: &Fields) -> std::result::Result<(String, i64), ApplyError> {
+    let at = rec
+        .get("updated_at")
+        .and_then(J::as_str)
+        .filter(|a| parse_micros(a).is_some());
+    match (at, row_version(rec)) {
+        (Some(at), Some(version)) => Ok((at.to_string(), version)),
+        _ => Err(ApplyError::Storage(
+            "internal error: a record the planner wrote has no updated_at or row_version".into(),
+        )),
+    }
+}
+
 fn stamp_new(out: &mut Fields, ts: i64, by: &str) {
     let at = J::from(fmt_micros(ts));
     out.insert("created_at".into(), at.clone());
@@ -750,7 +766,8 @@ impl<'a> Stage<'a> {
                 // Created and, if at all, deleted again in this transaction.
                 (None, Some(live), _) => {
                     if rec.track.history {
-                        rows.push(self.entry(rec, "create", live, None, Some(live)));
+                        let (at, version) = stamp_of(live)?;
+                        rows.push(self.entry(rec, "create", at, version, None, Some(live)));
                     }
                 }
                 (None, None, _) | (Some(_), None, None) => {}
@@ -768,21 +785,25 @@ impl<'a> Stage<'a> {
                             .as_ref()
                             .is_some_and(|(m, i)| *m == rec.model && *i == rec.id);
                         let op = if primary { "transition" } else { "update" };
-                        rows.push(self.entry(rec, op, live, Some(before), Some(live)));
+                        let (at, version) = stamp_of(live)?;
+                        rows.push(self.entry(rec, op, at, version, Some(before), Some(live)));
                     }
                 }
                 (Some(before), None, Some(gone)) => {
                     let last = &gone.last;
                     let net = rec.stamped && canon(before) != canon(last);
                     if net && rec.track.history {
-                        rows.push(self.entry(rec, "update", last, Some(before), Some(last)));
+                        let (at, version) = stamp_of(last)?;
+                        rows.push(self.entry(rec, "update", at, version, Some(before), Some(last)));
                     }
                     if rec.track.history {
+                        // A record from before the tracking has no version and reads as 1, so
+                        // its delete is version 2; one that was changed and put back counts from
+                        // the version it had, the stamp of this transaction never having been
+                        // stored.
                         let version = row_version(if net { last } else { before }).unwrap_or(1) + 1;
-                        let mut row = self.entry(rec, "delete", last, Some(last), None);
-                        row.at = fmt_micros(gone.at);
-                        row.row_version = version;
-                        rows.push(row);
+                        let at = fmt_micros(gone.at);
+                        rows.push(self.entry(rec, "delete", at, version, Some(last), None));
                     }
                 }
             }
@@ -826,13 +847,14 @@ impl<'a> Stage<'a> {
         Ok(())
     }
 
-    /// One entry for `rec`. `before` and `after` are the record around the change (system keys
-    /// are ignored); the entry says `after`'s stamp.
+    /// One entry for `rec`, made at `at` (canonical text) with the record at `version`. `before`
+    /// and `after` are the record around the change; system keys are not part of what changed.
     fn entry(
         &self,
         rec: &Rec,
         op: &str,
-        stamped: &Fields,
+        at: String,
+        version: i64,
         before: Option<&Fields>,
         after: Option<&Fields>,
     ) -> ChangeRow {
@@ -844,16 +866,13 @@ impl<'a> Stage<'a> {
         let (changed, sealed) = self.changed(rec, before, after);
         ChangeRow {
             seq: 0,
-            at: stamped
-                .get("updated_at")
-                .and_then(J::as_str)
-                .map_or_else(String::new, String::from),
+            at,
             model: rec.model.clone(),
             record_id: rec.id.clone(),
             op: op.to_string(),
             actor: self.ctx.by.clone(),
             via: via_json(&self.ctx.via, effect.then_some("effect")),
-            row_version: row_version(stamped).unwrap_or(1),
+            row_version: version,
             changed,
             sealed,
             batch_id: self.ctx.batch_id.clone(),
