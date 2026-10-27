@@ -37,12 +37,10 @@ use std::sync::{Arc, RwLock};
 /// Reads are not refused (they find nothing), and `import` is not either: it is how those rows
 /// come back.
 ///
-/// The install gate will refuse the same name in a package: `RESERVED_MODELS` of `obop-registry`
+/// The install gate refuses the same name in a package: `RESERVED_MODELS` of `obop-registry`
 /// lists it, together with three names of models that are stored as records or are virtual and
-/// so are not refused here, but the gate does not enforce the list yet (the D75 package does).
-/// Until then a package or a module-builder model named `record_change` still installs, and its
-/// writes are refused here with this message: an interim behaviour change, recorded in
-/// docs/ISSUES.md (K21).
+/// so are not refused here. A package installed before the gate did that still loads, and its
+/// writes to a model of that name are refused here with this message (docs/ISSUES.md, K21).
 pub const PSEUDO_MODELS: [&str; 1] = ["record_change"];
 
 fn is_pseudo(model: &str) -> bool {
