@@ -456,6 +456,11 @@ fn describe_with(e: &postgres::Error, sent: bool) -> String {
         fault::note(Fault::Timeout);
         return Fault::Timeout.message("a database statement ran into its time limit");
     }
+    // A write the database's own guards refused (D77, SQLSTATE OBG01 / OBG02) is neither a fault
+    // nor a plain server error: it carries the typed form of `refusal` through the `String`.
+    if let Some(r) = e.as_db_error().and_then(crate::refusal::from_db) {
+        return crate::refusal::to_error(&r);
+    }
     if connection_failed(e) {
         if sent {
             // A statement was on this connection when it broke: what it did is unknown.

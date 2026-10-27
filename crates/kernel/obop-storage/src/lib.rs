@@ -464,8 +464,11 @@ mod pgpool;
 pub mod pool;
 #[cfg(test)]
 mod pool_tests;
+pub mod refusal;
 #[cfg(test)]
 mod shared_tests;
+#[cfg(test)]
+mod seams_tests;
 mod sqlite;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
