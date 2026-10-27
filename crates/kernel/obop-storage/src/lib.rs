@@ -451,6 +451,7 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
     base
 }
 
+pub mod ctx;
 pub mod fault;
 mod guard;
 pub mod keyexpr;
@@ -472,6 +473,7 @@ pub mod tls;
 #[cfg(test)]
 mod tls_tests;
 
+pub use ctx::{ACTOR_PUBLIC, ACTOR_SYSTEM, ActionRun, Via, WriteCtx};
 pub use guard::guarded;
 pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
 
