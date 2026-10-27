@@ -3,7 +3,7 @@
 // translatable messages here; anything else is shown as received. When the server learns to send a
 // code with its messages, replace the patterns by that code.
 import { getLang, t, tx } from "@obop/ui";
-import type { ModuleMeta } from "./api.ts";
+import type { FieldMeta, ModuleMeta } from "./api.ts";
 import { label, optionLabel } from "./format.ts";
 import { appTitle, fieldTitle, modelTitle } from "./labels.ts";
 
@@ -21,18 +21,55 @@ function modelName(name: string): string {
   return tx("model", label(name));
 }
 
-function fieldName(model: string, field: string): string {
+/** The field of a model as `/api/meta` described it, or `undefined` when either is unknown. */
+function findField(model: string, field: string): FieldMeta | undefined {
   for (const m of modules) {
     const f = m.models.find((x) => x.name === model)?.fields.find((x) => x.name === field);
-    if (f) return fieldTitle(f);
+    if (f) return f;
   }
-  return tx("field", label(field));
+  return undefined;
 }
 
-/** An option value as the server quotes it ("draft"), or "(empty)", shown as the interface would. */
-function opt(raw: string): string {
-  if (raw === "(empty)") return t("empty");
-  return optionLabel(raw.replace(/^"|"$/g, ""));
+/** The field a rule names as `model.field` in its first two groups. */
+const named = (m: RegExpExecArray) => findField(m[1]!, m[2]!);
+
+function fieldName(model: string, field: string): string {
+  const f = findField(model, field);
+  return f ? fieldTitle(f) : tx("field", label(field));
+}
+
+/** The option value without the quotes the server puts around it. */
+function unquote(raw: string): string {
+  return raw.replace(/^"|"$/g, "");
+}
+
+/**
+ * An option value as the server quotes it ("draft"), or "(empty)", shown as the interface would:
+ * with the package's own words when `field` is known (its `option_labels`), else the generic table.
+ */
+function opt(raw: string, field?: FieldMeta): string {
+  if (raw === "(empty)" || raw === "empty") return t("empty");
+  return optionLabel(unquote(raw), field);
+}
+
+/**
+ * The select field a sentence means when it names the field but not the model ("stage must be new
+ * to do this", from a state change): a select of that name in the registered modules that offers
+ * every value the sentence quotes. It is used only when all such fields would show those values
+ * the same way; when models disagree the field is unknown and the generic table applies.
+ */
+function selectNamed(name: string, ...raws: string[]): FieldMeta | undefined {
+  const wanted = raws.filter((r) => r !== "(empty)" && r !== "empty").map(unquote);
+  const hits: FieldMeta[] = [];
+  for (const m of modules)
+    for (const model of m.models) {
+      const f = model.fields.find((x) => x.name === name && x.kind === "select");
+      if (f && wanted.every((v) => f.options?.includes(v))) hits.push(f);
+    }
+  const first = hits[0];
+  if (!first) return undefined;
+  const same = hits.every((f) => wanted.every((v) => optionLabel(v, f) === optionLabel(v, first)));
+  return same ? first : undefined;
 }
 
 /** A module by the name the interface gives it (its id when it is not installed). */
@@ -41,10 +78,10 @@ function moduleName(id: string): string {
   return m ? appTitle(m) : tx("app", label(id));
 }
 
-function values(list: string): string {
+function values(list: string, field?: FieldMeta): string {
   return list
     .split(/,\s*/)
-    .map((v) => optionLabel(v.replace(/^"|"$/g, "")))
+    .map((v) => optionLabel(unquote(v), field))
     .join(", ");
 }
 
@@ -78,7 +115,7 @@ const RULES: Rule[] = [
       t("{field} is required before {state} can change to {value}", {
         field: fieldName(m[1]!, m[2]!),
         state: fieldName(m[1]!, m[3]!),
-        value: optionLabel(m[4]!),
+        value: optionLabel(m[4]!, findField(m[1]!, m[3]!)),
       }),
   ],
   [
@@ -110,7 +147,7 @@ const RULES: Rule[] = [
     (m) =>
       t("{field} must be one of: {options}", {
         field: fieldName(m[1]!, m[2]!),
-        options: values(m[3]!),
+        options: values(m[3]!, named(m)),
       }),
   ],
   [
@@ -126,9 +163,9 @@ const RULES: Rule[] = [
     (m) =>
       t("{field} cannot change from {from} to {to}; from {from} it can only go to: {allowed}", {
         field: fieldName(m[1]!, m[2]!),
-        from: opt(m[3]!),
-        to: optionLabel(m[4]!),
-        allowed: values(m[5]!),
+        from: opt(m[3]!, named(m)),
+        to: optionLabel(m[4]!, named(m)),
+        allowed: values(m[5]!, named(m)),
       }),
   ],
   [
@@ -136,8 +173,8 @@ const RULES: Rule[] = [
     (m) =>
       t("{field} cannot change from {from} to {to}: no action leads away from {from}", {
         field: fieldName(m[1]!, m[2]!),
-        from: opt(m[3]!),
-        to: optionLabel(m[4]!),
+        from: opt(m[3]!, named(m)),
+        to: optionLabel(m[4]!, named(m)),
       }),
   ],
   [
@@ -171,7 +208,7 @@ const RULES: Rule[] = [
     (m) =>
       t("{field} starts as {value} when a record is created; it moves on through the actions", {
         field: fieldName(m[1]!, m[2]!),
-        value: opt(m[3]!),
+        value: opt(m[3]!, named(m)),
       }),
   ],
   [
@@ -181,8 +218,8 @@ const RULES: Rule[] = [
         "{field}: moving from {from} to {to} is the action {action}, which needs the group {group}",
         {
           field: fieldName(m[1]!, m[2]!),
-          from: opt(m[3]!),
-          to: opt(m[4]!),
+          from: opt(m[3]!, named(m)),
+          to: opt(m[4]!, named(m)),
           action: tx("action", label(m[5]!)),
           group: m[6]!,
         },
@@ -190,12 +227,16 @@ const RULES: Rule[] = [
   ],
   [
     /^(\w+) must be (\S+) to do this, it is (.+)$/,
-    (m) =>
-      t("{field} must be {from} to do this, it is {current}", {
-        field: tx("field", label(m[1]!)),
-        from: opt(m[2]!),
-        current: opt(m[3]!),
-      }),
+    (m) => {
+      // The sentence names the field but not its model: use the field of the metadata when it is the
+      // same one wherever it occurs, else the generic option table.
+      const f = selectNamed(m[1]!, m[2]!, m[3]!);
+      return t("{field} must be {from} to do this, it is {current}", {
+        field: f ? fieldTitle(f) : tx("field", label(m[1]!)),
+        from: opt(m[2]!, f),
+        current: opt(m[3]!, f),
+      });
+    },
   ],
   // Server-side queries (D49) and summaries (D4).
   [/^unknown op "([^"]*)" \(use .*\)$/, (m) => t("Unknown filter operator {op}", { op: m[1]! })],
