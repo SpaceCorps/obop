@@ -206,6 +206,14 @@ impl Backend for Sqlite {
         self.apply_checked(ops).map_err(|e| e.to_string())
     }
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        self.apply_tracked(ctx::system_ctx(), ops, Tracking::empty())
+    }
+    fn apply_tracked(
+        &self,
+        ctx: &WriteCtx,
+        ops: &[Op],
+        tracking: &Tracking,
+    ) -> std::result::Result<(), ApplyError> {
         struct S<'a>(&'a rusqlite::Transaction<'a>);
         impl TxView for S<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
@@ -259,7 +267,7 @@ impl Backend for Sqlite {
         let tx = g
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|e| ApplyError::Storage(e.to_string()))?;
-        let r = run_ops(&mut S(&tx), ops);
+        let r = run_ops(&mut S(&tx), ops, ctx, tracking);
         match r {
             Ok(()) => tx.commit().map_err(|e| ApplyError::Storage(e.to_string())),
             Err(e) => {

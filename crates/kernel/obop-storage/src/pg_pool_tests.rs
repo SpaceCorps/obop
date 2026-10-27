@@ -32,38 +32,19 @@ fn fields(n: i64) -> Fields {
 
 /// A database of this test's own on the server `OBOP_TEST_POSTGRES_URL` names, dropped afterwards
 /// (with its sessions): other tests that run beside these, in this crate or another, build
-/// indexes and fill tables in the shared database, which would make a statement here wait.
+/// indexes and fill tables in the shared database, which would make a statement here wait. It is
+/// `testing::TestDb`, the harness every test of the crate uses.
 struct Scratch {
-    admin: String,
-    name: String,
     url: String,
+    _db: crate::testing::TestDb,
 }
 
 impl Scratch {
     fn new(base: &str) -> Scratch {
-        let name = unique("obop_pool_unit").replace('-', "_");
-        let mut c = PgConnector::new(base).unwrap().connect().unwrap();
-        c.batch_execute(&format!("CREATE DATABASE {name}")).unwrap();
-        let (head, tail) = base.rsplit_once('/').unwrap();
-        // Keep any query string (sslmode and the like) of the base address.
-        let query = tail
-            .split_once('?')
-            .map_or(String::new(), |(_, q)| format!("?{q}"));
+        let db = crate::testing::TestDb::create(base).unwrap();
         Scratch {
-            admin: base.to_string(),
-            url: format!("{head}/{name}{query}"),
-            name,
-        }
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        if let Ok(mut c) = PgConnector::new(&self.admin).and_then(|c| c.connect()) {
-            let _ = c.batch_execute(&format!(
-                "DROP DATABASE IF EXISTS {} WITH (FORCE)",
-                self.name
-            ));
+            url: db.url().to_string(),
+            _db: db,
         }
     }
 }

@@ -1,4 +1,8 @@
+import { HOSTING } from "../data/hosting.ts";
+import { hostedPlans } from "./hosting.ts";
 import type { Messages } from "./types.ts";
+
+const eur = (n: number) => `€${n}`;
 
 export const pl: Messages = {
   htmlLang: "pl",
@@ -191,11 +195,11 @@ export const pl: Messages = {
         body: "Czytaj kod, decyzje i plan rozwoju. Apache-2.0, bezpłatny w użyciu i do samodzielnego hostowania; zajrzyj do repozytorium.",
       },
     ],
-    pricingTitle: "Prosty cennik, w planach",
-    pricingSub:
-      "Samodzielny hosting wersji otwartoźródłowej jest bezpłatny. Plany hostowane są rozliczane za organizację. To planowane ceny; w czasie bety nic nie jest pobierane.",
-    pricingFine: "Planowane ceny, rozliczane rocznie, bez VAT. Jeszcze nie pobierane.",
-    pricingCta: "Zobacz, co zawiera każdy plan",
+    pricingTitle: "Za darmo. Hosting, jeśli chcesz.",
+    pricingSub: `obop jest darmowy i open source: uruchom go sam na własnym serwerze. Jeśli wolisz tego nie robić, planowany jest dedykowany hosting od ${eur(HOSTING.servers[0].eur)} miesięcznie. Dziś nic nie jest naliczane.`,
+    pricingFine:
+      "Planowane ceny za serwer miesięcznie, bez VAT. Hosting nie jest jeszcze oferowany ani naliczany.",
+    pricingCta: "Zobacz planowane ceny hostingu",
     faqTitle: "Pytania",
     faq: [
       {
@@ -208,7 +212,7 @@ export const pl: Messages = {
       },
       {
         q: "Ile to kosztuje?",
-        a: "Własny hosting jest bezpłatny. Plany hostowane są przewidziane za €0, €49, €249 i od €899 miesięcznie za organizację, ale w czasie bety nic nie jest pobierane, a ceny mogą się zmienić.",
+        a: `obop można używać i hostować samodzielnie za darmo. Dedykowany hosting na własnym serwerze jest planowany od ${eur(HOSTING.servers[0].eur)} miesięcznie, plus ${eur(HOSTING.extraStorage.eur)} za każde dodatkowe ${HOSTING.extraStorage.blockGb} GB miejsca, ale nie jest jeszcze oferowany ani naliczany, a ceny mogą się zmienić.`,
       },
       {
         q: "Gdzie są moje dane?",
@@ -237,77 +241,54 @@ export const pl: Messages = {
   },
   pricing: {
     title: "Cennik",
-    description:
-      "Planowany cennik: Free, Team (€49), Growth (€249) i Scale (od €899) za organizację miesięcznie. Wyłącznie plan, w czasie bety nic nie jest pobierane. Własny hosting jest bezpłatny.",
-    lead: "Własny hosting wersji otwartoźródłowej jest bezpłatny. Plany hostowane są rozliczane za organizację, a nie za użytkownika. To ceny planowane: w czasie bety nic nie jest pobierane i mogą się zmienić, zanim zaczniemy je pobierać.",
-    plans: [
-      {
-        name: "Free",
-        price: "€0",
+    description: `obop jest darmowy i open source (Apache-2.0). Planowany dedykowany hosting: własny serwer od ${eur(HOSTING.servers[0].eur)} miesięcznie, dodatkowe miejsce ${eur(HOSTING.extraStorage.eur)} za ${HOSTING.extraStorage.blockGb} GB. Jeszcze nieoferowany ani nienaliczany.`,
+    lead: "obop można używać i hostować samodzielnie za darmo. Jeśli wolisz nie prowadzić serwera, planujemy prowadzić go dla Ciebie: dedykowany serwer na firmę, wyceniany według jego wielkości i dodanego miejsca, a nie liczby użytkowników. To ceny planowane; hosting nie jest jeszcze oferowany ani naliczany.",
+    plans: hostedPlans({
+      eur,
+      unit: "GB",
+      period: "/miesiąc",
+      selfHost: {
+        name: "Samodzielny hosting",
+        price: eur(0),
         period: "",
-        blurb: "Własna instancja hostowana, w której wypróbujesz podstawy fakturowania.",
+        blurb: "Cały projekt na Twoim własnym serwerze. Apache-2.0, darmowy na zawsze.",
         features: [
-          "Pakiet fakturowania",
-          "Wsparcie społeczności",
-          "Pełny eksport danych w planach",
-        ],
-      },
-      {
-        name: "Team",
-        price: "€49",
-        period: "/miesiąc",
-        blurb: "Pełny obieg w siedmiu aplikacjach dla rosnącego zespołu.",
-        features: [
-          "Pięciu pełnych użytkowników",
-          "Wszystkie aplikacje obiegu",
-          "Kopie zapasowe i region UE",
-          "Wsparcie e-mailowe",
+          "Wszystkie dołączone aplikacje",
+          "REST API, MCP i wiersz poleceń",
+          "SQLite lub PostgreSQL",
+          "Pomoc na GitHubie",
         ],
         highlight: true,
       },
-      {
-        name: "Growth",
-        price: "€249",
-        period: "/miesiąc",
-        blurb: "Większa wydajność, wsparcie i poziomy usług.",
-        features: [
-          "25 pełnych użytkowników",
-          "Wszystkie aplikacje, 100 GB",
-          "Odtwarzanie do punktu w czasie, środowisko testowe",
-          "Wsparcie w następnym dniu roboczym",
-        ],
-      },
-      {
-        name: "Scale",
-        price: "od €899",
-        period: "/miesiąc",
-        blurb: "Dedykowana wydajność i wyznaczona osoba kontaktowa.",
-        features: [
-          "100 lub więcej użytkowników",
-          "Dedykowana komórka, przypięcie do regionu",
-          "SAML i SCIM",
-          "Cel dostępności 99,9 procent, 24x5",
-        ],
-      },
-    ],
-    plannedBadge: "Planowane, jeszcze nie pobierane",
-    note: "Ceny są planowane, za organizację miesięcznie, rozliczane rocznie, bez VAT. To hipotezy z planu produktu, a nie umowa.",
-    selfHostTitle: "Własny hosting jest bezpłatny",
+      serverBlurb: "Dedykowany serwer dla jednej firmy.",
+      serverFeatures: (storageGb) => [
+        "Własny serwer, niewspółdzielony z innymi klientami",
+        "obop i jego baza PostgreSQL na tym samym serwerze",
+        `${storageGb} GB miejsca NVMe w cenie`,
+        "To samo wolne oprogramowanie: odejdź, kiedy chcesz, i hostuj je sam",
+      ],
+    }),
+    plannedBadge: "Planowane, jeszcze nieoferowane ani nienaliczane",
+    note: `Planowane ceny w euro za serwer miesięcznie, bez VAT. Dodatkowe miejsce NVMe: ${eur(HOSTING.extraStorage.eur)} za ${HOSTING.extraStorage.blockGb} GB miesięcznie. To plany, a nie oferta ani umowa.`,
+    selfHostTitle: "Za darmo i do uruchomienia po Twojej stronie",
     selfHostBody:
-      "Wersja otwartoźródłowa zawiera wszystkie wbudowane aplikacje, REST API, MCP i CLI. Uruchamiasz ją samodzielnie na SQLite lub PostgreSQL. Płatne wsparcie i usługi dla osób hostujących samodzielnie są w planach, ale nie są jeszcze oferowane.",
+      "obop nie ma płatnej edycji ani wstrzymanych funkcji: każda aplikacja, REST API, MCP i wiersz poleceń są w darmowym wydaniu Apache-2.0. Uruchamiasz go sam na SQLite lub PostgreSQL.",
+    hostingTitle: "Hosting, jeśli chcesz",
+    hostingBody:
+      "Planowana usługa: SpaceCorps prowadzi dedykowany serwer dla Twojej firmy w infrastrukturze Sliplane, z obop i PostgreSQL na nim. Cena zależy od wielkości serwera; nie ma opłat za użytkownika.",
     faqTitle: "Pytania o cennik",
     faq: [
       {
-        q: "Czy dziś cokolwiek mi się nalicza?",
-        a: "Nie. Usługa hostowana to bezpłatna beta. Gdy zaczniemy pobierać opłaty, ogłosimy to i nic nie zostanie pobrane bez Twojej zgody.",
+        q: "Czy dziś coś mi naliczono?",
+        a: "Nie. obop jest darmowy, a hosting dla innych nie jest jeszcze oferowany. Gdy będzie, ogłosimy to tutaj i nic nie zostanie naliczone bez Twojej zgody.",
       },
       {
-        q: "Dlaczego za organizację, a nie za użytkownika?",
-        a: "Zamierzamy wyceniać firmę, a nie każde stanowisko, z podziałem na przedziały według liczby pełnych użytkowników. Użytkownicy portalu i kilka stanowisk dla księgowych mają być bezpłatne.",
+        q: "Dlaczego hosting wyceniany jest za serwer, a nie za użytkownika?",
+        a: "Każda hostowana firma dostaje dedykowany serwer, więc cena zależy od wielkości serwera i dodanego miejsca. Dodawanie osób nic nie kosztuje.",
       },
       {
-        q: "Czy mogę odejść i zabrać swoje dane?",
-        a: "Tak, jeśli hostujesz samodzielnie: baza danych należy do Ciebie. Pełny eksport w każdym planie to wiążąca decyzja produktowa; narzędzie do eksportu dopiero powstanie.",
+        q: "Czy mogę odejść i zabrać dane?",
+        a: "Tak. obop ma licencję Apache-2.0, a jego baza to zwykły PostgreSQL, więc możesz uruchomić to samo oprogramowanie sam; obop backup i obop restore są wbudowane.",
       },
     ],
     cta: "Załóż własną instancję",

@@ -15,7 +15,7 @@ Everything below is Proposed unless a binding decision is cited (section 2); pri
 | What is it? | An open-source operating system for businesses: sales, stock, invoicing, accounting, CRM and more as modules on one shared data model, with Odoo as the functional reference (section 1). |
 | For whom? | Owner-led firms of 5 to 50 people in services and light trade, one company and one country at a time, Germany first (Proposed, D4). See [PRODUCT.md section 3](docs/PRODUCT.md#3-who-it-is-for). |
 | Why would it win? | One open edition, a free generated API, books enforced by the database, upgrades with a local dry-run, signed country packs (section 3). No speed claim until a benchmark exists (D21). |
-| What does it cost? | Nothing. The whole project is Apache-2.0 and completely free to use and to self-host: no paid tier, no enterprise layer, no price list (RATIFIED, D1, D2, OR-1, OR-2). The hosted plans, prices and paid list that [PRODUCT.md](docs/PRODUCT.md) and [BUSINESS.md](docs/BUSINESS.md) still describe are superseded. |
+| What does it cost? | Nothing for the software: the whole project is Apache-2.0 and completely free to use and to self-host, with no paid tier, no enterprise layer and no per-user fee (RATIFIED, D1, D2, OR-1, OR-2). SpaceCorps also plans to run dedicated hosting for businesses that would rather not run a server, from about EUR 29 a month plus EUR 15 per extra 50 GB of storage; that is planned, not offered or charged yet (OR-22). |
 | When? | Nothing can be installed today. First delivery is wave W1, 2027-01-01 to 2027-09-30: paid beta 2027-07-06, German pack stable 2027-09-30, 1.0 LTS 2028-04-18 (Proposed, D26). |
 | How is it built? | Rust backend, Vite+ frontend driven only through `vp`, pnpm as the only package manager, one binary plus PostgreSQL (F1, F2, D37). |
 | Where does the project stand? | Pre-code and pre-formation: no seed round closed (about EUR 3M planned), no counsel retained, no design partner signed ([ROADMAP.md section 5.2](docs/ROADMAP.md#52-dependency-register)). |
@@ -72,7 +72,7 @@ Wave W1, 2027-01-01 to 2027-09-30 (Proposed, D25, D26). Three milestones replace
 
 ## 6. Licence and contributing (RATIFIED, D1)
 
-The whole project is **Apache-2.0** ([LICENSE](LICENSE), [NOTICE](NOTICE)): the core, first-party apps, SDKs and templates alike, with no copyleft layer, no `ee` tree and nothing paid (OR-1, OR-2). SpaceCorps is the publisher, copyright holder and trademark holder (OR-10); Apache-2.0 grants no trademark rights.
+The whole project is **Apache-2.0** ([LICENSE](LICENSE), [NOTICE](NOTICE)): the core, first-party apps, SDKs and templates alike, with no copyleft layer, no `ee` tree and nothing paid in the software (OR-1, OR-2). The one planned paid thing is a hosting service run by SpaceCorps, which restricts nothing in the free software (OR-22). SpaceCorps is the publisher, copyright holder and trademark holder (OR-10); Apache-2.0 grants no trademark rights.
 
 Contributions carry a DCO sign-off (`git commit -s`) and no CLA, so inbound equals outbound. The owner signs off every commit, and agents are recorded with a `Co-Authored-By` trailer and never add a sign-off (OR-18). Nothing here is legal advice; open legal items are listed for counsel in [docs/BUSINESS.md](docs/BUSINESS.md).
 

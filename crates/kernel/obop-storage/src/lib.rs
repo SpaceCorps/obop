@@ -73,6 +73,18 @@ pub enum Op {
 }
 
 impl Op {
+    /// The model of the record this step works on.
+    pub fn model(&self) -> &str {
+        match self {
+            Op::Insert { model, .. }
+            | Op::Put { model, .. }
+            | Op::Merge { model, .. }
+            | Op::Delete { model, .. }
+            | Op::Add { model, .. }
+            | Op::Patch { model, .. } => model,
+        }
+    }
+
     pub fn add(model: &str, id: &str, field: &str, delta: i64) -> Op {
         Op::Add {
             model: model.into(),
@@ -212,6 +224,39 @@ pub trait Backend: Send + Sync {
         Err(ApplyError::Storage(
             "this storage backend has no atomic batches".into(),
         ))
+    }
+    /// Like [`Backend::apply_checked`], for a write that knows who makes it and with which tickets
+    /// (D75, D77). Only [`Tracked`] implements it, by handing the context and its own list of
+    /// tracked models to the backend underneath (`apply_tracked`); every other backend leaves
+    /// this default, which drops the context, and a wrapper that sits above a `Tracked` must
+    /// forward it (the lint `tracked_forwards_every_backend_method` and its siblings check that).
+    fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+        let _ = ctx;
+        self.apply_checked(ops)
+    }
+    /// What the three shipped backends implement instead of `apply_checked`, which they define as
+    /// this call with the system's context and no tracked models. Not for callers: they use
+    /// `apply_ctx` or `apply_checked`. The default refuses, so a backend that forgets it fails
+    /// loudly instead of calling itself.
+    #[doc(hidden)]
+    fn apply_tracked(
+        &self,
+        ctx: &WriteCtx,
+        ops: &[Op],
+        tracking: &Tracking,
+    ) -> std::result::Result<(), ApplyError> {
+        let _ = (ctx, ops, tracking);
+        Err(ApplyError::Storage(
+            "this storage backend has no atomic batches".into(),
+        ))
+    }
+    /// Keep system fields and history for `model` from now on (D75). Only [`Tracked`] has a list.
+    fn track(&self, _model: &str, _how: Track) {}
+    /// Stop tracking `model`.
+    fn untrack(&self, _model: &str) {}
+    /// The models that are tracked, sorted.
+    fn tracked_models(&self) -> Vec<String> {
+        Vec::new()
     }
     /// Records of `model` whose `field` equals `value`, in insertion order. The shipped backends
     /// answer it in the database; the default reads the model.
@@ -401,23 +446,112 @@ fn ident(s: &str) -> Result<&str> {
     }
 }
 
+/// Whether the process may issue DDL (create tables) when it opens a PostgreSQL database.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ddl {
+    /// Create what is missing, under the lock that serialises processes starting together.
+    IfMissing,
+    /// Create nothing: a database that lacks the schema is an error that says so. For a
+    /// deployment whose serving role may not create tables. It covers the record store
+    /// (`schema::parts`) and the byte store's table (`blob::DbBytes`).
+    Never,
+}
+
+impl Ddl {
+    /// What [`open`] uses: `Never` in a production process (see [`production`], which no process
+    /// is yet), else `IfMissing`.
+    pub fn for_process() -> Ddl {
+        if production() {
+            Ddl::Never
+        } else {
+            Ddl::IfMissing
+        }
+    }
+}
+
+/// How [`open_options`] opens a database.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenOptions {
+    /// The connection pool settings; `None` reads them from the environment (`OBOP_DB_*`, see
+    /// docs/DEPLOY.md). Only PostgreSQL has a pool.
+    pub pool: Option<PgPoolConfig>,
+    /// Whether opening may create the schema. Only PostgreSQL has one to create.
+    pub ddl: Ddl,
+}
+
+impl Default for OpenOptions {
+    fn default() -> Self {
+        Self {
+            pool: None,
+            ddl: Ddl::for_process(),
+        }
+    }
+}
+
+static PRODUCTION: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Declare this process a production process: from then on [`open`] does not create the schema.
+/// Nothing calls it yet. The start-up of the roles work (D77) will, for a server started as a
+/// production server, once there is a command that installs the schema as the owner (until
+/// then a production process could not be given a database to open).
+pub fn set_production(on: bool) {
+    PRODUCTION.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Is this a production process, that is, was [`set_production`] called? Read by [`open`] and by
+/// nothing else.
+///
+/// The environment variable `OBOP_PRODUCTION=1` is deliberately not read yet ([`production_from`]
+/// is the rule it will follow). Reading it now would make every command that opens a database
+/// with [`open`] refuse an empty PostgreSQL database (`obop restore` into a fresh one, the
+/// restore drill, `obop migrate rehearse --scratch`, the control plane's first start), and no
+/// command installs the schema as the owner yet (`schema::owner_install` is a Rust function).
+pub fn production() -> bool {
+    PRODUCTION.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The rule by which the variable will be read once it is: the flag, or `OBOP_PRODUCTION` set to
+/// `1`. Tested; not used by [`production`] yet.
+#[cfg(test)]
+fn production_from(flag: bool, variable: Option<&str>) -> bool {
+    flag || variable.is_some_and(|v| v.trim() == "1")
+}
+
+/// Open the database `url` names: `memory:`, `sqlite://PATH` or `postgres://...`. A production
+/// process (see [`production`]; none is yet) does not create the PostgreSQL schema; any other
+/// does.
 pub fn open(url: &str) -> Result<Arc<dyn Backend>> {
-    open_with(url, None)
+    open_options(url, &OpenOptions::default())
 }
 
 /// As [`open`], with the connection pool settings given instead of read from the environment
-/// (`OBOP_DB_*`, see docs/DEPLOY.md). Only PostgreSQL has a pool; the setting is ignored for
-/// `memory:` and SQLite.
+/// (`OBOP_DB_*`, see docs/DEPLOY.md), and the schema created when it is missing whatever
+/// `set_production` says: for the commands that set a database up (the control plane seeding a
+/// new instance, tests). Only PostgreSQL has a pool; the setting is ignored for `memory:` and
+/// SQLite.
 pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
-    let backend = open_backend(url, pool)?;
+    open_options(
+        url,
+        &OpenOptions {
+            pool,
+            ddl: Ddl::IfMissing,
+        },
+    )
+}
+
+/// Open a database with every setting given. The backend it returns is the [`Tracked`] wrapper
+/// around the store (and the guard of `fault` around PostgreSQL), so a caller that holds only
+/// `Arc<dyn Backend>` reaches `apply_ctx` and the list of tracked models.
+pub fn open_options(url: &str, options: &OpenOptions) -> Result<Arc<dyn Backend>> {
+    let backend = open_backend(url, options)?;
     // In a build with `test-support` (the tests of the workspace, never a release) the process
     // tests can make the binary's store refuse calls: `OBOP_TEST_FAULTS`, see `testing`.
     #[cfg(feature = "test-support")]
     let backend = testing::faults_from_env(backend);
-    Ok(backend)
+    Ok(Tracked::wrap(backend))
 }
 
-fn open_backend(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend>> {
+fn open_backend(url: &str, options: &OpenOptions) -> Result<Arc<dyn Backend>> {
     if url == "memory:" {
         Ok(Arc::new(Memory::default()))
     } else if let Some(path) = url
@@ -426,10 +560,7 @@ fn open_backend(url: &str, pool: Option<PgPoolConfig>) -> Result<Arc<dyn Backend
     {
         Ok(Arc::new(Sqlite::open(path)?))
     } else if url.starts_with("postgres://") || url.starts_with("postgresql://") {
-        let pg = match pool {
-            Some(cfg) => Pg::connect_with(url, cfg)?,
-            None => Pg::connect(url)?,
-        };
+        let pg = Pg::connect_options(url, options.pool.clone(), options.ddl)?;
         // The guard keeps the rule of `fault` (no change after a refused call, commits noted).
         Ok(guarded(Arc::new(pg)))
     } else {
@@ -451,6 +582,7 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
     base
 }
 
+pub mod ctx;
 pub mod fault;
 mod guard;
 pub mod keyexpr;
@@ -463,6 +595,10 @@ mod pgpool;
 pub mod pool;
 #[cfg(test)]
 mod pool_tests;
+pub mod refusal;
+pub mod schema;
+#[cfg(test)]
+mod seams_tests;
 #[cfg(test)]
 mod shared_tests;
 mod sqlite;
@@ -471,9 +607,12 @@ pub mod testing;
 pub mod tls;
 #[cfg(test)]
 mod tls_tests;
+pub mod tracked;
 
+pub use ctx::{ACTOR_PUBLIC, ACTOR_SYSTEM, ActionRun, Via, WriteCtx};
 pub use guard::guarded;
 pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
+pub use tracked::{Track, Tracked, Tracking, Treat};
 
 use memory::Memory;
 use pg::Pg;

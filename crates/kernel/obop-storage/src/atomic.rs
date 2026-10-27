@@ -2,7 +2,8 @@
 //! voucher's last use, a state that changes once). Each backend runs [`run_ops`] inside its own
 //! transaction (a lock in memory, `BEGIN IMMEDIATE` in SQLite, row locks in PostgreSQL).
 
-use crate::{Fields, Op, Result};
+use crate::tracked::Tracking;
+use crate::{Fields, Op, Result, WriteCtx};
 use serde_json::Value as J;
 
 /// Why an atomic batch was not applied. Nothing was changed in either case.
@@ -32,9 +33,26 @@ pub(crate) trait TxView {
     fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()>;
     fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()>;
     fn tx_delete(&mut self, model: &str, id: &str) -> Result<()>;
+    /// Hand the database the tickets of the write (D77): the transaction-local setting
+    /// `obop.ctx`, which its guard triggers read. Backends without guards ignore it.
+    fn tx_context(&mut self, _json: &str) -> Result<()> {
+        Ok(())
+    }
 }
 
-pub(crate) fn run_ops(tx: &mut dyn TxView, ops: &[Op]) -> std::result::Result<(), ApplyError> {
+/// Run `ops` in the transaction `tx`. `ctx` says who writes and with which tickets; `tracking`
+/// says which models keep system fields and history. Neither changes what a step does yet: the
+/// record layer that uses them (D75) builds on this signature, and the tickets of `ctx` reach
+/// the database before the first step (D77).
+pub(crate) fn run_ops(
+    tx: &mut dyn TxView,
+    ops: &[Op],
+    ctx: &WriteCtx,
+    _tracking: &Tracking,
+) -> std::result::Result<(), ApplyError> {
+    if let Some(setting) = ctx.setting() {
+        tx.tx_context(&setting).map_err(ApplyError::Storage)?;
+    }
     let conflict = |index: usize, reason: &str| ApplyError::Conflict {
         index,
         reason: reason.into(),
@@ -127,4 +145,126 @@ pub(crate) fn run_ops(tx: &mut dyn TxView, ops: &[Op]) -> std::result::Result<()
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    /// A transaction that only keeps a log of what it was asked, in order.
+    #[derive(Default)]
+    struct Log {
+        rows: BTreeMap<(String, String), Fields>,
+        calls: Vec<String>,
+        refuse_context: bool,
+    }
+
+    impl TxView for Log {
+        fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+            self.calls.push(format!("get {model}/{id}"));
+            Ok(self.rows.get(&(model.into(), id.into())).cloned())
+        }
+        fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+            self.calls.push(format!("insert {model}/{id}"));
+            self.rows.insert((model.into(), id.into()), fields.clone());
+            Ok(())
+        }
+        fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
+            self.calls.push(format!("put {model}/{id}"));
+            self.rows.insert((model.into(), id.into()), fields.clone());
+            Ok(())
+        }
+        fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
+            self.calls.push(format!("delete {model}/{id}"));
+            self.rows.remove(&(model.into(), id.into()));
+            Ok(())
+        }
+        fn tx_context(&mut self, json: &str) -> Result<()> {
+            self.calls.push(format!("context {json}"));
+            if self.refuse_context {
+                return Err("the database refused the context".into());
+            }
+            Ok(())
+        }
+    }
+
+    fn insert(id: &str) -> Op {
+        Op::Insert {
+            model: "m".into(),
+            id: id.into(),
+            fields: Fields::new(),
+        }
+    }
+
+    #[test]
+    fn the_tickets_reach_the_transaction_once_before_the_first_step() {
+        let mut tx = Log::default();
+        let ctx = WriteCtx::new("ann", "rest", "m.post")
+            .ticket("m", "a", "post")
+            .ticket("m", "b", "post");
+        run_ops(
+            &mut tx,
+            &[insert("a"), insert("b")],
+            &ctx,
+            Tracking::empty(),
+        )
+        .unwrap();
+        assert_eq!(tx.calls.len(), 1 + 4, "{:?}", tx.calls);
+        assert_eq!(tx.calls[0], format!("context {}", ctx.setting().unwrap()));
+        assert_eq!(tx.calls[1], "get m/a");
+        assert_eq!(
+            tx.calls.iter().filter(|c| c.starts_with("context")).count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_write_without_tickets_sends_no_context() {
+        let mut tx = Log::default();
+        // Who writes and how does not reach the database: only tickets do.
+        let ctx = WriteCtx::new("ann", "rest", "m.create").batch("b").run("r");
+        run_ops(&mut tx, &[insert("a")], &ctx, Tracking::empty()).unwrap();
+        assert_eq!(tx.calls, ["get m/a", "insert m/a"]);
+    }
+
+    #[test]
+    fn a_context_the_database_refuses_stops_the_batch_before_any_step() {
+        let mut tx = Log {
+            refuse_context: true,
+            ..Log::default()
+        };
+        let ctx = WriteCtx::system("x").ticket("m", "a", "post");
+        let e = run_ops(&mut tx, &[insert("a")], &ctx, Tracking::empty()).unwrap_err();
+        assert_eq!(
+            e,
+            ApplyError::Storage("the database refused the context".into())
+        );
+        assert_eq!(tx.calls.len(), 1, "no step ran: {:?}", tx.calls);
+        assert!(tx.rows.is_empty());
+    }
+
+    #[test]
+    fn the_steps_behave_as_before_whatever_the_context() {
+        // The context and the tracking are for the layers built on this seam; the steps
+        // themselves do exactly what they did.
+        let ctx = WriteCtx::new("ann", "rest", "x");
+        let mut a = Log::default();
+        let mut b = Log::default();
+        let ops = [
+            insert("a"),
+            Op::Merge {
+                model: "m".into(),
+                id: "a".into(),
+                patch: Fields::new(),
+            },
+            Op::Delete {
+                model: "m".into(),
+                id: "a".into(),
+            },
+        ];
+        run_ops(&mut a, &ops, &ctx, Tracking::empty()).unwrap();
+        run_ops(&mut b, &ops, &WriteCtx::system(""), Tracking::empty()).unwrap();
+        assert_eq!(a.calls, b.calls);
+    }
 }

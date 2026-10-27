@@ -30,7 +30,9 @@ test.describe("website without JavaScript", () => {
     await expect(page.locator("#apps .app.live")).toHaveCount(6);
     await expect(page.locator("#apps .app.market")).toHaveCount(22);
     await expect(
-      page.getByText("Planned prices, billed yearly, excluding VAT. Not yet charged."),
+      page.getByText(
+        "Planned prices per server and month, excluding VAT. Hosting is not offered or charged yet.",
+      ),
     ).toBeVisible();
     await expect(page.locator("#faq details")).toHaveCount(8);
     await page.locator("#faq summary").first().click();
@@ -158,11 +160,27 @@ test.describe("website without JavaScript", () => {
     }
   });
 
-  test("the pricing page labels every price as planned", async ({ page }) => {
+  test("the pricing page says obop is free and labels every hosting price as planned", async ({
+    page,
+  }) => {
     await page.goto(`${base()}/pricing/`);
-    await expect(page.getByText("Planned, not yet charged")).toBeVisible();
-    for (const price of ["€0", "€49", "€249", "€899"])
-      await expect(page.getByText(price).first()).toBeVisible();
+    await expect(page.getByText("Planned, not yet offered or charged")).toBeVisible();
+    // Self-hosting is free; the six planned servers follow data/hosting.ts (the provider's price
+    // times three, rounded up to the next price that ends in 9).
+    expect(await page.locator(".plans .price").allTextContents()).toEqual([
+      "€0",
+      "€29/month",
+      "€59/month",
+      "€89/month",
+      "€139/month",
+      "€269/month",
+      "€679/month",
+    ]);
+    await expect(page.locator(".plans article")).toHaveCount(7);
+    await expect(page.getByText("Extra NVMe storage: €15 per 50 GB and month.")).toBeVisible();
+    // The old paid plans are gone.
+    for (const old of ["€49", "€249", "€899"])
+      await expect(page.locator(".plans")).not.toContainText(old);
   });
 
   test("the 404 page is friendly, has search and links, and asks not to be indexed", async ({

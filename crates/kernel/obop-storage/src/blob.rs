@@ -20,9 +20,9 @@
 //! Nothing here looks inside the bytes: sniffing, decoding limits and re-encoding are done by the
 //! caller (`obop-media`) before `put`. A virus scanner plugs in as [`Scanner`].
 
-use crate::pgpool::{Class, PgPool, PgPoolConfig, describe, tune};
+use crate::pgpool::{Class, PgPool, PgPoolConfig, tune};
 use crate::tls::PgConnector;
-use crate::{ApplyError, Backend, Fields, Op, Result};
+use crate::{ApplyError, Backend, Ddl, Fields, Op, OpenOptions, Result, schema};
 use serde_json::{Value as J, json};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -322,11 +322,26 @@ impl DbBytes {
     /// Open the byte table of `url` (`sqlite://PATH` or `postgres://...`). An in-memory SQLite
     /// database is not shared between connections, so use [`MemoryBytes`] there.
     pub fn open(url: &str) -> Result<Self> {
-        Self::open_with(url, None)
+        Self::open_options(url, &OpenOptions::default())
     }
 
-    /// As [`DbBytes::open`], with the pool settings given instead of read from the environment.
+    /// As [`DbBytes::open`], with the pool settings given instead of read from the environment,
+    /// and the table created when it is missing (as `open_with` of the record store does).
     pub fn open_with(url: &str, pool: Option<PgPoolConfig>) -> Result<Self> {
+        Self::open_options(
+            url,
+            &OpenOptions {
+                pool,
+                ddl: Ddl::IfMissing,
+            },
+        )
+    }
+
+    /// As [`DbBytes::open`], with every setting given. With `Ddl::Never` the PostgreSQL table
+    /// is not created: a database without it is an error that names it
+    /// (`schema::install_all` makes it).
+    pub fn open_options(url: &str, options: &OpenOptions) -> Result<Self> {
+        let pool = options.pool.clone();
         let db = if let Some(path) = url
             .strip_prefix("sqlite://")
             .or_else(|| url.strip_prefix("sqlite:"))
@@ -356,21 +371,12 @@ impl DbBytes {
             let mut client = tune(connector.clone(), "obop-blob", &cfg).connect()?;
             // Several processes may open the store at once on a database that does not have the
             // table yet: creating it is serialised with the same lock the record schema uses
-            // (`pg.rs`), or one of them fails with a duplicate-object error. The error says what
-            // it was (SQLSTATE and the server's message), not just "db error".
-            let mut tx = client.transaction().map_err(|e| describe(&e))?;
-            tx.batch_execute("SELECT pg_advisory_xact_lock(hashtextextended('obop-schema', 0))")
-                .map_err(|e| describe(&e))?;
-            tx.batch_execute(
-                "CREATE TABLE IF NOT EXISTS obop_blob_data (
-                     key  TEXT NOT NULL,
-                     seq  INTEGER NOT NULL,
-                     data BYTEA NOT NULL,
-                     PRIMARY KEY (key, seq)
-                 );",
-            )
-            .map_err(|e| describe(&e))?;
-            tx.commit().map_err(|e| describe(&e))?;
+            // (`schema::with_lock`), or one of them fails with a duplicate-object error. The
+            // error says what it was (SQLSTATE and the server's message), not just "db error".
+            // Under `Ddl::Never` nothing is created and a missing table is an error.
+            schema::with_lock(&mut client, |c| {
+                schema::ensure_parts(c, std::slice::from_ref(&schema::BLOB), options.ddl)
+            })?;
             let pool = PgPool::new("blob", connector, cfg.blob_size, &cfg);
             pool.seed(client);
             Db::Pg(pool)

@@ -1,4 +1,8 @@
+import { HOSTING } from "../data/hosting.ts";
+import { hostedPlans } from "./hosting.ts";
 import type { Messages } from "./types.ts";
+
+const eur = (n: number) => `${n} €`;
 
 export const fr: Messages = {
   htmlLang: "fr",
@@ -194,11 +198,11 @@ export const fr: Messages = {
         body: "Lisez le code, les décisions et la feuille de route. Apache-2.0, libre d'usage et auto-hébergeable ; consultez le dépôt.",
       },
     ],
-    pricingTitle: "Une tarification simple, en projet",
-    pricingSub:
-      "L'auto-hébergement de l'édition open source est gratuit. Les offres hébergées sont facturées par organisation. Ces tarifs sont prévisionnels ; rien n'est facturé pendant la bêta.",
-    pricingFine: "Tarifs prévisionnels, facturés annuellement, hors TVA. Pas encore facturés.",
-    pricingCta: "Voir ce que comprend chaque offre",
+    pricingTitle: "Gratuit à utiliser. L'hébergement si vous le souhaitez.",
+    pricingSub: `obop est gratuit et open source : exploitez-le vous-même sur votre propre serveur. Si vous préférez ne pas le faire, un hébergement dédié est prévu à partir de ${eur(HOSTING.servers[0].eur)} par mois. Rien n'est facturé aujourd'hui.`,
+    pricingFine:
+      "Prix prévus par serveur et par mois, hors TVA. L'hébergement n'est pas encore proposé ni facturé.",
+    pricingCta: "Voir les prix d'hébergement prévus",
     faqTitle: "Questions",
     faq: [
       {
@@ -211,7 +215,7 @@ export const fr: Messages = {
       },
       {
         q: "Combien cela coûte-t-il ?",
-        a: "L'auto-hébergement est gratuit. Les offres hébergées sont prévues à 0 €, 49 €, 249 € et à partir de 899 € par mois et par organisation, mais rien n'est facturé pendant la bêta et ces tarifs peuvent changer.",
+        a: `obop est gratuit à utiliser et à héberger soi-même. Un hébergement dédié sur un serveur à vous est prévu à partir de ${eur(HOSTING.servers[0].eur)} par mois, plus ${eur(HOSTING.extraStorage.eur)} par tranche supplémentaire de ${HOSTING.extraStorage.blockGb} Go de stockage, mais il n'est pas encore proposé ni facturé et les prix peuvent changer.`,
       },
       {
         q: "Où sont stockées mes données ?",
@@ -240,77 +244,54 @@ export const fr: Messages = {
   },
   pricing: {
     title: "Tarifs",
-    description:
-      "Tarifs prévisionnels d'obop : Free, Team (49 €), Growth (249 €) et Scale (à partir de 899 €) par organisation et par mois. Prévisionnels uniquement, rien n'est facturé pendant la bêta. L'auto-hébergement est gratuit.",
-    lead: "L'auto-hébergement de l'édition open source est gratuit. Les offres hébergées sont facturées par organisation, et non par utilisateur. Ces tarifs sont prévisionnels : rien n'est facturé pendant la bêta, et ils peuvent changer avant le début de la facturation.",
-    plans: [
-      {
-        name: "Free",
-        price: "0 €",
+    description: `obop est gratuit et open source (Apache-2.0). Hébergement dédié prévu : un serveur à vous à partir de ${eur(HOSTING.servers[0].eur)} par mois, stockage supplémentaire ${eur(HOSTING.extraStorage.eur)} par tranche de ${HOSTING.extraStorage.blockGb} Go. Pas encore proposé ni facturé.`,
+    lead: "obop est gratuit à utiliser et à héberger soi-même. Si vous préférez ne pas exploiter de serveur, nous prévoyons d'en exploiter un pour vous : un serveur dédié par entreprise, tarifé selon sa taille et le stockage ajouté, pas selon le nombre d'utilisateurs. Ces prix sont prévus ; l'hébergement n'est pas encore proposé ni facturé.",
+    plans: hostedPlans({
+      eur,
+      unit: "Go",
+      period: "/mois",
+      selfHost: {
+        name: "Auto-hébergé",
+        price: eur(0),
         period: "",
-        blurb: "Votre propre instance hébergée, pour essayer les bases de la facturation.",
+        blurb: "Le projet entier sur votre propre serveur. Apache-2.0, gratuit pour toujours.",
         features: [
-          "Ensemble facturation",
-          "Assistance communautaire",
-          "Export complet des données prévu",
-        ],
-      },
-      {
-        name: "Team",
-        price: "49 €",
-        period: "/mois",
-        blurb: "Le cycle complet de sept applications pour une équipe en croissance.",
-        features: [
-          "Cinq utilisateurs complets",
-          "Toutes les applications du cycle",
-          "Sauvegardes et région UE",
-          "Assistance par e-mail",
+          "Toutes les applications fournies",
+          "API REST, MCP et ligne de commande",
+          "SQLite ou PostgreSQL",
+          "Aide sur GitHub",
         ],
         highlight: true,
       },
-      {
-        name: "Growth",
-        price: "249 €",
-        period: "/mois",
-        blurb: "Plus de capacité, d'assistance et de niveaux de service.",
-        features: [
-          "25 utilisateurs complets",
-          "Toutes les applications, 100 Go",
-          "Restauration à un instant donné, préproduction",
-          "Assistance sous un jour ouvré",
-        ],
-      },
-      {
-        name: "Scale",
-        price: "dès 899 €",
-        period: "/mois",
-        blurb: "Capacité dédiée et interlocuteur nommé.",
-        features: [
-          "100 utilisateurs ou plus",
-          "Cellule dédiée, région imposée",
-          "SAML et SCIM",
-          "Objectif de 99,9 %, 24 h/24 sur 5 jours",
-        ],
-      },
-    ],
-    plannedBadge: "Prévisionnel, pas encore facturé",
-    note: "Les tarifs sont prévisionnels, par organisation et par mois, facturés annuellement, hors TVA. Ce sont des hypothèses issues du plan produit, et non un engagement contractuel.",
-    selfHostTitle: "L'auto-hébergement est gratuit",
+      serverBlurb: "Un serveur dédié pour une entreprise.",
+      serverFeatures: (storageGb) => [
+        "Un serveur à vous, non partagé avec d'autres clients",
+        "obop et sa base PostgreSQL sur le même serveur",
+        `${storageGb} Go de stockage NVMe inclus`,
+        "Le même logiciel libre : partez quand vous voulez et hébergez-le vous-même",
+      ],
+    }),
+    plannedBadge: "Prévu, pas encore proposé ni facturé",
+    note: `Prix prévus en euros par serveur et par mois, hors TVA. Stockage NVMe supplémentaire : ${eur(HOSTING.extraStorage.eur)} par tranche de ${HOSTING.extraStorage.blockGb} Go et par mois. Ce sont des projets, ni une offre ni un contrat.`,
+    selfHostTitle: "Gratuit, et à vous de l'exploiter",
     selfHostBody:
-      "L'édition open source comprend toutes les applications fournies, l'API REST, MCP et la CLI. Vous l'exécutez vous-même sur SQLite ou PostgreSQL. Une assistance et des services payants pour les auto-hébergeurs sont prévus, mais pas encore proposés.",
+      "obop n'a pas d'édition payante ni de fonctions réservées : chaque application, l'API REST, MCP et la ligne de commande sont dans la version gratuite Apache-2.0. Vous l'exploitez vous-même avec SQLite ou PostgreSQL.",
+    hostingTitle: "L'hébergement, si vous le souhaitez",
+    hostingBody:
+      "Un service prévu : SpaceCorps exploite un serveur dédié pour votre entreprise sur l'infrastructure de Sliplane, avec obop et PostgreSQL dessus. Le prix suit la taille du serveur ; il n'y a pas de frais par utilisateur.",
     faqTitle: "Questions sur les tarifs",
     faq: [
       {
-        q: "Suis-je facturé aujourd'hui ?",
-        a: "Non. Le service hébergé est une bêta gratuite. Lorsque la facturation commencera, nous l'annoncerons et rien ne sera facturé sans votre accord.",
+        q: "Me facture-t-on quelque chose aujourd'hui ?",
+        a: "Non. obop est gratuit, et l'hébergement pour des tiers n'est pas encore proposé. Quand il le sera, nous l'annoncerons ici et rien ne sera facturé sans votre accord.",
       },
       {
-        q: "Pourquoi par organisation et non par utilisateur ?",
-        a: "Le principe est de tarifer l'entreprise plutôt que chaque poste, par tranches d'utilisateurs complets. Les utilisateurs du portail et quelques postes pour les experts-comptables devraient être gratuits.",
+        q: "Pourquoi l'hébergement est-il tarifé par serveur et non par utilisateur ?",
+        a: "Chaque entreprise hébergée reçoit un serveur dédié : le prix suit donc la taille du serveur et le stockage ajouté. Ajouter des personnes ne coûte rien de plus.",
       },
       {
         q: "Puis-je partir avec mes données ?",
-        a: "Oui si vous l'auto-hébergez : la base de données vous appartient. Un export complet dans chaque offre est une décision produit ferme ; l'outil d'export reste à construire.",
+        a: "Oui. obop est sous licence Apache-2.0 et sa base est du PostgreSQL ordinaire : vous pouvez exploiter le même logiciel vous-même ; obop backup et obop restore sont intégrés.",
       },
     ],
     cta: "Obtenir votre instance",
