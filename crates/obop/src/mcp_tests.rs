@@ -310,11 +310,13 @@ async fn sessions_are_required_validated_ended_and_bound_to_the_token() {
 #[tokio::test]
 async fn expired_sessions_are_404() {
     let r = router_with(McpConfig {
-        session_ttl: std::time::Duration::from_millis(50),
+        // Wide against a loaded machine: the session must still be alive when it is made and
+        // long dead when it is used.
+        session_ttl: std::time::Duration::from_millis(400),
         ..McpConfig::default()
     });
     let sid = session(&r, "dev-agent").await;
-    tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(900)).await;
     let resp = rpc(
         &r,
         "dev-agent",
