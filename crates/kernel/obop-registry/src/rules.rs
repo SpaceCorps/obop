@@ -610,11 +610,14 @@ impl ModelDef {
         self.fields.iter().filter(|f| f.computed.is_some())
     }
 
-    /// Fields no create or update may set: computed values and sequences.
+    /// Fields no create or update may set: computed values and sequences, and the platform's
+    /// system fields of a model that has them (see `with_system_fields`).
     pub fn is_system_field(&self, name: &str) -> bool {
-        self.fields
-            .iter()
-            .any(|f| f.name == name && (f.computed.is_some() || f.sequence.is_some()))
+        (self.ext.system_fields && crate::is_system_name(name))
+            || self
+                .fields
+                .iter()
+                .any(|f| f.name == name && (f.computed.is_some() || f.sequence.is_some()))
     }
 }
 

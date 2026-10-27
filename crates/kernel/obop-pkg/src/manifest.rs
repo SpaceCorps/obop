@@ -9,8 +9,9 @@ use obop_registry::labels::{LangLabels, ModelShape, Shape, Translations, check_l
 use obop_registry::rules::{MAX_EFFECTS, SeqFormat};
 use obop_registry::{
     Access, Assertion, CommandDef, Computed, Effect, EffectKind, FieldDef, FieldKind,
-    GENERATED_COMMANDS, Lit, Locator, MATURITIES, MODULE_CATEGORIES, ModelDef, Module, ModuleMeta,
-    Reset, SequenceSpec, Src, Target, Unique, check_module, intern,
+    GENERATED_COMMANDS, History, Lit, Locator, MATURITIES, MODULE_CATEGORIES, ModelDef, ModelExt,
+    Module, ModuleMeta, Reset, SequenceSpec, Src, Target, Unique, check_installed_module,
+    check_module, intern,
 };
 use obop_types::DataClass;
 use serde::Deserialize;
@@ -136,6 +137,14 @@ pub struct ModelM {
     pub public: Option<PublicM>,
     /// Row-level access rules (D58). Absent: the groups decide alone.
     pub access: Option<AccessM>,
+    /// `"full"` (the default) or `"none"`: whether the platform keeps the change history of the
+    /// records (D75). `"none"` needs `history_reason` and is refused by the gate for a model with
+    /// a sensitive field or a state field that actions move.
+    pub history: Option<String>,
+    /// Why the model keeps no history; only with `history = "none"`.
+    pub history_reason: Option<String>,
+    /// Days to keep history entries; absent keeps them for ever. Not with `history = "none"`.
+    pub history_retention_days: Option<u32>,
 }
 
 /// `[model.access]`: which records a caller may see and change besides the groups (D58).
@@ -534,6 +543,7 @@ impl Manifest {
             if !seen.insert(&m.name) {
                 return Err(format!("model {} is declared twice", m.name));
             }
+            Self::validate_history(m)?;
             for g in [&m.read_group, &m.write_group]
                 .into_iter()
                 .chain(m.field.iter().filter_map(|f| f.group.as_ref()))
@@ -611,6 +621,41 @@ impl Manifest {
         self.public_specs()?;
         check_labels(&self.labels, &self.shape())?;
         self.validate_migrations()?;
+        Ok(())
+    }
+
+    /// The three history keys of a model (D75) say one thing between them.
+    fn validate_history(m: &ModelM) -> Result<(), String> {
+        let (name, reason) = (&m.name, m.history_reason.as_deref().map(str::trim));
+        match m.history.as_deref() {
+            None | Some("full") => {
+                if reason.is_some() {
+                    return Err(format!(
+                        "{name}: history_reason only goes with history = \"none\""
+                    ));
+                }
+            }
+            Some("none") => {
+                if reason.is_none_or(str::is_empty) {
+                    return Err(format!(
+                        "{name}: history = \"none\" needs a history_reason that says why the changes of its records need not be kept"
+                    ));
+                }
+                if m.history_retention_days.is_some() {
+                    return Err(format!(
+                        "{name}: history_retention_days means nothing with history = \"none\""
+                    ));
+                }
+            }
+            Some(other) => {
+                return Err(format!(
+                    "{name}: history must be \"full\" or \"none\", not {other:?}"
+                ));
+            }
+        }
+        if m.history_retention_days == Some(0) {
+            return Err(format!("{name}: history_retention_days must be at least 1"));
+        }
         Ok(())
     }
 
@@ -1564,7 +1609,16 @@ impl Manifest {
                 access,
                 fields,
                 commands,
-                ext: Default::default(),
+                ext: ModelExt {
+                    history: History {
+                        // The command layer enables the history of the models it records.
+                        enabled: false,
+                        off_reason: (m.history.as_deref() == Some("none"))
+                            .then(|| intern(m.history_reason.as_deref().unwrap_or("").trim())),
+                        retention_days: m.history_retention_days,
+                    },
+                    ..ModelExt::default()
+                },
             });
         }
         Ok(out)
@@ -1572,6 +1626,19 @@ impl Manifest {
 
     /// Build registry metadata and run the D41 install gate over it.
     pub fn to_module(&self) -> Result<Module, String> {
+        self.build_module(true)
+    }
+
+    /// As [`Manifest::to_module`], for a package that is already installed and is registered
+    /// again (server start, a failed upgrade put back, a rollback): a field or model whose name
+    /// was free when the package was installed and is reserved now (D75) is let through, so a
+    /// server never starts without a module its data belongs to. Installing or upgrading uses
+    /// `to_module`, which refuses the name.
+    pub fn to_module_installed(&self) -> Result<Module, String> {
+        self.build_module(false)
+    }
+
+    fn build_module(&self, reserved: bool) -> Result<Module, String> {
         let models = self.build_models()?;
         let module = Module {
             id: self.module.id.clone(),
@@ -1593,7 +1660,11 @@ impl Manifest {
         if !public_problems.is_empty() {
             return Err(public_problems.join("; "));
         }
-        let violations = check_module(&module);
+        let violations = if reserved {
+            check_module(&module)
+        } else {
+            check_installed_module(&module)
+        };
         if violations.is_empty() {
             Ok(module)
         } else {
@@ -1889,9 +1960,148 @@ write_group = "fleet.manager"
             "bulk_create",
             "update",
             "delete",
+            "history",
         ] {
             let bad = FLEET.replace("name = \"dispatch\"", &format!("name = \"{name}\""));
             assert!(err(&bad).contains("bad action name"), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_reserved_field_name_is_refused_when_installing_and_says_what_to_use() {
+        for (name, hint) in [
+            ("created_at", "recorded_at"),
+            ("updated_at", "modified_at"),
+            ("created_by", "author"),
+            ("updated_by", "last_editor"),
+            ("row_version", "revision"),
+            ("sys_backfilled", "estimated"),
+            ("if_version", "expected_version"),
+        ] {
+            let text = FLEET.replace("name = \"plate\"", &format!("name = \"{name}\""));
+            // The text is a good manifest: only the gate objects, and names the field and the hint.
+            let m = Manifest::parse(&text).unwrap();
+            let e = m.to_module().unwrap_err();
+            assert!(e.contains(&format!("fleet.fleet_vehicle.{name}")), "{e}");
+            assert!(e.contains(&format!("`{name}`")), "{e}");
+            assert!(e.contains(&format!("`{hint}`")), "{e}");
+            // An installed package with that name is registered all the same.
+            let module = m.to_module_installed().unwrap();
+            assert_eq!(module.models[0].fields[0].name, name);
+        }
+    }
+
+    #[test]
+    fn a_reserved_model_name_is_refused_when_installing() {
+        for (id, model) in [
+            ("record", "record_change"),
+            ("storage", "storage_event"),
+            ("storage", "storage_index"),
+            ("data", "data_guard"),
+        ] {
+            let text = FLEET
+                .replace("id = \"fleet\"", &format!("id = \"{id}\""))
+                .replace("name = \"fleet_vehicle\"", &format!("name = \"{model}\""));
+            let m = Manifest::parse(&text).unwrap();
+            let e = m.to_module().unwrap_err();
+            assert!(e.contains(&format!("`{model}`")), "{e}");
+            assert!(m.to_module_installed().is_ok());
+        }
+    }
+
+    fn with_history(keys: &str) -> String {
+        FLEET.replace(
+            "write_group = \"fleet.manager\"
+",
+            &format!(
+                "write_group = \"fleet.manager\"
+{keys}
+"
+            ),
+        )
+    }
+
+    #[test]
+    fn the_history_keys_reach_the_registry_and_change_nothing_yet() {
+        let plain = Manifest::parse(FLEET).unwrap().to_module().unwrap();
+        assert_eq!(plain.models[0].ext, ModelExt::default());
+        // `full` is the default and sets nothing.
+        let full = Manifest::parse(&with_history(
+            "history = \"full\"
+history_retention_days = 90",
+        ))
+        .unwrap()
+        .to_module()
+        .unwrap();
+        let h = &full.models[0].ext.history;
+        assert_eq!((h.off_reason, h.retention_days), (None, Some(90)));
+        // Nothing enables a model's history from a manifest: the model has no `history` command.
+        assert!(!h.enabled && !full.models[0].history_on());
+        assert_eq!(full.models[0].all_commands().len(), 8);
+        // `none` with a reason, on a model that has no sensitive field and no state field moved by
+        // an action (FLEET has both an action and a state, so take the action away).
+        let simple = Manifest::parse(&with_history(
+            "history = \"none\"
+history_reason = \" a counter nobody audits \"",
+        ))
+        .unwrap();
+        let e = simple.to_module().unwrap_err();
+        assert!(e.contains("state field state"), "{e}");
+        let no_action = |keys: &str| {
+            let t = with_history(keys);
+            let cut = t.find("  [[model.action]]").unwrap();
+            Manifest::parse(&t[..cut]).unwrap()
+        };
+        let none = no_action(
+            "history = \"none\"
+history_reason = \" a counter nobody audits \"",
+        )
+        .to_module()
+        .unwrap();
+        assert_eq!(
+            none.models[0].ext.history.off_reason,
+            Some("a counter nobody audits")
+        );
+        // A sensitive field forbids it.
+        let sensitive = no_action(
+            "history = \"none\"
+history_reason = \"x\"",
+        )
+        .text
+        .replace("class = \"internal\"", "class = \"special_category\"");
+        let e = Manifest::parse(&sensitive)
+            .unwrap()
+            .to_module()
+            .unwrap_err();
+        assert!(e.contains("sensitive field (driver"), "{e}");
+    }
+
+    #[test]
+    fn each_history_key_has_its_own_error() {
+        for (keys, wants) in [
+            ("history = \"maybe\"", "must be \"full\" or \"none\""),
+            ("history = \"none\"", "needs a history_reason"),
+            (
+                "history = \"none\"
+history_reason = \"  \"",
+                "needs a history_reason",
+            ),
+            (
+                "history_reason = \"why\"",
+                "only goes with history = \"none\"",
+            ),
+            (
+                "history = \"none\"
+history_reason = \"why\"
+history_retention_days = 5",
+                "means nothing with history = \"none\"",
+            ),
+            ("history_retention_days = 0", "at least 1"),
+            ("history_retention_days = -1", "invalid obop.toml"),
+            ("history = true", "invalid obop.toml"),
+        ] {
+            let e = Manifest::parse(&with_history(keys)).unwrap_err();
+            assert!(e.contains(wants), "{keys}: {e}");
         }
     }
 
