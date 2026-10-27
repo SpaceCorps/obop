@@ -1,5 +1,9 @@
 import { APP_COPY } from "../data/apps.ts";
+import { HOSTING } from "../data/hosting.ts";
+import { hostedPlans } from "./hosting.ts";
 import type { Messages } from "./types.ts";
+
+const eur = (n: number) => `€${n}`;
 
 const taglines = Object.fromEntries(APP_COPY.map((a) => [a.id, a.tagline]));
 
@@ -186,11 +190,11 @@ export const en: Messages = {
         body: "Read the code, the decisions and the roadmap. Apache-2.0, free to use and to self-host; see the repository.",
       },
     ],
-    pricingTitle: "Simple pricing, planned",
-    pricingSub:
-      "Self-hosting the open-source edition is free. Hosted plans are per organisation. These are planned prices; nothing is charged during the beta.",
-    pricingFine: "Planned prices, billed yearly, excluding VAT. Not yet charged.",
-    pricingCta: "See what each plan includes",
+    pricingTitle: "Free to use. Hosting if you want it.",
+    pricingSub: `obop is free and open source: run it yourself on your own server. If you would rather not, dedicated hosting is planned from ${eur(HOSTING.servers[0].eur)} a month. Nothing is charged today.`,
+    pricingFine:
+      "Planned prices per server and month, excluding VAT. Hosting is not offered or charged yet.",
+    pricingCta: "See the planned hosting prices",
     faqTitle: "Questions",
     faq: [
       {
@@ -203,7 +207,7 @@ export const en: Messages = {
       },
       {
         q: "How much does it cost?",
-        a: "Self-hosting is free. Hosted plans are planned at €0, €49, €249 and from €899 a month per organisation, but nothing is charged during the beta and these prices may change.",
+        a: `obop is free to use and to self-host. Dedicated hosting on a server of its own is planned from ${eur(HOSTING.servers[0].eur)} a month, plus ${eur(HOSTING.extraStorage.eur)} for each extra ${HOSTING.extraStorage.blockGb} GB of storage, but it is not offered or charged yet and the prices may change.`,
       },
       {
         q: "Where does my data live?",
@@ -232,68 +236,54 @@ export const en: Messages = {
   },
   pricing: {
     title: "Pricing",
-    description:
-      "Planned obop pricing: Free, Team (€49), Growth (€249) and Scale (from €899) per organisation per month. Planned only, nothing is charged during the beta. Self-hosting is free.",
-    lead: "Self-hosting the open-source edition is free. Hosted plans are per organisation, not per user. These are planned prices: nothing is charged during the beta, and they may change before we start charging.",
-    plans: [
-      {
-        name: "Free",
-        price: "€0",
+    description: `obop is free and open source (Apache-2.0). Planned dedicated hosting: a server of your own from ${eur(HOSTING.servers[0].eur)} a month, extra storage ${eur(HOSTING.extraStorage.eur)} per ${HOSTING.extraStorage.blockGb} GB. Not yet offered or charged.`,
+    lead: "obop is free to use and to self-host. If you would rather not run a server, we plan to run one for you: a dedicated server per business, priced by its size and the storage you add, not by the number of users. These are planned prices; hosting is not offered or charged yet.",
+    plans: hostedPlans({
+      eur,
+      unit: "GB",
+      period: "/month",
+      selfHost: {
+        name: "Self-hosted",
+        price: eur(0),
         period: "",
-        blurb: "Your own hosted instance to try the invoicing basics.",
-        features: ["Invoicing bundle", "Community support", "Full data export planned"],
-      },
-      {
-        name: "Team",
-        price: "€49",
-        period: "/month",
-        blurb: "The full seven-app loop for a growing team.",
-        features: ["Five full users", "All loop apps", "Backups and EU region", "Email support"],
+        blurb: "The whole project on your own server. Apache-2.0, free for ever.",
+        features: [
+          "Every bundled app",
+          "REST API, MCP and the command line",
+          "SQLite or PostgreSQL",
+          "Help on GitHub",
+        ],
         highlight: true,
       },
-      {
-        name: "Growth",
-        price: "€249",
-        period: "/month",
-        blurb: "More capacity, support and service levels.",
-        features: [
-          "25 full users",
-          "All apps, 100 GB",
-          "Point-in-time recovery, staging",
-          "Next-business-day support",
-        ],
-      },
-      {
-        name: "Scale",
-        price: "from €899",
-        period: "/month",
-        blurb: "Dedicated capacity and a named contact.",
-        features: [
-          "100 or more users",
-          "Dedicated cell, region pinning",
-          "SAML and SCIM",
-          "99.9 percent target, 24x5",
-        ],
-      },
-    ],
-    plannedBadge: "Planned, not yet charged",
-    note: "Prices are planned, per organisation per month, billed yearly, excluding VAT. They are hypotheses from the product plan and are not a contract.",
-    selfHostTitle: "Self-hosting is free",
+      serverBlurb: "A dedicated server for one business.",
+      serverFeatures: (storageGb) => [
+        "A server of your own, not shared with other customers",
+        "obop and its PostgreSQL database on the same server",
+        `${storageGb} GB NVMe storage included`,
+        "The same free software: leave any time and self-host",
+      ],
+    }),
+    plannedBadge: "Planned, not yet offered or charged",
+    note: `Planned prices in euro per server and month, excluding VAT. Extra NVMe storage: ${eur(HOSTING.extraStorage.eur)} per ${HOSTING.extraStorage.blockGb} GB and month. These are plans, not an offer or a contract.`,
+    selfHostTitle: "Free, and yours to run",
     selfHostBody:
-      "The open-source edition has every bundled app, the REST API, MCP and the CLI. You run it yourself on SQLite or PostgreSQL. Paid support and services for self-hosters are planned but not yet offered.",
+      "obop has no paid edition and no held-back features: every app, the REST API, MCP and the command line are in the free Apache-2.0 release. You run it yourself on SQLite or PostgreSQL.",
+    hostingTitle: "Hosting, if you want it",
+    hostingBody:
+      "A planned service: SpaceCorps runs a dedicated server for your business on Sliplane's infrastructure, with obop and PostgreSQL on it. The price follows the size of the server; there are no per-user fees.",
     faqTitle: "Pricing questions",
     faq: [
       {
         q: "Am I charged anything today?",
-        a: "No. The hosted service is a free beta. When billing starts we will announce it and nothing will be charged without your consent.",
+        a: "No. obop is free, and hosting for others is not offered yet. When it is, we will announce it here and nothing will be charged without your consent.",
       },
       {
-        q: "Why per organisation and not per user?",
-        a: "The plan is to price the business, not each seat, banded by full users. Portal users and a few accountant seats are planned to be free.",
+        q: "Why is hosting priced by server and not by user?",
+        a: "Each hosted business gets a dedicated server, so the price follows the size of the server and the storage you add. Adding people costs nothing extra.",
       },
       {
         q: "Can I leave and take my data?",
-        a: "Yes when you self-host: the database is yours. A full export on every plan is a binding product decision; the export tooling is still to be built.",
+        a: "Yes. obop is Apache-2.0 and its database is plain PostgreSQL, so you can run the same software yourself; obop backup and obop restore are built in.",
       },
     ],
     cta: "Get your own instance",

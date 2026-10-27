@@ -1,4 +1,8 @@
+import { HOSTING } from "../data/hosting.ts";
+import { hostedPlans } from "./hosting.ts";
 import type { Messages } from "./types.ts";
+
+const eur = (n: number) => `€${n}`;
 
 export const sv: Messages = {
   htmlLang: "sv",
@@ -191,11 +195,11 @@ export const sv: Messages = {
         body: "Läs koden, besluten och färdplanen. Apache-2.0, fri att använda och köra själv; se arkivet.",
       },
     ],
-    pricingTitle: "Enkla priser, planerade",
-    pricingSub:
-      "Egen drift av versionen med öppen källkod är gratis. Hostade planer gäller per organisation. Priserna är planerade; inget debiteras under betan.",
-    pricingFine: "Planerade priser, faktureras årsvis, exklusive moms. Debiteras inte ännu.",
-    pricingCta: "Se vad varje plan innehåller",
+    pricingTitle: "Gratis att använda. Hosting om du vill.",
+    pricingSub: `obop är gratis och öppen källkod: kör det själv på din egen server. Vill du hellre slippa är dedikerad hosting planerad från ${eur(HOSTING.servers[0].eur)} i månaden. Inget debiteras idag.`,
+    pricingFine:
+      "Planerade priser per server och månad, exklusive moms. Hosting erbjuds eller debiteras inte ännu.",
+    pricingCta: "Se de planerade hostingpriserna",
     faqTitle: "Frågor",
     faq: [
       {
@@ -208,7 +212,7 @@ export const sv: Messages = {
       },
       {
         q: "Vad kostar det?",
-        a: "Egen drift är gratis. De hostade planerna är planerade till 0 €, 49 €, 249 € och från 899 € i månaden per organisation, men inget debiteras under betan och priserna kan ändras.",
+        a: `obop är gratis att använda och köra själv. Dedikerad hosting på en egen server är planerad från ${eur(HOSTING.servers[0].eur)} i månaden, plus ${eur(HOSTING.extraStorage.eur)} för varje extra ${HOSTING.extraStorage.blockGb} GB lagring, men den erbjuds eller debiteras inte ännu och priserna kan ändras.`,
       },
       {
         q: "Var finns min data?",
@@ -237,73 +241,54 @@ export const sv: Messages = {
   },
   pricing: {
     title: "Priser",
-    description:
-      "Planerade priser för obop: Free, Team (49 €), Growth (249 €) och Scale (från 899 €) per organisation och månad. Endast planerade, inget debiteras under betan. Egen drift är gratis.",
-    lead: "Egen drift av versionen med öppen källkod är gratis. Hostade planer gäller per organisation, inte per användare. Priserna är planerade: inget debiteras under betan, och de kan ändras innan vi börjar ta betalt.",
-    plans: [
-      {
-        name: "Free",
-        price: "€0",
+    description: `obop är gratis och öppen källkod (Apache-2.0). Planerad dedikerad hosting: en egen server från ${eur(HOSTING.servers[0].eur)} i månaden, extra lagring ${eur(HOSTING.extraStorage.eur)} per ${HOSTING.extraStorage.blockGb} GB. Erbjuds eller debiteras inte ännu.`,
+    lead: "obop är gratis att använda och köra själv. Vill du hellre slippa köra en server planerar vi att köra en åt dig: en dedikerad server per företag, prissatt efter dess storlek och den lagring du lägger till, inte efter antalet användare. Det här är planerade priser; hosting erbjuds eller debiteras inte ännu.",
+    plans: hostedPlans({
+      eur,
+      unit: "GB",
+      period: "/månad",
+      selfHost: {
+        name: "Egen drift",
+        price: eur(0),
         period: "",
-        blurb: "Din egen hostade instans för att prova grunderna i fakturering.",
-        features: ["Faktureringspaket", "Support via community", "Fullständig dataexport planerad"],
-      },
-      {
-        name: "Team",
-        price: "€49",
-        period: "/månad",
-        blurb: "Hela kedjan med sju appar för ett växande team.",
+        blurb: "Hela projektet på din egen server. Apache-2.0, gratis för alltid.",
         features: [
-          "Fem fullständiga användare",
-          "Alla appar i kedjan",
-          "Säkerhetskopior och EU-region",
-          "Support via e-post",
+          "Alla medföljande appar",
+          "REST-API, MCP och kommandoraden",
+          "SQLite eller PostgreSQL",
+          "Hjälp på GitHub",
         ],
         highlight: true,
       },
-      {
-        name: "Growth",
-        price: "€249",
-        period: "/månad",
-        blurb: "Mer kapacitet, support och servicenivåer.",
-        features: [
-          "25 fullständiga användare",
-          "Alla appar, 100 GB",
-          "Återställning till valfri tidpunkt, testmiljö",
-          "Support nästa arbetsdag",
-        ],
-      },
-      {
-        name: "Scale",
-        price: "från €899",
-        period: "/månad",
-        blurb: "Dedikerad kapacitet och en namngiven kontaktperson.",
-        features: [
-          "100 eller fler användare",
-          "Dedikerad cell, fast region",
-          "SAML och SCIM",
-          "Mål på 99,9 procent, 24x5",
-        ],
-      },
-    ],
-    plannedBadge: "Planerad, debiteras inte ännu",
-    note: "Priserna är planerade, per organisation och månad, faktureras årsvis, exklusive moms. De är hypoteser från produktplanen och utgör inget avtal.",
-    selfHostTitle: "Egen drift är gratis",
+      serverBlurb: "En dedikerad server för ett företag.",
+      serverFeatures: (storageGb) => [
+        "En egen server som inte delas med andra kunder",
+        "obop och dess PostgreSQL-databas på samma server",
+        `${storageGb} GB NVMe-lagring ingår`,
+        "Samma fria programvara: lämna när du vill och kör själv",
+      ],
+    }),
+    plannedBadge: "Planerat, erbjuds eller debiteras inte ännu",
+    note: `Planerade priser i euro per server och månad, exklusive moms. Extra NVMe-lagring: ${eur(HOSTING.extraStorage.eur)} per ${HOSTING.extraStorage.blockGb} GB och månad. Det här är planer, inte ett erbjudande eller ett avtal.`,
+    selfHostTitle: "Gratis, och du kör det själv",
     selfHostBody:
-      "Versionen med öppen källkod innehåller alla medföljande appar, REST-API:et, MCP och CLI. Du kör den själv på SQLite eller PostgreSQL. Betald support och betalda tjänster för dig som driftar själv är planerade men erbjuds inte ännu.",
+      "obop har ingen betald utgåva och inga undanhållna funktioner: varje app, REST-API:t, MCP och kommandoraden ingår i den kostnadsfria Apache-2.0-utgåvan. Du kör det själv på SQLite eller PostgreSQL.",
+    hostingTitle: "Hosting, om du vill",
+    hostingBody:
+      "En planerad tjänst: SpaceCorps driver en dedikerad server åt ditt företag på Sliplanes infrastruktur, med obop och PostgreSQL på den. Priset följer serverns storlek; det finns inga avgifter per användare.",
     faqTitle: "Frågor om priser",
     faq: [
       {
         q: "Debiteras jag något i dag?",
-        a: "Nej. Den hostade tjänsten är en gratis beta. När faktureringen startar meddelar vi det, och ingenting debiteras utan ditt medgivande.",
+        a: "Nej. obop är gratis, och hosting åt andra erbjuds inte ännu. När det gör det meddelar vi det här, och inget debiteras utan ditt samtycke.",
       },
       {
-        q: "Varför per organisation och inte per användare?",
-        a: "Tanken är att priset ska gälla företaget, inte varje plats, i nivåer efter antal fullständiga användare. Portalanvändare och ett par platser för redovisningskonsulter är planerade att vara gratis.",
+        q: "Varför prissätts hosting per server och inte per användare?",
+        a: "Varje hostat företag får en dedikerad server, så priset följer serverns storlek och den lagring du lägger till. Fler personer kostar inget extra.",
       },
       {
-        q: "Kan jag lämna och ta med mig min data?",
-        a: "Ja, om du driftar själv: databasen är din. Fullständig export i alla planer är ett bindande produktbeslut; verktygen för exporten återstår att bygga.",
+        q: "Kan jag lämna och ta med mina data?",
+        a: "Ja. obop har licensen Apache-2.0 och databasen är vanlig PostgreSQL, så du kan köra samma programvara själv; obop backup och obop restore finns inbyggda.",
       },
     ],
     cta: "Skaffa din egen instans",

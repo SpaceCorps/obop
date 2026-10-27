@@ -112,6 +112,8 @@ export interface Messages {
     note: string;
     selfHostTitle: string;
     selfHostBody: string;
+    hostingTitle: string;
+    hostingBody: string;
     faqTitle: string;
     faq: { q: string; a: string }[];
     cta: string;
