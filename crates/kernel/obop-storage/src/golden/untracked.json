@@ -1,0 +1,445 @@
+{
+  "memory": {
+    "restored": 7,
+    "rows": [
+      [
+        "order",
+        "o1",
+        {
+          "created_at": "2026-01-01T00:00:00Z",
+          "nested": {
+            "a": [
+              1,
+              2,
+              {
+                "b": null
+              }
+            ],
+            "ü": "ñ"
+          },
+          "note": "x",
+          "number": "SO-1",
+          "row_version": 7,
+          "state": "closed",
+          "sys_backfilled": true,
+          "total": 120,
+          "updated_by": "someone"
+        }
+      ],
+      [
+        "line",
+        "l1",
+        {
+          "order": "o1",
+          "qty": 1
+        }
+      ],
+      [
+        "line",
+        "l2",
+        {
+          "order": "o1",
+          "qty": 2
+        }
+      ],
+      [
+        "order",
+        "o3",
+        {
+          "n": 2,
+          "number": "SO-3b"
+        }
+      ],
+      [
+        "stock",
+        "s1",
+        {
+          "qty": 8,
+          "sku": "S-1"
+        }
+      ],
+      [
+        "stock",
+        "s9",
+        {
+          "qty": 1,
+          "sku": "Z"
+        }
+      ],
+      [
+        "secret",
+        "k1",
+        {
+          "other": "kept",
+          "token": "sealed:2"
+        }
+      ]
+    ],
+    "total_after_restore": 7,
+    "trace": [
+      "ok ()",
+      "refused",
+      "ok ()",
+      "ok true",
+      "ok false",
+      "ok true",
+      "ok true",
+      "ok false",
+      "ok ()",
+      "refused",
+      "ok false",
+      "ok ()",
+      "stale expect: conflict 3 the record changed",
+      "stale expect: unchanged true",
+      "row_version expect: conflict 3 the record changed",
+      "row_version expect: unchanged true",
+      "below the minimum: conflict 3 below the minimum",
+      "below the minimum: unchanged true",
+      "above the maximum: conflict 3 above the maximum",
+      "above the maximum: unchanged true",
+      "overflow: conflict 3 overflow",
+      "overflow: unchanged true",
+      "not an integer: conflict 3 the field is not an integer",
+      "not an integer: unchanged true",
+      "missing counter: conflict 3 no such record",
+      "missing counter: unchanged true",
+      "merge missing: conflict 3 no such record",
+      "merge missing: unchanged true",
+      "patch missing: conflict 3 no such record",
+      "patch missing: unchanged true",
+      "delete missing: conflict 3 no such record",
+      "delete missing: unchanged true",
+      "insert existing: conflict 3 already exists",
+      "insert existing: unchanged true",
+      "refused",
+      "ok ()",
+      "ok ()",
+      "ok 0",
+      "ok 1",
+      "ok [\"s1\"]",
+      "ok 2",
+      "ok 0",
+      "ok 7"
+    ]
+  },
+  "postgres": {
+    "raw": [
+      [
+        "order",
+        "o1",
+        "{\"note\": \"x\", \"state\": \"closed\", \"total\": 120, \"nested\": {\"a\": [1, 2, {\"b\": null}], \"ü\": \"ñ\"}, \"number\": \"SO-1\", \"created_at\": \"2026-01-01T00:00:00Z\", \"updated_by\": \"someone\", \"row_version\": 7, \"sys_backfilled\": true}"
+      ],
+      [
+        "line",
+        "l1",
+        "{\"qty\": 1, \"order\": \"o1\"}"
+      ],
+      [
+        "line",
+        "l2",
+        "{\"qty\": 2, \"order\": \"o1\"}"
+      ],
+      [
+        "stock",
+        "s1",
+        "{\"qty\": 8, \"sku\": \"S-1\"}"
+      ],
+      [
+        "stock",
+        "s9",
+        "{\"qty\": 1, \"sku\": \"Z\"}"
+      ],
+      [
+        "order",
+        "o3",
+        "{\"n\": 2, \"number\": \"SO-3b\"}"
+      ],
+      [
+        "secret",
+        "k1",
+        "{\"other\": \"kept\", \"token\": \"sealed:2\"}"
+      ]
+    ],
+    "restored": 7,
+    "rows": [
+      [
+        "order",
+        "o1",
+        {
+          "created_at": "2026-01-01T00:00:00Z",
+          "nested": {
+            "a": [
+              1,
+              2,
+              {
+                "b": null
+              }
+            ],
+            "ü": "ñ"
+          },
+          "note": "x",
+          "number": "SO-1",
+          "row_version": 7,
+          "state": "closed",
+          "sys_backfilled": true,
+          "total": 120,
+          "updated_by": "someone"
+        }
+      ],
+      [
+        "line",
+        "l1",
+        {
+          "order": "o1",
+          "qty": 1
+        }
+      ],
+      [
+        "line",
+        "l2",
+        {
+          "order": "o1",
+          "qty": 2
+        }
+      ],
+      [
+        "stock",
+        "s1",
+        {
+          "qty": 8,
+          "sku": "S-1"
+        }
+      ],
+      [
+        "stock",
+        "s9",
+        {
+          "qty": 1,
+          "sku": "Z"
+        }
+      ],
+      [
+        "order",
+        "o3",
+        {
+          "n": 2,
+          "number": "SO-3b"
+        }
+      ],
+      [
+        "secret",
+        "k1",
+        {
+          "other": "kept",
+          "token": "sealed:2"
+        }
+      ]
+    ],
+    "total_after_restore": 7,
+    "trace": [
+      "ok ()",
+      "refused",
+      "ok ()",
+      "ok true",
+      "ok false",
+      "ok true",
+      "ok true",
+      "ok false",
+      "ok ()",
+      "refused",
+      "ok false",
+      "ok ()",
+      "stale expect: conflict 3 the record changed",
+      "stale expect: unchanged true",
+      "row_version expect: conflict 3 the record changed",
+      "row_version expect: unchanged true",
+      "below the minimum: conflict 3 below the minimum",
+      "below the minimum: unchanged true",
+      "above the maximum: conflict 3 above the maximum",
+      "above the maximum: unchanged true",
+      "overflow: conflict 3 overflow",
+      "overflow: unchanged true",
+      "not an integer: conflict 3 the field is not an integer",
+      "not an integer: unchanged true",
+      "missing counter: conflict 3 no such record",
+      "missing counter: unchanged true",
+      "merge missing: conflict 3 no such record",
+      "merge missing: unchanged true",
+      "patch missing: conflict 3 no such record",
+      "patch missing: unchanged true",
+      "delete missing: conflict 3 no such record",
+      "delete missing: unchanged true",
+      "insert existing: conflict 3 already exists",
+      "insert existing: unchanged true",
+      "refused",
+      "ok ()",
+      "ok ()",
+      "ok 0",
+      "ok 1",
+      "ok [\"s1\"]",
+      "ok 2",
+      "ok 0",
+      "ok 7"
+    ]
+  },
+  "sqlite": {
+    "raw": [
+      [
+        "order",
+        "o1",
+        "{\"created_at\":\"2026-01-01T00:00:00Z\",\"nested\":{\"a\":[1,2,{\"b\":null}],\"ü\":\"ñ\"},\"note\":\"x\",\"number\":\"SO-1\",\"row_version\":7,\"state\":\"closed\",\"sys_backfilled\":true,\"total\":120,\"updated_by\":\"someone\"}"
+      ],
+      [
+        "line",
+        "l1",
+        "{\"order\":\"o1\",\"qty\":1}"
+      ],
+      [
+        "line",
+        "l2",
+        "{\"order\":\"o1\",\"qty\":2}"
+      ],
+      [
+        "stock",
+        "s1",
+        "{\"qty\":8,\"sku\":\"S-1\"}"
+      ],
+      [
+        "stock",
+        "s9",
+        "{\"qty\":1,\"sku\":\"Z\"}"
+      ],
+      [
+        "order",
+        "o3",
+        "{\"n\":2,\"number\":\"SO-3b\"}"
+      ],
+      [
+        "secret",
+        "k1",
+        "{\"other\":\"kept\",\"token\":\"sealed:2\"}"
+      ]
+    ],
+    "restored": 7,
+    "rows": [
+      [
+        "order",
+        "o1",
+        {
+          "created_at": "2026-01-01T00:00:00Z",
+          "nested": {
+            "a": [
+              1,
+              2,
+              {
+                "b": null
+              }
+            ],
+            "ü": "ñ"
+          },
+          "note": "x",
+          "number": "SO-1",
+          "row_version": 7,
+          "state": "closed",
+          "sys_backfilled": true,
+          "total": 120,
+          "updated_by": "someone"
+        }
+      ],
+      [
+        "line",
+        "l1",
+        {
+          "order": "o1",
+          "qty": 1
+        }
+      ],
+      [
+        "line",
+        "l2",
+        {
+          "order": "o1",
+          "qty": 2
+        }
+      ],
+      [
+        "stock",
+        "s1",
+        {
+          "qty": 8,
+          "sku": "S-1"
+        }
+      ],
+      [
+        "stock",
+        "s9",
+        {
+          "qty": 1,
+          "sku": "Z"
+        }
+      ],
+      [
+        "order",
+        "o3",
+        {
+          "n": 2,
+          "number": "SO-3b"
+        }
+      ],
+      [
+        "secret",
+        "k1",
+        {
+          "other": "kept",
+          "token": "sealed:2"
+        }
+      ]
+    ],
+    "total_after_restore": 7,
+    "trace": [
+      "ok ()",
+      "refused",
+      "ok ()",
+      "ok true",
+      "ok false",
+      "ok true",
+      "ok true",
+      "ok false",
+      "ok ()",
+      "refused",
+      "ok false",
+      "ok ()",
+      "stale expect: conflict 3 the record changed",
+      "stale expect: unchanged true",
+      "row_version expect: conflict 3 the record changed",
+      "row_version expect: unchanged true",
+      "below the minimum: conflict 3 below the minimum",
+      "below the minimum: unchanged true",
+      "above the maximum: conflict 3 above the maximum",
+      "above the maximum: unchanged true",
+      "overflow: conflict 3 overflow",
+      "overflow: unchanged true",
+      "not an integer: conflict 3 the field is not an integer",
+      "not an integer: unchanged true",
+      "missing counter: conflict 3 no such record",
+      "missing counter: unchanged true",
+      "merge missing: conflict 3 no such record",
+      "merge missing: unchanged true",
+      "patch missing: conflict 3 no such record",
+      "patch missing: unchanged true",
+      "delete missing: conflict 3 no such record",
+      "delete missing: unchanged true",
+      "insert existing: conflict 3 already exists",
+      "insert existing: unchanged true",
+      "refused",
+      "ok ()",
+      "ok ()",
+      "ok 0",
+      "ok 1",
+      "ok [\"s1\"]",
+      "ok 2",
+      "ok 0",
+      "ok 7"
+    ]
+  }
+}

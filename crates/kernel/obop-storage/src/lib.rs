@@ -584,6 +584,8 @@ fn merged(mut base: Fields, patch: &Fields) -> Fields {
 
 pub mod ctx;
 pub mod fault;
+#[cfg(test)]
+mod golden_tests;
 mod guard;
 pub mod keyexpr;
 pub mod limit;
