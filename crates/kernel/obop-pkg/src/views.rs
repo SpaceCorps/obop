@@ -9,7 +9,7 @@ use crate::resolve::{Blocker, Plan, StepAction};
 use crate::semver::{Req, Version};
 use crate::spdx::{self, LicenseKind};
 use obop_commands::Value;
-use obop_registry::{GENERATED_COMMANDS, Module, ModuleMeta};
+use obop_registry::{Module, ModuleMeta};
 use std::collections::BTreeMap;
 
 /// What a view is computed against.
@@ -205,7 +205,7 @@ pub fn contents(module: &Module) -> Value {
         let actions: Vec<_> = m
             .commands
             .iter()
-            .filter(|c| !GENERATED_COMMANDS.contains(&c.name))
+            .filter(|c| !m.is_generated_command(c.name))
             .collect();
         for a in &actions {
             if a.needs_approval {

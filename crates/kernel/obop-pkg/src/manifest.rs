@@ -458,13 +458,25 @@ pub struct Requirement {
 
 impl Manifest {
     pub fn parse(text: &str) -> Result<Self, String> {
+        Self::parse_as(text, false)
+    }
+
+    /// As [`Manifest::parse`], for the text of a package that is already installed: the one name
+    /// that was free when it was installed and is taken now, an action called `history`, is let
+    /// through, so a server still starts with the module its data belongs to (see
+    /// [`Manifest::to_module_installed`]). Everything else is checked as for an upload.
+    pub fn parse_installed(text: &str) -> Result<Self, String> {
+        Self::parse_as(text, true)
+    }
+
+    fn parse_as(text: &str, installed: bool) -> Result<Self, String> {
         if text.len() > MAX_BYTES {
             return Err(format!("manifest is larger than {} KiB", MAX_BYTES / 1024));
         }
         let mut m: Manifest =
             toml::from_str(text).map_err(|e| format!("invalid obop.toml: {e}"))?;
         m.text = text.to_string();
-        m.validate()?;
+        m.validate(installed)?;
         Ok(m)
     }
 
@@ -508,7 +520,7 @@ impl Manifest {
     }
 
     /// Structural rules that need no knowledge of what is already installed.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self, installed: bool) -> Result<(), String> {
         let id = &self.module.id;
         if !ident_ok(id) {
             return Err(format!(
@@ -578,8 +590,18 @@ impl Manifest {
             }
             let mut actions = std::collections::HashSet::new();
             for a in &m.action {
-                if !ident_ok(&a.name) || GENERATED_COMMANDS.contains(&a.name.as_str()) {
-                    return Err(format!("{}: bad action name {:?}", m.name, a.name));
+                let generated = GENERATED_COMMANDS.contains(&a.name.as_str())
+                    && !(installed && a.name == "history");
+                if !ident_ok(&a.name) || generated {
+                    let hint = if a.name == "history" {
+                        format!(
+                            " (it is the generated command that reads the change history of a record; call the action `{}` instead)",
+                            obop_registry::rename_hint("history")
+                        )
+                    } else {
+                        String::new()
+                    };
+                    return Err(format!("{}: bad action name {:?}{hint}", m.name, a.name));
                 }
                 if !actions.insert(&a.name) {
                     return Err(format!("{}: action {:?} is declared twice", m.name, a.name));
@@ -1988,6 +2010,44 @@ write_group = "fleet.manager"
             // An installed package with that name is registered all the same.
             let module = m.to_module_installed().unwrap();
             assert_eq!(module.models[0].fields[0].name, name);
+        }
+    }
+
+    #[test]
+    fn an_action_called_history_is_refused_when_installing_and_kept_when_installed() {
+        let text = FLEET.replace("name = \"dispatch\"", "name = \"history\"");
+        let e = err(&text);
+        assert!(e.contains("bad action name \"history\""), "{e}");
+        assert!(e.contains("`show_history`"), "{e}");
+        // The text of a package that is installed already is read, and its module is built.
+        let m = Manifest::parse_installed(&text).unwrap();
+        let module = m.to_module_installed().unwrap();
+        assert!(
+            module.models[0]
+                .commands
+                .iter()
+                .any(|c| c.name == "history")
+        );
+        assert_eq!(
+            module.models[0].all_commands().len(),
+            8,
+            "its own, not a ninth"
+        );
+        // Only that name is let through, and only for an installed package; `to_module` still
+        // refuses the module built from it.
+        let e = m.to_module().unwrap_err();
+        assert!(e.contains("`show_history`"), "{e}");
+        for name in [
+            "get",
+            "list",
+            "search",
+            "create",
+            "bulk_create",
+            "update",
+            "delete",
+        ] {
+            let bad = FLEET.replace("name = \"dispatch\"", &format!("name = \"{name}\""));
+            assert!(Manifest::parse_installed(&bad).is_err(), "{name}");
         }
     }
 

@@ -471,9 +471,21 @@ impl ModelDef {
 
     /// Whether the platform keeps the change history of this model and so offers the generated
     /// command `history`: the command layer has switched it on (`ext.history.enabled`; none does
-    /// yet) and the package did not turn it off.
+    /// yet), the package did not turn it off, and the model has no action of its own called
+    /// `history` (a package installed before the name was taken keeps its action, and so has no
+    /// generated command of that name).
     pub fn history_on(&self) -> bool {
-        self.ext.history.enabled && self.ext.history.off_reason.is_none()
+        self.ext.history.enabled
+            && self.ext.history.off_reason.is_none()
+            && !self.commands.iter().any(|c| c.name == "history")
+    }
+
+    /// Whether `name` is a command the platform generates for this model: one of
+    /// [`GENERATED_COMMANDS`], except `history` on a model that declares an action of that name
+    /// itself (see [`ModelDef::history_on`]), which is that action.
+    pub fn is_generated_command(&self, name: &str) -> bool {
+        GENERATED_COMMANDS.contains(&name)
+            && !(name == "history" && self.commands.iter().any(|c| c.name == "history"))
     }
 
     /// This definition with the [`system_defs`] appended (the fields the platform adds to every
@@ -569,6 +581,8 @@ pub fn rename_hint(name: &str) -> &'static str {
         "sys_backfilled" => "estimated",
         "if_version" => "expected_version",
         "id" => "reference",
+        // Not a field: the name to use for an action that would be called `history`.
+        "history" => "show_history",
         _ => "",
     }
 }
@@ -861,7 +875,20 @@ fn check_basics(m: &Module, reserved: bool) -> Vec<Violation> {
         }
         let mut command_names = HashSet::new();
         for c in &model.commands {
-            if GENERATED_COMMANDS.contains(&c.name) || !command_names.insert(c.name) {
+            // `history` became a generated name with D75: an action of that name in a package
+            // that is already installed is let through, like the reserved field names.
+            let generated =
+                GENERATED_COMMANDS.contains(&c.name) && (reserved || c.name != "history");
+            let twice = !command_names.insert(c.name);
+            if generated && c.name == "history" && !twice {
+                bad(
+                    format!("{mp}::history"),
+                    &format!(
+                        "an action cannot be named `history`: it is the generated command that reads the change history of a record (call the action `{}` instead)",
+                        rename_hint("history")
+                    ),
+                );
+            } else if generated || twice {
                 bad(
                     format!("{mp}::{}", c.name),
                     "command name is generated or declared twice",
@@ -1219,6 +1246,7 @@ mod tests {
         }
         assert_eq!(rename_hint("created_at"), "recorded_at");
         assert_eq!(rename_hint("if_version"), "expected_version");
+        assert_eq!(rename_hint("history"), "show_history");
         assert_eq!(rename_hint("email"), "");
         assert!(is_system_name("row_version"));
         assert!(!is_system_name("id") && !is_system_name("if_version"));
@@ -1329,13 +1357,58 @@ mod tests {
         assert!(!m.models[0].history_on());
         assert!(!names(&m).contains(&"history"));
         assert!(check_module(&m).is_empty(), "{:?}", check_module(&m));
-        // A custom command cannot take the name, on or off.
+        // A custom command cannot take the name, on or off, and the message says what to use.
         m.models[0].commands = vec![CommandDef::new("history", "x", "g")];
-        assert!(
-            check_module(&m)[0]
-                .problem
-                .contains("generated or declared twice")
+        let v = check_module(&m);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert_eq!(v[0].path, "t.party::history");
+        assert!(v[0].problem.contains("`history`"), "{}", v[0].problem);
+        assert!(v[0].problem.contains("`show_history`"), "{}", v[0].problem);
+    }
+
+    #[test]
+    fn an_installed_model_keeps_an_action_called_history_and_so_has_no_generated_one() {
+        let mut m = module(ok_field().select(&["a", "b"]));
+        m.models[0].fields[0].name = "state";
+        m.models[0].commands =
+            vec![CommandDef::new("history", "Mine", "g").transition("state", Some("a"), "b")];
+        // Installing or upgrading it is refused; registering it again is not.
+        assert_eq!(check_module(&m).len(), 1);
+        let v = check_installed_module(&m);
+        assert!(v.is_empty(), "{v:?}");
+        // Twice is still twice, and the other generated names were never free.
+        m.models[0]
+            .commands
+            .push(CommandDef::new("history", "Again", "g"));
+        assert_eq!(check_installed_module(&m).len(), 1);
+        m.models[0].commands = vec![CommandDef::new("delete", "x", "g")];
+        assert_eq!(check_installed_module(&m).len(), 1);
+        // The action is the action: it is not a generated command, the platform does not add
+        // its own `history` beside it even when the history of the model is switched on, and
+        // there is one command of that name.
+        m.models[0].commands = vec![CommandDef::new("history", "Mine", "g")];
+        m.models[0].ext.history.enabled = true;
+        assert!(!m.models[0].is_generated_command("history"));
+        assert!(m.models[0].is_generated_command("delete"));
+        assert!(!m.models[0].history_on());
+        let names: Vec<_> = m.models[0].all_commands().iter().map(|c| c.name).collect();
+        assert_eq!(
+            names.iter().filter(|n| **n == "history").count(),
+            1,
+            "{names:?}"
         );
+        assert_eq!(
+            m.models[0]
+                .all_commands()
+                .iter()
+                .find(|c| c.name == "history")
+                .unwrap()
+                .description,
+            "Mine"
+        );
+        // A model without such an action sees `history` as a generated name.
+        let plain = module(ok_field());
+        assert!(plain.models[0].is_generated_command("history"));
     }
 
     #[test]

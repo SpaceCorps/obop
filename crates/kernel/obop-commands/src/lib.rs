@@ -11,7 +11,7 @@ use shared::{Pending, Plans};
 use obop_masking::mode_for;
 pub use obop_masking::{PrincipalKind, RestoreError, Vault};
 use obop_registry::labels::Texts;
-use obop_registry::{FieldDef, GENERATED_COMMANDS, Module, Transition, Translations};
+use obop_registry::{FieldDef, Module, Transition, Translations};
 use obop_types::MaskMode;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
@@ -488,7 +488,7 @@ impl Dispatcher {
                     .filter(|(id, c)| {
                         c.model == name.as_str()
                             && id.starts_with(&format!("{name}."))
-                            && !GENERATED_COMMANDS.contains(&&id[name.len() + 1..])
+                            && !m.def.is_generated_command(&id[name.len() + 1..])
                             && visible(c)
                     })
                     .map(|(id, c)| {
