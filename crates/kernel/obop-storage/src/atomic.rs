@@ -39,9 +39,10 @@ pub(crate) trait TxView {
     fn tx_context(&mut self, _json: &str) -> Result<()> {
         Ok(())
     }
-    /// The first read of a record of a tracked model in a transaction (D75): the record, locked,
-    /// and the transaction learns the clock. PostgreSQL asks for both in one statement; the
-    /// others have nothing to add to `tx_get`.
+    /// The first read of a record of a tracked model in a transaction (D75): the record, locked.
+    /// A backend that can learn the clock in the same statement may do so here and answer from it
+    /// in `tx_now`; none does yet (PostgreSQL has this default and the clock of the process until
+    /// its history store is written).
     fn tx_get_clock(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
         self.tx_get(model, id)
     }

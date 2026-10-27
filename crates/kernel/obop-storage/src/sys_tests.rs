@@ -1596,6 +1596,102 @@ fn an_erasure_removes_the_values_from_the_history_and_says_so_without_values() {
 }
 
 #[test]
+fn the_entry_of_an_erasure_carries_the_version_the_record_has_when_the_batch_is_done() {
+    each(|fx| {
+        fx.track_plain("deal", &["a"]);
+        fx.ok("ann", &[ins("deal", "d1", json!({"a": 1}))]);
+        fx.ok("ann", &[merge("deal", "d1", json!({"a": 2}))]);
+        fx.ok("ann", &[merge("deal", "d1", json!({"a": 3}))]);
+        // Changed and put back in the batch that erases: the record stays at version 3, and so
+        // does the entry (the version 4 of the middle step was never stored).
+        fx.ok(
+            "bob",
+            &[
+                merge("deal", "d1", json!({"a": 9})),
+                merge("deal", "d1", json!({"a": 3})),
+                erase("deal", "d1"),
+            ],
+        );
+        assert_eq!(fx.get("deal", "d1")["row_version"], 3);
+        // Erased on its own: the stored version.
+        fx.ok("bob", &[erase("deal", "d1")]);
+        // Changed, deleted, erased: the delete is entered as version 5, and so is the erasure.
+        fx.ok(
+            "bob",
+            &[
+                merge("deal", "d1", json!({"a": 7})),
+                del("deal", "d1"),
+                erase("deal", "d1"),
+            ],
+        );
+        let shape: Vec<(String, i64)> = fx
+            .hist("deal", "d1")
+            .into_iter()
+            .map(|e| (e.op, e.row_version))
+            .collect();
+        let want: Vec<(String, i64)> = [
+            ("create", 1),
+            ("update", 2),
+            ("update", 3),
+            ("erase", 3),
+            ("erase", 3),
+            ("update", 4),
+            ("delete", 5),
+            ("erase", 5),
+        ]
+        .into_iter()
+        .map(|(o, v)| (o.to_string(), v))
+        .collect();
+        assert_eq!(shape, want);
+        // Made and erased in one batch: version 1. No such record: 0, as it says.
+        fx.ok(
+            "bob",
+            &[ins("deal", "d2", json!({"a": 1})), erase("deal", "d2")],
+        );
+        assert_eq!(fx.hist("deal", "d2").last().unwrap().row_version, 1);
+        fx.ok("bob", &[erase("deal", "ghost")]);
+        assert_eq!(fx.hist("deal", "ghost")[0].row_version, 0);
+        // A record this batch did not touch, of a model nobody tracks: what is stored.
+        fx.ok("bob", &[ins("note", "n1", json!({"row_version": 8}))]);
+        fx.ok("bob", &[erase("note", "n1")]);
+        assert_eq!(fx.hist("note", "n1")[0].row_version, 8);
+    });
+}
+
+#[test]
+fn a_version_at_the_end_of_the_range_refuses_the_batch_and_does_not_panic() {
+    each(|fx| {
+        // Written before the tracking, when any value could be there (old data, an import).
+        fx.ok(
+            "ann",
+            &[
+                ins("deal", "d1", json!({"n": 1, "row_version": i64::MAX})),
+                ins("deal", "d2", json!({"n": 1, "row_version": i64::MAX})),
+            ],
+        );
+        fx.track_plain("deal", &["n"]);
+        let before = fx.rows();
+        for ops in [
+            vec![merge("deal", "d1", json!({"n": 2}))],
+            vec![del("deal", "d2")],
+            vec![merge("deal", "d2", json!({"n": 2})), del("deal", "d2")],
+        ] {
+            let r = fx.by("bob", &ops);
+            assert!(
+                matches!(&r, Err(ApplyError::Storage(m)) if m.contains("row_version")),
+                "{ops:?}: {r:?}"
+            );
+            assert_eq!(fx.rows(), before, "{ops:?}");
+        }
+        // The store is still there for the next batch (nothing panicked with a lock held), and
+        // a write that changes nothing needs no new version.
+        fx.ok("bob", &[merge("deal", "d1", json!({"n": 1}))]);
+        fx.ok("bob", &[ins("deal", "d3", json!({"n": 1}))]);
+        assert_eq!(fx.get("deal", "d3")["row_version"], 1);
+    });
+}
+
+#[test]
 fn a_sealed_value_is_erased_like_any_other() {
     each(|fx| {
         fx.track(

@@ -523,7 +523,13 @@ fn stamp_new(out: &mut Fields, ts: i64, by: &str) {
 
 /// Stamp a record that exists: `updated_at` is the clock, but at least a microsecond after the
 /// last stamp, so the instants of a record only grow.
-fn stamp_existing(out: &mut Fields, live: &Fields, id: &str, ts: i64, by: &str) {
+fn stamp_existing(
+    out: &mut Fields,
+    live: &Fields,
+    id: &str,
+    ts: i64,
+    by: &str,
+) -> std::result::Result<(), ApplyError> {
     let prev = live
         .get("updated_at")
         .and_then(J::as_str)
@@ -547,10 +553,19 @@ fn stamp_existing(out: &mut Fields, live: &Fields, id: &str, ts: i64, by: &str) 
         out.insert("created_by".into(), by.clone());
     }
     out.insert("updated_by".into(), J::from(by));
-    out.insert("row_version".into(), J::from(version.unwrap_or(1) + 1));
+    out.insert("row_version".into(), J::from(next_version(version)?));
     if estimated {
         out.insert("sys_backfilled".into(), J::from(true));
     }
+    Ok(())
+}
+
+/// The version after `version` (a record without one reads as 1). A stored version at the end of
+/// the range is refused: the batch fails, it does not wrap or panic with a lock held.
+fn next_version(version: Option<i64>) -> std::result::Result<i64, ApplyError> {
+    version.unwrap_or(1).checked_add(1).ok_or_else(|| {
+        ApplyError::Storage("the row_version of the record cannot be raised any further".into())
+    })
 }
 
 impl<'a> Stage<'a> {
@@ -775,7 +790,7 @@ impl<'a> Stage<'a> {
             }
             (Some(live), false) => {
                 let ts = tx.tx_now().map_err(ApplyError::Storage)?;
-                stamp_existing(&mut out, live, &rec.id, ts, by);
+                stamp_existing(&mut out, live, &rec.id, ts, by)?;
             }
             (None, _) => {
                 let ts = tx.tx_now().map_err(ApplyError::Storage)?;
@@ -799,32 +814,45 @@ impl<'a> Stage<'a> {
     pub(crate) fn finish(self, tx: &mut dyn TxView) -> std::result::Result<(), ApplyError> {
         let st = ApplyError::Storage;
         let mut rows: Vec<ChangeRow> = Vec::new();
+        // The version each record has when the batch is done, as stored (a record that is gone:
+        // the version its delete is entered with), for the entry of an erasure. A record that
+        // was made again after a delete is the later of its lives.
+        let mut finals: HashMap<(String, String), i64> = HashMap::new();
         for rec in &self.recs {
+            let key = (rec.model.clone(), rec.id.clone());
             match (&rec.before, &rec.live, &rec.gone) {
                 // Created and, if at all, deleted again in this transaction.
                 (None, Some(live), _) => {
+                    let (at, version) = stamp_of(live)?;
+                    finals.insert(key, version);
                     if rec.track.history {
-                        let (at, version) = stamp_of(live)?;
                         rows.push(self.entry(rec, "create", at, version, None, Some(live)));
                     }
                 }
-                (None, None, _) | (Some(_), None, None) => {}
+                (None, None, _) | (Some(_), None, None) => {
+                    finals.insert(key, 0);
+                }
                 (Some(before), Some(live), _) => {
                     if !rec.stamped {
+                        finals.insert(key, row_version(before).unwrap_or(1));
                         continue;
                     }
                     if canon(before) == canon(live) {
                         // A to B to A: the record goes back to what it was, stamps and all.
                         tx.tx_put(&rec.model, &rec.id, before).map_err(st)?;
-                    } else if rec.track.history {
-                        let primary = self
-                            .ctx
-                            .primary
-                            .as_ref()
-                            .is_some_and(|(m, i)| *m == rec.model && *i == rec.id);
-                        let op = if primary { "transition" } else { "update" };
+                        finals.insert(key, row_version(before).unwrap_or(1));
+                    } else {
                         let (at, version) = stamp_of(live)?;
-                        rows.push(self.entry(rec, op, at, version, Some(before), Some(live)));
+                        finals.insert(key, version);
+                        if rec.track.history {
+                            let primary = self
+                                .ctx
+                                .primary
+                                .as_ref()
+                                .is_some_and(|(m, i)| *m == rec.model && *i == rec.id);
+                            let op = if primary { "transition" } else { "update" };
+                            rows.push(self.entry(rec, op, at, version, Some(before), Some(live)));
+                        }
                     }
                 }
                 (Some(before), None, Some(gone)) => {
@@ -834,12 +862,12 @@ impl<'a> Stage<'a> {
                         let (at, version) = stamp_of(last)?;
                         rows.push(self.entry(rec, "update", at, version, Some(before), Some(last)));
                     }
+                    // A record from before the tracking has no version and reads as 1, so its
+                    // delete is version 2; one that was changed and put back counts from the
+                    // version it had, the stamp of this transaction never having been stored.
+                    let version = next_version(row_version(if net { last } else { before }))?;
+                    finals.insert(key, version);
                     if rec.track.history {
-                        // A record from before the tracking has no version and reads as 1, so
-                        // its delete is version 2; one that was changed and put back counts from
-                        // the version it had, the stamp of this transaction never having been
-                        // stored.
-                        let version = row_version(if net { last } else { before }).unwrap_or(1) + 1;
                         let at = fmt_micros(gone.at);
                         rows.push(self.entry(rec, "delete", at, version, Some(last), None));
                     }
@@ -850,7 +878,7 @@ impl<'a> Stage<'a> {
             tx.tx_history(&rows).map_err(st)?;
         }
         for (model, id) in &self.erase {
-            self.scrub(tx, model, id)?;
+            self.scrub(tx, model, id, &finals)?;
         }
         Ok(())
     }
@@ -861,6 +889,7 @@ impl<'a> Stage<'a> {
         tx: &mut dyn TxView,
         model: &str,
         id: &str,
+        finals: &HashMap<(String, String), i64>,
     ) -> std::result::Result<(), ApplyError> {
         let st = ApplyError::Storage;
         let keep: Vec<String> = self
@@ -868,11 +897,10 @@ impl<'a> Stage<'a> {
             .get(model)
             .map(|t| t.keep_on_erase.iter().cloned().collect())
             .unwrap_or_default();
-        let version = match self.index.get(&(model.to_string(), id.to_string())) {
-            Some(&i) => self.recs[i]
-                .live
-                .as_ref()
-                .map_or(0, |l| row_version(l).unwrap_or(1)),
+        // The version the record has once the batch is done: what the planner worked out for a
+        // record this batch touched, else what is stored (0: there is no such record).
+        let version = match finals.get(&(model.to_string(), id.to_string())) {
+            Some(v) => *v,
             None => tx
                 .tx_get(model, id)
                 .map_err(st)?
