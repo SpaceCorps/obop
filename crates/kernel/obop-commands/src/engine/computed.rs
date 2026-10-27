@@ -34,7 +34,9 @@ pub(crate) fn to_v(kind: Option<&FieldKind>, j: Option<&J>) -> V {
             Decimal::parse(s).map_or(V::Null, V::Dec)
         }
         (Some(FieldKind::Datetime), Some(J::String(s))) => {
-            Instant::parse(s).map_or(V::Null, |i| V::Instant(i.micros()))
+            // Only the canonical text is an instant (D72); any other spelling is data that
+            // bypassed validation and counts as empty, as it does in a filter.
+            crate::query::stored_instant(s).map_or(V::Null, |i| V::Instant(i.micros()))
         }
         (_, Some(J::Number(n))) => n.as_i64().map_or(V::Null, V::Int),
         (_, Some(J::String(s))) => V::Text(s.clone()),
@@ -445,5 +447,30 @@ mod tests {
             (r["total"].clone(), r["avg"].clone()),
             (J::from(0), J::Null)
         );
+    }
+
+    /// A stored datetime is an instant in an expression only in its canonical form; any other
+    /// spelling counts as empty, as in a filter, in a group and in the SQL `Instant` slot (D72).
+    #[test]
+    fn a_stored_datetime_is_an_instant_only_in_its_canonical_form() {
+        let at = |s: &str| to_v(Some(&FieldKind::Datetime), Some(&J::from(s)));
+        let canonical = "2026-03-29T01:30:00.000000Z";
+        let micros = Instant::parse(canonical).unwrap().micros();
+        assert!(matches!(at(canonical), V::Instant(us) if us == micros));
+        for other in [
+            "2026-03-29T01:30:00Z",
+            "2026-03-29T03:30:00.000000+02:00",
+            "2026-03-29t01:30:00.000000Z",
+            "2026-02-30T01:30:00.000000Z",
+            "not a time",
+            "",
+        ] {
+            assert!(matches!(at(other), V::Null), "{other:?}");
+        }
+        assert!(matches!(
+            to_v(Some(&FieldKind::Datetime), Some(&J::from(5))),
+            V::Int(5)
+        ));
+        assert!(matches!(to_v(Some(&FieldKind::Datetime), None), V::Null));
     }
 }

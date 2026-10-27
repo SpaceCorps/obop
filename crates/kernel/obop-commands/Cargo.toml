@@ -27,3 +27,5 @@ workspace = true
 
 [dev-dependencies]
 obop-storage = { workspace = true, features = ["test-support"] }
+# The parity test of the SQL key expressions talks to a real server (see keyexpr_parity.rs).
+postgres = "0.19"

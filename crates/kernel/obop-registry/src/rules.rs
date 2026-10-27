@@ -1261,7 +1261,7 @@ fn check_access(m: &ModelDef, a: &Access, lookup: Lookup<'_>, bad: &mut dyn FnMu
         match field(n) {
             Some(f) if matches!(f.kind, FieldKind::Text | FieldKind::LongText) => {}
             Some(_) => bad(format!(
-                "access.shared_with: {n} must be a text field holding user ids separated by commas"
+                "access.shared_with: {n} must be a text field holding user ids separated by commas, semicolons, spaces or line breaks"
             )),
             None => bad(format!("access.shared_with: no field {n}")),
         }

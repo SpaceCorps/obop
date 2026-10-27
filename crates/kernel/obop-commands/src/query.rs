@@ -24,6 +24,7 @@ use crate::aggregate::Aggregate;
 use crate::collate::{self, TextOrder};
 use obop_registry::{FieldKind, ModelDef, is_valid_date};
 use obop_storage::Fields;
+use obop_storage::keyexpr::Slot;
 use obop_values::datetime::{bucket_label, days_from_civil, parse_date, weekday};
 use obop_values::{Bucket, Decimal, Instant, Zone, Zones};
 use serde_json::Value as J;
@@ -52,14 +53,16 @@ pub(crate) enum Key {
 
 /// A condition's `bucket`: the field is cut into periods before it is compared.
 #[derive(Debug, Clone)]
-struct Bucketed {
-    bucket: Bucket,
+pub(crate) struct Bucketed {
+    pub(crate) bucket: Bucket,
     /// The zone of a datetime's wall clock; none for a date.
-    zone: Option<Zone>,
+    pub(crate) zone: Option<Zone>,
 }
 
+/// What a condition asks of the field. The match on it is exhaustive wherever a backend lowers
+/// it (the pushdown, D76), so a new operator cannot be forgotten there.
 #[derive(Debug)]
-enum Op {
+pub(crate) enum Op {
     Eq(Key),
     Ne(Key),
     Contains(String),
@@ -73,18 +76,30 @@ enum Op {
 }
 
 #[derive(Debug)]
-struct Cond {
-    field: String,
-    kind: FieldKind,
-    op: Op,
-    bucket: Option<Bucketed>,
+pub(crate) struct Cond {
+    pub(crate) field: String,
+    pub(crate) kind: FieldKind,
+    pub(crate) op: Op,
+    pub(crate) bucket: Option<Bucketed>,
 }
 
 #[derive(Debug)]
-struct Sort {
-    field: String,
-    kind: FieldKind,
-    desc: bool,
+pub(crate) struct Sort {
+    pub(crate) field: String,
+    pub(crate) kind: FieldKind,
+    pub(crate) desc: bool,
+}
+
+/// A parsed query taken apart for the pushdown (D76), which lowers the conditions and the order
+/// to SQL and leaves paging to the database.
+#[derive(Debug)]
+#[allow(dead_code, reason = "read by the D76 pushdown")]
+pub(crate) struct QueryParts<'a> {
+    pub(crate) conds: &'a [Cond],
+    pub(crate) order: &'a [Sort],
+    pub(crate) limit: Option<usize>,
+    pub(crate) offset: usize,
+    pub(crate) lang: Option<&'a icu_locale::Locale>,
 }
 
 #[derive(Debug, Default)]
@@ -122,14 +137,32 @@ fn date_key(s: &str) -> Option<i64> {
     Some(n(0..4)? * 10_000 + n(5..7)? * 100 + n(8..10)?)
 }
 
+/// A stored instant: only the canonical text `YYYY-MM-DDTHH:MM:SS.ffffffZ` counts (D72, as the
+/// stores write it). Any other spelling of an instant, an offset or fewer digits, can only be
+/// data that bypassed validation and counts as empty, exactly as the `Instant` slot of
+/// `obop_storage::keyexpr` reads it in SQL. Every place that reads a stored datetime (filters,
+/// order, buckets, the groups of an aggregate and computed fields) goes through this one rule.
+pub(crate) fn stored_instant(s: &str) -> Option<Instant> {
+    // The canonical text is 27 bytes: say no to everything else before parsing.
+    if s.len() != 27 {
+        return None;
+    }
+    Instant::parse(s).ok().filter(|i| i.canonical() == s)
+}
+
 /// The key of a stored JSON value; `None` for null, missing or a value of the wrong type (such
 /// a value counts as empty, it can only come from data that bypassed validation).
-fn stored_key(kind: &FieldKind, v: &J) -> Option<Key> {
+///
+/// `obop_storage::keyexpr` is the same function in SQL, slot for slot (see [`slot_of`]); the
+/// test `keyexpr_parity` runs both over the same hostile values on PostgreSQL.
+pub(crate) fn stored_key(kind: &FieldKind, v: &J) -> Option<Key> {
     match (kind, v) {
         (FieldKind::Number | FieldKind::Money, J::Number(n)) => n.as_i64().map(Key::Int),
         (FieldKind::Date, J::String(s)) => date_key(s).map(Key::Int),
+        // A decimal is read as it is written, whatever its scale: the SQL slot cannot know the
+        // field's declared scale either, and the stores check the canonical text on write.
         (FieldKind::Decimal { .. }, J::String(s)) => Decimal::parse(s).ok().map(Key::Dec),
-        (FieldKind::Datetime, J::String(s)) => Instant::parse(s).ok().map(|i| Key::Int(i.micros())),
+        (FieldKind::Datetime, J::String(s)) => stored_instant(s).map(|i| Key::Int(i.micros())),
         (FieldKind::Bool, J::Bool(b)) => Some(Key::Int(i64::from(*b))),
         (FieldKind::Select(o), J::String(s)) => {
             o.iter().position(|x| x == s).map(|i| Key::Int(i as i64))
@@ -141,6 +174,25 @@ fn stored_key(kind: &FieldKind, v: &J) -> Option<Key> {
     }
 }
 
+/// The SQL slot (`obop_storage::keyexpr`) that reads a stored value of `kind` as `stored_key`
+/// does, the one place that maps kinds to slots. `None` for an image or a file: their key is
+/// always empty. A select's key is the position of its option, so the slot is `SelPos`; an
+/// equality on a select may also compare the option text through `Slot::Str`. The match is
+/// exhaustive, so a new kind has to say what it is.
+#[allow(dead_code, reason = "read by the D76 pushdown and the D78 indexes")]
+pub(crate) fn slot_of(kind: &FieldKind) -> Option<Slot> {
+    match kind {
+        FieldKind::Text | FieldKind::LongText | FieldKind::Ref(_) => Some(Slot::Str),
+        FieldKind::Number | FieldKind::Money => Some(Slot::Int),
+        FieldKind::Bool => Some(Slot::Bool),
+        FieldKind::Date => Some(Slot::Date),
+        FieldKind::Datetime => Some(Slot::Instant),
+        FieldKind::Decimal { .. } => Some(Slot::Dec),
+        FieldKind::Select(_) => Some(Slot::SelPos),
+        FieldKind::Image(_) | FieldKind::File(_) => None,
+    }
+}
+
 /// The period label of a stored date or instant, for a condition with a `bucket`.
 fn bucket_key(kind: &FieldKind, v: &J, b: &Bucketed) -> Option<Key> {
     match (kind, v) {
@@ -149,7 +201,7 @@ fn bucket_key(kind: &FieldKind, v: &J, b: &Bucketed) -> Option<Key> {
             Some(Key::Str(bucket_label(y, m, d, b.bucket)))
         }
         (FieldKind::Datetime, J::String(s)) => {
-            let at = Instant::parse(s).ok()?;
+            let at = stored_instant(s)?;
             Some(Key::Str(b.zone.as_ref()?.bucket(at, b.bucket)))
         }
         _ => None,
@@ -203,10 +255,24 @@ fn operand(model: &str, field: &str, kind: &FieldKind, v: &Value) -> Result<Key,
             .map(|i| Key::Int(i as i64))
             .ok_or_else(bad),
         (FieldKind::Text | FieldKind::LongText | FieldKind::Ref(_), Value::Text(t)) => {
+            no_nul(model, field, t)?;
             Ok(Key::Str(t.clone()))
         }
         _ => Err(bad()),
     }
+}
+
+/// A NUL (U+0000) cannot be stored in PostgreSQL `text` or `jsonb`, and bound as a parameter it
+/// fails the statement. So no backend takes it in a filter value: the answer must not depend on
+/// where the data lives (D76, a deliberate narrow change; nothing could ever match it on
+/// PostgreSQL).
+fn no_nul(model: &str, field: &str, t: &str) -> Result<(), String> {
+    if t.contains('\0') {
+        return Err(format!(
+            "filter on {model}.{field}: text cannot contain NUL"
+        ));
+    }
+    Ok(())
 }
 
 fn int_option(
@@ -360,6 +426,18 @@ impl Query {
     /// The collation language of text sorts.
     pub(crate) fn lang(&self) -> Option<&icu_locale::Locale> {
         self.lang.as_ref()
+    }
+
+    /// The conditions, order, paging and language, for the pushdown (D76).
+    #[allow(dead_code, reason = "read by the D76 pushdown")]
+    pub(crate) fn parts(&self) -> QueryParts<'_> {
+        QueryParts {
+            conds: &self.conds,
+            order: &self.order,
+            limit: self.limit,
+            offset: self.offset,
+            lang: self.lang.as_ref(),
+        }
     }
 
     /// `list` and the public routes do not aggregate.
@@ -582,7 +660,10 @@ fn parse_cond(
                 ));
             }
             match value {
-                Value::Text(t) => Op::Contains(t.to_lowercase()),
+                Value::Text(t) => {
+                    no_nul(def.name, name, t)?;
+                    Op::Contains(t.to_lowercase())
+                }
                 _ => {
                     return Err(format!(
                         "filter on {}.{name}: contains needs a string",
@@ -671,4 +752,279 @@ fn bucketed(
         (_, None) => None,
     };
     Ok(Some(Bucketed { bucket, zone }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use obop_types::DataClass;
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    fn field(name: &'static str, kind: FieldKind) -> obop_registry::FieldDef {
+        obop_registry::FieldDef::new(name, "d", DataClass::None, false, "t.user").kind(kind)
+    }
+
+    fn model() -> ModelDef {
+        ModelDef {
+            name: "t_thing",
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            fields: vec![
+                field("title", FieldKind::Text),
+                field("notes", FieldKind::LongText),
+                field("owner", FieldKind::Ref("t_user")),
+                field("state", FieldKind::Select(Arc::from(vec!["open", "done"]))),
+                field("due", FieldKind::Date),
+                field(
+                    "price",
+                    FieldKind::Decimal {
+                        precision: 12,
+                        scale: 2,
+                        round: None,
+                    },
+                ),
+                field("at", FieldKind::Datetime),
+            ],
+            commands: vec![],
+            access: None,
+            ext: Default::default(),
+        }
+    }
+
+    fn text(s: &str) -> Value {
+        Value::Text(s.into())
+    }
+
+    fn map(pairs: Vec<(&str, Value)>) -> Value {
+        Value::Map(
+            pairs
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect::<BTreeMap<_, _>>(),
+        )
+    }
+
+    fn parse(filter: Vec<Value>) -> Result<Query, String> {
+        Query::parse(
+            &model(),
+            &map(vec![("filter", Value::List(filter))]),
+            &|_| true,
+        )
+    }
+
+    fn cond(field: &str, op: &str, value: Value) -> Value {
+        map(vec![
+            ("field", text(field)),
+            ("op", text(op)),
+            ("value", value),
+        ])
+    }
+
+    #[test]
+    fn a_nul_in_a_filter_value_is_refused_wherever_a_text_is_compared() {
+        for field in ["title", "notes", "owner", "id"] {
+            for op in ["eq", "ne", "gt", "gte", "lt", "lte", "contains"] {
+                if field == "owner" && matches!(op, "gt" | "gte" | "lt" | "lte" | "contains") {
+                    continue; // a ref has no range and no contains
+                }
+                for bad in ["\0", "a\0", "\0b", "a\0b", "caf\u{e9}\0"] {
+                    let e = parse(vec![cond(field, op, text(bad))]).unwrap_err();
+                    assert_eq!(
+                        e,
+                        format!("filter on t_thing.{field}: text cannot contain NUL"),
+                        "{field} {op} {bad:?}"
+                    );
+                }
+            }
+            // Inside `in`, in any position.
+            for list in [vec!["\0"], vec!["a", "b\0"], vec!["\0", "a"]] {
+                let items = list.into_iter().map(text).collect();
+                let e = parse(vec![cond(field, "in", Value::List(items))]).unwrap_err();
+                assert!(e.ends_with("text cannot contain NUL"), "{field}: {e}");
+            }
+            // Text without a NUL is as welcome as before, including its odd characters.
+            for ok in [
+                "",
+                "a b",
+                "%_\\'\"",
+                "\u{fffd}",
+                "\u{1}",
+                "caf\u{e9}",
+                "\u{10ffff}",
+            ] {
+                parse(vec![cond(field, "eq", text(ok))]).unwrap_or_else(|e| panic!("{ok:?}: {e}"));
+            }
+        }
+        // Kinds that cannot hold a NUL anyway keep their own error.
+        for (f, bad) in [
+            ("state", "\0"),
+            ("due", "2026-01-01\0"),
+            ("price", "1\0"),
+            ("at", "x\0"),
+        ] {
+            let e = parse(vec![cond(f, "eq", text(bad))]).unwrap_err();
+            assert!(!e.contains("NUL"), "{f}: {e}");
+        }
+        // The empty-check is untouched.
+        parse(vec![cond("title", "is_null", Value::Bool(true))]).unwrap();
+    }
+
+    #[test]
+    fn a_stored_instant_counts_only_in_its_canonical_form() {
+        let at = |s: &str| stored_key(&FieldKind::Datetime, &J::from(s));
+        let micros = |s: &str| Instant::parse(s).unwrap().micros();
+        for ok in [
+            "2026-03-29T01:30:00.000000Z",
+            "0001-01-01T00:00:00.000000Z",
+            "9999-12-31T23:59:59.999999Z",
+            "2024-02-29T12:00:00.123456Z",
+        ] {
+            assert_eq!(at(ok), Some(Key::Int(micros(ok))), "{ok}");
+        }
+        // Valid RFC 3339, but not what the stores write: the other spellings are empty.
+        for other in [
+            "2026-03-29T01:30:00Z",
+            "2026-03-29T01:30:00.5Z",
+            "2026-03-29T03:30:00.000000+02:00",
+            "2026-03-29T01:30:00.000000-00:00",
+            "2026-03-29t01:30:00.000000Z",
+            "2026-03-29T01:30:00.000000z",
+            "2026-03-29 01:30:00.000000Z",
+            " 2026-03-29T01:30:00.000000Z",
+            "2026-03-29T01:30:00.000000Z ",
+            "2026-03-29T01:30:00.000000Z\n",
+            "2026-02-30T01:30:00.000000Z",
+            "2026-03-29T24:00:00.000000Z",
+            "2026-03-29T23:60:00.000000Z",
+            "2026-03-29T23:59:60.000000Z",
+            "0000-01-01T00:00:00.000000Z",
+            "\u{ff12}026-03-29T01:30:00.000000Z",
+            "",
+        ] {
+            assert_eq!(at(other), None, "{other:?}");
+        }
+        assert_eq!(at("not a time"), None);
+        assert_eq!(stored_key(&FieldKind::Datetime, &J::from(5)), None);
+        // The bucket filter reads stored instants the same way.
+        let b = Bucketed {
+            bucket: Bucket::Day,
+            zone: Some(Zones::default().zone(None).unwrap()),
+        };
+        let canonical = J::from("2026-03-29T01:30:00.000000Z");
+        assert!(bucket_key(&FieldKind::Datetime, &canonical, &b).is_some());
+        let other = J::from("2026-03-29T01:30:00Z");
+        assert!(bucket_key(&FieldKind::Datetime, &other, &b).is_none());
+    }
+
+    #[test]
+    fn a_stored_decimal_counts_when_the_strict_grammar_accepts_it() {
+        // The rule of the SQL slot too: grammar and limits of Decimal::parse, whatever the scale
+        // the field declares (that is checked when a value is written).
+        let kind = FieldKind::Decimal {
+            precision: 12,
+            scale: 2,
+            round: None,
+        };
+        let d = |s: &str| stored_key(&kind, &J::from(s));
+        let val = |s: &str| Some(Key::Dec(Decimal::parse(s).unwrap()));
+        let nines = "9".repeat(38);
+        for ok in [
+            "0",
+            "-0",
+            "7",
+            "-0.05",
+            "12.3400",
+            "007.5",
+            "1.234567890123",
+            &nines,
+        ] {
+            assert_eq!(d(ok), val(ok), "{ok}");
+        }
+        assert_eq!(d("1.50"), d("1.5"), "compared by value, not by scale");
+        let long = format!("0.{}1", "0".repeat(37)); // 38 fractional digits: the most
+        assert!(d(&long).is_some());
+        let (too_many, too_fine, too_long) = (
+            "9".repeat(39),
+            format!("0.{}1", "0".repeat(38)), // 39 fractional digits
+            format!("1{}", "0".repeat(80)),   // 81 characters
+        );
+        for bad in [
+            "", "-", "+5", ".5", "5.", "1e3", "1E3", " 1", "1 ", "1\n", "1,5", "NaN", "Infinity",
+            "0x10", "\u{ff11}", "\u{661}", "1_000", "--1", "1.2.3", &too_many, &too_fine,
+            &too_long,
+        ] {
+            assert_eq!(d(bad), None, "{bad:?}");
+        }
+        assert_eq!(
+            stored_key(&kind, &J::from(5)),
+            None,
+            "a number is not a decimal"
+        );
+        assert_eq!(stored_key(&kind, &J::from(5.5)), None);
+    }
+
+    #[test]
+    fn every_kind_has_a_slot_that_reads_it_like_stored_key() {
+        let all: Vec<(FieldKind, Option<Slot>)> = vec![
+            (FieldKind::Text, Some(Slot::Str)),
+            (FieldKind::LongText, Some(Slot::Str)),
+            (FieldKind::Ref("x"), Some(Slot::Str)),
+            (FieldKind::Number, Some(Slot::Int)),
+            (FieldKind::Money, Some(Slot::Int)),
+            (FieldKind::Bool, Some(Slot::Bool)),
+            (FieldKind::Date, Some(Slot::Date)),
+            (FieldKind::Datetime, Some(Slot::Instant)),
+            (
+                FieldKind::Decimal {
+                    precision: 5,
+                    scale: 2,
+                    round: None,
+                },
+                Some(Slot::Dec),
+            ),
+            (FieldKind::Select(Arc::from(vec!["a"])), Some(Slot::SelPos)),
+            (FieldKind::Image(0), None),
+            (FieldKind::File(0), None),
+        ];
+        for (kind, slot) in &all {
+            assert_eq!(slot_of(kind), *slot, "{kind:?}");
+        }
+        // Images and files have no key at all, whatever is stored.
+        for v in [J::from("a"), J::from(1), J::Null, J::from(true)] {
+            assert_eq!(stored_key(&FieldKind::Image(0), &v), None);
+            assert_eq!(stored_key(&FieldKind::File(0), &v), None);
+        }
+    }
+
+    #[test]
+    fn the_parts_of_a_parsed_query_are_what_was_asked() {
+        let q = Query::parse(
+            &model(),
+            &map(vec![
+                ("filter", Value::List(vec![cond("title", "eq", text("a"))])),
+                (
+                    "order",
+                    Value::List(vec![map(vec![
+                        ("field", text("due")),
+                        ("dir", text("desc")),
+                    ])]),
+                ),
+                ("limit", Value::Int(7)),
+                ("offset", Value::Int(3)),
+                ("lang", text("sv")),
+            ]),
+            &|_| true,
+        )
+        .unwrap();
+        let p = q.parts();
+        assert_eq!(
+            (p.conds.len(), p.order.len(), p.limit, p.offset),
+            (1, 1, Some(7), 3)
+        );
+        assert!(p.order[0].desc && p.order[0].field == "due");
+        assert!(matches!(&p.conds[0].op, Op::Eq(Key::Str(s)) if s == "a"));
+        assert_eq!(p.lang.map(ToString::to_string).as_deref(), Some("sv"));
+    }
 }

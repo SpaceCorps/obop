@@ -39,11 +39,11 @@
 
 use crate::Value;
 use crate::collate::TextOrder;
-use crate::query::{Key, Query};
+use crate::query::{Key, Query, stored_instant};
 use obop_registry::{FieldKind, ModelDef};
 use obop_storage::{Backend, Fields};
 use obop_values::datetime::{bucket_label, parse_date};
-use obop_values::{Bucket, Decimal, Instant, Round, Zone, Zones};
+use obop_values::{Bucket, Decimal, Round, Zone, Zones};
 use serde_json::Value as J;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -502,7 +502,8 @@ fn group_key(g: &GroupBy, f: &Fields) -> Option<Key> {
     match (&g.kind, v) {
         (FieldKind::Date, J::String(s)) => bucket_of(s, g.bucket?).map(Key::Str),
         (FieldKind::Datetime, J::String(s)) => {
-            let at = Instant::parse(s).ok()?;
+            // A stored instant in any form but the canonical one is empty, as in a filter.
+            let at = stored_instant(s)?;
             Some(Key::Str(g.zone.as_ref()?.bucket(at, g.bucket?)))
         }
         (FieldKind::Decimal { .. }, J::String(s)) => Decimal::parse(s).ok().map(Key::Dec),
@@ -553,5 +554,81 @@ mod tests {
         assert_eq!(bucket_of("2024-02-29", Bucket::Month).unwrap(), "2024-02");
         assert_eq!(bucket_of("2024-03-01", Bucket::Week).unwrap(), "2024-02-26");
         assert!(bucket_of("2024-02-30", Bucket::Day).is_none());
+    }
+
+    /// A stored datetime groups into a bucket only in its canonical form; every other spelling
+    /// is empty, as it is in a filter and in the SQL `Instant` slot (D72).
+    #[test]
+    fn a_stored_datetime_is_grouped_only_in_its_canonical_form() {
+        use obop_types::DataClass;
+        let def = ModelDef {
+            name: "t_visit",
+            description: "d",
+            read_group: "t.user",
+            write_group: "t.user",
+            fields: vec![
+                obop_registry::FieldDef::new("at", "d", DataClass::None, false, "t.user")
+                    .kind(FieldKind::Datetime),
+            ],
+            commands: vec![],
+            access: None,
+            ext: Default::default(),
+        };
+        let map = |pairs: Vec<(&str, Value)>| {
+            Value::Map(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+        };
+        let input = map(vec![(
+            "aggregate",
+            map(vec![
+                (
+                    "group_by",
+                    Value::List(vec![map(vec![
+                        ("field", Value::text("at")),
+                        ("bucket", Value::text("day")),
+                    ])]),
+                ),
+                (
+                    "measures",
+                    Value::List(vec![map(vec![("op", Value::text("count"))])]),
+                ),
+            ]),
+        )]);
+        let q = Query::parse(&def, &input, &|_| true).unwrap();
+        let row = |id: &str, at: Option<&str>| {
+            let mut f = Fields::new();
+            if let Some(at) = at {
+                f.insert("at".into(), J::from(at));
+            }
+            (id.to_string(), f)
+        };
+        let rows = vec![
+            row("a", Some("2026-03-29T01:30:00.000000Z")),
+            row("b", Some("2026-03-29T23:59:59.999999Z")),
+            // The same instant as `a`, written with an offset; and one without microseconds.
+            row("c", Some("2026-03-29T03:30:00.000000+02:00")),
+            row("d", Some("2026-03-29T01:30:00Z")),
+            row("e", None),
+        ];
+        let (groups, total) = q.run_aggregate_rows(&rows, &|_| true).unwrap().unwrap();
+        assert_eq!(total, 5);
+        let summary: Vec<(Value, Value)> = groups
+            .into_iter()
+            .map(|g| {
+                let Value::Map(mut m) = g else {
+                    panic!("{g:?}")
+                };
+                let Some(Value::Map(mut key)) = m.remove("key") else {
+                    panic!("no key")
+                };
+                (key.remove("at").unwrap(), m.remove("count").unwrap())
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                (Value::text("2026-03-29"), Value::Int(2)),
+                (Value::Null, Value::Int(3)),
+            ]
+        );
     }
 }
