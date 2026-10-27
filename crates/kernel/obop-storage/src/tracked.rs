@@ -25,6 +25,8 @@
 //! `Flaky` of `testing` and for the `Flaky` of `obop-ops` (it reads that file by path).
 
 use crate::ctx::{self, WriteCtx};
+use crate::history::{Backfilled, HistoryQuery};
+use crate::sysfields::ChangeRow;
 use crate::{ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, RwLock};
@@ -78,18 +80,44 @@ pub struct Track {
     pub retention_days: Option<u32>,
 }
 
+/// Seals a value of a field of class `special_category` or `confidential_hr` before it is written
+/// into a history entry, and opens it again (D75). Implemented by the key ring (a later step); a
+/// store without one records such a field as `redacted`. `purpose` names what the value is
+/// (`history.v1:{model}.{field}`), so a sealed value cannot be moved to another field.
+pub trait Sealer: Send + Sync {
+    /// The sealed form of `plain`, or `None` when it cannot be sealed (no usable key).
+    fn seal(&self, purpose: &str, plain: &str) -> Option<String>;
+    /// The text `sealed` holds, or `None` when it is not a value sealed for `purpose` that this
+    /// key ring can open.
+    fn open(&self, purpose: &str, sealed: &str) -> Option<String>;
+}
+
 /// The models a [`Tracked`] store tracks, readable by the backend underneath through
-/// `apply_tracked`. Empty means every model behaves as it always did.
+/// `apply_tracked`, and the sealer of the history. Empty means every model behaves as it always
+/// did.
 #[derive(Default)]
 pub struct Tracking {
     models: RwLock<BTreeMap<String, Arc<Track>>>,
+    sealer: RwLock<Option<Arc<dyn Sealer>>>,
 }
 
 impl Tracking {
     pub const fn new() -> Self {
         Self {
             models: RwLock::new(BTreeMap::new()),
+            sealer: RwLock::new(None),
         }
+    }
+
+    pub fn set_sealer(&self, sealer: Arc<dyn Sealer>) {
+        *self.sealer.write().unwrap_or_else(|e| e.into_inner()) = Some(sealer);
+    }
+
+    pub fn sealer(&self) -> Option<Arc<dyn Sealer>> {
+        self.sealer
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// The tracking of a write that tracks nothing: what `apply_checked` passes.
@@ -329,6 +357,23 @@ impl Backend for Tracked {
     }
     fn tracked_models(&self) -> Vec<String> {
         self.tracking.models()
+    }
+    fn set_sealer(&self, sealer: Arc<dyn Sealer>) {
+        self.tracking.set_sealer(sealer);
+    }
+    fn sealer(&self) -> Option<Arc<dyn Sealer>> {
+        self.tracking.sealer()
+    }
+    fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
+        self.inner.history(q)
+    }
+    fn backfill_sysfields(
+        &self,
+        models: &[String],
+        fallback_at: &str,
+        batch: usize,
+    ) -> Result<Backfilled> {
+        self.inner.backfill_sysfields(models, fallback_at, batch)
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.inner.find(model, field, value)
@@ -738,9 +783,33 @@ mod tests {
         assert!(t.get("record_change", "1").unwrap().is_none());
         assert_eq!(t.count("record_change").unwrap(), 0);
         t.insert("record_changes", "1", &Fields::new()).unwrap();
-        // `import` is how those rows come back from a backup, and is not refused here.
-        let mut rows = Some(vec![row()]);
+        // `import` is how those rows come back from a backup, and is not refused here: a row of
+        // that name is an entry of the change history, and anything else is refused.
+        let entry = crate::sysfields::ChangeRow {
+            seq: 1,
+            at: crate::sysfields::fmt_micros(1_000_000),
+            model: "m".into(),
+            record_id: "r".into(),
+            op: "create".into(),
+            actor: "ann".into(),
+            via: Fields::new(),
+            row_version: 1,
+            changed: Fields::new(),
+            sealed: false,
+            batch_id: None,
+            run_id: None,
+            txid: 0,
+        };
+        let mut rows = Some(vec![(
+            "record_change".to_string(),
+            "1".to_string(),
+            entry.to_fields(),
+        )]);
         assert_eq!(t.import(false, &mut || Ok(rows.take())).unwrap(), 1);
+        let kept = t.history(&crate::HistoryQuery::of("m", "r", 10)).unwrap();
+        assert_eq!(kept, [entry]);
+        let mut junk = Some(vec![row()]);
+        assert!(t.import(false, &mut || Ok(junk.take())).is_err());
     }
 
     #[test]

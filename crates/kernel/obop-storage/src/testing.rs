@@ -4,8 +4,8 @@
 
 use crate::fault::{self, Fault};
 use crate::{
-    ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap, Track, Tracking,
-    WriteCtx, guarded,
+    ApplyError, Backend, Backfilled, ChangeRow, Fields, HistoryQuery, J, LockGuard, Op, Result,
+    Row, RowSink, Sealer, Swap, Track, Tracking, WriteCtx, guarded,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering::SeqCst};
@@ -480,6 +480,25 @@ impl Backend for Flaky {
     }
     fn tracked_models(&self) -> Vec<String> {
         self.inner.tracked_models()
+    }
+    fn set_sealer(&self, sealer: Arc<dyn Sealer>) {
+        self.inner.set_sealer(sealer)
+    }
+    fn sealer(&self) -> Option<Arc<dyn Sealer>> {
+        self.inner.sealer()
+    }
+    fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
+        self.gate_m(false, &q.model)?;
+        self.inner.history(q)
+    }
+    fn backfill_sysfields(
+        &self,
+        models: &[String],
+        fallback_at: &str,
+        batch: usize,
+    ) -> Result<Backfilled> {
+        self.gate(true)?;
+        self.inner.backfill_sysfields(models, fallback_at, batch)
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.gate_m(false, model)?;

@@ -1602,4 +1602,6 @@ mod keyexpr_parity;
 #[cfg(test)]
 mod kinds_tests;
 #[cfg(test)]
+mod sysfields_tests;
+#[cfg(test)]
 mod tests;

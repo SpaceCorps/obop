@@ -2,6 +2,8 @@
 //! file (WAL mode, a busy timeout); cross-process locks are file locks next to the database.
 
 use super::*;
+use crate::history::{Backfilled, HistoryQuery};
+use crate::sysfields::{self, ChangeRow, Clock};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 
 pub(crate) struct Sqlite {
@@ -9,6 +11,8 @@ pub(crate) struct Sqlite {
     /// The database file; `None` for an in-memory database.
     path: Option<String>,
     locks: Arc<LocalLocks>,
+    /// The instants of the stamps (D75): the host clock, made to only grow.
+    clock: Clock,
 }
 
 const SCHEMA: &str = "PRAGMA journal_mode = WAL;
@@ -30,7 +34,74 @@ const SCHEMA: &str = "PRAGMA journal_mode = WAL;
          value      TEXT NOT NULL,
          expires_ms INTEGER NOT NULL
      );
-     CREATE INDEX IF NOT EXISTS obop_kv_expiry ON obop_kv (expires_ms);";
+     CREATE INDEX IF NOT EXISTS obop_kv_expiry ON obop_kv (expires_ms);
+     CREATE TABLE IF NOT EXISTS obop_record_change (
+         seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+         at         TEXT NOT NULL,
+         model      TEXT NOT NULL,
+         record_id  TEXT NOT NULL,
+         op         TEXT NOT NULL CHECK (op IN ('create','update','delete','transition','erase','import')),
+         actor      TEXT NOT NULL,
+         via        TEXT NOT NULL CHECK (json_valid(via)),
+         row_version INTEGER NOT NULL,
+         changed    TEXT NOT NULL CHECK (json_valid(changed)),
+         sealed     INTEGER NOT NULL DEFAULT 0,
+         batch_id   TEXT,
+         run_id     TEXT,
+         txid       INTEGER NOT NULL DEFAULT 0
+     );
+     CREATE INDEX IF NOT EXISTS obop_record_change_rec
+         ON obop_record_change (model, record_id, seq DESC);";
+
+/// The columns of an entry of the change history, in the order [`read_change`] reads them.
+const CHANGE_COLUMNS: &str = "seq, at, model, record_id, op, actor, via, row_version, changed, sealed, batch_id, run_id, txid";
+
+/// One entry from a row selected with [`CHANGE_COLUMNS`].
+fn read_change(r: &rusqlite::Row<'_>) -> Result<ChangeRow> {
+    Ok(ChangeRow {
+        seq: r.get(0).map_err(e)?,
+        at: r.get(1).map_err(e)?,
+        model: r.get(2).map_err(e)?,
+        record_id: r.get(3).map_err(e)?,
+        op: r.get(4).map_err(e)?,
+        actor: r.get(5).map_err(e)?,
+        via: parse(&r.get::<_, String>(6).map_err(e)?)?,
+        row_version: r.get(7).map_err(e)?,
+        changed: parse(&r.get::<_, String>(8).map_err(e)?)?,
+        sealed: r.get::<_, i64>(9).map_err(e)? != 0,
+        batch_id: r.get(10).map_err(e)?,
+        run_id: r.get(11).map_err(e)?,
+        txid: r.get(12).map_err(e)?,
+    })
+}
+
+/// Append `row` with its number if it has one (a restore), else the next one.
+fn insert_change(tx: &rusqlite::Connection, row: &ChangeRow) -> Result<()> {
+    let seq = (row.seq > 0).then_some(row.seq);
+    tx.execute(
+        "INSERT INTO obop_record_change
+             (seq, at, model, record_id, op, actor, via, row_version, changed, sealed,
+              batch_id, run_id, txid)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        rusqlite::params![
+            seq,
+            row.at,
+            row.model,
+            row.record_id,
+            row.op,
+            row.actor,
+            J::Object(row.via.clone()).to_string(),
+            row.row_version,
+            J::Object(row.changed.clone()).to_string(),
+            row.sealed,
+            row.batch_id,
+            row.run_id,
+            row.txid,
+        ],
+    )
+    .map(|_| ())
+    .map_err(e)
+}
 
 fn e(err: rusqlite::Error) -> String {
     err.to_string()
@@ -38,6 +109,10 @@ fn e(err: rusqlite::Error) -> String {
 
 impl Sqlite {
     pub(crate) fn open(path: &str) -> Result<Self> {
+        Self::open_with_clock(path, Clock::system())
+    }
+
+    pub(crate) fn open_with_clock(path: &str, clock: Clock) -> Result<Self> {
         let memory = path == ":memory:" || path.is_empty();
         let conn = if memory {
             Connection::open_in_memory()
@@ -62,6 +137,7 @@ impl Sqlite {
             conn: Mutex::new(conn),
             path: (!memory).then(|| path.to_string()),
             locks: Arc::default(),
+            clock,
         })
     }
 }
@@ -214,7 +290,7 @@ impl Backend for Sqlite {
         ops: &[Op],
         tracking: &Tracking,
     ) -> std::result::Result<(), ApplyError> {
-        struct S<'a>(&'a rusqlite::Transaction<'a>);
+        struct S<'a>(&'a rusqlite::Transaction<'a>, &'a Clock);
         impl TxView for S<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
                 let text: Option<String> = self
@@ -262,12 +338,86 @@ impl Backend for Sqlite {
                     .map(|_| ())
                     .map_err(|e| e.to_string())
             }
+            fn tx_now(&mut self) -> Result<i64> {
+                Ok(self.1.tick())
+            }
+            fn tx_history(&mut self, rows: &[ChangeRow]) -> Result<()> {
+                for r in rows {
+                    insert_change(
+                        self.0,
+                        &ChangeRow {
+                            seq: 0,
+                            txid: 0,
+                            ..r.clone()
+                        },
+                    )?;
+                }
+                Ok(())
+            }
+            fn tx_scrub(
+                &mut self,
+                model: &str,
+                id: &str,
+                keep: &[String],
+                actor: &str,
+                via: &Fields,
+                row_version: i64,
+                at: i64,
+            ) -> Result<u64> {
+                let stored: Vec<(i64, String)> = {
+                    let mut st = self
+                        .0
+                        .prepare(
+                            "SELECT seq, changed FROM obop_record_change
+                             WHERE model = ?1 AND record_id = ?2 AND op <> 'erase' ORDER BY seq",
+                        )
+                        .map_err(e)?;
+                    let it = st
+                        .query_map((model, id), |r| Ok((r.get(0)?, r.get(1)?)))
+                        .map_err(e)?;
+                    it.collect::<std::result::Result<_, _>>().map_err(e)?
+                };
+                let mut erased: std::collections::BTreeSet<String> = Default::default();
+                let mut entries = 0usize;
+                for (seq, text) in stored {
+                    if let Some((changed, names)) = sysfields::scrub_changed(&parse(&text)?, keep) {
+                        self.0
+                            .execute(
+                                "UPDATE obop_record_change SET changed = ?2, sealed = 0
+                                 WHERE seq = ?1",
+                                (seq, J::Object(changed).to_string()),
+                            )
+                            .map_err(e)?;
+                        entries += 1;
+                        erased.extend(names);
+                    }
+                }
+                insert_change(
+                    self.0,
+                    &ChangeRow {
+                        seq: 0,
+                        at: sysfields::fmt_micros(at),
+                        model: model.to_string(),
+                        record_id: id.to_string(),
+                        op: "erase".to_string(),
+                        actor: actor.to_string(),
+                        via: via.clone(),
+                        row_version,
+                        changed: sysfields::erase_changed(erased, entries),
+                        sealed: false,
+                        batch_id: None,
+                        run_id: None,
+                        txid: 0,
+                    },
+                )?;
+                Ok(entries as u64)
+            }
         }
         let mut g = self.conn.lock().unwrap();
         let tx = g
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(|e| ApplyError::Storage(e.to_string()))?;
-        let r = run_ops(&mut S(&tx), ops, ctx, tracking);
+        let r = run_ops(&mut S(&tx, &self.clock), ops, ctx, tracking);
         match r {
             Ok(()) => tx.commit().map_err(|e| ApplyError::Storage(e.to_string())),
             Err(e) => {
@@ -539,13 +689,30 @@ impl Backend for Sqlite {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(e)?;
         if wipe {
-            for t in ["obop_record", "obop_kv", "obop_counter"] {
+            for t in [
+                "obop_record",
+                "obop_kv",
+                "obop_counter",
+                "obop_record_change",
+            ] {
                 tx.execute(&format!("DELETE FROM {t}"), ()).map_err(e)?;
             }
         }
         let mut n = 0;
         while let Some(batch) = next()? {
             for (model, id, fields) in batch {
+                if model == "record_change" {
+                    // An entry of the change history: the id is its number, kept.
+                    let seq = id
+                        .parse::<i64>()
+                        .ok()
+                        .filter(|s| *s >= 1)
+                        .ok_or_else(|| format!("record_change {id}: the id is not a number"))?;
+                    let row = ChangeRow::from_fields(seq, &fields)?;
+                    insert_change(&tx, &row).map_err(|x| format!("record_change {seq}: {x}"))?;
+                    n += 1;
+                    continue;
+                }
                 tx.execute(
                     "INSERT INTO obop_record (model, id, data) VALUES (?1, ?2, ?3)",
                     (&model, &id, J::Object(fields).to_string()),
@@ -606,11 +773,91 @@ impl Backend for Sqlite {
         self.conn
             .lock()
             .unwrap()
-            .query_row("SELECT COUNT(*) FROM obop_record", (), |r| {
-                r.get::<_, i64>(0)
-            })
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM obop_record)
+                      + (SELECT COUNT(*) FROM obop_record_change)",
+                (),
+                |r| r.get::<_, i64>(0),
+            )
             .map(|n| n as usize)
             .map_err(e)
+    }
+
+    fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
+        let g = self.conn.lock().unwrap();
+        let mut st = g
+            .prepare(&format!(
+                "SELECT {CHANGE_COLUMNS} FROM obop_record_change
+                 WHERE model = ?1 AND record_id = ?2
+                   AND (?3 IS NULL OR seq < ?3) AND (?4 IS NULL OR op = ?4)
+                   AND (?5 IS NULL OR at >= ?5)
+                 ORDER BY seq DESC LIMIT ?6"
+            ))
+            .map_err(e)?;
+        let mut rows = st
+            .query(rusqlite::params![
+                q.model,
+                q.record_id,
+                q.before_seq,
+                q.op,
+                q.since_at,
+                i64::try_from(q.limit).unwrap_or(i64::MAX),
+            ])
+            .map_err(e)?;
+        let mut out = Vec::new();
+        while let Some(r) = rows.next().map_err(e)? {
+            out.push(read_change(r)?);
+        }
+        Ok(out)
+    }
+
+    fn backfill_sysfields(
+        &self,
+        models: &[String],
+        fallback_at: &str,
+        batch: usize,
+    ) -> Result<Backfilled> {
+        if sysfields::parse_micros(fallback_at).is_none() {
+            return Err(format!("{fallback_at:?} is not a canonical instant"));
+        }
+        let mut g = self.conn.lock().unwrap();
+        let tx = g
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(e)?;
+        let mut out = Backfilled::default();
+        for model in models {
+            let candidates: Vec<(String, String)> = {
+                let mut st = tx
+                    .prepare(
+                        "SELECT id, data FROM obop_record WHERE model = ?1
+                           AND (json_type(data, '$.row_version') IS NOT 'integer'
+                                OR json_extract(data, '$.row_version') < 1)
+                         ORDER BY seq",
+                    )
+                    .map_err(e)?;
+                let it = st
+                    .query_map((model,), |r| Ok((r.get(0)?, r.get(1)?)))
+                    .map_err(e)?;
+                it.collect::<std::result::Result<_, _>>().map_err(e)?
+            };
+            for (id, data) in candidates {
+                let Some(stamped) = sysfields::backfilled(&id, &parse(&data)?, fallback_at) else {
+                    continue;
+                };
+                if out.stamped >= batch.max(1) {
+                    out.remaining += 1;
+                    continue;
+                }
+                tx.execute(
+                    "UPDATE obop_record SET data = ?3 WHERE model = ?1 AND id = ?2",
+                    (model, &id, J::Object(stamped).to_string()),
+                )
+                .map_err(e)?;
+                out.stamped += 1;
+            }
+        }
+        tx.commit().map_err(e)?;
+        Ok(out)
     }
 }
 
@@ -638,6 +885,38 @@ fn export_from(conn: &mut Connection, batch: usize, sink: &mut RowSink<'_>) -> R
             .into_iter()
             .map(|(_, m, i, d)| Ok((m, i, parse(&d)?)))
             .collect::<Result<_>>()?;
+        sink(&out)?;
+    }
+    // The history comes after the records, from the same snapshot, as rows of the model
+    // `record_change` (D75) whose id is the number of the entry.
+    let mut after = 0i64;
+    loop {
+        let entries: Vec<ChangeRow> = {
+            let mut st = tx
+                .prepare(&format!(
+                    "SELECT {CHANGE_COLUMNS} FROM obop_record_change WHERE seq > ?1
+                     ORDER BY seq LIMIT ?2"
+                ))
+                .map_err(e)?;
+            let mut it = st.query((after, batch.max(1) as i64)).map_err(e)?;
+            let mut v = Vec::new();
+            while let Some(r) = it.next().map_err(e)? {
+                v.push(read_change(r)?);
+            }
+            v
+        };
+        let Some(last) = entries.last() else { break };
+        after = last.seq;
+        let out: Vec<Row> = entries
+            .iter()
+            .map(|r| {
+                (
+                    "record_change".to_string(),
+                    r.seq.to_string(),
+                    r.to_fields(),
+                )
+            })
+            .collect();
         sink(&out)?;
     }
     Ok(())

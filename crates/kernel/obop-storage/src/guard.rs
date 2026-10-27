@@ -17,8 +17,8 @@
 //! nothing but delegate.
 
 use crate::{
-    ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap, Track, Tracking,
-    WriteCtx, fault,
+    ApplyError, Backend, Backfilled, ChangeRow, Fields, HistoryQuery, J, LockGuard, Op, Result,
+    Row, RowSink, Sealer, Swap, Track, Tracking, WriteCtx, fault,
 };
 use std::sync::Arc;
 
@@ -63,14 +63,7 @@ fn done_kv<T>(r: Result<T>) -> Result<T> {
 }
 
 fn op_model(op: &Op) -> &str {
-    match op {
-        Op::Insert { model, .. }
-        | Op::Put { model, .. }
-        | Op::Merge { model, .. }
-        | Op::Delete { model, .. }
-        | Op::Add { model, .. }
-        | Op::Patch { model, .. } => model,
-    }
+    op.model()
 }
 
 impl Backend for Guarded {
@@ -157,6 +150,28 @@ impl Backend for Guarded {
     }
     fn tracked_models(&self) -> Vec<String> {
         self.inner.tracked_models()
+    }
+    fn set_sealer(&self, sealer: Arc<dyn Sealer>) {
+        self.inner.set_sealer(sealer)
+    }
+    fn sealer(&self) -> Option<Arc<dyn Sealer>> {
+        self.inner.sealer()
+    }
+    fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
+        self.inner.history(q)
+    }
+    fn backfill_sysfields(
+        &self,
+        models: &[String],
+        fallback_at: &str,
+        batch: usize,
+    ) -> Result<Backfilled> {
+        fault::before_write()?;
+        let r = self.inner.backfill_sysfields(models, fallback_at, batch);
+        if r.as_ref().is_ok_and(|b| b.stamped > 0) {
+            fault::wrote();
+        }
+        r
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.inner.find(model, field, value)

@@ -1,12 +1,39 @@
 //! The in-memory backend: tests, `memory:` databases and the contract's reference.
 
 use super::*;
+use crate::history::{Backfilled, HistoryQuery};
+use crate::sysfields::{self, ChangeRow, Clock};
+
+/// The change history (D75): a list that only grows, except that an erasure rewrites the values
+/// of the entries of one record. Nothing else changes or removes an entry (`import` with a wipe
+/// replaces the lot).
+#[derive(Default, Clone)]
+struct MemHistory {
+    rows: Vec<ChangeRow>,
+    last_seq: i64,
+}
+
+impl MemHistory {
+    fn append(&mut self, rows: &[ChangeRow]) {
+        for r in rows {
+            self.last_seq += 1;
+            self.rows.push(ChangeRow {
+                seq: self.last_seq,
+                txid: 0,
+                ..r.clone()
+            });
+        }
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct Memory {
     rows: Mutex<BTreeMap<String, Vec<(String, Fields)>>>,
     /// Insertion order across models, for `export`.
     order: Mutex<Vec<(String, String)>>,
+    /// Always taken after `rows` and `order`.
+    history: Mutex<MemHistory>,
+    clock: Clock,
     locks: Arc<LocalLocks>,
     /// key -> (value, expiry in ms; 0 = never)
     counters: Mutex<BTreeMap<String, (u64, u64)>>,
@@ -16,6 +43,15 @@ pub(crate) struct Memory {
 impl Memory {
     fn note(&self, model: &str, id: &str) {
         self.order.lock().unwrap().push((model.into(), id.into()));
+    }
+
+    /// A store whose stamps read `clock` instead of the host clock (tests).
+    #[cfg(test)]
+    pub(crate) fn with_clock(clock: Clock) -> Self {
+        Self {
+            clock,
+            ..Self::default()
+        }
     }
 }
 
@@ -124,17 +160,21 @@ impl Backend for Memory {
         ops: &[Op],
         tracking: &Tracking,
     ) -> std::result::Result<(), ApplyError> {
-        struct M<'a>(&'a mut BTreeMap<String, Vec<(String, Fields)>>);
+        struct M<'a> {
+            rows: &'a mut BTreeMap<String, Vec<(String, Fields)>>,
+            history: &'a mut MemHistory,
+            clock: &'a Clock,
+        }
         impl TxView for M<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
                 Ok(self
-                    .0
+                    .rows
                     .get(model)
                     .and_then(|r| r.iter().find(|(i, _)| i == id))
                     .map(|(_, f)| f.clone()))
             }
             fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
-                self.0
+                self.rows
                     .entry(model.into())
                     .or_default()
                     .push((id.into(), fields.clone()));
@@ -142,7 +182,7 @@ impl Backend for Memory {
             }
             fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
                 if let Some((_, f)) = self
-                    .0
+                    .rows
                     .get_mut(model)
                     .and_then(|r| r.iter_mut().find(|(i, _)| i == id))
                 {
@@ -151,17 +191,87 @@ impl Backend for Memory {
                 Ok(())
             }
             fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
-                if let Some(r) = self.0.get_mut(model) {
+                if let Some(r) = self.rows.get_mut(model) {
                     r.retain(|(i, _)| i != id);
                 }
                 Ok(())
             }
+            fn tx_now(&mut self) -> Result<i64> {
+                Ok(self.clock.tick())
+            }
+            fn tx_history(&mut self, rows: &[ChangeRow]) -> Result<()> {
+                self.history.append(rows);
+                Ok(())
+            }
+            fn tx_scrub(
+                &mut self,
+                model: &str,
+                id: &str,
+                keep: &[String],
+                actor: &str,
+                via: &Fields,
+                row_version: i64,
+                at: i64,
+            ) -> Result<u64> {
+                let mut erased: std::collections::BTreeSet<String> = Default::default();
+                let mut entries = 0usize;
+                for r in self
+                    .history
+                    .rows
+                    .iter_mut()
+                    .filter(|r| r.model == model && r.record_id == id && r.op != "erase")
+                {
+                    if let Some((changed, names)) = sysfields::scrub_changed(&r.changed, keep) {
+                        r.changed = changed;
+                        r.sealed = false;
+                        entries += 1;
+                        erased.extend(names);
+                    }
+                }
+                self.history.append(&[ChangeRow {
+                    seq: 0,
+                    at: sysfields::fmt_micros(at),
+                    model: model.to_string(),
+                    record_id: id.to_string(),
+                    op: "erase".to_string(),
+                    actor: actor.to_string(),
+                    via: via.clone(),
+                    row_version,
+                    changed: sysfields::erase_changed(erased, entries),
+                    sealed: false,
+                    batch_id: None,
+                    run_id: None,
+                    txid: 0,
+                }]);
+                Ok(entries as u64)
+            }
         }
         let mut g = self.rows.lock().unwrap();
+        let mut h = self.history.lock().unwrap();
         let backup = g.clone();
-        let r = run_ops(&mut M(&mut g), ops, ctx, tracking);
+        // An append is undone by cutting the list back; only an erasure rewrites old entries.
+        let (kept_len, kept_seq) = (h.rows.len(), h.last_seq);
+        let kept_rows = ops
+            .iter()
+            .any(|o| matches!(o, Op::EraseHistory { .. }))
+            .then(|| h.rows.clone());
+        let r = run_ops(
+            &mut M {
+                rows: &mut g,
+                history: &mut h,
+                clock: &self.clock,
+            },
+            ops,
+            ctx,
+            tracking,
+        );
         if r.is_err() {
             *g = backup;
+            match kept_rows {
+                Some(rows) => h.rows = rows,
+                None => h.rows.truncate(kept_len),
+            }
+            h.last_seq = kept_seq;
         } else {
             // Keep the cross-model insertion order (for `export`) in step with the rows.
             let mut order = self.order.lock().unwrap();
@@ -283,6 +393,9 @@ impl Backend for Memory {
         let all: Vec<(String, String, Fields)> = {
             let rows = self.rows.lock().unwrap();
             let order = self.order.lock().unwrap();
+            let history = self.history.lock().unwrap();
+            // The records in insertion order, then the history as the rows of the model
+            // `record_change` (D75), the number of the entry as the id.
             order
                 .iter()
                 .filter_map(|(m, i)| {
@@ -291,6 +404,13 @@ impl Backend for Memory {
                         .find(|(x, _)| x == i)
                         .map(|(_, f)| (m.clone(), i.clone(), f.clone()))
                 })
+                .chain(history.rows.iter().map(|r| {
+                    (
+                        "record_change".to_string(),
+                        r.seq.to_string(),
+                        r.to_fields(),
+                    )
+                }))
                 .collect()
         };
         for chunk in all.chunks(batch.max(1)) {
@@ -299,7 +419,8 @@ impl Backend for Memory {
         Ok(())
     }
     fn total(&self) -> Result<usize> {
-        Ok(self.rows.lock().unwrap().values().map(Vec::len).sum())
+        let records: usize = self.rows.lock().unwrap().values().map(Vec::len).sum();
+        Ok(records + self.history.lock().unwrap().rows.len())
     }
     fn import(
         &self,
@@ -308,14 +429,30 @@ impl Backend for Memory {
     ) -> Result<usize> {
         let mut rows = self.rows.lock().unwrap();
         let mut order = self.order.lock().unwrap();
-        let (mut r2, mut o2) = if wipe {
-            (BTreeMap::new(), Vec::new())
+        let mut history = self.history.lock().unwrap();
+        let (mut r2, mut o2, mut h2) = if wipe {
+            (BTreeMap::new(), Vec::new(), MemHistory::default())
         } else {
-            (rows.clone(), order.clone())
+            (rows.clone(), order.clone(), history.clone())
         };
         let mut n = 0;
         while let Some(batch) = next()? {
             for (model, id, fields) in batch {
+                if model == "record_change" {
+                    // An entry of the change history: the id is its number.
+                    let seq = id
+                        .parse::<i64>()
+                        .ok()
+                        .filter(|s| *s >= 1)
+                        .ok_or_else(|| format!("record_change {id}: the id is not a number"))?;
+                    if h2.rows.iter().any(|r| r.seq == seq) {
+                        return Err(format!("duplicate record_change {seq}"));
+                    }
+                    h2.rows.push(ChangeRow::from_fields(seq, &fields)?);
+                    h2.last_seq = h2.last_seq.max(seq);
+                    n += 1;
+                    continue;
+                }
                 let v = r2.entry(model.clone()).or_default();
                 if v.iter().any(|(i, _)| *i == id) {
                     return Err(format!("duplicate {model} {id}"));
@@ -325,8 +462,10 @@ impl Backend for Memory {
                 n += 1;
             }
         }
+        h2.rows.sort_by_key(|r| r.seq);
         *rows = r2;
         *order = o2;
+        *history = h2;
         if wipe {
             self.kv.lock().unwrap().clear();
             self.counters.lock().unwrap().clear();
@@ -350,6 +489,52 @@ impl Backend for Memory {
             }
         }
         Ok(n)
+    }
+    fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
+        let h = self.history.lock().unwrap();
+        let mut found: Vec<ChangeRow> = h
+            .rows
+            .iter()
+            .filter(|r| {
+                r.model == q.model
+                    && r.record_id == q.record_id
+                    && q.before_seq.is_none_or(|s| r.seq < s)
+                    && q.op.as_ref().is_none_or(|o| r.op == *o)
+                    && q.since_at.as_ref().is_none_or(|a| r.at >= *a)
+            })
+            .cloned()
+            .collect();
+        found.sort_by_key(|r| std::cmp::Reverse(r.seq));
+        found.truncate(q.limit);
+        Ok(found)
+    }
+    fn backfill_sysfields(
+        &self,
+        models: &[String],
+        fallback_at: &str,
+        batch: usize,
+    ) -> Result<Backfilled> {
+        if sysfields::parse_micros(fallback_at).is_none() {
+            return Err(format!("{fallback_at:?} is not a canonical instant"));
+        }
+        let mut g = self.rows.lock().unwrap();
+        let mut out = Backfilled::default();
+        for model in models {
+            for (id, f) in g.get_mut(model).into_iter().flatten() {
+                if sysfields::row_version(f).is_some() {
+                    continue;
+                }
+                if out.stamped < batch.max(1)
+                    && let Some(stamped) = sysfields::backfilled(id, f, fallback_at)
+                {
+                    *f = stamped;
+                    out.stamped += 1;
+                } else {
+                    out.remaining += 1;
+                }
+            }
+        }
+        Ok(out)
     }
     fn kv_swap(&self, key: &str, old: &str, new: &str) -> Result<bool> {
         let mut g = self.kv.lock().unwrap();

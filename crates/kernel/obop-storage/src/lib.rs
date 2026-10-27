@@ -70,6 +70,11 @@ pub enum Op {
         patch: Fields,
         expect: Vec<(String, J)>,
     },
+    /// Erase the values from the change history of a record, in the same transaction and after
+    /// every other step has written its entries (D75): the entries stay, with `{"t":"erased"}`
+    /// where a value was, except for the fields the model's tracking keeps. Needs `apply_ctx` or
+    /// `apply_checked`. Not for a pseudo-model.
+    EraseHistory { model: String, id: String },
 }
 
 impl Op {
@@ -81,7 +86,8 @@ impl Op {
             | Op::Merge { model, .. }
             | Op::Delete { model, .. }
             | Op::Add { model, .. }
-            | Op::Patch { model, .. } => model,
+            | Op::Patch { model, .. }
+            | Op::EraseHistory { model, .. } => model,
         }
     }
 
@@ -170,6 +176,9 @@ pub trait Backend: Send + Sync {
                 Op::Add { .. } | Op::Patch { .. } | Op::Put { .. } => {
                     Err("counters, puts and compare-and-set need `apply_checked`".to_string())
                 }
+                Op::EraseHistory { .. } => {
+                    Err("erasing history needs `apply_checked` or `apply_ctx`".to_string())
+                }
                 Op::Insert { model, id, fields } => self.insert(model, id, fields).map(|()| {
                     undo.push(Op::Delete {
                         model: model.clone(),
@@ -202,7 +211,10 @@ pub trait Backend: Send + Sync {
             if let Err(e) = step {
                 for u in undo.into_iter().rev() {
                     let _ = match u {
-                        Op::Add { .. } | Op::Patch { .. } | Op::Put { .. } => Ok(()),
+                        Op::Add { .. }
+                        | Op::Patch { .. }
+                        | Op::Put { .. }
+                        | Op::EraseHistory { .. } => Ok(()),
                         Op::Insert { model, id, fields } => self.insert(&model, &id, &fields),
                         Op::Merge { model, id, patch } => {
                             self.update(&model, &id, &patch).map(|_| ())
@@ -257,6 +269,29 @@ pub trait Backend: Send + Sync {
     /// The models that are tracked, sorted.
     fn tracked_models(&self) -> Vec<String> {
         Vec::new()
+    }
+    /// The key ring that seals the values of sensitive fields in history entries (D75). Only
+    /// [`Tracked`] keeps one; without it such a field is recorded as `redacted`.
+    fn set_sealer(&self, _sealer: Arc<dyn Sealer>) {}
+    /// The sealer set with [`Backend::set_sealer`], if any.
+    fn sealer(&self) -> Option<Arc<dyn Sealer>> {
+        None
+    }
+    /// The change history of one record, newest first (D75). A backend that keeps no history
+    /// refuses, which is not the same as a record with no entries.
+    fn history(&self, _q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
+        Err("this storage backend keeps no change history".into())
+    }
+    /// Stamp up to `batch` records of `models` that predate the system fields: `created_at` from
+    /// the UUIDv7 id, else `fallback_at` (canonical text); `row_version` 1; `sys_backfilled`;
+    /// no actor; no history entry. Call it until `remaining` is 0.
+    fn backfill_sysfields(
+        &self,
+        _models: &[String],
+        _fallback_at: &str,
+        _batch: usize,
+    ) -> Result<Backfilled> {
+        Err("this storage backend cannot stamp the system fields of old records".into())
     }
     /// Records of `model` whose `field` equals `value`, in insertion order. The shipped backends
     /// answer it in the database; the default reads the model.
@@ -587,6 +622,7 @@ pub mod fault;
 #[cfg(test)]
 mod golden_tests;
 mod guard;
+pub mod history;
 pub mod keyexpr;
 pub mod limit;
 mod memory;
@@ -604,6 +640,9 @@ mod seams_tests;
 #[cfg(test)]
 mod shared_tests;
 mod sqlite;
+#[cfg(test)]
+mod sys_tests;
+pub mod sysfields;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 pub mod tls;
@@ -613,8 +652,10 @@ pub mod tracked;
 
 pub use ctx::{ACTOR_PUBLIC, ACTOR_SYSTEM, ActionRun, Via, WriteCtx};
 pub use guard::guarded;
+pub use history::{Backfilled, HistoryQuery};
 pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
-pub use tracked::{Track, Tracked, Tracking, Treat};
+pub use sysfields::ChangeRow;
+pub use tracked::{Sealer, Track, Tracked, Tracking, Treat};
 
 use memory::Memory;
 use pg::Pg;

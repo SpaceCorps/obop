@@ -218,7 +218,8 @@ fn op_target(op: &Op) -> (&str, &str) {
         | Op::Merge { model, id, .. }
         | Op::Delete { model, id }
         | Op::Add { model, id, .. }
-        | Op::Patch { model, id, .. } => (model, id),
+        | Op::Patch { model, id, .. }
+        | Op::EraseHistory { model, id } => (model, id),
     }
 }
 
