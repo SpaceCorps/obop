@@ -185,18 +185,18 @@ Adding a code is a minor change; repurposing one is a major change (6). The buil
 
 ### 2.5 Error model
 
-The server answers with RFC 9457 `application/problem+json` (`type`, `title`, `status`, `detail`, `code`, `retryable`, `errors[]`, `request_id`, `trace_id`; integrations 4.1, [R21 s5]). The CLI never renames `code`; it adds `exit` from the class below, and the catalogue lists the codes each command can return, so `obop schema` shows them. The documents already name `idempotency_key_required`, `idempotency_key_reuse`, `lock_date_violation`, `unbalanced_entry`, `posted_immutable`, `plan_stale`, `approval_required`, `insufficient_scope`, `field_not_readable` and `endpoint_url_not_allowed`; the other slugs below are Proposed.
+The server answers with RFC 9457 `application/problem+json` (`type`, `title`, `status`, `detail`, `code`, `retryable`, `errors[]`, `request_id`, `trace_id`; integrations 4.1, [R21 s5]). The CLI never renames `code`; it adds `exit` from the class below (Proposed numbers of 2.4; today every failed call exits 1 and a refused store exits 75), and the catalogue lists the codes each command can return, so `obop schema` shows them. The documents already name `idempotency_key_required`, `idempotency_key_reuse`, `lock_date_violation`, `unbalanced_entry`, `posted_immutable`, `plan_stale`, `approval_required`, `insufficient_scope`, `field_not_readable` and `endpoint_url_not_allowed`; the other slugs below are Proposed.
 
 | Problem `code` | HTTP | Exit | Retryable |
 |---|---|---|---|
-| `validation_failed` | 400, 422 | 5 | No |
-| `unauthenticated`, `token_expired`, `step_up_required` | 401 | 3 | No (a human acts) |
-| `forbidden`, `not_found`, `insufficient_scope` | 403, 404 | 4 | No |
+| `validation_failed` | 400, 422 | 14 | No |
+| `unauthenticated`, `token_expired`, `step_up_required` | 401 | 12 | No (a human acts) |
+| `forbidden`, `not_found`, `insufficient_scope` | 403, 404 | 13 | No |
 | `plan_stale`, `precondition_failed`, `idempotency_key_reuse` | 409, 412, 422 | 6 | No |
 | `idempotency_in_flight` | 409 | 6 | Yes |
 | `lock_date_violation`, `unbalanced_entry`, `posted_immutable` | 409, 422 | 7 | No |
 | `approval_required` | per problem | 10 | After approval |
-| `rate_limited`, `unavailable` | 429, 503 | 8 | Yes |
+| `rate_limited`, `unavailable` | 429, 503 | 75 | Yes |
 | `internal_error` | 5xx | 1 | Per `retryable` |
 
 ### 2.6 Lists, streaming, filters and jobs
