@@ -1,0 +1,54 @@
+[module]
+id = "sign_docuseal"
+version = "0.2.0"
+name = "Sign with DocuSeal"
+description = "Receives the events of a DocuSeal server (viewed, signed, declined, expired) as records, next to the Sign app's requests. A signature request is sent to DocuSeal by the DocuSeal connector when sign_request.send runs; DocuSeal keeps the signed document and its audit trail, and the event here names the request by its reference and links to the document. The event does not move the request: a person still records the signature with the sign action, which needs approval."
+author = "SpaceCorps"
+summary = "Receive DocuSeal signing events next to Sign requests. A person still records the signature."
+license = "Apache-2.0"
+homepage = "https://github.com/SpaceCorps/obop"
+repository = "https://github.com/SpaceCorps/obop"
+keywords = ["signature", "e-sign", "docuseal", "contracts", "nda"]
+categories = ["productivity"]
+maturity = "experimental"
+requires_core = "^0.2"
+
+[module.dependencies]
+sign = "^0.2"
+
+[[model]]
+name = "sign_docuseal_event"
+description = "One event DocuSeal reported about a signing request, written by the DocuSeal connector"
+read_group = "sign_docuseal.user"
+write_group = "sign_docuseal.manager"
+
+  [[model.field]]
+  name = "event"
+  description = "DocuSeal's event type, for example form.completed, form.declined or submission.expired"
+  class = "none"
+  required = true
+
+  [[model.field]]
+  name = "request_ref"
+  description = "The reference of the signature request the event is about, as the connector sent it (DocuSeal's external_id)"
+  class = "none"
+
+  [[model.field]]
+  name = "submission_id"
+  description = "DocuSeal's id of the submission, to find it in DocuSeal"
+  class = "none"
+
+  [[model.field]]
+  name = "status"
+  description = "DocuSeal's status at that moment, for example completed or declined"
+  class = "none"
+
+  [[model.field]]
+  name = "document_url"
+  description = "Address of the signed document on the DocuSeal server; opening it needs access to DocuSeal"
+  class = "internal"
+
+  [[model.field]]
+  name = "completed_at"
+  description = "When DocuSeal says the signer finished, as DocuSeal wrote it"
+  class = "none"

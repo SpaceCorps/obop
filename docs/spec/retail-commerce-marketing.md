@@ -4,9 +4,9 @@
 
 **Date:** 2026-10-01  
 
-**Scope:** Point of sale, eCommerce, website builder and the marketing suite (email, SMS, loyalty, coupons, deliverability), with explicit dispositions for live chat, blog, forum, eLearning, events, surveys, social and automation.
+**Scope:** Point of sale, eCommerce, website builder and the marketing suite (email, SMS, loyalty, coupons, deliverability), with explicit dispositions for live chat, blog, forum, eLearning, events, surveys, social and automation, and the typed-command surface (CLI, REST API, MCP) of all of them (4.7). Everything here is Apache-2.0 and completely free to use and to self-host (OR-1, OR-2); nothing in this area is gated, metered or sold.
 
-Nothing here is legal advice. "Proposed (Dn)" marks reliance on a decision the owner has not ratified (D2, D4, D5, D12, D13, D14, D16, D17, D20, D23, D25 and D26 are Proposed on this date); "[RPn]" marks a design choice that neither the research nor [DECISIONS.md](../DECISIONS.md) settles (see 9.2); "(target)" and "(estimate)" mark numbers that are not measurements. Names of events, permission groups, data classes, states and ports follow [CONVENTIONS.md](../CONVENTIONS.md), which wins on a name. Platform facts, as of 2026-10-01: Rust 1.98.1 and `vite-plus` 1.0.0 as Proposed pins (D23; Q10); Vite+ driven only through the `vp` CLI with pnpm as the only package manager (constraint F2); PostgreSQL 17 and 18, 18 as reference (D8) [R00 s3].
+Nothing here is legal advice. "OR-n" cites an owner ruling of 2026-10-01 (RATIFIED, [DECISIONS.md](../DECISIONS.md) "Owner rulings"), which wins over every Proposed position here and in the research. "Proposed (Dn)" marks reliance on a decision the owner has not ratified: on this date the ICP and T0 list of D4, D12, D13, D14, D20, D25, the staging and remaining admission details of D81, the release cadence and post-1.0 deprecation window of D85, the grammar and output details of D80 (Q22) and the entries of its exemption list (OR-16 ratifies the mechanism; the owner approves the entries one by one), the slip order of D86 (the W1 cut itself is RATIFIED, OR-15) and the dates of D26 other than the wave windows, the German pack date and the 1.0 target. D5 and D16 are superseded (D84, D85). "[RPn]" marks a design choice that neither the research nor DECISIONS.md settles (see 9.2); "(target)" and "(estimate)" mark numbers that are not measurements. Names of events, permission groups, data classes, states and ports follow [CONVENTIONS.md](../CONVENTIONS.md), which wins on a name; command grammar, exit codes and the plugin registry client are owned by [cli.md](./cli.md). Platform facts, as of 2026-10-01: Rust 1.98.1 and `vite-plus` 1.0.0 as pins under the ratified pin policy (D23, OR-8: the newest release past a 7 to 14 day cooldown, or its x.y.1 patch, so the toolchain runs up to about three weeks behind); Vite+ driven only through the `vp` CLI with pnpm as the only package manager (constraint F2; the only two named exceptions are the nightly exit drill and `pnpm sbom`, OR-9); PostgreSQL 17 and 18, 18 as reference (D8) [R00 s3].
 
 ## 1. Purpose and scope
 
@@ -25,41 +25,42 @@ Users are store staff, merchandisers, fulfilment staff, website editors, markete
 | [Supply chain](./supply-chain.md) | `stock`, `delivery`, barcode | Availability, reservation, carriers; POS raises consolidated demand via `DemandPort` |
 | [Platform](./platform.md) | `base`, `mail`, `automation`, search | Chatter, mail gateway, automation rules, external ids, consent capability |
 | [Services](./services.md) | `helpdesk`, `appointments` | Chat hand-off to tickets; restaurant bookings |
+| [CLI](./cli.md) | Command catalogue, grammar, exit codes, the `obop` binary, the plugin registry client | Every capability of this area is a catalogue command on CLI, REST and MCP (4.7); grammar and output contracts are owned there |
 | [UX](./ux.md), [AI](./ai.md), [Integrations](./integrations.md), [Security and privacy](./security-privacy.md) | Design system, agents, connector tiers, identity and audit | Referenced, not restated |
 
-### 1.3 Modules, tiers, waves, open/paid
+### 1.3 Modules, tiers and waves (all open and free)
 
-Tier and wave follow DECISIONS section 5 (Proposed D25, D26); open/paid follows section 6 (Proposed D2). Country-pack detail is in [LOCALIZATION.md](../LOCALIZATION.md).
+Tier and wave follow DECISIONS section 5 (Proposed D25; the wave windows are RATIFIED, D26, OR-13; the W1 cut is RATIFIED, D86, OR-15, while its slip order stays Proposed). Every row is Apache-2.0 and free: nothing is paid, gated or planned as a paid tier (OR-1, OR-2; DECISIONS section 6), so the last column carries only notes. Country-pack detail is in [LOCALIZATION.md](../LOCALIZATION.md).
 
-| Module or app | Content | Tier | Wave | Open/paid |
+| Module or app | Content | Tier | Wave | Note |
 |---|---|---|---|---|
-| `obop-edge`, `hub` role, hardware agent | SQLite edge store, store hub, native hardware bridge | T0 | W3 | Open |
-| `pos` (retail) | Sessions, orders, cash control, fiscal adapters (DE TSE via cloud signer per D25; a hardware `LocalDevice` TSE is added here because a cloud signer cannot work offline, Proposed [RP8]), terminals | T2 | W3 | Open; fiscal-signer contracts belong to the merchant; operated Assurance is paid |
-| `pos_stock`, `pos_account` (bridges) | Consolidated transfer at session close via `DemandPort`; session entry via `PostingPort`; both specified from [R23 D.4] | T2 | W3 | Open |
-| `pos` restaurant mode | Floors, tables, courses, kitchen display, split bills, QR self-order | T2 | W3 end or W4 [RP1] | Open |
-| `loyalty` | Coupons, gift cards, points, eWallet, promotions (shared by POS, web, sales) | T2 (with `ecommerce`) | W3 | Open |
-| `website` with block page builder | Block pages, themes, forms, multi-website, multilingual | T2 | W3 | Open; partner white-label is paid |
-| `ecommerce` | Catalogue, cart, checkout, returns, SEO, headless API; channel-sync framework [RP2] | T2 | W3 | Open |
-| Channel connectors | Shopify, WooCommerce as X3 or X4 packages [RP2] | T2 | W4 (D25) | Open; Amazon, Shopee, Lazada, TikTok, Gelato, eBay, Etsy are T3 (community; unlisted means T3) |
-| `marketing` | Email and SMS marketing, lists, segments, tracking | T2 | W3 | Open; a hosted relay and hosted SMS credits would be paid convenience, listed in DECISIONS section 6 only as a Proposed addition to D2's closed paid list (Q3, Q19) [RP19] |
-| Deliverability core (in `mail`) | Sending domains, DKIM, DNS checker, bounce and complaint handling, suppression | T0 | W1 for the core, W3 for bulk features [RP3] | Open |
-| `livechat` | Website chat, operators, chatbot scripts | T2 | W3 | Open |
-| Marketing automation, social, marketing card, referrals, events, surveys, blog, forum, eLearning | See 4.6 | T3 | W4+ or community | Open |
-| WhatsApp | Messaging connector | T2 | W4, X3 or X4 package | Open |
+| `obop-edge`, `hub` role, hardware agent | SQLite edge store, store hub, native hardware bridge | T0 | W3 | |
+| `pos` (retail) | Sessions, orders, cash control, fiscal adapters (DE TSE via cloud signer per D25; a hardware `LocalDevice` TSE is added here because a cloud signer cannot work offline, Proposed [RP8]), terminals | T2 | W3 | Fiscal signers are third-party or user-chosen and their contracts belong to the merchant; SpaceCorps operates no signer (D17, D83) |
+| `pos_stock`, `pos_account` (bridges) | Consolidated transfer at session close via `DemandPort`; session entry via `PostingPort`; both specified from [R23 D.4] | T2 | W3 | |
+| `pos` restaurant mode | Floors, tables, courses, kitchen display, split bills, QR self-order | T2 | W3 end or W4 [RP1] | |
+| `loyalty` | Coupons, gift cards, points, eWallet, promotions (shared by POS, web, sales) | T2 (with `ecommerce`) | W3 | |
+| `website` with block page builder | Block pages, themes, forms, multi-website, multilingual | T2 | W3 | Themes are built on the `theme` package format of the W3 theme and branding pack work (DECISIONS 5.1, D86 slip item 1); no white-label licence exists, a business or fork rebrands freely subject to the trademark policy (Q26) |
+| `ecommerce` | Catalogue, cart, checkout, returns, SEO, headless API; channel-sync framework [RP2] | T2 | W3 | |
+| Channel connectors | Shopify, WooCommerce as X3 or X4 packages [RP2], distributed as plugins through the free registry (D81) | T2 | W4 (D25) | "Marketplace" here means an external sales channel. Amazon, Shopee, Lazada, TikTok, Gelato, eBay, Etsy are T3 (community plugins; unlisted means T3) |
+| `marketing` | Email and SMS marketing, lists, segments, tracking | T2 | W3 | Bring-your-own relay and SMS provider through adapters; SpaceCorps operates no sending relay, no IP-reputation service and no SMS gateway (OR-2, OR-11) [RP19] |
+| Deliverability core (in `mail`) | Sending domains, DKIM, DNS checker, bounce and complaint handling, suppression | T0 | Re-cut: outbound subset with the reduced `mail` in W1 if capacity allows, bounce and complaint handling with the inbound gateway in W2, bulk features in W3 (Proposed [RP3]; open question 19) | The D86 cut lists only outbound email and templates for `mail` in W1 |
+| `livechat` | Website chat, operators, chatbot scripts | T2 | W3 | |
+| Marketing automation, social, marketing card, referrals, events, surveys, blog, forum, eLearning | See 4.6 | T3 | W4+ or community | Community plugins where built (D81) |
+| WhatsApp | Messaging connector | T2 | W4, X3 or X4 package | |
 
-Supplied by other specs: `product`, `pricing`, `tax`, `payment`, `portal`, `mail`, `automation`, `stock` (W1); `discuss` channels (W2); `delivery` (T1), `helpdesk`, `appointments`, `subscriptions` (T2) (W3).
+Supplied by other specs, with the waves of the D86 re-cut (DECISIONS 5.1): `product`, `tax`, `stock` (one warehouse), `mail` (reduced: chatter, activities, followers, outbound email and templates), `pricing` (list price and line discount) and `payment` (manual registration only) in W1; `portal`, `automation`, the `mail` inbound gateway, `pricing` rules and price lists, and `payment` providers (Stripe plus one) in W2; `discuss` channels, `delivery` (T1), `helpdesk`, `appointments`, `subscriptions` (T2) in W3.
 
 ### 1.4 Wave statement
 
-None of POS, eCommerce, website builder or marketing is in the first delivery (W1) or the first stable release: R20 keeps POS, eCommerce, manufacturing, payroll and multi-country tax out of the MVP, and Proposed (D4) repeats it for POS, payroll, manufacturing and multi-country tax [R20 s9]. They sit in W3 (2028-07-01 to 2029-06-30), "T2 apps in demand order (`mrp`, `pos` first)", each needing a design partner, and W3 breadth is paced by ARR, not the calendar (Proposed D5, D26). Dates here are windows, not promises.
+None of POS, eCommerce, website builder or marketing is in the first delivery (W1), in W2 or in the first stable release (1.0, target 2028-04-18): W1 is the smallest honest loop (kernel, invoicing, accounting with tax, German e-invoicing, CRM and sales, basic stock; OR-13, OR-15, D86), and R20 already kept POS, eCommerce, manufacturing, payroll and multi-country tax out of the MVP [R20 s9]. They sit in W3 (2028-07-01 to 2029-06-30), "T2 apps in demand order (`mrp`, `pos` first)", each needing a design partner. W3 is an ordered backlog paced by the capacity of a very small team (the owner plus AI agents, D84) and by design-partner demand, not by revenue or ARR (none exists, OR-2, OR-6); nothing in it is sold or withheld, and nothing is promised beyond the dates of DECISIONS section 5. Dates here are windows, not promises.
 
-W0 to W2 must still do five things so W3 is not a rewrite [RP25]:
+W0 to W2 must still do five things so W3 is not a rewrite [RP25], placed to match the D86 re-cut:
 
-1. Keep `pricing`, tax, rounding and promotion logic pure Rust with no SQL, compilable to Wasm (D37; [R12 MUST 5]); [ARCHITECTURE](../ARCHITECTURE.md) proposes the crate name `obop-calc`.
-2. Carry a unique `command_id` on every mutating command (D9) and key the API on `Idempotency-Key` (D31).
-3. Ship the deliverability core, DKIM and bounce handling in `mail` in W1.
-4. Ship the theme pipeline (DTCG tokens, portal theme packs) in W1 [R24 s11].
-5. Define the `PaymentProvider` trait with transaction, token, refund, payout and dispute entities in W1 [R21 s6.1].
+1. Keep `pricing`, tax, rounding and promotion logic pure Rust with no SQL, compilable to Wasm (D37; [R12 MUST 5]); [ARCHITECTURE](../ARCHITECTURE.md) proposes the crate name `obop-calc`. W1 `pricing` is list price and line discount; price rules and lists follow in W2.
+2. Carry a unique `command_id` on every mutating command (D9) and key the API on `Idempotency-Key` (D31); define every operation of this area as a typed catalogue command with CLI, API and MCP parity (D80; 4.7), so no screen is ever the only way to do something.
+3. Deliverability: with the reduced W1 `mail` (outbound email and templates only, DECISIONS 5.3 call 3), ship per-domain DKIM signing and the SPF, DKIM and DMARC checker if capacity allows; bounce and complaint handling needs the inbound gateway (W2); bulk features are W3 (Proposed [RP3]; open question 19).
+4. Keep DTCG design tokens the only styling contract from the first view (D35), so the `theme` package format and the branding packs of W3 (T0, DECISIONS 5.1; D86 slip item 1) are not a rewrite. The theme pipeline itself is no longer a W1 deliverable.
+5. Define the `PaymentProvider` trait with transaction, token, refund, payout and dispute entities with the first providers in W2 (W1 `payment` is manual registration only; providers beyond manual are D86 slip item 9) [R21 s6.1].
 
 ## 2. Personas and roles
 
@@ -77,17 +78,17 @@ Permission groups are seed data; every permission row declares a scope (`all`, `
 | Marketer | Compose, send to lists | `marketing.user`, `marketing.manager` (schedule, segments, imports) |
 | Deliverability administrator, chat operator | Sending domains, keys, transports, thresholds; answer chats | `marketing.deliverability_admin`; `livechat.operator` |
 | Shopper, recipient | Buy, return, subscribe | Guest with capability token, portal principal; never a permission group |
-| AI agent | Draft copy, mailings, product text | A principal; permissions are the intersection of user and token scopes, drafts only, no send, publish, refund or payment without approval (D18) |
+| AI agent | Draft copy, mailings, product text; operate the shop through the CLI, API or MCP | A principal using the same typed commands as people (D80); permissions are the intersection of user and token scopes, drafts only, no send, publish, refund or payment without approval (D18; 4.7) |
 
 ## 3. Capability map
 
-Odoo parity values: matches Odoo Community, matches Odoo Enterprise (both words always mean Odoo's editions; obop has one open edition and `ee`), beyond, deliberately skipped. Waves are W3 unless stated.
+Odoo parity values: matches Odoo Community, matches Odoo Enterprise (both words always mean Odoo's editions; obop has one edition, open and free), beyond, deliberately skipped. Waves are W3 unless stated.
 
 | Capability | Description | Wave | Odoo parity |
 |---|---|---|---|
 | Offline POS order capture | Edge store, edge command outbox, idempotent sync | W3 | Matches Community (client UUID, IndexedDB); append-only ledger beyond |
-| Store hub, hardware agent | LAN authority for registers and kitchens; printers, drawer, scale, serial fiscal devices without a paid box | W3 | Beyond (Odoo's production IoT box needs a subscription) |
-| Fiscal adapter trait | `LocalDevice`, `CloudSigner`, `ChainedSoftware`; DE first | W3 | Matches Enterprise (inferred: fiscal POS modules absent from the Community tree) |
+| Store hub, hardware agent | LAN authority for registers and kitchens; printers, drawer, scale, serial fiscal devices with an open agent and no vendor box | W3 | Beyond (Odoo's production IoT box needs a subscription) |
+| Fiscal adapter trait | `LocalDevice`, `CloudSigner`, `ChainedSoftware`; DE first; signers are third-party or user-chosen, SpaceCorps operates none | W3 | Matches Enterprise (inferred: fiscal POS modules absent from the Community tree) |
 | Terminals, cash control | `TerminalDriver` (Stripe, Adyen first); float, movements, session entry | W3 | Matches Community |
 | Restaurant mode | Floors, tables, courses, KDS, split, tips, QR order | W3 end or W4 | Matches Community; LAN resilience beyond |
 | Loyalty engine | Coupons, gift cards, points, eWallet, promotions on one schema | W3 | Matches Community; ledger and explain trace beyond |
@@ -96,14 +97,15 @@ Odoo parity values: matches Odoo Community, matches Odoo Enterprise (both words 
 | Returns and withdrawal | Portal return request, consumer withdrawal function | W3 | Matches Community (Odoo 20 return requests) |
 | Channel sync | Orders in; stock, price, tracking out; Shopify and WooCommerce packages in W4 | W3 framework, W4 connectors | Matches Enterprise for Amazon (a T3 community package here); Shopify beyond |
 | Headless storefront | Versioned OpenAPI projection, typed client; reference React storefront in W4 | W3, W4 | Beyond |
-| Block page builder, themes | JSON blocks, immutable snapshots, islands; DTCG-token theme packages | W3 | Matches Community in concept; versioning and tokens beyond |
+| Block page builder, themes | JSON blocks, immutable snapshots, islands; DTCG-token theme packages (the `theme` package format comes with the W3 theme pack work) | W3 | Matches Community in concept; versioning and tokens beyond |
 | Multi-website, multilingual, forms | Host routing, locale routes, redirects, CRM leads | W3 | Matches Community |
 | Website import, AI assistant | Pull pages from an existing site; BYOK drafting | W4 | Matches Odoo 20 docs; AI without credits beyond |
-| Email and SMS marketing | Lists, segments, composer, tracking; `SmsProvider`, BYO Twilio first | W3 | Matches Community; no credit wall beyond |
-| Deliverability subsystem | DKIM, SPF/DMARC checks, one-click unsubscribe, bounces, suppression, warm-up | W1 core, W3 bulk | Beyond |
+| Email and SMS marketing | Lists, segments, composer, tracking; bring-your-own relay and `SmsProvider` (BYO Twilio first) | W3 | Matches Community; no credit wall beyond |
+| Deliverability subsystem | DKIM, SPF/DMARC checks, one-click unsubscribe, bounces, suppression, warm-up | Outbound subset W1 if capacity allows, bounces W2, bulk W3 (Proposed [RP3]) | Beyond |
 | Live chat | Widget, operators, chatbot scripts | W3 | Matches Community |
 | Marketing automation, social | Journeys; multi-network posting | W4+ | Matches Enterprise |
 | Events, surveys, blog, forum, eLearning, marketing card, referrals | Long tail | W4+ or community | Community, except referrals (Enterprise) |
+| Typed commands on three surfaces | Every capability above is one catalogue command on CLI, REST and MCP with the same schemas, dry-run plans and idempotency keys (4.7) | With each module | Beyond (Odoo gates its external API to one plan and has no atomic multi-step call, D31) |
 
 ## 4. Per-app specification
 
@@ -113,9 +115,9 @@ Reference versions, observed on 2026-10-01 and not yet pinned (pins follow D23) 
 
 **Purpose.** Retail counters that keep selling without internet. Every sale is an immutable fact; stock, accounting, loyalty and invoices are derived from it.
 
-**First release (W3, retail).** Sessions and cash control; sales, refunds, exchanges; cash, other, customer-account, terminal, gift-card and loyalty tenders; pricelists, promotions, taxes and fiscal positions through the shared engine; discount limits and supervisor overrides; barcode and weighed items; receipts (thermal, email, PDF via Typst, Proposed D20); drawer, customer display; quick customer capture; invoice request; store hub for two or more registers; DE fiscal via `CloudSigner` or hardware `LocalDevice`; X and session reports; consolidated stock and accounting at close.
+**First release (W3, retail).** Sessions and cash control; sales, refunds, exchanges; cash, other, customer-account, terminal, gift-card and loyalty tenders; pricelists, promotions, taxes and fiscal positions through the shared engine; discount limits and supervisor overrides; barcode and weighed items; receipts (thermal, email, PDF via Typst, Proposed D20); drawer, customer display; quick customer capture; invoice request; store hub for two or more registers; DE fiscal via `CloudSigner` (a third-party signing service the merchant chooses) or hardware `LocalDevice`; X and session reports; consolidated stock and accounting at close; every register action a typed command (4.7).
 
-**Later.** Restaurant mode (below); FR `ChainedSoftware`; ES, IT and BE adapters with their W4 packs (L2 partners, D25); AT RKSV through a cloud signer with the AT pack (W3, L2, [LOCALIZATION.md](../LOCALIZATION.md)); cash machines; electronic shelf labels; multi-currency checkout; delivery-platform integrations; POS without `stock` (Odoo 20 direction [R01 s2.1]).
+**Later.** Restaurant mode (below); FR `ChainedSoftware`; ES, IT and BE adapters with their W4 packs (L2, third-party maintainers, D25); AT RKSV through a cloud signer with the AT pack (W3, L2, [LOCALIZATION.md](../LOCALIZATION.md)); cash machines; electronic shelf labels; multi-currency checkout; delivery-platform integrations; POS without `stock` (Odoo 20 direction [R01 s2.1]).
 
 **Topology** (D37, binding; offline scope is Proposed D13; Tauri 2 shell plus Rust agent is baseline for sites with hardware, PWA for no-hardware use, sqlite-wasm with `opfs-sahpool` in a SharedWorker for browser-only). iPad Safari has no WebUSB, Web Serial, WebHID or Web Bluetooth and is a poor offline host [R12 s3.4].
 
@@ -132,7 +134,7 @@ flowchart LR
   T1 --- A
   H -->|commands up, snapshots down| S[(obop server<br/>PostgreSQL, outbox)]
   T1 -.->|no store hub| S
-  S --> F[Cloud signer API]
+  S --> F[Cloud signer API<br/>third-party, user-chosen]
 ```
 
 **Edge store [RP5].** At most 15 tables, fixed schema, `PRAGMA user_version`, never a projection of the server schema (D37): `device`, `snapshot_meta`, `snapshot_row` (kind, id, JSON for catalogue, price rules, taxes, customers, floor layout, programs), `loyalty_balance`, `order`, `order_line`, `order_payment`, `course_ticket`, `receipt`, `cash_movement`, `fiscal_record`, `print_queue`, `command_outbox`, `inbox_ack`, `event_log`.
@@ -181,7 +183,7 @@ The unsynced count is always visible and the shell refuses to clear storage with
 5. Device clocks are untrusted; the server stamps receipt time, and a signer's clock is authoritative for signed receipts.
 6. Receipt numbers are gapless per register (`REG01-000041`); a missing number raises `sequence_gap` and is never renumbered [RP7]. Legal invoice numbers are assigned at posting, not at the counter.
 7. Orders have one owner at a time (register or store hub); transfer is a command. No CRDTs for orders (R12 s3.2). Sync-engine products (PowerSync, Electric, Zero) are not used (Proposed D13; [R22 s7.2]).
-8. The command and snapshot schema (`pos-api`) is a public contract with the 24-month deprecation floor (Proposed D16) so a register that missed an update still syncs [RP22].
+8. The command and snapshot schema (`pos-api`) is a public contract under the deprecation window of D85 (12 months before 1.0; after 1.0 the same 12 months unless the owner rules otherwise, Proposed, Q28), so a register that missed an update within the window still syncs [RP22]. The 24-month floor once proposed for it (former D16) is withdrawn (OR-12). The edge commands are the catalogue commands of 4.7, queued in the edge command outbox and replayed on the server through the same domain services, so an offline register and an online caller use one contract.
 
 **Main workflow (sale).**
 
@@ -227,9 +229,11 @@ pub trait FiscalAdapter: Send + Sync {
 
 **Configuration.** Per register: pricelist, fiscal profile, payment methods with their cash, clearing, difference and tips accounts, receipt layout (minijinja to ESC/POS; Typst for PDF, Proposed D20), offline policy and limits, hardware mapping, cash rounding, tips.
 
-**Localization and compliance.** Germany first (Proposed D4, D25): certified TSE, hardware or cloud, per KassenSichV; registration with the tax authority within one month; DSFinV-K export; fines up to EUR 25,000 under section 379(6) AO for distributing non-compliant systems; the cloud-signer route uses a fiskaly-class service [R25 A6, B4; R12 s3.6]. France second: NF525 needs a certificate or publisher attestation (counsel decides); LNE handed issuance to BYCYB, price and lead time unknown [R25 B4]. Spain's Veri*Factu is producer self-declaration with EUR 150,000 per year per system type exposure [R25 B4]. BE FDM and IT RT printers follow their partner-led W4 packs; AT RKSV follows the AT pack (W3, cloud signer); the Polish POS regime is not researched (unverified [R12 s3.6]) and unscheduled. Counsel precedes any conformance claim [R25 MUST 6]. The POS front end meets WCAG 2.2 AA (D38) with 48 px touch targets [R19 s10].
+**Localization and compliance.** Germany first (RATIFIED, OR-7, D4; the POS wave is Proposed, D25): certified TSE, hardware or cloud, per KassenSichV; registration with the tax authority within one month; DSFinV-K export; fines up to EUR 25,000 under section 379(6) AO for distributing non-compliant systems; the cloud-signer route uses a fiskaly-class third-party service that the merchant contracts; SpaceCorps operates no signer and sells no fiscal-compliance service or warranty (D17) [R25 A6, B4; R12 s3.6]. France second (Proposed, D4): NF525 needs a certificate or publisher attestation (counsel decides); LNE handed issuance to BYCYB, price and lead time unknown [R25 B4]. Spain's Veri*Factu is producer self-declaration with EUR 150,000 per year per system type exposure [R25 B4]. BE FDM and IT RT printers follow their W4 packs, maintained by third parties (L2); AT RKSV follows the AT pack (W3, cloud signer); the Polish POS regime is not researched (unverified [R12 s3.6]) and unscheduled. Counsel precedes any conformance claim [R25 MUST 6]. The POS front end meets WCAG 2.2 AA (D38) with 48 px touch targets [R19 s10].
 
-**Open vs paid.** Open, including the hardware agent and fiscal traits. Paid only as operation and assurance: the per-country Assurance service and hosted gateways where they apply (Proposed D2, D17).
+**Open and free.** All of it is Apache-2.0, including the hardware agent, the store hub and the fiscal traits (OR-1, OR-2). Nothing in POS is paid: there is no Assurance service, no capped warranty and no hosted fiscal gateway (D17, D83). TSE hardware and cloud-signer services are third-party or user-chosen, and the fiscal packs are "as is" under Apache-2.0, earning trust through golden cases and oracles, with counsel before any conformance claim (D17).
+
+**CLI, API and MCP.** The register, the store hub and the back office are clients of the same commands: `obop pos_session open`, `obop pos_session close`, `obop pos_order refund` and the rest listed in 4.7. The hub is the same binary (`obop serve --roles hub`, [cli.md](./cli.md) 3.1).
 
 #### 4.1.1 Restaurant mode (later) [RP1]
 
@@ -255,7 +259,7 @@ The engine is `apply(programs, order_snapshot, cards) -> Applied{lines, rewards,
 
 **Accounting [RP11].** Gift-card sales post to the `gift_card_liability` account role (Proposed in [Finance](./finance.md) 4.1.1), redemption releases it; points create no entries in the first release and the reward is a price reduction at redemption. Deferred-revenue and multi-purpose voucher treatment is not researched (open question 9).
 
-**Permissions.** `loyalty.manager` creates programs; manual adjustments and gift-card issuance are audited and need approval above a configured amount. **Reports.** Issued, redeemed, expired, liability outstanding, overdrafts. **Configuration.** Programs per scope, stacking order, expiry, offline policy. **Localization.** Gift-card and voucher tax treatment, expiry limits and unclaimed-balance rules differ by country and are not researched (open question 9); messages and receipts render in the customer's language. **Open vs paid.** Open.
+**Permissions.** `loyalty.manager` creates programs; manual adjustments and gift-card issuance are audited and need approval above a configured amount. **Reports.** Issued, redeemed, expired, liability outstanding, overdrafts. **Configuration.** Programs per scope, stacking order, expiry, offline policy. **Localization.** Gift-card and voucher tax treatment, expiry limits and unclaimed-balance rules differ by country and are not researched (open question 9); messages and receipts render in the customer's language. **Open and free.** The engine, the schema and every program type are Apache-2.0; nothing is metered or gated (OR-2). **CLI, API and MCP.** Programs, cards and the engine's explain trace are typed commands (4.7), so an agent can dry-run a promotion before it is activated.
 
 ### 4.3 eCommerce (`ecommerce`, channel sync, headless API)
 
@@ -288,7 +292,7 @@ The engine is `apply(programs, order_snapshot, cards) -> Applied{lines, rewards,
 7. Invoicing follows the product policy; `PaymentReconciled` updates payment state.
 8. Returns and withdrawals open a `return_request`; approval creates a return transfer and a credit note.
 
-**Channel sync.** Scope equals Odoo's first scope: orders in; available quantity, price and tracking out; no listing push [R12 s4.4]. The W3 framework [RP2] builds on the `connection` (credentials, state, limiter) and the inbound-event pipeline of [Integrations](./integrations.md), which are not restated here, and provides: a token vault per connection (encrypted, single-flight refresh); an importer writing `sale_order` with `ecommerce__sales_channel_id` and `ecommerce__external_order_id`, unique on the pair; pushers that coalesce stock changes and respect rate limits; webhook receivers with raw-body signature checks and an inbox table; a scheduled reconciliation sweep, because webhooks are at-least-once, unordered and can be lost [R21 s4]; the API version stored per connection with CI contract tests; a "field unavailable" model for withheld buyer data; channel settlement posted to a clearing account (Finance). Connectors are X3 (Wasm `connector` world with allow-listed egress) or X4 (remote app) packages (D11). Research order [R12 SHOULD 13]: Shopify (GraphQL Admin, `2026-07` pinned, REST Admin is legacy), WooCommerce (REST v3, batch endpoints), Amazon SP-API (never Orders v0, removed 2027-03-27), Etsy (manual approval lead time), eBay after verification [R12 s4.4; R21 s6.3]. D25 schedules only the first two (W4); Amazon, Etsy and eBay connectors are T3 community packages, later (unlisted means T3).
+**Channel sync.** Scope equals Odoo's first scope: orders in; available quantity, price and tracking out; no listing push [R12 s4.4]. The W3 framework [RP2] builds on the `connection` (credentials, state, limiter) and the inbound-event pipeline of [Integrations](./integrations.md), which are not restated here, and provides: a token vault per connection (encrypted, single-flight refresh); an importer writing `sale_order` with `ecommerce__sales_channel_id` and `ecommerce__external_order_id`, unique on the pair; pushers that coalesce stock changes and respect rate limits; webhook receivers with raw-body signature checks and an inbox table; a scheduled reconciliation sweep, because webhooks are at-least-once, unordered and can be lost [R21 s4]; the API version stored per connection with CI contract tests; a "field unavailable" model for withheld buyer data; channel settlement posted to a clearing account (Finance). Connectors are X3 (Wasm `connector` world with allow-listed egress) or X4 (remote app) packages (D11), so they arrive after the extension platform (X3 and the X4 app model are W3, D86), and they are distributed as plugins through the free, open plugin registry: `obop plugin search`, `install` (version-pinned) or `copy` (the source becomes the business's own code), with `community` and `verified` trust tiers only plugins with an OSI-approved licence listed (which keeps copy mode legally clean) and no payments (OR-3, OR-17, D81; [cli.md](./cli.md) 4). "Marketplace" in this spec always means an external sales channel; the obop package marketplace of earlier drafts is the plugin registry. Research order [R12 SHOULD 13]: Shopify (GraphQL Admin, `2026-07` pinned, REST Admin is legacy), WooCommerce (REST v3, batch endpoints), Amazon SP-API (never Orders v0, removed 2027-03-27), Etsy (manual approval lead time), eBay after verification [R12 s4.4; R21 s6.3]. D25 schedules only the first two (W4); Amazon, Etsy and eBay connectors are T3 community plugins, later (unlisted means T3).
 
 **Headless API.** The storefront API is a public-scoped projection of the registry (D31): cacheable catalogue reads, cart actions under a capability token, checkout actions with `Idempotency-Key`, order webhooks (Standard Webhooks), per-business OpenAPI including custom fields, generated typed client. Agentic-commerce protocols are a COULD [R21 s3]. Bot defence must satisfy WCAG 3.3.8 (no puzzle-only CAPTCHA) [RP27].
 
@@ -308,7 +312,7 @@ The engine is `apply(programs, order_snapshot, cards) -> Applied{lines, rewards,
 
 **Localization and compliance.** EAA: the default storefront and checkout meet WCAG 2.2 AA and an accessibility-statement template ships; service microenterprises are exempt (Art. 4(5)) [R28 E.5]. The consumer withdrawal function (Directive 2023/2673, Art. 11a) applies from 2026-06-19 and ships in the default checkout and portal (D38). Omnibus prior-price and review rules, the 14-day withdrawal period and GDPR/ePrivacy consent shape checkout defaults; counsel reviews them [R28 E.7]. PCI DSS v4.0.1: hosted fields or redirect only; checkout pages use a locked script allow-list and CSP because editors can add scripts (PCI SSC FAQ 1588 names requirements 6.4.3 and 11.6.1) [R12 s4.3]. VAT: destination fiscal positions and the EUR 10,000 OSS threshold; the OSS return is a Finance export; ViDA platform rules apply 2028-07-01, postponable to 2030-01-01 [R09 s3; R12 s4.3].
 
-**Open vs paid.** Open. Paid: hosting, support, Assurance (D2).
+**Open and free.** The shop, the headless API and the channel framework are Apache-2.0 and ungated: no plan limits orders, websites or API calls (OR-2, D31). SpaceCorps hosts no shop for anyone today; the only obop it hosts is the free, ephemeral sandbox with sample data only (OR-20, D83), and a hosting service for shops would be the planned service of OR-22, not offered yet; whoever runs a shop carries a host's duties. **CLI, API and MCP.** Catalogue publication, returns and channels are typed commands (4.7); the storefront API is a public-scoped projection of the same registry (D31).
 
 ### 4.4 Website builder (`website`)
 
@@ -325,7 +329,7 @@ flowchart LR
   S -->|dependency tags| P[tag purge on publish and data change]
 ```
 
-**First release.** Pages as versioned JSON block trees with slots and per-locale translation maps; a first-party block catalogue (hero, rich text, image and gallery, columns, product grid and card, cart island, form, accordion, menu, footer, video embed with consent gate, newsletter signup, tag block); themes as `theme` packages (DTCG 2025.10 tokens plus block templates, R24 s10); menus; redirects; forms into `crm` or `helpdesk`; multi-website by host; multilingual with locale-prefixed routes, canonical and hreflang; sitemaps; cookie and consent banner; first-party visitor analytics gated by consent; link tracker and UTM; custom domains with ACME and DNS-TXT proof.
+**First release.** Pages as versioned JSON block trees with slots and per-locale translation maps; a first-party block catalogue (hero, rich text, image and gallery, columns, product grid and card, cart island, form, accordion, menu, footer, video embed with consent gate, newsletter signup, tag block); themes as `theme` packages (DTCG 2025.10 tokens plus block templates, R24 s10 for the technical format only; the `theme` package kind and branding packs are the W3 theme pack work of DECISIONS 5.1, not a W1 pipeline); menus; redirects; forms into `crm` or `helpdesk`; multi-website by host; multilingual with locale-prefixed routes, canonical and hreflang; sitemaps; cookie and consent banner; first-party visitor analytics gated by consent; link tracker and UTM; custom domains with ACME and DNS-TXT proof.
 
 **Later.** Website import (JSON-LD, Open Graph, Shopify, WooCommerce, PrestaShop as Odoo 20 does [R12 s2.3]); BYOK page assistant (W4); A/B tests.
 
@@ -356,7 +360,7 @@ flowchart LR
 
 **Localization and compliance.** Logical CSS, RTL and CJK fixtures in CI (D34, D35); machine translation is a suggestion; privacy, terms and withdrawal page templates ship per country pack as starting points, not legal advice; WCAG 2.2 AA default theme (D38).
 
-**Open vs paid.** Open, including themes, forms and the website or portal custom domain (section 6); partner white-label is paid.
+**Open and free.** Apache-2.0, including themes, forms and the website or portal custom domain (DECISIONS section 6). There is no white-label licence, reseller console or branding tier (OR-2): a business brands its own site freely, and a fork may rebrand subject only to the trademark policy (Q26). Third-party themes and block packs are plugins from the free registry (`obop plugin install`, D81), with the F2 or F3 UI tiers of D11. **CLI, API and MCP.** Pages, publishing, rollback and domains are typed commands (4.7); the block editor is a client of them.
 
 ### 4.5 Marketing suite (`marketing`): email, SMS, deliverability
 
@@ -364,7 +368,7 @@ flowchart LR
 
 **First release (W3).** Lists and dynamic segments (Domain AST over parties and orders, Proposed D12); block composer rendered through MJML (`mrml`) to inlined HTML plus a text part; template library; personalisation in sandboxed `minijinja` with fuel and recursion limits (Proposed D20); scheduling; click tracking with UTM; unsubscribe and preference centre; SMS through `SmsProvider` (BYO Twilio first, as `sms_twilio` does [R12 s6.4]); abandoned-cart, welcome and review-request flows as template automations on `automation` [RP20].
 
-**Later.** A/B subjects, journey builder (T3), social posting (T3), WhatsApp (W4 package), KumoMTA as an optional sending service.
+**Later.** A/B subjects, journey builder (T3), social posting (T3), WhatsApp (W4 package), KumoMTA as an optional sidecar that the operator runs.
 
 | Entity | Purpose | Key fields | States |
 |---|---|---|---|
@@ -390,7 +394,7 @@ flowchart LR
 
 #### 4.5.1 Deliverability subsystem [RP3]
 
-Ownership: `mail` (W1) owns sending domains, DNS checks, bounce and complaint handling, suppression; `marketing` (W3) adds bulk features. [Platform](./platform.md) 4.7 already specifies, for W1, per-domain DKIM, VERP bounces, a sender-domain checker, `mail_alias_domain`, `mail_blocklist` and the `MailBounced` event; this section adds ARF complaint handling, warm-up, thresholds and bulk streams on top of them rather than parallel entities (open question 16). The consent ledger is the `consent_record` that [Security and privacy](./security-privacy.md) proposes in `base`, reached through a `ConsentPort` in `base-api` so POS sign-ups, checkout opt-ins, website forms and marketing write one ledger [RP4]; its fields already include basis and source, so marketing needs only one more, double opt-in state (open question 3).
+Ownership: `mail` owns sending domains, DNS checks, bounce and complaint handling, suppression; `marketing` (W3) adds bulk features. Placement after the D86 re-cut (Proposed [RP3]; open question 19): the W1 `mail` is reduced to chatter, activities, followers, outbound email and templates (DECISIONS 5.3 call 3), so only the outbound subset (per-domain DKIM signing, the sender-domain checker, suppression on a known-bad address) is a W1 candidate; VERP bounce detection and ARF complaint intake need the inbound gateway and arrive with it in W2. [Platform](./platform.md) 4.7 specifies per-domain DKIM, VERP bounces, a sender-domain checker, `mail_alias_domain`, `mail_blocklist` and the `MailBounced` event; this section adds ARF complaint handling, warm-up, thresholds and bulk streams on top of them rather than parallel entities (open question 16). The consent ledger is the `consent_record` that [Security and privacy](./security-privacy.md) proposes in `base`, reached through a `ConsentPort` in `base-api` so POS sign-ups, checkout opt-ins, website forms and marketing write one ledger [RP4]; its fields already include basis and source, so marketing needs only one more, double opt-in state (open question 3).
 
 | Requirement | Source | Design |
 |---|---|---|
@@ -407,9 +411,9 @@ Ownership: `mail` (W1) owns sending domains, DNS checks, bounce and complaint ha
 | Suppression vs erasure | GDPR | Suppression keyed by an HMAC of the normalised address so an erased contact is not re-mailed if re-imported; whether keeping the hash is lawful after erasure is a counsel question (unverified) [RP15] |
 | Opens unreliable | Image prefetching, unverified in R12 [R12 s6.3] | Click and conversion are primary; opens optional, off by default for EU businesses pending counsel [RP16] |
 
-Transports: SMTP relay through `lettre` is the default; KumoMTA (Apache-2.0) is an optional sidecar (I-1, Proposed); the AGPL Stalwart server is never embedded (D39); user mailboxes through Gmail API or Graph serve 1:1 mail (D39), not bulk (their limits are not researched). The dashboard shows per domain: sent, delivered, bounces, complaints, unsubscribes, spam rate against thresholds, DNS health.
+Transports (all bring-your-own; SpaceCorps provides no relay, OR-2, OR-11): the operator's own SMTP relay or a provider API of their choice through `lettre` is the default; KumoMTA (Apache-2.0) is an optional sidecar that the operator runs (I-1, RATIFIED, OR-14); IP reputation belongs to whichever relay the operator picks, so obop's part is the per-domain warm-up caps and thresholds below, not a managed IP pool; the AGPL Stalwart server is never embedded (D39; a copyleft-only component is excluded by the dependency allow-list, D1); user mailboxes through Gmail API or Graph serve 1:1 mail (D39), not bulk (their limits are not researched). The dashboard shows per domain: sent, delivered, bounces, complaints, unsubscribes, spam rate against thresholds, DNS health.
 
-**SMS.** `SmsProvider` trait (send, status webhook, inbound, opt-out); BYO provider keys; no obop credit wall for them (D18 sets this for AI; extending it to SMS is this spec's choice, [RP19]); STOP keyword handled on inbound; replies go to chatter; US traffic needs A2P 10DLC brand and campaign registration (unregistered traffic incurs carrier fees) [R12 s6.1]; shortened links tracked; segment counting in the composer; the same consent ledger. TCPA and other national rules are unchecked [R12].
+**SMS.** `SmsProvider` trait (send, status webhook, inbound, opt-out); BYO provider keys and provider adapters, which may ship as plugins through the free registry (D81); no obop credit wall, no SMS credits and no SMS gateway operated by SpaceCorps (OR-2, OR-11; D18 states the same for AI, [RP19]); STOP keyword handled on inbound; replies go to chatter; US traffic needs A2P 10DLC brand and campaign registration (unregistered traffic incurs carrier fees) [R12 s6.1]; shortened links tracked; segment counting in the composer; the same consent ledger. TCPA and other national rules are unchecked [R12].
 
 **Automatic flows.** Emits `MailingScheduled`, `MailingSent`, `EmailComplaintReceived`, `UnsubscribeReceived`, `SuppressionAdded`, `SendingDomainStatusChanged`. Consumes `MailBounced` (Platform; hard bounces add suppression), `CartAbandoned`, `SaleOrderConfirmed`, `FormSubmitted`, `ConsentWithdrawn`, `PartyErased`.
 
@@ -417,7 +421,7 @@ Transports: SMTP relay through `lettre` is the default; KumoMTA (Apache-2.0) is 
 
 **Localization and compliance.** CAN-SPAM (10 business days, postal address, up to USD 53,088 per violating email); GDPR and ePrivacy consent and soft opt-in rules not re-verified; preference centre in the recipient's language; statutory texts never machine-translated (D34) [R12 s6.1].
 
-**Open vs paid.** Open, with BYO relay and BYO SMS. Hosted sending relay, managed IP reputation and hosted SMS credits are operated convenience and would be paid; D2's list is closed, and DECISIONS section 6 adds them only as a Proposed addition, so they need ratification (Q3, Q19) [RP19].
+**Open and free.** Apache-2.0, with a bring-your-own sending relay and a bring-your-own SMS provider. A hosted sending relay, managed IP reputation and SMS credits do not exist: they would be operated paid services, and there are none (OR-2, OR-11; Q3 and Q19 are closed) [RP19]. **CLI, API and MCP.** Mailings, segments, sending domains and suppression are typed commands (4.7); the composer is a client of them, and an agent's send waits for human approval (exit 10, GP-9).
 
 ### 4.6 Live chat and long-tail dispositions
 
@@ -432,8 +436,39 @@ Transports: SMTP relay through `lettre` is the default; KumoMTA (Apache-2.0) is 
 | Surveys | The form block covers simple forms; scoring and certification are community-maintained | T3 |
 | Marketing automation | Fixed flow templates on `automation` until a builder exists; Odoo Enterprise behaviour specified from public docs only | T3, W4+ |
 | Social marketing | X4 remote apps; platform API terms gate it [R12 s6.4] | T3 |
-| Marketing card, referrals, Amazon, Shopee, Lazada, TikTok, Gelato | Not planned first-party; community or partner packages | T3 |
-| WhatsApp | X3 or X4 connector package | T2, W4 |
+| Marketing card, referrals, Amazon, Shopee, Lazada, TikTok, Gelato | Not planned first-party; community plugins from the free registry (D81) | T3 |
+| WhatsApp | X3 or X4 connector plugin | T2, W4 |
+
+Where the table says "community", the route is the plugin registry: a community or verified plugin is found with `obop plugin search`, then installed version-pinned or copied as source (OR-3; [cli.md](./cli.md) 4). SpaceCorps promises no review capacity and handles no payments for any of them.
+
+### 4.7 CLI, API and MCP surface (OR-4, D80)
+
+**Principle.** Agentic first, CLI for everything (OR-4). Every capability of this area is one typed command in the command catalogue generated from the runtime registry (D29, D80), reachable through three equal surfaces with the same input and output schemas, the D10 permission check and an audit entry: the `obop` CLI, the REST API and MCP. The register (Tauri shell or PWA), the storefront, the block editor and the mailing composer are clients of the same commands and hold no business logic. A feature here is not done until it exists in CLI, API and MCP, its mutating commands have a dry-run that returns a digest-bound `plan_id` and accept an idempotency key, reference documentation is generated from the registry, and the parity test (`obop dev parity`, [cli.md](./cli.md) 6) is green for it (D36, D80). The UI reaches literal parity with the commands before the first stable release (OR-16: every command of every shipped module gets a UI, except operator-only commands on the owner-approved exemption list); these modules ship after 1.0 (1.4), so the 1.0 gate does not cover them; whether later series are gated is this spec's open question 22 (not ruled by OR-16), and meanwhile this spec proposes that the UI bindings of each of these apps are measured when the app ships, not left to a later sweep [RP28].
+
+**Grammar.** `obop <subject> <action> [<id>] [options]`; the wire id and the MCP tool name are `<subject>.<action>` (CONVENTIONS 2.1; [cli.md](./cli.md) 2.1). Generated `list`, `get`, `create`, `update`, `delete` and `aggregate` exist for each registry model of section 4 that permits them (paid POS rows are immutable, POS-1, so `pos_order` has no `update` or `delete`). An action marked `*` is named here for the first time and is Proposed [RP28]; `ClosePosSession` of 4.1 is `pos_session.close`. Global flags are `--dry-run`, `--plan`, `--idempotency-key`, `--format json`, `--fields` and `--wait`; exit 10 means a plan waits for a human ([cli.md](./cli.md) 2.2 to 2.7). "Kind" is R(ead) or M(utating).
+
+| Area | Commands | Kind | Notes |
+|---|---|---|---|
+| POS registers and devices | `obop pos_config create\|update\|list\|get`; `obop pos_device register*\|revoke*\|list\|get` | M; lists R | A revoked device can no longer sync (states `registered`, `revoked`) |
+| POS sessions and cash | `obop pos_session open*\|close*\|reopen*\|report*\|list\|get`; `obop pos_cash_movement create*\|list` | M; `report`, lists R | `close` is one transaction that posts the session entry, so a locked period leaves the session in `closing_control` and the CLI exits 7 (`lock_date_violation`); `reopen` needs `pos.supervisor` or higher (4.1) |
+| POS orders, fiscal records, exceptions | `obop pos_order create\|list\|get\|refund*\|cancel*`; `obop pos_fiscal_record list\|get\|export*`; `obop pos_exception list\|get\|resolve*\|waive*` | M; others R | `pos_order create` is the sync command and carries `command_id` and `(device_id, device_seq)`; on a register `refund` is queued in the edge command outbox and replayed on sync; `cancel` voids an order that is not yet `paid` (a paid order is corrected only by a refund, POS-1); `export` produces the DSFinV-K artefact for a period |
+| Loyalty | `obop loyalty_program create\|update\|activate*\|close*\|explain*\|list\|get`; `obop loyalty_card issue*\|adjust*\|block*\|void*\|list\|get`; `obop loyalty_ledger_entry list` | M; `explain`, lists R | `explain` runs the engine on an order snapshot and prints the trace with no effect; `issue` and `adjust` are audited and need approval above the configured amount |
+| Catalogue, cart, returns | `obop website_product publish*\|unpublish*\|list\|get\|update`; `obop return_request create\|approve*\|decline*\|receive*\|refund*\|list\|get`; `obop product_feed generate*\|list`; `obop cart list\|get` | M; lists R | `cart` is read-only for operators; shoppers act through the storefront API under a capability token, generated from the same catalogue (D31). Approving a return creates the return transfer and the credit note |
+| Sales channels | `obop sales_channel create\|update\|pause*\|resume*\|sync*\|list\|get`; `obop sales_channel_event_inbox list\|replay*` | M; lists R | Credentials, connection state and the token vault belong to [Integrations](./integrations.md); `sync` runs the reconciliation sweep |
+| Website pages | `obop website_page create\|update\|validate*\|preview*\|schedule*\|publish*\|unpublish*\|rollback*\|archive*\|list\|get`; `obop page_revision list\|get`; `obop page_snapshot list\|get`; `obop website_redirect`, `website_menu` and `block_type` CRUD or list | M; `validate`, `preview`, lists R | `validate` runs the publish-pipeline checks (alt text, heading order, contrast, links, SEO) with no effect; `rollback` repoints to a previous snapshot |
+| Domains and forms | `obop custom_domain add*\|verify*\|remove*\|list\|get`; `obop form_definition create\|update\|list\|get`; `obop form_submission list\|get` | M; lists R | Domain changes are audited; `verify` checks the DNS-TXT proof |
+| Mailings | `obop mailing create\|update\|preflight*\|test*\|schedule*\|send*\|pause*\|resume*\|cancel*\|list\|get`; `obop mailing_trace list\|get`; `obop link_tracker list\|get` | M; `preflight`, lists R | `preflight` returns the checks of 4.5 (verified sending domain, unsubscribe link, text part, consent) with no effect; `test` sends to the caller only; `send` by an agent returns a plan (GP-9) |
+| Audiences and consent | `obop mailing_list create\|update\|list\|get`; `obop mailing_subscription subscribe*\|unsubscribe*\|list`; `obop audience_segment create\|refresh*\|count*\|list\|get`; `obop data import <file> --model mailing_subscription`; `obop consent_record list` | M; lists R | An import needs the consent attestation of 4.5.1 and rolls back as a batch (`obop import_run rollback`, [cli.md](./cli.md) 3.4); exporting a subscriber list needs the `export` operation and is audited; `consent_record` is append-only (MKT-2), so it has no update or delete command |
+| Deliverability | `obop sending_domain add*\|check*\|verify*\|rotate_key*\|list\|get`; `obop email_suppression add*\|remove*\|check*\|list`; `obop bounce_event list`; `obop complaint_event list` | M; `check`, lists R | `check` runs the SPF, DKIM, DMARC and reverse-DNS checker; `rotate_key` needs `marketing.deliverability_admin` and never prints key material (`secret` class, [cli.md](./cli.md) 2.12) |
+| SMS | `obop sms_sender_registration create\|list\|get`; `obop sms_message list\|get` | M; lists R | Sending is `mailing send` with kind `sms`; provider keys come from `_FILE` variables or `--body`, never as arguments |
+| Live chat | `obop livechat_channel create\|update\|list\|get`; `obop livechat_conversation list\|get\|assign*\|close*`; `obop chatbot_script create\|update\|list\|get` | M; lists R | Visitor identity and transcripts are consent-gated personal data (4.6) |
+| Reports | `obop <model> aggregate --group-by <field> --agg sum:<field>` for the measures of each app; `obop analytics query` (W3) | R | Sales by product or hour, cash variance, campaign performance and the rest run under the caller's access ([cli.md](./cli.md) 3.4) |
+| Plugins | `obop plugin search\|info\|install\|copy\|update\|remove\|audit` | M; `search`, `info`, `audit` R | Channel connectors, SMS and relay adapters, themes and long-tail packs come from the free registry, `community` and `verified` tiers, no payments, and only plugins with an OSI-approved licence are listed (OR-3, OR-17, D81; [cli.md](./cli.md) 4); which fiscal and terminal adapters can be plugins is open question 21 |
+| Local tools | `obop serve --roles hub`; `obop dev up`; `obop doctor` | M; `doctor` R | The hub is the same binary (D37); `dev up` is an optional local demo; the public evaluation path is the free hosted sandbox from the public beta (D83, OR-20). Hardware-agent operations (print a test page, pulse the drawer, read the scale) are proposed entries of the owner-approved exemption list (OR-16; cli.md 1.1; open question 20): local commands exempt from REST and MCP with recorded reasons, which await the owner's approval entry by entry |
+
+**Agents and approvals.** Commands with a real-world effect on money, customers or the public are high-effect in the sense of [ai.md](./ai.md) 4.3: a send, a page publish or rollback, a refund, void or session reopen, gift-card issuance, a manual loyalty adjustment, a cash movement, a suppression removal, a sending-key rotation and a custom-domain change. An agent that calls one gets a plan and exit 10, never an effect; a human with the matching permission group (`marketing.manager`, `website.publisher`, `pos.supervisor`, `loyalty.manager`, `marketing.deliverability_admin`, `website.admin`) commits the plan, which then runs as that human with the agent recorded as proposer ([cli.md](./cli.md) 2.7, 5.5). This is the D18 rule of section 2 stated per command; the per-command effect classes are Proposed [RP28]. Drafts (`mailing create`, `website_page update` on a draft, `return_request create`) are automatic for an agent that holds the scope. Discovery is data: `obop schema <wire-id>` prints the input and output schema, error codes and bindings, and `obop agent guide` renders the catalogue for the caller's permissions ([cli.md](./cli.md) 2.9, 3.9).
+
+**Waves.** These commands ship with their modules in W3 (the connectors of W4 with the extension platform); the catalogue, the generated CLI, REST and MCP, dry-run plans and the parity test exist from W1 (D86, D80), so nothing in this area is built UI-only. "CLI first" means the catalogue entry and its command are the milestone, with REST and MCP generated in the same change and the UI following under the parity matrix ([cli.md](./cli.md) 9).
 
 ## 5. Cross-app golden paths
 
@@ -481,8 +516,8 @@ These double as acceptance tests. Money is EUR; prices are tax-included; roundin
 
 **GP-9 Agent drafts, human approves.**
 - *Given* an agent principal with marketing draft scope and an approval policy "approve-by-role" for audiences above 1,000.
-- *When* it drafts a mailing to the 11,500 eligible recipients and calls send.
-- *Then* the mailing is `pending_approval`; a `marketing.manager` approves; the audit entry records agent, user and token scopes.
+- *When* it drafts a mailing to the 11,500 eligible recipients (`obop mailing create --body @mailing.json`) and calls send (`obop mailing send <id>`, or the `mailing.send` MCP tool).
+- *Then* the mailing is `pending_approval`; the command returns a plan and exits 10 (`approval_required`) and nothing is sent; a `marketing.manager` approves (`obop plan commit <plan_id>`); the send then runs as that human with the agent recorded as proposer; the audit entry records agent, user and token scopes. Committing the same plan twice returns the stored result; editing the mailing after the dry-run and committing the old plan exits 6 (`plan_stale`). The same path, with the same `plan_id` and approval, works through REST and MCP, and the parity test replays it on all three surfaces.
 
 ## 6. Non-functional requirements
 
@@ -502,6 +537,7 @@ These double as acceptance tests. Money is EUR; prices are tax-included; roundin
 | LOY-1 | Ledger is append-only; balance equals its sum; redemption is atomic | Trigger, conditional update |
 | MKT-1 | `(mailing, address_hash)` unique; suppressed or withdrawn addresses are never sent to | Unique key; send-time check |
 | MKT-2 | Consent history is append-only (withdrawal is recorded, never deleted); unsubscribe is idempotent | Trigger |
+| PAR-1 | Every command of 4.7 exists on CLI, REST and MCP with identical input and output schemas, the D10 permission check, a dry-run plan and idempotency key for mutating commands, and an audit entry; a route, tool or command absent from the catalogue fails the build | Generated from the catalogue; parity test (D36, D80; [cli.md](./cli.md) 6) |
 
 Money and quantities follow D9 (`bigint` minor units for ledger and totals, `NUMERIC(24,8)` prices, `NUMERIC(24,6)` quantities, no floats, `overflow-checks` on). Property tests cover totals (edge engine equals server engine), rounding, promotions and loyalty (D36).
 
@@ -515,7 +551,7 @@ WCAG 2.2 AA is a release gate for storefront, checkout, portal and POS (D35, D38
 
 ### 6.4 Offline
 
-D13 (Proposed): 1.0 targets Odoo-19 parity for the apps that ship by then (a read cache of visited views and a published degraded-feature list); POS order capture with post-reconnect invoicing ships with `pos` and `obop-edge` in W3 (D25), after the 1.0 LTS (2028-04-18), unless the owner pulls a POS-capture slice into W2 (Q11); POS and warehouse get the edge command outbox from W3; queued writes for allow-listed back-office models are later. This document follows that reading, so the 1.0 offline scope is the read cache and the degraded-feature list (open question 18; [ARCHITECTURE](../ARCHITECTURE.md#163-open-questions) 16.3 item 2). The offline contract in 4.1 is the published list. Acceptance spike (R23 DR-7): two tablets and a store hub offline for an hour, 10,000 orders queued, `kill -9` mid-sync, exactly-once on `unique(command_id)`.
+D13 (Proposed): 1.0 targets Odoo-19 parity for the apps that ship by then (a read cache of visited views and a published degraded-feature list); POS order capture with post-reconnect invoicing ships with `pos` and `obop-edge` in W3 (D25), after 1.0 (2028-04-18, the first stable release; there is no "LTS" label, D85), unless the owner pulls a POS-capture slice into W2 (Q11); POS and warehouse get the edge command outbox from W3; queued writes for allow-listed back-office models are later. This document follows that reading, so the 1.0 offline scope is the read cache and the degraded-feature list (open question 18; [ARCHITECTURE](../ARCHITECTURE.md#163-open-questions) 16.3 item 2). The offline contract in 4.1 is the published list. Acceptance spike (R23 DR-7): two tablets and a store hub offline for an hour, 10,000 orders queued, `kill -9` mid-sync, exactly-once on `unique(command_id)`.
 
 ### 6.5 Performance
 
@@ -527,20 +563,21 @@ Pain numbers are the ranks in [R04 s1].
 
 | Topic | Odoo | obop | Pain addressed |
 |---|---|---|---|
-| Fiscal POS | Country modules partly outside Community | Open fiscal trait, per-country pack, counsel-gated claims | 2 open-core surprises, 5 localization |
+| Fiscal POS | Country modules partly outside Community | Open fiscal trait, per-country pack, third-party or user-chosen signers, counsel-gated claims | 2 open-core surprises, 5 localization |
 | Hardware | Production IoT box needs a subscription | Open hardware agent | 2, 9 hosting and ops |
 | Offline | Browser cache; terminals, customer registration and live stock do not work offline | Edge store, store hub, append-only ledger, explicit contract | 7, 8 |
 | Marketplace connectors | Amazon connector Enterprise; carrier connectors not in the public tree | Open framework, packages on X3 or X4 | 2, 6 third-party quality |
 | Messaging and AI | SMS, AI through IAP credits | BYO provider keys, no credit wall | 2 |
 | Website content | Pages are views, so content and templates share one mechanism (inferred fragile on upgrade) | Versioned JSON blocks and immutable snapshots, rollback | 1 upgrades, 3 customisation debt |
-| Customisation | Studio is a paid Custom-plan feature | Themes, packs, forms and view layers in the open edition | 3 |
+| Customisation | Studio is a paid Custom-plan feature | Themes, packs, forms and view layers in the one open edition, free, plus the free plugin registry (install or copy, D81) | 3 |
 | Deliverability | SPF and DKIM set-up steps, DMARC guidance; one-click URL and bounce aliases exist [R15 s4; R12 s6.3] | Built-in checker, thresholds, suppression, warm-up | Not a ranked pain; sender rules now enforce it |
-| Upgrade safety | Yearly breakage | 24-month deprecation floor (Proposed D16) on storefront API, `pos-api`, pack schema | 1 |
+| Upgrade safety | Yearly breakage | Deprecation window of D85 (12 months; after 1.0 Proposed, Q28) and a 2-year security-fix window from 1.0, on the storefront API, `pos-api`, pack schema and the CLI command catalogue; the 24-month floor once proposed was withdrawn (OR-12) | 1 |
+| Scripts and agents | The external API is gated to one plan and has no atomic multi-step call (D31); the UI is the complete surface | Every capability is a typed command on CLI, REST and MCP from one catalogue, free and ungated; the UI is a client (OR-4, D80) | 2 open-core surprises |
 
 ## 8. Out of scope, non-goals and later
 
-- Not in W1 or W2, nor in the first stable release: POS, eCommerce, the website builder and the marketing suite (R20 s9; Proposed D4), apart from the W0 to W2 groundwork in 1.4. D13 places POS order capture with `pos` in W3, unless the owner pulls a slice into W2 (Q11; 6.4; open question 18).
-- Non-goals: a multi-vendor marketplace (DSA exposure); a PIM; full WMS and 3PL (W4); a customer data platform or ad-tech; an obop-operated fiscal signer, payment processor or large-scale MTA; Node SSR in production (Proposed D14); Qwik 1.x (peer range excludes Vite 8); commercially licensed grids and editors (D15); SMS one-time passwords (TOTP and passkeys instead).
+- Not in W1 or W2, nor in the first stable release: POS, eCommerce, the website builder and the marketing suite (OR-13, OR-15, D86; R20 s9), apart from the W0 to W2 groundwork in 1.4. D13 places POS order capture with `pos` in W3, unless the owner pulls a slice into W2 (Q11; 6.4; open question 18).
+- Non-goals: a multi-vendor marketplace (DSA exposure); a PIM; full WMS and 3PL (W4); a customer data platform or ad-tech; an obop-operated fiscal signer, payment processor or large-scale MTA; any SpaceCorps-operated service at all for this area (sending relay, IP reputation pool, SMS gateway or credits, hosted shop, hosted fiscal or Peppol gateway, Assurance service; OR-2, OR-11, D83), apart from the free, ephemeral sandbox with sample data only (OR-20, D83), whose outbound mail goes to a sink and whose egress is blocked, and from the paid hosting service planned by OR-22 (not offered yet; it would be dedicated obop servers, not a hosted shop product); paid tiers, plans, quotas or a white-label licence for any app here (OR-2); payments, listing fees or revenue share for plugins in the registry (OR-3); UI-only features with no CLI, API and MCP command (OR-4); Node SSR in production (Proposed D14); Qwik 1.x (peer range excludes Vite 8); commercially licensed grids and editors (D15); SMS one-time passwords (TOTP and passkeys instead).
 - Later (detail in section 4): restaurant mode, FR, AT, ES, IT and BE fiscal adapters (the Polish POS regime is unresearched), cash machines, Shopify and WooCommerce connectors, reference headless storefront, website import, journey builder, WhatsApp, A/B tests, donations, subscription selling.
 
 ## 9. Open questions
@@ -550,7 +587,7 @@ Pain numbers are the ranks in [R04 s1].
 1. **Restaurant wave and edge budget.** D25 lists only retail `pos`; is restaurant W3 end or W4, and does the 15-table edge cap hold (else amend D37)?
 2. **Cloud signer offline.** Is a documented fallback lawful in DE, and does the signer vendor offer one? Not researched; counsel and vendor.
 3. **Consent field.** Add double opt-in state to `consent_record` (basis and source are already in [Security and privacy](./security-privacy.md)); the `ConsentPort` in `base-api` is named by both that spec and [Platform](./platform.md), still Proposed.
-4. **Paid list.** DECISIONS section 6 lists hosted sending relay, managed IP reputation and SMS credits only as a Proposed addition to the closed paid list; they stay unratified until the owner answers Q3 and Q19.
+4. **Closed: paid list.** Answered by OR-2 and OR-11 (Q3 and Q19 are closed): there is no paid list, and a hosted sending relay, managed IP reputation and SMS credits do not exist. Email and SMS are bring-your-own. The number is kept so other documents' references to this list stay valid.
 5. **Editor.** Build in-house or adopt Puck or GrapesJS behind the Wasm renderer; effort not estimated.
 6. **Cart as sales order.** [Sales and CRM](./sales-crm.md) accepts it on three Proposed conditions; both specs need the owner's ratification together.
 7. **Multi-channel stock.** Does POS reduce online availability on sync (RP10) or only at session close? Confirm with [Supply chain](./supply-chain.md).
@@ -564,17 +601,21 @@ Pain numbers are the ranks in [R04 s1].
 15. **Unverified vendor and infrastructure items.** Terminal SDK licences and offline-capable LAN terminals; ACME rate limits for many custom domains.
 16. **Deliverability entity overlap.** Confirm with [Platform](./platform.md) that `sending_domain` extends `mail_alias_domain` and `email_suppression` extends `mail_blocklist`, and that `MailBounced` feeds suppression, so `mail` has one set of sender-domain and blocklist entities.
 17. **Tax changes for POS snapshots.** `TaxRuleChanged` (POS snapshot deltas for taxes and fiscal positions) is Proposed in [Finance](./finance.md) 4.4 and 4.15; ratify it as the trigger, or have the snapshot builder read tax tables by `row_version`.
-18. **Wave of POS order capture.** D13 places POS order capture with `pos` in W3, after the 1.0 LTS (2028-04-18), unless the owner pulls a POS-capture slice into W2. This document follows W3 (6.4); the owner answers Q11 ([ARCHITECTURE](../ARCHITECTURE.md#163-open-questions) 16.3 item 2).
+18. **Wave of POS order capture.** D13 places POS order capture with `pos` in W3, after 1.0 (2028-04-18), unless the owner pulls a POS-capture slice into W2. This document follows W3 (6.4); the owner answers Q11 ([ARCHITECTURE](../ARCHITECTURE.md#163-open-questions) 16.3 item 2).
+19. **Deliverability core after the D86 cut.** The reduced W1 `mail` has no inbound gateway, so VERP bounces and ARF complaints cannot land in W1. *Default:* ship only the outbound subset (per-domain DKIM signing, the sender-domain checker) in W1 if capacity allows, bounce and complaint handling with the gateway in W2, bulk features in W3; confirm with [Platform](./platform.md) 4.7 that its placement of DKIM, VERP bounces and the gateway matches the cut (RP3).
+20. **Parity for register-local commands.** The hardware agent's operations (print a test page, pulse the drawer, read a scale) and a register's offline actions run before any server call. *Default:* operations that change server state are catalogue commands queued in the edge command outbox (4.1); purely local hardware operations are proposed entries of the owner-approved exemption list (OR-16; [cli.md](./cli.md) 1.1): local commands exempt from REST and MCP with recorded reasons, which the owner approves entry by entry.
+21. **Third-party fiscal and terminal adapters.** L2 packs (ES, IT, BE) are maintained by third parties (D25), but X5 native crates are first-party only and not installable from the registry ([cli.md](./cli.md) 4.1). *Default:* `CloudSigner`, `ChainedSoftware` and SMS adapters can be X3 or X4 plugins; a `LocalDevice` adapter lives in the hardware agent, so it is contributed to the core repository or vendored by copy into the operator's own build. Not researched; decide when the hardware agent is designed.
+22. **UI parity gate for modules that ship after 1.0.** OR-16 makes UI parity literal before the first stable release, and POS, eCommerce, the website builder and marketing all ship after it (1.4), so the 1.0 gate does not cover them and OR-16 does not say whether later series are gated; the same gap exists for the W3 services variant in [Services](./services.md). *Default (Proposed, RP28):* the UI bindings of each app are measured against its commands when the app ships, with the same exemption-list mechanism (OR-16), so a release of these apps does not add a command without a UI binding unless the owner has approved an entry for it. A question for the owner at spec level, not a register question.
 
 ### 9.2 Design proposals
 
-The markers [RP1] to [RP27] (retail proposal; the prefix avoids the clash with the planning principles PR1 to PR8 in [ROADMAP](../ROADMAP.md) and the priority levels P0 to P2 in D33) are the choices this document makes that neither the research nor DECISIONS.md settles. Each is specified in the section named below (sections 1 and 3 use the markers earlier); the owner or the relevant spec ratifies or rejects them.
+The markers [RP1] to [RP28] (retail proposal; the prefix avoids the clash with the planning principles PR1 to PR8 in [ROADMAP](../ROADMAP.md) and the priority levels P0 to P2 in D33) are the choices this document makes that neither the research nor DECISIONS.md settles. Each is specified in the section named below (sections 1 and 3 use the markers earlier); the owner or the relevant spec ratifies or rejects them.
 
 | Marker | Proposal | Section |
 |---|---|---|
 | RP1 | Restaurant mode lands at the end of W3 or in W4 | 4.1.1 |
 | RP2 | Channel-sync framework in W3; Shopify and WooCommerce connectors as X3 or X4 packages in W4 | 4.3 |
-| RP3 | Deliverability core in `mail` (W1); `sending_domain` and `email_suppression` extend Platform's `mail_alias_domain` and `mail_blocklist` | 4.5.1 |
+| RP3 | Deliverability core in `mail` (outbound subset W1 if capacity allows, bounces W2, bulk W3, after the D86 cut); `sending_domain` and `email_suppression` extend Platform's `mail_alias_domain` and `mail_blocklist` | 4.5.1 |
 | RP4 | One consent ledger reached through a `ConsentPort` in `base-api` | 4.5.1 |
 | RP5 | Edge store of at most 15 fixed-schema tables | 4.1 |
 | RP6 | Posted amounts follow the signed receipt; server totals differences raise `totals_mismatch` | 4.1 |
@@ -590,22 +631,26 @@ The markers [RP1] to [RP27] (retail proposal; the prefix avoids the clash with t
 | RP16 | Open tracking optional and off by default for EU businesses; double opt-in per pack | 4.5.1 |
 | RP17 | Spam-rate thresholds: warn at 0.10%, pause at 0.20% | 4.5.1 |
 | RP18 | Per-domain warm-up caps from a pack-shipped ramp table; excess stays `deferred` | 4.5.1 |
-| RP19 | BYO SMS keys with no obop credit wall; hosted relay and SMS credits paid only once ratified | 4.5 |
+| RP19 | BYO SMS keys and BYO sending relay; no obop-operated relay, IP-reputation pool or SMS credits (follows from OR-2 and OR-11; the design content is the `SmsProvider` trait and the per-domain caps) | 4.5 |
 | RP20 | Abandoned-cart, welcome and review-request flows as template automations on `automation` | 4.5 |
 | RP21 | Blog as an X1 pack over generic collection blocks | 4.6 |
-| RP22 | `pos-api` is a public contract with the 24-month deprecation floor | 4.1 |
+| RP22 | `pos-api` is a public contract under the D85 deprecation window (12 months; the 24-month floor is withdrawn) | 4.1 |
 | RP23 | Agent-initiated sends and large audiences enter `pending_approval` | 4.5 |
 | RP24 | POS session close flagged `SERIALIZABLE` | 6.2 |
-| RP25 | Five W0 to W2 groundwork items so W3 is not a rewrite | 1.4 |
+| RP25 | Five W0 to W2 groundwork items so W3 is not a rewrite, placed to match the D86 re-cut | 1.4 |
 | RP26 | Edge PIN hashes, encrypted customer cache (optional in PWA mode), `CaptureParty` de-duplicated by email | 4.1 |
 | RP27 | Bot defence satisfies WCAG 3.3.8 (no puzzle-only CAPTCHA) | 4.3 |
+| RP28 | The command names, read or mutating kinds and high-effect classes of 4.7 (marked `*`), and UI bindings measured when each W3 app ships (open question 22) | 4.7 |
 
 ## 10. Sources
 
-Research tags map to files (links are relative to this file). "D", "F" and "Q" identifiers refer to [DECISIONS.md](../DECISIONS.md); names of events, permission groups, data classes, states and ports follow [CONVENTIONS.md](../CONVENTIONS.md). RFC 8058 was checked directly at https://www.rfc-editor.org/rfc/rfc8058 on 2026-10-01 for the DKIM-coverage and header requirements.
+Research tags map to files (links are relative to this file). "D", "F", "OR" and "Q" identifiers refer to [DECISIONS.md](../DECISIONS.md); names of events, permission groups, data classes, states and ports follow [CONVENTIONS.md](../CONVENTIONS.md). The commercial content of the research (R17, R24 s9-s11 marketplace commerce and white-label, R25 B7 operated services, R26 pricing, funding and partners) is superseded by the owner rulings OR-1 to OR-21; this spec relies on those notes for technical statements only. RFC 8058 was checked directly at https://www.rfc-editor.org/rfc/rfc8058 on 2026-10-01 for the DKIM-coverage and header requirements.
 
 | Tag | File |
 |---|---|
+| Rulings | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS.md](../DECISIONS.md); they outrank every research note |
+| CLI | [cli.md](./cli.md): grammar, exit codes, catalogue, agent protocol, plugin registry client |
+| Licence | [../../LICENSE](../../LICENSE) (Apache-2.0) and [../../NOTICE](../../NOTICE) |
 | Conventions | [CONVENTIONS.md](../CONVENTIONS.md) |
 | R00 | [research/README.md](../research/README.md) |
 | R01 | [01-odoo-app-catalog.md](../research/01-odoo-app-catalog.md) |

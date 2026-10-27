@@ -68,7 +68,7 @@ fn the_core_version_is_the_workspace_version() {
 #[test]
 fn every_bundled_package_declares_its_metadata() {
     let all = bundled();
-    assert_eq!(all.len(), 22);
+    assert_eq!(all.len(), 23);
     let builtin: BTreeSet<String> = App::new().modules.iter().map(|m| m.id.clone()).collect();
     let ids: BTreeSet<String> = all.iter().map(|m| m.module.id.clone()).collect();
     for m in &all {
@@ -166,7 +166,7 @@ fn installing_timesheets_alone_pulls_projects_and_a_dependency_on_base_is_the_co
 }
 
 #[test]
-fn all_22_packages_install_with_their_dependencies_and_the_module_list_shows_every_edge() {
+fn all_23_packages_install_with_their_dependencies_and_the_module_list_shows_every_edge() {
     let app = App::new();
     let admin = Principal::user("root", &[ADMIN_GROUP]);
     let call = |id: &str, input: Value| {
@@ -199,8 +199,8 @@ fn all_22_packages_install_with_their_dependencies_and_the_module_list_shows_eve
             .unwrap()
             .value,
     );
-    // 7 built-in (6 modules and the admin module) plus 22.
-    assert_eq!(rows.len(), app.modules.len() + 22);
+    // 7 built-in (6 modules and the admin module) plus 23.
+    assert_eq!(rows.len(), app.modules.len() + 23);
     for r in &rows {
         let Value::Map(m) = r else { panic!() };
         let id = format!("{:?}", m["id"]);
@@ -280,7 +280,7 @@ fn the_check_command_applies_the_catalogue_rules_and_reports_warnings() {
         .map(|p| p.to_string_lossy().to_string())
         .collect();
     files.sort();
-    assert_eq!(files.len(), 22);
+    assert_eq!(files.len(), 23);
     let refs: Vec<&str> = files.iter().map(String::as_str).collect();
     assert!(
         modules_check_files_with(&refs, false, true).is_ok(),

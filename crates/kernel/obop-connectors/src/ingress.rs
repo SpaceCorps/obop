@@ -208,12 +208,21 @@ impl Ingress {
                     pf.decision.why.as_str()
                 ));
             }
-            // A value that is one of this connection's own tokens means what it stood for.
+            // A value that is one of this connection's own tokens means what it stood for. A
+            // reference pseudonym does too, where the connection asks for it; a refused read
+            // refuses the item for now (the next run, or the sender's retry, reads it again)
+            // instead of storing the pseudonym text as if it were the record.
             let v = match v {
-                J::String(s) => self
-                    .egress
-                    .restore(&conn.id, s)
-                    .map_or_else(|| v.clone(), J::from),
+                J::String(s) => {
+                    let back = match self.egress.restore(&conn.id, s) {
+                        Some(t) => Some(t),
+                        None if conn.cfg("resolve_refs") == "true" => {
+                            self.egress.resolve_ref(&conn.id, s)?
+                        }
+                        None => None,
+                    };
+                    back.map_or_else(|| v.clone(), J::from)
+                }
                 other => other.clone(),
             };
             values.insert(k.clone(), v);

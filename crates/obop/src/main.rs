@@ -3816,7 +3816,7 @@ mod bundled_packages {
                 }
             }
         }
-        assert_eq!(files.len(), 6 * 29);
+        assert_eq!(files.len(), 6 * 30);
         let refs: Vec<&str> = files.iter().map(String::as_str).collect();
         assert!(modules_check_files(&refs, true).is_ok());
     }

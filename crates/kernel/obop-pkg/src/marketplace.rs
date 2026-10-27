@@ -170,6 +170,7 @@ const BUNDLED: &[Bundle] = &[
     bundle!("projects"),
     bundle!("purchase"),
     bundle!("sign"),
+    bundle!("sign_docuseal"),
     bundle!("subscriptions"),
     bundle!("timesheets"),
     bundle!("website"),
@@ -336,6 +337,7 @@ mod tests {
                 "projects",
                 "purchase",
                 "sign",
+                "sign_docuseal",
                 "subscriptions",
                 "timesheets",
                 "website"

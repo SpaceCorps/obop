@@ -1,0 +1,32 @@
+[labels.pl.module]
+name = "Podpisy z DocuSeal"
+description = "Odbiera zdarzenia serwera DocuSeal (obejrzane, podpisane, odrzucone, wygasłe) jako rekordy obok wniosków aplikacji Podpisy. Zdarzenie nie zmienia wniosku: podpis nadal rejestruje osoba akcją sign, która wymaga zatwierdzenia."
+summary = "Odbiera zdarzenia podpisów DocuSeal obok wniosków. Podpis nadal rejestruje osoba."
+
+[labels.pl.model.sign_docuseal_event]
+name = "Zdarzenie DocuSeal"
+description = "Zdarzenie zgłoszone przez DocuSeal w sprawie wniosku o podpis, zapisane przez złącze DocuSeal"
+
+[labels.pl.model.sign_docuseal_event.field.event]
+label = "Zdarzenie"
+description = "Typ zdarzenia z DocuSeal, na przykład form.completed, form.declined lub submission.expired"
+
+[labels.pl.model.sign_docuseal_event.field.request_ref]
+label = "Odnośnik wniosku"
+description = "Odnośnik wniosku o podpis, którego dotyczy zdarzenie, tak jak wysłało go złącze (external_id w DocuSeal)"
+
+[labels.pl.model.sign_docuseal_event.field.submission_id]
+label = "ID zgłoszenia"
+description = "Identyfikator zgłoszenia w DocuSeal, by je tam znaleźć"
+
+[labels.pl.model.sign_docuseal_event.field.status]
+label = "Status"
+description = "Status w DocuSeal w tej chwili, na przykład completed lub declined"
+
+[labels.pl.model.sign_docuseal_event.field.document_url]
+label = "Adres dokumentu"
+description = "Adres podpisanego dokumentu na serwerze DocuSeal; otwarcie wymaga dostępu do DocuSeal"
+
+[labels.pl.model.sign_docuseal_event.field.completed_at]
+label = "Zakończono"
+description = "Kiedy według DocuSeal podpisujący skończył, tak jak zapisał to DocuSeal"
