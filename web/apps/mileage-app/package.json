@@ -7,10 +7,12 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start --dev-client",
-    "prebuild:android": "expo prebuild --platform android",
     "export:android": "expo export --platform android",
     "check:sdk": "expo install --check",
-    "doctor": "expo-doctor"
+    "doctor": "expo-doctor",
+    "android:prebuild": "expo prebuild --platform android --no-install",
+    "android:build": "node scripts/gradle.mjs assembleDebug -PreactNativeArchitectures=arm64-v8a,x86_64",
+    "android:build:release": "node scripts/gradle.mjs assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64"
   },
   "dependencies": {
     "@obop/trip-core": "workspace:*",

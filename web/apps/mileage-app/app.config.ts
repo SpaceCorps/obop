@@ -11,7 +11,6 @@ const config: ExpoConfig = {
   scheme: "obop-mileage",
   version: "0.0.0",
   orientation: "portrait",
-  userInterfaceStyle: "automatic",
   android: { package: APPLICATION_ID },
   ios: { bundleIdentifier: APPLICATION_ID },
   plugins: [
