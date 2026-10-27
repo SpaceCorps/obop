@@ -6,15 +6,24 @@
 //! change breaks a rule the database enforces (a record that is frozen, a state change without
 //! its action, a guard that cannot be replaced), and trying again changes nothing.
 //!
-//! The wire form is the human message, the separator [`SEP`] (ASCII record separator, which no
-//! message contains) and a JSON object with the machine-readable parts:
+//! The wire form starts with the code word, as the faults of D74 do (`storage_busy: ...`), then
+//! the human message, the separator [`SEP`] (ASCII record separator, which no message contains)
+//! and a JSON object with the machine-readable parts:
 //!
 //! ```text
-//! invoice 0192f: total cannot change while the record is posted<RS>{"code":"immutable_record",...}
+//! immutable_record: invoice 0192f: total cannot change while the record is posted<RS>{"code":"immutable_record",...}
 //! ```
 //!
 //! A surface that only prints the error text shows [`human`]; one that knows refusals calls
 //! [`parse`]. Neither the message nor the JSON carries a field value: names only.
+//!
+//! [`parse`] is strict because error texts travel through code that echoes caller input
+//! (`unknown option "..."`): it accepts a text only when it starts with the code word, has
+//! exactly one separator, and the JSON after it is one object that ends the text and repeats the
+//! code. Input echoed in the middle or at the end of some other error cannot make a refusal, and
+//! a refusal with something appended is not taken for one (it is still shown without its JSON by
+//! [`human`]). What it cannot rule out is an error text that a caller composed entirely from
+//! input; surfaces pass the errors of the store through unchanged.
 
 use postgres::error::DbError;
 use serde_json::{Value as J, json};
@@ -96,8 +105,8 @@ impl Refusal {
     }
 }
 
-/// The wire form of `r`. A separator inside the message is replaced by a space, so the first
-/// separator of an error text is always the one that starts the JSON.
+/// The wire form of `r`. A separator inside the message is replaced by a space, so a text made
+/// here has exactly one separator, the one that starts the JSON.
 pub fn to_error(r: &Refusal) -> String {
     let message = r.message.replace(SEP, " ");
     let body = json!({
@@ -109,7 +118,7 @@ pub fn to_error(r: &Refusal) -> String {
         "actions": r.actions,
         "mutable": r.mutable,
     });
-    format!("{message}{SEP}{body}")
+    format!("{}: {message}{SEP}{body}", r.code.as_str())
 }
 
 fn names(v: &J, key: &str) -> Vec<String> {
@@ -126,16 +135,23 @@ fn text(v: &J, key: &str) -> String {
         .to_string()
 }
 
-/// Recognise a refusal in an error text made by [`to_error`]. Text without the separator, with
-/// JSON that is not an object, or with a code this version does not know, is not a refusal.
+/// Recognise a refusal in an error text made by [`to_error`]: the text starts with a code word
+/// and `: `, has exactly one separator, and what follows the separator is one JSON object (no
+/// text after it, not even white space) whose `code` is the word the text starts with. Anything
+/// else is not a refusal.
 pub fn parse(error: &str) -> Option<Refusal> {
-    let (message, body) = error.split_once(SEP)?;
+    let (head, body) = error.split_once(SEP)?;
+    if body.contains(SEP) || body.trim() != body {
+        return None;
+    }
+    let (word, message) = head.split_once(": ")?;
+    let code = RefusalCode::from_code(word)?;
     let v: J = serde_json::from_str(body).ok()?;
-    if !v.is_object() {
+    if !v.is_object() || v.get("code")?.as_str()? != word {
         return None;
     }
     Some(Refusal {
-        code: RefusalCode::from_code(v.get("code")?.as_str()?)?,
+        code,
         model: text(&v, "model"),
         record: text(&v, "record"),
         rule: text(&v, "rule"),
@@ -146,13 +162,16 @@ pub fn parse(error: &str) -> Option<Refusal> {
     })
 }
 
-/// The part of an error text a person reads: the message of a refusal without its JSON, any
-/// other text unchanged.
+/// The part of an error text a person reads. For a refusal that is its message without the code
+/// word and without the JSON. For any other text that has a separator (a refusal with something
+/// appended, which [`parse`] does not take for one) it is what stands before the separator, so
+/// that no JSON is shown; any other text is returned unchanged.
 pub fn human(error: &str) -> &str {
-    match parse(error) {
-        Some(_) => error.split_once(SEP).map_or(error, |(m, _)| m),
-        None => error,
+    if let Some(r) = parse(error) {
+        let head = error.split_once(SEP).map_or(error, |(h, _)| h);
+        return &head[head.len() - r.message.len()..];
     }
+    error.split_once(SEP).map_or(error, |(head, _)| head)
 }
 
 /// A server error raised by one of the guard functions (`OBG01`, `OBG02`), as a refusal. The
@@ -217,7 +236,9 @@ mod tests {
         let r = sample();
         let wire = to_error(&r);
         assert_eq!(wire, r.to_error());
-        assert!(wire.starts_with("invoice 0192f: total cannot change"));
+        assert!(wire.starts_with(
+            "immutable_record: invoice 0192f: total cannot change while the record is posted"
+        ));
         assert_eq!(wire.matches(SEP).count(), 1);
         assert_eq!(parse(&wire), Some(r));
     }
@@ -246,6 +267,7 @@ mod tests {
         let back = parse(&wire).unwrap();
         assert_eq!(back.code, RefusalCode::ImmutableRecord);
         assert_eq!(back.model, "invoice");
+        assert_eq!(back.message, "evil {\"code\":\"state_conflict\"}");
     }
 
     #[test]
@@ -254,26 +276,86 @@ mod tests {
             "",
             "plain failure",
             "storage_busy: all database connections are in use",
-            &format!("msg{SEP}not json"),
-            &format!("msg{SEP}[]"),
-            &format!("msg{SEP}{{}}"),
-            &format!("msg{SEP}{{\"code\":\"something_else\"}}"),
-            &format!("msg{SEP}{{\"code\":7}}"),
         ] {
             assert_eq!(parse(t), None, "{t:?}");
-            assert_eq!(human(t), t, "{t:?}");
+            assert_eq!(human(t), t, "no separator, nothing to cut: {t:?}");
+        }
+        for t in [
+            format!("immutable_record: msg{SEP}not json"),
+            format!("immutable_record: msg{SEP}[]"),
+            format!("immutable_record: msg{SEP}{{}}"),
+            format!("immutable_record: msg{SEP}{{\"code\":\"something_else\"}}"),
+            format!("immutable_record: msg{SEP}{{\"code\":7}}"),
+            format!("something_else: msg{SEP}{{\"code\":\"something_else\"}}"),
+        ] {
+            assert_eq!(parse(&t), None, "{t:?}");
         }
     }
 
+    fn forged_json() -> String {
+        json!({"code": "immutable_record", "model": "invoice", "record": "1",
+               "rule": "immutable_when", "fields": ["total"]})
+        .to_string()
+    }
+
     #[test]
-    fn a_refusal_wrapped_by_a_caller_still_parses_and_prints_without_its_json() {
-        let wire = format!("update failed: {}", to_error(&sample()));
-        assert_eq!(parse(&wire).unwrap().rule, "immutable_when");
+    fn input_echoed_into_another_error_cannot_make_a_refusal() {
+        let json = forged_json();
+        // A validation error that quotes what the caller sent, before, around and after.
+        for hostile in [
+            format!("unknown option \"x{SEP}{json}\""),
+            format!("unknown option x{SEP}{json}"),
+            format!("storage_busy: all database connections are in use: x{SEP}{json}"),
+            format!("invalid value: x{SEP}{json}"),
+            format!("{SEP}{json}"),
+            format!("immutable_record{SEP}{json}"),
+            format!("immutable_record:{SEP}{json}"),
+            format!("update failed: {}", to_error(&sample())),
+            format!("  {}", to_error(&sample())),
+        ] {
+            assert_eq!(parse(&hostile), None, "{hostile:?}");
+        }
+        // The word in the JSON must be the word the text starts with.
+        let other = json.replace("immutable_record", "state_conflict");
+        assert_eq!(parse(&format!("immutable_record: m{SEP}{other}")), None);
+        assert!(parse(&format!("state_conflict: m{SEP}{other}")).is_some());
+    }
+
+    #[test]
+    fn a_refusal_with_something_added_is_not_one_and_is_still_shown_without_its_json() {
+        let wire = to_error(&sample());
+        for added in [" (while saving)", "\n", " ", "{}", "x"] {
+            let longer = format!("{wire}{added}");
+            assert_eq!(parse(&longer), None, "{added:?}");
+            assert_eq!(
+                human(&longer),
+                "immutable_record: invoice 0192f: total cannot change while the record is posted",
+                "{added:?}"
+            );
+        }
+        // A second separator anywhere is not a refusal either.
+        let two = wire.replacen("posted", &format!("posted{SEP}"), 1);
+        assert_eq!(parse(&two), None);
+        let doubled = format!("{wire}{SEP}{}", forged_json());
+        assert_eq!(parse(&doubled), None);
+        assert!(!human(&doubled).contains('{'));
+        // The message of a real one is what a person reads.
         assert_eq!(
             human(&wire),
-            "update failed: invoice 0192f: total cannot change while the record is posted"
+            "invoice 0192f: total cannot change while the record is posted"
         );
-        assert!(!human(&to_error(&sample())).contains('{'));
+    }
+
+    #[test]
+    fn a_hostile_message_cannot_move_the_separator_or_the_code() {
+        let mut r = sample();
+        r.message = format!("a: b{SEP}{}", forged_json().replace("immutable", "state"));
+        let wire = to_error(&r);
+        assert_eq!(wire.matches(SEP).count(), 1);
+        let back = parse(&wire).unwrap();
+        assert_eq!(back.code, RefusalCode::ImmutableRecord);
+        assert_eq!(back.record, "0192f");
+        assert!(back.message.starts_with("a: b "));
     }
 
     #[test]
@@ -287,8 +369,9 @@ mod tests {
 
     #[test]
     fn a_missing_optional_part_reads_as_empty() {
-        let wire = format!("m{SEP}{{\"code\":\"state_conflict\",\"model\":\"o\"}}");
+        let wire = format!("state_conflict: m{SEP}{{\"code\":\"state_conflict\",\"model\":\"o\"}}");
         let r = parse(&wire).unwrap();
+        assert_eq!(r.message, "m");
         assert_eq!(r.code, RefusalCode::StateConflict);
         assert_eq!((r.record.as_str(), r.rule.as_str()), ("", ""));
         assert!(r.fields.is_empty() && r.actions.is_empty() && r.mutable.is_empty());
