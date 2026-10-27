@@ -278,6 +278,23 @@ impl Queue {
         Ok(n)
     }
 
+    /// Remove the dead letters that gave up more than `keep_days(connection)` days before `at`.
+    /// A dead letter keeps the treated payload of a delivery (what the policy let through, in
+    /// clear where the owner allowed it) and, unlike the flow log, nothing else ever removed it:
+    /// it is held for as long as the connection's retention, like the rest of its records. A
+    /// refusal of the store is an error (the run is repeated). Returns how many were removed.
+    pub fn purge_dead(&self, at: u64, keep_days: impl Fn(&str) -> i64) -> Result<usize, String> {
+        let mut n = 0;
+        for (id, f) in self.backend.list(DEAD)? {
+            let kept_until =
+                num(&f, "dead_at") + (keep_days(text(&f, "connection")).max(1) as u64) * 86_400;
+            if kept_until < at && self.backend.delete(DEAD, &id)? {
+                n += 1;
+            }
+        }
+        Ok(n)
+    }
+
     /// The deliveries that gave up, oldest first.
     pub fn dead(&self) -> Vec<DeadJob> {
         self.backend
@@ -384,6 +401,31 @@ mod tests {
         let again = q.take_due(now + 1).pop().unwrap();
         assert_eq!((again.id.as_str(), again.attempt), ("m1", 1));
         assert!(!q.revive("m1", now));
+    }
+
+    #[test]
+    fn a_dead_letter_is_held_for_the_retention_of_its_connection_and_then_removed() {
+        let q = Queue::in_memory();
+        let bury = |id: &str, connection: &str, at: u64| {
+            let mut j = job(id, 0);
+            j.connection = connection.into();
+            j.attempt = 5;
+            assert_eq!(q.requeue_because(j, at, 0, "down"), Requeued::Dead);
+        };
+        let day = 86_400;
+        bury("old", "c1", 1_000);
+        bury("young", "c1", 1_000 + 20 * day);
+        bury("long", "c2", 1_000);
+        let keep = |c: &str| if c == "c2" { 90 } else { 10 };
+        // Nothing is older than its connection's retention yet.
+        assert_eq!(q.purge_dead(1_000 + 9 * day, keep), Ok(0));
+        // Eleven days on, the first letter of c1 is past ten days; the one of c2 (90 days) is not.
+        assert_eq!(q.purge_dead(1_000 + 11 * day, keep), Ok(1));
+        let left: Vec<String> = q.dead().into_iter().map(|d| d.id).collect();
+        assert!(left.contains(&"young".to_string()) && left.contains(&"long".to_string()));
+        assert!(!left.contains(&"old".to_string()));
+        assert_eq!(q.purge_dead(1_000 + 91 * day, keep), Ok(2));
+        assert!(q.dead().is_empty());
     }
 
     #[test]
