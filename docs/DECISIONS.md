@@ -892,8 +892,6 @@ Removed with the rulings: the pooled Free tier (D6), the own Peppol access point
 
 **Why.** OR-1: permissive licence, DCO, no CLA. The DCO is the lightest contributor friction and needs no bot that stores signatures. **Superseded alternative.** A licence-grant CLA with a patent licence and an irrevocable "OSI licence forever" pledge, DCO for documentation only, a steward veto and an investor covenant (former D1, D2 and D5 clauses). **Rejected.** A CLA; copyright assignment; no sign-off at all. **Consequences.** With no CLA, relicensing needs the consent of every contributor, so a later closed or copyleft relicence of the whole is impractical by design. A dependency allow-list (D1) keeps the shipped tree Apache-2.0-compatible. CLA tooling questions (ENGINEERING Q-E8) are moot. **Evidence.** OR-1, OR-10, OR-18; R28 C.2, R17 s4-s5.
 
-<a id="d43-no-hosting-posture-and-a-free-sandbox-at-most"></a>
-
 #### D83 Hosting posture and a free sandbox at the public beta
 **Status** RATIFIED (OR-11, OR-20, OR-22); the sandbox details (terms and data policy, host and cost ceiling, abuse and screening approach) are PROPOSED (Q34 to Q36). **Reversibility** two-way door (the sandbox can be closed at any time; the hosting service of OR-22 is not offered yet; any wider hosting would need an amendment of this record and of D2). **Owner action** Q34, Q35, Q36.
 

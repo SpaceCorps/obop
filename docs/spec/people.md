@@ -541,7 +541,7 @@ Illustrative; flag spellings are Proposed ([CLI](cli.md) 2.2). The path is a gol
 - **When** E-104 runs `obop leave_request submit --body @leave.json --dry-run`, **then** the exit code is 0 and `data.plan` shows duration 4.0 days, available balance 8.0 and two approval steps, with nothing written; the same body through the REST action `POST /api/v1/leave_request/submit` as a dry run and through the MCP tool `leave_request.submit` returns an identical `data`.
 - **When** E-104 runs the command for real and the connection drops, **then** the retry with the same idempotency key creates no second request and reports `meta.replayed`.
 - **When** M-07 and H-02 each run `obop approval decide` for their step, **then** `obop leave_request get` shows `approved`; a second decision by M-07 on the same request is refused (exit 7).
-- **When** `scout` runs `obop leave_request submit`, **then** the exit code is 4 and the wire id is absent from its `tools/list`; `obop payslip list` by `scout` also exits 4, because `financial` data is not agent-readable by default (4.11).
+- **When** `scout` runs `obop leave_request submit`, **then** the exit code is 13 and the wire id is absent from its `tools/list`; `obop payslip list` by `scout` also exits 13, because `financial` data is not agent-readable by default (4.11).
 
 ## 6. Non-functional requirements
 

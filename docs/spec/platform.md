@@ -662,7 +662,7 @@ This path needs the inbound gateway, the OAuth mailbox connector, the automation
 
 - **Given** article "Onboarding checklist" inherits access from "People Playbook", restricted to HR and Managers; Ana (HR) and Ben (Manager) edit; Carl (sales) has no access.
 - **When** Ben's connection drops for ten minutes while his editor tab stays open and he keeps typing in paragraph 5 (the open tab buffers the updates; durable offline editing is later, section 4.10), and Ana edits paragraph 2, **Then** on reconnect both edits merge without loss or duplication and Ana's comment anchor on paragraph 2 survives an insertion above it.
-- **When** Carl opens the WebSocket, **Then** the handshake answers 404 and his search never finds the text; his `obop article get` and `obop search` answer the same way (exit 4, not distinguishable from absence).
+- **When** Carl opens the WebSocket, **Then** the handshake answers 404 and his search never finds the text; his `obop article get` and `obop search` answer the same way (exit 13, not distinguishable from absence).
 - **When** an admin removes Ben from Managers while he is connected, **Then** his socket closes within 5 seconds (target); his earlier edits remain attributed to him.
 
 ### 5.6 Retention and erasure (W1)
@@ -675,7 +675,7 @@ This path needs the inbound gateway, the OAuth mailbox connector, the automation
 ### 5.7 Business export round trip (W1)
 
 - **Given** a business with 3,000 parties, 12,000 messages and 2,500 attachments, on any install (self-hosted, or run by a third party).
-- **When** the business owner runs `obop business export --output ./export --wait` (a non-interactive call first exits 3 with `step_up_required` and a URL, and the owner completes the step-up in a browser), **Then** an asynchronous job produces NDJSON per model, the schema, checksummed attachments, the audit log and configuration, without OAuth tokens; the export is a user right and is never gated. `obop business verify ./export` checks the manifest digests, the hash chains and the absence of secrets.
+- **When** the business owner runs `obop business export --output ./export --wait` (a non-interactive call first exits 12 with `step_up_required` and a URL, and the owner completes the step-up in a browser), **Then** an asynchronous job produces NDJSON per model, the schema, checksummed attachments, the audit log and configuration, without OAuth tokens; the export is a user right and is never gated. `obop business verify ./export` checks the manifest digests, the hash chains and the absence of secrets.
 - **When** the bundle is imported into an empty business of the same version (`obop business import ./export`), **Then** the deep diff of ids, relations, external ids and checksums is empty and connections show `needs_reauth`.
 
 ### 5.8 Bounce and loop guard (W2)

@@ -41,7 +41,7 @@ Eight rules decide what is built, in what order, and what may slip.
 
 ## 2. The canonical waves
 
-Names, windows, scope and exit criteria are D26, D86 and section 5 of DECISIONS.md. The wave table and the exit criteria have one home, [DECISIONS 5.2](DECISIONS.md#52-waves-and-calendar-d26-d46), and are not reprinted here: each wave below points to its row and adds only what this plan places itself. The wave windows, the German pack target and the 1.0 target are RATIFIED (OR-13); the rest of the calendar is Proposed (D26).
+Names, windows, scope and exit criteria are D26, D86 and section 5 of DECISIONS.md. The wave table and the exit criteria have one home, [DECISIONS 5.2](DECISIONS.md#52-waves-and-calendar-d26-d86), and are not reprinted here: each wave below points to its row and adds only what this plan places itself. The wave windows, the German pack target and the 1.0 target are RATIFIED (OR-13); the rest of the calendar is Proposed (D26).
 
 ### 2.1 What the milestone words mean
 
@@ -67,7 +67,7 @@ Why the split matters: pack stable is a compliance milestone with an external de
 ### 2.2 The five waves
 
 **W0 Foundations, 2026-10-01 to 2026-12-31.**
-- Ships: the W0 row of [DECISIONS 5.2](DECISIONS.md#52-waves-and-calendar-d26-d46). Read here: the T0 kernel is the eleven kernel crates of D25, from `obop-types` to `obop-testkit`, and module `base`, the Contacts app; the spikes read out by 2026-11-27 and 0.1 is a preview on 2026-12-01 with no stability promise.
+- Ships: the W0 row of [DECISIONS 5.2](DECISIONS.md#52-waves-and-calendar-d26-d86). Read here: the T0 kernel is the eleven kernel crates of D25, from `obop-types` to `obop-testkit`, and module `base`, the Contacts app; the spikes read out by 2026-11-27 and 0.1 is a preview on 2026-12-01 with no stability promise.
 - Exit: the W0 row of DECISIONS 5.2, applied as the gates G0 and GT1 (2.3); the throughput review of K1 and K2 against plan is 4.4 (D84).
 - Reading of "ships" (proposal): a walking skeleton merged and tested on PG 17 and 18 by 2026-12-31, hardened by 0.2. Section 4.5 shows why.
 
@@ -96,7 +96,7 @@ G0 is D26 and keeps that name in every document; it was overtaken on 2026-10-26 
 |---|---|---|---|
 | G0 Public repository (overtaken 2026-10-26; checklist before 0.3) | W0 exit; latest before 0.3 (2027-04-06, Proposed) | The name is cleared (counsel opinion by 2026-12-15, Q2) or a screened fallback is adopted; the licence and publisher matters are settled (OR-5, OR-10; what counsel must have covered is Q16); the DCO check is required in CI (D82); the D33 P1 files exist (`SECURITY.md`, signed releases, SBOM). There is no CLA bot and no paid list to publish. Q16's recommended default puts counsel's written advice at 2027-03-15, so the checklist has no settled date until the owner answers Q16 | 0.3 cannot ship as a public alpha with a public promise (the repository itself is already public) |
 | GT1 Architecture freeze | 2026-12-31 | Spike readouts reviewed; D6, D7, D9 frozen; pins per D23; 3 to 5 design partners agreed to use it; counsel engaged; the throughput review of 4.4 done | 8.2 rows 1 to 3 |
-| GT3 Pack stable | 2027-09-30 | The W1 exit criteria (the W1 row of [DECISIONS 5.2](DECISIONS.md#52-waves-and-calendar-d26-d46); 2.2) | DE pack stays beta until the oracles, golden cases and sign-off are in; the date does not move, the label does (D86) |
+| GT3 Pack stable | 2027-09-30 | The W1 exit criteria (the W1 row of [DECISIONS 5.2](DECISIONS.md#52-waves-and-calendar-d26-d86); 2.2) | DE pack stays beta until the oracles, golden cases and sign-off are in; the date does not move, the label does (D86) |
 | GT4 1.0 | CRA sign-off by 2027-12-10 if applicable; cut 2028-03-07; RCs 2028-03-21 and 2028-04-04 | CRA sign-off (only if counsel finds SpaceCorps to be a manufacturer, Q5); double reproducible build; SBOM and attestation; chain tests; the CLI, API, MCP and UI parity test green for every command not on the owner-approved exemption list (OR-4, OR-16); no known trial-balance bug | Nothing is labelled 1.0 until the gate is met and there is no early "1.0" (D26); the W2 slip order (6.2) runs first; if the gate is still red, the choice between the date and the gate is the owner's, and the next slot and the numbering are open (6.2, 9.3 item 9) |
 
 **Sandbox go/no-go (a checkpoint, not a release gate; D83, OR-20).** On 2027-06-01, the day of the runbook drill, the owner checks that the duties of D83 are in place: terms of use that forbid personal and production data, a privacy notice, abuse and rate controls with a kill switch, egress and outbound-mail blocking, the auto-reset time to live, the sanctions-screening approach, and counsel's review of the terms, the notice and the screening (Q34, Q36; the host and the cost ceiling are Q35). If they are, the sandbox opens with 0.5 on 2027-07-06; if not, it opens later and 0.5 does not wait for it (Proposed details, Q35). No release gate depends on the sandbox, and it is outside the protected core of DECISIONS 5.3.
@@ -392,7 +392,7 @@ Never, under the register: XML-RPC (D22), in-process third-party Rust (D11), met
 
 ### 6.2 Slip order and cut rules (Proposed, DECISIONS 5.3)
 
-Scope moves, dates do not (PR6). The slip order, the protected core, the necessary-inside calls and the order for a W2 overrun have one home, [DECISIONS 5.3](DECISIONS.md#53-w1-cut-necessary-inside-calls-and-slip-order-d46), and are not reprinted here, so the two documents cannot drift apart. Wherever this document says "the slip order (6.2)" it means the slip-order table there (item 1 leaves first and returns last) and, where it says "the W2 slip order", the "If W2 overruns" paragraph that follows it.
+Scope moves, dates do not (PR6). The slip order, the protected core, the necessary-inside calls and the order for a W2 overrun have one home, [DECISIONS 5.3](DECISIONS.md#53-w1-cut-necessary-inside-calls-and-slip-order-d86), and are not reprinted here, so the two documents cannot drift apart. Wherever this document says "the slip order (6.2)" it means the slip-order table there (item 1 leaves first and returns last) and, where it says "the W2 slip order", the "If W2 overruns" paragraph that follows it.
 
 Rules (proposal): a wave may not pull work from the next without naming the offset; W1 compresses before 2027-09-30 moves; the first cut inside W1 is the first item of the order.
 

@@ -709,7 +709,7 @@ Agent `ap-intake` holds the scopes `invoice:create_draft`, `invoice:post` (under
 - **When** the human commits the plan (`obop plan commit <plan_id>`, or the same call on the API or MCP), **then** the bill posts with its number, hash-chain link and lock check, executed as the human with `ap-intake` recorded as proposer; a second commit returns the stored result.
 - **When** the draft is edited after the dry-run and the old plan is committed, **then** it fails with `plan_stale` (409 on the API, exit 6).
 - **When** the same bill is dated 2027-03-25, inside the tax-locked March of 5.5, **then** the post fails with `lock_date_violation` (exit 7) on every surface and consumes no number.
-- **When** an agent without the `invoice:post` scope calls `invoice.post`, **then** it is refused (exit 4) and nothing posts.
+- **When** an agent without the `invoice:post` scope calls `invoice.post`, **then** it is refused (exit 13) and nothing posts.
 - **Then** the same input returns the same `data` through the CLI, the REST endpoint and the MCP tool (parity test).
 
 ## 6. Non-functional requirements

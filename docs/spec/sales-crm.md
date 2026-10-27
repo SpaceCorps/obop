@@ -624,7 +624,7 @@ Fixture tax T20 is 20% and is not a statutory rate. These scenarios are acceptan
 - **When** sales edits Q-A after the customer loaded it and the customer accepts, **Then** the response is 409 and no order is confirmed.
 - **When** Q-A is cancelled, **Then** its link stops working.
 - **When** an agent principal calls `sale_order.confirm` (`obop sale_order confirm <id>` or the MCP tool), **Then** the order is not confirmed: the call returns a plan (CLI exit 10) and the order stays draft until a human with the right permission commits it (`obop plan commit <plan-id>`); from W2 the plan can instead be a durable approval item under `approve_by_role`. A committed plan runs as that human with the agent recorded as proposer, and a second commit returns the same result.
-- **When** an agent principal without the `sale_order:confirm` scope calls the command, **Then** the exit is 4 (denied) and nothing changes; the same call through REST and MCP is refused identically.
+- **When** an agent principal without the `sale_order:confirm` scope calls the command, **Then** the exit is 13 (denied) and nothing changes; the same call through REST and MCP is refused identically.
 - **When** an agent principal calls `sale_order.accept`, **Then** the command is not offered to it (W2).
 
 ## 6. Non-functional requirements
