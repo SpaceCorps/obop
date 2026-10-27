@@ -1162,8 +1162,14 @@ impl Dispatcher {
                     let Some(def) = defs.as_ref().and_then(|f| f.iter().find(|f| f.name == k))
                     else {
                         // Unclassified output is withheld: the gate guarantees declared fields only.
+                        // A key with the name of a system field (D75) on a model that has no
+                        // definition for it is what a field of that name left behind in records
+                        // written before the model dropped it (`connection.created_at`): it is
+                        // withheld too, but nobody was denied it, so it is not reported as denied.
                         if k != "id" {
-                            denied.push(format!("{model}.{k}"));
+                            if !obop_registry::is_system_name(&k) {
+                                denied.push(format!("{model}.{k}"));
+                            }
                             continue;
                         }
                         shaped.insert(k, v);

@@ -1863,6 +1863,51 @@ fn search_masks_and_withholds_the_rows_it_returns() {
 }
 
 #[test]
+fn a_leftover_system_named_key_is_withheld_and_not_reported_as_denied() {
+    each_backend(|r| {
+        let u = user();
+        // A record written by a version where the model declared `created_at` itself.
+        let id = r
+            .store
+            .insert(
+                &r.model("party"),
+                [
+                    ("name".to_string(), Value::text("Ada")),
+                    (
+                        "created_at".to_string(),
+                        Value::text("2026-01-01T00:00:00Z"),
+                    ),
+                    ("mystery".to_string(), Value::text("x")),
+                ]
+                .into(),
+            )
+            .unwrap();
+        for command in ["get", "list", "search"] {
+            let input = if command == "get" {
+                m(vec![("id", t(&id))])
+            } else {
+                m(vec![])
+            };
+            let resp = r.call(&u, "party", command, input).unwrap();
+            let party = r.model("party");
+            // Any other key the model does not declare is still reported, as before.
+            assert!(
+                resp.denied.contains(&format!("{party}.mystery")),
+                "{command}: {:?}",
+                resp.denied
+            );
+            assert!(
+                !resp.denied.iter().any(|d| d.ends_with(".created_at")),
+                "{command}: {:?}",
+                resp.denied
+            );
+            let shown = format!("{:?}", resp.value);
+            assert!(!shown.contains("2026-01-01"), "{command}: {shown}");
+        }
+    });
+}
+
+#[test]
 fn search_is_a_generated_command_for_every_model_and_surface() {
     each_backend(|r| {
         for model in ["move", "task", "line", "party"] {

@@ -238,6 +238,71 @@ fn the_module_passes_the_install_gate() {
     }
 }
 
+/// The model no longer declares `created_at` (it is a system field of every record, D75), and
+/// nothing writes it. A connection saved by an earlier version still has the key in storage: it
+/// is withheld like any key the model does not declare, and it is not reported as denied.
+#[test]
+fn a_connection_saved_with_a_created_at_by_an_earlier_version_is_read_without_it() {
+    let e = env();
+    enable(&e, "webhook_out", true);
+    let r = Receiver::new(200);
+    let id = make_connection(&e, &admin(), &r, json!({}));
+    let stored = e.s.backend().get("connection", &id).unwrap().unwrap();
+    assert!(
+        !stored.contains_key("created_at"),
+        "a new connection does not get one: {stored:?}"
+    );
+    assert!(
+        module()
+            .models
+            .iter()
+            .find(|m| m.name == "connection")
+            .is_some_and(|m| !m.fields.iter().any(|f| f.name == "created_at"))
+    );
+    // As the earlier version stored it.
+    let mut old = serde_json::Map::new();
+    old.insert("created_at".into(), json!("2026-10-01T09:00:00Z"));
+    assert!(e.s.backend().update("connection", &id, &old).unwrap());
+    let mut answered = 0;
+    for (cmd, input) in [
+        ("connection.get", json!({"id": id})),
+        ("connection.list", json!({})),
+        ("connection.search", json!({})),
+    ] {
+        for who in [admin(), sam_agent()] {
+            let Ok(resp) = e.d.call(
+                Surface::Rest,
+                &who,
+                &mut Vault::new(),
+                cmd,
+                &Value::from_json(&input),
+            ) else {
+                continue;
+            };
+            answered += 1;
+            let shown = resp.value.to_json().to_string();
+            assert!(!shown.contains("2026-10-01T09:00"), "{cmd}: {shown}");
+            assert!(
+                !resp.denied.iter().any(|d| d.ends_with("created_at")),
+                "{cmd}: {:?}",
+                resp.denied
+            );
+        }
+    }
+    assert!(
+        answered >= 3,
+        "the administrator reads it three ways: {answered}"
+    );
+    // An update of the connection goes through and leaves the rest as it was.
+    let upd = ok(
+        &e,
+        &admin(),
+        "connection.update",
+        json!({"id": id, "name": "Renamed"}),
+    );
+    assert_eq!(upd["name"], "Renamed");
+}
+
 #[test]
 fn an_outbound_flow_end_to_end_sends_pseudonyms_and_never_the_denied_class() {
     let e = env();
