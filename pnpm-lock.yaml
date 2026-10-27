@@ -254,6 +254,12 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  web/packages/trip-core:
+    devDependencies:
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   web/packages/ui:
     dependencies:
       '@fontsource-variable/geist':
