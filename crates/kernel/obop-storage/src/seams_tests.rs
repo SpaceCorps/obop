@@ -252,26 +252,41 @@ fn read_tx_takes_a_normal_connection_and_not_a_place_in_the_long_read_lane() {
         PgPoolConfig {
             size: 4,
             max_long: 1,
+            // What a waiter for a place in the lane gives up after. It is the only time window of
+            // the test, and nothing that is waited for can end it early: the holder keeps the
+            // place until the test lets go.
             acquire_timeout: Duration::from_millis(500),
+            // No health check of the connections opened below: they are used at once.
+            health_check_idle: Duration::from_secs(3600),
             ..one()
         },
     )
     .unwrap();
-    let (started_tx, started_rx) = mpsc::channel::<()>();
-    let (release_tx, release_rx) = mpsc::channel::<()>();
+    // Open the connections before anything is measured: opening one (TCP, authentication) can
+    // take longer than the window on a loaded machine and is not what is tested.
+    let warm: Vec<_> = (0..3).map(|_| pg.main.lease(false).unwrap()).collect();
+    drop(warm);
     std::thread::scope(|s| {
-        // A scan holds the only place in the long-read lane.
+        // The ends of the channels are locals of this closure, so that they are dropped when an
+        // assertion below fails and the thread unwinds: the holder then stops waiting and the
+        // scope can end with the failure instead of hanging.
+        let (started_tx, started_rx) = mpsc::channel::<()>();
+        let (release_tx, release_rx) = mpsc::channel::<()>();
         let pg = &pg;
         let holder = s.spawn(move || {
+            // A scan holds the only place in the long-read lane.
             pg.main
                 .snapshot(Class::Aggregate, |_tx| {
                     started_tx.send(()).unwrap();
-                    release_rx.recv().unwrap();
+                    // Let go when told, when the test is gone, or after a minute at the latest.
+                    let _ = release_rx.recv_timeout(Duration::from_secs(60));
                     Ok(())
                 })
                 .unwrap();
         });
-        started_rx.recv().unwrap();
+        started_rx
+            .recv_timeout(Duration::from_secs(30))
+            .expect("the holder never took its place in the long-read lane");
         let e = pg.main.snapshot(Class::Aggregate, |_| Ok(())).unwrap_err();
         assert_eq!(
             Fault::of_message(&e),
@@ -279,7 +294,7 @@ fn read_tx_takes_a_normal_connection_and_not_a_place_in_the_long_read_lane() {
             "a second long read has to wait for the first: {e}"
         );
         fault::clear();
-        // The short read does not.
+        // The short read does not: it takes one of the idle connections.
         let one_row = pg
             .main
             .read_tx(Class::List, |tx| {
@@ -287,7 +302,7 @@ fn read_tx_takes_a_normal_connection_and_not_a_place_in_the_long_read_lane() {
             })
             .unwrap();
         assert_eq!(one_row, 1);
-        release_tx.send(()).unwrap();
+        drop(release_tx);
         holder.join().unwrap();
     });
 }
