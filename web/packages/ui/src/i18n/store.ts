@@ -21,8 +21,10 @@ type State = {
   lang: Lang;
   region: string;
   messages: Catalogue;
-  /** Instance defaults from the settings (admins set them). */
+  /** Instance defaults from the settings (admins set them); known only after sign-in. */
   instanceLang: Lang | null;
+  /** The instance default the server put into the page, known before sign-in (`OBOP_DEFAULT_LANGUAGE`). */
+  pageLang: Lang | null;
   currency: string;
   version: number;
 };
@@ -32,6 +34,7 @@ const S: State = {
   region: "auto",
   messages: {},
   instanceLang: null,
+  pageLang: null,
   currency: "EUR",
   version: 0,
 };
@@ -95,9 +98,38 @@ export function browserLang(): Lang {
   return "en";
 }
 
-/** ?lang, then the person's own choice, then the instance default, then the browser, then English. */
+/** The name of the meta tag the server adds to the page: `<meta name="obop-default-language" content="sv">`. */
+export const DEFAULT_LANGUAGE_META = "obop-default-language";
+
+/** The part of a document `pageDefaultLang` reads; a test can pass a stand-in. */
+export type PageDocument = {
+  querySelector(selectors: string): { getAttribute(name: string): string | null } | null;
+};
+
+/**
+ * The instance default language the server put into the page for the screens that come before
+ * sign-in, when the settings cannot be read yet. The content is a language code of ours and
+ * nothing else: anything different (no tag, an empty or unknown code, a pseudo-locale) is `null`.
+ */
+export function pageDefaultLang(
+  doc: PageDocument | undefined = typeof document === "undefined" ? undefined : document,
+): Lang | null {
+  let raw: string | null | undefined;
+  try {
+    raw = doc?.querySelector(`meta[name="${DEFAULT_LANGUAGE_META}"]`)?.getAttribute("content");
+  } catch {
+    return null; // a page that cannot be queried has no tag
+  }
+  const code = raw?.trim().toLowerCase();
+  return (LANGS as readonly string[]).includes(code ?? "") ? (code as Lang) : null;
+}
+
+/**
+ * ?lang, then the person's own choice, then the instance default (the settings once they are
+ * known, else the default the server put into the page), then the browser, then English.
+ */
 export function resolveLang(): Lang {
-  return queryLang() ?? personalLang() ?? S.instanceLang ?? browserLang();
+  return queryLang() ?? personalLang() ?? S.instanceLang ?? S.pageLang ?? browserLang();
 }
 
 function writeCookie(lang: Lang) {
@@ -140,9 +172,14 @@ function applyDocument() {
   el.dir = LANG_INFO[S.lang].dir;
 }
 
-/** Register the lazy catalogues and switch to the resolved language; resolves when it is loaded. */
-export async function initI18n(opts: { loaders: Loaders[] }): Promise<void> {
+/**
+ * Register the lazy catalogues and switch to the resolved language; resolves when it is loaded.
+ * The default language in the page (`pageDefaultLang`) is read here, before anything is rendered,
+ * so the sign-in screens already speak the instance's language. `doc` is for tests.
+ */
+export async function initI18n(opts: { loaders: Loaders[]; doc?: PageDocument }): Promise<void> {
   loaders = opts.loaders;
+  S.pageLang = pageDefaultLang(opts.doc);
   S.region = lsGet(LS_REGION) ?? "auto";
   await activate(resolveLang());
   // Keep the server's view of the language current (server-rendered pages read the cookie).
@@ -204,7 +241,8 @@ export const getLang = () => S.lang;
 export const getRegion = () => S.region;
 export const getCurrency = () => S.currency;
 export const getDir = () => LANG_INFO[S.lang].dir;
-export const instanceLang = () => S.instanceLang;
+/** The instance default language: the settings' once known, else the one the server put into the page. */
+export const instanceLang = () => S.instanceLang ?? S.pageLang;
 
 /** The locale used for numbers, dates and currency: the chosen region, else the browser's, else the language's. */
 export function formatLocale(lang: Lang = S.lang, region: string = S.region): string {
