@@ -2545,9 +2545,11 @@ pub fn register_admin(d: &Dispatcher, inst: &Arc<Installer>) {
         "setting",
         "get",
         Box::new(move |_| {
+            // A refused read is an error: shown as "{}" it was saved back by the settings page
+            // over the theme, the app order and the security policy.
             Ok(Value::map([
                 ("id", s("instance")),
-                ("value", s(&i.settings())),
+                ("value", s(&i.try_settings()?)),
             ]))
         }),
     );
