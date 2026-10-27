@@ -121,9 +121,19 @@ test.describe("the default language of an instance", () => {
       await expect(page.getByRole("heading", { name: tr("fi", "Your apps") })).toBeVisible();
       expect(await savedChoice(page)).toBeNull();
 
-      // Signed out again, the screen before sign-in is back to the default of the server.
-      await signOut(page);
+      // Signed out with the real menu item, and no reload: the screen before sign-in is back to the
+      // default of the server, not the language the administrator set for the session just ended.
+      await page.getByRole("button", { name: tr("fi", "Account") }).click();
+      await page.getByRole("menuitem", { name: tr("fi", "Sign out") }).click();
+      await expect(
+        page.getByRole("heading", { name: tr("sv", "Sign in"), exact: true }),
+      ).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("lang", "sv");
+      await expect(page.getByLabel(tr("sv", "Language"))).toHaveValue("sv");
+      await expect(
+        page.getByRole("heading", { name: tr("fi", "Sign in"), exact: true }),
+      ).toHaveCount(0);
+      expect(await savedChoice(page)).toBeNull();
     } finally {
       await api.run("root", "setting.update", { id: "instance", value: before.value });
     }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   DEFAULT_LANGUAGE_META,
+  getCurrency,
   getLang,
   initI18n,
   instanceLang,
@@ -105,6 +106,19 @@ describe("the instance default of the page before sign-in", () => {
     expect(instanceLang()).toBe("sv");
     await setInstanceDefaults({ language: "xx" }); // not a language we ship: as empty
     expect(getLang()).toBe("sv");
+  });
+
+  it("comes back when the settings are forgotten at sign-out, with the currency", async () => {
+    browser();
+    await initI18n({ loaders: [], doc: page("sv") });
+    await setInstanceDefaults({ language: "fi", currency: "SEK" });
+    expect(getLang()).toBe("fi");
+    expect(getCurrency()).toBe("SEK");
+    // What the back office does when someone signs out: no settings of the previous session.
+    await setInstanceDefaults({});
+    expect(getLang()).toBe("sv");
+    expect(instanceLang()).toBe("sv");
+    expect(getCurrency()).toBe("EUR");
   });
 
   it("never beats ?lang or the person's own saved choice", async () => {
