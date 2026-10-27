@@ -2,13 +2,13 @@
 
 **Status:** Draft 0.1  
 **Date:** 2026-10-01  
-**Scope:** Product specification of obop's services area: the shared resource-calendar foundation, Project, Timesheets with the time-to-invoice bridges, Helpdesk with its SLA engine, Planning with field work, Appointments, service contracts and Fleet.
+**Scope:** Product specification of obop's services area: the shared resource-calendar foundation, Project, Timesheets with the time-to-invoice bridges, Helpdesk with its SLA engine, Planning with field work, Appointments, service contracts and Fleet, each with its CLI, API and MCP surface (4.9).
 
-> **Reading notes.** Tiers, waves and open/paid status follow D25, D26 and D2, all Proposed, so every wave below is Proposed until the owner ratifies it ([DECISIONS](../DECISIONS.md)). "Community" and "Enterprise" always name Odoo's editions (obop says "open edition" and `ee`, D24); "Odoo 20" is the September 2026 release (release commit 2026-09-17); an Odoo app's Enterprise status is inferred from its absence in the public Community tree [R14 s2]. Nothing is built, so every number about obop is a (target) or an (estimate), never a measurement (D21). Nothing is legal advice; "counsel" marks items for a lawyer.
+> **Reading notes.** The owner rulings of 2026-10-01 (OR-1 to OR-21, [DECISIONS](../DECISIONS.md)) are RATIFIED and win over the research: the whole project is Apache-2.0 and completely free, with no paid list, plans or prices (OR-1, OR-2); every capability is a typed command in the CLI, the REST API and MCP, and a feature is not done until it exists in all three (OR-4, D80; [cli](cli.md)). The wave windows and the German pack date are RATIFIED (OR-13), and so is the services variant's place in W3 (OR-15); the placement of every other module in a wave (D25, D86) is Proposed, so every other wave below is a Proposed placement. "Community" and "Enterprise" always name Odoo's editions (obop has one edition under Apache-2.0 and no `ee` tree, D24); "Odoo 20" is the September 2026 release (release commit 2026-09-17); an Odoo app's Enterprise status is inferred from its absence in the public Community tree [R14 s2]. "SLA" is the helpdesk domain term for a business's own response promise to its customers; SpaceCorps promises no service level (D85). Little is built, so every number about obop is a (target) or an (estimate), never a measurement (D21). Nothing is legal advice; "counsel" marks items for a lawyer.
 
 ## 1. Purpose and scope
 
-The services area is where a business sells time, expertise and visits rather than goods: consultants billing hours, support desks answering against a promised response time, technicians visiting customer sites, professionals taking bookings. Odoo keeps the revenue-critical parts (Helpdesk, Planning, Field Service, Appointments, Gantt, timesheet grid and approval) in Enterprise [R14 s2; R01 s3.1, s3.8]; obop ships them in the open edition (D2, DECISIONS section 6).
+The services area is where a business sells time, expertise and visits rather than goods: consultants billing hours, support desks answering against a promised response time, technicians visiting customer sites, professionals taking bookings. Odoo keeps the parts a services business depends on (Helpdesk, Planning, Field Service, Appointments, Gantt, timesheet grid and approval) in Enterprise [R14 s2; R01 s3.1, s3.8]; obop has one edition, free under Apache-2.0, so none of them is withheld (OR-1, OR-2; DECISIONS section 6, "Open boundary"). Each is an ordered backlog item, built in demand order with a design partner; the waves below are a plan, not a promise (DECISIONS 5.1).
 
 Three ideas hold the area together.
 
@@ -16,26 +16,28 @@ Three ideas hold the area together.
 2. **One time table.** A timesheet entry is an analytic line, so cost, billing and profitability share one ledger [R14 MUST 1; R23 B.1].
 3. **One join point.** Services never invoice directly. Timesheets, milestones and visits contribute delivered quantity to the sale line through `QtyContributionPort`; invoicing reads the sale line [R23 D.4; R11 s7].
 
-Primary users are 5-50 person services firms (the first ICP, Proposed D4) and the after-sales teams of light-trade businesses. R20 rates the agency persona's fit with the loop High, as it does distributors [R20 s3.1]; Project plus billable Timesheets is the "services variant" added to the seven-app loop [R20 s9.2; D25].
+A fourth rule governs how the area is built (OR-4, D80): every capability is a typed command in the command catalogue, reachable through the `obop` CLI, the REST API and MCP, and the web UI is a client of the same commands. 4.9 lists the commands and states the parity rule.
+
+Primary users are 5-50 person services firms (the first ICP, Proposed D4) and the after-sales teams of light-trade businesses. R20 rates the agency persona's fit with the loop High, as it does distributors [R20 s3.1]; Project plus billable Timesheets is the "services variant" of the loop [R20 s9.2; D25]. D86 (OR-13) cut W1 to the smallest honest loop and made the variant the first item of W3, and the owner confirmed the cut and that project and timesheet go to W3 (OR-15), so services firms wait for it; whether the ICP stays "services and light trade" is a DECISIONS Q8 question (D4).
 
 ### 1.1 Modules
 
-"Open" means AGPL with no `ee` part (D1, D2, Proposed).
+"Open" means Apache-2.0 and free, with no `ee` tree and no paid layer (OR-1, OR-2, D1, D2). Waves are Proposed placements (D25, D86), except that the services variant (`project`, `timesheet` and their bridges `sale_project` and `sale_timesheet`, DECISIONS 5.1) is in W3, which is RATIFIED (OR-15); it is the first part of W3.
 
 | Module | Contents | Tier | Wave | Status |
 |---|---|---|---|---|
-| `resource` | Calendars, working intervals, leaves, resources (people, materials, vehicles, rooms), working-time arithmetic | T0 foundation (listed in D25, Proposed; DECISIONS Q8) | Proposed W2 | Open |
-| `project` | Projects, tasks, stages, dependencies with lag, milestones, templates, scheduling engine | T1 | W2 | Open |
-| `timesheet` | Time on analytic lines, timer, grid, submission and approval; needs the employee core of `hr` (4.3) | T1 | W2 | Open |
-| `sale_project`, `sale_timesheet` | Bridges: service policy matrix, project/task creation, delivered quantity from time and milestones | T1 | W2 (W1 only if the loop is on schedule at 0.5) | Open |
-| Gantt and map views | View types in the UI registry | T0 | W3 ("gantt follows `project`") | Open |
-| `helpdesk` | Teams, tickets, SLA engine, channels, CSAT, macros | T2 | W3 | Open |
-| `planning` with field work | Shifts, scheduling roles, open shifts, auto-plan, sites, equipment, worksheets, visits | T2 | W3; design starts no earlier than 2028-07-01 | Open |
-| `appointments` | Booking types, hosts, resources, slot engine, booking page | T2 | W3 | Open |
+| `resource` | Calendars, working intervals, leaves, resources (people, materials, vehicles, rooms), working-time arithmetic | T0 foundation (listed in D25, Proposed; DECISIONS Q8) | Proposed W3, beneath the services variant (moved from W2 by D86) | Open |
+| `project` | Projects, tasks, stages, dependencies with lag, milestones, templates, scheduling engine | T1 | W3, services variant (RATIFIED, OR-15) | Open |
+| `timesheet` | Time on analytic lines, timer, grid, submission and approval; needs the employee core of `hr` (4.3) | T1 | W3, services variant (RATIFIED, OR-15) | Open |
+| `sale_project`, `sale_timesheet` | Bridges: service policy matrix, project/task creation, delivered quantity from time and milestones | T1 | W3, services variant (RATIFIED, OR-15) | Open |
+| Gantt and map views | View types in the UI registry | T0 | W3, after `project` ("gantt follows `project`") | Open |
+| `helpdesk` | Teams, tickets, SLA engine, channels, CSAT, macros | T2 | W3, in demand order after the variant | Open |
+| `planning` with field work | Shifts, scheduling roles, open shifts, auto-plan, sites, equipment, worksheets, visits | T2 | W3, in demand order; design starts no earlier than 2028-07-01 | Open |
+| `appointments` | Booking types, hosts, resources, slot engine, booking page | T2 | W3, in demand order | Open |
 | `service_contract` | Entitlements, allowances, covered sites and equipment, visit plans | Not listed, so T3 by the D25 default | Proposed W3, beside `planning` | Open |
-| `fleet` | Vehicles, contracts, services, odometer, driver assignments | T3 | W4+ or community | Open |
+| `fleet` | Vehicles, contracts, services, odometer, driver assignments | T3 | W4+ or a community plugin (D81) | Open |
 
-Each T2 app enters in demand order and needs a design partner (D25). Consumed but not owned here: `calendar` (T1, W2), the approvals engine (T0, W2, inside `automation`), `knowledge`, `subscriptions`, `livechat`, `website`, `sign` (T2, W3).
+Each T2 app enters in demand order and needs a design partner (D25); nothing in W3 is sold or withheld, it is an ordered backlog (DECISIONS 5.1). The services variant of D86 is `project`, `timesheet`, `sale_project`, `sale_timesheet`, the `hr` employee core (employee, version, department, job, calendar; Proposed), `calendar` and `discuss`, with `resource` and `analytic` (both T0, W3) beneath them. The variant's place in W3 is RATIFIED (OR-15) for `project`, `timesheet` and the two bridges; the `hr` employee core, `calendar`, `discuss`, `resource` and `analytic` stay Proposed placements (D25, DECISIONS Q8). Consumed but not owned here: `calendar` (T1, W3), the `hr` employee core (T1, W3, among the first items), `analytic` (T0, W3), `portal` and the approvals engine inside `automation` (both T0, W2), the inbound `mail` gateway (T0, W2), `knowledge`, `subscriptions`, `livechat`, `website`, `sign` (T2, W3). `portal`, the approvals engine and the inbound mail gateway are out of W1 (RATIFIED, OR-15; DECISIONS 5.3); their landing in W2 and the slip order of DECISIONS 5.3 that can move them are Proposed. Timesheet approval (4.3) and email-in (4.2, 4.4) need the approvals engine and the inbound mail gateway (open question 18). W3 opens on 2028-07-01, after 1.0 (2028-04-18), so the services variant ships in a post-1.0 series; the first stable series inside W3 is the April 2029 series on 2029-04-17 under the Q28 recommendation of one series a year (an October 2028 slot on 2028-10-17 only if Q28 keeps two series a year; numbering a placeholder, cadence Proposed, Q28).
 
 ### 1.2 Boundaries
 
@@ -47,6 +49,7 @@ Each T2 app enters in demand order and needs a design partner (D25). Consumed bu
 | [Supply chain](supply-chain.md) | Stock, internal equipment maintenance, repairs | Van-stock use via ports; customer-site equipment |
 | [Platform](platform.md) | Chatter, mail gateway, `calendar` and sync, knowledge, sign, approvals, automation | Service requirements on them (4.6) |
 | [Retail, commerce, marketing](retail-commerce-marketing.md) | POS restaurant tables | Capacity-aware booking resources are reusable there [R12] |
+| [CLI and agentic command surface](cli.md) | Grammar, global flags, output envelope, exit codes, the command catalogue and the plugin registry client | The service commands and their effect classes (4.9) |
 
 ### 1.3 Module graph
 
@@ -106,6 +109,7 @@ Helpdesk's other after-sales ports (credit note, return, repair, lead) are omitt
 | Fleet manager, driver | Vehicles, costs, services, odometer | `fleet.manager`, `fleet.driver` |
 | Contract manager | Sell and renew entitlements | `service_contract.manager` |
 | Customer | Follow tasks, tickets, billed time; rate; book | `base.portal` or share grants; no service permission group |
+| AI agent or script | Draft timesheet entries, triage tickets and draft replies, propose shifts and bookings, answer utilisation questions | An agent principal (D28): effective permission is the grants of the user it acts for, or of its service group, intersected with its token scopes ([ai](ai.md) 4.2); it never approves or posts (D18) |
 
 Permission groups bundle permission rows under the D10 algebra: default-deny, every row declares a scope (`all`, `own`, `company`, `domain`), restriction rows only narrow. Group names follow the `<module>.<role>` form of [CONVENTIONS](../CONVENTIONS.md) section 4, which registers the services groups below; they stay Proposed until the seed list of [security-privacy](security-privacy.md) 2 carries them. (Entities such as `appointment_host` in 4.6 are tables, not groups.)
 
@@ -126,21 +130,21 @@ External people get `share_grant` capability tokens scoped to a record and an ac
 
 ## 3. Capability map
 
-Waves are Proposed (D25, D26). Parity values: matches Community, matches Enterprise, beyond, deliberately skipped.
+Waves are Proposed placements (D25, D86), except that the services variant in W3 is RATIFIED (OR-15), and every capability is also a typed command in CLI, API and MCP (4.9). Parity values compare with Odoo: matches Community, matches Enterprise, beyond, deliberately skipped.
 
 | Capability | Description | Wave | Odoo parity |
 |---|---|---|---|
-| Working calendars, leaves, arithmetic | Weekly, two-week, flexible schedules; zones; pack holidays; pure library with explain trace | W2 | Matches Community |
-| Projects, tasks, stage versus state | Kanban stages, sub-tasks, privacy modes, email-in; fixed state enum, derived `waiting`, event log | W2 | Matches Community; beyond |
-| Dependencies with lag | Blocks, relates, duplicates, precedes with signed lag, cycle check | W2 | Beyond (Community has blocked-by only) |
-| Auto and manual scheduling | Headless engine honouring calendars; critical path | W2 engine, W3 UI | Beyond |
+| Working calendars, leaves, arithmetic | Weekly, two-week, flexible schedules; zones; pack holidays; pure library with explain trace | W3 | Matches Community |
+| Projects, tasks, stage versus state | Kanban stages, sub-tasks, privacy modes, email-in; fixed state enum, derived `waiting`, event log | W3 | Matches Community; beyond |
+| Dependencies with lag | Blocks, relates, duplicates, precedes with signed lag, cycle check | W3 | Beyond (Community has blocked-by only) |
+| Auto and manual scheduling | Headless engine honouring calendars; critical path | W3 engine with `project`; the Gantt UI follows in W3 | Beyond |
 | Gantt with baselines | Drag or form scheduling, dependencies, baselines | W3 | Matches Enterprise Gantt; beyond on lag; baselines are an OpenProject feature, not found in the Odoo research [R14 s3.2] |
-| Milestones, updates, templates, recurrence, collaborators | Billing-linked checkpoints, status posts, date-shifting templates, portal sharing | W2 | Matches Community |
-| Burndown and time in stage | From event tables incl. estimate revisions | W2 | Matches Community; beyond |
+| Milestones, updates, templates, recurrence, collaborators | Billing-linked checkpoints, status posts, date-shifting templates, portal sharing | W3 | Matches Community |
+| Burndown and time in stage | From event tables incl. estimate revisions | W3 | Matches Community; beyond |
 | Sprints and cycles | Optional iteration mode | W4+ | Beyond (Odoo has none); later |
-| Timesheet entry, timer, grid, approval | Analytic line; keyboard matrix; suggestions; period submission via the approvals engine | W2 | Matches Community; grid, timer, approval match Enterprise |
-| Service policy matrix, employee rate card | Four policies by four tracking modes; employee to sale line | W2 | Matches Community |
-| Time-to-invoice with billed-time lock | Approved time only; billed entries immutable | W2 | Beyond |
+| Timesheet entry, timer, grid, approval | Analytic line; keyboard matrix; suggestions; period submission via the approvals engine | W3 | Matches Community; grid, timer, approval match Enterprise |
+| Service policy matrix, employee rate card | Four policies by four tracking modes; employee to sale line | W3 | Matches Community |
+| Time-to-invoice with billed-time lock | Approved time only; billed entries immutable | W3 | Beyond |
 | Ticketing, assignment, macros, merge | Teams, stage/state, strategies, duplicate merge | W3 | Matches Enterprise |
 | SLA engine | First response, next response, resolution, reach-stage; pause; warnings | W3 | Matches Enterprise; beyond (reproducible) |
 | Helpdesk channels | Email alias, web form, portal, API, `livechat` hand-off; WhatsApp and social as connectors | W3, connectors W4 | Matches Enterprise |
@@ -150,19 +154,20 @@ Waves are Proposed (D25, D26). Parity values: matches Community, matches Enterpr
 | Map and routing | Map view; `RoutingProvider` trait; no bundled vendor | W3 | Matches Enterprise; vendor lock deliberately skipped |
 | Offline visit execution | Queued commands for allow-listed visit actions | W3+ (Proposed D13) | Beyond Odoo 19; Odoo 20 queues writes |
 | Appointment types and scheduling types | Collective, round-robin, resource with capacity; buffers, notice; deposit, CRM lead, reminders, reschedule, feedback | W3 | Matches Enterprise on the Odoo list [R14 s8.1]; collective and round-robin follow Cal.diy [R14 s8.2] |
-| Calendar-aware booking | Busy-time reads, conflict detection, idempotent writes | W3 (sync W2) | Matches Enterprise; beyond on conflicts |
+| Calendar-aware booking | Busy-time reads, conflict detection, idempotent writes | W3 (with `calendar` sync, also W3) | Matches Enterprise; beyond on conflicts |
 | Service contracts | Entitlement, prepaid allowance, visit plan | Proposed W3 | Beyond (OCA `contract` is the precedent) |
 | Fleet | Vehicles, contracts, services, odometer, assignments | W4+ | Matches Community |
+| Typed commands in CLI, API and MCP | Each capability above is one catalogue command (4.9); mutating commands have a dry-run plan and an idempotency key; agents draft and humans commit | Same wave as the capability (OR-4) | Beyond on the write protocol: Odoo's MCP tools are server actions that run unconditionally unless their code blocks them [R16 s2.1] |
 
 ## 4. Per-app specification
 
-Conventions for every table: `id` is an application-generated UUIDv7 (D9; the event and log tables here may switch to `bigint` plus a public uuid if the D9 `IdType` spike reads out that way on 2026-11-27); `company_id` NOT NULL (D28); rows carry `row_version` and audit stamps. Durations are integer minutes unless stated; hours and days are `NUMERIC(24,6)`, unit prices `NUMERIC(24,8)`, totals and costs `bigint` minor units with a currency (D9). State machines are registry data [R23 B.2]. Event names follow [CONVENTIONS](../CONVENTIONS.md) section 3 and stay Proposed until the catalogue generated from the registry replaces it (D29). Foreign keys are `<entity>_id` with the full entity name (CONVENTIONS section 2.1), so `resource_calendar_id`, never `calendar_id`; a column that a bridge or an optional module adds to another module's entity carries the `<module_id>__` prefix, and a module's columns on its own entities do not (1.3). In flow tables, T is a TxEvent in the publisher's transaction, D a durable event through the outbox, P a port call (D27); external I/O happens only in durable handlers.
+Conventions for every table: `id` is an application-generated UUIDv7 (D9; the event and log tables here may switch to `bigint` plus a public uuid if the D9 `IdType` spike reads out that way on 2026-11-27); `company_id` NOT NULL (D28); rows carry `row_version` and audit stamps. Durations are integer minutes unless stated; hours and days are `NUMERIC(24,6)`, unit prices `NUMERIC(24,8)`, totals and costs `bigint` minor units with a currency (D9). State machines are registry data [R23 B.2], and every transition and action named below is a typed command in the catalogue, reachable through the CLI, REST and MCP (4.9, OR-4). Event names follow [CONVENTIONS](../CONVENTIONS.md) section 3 and stay Proposed until the catalogue generated from the registry replaces it (D29). Foreign keys are `<entity>_id` with the full entity name (CONVENTIONS section 2.1), so `resource_calendar_id`, never `calendar_id`; a column that a bridge or an optional module adds to another module's entity carries the `<module_id>__` prefix, and a module's columns on its own entities do not (1.3). In flow tables, T is a TxEvent in the publisher's transaction, D a durable event through the outbox, P a port call (D27); external I/O happens only in durable handlers.
 
 ### 4.1 Resource
 
 **Purpose.** One working-time model for everything schedulable. Odoo's `resource` is the most reused service primitive [R14 s7].
 
-**Capabilities.** *W2:* weekly calendars with a two-week pattern and a flexible-hours flag; IANA zone per calendar and resource; global leaves (holidays from country packs) and resource leaves (time off through a bridge); effective-dated calendar assignment; the arithmetic API. *Later:* rotations, skills.
+**Capabilities.** *W3, beneath the services variant:* weekly calendars with a two-week pattern and a flexible-hours flag; IANA zone per calendar and resource; global leaves (holidays from country packs) and resource leaves (time off through a bridge); effective-dated calendar assignment; the arithmetic API. *Later:* rotations, skills.
 
 | Entity | Purpose | Key fields |
 |---|---|---|
@@ -182,13 +187,13 @@ Conventions for every table: `id` is an application-generated UUIDv7 (D9; the ev
 | Emits | `LeaveRecorded`, `LeaveRemoved` | D | planning conflict flags; appointments availability; helpdesk assignment; project rescheduling; timesheet expected hours |
 | Consumes | `LeaveApproved`, `LeaveCancelled` | D | `hr`, via the bridge |
 
-**Permissions.** A leave's reason can reveal health data [R13 s9], so schedulers see only "unavailable", through a narrow read model like `hr_employee_public` [R13 s3.1]. **Reports.** Capacity against allocation. **Configuration.** Company default calendar, holiday sets per country and region. **Localization.** Holidays are effective-dated pack data, not code. **Open vs paid.** Open.
+**Permissions.** A leave's reason can reveal health data [R13 s9], so schedulers see only "unavailable", through a narrow read model like `hr_employee_public` [R13 s3.1]. **Reports.** Capacity against allocation. **Configuration.** Company default calendar, holiday sets per country and region. **Localization.** Holidays are effective-dated pack data, not code. **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
 
 ### 4.2 Project
 
 **Purpose.** Plan and track internal and customer work with the scheduling behaviour OpenProject offers free and Odoo gates [R14 s3; R14 SHOULD 9].
 
-**Capabilities.** *W2:* projects with privacy (`invited`, `internal`, `portal`); tasks with sub-tasks, priority 0-3, assignees and per-project stages; the full dependency model and headless scheduling engine; milestones; status updates; templates that shift all dates from a new start; recurring tasks; collaborators; email-in; burndown; profitability. *W3:* Gantt with baselines and critical path. *Later:* sprints, intake triage [R14 COULD 17], other relation types, portfolio view.
+**Capabilities.** *W3, first:* projects with privacy (`invited`, `internal`, `portal`); tasks with sub-tasks, priority 0-3, assignees and per-project stages; the full dependency model and headless scheduling engine; milestones; status updates; templates that shift all dates from a new start; recurring tasks; collaborators; email-in; burndown; profitability. *W3, after `project`:* Gantt with baselines and critical path. *Later:* sprints, intake triage [R14 COULD 17], other relation types, portfolio view.
 
 | Entity | Purpose | Key fields | States |
 |---|---|---|---|
@@ -232,13 +237,13 @@ Guards (Proposed): `complete` fails while blockers are open unless a manager for
 | Consumes | `ResourceCalendarChanged`, `LeaveRecorded`, `LeaveRemoved` | D | Reschedule automatic tasks around calendar changes and assignees' leave |
 | Consumes | Create-task calls from helpdesk | P | Ticket to task |
 
-**Permissions.** Prices and margins are field-protected; the query compiler rejects filter, sort and group-by on unreadable fields (D10). **Reports.** Burndown from `task_event` and estimate revisions (Odoo's burndown appears not to re-snapshot estimates; inferred, [R14 s3.1]), cumulative flow, time in stage, workload, profitability (expected, to invoice, invoiced; revenue against cost) via the semantic layer [R23 B.3]. **Configuration.** Per-project features, stage sets, calendar. **Localization.** Calendars and holidays only. **Open vs paid.** Open.
+**Permissions.** Prices and margins are field-protected; the query compiler rejects filter, sort and group-by on unreadable fields (D10). **Reports.** Burndown from `task_event` and estimate revisions (Odoo's burndown appears not to re-snapshot estimates; inferred, [R14 s3.1]), cumulative flow, time in stage, workload, profitability (expected, to invoice, invoiced; revenue against cost) via the semantic layer [R23 B.3]. **Configuration.** Per-project features, stage sets, calendar. **Localization.** Calendars and holidays only. **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
 
 ### 4.3 Timesheets and the time-to-invoice bridges
 
 **Purpose.** Capture time once, bill it correctly, cost it, and never let billed time change silently.
 
-**Capabilities.** *W2:* entry in hours or days; one-click timer (one running per employee); weekly keyboard grid [R19 s6, s7]; suggested rows; submission and approval through the approvals engine; cost snapshot from the employee's hourly cost; the service policy matrix; employee rate card; delivered quantity from approved time. *Later:* minimum-increment rounding, billing-target dashboard (in Odoo 20, [R14 s4.3]), time budgets, calendar-based suggestions, offline entry (a queued-write candidate under Proposed D13, [R19 s11]).
+**Capabilities.** *W3, first:* entry in hours or days; one-click timer (one running per employee); weekly keyboard grid [R19 s6, s7]; suggested rows; submission and approval through the approvals engine; cost snapshot from the employee's hourly cost; the service policy matrix; employee rate card; delivered quantity from approved time. *Later:* minimum-increment rounding, billing-target dashboard (in Odoo 20, [R14 s4.3]), time budgets, calendar-based suggestions, offline entry (a queued-write candidate under Proposed D13, [R19 s11]).
 
 | Entity | Purpose | Key fields | States |
 |---|---|---|---|
@@ -250,7 +255,7 @@ Guards (Proposed): `complete` fails while blockers are open unless a manager for
 
 The analytic line (owned by [finance](finance.md) 4.8) holds date, account, amounts and currency, so time cost sits beside vendor bills. The extension row shares its id and is inseparable from it (foreign key plus deferred constraint, Proposed); finance 4.8 gives every `analytic_line` a `source_ref` so reports can tell timesheet entries from invoice and bill lines, and allows a module-owned 1:1 extension row (Proposed there; closes open question 3).
 
-**Employee dependency.** `timesheet` is W2 but `hr` is W3 (D25), apart from an employee core (employee, version, department, job, calendar) that D25 lists in W2 (Proposed; DECISIONS Q8). [People](people.md) proposes the same; this spec assumes it (R23 D.3 draws the edge as optional, `hr?`, but every entry has an employee). The hourly cost sits in the effective-dated employee version in class `financial` (a value from which wage can be recomputed takes wage's class) and is read through `EmployeePort`; a `cost_rate(employee, date)` lookup is a Proposed addition to that port.
+**Employee dependency.** `timesheet` ships in W3 with the services variant, and so does the employee core of `hr` (employee, version, department, job, calendar), which D25 and D86 place among the first items of W3 ahead of the rest of `hr` (Proposed; DECISIONS Q8). [People](people.md) proposes the same core; this spec assumes it (R23 D.3 draws the edge as optional, `hr?`, but every entry has an employee). The hourly cost sits in the effective-dated employee version in class `financial` (a value from which wage can be recomputed takes wage's class) and is read through `EmployeePort`; a `cost_rate(employee, date)` lookup is a Proposed addition to that port.
 
 **Service policy matrix** [R14 s4.2; R14 MUST 2]:
 
@@ -272,7 +277,7 @@ The project grouping follows Odoo 20's `sale_project` source (one project per or
 
 **Sale line for an entry**, by the project's `sale_timesheet__pricing_type` (Proposed order; [R14 s4.4] gives a looser one): `task_rate` (the task's line, else the project default), `fixed_rate` (the project default), `employee_rate` (the rate-card row, else the default). An explicit choice sets `sale_timesheet__is_sale_line_overridden`, so recomputation never overwrites it [R14 s4.1].
 
-**Validation.** `SubmitTimesheet` moves the period's draft entries to `submitted`; the manager approves or refuses (`refused` returns to `draft` with a comment). "Bill approved time only" is on by default when approval is enabled (Proposed); Enterprise's grid appears to restrict delivered quantity to validated entries (inferred, [R14 s4.1]).
+**Validation.** `SubmitTimesheet` moves the period's draft entries to `submitted`; the manager approves or refuses (`refused` returns to `draft` with a comment). "Bill approved time only" is on by default when approval is enabled (Proposed); Enterprise's grid appears to restrict delivered quantity to validated entries (inferred, [R14 s4.1]). Approval runs on the approvals engine, a W2 item that can slip (open question 18).
 
 **Workflows.** (1) Sell a `delivered_timesheet` / `task_in_project` product; confirmation creates project and task with `sale_project__sale_order_line_id` set. (2) Employees log time; the line follows the rule above. (3) The manager approves the week. (4) `sale_timesheet` sets the entry's contribution; the line becomes "to invoice". (5) Finance invoices; the invoice carries a billed-time annex (Typst, Proposed D20). (6) On `InvoicePosted` the contributing entries lock; corrections are new entries with `correction_of_id`, possibly negative, approved like any other.
 
@@ -284,13 +289,13 @@ The project grouping follows Odoo 20's `sale_project` source (one project per or
 | Consumes | `MilestoneReached`, `SaleOrderConfirmed`, `SaleOrderCancelled` | T | `sale_project` sets contributions, creates, detaches |
 | Consumes | `LeaveRecorded`, `LeaveRemoved` | D | Expected hours per day in the grid; available hours in utilisation |
 
-**Permissions.** `cost_rate` and `amount_minor` derive from salary, are class `financial` and are additionally field-protected (`timesheet.cost_viewer`); a group-by on cost by an unauthorised user is rejected. No activity tracking, screen capture or geolocation in core; sensitive capture stays off by default [R13 MUST 17]. An entry an agent proposes stays `draft` until the employee submits it (D18); every state change is a typed command on the generated API (D31). **Reports.** Utilisation (billable against available hours from the employee's calendar), time by project, task and customer, work in progress (delivered, not invoiced), budget against actual. **Configuration.** Unit and day length, approval mode, "bill approved time only", timesheet lock date, back-entry window. **Compliance.** Working-time recording duties differ by country and are not in the research (counsel); entries are employee personal data under retention and anonymise-in-place rules [R18 s8.1]. **Open vs paid.** Open; timesheet-only users count as light users, free within fair use (D2, [R26 A3]).
+**Permissions.** `cost_rate` and `amount_minor` derive from salary, are class `financial` and are additionally field-protected (`timesheet.cost_viewer`); a group-by on cost by an unauthorised user is rejected. No activity tracking, screen capture or geolocation in core; sensitive capture stays off by default [R13 MUST 17]. An entry an agent proposes stays `draft` until the employee submits it (D18); every state change is a typed command in the catalogue, reachable through the CLI, REST and MCP (D31, D80; 4.9). **Reports.** Utilisation (billable against available hours from the employee's calendar), time by project, task and customer, work in progress (delivered, not invoiced), budget against actual. **Configuration.** Unit and day length, approval mode, "bill approved time only", timesheet lock date, back-entry window. **Compliance.** Working-time recording duties differ by country and are not in the research (counsel); entries are employee personal data under retention and anonymise-in-place rules [R18 s8.1]. **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2). There are no user types, seats or prices: employees, timesheet-only users and portal users are all free (OR-2).
 
 ### 4.4 Helpdesk
 
 **Purpose.** Answer customers through any channel against a measurable promise, and feed after-sales work into the business.
 
-**Capabilities.** *W3:* teams (private, internal, public) with inbound aliases; tickets with priority, type, tags and a stage/state pair; the SLA engine; assignment strategies; macros and canned replies; merge and split; CSAT; help-center links; after-sales actions; ticket time and prepaid support; portal view. Chat hand-off from `livechat` (W3) creates a ticket ([retail-commerce-marketing](retail-commerce-marketing.md)). *Later:* WhatsApp and social connectors (W4, X3/X4 packages); phone via provider APIs [R21 s6.6]; optional AI assistance (D18).
+**Capabilities.** *W3:* teams (private, internal, public) with inbound aliases; tickets with priority, type, tags and a stage/state pair; the SLA engine; assignment strategies; macros and canned replies; merge and split; CSAT; help-center links; after-sales actions; ticket time and prepaid support; portal view. Chat hand-off from `livechat` (W3) creates a ticket ([retail-commerce-marketing](retail-commerce-marketing.md)). *Later:* WhatsApp and social connectors (W4, as X3 or X4 plugins from the registry, D81; the user brings the provider account); phone via provider APIs [R21 s6.6]; optional AI assistance (D18).
 
 | Entity | Purpose | Key fields | States |
 |---|---|---|---|
@@ -319,7 +324,7 @@ stateDiagram-v2
   open --> closed: close_merged_or_spam
 ```
 
-**SLA engine (crate `obop-sla`, Proposed).** Chatwoot's status set is the model; Chatwoot, Zendesk, Freshdesk and Odoo gate SLAs, obop does not [R14 MUST 5].
+**SLA engine (crate `obop-sla`, Proposed).** Chatwoot's status set is the model; Chatwoot, Zendesk, Freshdesk and Odoo gate SLAs; obop gates nothing (OR-2) [R14 MUST 5].
 - *Attachment:* at creation and when priority, tags, team or service contract change, the first policy (by `sequence`) whose criteria match applies, per metric.
 - *Clock:* `first_response` and `resolution` start at creation; `next_response` starts at each customer message that follows an agent reply and stops at the next public agent reply. Internal notes stop nothing.
 - *Pause:* intervals come from `ticket_event` (state `pending`, or a stage with `pauses_sla`).
@@ -346,13 +351,13 @@ stateDiagram-v2
 | Consumes | `ResourceCalendarChanged`, `LeaveRecorded`, `LeaveRemoved` | D | SLA recompute; assignment |
 | Consumes | `PartyErased` | D | Anonymise contact snapshots (requester name and email) in place (ARCHITECTURE 4.3; Proposed) |
 
-**Permissions.** Agents see their teams' tickets; internal notes never reach the portal; on a public team a portal user sees only tickets they follow [R14 s9]. Messages and attachments are personal data and may hold special-category data; erasure anonymises in place [R18 s8.1]. AI features are optional, switchable per module, and draft only (D18). **Reports.** SLA attainment and time to first response by team, policy, priority; backlog ageing; CSAT; volume by channel; reopen rate. **Configuration.** Stages, calendars, auto-close days, rating window, alias loop thresholds, web-form spam limits (rate limit; optional challenge via a connector). **Compliance.** Portal, web form and CSAT page sit inside the WCAG 2.2 AA commitment (D38). Mailboxes are OAuth-only; EWS is default-disabled from 2026-10-01 and permanently off from 2027-04-01 (D39, [R21 s6.5]). **Open vs paid.** Open.
+**Permissions.** Agents see their teams' tickets; internal notes never reach the portal; on a public team a portal user sees only tickets they follow [R14 s9]. Messages and attachments are personal data and may hold special-category data; erasure anonymises in place [R18 s8.1]. AI features are optional, switchable per module, and draft only (D18). **Reports.** SLA attainment and time to first response by team, policy, priority; backlog ageing; CSAT; volume by channel; reopen rate. **Configuration.** Stages, calendars, auto-close days, rating window, alias loop thresholds, web-form spam limits (rate limit; optional challenge via a connector). **Compliance.** Portal, web form and CSAT page sit inside the WCAG 2.2 AA commitment (D38). Mailboxes are OAuth-only; EWS is default-disabled from 2026-10-01 and permanently off from 2027-04-01 (D39, [R21 s6.5]). **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
 
 ### 4.5 Planning and field work
 
 **Purpose.** Schedule people and things against demand, and run on-site work from request to invoice.
 
-**Design choice (Proposed).** Odoo 20 discontinued Field Service and merged it into Planning: an intervention is a shift with customer, sales order, worksheet and sign-in [R14 s6.1]. The task-versus-shift question is DEFERRED (DECISIONS section 2.3, ruling 18). Proposal:
+**Design choice (Proposed).** Odoo 20 discontinued Field Service and merged it into Planning: an intervention is a shift with customer, sales order, worksheet and sign-in [R14 s6.1]. The task-versus-shift question is DEFERRED (DECISIONS section 2.3 and contradiction ruling 18). Proposal:
 
 | Option | Model | Strength | Weakness |
 |---|---|---|---|
@@ -397,7 +402,7 @@ Sites and equipment are first-class because the strongest open evidence (OCA `fi
 | Consumes | `TaskScheduleChanged`, `LeaveRecorded`, `LeaveRemoved` | D | Conflict flags |
 | Ports | `DemandPort` (van stock), `RoutingProvider`, optional sale-line creation | P | stock, map |
 
-**Permissions.** `planning.technician` sees assigned visits and no prices. Site access notes may hold door codes and show only inside the visit window (Proposed). Geolocation is off by default, with company opt-in and notice [R13 MUST 17]. **Reports.** Utilisation, planned against actual hours, open shifts, first-time-fix rate, travel time. **Configuration.** Recurrence horizon (Odoo generates six months ahead, [R14 s7]), auto-plan rules, routing provider, tile source, geolocation opt-in. **Routing and maps.** `RoutingProvider` is a trait with no bundled vendor; OSRM, Valhalla or VROOM are optional sidecars outside the default install (Proposed I-1), and without one travel time comes from straight-line distance. OSM public tiles are unsuitable for production [R14 s6.3], so the tile source is a setting; MapLibre GL JS is the client library. FullCalendar Premium is excluded on licence [R00 s3.3], so the resource timeline is first-party; the Gantt renderer is a time-boxed spike (SVAR, DHTMLX Community or custom, [R07 s3.3]) within the React 19 and Vite+ toolchain (D15), driven through `vp`. **Compliance.** Geolocation and premises photos are personal data (counsel); technician rest-period rules are not modelled. **Open vs paid.** Open. A hosted routing or tile service is not on the closed paid list (DECISIONS section 6), so the default is bring-your-own keys.
+**Permissions.** `planning.technician` sees assigned visits and no prices. Site access notes may hold door codes and show only inside the visit window (Proposed). Geolocation is off by default, with company opt-in and notice [R13 MUST 17]. **Reports.** Utilisation, planned against actual hours, open shifts, first-time-fix rate, travel time. **Configuration.** Recurrence horizon (Odoo generates six months ahead, [R14 s7]), auto-plan rules, routing provider, tile source, geolocation opt-in. **Routing and maps.** `RoutingProvider` is a trait with no bundled vendor; OSRM, Valhalla or VROOM are optional sidecars outside the default install (I-1), and without one travel time comes from straight-line distance. OSM public tiles are unsuitable for production [R14 s6.3], so the tile source is a setting; MapLibre GL JS is the client library. FullCalendar Premium is excluded on licence [R00 s3.3], so the resource timeline is first-party; the Gantt renderer is a time-boxed spike (SVAR, DHTMLX Community or custom, [R07 s3.3]) within the React 19 and Vite+ toolchain (D15), driven through `vp` with pnpm. **Compliance.** Geolocation and premises photos are personal data (counsel); technician rest-period rules are not modelled. **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2). SpaceCorps hosts no routing or tile service (OR-11, D83), so the default is bring-your-own keys or a sidecar the operator runs.
 
 ### 4.6 Appointments
 
@@ -443,13 +448,13 @@ stateDiagram-v2
 | Consumes | `CalendarEventChanged`, `CalendarEventCancelled`, `LeaveRecorded`, `LeaveRemoved` | D | Conflict detection; freed slots |
 | Consumes | `PartyErased` | D | Anonymise booker contact snapshots in place (ARCHITECTURE 4.3; Proposed) |
 
-**Permissions.** Booker name, contact and answers are personal data; a question can be marked special-category, which hides it from non-hosts and shortens retention. Tokens are `share_grant`s. **Reports.** Bookings by type and host, no-show rate, lead conversion. **Configuration.** Sweep interval (Proposed 10 minutes), hold length, staleness limit, retention. **Compliance.** The booking page is a portal surface under WCAG 2.2 AA (D38); the EAA (Directive (EU) 2019/882) applies from 2025-06-28 to services provided to consumers, with an exemption for microenterprises providing services [Directive (EU) 2019/882 Arts. 31(2), 4(5); R28 E.5] (counsel confirms scope). Whether the consumer withdrawal function (since 2026-06-19, [R00 s3.7]) governs paid bookings is open question 9. **Open vs paid.** Open; SMS reminders use bring-your-own gateway keys.
+**Permissions.** Booker name, contact and answers are personal data; a question can be marked special-category, which hides it from non-hosts and shortens retention. Tokens are `share_grant`s. **Reports.** Bookings by type and host, no-show rate, lead conversion. **Configuration.** Sweep interval (Proposed 10 minutes), hold length, staleness limit, retention. **Compliance.** The booking page is a portal surface under WCAG 2.2 AA (D38); the EAA (Directive (EU) 2019/882) applies from 2025-06-28 to services provided to consumers, with an exemption for microenterprises providing services [Directive (EU) 2019/882 Arts. 31(2), 4(5); R28 E.5] (counsel confirms scope). Whether the consumer withdrawal function (since 2026-06-19, [R00 s3.7]) governs paid bookings is open question 9. **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2); SMS reminders use the user's own gateway keys, since SpaceCorps operates no gateway (D83).
 
 ### 4.7 Fleet
 
 **Purpose.** An asset-with-logs record of vehicles, contracts, services and drivers; Odoo's model is small [R14 s9].
 
-**Delivery (Proposed).** Fleet is T3 (W4+ or community). Its model is data, fields, views, reminders and rules, so it can ship as an X1 declarative pack [R24 s3.1; D11, D32], a useful test that the extension API suffices for a real app.
+**Delivery (Proposed).** Fleet is T3 (W4+ or community). Its model is data, fields, views, reminders and rules, so it can ship as an X1 declarative pack [R24 s3.1; D11, D32], published as a plugin in the free registry and installed or copied with the CLI (D81; [cli](cli.md) 4), a useful test that the extension API suffices for a real app.
 
 | Entity | Purpose | Key fields | States |
 |---|---|---|---|
@@ -461,7 +466,7 @@ stateDiagram-v2
 
 **Workflows.** (1) Register a vehicle and assign a driver. (2) Attach contracts; an automation rule raises `VehicleContractExpiring` 30 days ahead (Proposed default, taken from the `delay_alert_contract` default in Odoo 20's `fleet` source, read 2026-10-01; configurable). (3) Drivers log odometer and fuel; a schedule by date or distance raises `VehicleServiceDue`. (4) Bill lines carry a vehicle dimension on the analytic ledger. (5) A vehicle linked to a `resource` of kind vehicle can be booked onto field shifts.
 
-**Flows.** Emits `VehicleContractExpiring`, `VehicleServiceDue`, `OdometerRecorded` (D); consumes none by event. **Permissions.** Drivers see only their vehicle; assignment history is personal data; no telematics or location tracking. **Reports.** Cost per vehicle and per distance, contract calendar, service compliance. **Configuration.** Service types, reminder lead times, odometer unit. **Localization.** Company-car taxation and inspection intervals are country rules for packs (counsel). **Open vs paid.** Open.
+**Flows.** Emits `VehicleContractExpiring`, `VehicleServiceDue`, `OdometerRecorded` (D); consumes none by event. **Permissions.** Drivers see only their vehicle; assignment history is personal data; no telematics or location tracking. **Reports.** Cost per vehicle and per distance, contract calendar, service compliance. **Configuration.** Service types, reminder lead times, odometer unit. **Localization.** Company-car taxation and inspection intervals are country rules for packs (counsel). **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
 
 ### 4.8 Service contracts (Proposed)
 
@@ -475,16 +480,71 @@ stateDiagram-v2
 
 Transitions: `draft` to `active` on activation; `active` to `expiring` by an automation rule N days before the end; then `expired`, `terminated`, or back to `active` on renewal. Allowance is derived: granted hours come from the prepaid line, consumed hours from contributions to it. An entry that crosses the allowance splits into (entry, prepaid line) for the remainder and (entry, overage line) for the excess; the key is (line, source) [R23 D.2 R3].
 
-**Workflow.** Sell a contract product; confirmation activates the contract; tickets on covered equipment inherit the SLA; the visit plan generates open shifts to the horizon. **Flows.** Emits `ServiceContractActivated`, `ServiceContractExpiring`, `ServiceContractAllowanceExhausted` (D); consumes `SubscriptionChanged` and `SubscriptionStatusChanged` (renewal, cancellation). **Permissions.** `service_contract.manager`. **Reports.** Allowance burn, expiring contracts, coverage gaps. **Configuration.** Overage policy (bill or block), expiry of unused hours. **Localization.** Consumer-contract terms are country-specific (counsel). **Open vs paid.** Open.
+**Workflow.** Sell a contract product; confirmation activates the contract; tickets on covered equipment inherit the SLA; the visit plan generates open shifts to the horizon. **Flows.** Emits `ServiceContractActivated`, `ServiceContractExpiring`, `ServiceContractAllowanceExhausted` (D); consumes `SubscriptionChanged` and `SubscriptionStatusChanged` (renewal, cancellation). **Permissions.** `service_contract.manager`. **Reports.** Allowance burn, expiring contracts, coverage gaps. **Configuration.** Overage policy (bill or block), expiry of unused hours. **Localization.** Consumer-contract terms are country-specific (counsel). **Open and free.** Apache-2.0, nothing gated (OR-1, OR-2).
+
+### 4.9 CLI, API and MCP surface
+
+**Rule (OR-4, D80).** Every capability in 4.1 to 4.8 is one typed command in the command catalogue generated from the runtime registry (D29). The entry gives it a CLI form (`obop <subject> <action> [<id>] [options]`, [cli](cli.md) 2.1), a REST route under `/api/v1` and an MCP tool named by the wire id `<model>.<action>` ([CONVENTIONS](../CONVENTIONS.md) 2.1), so the three surfaces cannot drift. A service feature is done when its commands exist in all three with the same input and output schemas, the D10 permission check, a dry-run with a digest-bound `plan_id` and an idempotency key for mutating commands, an audit entry, generated reference documentation and a passing CLI/API/MCP parity test (D80, D36). The web UI (React on Vite+, driven through `vp` with pnpm) is a client of the same commands and holds no business logic: the Gantt view, the timesheet grid, the ticket inbox, the dispatch board and the booking page call the commands below and show nothing the catalogue does not expose (D35). No service feature ships as UI-only. UI parity is literal (OR-16, D80): every command of every shipped module gets a UI before the first stable release. It is tracked in the parity matrix (`obop dev parity`, [cli](cli.md) 6); whether modules that ship after 1.0 are gated on it is open question 16.
+
+The names below are Proposed under the grammar freeze of Q22. The subject is the model id of 4.1 to 4.8 verbatim (snake_case, [cli](cli.md) 2.1 rule N1). Every entity has the generated `create`, `list`, `get`, `update`, `delete` and `aggregate` entries unless its table marks it append-only or derived (`task_event`, `ticket_event` and `applied_sla` are read-only). Rust types keep the names this spec already uses (`SubmitTimesheet`, `ScheduleProject`), and the wire id is the `<model>.<action>` form of the same definition. Effects are the classes of [ai](ai.md) 4.3 and are Proposed: an agent runs `read` and `draft` commands directly and gets a plan for a human to confirm at `commit` and `external` (exit 10, [cli](cli.md) 2.7). No command below is proposed as `money_and_payee` or `destructive` (open question 15).
+
+| Area | Command (CLI form) | What it does | Effect |
+|---|---|---|---|
+| Resource | `obop resource_calendar create\|list\|get\|update`; `obop resource_calendar_assignment create`; `obop resource_leave create\|list` | Calendars, effective-dated assignments and leaves; a calendar change recomputes open SLAs and reschedules automatic tasks (`ResourceCalendarChanged`) | `commit`; lists `read` |
+| Resource | `obop resource_calendar add_working_duration\|working_minutes_between\|next_working_instant\|is_working <id>` | The arithmetic of `obop-resource` as read commands; each result carries the segments it used, so an agent or a test can check an SLA deadline (GP-3) | `read` |
+| Project | `obop project create\|list\|get\|update`; `obop project create_from_template <template-id> --start <date>` | Projects; a project from a template with every date shifted from the start | `draft` |
+| Project | `obop project schedule <id>` (`ScheduleProject`) | Recomputes automatic tasks and the critical path with an explain trace; `--dry-run` lists the tasks that would move and the manual-task violations | `commit` |
+| Project | `obop task create\|list\|get\|update`; `obop task request_changes\|resubmit\|approve\|complete\|reopen\|cancel <id>` | Tasks and the state machine of 4.2; `complete` fails while blockers are open unless a manager forces it, which is audited | `draft`; transitions `commit` |
+| Project | `obop task_dependency create\|delete`; `obop milestone create\|reach\|unreach`; `obop project_update create`; `obop project_baseline create\|list` | Edges (a cycle returns `dependency_cycle` with the path); milestones (`reach` sets delivered quantity, and `unreach` on an invoiced milestone returns `milestone_invoiced`); status posts; frozen plans | `commit`; `list` `read` |
+| Timesheets | `obop timesheet_entry create\|list\|get\|update\|delete` | Entries; an entry an agent proposes stays `draft`; a billed entry cannot be changed or deleted (`timesheet_entry_billed`), and a correction is a new entry carrying `correction_of_id` | `draft` |
+| Timesheets | `obop timesheet_timer start\|stop` | The one running timer per employee; commands carry a `command_id`, so a retry cannot start a second timer | `draft` |
+| Timesheets | `obop timesheet_submission submit\|approve\|refuse <id>` (`SubmitTimesheet`) | Submission and the manager's decision through the approvals engine; `refuse` returns the entries to `draft` with a comment | `commit` |
+| Timesheets | `obop project_billing_rate create\|list` | Rate-card rows that map an employee to a sale line; changes go to the audit log (D33) | `commit`; `list` `read` |
+| Bridges | `obop sale_order confirm <id>` ([sales-crm](sales-crm.md)) | Owned by `sales`; with `sale_project` installed it creates the projects and tasks of 4.3 idempotently. The service fields of 4.3 are set on the product, for example `obop product update <id> --set sale_project__service_policy=delivered_timesheet` | `commit` |
+| Helpdesk | `obop helpdesk_team create\|list\|get\|update`; `obop sla_policy create\|list\|get\|update` | Teams, and SLA policies with their targets; policy edits go to the audit log (D33) | `commit`; `list`, `get` `read` |
+| Helpdesk | `obop ticket create\|list\|get\|update` | Tickets; mail, web form, portal and API all create tickets through this command | `draft` |
+| Helpdesk | `obop ticket assign\|set_pending\|solve\|reopen\|close\|merge <id>` | The state machine and assignment of 4.4; `set_pending` carries a reason and pauses the SLA; `merge` moves messages and followers to the surviving ticket and settles both SLAs | `commit` |
+| Helpdesk | `obop ticket reply <id>`; `obop ticket note <id>` | A public reply to the requester (it sends email), and an internal note that never reaches the portal. An agent's reply is a plan that a human confirms (D18) | `external`; `draft` |
+| Helpdesk | `obop applied_sla list\|get`; `obop applied_sla verify [--ticket <id>]`; `obop ticket_rating list` | SLA state per ticket; `verify` recomputes rows from the event log, policy and calendar version and reports mismatches (the nightly proof of 4.4, on demand); CSAT | `read` |
+| Planning | `obop planning_role create\|list`; `obop planning_shift create\|list\|get\|update` | Scheduling roles; shifts and open shifts (`resource_id` empty) | `draft` |
+| Planning | `obop planning_shift publish\|claim\|cancel <id>`; `obop planning_shift auto_plan --from <date> --to <date>` | Publishing notifies people; `claim` takes an open shift; `auto_plan` fills open shifts by role, availability and priority, and `--dry-run` returns the proposed assignments and conflicts | `external` (`publish`); `commit` |
+| Planning | `obop shift_swap_request create\|accept\|decline` | Swap or unassign requests | `commit` |
+| Planning | `obop planning_shift sign_in\|complete <id>`; `obop worksheet_response create\|submit`; `obop field_material_line create` | The visit lifecycle (`VisitStarted`, `VisitCompleted`): `complete` creates the technician's time entry and settles parts in the same transaction and is replay-safe by `command_id` | `commit` |
+| Planning | `obop service_site create\|list\|get\|update` (likewise `service_equipment`, `worksheet_template`) | Sites, customer-site equipment (warranty status computed from `warranty_until`) and versioned worksheet templates | `draft` |
+| Appointments | `obop appointment_type create\|list\|get\|update\|publish\|archive` | Bookable offers; `publish` exposes the public booking page | `commit` |
+| Appointments | `obop appointment_type available_slots <id> --from <date> --to <date> --timezone <tz>` | The slot engine `available_slots(type, range, busy, now)` as a read command; it fails closed when external busy data is stale | `read` |
+| Appointments | `obop booking create\|list\|get`; `obop booking confirm\|reject\|reschedule\|cancel\|check_in\|complete\|mark_no_show <id>` | Reservations and the state machine of 4.6; `create` takes an idempotency key, and a lost race returns the 409 problem `slot_unavailable` with alternative slots | `commit` |
+| Fleet | `obop vehicle create\|list\|get\|update` (likewise `vehicle_assignment`, `vehicle_contract`, `vehicle_service_log`, `vehicle_odometer`) | Assets with logs; reminders are automation rules (`VehicleContractExpiring`, `VehicleServiceDue`) | `draft` |
+| Service contracts | `obop service_contract create\|list\|get\|update`; `obop service_contract activate\|terminate\|renew <id>` | Entitlements and their lifecycle; tickets on covered equipment inherit the SLA | `commit` |
+| Service contracts | `obop service_contract allowance <id>` | The derived allowance: granted hours from the prepaid line, consumed hours from contributions, and the overage split | `read` |
+
+**Discovery and scopes.** `obop schema <wire-id>` prints a command's input and output schemas, error codes and bindings, `obop catalogue list --subject ticket` lists a subject's commands, and `obop agent guide` renders the catalogue a token may use ([cli](cli.md) 2.9, 3.9). Agent tokens carry scopes of the form `<model>:<operation>`, for example `timesheet_entry:create` and `ticket:read` ([CONVENTIONS](../CONVENTIONS.md) 2.1), and the field permissions of section 2 still apply: a group-by on cost by a caller without `timesheet.cost_viewer` is rejected like any other query (D10).
+
+**Reports.** Reports read the semantic layer when `analytics` exists (T0, W3). If it has not landed when the services variant ships, `obop <model> aggregate` answers grouped questions under the caller's access, for example `obop timesheet_entry aggregate --group-by project_id --agg sum:unit_amount` ([cli](cli.md) 3.4).
+
+**Public and offline callers.** The booking page, web-form ticket creation, CSAT page and token links call the same commands as a guest or portal principal (open question 17). Offline field-visit commands are the same typed commands replayed with their `command_id` (D13, D80), not a second API.
 
 ## 5. Cross-app golden paths
 
-Each scenario doubles as an acceptance test. Dates and holidays are fixtures; totals use per-group rounding (D9).
+Each scenario doubles as an acceptance test and as a recorded CLI transcript for the parity test ([cli](cli.md) 6; GP-1 and GP-3 sketch theirs). Dates and holidays are fixtures on a fixed test clock, not release dates (GP-3 is dated 2027, before `helpdesk` exists); totals use per-group rounding (D9). All seven need the W3 modules of section 1.1.
 
 **GP-1 Sales order to project to timesheet to invoice (time and material).**
 *Given* Company A (EUR, 19% VAT) and order S1 with two `delivered_timesheet` / `task_in_project` lines: L1 senior 20 h x 150.00 = 3,000.00, L2 junior 20 h x 90.00 = 1,800.00 (4,800.00 net, 912.00 VAT, 5,712.00 total); `employee_rate` with Ben to L1 and Ana to L2; hourly costs Ana 55.00, Ben 70.00; "bill approved time only" on.
 *When* S1 is confirmed and, in the week of Monday 2028-05-08, Ana logs 4.0 + 4.5 + 4.0 = 12.5 h and Ben 5.0 + 3.0 = 8.0 h,
 *Then* a project and tasks exist with `sale_project__sale_order_line_id` set; L1 and L2 show delivered 0.0 until the manager approves on Friday; afterwards L1 is 8.0 and L2 12.5, both "to invoice". The invoice has 8.0 x 150.00 = 1,200.00 and 12.5 x 90.00 = 1,125.00: 2,325.00 net, 441.75 VAT, 2,766.75 total. Cost is 687.50 + 560.00 = 1,247.50, margin 1,077.50 (46.3%). *And when* the invoice is posted and Ana edits her 4.5 h entry, *then* the command fails with `timesheet_entry_billed`; she adds a 0.5 h correction, and once approved L2 shows 13.0 delivered, 12.5 invoiced and 0.5 h (45.00 net) to invoice.
+
+*Transcript sketch (Proposed names, [cli](cli.md) 8).*
+
+```sh
+obop sale_order confirm "$S1" --dry-run > confirm.plan.json
+obop sale_order confirm "$S1" --plan "$(jq -r .data.plan.plan_id confirm.plan.json)"
+obop timesheet_entry create --body @ana-mon-1.json --idempotency-key gp1-ana-mon-1   # one call per entry
+obop timesheet_submission submit "$ANA_WEEK"
+obop timesheet_submission approve "$ANA_WEEK"                                        # the manager, a human
+obop sale_order_line get "$L2" --fields qty_delivered,qty_to_invoice                  # 12.5 to invoice
+# finance creates and posts the invoice (cli.md 3.5), then:
+obop timesheet_entry update "$ANA_ENTRY_45" --set unit_amount=5.0                     # exit 7, timesheet_entry_billed
+```
 
 **GP-2 Fixed price with milestones.**
 *Given* order S2 with one `delivered_milestones` / `project_only` line "Website redesign" 1 x 10,000.00 and milestones M1 30%, M2 70%.
@@ -494,6 +554,14 @@ Each scenario doubles as an acceptance test. Dates and holidays are fixtures; to
 *Given* a team calendar Monday-Friday 09:00-17:00 Europe/Berlin without holidays, policy "Gold" (first response 120 min, resolution 480 min) and auto-close after 7 days.
 *When* a ticket is created Friday 2027-03-12 16:00,
 *Then* the first-response deadline is Monday 2027-03-15 10:00 (60 min Friday, 60 min Monday) and the resolution deadline Monday 16:00. An agent reply at Monday 09:40 makes first response `hit`. Setting `pending` at Monday 10:00 (120 working minutes used) and a customer reply Tuesday 11:00 resumes the clock with 360 minutes left: deadline Tuesday 17:00. Solving Tuesday 15:30 makes resolution `hit` with 90 minutes to spare; the CSAT request is sent and the ticket closes after 7 days without a reply. Without an agent reply by Monday 10:00, `SlaBreached` fires and first response becomes `missed`.
+
+*Transcript sketch (Proposed names).*
+
+```sh
+obop resource_calendar add_working_duration "$BERLIN_OFFICE" --from 2027-03-12T16:00:00+01:00 --minutes 120   # 2027-03-15T10:00 and the segments used
+obop ticket set_pending "$T1" --reason customer
+obop applied_sla verify --ticket "$T1"                                          # recomputed from ticket_event; mismatches are reported
+```
 
 **GP-4 Ticket to field job to invoice, offline (W3+, Proposed D13).**
 *Given* equipment HP-900 (serial 7731) with `warranty_until` 2028-06-30 at site "Werk 2", ticket T-2041, technician Kai (scheduling role HVAC) with sensor S-12 (48.00) in his van, labour at 85.00/h.
@@ -525,11 +593,13 @@ Each scenario doubles as an acceptance test. Dates and holidays are fixtures; to
 7. Money and quantities are decimals and integers; floats are banned (D9).
 8. Share tokens are stored hashed, expire and carry one scope [R23 B.1].
 
+**Surface parity.** The CLI/API/MCP parity test of D36 and D80 covers every command of 4.9: a service command missing from any of the three surfaces, or present on a surface but absent from the catalogue, fails the build, and golden paths GP-1 to GP-7 run as CLI transcripts ([cli](cli.md) 6). None of these commands is a bootstrap or local command, so none needs a recorded exemption (OR-16; [cli](cli.md) 1.1).
+
 **Concurrency and audit.** READ COMMITTED with atomic updates and row locks on hot rows; retry on 40001, 40P01, 55P03 [R22 s6]. Round-robin assignment locks its cursor row, booking creation locks the host, the SLA sweep uses `SKIP LOCKED` with leases, timer commands carry a `command_id`. Rate-card and cost changes, approvals, SLA policy edits and forced completions go to the hash-chained audit log (D33); `task_event` and `ticket_event` are append-only.
 
 **Accessibility.** WCAG 2.2 AA is a release gate (D35). Every drag has a non-drag path (SC 2.5.7, [R19 s8]): a task treegrid is the accessible primary form of Gantt and timeline views, with "Move by N days" dialogs ([ux](ux.md)); kanban cards get a "Move to..." menu. The timesheet grid is a keyboard matrix; charts have data-table fallbacks; the map has a list alternative; booking and CSAT pages are keyboard-first.
 
-**Offline.** 1.0 targets a read cache of visited views (D13, Proposed). Field-visit commands (sign-in, worksheet, parts, signature, complete) and timesheet entry are the first candidates for the queued-write allow-list from W3, with attachments uploaded through resumable presigned URLs and per-field conflict policy [R22 s7.2]. The POS edge store already uses the 15-table limit (D37), so visits need their own schema or a higher limit (open question 6).
+**Offline.** 1.0 targets a read cache of visited views (D13, Proposed). Field-visit commands (sign-in, worksheet, parts, signature, complete) and timesheet entry are the first candidates for the queued-write allow-list from W3 (the same typed commands as online, replayed with their `command_id`, 4.9), with attachments uploaded through resumable presigned URLs and per-field conflict policy [R22 s7.2]. The POS edge store already uses the 15-table limit (D37), so visits need their own schema or a higher limit (open question 6).
 
 **Performance (all targets; none measured; no multiple over Odoo is claimed, D21).**
 
@@ -550,44 +620,49 @@ The last column names an [R04] pain rank only where one applies.
 
 | Area | Odoo | obop | Related pain |
 |---|---|---|---|
-| Edition line | Helpdesk, Planning, Field Service, Appointments, Gantt, timesheet grid and approval are Enterprise | All open, no `ee` part | Open-core surprises (2) |
+| Edition line | Helpdesk, Planning, Field Service, Appointments, Gantt, timesheet grid and approval are Enterprise | All of it in the one edition, free under Apache-2.0: no `ee` tree, no paid list, nothing withheld (OR-1, OR-2); built in demand order | Open-core surprises (2) |
 | Dependencies | Blocked-by only; Gantt is Enterprise | Lag, finish-to-start, auto and manual modes in the free core | Open-core (2) |
 | History | Fixed states plus JSON `duration_tracking` | Append-only event tables feed burndown, flow and SLA pauses | None recorded |
 | SLA | A stage-based tag, Enterprise | A tested engine, free, reproducible from the event log | Open-core (2) |
 | Billing of time | Delivered quantity reads timesheets; validation is a hook | Approved-only setting, billed-time lock, correction entries | None recorded |
 | Field work | Odoo 20: the shift is the job; worksheets as property fields | Task plus visits (Proposed), sites and equipment first-class, worksheets as versioned data in packs | Customisation debt (3) |
 | Booking | Enterprise app; Cal.com, open-core for five years, closed its production source on 2026-04-14 [R14 s8.2] | First-party engine with stated race windows and conflict detection | Open-core (2) |
-| Light users | EUR 7.90 Light User tier (price by quote, unit unverified, DECISIONS ruling 21) [R00 s3.5] | Timesheet-only and portal users free within fair use (D2, Proposed) | Pricing (2) |
-| Customisation | Worksheets in 19.0 need Studio, a Custom-plan feature; Odoo 20 moves them to property fields [R14 s6.1; R04 s2] | SLA policies, worksheets, automations are registry data in packs, exportable as a package (D32) | Pricing (2) |
-| API | External API gated to the Custom plan | Typed commands, MCP and webhooks on every plan (D31) | API and docs (10) |
+| Light users | EUR 7.90 Light User tier (price by quote, unit unverified, DECISIONS contradiction ruling 21) [R00 s3.5] | No user types and no prices: every user, timesheet-only and portal users included, is free (OR-2) | Pricing (2) |
+| Customisation | Worksheets in 19.0 need Studio, a Custom-plan feature; Odoo 20 moves them to property fields [R14 s6.1; R04 s2] | SLA policies, worksheets, automations are registry data in packs, exportable as a package (D32) and shareable through the free plugin registry (D81) | Pricing (2) |
+| API and CLI | External API gated to the Custom plan | Typed commands in the CLI, REST and MCP, with webhooks, free and ungated: every install has all of them, and a feature is not done until it exists in all three (D31, D80, OR-4) | API and docs (10) |
+| Agents | Server actions exposed as MCP tools that run unconditionally unless their code blocks them [R16 s2.1] | Every service command has an effect class, a dry-run plan and an idempotency key; agents draft and humans commit (D18, D80) | None recorded |
 | Skipped | ActivityWatch in timesheets; Mapbox routing; Planning-Payroll link (removed in Odoo 20); IAP-credit AI | Monitoring off; provider-neutral routing; no payroll link; bring-your-own-key AI (D18) | - |
 
 ## 8. Out of scope, non-goals and later
 
 - **Elsewhere:** repairs and internal equipment maintenance (supply-chain; a helpdesk button calls `repair` when present); subscriptions and rental (sales-crm); payroll and time off (people); the calendar sync engine and knowledge (platform).
-- **Non-goals:** screen or activity tracking, GPS tracking of staff or vehicles, telematics, a PBX or softphone stack (CTI through provider APIs, [R15 s13; R21 s6.6]), embedding Cal.com, a bundled routing vendor, per-country working-time law in core.
+- **Non-goals:** screen or activity tracking, GPS tracking of staff or vehicles, telematics, a PBX or softphone stack (CTI through provider APIs, [R15 s13; R21 s6.6]), embedding Cal.com, a bundled routing vendor, per-country working-time law in core, a routing, tile, SMS or messaging service run by SpaceCorps (OR-11, D83), and a service feature that exists only in the UI (OR-4).
 - **Later:** sprints, intake triage, other relation types, resource levelling, portfolio views, skills, territories, VROOM optimisation, WhatsApp and social channels (W4), waitlists, group seats, timesheet rounding, billing-target dashboards, projects from CRM opportunities (an Odoo 20 feature, [R14 s3.1]).
 
 ## 9. Open questions
 
-1. **D25 gaps.** D25 lists `resource` as a T0 module in W2 (Proposed); it is ratified with DECISIONS Q8. `service_contract` is not listed and defaults to T3: set its wave.
-2. **Employee core in W2.** `timesheet` is W2 but most of `hr` is W3; D25 lists an `hr` employee core in W2 as Proposed, ratified with DECISIONS Q8. Confirm, and add `cost_rate(employee, date)` to `EmployeePort` (people.md 4.1 already provides it as this spec proposes).
+1. **D25 gaps.** D25 lists `resource` as a T0 module in W3 (Proposed); it is confirmed with DECISIONS Q8. `service_contract` is not listed and defaults to T3: set its wave (this spec proposes W3, beside `planning`).
+2. **Employee core in W3.** `timesheet` needs an employee record, so the `hr` employee core ships with it in W3; D25 and D86 list that core among the first items of W3 (Proposed, confirmed with DECISIONS Q8). Confirm, and add `cost_rate(employee, date)` to `EmployeePort` (people.md 4.1 already provides it as this spec proposes).
 3. **Analytic ledger (closed).** finance.md 4.8 owns `analytic_line`, gives every line a `source_ref` and allows a module-owned 1:1 extension row (Proposed there). The number is kept because other documents cite it.
 4. **Leave path (closed).** [People](people.md) 4.2 already routes project, planning and helpdesk through the `hr_resource` bridge and `resource_leave`, the same path as 4.1 here, so one availability source serves all. The number is kept because people.md cites it.
 5. **Field work model.** Ratify option C (task plus visits) before 2028-07-01.
 6. **Edge store.** The POS store in retail-commerce-marketing.md already lists 15 tables (D37). Field visits need a separate edge schema or a higher limit; which?
 7. **Equipment.** `service_equipment` (customer sites) and `maintenance_equipment` (the company's own assets, [supply-chain](supply-chain.md) 4.6) stay separate tables, and neither is a bare `equipment` ([CONVENTIONS](../CONVENTIONS.md) section 6). Open: whether a link between them is needed.
-8. **Cross-company staffing.** Company groups will want one company's employees on another's projects before intercompany ships (W3). Is a W2 workaround acceptable?
+8. **Cross-company staffing.** Company groups will want one company's employees on another's projects before `intercompany` ships, a T2 app of W3 that follows the services variant in demand order. Is a workaround until then acceptable?
 9. **Consumer law.** Does the withdrawal function apply to paid bookings and deposits (counsel)?
-10. **Routing.** Ship only the trait and straight-line fallback, or document a default sidecar profile? A hosted service would amend the paid list.
-11. **Gantt placement and renderer.** ux.md asks whether a basic Gantt ships with `project` in W2 for the services variant; D25 says W3. The SVAR, DHTMLX or custom spike is still open.
+10. **Routing.** Ship only the trait and straight-line fallback, or document a default sidecar profile for operators? SpaceCorps hosts no routing service (OR-11, D83).
+11. **Gantt placement and renderer.** ux.md asks whether a basic Gantt ships with `project` for the services variant; D25 places the Gantt view in W3 after `project`, which is itself W3 (D86; RATIFIED, OR-15), so the question is whether a basic Gantt is in the variant's first release or follows it. The SVAR, DHTMLX or custom spike is still open.
 12. **Defaults for design partners.** "Bill approved time only" only when approval is on; first matching SLA policy per metric; finish-to-start with lag as the only W3 relation; a hard 24 h daily timesheet cap or a warning.
 13. **Odoo 20 detail.** Odoo 20 docs for Helpdesk, Timesheets and Appointments were not read line by line, and project profitability conflicts between release notes and docs [R14 gaps]; verify before publishing parity claims.
 14. **Invoicing sources.** `timesheet` is not an `InvoiceableSource` implementer: billable time reaches invoicing only through the sale line (`QtyContributionPort` via `sale_timesheet`, [R23 D.4]) and `sales` is the implementer ([ARCHITECTURE](../ARCHITECTURE.md) 4.3; [CONVENTIONS](../CONVENTIONS.md) 7.1), so there is no time-only invoice without an order. Whether to add time-only invoicing stays an owner question (ARCHITECTURE 16.3 item 7; finance open question 18; DECISIONS Q8). Confirm, or specify it.
+15. **Command names and effect classes.** The commands in 4.9 are Proposed names under the grammar freeze of Q22, and the effect classes follow [ai](ai.md) 4.3 (Proposed). Confirm them, in particular that `ticket reply` is `external`, that `timesheet_submission approve` is `commit`, and that no service command is `money_and_payee` or `destructive`. *Default:* as listed in 4.9.
+16. **UI parity after 1.0.** D80 gates 1.0 on UI parity for what has shipped by then (OR-16: literal parity), and the services variant ships after 1.0, in W3. Must a later series be gated on UI parity for its new commands? OR-16 fixes the gate only at the first stable release, so this stays open. *Default:* no release gate; UI coverage is tracked per module in the parity matrix ([cli](cli.md) 6), because the UI is not part of the per-feature definition of done (D80). The owner decides; this is not a ruling.
+17. **Anonymous callers.** The booking page, web-form ticket creation, CSAT page and token links serve people with no account. Which commands may a guest principal (D28) call, and how does the parity matrix list them ([cli](cli.md) 1.1)? *Default:* only `booking.create`, `ticket.create` through a form mapped to a team, and `ticket_rating.create`, each behind a `share_grant` or a form token and rate limited; everything else needs a principal.
+18. **Approvals engine and inbound mail.** Timesheet approval and "bill approved time only" (4.3) need the approvals engine, and email-in for tasks and tickets needs the inbound mail gateway. Both are out of W1 (RATIFIED, OR-15); their landing in W2 is Proposed, and the slip order of DECISIONS 5.3 can move them. *Default:* build them first; the services variant is a wave later, and if they slip into W3 they precede `timesheet` and `helpdesk` there.
 
 ## 10. Sources
 
-Decision IDs (D1-D39), register sections and vocabulary come from [DECISIONS.md](../DECISIONS.md). Names of events, permission groups, data classes and entities follow [CONVENTIONS.md](../CONVENTIONS.md).
+Decision IDs (D1-D86), the owner rulings OR-1 to OR-21, register sections and vocabulary come from [DECISIONS.md](../DECISIONS.md). Names of events, permission groups, data classes and entities follow [CONVENTIONS.md](../CONVENTIONS.md); command names and the CLI grammar follow [cli.md](cli.md) (Proposed until Q22).
 
 | Tag | File |
 |---|---|
@@ -601,6 +676,7 @@ Decision IDs (D1-D39), register sections and vocabulary come from [DECISIONS.md]
 | R13 | [research/13-hr-payroll.md](../research/13-hr-payroll.md) |
 | R14 | [research/14-services-project-helpdesk-field.md](../research/14-services-project-helpdesk-field.md) |
 | R15 | [research/15-platform-collaboration-documents.md](../research/15-platform-collaboration-documents.md) |
+| R16 | [research/16-ai-native-erp.md](../research/16-ai-native-erp.md) |
 | R18 | [research/18-security-compliance-deployment-ops.md](../research/18-security-compliance-deployment-ops.md) |
 | R19 | [research/19-ux-design-system.md](../research/19-ux-design-system.md) |
 | R20 | [research/20-market-personas-mvp-gtm.md](../research/20-market-personas-mvp-gtm.md) |
@@ -608,5 +684,6 @@ Decision IDs (D1-D39), register sections and vocabulary come from [DECISIONS.md]
 | R22 | [research/22-data-layer-sync-realtime-performance.md](../research/22-data-layer-sync-realtime-performance.md) |
 | R23 | [research/23-kernel-model-architecture-decisions.md](../research/23-kernel-model-architecture-decisions.md) |
 | R24 | [research/24-extension-platform-sdk.md](../research/24-extension-platform-sdk.md) |
-| R26 | [research/26-business-model-pricing-risk.md](../research/26-business-model-pricing-risk.md) |
 | R28 | [research/28-docs-community-support-brand.md](../research/28-docs-community-support-brand.md) |
+| Rulings | OR-1 to OR-21, "Owner rulings (2026-10-01)" in [DECISIONS.md](../DECISIONS.md) |
+| CLI | [cli.md](cli.md): the grammar, the command catalogue, parity and the plugin registry client |
