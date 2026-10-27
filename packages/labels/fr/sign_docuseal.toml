@@ -1,0 +1,32 @@
+[labels.fr.module]
+name = "Signer avec DocuSeal"
+description = "Reçoit sous forme d'enregistrements les événements d'un serveur DocuSeal (consulté, signé, refusé, expiré), à côté des demandes de l'app Signature. L'événement ne fait pas avancer la demande : une personne enregistre encore la signature avec l'action sign, qui exige une approbation."
+summary = "Reçoit les événements de signature DocuSeal à côté des demandes. Une personne enregistre encore la signature."
+
+[labels.fr.model.sign_docuseal_event]
+name = "Événement DocuSeal"
+description = "Un événement signalé par DocuSeal au sujet d'une demande de signature, écrit par le connecteur DocuSeal"
+
+[labels.fr.model.sign_docuseal_event.field.event]
+label = "Événement"
+description = "Type d'événement de DocuSeal, par exemple form.completed, form.declined ou submission.expired"
+
+[labels.fr.model.sign_docuseal_event.field.request_ref]
+label = "Référence de la demande"
+description = "Référence de la demande de signature concernée, telle que le connecteur l'a envoyée (external_id chez DocuSeal)"
+
+[labels.fr.model.sign_docuseal_event.field.submission_id]
+label = "ID de soumission"
+description = "Identifiant de la soumission chez DocuSeal, pour la retrouver"
+
+[labels.fr.model.sign_docuseal_event.field.status]
+label = "Statut"
+description = "Statut chez DocuSeal à ce moment, par exemple completed ou declined"
+
+[labels.fr.model.sign_docuseal_event.field.document_url]
+label = "Adresse du document"
+description = "Adresse du document signé sur le serveur DocuSeal ; l'ouvrir demande un accès à DocuSeal"
+
+[labels.fr.model.sign_docuseal_event.field.completed_at]
+label = "Terminé le"
+description = "Quand le signataire a terminé selon DocuSeal, tel qu'écrit par DocuSeal"

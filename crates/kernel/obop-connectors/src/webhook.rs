@@ -30,6 +30,8 @@ pub enum Scheme {
     Standard,
     GitHub,
     Stripe,
+    /// A shared secret in the `x-docuseal-secret` header, for senders that cannot sign (DocuSeal).
+    Header,
 }
 
 impl Scheme {
@@ -38,6 +40,7 @@ impl Scheme {
             "standard" | "" => Some(Self::Standard),
             "github" => Some(Self::GitHub),
             "stripe" => Some(Self::Stripe),
+            "header" => Some(Self::Header),
             _ => None,
         }
     }
@@ -193,6 +196,19 @@ pub fn verify(
                 }
             }
             if ok {
+                Ok(Verified {
+                    event_id: body_id(),
+                })
+            } else {
+                Err(VerifyError::BadSignature)
+            }
+        }
+        Scheme::Header => {
+            // No timestamp and no body signature: the secret proves who sent it, not that the body
+            // is untouched. The event id is the body hash, so a captured delivery cannot be
+            // applied twice.
+            let got = header("x-docuseal-secret").ok_or(VerifyError::MissingHeader)?;
+            if ct_eq(got.as_bytes(), secret.as_bytes()) {
                 Ok(Verified {
                     event_id: body_id(),
                 })
@@ -416,6 +432,43 @@ mod tests {
             verify(Scheme::GitHub, secret, &none, body, NOW),
             Err(VerifyError::MissingHeader)
         );
+    }
+
+    #[test]
+    fn header_scheme() {
+        let body = b"{\"event_type\":\"form.completed\"}";
+        let good = headers(&[("x-docuseal-secret", "shared-secret-0001".into())]);
+        let v = verify(Scheme::Header, "shared-secret-0001", &good, body, NOW).unwrap();
+        // Replay protection rests on the id: the same body is the same id, another body another.
+        assert_eq!(
+            v.event_id,
+            verify(
+                Scheme::Header,
+                "shared-secret-0001",
+                &good,
+                body,
+                NOW + 9999
+            )
+            .unwrap()
+            .event_id
+        );
+        assert_ne!(
+            v.event_id,
+            verify(Scheme::Header, "shared-secret-0001", &good, b"{}", NOW)
+                .unwrap()
+                .event_id
+        );
+        let bad = headers(&[("x-docuseal-secret", "shared-secret-0002".into())]);
+        assert_eq!(
+            verify(Scheme::Header, "shared-secret-0001", &bad, body, NOW),
+            Err(VerifyError::BadSignature)
+        );
+        let none = headers(&[]);
+        assert_eq!(
+            verify(Scheme::Header, "shared-secret-0001", &none, body, NOW),
+            Err(VerifyError::MissingHeader)
+        );
+        assert_eq!(Scheme::parse("header"), Some(Scheme::Header));
     }
 
     #[test]

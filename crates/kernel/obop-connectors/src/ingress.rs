@@ -213,6 +213,11 @@ impl Ingress {
                 J::String(s) => self
                     .egress
                     .restore(&conn.id, s)
+                    .or_else(|| {
+                        (conn.cfg("resolve_refs") == "true")
+                            .then(|| self.egress.resolve_ref(&conn.id, s))
+                            .flatten()
+                    })
                     .map_or_else(|| v.clone(), J::from),
                 other => other.clone(),
             };

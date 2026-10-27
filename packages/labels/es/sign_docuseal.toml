@@ -1,0 +1,32 @@
+[labels.es.module]
+name = "Firmar con DocuSeal"
+description = "Recibe los eventos de un servidor DocuSeal (visto, firmado, rechazado, caducado) como registros junto a las solicitudes de la app Firma. El evento no mueve la solicitud: una persona sigue registrando la firma con la acción sign, que requiere aprobación."
+summary = "Recibe los eventos de firma de DocuSeal junto a las solicitudes. Una persona sigue registrando la firma."
+
+[labels.es.model.sign_docuseal_event]
+name = "Evento de DocuSeal"
+description = "Un evento que DocuSeal comunicó sobre una solicitud de firma, escrito por el conector de DocuSeal"
+
+[labels.es.model.sign_docuseal_event.field.event]
+label = "Evento"
+description = "Tipo de evento de DocuSeal, por ejemplo form.completed, form.declined o submission.expired"
+
+[labels.es.model.sign_docuseal_event.field.request_ref]
+label = "Referencia de la solicitud"
+description = "Referencia de la solicitud de firma a la que se refiere el evento, tal como la envió el conector (external_id en DocuSeal)"
+
+[labels.es.model.sign_docuseal_event.field.submission_id]
+label = "ID de envío"
+description = "Identificador del envío en DocuSeal, para encontrarlo allí"
+
+[labels.es.model.sign_docuseal_event.field.status]
+label = "Estado"
+description = "Estado en DocuSeal en ese momento, por ejemplo completed o declined"
+
+[labels.es.model.sign_docuseal_event.field.document_url]
+label = "Dirección del documento"
+description = "Dirección del documento firmado en el servidor DocuSeal; abrirlo requiere acceso a DocuSeal"
+
+[labels.es.model.sign_docuseal_event.field.completed_at]
+label = "Terminado el"
+description = "Cuándo terminó el firmante según DocuSeal, tal como lo escribió DocuSeal"

@@ -1,0 +1,32 @@
+[labels.de.module]
+name = "Signieren mit DocuSeal"
+description = "Empfängt die Ereignisse eines DocuSeal-Servers (angesehen, signiert, abgelehnt, abgelaufen) als Datensätze neben den Anfragen der Sign-App. Das Ereignis ändert die Anfrage nicht: Eine Person erfasst die Signatur weiterhin mit der Aktion sign, die eine Genehmigung braucht."
+summary = "DocuSeal-Signaturereignisse neben Sign-Anfragen empfangen. Eine Person erfasst die Signatur weiterhin."
+
+[labels.de.model.sign_docuseal_event]
+name = "DocuSeal-Ereignis"
+description = "Ein Ereignis, das DocuSeal zu einer Signaturanfrage gemeldet hat, geschrieben vom DocuSeal-Connector"
+
+[labels.de.model.sign_docuseal_event.field.event]
+label = "Ereignis"
+description = "Der Ereignistyp von DocuSeal, zum Beispiel form.completed, form.declined oder submission.expired"
+
+[labels.de.model.sign_docuseal_event.field.request_ref]
+label = "Anfrage-Referenz"
+description = "Die Referenz der Signaturanfrage, um die es geht, wie der Connector sie gesendet hat (external_id bei DocuSeal)"
+
+[labels.de.model.sign_docuseal_event.field.submission_id]
+label = "Submission-ID"
+description = "Die ID der Submission bei DocuSeal, um sie dort zu finden"
+
+[labels.de.model.sign_docuseal_event.field.status]
+label = "Status"
+description = "Der Status bei DocuSeal in diesem Moment, zum Beispiel completed oder declined"
+
+[labels.de.model.sign_docuseal_event.field.document_url]
+label = "Dokumentadresse"
+description = "Adresse des signierten Dokuments auf dem DocuSeal-Server; zum Öffnen ist Zugriff auf DocuSeal nötig"
+
+[labels.de.model.sign_docuseal_event.field.completed_at]
+label = "Abgeschlossen am"
+description = "Wann laut DocuSeal die unterzeichnende Person fertig war, wie DocuSeal es geschrieben hat"

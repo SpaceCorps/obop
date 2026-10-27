@@ -610,6 +610,22 @@ impl Egress {
             .ok()
     }
 
+    /// The id of the record a reference pseudonym stood for, for a connection that asked for it
+    /// (`resolve_refs`): the way an event from the receiver finds the record it is about. It reads
+    /// the map the erasure hook already clears, so once a subject is erased the pseudonym stays
+    /// unresolvable. `None` for anything that is not a reference this connection issued.
+    pub fn resolve_ref(&self, connection: &str, text: &str) -> Option<String> {
+        if !text.starts_with("psn_") {
+            return None;
+        }
+        let f = self
+            .backend
+            .get(PSEUDONYMS, &format!("{connection}:{text}"))
+            .ok()??;
+        let (_, id) = str_of(&f, "record").split_once(':')?;
+        Some(id.to_string())
+    }
+
     /// Drop everything the instance holds that links a pseudonym or a token to `record`
     /// (`model:id`): the erasure hook. Returns how many entries were removed per connection.
     ///

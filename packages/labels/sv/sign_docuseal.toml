@@ -1,0 +1,32 @@
+[labels.sv.module]
+name = "Signering med DocuSeal"
+description = "Tar emot händelserna från en DocuSeal-server (visad, signerad, avböjd, utgången) som poster bredvid begäranden i Signering. Händelsen flyttar inte begäran: en person registrerar fortfarande signaturen med åtgärden sign, som kräver godkännande."
+summary = "Ta emot DocuSeals signeringshändelser bredvid begäranden. En person registrerar fortfarande signaturen."
+
+[labels.sv.model.sign_docuseal_event]
+name = "DocuSeal-händelse"
+description = "En händelse som DocuSeal rapporterat om en signeringsbegäran, skriven av DocuSeal-kopplingen"
+
+[labels.sv.model.sign_docuseal_event.field.event]
+label = "Händelse"
+description = "DocuSeals händelsetyp, till exempel form.completed, form.declined eller submission.expired"
+
+[labels.sv.model.sign_docuseal_event.field.request_ref]
+label = "Begärans referens"
+description = "Referensen för signeringsbegäran som händelsen gäller, som kopplingen skickade den (external_id hos DocuSeal)"
+
+[labels.sv.model.sign_docuseal_event.field.submission_id]
+label = "Submission-id"
+description = "DocuSeals id för submission, för att hitta den där"
+
+[labels.sv.model.sign_docuseal_event.field.status]
+label = "Status"
+description = "Statusen hos DocuSeal just då, till exempel completed eller declined"
+
+[labels.sv.model.sign_docuseal_event.field.document_url]
+label = "Dokumentadress"
+description = "Adressen till det signerade dokumentet på DocuSeal-servern; att öppna det kräver åtkomst till DocuSeal"
+
+[labels.sv.model.sign_docuseal_event.field.completed_at]
+label = "Klar"
+description = "När undertecknaren enligt DocuSeal blev klar, som DocuSeal skrev det"

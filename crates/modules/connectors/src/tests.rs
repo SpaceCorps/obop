@@ -2546,6 +2546,101 @@ fn stripe_takes_form_encoded_customers_and_signed_events_through_one_connection(
     );
 }
 
+#[test]
+fn docuseal_gets_a_submission_with_the_key_header_and_reports_back_with_a_shared_secret() {
+    let s = Store::new();
+    let d = Arc::new(Dispatcher::new());
+    base::register(&d, &s);
+    crm::register(&d, &s);
+    let rt = Runtime::with_providers(
+        s.backend(),
+        d.clone(),
+        SecretBox::for_tests(),
+        Config {
+            allow_loopback: true,
+            public_url: None,
+        },
+        providers(),
+        None,
+    );
+    register(&d, &s, &rt);
+    let e = Env { d, s, rt };
+    let party = seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "docuseal", false);
+    let api_key = "ds_api_key_for_the_test_0001";
+    let secret = "docuseal-shared-secret-0001";
+    let c = ok(
+        &e,
+        &admin(),
+        "connection.create",
+        json!({"name": "DocuSeal", "provider": "docuseal",
+               "config": json!({"url": r.url(), "template_id": "7", "role": "Signer", "resolve_refs": "true",
+                                "target_model": "lead",
+                                "mapping": json!({"event_type": "title", "data.external_id": "contact_name"}).to_string()}).to_string(),
+               "credentials": json!({"api_key": api_key, "signing_secret": secret}).to_string(),
+               "field_allowlist": json!({"party": ["name", "email"], "lead": ["title", "contact_name"]}).to_string(),
+               "policy": json!({"classes": {"public_directory": "allow", "internal": "allow"}}).to_string()}),
+    );
+    assert_clean(&c);
+    let id = c["id"].as_str().unwrap().to_string();
+    ok(
+        &e,
+        &admin(),
+        "consent.create",
+        json!({"connection": id, "purpose": "Get contracts signed", "legal_basis": "contract"}),
+    );
+    ok(&e, &admin(), "connection.connect", json!({"id": id}));
+    ok(&e, &admin(), "connection.sync", json!({"id": id}));
+    let hit = r.last();
+    let (head, body) = hit.split_once("\r\n\r\n").unwrap();
+    // The key goes in DocuSeal's own header, not as a bearer token.
+    assert!(
+        head.to_ascii_lowercase()
+            .contains(&format!("x-auth-token: {api_key}").to_ascii_lowercase()),
+        "{head}"
+    );
+    assert!(!head.to_ascii_lowercase().contains("authorization:"));
+    let doc: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(doc["template_id"], 7);
+    assert_eq!(doc["send_email"], true);
+    let who = &doc["submitters"][0];
+    assert_eq!(who["role"], "Signer");
+    assert_eq!(who["email"], "ada@example.test");
+    assert_eq!(who["name"], "Ada Example");
+    let token = who["external_id"].as_str().unwrap().to_string();
+    assert!(token.starts_with("psn_"), "{token}");
+    assert_eq!(r.count(), 1);
+
+    // DocuSeal reports back with the token it was given; the record behind it comes back.
+    let event = json!({"event_type": "form.completed", "timestamp": "2026-10-27T12:00:00Z",
+                       "data": {"external_id": token, "status": "completed"}})
+    .to_string();
+    let good = |k: &str| (k == "x-docuseal-secret").then(|| secret.to_string());
+    let o = e.rt.receive_webhook(&id, &good, event.as_bytes()).unwrap();
+    assert_eq!(o.created, 1);
+    let lead = &e.s.backend().list("lead").unwrap()[0].1;
+    assert_eq!(
+        (lead["title"].as_str(), lead["contact_name"].as_str()),
+        (Some("form.completed"), Some(party.as_str()))
+    );
+    // The same delivery twice, a wrong secret and no secret at all are refused.
+    assert!(e.rt.receive_webhook(&id, &good, event.as_bytes()).is_err());
+    let other = json!({"event_type": "form.declined", "data": {"external_id": token}}).to_string();
+    let bad = |k: &str| (k == "x-docuseal-secret").then(|| "not-the-secret-at-all-1".to_string());
+    assert_eq!(
+        e.rt.receive_webhook(&id, &bad, other.as_bytes())
+            .unwrap_err(),
+        obop_connectors::runtime::HookError::Unauthorised
+    );
+    let none = |_: &str| None;
+    assert_eq!(
+        e.rt.receive_webhook(&id, &none, other.as_bytes())
+            .unwrap_err(),
+        obop_connectors::runtime::HookError::Unauthorised
+    );
+}
+
 // ---- a refusal of the store in a withdrawal, a revocation and an erasure (D74) --------------------
 
 fn flaky_env() -> (
