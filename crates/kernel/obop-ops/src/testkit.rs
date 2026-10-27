@@ -41,7 +41,7 @@ impl Flaky {
         if self.refuse_reads.lock().unwrap().iter().any(|m| m == model)
             && self
                 .allow_reads
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
                 .is_err()
         {
             return Err(obop_storage::fault::Fault::Busy
@@ -73,7 +73,7 @@ impl Backend for Flaky {
             .any(|(m, i)| m == model && i == id)
             && self
                 .allow_reads
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
                 .is_err()
         {
             return Err(obop_storage::fault::Fault::Busy

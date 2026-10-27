@@ -238,16 +238,19 @@ fn pw() -> Reauth<'static> {
 
 /// Ada with two passkeys (the first one used for passwordless sign-in), signed in; a proof ready
 /// for the removal of the first, so the removal can run inside a hook.
-fn passwordless_rig() -> (
-    Arc<Auth>,
-    Arc<Flaky>,
-    Arc<dyn Backend>,
-    SoftAuthenticator,
-    serde_json::Value,
-    String,
-    Principal,
-    String,
-) {
+struct PasswordlessRig {
+    a: Arc<Auth>,
+    flaky: Arc<Flaky>,
+    b: Arc<dyn Backend>,
+    /// The answer of the first key to a passwordless challenge, made before anything races.
+    answer: serde_json::Value,
+    /// The id of the first key.
+    id: String,
+    p: Principal,
+    token: String,
+}
+
+fn passwordless_rig() -> PasswordlessRig {
     let (a, flaky, b) = shared(AuthConfig::insecure_dev());
     user_with(&a, "ada", &["base.user"]);
     let (token, p) = session_of(&a, "ada");
@@ -279,7 +282,15 @@ fn passwordless_rig() -> (
     // The proof the removal needs, from the second key.
     let opts = a.proof_options(&p, &ctx()).unwrap();
     a.proof(&p, &ctx(), &a2.get(&opts, ORIGIN)).unwrap();
-    (a, flaky, b, a1, answer, id, p, token)
+    PasswordlessRig {
+        a,
+        flaky,
+        b,
+        answer,
+        id,
+        p,
+        token,
+    }
 }
 
 #[test]
@@ -288,7 +299,15 @@ fn removing_a_passkey_ends_the_passwordless_sign_in_that_used_it_at_either_point
     // passkey is checked again and is gone), once after both reads and before the session is
     // written (the epoch has changed).
     for after_gets in [0, 1] {
-        let (a, flaky, b, _a1, answer, id, p, token) = passwordless_rig();
+        let PasswordlessRig {
+            a,
+            flaky,
+            b,
+            answer,
+            id,
+            p,
+            token,
+        } = passwordless_rig();
         let (a2, p2, t2) = (a.clone(), p.clone(), token.clone());
         flaky.after_the_get_of(
             crate::passkey::PASSKEY_TABLE,

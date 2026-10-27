@@ -1365,11 +1365,7 @@ fn a_backup_is_never_labelled_with_a_schema_version_the_store_would_not_give() {
             Ok(r) => {
                 made += 1;
                 let v = backup::verify_with(&r.path, &keys()).unwrap();
-                assert_eq!(
-                    u64::from(v.manifest.schema_version),
-                    real,
-                    "after {allowed} reads"
-                );
+                assert_eq!(v.manifest.schema_version, real, "after {allowed} reads");
             }
         }
     }
