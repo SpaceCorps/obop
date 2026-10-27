@@ -100,6 +100,42 @@ fn only_file(dir: &Path, ext: &str) -> PathBuf {
 }
 
 #[test]
+fn a_preview_and_a_run_with_a_backup_made_elsewhere_do_not_need_the_uploaded_files() {
+    let dir = Dir::new("noblobs");
+    let url = old_db(&dir, "prod.db");
+    // The directory of the uploaded files cannot be made: it would be inside a file.
+    std::fs::write(dir.p("file"), b"x").unwrap();
+    let blocked = dir.s("file/blobs");
+    let env = [("OBOP_BLOB_DIR", blocked.as_str())];
+    let t = ok(&run(&env, &["migrate", "run", "--dry-run", "--db", &url]));
+    assert!(t.contains("dry run"), "{t}");
+    // A run that has to take the backup itself needs them, and says so.
+    let backups = dir.s("backups");
+    let o = run(
+        &[
+            ("OBOP_BLOB_DIR", blocked.as_str()),
+            ("OBOP_BACKUP_DIR", &backups),
+        ],
+        &["migrate", "run", "--db", &url],
+    );
+    assert!(!o.status.success());
+    assert!(
+        text(&o).contains("cannot open the uploaded files"),
+        "{}",
+        text(&o)
+    );
+    // No backup is taken here (no directory), so the run goes on; and an up-to-date database is
+    // only a report.
+    for _ in 0..2 {
+        let t = ok(&run(
+            &[("OBOP_BLOB_DIR", blocked.as_str())],
+            &["migrate", "run", "--db", &url],
+        ));
+        assert!(!t.contains("cannot open"), "{t}");
+    }
+}
+
+#[test]
 fn the_strict_gates_refuse_then_allow_a_migration_that_is_then_rolled_back_with_a_reason() {
     let dir = Dir::new("strict");
     let url = old_db(&dir, "prod.db");

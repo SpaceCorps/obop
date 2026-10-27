@@ -579,6 +579,60 @@ fn a_restore_point_is_made_on_a_postgresql_host_and_required_when_archiving_is_o
 }
 
 #[test]
+fn a_setting_the_server_would_not_give_is_not_archiving_off_and_a_size_not_given_is_not_zero() {
+    let clock = Arc::new(FakeClock::at(T0));
+    // The role may not make the restore point, and the server cannot say whether it archives: the
+    // strict gate keeps the recovery point part of the run (it went on with "archiving is off").
+    let dir = Dir::new("rpx");
+    let (b, url) = old_db(&dir);
+    let mut s = FakeServer::well_configured();
+    s.setting_error = Some("the connection was lost".into());
+    s.restore_point_error = Some("permission denied".into());
+    let mut strict = gate(&b, &url, &clock, Mode::Strict);
+    strict.server = Some(Arc::new(s));
+    strict.options.disk_attested = true;
+    let d2 = Dir::new("rpxx");
+    plan_and_store(&strict);
+    let bk = backup_now(&b, &d2, "r", &clock);
+    rehearse_to_receipt(&strict, &bk, &d2.p("r.json"), None);
+    strict.options.receipt = Some(d2.p("r.json"));
+    strict.options.backup_file = Some(bk);
+    let e = strict.run(false, &mut |_| {}).unwrap_err();
+    assert!(e.contains("restore point") && e.contains("unknown"), "{e}");
+    assert_eq!(strict.migrator().status().unwrap().stored, None);
+    // The relaxed gate goes on and says that it does not know.
+    let dir3 = Dir::new("rpy");
+    let (b3, url3) = old_db(&dir3);
+    let mut s = FakeServer::well_configured();
+    s.setting_error = Some("the connection was lost".into());
+    s.restore_point_error = Some("permission denied".into());
+    let mut relaxed = gate(&b3, &url3, &clock, Mode::Relaxed);
+    relaxed.server = Some(Arc::new(s));
+    let mut said = Vec::new();
+    relaxed
+        .run(false, &mut |l| said.push(l.to_string()))
+        .unwrap();
+    assert!(
+        said.iter()
+            .any(|l| l.contains("no restore point") && l.contains("unknown")),
+        "{said:?}"
+    );
+    // The size of the database is not known: the check says so and does not pass on "needs 0.0".
+    let dir4 = Dir::new("sizeless");
+    let (b4, _) = old_db(&dir4);
+    let backups = Dir::new("sizeless-bk");
+    let mut s = FakeServer::well_configured();
+    s.bytes_error = Some("the connection was lost".into());
+    let mut g = gate(&b4, "postgres://u@h/db", &clock, Mode::Strict);
+    g.server = Some(Arc::new(s));
+    g.options.backup_dir = Some(backups.0.clone());
+    let (_, c) = g.preflight().unwrap();
+    let d = check(&c, "disk_backup");
+    assert_eq!(d.level, Level::Warn, "{d:?}");
+    assert!(d.detail.contains("could not be read"), "{}", d.detail);
+}
+
+#[test]
 fn a_postgresql_host_needs_the_operator_to_attest_its_disk() {
     let dir = Dir::new("pgdisk");
     let b = obop_storage::open("memory:").unwrap();
