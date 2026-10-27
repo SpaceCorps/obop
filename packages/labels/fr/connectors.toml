@@ -282,10 +282,6 @@ description = "Nombre maximal d’enregistrements par jour"
 label = "Jours de conservation"
 description = "Nombre de jours de conservation des journaux de flux et des exécutions"
 
-[labels.fr.model.connection.field.created_at]
-label = "Créée le"
-description = "Quand la connexion a été créée"
-
 [labels.fr.model.connection.field.last_sync_at]
 label = "Dernière exécution le"
 description = "Quand la connexion s’est exécutée pour la dernière fois"

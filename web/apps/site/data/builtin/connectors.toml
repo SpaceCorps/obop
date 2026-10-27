@@ -338,11 +338,6 @@ class = "none"
 kind = "number"
 
 [[model.field]]
-name = "created_at"
-description = "When the connection was created"
-class = "none"
-
-[[model.field]]
 name = "last_sync_at"
 description = "When the connection last ran"
 class = "none"

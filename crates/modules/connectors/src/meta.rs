@@ -147,7 +147,6 @@ pub fn models() -> Vec<ModelDef> {
                 num("rate_limit_per_hour", "Most flows per hour", USER),
                 num("volume_cap_per_day", "Most records per day", USER),
                 num("retention_days", "Days flow logs and runs are kept", USER),
-                t("created_at", "When the connection was created", USER),
                 t("last_sync_at", "When the connection last ran", USER),
                 t("last_error", "Summary of the last failure, without payloads", USER),
                 long("result", "Output of the last command (test, sync, authorisation link); never stored", USER),

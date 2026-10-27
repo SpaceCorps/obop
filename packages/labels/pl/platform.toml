@@ -349,7 +349,7 @@ description = "Uwagi, które niczego nie blokują, na przykład licencja zastrze
 label = "Dziennik zmian"
 description = "Informacje o tym wydaniu"
 
-[labels.pl.model.module.field.updated_at]
+[labels.pl.model.module.field.upgraded_at]
 label = "Zaktualizowano"
 description = "Kiedy ostatnio zaktualizowano (sekundy Unix); puste, jeśli nigdy"
 

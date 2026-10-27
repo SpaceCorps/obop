@@ -282,10 +282,6 @@ description = "Höchstzahl an Datensätzen pro Tag"
 label = "Aufbewahrungstage"
 description = "Tage, die Datenfluss-Protokolle und Läufe aufbewahrt werden"
 
-[labels.de.model.connection.field.created_at]
-label = "Erstellt am"
-description = "Wann die Verbindung erstellt wurde"
-
 [labels.de.model.connection.field.last_sync_at]
 label = "Letzter Lauf am"
 description = "Wann die Verbindung zuletzt lief"

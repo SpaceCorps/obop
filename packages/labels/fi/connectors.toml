@@ -282,10 +282,6 @@ description = "Enimmäismäärä tietueita päivässä"
 label = "Säilytyspäivät"
 description = "Päivät, joina tietovirtalokit ja ajot säilytetään"
 
-[labels.fi.model.connection.field.created_at]
-label = "Luotu"
-description = "Milloin yhteys luotiin"
-
 [labels.fi.model.connection.field.last_sync_at]
 label = "Viimeksi ajettu"
 description = "Milloin yhteys viimeksi ajettiin"

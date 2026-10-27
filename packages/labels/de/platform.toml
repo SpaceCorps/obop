@@ -349,7 +349,7 @@ description = "Hinweise, die nichts verhindern, etwa eine proprietäre Lizenz (e
 label = "Änderungsprotokoll"
 description = "Versionshinweise zu dieser Version"
 
-[labels.de.model.module.field.updated_at]
+[labels.de.model.module.field.upgraded_at]
 label = "Aktualisiert am"
 description = "Wann zuletzt aktualisiert wurde (Unix-Sekunden); leer, wenn nie"
 

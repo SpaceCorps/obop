@@ -349,7 +349,7 @@ description = "Huomautukset, jotka eivät estä mitään, esimerkiksi suljettu l
 label = "Muutosloki"
 description = "Tämän version julkaisutiedot"
 
-[labels.fi.model.module.field.updated_at]
+[labels.fi.model.module.field.upgraded_at]
 label = "Päivitetty"
 description = "Milloin viimeksi päivitettiin (Unix-sekunteja); tyhjä, jos ei koskaan"
 

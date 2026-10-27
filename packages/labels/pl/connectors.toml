@@ -282,10 +282,6 @@ description = "Maksymalna liczba rekordów na dobę"
 label = "Dni przechowywania"
 description = "Liczba dni przechowywania dzienników przepływu i uruchomień"
 
-[labels.pl.model.connection.field.created_at]
-label = "Utworzono"
-description = "Kiedy utworzono połączenie"
-
 [labels.pl.model.connection.field.last_sync_at]
 label = "Ostatnie uruchomienie"
 description = "Kiedy połączenie ostatnio działało"
