@@ -547,6 +547,76 @@ fn the_schema_of_a_non_default_search_path_is_used() {
     assert!(tables(&mut c).is_empty(), "nothing in public");
 }
 
+// ---- a refusal is never run again because of the words in it ----------------------------------------
+
+#[test]
+fn a_refused_batch_is_not_run_again_because_a_record_id_says_deadlock() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let b = open_with(db.url(), Some(one())).unwrap();
+    // The trigger counts its calls on a sequence, which a rolled-back transaction does not undo.
+    db.connect()
+        .batch_execute(&format!(
+            "CREATE SEQUENCE zz_attempts;{REFUSING_TRIGGER_COUNTING}"
+        ))
+        .unwrap();
+    let id = "inv SQLSTATE 40001 and SQLSTATE 40P01";
+    let e = b
+        .apply_checked(&[Op::Insert {
+            model: "frozen".into(),
+            id: id.into(),
+            fields: fields(1),
+        }])
+        .unwrap_err();
+    let ApplyError::Storage(text) = e else {
+        panic!("{e:?}");
+    };
+    let r = refusal::parse(&text).unwrap_or_else(|| panic!("not a refusal: {text}"));
+    assert_eq!(r.record, id);
+    assert!(
+        text.contains("SQLSTATE 40001"),
+        "the id is in the message: {text}"
+    );
+    let attempts: i64 = db
+        .connect()
+        .query_one("SELECT last_value FROM zz_attempts", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(attempts, 1, "the batch ran once; it was not run again");
+    // And the words that `describe` writes for a real deadlock are still recognised.
+    assert!(crate::pgpool::is_retryable_text(
+        "db error (SQLSTATE 40P01): deadlock detected"
+    ));
+    assert!(crate::pgpool::is_retryable_text(
+        "db error (SQLSTATE 40001): could not serialize access"
+    ));
+    for not in [
+        text.as_str(),
+        "update failed: db error (SQLSTATE 40P01): deadlock detected",
+        "storage_busy: SQLSTATE 40001",
+        "db error (SQLSTATE 23505): duplicate key value, SQLSTATE 40P01",
+        "",
+    ] {
+        assert!(!crate::pgpool::is_retryable_text(not), "{not}");
+    }
+}
+
+const REFUSING_TRIGGER_COUNTING: &str = r#"
+    CREATE FUNCTION zz_refuse() RETURNS trigger LANGUAGE plpgsql AS $f$
+    BEGIN
+        IF NEW.model = 'frozen' THEN
+            PERFORM nextval('zz_attempts');
+            RAISE EXCEPTION USING ERRCODE = 'OBG01', MESSAGE = 'immutable_record',
+                DETAIL = json_build_object('model', NEW.model, 'id', NEW.id,
+                    'rule', 'immutable_when', 'fields', json_build_array('total'),
+                    'detail', 'total cannot change')::text;
+        END IF;
+        RETURN NEW;
+    END $f$;
+    CREATE TRIGGER zz_refuse BEFORE INSERT ON obop_record
+        FOR EACH ROW EXECUTE FUNCTION zz_refuse();"#;
+
 // ---- production ----------------------------------------------------------------------------------
 
 #[test]

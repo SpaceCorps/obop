@@ -6,7 +6,7 @@
 use super::*;
 use crate::pgpool::{
     Class, MAX_REPEATS, PR, PgManager, PgPool, PgPoolConfig, Pooler, Session, describe,
-    repeat_pause, tune,
+    is_retryable_text, repeat_pause, tune,
 };
 use crate::pool::{Pool, Pooled};
 use crate::tls::PgConnector;
@@ -510,10 +510,10 @@ impl Backend for Pg {
                 let commit = r.is_ok();
                 Ok((r, commit))
             });
-            let again = |m: &str| m.contains("SQLSTATE 40P01") || m.contains("SQLSTATE 40001");
             match outcome {
-                Ok(Err(ApplyError::Storage(m))) if attempt < MAX_REPEATS && again(&m) => {}
-                Err(m) if attempt < MAX_REPEATS && again(&m) => {}
+                Ok(Err(ApplyError::Storage(m)))
+                    if attempt < MAX_REPEATS && is_retryable_text(&m) => {}
+                Err(m) if attempt < MAX_REPEATS && is_retryable_text(&m) => {}
                 Ok(r) => return r,
                 Err(m) => return Err(ApplyError::Storage(m)),
             }

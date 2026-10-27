@@ -485,8 +485,19 @@ pub(crate) fn rolled_back_for_retry(e: &PErr) -> bool {
     match e {
         PErr::Pg(e) => e.code().is_some_and(|c| code_is_retryable(c.code())),
         PErr::Setup(_) => false,
-        PErr::Msg(m) => m.contains("SQLSTATE 40P01") || m.contains("SQLSTATE 40001"),
+        PErr::Msg(m) => is_retryable_text(m),
     }
+}
+
+/// Does this error text, made by [`describe`], say the server rolled the transaction back for a
+/// deadlock or a serialisation failure? The words are recognised where `describe` puts them, at
+/// the start of the text. Anywhere else they may be text somebody chose: the message of a
+/// refusal names the record, and a record id that contains `SQLSTATE 40001` must not make a
+/// batch the guards refused run again.
+pub(crate) fn is_retryable_text(m: &str) -> bool {
+    ["db error (SQLSTATE 40P01)", "db error (SQLSTATE 40001)"]
+        .iter()
+        .any(|p| m.starts_with(p))
 }
 
 /// A checked-out connection with the pool's rules attached.
