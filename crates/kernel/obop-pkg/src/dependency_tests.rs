@@ -366,6 +366,26 @@ fn uninstall_is_blocked_while_dependents_exist_and_lists_them_transitively() {
 }
 
 #[test]
+fn a_package_list_the_store_refused_does_not_let_a_package_be_removed_from_under_its_dependents() {
+    use obop_storage::testing::{Flaky, Mode};
+    // The list of the installed packages was read as "none installed" by the command line (no
+    // request scope, so no guard), and the check "does another package need it" found nobody.
+    let flaky = Flaky::new(obop_storage::open("memory:").unwrap());
+    let (d, inst) = setup(chain(), &Store::over(flaky.clone()));
+    call(&d, &admin(), "marketplace_listing.install", by_id("c")).unwrap();
+    flaky.refuse_model("obop_package", Mode::Reads);
+    let done = inst.uninstall("a");
+    flaky.allow_models();
+    assert!(
+        matches!(&done, Err(m) if m.starts_with("storage_busy")),
+        "{done:?}"
+    );
+    assert!(d.has_model("a_item"), "a is still installed");
+    // Healthy again, it is the dependents that stop it.
+    assert!(inst.uninstall("a").unwrap_err().contains("required by b"));
+}
+
+#[test]
 fn a_core_mismatch_refuses_the_install_with_both_versions() {
     let (d, _) = setup(vec![pkg("future", "1.0.0", ">=9, <10", &[])], &Store::new());
     let e = handler_error(call(

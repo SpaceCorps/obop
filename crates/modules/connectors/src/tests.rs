@@ -1324,6 +1324,50 @@ fn retention_removes_old_flow_logs_and_runs() {
 }
 
 #[test]
+fn the_tokens_a_provider_just_issued_are_kept_although_the_store_refuses_once() {
+    use obop_connectors::oauth::Tokens;
+    use obop_storage::fault;
+    // The old refresh token is spent when the new pair arrives: a pair that is not stored leaves
+    // nothing to refresh by. In a request that has met a refusal already, a plain retry is refused
+    // by the guard, so the write is a needed step.
+    let (e, flaky, inner) = flaky_env();
+    seed_party(&e);
+    let r = Receiver::new(200);
+    enable(&e, "webhook_out", false);
+    let id = ready(&e, &admin(), &r);
+    let (conn, _) = e.rt.connection(&id).unwrap();
+    let fresh = Tokens {
+        access_token: "at-new".into(),
+        refresh_token: Some("rt-new".into()),
+        expires_at: obop_connectors::util::now() + 3600,
+        scope: "read".into(),
+    };
+    flaky.refuse_call_after(0);
+    fault::begin_request(Default::default());
+    let done = e.rt.store_tokens(&conn, &fresh);
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    assert!(done.is_ok(), "{done:?} {out:?}");
+    assert!(
+        inner.get("connection", &id).unwrap().unwrap()["oauth_tokens"]
+            .as_str()
+            .unwrap()
+            .starts_with("e2."),
+        "sealed and stored"
+    );
+    // A lasting refusal is an error and a partial request: the provider has moved on.
+    flaky.refuse_calls_after(0, 20);
+    fault::begin_request(Default::default());
+    let done = e.rt.store_tokens(&conn, &fresh);
+    let out = fault::end_request();
+    flaky.allow_models();
+    fault::clear();
+    assert!(done.is_err());
+    assert!(out.partial, "{out:?}");
+}
+
+#[test]
 fn the_retention_run_removes_old_dead_letters_too() {
     // A dead letter keeps the treated payload of a delivery that gave up, and only an operator
     // who looked at it ever removed it.

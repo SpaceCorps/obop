@@ -1116,12 +1116,24 @@ impl Runtime {
         Ok(c.id)
     }
 
-    fn store_tokens(&self, c: &Connection, t: &Tokens) -> Result<(), String> {
+    /// Keep the tokens the provider has just issued. Needed, not best effort: for a provider that
+    /// rotates the refresh token the old one is spent, so a pair that is not stored leaves the
+    /// connection with nothing to refresh by until a person authorises it again. Tried again
+    /// while the store refuses (also in a request that has met a refusal already), a lasting
+    /// refusal makes the request a partial one, and a connection that is gone is an error.
+    pub fn store_tokens(&self, c: &Connection, t: &Tokens) -> Result<(), String> {
         let sealed = self.secrets.seal(PURPOSE_OAUTH, &t.to_json().to_string());
         let mut f = Fields::new();
         f.insert("oauth_tokens".into(), sealed.into());
-        self.backend.update(CONNECTION, &c.id, &f)?;
-        Ok(())
+        // What the provider did cannot be taken back.
+        obop_storage::fault::external_change();
+        obop_storage::fault::needed(|| {
+            if self.backend.update(CONNECTION, &c.id, &f)? {
+                Ok(())
+            } else {
+                Err(format!("no connection {}", c.id))
+            }
+        })
     }
 
     /// A usable access token, refreshed when it is about to expire.

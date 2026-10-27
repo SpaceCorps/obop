@@ -195,9 +195,21 @@ impl Queue {
         claimed
     }
 
-    /// The delivery is finished (succeeded, or refused for good): forget the job.
+    /// The delivery is finished (succeeded, or refused for good): forget the job. A refusal of the
+    /// store is tried again a few times; if it lasts, the job stays leased and is delivered again
+    /// when the lease ends (delivery is at least once, and the receiver can deduplicate by the
+    /// job id it is sent), which the line says.
     pub fn complete(&self, job: &Job) {
-        let _ = self.backend.delete(JOBS, &job.id);
+        if let Err(e) =
+            obop_storage::fault::patiently(4, std::time::Duration::from_millis(250), || {
+                self.backend.delete(JOBS, &job.id).map(|_| ())
+            })
+        {
+            eprintln!(
+                "connectors: the finished delivery {} could not be removed from the queue ({e}); it is sent again when its lease ends",
+                job.id
+            );
+        }
     }
 
     /// A delivery failed: schedule the next try (releasing the lease) or give up and keep the
@@ -452,6 +464,23 @@ mod tests {
         assert_eq!(q.requeue_because(again, 200, 0, "down"), Requeued::Dead);
         assert_eq!(b.count(JOBS).unwrap(), 0);
         assert_eq!(b.count(DEAD).unwrap(), 1);
+    }
+
+    #[test]
+    fn a_finished_delivery_is_removed_although_the_store_refuses_once() {
+        use obop_storage::testing::Flaky;
+        let b = obop_storage::open("memory:").unwrap();
+        let flaky = Flaky::new(b.clone());
+        let q = Queue::new(obop_storage::guarded(flaky.clone()), SecretBox::for_tests());
+        q.push(job("m1", 0)).unwrap();
+        let claimed = q.take_due(10).pop().unwrap();
+        // One busy moment right when the delivery is done: the job stayed, and was sent again
+        // when its lease ended.
+        flaky.refuse_call_after(0);
+        q.complete(&claimed);
+        flaky.allow_models();
+        assert_eq!(b.count(JOBS).unwrap(), 0);
+        assert!(q.take_due(10 + LEASE_SECS + 1).is_empty(), "not sent again");
     }
 
     #[test]
