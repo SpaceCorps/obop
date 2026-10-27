@@ -5,8 +5,9 @@
 //! (D59) so any server process can finish a ceremony another one started. The protocol checks are
 //! in `webauthn`; this file holds the rules around them.
 
+use crate::mfa::SessionError;
 use crate::webauthn::{self as wa, b64url, b64url_decode, sha256};
-use crate::{Auth, Change, hex, random_bytes, token_hash};
+use crate::{Auth, Change, Epoch, bump_epoch, epoch_of, hex, random_bytes, token_hash};
 use obop_commands::audit::rfc3339;
 use obop_commands::{
     ADMIN_GROUP, LoginOutcome, MfaError, PasskeyApi, Principal, PrincipalKind, Reauth, WebauthnCtx,
@@ -294,7 +295,7 @@ impl Auth {
         purpose: &str,
         credential: &J,
         require_uv: bool,
-    ) -> Result<(String, J), MfaError> {
+    ) -> Result<(String, J, Epoch), MfaError> {
         let bad = |e: String| MfaError::Denied(e);
         let cred = wa::credential(credential).map_err(bad)?;
         let cd =
@@ -325,21 +326,38 @@ impl Auth {
                 "this passkey was registered for a different address",
             ));
         }
+        let mut epoch: Epoch = None;
         if purpose == "login" {
             // Passwordless: only a passkey that was user-verified when it was made, for a person
             // who allowed it, and not for a disabled account.
+            let account = match self.user_record(&owner) {
+                Ok(u) => Some(u),
+                Err(MfaError::NotFound) => None,
+                // The store's trouble is not "not allowed".
+                Err(e) => return Err(e),
+            };
             if stored["user_verified"].as_bool() != Some(true)
-                || !self
-                    .user_record(&owner)
-                    .is_ok_and(|u| u["passkey_login"].as_bool() == Some(true))
+                || !account
+                    .as_ref()
+                    .is_some_and(|u| u["passkey_login"].as_bool() == Some(true))
             {
                 return Err(denied(
                     "this passkey cannot be used to sign in without a password",
                 ));
             }
+            epoch = account.as_ref().and_then(epoch_of);
             if self.is_disabled(&owner) {
                 self.event(&owner, "login_refused", &owner, "the account is disabled");
                 return Err(denied("this passkey cannot be used to sign in"));
+            }
+            // The epoch above was read after the passkey was; the passkey must still exist after
+            // it. Removing a passkey deletes it and changes the epoch in one atomic write, so a
+            // passkey that is still there was removed (if at all) after the epoch was read, and
+            // the session that follows is either refused by the epoch or listed by the removal.
+            match self.backend.get(PASSKEY_TABLE, &id) {
+                Ok(Some(_)) => {}
+                Ok(None) => return Err(denied("this passkey is not registered here")),
+                Err(e) => return Err(MfaError::Unavailable(e)),
             }
         }
         let a = wa::assertion(&cred.response).map_err(bad)?;
@@ -398,10 +416,12 @@ impl Auth {
         p.insert("last_used_at".into(), J::from(self.now()));
         p.insert("backup_state".into(), J::Bool(auth.backed_up()));
         let _ = self.backend.update(PASSKEY_TABLE, &id, &p);
-        Ok((owner, rec))
+        Ok((owner, rec, epoch))
     }
 
-    fn mfa_token_user(&self, mfa_token: &str) -> Result<(String, u64), MfaError> {
+    /// The person a half-finished sign-in belongs to, how many wrong answers it has had, and the
+    /// credential epoch its password step read (see [`crate::Epoch`]).
+    fn mfa_token_user(&self, mfa_token: &str) -> Result<(String, u64, Epoch), MfaError> {
         let key = token_hash(mfa_token);
         let rec = self
             .backend
@@ -417,6 +437,7 @@ impl Auth {
         Ok((
             rec["user"].as_str().ok_or(MfaError::Expired)?.to_string(),
             rec["attempts"].as_u64().unwrap_or(0),
+            rec["epoch"].as_str().map(String::from),
         ))
     }
 
@@ -455,7 +476,7 @@ impl Auth {
         credential: &J,
     ) -> Result<LoginOutcome, MfaError> {
         let _g = self.mfa_guard()?;
-        let (name, attempts) = self.mfa_token_user(mfa_token)?;
+        let (name, attempts, pending) = self.mfa_token_user(mfa_token)?;
         let key = token_hash(mfa_token);
         if attempts >= crate::mfa::MFA_TOKEN_ATTEMPTS {
             let _ = self.backend.delete("auth_mfa_token", &key);
@@ -468,10 +489,10 @@ impl Auth {
                 "too many attempts, try again in a minute".into(),
             ));
         }
-        self.refuse_if_disabled(&name, &key)?;
+        self.refuse_if_disabled(&name, &key, &pending)?;
         let result = self
             .verify_assertion(ctx, "second", credential, false)
-            .and_then(|(user, rec)| {
+            .and_then(|(user, rec, _)| {
                 if user == name && rec["mfa"].as_str() == Some(key.as_str()) {
                     Ok(())
                 } else {
@@ -483,8 +504,8 @@ impl Auth {
                 // Single use: the pending sign-in is gone whatever happens next.
                 let _ = self.backend.delete("auth_mfa_token", &key);
                 self.event(&name, "passkey_used", &name, "second step of sign-in");
-                self.session_outcome(&name, false)
-                    .map_err(MfaError::Unavailable)
+                self.session_outcome(&name, false, &pending)
+                    .map_err(SessionError::mfa)
             }
             Err(e) => {
                 let mut p = Fields::new();
@@ -505,7 +526,7 @@ impl Auth {
         ctx: &WebauthnCtx,
         credential: &J,
     ) -> Result<LoginOutcome, MfaError> {
-        let (name, _) = self.verify_assertion(ctx, "login", credential, true)?;
+        let (name, _, epoch) = self.verify_assertion(ctx, "login", credential, true)?;
         self.purge_tokens();
         self.event(
             &name,
@@ -513,8 +534,8 @@ impl Auth {
             &name,
             "signed in with a passkey alone",
         );
-        self.session_outcome(&name, false)
-            .map_err(MfaError::Unavailable)
+        self.session_outcome(&name, false, &epoch)
+            .map_err(SessionError::mfa)
     }
 }
 
@@ -809,6 +830,9 @@ impl PasskeyApi for Auth {
         // the passkey, the user's record and the note that its other sessions are owed an end are
         // one change, so none of them can be missing (D74).
         patch.extend(self.owed_patch(name, &op, Some(&keep))?);
+        // The credential epoch changes in the same batch, so a passwordless sign-in that used the
+        // passkey cannot hand out a session that the revocation below would miss.
+        bump_epoch(&mut patch);
         self.backend
             .apply(&[
                 Op::Delete {
@@ -901,7 +925,7 @@ impl PasskeyApi for Auth {
         }
         let _g = self.mfa_guard()?;
         match self.verify_assertion(ctx, "proof", credential, false) {
-            Ok((user, _)) if user == name => {
+            Ok((user, _, _)) if user == name => {
                 let rec = json!({"expires_at": self.now() + PROOF_SECS});
                 self.backend
                     .kv_put(&proof_key(name), &rec.to_string(), Some(PROOF_SECS * 1000))
@@ -931,7 +955,7 @@ impl PasskeyApi for Auth {
                 Ok(self.request_options(ctx, &challenge, &[], "required"))
             }
             Some(tok) => {
-                let (name, _) = self.mfa_token_user(tok)?;
+                let (name, _, _) = self.mfa_token_user(tok)?;
                 let creds = self.passkeys_of(&name);
                 if creds.is_empty() {
                     return Err(MfaError::Invalid("this account has no passkey".into()));
@@ -958,7 +982,7 @@ impl PasskeyApi for Auth {
     }
 
     fn methods(&self, mfa_token: &str) -> Vec<&'static str> {
-        let Ok((name, _)) = self.mfa_token_user(mfa_token) else {
+        let Ok((name, _, _)) = self.mfa_token_user(mfa_token) else {
             return Vec::new();
         };
         let mut m = Vec::new();

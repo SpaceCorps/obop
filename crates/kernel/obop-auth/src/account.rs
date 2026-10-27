@@ -2,7 +2,7 @@
 //! view of the accounts (B7, D59). Every change that matters is written to the security event
 //! log (`security_event`) with who did it; nothing logged or returned is a secret.
 
-use crate::{Auth, Change, hex, random_bytes, str_list, token_hash};
+use crate::{Auth, Change, bump_epoch, hex, random_bytes, str_list, token_hash};
 use obop_commands::audit::rfc3339;
 use obop_commands::{ADMIN_GROUP, MfaError, Principal, PrincipalKind};
 use obop_storage::Fields;
@@ -383,6 +383,7 @@ impl Auth {
         patch.insert("password_hash".into(), J::from(hash));
         patch.insert("must_change_password".into(), J::Bool(false));
         patch.insert("password_changed_at".into(), J::from(self.now()));
+        bump_epoch(&mut patch);
         self.put(name, &patch)?;
         let h = token_hash(session);
         // A repeat would need the old password, which no longer works (and counts towards the
@@ -528,6 +529,7 @@ impl Auth {
         }
         let mut patch = Fields::new();
         patch.insert("disabled".into(), J::Bool(disabled));
+        bump_epoch(&mut patch);
         let was_offboarded = u["offboarded"].as_bool() == Some(true);
         if !disabled && was_offboarded {
             patch.insert("offboarded".into(), J::Bool(false));
@@ -603,6 +605,7 @@ impl Auth {
         let mut patch = Fields::new();
         patch.insert("password_hash".into(), J::from(hash));
         patch.insert("must_change_password".into(), J::Bool(true));
+        bump_epoch(&mut patch);
         self.put(&target, &patch)?;
         let ch = Change::new(&target, "password_reset", actor, "temporary password set");
         let n = self.revoke_user_sessions(&target, None, &ch)?;

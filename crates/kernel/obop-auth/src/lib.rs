@@ -58,6 +58,24 @@ fn token_hash(token: &str) -> String {
     hex(&Sha256::digest(token.as_bytes()))
 }
 
+/// The credential epoch of an account: a random value that every change which ends sessions
+/// writes in the same atomic write as the change itself (a new password, a reset, a disable or an
+/// offboarding, new groups, a removed second factor or passkey). A sign-in reads it before it
+/// looks at any credential and compares it once more after its session is written: if it is
+/// another value, a revocation ran in between whose list of sessions may not hold this one, so
+/// the session is ended and not handed out. If it is the same, the revocation has not committed
+/// yet, and the list it takes afterwards holds the session. No lock is needed between the two.
+pub(crate) type Epoch = Option<String>;
+
+pub(crate) fn epoch_of(u: &J) -> Epoch {
+    u.get("epoch").and_then(J::as_str).map(String::from)
+}
+
+/// Put a new credential epoch into `patch` (see [`Epoch`]).
+pub(crate) fn bump_epoch(patch: &mut Fields) {
+    patch.insert("epoch".into(), J::from(hex(&random_bytes::<12>())));
+}
+
 fn str_list(v: &J) -> Vec<String> {
     v.as_array()
         .map(|a| {
@@ -479,6 +497,8 @@ impl Authenticator for Auth {
 
 #[cfg(test)]
 mod admin_tests;
+#[cfg(test)]
+mod epoch_tests;
 #[cfg(test)]
 mod mfa_tests;
 #[cfg(test)]
