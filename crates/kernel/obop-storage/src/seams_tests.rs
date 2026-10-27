@@ -1,5 +1,7 @@
-//! The seams of wave 2 against a real PostgreSQL. Each test has a database of its own (`TestDb`) and
-//! returns early, saying so, when `OBOP_TEST_POSTGRES_URL` is not set.
+//! The seams of wave 2 against a real PostgreSQL: the context reaching the transaction, the typed
+//! refusal of the database's guards, the short read transaction, and the schema parts with and
+//! without the right to create tables. Each test has a database of its own (`TestDb`) and returns
+//! early, saying so, when `OBOP_TEST_POSTGRES_URL` is not set.
 
 use super::*;
 use crate::fault::{self, Fault};
@@ -7,6 +9,8 @@ use crate::pg::Pg;
 use crate::pgpool::{Class, PgPoolConfig};
 use crate::refusal::{self, RefusalCode};
 use crate::testing::TestDb;
+use std::sync::mpsc;
+use std::time::Duration;
 
 fn fields(n: i64) -> Fields {
     let mut m = Fields::new();
@@ -16,6 +20,15 @@ fn fields(n: i64) -> Fields {
 
 fn one() -> PgPoolConfig {
     PgPoolConfig::one_shot()
+}
+
+fn count_in(tx: &mut postgres::Transaction<'_>, model: &str) -> crate::pgpool::PR<i64> {
+    Ok(tx
+        .query_one(
+            "SELECT count(*) FROM obop_record WHERE model = $1",
+            &[&model],
+        )?
+        .get(0))
 }
 
 // ---- the typed refusal of the database's guards --------------------------------------------------
@@ -181,5 +194,132 @@ fn the_tickets_of_a_write_are_visible_to_the_database_in_its_transaction_and_onl
         .unwrap()
         .get(0);
     assert!(last.is_none_or(|s| s.is_empty()));
+}
+
+// ---- the short read transaction ------------------------------------------------------------------
+
+#[test]
+fn read_tx_is_one_snapshot_and_read_only() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let pg = Pg::connect_with(db.url(), PgPoolConfig { size: 3, ..one() }).unwrap();
+    pg.insert("m", "a", &fields(1)).unwrap();
+    let (before, during) = pg
+        .main
+        .read_tx(Class::List, |tx| {
+            let before = count_in(tx, "m")?;
+            // Another connection commits a record while the transaction is open.
+            pg.insert("m", "b", &fields(2)).unwrap();
+            Ok((before, count_in(tx, "m")?))
+        })
+        .unwrap();
+    assert_eq!((before, during), (1, 1), "both statements saw one snapshot");
+    assert_eq!(
+        pg.count("m").unwrap(),
+        2,
+        "and the record is there afterwards"
+    );
+    // Read-only: a write inside is refused by the server.
+    let e = pg
+        .main
+        .read_tx(Class::List, |tx| {
+            tx.execute(
+                "INSERT INTO obop_record (model, id, data) VALUES ('m', 'c', '{}')",
+                &[],
+            )?;
+            Ok(())
+        })
+        .unwrap_err();
+    assert!(e.contains("SQLSTATE 25006"), "{e}");
+    assert_eq!(pg.count("m").unwrap(), 2);
+    // The connection is fine for the next call.
+    assert_eq!(
+        pg.main
+            .read_tx(Class::Point, |tx| count_in(tx, "m"))
+            .unwrap(),
+        2
+    );
+}
+
+#[test]
+fn read_tx_takes_a_normal_connection_and_not_a_place_in_the_long_read_lane() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let pg = Pg::connect_with(
+        db.url(),
+        PgPoolConfig {
+            size: 4,
+            max_long: 1,
+            acquire_timeout: Duration::from_millis(500),
+            ..one()
+        },
+    )
+    .unwrap();
+    let (started_tx, started_rx) = mpsc::channel::<()>();
+    let (release_tx, release_rx) = mpsc::channel::<()>();
+    std::thread::scope(|s| {
+        // A scan holds the only place in the long-read lane.
+        let pg = &pg;
+        let holder = s.spawn(move || {
+            pg.main
+                .snapshot(Class::Aggregate, |_tx| {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
+                .unwrap();
+        });
+        started_rx.recv().unwrap();
+        let e = pg.main.snapshot(Class::Aggregate, |_| Ok(())).unwrap_err();
+        assert_eq!(
+            Fault::of_message(&e),
+            Some(Fault::Busy),
+            "a second long read has to wait for the first: {e}"
+        );
+        fault::clear();
+        // The short read does not.
+        let one_row = pg
+            .main
+            .read_tx(Class::List, |tx| {
+                Ok(tx.query_one("SELECT 1::int", &[])?.get::<_, i32>(0))
+            })
+            .unwrap();
+        assert_eq!(one_row, 1);
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+    });
+}
+
+#[test]
+fn read_tx_runs_again_once_on_a_fresh_connection_when_the_reused_one_is_dead() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let pg = Pg::connect_with(
+        db.url(),
+        PgPoolConfig {
+            // No health check: the dead connection is handed out and found out by the read.
+            health_check_idle: Duration::from_secs(3600),
+            ..one()
+        },
+    )
+    .unwrap();
+    pg.insert("m", "a", &fields(1)).unwrap();
+    assert_eq!(pg.count("m").unwrap(), 1, "the connection has been used");
+    db.terminate_sessions();
+    fault::clear();
+    let n = pg
+        .main
+        .read_tx(Class::List, |tx| count_in(tx, "m"))
+        .unwrap();
+    assert_eq!(n, 1, "the read was repeated on a new connection");
+    assert_eq!(fault::take(), None, "and nothing was noted: it worked");
+    assert!(pg.main.stats().connections_closed >= 1);
+    // And again: the connection that replaced the dead one dies in its turn.
+    db.terminate_sessions();
+    let again = pg.main.read_tx(Class::List, |tx| count_in(tx, "m"));
+    assert_eq!(again.unwrap(), 1);
 }
 

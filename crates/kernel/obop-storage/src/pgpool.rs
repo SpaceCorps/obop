@@ -794,6 +794,39 @@ impl PgPool {
         }
     }
 
+    /// A short read that needs one snapshot over several statements (a page of rows and the
+    /// count behind it, the rows of a keyset page): a repeatable-read, read-only transaction on a
+    /// normal lease, not in the long-read lane that [`PgPool::snapshot`] takes, so that requests
+    /// can run as many of them at once as the pool has connections. The limit of `class` applies
+    /// to each statement.
+    ///
+    /// As [`PgPool::read`]: if the connection was an old one and turns out to be dead (the server
+    /// restarted), the idle connections are dropped and `f` runs again, once, on a fresh one. It
+    /// is therefore `FnMut`, and must not leave anything behind that a second run would repeat.
+    // Used by the query and index layers of wave 2 (D76, D78); tested here until they land.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn read_tx<T>(
+        &self,
+        class: Class,
+        mut f: impl FnMut(&mut Transaction<'_>) -> PR<T>,
+    ) -> Result<T, String> {
+        let mut attempt = 0;
+        loop {
+            let mut lease = self.lease(false)?;
+            let reused = lease.pooled.reused();
+            let r = lease.snapshot(class, &mut f);
+            if attempt == 0
+                && reused
+                && matches!(&r, Err(PErr::Pg(e) | PErr::Setup(e)) if connection_failed(e))
+            {
+                lease.broken();
+                attempt += 1;
+                continue;
+            }
+            return lease.finish(r);
+        }
+    }
+
     /// A consistent view of the whole database for a long read, in the long-read lane.
     pub(crate) fn snapshot<T>(
         &self,
