@@ -105,6 +105,22 @@ async fn get(r: &axum::Router, path: &str) -> (u16, String, axum::http::HeaderMa
     .await
 }
 
+async fn ask(
+    r: &axum::Router,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+) -> (u16, String, axum::http::HeaderMap) {
+    let mut req = Request::builder()
+        .method(method)
+        .uri(path)
+        .header("host", "shop.test");
+    for (k, v) in headers {
+        req = req.header(*k, *v);
+    }
+    send(r, req.body(Body::empty()).unwrap()).await
+}
+
 fn between<'a>(s: &'a str, start: &str, end: &str) -> &'a str {
     let a = s.find(start).unwrap_or_else(|| panic!("no {start} in {s}")) + start.len();
     &s[a..a + s[a..].find(end).unwrap()]
@@ -251,10 +267,11 @@ async fn the_back_office_carries_the_default_language_where_it_is_mounted_and_no
     const SHELL: &str =
         "<html><head><title>obop</title></head><body>BACKOFFICE-SHELL</body></html>";
     const TAG: &str = "<meta name=\"obop-default-language\" content=\"sv\">";
+    const SCRIPT: &str = "console.log('admin')";
     let build = Build(std::env::temp_dir().join(format!("obop-admin-lang-{}", std::process::id())));
     std::fs::create_dir_all(build.0.join("assets")).unwrap();
     std::fs::write(build.0.join("index.html"), SHELL).unwrap();
-    std::fs::write(build.0.join("assets/app.js"), "console.log('admin')").unwrap();
+    std::fs::write(build.0.join("assets/app.js"), SCRIPT).unwrap();
     for (public, language) in [
         (true, Some("sv")),
         (false, Some("sv")),
@@ -297,7 +314,51 @@ async fn the_back_office_carries_the_default_language_where_it_is_mounted_and_no
             assert_eq!(h["cache-control"], "no-cache", "public={public} {path}");
         }
         let (s, js, _) = get(&router, &format!("{mount}/assets/app.js")).await;
-        assert_eq!((s, js.as_str()), (200, "console.log('admin')"));
+        assert_eq!((s, js.as_str()), (200, SCRIPT));
+        // A script keeps its 304, 206 and HEAD, with or without a default language.
+        let script = format!("{mount}/assets/app.js");
+        let (_, _, h) = ask(&router, "GET", &script, &[]).await;
+        let modified = h["last-modified"].to_str().unwrap().to_string();
+        let (s, body, _) = ask(&router, "GET", &script, &[("if-modified-since", &modified)]).await;
+        assert_eq!((s, body.as_str()), (304, ""), "public={public} {script}");
+        let (s, body, h) = ask(&router, "GET", &script, &[("range", "bytes=0-9")]).await;
+        assert_eq!((s, body.as_str()), (206, &SCRIPT[..10]), "public={public}");
+        assert_eq!(
+            h["content-range"].to_str().unwrap(),
+            format!("bytes 0-9/{}", SCRIPT.len())
+        );
+        let (s, body, h) = ask(&router, "HEAD", &script, &[]).await;
+        assert_eq!((s, body.as_str()), (200, ""), "public={public} {script}");
+        assert_eq!(
+            h["content-length"].to_str().unwrap(),
+            SCRIPT.len().to_string()
+        );
+        assert_eq!(h["last-modified"].to_str().unwrap(), modified);
+        // The shell: a copy that claims to be current is a 304 only where the server adds nothing.
+        let shell_path = format!("{mount}/");
+        let current = [("if-modified-since", "Fri, 01 Jan 2100 00:00:00 GMT")];
+        let (s, body, _) = ask(&router, "GET", &shell_path, &current).await;
+        match language {
+            Some(_) => {
+                assert_eq!(
+                    s, 200,
+                    "public={public}: the shell is never a 304 without its tag"
+                );
+                assert_eq!(body.matches(TAG).count(), 1, "public={public}: {body}");
+            }
+            None => assert_eq!((s, body.as_str()), (304, ""), "public={public}"),
+        }
+        let (s, body, _) = ask(&router, "GET", &shell_path, &[("range", "bytes=0-9")]).await;
+        match language {
+            Some(_) => {
+                assert_eq!(
+                    s, 200,
+                    "public={public}: the shell is never a 206 without its tag"
+                );
+                assert_eq!(body.matches(TAG).count(), 1, "public={public}: {body}");
+            }
+            None => assert_eq!((s, body.as_str()), (206, &SHELL[..10]), "public={public}"),
+        }
         if public {
             // The public site is not the back office and never carries the tag.
             let (_, home, _) = get(&router, "/").await;

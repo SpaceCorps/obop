@@ -9,17 +9,25 @@
 //!
 //! The shell is the one document that must never be reused without asking the server: its
 //! content depends on the build on disk and on this setting, so every HTML answer of the service
-//! says `Cache-Control: no-cache`. When the tag is injected the answer also drops the validators
-//! (`ETag`, `Last-Modified`) and the request's conditional headers are not passed on, because a
-//! `304 Not Modified` to a copy kept from before the setting existed would keep the page without
-//! the tag.
+//! says `Cache-Control: no-cache`.
+//!
+//! Only the shell is touched. A request is first answered exactly as `ServeDir` answers it, and an
+//! answer for a file that is not HTML (a script, a style sheet, a font, a picture, a PDF) goes out
+//! byte for byte: `304`, `206`, `HEAD` and `Last-Modified` as they are, with or without a default
+//! language. Only when the answer is HTML, or is one of the empty answers that cannot be told from
+//! it (`304`, `412` and `416` carry no `Content-Type`), the document itself is asked for again
+//! without the request's validators and range. That is what keeps a browser from holding on to a
+//! copy of the page from before the setting existed: a `304` or a `206` for the shell would keep
+//! it without the tag. The answer is then a `200` with the tag and without `ETag` and
+//! `Last-Modified`.
 
 use axum::{
-    body::Body,
+    body::{Body, Bytes},
     extract::Request,
-    http::{HeaderMap, HeaderValue, Method, StatusCode, header},
+    http::{HeaderMap, HeaderValue, Method, StatusCode, Uri, Version, header},
     response::{IntoResponse, Response},
 };
+use http_body_util::{BodyExt, LengthLimitError, Limited};
 use tower::ServiceExt;
 use tower_http::services::{ServeDir, ServeFile};
 
@@ -33,7 +41,8 @@ pub use obop_oauth::page::LANGS;
 /// The name of the meta tag the page reads.
 pub const META_NAME: &str = "obop-default-language";
 
-/// The largest shell this service will rewrite. A real shell is a few kilobytes.
+/// The largest HTML document this service will rewrite. A real shell is a few kilobytes; a larger
+/// document is served as it is, without the tag.
 const MAX_SHELL_BYTES: usize = 4 * 1024 * 1024;
 
 /// A language tag (`sv`, `sv-SE`, `SV`) as the shipped language it names (`sv`), or why it is not
@@ -170,12 +179,98 @@ fn is_html(h: &HeaderMap) -> bool {
         .is_some_and(|v| v.trim_start().to_ascii_lowercase().starts_with("text/html"))
 }
 
+/// The request headers that make `ServeDir` answer `304`, `412`, `206` or `416` instead of `200`.
+const VALIDATORS: [header::HeaderName; 6] = [
+    header::IF_MODIFIED_SINCE,
+    header::IF_NONE_MATCH,
+    header::IF_UNMODIFIED_SINCE,
+    header::IF_MATCH,
+    header::IF_RANGE,
+    header::RANGE,
+];
+
+/// What a request asked for, kept so that the document can be asked for again without validators.
+struct Asked {
+    method: Method,
+    uri: Uri,
+    version: Version,
+    headers: HeaderMap,
+}
+
+impl Asked {
+    fn of(req: &Request) -> Self {
+        Asked {
+            method: req.method().clone(),
+            uri: req.uri().clone(),
+            version: req.version(),
+            headers: req.headers().clone(),
+        }
+    }
+
+    fn is_head(&self) -> bool {
+        self.method == Method::HEAD
+    }
+
+    /// The same request as a plain `GET`: no validators and no range, so only a whole file answers.
+    fn plain(&self) -> Request {
+        let mut req = Request::new(Body::empty());
+        *req.method_mut() = Method::GET;
+        *req.uri_mut() = self.uri.clone();
+        *req.version_mut() = self.version;
+        let headers = req.headers_mut();
+        for (name, value) in &self.headers {
+            if !VALIDATORS.contains(name) {
+                headers.append(name.clone(), value.clone());
+            }
+        }
+        req
+    }
+}
+
+/// Why a body could not be read for rewriting.
+#[derive(Debug)]
+enum Unread {
+    /// It is longer than the limit.
+    TooLarge,
+    /// The read itself failed.
+    Failed(String),
+}
+
+/// The whole body, or why not; never more than `limit` bytes are held.
+async fn read_limited(body: Body, limit: usize) -> Result<Bytes, Unread> {
+    match Limited::new(body, limit).collect().await {
+        Ok(all) => Ok(all.to_bytes()),
+        Err(e) if e.is::<LengthLimitError>() => Err(Unread::TooLarge),
+        Err(e) => Err(Unread::Failed(e.to_string())),
+    }
+}
+
+/// An HTML answer is never reused without asking the server.
+fn no_cache(mut resp: Response) -> Response {
+    if is_html(resp.headers()) {
+        resp.headers_mut()
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    }
+    resp
+}
+
+/// A `HEAD` request gets the headers of the answer to the `GET` and no body.
+fn for_method(resp: Response, asked: &Asked) -> Response {
+    if !asked.is_head() {
+        return resp;
+    }
+    let (parts, _) = resp.into_parts();
+    Response::from_parts(parts, Body::empty())
+}
+
 /// Serves the files of a back office build, the shell for every path that is not a file, and the
 /// shell with the default language when there is one.
 #[derive(Clone)]
 pub struct Shell {
     files: ServeDir<ServeFile>,
     language: Option<&'static str>,
+    /// The largest document that is rewritten.
+    limit: usize,
 }
 
 impl Shell {
@@ -187,6 +282,7 @@ impl Shell {
         Shell {
             files: ServeDir::new(dir).fallback(ServeFile::new(format!("{dir}/index.html"))),
             language,
+            limit: MAX_SHELL_BYTES,
         }
     }
 
@@ -217,51 +313,75 @@ impl Shell {
         })
     }
 
-    /// The answer to one request.
-    pub async fn serve(&self, mut req: Request) -> Response {
-        // With a default language the answer is built from the file as it is now and from this
-        // setting: a validator or a range from a copy kept before the setting existed is dropped.
-        // A HEAD request is measured as a GET and answered without the body.
-        let head_only = self.language.is_some() && req.method() == Method::HEAD;
-        if self.language.is_some() {
-            let h = req.headers_mut();
-            for name in [
-                header::IF_MODIFIED_SINCE,
-                header::IF_NONE_MATCH,
-                header::IF_UNMODIFIED_SINCE,
-                header::IF_MATCH,
-                header::IF_RANGE,
-                header::RANGE,
-            ] {
-                h.remove(name);
-            }
-            if head_only {
-                *req.method_mut() = Method::GET;
-            }
-        }
-        let resp = match self.files.clone().oneshot(req).await {
+    /// The answer of the file service to a request, as it gives it.
+    async fn ask(&self, req: Request) -> Response {
+        match self.files.clone().oneshot(req).await {
             Ok(r) => r.into_response(),
             Err(never) => match never {},
-        };
-        let (mut parts, body) = resp.into_parts();
-        let send = |parts: axum::http::response::Parts, body: Body| {
-            Response::from_parts(parts, if head_only { Body::empty() } else { body })
-        };
-        if !is_html(&parts.headers) {
-            return send(parts, body);
         }
-        parts
-            .headers
-            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    }
+
+    /// The answer to one request.
+    pub async fn serve(&self, req: Request) -> Response {
         let Some(language) = self.language else {
-            return send(parts, body);
+            return no_cache(self.ask(req).await);
         };
-        if parts.status != StatusCode::OK || parts.headers.contains_key(header::CONTENT_ENCODING) {
-            return send(parts, body);
+        let asked = Asked::of(&req);
+        let first = self.ask(req).await;
+        // `304`, `412` and `416` carry no `Content-Type`: the file they speak of may be the shell.
+        let empty = matches!(
+            first.status(),
+            StatusCode::NOT_MODIFIED
+                | StatusCode::PRECONDITION_FAILED
+                | StatusCode::RANGE_NOT_SATISFIABLE
+        );
+        if !empty && !is_html(first.headers()) {
+            // A file: exactly the answer of the file service (`304`, `206`, `HEAD` and all).
+            return first;
         }
-        let bytes = match axum::body::to_bytes(body, MAX_SHELL_BYTES).await {
+        // The shell, or an answer that may be about it. A `200` to a `GET` is the whole document;
+        // anything else (a `HEAD`, a `206`, an empty answer) is asked for again as a plain `GET`.
+        let whole = asked.method == Method::GET
+            && first.status() == StatusCode::OK
+            && is_html(first.headers());
+        let (doc, original) = if whole {
+            (first, None)
+        } else {
+            (self.ask(asked.plain()).await, Some(first))
+        };
+        if doc.status() != StatusCode::OK
+            || !is_html(doc.headers())
+            || doc.headers().contains_key(header::CONTENT_ENCODING)
+        {
+            // Not a document that can be rewritten. An empty answer about a file that turns out
+            // not to be HTML (a script that did not change) stays what it was.
+            return match original {
+                Some(o) if empty && !is_html(doc.headers()) => o,
+                _ => for_method(no_cache(doc), &asked),
+            };
+        }
+        let declared = doc
+            .headers()
+            .get(header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok());
+        if declared.is_some_and(|n| n > self.limit as u64) {
+            // Too large to be a shell: never rewritten, so the answer to the request as it was
+            // asked (`304`, `206`, `HEAD` or the file itself, streamed) is the right one.
+            return match original {
+                Some(o) => no_cache(o),
+                None => for_method(no_cache(doc), &asked),
+            };
+        }
+        let (mut parts, body) = doc.into_parts();
+        let bytes = match read_limited(body, self.limit).await {
             Ok(b) => b,
-            Err(e) => {
+            Err(Unread::TooLarge) => {
+                // No length was declared and the document is too large to rewrite: send it as it
+                // is, from a fresh answer because the first was partly read.
+                return for_method(no_cache(self.ask(asked.plain()).await), &asked);
+            }
+            Err(Unread::Failed(e)) => {
                 eprintln!("cannot read the back office shell: {e}");
                 return (StatusCode::INTERNAL_SERVER_ERROR, "cannot read the shell")
                     .into_response();
@@ -269,17 +389,21 @@ impl Shell {
         };
         let bytes = match inject(&bytes, language) {
             Some(v) => {
+                // The page is not the file any more: the file's validators do not describe it.
                 for name in [header::ETAG, header::LAST_MODIFIED, header::ACCEPT_RANGES] {
                     parts.headers.remove(name);
                 }
-                axum::body::Bytes::from(v)
+                Bytes::from(v)
             }
             None => bytes,
         };
         parts
             .headers
             .insert(header::CONTENT_LENGTH, HeaderValue::from(bytes.len()));
-        send(parts, Body::from(bytes))
+        parts
+            .headers
+            .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+        for_method(Response::from_parts(parts, Body::from(bytes)), &asked)
     }
 }
 
@@ -415,6 +539,11 @@ mod tests {
             std::fs::write(dir.join("index.html"), PAGE).unwrap();
             std::fs::write(dir.join("assets/app.js"), "console.log('<head>')").unwrap();
             std::fs::write(dir.join("assets/app.css"), "body{margin:0}").unwrap();
+            std::fs::write(
+                dir.join("assets/doc.pdf"),
+                "%PDF-1.4 a document that is not text/html",
+            )
+            .unwrap();
             Build(dir)
         }
         fn path(&self) -> &str {
@@ -554,5 +683,224 @@ mod tests {
         let shell = Shell::new(gone.path(), Some("sv"));
         let (status, _, _) = get(&shell, "GET", "/", &[]).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    /// The request headers of a set of conditions a browser sends, with the answer each should get
+    /// from a file service: `(name, headers)`.
+    fn conditions(modified: &str) -> Vec<(&'static str, Vec<(&'static str, &str)>)> {
+        vec![
+            ("plain", vec![]),
+            ("fresh copy", vec![("if-modified-since", modified)]),
+            (
+                "stale copy",
+                vec![("if-modified-since", "Mon, 01 Jan 1990 00:00:00 GMT")],
+            ),
+            ("etag", vec![("if-none-match", "\"abc\"")]),
+            ("etag star", vec![("if-none-match", "*")]),
+            (
+                "unmodified since long ago",
+                vec![("if-unmodified-since", "Mon, 01 Jan 1990 00:00:00 GMT")],
+            ),
+            ("range", vec![("range", "bytes=0-9")]),
+            (
+                "range beyond the end",
+                vec![("range", "bytes=99999-999999")],
+            ),
+            (
+                "range kept only if unchanged",
+                vec![
+                    ("range", "bytes=0-9"),
+                    ("if-range", "Mon, 01 Jan 1990 00:00:00 GMT"),
+                ],
+            ),
+        ]
+    }
+
+    /// The `Last-Modified` the file service gives a path, as a browser would store it.
+    async fn modified_of(dir: &str, path: &str) -> String {
+        let plain = Shell::new(dir, None);
+        let (status, headers, _) = get(&plain, "GET", path, &[]).await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        headers[header::LAST_MODIFIED].to_str().unwrap().to_string()
+    }
+
+    /// Every header of an answer, sorted, as text: the answer compared as a whole.
+    fn shown(headers: &HeaderMap) -> Vec<String> {
+        let mut all: Vec<String> = headers
+            .iter()
+            .map(|(k, v)| format!("{k}: {}", v.to_str().unwrap_or("?")))
+            .collect();
+        all.sort();
+        all
+    }
+
+    #[tokio::test]
+    async fn a_file_that_is_not_html_is_answered_exactly_as_without_a_default_language() {
+        let build = Build::new("assets");
+        let without = Shell::new(build.path(), None);
+        let with = Shell::new(build.path(), Some("sv"));
+        for path in ["/assets/app.js", "/assets/app.css", "/assets/doc.pdf"] {
+            let modified = modified_of(build.path(), path).await;
+            for method in ["GET", "HEAD"] {
+                for (what, headers) in conditions(&modified) {
+                    let a = get(&without, method, path, &headers).await;
+                    let b = get(&with, method, path, &headers).await;
+                    let context = format!("{method} {path} ({what})");
+                    assert_eq!(a.0, b.0, "status of {context}");
+                    assert_eq!(shown(&a.1), shown(&b.1), "headers of {context}");
+                    assert_eq!(a.2, b.2, "body of {context}");
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_file_that_is_not_html_keeps_its_304_206_412_416_and_head_with_a_default_language() {
+        let build = Build::new("revalidate");
+        let shell = Shell::new(build.path(), Some("sv"));
+        let path = "/assets/app.js";
+        let file = "console.log('<head>')";
+        let modified = modified_of(build.path(), path).await;
+        // A copy that is still current: 304 and nothing else.
+        let (status, _, body) = get(
+            &shell,
+            "GET",
+            path,
+            &[("if-modified-since", modified.as_str())],
+        )
+        .await;
+        assert_eq!((status, body.len()), (StatusCode::NOT_MODIFIED, 0));
+        // A copy older than the file: the file.
+        let (status, headers, body) = get(
+            &shell,
+            "GET",
+            path,
+            &[("if-modified-since", "Mon, 01 Jan 1990 00:00:00 GMT")],
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, file.as_bytes());
+        assert_eq!(headers[header::LAST_MODIFIED].to_str().unwrap(), modified);
+        // A range: 206 with its Content-Range and exactly those bytes.
+        let (status, headers, body) = get(&shell, "GET", path, &[("range", "bytes=0-9")]).await;
+        assert_eq!(status, StatusCode::PARTIAL_CONTENT);
+        assert_eq!(body, &file.as_bytes()[..10]);
+        assert_eq!(
+            headers[header::CONTENT_RANGE].to_str().unwrap(),
+            format!("bytes 0-9/{}", file.len())
+        );
+        // A range beyond the end and a precondition that fails keep their statuses.
+        let (status, _, _) = get(&shell, "GET", path, &[("range", "bytes=999-9999")]).await;
+        assert_eq!(status, StatusCode::RANGE_NOT_SATISFIABLE);
+        let (status, _, _) = get(
+            &shell,
+            "GET",
+            path,
+            &[("if-unmodified-since", "Mon, 01 Jan 1990 00:00:00 GMT")],
+        )
+        .await;
+        assert_eq!(status, StatusCode::PRECONDITION_FAILED);
+        // HEAD: the headers of the file, its length, no body, and its validators.
+        let (status, headers, body) = get(&shell, "HEAD", path, &[]).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.is_empty());
+        assert_eq!(
+            headers[header::CONTENT_LENGTH].to_str().unwrap(),
+            file.len().to_string()
+        );
+        assert_eq!(headers[header::LAST_MODIFIED].to_str().unwrap(), modified);
+        assert!(headers.get(header::CACHE_CONTROL).is_none());
+    }
+
+    #[tokio::test]
+    async fn the_shell_is_never_answered_with_a_304_or_a_206_that_lacks_the_tag() {
+        let build = Build::new("never");
+        let shell = Shell::new(build.path(), Some("sv"));
+        let modified = modified_of(build.path(), "/").await;
+        let tag = "<meta name=\"obop-default-language\" content=\"sv\">";
+        // The shell at every address that serves it, including a missing script that falls back
+        // to it, with every condition a browser could send.
+        for path in [
+            "/",
+            "/index.html",
+            "/customize",
+            "/crm/lead/42",
+            "/assets/gone.js",
+        ] {
+            let (_, _, full) = get(&shell, "GET", path, &[]).await;
+            assert!(String::from_utf8(full.clone()).unwrap().contains(tag));
+            for (what, headers) in conditions(&modified) {
+                let context = format!("{path} ({what})");
+                let (status, answer, body) = get(&shell, "GET", path, &headers).await;
+                assert_eq!(status, StatusCode::OK, "{context}");
+                assert_eq!(body, full, "{context}");
+                assert_eq!(String::from_utf8_lossy(&body).matches(tag).count(), 1);
+                assert_eq!(answer[header::CACHE_CONTROL], "no-cache", "{context}");
+                assert!(answer.get(header::CONTENT_RANGE).is_none(), "{context}");
+                assert!(answer.get(header::ETAG).is_none(), "{context}");
+                assert!(answer.get(header::LAST_MODIFIED).is_none(), "{context}");
+                // And a HEAD with the same conditions reports that document's length.
+                let (status, answer, body) = get(&shell, "HEAD", path, &headers).await;
+                assert_eq!(status, StatusCode::OK, "HEAD {context}");
+                assert!(body.is_empty(), "HEAD {context}");
+                assert_eq!(
+                    answer[header::CONTENT_LENGTH].to_str().unwrap(),
+                    full.len().to_string(),
+                    "HEAD {context}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn an_html_file_over_the_limit_is_served_as_it_is_and_never_a_500() {
+        let build = Build::new("big");
+        let big = format!(
+            "<html><head><title>big</title></head><body>{}</body></html>",
+            "x".repeat(5 * 1024 * 1024)
+        );
+        std::fs::write(build.0.join("big.html"), &big).unwrap();
+        let shell = Shell::new(build.path(), Some("sv"));
+        let modified = modified_of(build.path(), "/big.html").await;
+        // The whole file, untouched: no tag, the file's own length and validators.
+        let (status, headers, body) = get(&shell, "GET", "/big.html", &[]).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body == big.as_bytes(), "the document is served unchanged");
+        assert!(!String::from_utf8_lossy(&body).contains("obop-default-language"));
+        assert_eq!(headers[header::CACHE_CONTROL], "no-cache");
+        assert_eq!(
+            headers[header::CONTENT_LENGTH].to_str().unwrap(),
+            big.len().to_string()
+        );
+        // Being unchanged, it keeps its 304, its 206 and its HEAD.
+        let (status, _, body) = get(
+            &shell,
+            "GET",
+            "/big.html",
+            &[("if-modified-since", modified.as_str())],
+        )
+        .await;
+        assert_eq!((status, body.len()), (StatusCode::NOT_MODIFIED, 0));
+        let (status, _, body) = get(&shell, "GET", "/big.html", &[("range", "bytes=0-9")]).await;
+        assert_eq!(status, StatusCode::PARTIAL_CONTENT);
+        assert_eq!(body, &big.as_bytes()[..10]);
+        let (status, headers, body) = get(&shell, "HEAD", "/big.html", &[]).await;
+        assert_eq!((status, body.len()), (StatusCode::OK, 0));
+        assert_eq!(
+            headers[header::CONTENT_LENGTH].to_str().unwrap(),
+            big.len().to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_body_is_read_up_to_the_limit_and_no_further() {
+        use http_body_util::Full;
+        let body = |n: usize| Body::new(Full::new(Bytes::from(vec![b'x'; n])));
+        assert_eq!(read_limited(body(8), 8).await.unwrap().len(), 8);
+        assert!(matches!(
+            read_limited(body(9), 8).await,
+            Err(Unread::TooLarge)
+        ));
+        assert_eq!(read_limited(body(0), 8).await.unwrap().len(), 0);
     }
 }

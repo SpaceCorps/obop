@@ -26,12 +26,12 @@ tokio = { version = "1.53", features = ["rt-multi-thread", "net", "macros", "tim
 serde_json = "1"
 tower-http = { version = "0.6", features = ["fs", "compression-gzip"] }
 mime_guess = "2"
+http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 
 [dev-dependencies]
 obop-storage = { workspace = true, features = ["test-support"] }
 tower = { version = "0.5", features = ["util"] }
-http-body-util = "0.1"
 
 [lints]
 workspace = true
