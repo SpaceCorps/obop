@@ -12,7 +12,7 @@ use crate::Clock;
 use crate::policy::{self, Fields, Who};
 use crate::track::{self, Fix, Options};
 use obop_commands::errors::{self, code};
-use obop_commands::{Dispatcher, Value};
+use obop_commands::{Actor, Dispatcher, Value};
 use obop_registry::Module;
 use obop_storage::{ApplyError, Backend, Op};
 use obop_values::Instant;
@@ -96,6 +96,16 @@ fn stored_points(db: &Db, trip_id: &str) -> Result<Vec<Stored>, String> {
     Ok(out)
 }
 
+/// The largest `distance_m` the field holds, a decimal of 12 digits with 2 after the point. The
+/// handler writes the field with a compare-and-set that does not go through the kinds, so it asks.
+const MAX_DISTANCE: &str = "9999999999.99";
+
+fn fits_distance(text: &str) -> bool {
+    text.split('.')
+        .next()
+        .is_some_and(|whole| whole.len() <= 10)
+}
+
 /// `end`: the points must all be there, then the server decides the distance.
 fn end(db: &Db, id: &str, trip: &Fields, input: &Value) -> Result<Fields, String> {
     // The device may carry the counts in the call itself or have written them to the trip first.
@@ -113,12 +123,22 @@ fn end(db: &Db, id: &str, trip: &Fields, input: &Value) -> Result<Fields, String
     let points = stored_points(db, id)?;
     let have = points.len() as i64;
     let highest = points.last().map_or(0, |p| p.seq);
-    if have != expected || (have > 0 && highest != last_seq) {
+    // Fewer points than the device said, and none beyond its last seq: the rest may still arrive,
+    // and the same call can be repeated until it has.
+    if have < expected && highest <= last_seq {
         return Err(errors::coded(
             code::INCOMPLETE,
             &format!(
-                "{have} of {expected} points are stored and the highest seq is {highest} of {last_seq}; send the missing points, then end the trip again"
+                "{have} of {expected} points are stored and the highest seq is {highest} of {last_seq}; send the missing points, then end the trip again, or, if the device lost them, end it with expected_points and last_seq set to what it really holds"
             ),
+        ));
+    }
+    // More than it said, or a seq beyond its last one, or the right count with another last seq:
+    // no point that arrives can make that fit, so waiting does not help. A refusal for good, with
+    // what to send instead.
+    if have != expected || (have > 0 && highest != last_seq) {
+        return Err(format!(
+            "the trip holds {have} points and the highest seq is {highest}, which no point that arrives can make the {expected} points and last seq {last_seq} of the call; the counts are wrong. Call end again with expected_points {have} and last_seq {highest}"
         ));
     }
     let fixes: Vec<Fix> = points.iter().map(|p| p.fix).collect();
@@ -128,6 +148,11 @@ fn end(db: &Db, id: &str, trip: &Fields, input: &Value) -> Result<Fields, String
         return Err(format!(
             "the trip has no distance ({} of {have} points counted, {distance} m): discard it instead",
             a.accepted
+        ));
+    }
+    if !fits_distance(&distance) {
+        return Err(format!(
+            "the computed distance of {distance} m is more than the field holds ({MAX_DISTANCE} m): the track is not a real drive; discard the trip instead"
         ));
     }
     let by_seq = |seq: i64| points.iter().find(|p| p.seq == seq);
@@ -156,18 +181,13 @@ fn run(db: &Db, clock: &Clock, action: &'static str, input: &Value) -> Result<Va
     let Some(trip) = db.get(policy::TRIP, &id)? else {
         return Err(policy::no_such(policy::TRIP, &id));
     };
-    let caller = text(input, "_caller");
-    let caller = caller.strip_suffix("/agent").unwrap_or(&caller).to_string();
     let approver = Some(text(input, "_actor_approver")).filter(|a| !a.is_empty());
     // The dispatcher has checked the group and the guard the policy; this is the same decision
-    // again on the record as it is now, for a plan that was approved later.
-    let who = Who {
-        id: caller.clone(),
-        reviewer: true,
-        admin: true,
-    };
+    // again on the record as it is now, for the roles the call carries (a plan that was approved
+    // later runs as the agent that proposed it).
+    let who = Who::from_actor(&Actor::from_input(input));
     policy::check_action(action, &who, approver.as_deref(), &trip)?;
-    let decider = approver.clone().unwrap_or(caller);
+    let decider = approver.clone().unwrap_or_else(|| who.id.clone());
     let mut patch = match action {
         "end" => end(db, &id, &trip, input)?,
         _ => Fields::new(),
@@ -194,11 +214,17 @@ fn run(db: &Db, clock: &Clock, action: &'static str, input: &Value) -> Result<Va
         }
         _ => {}
     }
+    let mut batch = vec![Op::Patch {
+        model: policy::TRIP.into(),
+        id: id.clone(),
+        patch: patch.clone(),
+        expect: vec![("state".into(), J::from(policy::state(&trip)))],
+    }];
     if action == "discard_stuck" {
-        // Who discarded it is in the log, written first so that a discard is never unlogged: no
-        // change history keeps it yet (D75 is not active).
-        obop_commands::audit::try_record_event(
-            &**db,
+        // Who discarded it is in the log, written in the same batch as the discard (no change
+        // history keeps it yet, D75 is not active): the entry exists exactly when the discard
+        // does, and a refused batch leaves neither.
+        batch.push(obop_commands::audit::event_op(
             u64::try_from(clock() / 1_000_000).unwrap_or(0),
             policy::text(&trip, "driver"),
             "mileage_discard_stuck",
@@ -207,15 +233,9 @@ fn run(db: &Db, clock: &Clock, action: &'static str, input: &Value) -> Result<Va
                 "discard_stuck of trip {id}, which was {}",
                 policy::state(&trip)
             ),
-        )?;
+        ));
     }
-    db.apply_checked(&[Op::Patch {
-        model: policy::TRIP.into(),
-        id: id.clone(),
-        patch: patch.clone(),
-        expect: vec![("state".into(), J::from(policy::state(&trip)))],
-    }])
-    .map_err(|e| match e {
+    db.apply_checked(&batch).map_err(|e| match e {
         ApplyError::Conflict { .. } => errors::coded(
             code::STATE_CONFLICT,
             &format!("the trip changed while {action} ran; nothing was changed"),
@@ -236,7 +256,7 @@ fn run(db: &Db, clock: &Clock, action: &'static str, input: &Value) -> Result<Va
 pub fn install(d: &Dispatcher, module: &Module, db: Db, clock: Clock) {
     for action in policy::ACTIONS {
         let (db, clock) = (db.clone(), clock.clone());
-        d.register(
+        d.register_with_actor(
             module,
             policy::TRIP,
             action,

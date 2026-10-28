@@ -5,9 +5,11 @@
 //! Groups. `mileage.driver` opens the module and is what the app's access token holds. A reviewer
 //! and an administrator hold it as well, the way `invoicing.manager` is given on top of
 //! `invoicing.user`: the platform lets one command name one group, and `get`, `list` and `update`
-//! of a trip must be callable by all three roles. What a role may then do is decided here.
+//! of a trip must be callable by all three roles. What a role may then do is decided here, and a
+//! role counts only for a principal that holds `mileage.driver` too (`Who::of`): a reviewer or an
+//! administrator account without it can read nothing, so it decides nothing either.
 
-use obop_commands::Principal;
+use obop_commands::{Actor, Principal};
 use serde_json::Value as J;
 
 pub type Fields = serde_json::Map<String, J>;
@@ -84,15 +86,25 @@ pub const POINT_FIELDS: [&str; 8] = [
 /// a three-hour trip at one fix every five seconds is 2,160.
 pub const MAX_POINTS_PER_TRIP: usize = 20_000;
 
-/// Whether a trip that holds `have` points has room for `adding` more.
-pub fn room_for(have: usize, adding: usize) -> Result<(), String> {
-    if have + adding > MAX_POINTS_PER_TRIP {
-        return Err(format!(
-            "a trip holds at most {MAX_POINTS_PER_TRIP} points; this one has {have} and {adding} more were sent"
-        ));
+/// The cap is kept by the range of `seq`, not by counting the stored points: (`trip`, `seq`) is
+/// unique, so a trip whose points have a `seq` from 1 to 20,000 cannot hold more than 20,000, and
+/// the guard of a batch looks at the batch alone (a count would read every stored point of the
+/// instance, under the lock of the call).
+pub fn check_seq(seq: i64) -> Result<(), String> {
+    if (1..=MAX_POINTS_PER_TRIP as i64).contains(&seq) {
+        return Ok(());
     }
-    Ok(())
+    Err(format!(
+        "mileage_point.seq must be a whole number from 1 to {MAX_POINTS_PER_TRIP}: a trip holds at most {MAX_POINTS_PER_TRIP} points"
+    ))
 }
+
+/// The fields of a point that say where and when the person was: a reviewer or an administrator
+/// reads them point by point, with the read logged, and cannot sort, group or total by them.
+pub const POINT_POSITIONS: [&str; 5] = ["lat", "lon", "accuracy_m", "speed_mps", "recorded_at"];
+
+/// The same for the start and the end of a trip.
+pub const TRIP_POSITIONS: [&str; 4] = ["start_lat", "start_lon", "end_lat", "end_lon"];
 
 /// The states a reviewer reads (5.7: "from `in_review` on"). A trip that was discarded after
 /// review is not among them: the reviewer saw it when it was in review or rejected.
@@ -110,11 +122,23 @@ pub struct Who {
 }
 
 impl Who {
+    /// The roles of a principal. Reviewer and administrator count only on top of the base group.
     pub fn of(p: &Principal) -> Self {
+        let driver = p.allows(DRIVER);
         Self {
             id: p.id.strip_suffix("/agent").unwrap_or(&p.id).to_string(),
-            reviewer: p.allows(REVIEWER),
-            admin: p.allows(ADMIN),
+            reviewer: driver && p.allows(REVIEWER),
+            admin: driver && p.allows(ADMIN),
+        }
+    }
+
+    /// The same, from the actor the dispatcher stamps into the input of a handler.
+    pub fn from_actor(a: &Actor) -> Self {
+        let driver = a.holds(DRIVER);
+        Self {
+            id: a.id.clone(),
+            reviewer: driver && a.holds(REVIEWER),
+            admin: driver && a.holds(ADMIN),
         }
     }
 
@@ -240,10 +264,29 @@ pub fn writable_fields(who: &Who, trip: &Fields) -> Result<&'static [&'static st
 mod tests {
     #[test]
     fn a_trip_holds_a_bounded_number_of_points() {
-        use super::{MAX_POINTS_PER_TRIP as TOP, room_for};
-        assert!(room_for(0, TOP).is_ok());
-        assert!(room_for(TOP - 5, 5).is_ok());
-        assert!(room_for(TOP - 5, 6).unwrap_err().contains("at most"));
+        use super::{MAX_POINTS_PER_TRIP as TOP, check_seq};
+        assert!(check_seq(1).is_ok() && check_seq(TOP as i64).is_ok());
+        for seq in [i64::MIN, -1, 0, TOP as i64 + 1, i64::MAX] {
+            assert!(check_seq(seq).unwrap_err().contains("at most"), "{seq}");
+        }
+    }
+
+    #[test]
+    fn a_role_counts_only_on_top_of_the_driver_group() {
+        let with = |groups: &[&str]| Who::of(&Principal::user("x", groups));
+        assert_eq!(
+            with(&[DRIVER, REVIEWER, ADMIN]),
+            Who {
+                id: "x".into(),
+                reviewer: true,
+                admin: true
+            }
+        );
+        for groups in [&[REVIEWER][..], &[ADMIN], &[REVIEWER, ADMIN]] {
+            let w = with(groups);
+            assert!(!w.reviewer && !w.admin, "{groups:?}");
+        }
+        assert!(with(&[DRIVER]).plain_driver());
     }
 
     use super::*;

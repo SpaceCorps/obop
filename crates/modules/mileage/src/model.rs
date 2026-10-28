@@ -73,22 +73,22 @@ fn trip() -> ModelDef {
                 "vehicle",
                 "The vehicle the trip was made with, as the driver names it (a plate or a name)",
                 Internal,
-                false,
+                true,
                 DRIVER,
             ),
             F::new(
                 "purpose",
                 "What the trip was for: business, private or commute",
                 Internal,
-                false,
+                true,
                 DRIVER,
             )
             .select(&["business", "private", "commute"]),
             F::new(
                 "started_at",
                 "When the driver pressed Start, by the phone's clock",
-                Internal,
-                false,
+                ConfidentialHr,
+                true,
                 DRIVER,
             )
             .datetime()
@@ -96,8 +96,8 @@ fn trip() -> ModelDef {
             F::new(
                 "ended_at",
                 "When the driver pressed Stop; taken from the last accepted fix when the app sent none",
-                Internal,
-                false,
+                ConfidentialHr,
+                true,
                 DRIVER,
             )
             .datetime(),
@@ -186,7 +186,7 @@ fn trip() -> ModelDef {
                 "discard_reason",
                 "Why the driver discards the trip; written before discard",
                 Internal,
-                false,
+                true,
                 DRIVER,
             )
             .kind(FieldKind::LongText),
@@ -194,7 +194,7 @@ fn trip() -> ModelDef {
                 "reject_reason",
                 "Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again",
                 Internal,
-                false,
+                true,
                 DRIVER,
             )
             .kind(FieldKind::LongText),

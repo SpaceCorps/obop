@@ -5,7 +5,10 @@
 //!
 //! - Reads: a plain driver sees only their own trips and points; a reviewer sees the trips
 //!   from the review on; an administrator sees all. A record the caller may not see answers
-//!   exactly as a record that does not exist.
+//!   exactly as a record that does not exist, for every command that names it: the visibility
+//!   guard goes first (`Dispatcher::prepend_guard`), before the generated guards that would
+//!   answer in their own words (the state, the referrers, the group). A reviewer or an
+//!   administrator cannot sort, group or total the points by a position.
 //! - Writes of a trip: the driver writes the fields of `policy::DRIVER_FIELDS` while the trip is
 //!   recording, ended or rejected; the reviewer writes `reject_reason` while it is in review;
 //!   nobody writes the fields the server sets, nor `state`; nobody deletes a trip.
@@ -13,6 +16,7 @@
 //!   recording, never changed, never deleted.
 //! - Actions: the state, the owner and the separation of duties (`policy::check_action`).
 
+use crate::Clock;
 use crate::policy::{self, Fields, Who};
 use obop_commands::{Dispatcher, Guard, Principal, Value, Verdict};
 use obop_storage::Backend;
@@ -65,12 +69,55 @@ fn driver_filter(who: &Who) -> Value {
     ])
 }
 
+/// The name of a field in a sort key, a group or a measure of a query.
+fn named(v: &Value) -> Option<&str> {
+    match v {
+        Value::Text(t) => Some(t),
+        Value::Map(m) => match m.get("field") {
+            Some(Value::Text(t)) => Some(t),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// A reviewer or an administrator reads positions row by row, with the read logged. Sorting,
+/// grouping or measuring by one would hand out the route without a row: a group per coordinate,
+/// the minimum of a latitude, a bisection by order and limit.
+fn check_position_use(model: &str, positions: &[&str], logged: bool, m: &M) -> Result<(), String> {
+    let mut used: Vec<&str> = Vec::new();
+    if let Some(Value::List(order)) = m.get("order") {
+        used.extend(order.iter().filter_map(named));
+    }
+    if let Some(Value::Map(a)) = m.get("aggregate") {
+        for key in ["group_by", "measures"] {
+            if let Some(Value::List(items)) = a.get(key) {
+                used.extend(items.iter().filter_map(named));
+            }
+        }
+    }
+    match used.into_iter().find(|f| positions.contains(f)) {
+        None => Ok(()),
+        Some(f) => Err(format!(
+            "{model}.{f} cannot be used to sort, group or measure by a reviewer or an administrator: read the {} themselves with get, list or search{}",
+            if model == policy::POINT {
+                "points"
+            } else {
+                "trips"
+            },
+            if logged { ", which are logged" } else { "" }
+        )),
+    }
+}
+
 /// `list` and `search`: a plain driver asks only for their own records. (The row rule of the
-/// models would show them every trip in review, and the points of those trips.)
-fn narrow_list() -> Guard {
-    Box::new(|p, input| {
+/// models would show them every trip in review, and the points of those trips.) Anybody else asks
+/// for rows, not for a sort, a group or a total by a position.
+fn narrow_list(model: &'static str, positions: &'static [&'static str], logged: bool) -> Guard {
+    Box::new(move |p, input| {
         let who = Who::of(p);
         if !who.plain_driver() {
+            check_position_use(model, positions, logged, map(input)?)?;
             return Ok(Verdict::default());
         }
         let mut m = map(input)?.clone();
@@ -99,6 +146,25 @@ fn get_point(db: Db) -> Guard {
             }
             _ => Err(policy::no_such(policy::POINT, &id)),
         }
+    })
+}
+
+/// As [`get_trip`], for the guard that goes in front of the generated ones: a call without an id
+/// is left to them to refuse in their words.
+fn trip_first(db: Db) -> Guard {
+    let check = get_trip(db);
+    Box::new(move |p, input| match id_of(input) {
+        Ok(_) => check(p, input),
+        Err(_) => Ok(Verdict::default()),
+    })
+}
+
+/// As [`get_point`], in front of the generated guards.
+fn point_first(db: Db) -> Guard {
+    let check = get_point(db);
+    Box::new(move |p, input| match id_of(input) {
+        Ok(_) => check(p, input),
+        Err(_) => Ok(Verdict::default()),
     })
 }
 
@@ -282,11 +348,7 @@ fn point_values(r: &M) -> Result<(), String> {
             "lon" => degrees(v, "lon", 180.0)?,
             "accuracy_m" => non_negative(v, "accuracy_m")?,
             "speed_mps" => non_negative(v, "speed_mps")?,
-            "seq" => {
-                if matches!(v, Value::Int(n) if *n < 0) {
-                    return Err("mileage_point.seq cannot be negative".into());
-                }
-            }
+            // The range of `seq` is checked for a call that writes (`point_rows`).
             k if policy::POINT_FIELDS.contains(&k) => {}
             other => {
                 // A declared field that is not the client's, or one that does not exist (the
@@ -300,25 +362,45 @@ fn point_values(r: &M) -> Result<(), String> {
     Ok(())
 }
 
-/// The trip a batch of points belongs to: the caller's own, still recording, with room left.
-fn trip_for_points(db: &Db, who: &Who, id: &str, adding: usize) -> Result<(), String> {
+/// The trip a batch of points belongs to: the caller's own, and, for a call that writes, still
+/// recording. A repeat of a call that was answered writes nothing, so it needs no more than the
+/// trip being the caller's.
+fn trip_for_points(db: &Db, who: &Who, id: &str, writes: bool) -> Result<(), String> {
     // Another person's trip looks exactly like a trip that does not exist, whatever its state.
     let trip = match db.get(policy::TRIP, id)? {
         Some(t) if policy::owns(who, &t) => t,
         _ => return Err(policy::no_such(policy::TRIP, id)),
     };
     let st = policy::state(&trip);
-    if st != policy::RECORDING {
+    if writes && st != policy::RECORDING {
         return Err(format!(
             "mileage_trip {id} is {st}: points can only be added while the trip is recording"
         ));
     }
-    let have = db.find(policy::POINT, "trip", &J::from(id))?.len();
-    policy::room_for(have, adding)
+    Ok(())
 }
 
-/// Rows of points for one trip: checked against the trip, stamped with its driver.
-fn point_rows(db: &Db, who: &Who, rows: &[Value]) -> Result<Vec<Value>, String> {
+/// The range of `seq` of the rows that are written.
+fn check_seqs(rows: &[Value]) -> Result<(), String> {
+    for r in rows {
+        if let Value::Map(m) = r
+            && let Some(Value::Int(seq)) = m.get("seq")
+        {
+            policy::check_seq(*seq)?;
+        }
+    }
+    Ok(())
+}
+
+/// Rows of points for one trip: checked against the trip, stamped with its driver. `replay` says
+/// that the call is the repeat of one that was answered (`replay_of`): it writes nothing, so the
+/// state of the trip and the range of `seq` are not asked again.
+fn point_rows(
+    db: &Db,
+    who: &Who,
+    rows: &[Value],
+    replay: impl FnOnce(&[Value]) -> bool,
+) -> Result<Vec<Value>, String> {
     let mut trips: Vec<&str> = rows
         .iter()
         .filter_map(|r| match r {
@@ -346,10 +428,7 @@ fn point_rows(db: &Db, who: &Who, rows: &[Value]) -> Result<Vec<Value>, String> 
             }
         }
     }
-    if let Some(trip) = trips.first() {
-        trip_for_points(db, who, trip, rows.len())?;
-    }
-    Ok(rows
+    let stamped: Vec<Value> = rows
         .iter()
         .map(|r| match r {
             Value::Map(m) => {
@@ -359,12 +438,20 @@ fn point_rows(db: &Db, who: &Who, rows: &[Value]) -> Result<Vec<Value>, String> 
             }
             other => other.clone(),
         })
-        .collect())
+        .collect();
+    let writes = !replay(&stamped);
+    if let Some(trip) = trips.first() {
+        trip_for_points(db, who, trip, writes)?;
+    }
+    if writes {
+        check_seqs(&stamped)?;
+    }
+    Ok(stamped)
 }
 
 fn create_point(db: Db) -> Guard {
     Box::new(move |p, input| {
-        let rows = point_rows(&db, &Who::of(p), std::slice::from_ref(input))?;
+        let rows = point_rows(&db, &Who::of(p), std::slice::from_ref(input), |_| false)?;
         Ok(match rows.into_iter().next() {
             Some(Value::Map(m)) => new_input(m),
             _ => Verdict::default(),
@@ -372,13 +459,25 @@ fn create_point(db: Db) -> Guard {
     })
 }
 
-fn bulk_points(db: Db) -> Guard {
+fn bulk_points(db: Db, clock: Clock) -> Guard {
     Box::new(move |p, input| {
         let m = map(input)?;
         let Some(rows) = rows_of(m)? else {
             return Ok(Verdict::default());
         };
-        let rewritten = point_rows(&db, &Who::of(p), rows)?;
+        // The stored answer is found by the key and the rows as the engine will see them, stamped.
+        let replay = |stamped: &[Value]| {
+            let mut call = m.clone();
+            call.insert("rows".into(), Value::List(stamped.to_vec()));
+            obop_commands::has_stored_answer(
+                &*db,
+                u64::try_from(clock() / 1_000_000).unwrap_or(0),
+                policy::POINT,
+                p,
+                &Value::Map(call),
+            )
+        };
+        let rewritten = point_rows(&db, &Who::of(p), rows, replay)?;
         let mut out = m.clone();
         out.insert("rows".into(), Value::List(rewritten));
         Ok(new_input(out))
@@ -395,14 +494,31 @@ fn action(db: Db, name: &'static str) -> Guard {
     })
 }
 
-pub fn install(d: &Dispatcher, module: &str, db: Db) {
+pub fn install(d: &Dispatcher, module: &str, db: Db, clock: Clock) {
     let id = |model: &str, c: &str| format!("{model}.{c}");
     let (t, pt) = (policy::TRIP, policy::POINT);
+    // What the caller may know exists is decided before the generated guards speak.
+    for c in ["delete", "update"].into_iter().chain(policy::ACTIONS) {
+        d.prepend_guard(module, &id(t, c), true, trip_first(db.clone()));
+    }
+    for c in ["delete", "update"] {
+        d.prepend_guard(module, &id(pt, c), true, point_first(db.clone()));
+    }
     d.add_guard(module, &id(t, "get"), false, get_trip(db.clone()));
     d.add_guard(module, &id(pt, "get"), false, get_point(db.clone()));
     for c in ["list", "search"] {
-        d.add_guard(module, &id(t, c), false, narrow_list());
-        d.add_guard(module, &id(pt, c), false, narrow_list());
+        d.add_guard(
+            module,
+            &id(t, c),
+            false,
+            narrow_list(t, &policy::TRIP_POSITIONS, false),
+        );
+        d.add_guard(
+            module,
+            &id(pt, c),
+            false,
+            narrow_list(pt, &policy::POINT_POSITIONS, true),
+        );
     }
     d.add_guard(module, &id(t, "create"), true, create_trip());
     d.add_guard(module, &id(t, "bulk_create"), true, bulk_trips());
@@ -420,7 +536,7 @@ pub fn install(d: &Dispatcher, module: &str, db: Db) {
         module,
         &id(pt, "bulk_create"),
         true,
-        bulk_points(db.clone()),
+        bulk_points(db.clone(), clock),
     );
     d.add_guard(
         module,

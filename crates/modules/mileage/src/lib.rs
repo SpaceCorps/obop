@@ -41,7 +41,7 @@ pub fn register_with_clock(d: &Dispatcher, store: &Store, clock: Clock) {
     let m = module();
     d.register_crud(&m, store);
     let db = store.backend();
-    guards::install(d, &m.id, db.clone());
+    guards::install(d, &m.id, db.clone(), clock.clone());
     handlers::install(d, &m, db.clone(), clock.clone());
     audit::install(d, db, clock);
 }
