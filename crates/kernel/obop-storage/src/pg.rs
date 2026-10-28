@@ -370,7 +370,7 @@ pub(crate) fn unique_lookup_sql(model: &str, fields: &[&str]) -> Result<String> 
     ))
 }
 
-/// What `data ->> field` returns for each value, as the bound texts of the lookup; `None` when a
+/// The text the index column holds for each value, as the bound texts of the lookup; `None` when a
 /// value has no exact text (a fraction, a list, an object, a NUL, or an empty first value, which
 /// the index treats as no value at all), and the caller then reads with `find` instead.
 fn unique_texts(values: &[J]) -> Option<Vec<String>> {

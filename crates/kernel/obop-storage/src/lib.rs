@@ -750,6 +750,8 @@ pub mod tls;
 #[cfg(test)]
 mod tls_tests;
 pub mod tracked;
+#[cfg(test)]
+mod unique_tests;
 
 pub use ctx::{ACTOR_PUBLIC, ACTOR_SYSTEM, ActionRun, Via, WriteCtx};
 pub use guard::guarded;

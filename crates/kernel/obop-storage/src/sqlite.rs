@@ -236,6 +236,14 @@ impl Sqlite {
     }
 }
 
+#[cfg(test)]
+impl Sqlite {
+    /// Run `f` on the connection (for a test that asks SQLite itself, such as a query plan).
+    pub(crate) fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> T) -> T {
+        f(&self.conn.lock().unwrap())
+    }
+}
+
 struct FileGuard {
     file: std::fs::File,
     _local: LocalGuard,
