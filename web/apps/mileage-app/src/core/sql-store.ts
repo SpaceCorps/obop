@@ -465,6 +465,15 @@ export function createSqlStore(db: SqlDb): OutboxStore {
       });
     },
 
+    async clearAll() {
+      await db.transaction(async (tx) => {
+        await tx.run("DELETE FROM point", []);
+        await tx.run("DELETE FROM batch", []);
+        await tx.run("DELETE FROM trip", []);
+        await setMeta(tx, ACTIVE, null);
+      });
+    },
+
     async getMeta(key) {
       return (
         (await db.one<{ value: string }>("SELECT value FROM meta WHERE key = ?", [key]))?.value ??

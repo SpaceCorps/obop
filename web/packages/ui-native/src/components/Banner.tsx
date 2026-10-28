@@ -1,5 +1,5 @@
 import { View } from "react-native";
-import { useTheme } from "../theme.tsx";
+import { useTheme, useWords } from "../theme.tsx";
 import { Button } from "./Button.tsx";
 import { Text } from "./Text.tsx";
 
@@ -21,22 +21,18 @@ const GLYPH: Record<BannerTone, string> = {
   warning: "!",
   danger: "!",
 };
-const WORD: Record<BannerTone, string> = {
-  info: "Note",
-  success: "Done",
-  warning: "Warning",
-  danger: "Problem",
-};
 
 /** A message that stays in the page. A warning or a problem is announced as soon as it appears. */
 export function Banner({ tone, title, message, action, testID }: BannerProps) {
   const t = useTheme();
+  const words = useWords();
+  const word = words[tone];
   const sig = t.c[tone];
   return (
     <View
       accessible
       accessibilityRole="alert"
-      accessibilityLabel={[`${WORD[tone]}: ${title}`, message].filter(Boolean).join(". ")}
+      accessibilityLabel={[`${word}: ${title}`, message].filter(Boolean).join(". ")}
       accessibilityLiveRegion={tone === "danger" || tone === "warning" ? "assertive" : "polite"}
       testID={testID}
       style={{
@@ -65,7 +61,7 @@ export function Banner({ tone, title, message, action, testID }: BannerProps) {
       </View>
       <View style={{ flex: 1, gap: t.space[1] }}>
         <Text variant="label" color={sig.ink}>
-          {`${WORD[tone]}: ${title}`}
+          {`${word}: ${title}`}
         </Text>
         {message ? <Text color={sig.ink}>{message}</Text> : null}
         {action ? (

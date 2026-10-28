@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { TextInput, View, type TextInputProps } from "react-native";
-import { useTheme } from "../theme.tsx";
+import { useTheme, useWords } from "../theme.tsx";
 import { Text } from "./Text.tsx";
 
 export type FieldProps = {
@@ -39,6 +39,7 @@ export function Field({
   testID,
 }: FieldProps) {
   const t = useTheme();
+  const words = useWords();
   const [focused, setFocused] = useState(false);
   const note = error ?? helper;
   return (
@@ -84,7 +85,7 @@ export function Field({
           accessibilityRole={error ? "alert" : undefined}
           accessibilityLiveRegion={error ? "polite" : undefined}
         >
-          {error ? `Error: ${error}` : note}
+          {error ? `${words.error}: ${error}` : note}
         </Text>
       ) : null}
     </View>

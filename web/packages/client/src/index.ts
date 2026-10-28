@@ -44,6 +44,7 @@ export {
   parseAuthorizationResponse,
   refreshTokens,
   registerMobileClient,
+  revokeToken,
 } from "./oauth.ts";
 export type {
   AuthorizeOptions,
@@ -53,5 +54,6 @@ export type {
   Pkce,
   RefreshOptions,
   RegisterOptions,
+  RevokeOptions,
   TokenSet,
 } from "./oauth.ts";

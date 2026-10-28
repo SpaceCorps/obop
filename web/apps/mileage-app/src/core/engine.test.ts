@@ -124,6 +124,18 @@ describe("the local store", () => {
     expect(await store.nextBatch("c1", 1000)).toMatchObject({ firstSeq: 4, lastSeq: 5 });
   });
 
+  test("clearAll leaves nothing of any trip", async () => {
+    const { store } = await rig();
+    await recordAndStop(store, 3, "a");
+    await start(store, "b");
+    await store.appendFixes("b", walk(2));
+    await store.clearAll();
+    expect(await store.listTrips()).toEqual([]);
+    expect(await store.activeTrip()).toBeNull();
+    expect(await store.pointCount("b")).toBe(0);
+    await expect(start(store, "c")).resolves.toMatchObject({ clientTripId: "c" });
+  });
+
   test("a database of a newer app is refused", async () => {
     const db = memoryDb();
     await db.exec("PRAGMA user_version = 99");

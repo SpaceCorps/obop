@@ -56,3 +56,34 @@ export function InsetsProvider({ insets, children }: { insets: Insets; children:
 export function useInsets(): Insets {
   return useContext(InsetsContext);
 }
+
+/**
+ * The few words the components say themselves (the back button, the word that goes with a
+ * banner's colour, the word before an error). The app passes its catalogue; the defaults are
+ * English, which is what the stories show.
+ */
+export type Words = {
+  back: string;
+  error: string;
+  info: string;
+  success: string;
+  warning: string;
+  danger: string;
+};
+export const DEFAULT_WORDS: Words = {
+  back: "Back",
+  error: "Error",
+  info: "Note",
+  success: "Done",
+  warning: "Warning",
+  danger: "Problem",
+};
+const WordsContext = createContext<Words>(DEFAULT_WORDS);
+
+export function WordsProvider({ words, children }: { words: Words; children: ReactNode }) {
+  return <WordsContext.Provider value={words}>{children}</WordsContext.Provider>;
+}
+
+export function useWords(): Words {
+  return useContext(WordsContext);
+}

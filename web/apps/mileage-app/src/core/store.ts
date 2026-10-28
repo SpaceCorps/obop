@@ -88,6 +88,8 @@ export interface OutboxStore {
   purgePoints(clientTripId: string): Promise<void>;
   /** Removes a trip that was never sent anywhere (only the local data). */
   deleteTrip(clientTripId: string): Promise<void>;
+  /** Everything the phone holds about trips: for a sign-out that the driver confirmed. */
+  clearAll(): Promise<void>;
 
   getMeta(key: string): Promise<string | null>;
   setMeta(key: string, value: string | null): Promise<void>;

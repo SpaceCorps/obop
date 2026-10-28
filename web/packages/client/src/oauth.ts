@@ -311,3 +311,22 @@ export async function refreshTokens(deps: OAuthDeps, options: RefreshOptions): P
   });
   return tokenSet(body, options.now ?? Date.now());
 }
+
+export interface RevokeOptions {
+  baseUrl: string;
+  clientId: string;
+  /** The refresh token: revoking it ends the whole sign-in (RFC 7009), and the device with it. */
+  token: string;
+}
+
+/** `POST /oauth/revoke` (RFC 7009): ends the sign-in on the instance. Answers 200 whatever the token was. */
+export async function revokeToken(deps: OAuthDeps, options: RevokeOptions): Promise<void> {
+  await post(deps, `${normaliseBaseUrl(options.baseUrl)}/oauth/revoke`, {
+    headers: FORM,
+    body: formBody({
+      token: options.token,
+      token_type_hint: "refresh_token",
+      client_id: options.clientId,
+    }),
+  });
+}

@@ -11,6 +11,7 @@ import {
   parseAuthorizationResponse,
   refreshTokens,
   registerMobileClient,
+  revokeToken,
   type OAuthDeps,
 } from "./index.ts";
 
@@ -267,5 +268,27 @@ describe("tokens", () => {
     await expect(
       refreshTokens(partial.deps, { baseUrl: "http://h", clientId: "c", refreshToken: "r" }),
     ).rejects.toMatchObject({ code: "invalid_response" });
+  });
+});
+
+describe("revocation", () => {
+  test("posts the refresh token and the client id, with the hint", async () => {
+    const { deps: d, calls } = deps(() => json({}));
+    await revokeToken(d, { baseUrl: "http://h/", clientId: "cid-1", token: "RT-1" });
+    expect(calls[0]!.url).toBe("http://h/oauth/revoke");
+    expect(Object.fromEntries(new URLSearchParams(bodyOf(calls[0]!.init)))).toEqual({
+      token: "RT-1",
+      token_type_hint: "refresh_token",
+      client_id: "cid-1",
+    });
+  });
+
+  test("no connection is network_error", async () => {
+    const down = deps(() => {
+      throw new TypeError("Network request failed");
+    });
+    await expect(
+      revokeToken(down.deps, { baseUrl: "http://h", clientId: "c", token: "t" }),
+    ).rejects.toMatchObject({ code: "network_error" });
   });
 });

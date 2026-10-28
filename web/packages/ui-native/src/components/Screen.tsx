@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ScrollView, View } from "react-native";
-import { useInsets, useTheme } from "../theme.tsx";
+import { useInsets, useTheme, useWords } from "../theme.tsx";
 import { Button } from "./Button.tsx";
 import { Text } from "./Text.tsx";
 
@@ -19,6 +19,7 @@ export type ScreenProps = {
 export function Screen({ title, onBack, footer, scroll = true, children }: ScreenProps) {
   const t = useTheme();
   const insets = useInsets();
+  const words = useWords();
   const body = <View style={{ gap: t.space[4], padding: t.space[4] }}>{children}</View>;
   return (
     <View
@@ -33,7 +34,7 @@ export function Screen({ title, onBack, footer, scroll = true, children }: Scree
       <View style={{ paddingHorizontal: t.space[4], paddingTop: t.space[3], gap: t.space[2] }}>
         {onBack ? (
           <View style={{ alignItems: "flex-start" }}>
-            <Button label="Back" variant="ghost" onPress={onBack} />
+            <Button label={words.back} variant="ghost" onPress={onBack} />
           </View>
         ) : null}
         <Text variant="title">{title}</Text>

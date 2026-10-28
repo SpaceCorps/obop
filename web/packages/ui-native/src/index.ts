@@ -13,7 +13,16 @@ export { Screen } from "./components/Screen.tsx";
 export type { ScreenProps } from "./components/Screen.tsx";
 export { Text } from "./components/Text.tsx";
 export type { TextProps, TextTone, TextVariant } from "./components/Text.tsx";
-export { InsetsProvider, makeTheme, ThemeProvider, useInsets, useTheme } from "./theme.tsx";
-export type { Insets, Theme } from "./theme.tsx";
+export {
+  DEFAULT_WORDS,
+  InsetsProvider,
+  makeTheme,
+  ThemeProvider,
+  useInsets,
+  useTheme,
+  useWords,
+  WordsProvider,
+} from "./theme.tsx";
+export type { Insets, Theme, Words } from "./theme.tsx";
 export { tokens } from "./tokens.native.ts";
 export type { ColorMode, Palette, Tokens } from "./tokens.native.ts";
