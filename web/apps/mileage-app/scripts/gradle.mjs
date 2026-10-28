@@ -74,6 +74,14 @@ if (windows && sdk) {
   }
 }
 
+// CMake 4 refuses a project that asks for a minimum below 3.5, and expo-sqlite (with the vendored
+// SQLCipher build) still says 3.4.1. CMake 4 reads this variable from the environment, so the files
+// of the packages stay untouched; CMake 3 ignores it. A value already set by the caller wins.
+const env = {
+  ...process.env,
+  CMAKE_POLICY_VERSION_MINIMUM: process.env.CMAKE_POLICY_VERSION_MINIMUM ?? "3.5",
+};
+
 const gradleArgs = [...args, `-PreactNativeArchitectures=${abis}`];
 let result;
 let shown;
@@ -92,12 +100,13 @@ if (windows) {
   result = spawnSync("cmd.exe", ["/d", "/s", "/c", `"${shown}"`], {
     cwd: androidDir,
     stdio: "inherit",
+    env,
     windowsVerbatimArguments: true,
   });
 } else {
   const wrapper = `${androidDir}gradlew`;
   shown = `${wrapper} ${gradleArgs.join(" ")}`;
-  result = spawnSync(wrapper, gradleArgs, { cwd: androidDir, stdio: "inherit" });
+  result = spawnSync(wrapper, gradleArgs, { cwd: androidDir, stdio: "inherit", env });
 }
 
 if (result.error) {

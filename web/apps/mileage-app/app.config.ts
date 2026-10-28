@@ -36,6 +36,17 @@ const config: ExpoConfig = {
     // The database is encrypted with a key in the Keystore. A cloud backup would carry the file
     // without the key, so Android's backup is off.
     allowBackup: false,
+    // Permissions that libraries add to the merged manifest and the app never uses: the overlay of
+    // the development menu, old external storage access, vibration, and the biometric prompt of
+    // secure-store (the app stores its keys without asking for a fingerprint).
+    blockedPermissions: [
+      "android.permission.SYSTEM_ALERT_WINDOW",
+      "android.permission.READ_EXTERNAL_STORAGE",
+      "android.permission.WRITE_EXTERNAL_STORAGE",
+      "android.permission.VIBRATE",
+      "android.permission.USE_BIOMETRIC",
+      "android.permission.USE_FINGERPRINT",
+    ],
   },
   ios: { bundleIdentifier: APPLICATION_ID },
   extra: { cleartextAllowed: CLEARTEXT, defaultServer: DEFAULT_SERVER },
