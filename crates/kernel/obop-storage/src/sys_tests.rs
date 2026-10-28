@@ -1,7 +1,9 @@
-//! System fields and change history (D75) on the stores that have them: memory and SQLite, each of
-//! them (SQLite also in a file, which is what a restart and a restore see) through the same
-//! contract. PostgreSQL has no history store yet, so it is not in this file; its behaviour with
-//! nothing tracked is pinned by `golden_tests`.
+//! System fields and change history (D75) on the stores that have them: memory, SQLite, each of
+//! them (SQLite also in a file, which is what a restart and a restore see) and PostgreSQL (a
+//! scratch database per test, skipped when `OBOP_TEST_POSTGRES_URL` is not set) through the same
+//! contract. The behaviour of PostgreSQL with nothing tracked is pinned by `golden_tests`; what
+//! only PostgreSQL has (partitions, the feed's horizon, the guards of the table) is in
+//! `pg_hist_tests`.
 //!
 //! The clock of every store here is a counter the test moves, so no test waits for time to pass.
 
@@ -98,6 +100,8 @@ struct Fx {
     now: Arc<AtomicI64>,
     name: &'static str,
     _dir: Option<TempDir>,
+    /// The scratch database of a PostgreSQL store (declared after `b`: the store goes first).
+    _db: Option<crate::testing::TestDb>,
 }
 
 fn clock() -> (Arc<AtomicI64>, Clock) {
@@ -114,6 +118,7 @@ impl Fx {
             now,
             name: "memory",
             _dir: None,
+            _db: None,
         }
     }
 
@@ -126,6 +131,7 @@ impl Fx {
             now,
             name: "sqlite in memory",
             _dir: None,
+            _db: None,
         }
     }
 
@@ -140,7 +146,28 @@ impl Fx {
             now,
             name: "sqlite file",
             _dir: Some(dir),
+            _db: None,
         }
+    }
+
+    /// A PostgreSQL store in a database of its own, `None` when no server is configured.
+    fn postgres() -> Option<Fx> {
+        let db = crate::testing::TestDb::new()?;
+        let (now, clock) = clock();
+        let cfg = crate::pgpool::PgPoolConfig {
+            size: 3,
+            ..crate::pgpool::PgPoolConfig::one_shot()
+        };
+        let pg = crate::pg::Pg::connect_with(db.url(), cfg)
+            .expect("a PostgreSQL store")
+            .with_clock(clock);
+        Some(Fx {
+            b: Tracked::new(Arc::new(pg)),
+            now,
+            name: "postgresql",
+            _dir: None,
+            _db: Some(db),
+        })
     }
 
     fn track(&self, model: &str, history: bool, fields: &[(&str, Treat)]) {
@@ -214,7 +241,14 @@ impl Fx {
 
 /// Run `test` on every store that has system fields and history.
 fn each(test: impl Fn(&Fx)) {
-    for fx in [Fx::memory(), Fx::sqlite(), Fx::sqlite_file()] {
+    let stores = [
+        Some(Fx::memory()),
+        Some(Fx::sqlite()),
+        Some(Fx::sqlite_file()),
+    ]
+    .into_iter()
+    .chain([Fx::postgres()]);
+    for fx in stores.flatten() {
         eprintln!("--- {}", fx.name);
         test(&fx);
     }
@@ -2006,6 +2040,7 @@ fn a_database_from_before_the_history_opens_without_a_schema_change_and_gets_the
         now,
         name: "an old file",
         _dir: None,
+        _db: None,
     };
     assert_eq!(
         schema(),

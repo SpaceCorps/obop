@@ -4,6 +4,7 @@
 //! session advisory locks on connections of a pool of their own.
 
 use super::*;
+use crate::pg_hist;
 use crate::pgpool::{
     Class, MAX_REPEATS, PR, PgManager, PgPool, PgPoolConfig, Pooler, Session, describe,
     is_retryable_text, repeat_pause, tune,
@@ -28,6 +29,9 @@ pub(crate) struct Pg {
     /// a pooled connection at the advisory locks and the pool, then reads too, would run dry
     /// (D74). Large batches take it exclusively, small ones share it.
     batches: std::sync::RwLock<()>,
+    /// What this process knows of the change history (D75): whether it is installed, the months
+    /// it has made partitions for, the clock tests set.
+    pub(crate) hist: pg_hist::State,
 }
 
 /// A batch that locks more stripes than this is a bulk write.
@@ -68,6 +72,14 @@ impl Pg {
         Self::connect_options(url, Some(cfg), Ddl::IfMissing)
     }
 
+    /// As `connect_with`, with stamps that read `clock` instead of the database's (the statements
+    /// that lock a record and read the clock still run).
+    #[cfg(test)]
+    pub(crate) fn with_clock(mut self, clock: crate::sysfields::Clock) -> Self {
+        self.hist = self.hist.with_clock(clock);
+        self
+    }
+
     /// Connect with the pool settings given (`None`: read `OBOP_DB_*`) and say whether the schema
     /// may be created.
     pub(crate) fn connect_options(url: &str, cfg: Option<PgPoolConfig>, ddl: Ddl) -> Result<Self> {
@@ -99,6 +111,9 @@ impl Pg {
         // trip over each other creating the same objects. The schema is the parts of `schema`:
         // what is missing is created under `Ddl::IfMissing`, and `Ddl::Never` only checks.
         schema::with_lock(&mut client, |c| schema::ensure(c, ddl))?;
+        // Created above under `IfMissing`; under `Never` it may be missing, which is not an error
+        // until a model keeps history (see `pg_hist`).
+        let history_ready = (pg_hist::PART.check)(&mut client)?;
 
         // Advisory locks need a session that lasts: behind a pooler in transaction mode they go
         // to a direct address. That address must reach the same server and database.
@@ -141,6 +156,7 @@ impl Pg {
             lock_pool,
             locks: Arc::default(),
             batches: std::sync::RwLock::new(()),
+            hist: pg_hist::State::new(ddl, history_ready),
         })
     }
 
@@ -275,7 +291,7 @@ pub(crate) fn lock_batch(c: &mut Client, keys: &[i32]) -> PR<()> {
     Ok(())
 }
 
-fn pg_fields(v: J) -> Result<Fields> {
+pub(crate) fn pg_fields(v: J) -> Result<Fields> {
     match v {
         J::Object(m) => Ok(m),
         _ => Err("stored record is not an object".into()),
@@ -417,12 +433,15 @@ impl Backend for Pg {
         ops: &[Op],
         tracking: &Tracking,
     ) -> std::result::Result<(), ApplyError> {
-        struct P<'a>(&'a mut Client);
+        struct P<'a> {
+            c: &'a mut Client,
+            h: pg_hist::Tx<'a>,
+        }
         impl TxView for P<'_> {
             fn tx_get(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
                 // Row lock: another process applying a batch to the same record waits here.
                 let row = self
-                    .0
+                    .c
                     .query_opt(
                         "SELECT data FROM obop_record WHERE model = $1 AND id = $2 FOR UPDATE",
                         &[&model, &id],
@@ -432,7 +451,7 @@ impl Backend for Pg {
             }
             fn tx_insert(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
                 let data = J::Object(fields.clone());
-                self.0
+                self.c
                     .execute(
                         "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
                         &[&model, &id, &data],
@@ -442,7 +461,7 @@ impl Backend for Pg {
             }
             fn tx_put(&mut self, model: &str, id: &str, fields: &Fields) -> Result<()> {
                 let data = J::Object(fields.clone());
-                self.0
+                self.c
                     .execute(
                         "UPDATE obop_record SET data = $3 WHERE model = $1 AND id = $2",
                         &[&model, &id, &data],
@@ -451,7 +470,7 @@ impl Backend for Pg {
                     .map_err(e)
             }
             fn tx_delete(&mut self, model: &str, id: &str) -> Result<()> {
-                self.0
+                self.c
                     .execute(
                         "DELETE FROM obop_record WHERE model = $1 AND id = $2",
                         &[&model, &id],
@@ -462,11 +481,36 @@ impl Backend for Pg {
             fn tx_context(&mut self, json: &str) -> Result<()> {
                 // Local to this transaction: gone at COMMIT or ROLLBACK, so a pooled connection
                 // never carries one write's tickets to the next.
-                self.0
+                self.c
                     .query_one("SELECT set_config('obop.ctx', $1, true)", &[&json])
                     .map(|_| ())
                     .map_err(e)
             }
+            fn tx_get_clock(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
+                self.h.get_clock(self.c, model, id)
+            }
+            fn tx_now(&mut self) -> Result<i64> {
+                self.h.now(self.c)
+            }
+            fn tx_history(&mut self, rows: &[ChangeRow]) -> Result<()> {
+                self.h.history(self.c, rows)
+            }
+            fn tx_scrub(
+                &mut self,
+                model: &str,
+                id: &str,
+                keep: &[String],
+                actor: &str,
+                via: &Fields,
+                row_version: i64,
+                at: i64,
+            ) -> Result<u64> {
+                self.h
+                    .scrub(self.c, model, id, keep, actor, via, row_version, at)
+            }
+        }
+        if pg_hist::State::wants(ops, tracking) {
+            self.hist.before_batch(&self.main);
         }
         // Two batches that touch the same records must not hold them in opposite order (they
         // would deadlock), and two that create the same record must not both think it is
@@ -507,7 +551,15 @@ impl Backend for Pg {
                         .get(0);
                     BATCH_LOCKS_HELD.with(|h| h.set(n));
                 }
-                let r = run_ops(&mut P(c), ops, ctx, tracking);
+                let r = run_ops(
+                    &mut P {
+                        c,
+                        h: pg_hist::Tx::new(&self.hist),
+                    },
+                    ops,
+                    ctx,
+                    tracking,
+                );
                 let commit = r.is_ok();
                 Ok((r, commit))
             });
@@ -521,6 +573,32 @@ impl Backend for Pg {
             attempt += 1;
             repeat_pause(attempt);
         }
+    }
+    fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
+        pg_hist::history(&self.main, q)
+    }
+    fn changes(&self, q: &ChangeQuery) -> Result<ChangePage> {
+        pg_hist::changes(self, q)
+    }
+    fn ensure_history_schema(&self) -> Result<()> {
+        self.hist.ensure_schema(&self.main)
+    }
+    fn history_stats(&self) -> Result<HistoryStats> {
+        pg_hist::stats(self)
+    }
+    fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
+        pg_hist::ensure_partition(self, month)
+    }
+    fn history_drop_partition(&self, month: &str, min_age_days: u32) -> Result<u64> {
+        pg_hist::drop_partition(self, month, min_age_days)
+    }
+    fn backfill_sysfields(
+        &self,
+        models: &[String],
+        fallback_at: &str,
+        batch: usize,
+    ) -> Result<Backfilled> {
+        pg_hist::backfill(&self.main, models, fallback_at, batch)
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.main.read(Class::List, |c| {
@@ -685,6 +763,7 @@ impl Backend for Pg {
     fn export(&self, batch: usize, sink: &mut RowSink<'_>) -> Result<()> {
         // One pooled connection, one repeatable-read read-only transaction: a consistent
         // snapshot that does not block writers and is paged by `seq`, so memory stays bounded.
+        // The change history follows the records, from the same snapshot.
         let limit = batch.max(1) as i64;
         self.main.snapshot(Class::Batch, |tx| {
             let mut after = 0i64;
@@ -695,21 +774,20 @@ impl Backend for Pg {
                     &[&after, &limit],
                 )?;
                 let Some(last) = rows.last() else {
-                    return Ok(());
+                    break;
                 };
-                after = last.get::<_, i64>(0);
-                let out: Vec<(String, String, Fields)> = rows
-                    .into_iter()
-                    .map(|r| {
-                        Ok((
-                            r.get::<_, String>(1),
-                            r.get::<_, String>(2),
-                            pg_fields(r.get::<_, J>(3))?,
-                        ))
-                    })
-                    .collect::<Result<_>>()?;
+                after = last.try_get::<_, i64>(0)?;
+                let mut out: Vec<(String, String, Fields)> = Vec::with_capacity(rows.len());
+                for r in &rows {
+                    out.push((
+                        r.try_get::<_, String>(1)?,
+                        r.try_get::<_, String>(2)?,
+                        pg_fields(r.try_get::<_, J>(3)?)?,
+                    ));
+                }
                 sink(&out)?;
             }
+            pg_hist::export(tx, limit, sink)
         })
     }
     fn import(
@@ -720,14 +798,23 @@ impl Backend for Pg {
         // A restore is a long write: it takes a long-read permit, so a few of them at once can
         // never take every connection.
         self.main.tx_decide(Class::Batch, true, |c| {
+            // The entries of the change history come in among the records (D75): the pipeline
+            // is preflight, wipe, rows (records and entries), then the partitions, the sequence
+            // and the epoch of the feed (`pg_hist::Import`).
+            let mut history = pg_hist::Import::preflight(c, wipe)?;
             if wipe {
                 for t in ["obop_record", "obop_kv", "obop_counter"] {
                     c.batch_execute(&format!("DELETE FROM {t}"))?;
                 }
+                history.wipe(c)?;
             }
             let mut n = 0;
             while let Some(batch) = next()? {
                 for (model, id, fields) in batch {
+                    if history.take(&model, &id, &fields)? {
+                        n += 1;
+                        continue;
+                    }
                     let data = J::Object(fields);
                     c.execute(
                         "INSERT INTO obop_record (model, id, data) VALUES ($1, $2, $3)",
@@ -735,7 +822,9 @@ impl Backend for Pg {
                     )?;
                     n += 1;
                 }
+                history.flush(c)?;
             }
+            history.finish(c)?;
             Ok((n, true))
         })
     }
@@ -767,7 +856,7 @@ impl Backend for Pg {
     fn total(&self) -> Result<usize> {
         self.main.read(Class::Aggregate, |c| {
             let r = c.query_one("SELECT COUNT(*) FROM obop_record", &[])?;
-            Ok(r.get::<_, i64>(0) as usize)
+            Ok(r.get::<_, i64>(0) as usize + pg_hist::count(c)?)
         })
     }
 }

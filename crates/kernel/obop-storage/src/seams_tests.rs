@@ -379,7 +379,18 @@ fn ensure_creates_what_is_missing_only_when_allowed() {
     assert!(tables(&mut c).is_empty());
     // IfMissing creates it; a second time there is nothing to do.
     crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
-    assert_eq!(tables(&mut c), ["obop_counter", "obop_kv", "obop_record"]);
+    // The change history's table is partitioned by month: the parent is not a plain table, and
+    // the monthly partitions are made by the first write that keeps history, so a new database
+    // has the default partition only.
+    assert_eq!(
+        tables(&mut c),
+        [
+            "obop_counter",
+            "obop_kv",
+            "obop_record",
+            "obop_record_change_default"
+        ]
+    );
     assert!(crate::schema::inspect(&mut c).unwrap().is_empty());
     crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
     // Now Never is fine, and the store works.

@@ -199,7 +199,7 @@ pub(crate) struct Clock {
     source: Box<dyn Fn() -> i64 + Send + Sync>,
 }
 
-fn host_micros() -> i64 {
+pub(crate) fn host_micros() -> i64 {
     // A host clock set before 1970 reads as the epoch; `tick` keeps the stamps increasing anyway.
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -217,6 +217,11 @@ impl Clock {
             last: AtomicI64::new(i64::MIN),
             source: Box::new(source),
         }
+    }
+
+    /// What the source says now, without taking a number (a store that only needs the month).
+    pub(crate) fn peek(&self) -> i64 {
+        (self.source)()
     }
 
     pub(crate) fn tick(&self) -> i64 {

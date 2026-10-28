@@ -282,6 +282,38 @@ pub trait Backend: Send + Sync {
     fn history(&self, _q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
         Err("this storage backend keeps no change history".into())
     }
+    /// The entries of the change history of every record, in the order a consumer must read them
+    /// (D75): one page, from `q.after` on. On PostgreSQL the order is `(txid, seq)` and an entry is
+    /// shown only once no transaction that began before its own can still commit, so a consumer
+    /// that follows the cursor never misses an entry that committed late; memory and SQLite order
+    /// by `seq`. A cursor that cannot be followed (the history was restored, or the database went
+    /// back in time) is refused with an error that starts `cursor_expired:`. A backend that keeps
+    /// no history refuses.
+    fn changes(&self, _q: &ChangeQuery) -> Result<ChangePage> {
+        Err("this storage backend keeps no change history".into())
+    }
+    /// Check that the store can keep the change history, and under `Ddl::IfMissing` make what is
+    /// missing of it. Under `Ddl::Never` it creates nothing and answers with an error that says
+    /// what an owner must install. The stores that need no setup say `Ok`.
+    fn ensure_history_schema(&self) -> Result<()> {
+        Ok(())
+    }
+    /// What the store can say about its history without reading it.
+    fn history_stats(&self) -> Result<HistoryStats> {
+        Ok(HistoryStats::default())
+    }
+    /// Make the partition of the month `YYYY-MM` (UTC) of the history, and move into it the
+    /// entries of that month that landed in the default partition. Idempotent. A store without
+    /// partitions does nothing. PostgreSQL refuses a month before 2000 or more than a year ahead.
+    fn history_ensure_partition(&self, _month: &str) -> Result<PartitionEnsured> {
+        Ok(PartitionEnsured::default())
+    }
+    /// Drop the partition of the month `YYYY-MM` and return how many entries it held. The
+    /// database refuses a month that ended less than `min_age_days` days ago (the shortest
+    /// retention of the models in it): it is the check that outlives a mistake of the caller.
+    fn history_drop_partition(&self, _month: &str, _min_age_days: u32) -> Result<u64> {
+        Ok(0)
+    }
     /// Stamp up to `batch` records of `models` that predate the system fields: `created_at` from
     /// the UUIDv7 id, else `fallback_at` (canonical text); `row_version` 1; `sys_backfilled`;
     /// no actor; no history entry. Call it until `remaining` is 0.
@@ -631,6 +663,9 @@ pub mod keyexpr;
 pub mod limit;
 mod memory;
 mod pg;
+mod pg_hist;
+#[cfg(test)]
+mod pg_hist_tests;
 #[cfg(test)]
 mod pg_pool_tests;
 mod pgpool;
@@ -656,7 +691,9 @@ pub mod tracked;
 
 pub use ctx::{ACTOR_PUBLIC, ACTOR_SYSTEM, ActionRun, Via, WriteCtx};
 pub use guard::guarded;
-pub use history::{Backfilled, HistoryQuery};
+pub use history::{
+    Backfilled, ChangeCursor, ChangePage, ChangeQuery, HistoryQuery, HistoryStats, PartitionEnsured,
+};
 pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
 pub use sysfields::ChangeRow;
 pub use tracked::{Sealer, Track, Tracked, Tracking, Treat};
