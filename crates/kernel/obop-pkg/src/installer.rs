@@ -1447,8 +1447,20 @@ impl Installer {
                 .ok_or_else(|| "no manifest".to_string())
                 .and_then(|t| Self::with_bundled_labels(t, source))
                 .and_then(|m| {
-                    m.to_module_installed()
-                        .and_then(|module| self.register(&m, &module))
+                    m.to_module_installed().and_then(|module| {
+                        // The model `device` is the built-in model of the devices of mobile apps
+                        // (D64 amendment). A package that was installed before it existed and has
+                        // a model of that name is not loaded: its records live in the same table,
+                        // and they must not be read, changed or ended as devices. Nothing of the
+                        // package is touched; the message says what to do.
+                        if module.models.iter().any(|x| x.name == "device") {
+                            return Err(
+                                "it declares a model named `device`, which this version of obop keeps for the devices of mobile apps (a built-in model of Customize). The package was not loaded and its records are untouched. Rename the model in a new version of the package, or export its records and uninstall it"
+                                    .to_string(),
+                            );
+                        }
+                        self.register(&m, &module)
+                    })
                 });
             if let Err(e) = r {
                 failed.push((id, e));
@@ -2422,7 +2434,7 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
                     ),
                     f(
                         "actor",
@@ -3102,6 +3114,62 @@ mod tests {
         assert!(!d2.has_model("helpdesk_ticket"));
         assert!(inst2.load_installed().is_empty());
         assert!(d2.has_model("helpdesk_ticket"));
+    }
+
+    /// The model `device` is the built-in model of the devices of mobile apps (the D64 amendment).
+    /// A package that declares it cannot be installed, and one that was installed before the name
+    /// was taken is not loaded at start: its rows are in the table the devices are in, and they
+    /// must not be read, renamed or ended as the devices of people. Nothing of it is deleted. (A
+    /// package names its models after its id, so only a package called `device` can have one.)
+    #[test]
+    fn a_package_with_a_model_called_device_is_refused_and_one_installed_before_is_not_loaded() {
+        let package = r#"
+[module]
+id = "device"
+version = "0.1.0"
+name = "Gadget"
+description = "Gadgets"
+requires_core = "^0.2"
+
+[[model]]
+name = "device"
+description = "A gadget"
+read_group = "gadget.user"
+write_group = "gadget.manager"
+
+  [[model.field]]
+  name = "label"
+  description = "What it is called"
+  class = "none"
+"#;
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        let e = inst.install(package, "upload", "root").unwrap_err();
+        assert!(e.contains("`device`"), "{e}");
+        assert!(!d.has_model("device"), "{}", d.has_model("device"));
+        // An instance that has had it since before: the stored record, as the installer writes it.
+        let record: Fields = [
+            ("manifest".to_string(), J::from(package)),
+            ("version".to_string(), J::from("0.1.0")),
+            ("source".to_string(), J::from("upload")),
+            ("installed_by".to_string(), J::from("root")),
+            ("installed_at".to_string(), J::from(1_700_000_000_u64)),
+        ]
+        .into_iter()
+        .collect();
+        store.backend().insert(TABLE, "device", &record).unwrap();
+        let (d2, inst2) = setup(&store);
+        let failed = inst2.load_installed();
+        assert_eq!(failed.len(), 1, "{failed:?}");
+        assert_eq!(failed[0].0, "device");
+        assert!(
+            failed[0].1.contains("`device`") && failed[0].1.contains("records are untouched"),
+            "{}",
+            failed[0].1
+        );
+        assert!(!d2.has_model("device"), "no command of it exists");
+        // The package and its rows are still there.
+        assert!(store.backend().get(TABLE, "device").unwrap().is_some());
     }
 
     /// A package that declares a name the platform reserves later (D75): installing it is

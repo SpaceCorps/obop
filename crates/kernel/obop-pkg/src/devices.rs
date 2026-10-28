@@ -14,6 +14,13 @@
 //! - `revoke`, a governed action (D48): the refresh-token family ends, the access token stops, the
 //!   record says `revoked`. An agent can only propose it.
 //!
+//! The commands are in group `*` (a person needs no group for their own devices), and the guards
+//! (`obop_commands::devices::may_see`, `may_list`) do the rest by what kind of token calls: a
+//! person at the keyboard and the administrators as above; the token of a mobile app only its own
+//! device (`get`, `update`, `revoke`; it cannot list or search); the token of an agent only a
+//! proposal to revoke its owner's device. A narrowed token never learns what other devices the
+//! person has.
+//!
 //! There is no `create`, `bulk_create` or `delete`: a device exists because an app signed in, and a
 //! revoked one is forgotten with its family a week after it ended.
 //!
@@ -35,7 +42,7 @@ pub fn device_model() -> ModelDef {
     };
     ModelDef {
         name: dev::MODEL,
-        description: "A phone or tablet that a mobile app is signed in on: created when the app signs in, ended by revoking it. A person sees, renames and revokes their own devices; the device administrators see and revoke every one",
+        description: "A phone or tablet that a mobile app is signed in on: created when the app signs in, ended by revoking it. A person sees, renames and revokes their own devices; the device administrators see and revoke every one; the app itself sees and signs out only its own device",
         read_group: ANY_GROUP,
         write_group: ANY_GROUP,
         access: Some(Access {
@@ -111,13 +118,40 @@ fn now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// The record `id` if the caller may see it. A device the caller may not see is reported exactly
-/// like one that does not exist, in the message and in the order of the checks.
-fn visible(store: &Store, p: &Principal, id: &str) -> Result<Fields, String> {
+/// The record `id` if the caller may do `what` to it. A device the caller may not see is reported
+/// exactly like one that does not exist (and so is a row of somebody else's table of the same
+/// name). A lookup the store refuses is the store's error, never "no device".
+fn visible(store: &Store, p: &Principal, id: &str, what: dev::Use) -> Result<Fields, String> {
     match store.backend().get(dev::MODEL, id)? {
-        Some(rec) if dev::may_see(p, &rec) => Ok(rec),
+        Some(rec) if dev::is_ours(&rec) && dev::may_see(p, id, &rec, what) => Ok(rec),
         _ => Err(format!("no device {id}")),
     }
+}
+
+/// `get`: the same rule as the other commands (the row access of the model lets a person and the
+/// administrators through; a mobile app's token and an agent's token get no more than they may).
+fn get_guard(store: Store) -> Guard {
+    Box::new(move |p, input| {
+        let Value::Map(m) = input else {
+            return Err("expected an object".into());
+        };
+        let id = id_of(m)?;
+        visible(&store, p, &id, dev::Use::Read)?;
+        Ok(Verdict::default())
+    })
+}
+
+/// `list` and `search`: a person sees their own devices, the administrators everybody's. A token of
+/// a mobile app or of an agent learns nothing of the person's devices by listing: it asks for its
+/// own by id (`get`, `revoke`), which it was told when it signed in.
+fn list_guard() -> Guard {
+    Box::new(move |p, _| {
+        if dev::may_list(p) {
+            Ok(Verdict::default())
+        } else {
+            Err("devices cannot be listed with this token: an app or an assistant sees only its own device, by id; the person manages their devices in Customize, Security".into())
+        }
+    })
 }
 
 fn update_guard(store: Store) -> Guard {
@@ -127,7 +161,7 @@ fn update_guard(store: Store) -> Guard {
             return Err("expected an object".into());
         };
         let id = id_of(m)?;
-        visible(&store, p, &id)?;
+        visible(&store, p, &id, dev::Use::Rename)?;
         for k in m.keys().filter(|k| *k != "id" && !k.starts_with('_')) {
             if k == "name" {
                 continue;
@@ -142,7 +176,8 @@ fn update_guard(store: Store) -> Guard {
             Some(Value::Text(t)) if dev::name_of(t).is_some() => {}
             _ => {
                 return Err(
-                    "device.name must be 1 to 80 characters without control characters".into(),
+                    "device.name must be 1 to 80 characters without control characters or characters that hide text"
+                        .into(),
                 );
             }
         }
@@ -156,12 +191,19 @@ fn revoke_guard(store: Store) -> Guard {
             return Err("expected an object".into());
         };
         let id = id_of(m)?;
-        let rec = visible(&store, p, &id)?;
+        let rec = visible(&store, p, &id, dev::Use::Revoke)?;
         if !dev::is_active(&rec) {
             return Err(format!("device {id} is already revoked"));
         }
         Ok(Verdict::default())
     })
+}
+
+fn text_of<'a>(x: &'a std::collections::BTreeMap<String, Value>, k: &str) -> Option<&'a str> {
+    match x.get(k) {
+        Some(Value::Text(t)) if !t.is_empty() => Some(t.as_str()),
+        _ => None,
+    }
 }
 
 /// Bind the commands of the `device` model. `ops` ends a device (the OAuth server). Call once at
@@ -171,6 +213,9 @@ fn revoke_guard(store: Store) -> Guard {
 pub fn register_devices(d: &Arc<Dispatcher>, store: &Store, ops: Arc<dyn dev::DevicesApi>) {
     let m = crate::installer::admin_module();
     d.register_read_only_models(&m, store, &[dev::MODEL]);
+    d.add_guard(&m.id, "device.get", false, get_guard(store.clone()));
+    d.add_guard(&m.id, "device.list", false, list_guard());
+    d.add_guard(&m.id, "device.search", false, list_guard());
 
     d.register_guard(&m.id, "device.update", true, update_guard(store.clone()));
     let st = store.clone();
@@ -190,6 +235,7 @@ pub fn register_devices(d: &Arc<Dispatcher>, store: &Store, ops: Arc<dyn dev::De
             let backend = st.backend();
             let before = backend
                 .get(dev::MODEL, &id)?
+                .filter(dev::is_ours)
                 .ok_or_else(|| format!("no device {id}"))?;
             if before.get("name").and_then(J::as_str) != Some(name.as_str()) {
                 let mut patch = Fields::new();
@@ -203,15 +249,7 @@ pub fn register_devices(d: &Arc<Dispatcher>, store: &Store, ops: Arc<dyn dev::De
                     now(),
                     &text("user"),
                     dev::EVENT_RENAMED,
-                    x.get("_caller")
-                        .and_then(|c| {
-                            if let Value::Text(t) = c {
-                                Some(t.as_str())
-                            } else {
-                                None
-                            }
-                        })
-                        .unwrap_or(""),
+                    text_of(x, "_caller").unwrap_or(""),
                     &format!("{:?} is now {:?} [{id}]", text("name"), name),
                 );
             }
@@ -233,12 +271,16 @@ pub fn register_devices(d: &Arc<Dispatcher>, store: &Store, ops: Arc<dyn dev::De
                 return Err("expected an object".into());
             };
             let id = id_of(x)?;
-            let caller = match x.get("_caller") {
-                Some(Value::Text(t)) => t.as_str(),
-                _ => "",
+            let caller = text_of(x, "_caller").unwrap_or("");
+            // An approved proposal runs as the agent that made it; the person who approved it is
+            // who did it, and the log says both.
+            let approver = text_of(x, "_actor_approver");
+            let (actor, proposed_by) = match approver {
+                Some(a) => (a, Some(caller)),
+                None => (caller, None),
             };
             // The family, the access token and the record, or an error that says what was left.
-            ops.revoke_device(&id, caller)?;
+            ops.revoke_device(&id, actor, proposed_by)?;
             // The answer is read back; a read the store refuses now does not undo the revocation.
             match st.backend().get(dev::MODEL, &id) {
                 Ok(Some(rec)) => Ok(row(&id, &rec)),

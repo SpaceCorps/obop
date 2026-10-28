@@ -561,12 +561,18 @@ pub const RESERVED_FIELDS: [&str; 8] = [
 
 /// Model names the platform keeps for its own records (D75, D76, D77, D78); the install gate
 /// refuses a model of this name.
-pub const RESERVED_MODELS: [&str; 4] = [
+pub const RESERVED_MODELS: [&str; 5] = [
     "record_change",
     "storage_event",
     "storage_index",
     "data_guard",
+    // The devices of mobile apps (the D64 amendment), a built-in model of the Customize module.
+    "device",
 ];
+
+/// The built-in model of a reserved name, by the module that owns it: the one place a reserved
+/// name is allowed (the `platform` module declares `device` itself).
+pub const OWNED_RESERVED: [(&str, &str); 1] = [("platform", "device")];
 
 /// Whether `name` is one of the [`SYSTEM_FIELDS`].
 pub fn is_system_name(name: &str) -> bool {
@@ -816,7 +822,10 @@ fn check_basics(m: &Module, reserved: bool) -> Vec<Violation> {
         if model.read_group.trim().is_empty() || model.write_group.trim().is_empty() {
             bad(mp.clone(), "model has no read or write permission group");
         }
-        if reserved && RESERVED_MODELS.contains(&model.name) {
+        if reserved
+            && RESERVED_MODELS.contains(&model.name)
+            && !OWNED_RESERVED.contains(&(m.id.as_str(), model.name))
+        {
             bad(
                 mp.clone(),
                 &format!(
@@ -1216,7 +1225,8 @@ mod tests {
                 "record_change",
                 "storage_event",
                 "storage_index",
-                "data_guard"
+                "data_guard",
+                "device"
             ]
         );
         // No name appears twice in a list.
@@ -1318,6 +1328,25 @@ mod tests {
             model.models[0].name = reserved;
             assert_eq!(check_module(&model).len(), 1, "{reserved}");
         }
+    }
+
+    #[test]
+    fn the_name_device_belongs_to_the_built_in_model_of_the_devices_of_mobile_apps() {
+        // A package cannot install a model of that name: its records would be read, renamed and
+        // ended as the devices of people (the D64 amendment).
+        let mut m = module(ok_field());
+        m.models[0].name = "device";
+        let problems = check_module(&m);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].problem.contains("`device`"));
+        // The module that owns the model is the one place it may be declared.
+        m.id = "platform".into();
+        assert!(check_module(&m).is_empty());
+        // Another name of the owner's is not made reserved by that.
+        let mut other = module(ok_field());
+        other.id = "platform".into();
+        other.models[0].name = "record_change";
+        assert_eq!(check_module(&other).len(), 1);
     }
 
     #[test]

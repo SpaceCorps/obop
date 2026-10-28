@@ -8,8 +8,13 @@ use obop_commands::devices::DevicesApi;
 use obop_storage::fault::Fault;
 
 impl DevicesApi for OAuth {
-    fn revoke_device(&self, id: &str, actor: &str) -> Result<(), String> {
-        OAuth::revoke_device(self, id, actor).map_err(|e| {
+    fn revoke_device(
+        &self,
+        id: &str,
+        actor: &str,
+        proposed_by: Option<&str>,
+    ) -> Result<(), String> {
+        OAuth::revoke_device(self, id, actor, proposed_by).map_err(|e| {
             if e.status == 503 {
                 // The code word of the storage faults, so that the surfaces answer with a 503 and
                 // the time to wait, not with a refusal of the command.

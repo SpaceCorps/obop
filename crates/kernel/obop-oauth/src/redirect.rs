@@ -4,9 +4,9 @@
 //! fragment, no user information, nothing that a browser could read differently from us.
 //!
 //! A mobile app (the D64 amendment) follows RFC 8252 for native apps more narrowly, see
-//! [`validate_mobile`]: a private-use scheme in reverse domain form, an `https` link the system
-//! hands to the app, or a loopback address by number. It never gets `localhost`, because the name
-//! can be made to point elsewhere and the numbers cannot.
+//! [`validate_mobile`]: a private-use scheme in reverse domain form, or a loopback address by
+//! number. It never gets `localhost` (the name can be made to point elsewhere, the numbers cannot)
+//! and never an `https` address (nothing here proves a web site belongs to an app).
 
 use crate::util::pct;
 
@@ -138,38 +138,60 @@ fn is_loopback_ip(host: &str) -> bool {
     matches!(host, "127.0.0.1" | "[::1]")
 }
 
-/// Whether a mobile client may register (and present) `uri`: RFC 8252 section 7.
+/// Where a redirect sends the browser or the phone, for the words of the consent page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RedirectForm {
+    /// A private-use scheme: the app on this phone that registered the scheme.
+    PrivateUse,
+    /// A loopback address by number: a program on this computer.
+    Loopback,
+    /// Anything else: a web address.
+    #[default]
+    Web,
+}
+
+/// The form of a redirect URI.
+pub fn form_of(uri: &str) -> RedirectForm {
+    if private_use(uri).is_some() {
+        return RedirectForm::PrivateUse;
+    }
+    match parts(uri) {
+        Some(("http", host, _, _)) if is_loopback_ip(&host.to_ascii_lowercase()) => {
+            RedirectForm::Loopback
+        }
+        _ => RedirectForm::Web,
+    }
+}
+
+/// Whether a mobile client may register (and present) `uri`: RFC 8252 sections 7.1 and 7.3.
 ///
 /// - a private-use scheme in reverse domain form with a path and nothing else, such as
 ///   `org.obop.mileage:/oauth` (no authority, no query, no fragment: section 7.1);
-/// - an `https` link the system opens in the app (section 7.2), by the rules of every `https`
-///   redirect here, except that its host is not a loopback name;
 /// - `http` to `127.0.0.1` or `[::1]` with any port (section 7.3), never `localhost`.
 ///
-/// Everything else is refused: a scheme without a dot (`claude://callback`, `javascript:`), `http`
-/// to any other host, wildcards, user information, a fragment.
+/// Everything else is refused, and above all `https`: an `https` redirect (a universal link or an
+/// app link, section 7.2) is only the app's own when the web site proves it (a digital asset links
+/// file, an apple-app-site-association file), which this server does not check, so a web address
+/// would be a web site collecting codes. Also refused: a scheme without a dot (`claude://callback`,
+/// `javascript:`), `http` to any other host, wildcards, user information, a fragment.
 pub fn validate_mobile(uri: &str) -> Result<(), &'static str> {
-    if private_use(uri).is_some() {
-        return Ok(());
+    match form_of(uri) {
+        RedirectForm::PrivateUse | RedirectForm::Loopback => Ok(()),
+        RedirectForm::Web => match parts(uri) {
+            Some(("https", _, _, _)) => Err(
+                "a mobile app may not use an https redirect (it cannot be shown to belong to the app); use a private-use scheme such as org.example.app:/oauth, or http on 127.0.0.1 or [::1]",
+            ),
+            Some(("http", host, _, _)) if is_loopback_host(&host.to_ascii_lowercase()) => Err(
+                "a mobile app may use plain http only for 127.0.0.1 and [::1], not for localhost",
+            ),
+            Some(("http", _, _, _)) => Err(
+                "a mobile app may use plain http only for 127.0.0.1 and [::1], not for another host",
+            ),
+            _ => Err(
+                "a mobile redirect URI must be a private-use scheme in reverse domain form such as org.example.app:/oauth, or http on 127.0.0.1 or [::1]",
+            ),
+        },
     }
-    if let Some((scheme, host, _, _)) = parts(uri) {
-        let host = host.to_ascii_lowercase();
-        match (scheme, validate(uri)) {
-            ("https", Ok(())) if !is_loopback_host(&host) => return Ok(()),
-            ("http", Ok(())) if is_loopback_ip(&host) => return Ok(()),
-            ("http", Ok(())) => {
-                return Err(
-                    "a mobile app may use plain http only for 127.0.0.1 and [::1], not for localhost or any other host",
-                );
-            }
-            ("https", Ok(())) => return Err("a mobile app may not use https to a loopback host"),
-            (_, Err(e)) => return Err(e),
-            _ => {}
-        }
-    }
-    Err(
-        "a mobile redirect URI must be a private-use scheme in reverse domain form such as org.example.app:/oauth, an https link, or http on 127.0.0.1 or [::1]",
-    )
 }
 
 /// As [`matches`], for a mobile client: the match is exact, except that the port of an `http`

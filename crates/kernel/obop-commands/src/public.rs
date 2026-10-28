@@ -992,6 +992,7 @@ impl Principal {
             groups: Default::default(),
             scopes: Some(Default::default()),
             mfa_limited: false,
+            device: None,
         }
     }
 }

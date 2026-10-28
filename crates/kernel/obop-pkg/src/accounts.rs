@@ -287,10 +287,11 @@ pub fn register_accounts(d: &Arc<Dispatcher>, auth: Arc<dyn Authenticator>) {
             r.insert(
                 "revoked".into(),
                 Value::Text(format!(
-                    "{} session(s), {} agent token(s), {} connected app(s)",
+                    "{} session(s), {} agent token(s), {} connected app(s), {} device(s) of mobile apps",
                     n("revoked_sessions"),
                     n("revoked_agent_tokens"),
-                    n("revoked_apps")
+                    n("revoked_apps"),
+                    n("revoked_devices")
                 )),
             );
             Ok(Value::Map(r))

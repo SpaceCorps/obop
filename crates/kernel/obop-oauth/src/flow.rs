@@ -6,9 +6,11 @@
 //! continue nor complete somebody's consent.
 
 use crate::client::{Class, Client};
+use crate::redirect::RedirectForm;
 use crate::util::{clean_text, ct_eq, rand_hex, sha_hex};
 use crate::{OAuth, OAuthError, api_resource, mcp_resource, redirect};
 use obop_commands::LoginOutcome;
+use obop_commands::devices::never_for_mobile;
 use serde_json::{Value as J, json};
 
 /// The parameters of `GET /oauth/authorize`.
@@ -63,16 +65,23 @@ pub fn is_verifier(s: &str) -> bool {
 }
 
 /// A group that runs the instance or an area of it. It is not ticked at first on the consent page
-/// of an MCP client.
+/// of an MCP client. (A mobile app has its own, stricter rule: `obop_commands::devices::
+/// never_for_mobile`, and nothing is ticked at first unless the app named it.)
 pub(crate) fn is_admin_like(g: &str) -> bool {
     g.starts_with("platform.") || g.ends_with(".admin")
 }
 
-/// A group a mobile app is never offered or given: the administrative ones above, and the groups
-/// of an administrator of one area (`api.device_admin`, `api.connection_admin`, `*_admin`). A phone
-/// is lost; what it holds must not run the instance, or read and end other people's devices.
-pub(crate) fn never_for_mobile(g: &str) -> bool {
-    is_admin_like(g) || g.ends_with("_admin")
+/// The groups the consent page offers a mobile app: those the client declared when it registered,
+/// that the person holds, and that a phone may ever have. The decision checks the same rule again.
+pub(crate) fn mobile_offer(declared: &[String], held: &[String]) -> Vec<String> {
+    let mut offered: Vec<String> = held
+        .iter()
+        .filter(|g| declared.contains(g) && !never_for_mobile(g))
+        .cloned()
+        .collect();
+    offered.sort();
+    offered.dedup();
+    offered
 }
 
 /// What the page needs to show a step.
@@ -84,6 +93,9 @@ pub struct FlowCtx {
     pub client_name: String,
     pub redirect_origin: String,
     pub redirect_host: String,
+    /// Whether the result goes to an app by its scheme, to a program on this computer, or to a web
+    /// address (only an MCP client has that): the page says which.
+    pub redirect_form: RedirectForm,
     pub user: Option<String>,
     /// What kind of application asks (a mobile app is told so, and is offered no administrative
     /// group).
@@ -202,7 +214,7 @@ impl OAuth {
         if p.resources.iter().any(|r| !ok_resource(r)) {
             return Err(fail("invalid_target", wrong_resource));
         }
-        let hint = p
+        let hint: Vec<String> = p
             .scope
             .as_deref()
             .unwrap_or("")
@@ -210,6 +222,13 @@ impl OAuth {
             .take(64)
             .map(|s| s.chars().take(100).collect())
             .collect();
+        // A mobile client may ask only for what it declared when it registered.
+        if client.class.is_mobile() && hint.iter().any(|g| !client.scope.contains(g)) {
+            return Err(fail(
+                "invalid_scope",
+                "scope names a group the app did not declare when it registered",
+            ));
+        }
         Ok(Validated {
             client,
             redirect_uri,
@@ -262,6 +281,9 @@ impl OAuth {
             "challenge": v.challenge,
             "resource": v.resource,
             "hint": v.hint,
+            // What a mobile client declared at registration, copied so the page and the decision
+            // read the same list for the whole flow.
+            "declared": v.client.scope,
             "csrf": rand_hex::<16>(),
             "binder": sha_hex(&binder),
             "user": J::Null,
@@ -312,28 +334,44 @@ impl OAuth {
             .and_then(|u| self.tokens().principal_of(u))
             .map(|p| p.groups.into_iter().collect())
             .unwrap_or_default();
-        // A phone is lost, so a mobile app is never offered a group that runs the instance.
-        if class.is_mobile() {
-            groups.retain(|g| !never_for_mobile(g));
-        }
         groups.sort();
-        let hint: Vec<&str> = rec["hint"]
-            .as_array()
-            .map(|a| a.iter().filter_map(J::as_str).collect())
-            .unwrap_or_default();
-        let requested: Vec<String> = groups
-            .iter()
-            .filter(|g| hint.contains(&g.as_str()))
-            .cloned()
-            .collect();
-        let preselected = if requested.is_empty() {
-            groups
+        let strings = |k: &str| -> Vec<String> {
+            rec[k]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let hint = strings("hint");
+        // A phone is lost: a mobile app is offered only the groups it declared, that the person
+        // holds and that a phone may ever have, and none is ticked unless the app asked for it.
+        let (groups, preselected) = if class.is_mobile() {
+            let offered = mobile_offer(&strings("declared"), &groups);
+            let ticked = offered
                 .iter()
-                .filter(|g| !is_admin_like(g))
+                .filter(|g| hint.contains(g))
                 .cloned()
-                .collect()
+                .collect();
+            (offered, ticked)
         } else {
-            requested
+            let requested: Vec<String> = groups
+                .iter()
+                .filter(|g| hint.contains(g))
+                .cloned()
+                .collect();
+            let ticked = if requested.is_empty() {
+                groups
+                    .iter()
+                    .filter(|g| !is_admin_like(g))
+                    .cloned()
+                    .collect()
+            } else {
+                requested
+            };
+            (groups, ticked)
         };
         let uri = rec["redirect_uri"].as_str().unwrap_or("");
         FlowCtx {
@@ -343,6 +381,7 @@ impl OAuth {
             client_name: rec["client_name"].as_str().unwrap_or("").to_string(),
             redirect_origin: redirect::origin(uri),
             redirect_host: redirect::display_host(uri),
+            redirect_form: redirect::form_of(uri),
             user,
             class,
             groups,
@@ -384,6 +423,20 @@ impl OAuth {
             600_000,
         )
         .map_err(|e| FlowError::Busy(e.retry_after.unwrap_or(60)))?;
+        // A mobile sign-in is bound to the credential epoch of the account read before the
+        // credential is looked at (the order the sessions of K10 use): a change that lands after
+        // this read, a new password, a second factor or passkey removed, a reset, a disable, is
+        // seen by the decision and by the code exchange, and what was begun before it cannot
+        // finish after it. A refused read ends the step: it is a 503, never "unchanged".
+        if Class::of_record(&rec).is_mobile() {
+            let name = username.trim().to_lowercase();
+            let epoch = self
+                .tokens()
+                .credential_epoch(&name)
+                .map_err(|_| FlowError::Gone)?;
+            rec["pre_user"] = J::from(name);
+            rec["pre_epoch"] = epoch.map_or(J::Null, J::from);
+        }
         match self.auth.login_step(username, password) {
             Ok(out) => self.after_login(id, &mut rec, out),
             Err(e) => {
@@ -510,7 +563,12 @@ impl OAuth {
 
     fn after_login(&self, id: &str, rec: &mut J, out: LoginOutcome) -> Result<LoginOut, FlowError> {
         match out {
-            LoginOutcome::MfaRequired { mfa_token } => Ok(LoginOut::Mfa(mfa_token)),
+            LoginOutcome::MfaRequired { mfa_token } => {
+                // The epoch read before the password was looked at goes with the flow to the
+                // second step.
+                let _ = self.flow_put(id, rec);
+                Ok(LoginOut::Mfa(mfa_token))
+            }
             LoginOutcome::Session {
                 token,
                 mfa_enrolment_required,
@@ -527,6 +585,19 @@ impl OAuth {
                 let Some(p) = who.filter(|p| p.kind == obop_commands::PrincipalKind::User) else {
                     return Ok(LoginOut::Failed("err.login"));
                 };
+                if Class::of_record(rec).is_mobile() {
+                    // The epoch read before the credential was looked at, for the same person;
+                    // for a sign-in by passkey alone the person was not known before, so it is
+                    // read now (the exchange of the code closes the rest, atomically).
+                    let epoch = if rec["pre_user"].as_str() == Some(p.id.as_str()) {
+                        rec["pre_epoch"].as_str().map(String::from)
+                    } else {
+                        self.tokens()
+                            .credential_epoch(&p.id)
+                            .map_err(|_| FlowError::Gone)?
+                    };
+                    rec["epoch"] = epoch.map_or(J::Null, J::from);
+                }
                 rec["user"] = J::from(p.id);
                 rec["attempts"] = J::from(0);
                 self.flow_put(id, rec).map_err(|_| FlowError::Gone)?;
@@ -588,13 +659,53 @@ impl OAuth {
             return Ok(DecideOut::Retry("err.scope_widen"));
         }
         let class = Class::of_record(&rec);
-        if class.is_mobile() && groups.iter().any(|g| never_for_mobile(g)) {
-            return Ok(DecideOut::Retry("err.mobile_admin"));
-        }
         let mut chosen: Vec<String> = groups.to_vec();
         chosen.sort();
         chosen.dedup();
-        if chosen.is_empty() {
+        if class.is_mobile() {
+            // The rule of the page, again on the server: a tampered form gets nothing the page did
+            // not offer, whatever the person holds.
+            if chosen.iter().any(|g| never_for_mobile(g)) {
+                return Ok(DecideOut::Retry("err.mobile_admin"));
+            }
+            let declared: Vec<String> = rec["declared"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let held: Vec<String> = principal.groups.iter().cloned().collect();
+            let offered = mobile_offer(&declared, &held);
+            if chosen.iter().any(|g| !offered.contains(g)) {
+                return Ok(DecideOut::Retry("err.mobile_scope"));
+            }
+            // What was begun before a change of the credentials does not finish after it.
+            let now = self
+                .tokens()
+                .credential_epoch(&user)
+                .map_err(|_| FlowError::Gone)?;
+            if now.as_deref() != rec["epoch"].as_str() {
+                let _ = self.backend.kv_delete(&flow_key(id));
+                return Err(FlowError::Gone);
+            }
+            // At most so many devices signed in for one person.
+            if self.active_devices(&user).map_err(|_| FlowError::Gone)?
+                >= self.cfg.max_devices_per_user
+            {
+                self.audit(
+                    &user,
+                    "device_limit",
+                    &format!(
+                        "{} ({client_id}) was refused: {} devices are signed in",
+                        clean_text(&client_name, 80),
+                        self.cfg.max_devices_per_user
+                    ),
+                );
+                return Ok(DecideOut::Retry("err.devices_full"));
+            }
+        } else if chosen.is_empty() {
             return Ok(DecideOut::Retry("err.no_scope"));
         }
         if !EXPIRY_DAYS.contains(&days) {
@@ -615,6 +726,8 @@ impl OAuth {
             "resource": rec["resource"],
             "owner": user,
             "scopes": chosen,
+            // The credential epoch of the account the sign-in was bound to (a mobile client's).
+            "epoch": rec["epoch"],
             "days": days,
             "exp": now + self.cfg.code_ttl_secs,
         });

@@ -439,7 +439,7 @@ impl Auth {
     /// run again; a refusal of the store is tried again and then fails as a partial request.
     pub(crate) fn end_account_tokens(&self, tid: &str, ch: &Change) -> Result<Tally, MfaError> {
         let mut t = Tally::default();
-        let mut devices = Vec::new();
+        let mut devices = crate::account::DeviceTally::default();
         self.needed(ch, "ending the tokens of the account", || {
             for (id, tok) in self.backend.list("auth_token")? {
                 if tok.get("owner").and_then(J::as_str) != Some(tid)
@@ -487,20 +487,12 @@ impl Auth {
                 }
             }
             self.backend.kv_delete(&crate::passkey::proof_key(tid))?;
-            // The devices of mobile apps: their families and tokens are ended above, the
-            // records say so too (and the log, below, names each).
-            self.end_devices(tid, None, &mut devices)?;
+            // The devices of mobile apps: their families and tokens are ended above, the records
+            // say so too and the log names each as it is ended (a repeat counts the ones it ends).
+            self.end_devices(tid, None, &ch.actor, ch.kind, &mut devices)?;
             Ok(())
         })?;
-        t.devices = devices.len();
-        for (_, what) in devices {
-            self.event(
-                tid,
-                obop_commands::devices::EVENT_REVOKED,
-                &ch.actor,
-                &format!("{what}: ended by {}", ch.kind),
-            );
-        }
+        t.devices = devices.ended;
         Ok(t)
     }
 

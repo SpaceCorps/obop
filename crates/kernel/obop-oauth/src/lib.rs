@@ -53,6 +53,10 @@ pub struct OAuthConfig {
     pub unused_client_secs: u64,
     /// A client nobody has used for this long is forgotten.
     pub idle_client_secs: u64,
+    /// Most mobile devices one person may have signed in at once. A new sign-in beyond it is
+    /// refused at the consent page and at the code exchange, with a `device_limit` entry in the
+    /// security log. A field here, not an environment setting: change it where the server is built.
+    pub max_devices_per_user: usize,
 }
 
 impl Default for OAuthConfig {
@@ -70,6 +74,7 @@ impl Default for OAuthConfig {
             token_per_ip_minute: 120,
             unused_client_secs: 24 * 3600,
             idle_client_secs: 180 * 24 * 3600,
+            max_devices_per_user: 20,
         }
     }
 }
@@ -171,6 +176,11 @@ impl OAuth {
 
     pub(crate) fn audit(&self, user: &str, kind: &str, detail: &str) {
         self.tokens().audit(user, kind, user, detail);
+    }
+
+    /// As `audit`, for a change somebody else made to the person's records: `actor` is named.
+    pub(crate) fn audit_by(&self, user: &str, kind: &str, actor: &str, detail: &str) {
+        self.tokens().audit(user, kind, actor, detail);
     }
 
     /// Housekeeping at most once an hour across all processes: forget clients nobody uses and

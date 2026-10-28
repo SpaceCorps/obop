@@ -69,6 +69,10 @@ pub struct Client {
     pub name: String,
     pub redirect_uris: Vec<String>,
     pub class: Class,
+    /// The groups a mobile client declared when it registered (RFC 7591 `scope`): the only groups
+    /// the consent page may offer it. Empty for a client that declared none and for every client of
+    /// the default class, which declares nothing and is offered what its person holds.
+    pub scope: Vec<String>,
 }
 
 fn fields(v: J) -> Fields {
@@ -159,6 +163,14 @@ impl OAuth {
         {
             return Err(bad("response_types must be [\"code\"]"));
         }
+        // A mobile client says which groups it will ask for; nothing else is ever offered to it.
+        let declared = match (class, obj.get("scope")) {
+            (Class::Mobile, Some(J::String(raw))) => {
+                obop_commands::devices::parse_declared_scope(raw).map_err(|e| bad(&e))?
+            }
+            (Class::Mobile, Some(_)) => return Err(bad("scope must be a string of group names")),
+            _ => Vec::new(),
+        };
         let name = clean_text(obj.get("client_name").and_then(J::as_str).unwrap_or(""), 80);
         let name = if name.is_empty() {
             "Unnamed application".to_string()
@@ -187,6 +199,7 @@ impl OAuth {
         // it always was.
         if class.is_mobile() {
             record.insert("class".into(), J::from(class.as_str()));
+            record.insert("scope".into(), json!(declared));
         }
         self.backend
             .insert(CLIENT_MODEL, &id, &record)
@@ -202,6 +215,7 @@ impl OAuth {
         });
         if class.is_mobile() {
             doc["obop_client_class"] = J::from(class.as_str());
+            doc["scope"] = J::from(declared.join(" "));
         }
         Ok(doc)
     }
@@ -246,6 +260,15 @@ impl OAuth {
                 })
                 .unwrap_or_default(),
             class: Class::of_fields(&rec),
+            scope: rec
+                .get("scope")
+                .and_then(J::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
         })
     }
 

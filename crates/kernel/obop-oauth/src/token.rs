@@ -9,7 +9,7 @@ use crate::client::Class;
 use crate::flow::{is_challenge, is_verifier};
 use crate::util::{clean_text, ct_eq, rand_hex, s256, sha_hex};
 use crate::{OAuth, OAuthError, api_resource, mcp_resource, redirect};
-use obop_commands::devices as dev;
+use obop_commands::devices::{self as dev, never_for_mobile};
 use obop_storage::fault::{self, Fault};
 use obop_storage::{ApplyError, Fields, Op};
 use serde_json::{Value as J, json};
@@ -58,6 +58,15 @@ impl Form {
             .filter(|v| !v.is_empty())
             .ok_or_else(|| OAuthError::new(400, "invalid_request", &format!("{k} is required")))
     }
+}
+
+/// The owner named by a grant record.
+fn owner_of(grant: &Fields) -> String {
+    grant
+        .get("owner")
+        .and_then(J::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 fn invalid_grant(why: &str) -> OAuthError {
@@ -197,6 +206,12 @@ impl OAuth {
             check_resource(form, &expected, why)?;
             if class.is_mobile() {
                 meta = device_metadata(form)?;
+                // What was begun before the credentials of the account changed does not finish
+                // after it, and a person has only so many devices. Both are checked before the
+                // code is spent; the batch below checks the epoch again, atomically.
+                let owner = peek["owner"].as_str().unwrap_or("");
+                self.check_epoch(owner, peek["epoch"].as_str())?;
+                self.check_device_cap(owner)?;
             }
         }
         let consumed = raw.is_some() && self.backend.kv_delete(&key).map_err(storage)?;
@@ -279,16 +294,26 @@ impl OAuth {
             None if fault::noted().is_some() => return Err(give_back(storage_busy())),
             None => return Err(invalid_grant("the account is not available")),
         };
-        let scopes: Vec<String> = rec["scopes"]
+        let given: Vec<String> = rec["scopes"]
             .as_array()
             .map(|a| {
                 a.iter()
                     .filter_map(|x| x.as_str().map(String::from))
-                    .filter(|g| principal.groups.contains(g))
                     .collect()
             })
             .unwrap_or_default();
-        if scopes.is_empty() {
+        let mut scopes: Vec<String> = given
+            .iter()
+            .filter(|g| principal.groups.contains(*g))
+            .cloned()
+            .collect();
+        // A phone never holds a group it may not have, whatever the code says.
+        if class.is_mobile() {
+            scopes.retain(|g| !never_for_mobile(g));
+        }
+        // A mobile app that was handed no group (it declared none, or the person ticked none)
+        // signs in with none; every other grant needs one.
+        if scopes.is_empty() && !(class.is_mobile() && given.is_empty()) {
             return Err(invalid_grant(
                 "the account no longer holds the granted groups",
             ));
@@ -350,6 +375,22 @@ impl OAuth {
         }));
         let clean_name = clean_text(client_name, 80);
         let mut ops = Vec::new();
+        // A mobile sign-in is bound to the credential epoch of the account: the batch commits only
+        // while the account still has the epoch the sign-in began with, so a new password, a reset,
+        // a second factor or a passkey removed, a disable or an offboarding that lands at any point
+        // before it makes the exchange fail, and one that lands after it finds the device (which the
+        // batch writes) when it ends the devices of the person (the order of K10, for sessions).
+        if class.is_mobile() {
+            ops.push(Op::Patch {
+                model: "auth_user".into(),
+                id: owner.to_string(),
+                patch: Fields::new(),
+                expect: vec![(
+                    "epoch".into(),
+                    rec["epoch"].as_str().map_or(J::Null, J::from),
+                )],
+            });
+        }
         // A mobile app's sign-in is a device, written in the same batch as the family it is bound to.
         let registered = device_id.as_ref().map(|device| {
             grant.insert("class".into(), J::from(class.as_str()));
@@ -379,11 +420,23 @@ impl OAuth {
                 fields: record.clone(),
             });
         }
-        if self.backend.apply_checked(&ops).is_err() {
-            // The access token was issued for nothing: it is revoked again, although the request
-            // already hit a fault (that is why), and it is tried again if the store refuses.
-            self.unissue(&access_id);
-            return Err(give_back(storage_busy()));
+        match self.backend.apply_checked(&ops) {
+            Ok(()) => {}
+            Err(ApplyError::Conflict { .. }) => {
+                // The account changed since the sign-in began: nothing was written. The code stays
+                // spent; the person signs in again.
+                self.unissue(&access_id);
+                return Err(invalid_grant(
+                    "the account changed since the sign-in began: sign in again",
+                ));
+            }
+            Err(ApplyError::Storage(_)) => {
+                // The access token was issued for nothing: it is revoked again, although the
+                // request already hit a fault (that is why), and it is tried again if the store
+                // refuses.
+                self.unissue(&access_id);
+                return Err(give_back(storage_busy()));
+            }
         }
         // The marker that lets a second use of the code end this grant. Losing it only weakens the
         // detection, so it is tried again but never fails the exchange, which has committed.
@@ -393,11 +446,62 @@ impl OAuth {
         if let Some((device, record)) = &registered {
             self.audit(owner, dev::EVENT_REGISTERED, &dev::describe(record, device));
         }
-        Ok(token_response(
-            &access,
-            &refresh,
-            self.cfg.access_ttl_secs,
-            &scopes,
+        Ok(with_device(
+            token_response(&access, &refresh, self.cfg.access_ttl_secs, &scopes),
+            registered.as_ref().map(|(d, _)| d.as_str()),
+        ))
+    }
+
+    /// The account must still have the credential epoch the sign-in began with. A lookup the store
+    /// refused is a 503 (the code is not spent), never "unchanged".
+    fn check_epoch(&self, owner: &str, recorded: Option<&str>) -> Result<(), OAuthError> {
+        match self.tokens().credential_epoch(owner) {
+            Ok(now) if now.as_deref() == recorded => Ok(()),
+            Ok(_) => Err(invalid_grant(
+                "the account changed since the sign-in began: sign in again",
+            )),
+            Err(_) => Err(storage_busy()),
+        }
+    }
+
+    /// The devices of `owner` that are signed in: active, written by this server, and not past the
+    /// end of their sign-in.
+    pub(crate) fn active_devices(&self, owner: &str) -> Result<usize, OAuthError> {
+        let now = dev::instant(self.now());
+        let rows = self
+            .backend
+            .find(dev::MODEL, "user", &J::from(owner))
+            .map_err(|_| storage_busy())?;
+        Ok(rows
+            .iter()
+            .filter(|(_, d)| {
+                dev::is_active(d)
+                    && dev::is_ours(d)
+                    && d.get("expires_at")
+                        .and_then(J::as_str)
+                        .is_none_or(|e| e > now.as_str())
+            })
+            .count())
+    }
+
+    /// Refuse a new device when the person already has the most the instance allows
+    /// (`OAuthConfig::max_devices_per_user`), and say so in the security log.
+    fn check_device_cap(&self, owner: &str) -> Result<(), OAuthError> {
+        if self.active_devices(owner)? < self.cfg.max_devices_per_user {
+            return Ok(());
+        }
+        self.audit(
+            owner,
+            "device_limit",
+            &format!(
+                "a sign-in was refused: {} devices are already signed in",
+                self.cfg.max_devices_per_user
+            ),
+        );
+        Err(OAuthError::new(
+            400,
+            "access_denied",
+            "this account already has the most devices signed in; end one under Customize, Security, Devices and sign in again",
         ))
     }
 
@@ -442,7 +546,7 @@ impl OAuth {
             // A grant that was ended while the revocation of its access token was refused (or of
             // its device): this is where the client comes back, so the step is finished here (it
             // is safe to repeat).
-            self.finish_ended(&grant, "the connection had ended")?;
+            self.finish_ended(&grant, "the connection had ended", &owner_of(&grant))?;
             return Err(gone());
         }
         if grant.get("expires_at").and_then(J::as_u64).unwrap_or(0) <= now {
@@ -487,10 +591,12 @@ impl OAuth {
                     .collect()
             })
             .unwrap_or_default();
-        // The owner may have lost groups since: never more than the owner holds today.
+        // The owner may have lost groups since: never more than the owner holds today (and never a
+        // group a phone may not have).
         let mut scopes: Vec<String> = granted
             .iter()
             .filter(|g| principal.groups.contains(*g))
+            .filter(|g| !(class.is_mobile() && never_for_mobile(g)))
             .cloned()
             .collect();
         if let Some(s) = form.get("scope") {
@@ -504,7 +610,8 @@ impl OAuth {
             }
             scopes.retain(|g| asked.contains(&g.as_str()));
         }
-        if scopes.is_empty() {
+        // The grant of a mobile app that was handed no group stays one with none.
+        if scopes.is_empty() && !(class.is_mobile() && granted.is_empty()) {
             return Err(invalid_grant(
                 "the account no longer holds the granted groups",
             ));
@@ -622,11 +729,9 @@ impl OAuth {
                 // happens next. The access token it replaces is revoked, tried again if the store
                 // refuses; if that is lost the old token ends by itself with its lifetime.
                 self.retire(&old_access);
-                Ok(token_response(
-                    &access,
-                    &new_refresh,
-                    self.cfg.access_ttl_secs,
-                    &scopes,
+                Ok(with_device(
+                    token_response(&access, &new_refresh, self.cfg.access_ttl_secs, &scopes),
+                    device.as_deref(),
                 ))
             }
             Err(ApplyError::Conflict { index: 0, .. }) => {
@@ -740,6 +845,18 @@ impl OAuth {
         kind: &str,
         why: &str,
     ) -> Result<bool, OAuthError> {
+        self.revoke_grant_by(grant_id, kind, why, None)
+    }
+
+    /// As [`OAuth::revoke_grant_internal`]; `actor` is who the security log names for it (the
+    /// owner of the grant when none is given, as for a reuse or a revocation by the application).
+    fn revoke_grant_by(
+        &self,
+        grant_id: &str,
+        kind: &str,
+        why: &str,
+        actor: Option<&str>,
+    ) -> Result<bool, OAuthError> {
         let grant = match fault::patiently(TRIES, PAUSE, || self.backend.get(GRANT_MODEL, grant_id))
         {
             Ok(Some(g)) => g,
@@ -761,10 +878,11 @@ impl OAuth {
             .flatten()
             .unwrap_or(grant);
         let owner = current.get("owner").and_then(J::as_str).unwrap_or("");
+        let actor = actor.unwrap_or(owner);
         if !already {
-            self.audit_grant(owner, kind, &current, why);
+            self.audit_grant(owner, kind, actor, &current, why);
         }
-        self.finish_ended(&current, why)?;
+        self.finish_ended(&current, why, actor)?;
         Ok(true)
     }
 
@@ -773,15 +891,15 @@ impl OAuth {
     /// own record) and the access token the grant names is revoked. Both are tried even when the
     /// first is refused: the token stops if either of them goes through, and the caller is told
     /// (503) if one did not, so that asking again finishes it.
-    fn finish_ended(&self, grant: &Fields, why: &str) -> Result<(), OAuthError> {
-        let device = self.end_device_of(grant, why);
+    fn finish_ended(&self, grant: &Fields, why: &str, actor: &str) -> Result<(), OAuthError> {
+        let device = self.end_device_of(grant, why, actor);
         let access = self.revoke_access_of(grant);
         device.and(access)
     }
 
     /// Mark the device a grant is bound to as revoked, if it is in force, and say so in the
     /// security log. A step the store refuses is tried again and then reported (503).
-    fn end_device_of(&self, grant: &Fields, why: &str) -> Result<(), OAuthError> {
+    fn end_device_of(&self, grant: &Fields, why: &str, actor: &str) -> Result<(), OAuthError> {
         let Some(did) = grant.get("device").and_then(J::as_str) else {
             return Ok(());
         };
@@ -798,32 +916,43 @@ impl OAuth {
         })
         .map_err(|_| storage_busy())?;
         let owner = grant.get("owner").and_then(J::as_str).unwrap_or("");
-        self.audit(
+        self.audit_by(
             owner,
             dev::EVENT_REVOKED,
+            actor,
             &format!("{}: {why}", dev::describe(&rec, did)),
         );
         Ok(())
     }
 
-    /// End the device `id`: its refresh-token family and its access token, and the record. Safe to
-    /// repeat; a step the store refuses is tried again and then reported (503), never skipped.
-    pub fn revoke_device(&self, id: &str, actor: &str) -> Result<(), OAuthError> {
+    /// End the device `id`: its refresh-token family and its access token, and the record. `actor`
+    /// is who the security log names (the person, an administrator, or the person who approved
+    /// an agent's proposal); `proposed_by` names the agent of such a proposal. Safe to repeat; a
+    /// step the store refuses is tried again and then reported (503), never skipped.
+    pub fn revoke_device(
+        &self,
+        id: &str,
+        actor: &str,
+        proposed_by: Option<&str>,
+    ) -> Result<(), OAuthError> {
         let rec = fault::patiently(TRIES, PAUSE, || self.backend.get(dev::MODEL, id))
             .map_err(|_| storage_busy())?;
-        let Some(rec) = rec else {
+        let Some(rec) = rec.filter(dev::is_ours) else {
             return Err(OAuthError::new(404, "not_found", "no such device"));
         };
-        let why = format!("revoked by {actor}");
+        let why = match proposed_by {
+            Some(agent) => format!("revoked by {actor} (proposed by {agent})"),
+            None => format!("revoked by {actor}"),
+        };
         let grant = rec.get("grant").and_then(J::as_str).unwrap_or("");
-        if self.revoke_grant_internal(grant, "oauth_revoked", &why)? {
+        if self.revoke_grant_by(grant, "oauth_revoked", &why, Some(actor))? {
             return Ok(());
         }
         // The family is gone (forgotten after it ended): only the record is left to mark.
         let mut stub = Fields::new();
         stub.insert("device".into(), J::from(id));
         stub.insert("owner".into(), rec.get("user").cloned().unwrap_or(J::Null));
-        self.end_device_of(&stub, &why)
+        self.end_device_of(&stub, &why, actor)
     }
 
     /// Revoke the access token a grant names. Safe to repeat; a step the store refuses is tried
@@ -838,10 +967,11 @@ impl OAuth {
         Ok(())
     }
 
-    fn audit_grant(&self, owner: &str, kind: &str, current: &Fields, why: &str) {
-        self.audit(
+    fn audit_grant(&self, owner: &str, kind: &str, actor: &str, current: &Fields, why: &str) {
+        self.audit_by(
             owner,
             kind,
+            actor,
             &format!(
                 "{} ({}): {}",
                 current.get("client_name").and_then(J::as_str).unwrap_or(""),
@@ -935,6 +1065,14 @@ impl OAuth {
             let _ = self.backend.delete(GRANT_MODEL, &g);
         }
     }
+}
+
+/// A mobile app is told which device it is (`device_id`), so that it can end its own.
+fn with_device(mut response: J, device: Option<&str>) -> J {
+    if let Some(d) = device {
+        response["device_id"] = J::from(d);
+    }
+    response
 }
 
 fn token_response(access: &str, refresh: &str, ttl: u64, scopes: &[String]) -> J {

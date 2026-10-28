@@ -9,21 +9,29 @@ use obop_storage::Fields;
 use obop_storage::fault;
 use obop_storage::testing::{Flaky, Mode};
 
-const APP: &str = "org.obop.mileage:/oauth";
-const LINK: &str = "https://app.example.test/mileage/callback";
-const LOOP4: &str = "http://127.0.0.1/callback";
-const DEVICE: [(&str, &str); 3] = [
+pub(super) const APP: &str = "org.obop.mileage:/oauth";
+pub(super) const LOOP4: &str = "http://127.0.0.1/callback";
+pub(super) const DEVICE: [(&str, &str); 3] = [
     ("device_name", "Pixel 8"),
     ("device_platform", "Android"),
     ("device_app_version", "1.4.2"),
 ];
 
-fn api() -> String {
+pub(super) fn api() -> String {
     format!("{BASE}/api")
 }
 
 impl Rig {
-    fn mobile_with(&self, redirects: &[&str]) -> Result<String, OAuthError> {
+    pub(super) fn mobile_with(&self, redirects: &[&str]) -> Result<String, OAuthError> {
+        self.mobile_declaring(redirects, "base.user sales.user")
+    }
+
+    /// A mobile client that declares `scope` (the groups it will ask for) when it registers.
+    pub(super) fn mobile_declaring(
+        &self,
+        redirects: &[&str],
+        scope: &str,
+    ) -> Result<String, OAuthError> {
         self.o
             .register(
                 "10.0.0.1",
@@ -31,29 +39,30 @@ impl Rig {
                     "client_name": "Mileage",
                     "obop_client_class": "mobile",
                     "redirect_uris": redirects,
+                    "scope": scope,
                 }),
             )
             .map(|d| d["client_id"].as_str().unwrap().to_string())
     }
 
-    fn mobile_client(&self) -> String {
-        self.mobile_with(&[APP, LINK, LOOP4]).unwrap()
+    pub(super) fn mobile_client(&self) -> String {
+        self.mobile_with(&[APP, LOOP4]).unwrap()
     }
 
-    fn mobile_params(&self, client: &str, redirect: &str) -> AuthorizeParams {
+    pub(super) fn mobile_params(&self, client: &str, redirect: &str) -> AuthorizeParams {
         AuthorizeParams {
             resources: vec![api()],
             ..self.params(client, redirect)
         }
     }
 
-    fn mobile_code(&self, client: &str, groups: &[&str]) -> String {
+    pub(super) fn mobile_code(&self, client: &str, groups: &[&str]) -> String {
         let loc = self.consent(&self.mobile_params(client, APP), groups, 30);
         assert!(loc.starts_with(&format!("{APP}?code=oac_")), "{loc}");
         query(&loc, "code")
     }
 
-    fn mobile_token(
+    pub(super) fn mobile_token(
         &self,
         client: &str,
         code: &str,
@@ -74,7 +83,7 @@ impl Rig {
     }
 
     /// A signed-in app: the client and the answer to the token request.
-    fn mobile_tokens(&self) -> (String, J) {
+    pub(super) fn mobile_tokens(&self) -> (String, J) {
         let c = self.mobile_client();
         let code = self.mobile_code(&c, &["base.user", "sales.user"]);
         let t = self
@@ -83,17 +92,17 @@ impl Rig {
         (c, t)
     }
 
-    fn devices(&self) -> Vec<(String, Fields)> {
+    pub(super) fn devices(&self) -> Vec<(String, Fields)> {
         self.backend.list(dev::MODEL).unwrap()
     }
 
-    fn the_device(&self) -> (String, Fields) {
+    pub(super) fn the_device(&self) -> (String, Fields) {
         let mut all = self.devices();
         assert_eq!(all.len(), 1, "{all:?}");
         all.remove(0)
     }
 
-    fn events(&self, kind: &str) -> Vec<String> {
+    pub(super) fn events(&self, kind: &str) -> Vec<String> {
         self.backend
             .list("security_event")
             .unwrap()
@@ -104,16 +113,16 @@ impl Rig {
     }
 }
 
-fn live_mobile_tokens(r: &Rig) -> usize {
+pub(super) fn live_mobile_tokens(r: &Rig) -> usize {
     r.backend
         .list("auth_token")
         .unwrap()
         .into_iter()
-        .filter(|(_, t)| t["kind"] == "mobile" && t["revoked"] != true)
+        .filter(|(_, t)| t.get("mobile") == Some(&json!(true)) && t["revoked"] != true)
         .count()
 }
 
-fn state_of(r: &Rig, id: &str) -> String {
+pub(super) fn state_of(r: &Rig, id: &str) -> String {
     r.backend.get(dev::MODEL, id).unwrap().unwrap()["state"]
         .as_str()
         .unwrap()
@@ -134,7 +143,6 @@ fn a_mobile_client_registers_only_redirects_that_follow_rfc_8252() {
         "org.obop.mileage:/oauth",
         "org.obop.mileage:/",
         "com.example.app-2:/cb/done",
-        "https://app.example.test/mileage/callback",
         "http://127.0.0.1/cb",
         "http://127.0.0.1:53124/cb",
         "http://[::1]/cb",
@@ -143,6 +151,13 @@ fn a_mobile_client_registers_only_redirects_that_follow_rfc_8252() {
         assert!(r.mobile_with(&[ok]).is_ok(), "{ok}");
     }
     for bad in [
+        // A web address of any kind: a mobile client takes no https redirect (the review of the
+        // D64 amendment: a self-registered client with a web redirect is a phishing page with
+        // our consent screen in front of it; verified app links are a later item, ISSUES).
+        "https://app.example.test/mileage/callback",
+        "https://app.example.test/",
+        "https://example.com/cb",
+        "HTTPS://app.example.test/cb",
         // Not a scheme of the app's own: a web address, a name that can be pointed elsewhere,
         // or a scheme anybody can claim because it has no reverse domain form.
         "http://example.com/cb",
@@ -264,7 +279,7 @@ fn the_presented_redirect_must_be_the_registered_one() {
     let r = rig();
     let c = r.mobile_client();
     let ok = |u: &str| r.o.validate_authorize(BASE, &r.mobile_params(&c, u));
-    for same in [APP, LINK, LOOP4] {
+    for same in [APP, LOOP4] {
         assert!(ok(same).is_ok(), "{same}");
     }
     // The loopback port may change (RFC 8252 7.3), nothing else may.
@@ -275,8 +290,8 @@ fn the_presented_redirect_must_be_the_registered_one() {
         "org.obop.mileage:/",
         "org.obop.other:/oauth",
         "org.obop.mileage.evil:/oauth",
-        "https://app.example.test/mileage/callback/",
-        "https://app.example.test/mileage/callback?x=1",
+        // A web address is never the redirect of a mobile client, whatever was registered.
+        "https://app.example.test/mileage/callback",
         "https://app.example.test.evil.test/mileage/callback",
         "http://app.example.test/mileage/callback",
         "http://127.0.0.1:53124/other",
@@ -847,7 +862,7 @@ fn a_bad_verifier_a_replayed_code_and_an_expired_code_leave_no_device_or_end_the
     // The code is bound to the redirect URI of the request.
     let code = r.mobile_code(&c, &["base.user"]);
     let e = r
-        .mobile_token(&c, &code, &verifier(), LINK, &DEVICE)
+        .mobile_token(&c, &code, &verifier(), LOOP4, &DEVICE)
         .unwrap_err();
     assert_eq!(e.error, "invalid_grant");
     // Expired: sixty seconds.
@@ -898,7 +913,7 @@ fn revoking_a_device_ends_the_family_and_the_access_token_and_says_so_once() {
         t["refresh_token"].as_str().unwrap(),
     );
     assert!(r.auth.resolve(access).is_some());
-    r.o.revoke_device(&id, "ada").unwrap();
+    r.o.revoke_device(&id, "ada", None).unwrap();
     assert!(
         r.auth.resolve(access).is_none(),
         "the access token stops at once"
@@ -911,10 +926,10 @@ fn revoking_a_device_ends_the_family_and_the_access_token_and_says_so_once() {
     assert_eq!(ev.len(), 1, "{ev:?}");
     assert!(ev[0].contains("revoked by ada") && !ev[0].contains(access));
     // Asking again changes nothing and says nothing more.
-    r.o.revoke_device(&id, "ada").unwrap();
+    r.o.revoke_device(&id, "ada", None).unwrap();
     assert_eq!(r.events("device_revoked").len(), 1);
     assert_eq!(
-        r.o.revoke_device("no-such-device", "ada")
+        r.o.revoke_device("no-such-device", "ada", None)
             .unwrap_err()
             .status,
         404
@@ -1030,7 +1045,14 @@ fn a_mobile_code_exchange_refused_at_any_call_is_retryable_and_leaves_no_device_
     // Wherever in the exchange the store starts refusing, the client is told to retry, the code is
     // still good, and neither a device, a grant nor a live token is left behind by the refusal.
     let (flaky, backend) = Flaky::memory();
-    let r = rig_on(backend, "ada", OAuthConfig::default());
+    let r = rig_on(
+        backend,
+        "ada",
+        OAuthConfig {
+            max_devices_per_user: 1000,
+            ..OAuthConfig::default()
+        },
+    );
     let c = r.mobile_client();
     let mut refused_somewhere = 0;
     for k in 1..=16 {
@@ -1084,6 +1106,55 @@ fn a_mobile_code_exchange_refused_at_any_call_is_retryable_and_leaves_no_device_
         }
     }
     assert!(refused_somewhere >= 3, "the sweep reached the exchange");
+
+    // And one refused call at every position of the exchange in turn, up to the first that is past
+    // its last call: the whole exchange is covered, not a floor of it.
+    let mut past_the_end = false;
+    for skip in 0..80 {
+        let code = r.mobile_code(&c, &["base.user"]);
+        let (devices, grants, tokens) = (
+            r.devices().len(),
+            r.backend.list("oauth_grant").unwrap().len(),
+            live_mobile_tokens(&r),
+        );
+        fault::begin_request(Default::default());
+        flaky.refuse_call_after(skip);
+        let first = r.mobile_token(&c, &code, &verifier(), APP, &DEVICE);
+        let out = fault::end_request();
+        flaky.allow_models();
+        match first {
+            Ok(_) => {
+                assert_eq!(r.devices().len(), devices + 1, "skip={skip}");
+                if out.fault.is_none() {
+                    past_the_end = true;
+                    break;
+                }
+            }
+            Err(e) => {
+                assert_eq!(
+                    (e.status, e.error),
+                    (503, "temporarily_unavailable"),
+                    "skip={skip}"
+                );
+                assert_eq!(
+                    (
+                        r.devices().len(),
+                        r.backend.list("oauth_grant").unwrap().len(),
+                        live_mobile_tokens(&r)
+                    ),
+                    (devices, grants, tokens),
+                    "skip={skip}: a refused exchange leaves nothing behind"
+                );
+                r.mobile_token(&c, &code, &verifier(), APP, &DEVICE)
+                    .unwrap_or_else(|e| panic!("skip={skip}: the retry: {e:?}"));
+                assert_eq!(r.devices().len(), devices + 1, "skip={skip}");
+            }
+        }
+    }
+    assert!(
+        past_the_end,
+        "the last position is past the final call of the exchange"
+    );
 }
 
 #[test]
@@ -1093,6 +1164,7 @@ fn a_mobile_refresh_refused_at_any_call_keeps_the_old_token_and_makes_no_orphan(
     let (c, t) = r.mobile_tokens();
     let mut refresh = t["refresh_token"].as_str().unwrap().to_string();
     let mut reached = 0;
+    let mut past_the_end = false;
     for skip in 0..24 {
         let tokens = live_mobile_tokens(&r);
         fault::begin_request(Default::default());
@@ -1102,6 +1174,7 @@ fn a_mobile_refresh_refused_at_any_call_keeps_the_old_token_and_makes_no_orphan(
         flaky.allow_models();
         match first {
             Ok(t2) => {
+                past_the_end |= out.fault.is_none();
                 refresh = t2["refresh_token"].as_str().unwrap().to_string();
                 assert_eq!(
                     live_mobile_tokens(&r),
@@ -1133,16 +1206,21 @@ fn a_mobile_refresh_refused_at_any_call_keeps_the_old_token_and_makes_no_orphan(
         assert_eq!(state_of(&r, &r.the_device().0), "active", "skip={skip}");
     }
     assert!(reached >= 3, "{reached}");
+    assert!(
+        past_the_end,
+        "the last positions are past the final call of the refresh: the sweep covered all of it"
+    );
 }
 
 #[test]
 fn ending_a_device_refused_at_any_call_is_never_reported_as_done_and_asking_again_finishes_it() {
     // A refusal of one call at every position, and a store that stays refused for longer than a
     // step is tried again from a few positions.
-    let sweep = (0..30)
+    let sweep = (0..60)
         .map(|k| (k, 1))
         .chain([1, 3, 5, 8, 12, 16].map(|k| (k, 6)));
     let mut refused = 0;
+    let mut past_the_end = false;
     for (skip, stays) in sweep {
         let (flaky, backend) = Flaky::memory();
         let r = rig_on(backend, "ada", OAuthConfig::default());
@@ -1155,11 +1233,12 @@ fn ending_a_device_refused_at_any_call_is_never_reported_as_done_and_asking_agai
         fault::begin_request(Default::default());
         // Refused from this position on, for longer than a step is tried again.
         flaky.refuse_calls_after(skip, stays);
-        let done = r.o.revoke_device(&id, "ada");
+        let done = r.o.revoke_device(&id, "ada", None);
         let out = fault::end_request();
         flaky.allow_models();
         match done {
             Ok(()) => {
+                past_the_end |= stays == 1 && out.fault.is_none();
                 assert!(
                     r.auth.resolve(&access).is_none(),
                     "skip={skip}: said done, so it is"
@@ -1176,7 +1255,7 @@ fn ending_a_device_refused_at_any_call_is_never_reported_as_done_and_asking_agai
                 );
                 assert_eq!(e.retry_after, Some(1), "a 503 always says when to retry");
                 assert!(out.fault.is_some(), "skip={skip}");
-                r.o.revoke_device(&id, "ada")
+                r.o.revoke_device(&id, "ada", None)
                     .unwrap_or_else(|e| panic!("skip={skip}: {e:?}"));
             }
         }
@@ -1195,6 +1274,10 @@ fn ending_a_device_refused_at_any_call_is_never_reported_as_done_and_asking_agai
         );
     }
     assert!(refused >= 3, "the sweep reached the revocation: {refused}");
+    assert!(
+        past_the_end,
+        "the last positions are past the final call of the revocation: the sweep covered all of it"
+    );
 }
 
 #[test]
@@ -1208,7 +1291,7 @@ fn a_refused_write_of_the_device_still_ends_the_token_and_a_refused_token_still_
     let access = t["access_token"].as_str().unwrap();
     fault::begin_request(Default::default());
     flaky.refuse_model(dev::MODEL, Mode::Updates);
-    let e = r.o.revoke_device(&id, "ada").unwrap_err();
+    let e = r.o.revoke_device(&id, "ada", None).unwrap_err();
     fault::end_request();
     flaky.allow_models();
     assert_eq!(e.status, 503);
@@ -1221,7 +1304,7 @@ fn a_refused_write_of_the_device_still_ends_the_token_and_a_refused_token_still_
         "active",
         "the record is still to be marked"
     );
-    r.o.revoke_device(&id, "ada").unwrap();
+    r.o.revoke_device(&id, "ada", None).unwrap();
     assert_eq!(state_of(&r, &id), "revoked");
 
     let (flaky, backend) = Flaky::memory();
@@ -1231,7 +1314,7 @@ fn a_refused_write_of_the_device_still_ends_the_token_and_a_refused_token_still_
     let access = t["access_token"].as_str().unwrap();
     fault::begin_request(Default::default());
     flaky.refuse_model("auth_token", Mode::Updates);
-    let e = r.o.revoke_device(&id, "ada").unwrap_err();
+    let e = r.o.revoke_device(&id, "ada", None).unwrap_err();
     fault::end_request();
     flaky.allow_models();
     assert_eq!(e.status, 503);
@@ -1240,7 +1323,7 @@ fn a_refused_write_of_the_device_still_ends_the_token_and_a_refused_token_still_
         r.auth.resolve(access).is_none(),
         "the device is the kill switch when the token record cannot be written"
     );
-    r.o.revoke_device(&id, "ada").unwrap();
+    r.o.revoke_device(&id, "ada", None).unwrap();
     assert_eq!(live_mobile_tokens(&r), 0);
 }
 
@@ -1283,7 +1366,7 @@ fn the_mobile_flow_on_postgres() {
         .o
         .register(
             &ip,
-            &json!({"client_name": "Mileage", "obop_client_class": "mobile", "redirect_uris": [APP]}),
+            &json!({"client_name": "Mileage", "obop_client_class": "mobile", "redirect_uris": [APP], "scope": "base.user"}),
         )
         .unwrap()["client_id"]
         .as_str()
@@ -1326,7 +1409,7 @@ fn the_mobile_flow_on_postgres() {
         .find(|(i, _)| *i != id)
         .map(|(i, _)| i)
         .unwrap();
-    r.o.revoke_device(&second, &user).unwrap();
+    r.o.revoke_device(&second, &user, None).unwrap();
     assert!(
         r.auth
             .resolve(t["access_token"].as_str().unwrap())
@@ -1339,10 +1422,14 @@ fn the_mobile_flow_on_postgres() {
 fn the_page_texts_of_the_mobile_class_exist_in_every_language() {
     for key in [
         "consent.who_body_mobile",
+        "consent.who_body_mobile_loopback",
         "consent.f1_mobile",
         "consent.f2_mobile",
         "consent.f3_mobile",
+        "consent.mobile_none",
         "err.mobile_admin",
+        "err.mobile_scope",
+        "err.devices_full",
     ] {
         for l in crate::page::LANGS {
             assert!(!crate::page::t(l, key).is_empty(), "{key} in {l}");

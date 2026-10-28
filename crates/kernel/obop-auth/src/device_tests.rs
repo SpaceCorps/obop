@@ -240,3 +240,267 @@ fn session_with(r: &Rig, user: &str, password: &str) -> (String, Principal) {
     let p = r.a.resolve(&token).unwrap();
     (token, p)
 }
+
+// ---- who the log names, what is stored, and the walks of D74 -----------------------------------
+
+#[test]
+fn the_log_names_the_administrator_who_ended_the_devices_and_the_person_who_did_it_to_themselves() {
+    let r = rig();
+    user_with(&r.a, "root", &[ADMIN_GROUP]);
+    let (_, root) = session(&r.a, "root");
+    user_with(&r.a, "ada", &["base.user"]);
+    user_with(&r.a, "bob", &["base.user"]);
+    let actors = |r: &Rig, user: &str| -> Vec<String> {
+        r.b.list(EVENT_TABLE)
+            .unwrap()
+            .into_iter()
+            .filter(|(_, f)| f["kind"] == "device_revoked" && f["user"] == user)
+            .map(|(_, f)| f["actor"].as_str().unwrap().to_string())
+            .collect()
+    };
+    sign_in(&r, "ada", "Phone");
+    r.a.offboard_user(&root, "ada", "left").unwrap();
+    assert_eq!(actors(&r, "ada"), ["root"], "the administrator did it");
+    sign_in(&r, "bob", "Phone");
+    enrol(&r.a, "bob");
+    r.a.admin_reset(&root, "bob").unwrap();
+    assert_eq!(actors(&r, "bob"), ["root"]);
+    user_with(&r.a, "cy", &["base.user"]);
+    let (mine, p) = session(&r.a, "cy");
+    sign_in(&r, "cy", "Phone");
+    r.a.change_password(&p, &mine, PW, "a brand new password", None, None)
+        .unwrap();
+    assert_eq!(actors(&r, "cy"), ["cy"], "the person did it to themselves");
+}
+
+#[test]
+fn a_mobile_token_never_carries_a_group_a_phone_may_not_have_whatever_the_record_says() {
+    let r = rig();
+    user_with(
+        &r.a,
+        "ada",
+        &[
+            "base.user",
+            "platform.admin",
+            "mileage.admin",
+            "expenses.approver",
+        ],
+    );
+    let app = sign_in(&r, "ada", "Phone");
+    // A record that was written by hand, or by an older build, with more than a phone may hold.
+    let (id, _) =
+        r.b.list("auth_token")
+            .unwrap()
+            .into_iter()
+            .find(|(_, t)| t.get("mobile") == Some(&json!(true)))
+            .unwrap();
+    let mut patch = Fields::new();
+    patch.insert(
+        "scopes".into(),
+        json!([
+            "base.user",
+            "platform.admin",
+            "mileage.admin",
+            "expenses.approver"
+        ]),
+    );
+    r.b.update("auth_token", &id, &patch).unwrap();
+    let p = r.a.resolve(&app.access).unwrap();
+    assert!(p.allows("base.user"));
+    for never in ["platform.admin", "mileage.admin", "expenses.approver"] {
+        assert!(!p.allows(never), "{never}");
+    }
+    // Without the device it is bound to, it is nobody.
+    let mut gone = Fields::new();
+    gone.insert("device".into(), J::Null);
+    r.b.update("auth_token", &id, &gone).unwrap();
+    assert!(r.a.resolve(&app.access).is_none());
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Change {
+    NewPassword,
+    SignOutEverywhere,
+    Disable,
+    Offboard,
+}
+
+fn make_change(
+    r: &Rig,
+    what: Change,
+    p: &Principal,
+    mine: &str,
+    root: &Principal,
+) -> Result<(), MfaError> {
+    match what {
+        Change::NewPassword => {
+            r.a.change_password(p, mine, PW, "a brand new password", None, None)
+        }
+        Change::SignOutEverywhere => r.a.revoke_sessions(p, mine, true).map(|_| ()),
+        Change::Disable => r.a.set_user_disabled(root, "ada", true),
+        Change::Offboard => r.a.offboard_user(root, "ada", "left").map(|_| ()),
+    }
+}
+
+/// How many entries of the log name this device as ended.
+fn logged_as_ended(r: &Rig, a: &App) -> usize {
+    device_events(r, "ada")
+        .iter()
+        .filter(|d| d.contains(&format!("[{}]", a.device)))
+        .count()
+}
+
+/// A change of the credentials of a person who has two devices, with the store refusing from one
+/// position on (for `stays` calls), at every position in turn up to the one after the last call the
+/// change makes. Wherever the refusal falls: the answer is true (done, or refused with the work
+/// that is left to repeat), a device that is marked ended is in the log exactly once, and the
+/// repeat ends the rest without logging anything twice.
+fn walk(what: Change, stays: i64) {
+    let mut reached_the_end = false;
+    let mut refused_at_least_once = 0;
+    let mut met_the_refusal = 0;
+    for skip in 0..400 {
+        let (r, flaky) = crate::admin_tests::flaky_rig();
+        user_with(&r.a, "root", &[ADMIN_GROUP]);
+        user_with(&r.a, "ada", &["base.user"]);
+        let (_, root) = session(&r.a, "root");
+        let (mine, p) = session(&r.a, "ada");
+        let apps = [sign_in(&r, "ada", "Phone"), sign_in(&r, "ada", "Tablet")];
+        if stays == 1 {
+            flaky.refuse_call_after(skip);
+        } else {
+            flaky.refuse_calls_after(skip, stays);
+        }
+        let (done, out) = crate::admin_tests::request(|| make_change(&r, what, &p, &mine, &root));
+        let refused = flaky.refused();
+        met_the_refusal += i32::from(refused > 0);
+        flaky.allow_models();
+        let at = format!("{what:?}, refused from call {skip} for {stays}: {done:?} {out:?}");
+        // Whatever is ended is in the log, at once. An entry may be there for a device whose end
+        // the store then refused (the repeat finishes it): the entry comes first, so that one
+        // that is lost never leaves a device ended and unlogged. One request never writes an
+        // entry twice.
+        for a in &apps {
+            let logged = logged_as_ended(&r, a);
+            assert!(logged >= usize::from(state(&r, a) == "revoked"), "{at}");
+            assert!(logged <= 1, "{at}");
+        }
+        match &done {
+            Ok(()) => assert!(
+                apps.iter().all(|a| ended(&r, a)),
+                "said done, so it is: {at}"
+            ),
+            Err(e) => {
+                refused_at_least_once += 1;
+                // Never "done" and never a verdict about the change: a refusal of the store is
+                // what the caller is told, and the request knows it met one.
+                assert!(out.fault.is_some(), "{e:?}: {at}");
+                // Finish it. After a new password the old one no longer works: the person signs in
+                // with the new one and signs everything out, which ends what is left.
+                match what {
+                    Change::NewPassword if out.wrote => {
+                        let (t2, p2) = session_with(&r, "ada", "a brand new password");
+                        r.a.revoke_sessions(&p2, &t2, true).unwrap();
+                    }
+                    _ => make_change(&r, what, &p, &mine, &root).unwrap(),
+                }
+            }
+        }
+        for a in &apps {
+            assert!(ended(&r, a), "after the repeat: {at}");
+            // Once, however many tries of one request; twice at most when a request that could not
+            // finish was repeated.
+            assert!((1..=2).contains(&logged_as_ended(&r, a)), "{at}");
+        }
+        if refused == 0 {
+            reached_the_end = true;
+            break;
+        }
+    }
+    assert!(
+        reached_the_end,
+        "{what:?}: the walk went past the last call of the change"
+    );
+    assert!(
+        met_the_refusal >= 5,
+        "{what:?}: the walk met the refusal in {met_the_refusal} places"
+    );
+    if stays > 1 {
+        assert!(
+            refused_at_least_once >= 1,
+            "{what:?}: a store that stays refused made the change fail {refused_at_least_once} times"
+        );
+    }
+}
+
+#[test]
+fn ending_the_devices_of_a_new_password_survives_a_refusal_at_every_call() {
+    walk(Change::NewPassword, 1);
+    walk(Change::NewPassword, 6);
+}
+
+#[test]
+fn ending_the_devices_of_a_sign_out_everywhere_survives_a_refusal_at_every_call() {
+    walk(Change::SignOutEverywhere, 1);
+    walk(Change::SignOutEverywhere, 6);
+}
+
+#[test]
+fn ending_the_devices_of_a_disable_survives_a_refusal_at_every_call() {
+    walk(Change::Disable, 1);
+    walk(Change::Disable, 6);
+}
+
+#[test]
+fn ending_the_devices_of_an_offboarding_survives_a_refusal_at_every_call() {
+    walk(Change::Offboard, 1);
+    walk(Change::Offboard, 6);
+}
+
+#[test]
+fn the_entry_of_a_device_that_was_ended_is_kept_when_the_next_step_is_refused_for_good() {
+    use obop_storage::testing::Mode;
+    // The sessions step is refused for longer than it is tried again, after the devices were
+    // ended: the devices are in the log all the same (they were once written after that step and
+    // lost with it), and the repeat does not write them a second time.
+    let (r, flaky) = crate::admin_tests::flaky_rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    let (mine, p) = session(&r.a, "ada");
+    let (a1, a2) = (sign_in(&r, "ada", "Phone"), sign_in(&r, "ada", "Tablet"));
+    flaky.refuse_model("auth_token", Mode::Reads);
+    let (done, _) = crate::admin_tests::request(|| r.a.revoke_sessions(&p, &mine, true));
+    flaky.allow_models();
+    assert!(done.is_err(), "{done:?}");
+    assert_eq!(state(&r, &a1), "revoked");
+    assert_eq!(state(&r, &a2), "revoked");
+    assert_eq!(
+        device_events(&r, "ada").len(),
+        2,
+        "{:?}",
+        device_events(&r, "ada")
+    );
+    r.a.revoke_sessions(&p, &mine, true).unwrap();
+    assert_eq!(device_events(&r, "ada").len(), 2, "not twice");
+}
+
+#[test]
+fn a_row_of_another_table_with_the_same_name_is_not_ended_as_a_device() {
+    let r = rig();
+    user_with(&r.a, "ada", &["base.user"]);
+    // A record of a package that was installed before the model was built in: no grant, no
+    // registration time.
+    r.b.insert(
+        dev::MODEL,
+        "theirs",
+        &fields(json!({"user": "ada", "state": "active", "name": "Not a phone"})),
+    )
+    .unwrap();
+    let (mine, p) = session(&r.a, "ada");
+    let app = sign_in(&r, "ada", "Phone");
+    r.a.change_password(&p, &mine, PW, "a brand new password", None, None)
+        .unwrap();
+    assert!(ended(&r, &app));
+    let theirs = r.b.get(dev::MODEL, "theirs").unwrap().unwrap();
+    assert_eq!(theirs["state"], "active", "{theirs:?}");
+    assert_eq!(device_events(&r, "ada").len(), 1);
+}
