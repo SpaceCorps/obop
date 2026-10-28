@@ -94,12 +94,7 @@ fn same_as_the_rule(b: &dyn Backend, model: &str) -> (usize, usize) {
                 .map(|(id, _)| id)
                 .collect();
             let got = ids(b.find_unique(model, &fields, &values).unwrap());
-            assert_eq!(
-                got,
-                want,
-                "{} {model} {fields:?} {values:?}",
-                b.kind()
-            );
+            assert_eq!(got, want, "{} {model} {fields:?} {values:?}", b.kind());
             asked += 1;
             found += usize::from(!want.is_empty());
         }
@@ -155,7 +150,9 @@ fn check_backend(b: &dyn Backend) {
             .filter(|(_, r)| unique_matches(r, &["a"], std::slice::from_ref(&first)))
             .map(|(id, _)| id)
             .collect();
-        let got = ids(b.find_unique("idx2", &["a"], std::slice::from_ref(&first)).unwrap());
+        let got = ids(b
+            .find_unique("idx2", &["a"], std::slice::from_ref(&first))
+            .unwrap());
         assert_eq!(got, want, "{} idx2 {first:?}", b.kind());
     }
     // A model nothing was stored in, and a name the index cannot carry, answer without error.
@@ -222,11 +219,7 @@ fn the_sqlite_lookup_is_planned_on_the_unique_index() {
     };
     use rusqlite::types::Value as Sql;
     for (fields, index, binds) in [
-        (
-            vec!["sku"],
-            "obop_uq_t_sku",
-            vec![Sql::Text("S77".into())],
-        ),
+        (vec!["sku"], "obop_uq_t_sku", vec![Sql::Text("S77".into())]),
         (
             vec!["sku", "company"],
             "obop_uq_t_sku_company",
@@ -246,7 +239,11 @@ fn the_sqlite_lookup_is_planned_on_the_unique_index() {
     let old = plan(
         "SELECT id, data FROM obop_record WHERE model = ?1 \
          AND json_extract(data, '$.' || ?2) = ?3 ORDER BY seq",
-        vec![Sql::Text("t".into()), Sql::Text("sku".into()), Sql::Text("S77".into())],
+        vec![
+            Sql::Text("t".into()),
+            Sql::Text("sku".into()),
+            Sql::Text("S77".into()),
+        ],
     );
     assert!(!old.contains("obop_uq_"), "{old}");
 }
@@ -271,16 +268,15 @@ fn the_postgres_lookup_is_planned_on_the_unique_index() {
          ANALYZE obop_record",
     )
     .unwrap();
-    let plan = |c: &mut postgres::Client,
-                sql: &str,
-                params: &[&(dyn postgres::types::ToSql + Sync)]| {
-        c.query(&format!("EXPLAIN {sql}"), params)
-            .unwrap()
-            .iter()
-            .map(|r| r.get::<_, String>(0))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
+    let plan =
+        |c: &mut postgres::Client, sql: &str, params: &[&(dyn postgres::types::ToSql + Sync)]| {
+            c.query(&format!("EXPLAIN {sql}"), params)
+                .unwrap()
+                .iter()
+                .map(|r| r.get::<_, String>(0))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
     let one = crate::pg::unique_lookup_sql("t", &["sku"]).unwrap();
     let p = plan(&mut c, &one, &[&"S77"]);
     assert!(p.contains("obop_uq_t_sku"), "{p}");
@@ -332,10 +328,22 @@ fn the_statements_are_golden() {
          AND (COALESCE(data ->> 'company', '')) = $2 ORDER BY seq"
     );
     for bad in ["", "T", "a b", "a'b", "a;b"] {
-        assert!(crate::sqlite::unique_lookup_sql(bad, &["a"]).is_err(), "{bad:?}");
-        assert!(crate::sqlite::unique_lookup_sql("t", &[bad]).is_err(), "{bad:?}");
-        assert!(crate::pg::unique_lookup_sql(bad, &["a"]).is_err(), "{bad:?}");
-        assert!(crate::pg::unique_lookup_sql("t", &[bad]).is_err(), "{bad:?}");
+        assert!(
+            crate::sqlite::unique_lookup_sql(bad, &["a"]).is_err(),
+            "{bad:?}"
+        );
+        assert!(
+            crate::sqlite::unique_lookup_sql("t", &[bad]).is_err(),
+            "{bad:?}"
+        );
+        assert!(
+            crate::pg::unique_lookup_sql(bad, &["a"]).is_err(),
+            "{bad:?}"
+        );
+        assert!(
+            crate::pg::unique_lookup_sql("t", &[bad]).is_err(),
+            "{bad:?}"
+        );
     }
     assert!(crate::sqlite::unique_lookup_sql("t", &[]).is_err());
     assert!(crate::pg::unique_lookup_sql("t", &[]).is_err());

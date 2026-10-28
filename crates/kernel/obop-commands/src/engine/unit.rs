@@ -133,6 +133,9 @@ pub(crate) struct Unit<'a> {
     undo: Vec<Undo>,
     /// The overlay by the keys of the uniqueness rules asked about so far, by model.
     keyed: RefCell<HashMap<String, Vec<Keyed>>>,
+    /// For the tests: the records of the unit that `find_unique` has looked at.
+    #[cfg(test)]
+    examined: std::cell::Cell<usize>,
 }
 
 impl<'a> Unit<'a> {
@@ -147,6 +150,8 @@ impl<'a> Unit<'a> {
             cap: MAX_EFFECT_RECORDS,
             undo: Vec::new(),
             keyed: RefCell::new(HashMap::new()),
+            #[cfg(test)]
+            examined: std::cell::Cell::new(0),
         }
     }
 
@@ -376,6 +381,8 @@ impl Reads for Unit<'_> {
                         ids: HashMap::new(),
                     };
                     for ((m, id), slot) in &self.overlay {
+                        #[cfg(test)]
+                        self.examined.set(self.examined.get() + 1);
                         if m == model
                             && let Some(rec) = slot
                         {
@@ -389,6 +396,8 @@ impl Reads for Unit<'_> {
             rules[at].ids.get(&key).cloned().unwrap_or_default()
         };
         for id in candidates {
+            #[cfg(test)]
+            self.examined.set(self.examined.get() + 1);
             if let Some(Some(rec)) = self.overlay.get(&(model.to_string(), id.clone()))
                 && unique_matches(rec, fields, values)
                 && !out.iter().any(|(i, _)| *i == id)
@@ -473,6 +482,112 @@ mod tests {
         }
         let e = u.insert("t", "over", Fields::new()).unwrap_err();
         assert!(e.contains("more than 500 records"), "{e}");
+    }
+
+    // The lookup of a uniqueness rule through the unit (D57, ask 11.4).
+    fn two(code: &str, scope: Option<&str>) -> Fields {
+        let mut m = f("code", J::from(code));
+        if let Some(s) = scope {
+            m.insert("scope".into(), J::from(s));
+        }
+        m
+    }
+
+    fn ask(u: &Unit<'_>, code: &str, scope: &str) -> Vec<String> {
+        let mut ids: Vec<String> =
+            Reads::find_unique(u, "t", &["code", "scope"], &[J::from(code), J::from(scope)])
+                .unwrap()
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect();
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn find_unique_sees_the_units_writes_and_not_what_they_replaced() {
+        for url in ["memory:", "sqlite::memory:"] {
+            let b = obop_storage::open(url).unwrap();
+            b.ensure_unique("obop_uq_t_code_scope", "t", &["code", "scope"])
+                .unwrap();
+            b.insert("t", "stored", &two("A", Some("x"))).unwrap();
+            b.insert("t", "bare", &two("A", None)).unwrap();
+            b.insert("t", "gone", &two("G", Some("x"))).unwrap();
+            let mut u = Unit::new(&*b);
+            // Stored and untouched; a missing scope is the empty text.
+            assert_eq!(ask(&u, "A", "x"), ["stored"], "{url}");
+            assert_eq!(ask(&u, "A", ""), ["bare"], "{url}");
+            assert!(ask(&u, "A", "y").is_empty(), "{url}");
+            // Added by the unit, with and without a scope.
+            u.insert("t", "new", two("N", Some("x"))).unwrap();
+            u.insert("t", "newbare", two("N", None)).unwrap();
+            assert_eq!(ask(&u, "N", "x"), ["new"], "{url}");
+            assert_eq!(ask(&u, "N", ""), ["newbare"], "{url}");
+            // A stored record the unit changed is found under its new key and not its old one.
+            u.merge("t", "stored", f("code", J::from("B"))).unwrap();
+            assert!(ask(&u, "A", "x").is_empty(), "{url}");
+            assert_eq!(ask(&u, "B", "x"), ["stored"], "{url}");
+            // A scope that becomes empty again.
+            u.merge("t", "new", f("scope", J::Null)).unwrap();
+            assert!(ask(&u, "N", "x").is_empty(), "{url}");
+            assert_eq!(ask(&u, "N", ""), ["new", "newbare"], "{url}");
+            // A stored record the unit deleted is not there.
+            u.delete("t", "gone").unwrap();
+            assert!(ask(&u, "G", "x").is_empty(), "{url}");
+            // Nothing was written: the store still has the old keys.
+            assert_eq!(ask_plain(&*b, "A", "x"), ["stored"], "{url}");
+            assert_eq!(ask_plain(&*b, "G", "x"), ["gone"], "{url}");
+        }
+    }
+
+    fn ask_plain(b: &dyn Backend, code: &str, scope: &str) -> Vec<String> {
+        Plain(b)
+            .find_unique("t", &["code", "scope"], &[J::from(code), J::from(scope)])
+            .unwrap()
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    #[test]
+    fn find_unique_follows_a_rewind_in_both_directions() {
+        let b = obop_storage::open("sqlite::memory:").unwrap();
+        let mut u = Unit::new(&*b);
+        u.insert("t", "a", two("K0", Some("x"))).unwrap();
+        let mark = u.mark();
+        // The first question comes after the change, so the list is built from the changed record
+        // and has never seen the key it had before.
+        u.merge("t", "a", f("code", J::from("K1"))).unwrap();
+        u.insert("t", "dropped", two("D", Some("x"))).unwrap();
+        assert_eq!(ask(&u, "K1", "x"), ["a"]);
+        assert_eq!(ask(&u, "D", "x"), ["dropped"]);
+        u.rewind(mark);
+        // The record is as it was: found under the old key, and a stale entry does not show.
+        assert_eq!(ask(&u, "K0", "x"), ["a"]);
+        assert!(ask(&u, "K1", "x").is_empty());
+        assert!(ask(&u, "D", "x").is_empty());
+        // And a new write after the rewind is found too.
+        u.insert("t", "later", two("D", Some("x"))).unwrap();
+        assert_eq!(ask(&u, "D", "x"), ["later"]);
+    }
+
+    #[test]
+    fn find_unique_does_not_look_at_every_record_of_the_unit() {
+        // 2,000 rows in one unit, each asked about twice: the list answers by key.
+        let b = obop_storage::open("sqlite::memory:").unwrap();
+        let mut u = Unit::with_cap(&*b, 5000);
+        for i in 0..2000 {
+            let code = format!("C{i}");
+            assert!(ask(&u, &code, "x").is_empty());
+            u.insert("t", &format!("r{i}"), two(&code, Some("x")))
+                .unwrap();
+            assert_eq!(ask(&u, &code, "x"), [format!("r{i}")]);
+        }
+        assert_eq!(ask(&u, "C1999", "x"), ["r1999"]);
+        // Count, not time: 4,001 questions looked at 2,000 candidates (one for each question
+        // that had an answer) and at no other record of the unit. A scan of the unit for each
+        // question would have looked at about 4 million.
+        assert_eq!(u.examined.get(), 2001);
     }
 
     // Rewinding a unit (D70).

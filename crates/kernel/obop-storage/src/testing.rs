@@ -136,6 +136,8 @@ pub struct Flaky {
     seen: std::sync::Mutex<Vec<SeenWrite>>,
     /// See [`Flaky::reads`].
     reads: std::sync::Mutex<Reads>,
+    /// Run once, right before the next atomic batch is applied.
+    before_apply: std::sync::Mutex<Option<AfterInsert>>,
 }
 
 /// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
@@ -191,6 +193,7 @@ impl Flaky {
             insert_error: std::sync::Mutex::new(None),
             seen: std::sync::Mutex::new(Vec::new()),
             reads: std::sync::Mutex::new(Reads::default()),
+            before_apply: std::sync::Mutex::new(None),
         })
     }
 
@@ -262,6 +265,20 @@ impl Flaky {
         self.run_len.store(0, SeqCst);
         self.vanish.store(false, SeqCst);
         self.lose_ack.store(-1, SeqCst);
+    }
+
+    /// Run `then` once, with the wrapped backend, right before the next atomic batch (`apply`,
+    /// `apply_checked`) is applied: another process committing between the check of a command and
+    /// its commit, with no thread and no sleep.
+    pub fn before_the_next_apply(&self, then: AfterInsert) {
+        *self.before_apply.lock().unwrap() = Some(then);
+    }
+
+    fn run_before_apply(&self) {
+        let hook = self.before_apply.lock().unwrap().take();
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
     }
 
     /// Run `then` once, right after the next successful insert into `model`.
@@ -548,10 +565,12 @@ impl Backend for Flaky {
     }
     fn apply(&self, ops: &[Op]) -> Result<()> {
         self.gate_apply()?;
+        self.run_before_apply();
         self.inner.apply(ops)
     }
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
         self.gate_apply().map_err(ApplyError::Storage)?;
+        self.run_before_apply();
         self.inner.apply_checked(ops)
     }
     fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {

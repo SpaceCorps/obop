@@ -1740,3 +1740,5 @@ mod sysfields_tests;
 mod tests;
 #[cfg(test)]
 mod unique_bench;
+#[cfg(test)]
+mod unique_tests;
