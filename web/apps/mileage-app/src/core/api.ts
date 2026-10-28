@@ -102,6 +102,10 @@ export function createTripApi(client: ObopClient, options: TripApiOptions = {}):
     }
   }
 
+  async function getTrip(id: string): Promise<RemoteTrip> {
+    return toRemote(await run<TripValue>("mileage_trip", "get", { id }));
+  }
+
   return {
     async createTrip(row, key) {
       const report = await bulk(
@@ -135,9 +139,7 @@ export function createTripApi(client: ObopClient, options: TripApiOptions = {}):
       return row ? toRemote(row) : null;
     },
 
-    async getTrip(id) {
-      return toRemote(await run<TripValue>("mileage_trip", "get", { id }));
-    },
+    getTrip,
 
     async listTrips(limit) {
       const result = await run<{ rows?: TripValue[] }>("mileage_trip", "search", {
@@ -160,16 +162,22 @@ export function createTripApi(client: ObopClient, options: TripApiOptions = {}):
       await run("mileage_trip", "update", input);
     },
 
+    // An action answers with the fields it changed and the id (handlers.rs of the mileage module),
+    // not with the whole trip, so the trip is read after it. If the read fails, the action is done
+    // and the caller repeats the step: the engine reads the trip first and sees what is left.
     async endTrip(id) {
-      return toRemote(await run<TripValue>("mileage_trip", "end", { id }));
+      await run("mileage_trip", "end", { id });
+      return getTrip(id);
     },
 
     async submitTrip(id) {
-      return toRemote(await run<TripValue>("mileage_trip", "submit", { id }));
+      await run("mileage_trip", "submit", { id });
+      return getTrip(id);
     },
 
     async discardTrip(id) {
-      return toRemote(await run<TripValue>("mileage_trip", "discard", { id }));
+      await run("mileage_trip", "discard", { id });
+      return getTrip(id);
     },
   };
 }

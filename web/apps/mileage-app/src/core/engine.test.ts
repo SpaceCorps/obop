@@ -71,6 +71,19 @@ describe("the local store", () => {
     });
   });
 
+  test("a cached fix from before the start is not part of the trip", async () => {
+    const { store } = await rig();
+    await start(store);
+    const stale = { ...walk(1)[0]!, t: T0 - 6 * 60_000, lat: 52.01 };
+    const justBefore = { ...walk(1)[0]!, t: T0 - 4000, lat: 52.0001 };
+    const fresh = walk(2, 1);
+    expect(await store.appendFixes("c1", [stale, justBefore, ...fresh])).toBe(3);
+    const points = await store.points("c1");
+    expect(points.map((p) => p.seq)).toEqual([1, 2, 3]);
+    expect(points[0]).toMatchObject({ lat: "52.0001000" });
+    expect(points.every((p) => p.lat !== "52.0100000")).toBe(true);
+  });
+
   test("a fix of a phone without accuracy or speed is stored without them", async () => {
     const { store } = await rig();
     await start(store);

@@ -133,33 +133,50 @@ describe("the calls of the outbox", () => {
     expect(sent[0]!.body).toEqual({ order: [{ field: "started_at", dir: "desc" }], limit: 50 });
   });
 
-  test("update, end, submit and discard send the id and the snake_case fields", async () => {
-    const { api, sent } = instance({
-      "/api/mileage_trip/update": TRIP,
-      "/api/mileage_trip/end": TRIP,
-      "/api/mileage_trip/submit": { ...TRIP, state: "in_review" },
-      "/api/mileage_trip/discard": { ...TRIP, state: "discarded" },
-    });
+  test("update sends the id and the snake_case fields", async () => {
+    const { api, sent } = instance({ "/api/mileage_trip/update": { id: "t-1" } });
     await api.updateTrip("t-1", {
       endedAt: "2026-10-15T09:10:00.000Z",
       expectedPoints: 120,
       lastSeq: 120,
     });
     await api.updateTrip("t-1", { discardReason: "Private" });
-    await api.endTrip("t-1");
-    expect((await api.submitTrip("t-1")).state).toBe("in_review");
-    expect((await api.discardTrip("t-1")).state).toBe("discarded");
     expect(sent.map((s) => [s.path.split("/").pop(), s.body])).toEqual([
       [
         "update",
         { id: "t-1", ended_at: "2026-10-15T09:10:00.000Z", expected_points: 120, last_seq: 120 },
       ],
       ["update", { id: "t-1", discard_reason: "Private" }],
-      ["end", { id: "t-1" }],
-      ["submit", { id: "t-1" }],
-      ["discard", { id: "t-1" }],
     ]);
   });
+
+  // The server answers an action with the fields it changed and the id, not with the trip (found
+  // on the first run against a real instance: the answer of `end` has no `client_trip_id`). The
+  // api therefore reads the trip after each action.
+  test.each([
+    ["end", "ended", { id: "t-1", state: "ended", distance_m: "1234.56" }],
+    ["submit", "in_review", { id: "t-1", state: "in_review", submitted_at: "x" }],
+    ["discard", "discarded", { id: "t-1", state: "discarded" }],
+  ] as const)(
+    "%s sends the id, takes the patch the server answers and reads the trip",
+    async (command, state, patch) => {
+      const { api, sent } = instance({
+        [`/api/mileage_trip/${command}`]: patch,
+        "/api/mileage_trip/get": { ...TRIP, state },
+      });
+      const call = {
+        end: (id: string) => api.endTrip(id),
+        submit: (id: string) => api.submitTrip(id),
+        discard: (id: string) => api.discardTrip(id),
+      }[command];
+      const trip = await call("t-1");
+      expect(trip).toMatchObject({ id: "t-1", clientTripId: "c1", state });
+      expect(sent.map((s) => [s.path.split("/").pop(), s.body])).toEqual([
+        [command, { id: "t-1" }],
+        ["get", { id: "t-1" }],
+      ]);
+    },
+  );
 
   test("an error answer reaches the caller as ObopApiError with the code and the wait", async () => {
     const { api } = instance({

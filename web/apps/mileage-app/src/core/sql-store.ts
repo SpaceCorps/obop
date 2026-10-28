@@ -12,7 +12,7 @@ import {
   type RemoteTrip,
   type StoredPoint,
 } from "./types.ts";
-import { plausible, toStored } from "./values.ts";
+import { plausible, STALE_FIX_MS, toStored } from "./values.ts";
 
 /** Bump with a migration step in `migrate` when a table changes. */
 export const SCHEMA_VERSION = 1;
@@ -284,10 +284,15 @@ export function createSqlStore(db: SqlDb): OutboxStore {
         );
         let seq = (last?.seq ?? 0) + 1;
         let lastT = last?.t ?? Number.NEGATIVE_INFINITY;
+        // A cached position from before the trip is not part of it (see STALE_FIX_MS).
+        const startedMs = Date.parse(trip.startedAt ?? "");
+        const notBefore = Number.isFinite(startedMs)
+          ? startedMs - STALE_FIX_MS
+          : Number.NEGATIVE_INFINITY;
         let stored = 0;
         const ordered: NewFix[] = [...fixes].sort((a, b) => a.t - b.t);
         for (const fix of ordered) {
-          if (!plausible(fix) || fix.t <= lastT) continue;
+          if (!plausible(fix) || fix.t <= lastT || fix.t < notBefore) continue;
           if (seq > MAX_POINTS_PER_TRIP) break;
           const p = toStored(seq, fix);
           await tx.run(

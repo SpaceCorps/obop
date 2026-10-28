@@ -36,6 +36,11 @@ const config: ExpoConfig = {
     // The database is encrypted with a key in the Keystore. A cloud backup would carry the file
     // without the key, so Android's backup is off.
     allowBackup: false,
+    // expo-task-manager schedules a persisted job when a location arrives and Android refuses that
+    // without this permission: the first emulator run of the release build crashed with "Requested
+    // job cannot be persisted without holding android.permission.RECEIVE_BOOT_COMPLETED" at the
+    // first fix. No library of the app declares it. It is a normal permission (no prompt).
+    permissions: ["android.permission.RECEIVE_BOOT_COMPLETED"],
     // Permissions that libraries add to the merged manifest and the app never uses: the overlay of
     // the development menu, old external storage access, vibration, and the biometric prompt of
     // secure-store (the app stores its keys without asking for a fingerprint).

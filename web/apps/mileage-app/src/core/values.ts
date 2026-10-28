@@ -46,6 +46,14 @@ export function toStored(seq: number, fix: NewFix): StoredPoint {
   };
 }
 
+/**
+ * A fix may be older than the moment of Start by this much and still belong to the trip (a fix
+ * made just before the tap). An older one is the position the phone had cached from before the
+ * trip; the first run of the app on an emulator stored such a fix as point 1 (900 m and six
+ * minutes away) and the server counted the leg to the first real fix.
+ */
+export const STALE_FIX_MS = 10_000;
+
 /** Whether a fix is a position the phone can trust to be on Earth. */
 export function plausible(fix: NewFix): boolean {
   return (

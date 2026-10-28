@@ -52,7 +52,8 @@ export function waypoints() {
 export function haversine(a, b) {
   const dLat = rad(b.lat - a.lat);
   const dLon = rad(b.lon - a.lon);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
   return 2 * MEAN_R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -82,7 +83,12 @@ export function geodesic(p, q) {
     cosSqAlpha = 1 - sinAlpha * sinAlpha;
     cos2SigmaM = cosSqAlpha === 0 ? 0 : cosSigma - (2 * sU1 * sU2) / cosSqAlpha;
     const C = (F / 16) * cosSqAlpha * (4 + F * (4 - 3 * cosSqAlpha));
-    const next = L + (1 - C) * F * sinAlpha * (sigma + C * sinSigma * (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM ** 2)));
+    const next =
+      L +
+      (1 - C) *
+        F *
+        sinAlpha *
+        (sigma + C * sinSigma * (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM ** 2)));
     if (Math.abs(next - lambda) < 1e-12) {
       lambda = next;
       break;
