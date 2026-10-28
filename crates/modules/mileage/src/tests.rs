@@ -476,6 +476,48 @@ fn a_full_batch_of_a_thousand_points_is_accepted() {
     });
 }
 
+/// The time of a batch of 1,000 points on an instance that already holds other points: a
+/// measurement, not a test. The unique check of the kernel looks every row up by an unindexed
+/// scan of the stored points (docs/ISSUES.md M8), so the time grows with what is stored.
+/// Run: `cargo test -p mileage --lib batch_time -- --ignored --nocapture` (a debug build; add
+/// `--release` for the other figure).
+#[test]
+#[ignore = "a measurement; prints the time of a batch of 1,000 points by the number of stored points"]
+fn batch_time_by_stored_points() {
+    use obop_storage::Op;
+    for url in ["memory:", "sqlite::memory:"] {
+        for stored in [0_usize, 5_000, 20_000] {
+            let r = Rig::open(url, None);
+            let ann = driver("ann");
+            let id = r.recording(&ann);
+            let db = r.store.backend();
+            for chunk in 0..stored.div_ceil(1000) {
+                let ops: Vec<Op> = (0..1000.min(stored - chunk * 1000))
+                    .map(|i| {
+                        let mut f = obop_storage::Fields::new();
+                        f.insert("trip".into(), J::from(format!("filler-{chunk}")));
+                        f.insert("driver".into(), J::from("zoe"));
+                        f.insert("seq".into(), J::from(i as i64 + 1));
+                        Op::Insert {
+                            model: POINT.into(),
+                            id: format!("filler-{chunk}-{i}"),
+                            fields: f,
+                        }
+                    })
+                    .collect();
+                db.apply_checked(&ops).unwrap();
+            }
+            let rows: Vec<J> = (1..=1000).map(|s| walk_row(&id, s)).collect();
+            let t = std::time::Instant::now();
+            r.ok(&ann, "mileage_point.bulk_create", json!({"rows": rows}));
+            eprintln!(
+                "BATCH_TIME {url} stored={stored} 1000 points: {:.2} s",
+                t.elapsed().as_secs_f64()
+            );
+        }
+    }
+}
+
 #[test]
 fn bulk_create_is_limited_to_twelve_calls_a_minute_so_a_long_trip_needs_few_batches() {
     each_rig(|r| {

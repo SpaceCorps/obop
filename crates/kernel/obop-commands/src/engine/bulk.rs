@@ -16,7 +16,9 @@
 //!   rows (a record in `bulk_idempotency`, valid 24 hours), so it exists exactly when the rows
 //!   do. A key used for a different request is refused.
 //! - *Rate limit.* A person may start `OBOP_BULK_PER_MINUTE` calls a minute (default 12, `0`
-//!   for no limit), dry runs included; the counter is shared by all server processes.
+//!   for no limit), dry runs included; the counter is shared by all server processes. Over the
+//!   limit the call is refused with the code `rate_limited` (429, `Retry-After`). A repeat of a
+//!   call that was answered (same key and rows) is looked up first and does not count.
 
 use super::access::{Gate, creator_blocked};
 use super::crud::{check_fields, default_governed, own_default, system_error, to_fields};
