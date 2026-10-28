@@ -286,15 +286,16 @@ pub trait Backend: Send + Sync {
     /// (D75): one page, from `q.after` on. On PostgreSQL the order is `(txid, seq)` and an entry is
     /// shown only once no transaction that began before its own can still commit, so a consumer
     /// that follows the cursor never misses an entry that committed late; memory and SQLite order
-    /// by `seq`. A cursor that cannot be followed (the history was restored, or the database went
-    /// back in time) is refused with an error that starts `cursor_expired:`. A backend that keeps
+    /// by `seq`. A cursor that cannot be followed (the history was restored, the database went
+    /// back in time or was moved to another cluster) is refused with an error that starts `cursor_expired:`. A backend that keeps
     /// no history refuses.
     fn changes(&self, _q: &ChangeQuery) -> Result<ChangePage> {
         Err("this storage backend keeps no change history".into())
     }
     /// Check that the store can keep the change history, and under `Ddl::IfMissing` make what is
-    /// missing of it. Under `Ddl::Never` it creates nothing and answers with an error that says
-    /// what an owner must install. The stores that need no setup say `Ok`.
+    /// missing of it (a start does not; the first write of a model that keeps history does the
+    /// same). Under `Ddl::Never` it creates nothing and answers with an error that says what an
+    /// owner must install. The stores that need no setup say `Ok`.
     fn ensure_history_schema(&self) -> Result<()> {
         Ok(())
     }
@@ -309,8 +310,10 @@ pub trait Backend: Send + Sync {
         Ok(PartitionEnsured::default())
     }
     /// Drop the partition of the month `YYYY-MM` and return how many entries it held. The
-    /// database refuses a month that ended less than `min_age_days` days ago (the shortest
-    /// retention of the models in it): it is the check that outlives a mistake of the caller.
+    /// database refuses a month that ended less than `min_age_days` days ago, which the caller
+    /// sets to the **longest** retention of the models that have entries in the month (the
+    /// database cannot see the models), and it refuses a missing or negative age: it is the check
+    /// that outlives a mistake of the caller.
     fn history_drop_partition(&self, _month: &str, _min_age_days: u32) -> Result<u64> {
         Ok(0)
     }
@@ -524,13 +527,16 @@ pub enum Ddl {
     IfMissing,
     /// Create nothing: a database that lacks the schema is an error that says so. For a
     /// deployment whose serving role may not create tables. It covers the record store
-    /// (`schema::parts`) and the byte store's table (`blob::DbBytes`).
+    /// (`schema::parts`) and the byte store's table (`blob::DbBytes`). The change history of D75
+    /// is not made at start under either mode: under `Never` it is only checked, when a model
+    /// that keeps history is written or `Backend::ensure_history_schema` is asked, and the
+    /// write is refused where it is missing. No shipped process selects `Never` yet.
     Never,
 }
 
 impl Ddl {
     /// What [`open`] uses: `Never` in a production process (see [`production`], which no process
-    /// is yet), else `IfMissing`.
+    /// sets yet, so every shipped process runs `IfMissing`), else `IfMissing`.
     pub fn for_process() -> Ddl {
         if production() {
             Ddl::Never

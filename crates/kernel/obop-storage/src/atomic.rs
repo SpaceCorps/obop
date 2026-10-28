@@ -41,8 +41,9 @@ pub(crate) trait TxView {
     }
     /// The first read of a record of a tracked model in a transaction (D75): the record, locked.
     /// A backend that can learn the clock in the same statement may do so here and answer from it
-    /// in `tx_now`; none does yet (PostgreSQL has this default and the clock of the process until
-    /// its history store is written).
+    /// in `tx_now`: PostgreSQL does (the record and the database's clock in one statement, the
+    /// clock read after the lock is granted); the others have this default and the clock of the
+    /// process.
     fn tx_get_clock(&mut self, model: &str, id: &str) -> Result<Option<Fields>> {
         self.tx_get(model, id)
     }
