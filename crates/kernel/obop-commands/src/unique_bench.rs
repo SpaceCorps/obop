@@ -185,15 +185,16 @@ fn print_pg_stats(db: &obop_storage::testing::TestDb) {
     let mut c = db.connect();
     let rows = c
         .query(
-            "SELECT relname, seq_scan, seq_tup_read, idx_scan, n_tup_ins              FROM pg_stat_user_tables ORDER BY relname",
+            "SELECT relname, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_tup_ins              FROM pg_stat_user_tables ORDER BY relname",
             &[],
         )
         .unwrap();
     for r in rows {
-        let (name, seq, seq_rows, idx, ins): (String, i64, i64, i64, i64) =
-            (r.get(0), r.get(1), r.get(2), r.get(3), r.get(4));
+        let name: String = r.get(0);
+        let n: Vec<i64> = (1..6).map(|i| r.get::<_, i64>(i)).collect();
         println!(
-            "table {name}: seq_scan {seq} (rows read {seq_rows}), idx_scan {idx}, inserts {ins}"
+            "table {name}: seq_scan {} (rows read {}), idx_scan {} (rows fetched {}), inserts {}",
+            n[0], n[1], n[2], n[3], n[4]
         );
     }
 }
