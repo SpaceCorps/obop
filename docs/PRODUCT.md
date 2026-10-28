@@ -470,7 +470,7 @@ The owner's ruling is "AGENTIC FIRST EVERYTHING CLI FOR EVERYTHING" (RATIFIED, O
 
 #### 7.3.2 The command surface at a glance
 
-Examples from [cli.md](spec/cli.md) section 3; every row exists on the CLI, REST and MCP except the bootstrap and local commands above, whose exemption-list entries are proposals until approved (OR-16). Waves are Proposed placements (D86).
+Examples from [cli.md](spec/cli.md) section 3; every row exists on the CLI, REST and MCP except the bootstrap and local commands above (and the owner-database commands of cli 1.1, Proposed, not built), whose exemption-list entries are proposals until approved (OR-16). Waves are Proposed placements (D86).
 
 | Area | Example commands | Wave |
 |---|---|---|
