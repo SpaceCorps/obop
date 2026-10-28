@@ -1,6 +1,7 @@
 import { ObopApiError, createObopClient, revokeToken, type ObopClient } from "@obop/client";
 import { createTripApi, type TripApi } from "../core/api.ts";
 import { createEngine, type Engine } from "../core/engine.ts";
+import { bindOwner, bindingOf, takeOver, type Binding, type Owner } from "../core/identity.ts";
 import { createSession, type Session } from "../core/session.ts";
 import type { OutboxStore } from "../core/store.ts";
 import { createSyncController, type SyncController } from "../core/sync.ts";
@@ -17,9 +18,21 @@ export interface Runtime {
   sync: SyncController;
   /** A typed client of the instance the phone is signed in to, or throws a 401 when it is none. */
   client(): ObopClient;
-  /** Tells the instance to end this sign-in. Best effort: false when it could not be reached. */
+  /** Tells the instance to end this sign-in. Best effort, and bounded: false when it could not be reached in time. */
   revokeSignIn(): Promise<boolean>;
+  /** Whether the trips in the outbox belong to this sign-in. Nothing is uploaded or shown while they do not. */
+  binding(): Binding;
+  /** A sign-in has finished as `owner`: decide about the trips on the phone before anything is uploaded. */
+  bindIdentity(owner: Owner): Promise<Binding>;
+  /** The driver chose to delete the other sign-in's trips and go on. */
+  takeOverOutbox(): Promise<void>;
+  /** The last sign-out could not tell the instance (shown once on the sign-in screen). */
+  signOutUntold(): boolean;
+  setSignOutUntold(untold: boolean): void;
 }
+
+/** How long a sign-out waits for the instance before it removes the tokens anyway. */
+const REVOKE_TIMEOUT_MS = 5000;
 
 const notSignedIn = () =>
   new ObopApiError({ status: 401, code: "not_signed_in", message: "Not signed in" });
@@ -28,6 +41,9 @@ async function build(): Promise<Runtime> {
   const store = await getStore();
   const session = createSession({ storage: secureStorage, oauth: oauthDeps });
   await session.restore();
+  let binding: Binding =
+    session.status() === "signed_in" ? await bindingOf(store, session.config()) : { kind: "own" };
+  let untold = false;
 
   let cached: { baseUrl: string; client: ObopClient } | null = null;
   const client = (): ObopClient => {
@@ -62,7 +78,8 @@ async function build(): Promise<Runtime> {
   const engine = createEngine({ store, api });
   const sync = createSyncController({
     engine,
-    signedIn: () => session.status() === "signed_in",
+    // Nothing is uploaded while the trips on the phone belong to somebody else.
+    signedIn: () => session.status() === "signed_in" && binding.kind === "own",
     onRejected: () => session.rejected(),
   });
   sync.subscribe(emitChange);
@@ -86,11 +103,30 @@ async function build(): Promise<Runtime> {
           baseUrl: config.baseUrl,
           clientId: config.clientId,
           token,
+          timeoutMs: REVOKE_TIMEOUT_MS,
         });
         return true;
       } catch {
         return false;
       }
+    },
+    binding: () => binding,
+    async bindIdentity(owner) {
+      binding = await bindOwner(store, owner);
+      emitChange();
+      return binding;
+    },
+    async takeOverOutbox() {
+      const config = session.config();
+      if (!config || config.user === undefined) return;
+      await takeOver(store, { origin: config.baseUrl, user: config.user });
+      binding = { kind: "own" };
+      emitChange();
+      sync.kick();
+    },
+    signOutUntold: () => untold,
+    setSignOutUntold(value) {
+      untold = value;
     },
   };
 }
