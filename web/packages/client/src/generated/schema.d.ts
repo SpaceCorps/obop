@@ -1471,6 +1471,375 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mileage_point/bulk_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create up to 1000 mileage_point records in one call; all or nothing unless mode is partial */
+        post: operations["mileage_point.bulk_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_point/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a mileage_point */
+        post: operations["mileage_point.create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_point/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete a mileage_point (agents only propose) */
+        post: operations["mileage_point.delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_point/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read one mileage_point */
+        post: operations["mileage_point.get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_point/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List mileage_point records */
+        post: operations["mileage_point.list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_point/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search mileage_point records with filter, order, limit and offset */
+        post: operations["mileage_point.search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_point/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update a mileage_point; a status field only moves along a declared action */
+        post: operations["mileage_point.update"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/bulk_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create up to 1000 mileage_trip records in one call; all or nothing unless mode is partial */
+        post: operations["mileage_trip.bulk_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a trip in review; from now on it counts. A reviewer cannot confirm their own trip
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["mileage_trip.confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a mileage_trip */
+        post: operations["mileage_trip.create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete a mileage_trip (agents only propose) */
+        post: operations["mileage_trip.delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard your own trip that is recording, ended or rejected; write discard_reason first. A discarded trip never counts
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["mileage_trip.discard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/discard_stuck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard a trip that is stuck in recording or ended, as an administrator
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["mileage_trip.discard_stuck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End a recording trip once every point has arrived: the server computes the distance from the accepted points */
+        post: operations["mileage_trip.end"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read one mileage_trip */
+        post: operations["mileage_trip.get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List mileage_trip records */
+        post: operations["mileage_trip.list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a trip in review; write reject_reason first. A reviewer cannot reject their own trip
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["mileage_trip.reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a rejected trip back to ended so that the driver can correct it and submit it again */
+        post: operations["mileage_trip.reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search mileage_trip records with filter, order, limit and offset */
+        post: operations["mileage_trip.search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send an ended trip to review */
+        post: operations["mileage_trip.submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mileage_trip/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update a mileage_trip; a status field only moves along a declared action */
+        post: operations["mileage_trip.update"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/module/get": {
         parameters: {
             query?: never;
@@ -3073,6 +3442,121 @@ export interface components {
             /** @description Must be false or absent: required dependencies cannot be skipped */
             without_dependencies?: boolean;
         };
+        /** @description One recorded position of a trip; written once, never changed */
+        mileage_point: {
+            /**
+             * @description Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @example 12.33
+             */
+            accuracy_m?: string;
+            /** @description Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked) */
+            driver?: string;
+            /**
+             * @description Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @example 12.3333333
+             */
+            lat?: string;
+            /**
+             * @description Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @example 12.3333333
+             */
+            lon?: string;
+            /**
+             * Format: date-time
+             * @description When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            recorded_at?: string;
+            /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
+            seq?: number;
+            /**
+             * @description Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @example 12.33
+             */
+            speed_mps?: string;
+            /** @description The trip the point belongs to (its server id) */
+            trip?: string;
+        };
+        /** @description A trip recorded by a driver: its distance, its state and the review of it */
+        mileage_trip: {
+            /** @description Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique) */
+            client_trip_id?: string;
+            /**
+             * Format: date-time
+             * @description When the trip was confirmed, set by confirm; the month of this instant in the platform zone is the month the trip counts in (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            confirmed_at?: string;
+            /** @description Why the driver discards the trip; written before discard */
+            discard_reason?: string;
+            /**
+             * @description Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client (an exact decimal as a string, never a JSON number: at most 12 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused)
+             * @example 12.33
+             */
+            distance_m?: string;
+            /** @description Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked) */
+            driver?: string;
+            /**
+             * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @example 12.3333333
+             */
+            end_lat?: string;
+            /**
+             * @description Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @example 12.3333333
+             */
+            end_lon?: string;
+            /**
+             * Format: date-time
+             * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            ended_at?: string;
+            /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
+            expected_points?: number;
+            /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+            integrity?: string;
+            /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
+            last_seq?: number;
+            /** @description The highest sequence number among the stored points (computed when read; read-only) */
+            readonly max_seq?: number;
+            /** @description How many points are stored for this trip (computed when read; read-only) */
+            readonly point_count?: number;
+            /**
+             * @description What the trip was for: business, private or commute
+             * @enum {string}
+             */
+            purpose?: "business" | "private" | "commute";
+            /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again */
+            reject_reason?: string;
+            /** @description True while the trip is in review, confirmed or rejected: the states a reviewer reads (computed when read; read-only) */
+            readonly reviewable?: boolean;
+            /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
+            reviewed_by?: string;
+            /**
+             * @description Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @example 12.3333333
+             */
+            start_lat?: string;
+            /**
+             * @description Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @example 12.3333333
+             */
+            start_lon?: string;
+            /**
+             * Format: date-time
+             * @description When the driver pressed Start, by the phone's clock (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            started_at?: string;
+            /**
+             * @description Lifecycle: recording, ended, in_review, confirmed, rejected or discarded; it moves only through the actions (moves only through the model's actions)
+             * @enum {string}
+             */
+            state?: "recording" | "ended" | "in_review" | "confirmed" | "rejected" | "discarded";
+            /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) */
+            vehicle?: string;
+        };
         /** @description An installed module: built in, uploaded or from the marketplace */
         module: {
             /** @description Who publishes it */
@@ -3315,7 +3799,7 @@ export interface components {
             at?: string;
             /** @description A short note without any code or secret */
             detail?: string;
-            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless */
+            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, mileage_route_read, mileage_discard_stuck, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless */
             kind?: string;
             /** @description The account the event is about */
             user?: string;
@@ -10475,6 +10959,2077 @@ export interface operations {
             };
             /** @description Missing, expired or revoked bearer token. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_point.bulk_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits */
+                    csv?: string;
+                    dry_run?: boolean;
+                    idempotency_key?: string;
+                    /** @enum {string} */
+                    mode?: "all_or_nothing" | "partial";
+                    rows?: {
+                        /**
+                         * @description Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @example 12.33
+                         */
+                        accuracy_m?: string;
+                        /** @description Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked) */
+                        driver?: string;
+                        /**
+                         * @description Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @example 12.3333333
+                         */
+                        lat: string;
+                        /**
+                         * @description Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @example 12.3333333
+                         */
+                        lon: string;
+                        /**
+                         * Format: date-time
+                         * @description When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @example 2026-03-29T01:30:00.000000Z
+                         */
+                        recorded_at: string;
+                        /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
+                        seq: number;
+                        /**
+                         * @description Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @example 12.33
+                         */
+                        speed_mps?: string;
+                        /** @description The trip the point belongs to (its server id) */
+                        trip: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description The report of the call. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            created?: number;
+                            dry_run?: boolean;
+                            errors?: {
+                                error?: string;
+                                line?: number;
+                                row?: number;
+                            }[];
+                            failed?: number;
+                            ids?: (string | null)[];
+                            mode?: string;
+                            ok?: boolean;
+                            replayed?: boolean;
+                            total?: number;
+                            /** @description With dry_run: rows that would be created */
+                            valid?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_point.create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.33
+                     */
+                    accuracy_m?: string;
+                    /** @description Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked) */
+                    driver?: string;
+                    /**
+                     * @description Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    lat: string;
+                    /**
+                     * @description Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    lon: string;
+                    /**
+                     * Format: date-time
+                     * @description When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    recorded_at: string;
+                    /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
+                    seq: number;
+                    /**
+                     * @description Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.33
+                     */
+                    speed_mps?: string;
+                    /** @description The trip the point belongs to (its server id) */
+                    trip: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_point"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_point.delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_point.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_point"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_point.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_point"][];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_point.search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Groups with counts and sums over every matching record instead of rows */
+                    aggregate?: {
+                        group_by?: (string | {
+                            /** @enum {string} */
+                            bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                            field: string;
+                            /** @description IANA zone name for a datetime, default the platform zone */
+                            zone?: string;
+                        })[];
+                        measures?: {
+                            field?: string;
+                            /** @enum {string} */
+                            op: "count" | "sum" | "min" | "max" | "avg";
+                            /**
+                             * @description avg only
+                             * @enum {string}
+                             */
+                            round?: "half_even" | "half_up" | "down";
+                            /** @description avg only */
+                            scale?: number;
+                        }[];
+                    };
+                    filter?: {
+                        /**
+                         * @description On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion
+                         * @enum {string}
+                         */
+                        bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                        field: string;
+                        /** @enum {string} */
+                        op: "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
+                        value?: unknown;
+                        /** @description With bucket on a datetime: an IANA zone name, default the platform zone */
+                        zone?: string;
+                    }[];
+                    /** @description BCP-47 tag that picks the text collation */
+                    lang?: string;
+                    limit?: number;
+                    offset?: number;
+                    order?: {
+                        /** @enum {string} */
+                        dir?: "asc" | "desc";
+                        field?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description A page of records and the total. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            groups?: {
+                                count?: number;
+                                key?: Record<string, never>;
+                                measures?: Record<string, never>;
+                            }[];
+                            rows?: components["schemas"]["mileage_point"][];
+                            total?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_point.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.33
+                     */
+                    accuracy_m?: string;
+                    /** @description Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked) */
+                    driver?: string;
+                    id: string;
+                    /**
+                     * @description Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    lat?: string;
+                    /**
+                     * @description Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    lon?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    recorded_at?: string;
+                    /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
+                    seq?: number;
+                    /**
+                     * @description Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.33
+                     */
+                    speed_mps?: string;
+                    /** @description The trip the point belongs to (its server id) */
+                    trip?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_point"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.bulk_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Instead of rows: the text of a CSV file with field names as headers (at most 1 MiB). Number fields take whole numbers, money minor units; a decimal is written with a point and a datetime with an offset or Z; a decimal field that rounds on import takes extra digits */
+                    csv?: string;
+                    dry_run?: boolean;
+                    idempotency_key?: string;
+                    /** @enum {string} */
+                    mode?: "all_or_nothing" | "partial";
+                    rows?: {
+                        /** @description Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique) */
+                        client_trip_id: string;
+                        /**
+                         * Format: date-time
+                         * @description When the trip was confirmed, set by confirm; the month of this instant in the platform zone is the month the trip counts in (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @example 2026-03-29T01:30:00.000000Z
+                         */
+                        confirmed_at?: string;
+                        /** @description Why the driver discards the trip; written before discard */
+                        discard_reason?: string;
+                        /**
+                         * @description Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client (an exact decimal as a string, never a JSON number: at most 12 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused)
+                         * @example 12.33
+                         */
+                        distance_m?: string;
+                        /** @description Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked) */
+                        driver: string;
+                        /**
+                         * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @example 12.3333333
+                         */
+                        end_lat?: string;
+                        /**
+                         * @description Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @example 12.3333333
+                         */
+                        end_lon?: string;
+                        /**
+                         * Format: date-time
+                         * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @example 2026-03-29T01:30:00.000000Z
+                         */
+                        ended_at?: string;
+                        /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
+                        expected_points?: number;
+                        /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                        integrity?: string;
+                        /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
+                        last_seq?: number;
+                        /**
+                         * @description What the trip was for: business, private or commute
+                         * @enum {string}
+                         */
+                        purpose?: "business" | "private" | "commute";
+                        /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again */
+                        reject_reason?: string;
+                        /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
+                        reviewed_by?: string;
+                        /**
+                         * @description Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @example 12.3333333
+                         */
+                        start_lat?: string;
+                        /**
+                         * @description Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @example 12.3333333
+                         */
+                        start_lon?: string;
+                        /**
+                         * Format: date-time
+                         * @description When the driver pressed Start, by the phone's clock (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @example 2026-03-29T01:30:00.000000Z
+                         */
+                        started_at: string;
+                        /**
+                         * @description Lifecycle: recording, ended, in_review, confirmed, rejected or discarded; it moves only through the actions (moves only through the model's actions)
+                         * @enum {string}
+                         */
+                        state?: "recording" | "ended" | "in_review" | "confirmed" | "rejected" | "discarded";
+                        /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) */
+                        vehicle?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description The report of the call. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            created?: number;
+                            dry_run?: boolean;
+                            errors?: {
+                                error?: string;
+                                line?: number;
+                                row?: number;
+                            }[];
+                            failed?: number;
+                            ids?: (string | null)[];
+                            mode?: string;
+                            ok?: boolean;
+                            replayed?: boolean;
+                            total?: number;
+                            /** @description With dry_run: rows that would be created */
+                            valid?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique) */
+                    client_trip_id: string;
+                    /**
+                     * Format: date-time
+                     * @description When the trip was confirmed, set by confirm; the month of this instant in the platform zone is the month the trip counts in (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    confirmed_at?: string;
+                    /** @description Why the driver discards the trip; written before discard */
+                    discard_reason?: string;
+                    /**
+                     * @description Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client (an exact decimal as a string, never a JSON number: at most 12 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused)
+                     * @example 12.33
+                     */
+                    distance_m?: string;
+                    /** @description Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked) */
+                    driver: string;
+                    /**
+                     * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    end_lat?: string;
+                    /**
+                     * @description Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    end_lon?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    ended_at?: string;
+                    /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
+                    expected_points?: number;
+                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                    integrity?: string;
+                    /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
+                    last_seq?: number;
+                    /**
+                     * @description What the trip was for: business, private or commute
+                     * @enum {string}
+                     */
+                    purpose?: "business" | "private" | "commute";
+                    /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again */
+                    reject_reason?: string;
+                    /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
+                    reviewed_by?: string;
+                    /**
+                     * @description Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    start_lat?: string;
+                    /**
+                     * @description Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    start_lon?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the driver pressed Start, by the phone's clock (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    started_at: string;
+                    /**
+                     * @description Lifecycle: recording, ended, in_review, confirmed, rejected or discarded; it moves only through the actions (moves only through the model's actions)
+                     * @enum {string}
+                     */
+                    state?: "recording" | "ended" | "in_review" | "confirmed" | "rejected" | "discarded";
+                    /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) */
+                    vehicle?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.discard_stuck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"][];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Groups with counts and sums over every matching record instead of rows */
+                    aggregate?: {
+                        group_by?: (string | {
+                            /** @enum {string} */
+                            bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                            field: string;
+                            /** @description IANA zone name for a datetime, default the platform zone */
+                            zone?: string;
+                        })[];
+                        measures?: {
+                            field?: string;
+                            /** @enum {string} */
+                            op: "count" | "sum" | "min" | "max" | "avg";
+                            /**
+                             * @description avg only
+                             * @enum {string}
+                             */
+                            round?: "half_even" | "half_up" | "down";
+                            /** @description avg only */
+                            scale?: number;
+                        }[];
+                    };
+                    filter?: {
+                        /**
+                         * @description On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion
+                         * @enum {string}
+                         */
+                        bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                        field: string;
+                        /** @enum {string} */
+                        op: "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
+                        value?: unknown;
+                        /** @description With bucket on a datetime: an IANA zone name, default the platform zone */
+                        zone?: string;
+                    }[];
+                    /** @description BCP-47 tag that picks the text collation */
+                    lang?: string;
+                    limit?: number;
+                    offset?: number;
+                    order?: {
+                        /** @enum {string} */
+                        dir?: "asc" | "desc";
+                        field?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description A page of records and the total. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            groups?: {
+                                count?: number;
+                                key?: Record<string, never>;
+                                measures?: Record<string, never>;
+                            }[];
+                            rows?: components["schemas"]["mileage_trip"][];
+                            total?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "mileage_trip.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique) */
+                    client_trip_id?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the trip was confirmed, set by confirm; the month of this instant in the platform zone is the month the trip counts in (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    confirmed_at?: string;
+                    /** @description Why the driver discards the trip; written before discard */
+                    discard_reason?: string;
+                    /**
+                     * @description Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client (an exact decimal as a string, never a JSON number: at most 12 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused)
+                     * @example 12.33
+                     */
+                    distance_m?: string;
+                    /** @description Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked) */
+                    driver?: string;
+                    /**
+                     * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    end_lat?: string;
+                    /**
+                     * @description Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    end_lon?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    ended_at?: string;
+                    /** @description How many points the device sent for this trip; the driver sets it before ending the trip */
+                    expected_points?: number;
+                    id: string;
+                    /** @description Flags the validator set when the trip ended: seq_gap, speed_jump and low_accuracy with their counts; empty when the track was clean */
+                    integrity?: string;
+                    /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
+                    last_seq?: number;
+                    /**
+                     * @description What the trip was for: business, private or commute
+                     * @enum {string}
+                     */
+                    purpose?: "business" | "private" | "commute";
+                    /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again */
+                    reject_reason?: string;
+                    /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
+                    reviewed_by?: string;
+                    /**
+                     * @description Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    start_lat?: string;
+                    /**
+                     * @description Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @example 12.3333333
+                     */
+                    start_lon?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the driver pressed Start, by the phone's clock (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    started_at?: string;
+                    /**
+                     * @description Lifecycle: recording, ended, in_review, confirmed, rejected or discarded; it moves only through the actions (moves only through the model's actions)
+                     * @enum {string}
+                     */
+                    state?: "recording" | "ended" | "in_review" | "confirmed" | "rejected" | "discarded";
+                    /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) */
+                    vehicle?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["mileage_trip"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

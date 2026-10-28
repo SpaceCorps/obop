@@ -30,6 +30,8 @@ mod kinds_tests;
 #[cfg(test)]
 mod mcp_tests;
 #[cfg(test)]
+mod mileage_tests;
+#[cfg(test)]
 mod mfa_tests;
 mod migrate_cli;
 #[cfg(test)]
