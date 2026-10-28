@@ -422,6 +422,9 @@ export function DevicesSection({
 }) {
   const id = useId();
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [absent, setAbsent] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const load = useCallback(async () => {
@@ -429,12 +432,42 @@ export function DevicesSection({
       order: [{ field: "registered_at", dir: "desc" }],
       limit: 200,
     });
-    // An instance without a sign-in server (--dev-auth) has no devices and no such model.
-    setRows("error" in r ? null : r.rows);
+    if ("error" in r) {
+      // An instance without a sign-in server (--dev-auth) has no such model: nothing to show. Any
+      // other refusal is shown as one, with the rows that were read before kept (a refused read is
+      // not "no devices", D74).
+      if (r.status === 404 || r.status === 501) setAbsent(true);
+      else if (r.status === 503 || r.status === 0)
+        setProblem(
+          t("The devices could not be loaded because the server is busy. Try again in a moment."),
+        );
+      else if (r.status === 403) setProblem(t("You are not allowed to see devices."));
+      else setProblem(t("The devices could not be loaded. Try again."));
+      return;
+    }
+    setProblem(null);
+    setRows(r.rows);
+    setTotal(r.total);
   }, [token]);
   useEffect(() => void load(), [load]);
-  if (rows === null) return null;
-  const showUser = isAdmin || new Set(rows.map((r) => String(r.user))).size > 1;
+  if (absent || (rows === null && problem === null)) return null;
+  const shown = rows ?? [];
+  // Who the rows belong to: shown to administrators and whenever a row is somebody else's (a
+  // device administrator who is not the instance administrator sees other people's devices).
+  let me = "";
+  try {
+    me = (sessionStorage.getItem("obop-user") ?? "").trim().toLowerCase();
+  } catch {
+    /* storage unavailable */
+  }
+  const isMine = (r: Row) => me === "" || String(r.user).toLowerCase() === me;
+  const showUser = isAdmin || shown.some((r) => !isMine(r));
+  // A failure of an action says why: a busy server finished part of it and finishes the rest when
+  // asked again (D74).
+  const refused = (what: string, status: number) =>
+    status === 503
+      ? t("The server is busy. Ask again in a moment; it finishes where it stopped.")
+      : what;
   const text = (r: Row, k: string) => (typeof r[k] === "string" ? (r[k] as string) : "");
   return (
     <section className="stack" aria-labelledby={`${id}-h`}>
@@ -446,9 +479,17 @@ export function DevicesSection({
           "Phones and tablets that a mobile app is signed in on. Revoking one signs the app out at once, and it has to sign in again. Changing your password or turning off a second factor signs all of them out.",
         )}
       </p>
-      {rows.length === 0 ? (
+      {problem !== null && (
+        <Notice tone="warning" title={t("Devices")}>
+          {problem}{" "}
+          <Button size="sm" onClick={() => void load()}>
+            {t("Try again")}
+          </Button>
+        </Notice>
+      )}
+      {rows !== null && rows.length === 0 && problem === null ? (
         <p className="hint">{t("No device is signed in.")}</p>
-      ) : (
+      ) : rows === null ? null : (
         <Table caption={t("Devices")} dense>
           <thead>
             <tr>
@@ -467,6 +508,10 @@ export function DevicesSection({
           <tbody>
             {rows.map((d) => {
               const active = d.state === "active";
+              // The sign-in of a device can end by its date without anybody revoking it: the record
+              // stays until it is cleaned up a week later, and says so here.
+              const ends = text(d, "expires_at");
+              const expired = active && ends !== "" && Date.parse(ends) < Date.now();
               const editing = renaming?.id === d.id ? renaming : null;
               return (
                 <tr key={d.id}>
@@ -486,7 +531,14 @@ export function DevicesSection({
                             setRenaming(null);
                             notify(t("Device renamed."));
                             void load();
-                          } else notify(t("Could not rename the device."), "error");
+                          } else
+                            notify(
+                              refused(
+                                t("Could not rename the device."),
+                                r.kind === "error" ? r.status : 0,
+                              ),
+                              "error",
+                            );
                         }}
                       >
                         <Input
@@ -526,20 +578,24 @@ export function DevicesSection({
                         : ""}
                   </td>
                   <td>
-                    <Badge tone={active ? "success" : "neutral"}>
-                      {active ? t("Signed in") : t("Revoked")}
+                    <Badge tone={active && !expired ? "success" : "neutral"}>
+                      {!active ? t("Revoked") : expired ? t("Expired") : t("Signed in")}
                     </Badge>
                   </td>
                   <td>
                     {active && !editing && (
                       <div className="actionrow">
-                        <Button
-                          size="sm"
-                          aria-label={t("Rename {name}", { name: text(d, "name") })}
-                          onClick={() => setRenaming({ id: d.id, name: text(d, "name") })}
-                        >
-                          {t("Rename")}
-                        </Button>
+                        {/* A name is the owner's: an administrator reads and ends every device and
+                            renames their own (the server refuses the rest). */}
+                        {isMine(d) && (
+                          <Button
+                            size="sm"
+                            aria-label={t("Rename {name}", { name: text(d, "name") })}
+                            onClick={() => setRenaming({ id: d.id, name: text(d, "name") })}
+                          >
+                            {t("Rename")}
+                          </Button>
+                        )}
                         <Button
                           variant="danger"
                           size="sm"
@@ -552,7 +608,18 @@ export function DevicesSection({
                             if (r.kind === "ok") {
                               notify(t("{name} is signed out.", { name: text(d, "name") }));
                               void load();
-                            } else notify(t("Could not revoke the device."), "error");
+                            } else {
+                              notify(
+                                refused(
+                                  t("Could not revoke the device."),
+                                  r.kind === "error" ? r.status : 0,
+                                ),
+                                "error",
+                              );
+                              // The first call may have ended the sign-in before the store refused
+                              // the rest: show what is true now.
+                              void load();
+                            }
                           }}
                         >
                           {t("Revoke")}
@@ -565,6 +632,14 @@ export function DevicesSection({
             })}
           </tbody>
         </Table>
+      )}
+      {rows !== null && total > rows.length && (
+        <p className="hint">
+          {t("Showing the newest {count} of {total} devices.", {
+            count: rows.length,
+            total,
+          })}
+        </p>
       )}
     </section>
   );
