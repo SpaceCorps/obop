@@ -11,6 +11,7 @@ mod backup_cli;
 mod backup_gate_tests;
 #[cfg(test)]
 mod blobs_tests;
+mod build_commit;
 #[cfg(test)]
 mod bulk_tests;
 #[cfg(test)]
@@ -60,7 +61,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 const USAGE: &str = "usage: obop <command>
-  --version
+  --version                                     the name, the core version and the commit the build was made from: obop 0.2.0 (abcdef012345)
   modules labels TARGET LANG                    a label template (every translatable text, English values) for a module, bundled package or FILE
   modules check [--complete] [--catalog] [FILE...]
                                                 the install gate over linked modules, or over package files (no database):
@@ -333,7 +334,15 @@ fn main() -> ExitCode {
     };
     let result = match args.as_slice() {
         [] | ["--version"] => {
-            println!("{} {}", obop_types::NAME, obop_types::CORE_VERSION);
+            // The commit is set by build.rs (the environment, else git, else "unknown").
+            println!(
+                "{}",
+                build_commit::version_line(
+                    obop_types::NAME,
+                    obop_types::CORE_VERSION,
+                    env!("OBOP_BUILD_COMMIT")
+                )
+            );
             Ok(())
         }
         ["modules", "check"] => modules_check(),

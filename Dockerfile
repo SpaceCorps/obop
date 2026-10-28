@@ -21,6 +21,11 @@ RUN cargo chef cook --release --locked --recipe-path recipe.json -p obop
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY crates ./crates
 COPY packages ./packages
+# The commit `obop --version` reports (crates/obop/build.rs). The image has no .git, so the build
+# says it: `docker build --build-arg OBOP_BUILD_COMMIT=$(git rev-parse HEAD) .`. It is declared here,
+# after the dependencies are cooked, so a new commit rebuilds the workspace and not them. Without
+# it the version line ends in (unknown).
+ARG OBOP_BUILD_COMMIT=
 RUN cargo build --release --locked -p obop
 
 FROM node:24-slim AS web
