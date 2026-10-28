@@ -291,7 +291,8 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 .collect();
             schemas.insert(name.clone(), rec.clone());
             let op = |id: &str, summary: &str, body: Option<J>, resp: J| {
-                let mut o = json!({"operationId": format!("{name}.{id}"), "summary": summary, "tags": [m.name.clone()], "security": sec.clone(), "responses": {"200": resp, "202": ok(json!({"$ref": "#/components/schemas/ApprovalRequired"}), "Proposed; needs a human to approve."), "400": error_responses()["400"].clone(), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone(), "503": error_responses()["503"].clone()}});
+                // The 503 is not listed here: `declare_503` adds it to every operation once.
+                let mut o = json!({"operationId": format!("{name}.{id}"), "summary": summary, "tags": [m.name.clone()], "security": sec.clone(), "responses": {"200": resp, "202": ok(json!({"$ref": "#/components/schemas/ApprovalRequired"}), "Proposed; needs a human to approve."), "400": error_responses()["400"].clone(), "401": error_responses()["401"].clone(), "404": error_responses()["404"].clone()}});
                 if let Some(b) = body {
                     o["requestBody"] = b;
                 }
@@ -341,8 +342,17 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 );
             }
             if model.can_bulk_create {
-                // A decimal that rounds on import takes any number of fractional digits here.
+                // An image or file field is not accepted by bulk_create (a blob is uploaded and
+                // claimed by the caller one record at a time, D60, D70), so a row does not offer it.
                 let mut row_props = input_props.clone();
+                for f in model
+                    .fields
+                    .iter()
+                    .filter(|f| matches!(f.kind, "image" | "file"))
+                {
+                    row_props.remove(f.name);
+                }
+                // A decimal that rounds on import takes any number of fractional digits here.
                 for f in model
                     .fields
                     .iter()
@@ -352,9 +362,13 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                         p["pattern"] = json!(f.decimal_import_pattern());
                     }
                 }
+                let row_required: Vec<&String> = required
+                    .iter()
+                    .filter(|r| row_props.contains_key(r.as_str()))
+                    .collect();
                 let mut row = json!({"type": "object", "properties": row_props});
-                if !required.is_empty() {
-                    row["required"] = json!(required);
+                if !row_required.is_empty() {
+                    row["required"] = json!(row_required);
                 }
                 paths.insert(
                     format!("/api/{name}/bulk_create"),
@@ -436,9 +450,30 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
     })
 }
 
+/// What an instance that runs the OAuth authorization server (D64) adds to the `x-mcp` block of its
+/// document. `GET /api/openapi.json` and `obop openapi` both go through here, so the exported
+/// document is the one a running instance serves.
+pub fn describe_oauth(doc: &mut J, base: &str) {
+    doc["x-mcp"]["authorization"] = J::from("oauth2 or bearer");
+    doc["x-mcp"]["authorizationServerMetadata"] =
+        J::from(format!("{base}/.well-known/oauth-authorization-server"));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn describe_oauth_names_the_authorization_server_under_the_base_url() {
+        let mut d = instance("https://x.test", &[]);
+        assert_eq!(d["x-mcp"]["authorization"], "bearer");
+        describe_oauth(&mut d, "https://x.test");
+        assert_eq!(d["x-mcp"]["authorization"], "oauth2 or bearer");
+        assert_eq!(
+            d["x-mcp"]["authorizationServerMetadata"],
+            "https://x.test/.well-known/oauth-authorization-server"
+        );
+    }
 
     #[test]
     fn the_control_plane_document_is_valid_looking_openapi() {

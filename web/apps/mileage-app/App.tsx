@@ -1,6 +1,11 @@
+import { createObopClient } from "@obop/client";
 import { distanceMeters } from "@obop/trip-core";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
+
+// The typed client of the instance (generated from its OpenAPI document). Nothing calls it yet: the
+// next steps sign in and upload with it. It is imported here so that Metro bundles the package.
+export const makeClient = createObopClient;
 
 // Synthetic reference pair; the spike only proves that the shared package is bundled.
 const FROM = { lat: 50.0, lon: 10.0 };

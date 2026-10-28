@@ -166,7 +166,7 @@ docs/  examples/  rfcs/   # specs and research; compiled examples; RFCs
 
 ```sh
 vp install --frozen-lockfile     # the only install in CI
-vp run gen                       # cargo -> openapi.json -> TypeScript types; diff-gated
+vp run gen                       # cargo -> openapi.json -> TypeScript types; diff-gated (Proposed as one task; today two steps for web/packages/client: `obop openapi --out web/packages/client/openapi.json`, then `vp run generate:types` there, each checked in CI, spec/mobile.md 8.4)
 vp check                         # format, lint and type-check in one pass
 vp test                          # Vitest 5: unit tests and Browser Mode
 vp build                         # production bundle, embedded into the Rust binary
