@@ -5,8 +5,11 @@
 //
 //   vp run emulator:drive -- [--adb PATH] [--serial emulator-5554] [--every-ms 6000]
 //
-// (From web/apps/mileage-app. The task runs this file with Node, as `android:build` runs Gradle:
-// the mobile-toolchain exception of OR-34, started through `vp run`.)
+// (From web/apps/mileage-app. This is a test script, started through `vp run` like
+// scripts/check-sdk.mjs and run by Node; it imports only Node's own modules and its sibling route.mjs, and it is not part of the app, its
+// build, any image or the shipped toolchain. The mobile-toolchain exception of OR-34 (b) names only
+// Metro, the Expo CLI, Gradle and Xcode and does not cover it, and none is claimed: the script is
+// a `vp run` task.)
 //
 // The schedule (waypoint index, 0 to 40): the screen goes off at 8 and on at 34; airplane mode goes
 // on at 16 and off at 26, and on again at 36, where it stays: stop the trip while offline, then

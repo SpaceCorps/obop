@@ -7,8 +7,11 @@
 //   vp run emulator:check -- --server http://127.0.0.1:18080 --user rita \
 //        [--driver dave] [--trip ID] [--reference-m 3989.44] [--tolerance 0.01]
 //
-// (From web/apps/mileage-app, with OBOP_CHECK_PASSWORD set in the environment. The task runs this
-// file with Node, as `android:build` runs Gradle: the mobile-toolchain exception of OR-34.)
+// (From web/apps/mileage-app, with OBOP_CHECK_PASSWORD set in the environment. This is a test
+// script, started through `vp run` like scripts/check-sdk.mjs and run by Node; it imports only Node's own modules and its sibling route.mjs,
+// and it is not part of the app, its build, any image or the shipped toolchain. The mobile-toolchain
+// exception of OR-34 (b) names only Metro, the Expo CLI, Gradle and Xcode and does not cover it,
+// and none is claimed: the script is a `vp run` task.)
 //
 // The password is read from the environment variable OBOP_CHECK_PASSWORD (never from an argument,
 // so that it does not land in a shell history). The exit status is 0 when everything holds and 1

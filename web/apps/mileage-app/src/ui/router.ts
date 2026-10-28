@@ -2,7 +2,8 @@ import type { SessionStatus } from "../core/session.ts";
 import type { Purpose } from "../core/types.ts";
 
 /**
- * The screens, as data. The app has six, so the state is a small stack in `App.tsx` and not a
+ * The screens of the stack, as data. The app has six routes (and two gates before them, Sign-in
+ * and the trips of another sign-in, see `gate`), so the state is a small stack in `App.tsx` and not a
  * navigation library (docs/spec/mobile.md 8.7): fewer native modules, fewer versions to pin.
  */
 export type Route =
