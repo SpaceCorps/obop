@@ -177,7 +177,7 @@ struct TlsPg {
 impl Drop for TlsPg {
     fn drop(&mut self) {
         let _ = Command::new("docker")
-            .args(["rm", "-f", &self.name])
+            .args(["rm", "-f", "-v", &self.name])
             .output();
     }
 }
@@ -203,7 +203,7 @@ impl TlsPg {
             std::process::id(),
             N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         );
-        let _ = docker(&["rm", "-f", &name]);
+        let _ = docker(&["rm", "-f", "-v", &name]);
         let started = docker(&[
             "run",
             "-d",
