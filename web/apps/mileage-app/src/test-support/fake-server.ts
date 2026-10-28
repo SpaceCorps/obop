@@ -136,7 +136,8 @@ export class FakeServer implements TripApi {
 
   private need(id: string): Stored {
     const t = this.trips.get(id);
-    if (!t) throw apiError(404, { code: "not_found", message: "No such trip" });
+    // The module answers a trip it does not hold (or may not show) with a plain 400 and no code.
+    if (!t) throw apiError(400, { message: `no mileage_trip ${id}` });
     return t;
   }
 

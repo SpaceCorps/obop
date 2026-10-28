@@ -16,7 +16,7 @@ export type Failure =
   | { kind: "signed_out" }
   /** 409 `incomplete`: points are still missing on the server; repeat `end` with backoff. */
   | { kind: "incomplete"; waitMs: number | null; message: string }
-  /** Any other 4xx: repeating changes nothing. */
+  /** Any other 4xx: repeating changes nothing. A trip the server does not hold has the code `gone`. */
   | { kind: "refused"; status: number; code: string; message: string };
 
 export function classify(error: unknown): Failure {
@@ -108,6 +108,10 @@ const INCOMPLETE_NOTICE = 5;
 
 const serverWords = (state: string): string => state.replace("_", " ");
 
+/** The server has no such trip for this person (a restored backup, a hidden trip): a 404, or the plain 400 of the module. */
+const isGone = (f: Extract<Failure, { kind: "refused" }>): boolean =>
+  f.status === 404 || /\bno mileage_trip\b/i.test(f.message);
+
 export function createEngine({
   store,
   api,
@@ -116,6 +120,7 @@ export function createEngine({
   let running: Promise<DrainReport> | null = null;
   let again = false;
   let failures = 0;
+  let swept = false;
 
   const wait = (): number =>
     Math.min(backoff.baseMs * 2 ** Math.max(0, failures - 1), backoff.maxMs);
@@ -126,7 +131,11 @@ export function createEngine({
       return await fn();
     } catch (error) {
       const failure = classify(error);
-      if (failure.kind === "refused") throw new Refused(step, failure);
+      if (failure.kind === "refused") {
+        // A missing trip is told apart from other refusals so that the driver can be offered a local discard.
+        const gone = step !== "create" && isGone(failure);
+        throw new Refused(step, gone ? { ...failure, code: "gone" } : failure);
+      }
       if (failure.kind === "incomplete") throw new Incomplete(failure.message, failure.waitMs);
       throw new Halt(failure);
     }
@@ -171,21 +180,50 @@ export function createEngine({
     return id;
   }
 
-  /** Sends every batch that waits. A refusal of a batch is read against what the server holds. */
-  async function uploadPoints(t: LocalTrip, id: string): Promise<void> {
+  /** The server discarded the trip, or has no such trip: nothing more can be sent, finish it here. */
+  async function finishLocally(t: LocalTrip): Promise<void> {
+    await store.patchTrip(t.clientTripId, {
+      endDone: true,
+      discardDone: true,
+      serverState: "discarded",
+      attempts: 0,
+      problem: null,
+      purgePoints: true,
+    });
+  }
+
+  /**
+   * Sends every batch that waits. A refusal of a batch is read against what the server holds.
+   * Answers `true` when the trip was finished on the phone because the server discarded it.
+   */
+  async function uploadPoints(t: LocalTrip, id: string): Promise<boolean> {
     for (;;) {
       const batch = await store.nextBatch(t.clientTripId, MAX_BATCH_POINTS);
-      if (!batch) return;
+      if (!batch) return false;
       const rows = (await store.batchPoints(batch)).map((p) => pointRow(id, p));
       try {
         await call("points", () =>
           api.createPoints(rows, pointsKey(t.clientTripId, batch.firstSeq, batch.lastSeq)),
         );
       } catch (error) {
-        if (!(error instanceof Refused)) throw error;
+        if (!(error instanceof Refused) || error.failure.code === "gone") throw error;
         // Refused for good, or the 24 hour memory of the key is gone and the unique constraint of
         // (trip, seq) refused the repeat: if the server holds these points, they are stored.
         const server = await call("points", () => api.getTrip(id));
+        if (server.state === "discarded") {
+          if (t.stopRequested) {
+            await finishLocally(t);
+            return true;
+          }
+          // The driver is still recording: say so (the problem is shown on the Recording screen);
+          // Stop and Discard finish the trip here.
+          throw new Refused("points", {
+            kind: "refused",
+            status: 400,
+            code: "discarded",
+            message: "The server discarded this trip.",
+          });
+        }
         const stored =
           server.pointCount !== null &&
           server.maxSeq !== null &&
@@ -206,7 +244,17 @@ export function createEngine({
       return;
     }
     const id = await serverId(t);
-    const server = await call("discard", () => api.getTrip(id));
+    let server: RemoteTrip;
+    try {
+      server = await call("discard", () => api.getTrip(id));
+    } catch (error) {
+      if (error instanceof Refused && error.failure.code === "gone") {
+        // The server has no such trip: the discard is done as far as it can be.
+        await finishLocally(t);
+        return;
+      }
+      throw error;
+    }
     if (server.state !== "discarded") {
       if (server.state !== "recording" && server.state !== "ended" && server.state !== "rejected") {
         throw conflict("discard", "discarded", server.state);
@@ -214,8 +262,11 @@ export function createEngine({
       await call("discard", () => api.updateTrip(id, { discardReason: t.discardReason ?? "" }));
       await call("discard", () => api.discardTrip(id));
     }
-    await store.purgePoints(t.clientTripId);
-    await store.patchTrip(t.clientTripId, { discardDone: true, serverState: "discarded" });
+    await store.patchTrip(t.clientTripId, {
+      discardDone: true,
+      serverState: "discarded",
+      purgePoints: true,
+    });
   }
 
   async function end(t: LocalTrip, id: string): Promise<void> {
@@ -226,9 +277,9 @@ export function createEngine({
         endDone: true,
         attempts: 0,
         problem: null,
+        purgePoints: true,
         ...fromServer(server),
       });
-      await store.purgePoints(t.clientTripId);
       return;
     }
     await call("end", () =>
@@ -244,6 +295,9 @@ export function createEngine({
     } catch (error) {
       if (error instanceof Incomplete) {
         const attempts = t.attempts + 1;
+        // The wait doubles with every answer (4 s, 8 s, 16 s ...) up to the cap, unless the server named one.
+        const delay =
+          error.waitMs ?? Math.min(backoff.baseMs * 2 ** Math.min(attempts + 1, 20), backoff.maxMs);
         await store.patchTrip(t.clientTripId, {
           attempts,
           // From the fifth answer the driver is told; the outbox keeps trying.
@@ -251,17 +305,19 @@ export function createEngine({
             ? { problem: { step: "end", code: "incomplete", message: error.message } as Problem }
             : {}),
         });
+        throw new Incomplete(error.message, delay);
       }
       throw error;
     }
+    // The server has the route and the distance; the phone does not keep the route. One
+    // transaction: a kill between the two would leave the route on the phone for good.
     await store.patchTrip(t.clientTripId, {
       endDone: true,
       attempts: 0,
       problem: null,
+      purgePoints: true,
       ...fromServer(ended),
     });
-    // The server has the route and the distance; the phone does not keep the route.
-    await store.purgePoints(t.clientTripId);
   }
 
   async function submit(t: LocalTrip, id: string): Promise<void> {
@@ -283,7 +339,7 @@ export function createEngine({
       return;
     }
     const id = await serverId(t);
-    await uploadPoints(t, id);
+    if (await uploadPoints(t, id)) return;
     if (!t.stopRequested) return;
     if (!t.endDone) await end(t, id);
     if (t.submitRequested && !t.submitDone) await submit(t, id);
@@ -295,9 +351,22 @@ export function createEngine({
     const soonest = (ms: number | null) => {
       if (ms !== null) retryIn = retryIn === null ? ms : Math.min(retryIn, ms);
     };
-    const trips = (await store.listTrips())
-      .filter(hasWork)
-      .sort((a, b) => a.createdMs - b.createdMs);
+    const all = await store.listTrips();
+    if (!swept) {
+      // A kill between "the server has it" and "remove the route" (older builds did these in two
+      // steps) leaves points behind that nothing else would remove.
+      swept = true;
+      for (const t of all) {
+        if (
+          t.origin === "device" &&
+          (t.endDone || t.discardDone) &&
+          (await store.pointCount(t.clientTripId)) > 0
+        ) {
+          await store.purgePoints(t.clientTripId);
+        }
+      }
+    }
+    const trips = all.filter(hasWork).sort((a, b) => a.createdMs - b.createdMs);
     if (trips.length === 0) return { state: "idle", pending: 0, problems: 0, retryInMs: null };
     for (const listed of trips) {
       try {
@@ -306,7 +375,7 @@ export function createEngine({
         if (hasWork(t)) await syncTrip(t);
       } catch (error) {
         if (error instanceof Incomplete) {
-          soonest(error.waitMs ?? backoff.baseMs * 2 ** 2);
+          soonest(error.waitMs);
           continue;
         }
         if (error instanceof Refused) {

@@ -34,6 +34,8 @@ export interface TripPatch {
   rejectReason?: string | null;
   attempts?: number;
   problem?: Problem | null;
+  /** Remove the stored points and batches of the trip in the same transaction as the other changes. */
+  purgePoints?: boolean;
 }
 
 /**
@@ -104,4 +106,14 @@ export function hasWork(t: LocalTrip): boolean {
   if (t.origin === "server") return t.submitRequested && !t.submitDone;
   if (!t.stopRequested) return true; // points are uploaded while recording
   return !t.endDone || (t.submitRequested && !t.submitDone);
+}
+
+/**
+ * Whether something about this trip exists only on this phone: points not yet taken over by the
+ * server, a step still to send, or a refusal that stopped it. This is what a sign-out would delete,
+ * so it is deliberately wider than `hasWork` (a trip stopped by a refusal still holds its route).
+ */
+export function holdsUnsent(t: LocalTrip, storedPoints: number): boolean {
+  if (t.origin !== "device") return false;
+  return storedPoints > 0 || hasWork(t) || t.problem !== null;
 }

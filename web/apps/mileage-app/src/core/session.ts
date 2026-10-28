@@ -4,6 +4,27 @@ import { OAuthError, refreshTokens, type OAuthDeps, type TokenSet } from "@obop/
 export interface ServerConfig {
   baseUrl: string;
   clientId: string;
+  /** The person this phone is signed in as (the owner of its device record), once known. */
+  user?: string;
+  /** When a sign-in last finished with this client (ms). The instance forgets a client that no sign-in used. */
+  usedAt?: number;
+}
+
+/** The instance forgets a registered client that nothing has used for a day, and a used one after about 180 idle days. */
+export const CLIENT_FRESH_MS = 30 * 24 * 3600 * 1000;
+
+/**
+ * Whether the app has to register with the instance before it opens the sign-in page: it has no
+ * client for this address, the client was never used by a finished sign-in (the instance forgets
+ * those after 24 hours), or the last use is old enough that the instance may have forgotten it.
+ */
+export function needsRegistration(
+  config: ServerConfig | null,
+  baseUrl: string,
+  nowMs: number,
+): boolean {
+  if (config === null || config.baseUrl !== baseUrl) return true;
+  return config.usedAt === undefined || nowMs - config.usedAt > CLIENT_FRESH_MS;
 }
 
 /** Where the session is kept. On the phone: the Android Keystore through expo-secure-store. */
@@ -88,10 +109,21 @@ export function createSession({
         refreshToken: tokens.refreshToken,
         now: now(),
       });
-      // The refresh token is spent: the answer is stored before anything else is done with it.
-      await storage.saveTokens(next);
+      // The refresh token is spent: the new pair is kept in memory first, so that a failed write
+      // never leaves the spent one in use (the instance ends the whole sign-in when a refresh
+      // token is presented twice), and then written, twice if need be.
       tokens = next;
       change("signed_in");
+      try {
+        await storage.saveTokens(next);
+      } catch {
+        try {
+          await storage.saveTokens(next);
+        } catch {
+          // The Keystore still holds the spent pair: the next start of the app will find the
+          // sign-in ended and ask for a new one. Nothing else can be done here.
+        }
+      }
       return next.accessToken;
     } catch (error) {
       if (error instanceof OAuthError && ENDED.includes(error.code)) {

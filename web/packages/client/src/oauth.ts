@@ -16,7 +16,16 @@ export interface OAuthDeps {
   randomBytes: (count: number) => Promise<Uint8Array>;
   /** The `fetch` to use; the global one when absent. */
   fetch?: typeof fetch;
+  /**
+   * Milliseconds after which a call to the instance is given up (`network_error`). React Native's
+   * network stack has no timeout of its own, so without this a half-open connection stalls for
+   * minutes. 30 seconds when absent. A refresh that times out may have been answered: see the
+   * single-use rule in the notes of `refreshTokens`.
+   */
+  timeoutMs?: number;
 }
+
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** A refusal by the authorization server, or an answer that is not what it sends. */
 export class OAuthError extends Error {
@@ -104,13 +113,29 @@ async function post(
   deps: OAuthDeps,
   url: string,
   init: { headers: Record<string, string>; body: string },
+  timeoutMs: number = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
 ): Promise<Record<string, unknown>> {
   let response: Response;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  // The signal stops the request itself; the race covers a fetch that does not honour it.
+  const stalled = new Promise<never>((_, reject) => {
+    abort.signal.addEventListener("abort", () =>
+      reject(new OAuthError("network_error", "The server did not answer in time")),
+    );
+  });
+  stalled.catch(() => undefined);
   try {
-    response = await (deps.fetch ?? globalThis.fetch)(url, { method: "POST", ...init });
+    response = await Promise.race([
+      (deps.fetch ?? globalThis.fetch)(url, { method: "POST", ...init, signal: abort.signal }),
+      stalled,
+    ]);
   } catch (cause) {
+    clearTimeout(timer);
+    if (cause instanceof OAuthError) throw cause;
     throw new OAuthError("network_error", "Could not reach the server", 0, { cause });
   }
+  clearTimeout(timer);
   const text = await response.text().catch(() => "");
   let body: Record<string, unknown> | undefined;
   try {
@@ -229,11 +254,13 @@ export function parseAuthorizationResponse(
   expected: { state: string; baseUrl: string },
 ): string {
   const q = queryOf(redirectUrl);
-  if (q.error) {
-    throw new OAuthError(q.error, "The sign-in was not completed", 0);
-  }
+  // The state is checked first: any app can open the redirect address, and an `error` in a link
+  // that does not carry this sign-in's state must not end the sign-in that is waiting.
   if (q.state !== expected.state) {
     throw new OAuthError("state_mismatch", "The answer did not belong to this sign-in");
+  }
+  if (q.error) {
+    throw new OAuthError(q.error, "The sign-in was not completed", 0);
   }
   if (q.iss !== undefined && normaliseBaseUrl(q.iss) !== normaliseBaseUrl(expected.baseUrl)) {
     throw new OAuthError("issuer_mismatch", "The answer came from another server");
@@ -317,16 +344,23 @@ export interface RevokeOptions {
   clientId: string;
   /** The refresh token: revoking it ends the whole sign-in (RFC 7009), and the device with it. */
   token: string;
+  /** Gives up after this many milliseconds (the revoke is safe to repeat, so a short wait is fine). */
+  timeoutMs?: number;
 }
 
 /** `POST /oauth/revoke` (RFC 7009): ends the sign-in on the instance. Answers 200 whatever the token was. */
 export async function revokeToken(deps: OAuthDeps, options: RevokeOptions): Promise<void> {
-  await post(deps, `${normaliseBaseUrl(options.baseUrl)}/oauth/revoke`, {
-    headers: FORM,
-    body: formBody({
-      token: options.token,
-      token_type_hint: "refresh_token",
-      client_id: options.clientId,
-    }),
-  });
+  await post(
+    deps,
+    `${normaliseBaseUrl(options.baseUrl)}/oauth/revoke`,
+    {
+      headers: FORM,
+      body: formBody({
+        token: options.token,
+        token_type_hint: "refresh_token",
+        client_id: options.clientId,
+      }),
+    },
+    options.timeoutMs,
+  );
 }

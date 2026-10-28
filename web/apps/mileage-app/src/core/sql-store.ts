@@ -353,12 +353,23 @@ export function createSqlStore(db: SqlDb): OutboxStore {
     },
 
     async patchTrip(clientTripId, patch) {
-      const { sets, values } = assignments(patch);
-      if (sets.length === 0) return;
-      await db.run(`UPDATE trip SET ${sets.join(", ")} WHERE client_trip_id = ?`, [
-        ...values,
-        clientTripId,
-      ]);
+      const { purgePoints, ...fields } = patch;
+      const { sets, values } = assignments(fields);
+      if (sets.length === 0 && !purgePoints) return;
+      // One transaction: a kill between the update and the purge must not leave a route behind
+      // for a trip that the server holds (the sweep at the start of a pass is the second guard).
+      await db.transaction(async (tx) => {
+        if (sets.length > 0) {
+          await tx.run(`UPDATE trip SET ${sets.join(", ")} WHERE client_trip_id = ?`, [
+            ...values,
+            clientTripId,
+          ]);
+        }
+        if (purgePoints) {
+          await tx.run("DELETE FROM point WHERE client_trip_id = ?", [clientTripId]);
+          await tx.run("DELETE FROM batch WHERE client_trip_id = ?", [clientTripId]);
+        }
+      });
     },
 
     async mergeRemote(trips: readonly RemoteTrip[]) {

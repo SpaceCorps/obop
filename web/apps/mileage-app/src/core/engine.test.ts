@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vite-plus/test";
 import { createEngine } from "./engine.ts";
+import { canDiscard } from "./present.ts";
 import { createSqlStore, migrate } from "./sql-store.ts";
 import { TripAlreadyActive, hasWork, type OutboxStore } from "./store.ts";
 import type { NewFix } from "./types.ts";
@@ -19,12 +20,12 @@ function walk(n: number, from = 0): NewFix[] {
   }));
 }
 
-async function rig() {
+async function rig(backoff = { baseMs: 1000, maxMs: 8000 }) {
   const db = memoryDb();
   await migrate(db);
   const store = createSqlStore(db);
   const server = new FakeServer();
-  const engine = createEngine({ store, api: server, backoff: { baseMs: 1000, maxMs: 8000 } });
+  const engine = createEngine({ store, api: server, backoff });
   return { db, store, server, engine };
 }
 
@@ -327,6 +328,89 @@ describe("a connection that fails", () => {
   });
 });
 
+describe("a trip that the server discarded or no longer has", () => {
+  test("points refused because the server discarded the trip finish the trip on the phone", async () => {
+    const { store, server, engine } = await rig();
+    await start(store);
+    await engine.drain(); // the trip exists on the server
+    await store.appendFixes("c1", walk(7));
+    await store.stopTrip("c1", new Date(T0 + 40_000).toISOString());
+    server.stored("c1")!.state = "discarded";
+    const report = await engine.drain();
+    expect(report).toMatchObject({ pending: 0, problems: 0 });
+    expect(await store.pointCount("c1")).toBe(0);
+    expect(await store.getTrip("c1")).toMatchObject({
+      discardDone: true,
+      serverState: "discarded",
+      problem: null,
+    });
+    expect(hasWork((await store.getTrip("c1"))!)).toBe(false);
+  });
+
+  test("a trip that is still recording when the server discards it is flagged and stays recording", async () => {
+    const { store, server, engine } = await rig();
+    await start(store);
+    await engine.drain();
+    await store.appendFixes("c1", walk(3));
+    server.stored("c1")!.state = "discarded";
+    await engine.drain();
+    const trip = (await store.getTrip("c1"))!;
+    expect(trip.problem).toMatchObject({ step: "points", code: "discarded" });
+    expect(await store.activeTrip()).not.toBeNull();
+    expect(await store.pointCount("c1")).toBe(3); // the route is not thrown away under the driver
+  });
+
+  test("a trip the server lost stops with the code gone, and the driver can discard it here", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 6);
+    await engine.drain(); // sends the points; one point more than the server can end without
+    const sent = (await store.getTrip("c1"))!;
+    await store.patchTrip("c1", { endDone: false, problem: null });
+    server.trips.delete(sent.serverId!); // the instance was restored from an older backup
+    await store.appendFixes("c1", []); // no change; the points are sent already
+    await engine.drain();
+    const stuck = (await store.getTrip("c1"))!;
+    expect(stuck.problem).toMatchObject({ step: "end", code: "gone" });
+    expect(canDiscard(stuck)).toBe(true);
+    await store.requestDiscard("c1", "lost on the server", new Date(T0 + 99_000).toISOString());
+    await store.clearProblem("c1");
+    expect(await engine.drain()).toMatchObject({ pending: 0, problems: 0 });
+    expect(await store.getTrip("c1")).toMatchObject({ discardDone: true, problem: null });
+    expect(await store.pointCount("c1")).toBe(0);
+  });
+
+  test("points of a trip the server lost are kept until the driver discards", async () => {
+    const { store, server, engine } = await rig();
+    await start(store);
+    await engine.drain();
+    const id = (await store.getTrip("c1"))!.serverId!;
+    await store.appendFixes("c1", walk(4));
+    server.trips.delete(id);
+    await engine.drain();
+    const stuck = (await store.getTrip("c1"))!;
+    expect(stuck.problem).toMatchObject({ step: "points", code: "gone" });
+    expect(await store.pointCount("c1")).toBe(4); // nothing is deleted without the driver's word
+    expect(canDiscard(stuck)).toBe(true);
+  });
+
+  test("a route that a kill left behind after the end is removed at the first pass", async () => {
+    const { store, engine } = await rig();
+    await recordAndStop(store, 5);
+    await engine.drain();
+    await store.appendFixes("c1", []); // ended and purged by the engine
+    // Simulate the older two-step write: the trip says ended, the points are still there.
+    const trip = (await store.getTrip("c1"))!;
+    expect(trip.endDone).toBe(true);
+    const { engine: second, store: store2 } = await rig();
+    await recordAndStop(store2, 5);
+    await store2.patchTrip("c1", { endDone: true });
+    expect(await store2.pointCount("c1")).toBe(5);
+    await second.drain();
+    expect(await store2.pointCount("c1")).toBe(0);
+    expect(engine).toBeDefined();
+  });
+});
+
 describe("Stop", () => {
   test("end is repeated until the points the server is missing are there", async () => {
     const { store, server, engine } = await rig();
@@ -337,7 +421,8 @@ describe("Stop", () => {
     expect(first).toMatchObject({ pending: 1, problems: 0 });
     expect(first.retryInMs).toBe(1000 * 4); // no Retry-After on this answer: the engine's own wait
     expect((await store.getTrip("c1"))!.attempts).toBe(1);
-    await engine.drain();
+    const second = await engine.drain();
+    expect(second.retryInMs).toBe(8000); // and it grows with every answer, up to the cap
     expect((await store.getTrip("c1"))!.attempts).toBe(2);
     expect(await engine.drain()).toMatchObject({ state: "idle" });
     expect(server.stored("c1")!.state).toBe("ended");
@@ -346,6 +431,22 @@ describe("Stop", () => {
       attempts: 0,
       problem: null,
     });
+  });
+
+  test("the wait for an incomplete end doubles from 4 s up to the cap", async () => {
+    const { store, server, engine } = await rig({ baseMs: 1000, maxMs: 20_000 });
+    await recordAndStop(store, 5);
+    server.fail("endTrip", apiError(409, { code: "incomplete", message: "4 of 5 points" }), 5);
+    const waits: Array<number | null> = [];
+    for (let i = 0; i < 5; i++) waits.push((await engine.drain()).retryInMs);
+    expect(waits).toEqual([4000, 8000, 16000, 20_000, 20_000]);
+  });
+
+  test("a Retry-After of the server beats the engine's own wait on an incomplete end", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 5);
+    server.fail("endTrip", apiError(409, { code: "incomplete", message: "x", retryAfter: 3 }), 1);
+    expect((await engine.drain()).retryInMs).toBe(3000);
   });
 
   test("the driver is told after five incomplete answers and the outbox keeps asking", async () => {

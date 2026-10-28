@@ -130,6 +130,10 @@ describe("the redirect", () => {
       "issuer_mismatch",
     );
     expect(code("org.obop.mileage:/oauth?error=access_denied&state=ST")).toBe("access_denied");
+    // A link that any other app opens, with an error and without this sign-in's state, must not
+    // end the sign-in that is waiting.
+    expect(code("org.obop.mileage:/oauth?error=access_denied")).toBe("state_mismatch");
+    expect(code("org.obop.mileage:/oauth?error=access_denied&state=OTHER")).toBe("state_mismatch");
     expect(code("org.obop.mileage:/oauth?state=ST")).toBe("invalid_response");
     expect(
       code("org.obop.mileage:/oauth?code=abc&state=ST&iss=https%3A%2F%2Facme.example.com%2F"),
@@ -281,6 +285,27 @@ describe("revocation", () => {
       token_type_hint: "refresh_token",
       client_id: "cid-1",
     });
+  });
+
+  test("a call that is not answered in time is given up as network_error", async () => {
+    const never = deps(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    const started = Date.now();
+    await expect(
+      revokeToken(never.deps, { baseUrl: "http://h", clientId: "c", token: "t", timeoutMs: 40 }),
+    ).rejects.toMatchObject({ code: "network_error" });
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  test("a fetch that ignores the abort signal is given up as well", async () => {
+    const never = deps(() => new Promise<Response>(() => {}));
+    await expect(
+      revokeToken(never.deps, { baseUrl: "http://h", clientId: "c", token: "t", timeoutMs: 40 }),
+    ).rejects.toMatchObject({ code: "network_error" });
   });
 
   test("no connection is network_error", async () => {

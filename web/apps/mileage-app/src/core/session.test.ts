@@ -1,6 +1,11 @@
 import { OAuthError, type OAuthDeps } from "@obop/client";
 import { describe, expect, test } from "vite-plus/test";
-import { createSession, type SessionStorage } from "./session.ts";
+import {
+  CLIENT_FRESH_MS,
+  createSession,
+  needsRegistration,
+  type SessionStorage,
+} from "./session.ts";
 
 const tokens = (n: number, expiresAt: number) => ({
   accessToken: `AT-${n}`,
@@ -13,32 +18,53 @@ const tokens = (n: number, expiresAt: number) => ({
 function rig(initial = tokens(1, 100_000)) {
   const saved: (ReturnType<typeof tokens> | null)[] = [];
   let clock = 0;
+  let saveFails = 0;
   const storage: SessionStorage = {
     loadConfig: async () => ({ baseUrl: "http://h", clientId: "cid" }),
     saveConfig: async () => {},
     loadTokens: async () => initial,
     saveTokens: async (t) => {
+      if (saveFails > 0) {
+        saveFails -= 1;
+        throw new Error("keystore");
+      }
       saved.push(t as ReturnType<typeof tokens> | null);
     },
   };
   const bodies: string[] = [];
-  let respond: () => Response | Promise<Response> = () =>
-    new Response(
+  // The token endpoint of the real instance (obop-oauth token.rs): the refresh token is single
+  // use, every answer is a new pair (AT-n+1, RT-n+1), and a token that was used before ends the
+  // whole sign-in (no grace window).
+  const used = new Set<string>();
+  let latest = 1;
+  let revoked = false;
+  const endpoint = (body: string): Response => {
+    const token = new URLSearchParams(body).get("refresh_token") ?? "";
+    if (revoked || used.has(token) || token !== `RT-${latest}`) {
+      revoked = true;
+      return new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 });
+    }
+    used.add(token);
+    latest += 1;
+    return new Response(
       JSON.stringify({
-        access_token: "AT-2",
-        refresh_token: "RT-2",
+        access_token: `AT-${latest}`,
+        refresh_token: `RT-${latest}`,
         expires_in: 3600,
         scope: "mileage.driver",
         device_id: "dev-1",
       }),
       { headers: { "content-type": "application/json" } },
     );
+  };
+  let respond: (body: string) => Response | Promise<Response> = endpoint;
   const oauth: OAuthDeps = {
     sha256: async () => new Uint8Array(32),
     randomBytes: async (n) => new Uint8Array(n),
     fetch: (async (_url: string, init: RequestInit) => {
-      bodies.push(typeof init.body === "string" ? init.body : "");
-      return respond();
+      const body = typeof init.body === "string" ? init.body : "";
+      bodies.push(body);
+      return respond(body);
     }) as unknown as typeof fetch,
   };
   const session = createSession({ storage, oauth, now: () => clock });
@@ -48,6 +74,9 @@ function rig(initial = tokens(1, 100_000)) {
     bodies,
     setNow: (ms: number) => (clock = ms),
     respond: (fn: typeof respond) => (respond = fn),
+    /** The real endpoint that does its work and then loses the answer. */
+    endpoint,
+    failSaves: (n: number) => (saveFails = n),
   };
 }
 
@@ -108,9 +137,67 @@ describe("the session", () => {
     expect(r.session.refreshToken()).toBe("RT-1");
     expect(r.saved).toHaveLength(0);
     // The next call tries again.
-    r.respond(() => new Response("{}", { headers: { "content-type": "application/json" } }));
-    await expect(r.session.accessToken()).rejects.toMatchObject({ code: "invalid_response" });
+    // The request never reached the instance, so the same refresh token is still good.
+    r.respond((body) => r.endpoint(body));
+    expect(await r.session.accessToken()).toBe("AT-2");
     expect(r.session.status()).toBe("signed_in");
+  });
+
+  test("a refresh whose answer was lost after the instance rotated ends the sign-in at the next try (known loss mode)", async () => {
+    // The instance has no grace window, so a spent refresh token that is presented again revokes
+    // the whole grant. The app cannot tell this case from "never arrived"; docs/ISSUES.md L29.
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    r.respond((body) => {
+      r.endpoint(body);
+      throw new TypeError("Network request failed");
+    });
+    await expect(r.session.accessToken()).rejects.toBeInstanceOf(OAuthError);
+    expect(r.session.status()).toBe("signed_in");
+    r.respond((body) => r.endpoint(body));
+    expect(await r.session.accessToken()).toBeNull();
+    expect(r.session.status()).toBe("expired");
+  });
+
+  test("a failed Keystore write does not bring the spent refresh token back", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    r.failSaves(2); // both writes fail
+    expect(await r.session.accessToken()).toBe("AT-2");
+    expect(r.session.refreshToken()).toBe("RT-2");
+    r.setNow(99_000 + 3_600_000); // the new access token is about to end as well
+    expect(await r.session.accessToken()).toBe("AT-3");
+    expect(r.session.status()).toBe("signed_in");
+    expect(r.bodies.map((b) => new URLSearchParams(b).get("refresh_token"))).toEqual([
+      "RT-1",
+      "RT-2",
+    ]);
+  });
+
+  test("one failed write is repeated once", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    r.failSaves(1);
+    await r.session.accessToken();
+    expect(r.saved.at(-1)).toMatchObject({ refreshToken: "RT-2" });
+  });
+
+  test("a client registers again when it was never used, is for another address, or is old", () => {
+    const now = 1_000_000_000_000;
+    const used = { baseUrl: "http://h", clientId: "c", usedAt: now - 1000 };
+    expect(needsRegistration(null, "http://h", now)).toBe(true);
+    expect(needsRegistration({ baseUrl: "http://h", clientId: "c" }, "http://h", now)).toBe(true);
+    expect(needsRegistration(used, "http://other", now)).toBe(true);
+    expect(needsRegistration(used, "http://h", now)).toBe(false);
+    expect(needsRegistration({ ...used, usedAt: now - CLIENT_FRESH_MS - 1 }, "http://h", now)).toBe(
+      true,
+    );
+    expect(needsRegistration({ ...used, usedAt: now - CLIENT_FRESH_MS + 1 }, "http://h", now)).toBe(
+      false,
+    );
   });
 
   test("a busy server or a rate limit does not end the sign-in", async () => {
