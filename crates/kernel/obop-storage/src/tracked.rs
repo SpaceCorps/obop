@@ -25,7 +25,9 @@
 //! `Flaky` of `testing` and for the `Flaky` of `obop-ops` (it reads that file by path).
 
 use crate::ctx::{self, WriteCtx};
-use crate::history::{Backfilled, HistoryQuery};
+use crate::history::{
+    Backfilled, ChangePage, ChangeQuery, HistoryQuery, HistoryStats, PartitionEnsured,
+};
 use crate::sysfields::ChangeRow;
 use crate::{ApplyError, Backend, Fields, J, LockGuard, Op, Result, Row, RowSink, Swap};
 use std::collections::{BTreeMap, BTreeSet};
@@ -364,6 +366,21 @@ impl Backend for Tracked {
     }
     fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
         self.inner.history(q)
+    }
+    fn changes(&self, q: &ChangeQuery) -> Result<ChangePage> {
+        self.inner.changes(q)
+    }
+    fn ensure_history_schema(&self) -> Result<()> {
+        self.inner.ensure_history_schema()
+    }
+    fn history_stats(&self) -> Result<HistoryStats> {
+        self.inner.history_stats()
+    }
+    fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
+        self.inner.history_ensure_partition(month)
+    }
+    fn history_drop_partition(&self, month: &str, min_age_days: u32) -> Result<u64> {
+        self.inner.history_drop_partition(month, min_age_days)
     }
     fn backfill_sysfields(
         &self,

@@ -17,8 +17,9 @@
 //! nothing but delegate.
 
 use crate::{
-    ApplyError, Backend, Backfilled, ChangeRow, Fields, HistoryQuery, J, LockGuard, Op, Result,
-    Row, RowSink, Sealer, Swap, Track, Tracking, WriteCtx, fault,
+    ApplyError, Backend, Backfilled, ChangePage, ChangeQuery, ChangeRow, Fields, HistoryQuery,
+    HistoryStats, J, LockGuard, Op, PartitionEnsured, Result, Row, RowSink, Sealer, Swap, Track,
+    Tracking, WriteCtx, fault,
 };
 use std::sync::Arc;
 
@@ -159,6 +160,36 @@ impl Backend for Guarded {
     }
     fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
         self.inner.history(q)
+    }
+    fn changes(&self, q: &ChangeQuery) -> Result<ChangePage> {
+        self.inner.changes(q)
+    }
+    fn ensure_history_schema(&self) -> Result<()> {
+        fault::before_write()?;
+        let r = self.inner.ensure_history_schema();
+        if r.is_ok() {
+            fault::wrote();
+        }
+        r
+    }
+    fn history_stats(&self) -> Result<HistoryStats> {
+        self.inner.history_stats()
+    }
+    fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
+        fault::before_write()?;
+        let r = self.inner.history_ensure_partition(month);
+        if r.as_ref().is_ok_and(|p| p.created || p.moved > 0) {
+            fault::wrote();
+        }
+        r
+    }
+    fn history_drop_partition(&self, month: &str, min_age_days: u32) -> Result<u64> {
+        fault::before_write()?;
+        let r = self.inner.history_drop_partition(month, min_age_days);
+        if r.is_ok() {
+            fault::wrote();
+        }
+        r
     }
     fn backfill_sysfields(
         &self,
