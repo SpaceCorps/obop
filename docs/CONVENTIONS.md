@@ -289,7 +289,7 @@ A data class tags columns. Owner of the registry: sec-priv 4.2 (people 4.11 assi
 | Product cost, margin, valuation, landed cost, pricelist cost base; party credit limit | No class: field permission (`product.cost_viewer`; finance groups) |
 | Project and analytic margins (aggregates over people) | No class; read with `timesheet.cost_viewer`; the minimum group size of people 4.11 for small teams is services' call (Proposed) |
 | Signature evidence (IP, user agent), serials and lots linked to a person, ticket requester email | No class; `personal_data` flag |
-| Trip points (`lat`, `lon`, `accuracy_m`, `speed_mps`, `recorded_at` of a mileage point) | `confidential_hr` as an interim reading (attendance geo is already there) until `location` is ratified (Proposed, D87, Q40) |
+| Trip points (`lat`, `lon`, `accuracy_m`, `speed_mps`, `recorded_at` of a mileage point) and the times and positions of a trip (`started_at`, `ended_at`, `start_lat`, `start_lon`, `end_lat`, `end_lon` of a mileage trip) | `confidential_hr` as an interim reading (attendance geo is already there) until `location` is ratified (Proposed, D87, Q40); an agent's token does not receive them |
 
 **Other flags.** `personal_data` (registry capability flag driving DSAR and erasure, D33), `retention_class` (pack-driven, separate taxonomy) and `agent_readable` are per model or class and are not classes. `special-category` as a prose adjective is fine; the identifier is `special_category`. People 2's "public" means `public_directory`; sec-priv AZ5's "confidential and special-category columns" means the three sensitive classes.
 
