@@ -166,7 +166,8 @@ pub(crate) fn unique_index_sql(name: &str, model: &str, fields: &[&str]) -> Resu
 
 /// The statement of [`Backend::find_unique`]: the same columns, each compared with a bound value,
 /// and the same `model = '...'` as the partial index, so SQLite can use the index. The model is a
-/// validated literal, never a parameter: SQLite does not use a partial index for a parameter.
+/// validated literal, never a parameter: a literal is the predicate of the index whatever the
+/// version of SQLite and however it treats a parameter, so the plan never depends on that.
 pub(crate) fn unique_lookup_sql(model: &str, fields: &[&str]) -> Result<String> {
     let model = ident(model)?;
     let tests: Vec<String> = unique_columns(fields)?
@@ -214,8 +215,6 @@ impl Sqlite {
         .map_err(e)?;
         conn.busy_timeout(std::time::Duration::from_secs(30))
             .map_err(e)?;
-        #[cfg(feature = "test-support")]
-        crate::testing::count_full_scans(&conn);
         // Two processes opening a fresh file at once may both try to switch the journal mode or
         // create tables; the busy timeout covers the wait, and a retry covers the rare race.
         let mut last = Ok(());
@@ -582,6 +581,8 @@ impl Backend for Sqlite {
             _ => None,
         };
         let Some((sql, binds)) = keyed else {
+            #[cfg(any(test, feature = "test-support"))]
+            crate::testing::note_fallback();
             let (field, value) = unique_head(fields, values)?;
             return Ok(self
                 .find(model, field, value)?
@@ -591,13 +592,16 @@ impl Backend for Sqlite {
         };
         let g = self.conn.lock().unwrap();
         let mut st = g.prepare_cached(&sql).map_err(e)?;
+        #[cfg(any(test, feature = "test-support"))]
+        st.reset_status(rusqlite::StatementStatus::VmStep);
         let rows = st
             .query_map(rusqlite::params_from_iter(binds), |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
             })
             .map_err(e)?;
-        // The database compares by SQLite's rules (`1` is `true`, `1.0` is `1`); the candidates
-        // are then held to the exact rule of `unique_matches`.
+        // SQLite compares a bound integer with a stored integer, real or boolean (`1` is `true`,
+        // `5.0` is `5`) and a bound text with a stored text; the candidates are then held to the
+        // exact rule of `unique_matches`.
         let mut out = Vec::new();
         for r in rows {
             let (id, data) = r.map_err(e)?;
@@ -606,6 +610,8 @@ impl Backend for Sqlite {
                 out.push((id, rec));
             }
         }
+        #[cfg(any(test, feature = "test-support"))]
+        crate::testing::note_keyed(&sql, st.get_status(rusqlite::StatementStatus::VmStep));
         Ok(out)
     }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {

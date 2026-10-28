@@ -2,16 +2,27 @@
 //! two unique rules (`code`, and `slot` within `scope`), filled through `bulk_create`, then single
 //! creates.
 //!
-//! Two tests live here and use nothing but the public surface of the dispatcher, so the same file
-//! runs against the code before the keyed lookup and shows the change:
+//! Three tests live here, all `#[ignore]`d measurements, and use nothing but the public surface of
+//! the dispatcher, so the same file runs against the code before the keyed lookup and shows the
+//! change (copy it to `crates/kernel/obop-commands/src/` of 7bb4304 and add `#[cfg(test)] mod
+//! unique_bench;` to its `lib.rs`). What a CI run holds the code to is counted, not timed: see
+//! `unique_tests.rs` (`the_check_reads_the_same_few_rows_in_a_model_of_any_size`) and the
+//! storage test of SQLite's work.
 //!
-//! * `the_cost_of_a_create_does_not_grow_with_the_model` runs everywhere and bounds a ratio of two
-//!   medians (generous: the old code was linear in the model, a ratio of 10 or more).
-//! * `measure_seeding` is `#[ignore]`d and prints the table of the PR:
+//! * `the_cost_of_a_create_does_not_grow_with_the_model` bounds a ratio of two medians of single
+//!   creates (500 and 8,000 rows; the old code was linear in the model, a ratio of 10 or more).
+//!   It is ignored because it reads the clock: `cargo test -p obop-commands --lib
+//!   the_cost_of_a_create -- --ignored --nocapture`.
+//! * `measure_seeding` prints the table of the PR (seeding by `bulk_create`, a single create at
+//!   2,500 rows and at the last size):
 //!   `cargo test -p obop-commands --lib measure_seeding -- --ignored --nocapture`, with
-//!   `OBOP_BENCH_URL` (`sqlite://FILE`, `sqlite::memory:`, `postgres://...`, `scratch-postgres`; default a SQLite
-//!   file in the temporary directory), `OBOP_BENCH_ROWS` (default 50000) and `OBOP_BENCH_BLOCK`
-//!   (rows per `bulk_create`, default 1000, at most 1000).
+//!   `OBOP_BENCH_URL` (`sqlite://FILE`, `sqlite::memory:`, `postgres://...`, or `scratch-postgres`
+//!   for a scratch database on the server of `OBOP_TEST_POSTGRES_URL`; default a SQLite file in
+//!   the temporary directory), `OBOP_BENCH_ROWS` (default 50000) and `OBOP_BENCH_BLOCK` (rows per
+//!   `bulk_create`, default 1000, at most 1000).
+//! * `measure_single_create_at_size` loads the rows straight into the store and times single
+//!   creates, so the old code can be timed at a size it could not seed in reasonable time; it
+//!   prints the round trip of a `SELECT 1` on PostgreSQL too (same variables).
 
 use crate::{CallError, Dispatcher, Principal, Response, Store, Surface, Value, Vault};
 use obop_registry::{FieldDef as F, ModelDef, Module, intern};
@@ -157,8 +168,10 @@ fn ms(d: Duration) -> f64 {
 
 /// A single create costs about the same in a model of 8,000 rows as in one of 500: before the
 /// keyed lookup it cost ten times as much. The bound is a ratio of medians of 25 creates, not a
-/// time, and generous (3, the ask's own figure) so a loaded machine does not fail it.
+/// time, and generous (3, the ask's own figure). It reads the clock, so it is not part of the
+/// default run (a loaded machine could fail it); the counted tests are.
 #[test]
+#[ignore = "reads the clock: run it with --ignored --nocapture"]
 fn the_cost_of_a_create_does_not_grow_with_the_model() {
     let b = Bench::open("sqlite::memory:");
     b.seed(0, 500, 500);

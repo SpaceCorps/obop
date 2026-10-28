@@ -477,8 +477,9 @@ fn a_full_batch_of_a_thousand_points_is_accepted() {
 }
 
 /// The time of a batch of 1,000 points on an instance that already holds other points: a
-/// measurement, not a test. The unique check of the kernel looks every row up by an unindexed
-/// scan of the stored points (docs/ISSUES.md M8), so the time grows with what is stored.
+/// measurement, not a test. The unique check of the kernel (D57) reads through the unique index
+/// of the rule on SQLite and PostgreSQL, so the time does not grow with what is stored there; the
+/// memory backend still scans the stored points (docs/ISSUES.md M8 and K37), so its time does.
 /// Run: `cargo test -p mileage --lib batch_time -- --ignored --nocapture` (a debug build; add
 /// `--release` for the other figure).
 #[test]

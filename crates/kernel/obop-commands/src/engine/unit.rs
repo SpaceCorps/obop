@@ -21,7 +21,9 @@ pub(crate) trait Reads {
     fn find(&self, model: &str, field: &str, value: &J) -> R<Vec<(String, Fields)>>;
     /// The records a uniqueness rule (D57) compares with a new value, as [`Backend::find_unique`]
     /// says, seen through the writes of the unit. With the rule's index in the store the cost does
-    /// not grow with the model, and the unit's own records are found by key, not by a scan.
+    /// not grow with the model, and the unit's own records are found by key, not by a scan. The
+    /// stored records come first, in insertion order; the unit's own come after them in no order
+    /// (no caller depends on the order).
     fn find_unique(&self, model: &str, fields: &[&str], values: &[J]) -> R<Vec<(String, Fields)>>;
     fn all(&self, model: &str) -> R<Vec<(String, Fields)>>;
 }

@@ -3,12 +3,15 @@
 //!
 //! * `the_check_gives_the_answers_of_the_rule` runs random sequences of creates, updates, deletes
 //!   and bulk creates against a plain model of the rule written out again in the test, on every
-//!   backend, and compares every outcome and the stored state. It uses only the public surface,
-//!   so it also runs against the code before the change: that is how "no change of results" was
-//!   checked.
+//!   backend, and compares every outcome and the stored state. It runs on two models: one whose
+//!   fields are all text, and one whose first fields are a text and a whole number and whose
+//!   scopes are a boolean, a whole number and a text. It uses only the public surface, so it also
+//!   runs against the code before the change: that is how "no change of results" was checked.
 //! * `the_messages_are_exactly_these` pins the text of the refusals.
 //! * `the_check_reads_the_same_few_rows_in_a_model_of_any_size` counts what the check reads
-//!   (through a store that tallies its reads, and the rows SQLite scans in full), not time.
+//!   (through a store that tallies its reads), which statement the backend ran for it, and on
+//!   SQLite the steps of its virtual machine: not time. A check that went back to `find` or to a
+//!   scan fails it.
 //! * the race tests: two commands that insert one key at once give one success and one refusal
 //!   that says "must be unique", never a storage fault.
 
@@ -47,10 +50,87 @@ fn item_module(p: &str) -> Module {
     }
 }
 
+/// `typed`: `label` (a text) unique within `flag` (a boolean) and `qty` (a whole number); `num` (a
+/// whole number) unique within `flag` and `grp` (a text).
+fn typed_module(p: &str) -> Module {
+    use obop_registry::FieldKind;
+    let fields: Vec<F> = vec![
+        f("label").unique_with(&["flag", "qty"]),
+        f("num")
+            .kind(FieldKind::Number)
+            .unique_with(&["flag", "grp"]),
+        f("flag").kind(FieldKind::Bool),
+        f("qty").kind(FieldKind::Number),
+        f("grp"),
+    ];
+    let model = ModelDef {
+        name: intern(&format!("{p}_typed")),
+        description: "d",
+        read_group: U,
+        write_group: U,
+        access: None,
+        fields,
+        commands: vec![],
+        ext: Default::default(),
+    };
+    Module {
+        id: p.into(),
+        name: "Typed".into(),
+        models: vec![model],
+        ..Module::default()
+    }
+}
+
+/// Where the values of a field come from in the random tests.
+enum Pool {
+    Text(&'static [&'static str]),
+    Num(&'static [i64]),
+    Bool,
+}
+
+/// A model of the random tests: its fields in the order of a `Rec`, the pools of their values, and
+/// its rules as (first field, scope fields) by position.
+struct Shape {
+    module: fn(&str) -> Module,
+    suffix: &'static str,
+    names: [&'static str; 5],
+    rules: &'static [(usize, &'static [usize])],
+    pools: [Pool; 5],
+}
+
+static TEXT: Shape = Shape {
+    module: item_module,
+    suffix: "item",
+    names: ["code", "slot", "tag", "scope", "region"],
+    rules: &[(0, &[]), (1, &[3]), (2, &[3, 4])],
+    pools: [
+        Pool::Text(&["A", "B", "C"]),
+        Pool::Text(&["P", "Q", "R"]),
+        Pool::Text(&["T", "U"]),
+        Pool::Text(&["s1", "s2"]),
+        Pool::Text(&["r1", "r2"]),
+    ],
+};
+
+static TYPED: Shape = Shape {
+    module: typed_module,
+    suffix: "typed",
+    names: ["label", "num", "flag", "qty", "grp"],
+    rules: &[(0, &[2, 3]), (1, &[2, 4])],
+    pools: [
+        Pool::Text(&["A", "B", "C"]),
+        Pool::Num(&[1, 2, 3]),
+        Pool::Bool,
+        Pool::Num(&[10, 20]),
+        Pool::Text(&["g1", "g2"]),
+    ],
+};
+
 struct Items {
     d: Arc<Dispatcher>,
     store: Store,
     model: String,
+    shape: &'static Shape,
 }
 
 impl Items {
@@ -59,15 +139,20 @@ impl Items {
     }
 
     fn over(store: Store) -> Items {
+        Self::shaped(store, &TEXT)
+    }
+
+    fn shaped(store: Store, shape: &'static Shape) -> Items {
         let p = format!("it{}", &uuid::Uuid::now_v7().simple().to_string()[22..]);
         let d = Arc::new(Dispatcher::new());
-        let module = item_module(&p);
+        let module = (shape.module)(&p);
         assert!(obop_registry::check_module(&module).is_empty());
         d.register_crud(&module, &store);
         Items {
             d,
             store,
-            model: format!("{p}_item"),
+            model: format!("{p}_{}", shape.suffix),
+            shape,
         }
     }
 
@@ -91,18 +176,22 @@ impl Items {
     }
 }
 
-/// The value of one field of the model: not there, null, the empty text, or a text.
+/// The value of one field of the model: not there, null, the empty text, a text, a whole number
+/// or a boolean.
 #[derive(Clone, Debug, PartialEq)]
 enum Val {
     Missing,
     Null,
     Empty,
     S(String),
+    N(i64),
+    B(bool),
 }
 
 impl Val {
+    /// A value that a rule holds to (as its first field): not nothing and not the empty text.
     fn constrained(&self) -> bool {
-        matches!(self, Val::S(_))
+        matches!(self, Val::S(_) | Val::N(_))
     }
     /// The value as a scope: nothing and the empty text are the same.
     fn scope(&self) -> Val {
@@ -117,6 +206,8 @@ impl Val {
             Val::Null => Some(Value::Null),
             Val::Empty => Some(t("")),
             Val::S(s) => Some(t(s)),
+            Val::N(n) => Some(Value::Int(*n)),
+            Val::B(b) => Some(Value::Bool(*b)),
         }
     }
     fn of_stored(v: Option<&serde_json::Value>) -> Val {
@@ -125,28 +216,28 @@ impl Val {
             Some(serde_json::Value::Null) => Val::Null,
             Some(serde_json::Value::String(s)) if s.is_empty() => Val::Empty,
             Some(serde_json::Value::String(s)) => Val::S(s.clone()),
+            Some(serde_json::Value::Number(n)) => Val::N(n.as_i64().expect("a whole number")),
+            Some(serde_json::Value::Bool(b)) => Val::B(*b),
             Some(other) => panic!("{other:?}"),
         }
     }
 }
 
-/// code, slot, tag, scope, region.
+/// The five fields of a shape, in the order of its `names`.
 type Rec = [Val; 5];
-const NAMES: [&str; 5] = ["code", "slot", "tag", "scope", "region"];
 
-/// The rule of D57 written out again: the first field of a rule that is a text, and the same
-/// first field and scope in another record.
-fn conflict(others: &[&Rec], r: &Rec) -> Option<&'static str> {
-    let rules: [(usize, &[usize]); 3] = [(0, &[]), (1, &[3]), (2, &[3, 4])];
-    for (first, scope) in rules {
-        if !r[first].constrained() {
+/// The rule of D57 written out again: the first field of a rule that holds a value, and the same
+/// first field and scope in another record. (A missing or null scope is the empty one.)
+fn conflict(shape: &Shape, others: &[&Rec], r: &Rec) -> Option<&'static str> {
+    for (first, scope) in shape.rules {
+        if !r[*first].constrained() {
             continue;
         }
         if others
             .iter()
-            .any(|o| o[first] == r[first] && scope.iter().all(|s| o[*s].scope() == r[*s].scope()))
+            .any(|o| o[*first] == r[*first] && scope.iter().all(|s| o[*s].scope() == r[*s].scope()))
         {
-            return Some(NAMES[first]);
+            return Some(shape.names[*first]);
         }
     }
     None
@@ -173,19 +264,34 @@ impl Rng {
             n => Val::S(words[(n - 3) % words.len()].to_string()),
         }
     }
-    fn record(&mut self) -> Rec {
-        [
-            self.pick(&["A", "B", "C"]),
-            self.pick(&["P", "Q", "R"]),
-            self.pick(&["T", "U"]),
-            self.pick(&["s1", "s2"]),
-            self.pick(&["r1", "r2"]),
-        ]
+    /// A value for a column: nothing, null, or one of the pool (the empty text only for a text).
+    fn pick_col(&mut self, pool: &Pool) -> Val {
+        match pool {
+            Pool::Text(words) => self.pick(words),
+            Pool::Num(ns) => match self.below(2 + ns.len() * 2) {
+                0 => Val::Missing,
+                1 => Val::Null,
+                n => Val::N(ns[(n - 2) % ns.len()]),
+            },
+            Pool::Bool => match self.below(6) {
+                0 => Val::Missing,
+                1 => Val::Null,
+                n => Val::B(n % 2 == 0),
+            },
+        }
+    }
+    fn record(&mut self, shape: &Shape) -> Rec {
+        let mut r: Rec = std::array::from_fn(|_| Val::Missing);
+        for (k, pool) in shape.pools.iter().enumerate() {
+            r[k] = self.pick_col(pool);
+        }
+        r
     }
 }
 
-fn input_of(r: &Rec) -> Value {
-    m(NAMES
+fn input_of(shape: &Shape, r: &Rec) -> Value {
+    m(shape
+        .names
         .iter()
         .zip(r)
         .filter_map(|(n, v)| v.input().map(|i| (*n, i)))
@@ -213,7 +319,7 @@ fn stored(it: &Items) -> Vec<(String, Rec)> {
         .unwrap()
         .into_iter()
         .map(|(id, f)| {
-            let r: Rec = std::array::from_fn(|i| Val::of_stored(f.get(NAMES[i])));
+            let r: Rec = std::array::from_fn(|i| Val::of_stored(f.get(it.shape.names[i])));
             (id, r)
         })
         .collect();
@@ -227,6 +333,7 @@ fn names(it: &Items, refusal: &str, field: &str) -> bool {
 }
 
 fn run(it: &Items, seed: u64, steps: usize) {
+    let shape = it.shape;
     let mut rng = Rng(seed | 1);
     // The reference: the records the engine should hold, by id.
     let mut world: Vec<(String, Rec)> = Vec::new();
@@ -235,10 +342,10 @@ fn run(it: &Items, seed: u64, steps: usize) {
         match rng.below(10) {
             // create
             0..=3 => {
-                let r = rng.record();
+                let r = rng.record(shape);
                 let others: Vec<&Rec> = world.iter().map(|(_, r)| r).collect();
-                let want = conflict(&others, &r);
-                match (it.call("create", input_of(&r)), want) {
+                let want = conflict(shape, &others, &r);
+                match (it.call("create", input_of(shape, &r)), want) {
                     (Ok(out), None) => {
                         let Value::Map(o) = &out.value else { panic!() };
                         let Some(Value::Text(id)) = o.get("id") else {
@@ -260,15 +367,9 @@ fn run(it: &Items, seed: u64, steps: usize) {
                 let (id, cur) = world[i].clone();
                 let mut next = cur.clone();
                 let mut patch = vec![("id", t(&id))];
-                for (k, name) in NAMES.iter().enumerate() {
+                for (k, name) in shape.names.iter().enumerate() {
                     if rng.below(3) == 0 {
-                        let v = match k {
-                            0 => rng.pick(&["A", "B", "C"]),
-                            1 => rng.pick(&["P", "Q", "R"]),
-                            2 => rng.pick(&["T", "U"]),
-                            3 => rng.pick(&["s1", "s2"]),
-                            _ => rng.pick(&["r1", "r2"]),
-                        };
+                        let v = rng.pick_col(&shape.pools[k]);
                         // A field that is not sent stays as it is; one that is sent is set.
                         if let Some(input) = v.input() {
                             patch.push((name, input));
@@ -285,7 +386,7 @@ fn run(it: &Items, seed: u64, steps: usize) {
                 let want = if next == cur {
                     None
                 } else {
-                    conflict(&others, &next)
+                    conflict(shape, &others, &next)
                 };
                 match (it.call("update", m(patch)), want) {
                     (Ok(_), None) => world[i].1 = next,
@@ -303,7 +404,7 @@ fn run(it: &Items, seed: u64, steps: usize) {
             }
             // bulk create
             _ => {
-                let rows: Vec<Rec> = (0..1 + rng.below(6)).map(|_| rng.record()).collect();
+                let rows: Vec<Rec> = (0..1 + rng.below(6)).map(|_| rng.record(shape)).collect();
                 let partial = rng.below(2) == 0;
                 // The rows are checked in order against what is stored and what the earlier good
                 // rows of the call added.
@@ -312,14 +413,14 @@ fn run(it: &Items, seed: u64, steps: usize) {
                 for (n, r) in rows.iter().enumerate() {
                     let mut others: Vec<&Rec> = world.iter().map(|(_, r)| r).collect();
                     others.extend(added.iter());
-                    match conflict(&others, r) {
+                    match conflict(shape, &others, r) {
                         None => added.push(r.clone()),
                         Some(field) => failed.push((n + 1, field)),
                     }
                 }
                 let mut input = vec![(
                     "rows",
-                    Value::List(rows.iter().map(input_of).collect::<Vec<_>>()),
+                    Value::List(rows.iter().map(|r| input_of(shape, r)).collect::<Vec<_>>()),
                 )];
                 if partial {
                     input.push(("mode", t("partial")));
@@ -377,7 +478,7 @@ fn run(it: &Items, seed: u64, steps: usize) {
             .map(|(_, (_, r))| r)
             .collect();
         assert_eq!(
-            conflict(&others, r),
+            conflict(shape, &others, r),
             None,
             "the reference ended in a conflict"
         );
@@ -407,6 +508,9 @@ fn the_check_gives_the_answers_of_the_rule() {
         };
         for seed in [1, 2, 3, 4, 5, 6] {
             run(&Items::open(&url), seed * 7919, steps);
+            // The same with a whole number and a boolean among the fields and the scopes.
+            let typed = Items::shaped(Store::open(&url).unwrap(), &TYPED);
+            run(&typed, seed * 104_729, steps);
         }
     }
 }
@@ -486,7 +590,8 @@ fn the_messages_are_exactly_these() {
                 "1 of 2 row(s) are invalid, so nothing was created. row 2: {md}.code must be unique: \"N-1\" is already used by another record"
             )
         );
-        // A number is shown as a number.
+        // The same through the other model of the measurements (a text in quotes; a number and a
+        // decimal are shown in `values_are_compared_in_their_canonical_form_and_by_their_kind`).
         let p = Bench::over(Store::open(&url).unwrap());
         p.call(&Bench::user(), "create", m(crate::unique_bench::row(1)))
             .unwrap();
@@ -506,18 +611,6 @@ fn the_messages_are_exactly_these() {
 
 // ---- what the check reads ------------------------------------------------------------------
 
-/// A store over SQLite that tallies what is read through it.
-fn tallied() -> (Arc<Flaky>, Store) {
-    let flaky = Flaky::new(obop_storage::open("sqlite::memory:").unwrap());
-    let backend = obop_storage::guarded(flaky.clone());
-    let bytes = obop_storage::blob::open_bytes("memory:", None).unwrap();
-    let store = Store {
-        blobs: Arc::new(obop_storage::blob::Catalog::new(backend.clone(), bytes)),
-        backend,
-    };
-    (flaky, store)
-}
-
 /// Put `n` reaction rows straight into the store (the check is not what is being measured here,
 /// and the old code would take minutes to check 20,000 rows).
 fn load(b: &Bench, n: usize) {
@@ -536,15 +629,21 @@ fn load(b: &Bench, n: usize) {
     }
 }
 
-/// What a fixed piece of work (20 creates, a bulk create of 50 rows, an update and a refused
-/// create) reads in a model of `n` rows.
-fn work_in(n: usize) -> (obop_storage::testing::Reads, u64) {
-    let (flaky, store) = tallied();
+/// What a fixed piece of work (20 creates, a bulk create of 50 rows and a refused create) reads in
+/// a model of `n` rows in the database at `url`, and which statements the backend ran for it.
+fn work_in(
+    url: &str,
+    n: usize,
+) -> (
+    obop_storage::testing::Reads,
+    obop_storage::testing::UniqueRuns,
+) {
+    let (flaky, store) = tallied_over(url);
     let b = Bench::over(store);
     load(&b, n);
     let who = Bench::user();
     flaky.reset_reads();
-    obop_storage::testing::reset_full_scan_steps();
+    obop_storage::testing::reset_unique_runs();
     for i in 0..20 {
         b.create_one(&who, n + i);
     }
@@ -563,33 +662,62 @@ fn work_in(n: usize) -> (obop_storage::testing::Reads, u64) {
         panic!("{dup:?}")
     };
     assert!(e.contains("must be unique"), "{e}");
-    (flaky.reads(), obop_storage::testing::full_scan_steps())
+    (flaky.reads(), obop_storage::testing::unique_runs())
 }
 
-#[test]
-fn the_check_reads_the_same_few_rows_in_a_model_of_any_size() {
-    let (small, small_scanned) = work_in(2_000);
-    let (large, large_scanned) = work_in(20_000);
-    eprintln!("2,000 rows: {small:?}, {small_scanned} rows scanned by SQLite");
-    eprintln!("20,000 rows: {large:?}, {large_scanned} rows scanned by SQLite");
-    // No read of the whole model, and no lookup on one field (a scan, on both databases).
-    for r in [small, large] {
+/// The check asks the store for its keys and for nothing else, whatever the size of the model, and
+/// the backend answers them with the statement built from the index.
+fn the_check_costs_the_same_in_a_model_of_any_size(small_url: &str, large_url: &str, sqlite: bool) {
+    let (small, small_runs) = work_in(small_url, 2_000);
+    let (large, large_runs) = work_in(large_url, 20_000);
+    eprintln!("2,000 rows: {small:?}, {small_runs:?}");
+    eprintln!("20,000 rows: {large:?}, {large_runs:?}");
+    // Every created row asked once for each of the two rules; the refused one only about the
+    // first, which it broke.
+    let asked = 2 * (20 + 50) + 1;
+    for (r, runs) in [(&small, &small_runs), (&large, &large_runs)] {
+        // No read of the whole model, and no lookup on one field (a scan, on both databases).
         // (The one call of `list` is the sweep of expired idempotency answers after a bulk
         // create, and the model it lists is empty.)
         assert_eq!((r.list_rows, r.scan_rows, r.finds), (0, 0, 0), "{r:?}");
         assert_eq!(r.scans, 0, "{r:?}");
-        // Every created row asked once for each of the two rules; the refused one only about
-        // the first, which it broke; and the answers held at most that one twin.
-        assert_eq!(r.keyed, 2 * (20 + 50) + 1, "{r:?}");
+        assert_eq!(r.keyed, asked, "{r:?}");
+        // And the answers held at most the one twin.
         assert!(r.keyed_rows <= 2, "{r:?}");
+        // The backend ran its keyed statement for every one of them: it did not go the way of
+        // `find`, which would give the same answers at the cost of the model.
+        assert_eq!((runs.keyed, runs.fallback), (asked, 0), "{runs:?}");
     }
     // The same work reads the same, whatever the size of the model.
     assert_eq!(small, large);
-    // SQLite stepped over no more rows in full scans for 20,000 rows than for 2,000, and over far
-    // fewer than the model has: one scan of the model by the old code is 20,000 steps, and the
-    // old check made two for each of the 71 creates.
-    assert_eq!(small_scanned, large_scanned);
-    assert!(large_scanned < 20_000, "{large_scanned}");
+    if sqlite {
+        // The work SQLite did for the statements is a handful of steps each, and no more for
+        // 20,000 rows than for 2,000. (For the old check it was in proportion to the model:
+        // 120,026 steps for one statement over 20,000 rows, see `obop-storage`'s
+        // `the_work_sqlite_does_for_the_keyed_statement_does_not_grow_with_the_model`.)
+        assert!(small_runs.vm_steps > 0, "{small_runs:?}");
+        assert!(small_runs.vm_steps < 100 * asked, "{small_runs:?}");
+        assert!(
+            large_runs.vm_steps <= small_runs.vm_steps + small_runs.vm_steps / 10,
+            "{small_runs:?} {large_runs:?}"
+        );
+    }
+}
+
+#[test]
+fn the_check_reads_the_same_few_rows_in_a_model_of_any_size() {
+    the_check_costs_the_same_in_a_model_of_any_size("sqlite::memory:", "sqlite::memory:", true);
+}
+
+#[test]
+fn with_postgres_the_check_reads_the_same_few_rows_in_a_model_of_any_size() {
+    let Ok(base) = std::env::var("OBOP_TEST_POSTGRES_URL") else {
+        eprintln!("skipped: set OBOP_TEST_POSTGRES_URL to run against PostgreSQL");
+        return;
+    };
+    let small = obop_storage::testing::TestDb::create(&base).unwrap();
+    let large = obop_storage::testing::TestDb::create(&base).unwrap();
+    the_check_costs_the_same_in_a_model_of_any_size(small.url(), large.url(), false);
 }
 
 // ---- the database as the last word ---------------------------------------------------------
@@ -702,6 +830,7 @@ fn race(url: &str, trials: usize) -> (usize, usize) {
         d: Arc::new(Dispatcher::new()),
         store: Store::open(url).unwrap(),
         model: a.model.clone(),
+        shape: &TEXT,
     };
     let module = item_module(a.model.strip_suffix("_item").unwrap());
     b.d.register_crud(&module, &b.store);

@@ -23,45 +23,51 @@ pub fn time_budget(secs: u64) -> std::time::Duration {
     std::time::Duration::from_secs_f64(secs as f64 * factor)
 }
 
-// ---- the rows SQLite reads in full scans -----------------------------------------------------
+// ---- which way the lookup of a unique rule went --------------------------------------------
 
-#[cfg(feature = "test-support")]
+/// What [`Backend::find_unique`] did on this thread: how often it ran its keyed statement, how
+/// often it went the way of the default (`find` and the exact rule), the work SQLite did for the
+/// keyed statements, and the text of the last keyed statement.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UniqueRuns {
+    /// Lookups answered by the statement built from the index text.
+    pub keyed: u64,
+    /// Lookups answered by `find` and the exact rule (a value without exact text, or a name the
+    /// index cannot carry).
+    pub fallback: u64,
+    /// SQLite only: the virtual machine steps (`SQLITE_STMTSTATUS_VM_STEP`) the keyed statements
+    /// took, summed. Work that does not depend on the clock: a statement that reads the whole
+    /// model takes a number of steps in proportion to the model, one that uses the index does not.
+    pub vm_steps: u64,
+    /// The text of the keyed statement that ran last.
+    pub last_sql: Option<String>,
+}
+
 thread_local! {
-    static FULL_SCAN_STEPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static UNIQUE_RUNS: std::cell::RefCell<UniqueRuns> = std::cell::RefCell::new(UniqueRuns::default());
 }
 
-/// Make every SQLite connection this process opens add, when a statement finishes, the rows that
-/// SQLite stepped over in full table scans (`sqlite3_stmt_status`, `SQLITE_STMTSTATUS_FULLSCAN_STEP`)
-/// to a count of the thread that ran it. A statement that finds its rows by an index adds nothing.
-#[cfg(feature = "test-support")]
-pub(crate) fn count_full_scans(conn: &rusqlite::Connection) {
-    use rusqlite::StatementStatus;
-    use rusqlite::trace::{TraceEvent, TraceEventCodes};
-    conn.trace_v2(
-        TraceEventCodes::SQLITE_TRACE_PROFILE,
-        Some(|event| {
-            if let TraceEvent::Profile(stmt, _) = event {
-                let steps = u64::try_from(stmt.get_status(StatementStatus::FullscanStep))
-                    .unwrap_or_default();
-                FULL_SCAN_STEPS.with(|n| n.set(n.get() + steps));
-            }
-        }),
-    );
+/// The runs of `find_unique` on this thread since it started or since [`reset_unique_runs`].
+pub fn unique_runs() -> UniqueRuns {
+    UNIQUE_RUNS.with(|r| r.borrow().clone())
 }
 
-/// The rows the SQLite statements run by this thread have stepped over in full table scans since
-/// the thread started (or since [`reset_full_scan_steps`]); a measure of work that does not depend
-/// on the clock. A lookup that uses an index adds no steps; one that scans a model of 20,000 rows
-/// adds 20,000 or more.
-#[cfg(feature = "test-support")]
-pub fn full_scan_steps() -> u64 {
-    FULL_SCAN_STEPS.with(std::cell::Cell::get)
+/// Set the count of [`unique_runs`] for this thread to zero.
+pub fn reset_unique_runs() {
+    UNIQUE_RUNS.with(|r| *r.borrow_mut() = UniqueRuns::default());
 }
 
-/// Set the count of [`full_scan_steps`] for this thread to zero.
-#[cfg(feature = "test-support")]
-pub fn reset_full_scan_steps() {
-    FULL_SCAN_STEPS.with(|n| n.set(0));
+pub(crate) fn note_keyed(sql: &str, vm_steps: i32) {
+    UNIQUE_RUNS.with(|r| {
+        let mut r = r.borrow_mut();
+        r.keyed += 1;
+        r.vm_steps += u64::try_from(vm_steps).unwrap_or_default();
+        r.last_sql = Some(sql.to_string());
+    });
+}
+
+pub(crate) fn note_fallback() {
+    UNIQUE_RUNS.with(|r| r.borrow_mut().fallback += 1);
 }
 
 /// Which calls are refused.

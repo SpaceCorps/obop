@@ -344,7 +344,8 @@ pub trait Backend: Send + Sync {
     /// `fields[0]` equals `values[0]` and whose later `fields[i]` equal `values[i]`, a missing or
     /// null stored value counting as the empty text `""` (so the caller passes `""` for a scope
     /// field it has no value for), in insertion order. [`unique_matches`] is the one definition of
-    /// "equal": a JSON string `"5"` and the number `5` are different values.
+    /// "equal": a JSON string `"5"` and the number `5` are different values. (The records a unit
+    /// of work has written and not yet committed come after the stored ones, in no order.)
     ///
     /// The answer is the same on every backend; only the cost differs. The default reads the model
     /// ([`Backend::find`] on `fields[0]`, then the other fields). SQLite and PostgreSQL ask the

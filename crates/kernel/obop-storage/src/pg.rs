@@ -345,7 +345,7 @@ fn unique_columns(fields: &[&str]) -> Result<Vec<String>> {
 }
 
 /// The statement that makes the unique index of `fields` on `model`. Its text is what deployed
-/// databases were given by every version since D57 (the test `unique_index_text_is_what_deployed_databases_hold`).
+/// databases were given by every version since D57 (pinned by the test `the_unique_index_is_what_deployed_databases_hold`).
 pub(crate) fn unique_index_sql(name: &str, model: &str, fields: &[&str]) -> Result<String> {
     let model = ident(model)?;
     Ok(format!(
@@ -688,6 +688,8 @@ impl Backend for Pg {
             _ => None,
         };
         let Some((sql, texts)) = keyed else {
+            #[cfg(any(test, feature = "test-support"))]
+            crate::testing::note_fallback();
             let (field, value) = unique_head(fields, values)?;
             return Ok(self
                 .find(model, field, value)?
@@ -700,6 +702,8 @@ impl Backend for Pg {
                 texts.iter().map(|t| t as _).collect();
             rows_with_id(c.query(&sql, &params)?)
         })?;
+        #[cfg(any(test, feature = "test-support"))]
+        crate::testing::note_keyed(&sql, 0);
         Ok(rows
             .into_iter()
             .filter(|(_, rec)| unique_matches(rec, fields, values))

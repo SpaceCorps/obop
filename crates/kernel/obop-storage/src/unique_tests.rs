@@ -2,11 +2,17 @@
 //!
 //! What these tests hold the code to:
 //!
-//! * the answer is the one the old check got from `find` and the rule of `unique_matches`, for a
-//!   corpus of hostile values (a string `"5"` and the number `5`, floats, lists, empty values,
-//!   quotes, long text), with and without the index;
-//! * the SQL of the lookup is served by the unique index: the query plan names it, on SQLite and on
-//!   PostgreSQL, and the old statement's plan does not (the control that shows the test can fail);
+//! * the answer is the exact rule of `unique_matches` (the first field equal as a JSON value, a
+//!   scope field equal or both empty), for a corpus of hostile values (a string `"5"` and the
+//!   number `5`, floats, lists, empty values, quotes, long text), with and without the index. The
+//!   old check got its candidates from `find`, which is the same rule for every value a typed
+//!   field can hold; it differed only for a float equal to an integer (`5.0` and `5`), which
+//!   PostgreSQL's `jsonb` took for one value and no typed kind can produce (ISSUES K37);
+//! * the backend runs the statement built from the index for text, whole numbers and booleans, and
+//!   goes the way of `find` only for the values listed here (it reports which way it went);
+//! * the statement it ran is served by the unique index: SQLite's plan and PostgreSQL's plan name
+//!   that exact index, the work SQLite does for it does not grow with the model, and the old
+//!   statement's does (the control that shows the test can fail);
 //! * the text of the index is what deployed databases hold since D57, byte for byte.
 
 use super::*;
@@ -189,26 +195,142 @@ fn find_unique_gives_the_answer_of_the_rule_on_postgres() {
     check_backend(&*open(db.url()).unwrap());
 }
 
+// ---- which statement ran ------------------------------------------------------------------
+
+/// Ask for a key and report which way the backend went: the statement built from the index, or
+/// `find` and the exact rule. A backend that quietly took the second way gives the same answers
+/// and costs the size of the model, which no test of answers can see.
+fn way(b: &dyn Backend, model: &str, fields: &[&str], values: &[J]) -> (u64, u64) {
+    crate::testing::reset_unique_runs();
+    b.find_unique(model, fields, values).unwrap();
+    let r = crate::testing::unique_runs();
+    (r.keyed, r.fallback)
+}
+
+const KEYED: (u64, u64) = (1, 0);
+const FALLBACK: (u64, u64) = (0, 1);
+
+/// `u64_is_keyed`: PostgreSQL has an exact text for every integer, SQLite compares only what fits
+/// an `i64`. `nul_is_keyed`: a text with a NUL has no exact text in PostgreSQL.
+fn the_way_of_each_kind_of_key(b: &dyn Backend, u64_is_keyed: bool, nul_is_keyed: bool) {
+    let kind = b.kind();
+    b.ensure_unique("obop_uq_w1_a", "w1", &["a"]).unwrap();
+    b.ensure_unique("obop_uq_w2_a_b", "w2", &["a", "b"])
+        .unwrap();
+    let way_of = |model: &str, fields: &[&str], values: &[J]| way(b, model, fields, values);
+    // Text, whole numbers and booleans, as the first field and as a scope.
+    for first in [
+        json!("x"),
+        json!("5"),
+        json!("é"),
+        json!(5),
+        json!(-7),
+        json!(0),
+        json!(i64::MAX),
+        json!(true),
+        json!(false),
+    ] {
+        assert_eq!(
+            way_of("w1", &["a"], std::slice::from_ref(&first)),
+            KEYED,
+            "{kind} {first:?}"
+        );
+        for scope in [json!(""), json!("y"), json!(5), json!(true), json!(false)] {
+            assert_eq!(
+                way_of("w2", &["a", "b"], &[first.clone(), scope.clone()]),
+                KEYED,
+                "{kind} {first:?} {scope:?}"
+            );
+        }
+    }
+    assert_eq!(
+        way_of("w1", &["a"], &[json!(u64::MAX)]),
+        if u64_is_keyed { KEYED } else { FALLBACK },
+        "{kind} u64::MAX"
+    );
+    // A text with a NUL: SQLite compares it exactly. PostgreSQL's `jsonb` cannot hold one (no
+    // such record can be stored, and `find` refuses the value, as it did before), so the lookup
+    // goes the way of `find` and reports that error.
+    crate::testing::reset_unique_runs();
+    let nul = b.find_unique("w1", &["a"], &[json!("a\0b")]);
+    let runs = crate::testing::unique_runs();
+    if nul_is_keyed {
+        assert!(nul.unwrap().is_empty(), "{kind} NUL");
+        assert_eq!((runs.keyed, runs.fallback), KEYED, "{kind} NUL");
+    } else {
+        assert!(nul.is_err(), "{kind} NUL");
+        assert_eq!((runs.keyed, runs.fallback), FALLBACK, "{kind} NUL");
+    }
+    // The values that have no exact text, an empty first value (the index holds no entry for it)
+    // and a name the index cannot carry go the way of `find`, with the same rule.
+    for first in [json!(1.5), json!([1]), json!({"k": 1}), json!(""), J::Null] {
+        assert_eq!(
+            way_of("w1", &["a"], std::slice::from_ref(&first)),
+            FALLBACK,
+            "{kind} {first:?}"
+        );
+    }
+    for scope in [json!(1.5), json!([1]), J::Null] {
+        assert_eq!(
+            way_of("w2", &["a", "b"], &[json!("x"), scope.clone()]),
+            FALLBACK,
+            "{kind} scope {scope:?}"
+        );
+    }
+    assert_eq!(
+        way_of("w1", &["Not-An-Identifier"], &[json!("x")]),
+        FALLBACK,
+        "{kind}"
+    );
+    assert_eq!(
+        way_of("Not-A-Model", &["a"], &[json!("x")]),
+        FALLBACK,
+        "{kind}"
+    );
+}
+
+#[test]
+fn the_sqlite_backend_runs_the_keyed_statement_for_text_integers_and_booleans() {
+    the_way_of_each_kind_of_key(&*open("sqlite::memory:").unwrap(), false, true);
+}
+
+#[test]
+fn with_postgres_the_backend_runs_the_keyed_statement_for_text_integers_and_booleans() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    the_way_of_each_kind_of_key(&*open(db.url()).unwrap(), true, false);
+}
+
 // ---- the plan: the index serves the lookup --------------------------------------------------
 
-/// The plan of the lookup on SQLite names the unique index and does not scan; the statement the
-/// check used before (`find`) does not use that index.
+/// The statement of `Sqlite::find` before the keyed lookup (the check used it for the first field
+/// of a rule).
+const OLD_SQLITE_FIND: &str = "SELECT id, data FROM obop_record WHERE model = ?1 \
+     AND json_extract(data, '$.' || ?2) = ?3 ORDER BY seq";
+
+/// The plan of the statement the SQLite backend ran names the unique index of its rule and does
+/// not scan; the statement the check used before (`find`) does not use that index. Each rule is
+/// on its own model, so that no other index could be the one named.
 #[test]
-fn the_sqlite_lookup_is_planned_on_the_unique_index() {
+fn the_sqlite_statement_the_backend_runs_is_planned_on_its_own_unique_index() {
+    use rusqlite::types::Value as Sql;
     let db = crate::sqlite::Sqlite::open(":memory:").unwrap();
     let rows: Vec<Row> = (0..3000)
-        .map(|n| {
-            let mut f = Fields::new();
-            f.insert("sku".into(), json!(format!("S{n}")));
-            f.insert("company".into(), json!(format!("c{}", n % 7)));
-            ("t".to_string(), format!("id{n}"), f)
+        .flat_map(|n| {
+            ["t1", "t2"].map(|m| {
+                let mut f = Fields::new();
+                f.insert("sku".into(), json!(format!("S{n}")));
+                f.insert("company".into(), json!(format!("c{}", n % 7)));
+                (m.to_string(), format!("{m}id{n}"), f)
+            })
         })
         .collect();
     db.insert_many(&rows).unwrap();
-    db.ensure_unique("obop_uq_t_sku", "t", &["sku"]).unwrap();
-    db.ensure_unique("obop_uq_t_sku_company", "t", &["sku", "company"])
+    db.ensure_unique("obop_uq_t1_sku", "t1", &["sku"]).unwrap();
+    db.ensure_unique("obop_uq_t2_sku_company", "t2", &["sku", "company"])
         .unwrap();
-    let plan = |sql: &str, binds: Vec<rusqlite::types::Value>| -> String {
+    let plan = |sql: &str, binds: Vec<Sql>| -> String {
         db.with_conn(|c| {
             let mut st = c.prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
             let rows = st
@@ -217,30 +339,73 @@ fn the_sqlite_lookup_is_planned_on_the_unique_index() {
             rows.map(|r| r.unwrap()).collect::<Vec<_>>().join(" | ")
         })
     };
-    use rusqlite::types::Value as Sql;
-    for (fields, index, binds) in [
-        (vec!["sku"], "obop_uq_t_sku", vec![Sql::Text("S77".into())]),
+    // (model, fields, values, the index that must be named, the binds the statement takes, the
+    // record that answers). The other kinds of key use the same statement with other bound types.
+    type Case = (
+        &'static str,
+        Vec<&'static str>,
+        Vec<J>,
+        &'static str,
+        Vec<Sql>,
+        &'static str,
+    );
+    let cases: Vec<Case> = vec![
         (
-            vec!["sku", "company"],
-            "obop_uq_t_sku_company",
-            vec![Sql::Text("S77".into()), Sql::Text("c0".into())],
+            "t1",
+            vec!["sku"],
+            vec![json!("S77")],
+            "obop_uq_t1_sku",
+            vec![Sql::Text("S77".into())],
+            "t1id77",
         ),
-    ] {
-        let sql = crate::sqlite::unique_lookup_sql("t", &fields).unwrap();
+        (
+            "t2",
+            vec!["sku", "company"],
+            vec![json!("S77"), json!("c0")],
+            "obop_uq_t2_sku_company",
+            vec![Sql::Text("S77".into()), Sql::Text("c0".into())],
+            "t2id77",
+        ),
+        (
+            "t1",
+            vec!["sku"],
+            vec![json!(77)],
+            "obop_uq_t1_sku",
+            vec![Sql::Integer(77)],
+            "",
+        ),
+        (
+            "t2",
+            vec!["sku", "company"],
+            vec![json!("S77"), json!(true)],
+            "obop_uq_t2_sku_company",
+            vec![Sql::Text("S77".into()), Sql::Integer(1)],
+            "",
+        ),
+    ];
+    for (model, fields, values, index, binds, want) in cases {
+        crate::testing::reset_unique_runs();
+        let hit = ids(db.find_unique(model, &fields, &values).unwrap());
+        assert_eq!(hit.join(","), want, "{model} {fields:?} {values:?}");
+        let runs = crate::testing::unique_runs();
+        assert_eq!((runs.keyed, runs.fallback), KEYED, "{model} {fields:?}");
+        let sql = runs.last_sql.expect("the statement that ran");
         let p = plan(&sql, binds);
         assert!(
-            p.contains(&format!("USING INDEX {index}")),
-            "the plan of {fields:?} does not use {index}: {p}"
+            p.contains(&format!("USING INDEX {index} (")),
+            "the plan of {model} {fields:?} does not use {index}: {p}"
         );
-        assert!(!p.contains("SCAN"), "the plan of {fields:?} scans: {p}");
+        assert!(
+            !p.contains("SCAN"),
+            "the plan of {model} {fields:?} scans: {p}"
+        );
     }
     // The control: what the check asked before. If this plan used the index, the assertions above
     // would prove nothing.
     let old = plan(
-        "SELECT id, data FROM obop_record WHERE model = ?1 \
-         AND json_extract(data, '$.' || ?2) = ?3 ORDER BY seq",
+        OLD_SQLITE_FIND,
         vec![
-            Sql::Text("t".into()),
+            Sql::Text("t1".into()),
             Sql::Text("sku".into()),
             Sql::Text("S77".into()),
         ],
@@ -248,23 +413,79 @@ fn the_sqlite_lookup_is_planned_on_the_unique_index() {
     assert!(!old.contains("obop_uq_"), "{old}");
 }
 
-/// The same on PostgreSQL, over 20,000 rows analysed, with the planner's own choice (no setting
-/// forces the index).
+/// The work SQLite does for the keyed statement does not grow with the model; the work it does
+/// for the old statement does (the control). The measure is the number of steps of SQLite's
+/// virtual machine, `SQLITE_STMTSTATUS_VM_STEP`: it does not depend on the clock. (A count of
+/// "full scan steps" cannot tell the two apart: SQLite plans the old statement as a range search
+/// on the primary key's `model` prefix, which it does not call a full scan, and reads 0 for it.)
 #[test]
-fn the_postgres_lookup_is_planned_on_the_unique_index() {
+fn the_work_sqlite_does_for_the_keyed_statement_does_not_grow_with_the_model() {
+    let db = crate::sqlite::Sqlite::open(":memory:").unwrap();
+    db.ensure_unique("obop_uq_t_sku", "t", &["sku"]).unwrap();
+    let grow_to = |from: usize, to: usize| {
+        let rows: Vec<Row> = (from..to)
+            .map(|n| {
+                let mut f = Fields::new();
+                f.insert("sku".into(), json!(format!("S{n}")));
+                ("t".to_string(), format!("id{n}"), f)
+            })
+            .collect();
+        db.insert_many(&rows).unwrap();
+    };
+    let measure = || -> (u64, u64) {
+        crate::testing::reset_unique_runs();
+        let hit = ids(db.find_unique("t", &["sku"], &[json!("S77")]).unwrap());
+        assert_eq!(hit, ["id77"]);
+        let keyed = crate::testing::unique_runs().vm_steps;
+        let old = db.with_conn(|c| {
+            let mut st = c.prepare(OLD_SQLITE_FIND).unwrap();
+            let n = st
+                .query_map(rusqlite::params!["t", "sku", "S77"], |r| {
+                    r.get::<_, String>(0)
+                })
+                .unwrap()
+                .count();
+            assert_eq!(n, 1);
+            u64::try_from(st.get_status(rusqlite::StatementStatus::VmStep)).unwrap()
+        });
+        (keyed, old)
+    };
+    grow_to(0, 2_000);
+    let (keyed_small, old_small) = measure();
+    grow_to(2_000, 20_000);
+    let (keyed_large, old_large) = measure();
+    eprintln!(
+        "VM steps at 2,000 and 20,000 rows: keyed {keyed_small} and {keyed_large}, old {old_small} and {old_large}"
+    );
+    // The control: the old statement visits the model, so its work is in proportion to it.
+    assert!(old_small > 2_000, "{old_small}");
+    assert!(old_large >= 8 * old_small, "{old_small} {old_large}");
+    // The keyed statement does a handful of steps whatever the size.
+    assert!(keyed_small > 0 && keyed_small < 100, "{keyed_small}");
+    assert!(
+        keyed_large <= keyed_small + 8,
+        "{keyed_small} {keyed_large}"
+    );
+}
+
+/// The same on PostgreSQL, over 2 x 20,000 rows analysed, with the planner's own choice (no
+/// setting forces the index): the plan of the statement the backend ran names the exact index of
+/// its rule. Each rule is on its own model, so that no other index could be the one named.
+#[test]
+fn with_postgres_the_statement_the_backend_runs_is_planned_on_its_own_unique_index() {
     let Some(db) = TestDb::new() else {
         return;
     };
     let b = open(db.url()).unwrap();
-    b.ensure_unique("obop_uq_t_sku", "t", &["sku"]).unwrap();
-    b.ensure_unique("obop_uq_t_sku_company", "t", &["sku", "company"])
+    b.ensure_unique("obop_uq_t1_sku", "t1", &["sku"]).unwrap();
+    b.ensure_unique("obop_uq_t2_sku_company", "t2", &["sku", "company"])
         .unwrap();
     let mut c = db.connect();
     c.batch_execute(
         "INSERT INTO obop_record (model, id, data)
-           SELECT 't', 'id' || g,
+           SELECT m, m || 'id' || g,
                   jsonb_build_object('sku', 'S' || g, 'company', 'c' || (g % 7))
-             FROM generate_series(1, 20000) g;
+             FROM generate_series(1, 20000) g, (VALUES ('t1'), ('t2')) AS v(m);
          ANALYZE obop_record",
     )
     .unwrap();
@@ -277,22 +498,48 @@ fn the_postgres_lookup_is_planned_on_the_unique_index() {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-    let one = crate::pg::unique_lookup_sql("t", &["sku"]).unwrap();
-    let p = plan(&mut c, &one, &[&"S77"]);
-    assert!(p.contains("obop_uq_t_sku"), "{p}");
-    assert!(!p.contains("Seq Scan"), "{p}");
-    let two = crate::pg::unique_lookup_sql("t", &["sku", "company"]).unwrap();
-    let p = plan(&mut c, &two, &[&"S77", &"c0"]);
-    assert!(p.contains("obop_uq_t_sku_company"), "{p}");
-    assert!(!p.contains("Seq Scan"), "{p}");
-    // And it returns the row: the plan is of the statement the backend runs.
-    let hit = b.find_unique("t", &["sku", "company"], &[json!("S77"), json!("c0")]);
-    assert_eq!(ids(hit.unwrap()), ["id77"]);
+    let names = |p: &str, index: &str| {
+        p.contains(&format!("using {index} on"))
+            || p.contains(&format!("Bitmap Index Scan on {index} "))
+    };
+    let mut ask =
+        |model: &str, fields: &[&str], values: &[J], texts: &[&str], index: &str, want: &str| {
+            crate::testing::reset_unique_runs();
+            let hit = ids(b.find_unique(model, fields, values).unwrap());
+            assert_eq!(hit.join(","), want, "{model} {fields:?}");
+            let runs = crate::testing::unique_runs();
+            assert_eq!((runs.keyed, runs.fallback), KEYED, "{model} {fields:?}");
+            let sql = runs.last_sql.expect("the statement that ran");
+            let params: Vec<&(dyn postgres::types::ToSql + Sync)> =
+                texts.iter().map(|t| t as _).collect();
+            let p = plan(&mut c, &sql, &params);
+            assert!(
+                names(&p, index),
+                "the plan of {model} does not use {index}: {p}"
+            );
+            assert!(!p.contains("Seq Scan"), "{p}");
+        };
+    ask(
+        "t1",
+        &["sku"],
+        &[json!("S77")],
+        &["S77"],
+        "obop_uq_t1_sku",
+        "t1id77",
+    );
+    ask(
+        "t2",
+        &["sku", "company"],
+        &[json!("S77"), json!("c0")],
+        &["S77", "c0"],
+        "obop_uq_t2_sku_company",
+        "t2id77",
+    );
     // The control: the statement the check used before reads the model.
     let old = plan(
         &mut c,
         "SELECT id, data FROM obop_record WHERE model = $1 AND data -> $2::text = $3 ORDER BY seq",
-        &[&"t", &"sku", &json!("S77")],
+        &[&"t1", &"sku", &json!("S77")],
     );
     assert!(
         old.contains("Seq Scan") && !old.contains("obop_uq_"),
@@ -350,8 +597,10 @@ fn the_statements_are_golden() {
 }
 
 /// What a database that was made by an earlier version holds is what these versions make: the
-/// definition the server reports for the index is pinned as text. The test compiles and passes
-/// against the code before the keyed lookup, which is how the text was taken.
+/// definition the server reports for the index is pinned as text. The text is the one the code of
+/// D57 made before the keyed lookup (`ensure_unique` of `sqlite.rs` and `pg.rs` at 7bb4304 builds
+/// it with the same `format!`); the test needs the test-only `Sqlite::with_conn`, so it does not
+/// compile unchanged against that code.
 #[test]
 fn the_unique_index_is_what_deployed_databases_hold() {
     let sqlite = open("sqlite::memory:").unwrap();
