@@ -1,6 +1,5 @@
 import { ObopApiError } from "@obop/client";
-import { emitChange } from "./bus.ts";
-import { stopRecording } from "./recorder.ts";
+import { leaveSession } from "./actions.ts";
 import type { Runtime } from "./runtime.ts";
 
 /** This phone as the instance lists it. A mobile token sees its own device and no other (DEPLOY.md "Mobile apps"). */
@@ -52,19 +51,12 @@ export async function renameDevice(rt: Runtime, name: string): Promise<void> {
 }
 
 /**
- * "Remove this phone": the instance ends the sign-in and marks the device revoked; then the tokens
- * and every trip on the phone go, as in a sign-out. If the instance cannot be reached the
- * call throws and nothing is removed.
+ * "Remove this phone": the instance ends the sign-in and marks the device revoked; then the app
+ * signs out as in `signOut` (`keepUnsent` decides about the trips that are only on the phone). If
+ * the instance cannot be reached the call throws and nothing is removed, so the phone is never
+ * left listed as active on the instance while the app thinks it is gone.
  */
-export async function removeThisDevice(rt: Runtime): Promise<void> {
+export async function removeThisDevice(rt: Runtime, keepUnsent: boolean): Promise<void> {
   await rt.client().call("device", "revoke", { id: deviceId(rt) });
-  rt.sync.stop();
-  try {
-    await stopRecording();
-  } catch {
-    // Nothing was running.
-  }
-  await rt.session.signOut();
-  await rt.store.clearAll();
-  emitChange();
+  await leaveSession(rt, keepUnsent);
 }

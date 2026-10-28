@@ -4,12 +4,10 @@ import { View } from "react-native";
 import { formatDistance, statusText, tripStatus } from "../../core/present.ts";
 import { hasWork } from "../../core/store.ts";
 import { PURPOSES, type Purpose } from "../../core/types.ts";
-import { t, type MessageKey } from "../../i18n/index.ts";
+import { formatDateTime, t, tp, type MessageKey } from "../../i18n/index.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useOutbox, useSyncStatus } from "../hooks.ts";
 import type { Nav } from "../router.ts";
-
-const when = (iso: string): string => new Date(iso).toLocaleString();
 
 export function Home({ rt, nav }: { rt: Runtime; nav: Nav }) {
   const { trips, active } = useOutbox(rt);
@@ -44,7 +42,7 @@ export function Home({ rt, nav }: { rt: Runtime; nav: Nav }) {
         <Banner
           tone="warning"
           title={t("home.open.title")}
-          message={t("home.open.message", { when: when(active.startedAt) })}
+          message={t("home.open.message", { when: formatDateTime(active.startedAt) })}
           action={{ label: t("home.open.action"), onPress: () => nav.push({ name: "recording" }) }}
           testID="open-trip-banner"
         />
@@ -61,10 +59,10 @@ export function Home({ rt, nav }: { rt: Runtime; nav: Nav }) {
         <Banner
           tone="info"
           title={t("home.waiting.title")}
-          message={t("home.waiting.message", { count: waiting.length })}
+          message={tp("home.waiting.message", waiting.length)}
         />
       ) : null}
-      {sync.error ? <Banner tone="danger" title={t("error.generic")} message={sync.error} /> : null}
+      {sync.error ? <Banner tone="danger" title={t("error.sync")} testID="sync-error" /> : null}
 
       <Text variant="label">{t("home.purpose")}</Text>
       <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
@@ -73,6 +71,7 @@ export function Home({ rt, nav }: { rt: Runtime; nav: Nav }) {
             key={p}
             label={t(`purpose.${p}` as MessageKey)}
             variant={p === purpose ? "primary" : "secondary"}
+            selected={p === purpose}
             onPress={() => setPurpose(p)}
             testID={`purpose-${p}`}
           />

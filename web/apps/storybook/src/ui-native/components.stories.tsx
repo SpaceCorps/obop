@@ -1,12 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { useState } from "react";
-import { Banner } from "./Banner.tsx";
-import { Button } from "./Button.tsx";
-import { Field } from "./Field.tsx";
-import { Row } from "./Row.tsx";
-import { Screen } from "./Screen.tsx";
-import { Text } from "./Text.tsx";
-import { Padded, PhoneFrames } from "../stories-support.tsx";
+import { Banner, Button, Field, Row, Screen, Text } from "@obop/ui-native";
+import { Padded, PhoneFrames } from "@obop/ui-native/stories-support";
 
 const meta = {
   title: "Native/Components",
@@ -109,19 +104,51 @@ export const HomeScreen: Story = {
 export const RecordingScreen: Story = {
   render: () => (
     <PhoneFrames height={700}>
-      <Screen
-        title="Recording"
-        scroll={false}
-        footer={<Button label="Stop" variant="danger" onPress={noop} />}
-      >
+      <Screen title="Recording" footer={<Button label="Stop" variant="danger" onPress={noop} />}>
+        <Banner
+          tone="danger"
+          title="Location updates are not running"
+          message="The trip is open but the phone is not recording it. Restart recording."
+          action={{ label: "Restart recording", onPress: noop }}
+        />
         <Text variant="display">00:14:32</Text>
-        <Text tone="muted">3.1 km so far (this phone&apos;s count; the server decides)</Text>
+        <Text>
+          3.1 km so far. This is the phone&apos;s own count; the server decides the distance.
+        </Text>
+        <Text tone="muted">212 points saved on this phone</Text>
         <Banner
           tone="info"
           title="Keep this app running"
           message="Do not force-stop it while you drive."
         />
       </Screen>
+    </PhoneFrames>
+  ),
+};
+
+function PurposeDemo() {
+  const [purpose, setPurpose] = useState("business");
+  return (
+    <Padded>
+      <Text variant="label">Purpose of the trip</Text>
+      {["business", "private", "commute"].map((p) => (
+        <Button
+          key={p}
+          label={p.charAt(0).toUpperCase() + p.slice(1)}
+          variant={p === purpose ? "primary" : "secondary"}
+          selected={p === purpose}
+          onPress={() => setPurpose(p)}
+        />
+      ))}
+    </Padded>
+  );
+}
+
+/** One choice of a group: the chosen one carries a check mark as well as the fill, and a screen reader hears a radio button. */
+export const PurposePicker: Story = {
+  render: () => (
+    <PhoneFrames height={420}>
+      <PurposeDemo />
     </PhoneFrames>
   ),
 };

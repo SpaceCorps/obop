@@ -2,8 +2,8 @@ import { Banner, Button, Field, Row, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { hasWork } from "../../core/store.ts";
-import { t } from "../../i18n/index.ts";
-import { signOut, unsentTrips } from "../../native/actions.ts";
+import { t, tp } from "../../i18n/index.ts";
+import { signOut, unsentSummary } from "../../native/actions.ts";
 import { databaseInfo } from "../../native/store.ts";
 import {
   readDevice,
@@ -13,6 +13,7 @@ import {
 } from "../../native/devices.ts";
 import { appVersion } from "../../native/platform-deps.ts";
 import type { Runtime } from "../../native/runtime.ts";
+import { announce } from "../announce.ts";
 import { useOutbox, useSyncStatus } from "../hooks.ts";
 import type { Nav } from "../router.ts";
 
@@ -21,6 +22,8 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
   const sync = useSyncStatus(rt);
   const [device, setDevice] = useState<DeviceView | null>(null);
   const [deviceError, setDeviceError] = useState(false);
+  const [leaveError, setLeaveError] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [name, setName] = useState("");
   const [saved, setSaved] = useState(false);
   const [cipher, setCipher] = useState<string | null>(null);
@@ -39,13 +42,20 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
     );
   }, [rt]);
 
-  const pending = trips.filter((x) => x.origin === "device" && hasWork(x)).length;
+  // "Everything is uploaded" is only said when no trip of this phone is waiting or stuck.
+  const mine = trips.filter((x) => x.origin === "device");
+  const pending = mine.filter((x) => hasWork(x)).length;
+  const stuck = mine.filter((x) => x.problem !== null && x.problem.code !== "incomplete").length;
   const report = sync.report;
+  const count = (): string =>
+    stuck > 0
+      ? tp("account.upload.stuck", stuck)
+      : pending > 0
+        ? tp("account.upload.pending", pending)
+        : t("account.upload.idle");
   const upload =
-    report === null || report.state === "idle"
-      ? pending > 0
-        ? t("account.upload.pending", { count: pending })
-        : t("account.upload.idle")
+    stuck > 0 || report === null || report.state === "idle"
+      ? count()
       : report.state === "offline"
         ? t("account.upload.offline")
         : report.state === "rate_limited"
@@ -54,50 +64,76 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
             ? t("account.upload.unavailable")
             : report.state === "signed_out"
               ? t("account.upload.signed_out")
-              : pending > 0
-                ? t("account.upload.pending", { count: pending })
-                : t("account.upload.idle");
+              : count();
 
   const save = () => {
     setSaved(false);
     renameDevice(rt, name).then(
-      () => setSaved(true),
+      () => {
+        setSaved(true);
+        announce(t("announce.saved"));
+      },
       () => setDeviceError(true),
     );
   };
 
+  /** Signs out (or removes this phone), keeping or deleting the trips that exist only on the phone. */
+  const go = (remove: boolean, keepUnsent: boolean) => {
+    setLeaving(true);
+    setLeaveError(false);
+    const done = remove ? removeThisDevice(rt, keepUnsent) : signOut(keepUnsent);
+    done.then(
+      () => nav.home(),
+      () => {
+        setLeaving(false);
+        setLeaveError(true);
+      },
+    );
+  };
+
   const leave = async (remove: boolean) => {
-    const unsent = await unsentTrips();
-    const go = () => {
-      const done = remove ? removeThisDevice(rt) : signOut();
-      done.then(
-        () => nav.home(),
-        () => setDeviceError(true),
-      );
-    };
-    if (unsent.length > 0) {
+    const unsent = await unsentSummary();
+    if (unsent.trips === 0) {
       Alert.alert(
-        t("account.signout.pending.title"),
-        t("account.signout.pending.message", { count: unsent.length }),
+        t(remove ? "account.device.revoke.title" : "account.signout.title"),
+        t(remove ? "account.device.revoke.message" : "account.signout.message"),
         [
           { text: t("common.cancel"), style: "cancel" },
-          { text: t("account.signout.delete"), style: "destructive", onPress: go },
+          {
+            text: t(remove ? "account.device.revoke" : "account.signout"),
+            style: "destructive",
+            onPress: () => go(remove, false),
+          },
         ],
       );
       return;
     }
-    Alert.alert(
-      t(remove ? "account.device.revoke.title" : "account.signout.title"),
-      t(remove ? "account.device.revoke.message" : "account.signout.message"),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t(remove ? "account.device.revoke" : "account.signout"),
-          style: "destructive",
-          onPress: go,
-        },
-      ],
-    );
+    // Trips that exist only on this phone: say how many, and let the driver keep them (the default
+    // and the safe choice) or delete them after a second, explicit confirmation.
+    const numbers = {
+      trips: tp("unit.trips", unsent.trips),
+      points: tp("unit.points", unsent.points),
+    };
+    Alert.alert(t("account.leave.pending.title"), t("account.leave.pending.message", numbers), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("account.leave.delete"),
+        style: "destructive",
+        onPress: () =>
+          Alert.alert(t("account.leave.delete.title"), t("account.leave.delete.message", numbers), [
+            { text: t("common.cancel"), style: "cancel" },
+            {
+              text: t(remove ? "account.leave.delete.remove" : "account.leave.delete.signout"),
+              style: "destructive",
+              onPress: () => go(remove, false),
+            },
+          ]),
+      },
+      {
+        text: t(remove ? "account.leave.keep.remove" : "account.leave.keep.signout"),
+        onPress: () => go(remove, true),
+      },
+    ]);
   };
 
   return (
@@ -142,11 +178,20 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
       ) : null}
       <Text tone="muted">{t("account.device.list")}</Text>
 
-      <Button label={t("account.signout")} onPress={() => void leave(false)} testID="signout" />
+      {leaveError ? (
+        <Banner tone="danger" title={t("account.leave.error")} testID="leave-error" />
+      ) : null}
+      <Button
+        label={t("account.signout")}
+        onPress={() => void leave(false)}
+        busy={leaving}
+        testID="signout"
+      />
       <Button
         label={t("account.device.revoke")}
         variant="danger"
         onPress={() => void leave(true)}
+        disabled={leaving}
         testID="remove-device"
       />
     </Screen>

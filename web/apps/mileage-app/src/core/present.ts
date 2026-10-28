@@ -1,4 +1,4 @@
-import { t, type MessageKey } from "../i18n/index.ts";
+import { formatNumber, t, tp, type MessageKey } from "../i18n/index.ts";
 import { hasWork } from "./store.ts";
 import type { LocalTrip, ServerState } from "./types.ts";
 
@@ -27,12 +27,38 @@ export function formatDistance(metres: string | null): string | null {
   if (metres === null) return null;
   const m = Number(metres);
   if (!Number.isFinite(m)) return null;
-  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
+  // The number and its unit come from the language, not from this code (decimal separator, unit text).
+  return m >= 1000
+    ? t("unit.km", { value: formatNumber(m / 1000, 1) })
+    : t("unit.m", { value: formatNumber(Math.round(m)) });
 }
 
 /** The distance the phone counts itself, in metres, as the same kind of text. */
 export function formatMetres(m: number): string {
-  return formatDistance(m.toFixed(2)) ?? "0 m";
+  return formatDistance(m.toFixed(2)) ?? t("unit.m", { value: formatNumber(0) });
+}
+
+/**
+ * The checks the server stored for a trip (`seq_gap:3 low_accuracy:1`) as sentences. A flag the
+ * app does not know is shown as it is, so nothing the server says is hidden.
+ */
+export function integrityLines(flags: string): string[] {
+  const lines: string[] = [];
+  for (const flag of flags.split(/\s+/)) {
+    if (flag === "") continue;
+    const [name, count] = flag.split(":");
+    const n = Number(count);
+    if (
+      (name === "seq_gap" || name === "speed_jump" || name === "low_accuracy") &&
+      Number.isInteger(n) &&
+      n > 0
+    ) {
+      lines.push(tp(`trip.check.${name}`, n));
+    } else {
+      lines.push(flag);
+    }
+  }
+  return lines;
 }
 
 /** Whether the driver may submit the trip: the server has it ended and it was not submitted. */

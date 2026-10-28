@@ -7,9 +7,10 @@ const reactNativeWeb = dirname(
   createRequire(import.meta.url).resolve("react-native-web/package.json"),
 );
 
-// The stories of every web package: `web/packages/<name>/src/**/*.stories.tsx`.
+// The stories of the native components live here (`src/`), so that the component package needs no
+// Storybook dependency; the stories of the web packages sit next to their components.
 const config: StorybookConfig = {
-  stories: ["../../../packages/*/src/**/*.stories.@(ts|tsx)"],
+  stories: ["../src/**/*.stories.@(ts|tsx)", "../../../packages/*/src/**/*.stories.@(ts|tsx)"],
   framework: "@storybook/react-vite",
   core: { disableTelemetry: true },
   addons: [],

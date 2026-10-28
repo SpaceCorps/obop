@@ -4,17 +4,31 @@ import {
   canDiscard,
   canSubmit,
   formatDistance,
+  integrityLines,
   statusText,
   tripStatus,
 } from "../../core/present.ts";
-import { t, type MessageKey } from "../../i18n/index.ts";
+import { formatDateTime, t, type MessageKey } from "../../i18n/index.ts";
 import { discardTrip, retryTrip, submitTrip } from "../../native/actions.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useOutbox } from "../hooks.ts";
 import type { Nav } from "../router.ts";
 
 const when = (iso: string | null): string | undefined =>
-  iso === null ? undefined : new Date(iso).toLocaleString();
+  iso === null ? undefined : formatDateTime(iso);
+
+/** The sentence for a refusal, by its code; the server's own words go on a separate line. */
+const problemText = (code: string): string => {
+  switch (code) {
+    case "state_conflict":
+    case "discarded":
+    case "gone":
+    case "invalid_response":
+      return t(`trip.problem.${code}`);
+    default:
+      return t("trip.problem.generic");
+  }
+};
 
 export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string }) {
   const { trips, loaded } = useOutbox(rt);
@@ -22,6 +36,13 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
   const [discarding, setDiscarding] = useState(false);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string | null>(null);
+  const [actionFailed, setActionFailed] = useState(false);
+
+  /** Runs one of the driver's actions; a rejection is shown, not lost. */
+  const act = (work: () => Promise<void>, after?: () => void) => {
+    setActionFailed(false);
+    work().then(after, () => setActionFailed(true));
+  };
 
   // Read the server's view of the trip once when it is opened.
   useEffect(() => {
@@ -44,10 +65,13 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
       setReasonError(t("discard.reason.helper"));
       return;
     }
-    void discardTrip(trip.clientTripId, reason).then(() => {
-      setDiscarding(false);
-      nav.back();
-    });
+    act(
+      () => discardTrip(trip.clientTripId, reason),
+      () => {
+        setDiscarding(false);
+        nav.back();
+      },
+    );
   };
 
   const footer = discarding ? (
@@ -73,7 +97,7 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
         <Button
           label={t("trip.submit")}
           hint={t("trip.submit.hint")}
-          onPress={() => void submitTrip(trip.clientTripId)}
+          onPress={() => act(() => submitTrip(trip.clientTripId))}
           testID="submit"
         />
       ) : null}
@@ -90,13 +114,32 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
 
   return (
     <Screen title={t("trip.title")} onBack={nav.back} footer={footer}>
+      {actionFailed ? (
+        <Banner tone="danger" title={t("trip.action.failed")} testID="action-failed" />
+      ) : null}
       {trip.problem && trip.problem.code !== "incomplete" ? (
+        <>
+          <Banner
+            tone="danger"
+            title={t("trip.problem.title")}
+            message={`${problemText(trip.problem.code)} ${t("trip.problem.hint")}`}
+            action={{
+              label: t("common.retry"),
+              onPress: () => act(() => retryTrip(trip.clientTripId)),
+            }}
+            testID="problem"
+          />
+          <Text tone="muted" testID="problem-details">
+            {t("trip.problem.details", { message: trip.problem.message })}
+          </Text>
+        </>
+      ) : null}
+      {trip.problem && trip.problem.code === "incomplete" ? (
         <Banner
-          tone="danger"
-          title={t("trip.problem.title")}
-          message={`${trip.problem.message} ${t("trip.problem.hint")}`}
-          action={{ label: t("common.retry"), onPress: () => void retryTrip(trip.clientTripId) }}
-          testID="problem"
+          tone="warning"
+          title={t("trip.incomplete.title")}
+          message={t("trip.incomplete.message")}
+          testID="incomplete"
         />
       ) : null}
       {status === "rejected" && trip.rejectReason ? (
@@ -134,7 +177,9 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
           <Row title={t("trip.started")} value={when(trip.startedAt) ?? ""} />
           {trip.endedAt ? <Row title={t("trip.ended")} value={when(trip.endedAt) ?? ""} /> : null}
           <Row title={t("trip.purpose")} value={t(`purpose.${trip.purpose}` as MessageKey)} />
-          {trip.integrity ? <Row title={t("trip.checks")} subtitle={trip.integrity} /> : null}
+          {trip.integrity ? (
+            <Row title={t("trip.checks")} subtitle={integrityLines(trip.integrity).join("\n")} />
+          ) : null}
         </>
       )}
     </Screen>

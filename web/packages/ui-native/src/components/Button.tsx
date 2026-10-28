@@ -15,6 +15,11 @@ export type ButtonProps = {
   busy?: boolean;
   /** What the button does, read after its name by a screen reader. */
   hint?: string;
+  /**
+   * The button is one choice of a group (a radio button): `true` for the chosen one. A screen reader
+   * says "selected" or "not selected", and a check mark in the label shows it without colour.
+   */
+  selected?: boolean;
   testID?: string;
 };
 
@@ -26,6 +31,7 @@ export function Button({
   disabled = false,
   busy = false,
   hint,
+  selected,
   testID,
 }: ButtonProps) {
   const t = useTheme();
@@ -49,10 +55,14 @@ export function Button({
   const big = size === "big";
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={selected === undefined ? "button" : "radio"}
       accessibilityLabel={label}
       accessibilityHint={hint}
-      accessibilityState={{ disabled: off, busy }}
+      accessibilityState={{
+        disabled: off,
+        busy,
+        ...(selected === undefined ? {} : { checked: selected }),
+      }}
       disabled={off}
       onPress={onPress}
       testID={testID}
@@ -75,7 +85,7 @@ export function Button({
       <View style={{ flexDirection: "row", alignItems: "center", gap: t.space[2] }}>
         {busy ? <ActivityIndicator color={ink} /> : null}
         <Text variant={big ? "title" : "label"} color={ink}>
-          {label}
+          {selected === true ? `✓ ${label}` : label}
         </Text>
       </View>
     </Pressable>

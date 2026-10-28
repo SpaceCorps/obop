@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { Binding } from "../core/identity.ts";
 import type { SessionStatus } from "../core/session.ts";
 import type { SyncStatus } from "../core/sync.ts";
 import type { LocalTrip } from "../core/types.ts";
@@ -10,11 +11,16 @@ export type Loaded =
   | { state: "ready"; runtime: Runtime }
   | { state: "failed"; message: string };
 
-/** Opens the encrypted database and reads the session, once. */
-export function useRuntime(): Loaded {
+/**
+ * Opens the encrypted database and reads the session. `retry` tries again after a failure (a
+ * failed open is not remembered by `getRuntime`).
+ */
+export function useRuntime(): Loaded & { retry: () => void } {
   const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
+    setLoaded({ state: "loading" });
     getRuntime().then(
       (runtime) => alive && setLoaded({ state: "ready", runtime }),
       (error: unknown) =>
@@ -24,8 +30,18 @@ export function useRuntime(): Loaded {
     return () => {
       alive = false;
     };
-  }, []);
-  return loaded;
+  }, [attempt]);
+  return { ...loaded, retry: () => setAttempt((n) => n + 1) };
+}
+
+/** Whose trips the outbox holds, compared with the sign-in: `foreign` blocks every screen but one. */
+export function useBinding(rt: Runtime): Binding {
+  const [binding, setBinding] = useState<Binding>(rt.binding());
+  useEffect(() => {
+    setBinding(rt.binding());
+    return onChange(() => setBinding(rt.binding()));
+  }, [rt]);
+  return binding;
 }
 
 export interface Outbox {

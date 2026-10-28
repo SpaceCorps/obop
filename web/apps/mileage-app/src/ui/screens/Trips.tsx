@@ -1,7 +1,7 @@
 import { Banner, Button, Row, Screen, Text } from "@obop/ui-native";
 import { useCallback, useEffect, useState } from "react";
 import { formatDistance, statusText, tripStatus } from "../../core/present.ts";
-import { t } from "../../i18n/index.ts";
+import { formatDateTime, t } from "../../i18n/index.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useOutbox } from "../hooks.ts";
 import type { Nav } from "../router.ts";
@@ -47,7 +47,7 @@ export function Trips({ rt, nav }: { rt: Runtime; nav: Nav }) {
       {trips.map((trip) => (
         <Row
           key={trip.clientTripId}
-          title={new Date(trip.startedAt).toLocaleString()}
+          title={formatDateTime(trip.startedAt)}
           subtitle={statusText(tripStatus(trip))}
           value={formatDistance(trip.distanceM) ?? undefined}
           onPress={() => nav.push({ name: "trip", id: trip.clientTripId })}

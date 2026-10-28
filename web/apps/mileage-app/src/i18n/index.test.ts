@@ -1,0 +1,64 @@
+import { describe, expect, test } from "vite-plus/test";
+import { formatNumber, t, tp } from "./index.ts";
+import { en } from "./en.ts";
+import { formatDistance, integrityLines } from "../core/present.ts";
+
+describe("sentences with a count", () => {
+  test("one and many are different sentences", () => {
+    expect(tp("home.waiting.message", 1)).toBe(
+      "1 trip is on this phone and not on the server yet. It is safe.",
+    );
+    expect(tp("home.waiting.message", 3)).toBe(
+      "3 trips are on this phone and not on the server yet. They are safe.",
+    );
+    expect(tp("recording.points", 1)).toBe("1 point saved on this phone");
+    expect(tp("recording.points", 0)).toBe("0 points saved on this phone");
+    expect(tp("account.upload.pending", 1)).toBe("1 trip waiting");
+    expect(tp("unit.trips", 2)).toBe("2 trips");
+    expect(tp("unit.points", 1)).toBe("1 point");
+    expect(tp("recording.quiet.message", 1)).toContain("1 minute old");
+  });
+
+  test("the count is written the way the language writes numbers", () => {
+    expect(tp("unit.points", 12345)).toBe("12,345 points");
+  });
+
+  test("every plural has an other form, and the forms use the same placeholders", () => {
+    const keys = Object.keys(en);
+    const bases = new Set(
+      keys.filter((k) => /\.(one|other)$/.test(k)).map((k) => k.replace(/\.(one|other)$/, "")),
+    );
+    expect(bases.size).toBeGreaterThan(0);
+    for (const base of bases) {
+      expect(keys).toContain(`${base}.other`);
+      expect(keys).toContain(`${base}.one`);
+      const holders = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort().join(" ");
+      const record = en as Record<string, string>;
+      expect(holders(record[`${base}.one`]!), base).toBe(holders(record[`${base}.other`]!));
+    }
+  });
+
+  test("a placeholder without a value stays visible", () => {
+    expect(t("home.open.message")).toBe("Started {when}. Stop it or discard it.");
+  });
+});
+
+describe("numbers and distances", () => {
+  test("distances come from the language, in kilometres from 1000 m", () => {
+    expect(formatDistance("12345.67")).toBe("12.3 km");
+    expect(formatDistance("999.4")).toBe("999 m");
+    expect(formatDistance("1000")).toBe("1 km");
+    expect(formatNumber(1234.56, 1)).toBe("1,234.6");
+  });
+});
+
+describe("the checks of the server", () => {
+  test("known flags are sentences, unknown ones are shown as they are", () => {
+    expect(integrityLines("seq_gap:1 low_accuracy:3 future_flag:2")).toEqual([
+      "1 gap in the numbering of the points",
+      "3 points skipped for low accuracy",
+      "future_flag:2",
+    ]);
+    expect(integrityLines("")).toEqual([]);
+  });
+});

@@ -1,10 +1,12 @@
 import * as Crypto from "expo-crypto";
-import { hasWork } from "../core/store.ts";
+import { unsentOf, type Unsent } from "../core/identity.ts";
+import type { Readiness } from "../core/liveness.ts";
 import type { LocalTrip, Purpose } from "../core/types.ts";
 import { instant, uuidV4 } from "../core/values.ts";
 import { emitChange } from "./bus.ts";
-import { startRecording, stopRecording } from "./recorder.ts";
-import { getRuntime } from "./runtime.ts";
+import { locationReadiness } from "./permissions.ts";
+import { ensureRecording, startRecording, stopRecording } from "./recorder.ts";
+import { getRuntime, type Runtime } from "./runtime.ts";
 
 /**
  * What the buttons do. Each action first changes the outbox (which is what makes it safe: the
@@ -12,9 +14,24 @@ import { getRuntime } from "./runtime.ts";
  * asks the sync controller to tell the server.
  */
 
-/** Start: stores the trip, then starts the foreground service. If the service cannot start, the trip is removed again. */
+/** The phone cannot record a trip yet; `reason` says what the driver has to change. */
+export class CannotRecord extends Error {
+  readonly reason: Exclude<Readiness, "ready">;
+  constructor(reason: Exclude<Readiness, "ready">) {
+    super(`cannot record: ${reason}`);
+    this.name = "CannotRecord";
+    this.reason = reason;
+  }
+}
+
+/**
+ * Start: checks that the phone can record (precise location allowed, location switched on), stores
+ * the trip, then starts the foreground service. If the service cannot start, the trip is removed again.
+ */
 export async function startTrip(purpose: Purpose): Promise<LocalTrip> {
   const rt = await getRuntime();
+  const ready = await locationReadiness();
+  if (ready !== "ready") throw new CannotRecord(ready);
   const id = uuidV4(await Crypto.getRandomBytesAsync(16));
   const now = Date.now();
   const trip = await rt.store.startTrip({
@@ -35,13 +52,29 @@ export async function startTrip(purpose: Purpose): Promise<LocalTrip> {
   return trip;
 }
 
-/** The service is not running although a trip is open (the system stopped it): start it again. */
-export async function resumeRecording(): Promise<void> {
-  await startRecording();
+/**
+ * The service may not be running although a trip is open (the system stopped it, the process
+ * restarted, location was switched off): check what is needed and start it again. Answers what
+ * stands in the way, if anything.
+ */
+export async function resumeRecording(): Promise<Readiness> {
+  const ready = await ensureRecording();
   emitChange();
+  return ready;
 }
 
-/** Stop: no further points, the counts are fixed, then everything is sent. */
+/** Stops the location service (it may be gone already) and ends the trip that is open, on the phone. */
+async function stopOpenTrip(rt: Runtime): Promise<void> {
+  try {
+    await stopRecording();
+  } catch {
+    // The service may be gone already; the trip is stopped on the phone either way.
+  }
+  const active = await rt.store.activeTrip();
+  if (active) await rt.store.stopTrip(active.clientTripId, instant(Date.now()));
+}
+
+/** Stop: no further points, the counts are fixed, then everything is sent. Works without a connection and without a sign-in. */
 export async function stopTrip(clientTripId: string): Promise<void> {
   const rt = await getRuntime();
   try {
@@ -85,28 +118,41 @@ export async function retryTrip(clientTripId: string): Promise<void> {
   rt.sync.kick();
 }
 
-/** Trips of this phone that the server does not have in full yet. */
-export async function unsentTrips(): Promise<LocalTrip[]> {
+/**
+ * The trips that exist only on this phone, and their points: the server does not hold the route
+ * yet. A trip that a refusal stopped is counted, because its points are still only here.
+ */
+export async function unsentSummary(): Promise<Unsent> {
   const rt = await getRuntime();
-  return (await rt.store.listTrips()).filter((t) => t.origin === "device" && hasWork(t));
+  return unsentOf(rt.store);
 }
 
 /**
- * Sign out. The instance is told to end the sign-in (best effort); the tokens leave the Keystore;
- * and every trip on the phone is deleted, uploaded or not, because the next person to sign in
- * must not inherit another driver's trips or upload them as their own. The caller has already
- * asked the driver about trips that are not uploaded.
+ * The end of a sign-in on this phone, after the instance has been told (or could not be).
+ * The trip that is open is stopped on the phone. The trips that are not uploaded are kept for the
+ * next sign-in of the same person at the same address (`keepUnsent`, the outbox stays bound to its
+ * owner and nobody else uploads or sees it) or deleted; everything that the server holds in full
+ * is a copy and goes.
  */
-export async function signOut(): Promise<void> {
-  const rt = await getRuntime();
+export async function leaveSession(rt: Runtime, keepUnsent: boolean): Promise<void> {
   rt.sync.stop();
-  try {
-    await stopRecording();
-  } catch {
-    // Nothing was running.
-  }
-  await rt.revokeSignIn();
+  await stopOpenTrip(rt);
+  const unsent = await unsentOf(rt.store);
   await rt.session.signOut();
-  await rt.store.clearAll();
+  if (!keepUnsent || unsent.trips === 0) await rt.store.clearAll();
+  emitChange();
+}
+
+/**
+ * Sign out. The tokens leave the Keystore at once; the instance is told in the background of the
+ * same call but never waited for longer than a few seconds, and when it could not be reached the
+ * sign-in screen says so once. `keepUnsent` keeps the trips that are only on the phone for the
+ * same person's next sign-in; otherwise they are deleted. The caller has asked the driver.
+ */
+export async function signOut(keepUnsent: boolean): Promise<void> {
+  const rt = await getRuntime();
+  const told = rt.revokeSignIn(); // reads the refresh token now, before it is forgotten
+  await leaveSession(rt, keepUnsent);
+  rt.setSignOutUntold(!(await told));
   emitChange();
 }

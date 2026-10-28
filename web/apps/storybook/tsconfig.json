@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": [".storybook", "vite.config.ts", "../../config"]
+  "include": [".storybook", "src", "vite.config.ts", "../../config"]
 }

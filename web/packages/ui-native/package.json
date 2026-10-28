@@ -10,13 +10,13 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./tokens": "./src/tokens.native.ts"
+    "./tokens": "./src/tokens.native.ts",
+    "./stories-support": "./src/stories-support.tsx"
   },
   "scripts": {
     "generate:tokens": "node scripts/generate-tokens.ts"
   },
   "devDependencies": {
-    "@storybook/react-vite": "10.6.3",
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "react": "19.3.0",
