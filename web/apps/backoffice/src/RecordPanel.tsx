@@ -4,7 +4,7 @@ import { aggregate, type FieldMeta, type ModelMeta, type Row } from "./api.ts";
 import { useData } from "./data.tsx";
 import { fromEdit, toEdit, validate, type Edit } from "./edit.ts";
 import { FieldInput, RefLabel } from "./fields.tsx";
-import { isMasked, isState, optionLabel, rowCurrency } from "./format.ts";
+import { isMasked, isState, optionLabel, rowCurrency, shownLabel } from "./format.ts";
 import { actionTitle, appTitle, fieldTitle, fieldTitleByName, modelTitle } from "./labels.ts";
 import { serverMessage } from "./serverMessage.ts";
 import { DeleteDialog } from "./DeleteDialog.tsx";
@@ -559,6 +559,7 @@ export function RecordPanel({
                       id={fid}
                       value={value(f)}
                       readOnly={!canEdit || !!f.computed || !!f.sequence}
+                      shown={row ? shownLabel(f, row[f.name], row) : undefined}
                       altHint={(() => {
                         const alt = model.fields.find((x) => x.name === `${f.name}_alt`);
                         return alt

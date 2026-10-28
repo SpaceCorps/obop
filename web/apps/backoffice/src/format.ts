@@ -10,6 +10,7 @@ import {
 import { getTime, type FieldMeta } from "./api.ts";
 import { formatDecimal } from "./decimals.ts";
 import { formatInstant } from "./instants.ts";
+import { shownOptionTarget } from "./shownOption.ts";
 
 /**
  * The English, humanised form of a technical name: "expected_revenue_minor" -> "Expected revenue".
@@ -46,6 +47,21 @@ export function optionKey(v: string): string {
 export function optionLabel(v: string, field?: Pick<FieldMeta, "option_labels">): string {
   if (v === "") return t("None");
   return labelFor({ labels: field?.option_labels?.[v] }, getLang(), tx("option", optionKey(v)));
+}
+
+/**
+ * The label to draw instead of the stored text of a text field that shows an option (`shows_option_of`,
+ * D52 amendment), or `undefined` when the value is drawn as stored. Only for what is read: an edit input,
+ * a filter, the sort order, the CSV export and the API keep the stored text. `row` is the record the
+ * value belongs to, which the field's condition reads.
+ */
+export function shownLabel(
+  f: FieldMeta,
+  v: unknown,
+  row?: Record<string, unknown>,
+): string | undefined {
+  const target = shownOptionTarget(f, v, row);
+  return target ? optionLabel(String(v), target) : undefined;
 }
 
 /** The currency of a record: its own `currency` field when it has a valid one, else the instance's. */

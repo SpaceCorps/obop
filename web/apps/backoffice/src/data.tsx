@@ -19,7 +19,7 @@ import {
 } from "./api.ts";
 import { t } from "@obop/ui";
 import type { App } from "./Chrome.tsx";
-import { isEmpty } from "./format.ts";
+import { isEmpty, shownLabel } from "./format.ts";
 import { registerMeta } from "./serverMessage.ts";
 import type { Lookup } from "./query.ts";
 
@@ -203,7 +203,8 @@ export function DataProvider(props: {
       const m = models.get(model)?.model;
       const f = m && labelField(m);
       const v = f ? row[f.name] : undefined;
-      return isEmpty(v) ? row.id.slice(0, 8) : String(v);
+      // A label field that shows an option (shows_option_of) names the record by that option's label.
+      return isEmpty(v) ? row.id.slice(0, 8) : ((f && shownLabel(f, v, row)) ?? String(v));
     };
     const refText = (model: string, id: string) => {
       const row = store.peek(model)?.find((r) => r.id === id);

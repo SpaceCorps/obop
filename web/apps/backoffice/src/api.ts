@@ -1,5 +1,6 @@
 import { fmt, getLang, isPseudo, t, type Factor } from "@obop/ui";
 import { NETWORK_MESSAGE, NetworkError, request, serverFault } from "./net.ts";
+import { resolveShownOptions } from "./shownOption.ts";
 
 /** Translations the server may add to metadata: language code -> text (D34; absent today). */
 export type Translations = Record<string, string>;
@@ -64,6 +65,13 @@ export type FieldMeta = {
   unique?: boolean;
   /** A number the server assigns; never sent (D57). */
   sequence?: boolean;
+  /**
+   * Only for `text` and `longtext` (D52 amendment): `model.field` of a select. The value is drawn with
+   * the label of the option it equals there, while `shows_option_when` (an expression on the same
+   * record, evaluated here) holds. Only the display changes; see shownOption.ts.
+   */
+  shows_option_of?: string;
+  shows_option_when?: string;
 };
 /** Row-level access rules of a model (D58): which records the person sees. */
 export type AccessMeta = {
@@ -177,6 +185,7 @@ export async function meta(
       model.can_delete ??= false;
       model.actions ??= [];
     }
+  resolveShownOptions(modules);
   return modules;
 }
 

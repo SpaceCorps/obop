@@ -475,11 +475,7 @@ export function KanbanView(p: ViewProps) {
                   key={r.id}
                   data-card={r.id}
                   tabIndex={0}
-                  aria-label={
-                    titleField
-                      ? String(r[titleField.name] ?? "") || r.id.slice(0, 8)
-                      : r.id.slice(0, 8)
-                  }
+                  aria-label={d.recordLabel(model.name, r)}
                   className={`kcard${r.id === p.selectedId ? " sel" : ""}${dragging === r.id ? " drag" : ""}`}
                   draggable={canDrag}
                   onDragStart={(e) => {
@@ -502,6 +498,7 @@ export function KanbanView(p: ViewProps) {
                             value={r[f.name]}
                             link={false}
                             currency={rowCurrency(r)}
+                            row={r}
                           />
                         </span>
                       </div>

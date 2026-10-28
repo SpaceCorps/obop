@@ -601,7 +601,12 @@ export function ListView(p: ViewProps) {
                             }}
                           />
                         ) : (
-                          <Cell field={f} value={it.row[f.name]} currency={rowCurrency(it.row)} />
+                          <Cell
+                            field={f}
+                            value={it.row[f.name]}
+                            currency={rowCurrency(it.row)}
+                            row={it.row}
+                          />
                         )}
                       </td>
                     );

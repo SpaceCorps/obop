@@ -12,6 +12,7 @@ import {
   isMasked,
   money,
   optionLabel,
+  shownLabel,
 } from "./format.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
 import { BlobInput, BlobThumb, FileChip } from "./BlobFields.tsx";
@@ -23,12 +24,15 @@ export function Cell({
   value,
   link = true,
   currency,
+  row,
 }: {
   field: FieldMeta;
   value: unknown;
   link?: boolean;
   /** The record's currency when it has one of its own. */
   currency?: string;
+  /** The record the value belongs to: a text field that shows an option label reads its condition there. */
+  row?: Row;
 }) {
   if (isEmpty(value)) return <span className="dim">—</span>;
   if (isMasked(value)) return <span className="masked">{String(value)}</span>;
@@ -64,7 +68,12 @@ export function Cell({
     case "file":
       return <FileChip id={String(value)} field={field} />;
     default:
-      return <>{typeof value === "object" ? JSON.stringify(value) : String(value)}</>;
+      return (
+        <>
+          {shownLabel(field, value, row) ??
+            (typeof value === "object" ? JSON.stringify(value) : String(value))}
+        </>
+      );
   }
 }
 
@@ -129,11 +138,14 @@ type InputProps = {
   optionState?: (option: string) => { disabled: boolean; title?: string };
   /** For an image: the model's `<name>_alt` field, when it has one, and whether it is empty. */
   altHint?: { title: string; empty: boolean };
+  /** For a read-only text or longtext: what to draw in place of the stored text (an option's label). */
+  shown?: string;
 };
 
 /** The control for one field, chosen by its kind. */
 export function FieldInput(p: InputProps) {
   const { field: f, value, onChange, readOnly } = p;
+  const readText = readOnly && p.shown !== undefined ? p.shown : String(value);
   const common = {
     id: p.id,
     autoFocus: p.autoFocus,
@@ -182,7 +194,7 @@ export function FieldInput(p: InputProps) {
         <textarea
           {...common}
           rows={p.compact ? 2 : 4}
-          value={String(value)}
+          value={readText}
           readOnly={readOnly}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -297,7 +309,7 @@ export function FieldInput(p: InputProps) {
         <input
           {...common}
           type="text"
-          value={String(value)}
+          value={readText}
           readOnly={readOnly}
           onChange={(e) => onChange(e.target.value)}
         />
