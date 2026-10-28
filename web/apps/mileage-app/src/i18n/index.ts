@@ -28,27 +28,54 @@ export type PluralKey = MessageKey extends infer K
     : never
   : never;
 
-const plurals = new Intl.PluralRules(LOCALE);
+/** The plural rules of English, for a runtime that has no `Intl.PluralRules` (Hermes on Android has none). */
+export const englishPlural = (count: number): "one" | "other" => (count === 1 ? "one" : "other");
 
-/**
- * A sentence that depends on a count: the form is chosen by the plural rules of the language
- * (`Intl.PluralRules`; English has `one` and `other`, Polish has more) and `{count}` is the number
- * written the way the language writes it. A language lists only the forms it needs, and `other`
- * is the one every language has.
- */
-export function tp(key: PluralKey, count: number, params: Params = {}): string {
-  const exact = `${key}.${plurals.select(count)}`;
-  const text =
-    (catalogue as Record<string, string>)[exact] ?? catalogue[`${key}.other` as MessageKey];
-  return fill(text, { ...params, count: new Intl.NumberFormat(LOCALE).format(count) });
+let rules: Intl.PluralRules | null = null;
+
+/** The plural category of a count in the language of the catalogue. */
+function pluralCategory(count: number): string {
+  if (typeof Intl !== "undefined" && typeof Intl.PluralRules === "function") {
+    try {
+      rules ??= new Intl.PluralRules(LOCALE);
+      return rules.select(count);
+    } catch {
+      // Fall through to the table.
+    }
+  }
+  return englishPlural(count);
 }
 
 /** A number in the way the language writes it (decimal separator, grouping). */
-export const formatNumber = (value: number, maximumFractionDigits = 0): string =>
-  new Intl.NumberFormat(LOCALE, { maximumFractionDigits }).format(value);
+export function formatNumber(value: number, maximumFractionDigits = 0): string {
+  try {
+    return new Intl.NumberFormat(LOCALE, { maximumFractionDigits }).format(value);
+  } catch {
+    return String(Number(value.toFixed(maximumFractionDigits)));
+  }
+}
+
+/**
+ * A sentence that depends on a count: the form is chosen by the plural rules of the language
+ * (`Intl.PluralRules`, or the table of English where the runtime has none; English has `one` and
+ * `other`, Polish has more) and `{count}` is the number written the way the language writes it. A
+ * language lists only the forms it needs, and `other` is the one every language has.
+ */
+export function tp(key: PluralKey, count: number, params: Params = {}): string {
+  const exact = `${key}.${pluralCategory(count)}`;
+  const text =
+    (catalogue as Record<string, string>)[exact] ?? catalogue[`${key}.other` as MessageKey];
+  return fill(text, { ...params, count: formatNumber(count) });
+}
 
 /** A date and time for a driver, in the language and time zone of the phone. */
-export const formatDateTime = (iso: string): string =>
-  new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(iso),
-  );
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso);
+  try {
+    return new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium", timeStyle: "short" }).format(
+      date,
+    );
+  } catch {
+    return date.toLocaleString(LOCALE);
+  }
+}

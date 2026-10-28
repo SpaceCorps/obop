@@ -63,6 +63,8 @@ export function Button({
         busy,
         ...(selected === undefined ? {} : { checked: selected }),
       }}
+      // The same state in the newer property, which react-native-web turns into `aria-checked`.
+      {...(selected === undefined ? {} : { "aria-checked": selected })}
       disabled={off}
       onPress={onPress}
       testID={testID}

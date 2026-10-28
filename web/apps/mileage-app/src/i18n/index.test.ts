@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vite-plus/test";
-import { formatNumber, t, tp } from "./index.ts";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+import { formatDateTime, formatNumber, t, tp } from "./index.ts";
 import { en } from "./en.ts";
 import { formatDistance, integrityLines } from "../core/present.ts";
 
@@ -60,5 +60,24 @@ describe("the checks of the server", () => {
       "future_flag:2",
     ]);
     expect(integrityLines("")).toEqual([]);
+  });
+});
+
+/** Hermes, the JavaScript engine of the app on Android, has no `Intl.PluralRules`: the app crashed at start. */
+describe("a runtime with less Intl than Node", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  test("without Intl.PluralRules the rules of English are used", () => {
+    vi.stubGlobal("Intl", { ...Intl, PluralRules: undefined });
+    expect(tp("unit.points", 1)).toBe("1 point");
+    expect(tp("unit.points", 2)).toBe("2 points");
+    expect(tp("unit.points", 0)).toBe("0 points");
+  });
+
+  test("without Intl.NumberFormat and Intl.DateTimeFormat the text is still made", () => {
+    vi.stubGlobal("Intl", {});
+    expect(formatNumber(12.34, 1)).toBe("12.3");
+    expect(tp("unit.points", 3)).toBe("3 points");
+    expect(formatDateTime("2026-10-15T09:00:00Z")).toMatch(/2026/);
   });
 });
