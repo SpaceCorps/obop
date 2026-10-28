@@ -289,18 +289,24 @@ pub(crate) fn check_unique_keys(
                 Some(J::String(s)) if s.is_empty() => continue,
                 Some(v) => v.clone(),
             };
-            for (other, orec) in Reads::find(unit, &model, field, &value)? {
-                if other != id && with.iter().all(|w| norm(&rec, w) == norm(&orec, w)) {
-                    let scope = if with.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" with the same {}", with.join(" and "))
-                    };
-                    return Err(format!(
-                        "{model}.{field} must be unique: {} is already used by another record{scope}",
-                        shown(&value)
-                    ));
-                }
+            // The rule's key as the unique index holds it: the field, then each scope field (a
+            // missing one is the empty text). One keyed lookup finds the records that share it;
+            // the record itself is not a collision.
+            let mut fields = vec![field];
+            fields.extend(with.iter().copied());
+            let mut values = vec![value.clone()];
+            values.extend(with.iter().map(|w| norm(&rec, w)));
+            let shared = Reads::find_unique(unit, &model, &fields, &values)?;
+            if shared.iter().any(|(other, _)| *other != id) {
+                let scope = if with.is_empty() {
+                    String::new()
+                } else {
+                    format!(" with the same {}", with.join(" and "))
+                };
+                return Err(format!(
+                    "{model}.{field} must be unique: {} is already used by another record{scope}",
+                    shown(&value)
+                ));
             }
         }
     }

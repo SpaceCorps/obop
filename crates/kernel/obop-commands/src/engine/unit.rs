@@ -8,8 +8,9 @@
 //! including no consumed sequence number.
 
 use obop_registry::rules::MAX_EFFECT_RECORDS;
-use obop_storage::{Backend, Fields, Op};
+use obop_storage::{Backend, Fields, Op, unique_matches};
 use serde_json::Value as J;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 pub(crate) type R<T> = Result<T, String>;
@@ -18,6 +19,10 @@ pub(crate) type R<T> = Result<T, String>;
 pub(crate) trait Reads {
     fn get(&self, model: &str, id: &str) -> R<Option<Fields>>;
     fn find(&self, model: &str, field: &str, value: &J) -> R<Vec<(String, Fields)>>;
+    /// The records a uniqueness rule (D57) compares with a new value, as [`Backend::find_unique`]
+    /// says, seen through the writes of the unit. With the rule's index in the store the cost does
+    /// not grow with the model, and the unit's own records are found by key, not by a scan.
+    fn find_unique(&self, model: &str, fields: &[&str], values: &[J]) -> R<Vec<(String, Fields)>>;
     fn all(&self, model: &str) -> R<Vec<(String, Fields)>>;
 }
 
@@ -31,12 +36,70 @@ impl Reads for Plain<'_> {
     fn find(&self, model: &str, field: &str, value: &J) -> R<Vec<(String, Fields)>> {
         self.0.find(model, field, value)
     }
+    fn find_unique(&self, model: &str, fields: &[&str], values: &[J]) -> R<Vec<(String, Fields)>> {
+        self.0.find_unique(model, fields, values)
+    }
     fn all(&self, model: &str) -> R<Vec<(String, Fields)>> {
         self.0.list(model)
     }
 }
 
 type Key = (String, String);
+
+/// The unit's own records of one model by the key of one uniqueness rule, so that the check of a
+/// row does not look at every other row the unit has written (a bulk create of 1,000 rows would
+/// otherwise compare each row with all the rows before it).
+///
+/// Invariant: every live record in the overlay is listed under its current key. A list may also
+/// hold an id that was rewound, deleted or changed since; a reader checks each candidate against
+/// the overlay, so a stale entry costs one look and never gives a wrong answer.
+struct Keyed {
+    fields: Vec<String>,
+    ids: HashMap<String, Vec<String>>,
+}
+
+impl Keyed {
+    /// The key of `rec` under this rule: its values for the rule's fields as JSON text, a missing
+    /// or null scope field as the empty text. `None` when the rule does not constrain the record
+    /// (its first field is missing, null or empty).
+    fn key_of(&self, rec: &Fields) -> Option<String> {
+        let mut values = Vec::with_capacity(self.fields.len());
+        for (i, f) in self.fields.iter().enumerate() {
+            values.push(match rec.get(f) {
+                None | Some(J::Null) if i > 0 => J::from(""),
+                None | Some(J::Null) => return None,
+                Some(J::String(s)) if i == 0 && s.is_empty() => return None,
+                Some(v) => v.clone(),
+            });
+        }
+        Some(key_text(&values))
+    }
+
+    fn note(&mut self, id: &str, rec: &Fields) {
+        if let Some(key) = self.key_of(rec) {
+            let ids = self.ids.entry(key).or_default();
+            if !ids.iter().any(|i| i == id) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+}
+
+/// Values as one string that is equal for two lists exactly when the lists are equal as JSON.
+fn key_text(values: &[J]) -> String {
+    let mut out = String::new();
+    for v in values {
+        out.push_str(&match v {
+            // 0.0 and -0.0 are equal as numbers and differ as text.
+            J::Number(n) if n.as_f64() == Some(0.0) && !n.is_i64() && !n.is_u64() => {
+                "0.0".to_string()
+            }
+            other => other.to_string(),
+        });
+        out.push('\u{1f}');
+    }
+    out
+}
 
 /// What one change did to the overlay, so a part of the unit can be taken back (see `Mark`).
 struct Undo {
@@ -68,6 +131,8 @@ pub(crate) struct Unit<'a> {
     touched: Vec<Key>,
     cap: usize,
     undo: Vec<Undo>,
+    /// The overlay by the keys of the uniqueness rules asked about so far, by model.
+    keyed: RefCell<HashMap<String, Vec<Keyed>>>,
 }
 
 impl<'a> Unit<'a> {
@@ -81,6 +146,20 @@ impl<'a> Unit<'a> {
             touched: Vec::new(),
             cap: MAX_EFFECT_RECORDS,
             undo: Vec::new(),
+            keyed: RefCell::new(HashMap::new()),
+        }
+    }
+
+    /// The record at `key` was just written to the overlay: list it under its key in each rule
+    /// that is being asked about.
+    fn note_keyed(&mut self, key: &Key) {
+        let Some(Some(rec)) = self.overlay.get(key) else {
+            return;
+        };
+        if let Some(rules) = self.keyed.get_mut().get_mut(&key.0) {
+            for rule in rules {
+                rule.note(&key.1, rec);
+            }
         }
     }
 
@@ -115,7 +194,9 @@ impl<'a> Unit<'a> {
                     self.overlay.remove(&u.key);
                 }
                 Some(prev) => {
-                    self.overlay.insert(u.key, prev);
+                    self.overlay.insert(u.key.clone(), prev);
+                    // The record is back as it was: list it under that key again.
+                    self.note_keyed(&u.key);
                 }
             }
         }
@@ -175,6 +256,7 @@ impl<'a> Unit<'a> {
             .entry(model.to_string())
             .or_default()
             .push(id.to_string());
+        self.note_keyed(&key);
         self.touched.push(key);
         Ok(())
     }
@@ -198,6 +280,7 @@ impl<'a> Unit<'a> {
             before,
             inserted: false,
         });
+        self.note_keyed(&key);
         self.touched.push(key);
         Ok(())
     }
@@ -265,6 +348,52 @@ impl Reads for Unit<'_> {
                 && !out.iter().any(|(i, _)| i == id)
             {
                 out.push((id.clone(), f.clone()));
+            }
+        }
+        Ok(out)
+    }
+
+    fn find_unique(&self, model: &str, fields: &[&str], values: &[J]) -> R<Vec<(String, Fields)>> {
+        // What is stored and the unit has not touched counts as it is stored. A stored record the
+        // unit changed or deleted is judged by the unit's version, found below.
+        let mut out: Vec<(String, Fields)> = Vec::new();
+        for (id, f) in self.backend.find_unique(model, fields, values)? {
+            if !self.overlay.contains_key(&(model.to_string(), id.clone())) {
+                out.push((id, f));
+            }
+        }
+        // The unit's own records with that key: from the rule's list, built from the overlay the
+        // first time the rule is asked about and kept up to date by every later write.
+        let key = key_text(values);
+        let candidates: Vec<String> = {
+            let mut by_model = self.keyed.borrow_mut();
+            let rules = by_model.entry(model.to_string()).or_default();
+            let at = match rules.iter().position(|r| r.fields == fields) {
+                Some(at) => at,
+                None => {
+                    let mut rule = Keyed {
+                        fields: fields.iter().map(|f| (*f).to_string()).collect(),
+                        ids: HashMap::new(),
+                    };
+                    for ((m, id), slot) in &self.overlay {
+                        if m == model
+                            && let Some(rec) = slot
+                        {
+                            rule.note(id, rec);
+                        }
+                    }
+                    rules.push(rule);
+                    rules.len() - 1
+                }
+            };
+            rules[at].ids.get(&key).cloned().unwrap_or_default()
+        };
+        for id in candidates {
+            if let Some(Some(rec)) = self.overlay.get(&(model.to_string(), id.clone()))
+                && unique_matches(rec, fields, values)
+                && !out.iter().any(|(i, _)| *i == id)
+            {
+                out.push((id, rec.clone()));
             }
         }
         Ok(out)

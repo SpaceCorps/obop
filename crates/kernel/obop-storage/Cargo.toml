@@ -18,9 +18,10 @@ webpki-roots = "1"
 tokio = { version = "1", default-features = false }
 
 [features]
-# The `testing` module (a backend that refuses calls like a full pool). Never enabled in a
-# release build: crates that use it enable it in their dev-dependencies.
-test-support = []
+# The `testing` module (a backend that refuses calls like a full pool, and the count of the rows
+# SQLite scanned in full: `rusqlite/trace`). Never enabled in a release build: crates that use it
+# enable it in their dev-dependencies.
+test-support = ["rusqlite/trace"]
 
 [lints]
 workspace = true

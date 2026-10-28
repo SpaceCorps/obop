@@ -23,6 +23,47 @@ pub fn time_budget(secs: u64) -> std::time::Duration {
     std::time::Duration::from_secs_f64(secs as f64 * factor)
 }
 
+// ---- the rows SQLite reads in full scans -----------------------------------------------------
+
+#[cfg(feature = "test-support")]
+thread_local! {
+    static FULL_SCAN_STEPS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Make every SQLite connection this process opens add, when a statement finishes, the rows that
+/// SQLite stepped over in full table scans (`sqlite3_stmt_status`, `SQLITE_STMTSTATUS_FULLSCAN_STEP`)
+/// to a count of the thread that ran it. A statement that finds its rows by an index adds nothing.
+#[cfg(feature = "test-support")]
+pub(crate) fn count_full_scans(conn: &rusqlite::Connection) {
+    use rusqlite::StatementStatus;
+    use rusqlite::trace::{TraceEvent, TraceEventCodes};
+    conn.trace_v2(
+        TraceEventCodes::SQLITE_TRACE_PROFILE,
+        Some(|event| {
+            if let TraceEvent::Profile(stmt, _) = event {
+                let steps = u64::try_from(stmt.get_status(StatementStatus::FullscanStep))
+                    .unwrap_or_default();
+                FULL_SCAN_STEPS.with(|n| n.set(n.get() + steps));
+            }
+        }),
+    );
+}
+
+/// The rows the SQLite statements run by this thread have stepped over in full table scans since
+/// the thread started (or since [`reset_full_scan_steps`]); a measure of work that does not depend
+/// on the clock. A lookup that uses an index adds no steps; one that scans a model of 20,000 rows
+/// adds 20,000 or more.
+#[cfg(feature = "test-support")]
+pub fn full_scan_steps() -> u64 {
+    FULL_SCAN_STEPS.with(std::cell::Cell::get)
+}
+
+/// Set the count of [`full_scan_steps`] for this thread to zero.
+#[cfg(feature = "test-support")]
+pub fn reset_full_scan_steps() {
+    FULL_SCAN_STEPS.with(|n| n.set(0));
+}
+
 /// Which calls are refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -93,10 +134,35 @@ pub struct Flaky {
     insert_error: std::sync::Mutex<Option<(String, String)>>,
     /// The batches that reached `apply_tracked`: see [`Flaky::seen_writes`].
     seen: std::sync::Mutex<Vec<SeenWrite>>,
+    /// See [`Flaky::reads`].
+    reads: std::sync::Mutex<Reads>,
 }
 
 /// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
 pub type SeenWrite = (WriteCtx, Vec<Op>, Vec<String>);
+
+/// What the layers above read through a [`Flaky`]: how often each way of reading a model was
+/// used and how many records it handed back. A scan of the model by `list`, `scan` or `find`
+/// shows as rows; a keyed lookup shows as the few rows it returns. See [`Flaky::reads`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Reads {
+    /// Calls of `get`.
+    pub gets: u64,
+    /// Calls of `list` and the records they returned.
+    pub lists: u64,
+    pub list_rows: u64,
+    /// Calls of `scan` and the records visited.
+    pub scans: u64,
+    pub scan_rows: u64,
+    /// Calls of `find` (one field, which the databases answer by reading the model unless an
+    /// index happens to serve it) and the records returned.
+    pub finds: u64,
+    pub find_rows: u64,
+    /// Calls of `find_unique` (the lookup that uses the unique index of a rule) and the records
+    /// returned.
+    pub keyed: u64,
+    pub keyed_rows: u64,
+}
 
 /// What [`Flaky::after_the_next_insert_into`] runs, with the wrapped backend.
 pub type AfterInsert = Box<dyn FnOnce(&dyn Backend) + Send>;
@@ -124,6 +190,7 @@ impl Flaky {
             after_get: std::sync::Mutex::new(None),
             insert_error: std::sync::Mutex::new(None),
             seen: std::sync::Mutex::new(Vec::new()),
+            reads: std::sync::Mutex::new(Reads::default()),
         })
     }
 
@@ -156,6 +223,16 @@ impl Flaky {
     /// the layers above that asks "did the write carry the context I expect?".
     pub fn seen_writes(&self) -> Vec<SeenWrite> {
         self.seen.lock().unwrap().clone()
+    }
+
+    /// What has been read through this backend since it was made or since [`Flaky::reset_reads`].
+    pub fn reads(&self) -> Reads {
+        *self.reads.lock().unwrap()
+    }
+
+    /// Start the count of [`Flaky::reads`] again from zero.
+    pub fn reset_reads(&self) {
+        *self.reads.lock().unwrap() = Reads::default();
     }
 
     /// How many calls were refused so far.
@@ -399,6 +476,7 @@ impl Backend for Flaky {
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
         self.gate_m(false, model)?;
+        self.reads.lock().unwrap().gets += 1;
         let found = self.inner.get(model, id)?;
         let hook = {
             let mut g = self.after_get.lock().unwrap();
@@ -421,7 +499,11 @@ impl Backend for Flaky {
     }
     fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
         self.gate_m(false, model)?;
-        self.inner.list(model)
+        let rows = self.inner.list(model)?;
+        let mut r = self.reads.lock().unwrap();
+        r.lists += 1;
+        r.list_rows += rows.len() as u64;
+        Ok(rows)
     }
     fn scan(
         &self,
@@ -429,7 +511,11 @@ impl Backend for Flaky {
         visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
     ) -> Result<()> {
         self.gate_m(false, model)?;
-        self.inner.scan(model, visit)
+        self.reads.lock().unwrap().scans += 1;
+        self.inner.scan(model, &mut |id, f| {
+            self.reads.lock().unwrap().scan_rows += 1;
+            visit(id, f)
+        })
     }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         self.gate_u(model)?;
@@ -535,7 +621,24 @@ impl Backend for Flaky {
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.gate_m(false, model)?;
-        self.inner.find(model, field, value)
+        let rows = self.inner.find(model, field, value)?;
+        let mut r = self.reads.lock().unwrap();
+        r.finds += 1;
+        r.find_rows += rows.len() as u64;
+        Ok(rows)
+    }
+    fn find_unique(
+        &self,
+        model: &str,
+        fields: &[&str],
+        values: &[J],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.gate_m(false, model)?;
+        let rows = self.inner.find_unique(model, fields, values)?;
+        let mut r = self.reads.lock().unwrap();
+        r.keyed += 1;
+        r.keyed_rows += rows.len() as u64;
+        Ok(rows)
     }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         self.gate(true)?;

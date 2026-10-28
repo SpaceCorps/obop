@@ -331,6 +331,63 @@ fn rows_with_id(rows: Vec<postgres::Row>) -> PR<Vec<(String, Fields)>> {
         .collect()
 }
 
+/// The columns of the unique index of a D57 rule, one per field, in the order of `fields`. The one
+/// place both the index and the lookup that must use it take them from, so they cannot drift.
+fn unique_columns(fields: &[&str]) -> Result<Vec<String>> {
+    if fields.is_empty() {
+        return Err("a unique rule needs at least one field".to_string());
+    }
+    fields
+        .iter()
+        .enumerate()
+        .map(|(i, f)| crate::keyexpr::unique_column(i, f))
+        .collect()
+}
+
+/// The statement that makes the unique index of `fields` on `model`. Its text is what deployed
+/// databases were given by every version since D57 (the test `unique_index_text_is_what_deployed_databases_hold`).
+pub(crate) fn unique_index_sql(name: &str, model: &str, fields: &[&str]) -> Result<String> {
+    let model = ident(model)?;
+    Ok(format!(
+        "CREATE UNIQUE INDEX IF NOT EXISTS {name} ON obop_record ({}) WHERE model = '{model}'",
+        unique_columns(fields)?.join(", ")
+    ))
+}
+
+/// The statement of [`Backend::find_unique`]: the same columns, each compared with a bound text,
+/// and the same `model = '...'` as the partial index, so the planner can use the index. The model
+/// is a validated literal, never a parameter: a parameter would not prove the index's predicate.
+pub(crate) fn unique_lookup_sql(model: &str, fields: &[&str]) -> Result<String> {
+    let model = ident(model)?;
+    let tests: Vec<String> = unique_columns(fields)?
+        .iter()
+        .enumerate()
+        .map(|(i, column)| format!("{column} = ${}", i + 1))
+        .collect();
+    Ok(format!(
+        "SELECT id, data FROM obop_record WHERE model = '{model}' AND {} ORDER BY seq",
+        tests.join(" AND ")
+    ))
+}
+
+/// What `data ->> field` returns for each value, as the bound texts of the lookup; `None` when a
+/// value has no exact text (a fraction, a list, an object, a NUL, or an empty first value, which
+/// the index treats as no value at all), and the caller then reads with `find` instead.
+fn unique_texts(values: &[J]) -> Option<Vec<String>> {
+    if matches!(values.first(), Some(J::String(s)) if s.is_empty()) {
+        return None;
+    }
+    values
+        .iter()
+        .map(|v| match v {
+            J::String(s) if !s.contains('\0') => Some(s.clone()),
+            J::Number(n) if n.is_i64() || n.is_u64() => Some(n.to_string()),
+            J::Bool(b) => Some(b.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
 impl Backend for Pg {
     fn insert(&self, model: &str, id: &str, fields: &Fields) -> Result<()> {
         let data = J::Object(fields.clone());
@@ -616,21 +673,40 @@ impl Backend for Pg {
             rows_with_id(rows)
         })
     }
+    fn find_unique(
+        &self,
+        model: &str,
+        fields: &[&str],
+        values: &[J],
+    ) -> Result<Vec<(String, Fields)>> {
+        unique_head(fields, values)?;
+        // The lookup is the index text applied to the bound texts of the values. A value that has
+        // no exact text (a float, a list), or a name the index cannot carry, goes the way of the
+        // default: read by `find` and filtered, the same answer.
+        let keyed = match (unique_lookup_sql(model, fields), unique_texts(values)) {
+            (Ok(sql), Some(texts)) => Some((sql, texts)),
+            _ => None,
+        };
+        let Some((sql, texts)) = keyed else {
+            let (field, value) = unique_head(fields, values)?;
+            return Ok(self
+                .find(model, field, value)?
+                .into_iter()
+                .filter(|(_, rec)| unique_matches(rec, fields, values))
+                .collect());
+        };
+        let rows = self.main.read(Class::List, |c| {
+            let params: Vec<&(dyn postgres::types::ToSql + Sync)> =
+                texts.iter().map(|t| t as _).collect();
+            rows_with_id(c.query(&sql, &params)?)
+        })?;
+        Ok(rows
+            .into_iter()
+            .filter(|(_, rec)| unique_matches(rec, fields, values))
+            .collect())
+    }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
-        let (name, model) = (ident(name)?, ident(model)?);
-        let mut cols = Vec::new();
-        for (i, f) in fields.iter().enumerate() {
-            let f = ident(f)?;
-            cols.push(if i == 0 {
-                format!("(NULLIF(data ->> '{f}', ''))")
-            } else {
-                format!("(COALESCE(data ->> '{f}', ''))")
-            });
-        }
-        let sql = format!(
-            "CREATE UNIQUE INDEX IF NOT EXISTS {name} ON obop_record ({}) WHERE model = '{model}'",
-            cols.join(", ")
-        );
+        let sql = unique_index_sql(ident(name)?, model, fields)?;
         self.main.run(Class::Batch, |c| {
             c.batch_execute(&sql)?;
             Ok(())

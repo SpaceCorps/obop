@@ -340,6 +340,31 @@ pub trait Backend: Send + Sync {
             .filter(|(_, f)| f.get(field) == Some(value))
             .collect())
     }
+    /// The records a uniqueness rule (D57) compares with a new value: those of `model` whose
+    /// `fields[0]` equals `values[0]` and whose later `fields[i]` equal `values[i]`, a missing or
+    /// null stored value counting as the empty text `""` (so the caller passes `""` for a scope
+    /// field it has no value for), in insertion order. [`unique_matches`] is the one definition of
+    /// "equal": a JSON string `"5"` and the number `5` are different values.
+    ///
+    /// The answer is the same on every backend; only the cost differs. The default reads the model
+    /// ([`Backend::find`] on `fields[0]`, then the other fields). SQLite and PostgreSQL ask the
+    /// database with exactly the expressions of the index [`Backend::ensure_unique`] makes for the
+    /// same `fields` in the same order, so with that index the cost does not grow with the model.
+    /// Without it they scan, as `find` does. The caller passes a non-empty `values[0]`: the rule
+    /// does not constrain an empty value.
+    fn find_unique(
+        &self,
+        model: &str,
+        fields: &[&str],
+        values: &[J],
+    ) -> Result<Vec<(String, Fields)>> {
+        let (field, value) = unique_head(fields, values)?;
+        Ok(self
+            .find(model, field, value)?
+            .into_iter()
+            .filter(|(_, rec)| unique_matches(rec, fields, values))
+            .collect())
+    }
     /// Make the database refuse two records of `model` that have the same non-empty `fields[0]`
     /// and the same values in the other `fields` (D57). `name` identifies the constraint in
     /// errors (`obop_uq_...`). Backends without indexes do nothing: the command layer checks on
@@ -407,6 +432,32 @@ pub trait Backend: Send + Sync {
         wipe: bool,
         next: &mut dyn FnMut() -> Result<Option<Vec<Row>>>,
     ) -> Result<usize>;
+}
+
+/// The first field and value of a keyed lookup, after checking that every field has a value.
+pub(crate) fn unique_head<'a>(fields: &[&'a str], values: &'a [J]) -> Result<(&'a str, &'a J)> {
+    match (fields.first(), values.first()) {
+        (Some(f), Some(v)) if fields.len() == values.len() => Ok((*f, v)),
+        _ => Err("a keyed lookup needs a value for each of one or more fields".to_string()),
+    }
+}
+
+/// Whether `rec` is a record that [`Backend::find_unique`] returns for `fields` and `values`: the
+/// first field holds the first value, and every other field holds its value or, where the stored
+/// field is missing or null, the empty text. This is the rule of `unique_with` (D57), written
+/// once: the command layer applies it to the records of a unit in progress and the backends to the
+/// candidates the database returns.
+pub fn unique_matches(rec: &Fields, fields: &[&str], values: &[J]) -> bool {
+    let (Some((first, rest)), Some((want, wanted))) = (fields.split_first(), values.split_first())
+    else {
+        return false;
+    };
+    rec.get(*first) == Some(want)
+        && rest.len() == wanted.len()
+        && rest.iter().zip(wanted).all(|(f, w)| match rec.get(*f) {
+            None | Some(J::Null) => matches!(w, J::String(s) if s.is_empty()),
+            Some(v) => v == w,
+        })
 }
 
 /// One compare-and-set of a text field of a record.
