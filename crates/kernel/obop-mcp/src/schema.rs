@@ -52,7 +52,9 @@ pub fn field_schema(f: &FieldInfo) -> J {
             " (may hold an option key of {of}; the back office shows that option's label, the stored text is the key)"
         ));
     }
-    if f.personal_data {
+    if f.personal_data && withheld_from_agents(f.class) {
+        desc.push_str(" (personal data of a sensitive class: agents are not given it at all)");
+    } else if f.personal_data {
         desc.push_str(
             " (personal data: agents read it as a mask token and may send the token back)",
         );
@@ -342,6 +344,13 @@ pub fn tools(d: &Dispatcher, p: &Principal) -> Vec<J> {
     out
 }
 
+/// Whether an agent's token is denied a field of this class outright, and not given a mask token
+/// (D40: the sensitive classes and secrets).
+fn withheld_from_agents(class: &str) -> bool {
+    use obop_types::DataClass;
+    DataClass::parse(class).is_some_and(|c| c.is_sensitive() || c == DataClass::Secret)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,6 +422,24 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("mask")
+        );
+        // A sensitive class is not masked for an agent, it is withheld: the text must not
+        // promise a token.
+        for class in ["confidential_hr", "special_category", "financial", "secret"] {
+            pd.class = class;
+            let d = field_schema(&pd)["description"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            assert!(d.contains("not given it at all"), "{class}: {d}");
+            assert!(!d.contains("mask"), "{class}: {d}");
+        }
+        pd.class = "internal";
+        assert!(
+            field_schema(&pd)["description"]
+                .as_str()
+                .unwrap()
+                .contains("mask token")
         );
     }
 

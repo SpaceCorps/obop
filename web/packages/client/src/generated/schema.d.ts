@@ -3445,32 +3445,32 @@ export interface components {
         /** @description One recorded position of a trip; written once, never changed */
         mileage_point: {
             /**
-             * @description Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @description Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
              * @example 12.33
              */
             accuracy_m?: string;
             /** @description Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked) */
             driver?: string;
             /**
-             * @description Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @description Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
              * @example 12.3333333
              */
             lat?: string;
             /**
-             * @description Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @description Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
              * @example 12.3333333
              */
             lon?: string;
             /**
              * Format: date-time
-             * @description When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @description When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
              * @example 2026-03-29T01:30:00.000000Z
              */
             recorded_at?: string;
             /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
             seq?: number;
             /**
-             * @description Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @description Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
              * @example 12.33
              */
             speed_mps?: string;
@@ -3479,7 +3479,7 @@ export interface components {
         };
         /** @description A trip recorded by a driver: its distance, its state and the review of it */
         mileage_trip: {
-            /** @description Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique) */
+            /** @description Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique) */
             client_trip_id?: string;
             /**
              * Format: date-time
@@ -3497,18 +3497,18 @@ export interface components {
             /** @description Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked) */
             driver?: string;
             /**
-             * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
              * @example 12.3333333
              */
             end_lat?: string;
             /**
-             * @description Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @description Longitude of the last accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
              * @example 12.3333333
              */
             end_lon?: string;
             /**
              * Format: date-time
-             * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
              * @example 2026-03-29T01:30:00.000000Z
              */
             ended_at?: string;
@@ -3534,18 +3534,18 @@ export interface components {
             /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
             reviewed_by?: string;
             /**
-             * @description Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @description Latitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
              * @example 12.3333333
              */
             start_lat?: string;
             /**
-             * @description Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+             * @description Longitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
              * @example 12.3333333
              */
             start_lon?: string;
             /**
              * Format: date-time
-             * @description When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @description When the driver pressed Start, by the phone's clock (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
              * @example 2026-03-29T01:30:00.000000Z
              */
             started_at?: string;
@@ -3658,7 +3658,7 @@ export interface components {
             notes?: string;
             /** @description Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB) (personal data: agents see it masked) */
             photo?: string;
-            /** @description Tax identifier of a natural person (personal data: agents see it masked) */
+            /** @description Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all) */
             tax_id?: string;
         };
         /** @description What a sample outbound record looks like after the policy: the exact payload and the treatment of each field */
@@ -10999,32 +10999,32 @@ export interface operations {
                     mode?: "all_or_nothing" | "partial";
                     rows?: {
                         /**
-                         * @description Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @description Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                          * @example 12.33
                          */
                         accuracy_m?: string;
                         /** @description Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked) */
                         driver?: string;
                         /**
-                         * @description Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @description Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                          * @example 12.3333333
                          */
                         lat: string;
                         /**
-                         * @description Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @description Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                          * @example 12.3333333
                          */
                         lon: string;
                         /**
                          * Format: date-time
-                         * @description When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @description When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         recorded_at: string;
                         /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
                         seq: number;
                         /**
-                         * @description Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @description Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                          * @example 12.33
                          */
                         speed_mps?: string;
@@ -11124,32 +11124,32 @@ export interface operations {
             content: {
                 "application/json": {
                     /**
-                     * @description Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.33
                      */
                     accuracy_m?: string;
                     /** @description Login of the driver of the trip; set by the server from the trip (personal data: agents see it masked) */
                     driver?: string;
                     /**
-                     * @description Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     lat: string;
                     /**
-                     * @description Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     lon: string;
                     /**
                      * Format: date-time
-                     * @description When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     recorded_at: string;
                     /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
                     seq: number;
                     /**
-                     * @description Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.33
                      */
                     speed_mps?: string;
@@ -11586,7 +11586,7 @@ export interface operations {
             content: {
                 "application/json": {
                     /**
-                     * @description Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.33
                      */
                     accuracy_m?: string;
@@ -11594,25 +11594,25 @@ export interface operations {
                     driver?: string;
                     id: string;
                     /**
-                     * @description Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     lat?: string;
                     /**
-                     * @description Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     recorded_at?: string;
                     /** @description Position of the point in the trip, counted by the device; unique within the trip (unique) */
                     seq?: number;
                     /**
-                     * @description Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.33
                      */
                     speed_mps?: string;
@@ -11702,7 +11702,7 @@ export interface operations {
                     /** @enum {string} */
                     mode?: "all_or_nothing" | "partial";
                     rows?: {
-                        /** @description Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique) */
+                        /** @description Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique) */
                         client_trip_id: string;
                         /**
                          * Format: date-time
@@ -11720,18 +11720,18 @@ export interface operations {
                         /** @description Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked) */
                         driver: string;
                         /**
-                         * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                          * @example 12.3333333
                          */
                         end_lat?: string;
                         /**
-                         * @description Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @description Longitude of the last accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                          * @example 12.3333333
                          */
                         end_lon?: string;
                         /**
                          * Format: date-time
-                         * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         ended_at?: string;
@@ -11751,18 +11751,18 @@ export interface operations {
                         /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
                         reviewed_by?: string;
                         /**
-                         * @description Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @description Latitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                          * @example 12.3333333
                          */
                         start_lat?: string;
                         /**
-                         * @description Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                         * @description Longitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                          * @example 12.3333333
                          */
                         start_lon?: string;
                         /**
                          * Format: date-time
-                         * @description When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @description When the driver pressed Start, by the phone's clock (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         started_at: string;
@@ -11944,7 +11944,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique) */
+                    /** @description Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique) */
                     client_trip_id: string;
                     /**
                      * Format: date-time
@@ -11962,18 +11962,18 @@ export interface operations {
                     /** @description Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked) */
                     driver: string;
                     /**
-                     * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     end_lat?: string;
                     /**
-                     * @description Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Longitude of the last accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     end_lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     ended_at?: string;
@@ -11993,18 +11993,18 @@ export interface operations {
                     /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
                     reviewed_by?: string;
                     /**
-                     * @description Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Latitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     start_lat?: string;
                     /**
-                     * @description Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Longitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     start_lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the driver pressed Start, by the phone's clock (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     started_at: string;
@@ -12913,7 +12913,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique) */
+                    /** @description Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique) */
                     client_trip_id?: string;
                     /**
                      * Format: date-time
@@ -12931,18 +12931,18 @@ export interface operations {
                     /** @description Login of the person who recorded the trip; set by the server to the caller (personal data: agents see it masked) */
                     driver?: string;
                     /**
-                     * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     end_lat?: string;
                     /**
-                     * @description Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Longitude of the last accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     end_lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     ended_at?: string;
@@ -12963,18 +12963,18 @@ export interface operations {
                     /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
                     reviewed_by?: string;
                     /**
-                     * @description Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Latitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     start_lat?: string;
                     /**
-                     * @description Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
+                     * @description Longitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)
                      * @example 12.3333333
                      */
                     start_lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the driver pressed Start, by the phone's clock (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     started_at?: string;
@@ -13743,7 +13743,7 @@ export interface operations {
                         name: string;
                         /** @description Free-text internal notes (personal data: agents see it masked) */
                         notes?: string;
-                        /** @description Tax identifier of a natural person (personal data: agents see it masked) */
+                        /** @description Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all) */
                         tax_id?: string;
                     }[];
                 };
@@ -13846,7 +13846,7 @@ export interface operations {
                     notes?: string;
                     /** @description Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB) (personal data: agents see it masked) */
                     photo?: string;
-                    /** @description Tax identifier of a natural person (personal data: agents see it masked) */
+                    /** @description Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all) */
                     tax_id?: string;
                 };
             };
@@ -14365,7 +14365,7 @@ export interface operations {
                     notes?: string;
                     /** @description Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB) (personal data: agents see it masked) */
                     photo?: string;
-                    /** @description Tax identifier of a natural person (personal data: agents see it masked) */
+                    /** @description Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all) */
                     tax_id?: string;
                 };
             };

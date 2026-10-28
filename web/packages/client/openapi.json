@@ -768,7 +768,7 @@
         "description": "One recorded position of a trip; written once, never changed",
         "properties": {
           "accuracy_m": {
-            "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+            "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
             "example": "12.33",
             "pattern": "^-?(0|[1-9][0-9]{0,5})(\\.[0-9]{1,2})?$",
             "type": "string"
@@ -778,19 +778,19 @@
             "type": "string"
           },
           "lat": {
-            "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+            "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
             "example": "12.3333333",
             "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
             "type": "string"
           },
           "lon": {
-            "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+            "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
             "example": "12.3333333",
             "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
             "type": "string"
           },
           "recorded_at": {
-            "description": "When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "description": "When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
             "example": "2026-03-29T01:30:00.000000Z",
             "format": "date-time",
             "type": "string"
@@ -800,7 +800,7 @@
             "type": "integer"
           },
           "speed_mps": {
-            "description": "Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+            "description": "Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
             "example": "12.33",
             "pattern": "^-?(0|[1-9][0-9]{0,4})(\\.[0-9]{1,2})?$",
             "type": "string"
@@ -816,7 +816,7 @@
         "description": "A trip recorded by a driver: its distance, its state and the review of it",
         "properties": {
           "client_trip_id": {
-            "description": "Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique)",
+            "description": "Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique)",
             "type": "string"
           },
           "confirmed_at": {
@@ -840,19 +840,19 @@
             "type": "string"
           },
           "end_lat": {
-            "description": "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+            "description": "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
             "example": "12.3333333",
             "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
             "type": "string"
           },
           "end_lon": {
-            "description": "Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+            "description": "Longitude of the last accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
             "example": "12.3333333",
             "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
             "type": "string"
           },
           "ended_at": {
-            "description": "When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "description": "When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
             "example": "2026-03-29T01:30:00.000000Z",
             "format": "date-time",
             "type": "string"
@@ -902,19 +902,19 @@
             "type": "string"
           },
           "start_lat": {
-            "description": "Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+            "description": "Latitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
             "example": "12.3333333",
             "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
             "type": "string"
           },
           "start_lon": {
-            "description": "Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+            "description": "Longitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
             "example": "12.3333333",
             "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
             "type": "string"
           },
           "started_at": {
-            "description": "When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "description": "When the driver pressed Start, by the phone's clock (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
             "example": "2026-03-29T01:30:00.000000Z",
             "format": "date-time",
             "type": "string"
@@ -1141,7 +1141,7 @@
             "type": "string"
           },
           "tax_id": {
-            "description": "Tax identifier of a natural person (personal data: agents see it masked)",
+            "description": "Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all)",
             "type": "string"
           }
         },
@@ -14053,7 +14053,7 @@
                     "items": {
                       "properties": {
                         "accuracy_m": {
-                          "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                          "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                           "example": "12.33",
                           "pattern": "^-?(0|[1-9][0-9]{0,5})(\\.[0-9]+)?$",
                           "type": "string"
@@ -14063,19 +14063,19 @@
                           "type": "string"
                         },
                         "lat": {
-                          "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                          "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                           "example": "12.3333333",
                           "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]+)?$",
                           "type": "string"
                         },
                         "lon": {
-                          "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                          "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                           "example": "12.3333333",
                           "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]+)?$",
                           "type": "string"
                         },
                         "recorded_at": {
-                          "description": "When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                          "description": "When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                           "example": "2026-03-29T01:30:00.000000Z",
                           "format": "date-time",
                           "type": "string"
@@ -14085,7 +14085,7 @@
                           "type": "integer"
                         },
                         "speed_mps": {
-                          "description": "Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                          "description": "Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                           "example": "12.33",
                           "pattern": "^-?(0|[1-9][0-9]{0,4})(\\.[0-9]+)?$",
                           "type": "string"
@@ -14273,7 +14273,7 @@
               "schema": {
                 "properties": {
                   "accuracy_m": {
-                    "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.33",
                     "pattern": "^-?(0|[1-9][0-9]{0,5})(\\.[0-9]{1,2})?$",
                     "type": "string"
@@ -14283,19 +14283,19 @@
                     "type": "string"
                   },
                   "lat": {
-                    "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "lon": {
-                    "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "recorded_at": {
-                    "description": "When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "description": "When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
                     "type": "string"
@@ -14305,7 +14305,7 @@
                     "type": "integer"
                   },
                   "speed_mps": {
-                    "description": "Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.33",
                     "pattern": "^-?(0|[1-9][0-9]{0,4})(\\.[0-9]{1,2})?$",
                     "type": "string"
@@ -15084,7 +15084,7 @@
               "schema": {
                 "properties": {
                   "accuracy_m": {
-                    "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Radius of the horizontal accuracy in metres, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 8 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.33",
                     "pattern": "^-?(0|[1-9][0-9]{0,5})(\\.[0-9]{1,2})?$",
                     "type": "string"
@@ -15097,19 +15097,19 @@
                     "type": "string"
                   },
                   "lat": {
-                    "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Latitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "lon": {
-                    "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Longitude in degrees (WGS84), at most 7 decimals (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "recorded_at": {
-                    "description": "When the phone recorded the position (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "description": "When the phone recorded the position (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
                     "type": "string"
@@ -15119,7 +15119,7 @@
                     "type": "integer"
                   },
                   "speed_mps": {
-                    "description": "Speed over ground in metres per second, when the phone said (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Speed over ground in metres per second, when the phone said (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 7 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.33",
                     "pattern": "^-?(0|[1-9][0-9]{0,4})(\\.[0-9]{1,2})?$",
                     "type": "string"
@@ -15271,7 +15271,7 @@
                     "items": {
                       "properties": {
                         "client_trip_id": {
-                          "description": "Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique)",
+                          "description": "Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique)",
                           "type": "string"
                         },
                         "confirmed_at": {
@@ -15295,19 +15295,19 @@
                           "type": "string"
                         },
                         "end_lat": {
-                          "description": "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                          "description": "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                           "example": "12.3333333",
                           "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]+)?$",
                           "type": "string"
                         },
                         "end_lon": {
-                          "description": "Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                          "description": "Longitude of the last accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                           "example": "12.3333333",
                           "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]+)?$",
                           "type": "string"
                         },
                         "ended_at": {
-                          "description": "When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                          "description": "When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                           "example": "2026-03-29T01:30:00.000000Z",
                           "format": "date-time",
                           "type": "string"
@@ -15342,19 +15342,19 @@
                           "type": "string"
                         },
                         "start_lat": {
-                          "description": "Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                          "description": "Latitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                           "example": "12.3333333",
                           "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]+)?$",
                           "type": "string"
                         },
                         "start_lon": {
-                          "description": "Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                          "description": "Longitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                           "example": "12.3333333",
                           "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]+)?$",
                           "type": "string"
                         },
                         "started_at": {
-                          "description": "When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                          "description": "When the driver pressed Start, by the phone's clock (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                           "example": "2026-03-29T01:30:00.000000Z",
                           "format": "date-time",
                           "type": "string"
@@ -15677,7 +15677,7 @@
               "schema": {
                 "properties": {
                   "client_trip_id": {
-                    "description": "Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique)",
+                    "description": "Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique)",
                     "type": "string"
                   },
                   "confirmed_at": {
@@ -15701,19 +15701,19 @@
                     "type": "string"
                   },
                   "end_lat": {
-                    "description": "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "end_lon": {
-                    "description": "Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Longitude of the last accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "ended_at": {
-                    "description": "When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "description": "When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
                     "type": "string"
@@ -15748,19 +15748,19 @@
                     "type": "string"
                   },
                   "start_lat": {
-                    "description": "Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Latitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "start_lon": {
-                    "description": "Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Longitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "started_at": {
-                    "description": "When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "description": "When the driver pressed Start, by the phone's clock (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
                     "type": "string"
@@ -17296,7 +17296,7 @@
               "schema": {
                 "properties": {
                   "client_trip_id": {
-                    "description": "Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again (unique)",
+                    "description": "Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again (unique)",
                     "type": "string"
                   },
                   "confirmed_at": {
@@ -17320,19 +17320,19 @@
                     "type": "string"
                   },
                   "end_lat": {
-                    "description": "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Latitude of the last accepted fix, set by the server; the app may stop before the final upload, so the end is not what the app reported (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "end_lon": {
-                    "description": "Longitude of the last accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Longitude of the last accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "ended_at": {
-                    "description": "When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "description": "When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
                     "type": "string"
@@ -17370,19 +17370,19 @@
                     "type": "string"
                   },
                   "start_lat": {
-                    "description": "Latitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Latitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "start_lon": {
-                    "description": "Longitude of the first accepted fix, set by the server (personal data: agents see it masked) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
+                    "description": "Longitude of the first accepted fix, set by the server (personal data of a sensitive class: not given to agents at all) (an exact decimal as a string, never a JSON number: at most 10 digits, 7 after the point; answers always carry exactly 7 fractional digits and input with more is refused, except in bulk_create and obop import, which round with half_even)",
                     "example": "12.3333333",
                     "pattern": "^-?(0|[1-9][0-9]{0,2})(\\.[0-9]{1,7})?$",
                     "type": "string"
                   },
                   "started_at": {
-                    "description": "When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "description": "When the driver pressed Start, by the phone's clock (personal data of a sensitive class: not given to agents at all) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
                     "example": "2026-03-29T01:30:00.000000Z",
                     "format": "date-time",
                     "type": "string"
@@ -18714,7 +18714,7 @@
                           "type": "string"
                         },
                         "tax_id": {
-                          "description": "Tax identifier of a natural person (personal data: agents see it masked)",
+                          "description": "Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all)",
                           "type": "string"
                         }
                       },
@@ -18909,7 +18909,7 @@
                     "type": "string"
                   },
                   "tax_id": {
-                    "description": "Tax identifier of a natural person (personal data: agents see it masked)",
+                    "description": "Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all)",
                     "type": "string"
                   }
                 },
@@ -19823,7 +19823,7 @@
                     "type": "string"
                   },
                   "tax_id": {
-                    "description": "Tax identifier of a natural person (personal data: agents see it masked)",
+                    "description": "Tax identifier of a natural person (personal data of a sensitive class: not given to agents at all)",
                     "type": "string"
                   }
                 },
