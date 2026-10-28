@@ -2,7 +2,7 @@
 
 Open-source operating system for businesses: an Odoo-class modular suite (ERP, CRM, accounting, inventory, manufacturing, HR, projects, POS, e-commerce, website, marketing, helpdesk, documents) on one shared data model. Clean-room re-implementation of Odoo's concepts and behaviour, not a code port. Apache-2.0 and completely free to use and to self-host.
 
-The owner's rulings of 2026-10-01 (OR-1 to OR-21), 2026-10-27 (OR-22 to OR-34) and 2026-10-28 (OR-35) are recorded in `docs/DECISIONS.md`, sections "Owner rulings (2026-10-01)" and "Owner rulings (2026-10-27)". They are RATIFIED and win over every Proposed position in every document and in the research. Anything the owner has not ruled stays PROPOSED or open; do not treat it as decided.
+The owner's rulings of 2026-10-01 (OR-1 to OR-21), 2026-10-27 (OR-22 to OR-34), 2026-10-28 and 2026-10-29 (OR-35) are recorded in `docs/DECISIONS.md`, sections "Owner rulings (2026-10-01)" and "Owner rulings (2026-10-27)". They are RATIFIED and win over every Proposed position in every document and in the research. Anything the owner has not ruled stays PROPOSED or open; do not treat it as decided.
 
 ## Hard tech constraints (set by the owner)
 
