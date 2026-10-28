@@ -111,8 +111,10 @@ impl Pg {
         // trip over each other creating the same objects. The schema is the parts of `schema`:
         // what is missing is created under `Ddl::IfMissing`, and `Ddl::Never` only checks.
         schema::with_lock(&mut client, |c| schema::ensure(c, ddl))?;
-        // Created above under `IfMissing`; under `Never` it may be missing, which is not an error
-        // until a model keeps history (see `pg_hist`).
+        // Not made at start (`schema::parts` is the record store only): a database installed
+        // before the history opens as it did, whatever the role. It is made when a model that
+        // keeps history first writes; where it cannot be made, that write is refused (see
+        // `pg_hist`).
         let history_ready = (pg_hist::PART.check)(&mut client)?;
 
         // Advisory locks need a session that lasts: behind a pooler in transaction mode they go
@@ -801,7 +803,7 @@ impl Backend for Pg {
             // The entries of the change history come in among the records (D75): the pipeline
             // is preflight, wipe, rows (records and entries), then the partitions, the sequence
             // and the epoch of the feed (`pg_hist::Import`).
-            let mut history = pg_hist::Import::preflight(c, wipe)?;
+            let mut history = pg_hist::Import::preflight(c, wipe, self.hist.ddl())?;
             if wipe {
                 for t in ["obop_record", "obop_kv", "obop_counter"] {
                     c.batch_execute(&format!("DELETE FROM {t}"))?;

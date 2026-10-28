@@ -88,6 +88,9 @@ impl Px {
                 ..Track::default()
             },
         );
+        // What the command layer does when it registers a model that keeps history; the tests of
+        // the first write that makes the part itself do not use this fixture.
+        b.ensure_history_schema().expect("the history part");
         Px { b, now, db }
     }
 
@@ -178,13 +181,30 @@ impl Px {
 
 // ---- the schema part --------------------------------------------------------------------------------
 
+/// The record store and the history part, made by the owner as `Ddl::IfMissing` would.
+fn install_history(c: &mut postgres::Client) {
+    crate::schema::with_lock(c, |c| {
+        crate::schema::ensure_parts(c, crate::schema::installable(), Ddl::IfMissing)
+    })
+    .unwrap();
+}
+
+/// A database as an older version left it: the record store, and no change history.
+fn base_only(c: &mut postgres::Client) {
+    crate::schema::with_lock(c, |c| {
+        crate::schema::ensure_parts(c, crate::schema::parts(), Ddl::IfMissing)
+    })
+    .unwrap();
+    assert!(!(crate::pg_hist::PART.check)(c).unwrap());
+}
+
 #[test]
 fn the_part_is_what_its_check_says_and_everything_it_lists_is_made() {
     let Some(db) = TestDb::new() else {
         return;
     };
     let mut c = db.connect();
-    crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
+    install_history(&mut c);
     assert!((crate::pg_hist::PART.check)(&mut c).unwrap());
     // Every relation the check looks for is the kind of object it should be.
     let kind = |c: &mut postgres::Client, name: &str| -> String {
@@ -252,7 +272,7 @@ fn a_missing_object_of_the_part_is_a_warning_that_does_not_stop_the_process_and_
         return;
     };
     let mut c = db.connect();
-    crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
+    install_history(&mut c);
     for broken in [
         "DROP INDEX obop_record_change_feed",
         "DROP INDEX obop_record_change_sealed",
@@ -289,8 +309,12 @@ fn a_missing_object_of_the_part_is_a_warning_that_does_not_stop_the_process_and_
         let e = b.ensure_history_schema().unwrap_err();
         assert!(e.contains("missing: history"), "{broken}: {e}");
         drop(b);
-        // With the right to create, the start repairs it and leaves the rest alone.
-        drop(open_with(db.url(), Some(one())).unwrap());
+        // The start of a process that may create does not touch it (nobody asked for the history)...
+        let b = open_with(db.url(), Some(one())).unwrap();
+        assert!(!(crate::pg_hist::PART.check)(&mut c).unwrap(), "{broken}");
+        // ... and the question of the feature puts it back, leaving the rest alone.
+        b.ensure_history_schema().unwrap();
+        drop(b);
         assert!(
             crate::schema::inspect(&mut c).unwrap().is_empty(),
             "{broken}"
@@ -300,7 +324,7 @@ fn a_missing_object_of_the_part_is_a_warning_that_does_not_stop_the_process_and_
 }
 
 #[test]
-fn processes_that_start_together_make_the_part_once() {
+fn processes_that_need_the_part_together_make_it_once() {
     let Some(db) = TestDb::new() else {
         return;
     };
@@ -311,10 +335,19 @@ fn processes_that_start_together_make_the_part_once() {
                 let (db, barrier) = (&db, &barrier);
                 s.spawn(move || {
                     barrier.wait();
-                    let b = open_with(db.url(), Some(one()))?;
-                    // The strict question of the feature races the start of the others too.
+                    let pg = Pg::connect_with(db.url(), one())?;
+                    // Some ask the strict question of the feature, the others write the first
+                    // entry, which makes the part itself: both race the others.
                     if i % 2 == 0 {
-                        b.ensure_history_schema()?;
+                        pg.ensure_history_schema()?;
+                    } else {
+                        let b = Tracked::new(Arc::new(pg));
+                        b.track("deal", history_of(&["name"]));
+                        b.apply_ctx(
+                            &WriteCtx::new("ann", "rest", "deal.create"),
+                            &[ins("deal", &format!("d{i}"), json!({"name": "A"}))],
+                        )
+                        .map_err(|e| e.to_string())?;
                     }
                     Ok::<(), String>(())
                 })
@@ -326,6 +359,11 @@ fn processes_that_start_together_make_the_part_once() {
     });
     let mut c = db.connect();
     assert!(crate::schema::inspect(&mut c).unwrap().is_empty());
+    let entries: i64 = c
+        .query_one("SELECT count(*) FROM obop_record_change", &[])
+        .unwrap()
+        .get(0);
+    assert_eq!(entries, 3, "the three writers wrote their entries");
     let n: i64 = c
         .query_one(
             "SELECT count(*) FROM pg_proc WHERE proname LIKE 'obop_history_%'",
@@ -334,6 +372,18 @@ fn processes_that_start_together_make_the_part_once() {
         .unwrap()
         .get(0);
     assert_eq!(n, 4);
+}
+
+/// A model that keeps history, with `names` as plain fields.
+fn history_of(names: &[&str]) -> Track {
+    Track {
+        history: true,
+        fields: names
+            .iter()
+            .map(|k| (k.to_string(), Treat::Plain))
+            .collect(),
+        ..Track::default()
+    }
 }
 
 fn relations(c: &mut postgres::Client) -> Vec<String> {
@@ -354,11 +404,7 @@ fn a_database_installed_before_the_history_starts_under_never_and_says_so_when_i
     };
     // What a deployment has that was installed by an older version: the base part only.
     let mut c = db.connect();
-    crate::schema::with_lock(&mut c, |c| {
-        crate::schema::ensure_parts(c, &crate::schema::parts()[..1], Ddl::IfMissing)
-    })
-    .unwrap();
-    assert!(!(crate::pg_hist::PART.check)(&mut c).unwrap());
+    base_only(&mut c);
     let before = relations(&mut c);
     let pg = Pg::connect_options(db.url(), Some(one()), Ddl::Never)
         .expect("the process starts without the history");
@@ -431,27 +477,175 @@ fn a_database_installed_before_the_history_starts_under_never_and_says_so_when_i
 }
 
 #[test]
-fn a_process_that_may_create_the_schema_gives_an_older_database_its_history_at_start() {
+fn a_process_that_may_create_the_schema_gives_an_older_database_its_history_with_the_first_entry() {
     let Some(db) = TestDb::new() else {
         return;
     };
     let mut c = db.connect();
-    crate::schema::with_lock(&mut c, |c| {
-        crate::schema::ensure_parts(c, &crate::schema::parts()[..1], Ddl::IfMissing)
-    })
-    .unwrap();
+    base_only(&mut c);
     c.batch_execute(
         "INSERT INTO obop_record (model, id, data) VALUES ('deal', 'old', '{\"name\": \"A\"}')",
     )
     .unwrap();
-    drop(open_with(db.url(), Some(one())).unwrap());
+    let b = Tracked::new(Arc::new(Pg::connect_with(db.url(), one()).unwrap()));
+    b.track("deal", history_of(&["name"]));
+    b.track("note", Track::default());
+    // The start made nothing, and neither does a write nobody keeps history of.
+    assert!(!(crate::pg_hist::PART.check)(&mut c).unwrap());
+    let ctx = WriteCtx::new("ann", "rest", "deal.create");
+    b.apply_ctx(&ctx, &[ins("note", "n1", json!({"x": 1}))])
+        .unwrap();
+    assert!(!(crate::pg_hist::PART.check)(&mut c).unwrap());
+    // The first write that keeps history makes the part, and is the first entry.
+    b.apply_ctx(&ctx, &[ins("deal", "d1", json!({"name": "B"}))])
+        .unwrap();
     assert!((crate::pg_hist::PART.check)(&mut c).unwrap());
+    assert_eq!(
+        b.history(&HistoryQuery::of("deal", "d1", 10))
+            .unwrap()
+            .len(),
+        1
+    );
     // What was there is untouched.
     let data: J = c
         .query_one("SELECT data FROM obop_record WHERE id = 'old'", &[])
         .unwrap()
         .get(0);
     assert_eq!(data, json!({"name": "A"}));
+}
+
+/// A serving role that may read and write the tables but not create anything, in a database that
+/// the owner installed with the record store only (what every deployment is that was set up
+/// before the history existed).
+fn serving_role_of_an_older_database(db: &mut TestDb) -> String {
+    let mut c = db.connect();
+    base_only(&mut c);
+    let rt = db
+        .role("rt", "NOSUPERUSER NOCREATEDB NOCREATEROLE")
+        .unwrap();
+    db.connect()
+        .batch_execute(&format!(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role};
+             GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO {role};
+             REVOKE CREATE ON SCHEMA public FROM PUBLIC",
+            role = db.role_name("rt")
+        ))
+        .unwrap();
+    rt
+}
+
+#[test]
+fn an_older_database_opens_exactly_as_before_under_a_role_that_may_not_create_anything() {
+    let Some(mut db) = TestDb::new() else {
+        return;
+    };
+    let rt = serving_role_of_an_older_database(&mut db);
+    let before = relations(&mut db.connect());
+    // The shipped binary opens with `IfMissing` (nothing sets `Never`): the start must not try to
+    // create the history, or this role could no longer start a database it started before.
+    for (ddl, n) in [(Ddl::IfMissing, 1), (Ddl::Never, 2)] {
+        let pg = Pg::connect_options(&rt, Some(one()), ddl)
+            .unwrap_or_else(|e| panic!("{ddl:?}: the start must be what it was: {e}"));
+        let b = Tracked::new(Arc::new(pg));
+        // Models are registered, some with history, as they are once the command layer tracks.
+        b.track("deal", history_of(&["name"]));
+        b.track("stamped", Track::default());
+        let ctx = WriteCtx::new("ann", "rest", "x.create");
+        // Everything that keeps no history works: plain models, stamped models, reads, backups.
+        b.apply_ctx(&ctx, &[ins("note", &format!("n{n}"), json!({"x": 1}))])
+            .unwrap();
+        b.apply_ctx(&ctx, &[ins("stamped", &format!("s{n}"), json!({"x": 1}))])
+            .unwrap();
+        assert_eq!(
+            b.get("stamped", &format!("s{n}")).unwrap().unwrap()["row_version"],
+            1
+        );
+        assert!(
+            b.history(&HistoryQuery::of("deal", "d1", 10))
+                .unwrap()
+                .is_empty()
+        );
+        assert!(b.export(100, &mut |_| Ok(())).is_ok());
+        assert_eq!(b.total().unwrap(), 2 * n as usize);
+        // A write that must keep history is refused with the reason, and leaves nothing behind.
+        let e = b
+            .apply_ctx(&ctx, &[ins("deal", "d1", json!({"name": "A"}))])
+            .unwrap_err();
+        let ApplyError::Storage(m) = e else {
+            panic!("{e:?}");
+        };
+        assert!(
+            m.contains("the change history is not installed"),
+            "{ddl:?}: {m}"
+        );
+        if ddl == Ddl::IfMissing {
+            assert!(
+                m.contains("tried to install it and could not"),
+                "{ddl:?}: the reason is the process's own try: {m}"
+            );
+        }
+        assert!(b.get("deal", "d1").unwrap().is_none());
+    }
+    assert_eq!(before, relations(&mut db.connect()), "nothing was created");
+}
+
+#[test]
+fn a_failed_install_of_the_part_does_not_mark_the_request_that_met_it() {
+    let Some(mut db) = TestDb::new() else {
+        return;
+    };
+    let rt = serving_role_of_an_older_database(&mut db);
+    let pg = Pg::connect_options(&rt, Some(one()), Ddl::IfMissing).unwrap();
+    // The stack of the binary: the guard refuses writes after a fault of the same request.
+    let b = Tracked::new(guarded(Arc::new(pg)));
+    b.track("deal", history_of(&["name"]));
+    // A request scope, as the HTTP layer opens one: the first write that keeps history tries to
+    // install the part, fails, and says why; that is housekeeping, not a fault of the request.
+    fault::begin_request(fault::Outcome::default());
+    let ctx = WriteCtx::new("ann", "rest", "deal.create");
+    b.apply_ctx(&ctx, &[ins("deal", "d1", json!({"name": "A"}))])
+        .unwrap_err();
+    assert_eq!(
+        fault::noted(),
+        None,
+        "the refusal of the install is not a storage fault"
+    );
+    // The request goes on: a write that keeps no history is not refused by the guard.
+    b.apply_ctx(&ctx, &[ins("note", "n1", json!({"x": 1}))])
+        .unwrap();
+    assert_eq!(fault::end_request().fault, None);
+}
+
+#[test]
+fn a_partition_that_cannot_be_made_in_time_does_not_mark_the_request_that_asked_for_it() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let pg = Pg::connect_with(db.url(), one()).unwrap();
+    // The stack of the binary: the guard refuses writes after a fault of the same request.
+    let b = Tracked::new(guarded(Arc::new(pg)));
+    b.track("deal", history_of(&["name"]));
+    b.ensure_history_schema().unwrap();
+    // The function runs into the limit of the statement (the pool notes a timeout for that).
+    db.connect()
+        .batch_execute(
+            "CREATE OR REPLACE FUNCTION obop_history_ensure_partition(p_month date) RETURNS text
+             LANGUAGE plpgsql AS $$ BEGIN
+               RAISE EXCEPTION 'too slow' USING ERRCODE = '57014';
+             END $$",
+        )
+        .unwrap();
+    fault::begin_request(fault::Outcome::default());
+    let ctx = WriteCtx::new("ann", "rest", "deal.create");
+    // The partitions of the month are made by the first write; here they cannot be, which is
+    // housekeeping on nobody's behalf: the entry goes to the default partition and the write works.
+    b.apply_ctx(&ctx, &[ins("deal", "d1", json!({"name": "A"}))])
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(fault::noted(), None, "nobody's request met a timeout");
+    // And the request's next write is not refused by the guard because of it.
+    b.apply_ctx(&ctx, &[ins("deal", "d2", json!({"name": "A"}))])
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(fault::end_request().fault, None);
 }
 
 // ---- the guard ---------------------------------------------------------------------------------------
@@ -1857,10 +2051,7 @@ fn a_backup_with_entries_cannot_be_restored_into_a_database_that_has_no_history(
         return;
     };
     let mut c = db.connect();
-    crate::schema::with_lock(&mut c, |c| {
-        crate::schema::ensure_parts(c, &crate::schema::parts()[..1], Ddl::IfMissing)
-    })
-    .unwrap();
+    base_only(&mut c);
     let old = Tracked::new(Arc::new(
         Pg::connect_options(db.url(), Some(one()), Ddl::Never).unwrap(),
     ));
@@ -1878,6 +2069,56 @@ fn a_backup_with_entries_cannot_be_restored_into_a_database_that_has_no_history(
     assert_eq!(
         old.import(true, &mut || Ok(feed.take())).unwrap(),
         plain.len()
+    );
+}
+
+#[test]
+fn a_backup_with_entries_makes_the_history_of_an_older_database_when_the_process_may_create_it() {
+    let Some(a) = Px::new() else {
+        return;
+    };
+    a.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
+    a.ok("ann", &[merge("deal", "d1", json!({"name": "B"}))]);
+    let backup = a.rows();
+    let Some(mut db) = TestDb::new() else {
+        return;
+    };
+    let rt = serving_role_of_an_older_database(&mut db);
+    // A role that may not create anything cannot: the restore is refused whole, with the reason.
+    let theirs = Tracked::new(Arc::new(
+        Pg::connect_options(&rt, Some(one()), Ddl::IfMissing).unwrap(),
+    ));
+    let mut feed = Some(backup.clone());
+    theirs
+        .import(true, &mut || Ok(feed.take()))
+        .expect_err("no right to create the history");
+    assert_eq!(theirs.total().unwrap(), 0, "the whole restore was undone");
+    assert!(!(crate::pg_hist::PART.check)(&mut db.connect()).unwrap());
+    // The owner's process makes it, in the transaction of the restore, and the numbers go on.
+    let mine = Tracked::new(Arc::new(Pg::connect_with(db.url(), one()).unwrap()));
+    mine.track("deal", history_of(&["name"]));
+    let mut feed = Some(backup.clone());
+    assert_eq!(
+        mine.import(true, &mut || Ok(feed.take())).unwrap(),
+        backup.len()
+    );
+    assert!((crate::pg_hist::PART.check)(&mut db.connect()).unwrap());
+    assert_eq!(
+        mine.history(&HistoryQuery::of("deal", "d1", 10))
+            .unwrap()
+            .len(),
+        2
+    );
+    mine.apply_ctx(
+        &WriteCtx::new("ann", "rest", "deal.update"),
+        &[merge("deal", "d1", json!({"name": "C"}))],
+    )
+    .unwrap();
+    let h = mine.history(&HistoryQuery::of("deal", "d1", 10)).unwrap();
+    assert_eq!(h.len(), 3);
+    assert!(
+        h[0].seq > h[1].seq,
+        "the new entry sorts after the restored ones"
     );
 }
 

@@ -8,9 +8,13 @@
 //!   month (UTC) with a default partition that takes whatever no month takes, the sequence that
 //!   numbers the entries, the guard that makes the table append-only, and four functions that do
 //!   the maintenance the guard otherwise forbids (`obop_history_ensure_partition`,
-//!   `obop_history_drop_partition`, `obop_history_erase`, and the guard itself). The part is
-//!   created under `Ddl::IfMissing` and checked, never created, under `Ddl::Never`; unlike the
-//!   record store it is not required at start (see `schema::Part::required`).
+//!   `obop_history_drop_partition`, `obop_history_erase`, and the guard itself). Unlike the
+//!   record store it is **not made at start**: a process that starts touches nothing for a
+//!   feature that no model uses, so a database installed before it opens as it always did, with
+//!   any role that could open it. It is made by `Backend::ensure_history_schema` (the command
+//!   layer calls it when it registers a model that keeps history) under `Ddl::IfMissing`, and
+//!   only checked under `Ddl::Never`; `schema::install_all` makes it with the rest, and a restore
+//!   whose backup carries entries makes it under `IfMissing`.
 //! - **The transaction** ([`Tx`]): the lock of a record and the database's clock in one statement
 //!   (the clock is read after the lock is granted, so the stamps of two writers of one record
 //!   follow the order of the locks), the flush of the entries of a batch in one statement, and the
@@ -247,6 +251,16 @@ const NOT_INSTALLED: &str = "the change history is not installed in this databas
      (obop_storage::schema::owner_install, or the migration step of the history), or start the \
      process with permission to create the schema";
 
+/// `NOT_INSTALLED`, and why this process could not make the part itself, if it tried.
+fn not_installed(why: Option<String>) -> String {
+    match why {
+        Some(why) => {
+            format!("{NOT_INSTALLED} (this process tried to install it and could not: {why})")
+        }
+        None => NOT_INSTALLED.to_string(),
+    }
+}
+
 // ---- what a process knows of the history ------------------------------------------------------------
 
 /// The state of one `Pg` backend about the history. Everything here can be wrong without harm:
@@ -264,6 +278,9 @@ pub(crate) struct State {
     retry_after: Mutex<Option<Instant>>,
     /// Why the last `ensure` failed, if it did.
     problem: Mutex<Option<String>>,
+    /// When the part may be made again after this process failed to make it (its role may not
+    /// create tables), and why it failed.
+    install_retry: Mutex<Option<(Instant, String)>>,
     /// Tests: the clock the stamps read instead of the server's.
     clock: Option<Clock>,
 }
@@ -277,6 +294,7 @@ impl State {
             covered_until: AtomicI64::new(i64::MIN),
             retry_after: Mutex::new(None),
             problem: Mutex::new(None),
+            install_retry: Mutex::new(None),
             clock: None,
         }
     }
@@ -296,7 +314,7 @@ impl State {
         {
             let mut last = self.probed.lock().unwrap_or_else(|e| e.into_inner());
             if last.is_some_and(|t| t.elapsed() < Duration::from_secs(1)) {
-                return Err(NOT_INSTALLED.into());
+                return Err(not_installed(self.install_problem()));
             }
             *last = Some(Instant::now());
         }
@@ -304,7 +322,52 @@ impl State {
             self.ready.store(true, Ordering::Release);
             Ok(())
         } else {
-            Err(NOT_INSTALLED.into())
+            Err(not_installed(self.install_problem()))
+        }
+    }
+
+    /// The `Ddl` this process was opened with.
+    pub(crate) fn ddl(&self) -> Ddl {
+        self.ddl
+    }
+
+    /// Why this process could not make the part, if it tried and failed.
+    fn install_problem(&self) -> Option<String> {
+        self.install_retry
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|(_, why)| why.clone())
+    }
+
+    /// The first write that keeps history on a database that does not have the part yet: under
+    /// `Ddl::IfMissing` this process makes it, outside the transaction of the write and at most
+    /// once in 30 seconds after a failure. A role that may not create tables fails here and the
+    /// write is refused with the reason by [`State::require`]; nothing else is affected, and a
+    /// process that never writes history never gets here. Under `Never` nothing is made.
+    fn install_on_demand(&self, main: &PgPool) {
+        if self.ddl != Ddl::IfMissing {
+            return;
+        }
+        if self
+            .install_retry
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .is_some_and(|(t, _)| Instant::now() < *t)
+        {
+            return;
+        }
+        // Housekeeping on nobody's behalf: a refusal must not mark the request that happened to
+        // write first (see `fault::detached`).
+        match crate::fault::detached(|| self.ensure_schema(main)) {
+            Ok(()) => {
+                *self.install_retry.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            }
+            Err(why) => {
+                *self.install_retry.lock().unwrap_or_else(|e| e.into_inner()) =
+                    Some((Instant::now() + Duration::from_secs(30), why));
+            }
         }
     }
 
@@ -321,7 +384,10 @@ impl State {
     /// `history_ensure_partition` finds them.
     pub(crate) fn before_batch(&self, main: &PgPool) {
         if !self.ready.load(Ordering::Acquire) {
-            return;
+            self.install_on_demand(main);
+            if !self.ready.load(Ordering::Acquire) {
+                return;
+            }
         }
         let now = self.now_micros();
         if now < self.covered_until.load(Ordering::Relaxed) {
@@ -337,13 +403,18 @@ impl State {
         }
         let (y, m) = year_month(now);
         let base = format!("{y:04}-{m:02}-01");
-        let done = main.run(Class::Batch, |c| {
-            c.query(
-                "SELECT obop_history_ensure_partition(($1::text::date + g * interval '1 month')::date)
-                   FROM generate_series(0, 1) g",
-                &[&base],
-            )?;
-            Ok(())
+        // Housekeeping whose failure is remembered, not raised: it must not mark the request that
+        // happened to write first as having met a storage fault (a later write of the same
+        // request would be refused, its answer made a 503), see `fault::detached`.
+        let done = crate::fault::detached(|| {
+            main.run(Class::Batch, |c| {
+                c.query(
+                    "SELECT obop_history_ensure_partition(($1::text::date + g * interval '1 month')::date)
+                       FROM generate_series(0, 1) g",
+                    &[&base],
+                )?;
+                Ok(())
+            })
         });
         match done {
             Ok(()) => {
@@ -961,6 +1032,10 @@ pub(crate) fn count(c: &mut Client) -> PR<usize> {
 /// new entries sort after the restored ones. Run inside the transaction of `Pg::import`.
 pub(crate) struct Import {
     exists: bool,
+    /// The process may make the part (`Ddl::IfMissing`): a backup that carries entries makes it.
+    may_create: bool,
+    /// An entry came in and the table is not there: the part is made before the first flush.
+    needs_install: bool,
     /// The table held entries when the restore began (and is to be emptied).
     had_rows: bool,
     pending: Vec<ChangeRow>,
@@ -970,7 +1045,7 @@ pub(crate) struct Import {
 
 impl Import {
     /// Look at what the restore meets, and refuse early, with the reason, what cannot work.
-    pub(crate) fn preflight(c: &mut Client, wipe: bool) -> PR<Import> {
+    pub(crate) fn preflight(c: &mut Client, wipe: bool, ddl: Ddl) -> PR<Import> {
         let exists = table_exists(c)?;
         let mut had_rows = false;
         if wipe && exists {
@@ -999,6 +1074,8 @@ impl Import {
         }
         Ok(Import {
             exists,
+            may_create: ddl == Ddl::IfMissing,
+            needs_install: false,
             had_rows,
             pending: Vec::new(),
             entries: 0,
@@ -1031,10 +1108,13 @@ impl Import {
             .filter(|s| *s >= 1)
             .ok_or_else(|| format!("record_change {id}: the id is not a number"))?;
         if !self.exists {
-            return Err(format!(
-                "record_change {id}: the backup carries change history and this database has no \
-                 table for it. {NOT_INSTALLED}"
-            ));
+            if !self.may_create {
+                return Err(format!(
+                    "record_change {id}: the backup carries change history and this database has \
+                     no table for it. {NOT_INSTALLED}"
+                ));
+            }
+            self.needs_install = true;
         }
         self.pending.push(ChangeRow::from_fields(seq, fields)?);
         self.newest = self.newest.max(seq);
@@ -1047,6 +1127,14 @@ impl Import {
     pub(crate) fn flush(&mut self, c: &mut Client) -> PR<()> {
         if self.pending.is_empty() {
             return Ok(());
+        }
+        if self.needs_install {
+            // The backup carries history and the database has none yet: make the part, as the
+            // start of a process would, under the schema lock and in this transaction.
+            c.batch_execute(schema::LOCK_SQL)?;
+            schema::ensure_parts(c, &[PART], Ddl::IfMissing)?;
+            self.exists = true;
+            self.needs_install = false;
         }
         let rows = std::mem::take(&mut self.pending);
         let mut months: Vec<String> = rows.iter().map(|r| first_of_month(&r.at)).collect();

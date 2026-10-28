@@ -5,10 +5,11 @@
 //! A [`Part`] is one group of objects: how to create it (`render`, idempotent SQL with a
 //! `{schema}` placeholder), how to tell that it is there (`check`, a catalogue lookup that issues
 //! no DDL) and a digest of the SQL it renders (see [`Part::digest`]), which a migration step
-//! pins so that edited SQL cannot reach existing databases unannounced. The record store has two
-//! parts today, `base` (records, counters, short-lived values) and `history` (the change history of
-//! D75, `pg_hist`; see [`parts`]); [`BLOB`] is the table of the byte store, which only some
-//! deployments use. The guards and the query support of waves D76 to D78 each add a part.
+//! pins so that edited SQL cannot reach existing databases unannounced. The record store has one
+//! part that every process makes sure of, `base` (records, counters, short-lived values; see
+//! [`parts`]); `history` (the change history of D75, `pg_hist`) is made when a model needs it;
+//! [`BLOB`] is the table of the byte store, which only some deployments use. The guards and the
+//! query support of waves D76 to D78 each add a part.
 //!
 //! Who calls what:
 //!
@@ -16,14 +17,18 @@
 //!   processes that start together do not trip over each other, and the byte store
 //!   (`blob::DbBytes`) does the same for [`BLOB`]. With [`Ddl::IfMissing`] a part that is not
 //!   completely there is created; with [`Ddl::Never`] a *required* part that is not there is an
-//!   error and no DDL is issued (a serving role that may not create tables). A part that is not
-//!   required (see [`Part::required`]) is only reported by [`inspect`] under `Never`: the process
-//!   starts, and the feature of that part says what is missing when it is first used.
-//! - [`owner_install`] / [`install_all`] create every part, the byte store's too, unconditionally,
-//!   as the role that owns the objects (tests, the control plane, a migration step).
-//! - [`inspect`] compares a live database with the parts of the record store and reports what is
-//!   wrong. It leaves [`BLOB`] out: a deployment that keeps its files in a directory has no such
-//!   table.
+//!   error and no DDL is issued (a serving role that may not create tables). Only [`parts`] is
+//!   ensured at start, so a database installed by an older version opens as it always did.
+//! - `Backend::ensure_history_schema` asks for the history under the process's `Ddl`: created
+//!   under `IfMissing`, an error that says what is missing under `Never` (the part is not
+//!   [`Part::required`] for the start, only for the feature). A restore whose backup carries
+//!   entries makes it under `IfMissing` too.
+//! - [`owner_install`] / [`install_all`] create every part, the history's and the byte store's
+//!   too, unconditionally, as the role that owns the objects (tests, the control plane, a
+//!   migration step).
+//! - [`inspect`] compares a live database with the parts of the record store and the history and
+//!   reports what is wrong; the history is a warning, the record store an error. It leaves
+//!   [`BLOB`] out: a deployment that keeps its files in a directory has no such table.
 //!
 //! A check that cannot be answered is an error, never "the part is missing": a refused or failed
 //! catalogue query (the connection broke, the statement ran into its limit, the transaction was
@@ -159,8 +164,19 @@ pub static BLOB: Part = Part {
     required: true,
 };
 
-/// The parts of the record store, in the order they are created: `base`, then the change history.
+/// The parts every process makes sure of at start: the record store, `base`. The change history
+/// is not among them: a process that starts creates nothing for a feature that no model uses yet,
+/// so a database installed before it opens exactly as it did, with any role that could open it
+/// then. The history is made when a model that keeps it is switched on
+/// (`Backend::ensure_history_schema`), by `install_all`, or by a restore whose backup carries
+/// entries; [`inspect`] reports it.
 pub fn parts() -> &'static [Part] {
+    static PARTS: [Part; 1] = [BASE];
+    &PARTS
+}
+
+/// The parts [`inspect`] compares and [`install_all`] creates: [`parts`] and the change history.
+pub(crate) fn installable() -> &'static [Part] {
     static PARTS: [Part; 2] = [BASE, crate::pg_hist::PART];
     &PARTS
 }
@@ -251,7 +267,7 @@ fn ensure_with(c: &mut Client, parts: &[Part], ddl: Ddl, strict: bool) -> Result
 /// [`owner_install`]).
 pub fn install_all(c: &mut Client) -> Result<()> {
     let schema = current_schema(c)?;
-    for p in parts().iter().chain(std::iter::once(&BLOB)) {
+    for p in installable().iter().chain(std::iter::once(&BLOB)) {
         c.batch_execute(&(p.render)(&schema))
             .map_err(|e| ddl_error(p.name, &e))?;
     }
@@ -299,7 +315,7 @@ pub struct Finding {
 /// that is whether each part is there; roles, triggers, functions and indexes join as their parts
 /// do. `Err` when the database could not be asked: that is not a finding about the schema.
 pub fn inspect(c: &mut Client) -> Result<Vec<Finding>> {
-    inspect_parts(c, parts())
+    inspect_parts(c, installable())
 }
 
 pub(crate) fn inspect_parts(c: &mut Client, parts: &[Part]) -> Result<Vec<Finding>> {
@@ -316,7 +332,8 @@ pub(crate) fn inspect_parts(c: &mut Client, parts: &[Part]) -> Result<Vec<Findin
                     )
                 } else {
                     format!(
-                        "part {} of the obop schema is not (completely) there; the process                          starts without it and the feature that needs it says so when it is used",
+                        "part {} of the obop schema is not (completely) there; the process starts \
+                         without it and the feature that needs it says so when it is used",
                         p.name
                     )
                 },
