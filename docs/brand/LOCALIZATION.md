@@ -109,6 +109,14 @@ extractor sees them. The five built-in modules and the 22 bundled packages now s
 languages (section 8), so the client table is the fallback for them and the only source for a module without
 labels. Marketplace listings of packages that are not installed still show the English description.
 
+A text field that holds the keys of a select (the status an effect wrote into a history entry) can name that
+select with `shows_option_of` (D52 amendment, docs/MODULES.md section 3.3), and `/api/meta` then carries
+`shows_option_of` and, with a condition, `shows_option_when` on it. The backoffice draws such a value with
+`optionLabel(value, select)`, the lookup above, so the field needs no language data of its own: the stored
+value, filters, sorting, CSV export and the API keep the key, and an edit input shows it. The condition is
+evaluated in the browser (`displayCondition.ts`, `shownOption.ts`), on the part of the expression language the
+install gate allows.
+
 `serverMessage()` maps the stable patterns of docs/MODULES.md 3.5 and the D47/D48/D49 error shapes (`x.y is
 required`, `must be one of: …`, `cannot delete …: still referenced by …`, transition refusals) to translatable
 messages. In English it returns the text as received. Unknown text is shown as received. The message of a
