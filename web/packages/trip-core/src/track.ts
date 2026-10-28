@@ -105,5 +105,3 @@ export function integrityFlags(a: TrackAnalysis): string {
   if (a.skippedAccuracy > 0) flags.push(`low_accuracy:${a.skippedAccuracy}`);
   return flags.join(" ");
 }
-
-

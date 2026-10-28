@@ -1,0 +1,173 @@
+[labels.fr.module]
+name = "Kilométrage"
+description = "Trajets enregistrés par l'application Mileage, vérifiés et confirmés dans le back-office. Le serveur calcule la distance ; seuls les trajets confirmés comptent."
+summary = "Trajets enregistrés, contrôlés sur le serveur et confirmés par un vérificateur."
+
+[labels.fr.model.mileage_trip]
+name = "Trajet"
+description = "Un trajet enregistré par un conducteur : sa distance, son état et sa vérification"
+
+[labels.fr.model.mileage_trip.field.client_trip_id]
+label = "ID de trajet de l'app"
+description = "Identifiant créé par l'app au départ (UUIDv7) ; unique par conducteur, il permet à l'app de retrouver son trajet"
+
+[labels.fr.model.mileage_trip.field.driver]
+label = "Conducteur"
+description = "Identifiant de la personne qui a enregistré le trajet ; le serveur y met l'appelant"
+
+[labels.fr.model.mileage_trip.field.vehicle]
+label = "Véhicule"
+description = "Le véhicule du trajet, tel que le conducteur le nomme (plaque ou nom)"
+
+[labels.fr.model.mileage_trip.field.purpose]
+label = "Motif"
+description = "L'objet du trajet : professionnel, privé ou domicile-travail"
+
+[labels.fr.model.mileage_trip.field.purpose.options]
+business = "Professionnel"
+private = "Privé"
+commute = "Domicile-travail"
+
+[labels.fr.model.mileage_trip.field.started_at]
+label = "Début"
+description = "Quand le conducteur a appuyé sur Démarrer, selon l'horloge du téléphone"
+
+[labels.fr.model.mileage_trip.field.ended_at]
+label = "Fin"
+description = "Quand le conducteur a appuyé sur Arrêter ; à défaut, celui du dernier point accepté"
+
+[labels.fr.model.mileage_trip.field.distance_m]
+label = "Distance (m)"
+description = "Distance en mètres, calculée par le serveur à partir des points acceptés à la fin du trajet ; jamais reprise du client"
+
+[labels.fr.model.mileage_trip.field.expected_points]
+label = "Points attendus"
+description = "Combien de points l'appareil a envoyés pour ce trajet ; le conducteur le renseigne avant de terminer"
+
+[labels.fr.model.mileage_trip.field.last_seq]
+label = "Dernier n° de séquence"
+description = "Le numéro de séquence du dernier point enregistré par l'appareil ; renseigné avant de terminer"
+
+[labels.fr.model.mileage_trip.field.point_count]
+label = "Nombre de points"
+description = "Combien de points sont enregistrés pour ce trajet"
+
+[labels.fr.model.mileage_trip.field.max_seq]
+label = "N° de séquence max."
+description = "Le plus grand numéro de séquence parmi les points enregistrés"
+
+[labels.fr.model.mileage_trip.field.integrity]
+label = "Intégrité"
+description = "Indicateurs posés à la fin : seq_gap, speed_jump et low_accuracy avec leur nombre ; vide si la trace est propre"
+
+[labels.fr.model.mileage_trip.field.start_lat]
+label = "Départ (latitude)"
+description = "Latitude du premier point accepté, fixée par le serveur"
+
+[labels.fr.model.mileage_trip.field.start_lon]
+label = "Départ (longitude)"
+description = "Longitude du premier point accepté, fixée par le serveur"
+
+[labels.fr.model.mileage_trip.field.end_lat]
+label = "Arrivée (latitude)"
+description = "Latitude du dernier point accepté, fixée par le serveur ; l'app peut s'arrêter avant le dernier envoi, la fin ne vient donc pas d'elle"
+
+[labels.fr.model.mileage_trip.field.end_lon]
+label = "Arrivée (longitude)"
+description = "Longitude du dernier point accepté, fixée par le serveur"
+
+[labels.fr.model.mileage_trip.field.discard_reason]
+label = "Motif d'abandon"
+description = "Pourquoi le conducteur abandonne le trajet ; écrit avant l'abandon"
+
+[labels.fr.model.mileage_trip.field.reject_reason]
+label = "Motif de rejet"
+description = "Pourquoi le vérificateur rejette le trajet ; écrit pendant la vérification, effacé quand le conducteur soumet de nouveau"
+
+[labels.fr.model.mileage_trip.field.reviewed_by]
+label = "Vérifié par"
+description = "Identifiant du vérificateur qui a confirmé ou rejeté le trajet, ou de la personne qui a approuvé la proposition d'un agent"
+
+[labels.fr.model.mileage_trip.field.confirmed_at]
+label = "Confirmé le"
+description = "Quand le trajet a été confirmé, fixé par Confirmer ; le mois de cet instant dans le fuseau de la plateforme est celui où le trajet compte"
+
+[labels.fr.model.mileage_trip.field.reviewable]
+label = "Vérifiable"
+description = "Vrai tant que le trajet est en vérification, confirmé ou rejeté : les états qu'un vérificateur lit"
+
+[labels.fr.model.mileage_trip.field.state]
+label = "État"
+description = "Cycle : en cours, terminé, en vérification, confirmé, rejeté ou abandonné ; ne change que par les actions"
+
+[labels.fr.model.mileage_trip.field.state.options]
+recording = "En cours"
+ended = "Terminé"
+in_review = "En vérification"
+confirmed = "Confirmé"
+rejected = "Rejeté"
+discarded = "Abandonné"
+
+[labels.fr.model.mileage_trip.action.end]
+label = "Terminer"
+description = "Terminer un trajet en cours dès que tous les points sont arrivés : le serveur calcule la distance à partir des points acceptés"
+
+[labels.fr.model.mileage_trip.action.submit]
+label = "Soumettre"
+description = "Envoyer un trajet terminé en vérification"
+
+[labels.fr.model.mileage_trip.action.confirm]
+label = "Confirmer"
+description = "Confirmer un trajet en vérification ; il compte dès lors. Un vérificateur ne peut pas confirmer son propre trajet"
+
+[labels.fr.model.mileage_trip.action.reject]
+label = "Rejeter"
+description = "Rejeter un trajet en vérification ; écrire d'abord le motif de rejet. Un vérificateur ne peut pas rejeter son propre trajet"
+
+[labels.fr.model.mileage_trip.action.reopen]
+label = "Rouvrir"
+description = "Remettre un trajet rejeté à terminé pour que le conducteur le corrige et le soumette de nouveau"
+
+[labels.fr.model.mileage_trip.action.discard]
+label = "Abandonner"
+description = "Abandonner son propre trajet en cours, terminé ou rejeté ; écrire d'abord le motif. Un trajet abandonné ne compte jamais"
+
+[labels.fr.model.mileage_trip.action.discard_stuck]
+label = "Abandonner un bloqué"
+description = "Abandonner, en administrateur, un trajet bloqué en cours ou terminé"
+
+[labels.fr.model.mileage_point]
+name = "Point GPS"
+description = "Une position enregistrée d'un trajet ; écrite une fois, jamais modifiée"
+
+[labels.fr.model.mileage_point.field.trip]
+label = "Trajet"
+description = "Le trajet auquel le point appartient (son identifiant serveur)"
+
+[labels.fr.model.mileage_point.field.seq]
+label = "N° de séquence"
+description = "Rang du point dans le trajet, compté par l'appareil ; unique dans le trajet"
+
+[labels.fr.model.mileage_point.field.recorded_at]
+label = "Enregistré le"
+description = "Quand le téléphone a enregistré la position"
+
+[labels.fr.model.mileage_point.field.lat]
+label = "Latitude"
+description = "Latitude en degrés (WGS84), 7 décimales au plus"
+
+[labels.fr.model.mileage_point.field.lon]
+label = "Longitude"
+description = "Longitude en degrés (WGS84), 7 décimales au plus"
+
+[labels.fr.model.mileage_point.field.accuracy_m]
+label = "Précision (m)"
+description = "Rayon de la précision horizontale en mètres, quand le téléphone l'a indiqué"
+
+[labels.fr.model.mileage_point.field.speed_mps]
+label = "Vitesse (m/s)"
+description = "Vitesse sol en mètres par seconde, quand le téléphone l'a indiquée"
+
+[labels.fr.model.mileage_point.field.driver]
+label = "Conducteur"
+description = "Identifiant du conducteur du trajet ; fixé par le serveur d'après le trajet"

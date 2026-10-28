@@ -1,0 +1,173 @@
+[labels.es.module]
+name = "Kilometraje"
+description = "Viajes registrados con la aplicación Mileage, revisados y confirmados en el back office. El servidor calcula la distancia; solo cuentan los viajes confirmados."
+summary = "Viajes registrados, comprobados en el servidor y confirmados por un revisor."
+
+[labels.es.model.mileage_trip]
+name = "Viaje"
+description = "Un viaje registrado por un conductor: su distancia, su estado y su revisión"
+
+[labels.es.model.mileage_trip.field.client_trip_id]
+label = "ID de viaje de la app"
+description = "Identificador que crea la app al empezar (UUIDv7); único por conductor, con él la app encuentra su viaje"
+
+[labels.es.model.mileage_trip.field.driver]
+label = "Conductor"
+description = "Usuario de quien registró el viaje; el servidor pone a quien llama"
+
+[labels.es.model.mileage_trip.field.vehicle]
+label = "Vehículo"
+description = "El vehículo del viaje, como lo nombra el conductor (matrícula o nombre)"
+
+[labels.es.model.mileage_trip.field.purpose]
+label = "Finalidad"
+description = "Para qué fue el viaje: profesional, privado o trayecto al trabajo"
+
+[labels.es.model.mileage_trip.field.purpose.options]
+business = "Profesional"
+private = "Privado"
+commute = "Trayecto al trabajo"
+
+[labels.es.model.mileage_trip.field.started_at]
+label = "Inicio"
+description = "Cuándo el conductor pulsó Iniciar, según el reloj del teléfono"
+
+[labels.es.model.mileage_trip.field.ended_at]
+label = "Fin del viaje"
+description = "Cuándo el conductor pulsó Parar; si la app no lo envió, el del último punto aceptado"
+
+[labels.es.model.mileage_trip.field.distance_m]
+label = "Distancia (m)"
+description = "Distancia en metros que calcula el servidor con los puntos aceptados al terminar; nunca la del cliente"
+
+[labels.es.model.mileage_trip.field.expected_points]
+label = "Puntos esperados"
+description = "Cuántos puntos envió el dispositivo para este viaje; el conductor lo fija antes de terminar"
+
+[labels.es.model.mileage_trip.field.last_seq]
+label = "Último n.º de secuencia"
+description = "El número de secuencia del último punto que registró el dispositivo; se fija antes de terminar"
+
+[labels.es.model.mileage_trip.field.point_count]
+label = "Número de puntos"
+description = "Cuántos puntos hay guardados para este viaje"
+
+[labels.es.model.mileage_trip.field.max_seq]
+label = "N.º de secuencia máx."
+description = "El mayor número de secuencia entre los puntos guardados"
+
+[labels.es.model.mileage_trip.field.integrity]
+label = "Integridad"
+description = "Marcas que puso la validación al terminar: seq_gap, speed_jump y low_accuracy con su número; vacío si el rastro era limpio"
+
+[labels.es.model.mileage_trip.field.start_lat]
+label = "Inicio (latitud)"
+description = "Latitud del primer punto aceptado, fijada por el servidor"
+
+[labels.es.model.mileage_trip.field.start_lon]
+label = "Inicio (longitud)"
+description = "Longitud del primer punto aceptado, fijada por el servidor"
+
+[labels.es.model.mileage_trip.field.end_lat]
+label = "Final (latitud)"
+description = "Latitud del último punto aceptado, fijada por el servidor; la app puede parar antes de la última subida, así que el final no es el que ella informó"
+
+[labels.es.model.mileage_trip.field.end_lon]
+label = "Final (longitud)"
+description = "Longitud del último punto aceptado, fijada por el servidor"
+
+[labels.es.model.mileage_trip.field.discard_reason]
+label = "Motivo del descarte"
+description = "Por qué el conductor descarta el viaje; se escribe antes de descartar"
+
+[labels.es.model.mileage_trip.field.reject_reason]
+label = "Motivo del rechazo"
+description = "Por qué el revisor rechaza el viaje; se escribe durante la revisión y se borra al enviar de nuevo"
+
+[labels.es.model.mileage_trip.field.reviewed_by]
+label = "Revisado por"
+description = "Usuario del revisor que confirmó o rechazó el viaje, o de quien aprobó la propuesta de un agente"
+
+[labels.es.model.mileage_trip.field.confirmed_at]
+label = "Confirmado el"
+description = "Cuándo se confirmó el viaje, fijado por Confirmar; el mes de ese instante en la zona de la plataforma es el mes en que cuenta"
+
+[labels.es.model.mileage_trip.field.reviewable]
+label = "Revisable"
+description = "Verdadero mientras el viaje está en revisión, confirmado o rechazado: los estados que lee un revisor"
+
+[labels.es.model.mileage_trip.field.state]
+label = "Estado"
+description = "Ciclo: grabando, finalizado, en revisión, confirmado, rechazado o descartado; solo cambia mediante las acciones"
+
+[labels.es.model.mileage_trip.field.state.options]
+recording = "Grabando"
+ended = "Finalizado"
+in_review = "En revisión"
+confirmed = "Confirmado"
+rejected = "Rechazado"
+discarded = "Descartado"
+
+[labels.es.model.mileage_trip.action.end]
+label = "Finalizar"
+description = "Finalizar un viaje en curso cuando han llegado todos los puntos: el servidor calcula la distancia con los puntos aceptados"
+
+[labels.es.model.mileage_trip.action.submit]
+label = "Enviar"
+description = "Enviar un viaje finalizado a revisión"
+
+[labels.es.model.mileage_trip.action.confirm]
+label = "Confirmar"
+description = "Confirmar un viaje en revisión; desde entonces cuenta. Un revisor no puede confirmar su propio viaje"
+
+[labels.es.model.mileage_trip.action.reject]
+label = "Rechazar"
+description = "Rechazar un viaje en revisión; escribe antes el motivo del rechazo. Un revisor no puede rechazar su propio viaje"
+
+[labels.es.model.mileage_trip.action.reopen]
+label = "Reabrir"
+description = "Devolver un viaje rechazado a finalizado para que el conductor lo corrija y lo envíe de nuevo"
+
+[labels.es.model.mileage_trip.action.discard]
+label = "Descartar"
+description = "Descartar tu propio viaje en curso, finalizado o rechazado; escribe antes el motivo. Un viaje descartado nunca cuenta"
+
+[labels.es.model.mileage_trip.action.discard_stuck]
+label = "Descartar atascado"
+description = "Descartar, como administrador, un viaje atascado en grabando o finalizado"
+
+[labels.es.model.mileage_point]
+name = "Punto"
+description = "Una posición registrada de un viaje; se escribe una vez y no se cambia nunca"
+
+[labels.es.model.mileage_point.field.trip]
+label = "Viaje"
+description = "El viaje al que pertenece el punto (su id del servidor)"
+
+[labels.es.model.mileage_point.field.seq]
+label = "N.º de secuencia"
+description = "Posición del punto en el viaje, contada por el dispositivo; única dentro del viaje"
+
+[labels.es.model.mileage_point.field.recorded_at]
+label = "Registrado el"
+description = "Cuándo registró el teléfono la posición"
+
+[labels.es.model.mileage_point.field.lat]
+label = "Latitud"
+description = "Latitud en grados (WGS84), como máximo 7 decimales"
+
+[labels.es.model.mileage_point.field.lon]
+label = "Longitud"
+description = "Longitud en grados (WGS84), como máximo 7 decimales"
+
+[labels.es.model.mileage_point.field.accuracy_m]
+label = "Precisión (m)"
+description = "Radio de la precisión horizontal en metros, cuando el teléfono lo indicó"
+
+[labels.es.model.mileage_point.field.speed_mps]
+label = "Velocidad (m/s)"
+description = "Velocidad sobre el suelo en metros por segundo, cuando el teléfono la indicó"
+
+[labels.es.model.mileage_point.field.driver]
+label = "Conductor"
+description = "Usuario del conductor del viaje; el servidor lo toma del viaje"

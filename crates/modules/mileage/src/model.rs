@@ -11,7 +11,7 @@ use obop_values::Round;
 const DEGREES: (u8, u8) = (10, 7);
 
 pub fn module() -> Module {
-    Module {
+    let m = Module {
         id: "mileage".into(),
         name: "Mileage".into(),
         models: vec![trip(), point()],
@@ -25,7 +25,15 @@ pub fn module() -> Module {
             "fleet",
             &[],
         ),
-    }
+    };
+    m.translated(&[
+        include_str!("../../../../packages/labels/de/mileage.toml"),
+        include_str!("../../../../packages/labels/fr/mileage.toml"),
+        include_str!("../../../../packages/labels/pl/mileage.toml"),
+        include_str!("../../../../packages/labels/fi/mileage.toml"),
+        include_str!("../../../../packages/labels/sv/mileage.toml"),
+        include_str!("../../../../packages/labels/es/mileage.toml"),
+    ])
 }
 
 fn trip() -> ModelDef {
