@@ -934,7 +934,7 @@ fn an_update_never_collides_with_the_record_itself_and_moves_a_key_cleanly() {
         assert_eq!(upd(&b, vec![("slot", "P")]), None);
         // Clearing a scope makes it the empty scope.
         assert_eq!(upd(&b, vec![("scope", "")]), None);
-        assert_eq!(upd(&a, vec![("slot", "P"), ("scope", "")]).is_some(), true);
+        assert!(upd(&a, vec![("slot", "P"), ("scope", "")]).is_some());
     }
 }
 
