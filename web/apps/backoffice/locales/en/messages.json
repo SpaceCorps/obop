@@ -541,6 +541,7 @@
   "Device name": "Device name",
   "Device renamed": "Device renamed",
   "Device renamed.": "Device renamed.",
+  "Device sign-in refused: too many devices": "Device sign-in refused: too many devices",
   "Device signed in": "Device signed in",
   "Device signed out": "Device signed out",
   "Devices": "Devices",

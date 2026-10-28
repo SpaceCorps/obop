@@ -415,10 +415,13 @@ export function DevicesSection({
   token,
   notify,
   isAdmin = false,
+  me = "",
 }: {
   token: string;
   notify: Notify;
   isAdmin?: boolean;
+  /** Who is signed in. Unknown (empty) is nobody: no row is then taken for theirs. */
+  me?: string;
 }) {
   const id = useId();
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -453,14 +456,11 @@ export function DevicesSection({
   if (absent || (rows === null && problem === null)) return null;
   const shown = rows ?? [];
   // Who the rows belong to: shown to administrators and whenever a row is somebody else's (a
-  // device administrator who is not the instance administrator sees other people's devices).
-  let me = "";
-  try {
-    me = (sessionStorage.getItem("obop-user") ?? "").trim().toLowerCase();
-  } catch {
-    /* storage unavailable */
-  }
-  const isMine = (r: Row) => me === "" || String(r.user).toLowerCase() === me;
+  // device administrator who is not the instance administrator sees other people's devices). The
+  // person is the one the app holds in memory; storage is not asked, and an unknown person owns
+  // nothing, so Rename is not offered on a row the server would refuse.
+  const who = me.trim().toLowerCase();
+  const isMine = (r: Row) => who !== "" && String(r.user).toLowerCase() === who;
   const showUser = isAdmin || shown.some((r) => !isMine(r));
   // A failure of an action says why: a busy server finished part of it and finishes the rest when
   // asked again (D74).

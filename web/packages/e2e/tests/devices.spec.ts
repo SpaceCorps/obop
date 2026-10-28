@@ -330,10 +330,26 @@ test.describe("Mobile apps: sign-in and devices", () => {
     const row = devices.getByRole("row", { name: /Sam's phone/ });
     await expect(row).toContainText("sam");
     await expect(row.getByRole("button", { name: "Rename Sam's phone" })).toHaveCount(0);
+    // Who is signed in is what the app holds, not what the browser's storage says: with the
+    // stored name gone (a private window, blocked site data) and the table opened again, the
+    // device is still not root's to rename, and the Person column is still there.
+    await page.evaluate(() => sessionStorage.removeItem("obop-user"));
+    await page.evaluate(() => {
+      location.hash = "#/customize/theme?tab=theme";
+    });
+    await expect(page.getByRole("table", { name: "Devices" })).toHaveCount(0);
+    await page.evaluate((h) => {
+      location.hash = h;
+    }, `#${SECURITY}`);
+    const again = page.getByRole("table", { name: "Devices" });
+    await expect(again.getByRole("columnheader", { name: "Person" })).toBeVisible();
+    await expect(
+      again.getByRole("row", { name: /Sam's phone/ }).getByRole("button", { name: /^Rename/ }),
+    ).toHaveCount(0);
     // But the device can be ended, and the app is out at once.
-    await row.getByRole("button", { name: "Revoke Sam's phone" }).click();
+    await again.getByRole("button", { name: "Revoke Sam's phone" }).click();
     await expect(page.getByText("Sam's phone is signed out.")).toBeVisible();
-    await expect(devices.getByRole("row", { name: /Sam's phone/ })).toContainText("Revoked");
+    await expect(again.getByRole("row", { name: /Sam's phone/ })).toContainText("Revoked");
     expect((await request.post("/api/party/list", { headers: bearer, data: {} })).status()).toBe(
       401,
     );

@@ -52,6 +52,8 @@ type Props = {
   modules: ModuleMeta[];
   settings: Settings;
   isAdmin: boolean;
+  /** Who is signed in (the name the sign-in gave). */
+  me?: string;
   /** Where the Modules tab is (its list, the open module and the panel tab). */
   modulesRoute: ModulesRoute;
   goModules: (r: Partial<ModulesRoute>) => void;

@@ -286,6 +286,7 @@
   "Device name": "Nombre del dispositivo",
   "Device renamed": "Dispositivo renombrado",
   "Device renamed.": "Dispositivo renombrado.",
+  "Device sign-in refused: too many devices": "Inicio de sesión del dispositivo rechazado: demasiados dispositivos",
   "Device signed in": "Dispositivo conectado",
   "Device signed out": "Dispositivo desconectado",
   "Devices": "Dispositivos",

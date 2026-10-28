@@ -355,6 +355,7 @@ export function App() {
                   modules={modules}
                   settings={settings}
                   isAdmin={isAdmin}
+                  me={email}
                   modulesRoute={parseModulesRoute(route)}
                   goModules={(patch) => {
                     const next = { ...parseModulesRoute(route), ...patch };

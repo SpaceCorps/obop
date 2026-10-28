@@ -286,6 +286,7 @@
   "Device name": "Enhetens namn",
   "Device renamed": "Enhet omdöpt",
   "Device renamed.": "Enheten har bytt namn.",
+  "Device sign-in refused: too many devices": "Enhetsinloggning nekad: för många enheter",
   "Device signed in": "Enhet inloggad",
   "Device signed out": "Enhet utloggad",
   "Devices": "Enheter",

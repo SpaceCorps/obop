@@ -286,6 +286,7 @@
   "Device name": "Laitteen nimi",
   "Device renamed": "Laite nimetty uudelleen",
   "Device renamed.": "Laite nimetty uudelleen.",
+  "Device sign-in refused: too many devices": "Laitteen kirjautuminen evättiin: liian monta laitetta",
   "Device signed in": "Laite kirjautui",
   "Device signed out": "Laite kirjattu ulos",
   "Devices": "Laitteet",
