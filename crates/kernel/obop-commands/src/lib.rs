@@ -118,6 +118,24 @@ impl Principal {
     }
 }
 
+/// Who is approving, under the prefix every handler already ignores and `call` strips from what
+/// a client sends: the person's id, whether they hold the instance administrator group, and the
+/// groups they hold (`Actor::of`, the same view of a principal that a generated handler gets).
+/// A module that lets a role count only on top of a base group applies that rule to the approver
+/// as well as to the caller.
+fn stamp_approver(input: &mut Value, approver: &Principal) {
+    if let Value::Map(m) = input {
+        let a = Actor::of(approver);
+        let prefix = format!("{}_approver", query::ACTOR_PREFIX);
+        m.insert(prefix.clone(), Value::text(&approver.id));
+        m.insert(format!("{prefix}_admin"), Value::Bool(a.admin));
+        m.insert(
+            format!("{prefix}_groups"),
+            Value::List(a.groups.iter().map(|g| Value::text(g)).collect()),
+        );
+    }
+}
+
 fn set(items: &[&str]) -> HashSet<String> {
     items.iter().map(|s| s.to_string()).collect()
 }
@@ -1024,6 +1042,8 @@ impl Dispatcher {
         // The record may have changed since the proposal, so the guard runs again, and the
         // approver must hold the groups of any transition the call implicitly runs (D48).
         let mut input = plan.input.clone();
+        // The guard sees who is approving, so that it can refuse before the plan is spent.
+        stamp_approver(&mut input, approver);
         let mut pre = Vec::new();
         let guard = self.guards.read().unwrap().get(&plan.id).cloned();
         if let Some(g) = guard {
@@ -1041,14 +1061,9 @@ impl Dispatcher {
             .remove(self.shared.get(), plan_id)
             .map_err(CallError::Handler)?;
         // The person who approved is who a handler may name in its log; the plan keeps the agent
-        // that proposed it as the caller. Under the prefix every handler already ignores (and
-        // `call` strips from what a client sends).
-        if let Value::Map(m) = &mut input {
-            m.insert(
-                format!("{}_approver", query::ACTOR_PREFIX),
-                Value::text(&approver.id),
-            );
-        }
+        // that proposed it as the caller. Stamped again after the guard, which may have rewritten
+        // the input.
+        stamp_approver(&mut input, approver);
         let result = self.run(&c, &plan.principal, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back, or the
         // approver's retry (the 503 says to retry) would meet "not found" and the proposal would

@@ -2010,6 +2010,73 @@ fn a_repeat_of_an_answered_call_is_free_and_is_not_refused_when_the_minute_is_us
 }
 
 #[test]
+fn a_repeat_of_an_answered_call_uses_none_of_the_minute() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let keyed = |sku: &str| {
+            m(vec![
+                ("rows", rows(vec![vec![("sku", t(sku))]])),
+                ("idempotency_key", t(&format!("key-{sku}"))),
+            ])
+        };
+        // Eleven new calls use eleven of the twelve, and five repeats of them follow.
+        for i in 0..11 {
+            r.ok(&who, "stock", "bulk_create", keyed(&format!("S{i}")));
+        }
+        for i in 0..5 {
+            let again = r.ok(&who, "stock", "bulk_create", keyed(&format!("S{i}")));
+            assert_eq!(put(&again, "replayed"), Value::Bool(true));
+        }
+        // The twelfth new call is still inside the limit, which it is not if a repeat was counted;
+        // the thirteenth is refused.
+        r.ok(&who, "stock", "bulk_create", keyed("S11"));
+        let msg = r.err(&who, "stock", "bulk_create", keyed("S12"));
+        assert!(msg.contains("too many bulk imports"), "{msg}");
+    });
+}
+
+#[test]
+fn only_an_ordinary_call_with_its_key_can_be_a_stored_answer() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let rows_of = |extra: Vec<(&str, Value)>| {
+            let mut v = vec![
+                ("rows", rows(vec![vec![("sku", t("A"))]])),
+                ("idempotency_key", t("key-A")),
+            ];
+            v.extend(extra);
+            m(v)
+        };
+        r.ok(&who, "stock", "bulk_create", rows_of(vec![]));
+        let (db, model, now) = (
+            r.store.backend(),
+            format!("{}_stock", r.p),
+            r.d_now() as u64,
+        );
+        let seen = |input: &Value| crate::has_stored_answer(&*db, now, &model, &who, input);
+        assert!(seen(&rows_of(vec![])), "the call as it was made");
+        assert!(
+            seen(&rows_of(vec![("mode", t("all_or_nothing"))])),
+            "the default mode, named"
+        );
+        // The fingerprint of the stored answer does not cover these, so each is refused by the
+        // function and not by the comparison.
+        assert!(
+            !seen(&rows_of(vec![("dry_run", Value::Bool(true))])),
+            "a dry run reads no key"
+        );
+        assert!(
+            !seen(&rows_of(vec![("mode", t("partial"))])),
+            "another mode is another call"
+        );
+        assert!(
+            !seen(&rows_of(vec![("mode", t("bogus"))])),
+            "an unknown mode is not read as the default"
+        );
+    });
+}
+
+#[test]
 fn bulk_create_takes_the_largest_call_it_allows() {
     each_rig(|r| {
         // A thousand rows on the local backends. On PostgreSQL every check is a round trip, so

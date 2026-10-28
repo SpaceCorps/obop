@@ -2108,6 +2108,231 @@ fn add_guard_runs_after_the_generated_guard_and_sees_what_it_produced() {
 }
 
 #[test]
+fn prepend_guard_runs_first_and_its_verdict_is_combined_with_the_guard_it_wraps() {
+    use crate::{Pre, Verdict};
+    use std::sync::{Arc, Mutex};
+    let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
+    d.register_crud(&m, &store);
+    let order = Arc::new(Mutex::new(Vec::<String>::new()));
+    // The guard that is already on the command: it asks for approval of an agent, for the group
+    // "h_inner" from whoever approves, and, for pat, for a step that cannot run.
+    let log = order.clone();
+    d.add_guard(
+        "hooks_t",
+        "hooks_item.list",
+        false,
+        Box::new(move |p, _| {
+            log.lock().unwrap().push(format!("inner:{}", p.id));
+            let pre = Pre {
+                command: "hooks_item.get".into(),
+                input: Value::map([("id", Value::text("missing"))]),
+                field: "owner",
+            };
+            Ok(Verdict {
+                requires: vec!["h_inner"],
+                approval: true,
+                pre: if p.id == "pat" { vec![pre] } else { vec![] },
+                ..Default::default()
+            })
+        }),
+    );
+    // The guard put in front of it: it filters by the caller (ruth gets a filter that the
+    // generated guard refuses), refuses hal in its own words, and asks for "h_first".
+    let log = order.clone();
+    d.prepend_guard(
+        "hooks_t",
+        "hooks_item.list",
+        false,
+        Box::new(move |p, input| {
+            log.lock().unwrap().push(format!("first:{}", p.id));
+            if p.id == "hal" {
+                return Err("not for hal".into());
+            }
+            let Value::Map(mut mm) = input.clone() else {
+                return Err("no".into());
+            };
+            let field = if p.id == "ruth" { "nope" } else { "owner" };
+            mm.insert(
+                "filter".into(),
+                Value::List(vec![Value::map([
+                    ("field", Value::text(field)),
+                    ("op", Value::text("eq")),
+                    ("value", Value::text(&p.id)),
+                ])]),
+            );
+            Ok(Verdict {
+                input: Some(Value::Map(mm)),
+                requires: vec!["h_first"],
+                ..Default::default()
+            })
+        }),
+    );
+    let call = |p: &Principal, input: &Value| {
+        d.call(
+            Surface::Rest,
+            p,
+            &mut Vault::new(),
+            "hooks_item.list",
+            input,
+        )
+    };
+    let (ann, bob) = (
+        Principal::user("ann", &["g"]),
+        Principal::user("bob", &["g"]),
+    );
+    for (who, name) in [(&ann, "mine"), (&bob, "theirs")] {
+        d.call(
+            Surface::Rest,
+            who,
+            &mut Vault::new(),
+            "hooks_item.create",
+            &m_of(&[("name", name), ("owner", &who.id)]),
+        )
+        .unwrap();
+    }
+    // The input the first guard rewrote is what the call runs with, and the order is first, then
+    // the rest.
+    let r = call(&ann, &Value::map([])).unwrap();
+    let Value::List(rows) = r.value else { panic!() };
+    assert_eq!(rows.len(), 1, "only the caller's record");
+    assert_eq!(*order.lock().unwrap(), ["first:ann", "inner:ann"]);
+    order.lock().unwrap().clear();
+    // The generated guard sees what the first one produced: the filter it wrote is refused, and
+    // the inner guard never ran.
+    let e = call(&Principal::user("ruth", &["g"]), &Value::map([])).unwrap_err();
+    assert!(
+        matches!(&e, CallError::Handler(m) if m.contains("unknown field")),
+        "{e:?}"
+    );
+    assert_eq!(*order.lock().unwrap(), ["first:ruth"]);
+    // The first guard refuses in its own words, before the generated guard looks at the query.
+    let bad = Value::map([(
+        "filter",
+        Value::List(vec![Value::map([
+            ("field", Value::text("nope")),
+            ("op", Value::text("eq")),
+            ("value", Value::text("x")),
+        ])]),
+    )]);
+    let e = call(&Principal::user("hal", &["g"]), &bad).unwrap_err();
+    assert!(
+        matches!(&e, CallError::Handler(m) if m.contains("not for hal")),
+        "{e:?}"
+    );
+    // A step that the inner guard asks for is run: pat's step reads a record that is not there.
+    let e = call(&Principal::user("pat", &["g"]), &Value::map([])).unwrap_err();
+    assert!(matches!(e, CallError::Handler(_)), "{e:?}");
+    // The approval the inner guard asks for holds for an agent, and the groups of both guards
+    // are asked of the person who approves.
+    let agent = Principal::agent("agt", &["g"], &["g"]);
+    let Err(CallError::ApprovalRequired { plan_id }) = call(&agent, &Value::map([])) else {
+        panic!("an agent only proposes when the guard under the prepended one asks for approval")
+    };
+    for (approver, groups) in [
+        ("dan", &["g", "h_first"][..]),
+        ("eve", &["g", "h_inner"][..]),
+    ] {
+        let e = d
+            .approve(
+                &Principal::user(approver, groups),
+                &mut Vault::new(),
+                &plan_id,
+            )
+            .unwrap_err();
+        assert!(matches!(e, CallError::Forbidden(_)), "{approver}: {e:?}");
+    }
+    d.approve(
+        &Principal::user("fay", &["g", "h_first", "h_inner"]),
+        &mut Vault::new(),
+        &plan_id,
+    )
+    .unwrap();
+}
+
+#[test]
+fn what_the_dispatcher_stamps_about_the_approver_reaches_the_guard_and_is_not_the_clients() {
+    use crate::Verdict;
+    use std::sync::{Arc, Mutex};
+    let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
+    d.register_crud(&m, &store);
+    let seen = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let log = seen.clone();
+    d.add_guard(
+        "hooks_t",
+        "hooks_item.create",
+        false,
+        Box::new(move |_, input| {
+            log.lock().unwrap().push(input.clone());
+            // A guard that normalises the input by building it again, as a guard may.
+            Ok(Verdict {
+                approval: true,
+                input: Some(Value::map([
+                    ("name", Value::text("x")),
+                    ("owner", Value::text("o")),
+                ])),
+                ..Default::default()
+            })
+        }),
+    );
+    let ran = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let log = ran.clone();
+    d.observe(
+        "hooks_t",
+        Box::new(move |id, _p, input, _out| {
+            if id == "hooks_item.create" {
+                log.lock().unwrap().push(input.clone());
+            }
+        }),
+    );
+    let agent = Principal::agent("agt", &["g"], &["g"]);
+    // A client that sends the stamped keys itself: they are dropped before any guard sees them.
+    let forged = Value::map([
+        ("name", Value::text("x")),
+        ("owner", Value::text("o")),
+        ("_actor_approver", Value::text("root")),
+        (
+            "_actor_approver_groups",
+            Value::List(vec![Value::text("g")]),
+        ),
+    ]);
+    let Err(CallError::ApprovalRequired { plan_id }) = d.call(
+        Surface::Rest,
+        &agent,
+        &mut Vault::new(),
+        "hooks_item.create",
+        &forged,
+    ) else {
+        panic!("proposal")
+    };
+    let first = seen.lock().unwrap()[0].clone();
+    let Value::Map(first) = first else { panic!() };
+    assert!(
+        !first.keys().any(|k| k.starts_with("_actor_approver")),
+        "{first:?}"
+    );
+    // The person who approves is stamped before the guard runs again, with their groups.
+    let dan = Principal::user("dan", &["g", "extra"]);
+    d.approve(&dan, &mut Vault::new(), &plan_id).unwrap();
+    let again = seen.lock().unwrap()[1].clone();
+    let Value::Map(again) = again else { panic!() };
+    assert_eq!(again["_actor_approver"], Value::text("dan"));
+    assert_eq!(again["_actor_approver_admin"], Value::Bool(false));
+    let Value::List(groups) = &again["_actor_approver_groups"] else {
+        panic!("{again:?}")
+    };
+    let mut groups: Vec<_> = groups.iter().map(|g| format!("{g:?}")).collect();
+    groups.sort();
+    assert_eq!(groups.len(), 2, "{groups:?}");
+    // The call runs with the approver stamped even though the guard returned an input of its
+    // own, so a handler that names the approver in its log can rely on it.
+    let Value::Map(ran) = ran.lock().unwrap()[0].clone() else {
+        panic!()
+    };
+    assert_eq!(ran["_actor_approver"], Value::text("dan"), "{ran:?}");
+    assert_eq!(ran["_caller"], Value::text("agt"));
+}
+
+#[test]
 fn observers_hear_about_successful_commands_only_and_go_with_their_module() {
     use std::sync::{Arc, Mutex};
     let (d, store, m) = (Dispatcher::new(), Store::new(), hooks_module());
