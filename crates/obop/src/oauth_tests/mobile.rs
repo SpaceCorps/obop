@@ -301,6 +301,16 @@ async fn a_mobile_app_signs_in_on_the_browser_pages_and_uses_the_api_but_not_mcp
     assert_eq!(s, 200, "{v}");
     let list = rows(&v);
     assert_eq!(list.len(), 1, "{v}");
+    // The query the Devices table of the back office makes.
+    let (s, v2) = command(
+        r,
+        &bearer,
+        "device.search",
+        json!({"order": [{"field": "registered_at", "dir": "desc"}], "limit": 200}),
+    )
+    .await;
+    assert_eq!(s, 200, "{v2}");
+    assert_eq!(v2["value"]["total"], 1);
     let d = &list[0];
     assert_eq!(d["name"], "Pixel 8");
     assert_eq!(

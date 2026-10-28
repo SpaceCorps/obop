@@ -162,7 +162,9 @@ test.describe("Mobile apps: sign-in and devices", () => {
     expect(refresh.status()).toBe(400);
     expect((await refresh.json()).error).toBe("invalid_grant");
 
-    // The security log of the administrator names the three events and no secret.
+    // The security log of the administrator names the three events and no secret. A new document
+    // first: the page keeps the session it started with when only the address bar changes.
+    await page.goto("/healthz");
     await signIn("root", SECURITY);
     const log = page.getByRole("table", { name: "Security log" });
     await expect(log).toContainText("Device signed in");

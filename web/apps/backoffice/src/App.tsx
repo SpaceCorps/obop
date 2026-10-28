@@ -164,7 +164,12 @@ export function App() {
   // The menu collapses on phones; picking something closes it.
   useEffect(() => setMenu(false), [route.app, route.model]);
 
-  const isAdmin = modules.some((m) => m.id === "platform");
+  // The platform module is what Customize is made of. Everyone sees it now (the `device` model is
+  // theirs to list), so an administrator is told by `module`, the list of installed modules, which
+  // only an administrator may read.
+  const isAdmin = modules.some(
+    (m) => m.id === "platform" && m.models.some((x) => x.name === "module"),
+  );
   const apps = useMemo(() => buildApps(modules, settings, isAdmin), [modules, settings, isAdmin]);
   const app = apps.find((a) => a.id === route.app);
   // Everyone may set their own theme and read the brand book; the rest of Customize is for admins.
