@@ -1,5 +1,6 @@
 import type { Page, Request } from "@playwright/test";
 import { expect, test, type Api } from "../support/fixtures.ts";
+import { isCommand } from "../support/urls.ts";
 
 // The list pages, filters and sorts on the server (D49). One throwaway module with 120 records, so
 // every number below is the only data there is. Row 001 is stage a, Row 002 is b, Row 003 is c, and
@@ -30,8 +31,7 @@ async function seed(api: Api, scratchModule: (s: any) => Promise<string>) {
 const searches = (page: Page, model: string) => {
   const seen: Record<string, any>[] = [];
   page.on("request", (r: Request) => {
-    if (r.url().endsWith(`/api/${model}/search`) && r.postData())
-      seen.push(JSON.parse(r.postData()!));
+    if (isCommand(r.url(), model, "search") && r.postData()) seen.push(JSON.parse(r.postData()!));
   });
   return seen;
 };

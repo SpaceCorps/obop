@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import type { Page, Request } from "@playwright/test";
 import { repoRoot } from "../support/env.ts";
 import { expect, test, type Api } from "../support/fixtures.ts";
+import { commandUrl, isCommand } from "../support/urls.ts";
 
 // D1 to D6 and the resilience work: select all matching, the record sheet on small screens, sorting
 // with accented names, aggregated views that never load the whole table, a language switch that keeps
@@ -31,7 +32,7 @@ const tr = (lang: string, id: string) => {
 function searches(page: Page, model: string) {
   const bodies: any[] = [];
   const on = (r: Request) => {
-    if (r.method() === "POST" && r.url().endsWith(`/api/${model}/search`))
+    if (r.method() === "POST" && isCommand(r.url(), model, "search"))
       bodies.push(JSON.parse(r.postData() ?? "{}"));
   };
   page.on("request", on);
@@ -391,7 +392,7 @@ test.describe("failures are survivable", () => {
     });
     await api.create("root", model, { title: "Fine" });
     let crash = true;
-    await page.route(`**/api/${model}/search`, async (route) => {
+    await page.route(commandUrl(model, "search"), async (route) => {
       if (!crash) return route.continue();
       await route.fulfill({
         status: 200,
@@ -424,7 +425,7 @@ test.describe("failures are survivable", () => {
     });
     await api.create("root", model, { title: "Alive" });
     let broken = true;
-    await page.route(`**/api/${model}/search`, (route) =>
+    await page.route(commandUrl(model, "search"), (route) =>
       broken
         ? route.fulfill({ status: 500, contentType: "text/html", body: "<h1>oops</h1>" })
         : route.continue(),
@@ -455,7 +456,7 @@ test.describe("failures are survivable", () => {
     await expect(page.getByRole("gridcell", { name: "Still here" })).toBeVisible();
 
     let down = true;
-    await page.route(`**/api/${model}/search`, (route) =>
+    await page.route(commandUrl(model, "search"), (route) =>
       down ? route.abort("failed") : route.continue(),
     );
     await page.reload();

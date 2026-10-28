@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "../support/fixtures.ts";
 import type { ModuleSpec } from "../support/modules.ts";
+import { isCommand } from "../support/urls.ts";
 
 // The message of an assertion in the language of the request (D52 amendment): a package gives an
 // assertion a `key` and translates its message in a label table; a REST call is answered in the
@@ -41,8 +42,8 @@ type Asked = { lang: string | null; header: string | null; cookie: string | null
 function watchFinish(page: Page, model: string): Asked[] {
   const asked: Asked[] = [];
   page.on("request", async (r) => {
+    if (!isCommand(r.url(), model, "finish")) return;
     const url = new URL(r.url());
-    if (url.pathname !== `/api/${model}/finish`) return;
     const headers = await r.allHeaders();
     asked.push({
       lang: url.searchParams.get("lang"),
