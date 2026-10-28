@@ -177,13 +177,13 @@ vp env exec pnpm sbom --sbom-format cyclonedx --sbom-spec-version 1.5   # ratifi
 
 ```yaml
 # pnpm-workspace.yaml: D23 values; which pnpm majors have been checked against these keys is recorded in DECISIONS.md 1.1 [R07 s3.13, R27 B8]
-# Status 2026-10-27: the file sets only the first two keys (checked on pnpm 12.6.0); the other four are not set yet
+# Status 2026-10-28: the file sets the first two keys (checked on pnpm 12.6.0) and, since the Storybook package, `allowBuilds` with one entry, `esbuild: false` (a reviewed refusal, explained in the file); `trustPolicy`, `blockExoticSubdeps` and `strictDepBuilds` are not set yet
 minimumReleaseAge: 10080        # minutes = 7 days
 minimumReleaseAgeStrict: true
 trustPolicy: no-downgrade
 blockExoticSubdeps: true
 strictDepBuilds: true
-allowBuilds: {}                 # reviewed entries only
+allowBuilds: {}                 # reviewed entries only (the file has `esbuild: false` so far)
 ```
 
 ### 2.4 Exit drill
