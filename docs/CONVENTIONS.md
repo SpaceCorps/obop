@@ -246,6 +246,7 @@ Events emitted and consumed inside one document (for example `EquipmentDowntimeS
 | platform 2 | `customize.designer`, `automation.designer`, `approvals.designer`, `analytics.designer`, `documents.user`, `documents.manager`, `knowledge.editor`, `knowledge.admin`, `contacts.manager`, `mail.account_admin`, `sign.user`, `sign.admin` |
 | ai 2 | `ai.admin`, `ai.user`, `ai.operator`, `ai.auditor`, `ai.hr_feature_owner`, `ai.ap_intake` (service group of the intake agent) |
 | integrations 2 | `api.client_admin`, `api.webhook_admin`, `api.connection_admin`, `api.import_operator`, `api.export_owner`, `api.extension_admin`, `api.device_admin` (Proposed with the mobile sign-in, spec/mobile 5.7: reads and revokes the `device` records of everybody; a person reads, renames and revokes their own with no group) |
+| mobile 5.7 | `mileage.driver` (base group of the two models; a reviewer and an administrator hold it too), `mileage.reviewer` (confirms, rejects and reopens trips that are in review or decided, never their own), `mileage.admin` (reads all trips, discards a stuck one). Built in step 4 (spec/mobile 8.6); the names stay Proposed with D87. The class `location` stays Proposed (Q40): the points are `confidential_hr` meanwhile |
 
 **Rulings.**
 
@@ -288,7 +289,7 @@ A data class tags columns. Owner of the registry: sec-priv 4.2 (people 4.11 assi
 | Product cost, margin, valuation, landed cost, pricelist cost base; party credit limit | No class: field permission (`product.cost_viewer`; finance groups) |
 | Project and analytic margins (aggregates over people) | No class; read with `timesheet.cost_viewer`; the minimum group size of people 4.11 for small teams is services' call (Proposed) |
 | Signature evidence (IP, user agent), serials and lots linked to a person, ticket requester email | No class; `personal_data` flag |
-| Trip points (`lat`, `lon`, `accuracy_m`, `speed_mps`, `recorded_at` of a mileage point) | `confidential_hr` as an interim reading (attendance geo is already there) until `location` is ratified (Proposed, D87, Q40) |
+| Trip points (`lat`, `lon`, `accuracy_m`, `speed_mps`, `recorded_at` of a mileage point) and the times and positions of a trip (`started_at`, `ended_at`, `start_lat`, `start_lon`, `end_lat`, `end_lon` of a mileage trip) | `confidential_hr` as an interim reading (attendance geo is already there) until `location` is ratified (Proposed, D87, Q40); an agent's token does not receive them |
 
 **Other flags.** `personal_data` (registry capability flag driving DSAR and erasure, D33), `retention_class` (pack-driven, separate taxonomy) and `agent_readable` are per model or class and are not classes. `special-category` as a prose adjective is fine; the identifier is `special_category`. People 2's "public" means `public_directory`; sec-priv AZ5's "confidential and special-category columns" means the three sensitive classes.
 

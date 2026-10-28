@@ -1,0 +1,173 @@
+[labels.de.module]
+name = "Fahrtenbuch"
+description = "Mit der Mileage-App aufgezeichnete Fahrten, im Backoffice geprüft und bestätigt. Der Server berechnet die Strecke; nur bestätigte Fahrten zählen."
+summary = "Aufgezeichnete Fahrten, auf dem Server geprüft und von einem Prüfer bestätigt."
+
+[labels.de.model.mileage_trip]
+name = "Fahrt"
+description = "Eine von einem Fahrer aufgezeichnete Fahrt: Strecke, Status und Prüfung"
+
+[labels.de.model.mileage_trip.field.client_trip_id]
+label = "Fahrt-ID der App"
+description = "Kennung, die die App beim Start erzeugt (UUIDv7); je Fahrer eindeutig, so findet die App ihre Fahrt wieder"
+
+[labels.de.model.mileage_trip.field.driver]
+label = "Fahrer"
+description = "Login der Person, die die Fahrt aufgezeichnet hat; der Server setzt den Aufrufer ein"
+
+[labels.de.model.mileage_trip.field.vehicle]
+label = "Fahrzeug"
+description = "Das Fahrzeug der Fahrt, so wie der Fahrer es nennt (Kennzeichen oder Name)"
+
+[labels.de.model.mileage_trip.field.purpose]
+label = "Zweck"
+description = "Wofür die Fahrt war: geschäftlich, privat oder Arbeitsweg"
+
+[labels.de.model.mileage_trip.field.purpose.options]
+business = "Geschäftlich"
+private = "Privat"
+commute = "Arbeitsweg"
+
+[labels.de.model.mileage_trip.field.started_at]
+label = "Beginn"
+description = "Wann der Fahrer Start gedrückt hat, nach der Uhr des Telefons"
+
+[labels.de.model.mileage_trip.field.ended_at]
+label = "Ende"
+description = "Wann der Fahrer Stopp gedrückt hat; fehlt die Angabe der App, gilt der letzte akzeptierte Punkt"
+
+[labels.de.model.mileage_trip.field.distance_m]
+label = "Strecke (m)"
+description = "Strecke in Metern, beim Beenden vom Server aus den akzeptierten Punkten berechnet; nie vom Client übernommen"
+
+[labels.de.model.mileage_trip.field.expected_points]
+label = "Erwartete Punkte"
+description = "Wie viele Punkte das Gerät für diese Fahrt gesendet hat; der Fahrer setzt den Wert vor dem Beenden"
+
+[labels.de.model.mileage_trip.field.last_seq]
+label = "Letzte Folgenr."
+description = "Die Folgenummer des letzten vom Gerät aufgezeichneten Punkts; der Fahrer setzt sie vor dem Beenden"
+
+[labels.de.model.mileage_trip.field.point_count]
+label = "Anzahl Punkte"
+description = "Wie viele Punkte für diese Fahrt gespeichert sind"
+
+[labels.de.model.mileage_trip.field.max_seq]
+label = "Höchste Folgenr."
+description = "Die höchste Folgenummer unter den gespeicherten Punkten"
+
+[labels.de.model.mileage_trip.field.integrity]
+label = "Integrität"
+description = "Markierungen des Prüfers beim Beenden: seq_gap, speed_jump und low_accuracy mit Anzahl; leer bei sauberer Spur"
+
+[labels.de.model.mileage_trip.field.start_lat]
+label = "Start (Breite)"
+description = "Breitengrad des ersten akzeptierten Punkts, vom Server gesetzt"
+
+[labels.de.model.mileage_trip.field.start_lon]
+label = "Start (Länge)"
+description = "Längengrad des ersten akzeptierten Punkts, vom Server gesetzt"
+
+[labels.de.model.mileage_trip.field.end_lat]
+label = "Ziel (Breite)"
+description = "Breitengrad des letzten akzeptierten Punkts, vom Server gesetzt; die App kann vor dem letzten Upload stoppen, das Ende stammt also nicht von ihr"
+
+[labels.de.model.mileage_trip.field.end_lon]
+label = "Ziel (Länge)"
+description = "Längengrad des letzten akzeptierten Punkts, vom Server gesetzt"
+
+[labels.de.model.mileage_trip.field.discard_reason]
+label = "Grund des Verwerfens"
+description = "Warum der Fahrer die Fahrt verwirft; wird vor dem Verwerfen geschrieben"
+
+[labels.de.model.mileage_trip.field.reject_reason]
+label = "Grund der Ablehnung"
+description = "Warum der Prüfer die Fahrt ablehnt; wird in der Prüfung vor dem Ablehnen geschrieben und beim erneuten Einreichen gelöscht"
+
+[labels.de.model.mileage_trip.field.reviewed_by]
+label = "Geprüft von"
+description = "Login des Prüfers, der die Fahrt bestätigt oder abgelehnt hat, oder der Person, die den Vorschlag eines Agenten genehmigt hat"
+
+[labels.de.model.mileage_trip.field.confirmed_at]
+label = "Bestätigt am"
+description = "Wann die Fahrt bestätigt wurde, von Bestätigen gesetzt; der Monat dieses Zeitpunkts in der Plattformzone ist der Monat, in dem die Fahrt zählt"
+
+[labels.de.model.mileage_trip.field.reviewable]
+label = "Prüfbar"
+description = "Wahr, solange die Fahrt in Prüfung, bestätigt oder abgelehnt ist: die Status, die ein Prüfer liest"
+
+[labels.de.model.mileage_trip.field.state]
+label = "Status"
+description = "Ablauf: Aufzeichnung, beendet, in Prüfung, bestätigt, abgelehnt oder verworfen; ändert sich nur über die Aktionen"
+
+[labels.de.model.mileage_trip.field.state.options]
+recording = "Aufzeichnung"
+ended = "Beendet"
+in_review = "In Prüfung"
+confirmed = "Bestätigt"
+rejected = "Abgelehnt"
+discarded = "Verworfen"
+
+[labels.de.model.mileage_trip.action.end]
+label = "Beenden"
+description = "Eine laufende Fahrt beenden, sobald alle Punkte da sind: der Server berechnet die Strecke aus den akzeptierten Punkten"
+
+[labels.de.model.mileage_trip.action.submit]
+label = "Einreichen"
+description = "Eine beendete Fahrt zur Prüfung senden"
+
+[labels.de.model.mileage_trip.action.confirm]
+label = "Bestätigen"
+description = "Eine Fahrt in Prüfung bestätigen; ab dann zählt sie. Ein Prüfer kann seine eigene Fahrt nicht bestätigen"
+
+[labels.de.model.mileage_trip.action.reject]
+label = "Ablehnen"
+description = "Eine Fahrt in Prüfung ablehnen; zuerst den Grund der Ablehnung schreiben. Ein Prüfer kann seine eigene Fahrt nicht ablehnen"
+
+[labels.de.model.mileage_trip.action.reopen]
+label = "Wieder öffnen"
+description = "Eine abgelehnte Fahrt auf beendet zurücksetzen, damit der Fahrer sie korrigieren und erneut einreichen kann"
+
+[labels.de.model.mileage_trip.action.discard]
+label = "Verwerfen"
+description = "Die eigene laufende, beendete oder abgelehnte Fahrt verwerfen; zuerst den Grund schreiben. Eine verworfene Fahrt zählt nie"
+
+[labels.de.model.mileage_trip.action.discard_stuck]
+label = "Hängende verwerfen"
+description = "Eine in Aufzeichnung oder Beendet hängende Fahrt als Administrator verwerfen"
+
+[labels.de.model.mileage_point]
+name = "Punkt"
+description = "Eine aufgezeichnete Position einer Fahrt; einmal geschrieben, nie geändert"
+
+[labels.de.model.mileage_point.field.trip]
+label = "Fahrt"
+description = "Die Fahrt, zu der der Punkt gehört (ihre Server-ID)"
+
+[labels.de.model.mileage_point.field.seq]
+label = "Folgenr."
+description = "Stelle des Punkts in der Fahrt, vom Gerät gezählt; innerhalb der Fahrt eindeutig"
+
+[labels.de.model.mileage_point.field.recorded_at]
+label = "Aufgezeichnet am"
+description = "Wann das Telefon die Position aufgezeichnet hat"
+
+[labels.de.model.mileage_point.field.lat]
+label = "Breitengrad"
+description = "Breitengrad in Grad (WGS84), höchstens 7 Dezimalstellen"
+
+[labels.de.model.mileage_point.field.lon]
+label = "Längengrad"
+description = "Längengrad in Grad (WGS84), höchstens 7 Dezimalstellen"
+
+[labels.de.model.mileage_point.field.accuracy_m]
+label = "Genauigkeit (m)"
+description = "Radius der horizontalen Genauigkeit in Metern, wenn das Telefon ihn angab"
+
+[labels.de.model.mileage_point.field.speed_mps]
+label = "Geschwindigkeit (m/s)"
+description = "Geschwindigkeit über Grund in Metern pro Sekunde, wenn das Telefon sie angab"
+
+[labels.de.model.mileage_point.field.driver]
+label = "Fahrer"
+description = "Login des Fahrers der Fahrt; der Server setzt ihn aus der Fahrt"

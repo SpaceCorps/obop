@@ -18,7 +18,7 @@ X1 packages cannot run anything, so an administrator can install one from an upl
 
 ### What ships
 
-Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`). Built-in modules version with the core (`0.2.0`, D55); every bundled package declares `license = "AGPL-3.0-or-later"`, `requires_core = "^0.2"`, its own version and its dependencies with ranges:
+Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md), `mileage` (`mileage_trip`, `mileage_point`: trips recorded by the Mileage app and reviewed in the back office, docs/spec/mobile.md 8.6). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`). Built-in modules version with the core (`0.2.0`, D55); every bundled package declares `license = "AGPL-3.0-or-later"`, `requires_core = "^0.2"`, its own version and its dependencies with ranges:
 
 | Package | Needs | What it holds |
 |---|---|---|
@@ -261,7 +261,7 @@ The table maps a module id to the **range of versions of it that this module sup
 
 **Requirement syntax** (the rules of Cargo, so a Rust developer already knows them): `*` any release; `1.2.3` or `^1.2.3` compatible with 1.2.3 (below 2.0.0; for `0.y.z` the minor is the breaking part, so `^0.2` is `>=0.2.0, <0.3.0`); `~1.2.3` patch updates only (`>=1.2.3, <1.3.0`); `>=1.2`, `>1.2`, `<=1.2`, `<1.2`, `=1.2.3`; partial versions and wildcards (`1.*`, `=1.2`); comma-separated comparators are ANDed (`>=0.2, <0.4`). A pre-release such as `0.3.0-beta.1` satisfies a requirement only when that requirement names a pre-release of the same `major.minor.patch`; otherwise only releases match.
 
-**Built-in modules version with the core.** `base`, `product`, `crm`, `sales`, `invoicing`, `connectors` and `platform` have the version of the running core (`GET /api/meta` says which). A requirement on one of them is therefore a requirement on the core: `base = "^0.2"` holds on core 0.2.x and fails on 0.3.0.
+**Built-in modules version with the core.** `base`, `product`, `crm`, `sales`, `invoicing`, `connectors`, `mileage` and `platform` have the version of the running core (`GET /api/meta` says which). A requirement on one of them is therefore a requirement on the core: `base = "^0.2"` holds on core 0.2.x and fails on 0.3.0.
 
 #### Compatibility policy
 
@@ -462,7 +462,7 @@ Install-time errors:
 | `Y V is installed but X needs ...` / `... which does not satisfy: ...` | An installed dependency is too old (or new) and the marketplace has nothing that fits. |
 | `upgrading Y to V would break X, which needs Y R` | An installed module needs a `Y` that `V` is not. Upgrade `X` first or choose another version. |
 | `X V is already installed` / `... would be a downgrade, which is refused` | Raise `version`; an installed module is never moved to an older or the same version. |
-| `X is a built-in module` / `X is a built-in module and is part of the core` | Your id clashes with `base`, `product`, `crm`, `sales`, `invoicing`, `connectors` or `platform`. |
+| `X is a built-in module` / `X is a built-in module and is part of the core` | Your id clashes with `base`, `product`, `crm`, `sales`, `invoicing`, `connectors`, `mileage` or `platform`. |
 | `model X already exists` | Another module owns a model of that name. |
 | `M.F refers to model T, which no dependency of X provides` / `M.F shows_option_of refers to model T, which no dependency of X provides` | A `ref` or a `shows_option_of` into another package or built-in: add the module that declares `T` to the dependencies. |
 | `marketplace package X: license is required for marketplace and bundled packages ...` | A catalogue package must declare `license` and `requires_core`. |
@@ -739,6 +739,12 @@ A field that is the `field` of at least one action is *governed*. The generic `c
 - Data written outside the commands (seeds, imports straight into the store) is not checked.
 
 The built-in modules follow the same rule: `lead.stage` (actions `qualify`, `mark_won`, `mark_lost`, `reopen`), `sale_order.state` (`confirm`, `cancel`, `reset_to_draft`) and `invoice.state` (`post`, needing `invoicing.manager` and approval, and `cancel`).
+
+### 6.2 A refusal the caller may repeat: `incomplete`
+
+Most refusals are for good: repeating the call gets the same answer. The code `incomplete` (HTTP 409, no `Retry-After`; body `{"error": "...", "code": "incomplete", "hint": "..."}`) says the opposite: the call needs records that have not all arrived yet, nothing was changed, and the same call can be repeated until they have. The built-in module `mileage` returns it for `end` on a trip whose points are still on their way (docs/spec/mobile.md 5.3 and 8.6), and only while more points could still arrive: fewer points are stored than the device said and none beyond its last `seq`. If what is missing was lost and will never arrive, the caller repeats the call with the counts corrected to what exists (the hint says so). When no point that arrives could make the numbers fit (more points than said, or a `seq` beyond the last one), the refusal is a plain 400 for good that names the values to use instead. A client tells `incomplete` from a refusal for good by the code alone: a refusal without it, such as a wrong state or a trip with no distance, is a plain 400 and is final. `@obop/client` does not repeat anything itself; its `isSafeToRetry` says a 409 may be repeated only with this code, and the caller's outbox does the repeating. Only built-in modules can return it today; a package assertion cannot name a code (ISSUES M1). The row is in `obop_commands::errors::TABLE` (origin D87), and the table test lists it.
+
+The code `rate_limited` (HTTP 429, `Retry-After: 60`, body `{"error": "...", "code": "rate_limited", "hint": "..."}`, origin D70) is the other answer that can be repeated: a person started more `bulk_create` calls in a minute than `OBOP_BULK_PER_MINUTE` allows (default 12), and nothing was changed. A repeat of a call that was already answered (the same person, model, `idempotency_key` and rows, inside 24 hours) is looked up before the counter: it returns the first answer and uses none of the budget, so a retry is never refused for the limit. `@obop/client` does not repeat it itself: `isSafeToRetry` says a 429 may be repeated, `retryDelayMs` gives the wait from `Retry-After`, and the caller's outbox does the repeating.
 
 ## 7. Refs, dependencies, installing, upgrading, removing
 

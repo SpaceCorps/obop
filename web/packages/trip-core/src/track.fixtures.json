@@ -1,0 +1,539 @@
+{
+  "about": "Test vectors for the track rules of docs/spec/mobile.md 5.4: the fix filter, the speed cap and the distance sum. They are read by two tests so that the device and the server agree: web/packages/trip-core/src/track.test.ts runs every case through analyseTrack, and crates/modules/mileage/src/track.rs runs the same cases through the Rust function the server uses. `t` is milliseconds since the Unix epoch; `accuracyM` is optional. `expect.distance_m` is the summed distance rounded to two decimals, the way the server stores it; `expect.integrity` is the flag text the server stores. All positions are synthetic. To change a case, change it here and run both tests.",
+  "defaults": {
+    "maxSpeedMps": 70,
+    "maxAccuracyM": 100
+  },
+  "cases": [
+    {
+      "name": "a walk of ten fixes",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.00003,
+          "lon": 10.00002,
+          "accuracyM": 7
+        },
+        {
+          "seq": 3,
+          "t": 1790000010000,
+          "lat": 50.00006,
+          "lon": 10.00004,
+          "accuracyM": 9
+        },
+        {
+          "seq": 4,
+          "t": 1790000015000,
+          "lat": 50.00009,
+          "lon": 10.00006,
+          "accuracyM": 5
+        },
+        {
+          "seq": 5,
+          "t": 1790000020000,
+          "lat": 50.00012,
+          "lon": 10.00008,
+          "accuracyM": 7
+        },
+        {
+          "seq": 6,
+          "t": 1790000025000,
+          "lat": 50.00015,
+          "lon": 10.0001,
+          "accuracyM": 9
+        },
+        {
+          "seq": 7,
+          "t": 1790000030000,
+          "lat": 50.00018,
+          "lon": 10.00012,
+          "accuracyM": 5
+        },
+        {
+          "seq": 8,
+          "t": 1790000035000,
+          "lat": 50.00021,
+          "lon": 10.00014,
+          "accuracyM": 7
+        },
+        {
+          "seq": 9,
+          "t": 1790000040000,
+          "lat": 50.00024,
+          "lon": 10.00016,
+          "accuracyM": 9
+        },
+        {
+          "seq": 10,
+          "t": 1790000045000,
+          "lat": 50.00027,
+          "lon": 10.00018,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "32.66",
+        "accepted": 10,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": 1,
+        "last_seq": 10
+      }
+    },
+    {
+      "name": "no fixes",
+      "points": [],
+      "expect": {
+        "distance_m": "0.00",
+        "accepted": 0,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": null,
+        "last_seq": null
+      }
+    },
+    {
+      "name": "one fix has no distance",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "0.00",
+        "accepted": 1,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": 1,
+        "last_seq": 1
+      }
+    },
+    {
+      "name": "five fixes at one place",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50.1234567,
+          "lon": 10.7654321,
+          "accuracyM": 8
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.1234567,
+          "lon": 10.7654321,
+          "accuracyM": 8
+        },
+        {
+          "seq": 3,
+          "t": 1790000010000,
+          "lat": 50.1234567,
+          "lon": 10.7654321,
+          "accuracyM": 8
+        },
+        {
+          "seq": 4,
+          "t": 1790000015000,
+          "lat": 50.1234567,
+          "lon": 10.7654321,
+          "accuracyM": 8
+        },
+        {
+          "seq": 5,
+          "t": 1790000020000,
+          "lat": 50.1234567,
+          "lon": 10.7654321,
+          "accuracyM": 8
+        }
+      ],
+      "expect": {
+        "distance_m": "0.00",
+        "accepted": 5,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": 1,
+        "last_seq": 5
+      }
+    },
+    {
+      "name": "one degree of longitude on the equator",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 0,
+          "lon": 0
+        },
+        {
+          "seq": 2,
+          "t": 1790003600000,
+          "lat": 0,
+          "lon": 1
+        }
+      ],
+      "expect": {
+        "distance_m": "111195.08",
+        "accepted": 2,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": 1,
+        "last_seq": 2
+      }
+    },
+    {
+      "name": "a jump of about ten kilometres in five seconds is skipped and the track goes on",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.00003,
+          "lon": 10.00002,
+          "accuracyM": 5
+        },
+        {
+          "seq": 3,
+          "t": 1790000010000,
+          "lat": 50.09,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 4,
+          "t": 1790000015000,
+          "lat": 50.00006,
+          "lon": 10.00004,
+          "accuracyM": 5
+        },
+        {
+          "seq": 5,
+          "t": 1790000020000,
+          "lat": 50.00009,
+          "lon": 10.00006,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "10.89",
+        "accepted": 4,
+        "skipped_accuracy": 0,
+        "skipped_speed": 1,
+        "seq_gaps": 0,
+        "integrity": "speed_jump:1",
+        "first_seq": 1,
+        "last_seq": 5
+      }
+    },
+    {
+      "name": "a real move after a long gap in the signal is accepted",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.00003,
+          "lon": 10.00002,
+          "accuracyM": 5
+        },
+        {
+          "seq": 3,
+          "t": 1790003605000,
+          "lat": 50.9,
+          "lon": 10,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "100075.87",
+        "accepted": 3,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": 1,
+        "last_seq": 3
+      }
+    },
+    {
+      "name": "a higher speed cap accepts the jump",
+      "options": {
+        "maxSpeedMps": 5000
+      },
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.09,
+          "lon": 10,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "10007.56",
+        "accepted": 2,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": 1,
+        "last_seq": 2
+      }
+    },
+    {
+      "name": "poor accuracy is dropped, the limit itself and an unknown accuracy count",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.0001,
+          "lon": 10,
+          "accuracyM": 150
+        },
+        {
+          "seq": 3,
+          "t": 1790000010000,
+          "lat": 50.0002,
+          "lon": 10,
+          "accuracyM": 100
+        },
+        {
+          "seq": 4,
+          "t": 1790000015000,
+          "lat": 50.0003,
+          "lon": 10
+        },
+        {
+          "seq": 5,
+          "t": 1790000020000,
+          "lat": 50.0004,
+          "lon": 10,
+          "accuracyM": 100.5
+        }
+      ],
+      "expect": {
+        "distance_m": "33.36",
+        "accepted": 3,
+        "skipped_accuracy": 2,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "low_accuracy:2",
+        "first_seq": 1,
+        "last_seq": 4
+      }
+    },
+    {
+      "name": "a gap in the sequence is counted, not hidden",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.00003,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 5,
+          "t": 1790000020000,
+          "lat": 50.00012,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 6,
+          "t": 1790000025000,
+          "lat": 50.00015,
+          "lon": 10,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "16.68",
+        "accepted": 4,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 2,
+        "integrity": "seq_gap:2",
+        "first_seq": 1,
+        "last_seq": 6
+      }
+    },
+    {
+      "name": "fixes that arrive out of order are taken in the order of seq",
+      "points": [
+        {
+          "seq": 4,
+          "t": 1790000015000,
+          "lat": 50.00009,
+          "lon": 10.00006,
+          "accuracyM": 5
+        },
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 3,
+          "t": 1790000010000,
+          "lat": 50.00006,
+          "lon": 10.00004,
+          "accuracyM": 9
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.00003,
+          "lon": 10.00002,
+          "accuracyM": 7
+        },
+        {
+          "seq": 5,
+          "t": 1790000020000,
+          "lat": 50.00012,
+          "lon": 10.00008,
+          "accuracyM": 7
+        }
+      ],
+      "expect": {
+        "distance_m": "14.52",
+        "accepted": 5,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": 1,
+        "last_seq": 5
+      }
+    },
+    {
+      "name": "a step back in time is dropped, two fixes at one instant and place count",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000010000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000005000,
+          "lat": 50.0001,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 3,
+          "t": 1790000010000,
+          "lat": 50,
+          "lon": 10,
+          "accuracyM": 5
+        },
+        {
+          "seq": 4,
+          "t": 1790000015000,
+          "lat": 50.00003,
+          "lon": 10,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "3.34",
+        "accepted": 3,
+        "skipped_accuracy": 0,
+        "skipped_speed": 1,
+        "seq_gaps": 0,
+        "integrity": "speed_jump:1",
+        "first_seq": 1,
+        "last_seq": 4
+      }
+    },
+    {
+      "name": "across the antimeridian",
+      "points": [
+        {
+          "seq": 1,
+          "t": 1790000000000,
+          "lat": 10,
+          "lon": 179.9999,
+          "accuracyM": 5
+        },
+        {
+          "seq": 2,
+          "t": 1790000010000,
+          "lat": 10,
+          "lon": -179.9999,
+          "accuracyM": 5
+        }
+      ],
+      "expect": {
+        "distance_m": "21.90",
+        "accepted": 2,
+        "skipped_accuracy": 0,
+        "skipped_speed": 0,
+        "seq_gaps": 0,
+        "integrity": "",
+        "first_seq": 1,
+        "last_seq": 2
+      }
+    }
+  ]
+}

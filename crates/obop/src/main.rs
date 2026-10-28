@@ -33,6 +33,8 @@ mod mcp_tests;
 mod mfa_tests;
 mod migrate_cli;
 #[cfg(test)]
+mod mileage_tests;
+#[cfg(test)]
 mod model_tests;
 #[cfg(test)]
 mod modules_tests;
@@ -4004,7 +4006,7 @@ mod bundled_packages {
                 }
             }
         }
-        assert_eq!(files.len(), 6 * 30);
+        assert_eq!(files.len(), 6 * 31);
         let refs: Vec<&str> = files.iter().map(String::as_str).collect();
         assert!(modules_check_files(&refs, true).is_ok());
     }

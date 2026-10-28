@@ -14,7 +14,7 @@ import {
 
 const err = (
   status: number,
-  extra: { applied?: "none" | "unknown" | "partial"; read?: boolean } = {},
+  extra: { applied?: "none" | "unknown" | "partial"; read?: boolean; code?: string } = {},
 ) => new ObopApiError({ status, message: `status ${status}`, ...extra });
 
 describe("isSafeToRetry (the D74 rule of docs/DEPLOY.md)", () => {
@@ -73,6 +73,14 @@ describe("isSafeToRetry (the D74 rule of docs/DEPLOY.md)", () => {
     ["403 never", err(403), true, false],
     ["404 never", err(404, { read: true }), true, false],
     ["409 never", err(409), true, false],
+    ["a 409 with another code never", err(409, { code: "state_conflict" }), true, false],
+    [
+      // The call needed records that had not all arrived; nothing was changed (D87).
+      "409 incomplete is repeated, plain write or not",
+      err(409, { code: "incomplete" }),
+      false,
+      true,
+    ],
     ["410 never", err(410, { read: true }), true, false],
     ["412 never", err(412), true, false],
     ["a 2xx is not a failure to repeat", err(202), true, false],

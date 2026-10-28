@@ -229,6 +229,9 @@ export class ObopApprovalRequired extends ObopApiError {
   }
 }
 
+/** The code of a refusal the caller may repeat once what is missing has arrived (409, D87). */
+const INCOMPLETE = "incomplete";
+
 /**
  * Whether the same call may be sent again without risking a change twice.
  *
@@ -246,9 +249,12 @@ export class ObopApprovalRequired extends ObopApiError {
  *
  * **Chosen by this client, not written in DEPLOY.md:** a 5xx with no word (a gateway, a crash) and
  * a lost connection are treated like `unknown` for a write (a lost connection of a read is
- * `none`); a 429 was refused before it ran and can be repeated after `retryAfterSeconds`; every
- * other status (400, 401, 403, 404, 409, 410, 412, a 2xx that could not be read ...) never,
- * because a repeat gets the same answer or does the work twice.
+ * `none`); a 429 was refused before it ran and can be repeated after `retryAfterSeconds`; a 409
+ * with the code `incomplete` (D87, docs/MODULES.md 6.2) was refused before it changed anything
+ * because records it needs have not all arrived yet, so the same call can be repeated, with
+ * backoff (it carries no `Retry-After`: use `retryDelayMs`); every other status (400, 401, 403,
+ * 404, any other 409, 410, 412, a 2xx that could not be read ...) never, because a repeat gets the
+ * same answer or does the work twice.
  *
  * `idempotent` says the call carries an idempotency key; it defaults to whether the failed call
  * only read (`err.read`). Anything that is not an `ObopApiError` is not safe to repeat.
@@ -256,6 +262,7 @@ export class ObopApprovalRequired extends ObopApiError {
 export function isSafeToRetry(err: unknown, opts: { idempotent?: boolean } = {}): boolean {
   if (!(err instanceof ObopApiError)) return false;
   if (err.status === 429) return true;
+  if (err.status === 409 && err.code === INCOMPLETE) return true;
   if (err.status !== 0 && err.status < 500) return false;
   if (err.applied === "partial") return false;
   if (err.applied === "none") return true;

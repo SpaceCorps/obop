@@ -1,0 +1,22 @@
+[package]
+name = "mileage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+obop-types.workspace = true
+obop-registry.workspace = true
+obop-commands.workspace = true
+obop-storage.workspace = true
+obop-values.workspace = true
+serde_json = "1"
+
+[dev-dependencies]
+obop-storage = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true
