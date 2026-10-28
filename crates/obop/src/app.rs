@@ -51,6 +51,7 @@ impl App {
         crm::register(&d, &store);
         sales::register(&d, &store);
         invoicing::register(&d, &store);
+        mileage::register(&d, &store);
         let secrets = SecretBox::open_for(&store.backend()).unwrap_or_else(|e| {
             eprintln!("error: {e}");
             std::process::exit(2);
@@ -78,6 +79,7 @@ impl App {
             crm::module(),
             sales::module(),
             invoicing::module(),
+            mileage::module(),
             ::connectors::module(),
             obop_pkg::admin_module(),
         ];
@@ -143,6 +145,9 @@ pub fn dev_principal(token: &str) -> Option<Principal> {
         "invoicing.manager",
         "connectors.user",
         "connectors.admin",
+        "mileage.driver",
+        "mileage.reviewer",
+        "mileage.admin",
     ];
     match token {
         "dev-admin" => Some(Principal::user("dev-admin", ALL)),
