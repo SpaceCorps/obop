@@ -306,8 +306,65 @@ The core follows semantic versioning. While it is below 1.0, a **minor** bump (`
 | `unique` | bool | `false` | No two records of the model may have the same non-empty value. |
 | `unique_with` | array of field names | `[]` | With `unique`: the value need only be unique among records equal in these fields (at most 4). |
 | `format`, `assign_on`, `gapless`, `reset` | | | Only for `kind = "sequence"`, see below. |
+| `shows_option_of` | string `"model.field"` | none | Only for `text` and `longtext` (D52 amendment). A select field with options, in this package, in a built-in module or in a module this one depends on (`obop modules check` and the marketplace require the dependency; a live install accepts any registered model, as it does for a `ref`). The back office draws the value of this field, when it equals an option of that select, with the option's label in the person's language; any other value is drawn as stored. Display only; see below. |
+| `when` | string (expression) | none | Only with `shows_option_of`: the label shows only while this condition holds on the same record, because the same field may also hold free notes. A true/false expression over the fields of this model, in the part of the expression language the browser evaluates (3.8). |
 
 `kind = "sequence"` is a text field numbered by the system (read-only, unique, never `required`): `format` is required, for example `"INV-{year}-{seq:05}"` (letters, digits and `- _ / . # space`, exactly one `{seq}` or `{seq:N}` with N from 1 to 12 for zero padding, optional `{year}` and `{month}`); `assign_on` names the action that numbers the record (default: numbered when it is created); `gapless = true` forbids deleting a record that holds a number; `reset` is `never` (default), `year` or `month` and needs `{year}` (and `{month}`) in the format. The counter is kept in a `sequence_counter` record per model, field and period and is committed in the same transaction as the record, so a failed action uses no number.
+
+**A text field that shows the label of an option (`shows_option_of`, D52 amendment).** Text written by an effect or by a client often holds a key that a select field also defines: the status written into a history entry, the role copied into a snapshot line. The key cannot change (other clients read it) and a label table on a text field is refused, so a person would read the stored word. Declare where the key comes from and the back office draws its label instead:
+
+```toml
+[[model]]
+name = "desk_case"
+# ...
+  [[model.field]]
+  name = "status"
+  description = "Where the case stands"
+  class = "none"
+  kind = "select"
+  options = ["open", "in_progress", "closed"]
+
+  [[model.action]]
+  name = "start"
+  description = "Start working on the case"
+  field = "status"
+  from = "open"
+  to = "in_progress"
+
+    [[model.action.effect]]
+    kind = "create"
+    model = "desk_entry"
+    map = { case_id = "$self.id", kind = "status", text = "$self.status" }
+
+[[model]]
+name = "desk_entry"
+# ...
+  [[model.field]]
+  name = "kind"
+  description = "status for a change of status, note for a free note"
+  class = "none"
+
+  [[model.field]]
+  name = "text"
+  description = "The status written by the action, or a free note"
+  class = "none"
+  kind = "longtext"
+  shows_option_of = "desk_case.status"     # the select whose option labels to use
+  when = 'kind == "status"'                # only on a line that holds a status
+
+[labels.sv.model.desk_case.field.status.options]   # the labels are those of the select, nothing new
+in_progress = "Pågår"
+closed = "Avslutad"
+```
+
+A history entry whose `text` is `in_progress` and whose `kind` is `status` reads "Pågår" to a person whose language is Swedish, and `In progress` to one whose language has no label for it (the lookup is that of the select itself: the package's `option_labels` in the active language, then the client table of the built-in modules, then the key written as words). The API still returns `in_progress`. A line whose `kind` is `note` and whose text reads `closed` is a free note: the condition is false, so it is shown as written, and so is any value that is not an option.
+
+- **Only the display changes.** The stored value, `create` and `update`, filters (`text eq "in_progress"` matches, `text eq "Pågår"` does not), sorting, grouping keys, REST, MCP, the command line, import, the text of an edit input and the field's own column in a CSV export are those of any text field. The back office draws the label in list cells, kanban cards and the record panel of a person who cannot edit it, and wherever it names a record by this field. A record is named by its first required `text` field, else a numbered text field, else its first `text` or `longtext` field, so a field that shows an option names the records of its model by the label: panel and card titles, calendar chips, dashboard record lists, delete dialogs, and the cell, picker and CSV column of a `ref` that points at such a record (a ref column already exports the name of the record, not its id, so it exports the label and sorts by it; the name is the same in every place). It does not draw it in an edit input (the panel of a person who may edit shows the stored text), nor in the public shop, the forum or the status page, which are server-rendered.
+- **The label is the select's.** There is no new language data: a package translates the options of the select (3.7) and every text field that names it follows. A label table on the text field itself stays refused (`labels.sv.model.desk_entry.field.text.options: text is not a select field`). Where the select lives in another module, the person must be able to see it (its model and field group are in `/api/meta` for them); otherwise the value is drawn as stored.
+- **The condition is evaluated in the browser**, on the record being drawn, because the API must not change. It is an expression of 3.8 over the fields of the same model, true/false, and only the part of the language that the browser implements is allowed: fields of the record (every kind except `decimal` and `datetime`: `text`, `longtext`, `select`, `ref`, `date`, `bool`, `number`, `money`, `sequence`, `image` and `file`, also computed ones; a sequence, an image and a file are text in a row), text in double quotes, whole numbers up to 9007199254740991, `true` and `false`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`, `!`, parentheses and `is_set(field)`. Arithmetic, a minus sign, decimals and instants (so no `decimal` or `datetime` field), `if`, `concat` and aggregates are refused by the install gate with a message that says so. The meaning is that of 3.8 (an empty value is `0` against a number, `""` against text and false as a condition; text compares by code point; `&&` and `||` stop early; `!` binds looser than a comparison, so `!a == b` is `!(a == b)`; a condition holds when it is exactly `true`). One limit: a `number` or `money` value above 9007199254740991 reaches the browser as a JSON number, which is a double, so it is right against a literal but two such values compared with each other (`n == amount`) can differ from the server's exact answer. The server's evaluator and the browser's read one file of test cases, `web/apps/backoffice/src/displayCondition.fixtures.json`, so they cannot drift apart. The cases pin the lexing, the precedence, the empty values and the kinds above; they cannot pin that limit, which the server and the browser read differently by construction. A browser that does not understand a condition (a newer server) draws the stored text.
+- **A condition may read only fields of the same group** as the text field (`group`), or the label would show whether a value that the reader may not see holds, and no field of class `secret`, which the browser is never sent (the condition would see it empty).
+- **The attribute is in `/api/meta`** on the text field as `shows_option_of` (`"desk_case.status"`) and, when there is a condition, `shows_option_when` (the expression as written; in the manifest the key is `when`). A field without the attribute has neither. MCP tool schemas say in the field's description that it may hold an option key. A client of the API that wants the label reads `option_labels` of the select.
+- **Upgrading and removing.** The attribute is replaced with the rest of the field by an upgrade and restored by a rollback; it needs no `[[migration]]`. The target is a reference like a `ref`'s: another module's select needs that module in `[module.dependencies]`. `obop modules check` and the marketplace refuse a package that does not declare it; a live install accepts any registered model (as for a `ref`), so declare it: with the dependency declared, `module.uninstall` of that module is blocked as for any dependency. Nothing re-checks an installed package when the module it points into changes (an upgrade-time re-check of dependents is not delivered, docs/ISSUES.md K27). The package keeps working and a value is drawn as stored when the select, the option or the module is gone; but the next install or upgrade of the package is refused (`T has no field F`, or `refers to model T, which no dependency of P provides`) until the attribute is dropped or points at something that exists. A removed option alone is not refused: the value is then simply not an option.
 
 ### 3.4 `[[model.action]]`
 
@@ -369,6 +426,16 @@ Parse and gate errors (from `obop modules install`, the Customize upload or `mod
 | `M.A: "V" is not one of the options of F (...)` | `from` or `to` is not in the select's options. |
 | `M.A: `from` and `to` are both "V"; an action must change the state` | An action that changes nothing is refused. |
 | `M.F: computed: ...` / `computed `E` is a number, but the field is text` | The expression does not parse or its type is not the field's. |
+| `M.F: `shows_option_of` is only valid for kind "text" or "longtext"` / `shows_option_of is for a text or longtext field, not K` | Only a text or longtext field can show an option's label (3.3). |
+| `M.F: shows_option_of "X" must look like model.field` | Write the model and the select field it takes labels from, for example `"desk_case.status"`. |
+| `M.F: `when` is only valid together with `shows_option_of`` | Add `shows_option_of`, or drop `when`. |
+| `M.F: `shows_option_of` names model T, which this package does not declare` | A model that starts with your own id must be one of your models. |
+| `shows_option_of T.F: T has no field F` / `that is a K field; it must be a select field` / `the select field has no options to take a label from` | The target must be a select field with options. |
+| `shows_option_of T.F: there is no model T; a model of another module needs that module in depends` | `obop modules check` and the marketplace find only the models of the package, its dependencies and the built-in modules: add the module that declares `T` to `[module.dependencies]`. |
+| `when `E`: ... cannot be used in a condition the browser evaluates; it may use ...` / `when `E`: F is a decimal number, which cannot be read ...` | The condition leaves the part of the language the browser evaluates (3.3). Rewrite it with comparisons, `&&`, `!` and `is_set`, or with the list in 3.3. |
+| `when `E` is a number; it must be a comparison or other true/false expression` / `when `E`: M has no field `F`` | The condition must be true/false over fields of the model of the text field. |
+| `when `E` reads M.F, which only g may read; give this field `group = "g"`` | The condition reads a field of another permission group. |
+| `when `E` reads M.F, which has class secret; the browser is never sent a secret field` | A field of class `secret` is never sent to a person, so the condition would see it empty: read another field. |
 | `computed `E` reads M.F (class C); the field must have class ...` / `give the computed field `group = "g"`` | A value computed from protected data is protected too: same group, same or stricter class, personal data if an input is. |
 | `computed fields depend on each other in a cycle: a -> b -> a` | Remove the loop. |
 | `M.F: format: ...` / `reset = "year" needs {year} in the format` / `assign_on: X is not an action of the model` | Fix the sequence. |
@@ -397,7 +464,7 @@ Install-time errors:
 | `X V is already installed` / `... would be a downgrade, which is refused` | Raise `version`; an installed module is never moved to an older or the same version. |
 | `X is a built-in module` / `X is a built-in module and is part of the core` | Your id clashes with `base`, `product`, `crm`, `sales`, `invoicing`, `connectors` or `platform`. |
 | `model X already exists` | Another module owns a model of that name. |
-| `M.F refers to model T, which no dependency of X provides` | A `ref` into another package or built-in: add the module that declares `T` to the dependencies. |
+| `M.F refers to model T, which no dependency of X provides` / `M.F shows_option_of refers to model T, which no dependency of X provides` | A `ref` or a `shows_option_of` into another package or built-in: add the module that declares `T` to the dependencies. |
 | `marketplace package X: license is required for marketplace and bundled packages ...` | A catalogue package must declare `license` and `requires_core`. |
 | `X: ...; the N step(s) before it were rolled back and nothing was installed` | A step of a multi-module install failed; the earlier steps were undone. |
 | `required dependencies cannot be skipped ...` | `without_dependencies` may only be false. |
@@ -461,7 +528,7 @@ description = "Ein verfügbares Fahrzeug in Betrieb nehmen"
 
 - **Label versus description.** A label is the short name (at most 80 characters) a person scans: a column header, a button. A description is a sentence (at most 400) that explains it. English has no `label`: the interface derives it from the technical name (`odometer_km` is "Odometer km"); a `[labels.en...]` table overrides that when the derived English reads badly ("Odometer (km)").
 - **Language codes** are two or three lowercase letters with an optional region: `de`, `fi`, `pt-BR`. The seven the interface ships are en, de, fr, pl, fi, sv, es. Anything else matching the pattern is stored and delivered; the client uses it when the active language is that code, or its base language.
-- **Every key must name something that exists**: a model of the package, one of its fields, an option of that select field, an action. A typo is a refused install, not an ignored line (`labels.de.model.fleet_vehicle.field.platte: fleet_vehicle has no field "platte"`). An unknown table or key name is refused by the schema. Option keys are the stored values and stay English.
+- **Every key must name something that exists**: a model of the package, one of its fields, an option of that select field, an action. A typo is a refused install, not an ignored line (`labels.de.model.fleet_vehicle.field.platte: fleet_vehicle has no field "platte"`). An unknown table or key name is refused by the schema. Option keys are the stored values and stay English. Only a select field has option labels: a table on a text field is refused (`field.text.options: text is not a select field`); to show the option label of a select in a text field that holds its keys, name the select in `shows_option_of` (3.3) and translate the select once.
 - **Values** are plain text: not empty, no leading or trailing spaces, one line, no control characters, no placeholders or markup (`{ } < >`), at most 80 characters (400 for descriptions and for the message of an assertion). They count toward the 256 KiB limit of the whole document.
 - **Partial translations are fine.** Missing entries fall back (below). The bundled packages are complete in six languages, which a test enforces.
 - **Permission group names** are not translatable (they are identifiers).
@@ -483,7 +550,7 @@ obop modules install assets.toml                          # installs the manifes
 
 ### 3.8 Expressions, assertions and effects (D56, D57)
 
-**The expression language** is used by `computed`, `assert` and `when`. It has integers, exact decimals (`0.25`, `12.50`: digits, a point, digits), text in double quotes (`\"` and `\\` escapes only), `true`, `false`; the fields of the record by name; `+ - * /` on integers (money and number fields; no floats exist: `/` rounds half away from zero, so `5 / 2` is 3 and `-5 / 2` is -3, and `a * b / 10000` is how a basis-point rate is applied); `== != < <= > >=` on two values of one type; `&&`, `||`, `!`; `if(condition, then, else)`; `concat(a, b, ...)` (numbers and booleans are written out); `is_set(field)`. An empty (null) value is `0` in arithmetic, `""` as text and false as a condition. Dividing by zero or leaving 64 bits is an error (a computed field then reads as empty; an assertion fails). **Decimals** (D72): a `decimal` field and a decimal literal are exact numbers; a whole number mixed with a decimal becomes a decimal, so `qty * 0.25` and `rate > 1` work and `0.1 + 0.2 == 0.3` is true. `+`, `-` and `*` lose nothing (the scale of a sum is the larger of the two, of a product their sum; going beyond 38 digits is an error) and comparison is numeric. `/` of decimals is the one operation that must cut digits: its result has the scale of the computed field being evaluated (12 in an assertion) and is rounded once with that field's `round` (default `half_even`), so `(a / b) * c` rounds `a / b` first; and the value of a computed `decimal` field is rounded to the field's scale the same way. A computed `number` or `money` field cannot take a decimal expression (the type check says so): make it a `decimal`. `sum`, `min` and `max` over a decimal child field are exact decimals. An instant (a `datetime` field) compares with an instant, or with a text literal that is a valid RFC 3339 instant (`signed_at < "2026-01-01T00:00:00Z"`); an empty one is before everything; there is no arithmetic on instants and a date never compares with an instant. Aggregates look at the child records: `sum(lines.amount)`, `min(...)`, `max(...)` (empty when there are no children) and `count(lines)`, optionally `where <condition on the child>`: `count(tasks where state == "done") * 100 / count(tasks)`. The child is named by its model, or by the part of the model name after this model's name, singular or plural (`lines` in `accounting_move` is `accounting_move_line`); it must have a `ref` to this model, and `lines[move_id]` picks the ref when there are several. At most 400 characters, 80 parts, 12 levels. Types are checked when the package is parsed and installed.
+**The expression language** is used by `computed`, `assert` and `when` (of an effect, and of a field's `shows_option_of`, 3.3, which the browser evaluates and which therefore may use only a part of it). It has integers, exact decimals (`0.25`, `12.50`: digits, a point, digits), text in double quotes (`\"` and `\\` escapes only), `true`, `false`; the fields of the record by name; `+ - * /` on integers (money and number fields; no floats exist: `/` rounds half away from zero, so `5 / 2` is 3 and `-5 / 2` is -3, and `a * b / 10000` is how a basis-point rate is applied); `== != < <= > >=` on two values of one type; `&&`, `||`, `!`; `if(condition, then, else)`; `concat(a, b, ...)` (numbers and booleans are written out); `is_set(field)`. An empty (null) value is `0` in arithmetic, `""` as text and false as a condition. Dividing by zero or leaving 64 bits is an error (a computed field then reads as empty; an assertion fails). **Decimals** (D72): a `decimal` field and a decimal literal are exact numbers; a whole number mixed with a decimal becomes a decimal, so `qty * 0.25` and `rate > 1` work and `0.1 + 0.2 == 0.3` is true. `+`, `-` and `*` lose nothing (the scale of a sum is the larger of the two, of a product their sum; going beyond 38 digits is an error) and comparison is numeric. `/` of decimals is the one operation that must cut digits: its result has the scale of the computed field being evaluated (12 in an assertion) and is rounded once with that field's `round` (default `half_even`), so `(a / b) * c` rounds `a / b` first; and the value of a computed `decimal` field is rounded to the field's scale the same way. A computed `number` or `money` field cannot take a decimal expression (the type check says so): make it a `decimal`. `sum`, `min` and `max` over a decimal child field are exact decimals. An instant (a `datetime` field) compares with an instant, or with a text literal that is a valid RFC 3339 instant (`signed_at < "2026-01-01T00:00:00Z"`); an empty one is before everything; there is no arithmetic on instants and a date never compares with an instant. Aggregates look at the child records: `sum(lines.amount)`, `min(...)`, `max(...)` (empty when there are no children) and `count(lines)`, optionally `where <condition on the child>`: `count(tasks where state == "done") * 100 / count(tasks)`. The child is named by its model, or by the part of the model name after this model's name, singular or plural (`lines` in `accounting_move` is `accounting_move_line`); it must have a `ref` to this model, and `lines[move_id]` picks the ref when there are several. At most 400 characters, 80 parts, 12 levels. Types are checked when the package is parsed and installed.
 
 **Computed fields** (`computed = "sum(lines.amount)"`) are evaluated when a record is read, from the current children, and are in `get`, `list`, `search` and every write response. They can be filtered and sorted on, may read other computed fields, are not stored, cannot be written (sending the current value back in an update is accepted, anything else is refused: `order.total is computed and read-only`), and are marked `computed: true` in `/api/meta`. Computing on read instead of keeping a cached value costs a look at the children per read (one indexed lookup for a record, one grouped scan for a list) and cannot drift. They are as protected as their inputs (3.5). Date arithmetic does not exist; `inventory_item.quantity` stays a stored number kept by `adjust` effects.
 
@@ -805,13 +872,15 @@ Declarative X1 deliberately cannot do the following. Plan around them or wait fo
 
 **How do I model a time of day?** A `date` plus `number` fields of minutes since midnight, as `planning` does.
 
+**An effect copies a status into a text field. How does a person read "Pågår" instead of `in_progress`?** Declare `shows_option_of = "desk_case.status"` on the text field, with a `when` if the field also holds free notes (3.3). The key stays what is stored and what the API returns; only the back office draws the label, from the translations of the select.
+
 **How do I add a field to an installed module?** Add it to the file, raise `version`, and install the file again. Old records have no value for it.
 
 **Where do I put a model that belongs to two apps?** Models are named after the module that owns them. Add the module that owns the model to `[module.dependencies]` (with the versions you tested) and `ref` to it.
 
 **Can a module have no models?** The file parses with no `[[model]]`, but it adds nothing.
 
-**Where are decisions recorded?** D11 (tiers), D45 (packages and the admin), D46 (backoffice and Customize), D47 (typed fields), D48 (governed fields), D49 (delete and search), D56 (effects and assertions), D57 (computed fields, uniqueness, sequences), D58 (row-level access) in `docs/DECISIONS.md`; data classes in `docs/CONVENTIONS.md` section 5.
+**Where are decisions recorded?** D11 (tiers), D45 (packages and the admin), D46 (backoffice and Customize), D47 (typed fields), D48 (governed fields), D49 (delete and search), D52 (translations, and a text field that shows an option's label), D56 (effects and assertions), D57 (computed fields, uniqueness, sequences), D58 (row-level access) in `docs/DECISIONS.md`; data classes in `docs/CONVENTIONS.md` section 5.
 
 ## 12. The bundled workflows
 

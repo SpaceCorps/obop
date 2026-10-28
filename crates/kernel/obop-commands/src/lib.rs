@@ -328,6 +328,11 @@ pub struct FieldInfo {
     pub unique: bool,
     /// Numbered by the system (D57).
     pub sequence: bool,
+    /// A text field shown, in the back office, with the label of the option of the select field
+    /// `model.field` that its value equals (D52 amendment). Display only: values are as stored.
+    pub shows_option_of: Option<String>,
+    /// The condition on the same record under which the label shows; the browser evaluates it.
+    pub shows_option_when: Option<String>,
 }
 
 impl FieldInfo {
@@ -550,6 +555,12 @@ impl Dispatcher {
                                 computed: f.computed.is_some(),
                                 unique: f.unique.is_some() || f.sequence.is_some(),
                                 sequence: f.sequence.is_some(),
+                                shows_option_of: f.shows_option.as_ref().map(|s| s.target()),
+                                shows_option_when: f
+                                    .shows_option
+                                    .as_ref()
+                                    .and_then(|s| s.when.as_ref())
+                                    .map(|w| w.source.clone()),
                             }
                         })
                         .collect(),
@@ -1610,6 +1621,8 @@ mod engine_tests;
 mod keyexpr_parity;
 #[cfg(test)]
 mod kinds_tests;
+#[cfg(test)]
+mod shows_option_tests;
 #[cfg(test)]
 mod sysfields_tests;
 #[cfg(test)]

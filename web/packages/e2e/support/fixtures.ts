@@ -78,6 +78,11 @@ type Fixtures = {
   allowConsoleErrors: (...patterns: RegExp[]) => void;
   /** Install a throwaway module as root (removed after the test); returns its model name. */
   scratchModule: (spec: Omit<ModuleSpec, "id"> & { id?: string }) => Promise<string>;
+  /**
+   * Install a throwaway package written as a whole `obop.toml` (several models, labels...) as root,
+   * removed after the test. `build` gets the module id, which every model name must start with.
+   */
+  scratchPackage: (build: (id: string) => string) => Promise<string>;
   /** A name no other record has, so tests never depend on how much data earlier tests left. */
   uid: (prefix: string) => string;
   /** Collects page errors and console errors and fails the test on any (auto fixture). */
@@ -120,6 +125,17 @@ export const test = base.extend<Fixtures & Options>({
     await use(async (spec) => {
       const id = spec.id ?? `t${Date.now().toString(36)}${++counter}`;
       await api.run("root", "module.install", { manifest: manifest({ ...spec, id }) });
+      installed.push(id);
+      return id;
+    });
+    for (const id of installed) await api.run("root", "module.uninstall", { id });
+  },
+
+  scratchPackage: async ({ api }, use) => {
+    const installed: string[] = [];
+    await use(async (build) => {
+      const id = `t${Date.now().toString(36)}${++counter}`;
+      await api.run("root", "module.install", { manifest: build(id) });
       installed.push(id);
       return id;
     });

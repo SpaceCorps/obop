@@ -103,7 +103,7 @@ export function GraphView(p: ViewProps) {
       value: values.get(key) ?? 0,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.server, agg.groups, rows, dim, m, d.version]);
+  }, [p.server, agg.groups, rows, dim, m, d.version, d.lang]);
 
   const total = data.reduce((n, x) => n + Math.max(x.value, 0), 0);
   const cur = p.server ? money : currencyOf(rows);

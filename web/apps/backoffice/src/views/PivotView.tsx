@@ -142,7 +142,7 @@ export function PivotView(p: ViewProps) {
     }
     return { rk, ck, cells, rowTotal, colTotal, grand };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.server, agg.groups, rows, rowF, colF, m, d.version]);
+  }, [p.server, agg.groups, rows, rowF, colF, m, d.version, d.lang]);
 
   const drill = (rk: string | null, ck: string | null) =>
     p.drill([

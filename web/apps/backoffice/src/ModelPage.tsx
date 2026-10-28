@@ -180,7 +180,7 @@ export function ModelPage({ app, model, route, go, extra: appExtra, onNew }: Pro
         : sortRows(applyFacets(rows, state.facets, fields, d.lookup), state.sort, fields, d.lookup),
     // lookup changes when ref labels load
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serverMode, aggMode, rows, state.facets, state.sort, fields, d.version],
+    [serverMode, aggMode, rows, state.facets, state.sort, fields, d.version, d.lang],
   );
   const paging = view === "list" && !grouped;
   const shown: Row[] = aggMode

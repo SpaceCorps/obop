@@ -10,8 +10,8 @@ use obop_registry::rules::{MAX_ASSERT_KEY, MAX_EFFECTS, SeqFormat, assert_key_ok
 use obop_registry::{
     Access, Assertion, CommandDef, Computed, Effect, EffectKind, FieldDef, FieldKind,
     GENERATED_COMMANDS, History, Lit, Locator, MATURITIES, MODULE_CATEGORIES, ModelDef, ModelExt,
-    Module, ModuleMeta, Reset, SequenceSpec, Src, Target, Unique, check_installed_module,
-    check_module, intern,
+    Module, ModuleMeta, Reset, SequenceSpec, ShowsOption, Src, Target, Unique,
+    check_installed_module, check_module, intern,
 };
 use obop_types::DataClass;
 use serde::Deserialize;
@@ -276,6 +276,14 @@ pub struct FieldM {
     pub gapless: bool,
     /// `kind = "sequence"`: `never` (default), `year` or `month`.
     pub reset: Option<String>,
+    /// `kind = "text"` or `"longtext"`: `model.field` of a select field. The value, when it
+    /// equals an option of that field, is shown with the option's label in the active language;
+    /// anything else is shown as stored. Display only (D52 amendment).
+    pub shows_option_of: Option<String>,
+    /// Only with `shows_option_of`: an expression (section 3.8 of docs/MODULES.md, the part the
+    /// browser evaluates) on the same record. The label shows only while it holds, because the
+    /// field may also hold free text.
+    pub when: Option<String>,
 }
 
 /// Whether `v` is a value the field can hold, for `set_default`.
@@ -1145,6 +1153,30 @@ impl Manifest {
         if !f.unique && !f.unique_with.is_empty() {
             return Err(format!("{at}: unique_with needs unique = true"));
         }
+        if let Some(of) = &f.shows_option_of {
+            if !matches!(f.kind.as_str(), "text" | "longtext") {
+                return Err(format!(
+                    "{at}: `shows_option_of` is only valid for kind \"text\" or \"longtext\", not {:?}",
+                    f.kind
+                ));
+            }
+            let so = ShowsOption::parse(of, f.when.as_deref()).map_err(|e| format!("{at}: {e}"))?;
+            // A target outside this package is checked at install time, against what is
+            // registered then (and what the package depends on); a target inside it must really
+            // be one of its models. Its field and options are checked by the gate.
+            let own =
+                so.model == self.module.id || so.model.starts_with(&format!("{}_", self.module.id));
+            if own && !self.model.iter().any(|x| x.name == so.model) {
+                return Err(format!(
+                    "{at}: `shows_option_of` names model {}, which this package does not declare",
+                    so.model
+                ));
+            }
+        } else if f.when.is_some() {
+            return Err(format!(
+                "{at}: `when` is only valid together with `shows_option_of`"
+            ));
+        }
         if f.kind != "select" && !f.options.is_empty() {
             return Err(format!("{at}: options are only valid for kind \"select\""));
         }
@@ -1221,8 +1253,9 @@ impl Manifest {
         Ok(())
     }
 
-    /// Models that `ref` fields point at and that this package does not declare: they must be
-    /// registered already when the package is installed.
+    /// Models that `ref` fields and `shows_option_of` point at, and effects write to, and that
+    /// this package does not declare: they must be registered already when the package is
+    /// installed, and its dependencies must provide them.
     pub fn external_refs(&self) -> Vec<(String, String)> {
         let mut v = Vec::new();
         for m in &self.model {
@@ -1232,6 +1265,14 @@ impl Manifest {
                     && !self.model.iter().any(|x| &x.name == to)
                 {
                     v.push((format!("{}.{}", m.name, f.name), to.clone()));
+                }
+                if let Some((to, _)) = f.shows_option_of.as_deref().and_then(|s| s.split_once('.'))
+                    && !self.model.iter().any(|x| x.name == to)
+                {
+                    v.push((
+                        format!("{}.{} shows_option_of", m.name, f.name),
+                        to.to_string(),
+                    ));
                 }
             }
             for a in &m.action {
@@ -1572,6 +1613,12 @@ impl Manifest {
                 return Err(format!("{at}: unique_with: {w:?} is not a field name"));
             }
         }
+        let shows_option = match &f.shows_option_of {
+            Some(of) => Some(std::sync::Arc::new(
+                ShowsOption::parse(of, f.when.as_deref()).map_err(|e| format!("{at}: {e}"))?,
+            )),
+            None => None,
+        };
         Ok(FieldDef {
             name: intern(&f.name),
             description: intern(&f.description),
@@ -1585,6 +1632,7 @@ impl Manifest {
                 with: f.unique_with.iter().map(|w| intern(w)).collect(),
             }),
             sequence,
+            shows_option,
         })
     }
 
@@ -2657,6 +2705,186 @@ maturity = "beta"
         // Prerelease versions are accepted; other shapes are not.
         assert!(Manifest::parse(&FLEET.replace("0.1.0", "1.0.0-rc.1")).is_ok());
         assert!(err(&FLEET.replace("0.1.0", "1.0")).contains("version"));
+    }
+
+    // ---- shows_option_of (D52 amendment) ----------------------------------------------------
+
+    /// A case with a status select, and a history entry whose text holds a status key or a note.
+    fn desk(text_field: &str) -> String {
+        format!(
+            r#"
+[module]
+id = "desk"
+version = "0.1.0"
+name = "Desk"
+description = "Cases and their history"
+requires_core = "^0.2"
+
+[[model]]
+name = "desk_case"
+description = "A case"
+read_group = "desk.user"
+write_group = "desk.manager"
+
+  [[model.field]]
+  name = "status"
+  description = "Where the case stands"
+  class = "none"
+  kind = "select"
+  options = ["draft", "pagar", "klar"]
+
+  [[model.field]]
+  name = "title"
+  description = "Title"
+  class = "none"
+
+[[model]]
+name = "desk_entry"
+description = "A history entry"
+read_group = "desk.user"
+write_group = "desk.manager"
+
+  [[model.field]]
+  name = "kind"
+  description = "status or note"
+  class = "none"
+
+  [[model.field]]
+  name = "count"
+  description = "A count"
+  class = "none"
+  kind = "number"
+
+  [[model.field]]
+  name = "text"
+  description = "The status key, or a free note"
+  class = "none"
+  {text_field}
+"#
+        )
+    }
+
+    const SHOWS: &str = "kind = \"longtext\"\n  shows_option_of = \"desk_case.status\"\n  when = \"kind == \\\"status\\\"\"";
+
+    #[test]
+    fn a_text_field_that_shows_an_option_reaches_the_registry() {
+        let m = Manifest::parse(&desk(SHOWS)).unwrap();
+        let module = m.to_module().unwrap();
+        let f = module.models[1]
+            .fields
+            .iter()
+            .find(|f| f.name == "text")
+            .unwrap();
+        let so = f.shows_option.as_ref().expect("the attribute");
+        assert_eq!(
+            (so.model.as_str(), so.field.as_str()),
+            ("desk_case", "status")
+        );
+        assert_eq!(so.when.as_ref().unwrap().source, "kind == \"status\"");
+        assert_eq!(
+            f.kind,
+            FieldKind::LongText,
+            "the stored kind does not change"
+        );
+        // Without a condition, and on a plain text field.
+        let plain = Manifest::parse(&desk("shows_option_of = \"desk_case.status\""))
+            .unwrap()
+            .to_module()
+            .unwrap();
+        let f = plain.models[1]
+            .fields
+            .iter()
+            .find(|f| f.name == "text")
+            .unwrap();
+        assert!(f.shows_option.as_ref().unwrap().when.is_none());
+        // Another field of the package has none.
+        assert!(
+            module.models[0]
+                .fields
+                .iter()
+                .all(|f| f.shows_option.is_none())
+        );
+        // The target is inside the package, so nothing is left for a dependency to provide.
+        assert!(m.external_refs().is_empty());
+    }
+
+    #[test]
+    fn a_target_in_another_module_is_a_reference_the_dependencies_must_provide() {
+        let m = Manifest::parse(&desk("shows_option_of = \"crm_lead.stage\"")).unwrap();
+        assert_eq!(
+            m.external_refs(),
+            [(
+                "desk_entry.text shows_option_of".to_string(),
+                "crm_lead".to_string()
+            )]
+        );
+        // The gate that sees only this package leaves the target to the install.
+        assert!(m.to_module().is_ok());
+    }
+
+    #[test]
+    fn shows_option_of_is_refused_where_it_cannot_work() {
+        let bad = |t: &str| err(&desk(t));
+        assert!(
+            bad("kind = \"number\"\n  shows_option_of = \"desk_case.status\"")
+                .contains("`shows_option_of` is only valid for kind \"text\" or \"longtext\"")
+        );
+        assert!(
+            bad("kind = \"select\"\n  options = [\"a\"]\n  shows_option_of = \"desk_case.status\"")
+                .contains("only valid for kind \"text\" or \"longtext\"")
+        );
+        assert!(
+            bad("when = \"kind == \\\"status\\\"\"")
+                .contains("`when` is only valid together with `shows_option_of`")
+        );
+        for target in [
+            "status",
+            "desk_case",
+            "Desk_case.status",
+            "desk_case.",
+            "a.b.c",
+        ] {
+            assert!(
+                bad(&format!("shows_option_of = {target:?}"))
+                    .contains("must look like model.field"),
+                "{target}"
+            );
+        }
+        assert!(
+            bad("shows_option_of = \"desk_ghost.status\"")
+                .contains("names model desk_ghost, which this package does not declare")
+        );
+        assert!(
+            bad("shows_option_of = \"desk_case.ghost\"")
+                .contains("shows_option_of desk_case.ghost: desk_case has no field ghost")
+        );
+        assert!(
+            bad("shows_option_of = \"desk_case.title\"")
+                .contains("that is a text field; it must be a select field")
+        );
+        // The condition: syntax, subset, fields of the same record, and true/false.
+        let when = |w: &str| {
+            bad(&format!(
+                "shows_option_of = \"desk_case.status\"\n  when = {w:?}"
+            ))
+        };
+        assert!(when("kind ==").contains("when: "));
+        assert!(when("count + 1 > 2").contains("arithmetic cannot be used"));
+        assert!(when("title == \"x\"").contains("no field `title`"));
+        assert!(when("count").contains("must be a comparison or other true/false expression"));
+    }
+
+    #[test]
+    fn a_label_table_on_the_text_field_itself_stays_refused() {
+        let table = "[labels.sv.model.desk_entry.field.text.options]\npagar = \"Pågår\"";
+        let e = err(&format!("{}\n{table}", desk(SHOWS)));
+        assert!(e.contains("is not a select field"), "{e}");
+        // The select it takes labels from can carry them.
+        let ok = format!(
+            "{}\n[labels.sv.model.desk_case.field.status.options]\npagar = \"Pågår\"",
+            desk(SHOWS)
+        );
+        assert!(Manifest::parse(&ok).is_ok());
     }
 
     #[test]

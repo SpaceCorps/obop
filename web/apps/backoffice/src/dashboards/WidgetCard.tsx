@@ -252,7 +252,7 @@ function Series({
     () => buildPoints(data.groups, dim, d.lookup),
     // ref labels arrive after the groups do
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.groups, dim, d.version],
+    [data.groups, dim, d.version, d.lang],
   );
   const fmt = (n: number) => (measure ? formatSum(measure, n) : integer(n));
   const go = (key: string) => {

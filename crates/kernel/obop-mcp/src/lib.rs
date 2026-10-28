@@ -417,6 +417,12 @@ pub fn meta_json(d: &Dispatcher, surface: Surface, p: &Principal) -> J {
                             if !f.option_labels.is_empty() {
                                 o["option_labels"] = json!(f.option_labels);
                             }
+                            if let Some(of) = &f.shows_option_of {
+                                o["shows_option_of"] = json!(of);
+                                if let Some(w) = &f.shows_option_when {
+                                    o["shows_option_when"] = json!(w);
+                                }
+                            }
                             o
                         }).collect::<Vec<_>>(),
                         "actions": x.actions.iter().map(|a| {

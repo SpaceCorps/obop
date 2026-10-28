@@ -35,6 +35,68 @@ impl Computed {
     }
 }
 
+// ---- the label of an option on a text field -----------------------------------------------
+
+/// `shows_option_of` (D52 amendment): a `text` or `longtext` field whose value, when it equals an
+/// option of the select field `model.field`, is shown with that option's label in the active
+/// language (the `option_labels` of D52), and as stored otherwise. Only the display of the back
+/// office changes: the stored value, filters, sorting, export, import and every API stay as they
+/// are, and the server never evaluates the condition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShowsOption {
+    /// The model of the select field.
+    pub model: String,
+    /// The select field.
+    pub field: String,
+    /// Show the label only while this condition holds on the same record.
+    pub when: Option<ShowsWhen>,
+}
+
+/// The condition of a [`ShowsOption`], as written and parsed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShowsWhen {
+    pub source: String,
+    pub expr: Expr,
+}
+
+fn name_ok(s: &str) -> bool {
+    let mut c = s.chars();
+    c.next().is_some_and(|f| f.is_ascii_lowercase())
+        && s.len() <= 40
+        && c.all(|x| x.is_ascii_lowercase() || x.is_ascii_digit() || x == '_')
+}
+
+impl ShowsOption {
+    /// `of` is `model.field`; `when` is an expression (syntax only here: `check_rules` checks it
+    /// against the model).
+    pub fn parse(of: &str, when: Option<&str>) -> Result<Self, String> {
+        let Some((model, field)) = of.split_once('.').filter(|(m, f)| name_ok(m) && name_ok(f))
+        else {
+            return Err(format!(
+                "shows_option_of {of:?} must look like model.field, for example \"fleet_vehicle.state\""
+            ));
+        };
+        let when = when
+            .map(|source| {
+                Ok::<_, String>(ShowsWhen {
+                    source: source.trim().to_string(),
+                    expr: Expr::parse(source).map_err(|e| format!("when: {e}"))?,
+                })
+            })
+            .transpose()?;
+        Ok(Self {
+            model: model.to_string(),
+            field: field.to_string(),
+            when,
+        })
+    }
+
+    /// `model.field`, as written.
+    pub fn target(&self) -> String {
+        format!("{}.{}", self.model, self.field)
+    }
+}
+
 // ---- uniqueness ---------------------------------------------------------------------------
 
 /// `unique = true` (plus `unique_with`): no two records of the model may have the same value in
@@ -457,6 +519,32 @@ impl FieldDef {
         if let Some(s) = &mut self.sequence {
             Arc::make_mut(s).assign_on = Some(intern(action));
         }
+        self
+    }
+
+    /// Show a text value with the label of the option it equals in the select field
+    /// `model.field` (`shows_option_of`); panics on a malformed target, for modules written in
+    /// Rust (packages go through `ShowsOption::parse`).
+    pub fn shows_option_of(mut self, target: &str) -> Self {
+        self.shows_option = Some(Arc::new(
+            ShowsOption::parse(target, None)
+                .unwrap_or_else(|e| panic!("{}: bad shows_option_of: {e}", self.name)),
+        ));
+        self
+    }
+
+    /// Only while `source` holds on the same record; call after `shows_option_of`.
+    pub fn shows_option_when(mut self, source: &str) -> Self {
+        let Some(so) = self.shows_option.take() else {
+            panic!(
+                "{}: shows_option_when needs shows_option_of first",
+                self.name
+            );
+        };
+        self.shows_option = Some(Arc::new(
+            ShowsOption::parse(&so.target(), Some(source))
+                .unwrap_or_else(|e| panic!("{}: bad shows_option_of: {e}", self.name)),
+        ));
         self
     }
 }
@@ -1240,6 +1328,99 @@ fn computed_cycle(models: &[Arc<ModelDef>], lookup: Lookup<'_>) -> Option<String
     None
 }
 
+/// `shows_option_of`: the field is text, the target is a select field with options (in this
+/// module, a dependency or a built-in model), and the condition is a true/false expression of the
+/// same record that stays inside what the browser evaluates (`expr::check_display_subset`).
+/// `strict` as for effects: a model that `lookup` does not find is a violation only then; the
+/// install checks it against what is registered.
+fn check_shows_option(
+    m: &ModelDef,
+    f: &FieldDef,
+    so: &ShowsOption,
+    lookup: Lookup<'_>,
+    strict: bool,
+    bad: &mut dyn FnMut(String),
+) {
+    let target = so.target();
+    if !matches!(f.kind, FieldKind::Text | FieldKind::LongText) {
+        bad(format!(
+            "shows_option_of is for a text or longtext field, not {}",
+            f.kind.name()
+        ));
+    }
+    match lookup(&so.model) {
+        None if strict => bad(format!(
+            "shows_option_of {target}: there is no model {}; a model of another module needs that module in depends",
+            so.model
+        )),
+        None => {}
+        Some(tm) => match tm.fields.iter().find(|d| d.name == so.field) {
+            None => bad(format!(
+                "shows_option_of {target}: {} has no field {}",
+                so.model, so.field
+            )),
+            Some(t) => match &t.kind {
+                FieldKind::Select(o) if !o.is_empty() => {}
+                FieldKind::Select(_) => bad(format!(
+                    "shows_option_of {target}: the select field has no options to take a label from"
+                )),
+                k => bad(format!(
+                    "shows_option_of {target}: that is a {} field; it must be a select field",
+                    k.name()
+                )),
+            },
+        },
+    }
+    let Some(w) = &so.when else { return };
+    if let Err(e) = expr::check_display_subset(&w.expr, m) {
+        bad(format!("when `{}`: {e}", w.source));
+        return;
+    }
+    let scope = Scope {
+        model: m,
+        lookup,
+        allow_computed: true,
+    };
+    match expr::check(&w.expr, &scope) {
+        Err(e) => {
+            bad(format!("when `{}`: {e}", w.source));
+            return;
+        }
+        Ok(Ty::Bool) => {}
+        Ok(t) => {
+            bad(format!(
+                "when `{}` is {}; it must be a comparison or other true/false expression",
+                w.source,
+                t.name()
+            ));
+            return;
+        }
+    }
+    // Whoever may read this field would learn something about a field they may not read, from
+    // whether the label shows. Same group, as for a computed field.
+    for name in w.expr.fields().into_iter().collect::<BTreeSet<_>>() {
+        if let Some(input) = m.fields.iter().find(|d| d.name == name)
+            && input.permission_group != f.permission_group
+        {
+            bad(format!(
+                "when `{}` reads {}.{name}, which only {} may read; give this field `group = \"{}\"`, because the label would show whether a value that the reader may not see holds",
+                w.source, m.name, input.permission_group, input.permission_group
+            ));
+        }
+        // The browser is a user, and a user is never sent a field of class secret (REST shaping,
+        // `mode_for(User, ..)` of obop-masking; a test in obop-commands keeps the two in step). It
+        // would evaluate the condition on an empty value, and the label would follow that.
+        if let Some(input) = m.fields.iter().find(|d| d.name == name)
+            && input.class.unwrap_or(DataClass::Secret) == DataClass::Secret
+        {
+            bad(format!(
+                "when `{}` reads {}.{name}, which has class secret; the browser is never sent a secret field, so the condition could not see its value",
+                w.source, m.name
+            ));
+        }
+    }
+}
+
 fn check_access(m: &ModelDef, a: &Access, lookup: Lookup<'_>, bad: &mut dyn FnMut(String)) {
     if a.is_empty() {
         bad("[model.access] declares no rule".into());
@@ -1328,6 +1509,9 @@ pub fn check_rules(module: &Module, lookup_ext: Lookup<'_>, strict: bool) -> Vec
         let governed = m.governed_fields();
         for f in &m.fields {
             let fp = format!("{mp}.{}", f.name);
+            if let Some(so) = &f.shows_option {
+                check_shows_option(m, f, so, &lookup, strict, &mut |p| bad(fp.clone(), p));
+            }
             if let Some(c) = &f.computed {
                 check_computed(m, f, c, &lookup, &mut |p| bad(fp.clone(), p));
             }
@@ -2144,5 +2328,182 @@ mod tests {
         ] {
             assert!(Src::parse(bad).is_err(), "{bad}");
         }
+    }
+
+    // ---- shows_option_of -----------------------------------------------------------------
+
+    /// A case with a status select, and an entry with a text field that holds a status or a note.
+    fn desk(text: FieldDef) -> Module {
+        module(vec![
+            model(
+                "t_case",
+                vec![f("status").select(&["draft", "pagar", "klar"]), f("title")],
+                vec![],
+            ),
+            model(
+                "t_entry",
+                vec![
+                    f("kind"),
+                    f("n").kind(FieldKind::Number),
+                    FieldDef::new("hr_note", "d", DataClass::None, false, "t.hr"),
+                    text,
+                ],
+                vec![],
+            ),
+        ])
+    }
+
+    #[test]
+    fn a_text_field_may_show_the_label_of_an_option() {
+        for t in [
+            f("text").shows_option_of("t_case.status"),
+            f("text")
+                .kind(FieldKind::LongText)
+                .shows_option_of("t_case.status"),
+            f("text")
+                .shows_option_of("t_case.status")
+                .shows_option_when("kind == \"status\" && n < 3 || !is_set(n)"),
+        ] {
+            assert_eq!(problems(&desk(t)), Vec::<String>::new());
+        }
+        // The attribute is metadata of the field, and nothing else about the field changes.
+        let t = f("text")
+            .shows_option_of("t_case.status")
+            .shows_option_when(" kind == \"status\" ");
+        let so = t.shows_option.as_ref().unwrap();
+        assert_eq!(so.target(), "t_case.status");
+        assert_eq!(so.when.as_ref().unwrap().source, "kind == \"status\"");
+    }
+
+    #[test]
+    fn shows_option_of_needs_a_text_field_and_a_select_to_take_labels_from() {
+        has(
+            &desk(
+                f("text")
+                    .kind(FieldKind::Number)
+                    .shows_option_of("t_case.status"),
+            ),
+            "shows_option_of is for a text or longtext field, not number",
+        );
+        has(
+            &desk(f("text").select(&["a"]).shows_option_of("t_case.status")),
+            "shows_option_of is for a text or longtext field, not select",
+        );
+        has(
+            &desk(f("text").shows_option_of("t_case.ghost")),
+            "shows_option_of t_case.ghost: t_case has no field ghost",
+        );
+        has(
+            &desk(f("text").shows_option_of("t_case.title")),
+            "shows_option_of t_case.title: that is a text field; it must be a select field",
+        );
+        // The target may be the model's own select.
+        let own = module(vec![model(
+            "t_entry",
+            vec![
+                f("status").select(&["a", "b"]),
+                f("text").shows_option_of("t_entry.status"),
+            ],
+            vec![],
+        )]);
+        assert!(problems(&own).is_empty());
+        let none = module(vec![model(
+            "t_entry",
+            vec![
+                f("status").select(&[]),
+                f("text").shows_option_of("t_entry.status"),
+            ],
+            vec![],
+        )]);
+        has(
+            &none,
+            "the select field has no options to take a label from",
+        );
+    }
+
+    #[test]
+    fn a_target_outside_the_module_is_found_through_the_dependencies() {
+        let m = module(vec![model(
+            "t_entry",
+            vec![f("text").shows_option_of("base_case.status")],
+            vec![],
+        )]);
+        // The plain gate cannot see other modules and leaves it to the install.
+        assert!(problems(&m).is_empty());
+        let none = |_: &str| None;
+        let v = check_module_in(&m, &none);
+        assert!(
+            v.iter().any(|x| x
+                .problem
+                .contains("there is no model base_case; a model of another module needs that module in depends")),
+            "{v:?}"
+        );
+        let case = Arc::new(model(
+            "base_case",
+            vec![f("status").select(&["a"]), f("title")],
+            vec![],
+        ));
+        let found = |n: &str| (n == "base_case").then(|| case.clone());
+        assert!(check_module_in(&m, &found).is_empty());
+        // And it must be a select there.
+        let m = module(vec![model(
+            "t_entry",
+            vec![f("text").shows_option_of("base_case.title")],
+            vec![],
+        )]);
+        let v = check_module_in(&m, &found);
+        assert!(
+            v.iter().any(|x| x
+                .problem
+                .contains("that is a text field; it must be a select field")),
+            "{v:?}"
+        );
+    }
+
+    #[test]
+    fn the_condition_is_a_true_false_expression_of_the_same_record_in_the_browsers_subset() {
+        let when = |w: &str| {
+            desk(
+                f("text")
+                    .shows_option_of("t_case.status")
+                    .shows_option_when(w),
+            )
+        };
+        has(
+            &when("n + 1 > 2"),
+            "arithmetic cannot be used in a condition the browser evaluates",
+        );
+        has(&when("if(true, true, false)"), "`if` cannot be used");
+        has(
+            &when("count(lines) > 0"),
+            "`count` over child records cannot be used",
+        );
+        has(&when("n == 1.5"), "the decimal number 1.5 cannot be used");
+        has(&when("ghost == 1"), "no field `ghost`");
+        has(&when("title == \"x\""), "no field `title`");
+        has(
+            &when("n"),
+            "is a number; it must be a comparison or other true/false expression",
+        );
+        has(&when("n == \"a\""), "cannot compare a number with text");
+        // A field the reader of the text may not read would be given away by the label.
+        has(
+            &when("hr_note == \"x\""),
+            "reads t_entry.hr_note, which only t.hr may read; give this field `group = \"t.hr\"`",
+        );
+        assert!(problems(&when("kind == \"status\"")).is_empty());
+    }
+
+    #[test]
+    fn the_target_and_the_condition_must_read_correctly() {
+        for bad in [
+            "status", "t_case", "t_case.", ".status", "T.x", "a.b.c", "a b.c", "",
+        ] {
+            let e = ShowsOption::parse(bad, None).unwrap_err();
+            assert!(e.contains("must look like model.field"), "{bad:?}: {e}");
+        }
+        let e = ShowsOption::parse("t_case.status", Some("kind ==")).unwrap_err();
+        assert!(e.starts_with("when: "), "{e}");
+        assert!(ShowsOption::parse("t_case.status", Some("kind == \"a\"")).is_ok());
     }
 }

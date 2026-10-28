@@ -267,6 +267,94 @@ write_group = "notes.user"
         assert!(e.iter().any(|x| x.contains("built-in module")), "{e:?}");
     }
 
+    /// `base` with a `party` that has a select field, for `shows_option_of`.
+    fn base_with_a_select() -> Module {
+        use obop_registry::FieldDef;
+        use obop_types::DataClass;
+        let mut m = base();
+        m.models[0].fields = vec![
+            FieldDef::new("name", "n", DataClass::None, false, "base.user"),
+            FieldDef::new("kind", "k", DataClass::None, false, "base.user")
+                .select(&["customer", "supplier"]),
+        ];
+        m
+    }
+
+    const SHOWS: &str = r#"
+[module]
+id = "notes"
+version = "0.1.0"
+name = "Notes"
+description = "Notes about contacts"
+requires_core = "^0.2"
+
+[module.dependencies]
+base = "^0.2"
+
+[[model]]
+name = "notes_note"
+description = "A note"
+read_group = "notes.user"
+write_group = "notes.user"
+
+  [[model.field]]
+  name = "text"
+  description = "The kind of party written as a key, or a free note"
+  class = "none"
+  shows_option_of = "party.kind"
+"#;
+
+    #[test]
+    fn shows_option_of_follows_the_dependency_rule_of_a_ref() {
+        // The select is in a model of a dependency.
+        assert!(check_manifest(SHOWS, &[base_with_a_select()]).is_empty());
+        // The dependency is not declared: the same message as for a ref.
+        let e = check_manifest(
+            &SHOWS.replace("base = \"^0.2\"", ""),
+            &[base_with_a_select()],
+        );
+        assert!(
+            e.iter().any(|x| x.contains(
+                "notes_note.text shows_option_of refers to model party, which module base declares; add base to depends"
+            )),
+            "{e:?}"
+        );
+        // No module declares the model.
+        let e = check_manifest(
+            &SHOWS.replace("party.kind", "ghost_model.kind"),
+            &[base_with_a_select()],
+        );
+        assert!(
+            e.iter().any(|x| x.contains(
+                "notes_note.text shows_option_of refers to model ghost_model, which no built-in module, bundled package or dependency declares"
+            )),
+            "{e:?}"
+        );
+    }
+
+    #[test]
+    fn the_target_of_shows_option_of_must_be_a_select_of_the_dependency() {
+        let e = check_manifest(
+            &SHOWS.replace("party.kind", "party.name"),
+            &[base_with_a_select()],
+        );
+        assert!(
+            e.iter().any(|x| x.contains(
+                "shows_option_of party.name: that is a text field; it must be a select field"
+            )),
+            "{e:?}"
+        );
+        let e = check_manifest(
+            &SHOWS.replace("party.kind", "party.ghost"),
+            &[base_with_a_select()],
+        );
+        assert!(
+            e.iter()
+                .any(|x| x.contains("shows_option_of party.ghost: party has no field ghost")),
+            "{e:?}"
+        );
+    }
+
     #[test]
     fn refs_through_a_bundled_dependency_resolve() {
         let pkg = PKG
