@@ -11,8 +11,9 @@ fn error_schema() -> J {
         "required": ["error"],
         "properties": {
             "error": {"type": "string", "description": "What went wrong, in a sentence."},
-            "code": {"type": "string", "description": "Stable machine-readable code such as not_found, unauthorized, invalid_input, forbidden, rate_limited."},
+            "code": {"type": "string", "description": "Stable machine-readable code such as not_found, unauthorized, invalid_input, forbidden, rate_limited, assertion_failed."},
             "hint": {"type": "string", "description": "What to do next."},
+            "assert_key": {"type": "string", "description": "Only on a 400 with code assertion_failed, and only when the assertion that refused has a key (D52): the key the package gave it, unique in its action, so a client that translates by itself does not have to match the text of error. The text of error is in the language of the request (the lang parameter, then the obop_lang cookie, then Accept-Language) when the package translated the assertion's message for it, else the manifest's own, and in both cases has the manifest's pattern: the message, then (assertion <expression> failed)."},
             "applied": {"type": "string", "enum": ["none", "unknown", "partial"], "description": "Only on a 503 (D74): what became of the request's own changes. none: nothing was changed, repeat the request. unknown: storage_unavailable, a change in flight when the connection broke may or may not have been applied, read before you repeat a write. partial: a change was committed and a step the request needed was refused, do not repeat it blindly. The same word is in the X-Obop-Applied header."}
         }
     })

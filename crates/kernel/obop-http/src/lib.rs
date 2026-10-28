@@ -6,7 +6,7 @@
 use axum::{
     Json, Router,
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{any, get, post},
 };
@@ -488,18 +488,49 @@ fn commands_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
     Json(json!({"commands": list})).into_response()
 }
 
+/// The language a REST request asked for (D52 amendment): the `lang` parameter, then the
+/// `obop_lang` cookie, then `Accept-Language` with its q-values, a region read as its language
+/// (`sv-SE` is `sv`); only the seven languages obop ships count, and a source that names none of
+/// them falls through to the next. The rules are the forum's (`obop_community::i18n::negotiate`),
+/// so the two cannot drift. `None`: the request asked for none of them.
+pub(crate) fn request_language(uri: &Uri, h: &HeaderMap) -> Option<&'static str> {
+    use obop_community::i18n;
+    let mut req =
+        obop_community::Req::new("POST", uri.path_and_query().map_or("/", |p| p.as_str()));
+    for name in ["cookie", "accept-language"] {
+        let values: Vec<&str> = h
+            .get_all(name)
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .collect();
+        if !values.is_empty() {
+            let sep = if name == "cookie" { "; " } else { ", " };
+            req.headers.insert(name.to_string(), values.join(sep));
+        }
+    }
+    i18n::requested(
+        req.q("lang").as_deref(),
+        req.cookie(i18n::COOKIE).as_deref(),
+        req.header("accept-language"),
+    )
+    .map(i18n::Lang::code)
+}
+
 async fn call(
     State(s): Shared,
     h: HeaderMap,
+    uri: Uri,
     Path((model, command)): Path<(String, String)>,
     body: Option<Json<J>>,
 ) -> Response {
-    blocking(move || call_blocking(s, h, model, command, body)).await
+    let lang = request_language(&uri, &h);
+    blocking(move || call_blocking(s, h, lang, model, command, body)).await
 }
 
 fn call_blocking(
     s: Arc<HttpState>,
     h: HeaderMap,
+    lang: Option<&'static str>,
     model: String,
     command: String,
     body: Option<Json<J>>,
@@ -510,21 +541,36 @@ fn call_blocking(
     };
     let input = Value::from_json(&body.map_or(json!({}), |Json(j)| j));
     let id = format!("{model}.{command}");
+    // The refusal of an assertion is worded in the language of the request; MCP and the command
+    // line open no scope and keep the manifest's text.
+    let _lang = obop_commands::locale::scope(lang);
     match session.with(|vault| s.dispatcher.call(Surface::Rest, &p, vault, &id, &input)) {
         Ok(result) => respond(result),
         Err(e) => unavailable(&e),
     }
 }
 
-async fn approve(State(s): Shared, h: HeaderMap, Path(plan_id): Path<String>) -> Response {
-    blocking(move || approve_blocking(s, h, plan_id)).await
+async fn approve(
+    State(s): Shared,
+    h: HeaderMap,
+    uri: Uri,
+    Path(plan_id): Path<String>,
+) -> Response {
+    let lang = request_language(&uri, &h);
+    blocking(move || approve_blocking(s, h, lang, plan_id)).await
 }
 
-fn approve_blocking(s: Arc<HttpState>, h: HeaderMap, plan_id: String) -> Response {
+fn approve_blocking(
+    s: Arc<HttpState>,
+    h: HeaderMap,
+    lang: Option<&'static str>,
+    plan_id: String,
+) -> Response {
     let (p, session) = match s.auth(&h) {
         Ok(x) => x,
         Err(c) => return c.into_response(),
     };
+    let _lang = obop_commands::locale::scope(lang);
     match session.with(|vault| s.dispatcher.approve(&p, vault, &plan_id)) {
         Ok(result) => respond(result),
         Err(e) => unavailable(&e),

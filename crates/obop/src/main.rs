@@ -4,6 +4,8 @@ mod accounts_cmd;
 #[cfg(test)]
 mod accounts_tests;
 mod app;
+#[cfg(test)]
+mod assert_lang_tests;
 mod backup_cli;
 #[cfg(test)]
 mod backup_gate_tests;

@@ -127,6 +127,20 @@ pub fn negotiate(
     (Lang::En, Source::Default)
 }
 
+/// As [`negotiate`], for a caller with no default of its own: the language the request really
+/// asked for, or `None` when none of the three sources named one of ours. The REST API uses it to
+/// word the message of an assertion (the manifest's own text answers a request that asked for none).
+pub fn requested(
+    query: Option<&str>,
+    cookie: Option<&str>,
+    accept_language: Option<&str>,
+) -> Option<Lang> {
+    match negotiate(query, cookie, accept_language) {
+        (_, Source::Default) => None,
+        (lang, _) => Some(lang),
+    }
+}
+
 /// Look up a string. Unknown keys return the key itself so a typo is visible, never a panic.
 pub fn t(lang: Lang, key: &str) -> &'static str {
     CATALOGUE
@@ -2776,5 +2790,37 @@ mod tests {
         assert_eq!(negotiate(None, None, Some("de;q=0, es")).0, Lang::Es);
         assert_eq!(Lang::from_code("pt-BR"), None);
         assert_eq!(Lang::from_code("FI-fi"), Some(Lang::Fi));
+    }
+
+    /// `requested` is `negotiate` without the English default: the same order, and `None` when no
+    /// source named one of the seven languages.
+    #[test]
+    fn a_requested_language_is_one_a_source_really_named() {
+        assert_eq!(requested(None, None, None), None);
+        assert_eq!(
+            requested(Some("xx"), Some("zz"), Some("xx, yy;q=0.4")),
+            None
+        );
+        assert_eq!(requested(Some(""), Some(""), Some("")), None);
+        assert_eq!(
+            requested(Some("de"), Some("fr"), Some("pl")),
+            Some(Lang::De)
+        );
+        assert_eq!(
+            requested(Some("xx"), Some("fr"), Some("pl")),
+            Some(Lang::Fr)
+        );
+        assert_eq!(
+            requested(None, Some("zz"), Some("pl,en;q=0.5")),
+            Some(Lang::Pl)
+        );
+        // A region reads as its language; q-values order the header; q=0 means "not acceptable".
+        assert_eq!(
+            requested(None, None, Some("en;q=0.3, sv-SE;q=0.9, fi;q=0.8")),
+            Some(Lang::Sv)
+        );
+        assert_eq!(requested(None, None, Some("de;q=0, es")), Some(Lang::Es));
+        // English asked for is English asked for: it beats a cookie in another language.
+        assert_eq!(requested(Some("en"), Some("sv"), None), Some(Lang::En));
     }
 }

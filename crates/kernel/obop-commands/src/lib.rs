@@ -4,6 +4,7 @@
 //! shapes the output through the masking policy.
 
 pub mod audit;
+pub mod locale;
 mod shared;
 pub use shared::Shared;
 use shared::{Pending, Plans};
@@ -1601,6 +1602,8 @@ pub mod names {
     }
 }
 
+#[cfg(test)]
+mod assert_lang_tests;
 #[cfg(test)]
 mod engine_tests;
 #[cfg(test)]

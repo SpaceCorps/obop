@@ -14,9 +14,10 @@ use super::seq;
 use super::unit::{R, Reads, Unit};
 use super::{Actor, Engine, civil};
 use crate::kinds::{self, Path};
+use crate::locale;
 use obop_registry::rules::{MAX_EFFECT_DEPTH, MAX_EFFECT_RECORDS};
 use obop_registry::{
-    CommandDef, Effect, EffectKind, FieldKind, Lit, Locator, ModelDef, Src, Target, expr,
+    Assertion, CommandDef, Effect, EffectKind, FieldKind, Lit, Locator, ModelDef, Src, Target, expr,
 };
 use obop_storage::Fields;
 use obop_values::Instant;
@@ -227,11 +228,11 @@ impl Runner<'_> {
             for a in &cmd.asserts {
                 match c.evaluate(def, id, &rec, &a.expr) {
                     Ok(expr::V::Bool(true)) => {}
-                    Ok(_) => return Err(a.failure()),
+                    Ok(_) => return Err(self.refusal(def, cmd, a)),
                     // A refusal of the store is the store's error, not a reason about the record
                     // (D74): it goes up unchanged, so it is recognised as one.
                     Err(e) if obop_storage::fault::Fault::is_transient(&e) => return Err(e),
-                    Err(e) => return Err(format!("{} ({e})", a.failure())),
+                    Err(e) => return Err(format!("{} ({e})", self.refusal(def, cmd, a))),
                 }
             }
         }
@@ -263,6 +264,27 @@ impl Runner<'_> {
                 })?;
         }
         Ok(patch)
+    }
+
+    /// The text of the refusal when assertion `a` of `def.cmd` does not hold. A request that
+    /// asked for a language (REST: `?lang=`, the `obop_lang` cookie, `Accept-Language`) gets the
+    /// message the package translated for that language, under the assertion's key; any other
+    /// call, and a language without a message, gets the manifest's own. Either way the text has
+    /// the pattern of the manifest's (`<message> (assertion <expression> failed)`). The refusal
+    /// is noted for `errors::classify`, which names its `code` and `assert_key`.
+    fn refusal(&self, def: &ModelDef, cmd: &CommandDef, a: &Assertion) -> String {
+        let translated = locale::language()
+            .zip(a.key.as_deref())
+            .and_then(|(lang, key)| {
+                let models = self.eng.models.read().unwrap();
+                let meta = models.get(def.name)?;
+                meta.translations
+                    .assertion_message(def.name, cmd.name, key, lang)
+                    .map(String::from)
+            });
+        let text = a.failure_in(translated.as_deref());
+        locale::note_assertion(&text, a.key.as_deref());
+        text
     }
 
     /// The record with its computed fields, as `$self` sees it.
