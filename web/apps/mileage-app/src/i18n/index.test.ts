@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { formatDateTime, formatNumber, t, tp } from "./index.ts";
 import { en } from "./en.ts";
-import { formatDistance, integrityLines } from "../core/present.ts";
+import { formatDistance, integrityLines, unsentSentence } from "../core/present.ts";
 
 describe("sentences with a count", () => {
   test("one and many are different sentences", () => {
@@ -40,6 +40,36 @@ describe("sentences with a count", () => {
 
   test("a placeholder without a value stays visible", () => {
     expect(t("home.open.message")).toBe("Started {when}. Stop it or discard it.");
+  });
+});
+
+describe("trips that are not completely on the server", () => {
+  const keys = [
+    "account.leave.pending.message",
+    "account.leave.delete.message",
+    "foreign.message",
+    "foreign.delete.message",
+  ] as const;
+
+  test("one trip gets a singular verb and pronoun, several a plural one", () => {
+    expect(unsentSentence("account.leave.pending.message", { trips: 1, points: 6 })).toBe(
+      "1 trip, with 6 points of route, is not completely on the server. If you keep it, it is uploaded the next time you sign in to this server with the same account. Nobody who signs in with another account can see or upload it.",
+    );
+    expect(unsentSentence("account.leave.pending.message", { trips: 2, points: 96 })).toContain(
+      "2 trips, with 96 points of route, are not completely on the server. If you keep them",
+    );
+    expect(unsentSentence("foreign.message", { trips: 1, points: 1 })).toContain(
+      "1 trip, with 1 point of route, that was recorded",
+    );
+  });
+
+  test("every sentence has both forms, and none keeps a placeholder", () => {
+    for (const key of keys) {
+      for (const trips of [1, 2, 0]) {
+        const text = unsentSentence(key, { trips, points: 3 });
+        expect(text, `${key} ${trips}`).not.toMatch(/\{\w+\}/);
+      }
+    }
   });
 });
 

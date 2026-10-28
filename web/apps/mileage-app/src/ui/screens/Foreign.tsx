@@ -2,7 +2,8 @@ import { Banner, Button, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
 import type { Binding } from "../../core/identity.ts";
-import { t, tp } from "../../i18n/index.ts";
+import { unsentSentence } from "../../core/present.ts";
+import { t } from "../../i18n/index.ts";
 import { signOut, stopTrip } from "../../native/actions.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { useOutbox } from "../hooks.ts";
@@ -35,11 +36,6 @@ export function Foreign({
     );
   }, [openId]);
 
-  const numbers = {
-    trips: tp("unit.trips", binding.unsent.trips),
-    points: tp("unit.points", binding.unsent.points),
-  };
-
   const run = (work: () => Promise<void>) => {
     setBusy(true);
     setFailed(false);
@@ -53,14 +49,18 @@ export function Foreign({
   };
 
   const confirmDelete = () => {
-    Alert.alert(t("foreign.delete.title"), t("foreign.delete.message", numbers), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("foreign.delete.confirm"),
-        style: "destructive",
-        onPress: () => run(() => rt.takeOverOutbox()),
-      },
-    ]);
+    Alert.alert(
+      t("foreign.delete.title"),
+      unsentSentence("foreign.delete.message", binding.unsent),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("foreign.delete.confirm"),
+          style: "destructive",
+          onPress: () => run(() => rt.takeOverOutbox()),
+        },
+      ],
+    );
   };
 
   return (
@@ -88,7 +88,7 @@ export function Foreign({
       <Banner
         tone="warning"
         title={t("foreign.title")}
-        message={t("foreign.message", numbers)}
+        message={unsentSentence("foreign.message", binding.unsent)}
         testID="foreign-banner"
       />
       {stopped ? <Text tone="muted">{t("foreign.stopped")}</Text> : null}

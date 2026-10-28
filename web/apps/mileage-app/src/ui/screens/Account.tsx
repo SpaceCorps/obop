@@ -1,6 +1,7 @@
 import { Banner, Button, Field, Row, Screen, Text } from "@obop/ui-native";
 import { useEffect, useState } from "react";
 import { Alert } from "react-native";
+import { unsentSentence } from "../../core/present.ts";
 import { hasWork } from "../../core/store.ts";
 import { t, tp } from "../../i18n/index.ts";
 import { signOut, unsentSummary } from "../../native/actions.ts";
@@ -110,30 +111,34 @@ export function Account({ rt, nav }: { rt: Runtime; nav: Nav }) {
     }
     // Trips that exist only on this phone: say how many, and let the driver keep them (the default
     // and the safe choice) or delete them after a second, explicit confirmation.
-    const numbers = {
-      trips: tp("unit.trips", unsent.trips),
-      points: tp("unit.points", unsent.points),
-    };
-    Alert.alert(t("account.leave.pending.title"), t("account.leave.pending.message", numbers), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("account.leave.delete"),
-        style: "destructive",
-        onPress: () =>
-          Alert.alert(t("account.leave.delete.title"), t("account.leave.delete.message", numbers), [
-            { text: t("common.cancel"), style: "cancel" },
-            {
-              text: t(remove ? "account.leave.delete.remove" : "account.leave.delete.signout"),
-              style: "destructive",
-              onPress: () => go(remove, false),
-            },
-          ]),
-      },
-      {
-        text: t(remove ? "account.leave.keep.remove" : "account.leave.keep.signout"),
-        onPress: () => go(remove, true),
-      },
-    ]);
+    Alert.alert(
+      t("account.leave.pending.title"),
+      unsentSentence("account.leave.pending.message", unsent),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("account.leave.delete"),
+          style: "destructive",
+          onPress: () =>
+            Alert.alert(
+              t("account.leave.delete.title"),
+              unsentSentence("account.leave.delete.message", unsent),
+              [
+                { text: t("common.cancel"), style: "cancel" },
+                {
+                  text: t(remove ? "account.leave.delete.remove" : "account.leave.delete.signout"),
+                  style: "destructive",
+                  onPress: () => go(remove, false),
+                },
+              ],
+            ),
+        },
+        {
+          text: t(remove ? "account.leave.keep.remove" : "account.leave.keep.signout"),
+          onPress: () => go(remove, true),
+        },
+      ],
+    );
   };
 
   return (

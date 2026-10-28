@@ -1,4 +1,4 @@
-import { formatNumber, t, tp, type MessageKey } from "../i18n/index.ts";
+import { formatNumber, t, tp, type MessageKey, type PluralKey } from "../i18n/index.ts";
 import { hasWork } from "./store.ts";
 import type { LocalTrip, ServerState } from "./types.ts";
 
@@ -31,6 +31,14 @@ export function formatDistance(metres: string | null): string | null {
   return m >= 1000
     ? t("unit.km", { value: formatNumber(m / 1000, 1) })
     : t("unit.m", { value: formatNumber(Math.round(m)) });
+}
+
+/**
+ * A sentence about trips that are not completely on the server (`{count}` is the number of trips,
+ * `{points}` the points of route): the verb and the pronoun follow the number of trips.
+ */
+export function unsentSentence(key: PluralKey, unsent: { trips: number; points: number }): string {
+  return tp(key, unsent.trips, { points: tp("unit.points", unsent.points) });
 }
 
 /** The distance the phone counts itself, in metres, as the same kind of text. */

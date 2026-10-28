@@ -216,16 +216,20 @@ export const en = {
   "discard.confirm": "Discard",
 
   "foreign.title": "Trips of another sign-in",
-  "foreign.message":
-    "This phone still holds {trips}, with {points} of route, that were recorded under another sign-in or on another server. They are not uploaded and not shown, and nothing is deleted until you choose.",
+  "foreign.message.one":
+    "This phone still holds {count} trip, with {points} of route, that was recorded under another sign-in or on another server. It is not uploaded and not shown, and nothing is deleted until you choose.",
+  "foreign.message.other":
+    "This phone still holds {count} trips, with {points} of route, that were recorded under another sign-in or on another server. They are not uploaded and not shown, and nothing is deleted until you choose.",
   "foreign.stopped": "A trip of that sign-in was still recording. The recording was stopped.",
   "foreign.keep": "Sign out and keep them",
   "foreign.keep.hint":
     "The person who recorded them can sign in on this phone later and upload them.",
   "foreign.delete": "Delete them and continue",
   "foreign.delete.title": "Delete these trips?",
-  "foreign.delete.message":
-    "{trips}, with {points} of route, exist only on this phone. They cannot be brought back.",
+  "foreign.delete.message.one":
+    "{count} trip, with {points} of route, is deleted from this phone. What the server does not have yet is lost, and it cannot be brought back.",
+  "foreign.delete.message.other":
+    "{count} trips, with {points} of route, are deleted from this phone. What the server does not have yet is lost, and it cannot be brought back.",
   "foreign.delete.confirm": "Delete them",
 
   "account.title": "Account",
@@ -246,14 +250,18 @@ export const en = {
   "account.signout.title": "Sign out?",
   "account.signout.message": "You sign in again with your browser.",
   "account.leave.pending.title": "Some trips are not uploaded yet",
-  "account.leave.pending.message":
-    "{trips}, with {points} of route, exist only on this phone. If you keep them, they are uploaded the next time you sign in to this server with the same account. Nobody who signs in with another account can see or upload them.",
+  "account.leave.pending.message.one":
+    "{count} trip, with {points} of route, is not completely on the server. If you keep it, it is uploaded the next time you sign in to this server with the same account. Nobody who signs in with another account can see or upload it.",
+  "account.leave.pending.message.other":
+    "{count} trips, with {points} of route, are not completely on the server. If you keep them, they are uploaded the next time you sign in to this server with the same account. Nobody who signs in with another account can see or upload them.",
   "account.leave.keep.signout": "Keep them and sign out",
   "account.leave.keep.remove": "Keep them and remove this phone",
   "account.leave.delete": "Delete them",
   "account.leave.delete.title": "Delete these trips?",
-  "account.leave.delete.message":
-    "{trips}, with {points} of route, are deleted from this phone. This cannot be undone.",
+  "account.leave.delete.message.one":
+    "{count} trip, with {points} of route, is deleted from this phone. What the server does not have yet is lost. This cannot be undone.",
+  "account.leave.delete.message.other":
+    "{count} trips, with {points} of route, are deleted from this phone. What the server does not have yet is lost. This cannot be undone.",
   "account.leave.delete.signout": "Delete them and sign out",
   "account.leave.delete.remove": "Delete them and remove this phone",
   "account.storage": "Storage",
