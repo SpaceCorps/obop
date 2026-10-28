@@ -9,7 +9,13 @@
     "due": "date",
     "n": "number",
     "amount": "money",
-    "done": "bool"
+    "done": "bool",
+    "entry_kind": "text",
+    "line2": "number",
+    "_pad": "text",
+    "seq": "sequence",
+    "pic": "image",
+    "doc": "file"
   },
   "cases": [
     {
@@ -350,7 +356,7 @@
     },
     {
       "name": "a no-break space is whitespace",
-      "when": "kind == \"a\"",
+      "when": "kind\u00a0==\u00a0\"a\"",
       "record": { "kind": "a" },
       "expected": true
     },
@@ -395,6 +401,156 @@
       "when": "kind == \"a\" || kind == \"b\" || kind == \"c\" || kind == \"d\"",
       "record": { "kind": "d" },
       "expected": true
+    },
+    {
+      "name": "not binds tighter than and: the left is false",
+      "when": "!done && n > 1",
+      "record": { "done": true, "n": 0 },
+      "expected": false
+    },
+    {
+      "name": "not binds tighter than and: both hold",
+      "when": "!done && n > 1",
+      "record": { "done": false, "n": 2 },
+      "expected": true
+    },
+    {
+      "name": "not binds tighter than and: the right is false",
+      "when": "!done && n > 1",
+      "record": { "done": false, "n": 0 },
+      "expected": false
+    },
+    {
+      "name": "not binds tighter than and: only the right holds",
+      "when": "!done && n > 1",
+      "record": { "done": true, "n": 2 },
+      "expected": false
+    },
+    {
+      "name": "not binds tighter than or: only the right holds",
+      "when": "!done || n > 1",
+      "record": { "done": true, "n": 2 },
+      "expected": true
+    },
+    {
+      "name": "not binds tighter than or: neither holds",
+      "when": "!done || n > 1",
+      "record": { "done": true, "n": 0 },
+      "expected": false
+    },
+    {
+      "name": "not binds tighter than or: only the left holds",
+      "when": "!done || n > 1",
+      "record": { "done": false, "n": 0 },
+      "expected": true
+    },
+    {
+      "name": "not of not",
+      "when": "!!done",
+      "record": { "done": true },
+      "expected": true
+    },
+    {
+      "name": "not of not of not",
+      "when": "!!!done",
+      "record": { "done": true },
+      "expected": false
+    },
+    {
+      "name": "not of not, on a missing bool",
+      "when": "!!done",
+      "record": {},
+      "expected": false
+    },
+    {
+      "name": "a field name with an underscore",
+      "when": "entry_kind == \"status\"",
+      "record": { "entry_kind": "status" },
+      "expected": true
+    },
+    {
+      "name": "a field name with a digit",
+      "when": "line2 > 1",
+      "record": { "line2": 2 },
+      "expected": true
+    },
+    {
+      "name": "a field name may start with an underscore in the expression language",
+      "when": "_pad == \"x\"",
+      "record": { "_pad": "x" },
+      "expected": true
+    },
+    {
+      "name": "is_set of a field with an underscore",
+      "when": "is_set(entry_kind)",
+      "record": { "entry_kind": "a" },
+      "expected": true
+    },
+    {
+      "name": "a sequence is text",
+      "when": "seq == \"E-0001\"",
+      "record": { "seq": "E-0001" },
+      "expected": true
+    },
+    {
+      "name": "an image holds the id of its blob",
+      "when": "is_set(pic)",
+      "record": { "pic": "0123abcd" },
+      "expected": true
+    },
+    {
+      "name": "an image that is not there is not set",
+      "when": "is_set(pic)",
+      "record": {},
+      "expected": false
+    },
+    {
+      "name": "a file holds the id of its blob",
+      "when": "doc == \"0123abcd\"",
+      "record": { "doc": "0123abcd" },
+      "expected": true
+    },
+    {
+      "name": "a leading zero is the same number",
+      "when": "n == 007",
+      "record": { "n": 7 },
+      "expected": true
+    },
+    {
+      "name": "zero written with leading zeros",
+      "when": "n == 000",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "a no-break space inside text is text",
+      "when": "kind == \"a\u00a0b\"",
+      "record": { "kind": "a\u00a0b" },
+      "expected": true
+    },
+    {
+      "name": "a character just above the control range inside text is text",
+      "when": "kind == \"a\u00a1b\"",
+      "record": { "kind": "a\u00a1b" },
+      "expected": true
+    },
+    {
+      "name": "every white space character separates tokens (the first half)",
+      "when": "true\t&&\ntrue\u000b&&\ftrue\r&& true\u0085&&\u00a0true\u1680&&\u2000true\u2001&&\u2002true\u2003&&true",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "every white space character separates tokens (the second half)",
+      "when": "true\u2004&&\u2005true\u2006&&\u2007true\u2008&&\u2009true\u200a&&\u2028true\u2029&&\u202ftrue\u205f&&\u3000true",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "white space around a comparison",
+      "when": "kind\u3000==\u2003\"a\"\u2028",
+      "record": { "kind": "a" },
+      "expected": true
     }
   ],
   "invalid": [
@@ -430,6 +586,18 @@
     "kind == \"a\u0001b\"",
     "kind[0] == \"a\"",
     "kind.x == \"a\"",
-    "kind﻿== \"a\""
+    "kind\ufeff== \"a\"",
+    "kind == \"a\u007fb\"",
+    "kind == \"a\u0080b\"",
+    "kind == \"a\u009fb\"",
+    "kind == \"a\u001fb\"",
+    "kind == \"a\u0000b\"",
+    "kind\u200b== \"a\"",
+    "kind\u180e== \"a\"",
+    "kind\u2060== \"a\"",
+    "n == 1_0",
+    "n == 1e3",
+    "n == 0x10",
+    "kind == \"a\" ;"
   ]
 }

@@ -17,6 +17,12 @@
 // `||` stop early; `!` binds looser than a comparison (`!a == b` is `!(a == b)`). Both sides read
 // displayCondition.fixtures.json, so a change on one side fails the test of the other.
 //
+// One thing the fixtures cannot pin: a number or money value above 2^53 - 1 (the gate limits only the
+// literals) reaches the browser as a JSON number, which is already a double, so it is right against a
+// literal (it rounds to at least 2^53) and two such values compared with each other can differ from the
+// server's exact answer. The server reads the same file with exact integers, so a case for it would
+// fail one of the two sides.
+//
 // A source this parser does not understand compiles to `null`; the caller then never relabels.
 
 type Val = null | number | string | boolean;
