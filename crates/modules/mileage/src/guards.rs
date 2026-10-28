@@ -497,12 +497,15 @@ fn action(db: Db, name: &'static str) -> Guard {
 pub fn install(d: &Dispatcher, module: &str, db: Db, clock: Clock) {
     let id = |model: &str, c: &str| format!("{model}.{c}");
     let (t, pt) = (policy::TRIP, policy::POINT);
-    // What the caller may know exists is decided before the generated guards speak.
+    // What the caller may know exists is decided before the generated guards speak: they name the
+    // state, the referrers and the group of a trip in their own words. (The generated guards of a
+    // point say nothing of the kind, so the guard of a point only has to come before the refusals
+    // below, which it does by being added first.)
     for c in ["delete", "update"].into_iter().chain(policy::ACTIONS) {
         d.prepend_guard(module, &id(t, c), true, trip_first(db.clone()));
     }
     for c in ["delete", "update"] {
-        d.prepend_guard(module, &id(pt, c), true, point_first(db.clone()));
+        d.add_guard(module, &id(pt, c), true, point_first(db.clone()));
     }
     d.add_guard(module, &id(t, "get"), false, get_trip(db.clone()));
     d.add_guard(module, &id(pt, "get"), false, get_point(db.clone()));

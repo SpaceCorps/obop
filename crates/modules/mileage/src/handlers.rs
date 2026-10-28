@@ -176,7 +176,12 @@ fn end(db: &Db, id: &str, trip: &Fields, input: &Value) -> Result<Fields, String
     Ok(patch)
 }
 
-fn run(db: &Db, clock: &Clock, action: &'static str, input: &Value) -> Result<Value, String> {
+pub(crate) fn run(
+    db: &Db,
+    clock: &Clock,
+    action: &'static str,
+    input: &Value,
+) -> Result<Value, String> {
     let id = text(input, "id");
     let Some(trip) = db.get(policy::TRIP, &id)? else {
         return Err(policy::no_such(policy::TRIP, &id));

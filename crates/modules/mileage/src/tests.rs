@@ -1967,6 +1967,9 @@ fn a_point_of_a_reviewable_trip_is_not_another_drivers_to_know_of() {
         for (cmd, extra) in [
             ("mileage_point.get", json!({})),
             ("mileage_point.update", json!({"lat": "1.0000000"})),
+            // A field the generated guard would refuse in its own words must not tell either.
+            ("mileage_point.update", json!({"driver": "bob"})),
+            ("mileage_point.update", json!({"no_such_field": 1})),
             ("mileage_point.delete", json!({})),
         ] {
             let ask = |who: &Principal, pid: &str| {
@@ -2082,6 +2085,40 @@ fn a_reviewer_or_administrator_without_the_driver_group_acts_on_nothing() {
             "mileage_trip.discard_stuck",
             json!({"id": stuck}),
         );
+    });
+}
+
+#[test]
+fn the_handler_checks_the_roles_of_the_actor_again_whatever_the_guard_let_through() {
+    // The actions run in a handler that decides by the actor the dispatcher stamped. Called
+    // directly, as a guard that failed to refuse would let it be, it holds the roles to the same
+    // rule: a role counts only on top of the base group.
+    each_rig(|r| {
+        let ann = driver("ann");
+        let review = r.in_review(&ann);
+        let stuck = r.recording(&ann);
+        let db = r.store.backend();
+        let clock: Clock = Arc::new(start);
+        let call = |action: &'static str, id: &str, who: &str, groups: &[&str]| {
+            let input = Value::from_json(&json!({
+                "id": id,
+                "_actor": who,
+                "_actor_caller": who,
+                "_actor_admin": false,
+                "_actor_groups": groups,
+            }));
+            crate::handlers::run(&db, &clock, action, &input)
+        };
+        let e = call("confirm", &review, "rex", &[REVIEWER]).unwrap_err();
+        assert!(e.contains("only a reviewer"), "{e}");
+        let e = call("discard_stuck", &stuck, "ada", &[ADMIN]).unwrap_err();
+        assert!(e.contains("only a mileage administrator"), "{e}");
+        assert_eq!(r.state(&review), "in_review");
+        assert_eq!(r.state(&stuck), "recording");
+        call("confirm", &review, "rex", &[DRIVER, REVIEWER]).unwrap();
+        call("discard_stuck", &stuck, "ada", &[DRIVER, ADMIN]).unwrap();
+        assert_eq!(r.state(&review), "confirmed");
+        assert_eq!(r.state(&stuck), "discarded");
     });
 }
 
