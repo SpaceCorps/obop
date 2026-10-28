@@ -2011,7 +2011,8 @@ fn a_restore_by_a_role_that_does_not_own_the_history_says_what_it_needs() {
     );
     assert_eq!(px.rows(), backup);
     // Into a database whose history is empty, the same role restores records and entries; the
-    // partitions it may not make are not needed, the entries wait in the default partition.
+    // partitions it may not make (it has no EXECUTE on the function) are not needed, the entries
+    // wait in the default partition.
     let fresh = TestDb::new().unwrap();
     crate::schema::owner_install(fresh.url()).unwrap();
     let mut fresh = fresh;
@@ -2020,6 +2021,12 @@ fn a_restore_by_a_role_that_does_not_own_the_history_says_what_it_needs() {
         .unwrap();
     let role = fresh.role_name("restorer");
     documented_grants(&mut fresh.connect(), &role, true);
+    fresh
+        .connect()
+        .batch_execute(&format!(
+            "REVOKE EXECUTE ON FUNCTION obop_history_ensure_partition(date) FROM {role}"
+        ))
+        .unwrap();
     let theirs = Tracked::new(Arc::new(
         Pg::connect_options(&url, Some(one()), Ddl::Never).unwrap(),
     ));
@@ -2784,10 +2791,10 @@ fn the_part_works_in_the_schema(name: &str) {
                 &format!(
                     "SELECT pg_get_expr(d.adbin, d.adrelid),
                             (SELECT count(*) FROM pg_trigger
-                              WHERE tgrelid = '{ident}.obop_record_change'::regclass
+                              WHERE tgrelid = '{lit}.obop_record_change'::regclass
                                 AND NOT tgisinternal)
                        FROM pg_attrdef d
-                      WHERE d.adrelid = '{ident}.obop_record_change'::regclass
+                      WHERE d.adrelid = '{lit}.obop_record_change'::regclass
                         AND d.adnum = (SELECT attnum FROM pg_attribute
                                         WHERE attrelid = d.adrelid AND attname = 'seq')"
                 ),
