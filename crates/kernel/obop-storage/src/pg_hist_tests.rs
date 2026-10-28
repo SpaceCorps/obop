@@ -2157,10 +2157,14 @@ fn a_minimum_age_that_is_missing_or_negative_never_lets_a_partition_go() {
     let Some(px) = Px::new() else {
         return;
     };
-    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
     let this = px.server_month(0);
     px.b.history_ensure_partition(&this).unwrap();
+    // An entry in the month that is not over, whatever the day: what a drop would take with it.
+    px.set_clock(&format!("{this}-01T12:00:00.000000Z"));
+    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
     let part = format!("obop_record_change_p{}", this.replace('-', ""));
+    assert_eq!(px.placed().len(), 1);
+    assert_eq!(px.placed()[0].1, part);
     let mut c = px.sql();
     // What the Rust side cannot send (it passes days as a number) but any other caller can.
     for (what, call) in [
@@ -2177,6 +2181,26 @@ fn a_minimum_age_that_is_missing_or_negative_never_lets_a_partition_go() {
             "a missing month",
             "NULL::date, interval '1 day'".to_string(),
         ),
+        // Two intervals are compared with a month counted as 30 days and subtracted from an
+        // instant with calendar months, so an age of mixed signs is "not negative" to the first
+        // and moves the floor into the future for the second (about half a day per month of the
+        // argument, so ten years of months reach the current month on any day).
+        (
+            "ten years of months against ten years of days",
+            format!("date '{this}-01', interval '-120 months 3600 days'"),
+        ),
+        (
+            "a year of months against a year of days",
+            format!("date '{this}-01', interval '-12 months 360 days'"),
+        ),
+        (
+            "a hundred years against a hundred years of days",
+            format!("date '{this}-01', interval '-1200 months 36000 days'"),
+        ),
+        (
+            "minus infinity",
+            format!("date '{this}-01', interval '-infinity'"),
+        ),
     ] {
         let e = c
             .query_one(&format!("SELECT obop_history_drop_partition({call})"), &[])
@@ -2189,6 +2213,33 @@ fn a_minimum_age_that_is_missing_or_negative_never_lets_a_partition_go() {
             px.partitions().contains(&part),
             "{what}: the month is still there"
         );
+    }
+    // Ages that are fine as ages but cannot drop the month that is not over: whatever the reason
+    // the call gives (the floor is not reached, or the arithmetic runs out of years), it drops
+    // nothing.
+    for (what, age) in [
+        (
+            "a month of days against a month",
+            "interval '-1 month 31 days'",
+        ),
+        ("a month of days", "interval '1 month -31 days'"),
+        ("an age of infinity", "interval 'infinity'"),
+        ("more months than there are", "interval '2000000000 months'"),
+        ("more years than there are", "interval '178000000 years'"),
+    ] {
+        let e = c
+            .query_one(
+                &format!("SELECT obop_history_drop_partition(date '{this}-01', {age})"),
+                &[],
+            )
+            .map(|_| ())
+            .unwrap_err();
+        assert!(e.as_db_error().is_some(), "{what}: {e}");
+        assert!(
+            px.partitions().contains(&part),
+            "{what}: the month is still there"
+        );
+        assert_eq!(px.placed().len(), 1, "{what}: and so is its entry");
     }
     // The floor itself: the month is not over, so not even an age of nothing drops it.
     let e = c
@@ -2498,6 +2549,82 @@ fn a_cursor_is_bound_to_the_cluster_and_to_the_numbers_it_counts_with() {
     );
 }
 
+#[test]
+fn a_role_that_may_not_read_the_control_data_still_reads_the_feed_by_the_numbers_alone() {
+    let Some(mut px) = Px::new() else {
+        return;
+    };
+    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
+    px.ok("ann", &[merge("deal", "d1", json!({"name": "B"}))]);
+    let rt = px
+        .db
+        .role("serving", "NOSUPERUSER NOCREATEDB NOCREATEROLE")
+        .unwrap();
+    let role = px.db.role_name("serving");
+    documented_grants(&mut px.sql(), &role, false);
+    // A server whose owner withdrew the control data from everybody (the function privileges
+    // are those of this database's catalogue, so the scratch database is the only one affected).
+    px.sql()
+        .batch_execute(
+            "REVOKE EXECUTE ON FUNCTION pg_control_system() FROM PUBLIC;
+             REVOKE EXECUTE ON FUNCTION pg_control_checkpoint() FROM PUBLIC",
+        )
+        .unwrap();
+    let theirs = Tracked::new(guarded(Arc::new(
+        Pg::connect_options(&rt, Some(one()), Ddl::IfMissing).unwrap(),
+    )));
+    let ask = |after: Option<crate::history::ChangeCursor>, limit: usize| {
+        let until = std::time::Instant::now() + budget(60);
+        loop {
+            let page = theirs
+                .changes(&ChangeQuery {
+                    after: after.clone(),
+                    limit,
+                    ..ChangeQuery::default()
+                })
+                .unwrap_or_else(|e| panic!("the feed needs the control data: {e}"));
+            if page.horizon_lag_ms.is_none() || page.rows.len() == limit {
+                return page;
+            }
+            assert!(
+                std::time::Instant::now() < until,
+                "the feed stayed held back"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+    };
+    let first = ask(None, 1);
+    assert_eq!(first.rows.len(), 1);
+    let cursor = first.next.clone().expect("a cursor");
+    // No identity to bind to: the epoch is the stored one, and the numbers are all there is.
+    let stored: String = px
+        .sql()
+        .query_one(
+            "SELECT value FROM obop_kv WHERE key = 'obop.history.epoch'",
+            &[],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(cursor.epoch, stored);
+    assert_eq!(ask(Some(cursor.clone()), 10).rows.len(), 1);
+    // A cursor with a number this cluster has not given out is refused all the same.
+    let from_afar = crate::history::ChangeCursor {
+        txid: i64::MAX / 2,
+        ..cursor
+    };
+    let e = theirs
+        .changes(&ChangeQuery {
+            after: Some(from_afar),
+            limit: 10,
+            ..ChangeQuery::default()
+        })
+        .unwrap_err();
+    assert!(
+        e.starts_with("cursor_expired") && e.contains("another time line"),
+        "{e}"
+    );
+}
+
 // ---- when the connection or the commit fails ----------------------------------------------------------
 
 /// A trigger that runs when the transaction commits (a deferred constraint trigger on the
@@ -2695,10 +2822,13 @@ fn the_digest_pins_the_sql_of_the_history_part() {
     let d = part.digest();
     assert_eq!(d.len(), 64);
     // The digest is of the schema "public", whatever schema a process renders for. If this
-    // fails, the SQL of the history part changed: databases that have the part do not get the
-    // change unless a ledger step installs it, so add the step and update this value together.
+    // fails, the SQL of the history part changed: a database that already has the part does not
+    // get the change (the SQL runs only when the part is missing), so a released part needs a
+    // ledger step that installs the new text, to be added with the new value. The part has not
+    // been released: a database that a development build made it in has to drop the objects and
+    // let them be made again (docs/DEPLOY.md, "Rolling back").
     assert_eq!(
-        d, "23eb6a959eb773b8bcb101362bb0ab846301dbe994050b79073f98c540896c73",
+        d, "3747cb943b0cd47f463c41042a2b314c9c2f1a68c69326d710d1ea681028930c",
         "digest of the history part"
     );
     assert_ne!(d, crate::schema::parts()[0].digest());

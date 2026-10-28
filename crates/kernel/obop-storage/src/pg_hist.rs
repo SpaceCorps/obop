@@ -167,9 +167,16 @@ RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path = {schema}, pg_
 DECLARE hi timestamptz; part text; n bigint;
 BEGIN
   -- The floor below only holds for an age that is zero or more: a missing one makes every
-  -- comparison unknown, and a negative one moves the floor into the future.
+  -- comparison unknown, and a negative one moves the floor into the future. Two intervals are
+  -- compared by counting a month as 30 days, but subtracted from an instant with calendar
+  -- months, so an age that mixes signs ('-120 months 3600 days') can pass the first test and
+  -- still move the floor into the future: the floor itself is tested as well.
   IF p_month IS NULL OR p_min_age IS NULL OR p_min_age < interval '0' THEN
     RAISE EXCEPTION 'obop_history_drop_partition needs a month and a minimum age that is not negative'
+      USING errcode = '22023';
+  END IF;
+  IF pg_catalog.now() - p_min_age > pg_catalog.now() THEN
+    RAISE EXCEPTION 'obop_history_drop_partition: the minimum age % puts the floor in the future', p_min_age
       USING errcode = '22023';
   END IF;
   hi := (pg_catalog.date_trunc('month', p_month::timestamp) + interval '1 month') AT TIME ZONE 'UTC';
@@ -780,17 +787,23 @@ pub(crate) fn history(main: &PgPool, q: &HistoryQuery) -> Result<Vec<ChangeRow>>
     })
 }
 
-/// What the feed binds its cursors to, in one statement: the next transaction number the cluster
-/// will give out, and the identity of the cluster with the time line it is on (its system
-/// identifier and the time line of its last checkpoint, which follows a promotion within
-/// moments). The control data is for any role unless the server's owner has withdrawn it; then
-/// the identity is NULL and only the check of the numbers remains.
-const CLUSTER: &str = "SELECT pg_snapshot_xmax(pg_current_snapshot())::text,
-       CASE WHEN has_function_privilege('pg_control_system()', 'EXECUTE')
-             AND has_function_privilege('pg_control_checkpoint()', 'EXECUTE')
-            THEN (SELECT system_identifier::text FROM pg_control_system())
-                 || '/' || (SELECT timeline_id::text FROM pg_control_checkpoint())
-       END";
+/// What the feed binds its cursors to: the next transaction number the cluster will give out
+/// (`$xmax`), and whether this role may read the control data that identifies the cluster. The
+/// control data is for any role unless the server's owner has withdrawn it; then only the check
+/// of the numbers remains.
+///
+/// Whether the role may is asked first and apart ([`IDENTITY`] is sent only when it may): the
+/// server checks the right to call a function when a statement starts, not when the branch that
+/// calls it is reached, so one statement with a `CASE` around the calls would fail for the role
+/// that must not make them instead of answering NULL.
+const XMAX: &str = "SELECT pg_snapshot_xmax(pg_current_snapshot())::text,
+       has_function_privilege('pg_control_system()', 'EXECUTE')
+         AND has_function_privilege('pg_control_checkpoint()', 'EXECUTE')";
+
+/// The identity of the cluster with the time line it is on: its system identifier and the time
+/// line of its last checkpoint, which follows a promotion within moments.
+const IDENTITY: &str = "SELECT (SELECT system_identifier::text FROM pg_control_system())
+       || '/' || (SELECT timeline_id::text FROM pg_control_checkpoint())";
 
 /// The epoch the cursors of the feed carry: the stored one (renewed by a restore), followed by a
 /// digest of the cluster and time line they were made on, where that is known. Letters and
@@ -826,10 +839,15 @@ pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
         // is that of the transaction numbers of the server, which another cluster (a dump loaded
         // into a new one) or an earlier time line (a point in time recovery, a failover to a
         // standby that lagged) counts again from other numbers.
-        let cluster = tx.query_one(CLUSTER, &[])?;
+        let cluster = tx.query_one(XMAX, &[])?;
         let xmax: String = cluster.try_get(0)?;
         let xmax: u64 = xmax.parse().unwrap_or(u64::MAX);
-        let epoch = epoch_of(&stored, cluster.try_get::<_, Option<String>>(1)?.as_deref());
+        let identity: Option<String> = if cluster.try_get::<_, bool>(1)? {
+            Some(tx.query_one(IDENTITY, &[])?.try_get(0)?)
+        } else {
+            None
+        };
+        let epoch = epoch_of(&stored, identity.as_deref());
         let exists: bool = tx
             .query_one("SELECT to_regclass('obop_record_change') IS NOT NULL", &[])?
             .get(0);

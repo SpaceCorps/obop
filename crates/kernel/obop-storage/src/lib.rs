@@ -686,6 +686,8 @@ mod seams_tests;
 mod shared_tests;
 mod sqlite;
 #[cfg(test)]
+mod start_tests;
+#[cfg(test)]
 mod sys_tests;
 pub mod sysfields;
 #[cfg(any(test, feature = "test-support"))]
