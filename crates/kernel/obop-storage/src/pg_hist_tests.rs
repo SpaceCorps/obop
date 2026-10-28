@@ -45,6 +45,11 @@ fn pool(size: usize) -> PgPoolConfig {
     }
 }
 
+/// How long a test waits for a condition: `crate::testing::time_budget`.
+fn budget(secs: u64) -> std::time::Duration {
+    crate::testing::time_budget(secs)
+}
+
 fn instant(text: &str) -> i64 {
     parse_micros(text).unwrap_or_else(|| panic!("{text} is not a canonical instant"))
 }
@@ -152,26 +157,45 @@ impl Px {
     /// One page of the feed, asked again until nothing is held back: the feed waits for every
     /// transaction that is open on the server, also those of the tests of other databases.
     fn feed(&self, after: Option<&ChangeCursor>, limit: usize) -> crate::history::ChangePage {
-        for _ in 0..400 {
+        let until = std::time::Instant::now() + budget(60);
+        loop {
             let page = self.feed_raw(after, limit);
             if page.horizon_lag_ms.is_none() {
                 return page;
             }
+            assert!(
+                std::time::Instant::now() < until,
+                "the feed stayed held back"
+            );
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
-        panic!("the feed stayed held back");
     }
 
     /// Wait until the statistics say nothing is held back (other databases' transactions on the
     /// server count too).
     fn settled(&self) {
-        for _ in 0..400 {
-            if self.b.history_stats().unwrap().horizon_lag_ms == 0 {
-                return;
-            }
+        let until = std::time::Instant::now() + budget(60);
+        while self.b.history_stats().unwrap().horizon_lag_ms != 0 {
+            assert!(
+                std::time::Instant::now() < until,
+                "something stayed held back"
+            );
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
-        panic!("something stayed held back");
+    }
+
+    /// The month `back` months before the server's own date (UTC), as `YYYY-MM`. The function
+    /// that drops a month reads the server's clock, which a test cannot move; a test that drops
+    /// months works from the server's date and stamps its entries inside the months it names.
+    fn server_month(&self, back: i32) -> String {
+        self.sql()
+            .query_one(
+                "SELECT to_char(date_trunc('month', now() AT TIME ZONE 'UTC')
+                                - $1::int * interval '1 month', 'YYYY-MM')",
+                &[&back],
+            )
+            .unwrap()
+            .get(0)
     }
 
     fn tick(&self, us: i64) {
@@ -688,12 +712,14 @@ fn the_table_is_append_only_for_everybody_but_the_maintenance_functions() {
     }
     assert_eq!(px.placed().len(), 2, "nothing changed");
     // Inserting is what the table is for.
+    // (Stamped inside the month the test drops: the clock of the fixture is in October 2026.)
     c.batch_execute(
         "INSERT INTO obop_record_change (at, model, record_id, op, actor, row_version, changed)
-         VALUES (now(), 'deal', 'd9', 'update', 'ann', 1, '{}')",
+         VALUES (timestamptz '2026-10-27 12:00:00+00', 'deal', 'd9', 'update', 'ann', 1, '{}')",
     )
     .unwrap();
     assert_eq!(px.placed().len(), 3);
+    assert_eq!(px.placed()[2].1, "obop_record_change_p202610");
     // Dropping a whole month is DDL and is not stopped by a row guard: that is retention's tool.
     c.batch_execute("DROP TABLE obop_record_change_p202610")
         .unwrap();
@@ -1083,30 +1109,30 @@ fn an_old_month_is_dropped_with_its_entries_and_a_young_one_is_refused() {
     let Some(px) = Px::new() else {
         return;
     };
-    px.set_clock("2026-08-10T10:00:00.000000Z");
+    // The months are the server's, counted back from its date, and the entries are stamped inside
+    // them (see `server_month`): the test says the same on any day of any year.
+    let this = px.server_month(0);
+    let old = px.server_month(3);
+    let name = |m: &str| format!("obop_record_change_p{}", m.replace('-', ""));
+    px.set_clock(&format!("{old}-10T10:00:00.000000Z"));
     px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
     px.ok("ann", &[merge("deal", "d1", json!({"name": "B"}))]);
-    assert!(
-        px.partitions()
-            .contains(&"obop_record_change_p202608".to_string())
-    );
-    // The month ended on 1 September; it is not 400 days old.
-    let e = px.b.history_drop_partition("2026-08", 400).unwrap_err();
+    assert!(px.partitions().contains(&name(&old)));
+    // The month ended two months ago at the earliest: it is not 400 days old.
+    let e = px.b.history_drop_partition(&old, 400).unwrap_err();
     assert!(e.contains("younger than the retention"), "{e}");
     assert_eq!(px.placed().len(), 2);
     // This month is never old enough, whatever the age asked for.
-    px.b.history_ensure_partition("2026-10").unwrap();
-    let e = px.b.history_drop_partition("2026-10", 0).unwrap_err();
+    px.b.history_ensure_partition(&this).unwrap();
+    let e = px.b.history_drop_partition(&this, 0).unwrap_err();
     assert!(e.contains("younger than the retention"), "{e}");
-    // The month before is (the server's date is the real one).
-    assert_eq!(px.b.history_drop_partition("2026-08", 30).unwrap(), 2);
-    assert!(
-        !px.partitions()
-            .contains(&"obop_record_change_p202608".to_string())
-    );
+    assert!(px.partitions().contains(&name(&this)));
+    // The month three months back is old enough for 30 days.
+    assert_eq!(px.b.history_drop_partition(&old, 30).unwrap(), 2);
+    assert!(!px.partitions().contains(&name(&old)));
     assert!(px.placed().is_empty());
     // Dropping what is not there is not an error and drops nothing.
-    assert_eq!(px.b.history_drop_partition("2026-08", 30).unwrap(), 0);
+    assert_eq!(px.b.history_drop_partition(&old, 30).unwrap(), 0);
     assert!(
         px.b.history_drop_partition("2026-8", 30)
             .unwrap_err()
@@ -1156,13 +1182,16 @@ fn making_and_moving_partitions_does_not_block_or_fail_the_writers() {
     px.ok("ann", &[ins("deal", "start", json!({"name": "A"}))]);
     let stop = std::sync::atomic::AtomicBool::new(false);
     let writes = std::sync::atomic::AtomicUsize::new(0);
+    // The longest a single write took, in milliseconds.
+    let worst = std::sync::atomic::AtomicU64::new(0);
     std::thread::scope(|s| {
         let writers: Vec<_> = (0..4)
             .map(|t| {
-                let (px, stop, writes) = (&px, &stop, &writes);
+                let (px, stop, writes, worst) = (&px, &stop, &writes, &worst);
                 s.spawn(move || {
                     let mut i = 0;
                     while !stop.load(SeqCst) {
+                        let began = std::time::Instant::now();
                         px.ok(
                             "ann",
                             &[
@@ -1170,6 +1199,7 @@ fn making_and_moving_partitions_does_not_block_or_fail_the_writers() {
                                 merge("deal", "start", json!({"n": t * 1000 + i})),
                             ],
                         );
+                        worst.fetch_max(began.elapsed().as_millis() as u64, SeqCst);
                         writes.fetch_add(1, SeqCst);
                         i += 1;
                     }
@@ -1198,6 +1228,14 @@ fn making_and_moving_partitions_does_not_block_or_fail_the_writers() {
     });
     let n = writes.load(SeqCst);
     assert!(n > 0, "the writers wrote while the partitions were made");
+    // A move that held the writers for as long as it took would show here: a write waits for
+    // the pool at most two seconds and for the server at most a minute, and a hundred rows move in
+    // a few milliseconds. The bound is generous (a loaded runner) and far below the minute.
+    let worst = worst.load(SeqCst);
+    assert!(
+        worst < budget(15).as_millis() as u64,
+        "the slowest of {n} writes took {worst} ms while the partitions were made"
+    );
     let total: i64 = px
         .sql()
         .query_one("SELECT count(*) FROM obop_record_change", &[])
@@ -1495,7 +1533,7 @@ fn a_feed_page_is_one_snapshot_while_writers_go_on() {
         // A reader that follows the cursor while the writers go on: its pages never repeat an
         // entry and never go back in the order of (transaction, number).
         let started = std::time::Instant::now();
-        while seen.len() < 300 && started.elapsed() < std::time::Duration::from_secs(60) {
+        while seen.len() < 300 && started.elapsed() < budget(60) {
             let page = px.feed_raw(cursor.as_ref(), 7);
             seen.extend(page.rows.iter().map(|r| (r.txid, r.seq, r.row_version)));
             cursor = page.next;
@@ -1570,7 +1608,7 @@ fn the_stamp_of_old_records_skips_rows_other_transactions_hold_and_finishes_late
     // The held row is skipped, not waited for.
     let started = std::time::Instant::now();
     let pass = px.b.backfill_sysfields(&models, fallback, 100).unwrap();
-    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    assert!(started.elapsed() < budget(5));
     assert_eq!((pass.stamped, pass.remaining), (5, 1));
     holder.batch_execute("COMMIT").unwrap();
     let pass = px.b.backfill_sysfields(&models, fallback, 100).unwrap();
@@ -1960,12 +1998,7 @@ fn a_restore_by_a_role_that_does_not_own_the_history_says_what_it_needs() {
         .role("restorer", "NOSUPERUSER NOCREATEDB NOCREATEROLE")
         .unwrap();
     let role = px.db.role_name("restorer");
-    px.sql()
-        .batch_execute(&format!(
-            "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON ALL TABLES IN SCHEMA public TO {role};
-             GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO {role}"
-        ))
-        .unwrap();
+    documented_grants(&mut px.sql(), &role, true);
     let theirs = Tracked::new(Arc::new(
         Pg::connect_options(&url, Some(one()), Ddl::Never).unwrap(),
     ));
@@ -1986,13 +2019,7 @@ fn a_restore_by_a_role_that_does_not_own_the_history_says_what_it_needs() {
         .role("restorer", "NOSUPERUSER NOCREATEDB NOCREATEROLE")
         .unwrap();
     let role = fresh.role_name("restorer");
-    fresh
-        .connect()
-        .batch_execute(&format!(
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role};
-             GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO {role}"
-        ))
-        .unwrap();
+    documented_grants(&mut fresh.connect(), &role, true);
     let theirs = Tracked::new(Arc::new(
         Pg::connect_options(&url, Some(one()), Ddl::Never).unwrap(),
     ));
@@ -2018,13 +2045,7 @@ fn a_restore_by_a_role_that_does_not_own_the_history_says_what_it_needs() {
         .role("restorer", "NOSUPERUSER NOCREATEDB NOCREATEROLE")
         .unwrap();
     let role = empty.role_name("restorer");
-    empty
-        .connect()
-        .batch_execute(&format!(
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role};
-             GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO {role}"
-        ))
-        .unwrap();
+    documented_grants(&mut empty.connect(), &role, true);
     let theirs = Tracked::new(Arc::new(
         Pg::connect_options(&url, Some(one()), Ddl::Never).unwrap(),
     ));
@@ -2119,6 +2140,354 @@ fn a_backup_with_entries_makes_the_history_of_an_older_database_when_the_process
     assert!(
         h[0].seq > h[1].seq,
         "the new entry sorts after the restored ones"
+    );
+}
+
+// ---- the part is hard to misuse, and the grants are what the docs say -----------------------------------
+
+#[test]
+fn a_minimum_age_that_is_missing_or_negative_never_lets_a_partition_go() {
+    let Some(px) = Px::new() else {
+        return;
+    };
+    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
+    let this = px.server_month(0);
+    px.b.history_ensure_partition(&this).unwrap();
+    let part = format!("obop_record_change_p{}", this.replace('-', ""));
+    let mut c = px.sql();
+    // What the Rust side cannot send (it passes days as a number) but any other caller can.
+    for (what, call) in [
+        ("a missing age", format!("date '{this}-01', NULL::interval")),
+        (
+            "a negative age",
+            format!("date '{this}-01', interval '-60 days'"),
+        ),
+        (
+            "a negative month age",
+            format!("date '{this}-01', interval '-2 months'"),
+        ),
+        (
+            "a missing month",
+            "NULL::date, interval '1 day'".to_string(),
+        ),
+    ] {
+        let e = c
+            .query_one(&format!("SELECT obop_history_drop_partition({call})"), &[])
+            .unwrap_err();
+        assert!(
+            e.as_db_error().is_some_and(|d| d.code().code() == "22023"),
+            "{what}: {e}"
+        );
+        assert!(
+            px.partitions().contains(&part),
+            "{what}: the month is still there"
+        );
+    }
+    // The floor itself: the month is not over, so not even an age of nothing drops it.
+    let e = c
+        .query_one(
+            &format!("SELECT obop_history_drop_partition(date '{this}-01', interval '0')"),
+            &[],
+        )
+        .unwrap_err();
+    assert!(
+        e.as_db_error()
+            .is_some_and(|d| d.message().contains("younger than the retention")),
+        "{e}"
+    );
+    assert!(px.partitions().contains(&part));
+    assert_eq!(px.placed().len(), 1);
+    // And a month that is asked for as NULL is not made either.
+    let e = c
+        .query_one("SELECT obop_history_ensure_partition(NULL::date)", &[])
+        .unwrap_err();
+    assert!(
+        e.as_db_error()
+            .is_some_and(|d| d.message().contains("outside the range")),
+        "{e}"
+    );
+}
+
+#[test]
+fn the_table_refuses_an_entry_whose_changed_or_via_is_not_an_object() {
+    let Some(px) = Px::new() else {
+        return;
+    };
+    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
+    px.ok("ann", &[merge("deal", "d1", json!({"name": "B"}))]);
+    assert_eq!(px.placed()[0].1, "obop_record_change_p202610");
+    let mut c = px.sql();
+    let in_a_month = "timestamptz '2026-10-27 12:00:00+00'";
+    let in_the_default = "timestamptz '2001-01-01 00:00:00+00'";
+    for (what, at, via, changed) in [
+        ("an array in a month", in_a_month, "'{}'", "'[]'"),
+        ("a number in a month", in_a_month, "'{}'", "'1'"),
+        ("a null in a month", in_a_month, "'{}'", "'null'"),
+        ("a string as via", in_a_month, "'\"x\"'", "'{}'"),
+        (
+            "an array in the default partition",
+            in_the_default,
+            "'{}'",
+            "'[]'",
+        ),
+        (
+            "an array as via in the default",
+            in_the_default,
+            "'[]'",
+            "'{}'",
+        ),
+    ] {
+        let e = c
+            .batch_execute(&format!(
+                "INSERT INTO obop_record_change (at, model, record_id, op, actor, via, row_version, changed)
+                 VALUES ({at}, 'deal', 'd1', 'update', 'mallory', {via}, 9, {changed})"
+            ))
+            .unwrap_err();
+        assert!(
+            e.as_db_error().is_some_and(|d| d.code().code() == "23514"),
+            "{what}: {e}"
+        );
+    }
+    assert_eq!(px.placed().len(), 2, "nothing was added");
+    // So the erasure of the record's history can always be completed.
+    px.ok(
+        "ann",
+        &[Op::EraseHistory {
+            model: "deal".into(),
+            id: "d1".into(),
+        }],
+    );
+    assert_eq!(
+        px.b.history(&HistoryQuery::of("deal", "d1", 10))
+            .unwrap()
+            .len(),
+        3
+    );
+}
+
+#[test]
+fn a_function_of_the_same_name_in_the_history_schema_does_not_take_the_place_of_a_builtin() {
+    let Some(px) = Px::new() else {
+        return;
+    };
+    px.ok(
+        "ann",
+        &[ins("deal", "d1", json!({"name": "A", "stage": "x"}))],
+    );
+    // Whoever may create objects in the schema leaves functions that take exactly the types the
+    // maintenance functions call the built-ins with: exact matches win over the casts the
+    // built-ins need, wherever they stand in the search path.
+    px.sql()
+        .batch_execute(
+            "CREATE FUNCTION public.to_char(date, text) RETURNS text LANGUAGE plpgsql AS $$
+               BEGIN RAISE EXCEPTION 'the decoy to_char(date, text) ran'; END $$;
+             CREATE FUNCTION public.format(text, text) RETURNS text LANGUAGE plpgsql AS $$
+               BEGIN RAISE EXCEPTION 'the decoy format(text, text) ran'; END $$;
+             CREATE FUNCTION public.format(text, text, text) RETURNS text LANGUAGE plpgsql AS $$
+               BEGIN RAISE EXCEPTION 'the decoy format(text, text, text) ran'; END $$;
+             CREATE FUNCTION public.to_jsonb(text[]) RETURNS jsonb LANGUAGE plpgsql AS $$
+               BEGIN RAISE EXCEPTION 'the decoy to_jsonb(text[]) ran'; END $$",
+        )
+        .unwrap();
+    // A month made and brought home, an erasure, and a month dropped: every function.
+    assert!(px.b.history_ensure_partition("2026-06").unwrap().created);
+    px.ok(
+        "ann",
+        &[Op::EraseHistory {
+            model: "deal".into(),
+            id: "d1".into(),
+        }],
+    );
+    let old = px.server_month(3);
+    px.b.history_ensure_partition(&old).unwrap();
+    assert_eq!(px.b.history_drop_partition(&old, 30).unwrap(), 0);
+    // And an ordinary write: the partitions of the month it is in.
+    px.ok("ann", &[ins("deal", "d2", json!({"name": "A"}))]);
+    assert_eq!(px.placed().len(), 3);
+}
+
+/// What docs/DEPLOY.md lists for a serving role that does not own the tables, and nothing more.
+fn documented_grants(owner: &mut postgres::Client, role: &str, restore: bool) {
+    let me: String = owner
+        .query_one("SELECT quote_ident(current_user)", &[])
+        .unwrap()
+        .get(0);
+    owner
+        .batch_execute(&format!(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON obop_record, obop_kv, obop_counter TO {role};
+             GRANT SELECT, INSERT ON obop_record_change TO {role};
+             GRANT SELECT ON ALL TABLES IN SCHEMA public TO {role};
+             ALTER DEFAULT PRIVILEGES FOR ROLE {me} IN SCHEMA public GRANT SELECT ON TABLES TO {role};
+             GRANT USAGE ON SEQUENCE obop_record_change_seq TO {role};
+             GRANT EXECUTE ON FUNCTION obop_history_ensure_partition(date) TO {role};
+             GRANT EXECUTE ON FUNCTION obop_history_erase(text, text, text[], text, jsonb, bigint, timestamptz) TO {role};
+             GRANT EXECUTE ON FUNCTION obop_history_drop_partition(date, interval) TO {role}"
+        ))
+        .unwrap();
+    if restore {
+        owner
+            .batch_execute(&format!(
+                "GRANT UPDATE ON SEQUENCE obop_record_change_seq TO {role}"
+            ))
+            .unwrap();
+    }
+}
+
+#[test]
+fn a_serving_role_with_exactly_the_documented_grants_writes_reads_the_feed_counts_and_backs_up() {
+    let Some(mut px) = Px::new() else {
+        return;
+    };
+    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
+    let rt = px
+        .db
+        .role("serving", "NOSUPERUSER NOCREATEDB NOCREATEROLE")
+        .unwrap();
+    let role = px.db.role_name("serving");
+    documented_grants(&mut px.sql(), &role, false);
+    let theirs = Tracked::new(guarded(Arc::new(
+        Pg::connect_options(&rt, Some(one()), Ddl::IfMissing).unwrap(),
+    )));
+    theirs.track("deal", history_of(&["name"]));
+    let ctx = WriteCtx::new("bob", "rest", "deal.update");
+    // Writes: the entries, and the partitions a write makes through the maintenance function.
+    theirs
+        .apply_ctx(&ctx, &[ins("deal", "d2", json!({"name": "B"}))])
+        .unwrap();
+    theirs
+        .apply_ctx(&ctx, &[merge("deal", "d2", json!({"name": "C"}))])
+        .unwrap();
+    assert_eq!(
+        theirs
+            .history(&HistoryQuery::of("deal", "d2", 10))
+            .unwrap()
+            .len(),
+        2
+    );
+    // The feed, and a cursor followed (the call that reads the newest number given out, which
+    // needs no more than the USAGE the writers have).
+    let ask = |after: Option<crate::history::ChangeCursor>| {
+        let until = std::time::Instant::now() + budget(60);
+        loop {
+            let page = theirs
+                .changes(&ChangeQuery {
+                    after: after.clone(),
+                    limit: 10,
+                    ..ChangeQuery::default()
+                })
+                .unwrap();
+            if page.horizon_lag_ms.is_none() {
+                return page;
+            }
+            assert!(
+                std::time::Instant::now() < until,
+                "the feed stayed held back"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+    };
+    let page = ask(None);
+    assert_eq!(page.rows.len(), 3);
+    assert!(ask(page.next.clone()).rows.is_empty());
+    // A month made after the grants is counted: the default privileges of the owner reach it.
+    let month = px.server_month(2);
+    theirs.history_ensure_partition(&month).unwrap();
+    let stats = theirs.history_stats().unwrap();
+    let made = format!("obop_record_change_p{}", month.replace('-', ""));
+    assert!(stats.partitions.iter().any(|p| p.0 == made), "{stats:?}");
+    assert_eq!(stats.default_rows, 0);
+    // A backup reads it all, and the total is what it counted.
+    let mut n = 0;
+    theirs
+        .export(100, &mut |rows| {
+            n += rows.len();
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(n, theirs.total().unwrap());
+    // Without the right to read a partition the statistics say what is missing.
+    px.sql()
+        .batch_execute(&format!(
+            "REVOKE SELECT ON obop_record_change_default FROM {role}"
+        ))
+        .unwrap();
+    let e = theirs.history_stats().unwrap_err();
+    assert!(
+        e.contains("grant SELECT on the partitions") && e.contains("obop_record_change_default"),
+        "{e}"
+    );
+}
+
+#[test]
+fn a_cursor_is_bound_to_the_cluster_and_to_the_numbers_it_counts_with() {
+    let Some(px) = Px::new() else {
+        return;
+    };
+    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
+    px.ok("ann", &[merge("deal", "d1", json!({"name": "B"}))]);
+    let cursor = px
+        .feed(None, 1)
+        .next
+        .expect("a cursor after the first entry");
+    // The epoch is the stored one, followed by a digest of the identity of the cluster and the
+    // time line it is on, where the role may read the control data.
+    let mut c = px.sql();
+    let stored: String = c
+        .query_one(
+            "SELECT value FROM obop_kv WHERE key = 'obop.history.epoch'",
+            &[],
+        )
+        .unwrap()
+        .get(0);
+    let identity: Option<String> = c
+        .query_one(
+            "SELECT CASE WHEN has_function_privilege('pg_control_system()', 'EXECUTE')
+                          AND has_function_privilege('pg_control_checkpoint()', 'EXECUTE')
+                         THEN (SELECT system_identifier::text FROM pg_control_system())
+                              || '/' || (SELECT timeline_id::text FROM pg_control_checkpoint())
+                    END",
+            &[],
+        )
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        cursor.epoch,
+        crate::pg_hist::epoch_of(&stored, identity.as_deref())
+    );
+    if identity.is_some() {
+        assert_ne!(cursor.epoch, stored, "the cluster is part of the epoch");
+        // A cursor of this database that was made without the cluster in it is refused.
+        let bare = crate::history::ChangeCursor {
+            epoch: stored.clone(),
+            ..cursor.clone()
+        };
+        let e =
+            px.b.changes(&ChangeQuery {
+                after: Some(bare),
+                limit: 10,
+                ..ChangeQuery::default()
+            })
+            .unwrap_err();
+        assert!(e.starts_with("cursor_expired"), "{e}");
+    }
+    // The cursor of this cluster is followed to the end.
+    assert_eq!(px.feed(Some(&cursor), 10).rows.len(), 1);
+    // A cursor with a transaction number this cluster has not given out comes from another one
+    // (a dump loaded into a new server counts again from low numbers), whatever its epoch says.
+    let from_afar = crate::history::ChangeCursor {
+        txid: i64::MAX / 2,
+        ..cursor.clone()
+    };
+    let e =
+        px.b.changes(&ChangeQuery {
+            after: Some(from_afar),
+            limit: 10,
+            ..ChangeQuery::default()
+        })
+        .unwrap_err();
+    assert!(
+        e.starts_with("cursor_expired") && e.contains("another time line"),
+        "{e}"
     );
 }
 
@@ -2322,7 +2691,7 @@ fn the_digest_pins_the_sql_of_the_history_part() {
     // fails, the SQL of the history part changed: databases that have the part do not get the
     // change unless a ledger step installs it, so add the step and update this value together.
     assert_eq!(
-        d, "0ef284a32ae3bcbcaaca2ddca93c98eb63679fa2846ebaa712e1e07c9970c41d",
+        d, "23eb6a959eb773b8bcb101362bb0ab846301dbe994050b79073f98c540896c73",
         "digest of the history part"
     );
     assert_ne!(d, crate::schema::parts()[0].digest());
@@ -2339,15 +2708,16 @@ fn the_digest_pins_the_sql_of_the_history_part() {
     assert!(!part.required);
 }
 
-#[test]
-fn the_part_works_in_a_schema_of_an_odd_name() {
+/// The part, working, in a schema of the given name (the search path of the database names it).
+fn the_part_works_in_the_schema(name: &str) {
     let Some(db) = TestDb::new() else {
         return;
     };
+    let ident = format!("\"{}\"", name.replace('"', "\"\""));
+    let lit = ident.replace('\'', "''");
     db.connect()
         .batch_execute(&format!(
-            "CREATE SCHEMA \"Odd Schema\"; \
-             ALTER DATABASE {} SET search_path TO \"Odd Schema\", public",
+            "CREATE SCHEMA {ident}; ALTER DATABASE {} SET search_path TO {ident}, public",
             db.name()
         ))
         .unwrap();
@@ -2373,9 +2743,11 @@ fn the_part_works_in_a_schema_of_an_odd_name() {
     let (here, elsewhere): (i64, i64) = {
         let r = c
             .query_one(
-                "SELECT count(*) FILTER (WHERE relnamespace = '\"Odd Schema\"'::regnamespace),
-                        count(*) FILTER (WHERE relnamespace = 'public'::regnamespace)
-                   FROM pg_class WHERE relname LIKE 'obop_record_change%'",
+                &format!(
+                    "SELECT count(*) FILTER (WHERE relnamespace = '{lit}'::regnamespace),
+                            count(*) FILTER (WHERE relnamespace = 'public'::regnamespace)
+                       FROM pg_class WHERE relname LIKE 'obop_record_change%'"
+                ),
                 &[],
             )
             .unwrap();
@@ -2383,12 +2755,14 @@ fn the_part_works_in_a_schema_of_an_odd_name() {
     };
     assert!(
         here >= 8 && elsewhere == 0,
-        "{here} here, {elsewhere} in public"
+        "{name}: {here} here, {elsewhere} in public"
     );
     let fns: i64 = c
         .query_one(
-            "SELECT count(*) FROM pg_proc WHERE proname LIKE 'obop_history_%'
-                AND pronamespace = '\"Odd Schema\"'::regnamespace",
+            &format!(
+                "SELECT count(*) FROM pg_proc WHERE proname LIKE 'obop_history_%'
+                    AND pronamespace = '{lit}'::regnamespace"
+            ),
             &[],
         )
         .unwrap()
@@ -2396,12 +2770,70 @@ fn the_part_works_in_a_schema_of_an_odd_name() {
     assert_eq!(fns, 4);
     assert_eq!(
         c.query_one(
-            "SELECT count(*) FROM \"Odd Schema\".obop_record_change_p202609",
+            &format!("SELECT count(*) FROM {ident}.obop_record_change_p202609"),
             &[]
         )
         .unwrap()
         .get::<_, i64>(0),
         0
+    );
+    // The default of the number column and the guards name the table of this schema.
+    let (default, guards): (String, i64) = {
+        let r = c
+            .query_one(
+                &format!(
+                    "SELECT pg_get_expr(d.adbin, d.adrelid),
+                            (SELECT count(*) FROM pg_trigger
+                              WHERE tgrelid = '{ident}.obop_record_change'::regclass
+                                AND NOT tgisinternal)
+                       FROM pg_attrdef d
+                      WHERE d.adrelid = '{ident}.obop_record_change'::regclass
+                        AND d.adnum = (SELECT attnum FROM pg_attribute
+                                        WHERE attrelid = d.adrelid AND attname = 'seq')"
+                ),
+                &[],
+            )
+            .unwrap();
+        (r.get(0), r.get(1))
+    };
+    assert!(default.starts_with("nextval("), "{default}");
+    assert_eq!(guards, 2);
+}
+
+#[test]
+fn the_part_works_in_a_schema_of_an_odd_name() {
+    the_part_works_in_the_schema("Odd Schema");
+}
+
+#[test]
+fn the_part_works_in_a_schema_whose_name_has_quotes_and_dollars() {
+    // A quote ends a string literal, a pair of dollars ends the body of a DO block: the name goes
+    // into both places of the SQL of the part.
+    the_part_works_in_the_schema("it's $$ a \"quoted\" $obop_do$ name");
+}
+
+#[test]
+fn the_sql_of_the_part_puts_the_name_of_the_schema_where_it_belongs() {
+    let render = |name: &str| (crate::pg_hist::PART.render)(name);
+    let sql = render("\"it's $$ x\"");
+    // No place is left, and none was filled in twice or with another one's text.
+    assert!(!sql.contains("{schema") && !sql.contains("{do}"), "{sql}");
+    // In a string literal the quote is doubled; as an identifier the name is as it was given.
+    assert!(
+        sql.contains("nextval('\"it''s $$ x\".obop_record_change_seq'::regclass)"),
+        "{sql}"
+    );
+    assert!(sql.contains("CREATE SEQUENCE IF NOT EXISTS \"it's $$ x\".obop_record_change_seq"));
+    // The body of the DO block is quoted with a tag the name does not contain.
+    assert!(sql.contains("DO $obop_do$ BEGIN") && sql.contains("END $obop_do$;"));
+    let sql = render("\"a$obop_do$b\"");
+    assert!(sql.contains("DO $obop_dox$ BEGIN") && sql.contains("END $obop_dox$;"));
+    // A name that looks like a place is a name.
+    let sql = render("\"{schema}{do}\"");
+    assert!(sql.contains("CREATE SEQUENCE IF NOT EXISTS \"{schema}{do}\".obop_record_change_seq"));
+    // And "public" is what the digest is of.
+    assert!(
+        render("public").contains("CREATE SEQUENCE IF NOT EXISTS public.obop_record_change_seq")
     );
 }
 
@@ -2510,10 +2942,7 @@ fn the_feed_is_served_by_its_index_and_never_sorted() {
         .collect();
     let nodes: Vec<&str> = plan
         .iter()
-        .map(|l| {
-            l.trim_start_matches(|c| c == ' ' || c == '-' || c == '>')
-                .trim()
-        })
+        .map(|l| l.trim_start_matches([' ', '-', '>']).trim())
         .collect();
     // A node that sorts is a line that is only `Sort`, `Incremental Sort` or `Sort` and a method
     // (a Merge Append prints a `Sort Key:` line without sorting anything).

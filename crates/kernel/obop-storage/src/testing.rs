@@ -11,6 +11,18 @@ use crate::{
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering::SeqCst};
 
+/// A time to wait for something in a test, in seconds, scaled by `OBOP_TEST_TIME_FACTOR` (a
+/// number, default 1) so that a slow or shared runner can be given more without editing tests.
+/// Tests wait for a condition up to this long; they do not sleep for it.
+pub fn time_budget(secs: u64) -> std::time::Duration {
+    let factor = std::env::var("OBOP_TEST_TIME_FACTOR")
+        .ok()
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .filter(|f| f.is_finite() && *f > 0.0)
+        .unwrap_or(1.0);
+    std::time::Duration::from_secs_f64(secs as f64 * factor)
+}
+
 /// Which calls are refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {

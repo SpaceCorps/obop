@@ -2388,7 +2388,8 @@ impl Fx {
     /// that is open anywhere on the server (the tests of other databases have some), so the
     /// answer is asked again until nothing is held back.
     fn feed_q(&self, q: &ChangeQuery) -> ChangePage {
-        for _ in 0..400 {
+        let until = std::time::Instant::now() + crate::testing::time_budget(60);
+        loop {
             let page = self
                 .b
                 .changes(q)
@@ -2396,9 +2397,13 @@ impl Fx {
             if page.horizon_lag_ms.is_none() {
                 return page;
             }
+            assert!(
+                std::time::Instant::now() < until,
+                "{}: the feed stayed held back",
+                self.name
+            );
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
-        panic!("{}: the feed stayed held back", self.name);
     }
 
     fn feed(&self, after: Option<&ChangeCursor>, limit: usize) -> ChangePage {

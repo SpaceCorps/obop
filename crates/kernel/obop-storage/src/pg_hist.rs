@@ -47,23 +47,28 @@ use std::time::{Duration, Instant};
 
 // ---- the schema part -------------------------------------------------------------------------------
 
-/// The SQL of the part, `{schema}` filled in by [`render`]. Every statement is idempotent. The
-/// functions are `SECURITY DEFINER` and pin their `search_path`; their names carry no version on
-/// purpose: a changed signature gets a new name, so that an older binary running `CREATE OR
-/// REPLACE` can never clobber a newer function.
+/// The SQL of the part, filled in by [`render`]: `{schema}` is the quoted name of the schema
+/// (an identifier), `{schema_lit}` the same name for the inside of a string literal (a quote
+/// doubled), and `{do}` the quote of the body of the `DO` block (a tag the name does not
+/// contain). Every statement is idempotent. The functions are `SECURITY DEFINER` and pin their
+/// `search_path`; every function of the server that they call is named with its schema
+/// (`pg_catalog.`), because a function of the same name in the history's schema, that takes
+/// exactly the types of the call, would be chosen over one that needs a cast. Their names carry
+/// no version on purpose: a changed signature gets a new name, so that an older binary running
+/// `CREATE OR REPLACE` can never clobber a newer function.
 const SQL: &str = r##"
 CREATE SEQUENCE IF NOT EXISTS {schema}.obop_record_change_seq;
 CREATE TABLE IF NOT EXISTS {schema}.obop_record_change (
-  seq BIGINT NOT NULL DEFAULT nextval('{schema}.obop_record_change_seq'),
+  seq BIGINT NOT NULL DEFAULT nextval('{schema_lit}.obop_record_change_seq'::regclass),
   at TIMESTAMPTZ NOT NULL,
   txid XID8 NOT NULL DEFAULT pg_current_xact_id(),
   model TEXT NOT NULL,
   record_id TEXT NOT NULL,
   op TEXT NOT NULL CHECK (op IN ('create','update','delete','transition','erase','import')),
   actor TEXT NOT NULL,
-  via JSONB NOT NULL DEFAULT '{}',
+  via JSONB NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(via) = 'object'),
   row_version BIGINT NOT NULL,
-  changed JSONB NOT NULL,
+  changed JSONB NOT NULL CHECK (jsonb_typeof(changed) = 'object'),
   sealed BOOLEAN NOT NULL DEFAULT false,
   batch_id TEXT,
   run_id TEXT,
@@ -81,53 +86,54 @@ CREATE INDEX IF NOT EXISTS obop_record_change_sealed
 CREATE OR REPLACE FUNCTION {schema}.obop_history_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path = {schema}, pg_temp AS $$
 BEGIN
-  IF current_setting('obop.history_maint', true) IS DISTINCT FROM 'on'
-     OR current_user <> (SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = tg_relid) THEN
+  IF pg_catalog.current_setting('obop.history_maint', true) IS DISTINCT FROM 'on'
+     OR current_user <> (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class
+                          WHERE oid = tg_relid) THEN
     RAISE EXCEPTION 'obop_record_change is append-only' USING errcode = '42501';
   END IF;
   RETURN coalesce(new, old);
 END $$;
 
-DO $$ BEGIN
+DO {do} BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'obop_record_change_ro'
-                  AND tgrelid = '{schema}.obop_record_change'::regclass) THEN
+                  AND tgrelid = '{schema_lit}.obop_record_change'::regclass) THEN
     CREATE TRIGGER obop_record_change_ro BEFORE UPDATE OR DELETE ON {schema}.obop_record_change
       FOR EACH ROW EXECUTE FUNCTION {schema}.obop_history_guard();
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'obop_record_change_ro_t'
-                  AND tgrelid = '{schema}.obop_record_change'::regclass) THEN
+                  AND tgrelid = '{schema_lit}.obop_record_change'::regclass) THEN
     CREATE TRIGGER obop_record_change_ro_t BEFORE TRUNCATE ON {schema}.obop_record_change
       FOR EACH STATEMENT EXECUTE FUNCTION {schema}.obop_history_guard();
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'obop_record_change_ro_t'
-                  AND tgrelid = '{schema}.obop_record_change_default'::regclass) THEN
+                  AND tgrelid = '{schema_lit}.obop_record_change_default'::regclass) THEN
     CREATE TRIGGER obop_record_change_ro_t BEFORE TRUNCATE ON {schema}.obop_record_change_default
       FOR EACH STATEMENT EXECUTE FUNCTION {schema}.obop_history_guard();
   END IF;
-END $$;
+END {do};
 
 CREATE OR REPLACE FUNCTION {schema}.obop_history_ensure_partition(p_month date) RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = {schema}, pg_temp AS $$
 DECLARE
-  lo timestamptz := date_trunc('month', p_month::timestamp) AT TIME ZONE 'UTC';
-  hi timestamptz := (date_trunc('month', p_month::timestamp) + interval '1 month') AT TIME ZONE 'UTC';
-  part text := 'obop_record_change_p' || to_char(p_month, 'YYYYMM');
+  lo timestamptz := pg_catalog.date_trunc('month', p_month::timestamp) AT TIME ZONE 'UTC';
+  hi timestamptz := (pg_catalog.date_trunc('month', p_month::timestamp) + interval '1 month') AT TIME ZONE 'UTC';
+  part text := 'obop_record_change_p' || pg_catalog.to_char(p_month::timestamp, 'YYYYMM');
   moved bigint := 0;
 BEGIN
-  IF p_month < date '2000-01-01' OR p_month > (current_date + interval '1 year')::date THEN
+  IF p_month IS NULL OR p_month < date '2000-01-01' OR p_month > (current_date + interval '1 year')::date THEN
     RAISE EXCEPTION 'month % is outside the range history partitions are made for', p_month;
   END IF;
-  PERFORM pg_advisory_xact_lock(hashtextextended('obop-history-partition', 0));
-  IF to_regclass(part) IS NOT NULL THEN RETURN 'exists'; END IF;
-  PERFORM set_config('obop.history_maint', 'on', true);
-  EXECUTE format('CREATE TABLE %I (LIKE obop_record_change INCLUDING DEFAULTS INCLUDING CONSTRAINTS)', part);
-  EXECUTE format('ALTER TABLE %I ADD CONSTRAINT %I CHECK (at >= %L AND at < %L)', part, part || '_bounds', lo, hi);
-  EXECUTE format('WITH m AS (DELETE FROM obop_record_change_default WHERE at >= %L AND at < %L RETURNING *) INSERT INTO %I SELECT * FROM m', lo, hi, part);
+  PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('obop-history-partition', 0));
+  IF pg_catalog.to_regclass(part) IS NOT NULL THEN RETURN 'exists'; END IF;
+  PERFORM pg_catalog.set_config('obop.history_maint', 'on', true);
+  EXECUTE pg_catalog.format('CREATE TABLE %I (LIKE obop_record_change INCLUDING DEFAULTS INCLUDING CONSTRAINTS)', part);
+  EXECUTE pg_catalog.format('ALTER TABLE %I ADD CONSTRAINT %I CHECK (at >= %L AND at < %L)', part, part || '_bounds', lo, hi);
+  EXECUTE pg_catalog.format('WITH m AS (DELETE FROM obop_record_change_default WHERE at >= %L AND at < %L RETURNING *) INSERT INTO %I SELECT * FROM m', lo, hi, part);
   GET DIAGNOSTICS moved = ROW_COUNT;
-  EXECUTE format('ALTER TABLE obop_record_change ATTACH PARTITION %I FOR VALUES FROM (%L) TO (%L)', part, lo, hi);
-  EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', part, part || '_bounds');
-  EXECUTE format('CREATE TRIGGER %I BEFORE TRUNCATE ON %I FOR EACH STATEMENT EXECUTE FUNCTION obop_history_guard()', part || '_ro_t', part);
-  PERFORM set_config('obop.history_maint', 'off', true);
+  EXECUTE pg_catalog.format('ALTER TABLE obop_record_change ATTACH PARTITION %I FOR VALUES FROM (%L) TO (%L)', part, lo, hi);
+  EXECUTE pg_catalog.format('ALTER TABLE %I DROP CONSTRAINT %I', part, part || '_bounds');
+  EXECUTE pg_catalog.format('CREATE TRIGGER %I BEFORE TRUNCATE ON %I FOR EACH STATEMENT EXECUTE FUNCTION obop_history_guard()', part || '_ro_t', part);
+  PERFORM pg_catalog.set_config('obop.history_maint', 'off', true);
   RETURN 'created, moved ' || moved;
 END $$;
 
@@ -136,38 +142,45 @@ CREATE OR REPLACE FUNCTION {schema}.obop_history_erase(
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path = {schema}, pg_temp AS $$
 DECLARE n bigint; names text[];
 BEGIN
-  PERFORM set_config('obop.history_maint', 'on', true);
-  SELECT coalesce(array_agg(DISTINCT e.k COLLATE "C" ORDER BY e.k COLLATE "C"), '{}') INTO names
-    FROM obop_record_change c, LATERAL jsonb_each(c.changed) e(k, v)
+  PERFORM pg_catalog.set_config('obop.history_maint', 'on', true);
+  SELECT coalesce(pg_catalog.array_agg(DISTINCT e.k COLLATE "C" ORDER BY e.k COLLATE "C"), '{}') INTO names
+    FROM obop_record_change c, LATERAL pg_catalog.jsonb_each(c.changed) e(k, v)
    WHERE c.model = p_model AND c.record_id = p_id AND c.op <> 'erase'
      AND e.k <> ALL (p_keep) AND NOT (e.v @> '{"t":"erased"}' OR e.v @> '{"t":"redacted"}');
   UPDATE obop_record_change c SET changed = (
-      SELECT jsonb_object_agg(e.k, CASE WHEN e.k = ANY (p_keep) OR e.v @> '{"t":"erased"}' OR e.v @> '{"t":"redacted"}'
+      SELECT pg_catalog.jsonb_object_agg(e.k, CASE WHEN e.k = ANY (p_keep) OR e.v @> '{"t":"erased"}' OR e.v @> '{"t":"redacted"}'
                                         THEN e.v ELSE '{"t":"erased"}'::jsonb END)
-        FROM jsonb_each(c.changed) e(k, v)), sealed = false
+        FROM pg_catalog.jsonb_each(c.changed) e(k, v)), sealed = false
    WHERE c.model = p_model AND c.record_id = p_id AND c.op <> 'erase'
-     AND EXISTS (SELECT 1 FROM jsonb_each(c.changed) e(k, v)
+     AND EXISTS (SELECT 1 FROM pg_catalog.jsonb_each(c.changed) e(k, v)
                   WHERE e.k <> ALL (p_keep) AND NOT (e.v @> '{"t":"erased"}' OR e.v @> '{"t":"redacted"}'));
   GET DIAGNOSTICS n = ROW_COUNT;
   INSERT INTO obop_record_change (at, model, record_id, op, actor, via, row_version, changed)
   VALUES (p_at, p_model, p_id, 'erase', p_actor, p_via, p_row_version,
-          jsonb_build_object('fields', to_jsonb(names), 'entries', n));
-  PERFORM set_config('obop.history_maint', 'off', true);
+          pg_catalog.jsonb_build_object('fields', pg_catalog.to_jsonb(names), 'entries', n));
+  PERFORM pg_catalog.set_config('obop.history_maint', 'off', true);
   RETURN n;
 END $$;
 
 CREATE OR REPLACE FUNCTION {schema}.obop_history_drop_partition(p_month date, p_min_age interval)
 RETURNS bigint LANGUAGE plpgsql SECURITY DEFINER SET search_path = {schema}, pg_temp AS $$
-DECLARE hi timestamptz := (date_trunc('month', p_month::timestamp) + interval '1 month') AT TIME ZONE 'UTC';
-        part text := 'obop_record_change_p' || to_char(p_month, 'YYYYMM'); n bigint;
+DECLARE hi timestamptz; part text; n bigint;
 BEGIN
-  IF to_regclass(part) IS NULL THEN RETURN 0; END IF;
-  IF hi > now() - p_min_age THEN
+  -- The floor below only holds for an age that is zero or more: a missing one makes every
+  -- comparison unknown, and a negative one moves the floor into the future.
+  IF p_month IS NULL OR p_min_age IS NULL OR p_min_age < interval '0' THEN
+    RAISE EXCEPTION 'obop_history_drop_partition needs a month and a minimum age that is not negative'
+      USING errcode = '22023';
+  END IF;
+  hi := (pg_catalog.date_trunc('month', p_month::timestamp) + interval '1 month') AT TIME ZONE 'UTC';
+  part := 'obop_record_change_p' || pg_catalog.to_char(p_month::timestamp, 'YYYYMM');
+  IF pg_catalog.to_regclass(part) IS NULL THEN RETURN 0; END IF;
+  IF NOT (hi <= pg_catalog.now() - p_min_age) THEN
     RAISE EXCEPTION 'partition % is younger than the retention of the models in it', part;
   END IF;
-  PERFORM set_config('lock_timeout', '3s', true);
-  EXECUTE format('SELECT count(*) FROM %I', part) INTO n;
-  EXECUTE format('DROP TABLE %I', part);
+  PERFORM pg_catalog.set_config('lock_timeout', '3s', true);
+  EXECUTE pg_catalog.format('SELECT count(*) FROM %I', part) INTO n;
+  EXECUTE pg_catalog.format('DROP TABLE %I', part);
   RETURN n;
 END $$;
 
@@ -197,8 +210,35 @@ pub(crate) const FUNCTIONS: [&str; 4] = [
     "obop_history_drop_partition(date, interval)",
 ];
 
+/// The SQL of the part for `schema` (the schema as `quote_ident` writes it). The three places
+/// are filled in one pass, so that nothing a name contains is taken for a place.
 fn render(schema: &str) -> String {
-    SQL.replace("{schema}", schema)
+    let mut tag = String::from("obop_do");
+    while schema.contains(&format!("${tag}$")) {
+        tag.push('x');
+    }
+    let places = [
+        ("{schema_lit}", schema.replace('\'', "''")),
+        ("{schema}", schema.to_string()),
+        ("{do}", format!("${tag}$")),
+    ];
+    let mut out = String::with_capacity(SQL.len() + 256);
+    let mut rest = SQL;
+    'scan: while let Some(i) = rest.find('{') {
+        out.push_str(&rest[..i]);
+        rest = &rest[i..];
+        for (name, value) in &places {
+            if let Some(after) = rest.strip_prefix(name) {
+                out.push_str(value);
+                rest = after;
+                continue 'scan;
+            }
+        }
+        out.push('{');
+        rest = &rest[1..];
+    }
+    out.push_str(rest);
+    out
 }
 
 fn check(c: &mut Client) -> Result<bool> {
@@ -740,6 +780,33 @@ pub(crate) fn history(main: &PgPool, q: &HistoryQuery) -> Result<Vec<ChangeRow>>
     })
 }
 
+/// What the feed binds its cursors to, in one statement: the next transaction number the cluster
+/// will give out, and the identity of the cluster with the time line it is on (its system
+/// identifier and the time line of its last checkpoint, which follows a promotion within
+/// moments). The control data is for any role unless the server's owner has withdrawn it; then
+/// the identity is NULL and only the check of the numbers remains.
+const CLUSTER: &str = "SELECT pg_snapshot_xmax(pg_current_snapshot())::text,
+       CASE WHEN has_function_privilege('pg_control_system()', 'EXECUTE')
+             AND has_function_privilege('pg_control_checkpoint()', 'EXECUTE')
+            THEN (SELECT system_identifier::text FROM pg_control_system())
+                 || '/' || (SELECT timeline_id::text FROM pg_control_checkpoint())
+       END";
+
+/// The epoch the cursors of the feed carry: the stored one (renewed by a restore), followed by a
+/// digest of the cluster and time line they were made on, where that is known. Letters and
+/// digits only, as the text of a cursor allows.
+pub(crate) fn epoch_of(stored: &str, cluster: Option<&str>) -> String {
+    use sha2::{Digest, Sha256};
+    match cluster {
+        None => stored.to_string(),
+        Some(identity) => {
+            let digest = Sha256::digest(identity.as_bytes());
+            let short: String = digest.iter().take(4).map(|b| format!("{b:02x}")).collect();
+            format!("{stored}{short}")
+        }
+    }
+}
+
 /// How far the clock of the oldest entry the feed holds back is behind: entries that committed
 /// after a transaction that began earlier and is still open.
 const HELD_BACK: &str = "SELECT (extract(epoch FROM clock_timestamp() - min(at)) * 1000)::bigint
@@ -751,17 +818,27 @@ const HELD_BACK: &str = "SELECT (extract(epoch FROM clock_timestamp() - min(at))
 pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
     let limit = history::feed_limit(q)?;
     let since = micros_of(&q.since_at)?;
-    let epoch = history::feed_epoch(pg)?;
+    let stored = history::feed_epoch(pg)?;
     let models = (!q.models.is_empty()).then(|| q.models.clone());
     let ops = (!q.ops.is_empty()).then(|| q.ops.clone());
-    let (rows, lag) = pg.main.read_tx(Class::List, |tx| {
+    let (rows, lag, epoch) = pg.main.read_tx(Class::List, |tx| {
+        // The cursors are made for this cluster and this time line of it: the order of the feed
+        // is that of the transaction numbers of the server, which another cluster (a dump loaded
+        // into a new one) or an earlier time line (a point in time recovery, a failover to a
+        // standby that lagged) counts again from other numbers.
+        let cluster = tx.query_one(CLUSTER, &[])?;
+        let xmax: String = cluster.try_get(0)?;
+        let xmax: u64 = xmax.parse().unwrap_or(u64::MAX);
+        let epoch = epoch_of(&stored, cluster.try_get::<_, Option<String>>(1)?.as_deref());
         let exists: bool = tx
             .query_one("SELECT to_regclass('obop_record_change') IS NOT NULL", &[])?
             .get(0);
-        // The newest number given out: a cursor beyond it comes from another time line.
+        // The newest number given out: a cursor beyond it comes from another time line. The
+        // function needs USAGE on the sequence, which the writers have; reading the sequence
+        // relation itself would need SELECT.
         let newest: i64 = if exists {
             tx.query_one(
-                "SELECT CASE WHEN is_called THEN last_value ELSE 0 END FROM obop_record_change_seq",
+                "SELECT coalesce(pg_catalog.pg_sequence_last_value('obop_record_change_seq'::regclass), 0)",
                 &[],
             )?
             .get(0)
@@ -769,8 +846,19 @@ pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
             0
         };
         let (txid, seq) = history::resume(&epoch, q.after.as_ref(), newest)?;
+        // An entry the cursor stands for has committed, so its number is below the next one this
+        // cluster will give out. At or above it, the cursor was made by another cluster or on a
+        // time line that was left (the numbers there ran further than they do here).
+        if txid > 0 && u64::try_from(txid).is_ok_and(|t| t >= xmax) {
+            return Err(history::cursor_expired(
+                "this cursor was made on another time line of the database (it was moved to \
+                 another server, recovered to an earlier point, or failed over to a standby \
+                 that lagged); read the feed again from the start",
+            )
+            .into());
+        }
         if !exists || limit == 0 {
-            return Ok((Vec::new(), None));
+            return Ok((Vec::new(), None, epoch));
         }
         let rows = tx.query(
             &feed_sql(),
@@ -790,7 +878,7 @@ pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
         } else {
             None
         };
-        Ok((rows, lag))
+        Ok((rows, lag, epoch))
     })?;
     let mut page = history::page(&epoch, q, rows);
     page.horizon_lag_ms = lag.map(|ms| ms.max(0));
@@ -818,8 +906,22 @@ pub(crate) fn stats(pg: &Pg) -> Result<HistoryStats> {
             // the server has never analysed.
             let n: i64 = if is_default || estimate < 0 {
                 let quoted = name.replace('"', "\"\"");
-                c.query_one(&format!("SELECT count(*) FROM \"{quoted}\""), &[])?
-                    .get(0)
+                // A partition is its own table for privileges: the grants of the parent do not
+                // reach it (a query through the parent is checked against the parent only).
+                match c.query_one(&format!("SELECT count(*) FROM \"{quoted}\""), &[]) {
+                    Ok(r) => r.get(0),
+                    Err(e) if e.code() == Some(&SqlState::INSUFFICIENT_PRIVILEGE) => {
+                        return Err(format!(
+                            "the statistics count the rows of the partition {name}, and this role \
+                             may not read it: grant SELECT on the partitions of \
+                             obop_record_change as well as on the table itself \
+                             (docs/DEPLOY.md, change history): {}",
+                            describe(&e)
+                        )
+                        .into());
+                    }
+                    Err(e) => return Err(e.into()),
+                }
             } else {
                 estimate
             };
@@ -1201,8 +1303,8 @@ impl Import {
         c.query_one(
             "SELECT setval('obop_record_change_seq',
                            greatest($1::bigint, 1,
-                                    (SELECT CASE WHEN is_called THEN last_value ELSE 0 END
-                                       FROM obop_record_change_seq)),
+                                    coalesce(pg_catalog.pg_sequence_last_value(
+                                        'obop_record_change_seq'::regclass), 0)),
                            true)",
             &[&self.newest],
         )?;
