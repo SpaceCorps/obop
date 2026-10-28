@@ -407,9 +407,6 @@ importers:
 
   web/packages/ui-native:
     devDependencies:
-      '@storybook/react-vite':
-        specifier: 10.6.3
-        version: 10.6.3(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.0))(react@19.3.0)(storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
@@ -6681,12 +6678,6 @@ snapshots:
 
   '@sinclair/typebox@0.27.12': {}
 
-  '@storybook/builder-vite@10.6.3(storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))':
-    dependencies:
-      storybook: 10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-      ts-dedent: 2.3.0
-      vite: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1)
-
   '@storybook/builder-vite@10.6.3(storybook@10.6.3(@types/react@19.3.0)(react@19.3.1)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))':
     dependencies:
       storybook: 10.6.3(@types/react@19.3.0)(react@19.3.1)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
@@ -6694,10 +6685,6 @@ snapshots:
       vite: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1)
 
   '@storybook/global@5.0.0': {}
-
-  '@storybook/icons@2.2.0(react@19.3.0)':
-    dependencies:
-      react: 19.3.0
 
   '@storybook/icons@2.2.0(react@19.3.1)':
     dependencies:
@@ -6711,14 +6698,6 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
-
-  '@storybook/react-dom-shim@10.6.3(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.0))(react@19.3.0)(storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))':
-    dependencies:
-      react: 19.3.0
-      react-dom: 19.3.1(react@19.3.0)
-      storybook: 10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-    optionalDependencies:
-      '@types/react': 19.3.0
 
   '@storybook/react-vite@10.6.3(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(storybook@10.6.3(@types/react@19.3.0)(react@19.3.1)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))':
     dependencies:
@@ -6743,29 +6722,6 @@ snapshots:
       - rollup
       - supports-color
 
-  '@storybook/react-vite@10.6.3(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.0))(react@19.3.0)(storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(supports-color@10.2.2)(typescript@7.0.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))':
-    dependencies:
-      '@joshwooding/vite-plugin-react-docgen-typescript': 0.7.0(typescript@7.0.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))
-      '@rollup/pluginutils': 5.4.0
-      '@storybook/builder-vite': 10.6.3(storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))
-      '@storybook/react': 10.6.3(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.0))(react@19.3.0)(storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(supports-color@10.2.2)(typescript@7.0.2)
-      empathic: 2.1.0
-      magic-string: 1.4.3
-      react: 19.3.0
-      react-docgen: 8.0.4(supports-color@10.2.2)
-      react-dom: 19.3.1(react@19.3.0)
-      resolve: 1.22.13
-      storybook: 10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-      tsconfig-paths: 4.2.0
-      vite: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1)
-    optionalDependencies:
-      typescript: 7.0.2
-    transitivePeerDependencies:
-      - '@types/react'
-      - '@types/react-dom'
-      - rollup
-      - supports-color
-
   '@storybook/react@10.6.3(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(storybook@10.6.3(@types/react@19.3.0)(react@19.3.1)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(supports-color@10.2.2)(typescript@7.0.2)':
     dependencies:
       '@storybook/global': 5.0.0
@@ -6778,21 +6734,6 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
-      typescript: 7.0.2
-    transitivePeerDependencies:
-      - supports-color
-
-  '@storybook/react@10.6.3(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.0))(react@19.3.0)(storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))(supports-color@10.2.2)(typescript@7.0.2)':
-    dependencies:
-      '@storybook/global': 5.0.0
-      '@storybook/react-dom-shim': 10.6.3(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.0))(react@19.3.0)(storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)))
-      react: 19.3.0
-      react-docgen: 8.0.4(supports-color@10.2.2)
-      react-docgen-typescript: 2.4.0(typescript@7.0.2)
-      react-dom: 19.3.1(react@19.3.0)
-      storybook: 10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-    optionalDependencies:
-      '@types/react': 19.3.0
       typescript: 7.0.2
     transitivePeerDependencies:
       - supports-color
@@ -6991,18 +6932,6 @@ snapshots:
       - utf-8-validate
       - vite
 
-  '@vitest/browser-preview@5.0.1(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)':
-    dependencies:
-      '@testing-library/dom': 10.4.2
-      '@testing-library/user-event': 14.6.8(@testing-library/dom@10.4.2)
-      '@vitest/browser': 5.0.1(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)
-      vitest: 5.0.1(@types/node@26.6.5)(@vitest/browser-preview@5.0.1)(@vitest/ui@5.0.1)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))
-    transitivePeerDependencies:
-      - bufferutil
-      - msw
-      - utf-8-validate
-      - vite
-
   '@vitest/browser@5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))(vitest@5.0.1)':
     dependencies:
       '@blazediff/core': 1.10.0
@@ -7014,24 +6943,6 @@ snapshots:
       sirv: 3.0.2
       tinyrainbow: 3.2.0
       vitest: 5.0.1(@types/node@26.6.5)(@vitest/browser-preview@5.0.1)(@vitest/ui@5.0.1)(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))
-      ws: 8.22.0
-    transitivePeerDependencies:
-      - bufferutil
-      - msw
-      - utf-8-validate
-      - vite
-
-  '@vitest/browser@5.0.1(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)':
-    dependencies:
-      '@blazediff/core': 1.10.0
-      '@vitest/mocker': 5.0.1(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))
-      '@vitest/ui': 5.0.1(vitest@5.0.1)
-      '@vitest/utils': 5.0.1
-      magic-string: 1.4.3
-      pngjs: 7.0.0
-      sirv: 3.0.2
-      tinyrainbow: 3.2.0
-      vitest: 5.0.1(@types/node@26.6.5)(@vitest/browser-preview@5.0.1)(@vitest/ui@5.0.1)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))
       ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
@@ -7055,15 +6966,6 @@ snapshots:
       magic-string: 1.4.3
     optionalDependencies:
       vite: '@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)'
-
-  '@vitest/mocker@5.0.1(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))':
-    dependencies:
-      '@jridgewell/trace-mapping': 0.3.31
-      '@vitest/spy': 5.0.1
-      estree-walker: 3.0.3
-      magic-string: 1.4.3
-    optionalDependencies:
-      vite: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1)
 
   '@vitest/pretty-format@3.2.4':
     dependencies:
@@ -9056,11 +8958,6 @@ snapshots:
       react: 19.3.0
       scheduler: 0.28.0
 
-  react-dom@19.3.1(react@19.3.0):
-    dependencies:
-      react: 19.3.0
-      scheduler: 0.28.0
-
   react-dom@19.3.1(react@19.3.1):
     dependencies:
       react: 19.3.1
@@ -9425,33 +9322,6 @@ snapshots:
 
   std-env@4.3.0: {}
 
-  storybook@10.6.3(@types/react@19.3.0)(react@19.3.0)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)):
-    dependencies:
-      '@storybook/global': 5.0.0
-      '@storybook/icons': 2.2.0(react@19.3.0)
-      '@testing-library/dom': 10.4.2
-      '@testing-library/jest-dom': 6.9.1
-      '@testing-library/user-event': 14.6.8(@testing-library/dom@10.4.2)
-      '@vitest/expect': 3.2.4
-      '@vitest/spy': 3.2.4
-      '@webcontainer/env': 1.1.1
-      esbuild: 0.28.2
-      jsonc-parser: 3.3.1
-      open: 10.2.0
-      oxc-parser: 0.127.0
-      oxc-resolver: 11.21.2
-      recast: 0.23.21
-      semver: 7.8.5
-      use-sync-external-store: 1.7.0(react@19.3.0)
-      ws: 8.22.0
-    optionalDependencies:
-      '@types/react': 19.3.0
-      vite-plus: 1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)
-    transitivePeerDependencies:
-      - bufferutil
-      - react
-      - utf-8-validate
-
   storybook@10.6.3(@types/react@19.3.0)(react@19.3.1)(vite-plus@1.0.0(@types/node@26.6.5)(@vitest/ui@5.0.1)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1)):
     dependencies:
       '@storybook/global': 5.0.0
@@ -9679,10 +9549,6 @@ snapshots:
 
   uri-js-replace@1.0.1: {}
 
-  use-sync-external-store@1.7.0(react@19.3.0):
-    dependencies:
-      react: 19.3.0
-
   use-sync-external-store@1.7.0(react@19.3.1):
     dependencies:
       react: 19.3.1
@@ -9840,29 +9706,6 @@ snapshots:
     optionalDependencies:
       '@types/node': 26.6.5
       '@vitest/browser-preview': 5.0.1(@voidzero-dev/vite-plus-core@1.0.0(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(typescript@7.0.2)(yaml@2.9.1))(vitest@5.0.1)
-      '@vitest/ui': 5.0.1(vitest@5.0.1)
-    transitivePeerDependencies:
-      - msw
-
-  vitest@5.0.1(@types/node@26.6.5)(@vitest/browser-preview@5.0.1)(@vitest/ui@5.0.1)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1)):
-    dependencies:
-      '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.1(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))
-      chai: 6.3.0
-      es-module-lexer: 2.3.2
-      expect-type: 1.4.0
-      magic-string: 1.4.3
-      obug: 2.2.1
-      picomatch: 4.0.7
-      std-env: 4.3.0
-      tinybench: 6.1.4
-      tinyexec: 1.3.0
-      tinyglobby: 0.2.17
-      vite: 8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 26.6.5
-      '@vitest/browser-preview': 5.0.1(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(terser@5.51.2)(yaml@2.9.1))(vitest@5.0.1)
       '@vitest/ui': 5.0.1(vitest@5.0.1)
     transitivePeerDependencies:
       - msw
