@@ -12,7 +12,10 @@ export interface SyncStatus {
 export interface SyncController {
   /** Run a pass now (or as soon as the one that is running has ended). */
   kick(): void;
-  /** Stop the timer. */
+  /**
+   * Stop the timer. A pass that is running is not cancelled here: it stops itself before its next
+   * call when the sign-in has changed (the engine's `identity`).
+   */
   stop(): void;
   status(): SyncStatus;
   subscribe(listener: () => void): () => void;
@@ -91,6 +94,13 @@ export function createSyncController({
       const report = await pass();
       set({ running: false, report, error: null });
       if (report.state === "signed_out") return;
+      if (report.state === "interrupted") {
+        // The sign-in changed during the pass: look again under the new one (a signed-out phone
+        // or a foreign outbox makes `signedIn()` false and nothing is sent).
+        again = false;
+        void run();
+        return;
+      }
       if (again) {
         again = false;
         void run();

@@ -96,6 +96,17 @@ describe("what the driver may do", () => {
     expect(canDiscard({ ...ended, discardReason: "x" })).toBe(false);
     expect(canDiscard({ ...ended, submitRequested: true })).toBe(false);
   });
+
+  test("a trip stopped by a refusal can be discarded, but not while the server's state is unknown", () => {
+    const problem = (code: string) => ({
+      ...ended,
+      problem: { step: "end" as const, code, message: "x" },
+    });
+    expect(canDiscard(problem("gone"))).toBe(true);
+    expect(canDiscard(problem("bad_request"))).toBe(true);
+    // The server answered 404 and the phone cannot tell what that means: the points stay.
+    expect(canDiscard(problem("unknown"))).toBe(false);
+  });
 });
 
 describe("distances", () => {

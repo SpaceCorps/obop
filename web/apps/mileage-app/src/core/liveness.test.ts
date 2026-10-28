@@ -12,6 +12,16 @@ describe("is the trip really being recorded", () => {
     expect(at(NO_FIX_MS)).toEqual({ kind: "no_fix" });
   });
 
+  test("before the stored positions have been read nothing is said, however old the trip is", () => {
+    expect(
+      recordingHealth({ startedAtMs: T0, lastFixMs: undefined, nowMs: T0 + 3 * NO_FIX_MS }),
+    ).toEqual({ kind: "waiting" });
+    // Once read, an old trip without a position is a fault as before.
+    expect(
+      recordingHealth({ startedAtMs: T0, lastFixMs: null, nowMs: T0 + 3 * NO_FIX_MS }),
+    ).toEqual({ kind: "no_fix" });
+  });
+
   test("a position that is not old is fine, an old one is a soft notice with its age", () => {
     const at = (ms: number) =>
       recordingHealth({ startedAtMs: T0, lastFixMs: T0 + 10_000, nowMs: T0 + 10_000 + ms });

@@ -26,11 +26,16 @@ export type Health =
 
 export function recordingHealth(input: {
   startedAtMs: number;
-  /** When the newest stored position was taken, or `null` when there is none. */
-  lastFixMs: number | null;
+  /**
+   * When the newest stored position was taken, `null` when there is none, and `undefined` while
+   * the stored positions have not been read yet (opening a trip that is older than a minute must
+   * not say "no position arrived" before the phone has looked).
+   */
+  lastFixMs: number | null | undefined;
   nowMs: number;
 }): Health {
   const { startedAtMs, lastFixMs, nowMs } = input;
+  if (lastFixMs === undefined) return { kind: "waiting" };
   if (lastFixMs === null) {
     return nowMs - startedAtMs >= NO_FIX_MS ? { kind: "no_fix" } : { kind: "waiting" };
   }

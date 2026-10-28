@@ -77,11 +77,16 @@ export function canSubmit(trip: LocalTrip): boolean {
   return (trip.serverState ?? "ended") === "ended";
 }
 
-/** Whether the driver may discard the trip: the server allows it while recording, ended or rejected, and a trip that a refusal stopped can always be cleared. */
+/**
+ * Whether the driver may discard the trip: the server allows it while recording, ended or
+ * rejected. A trip that a refusal stopped can be discarded as well, and the engine finishes it on
+ * the phone when the server says it has no such trip (`gone`) or when the trip was never created
+ * there (the create was refused for good). Not while the state is unknown (`unknown`: the server
+ * answered 404): the points are kept until it answers.
+ */
 export function canDiscard(trip: LocalTrip): boolean {
   if (trip.discardReason !== null || trip.discardDone) return false;
-  // A trip stopped by a refusal (the server discarded it, or has lost it) can always be cleared
-  // from the phone: the engine finishes a discard locally when the server says the trip is gone.
+  if (trip.problem?.code === "unknown") return false;
   if (trip.problem !== null && trip.origin === "device") return true;
   if (trip.submitRequested && !trip.submitDone) return false;
   const state = trip.serverState;

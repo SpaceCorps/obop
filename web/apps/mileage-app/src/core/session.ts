@@ -1,4 +1,10 @@
-import { OAuthError, refreshTokens, type OAuthDeps, type TokenSet } from "@obop/client";
+import {
+  OAuthError,
+  refreshTokens,
+  revokeToken,
+  type OAuthDeps,
+  type TokenSet,
+} from "@obop/client";
 
 /** The instance the phone signs in to, and the client the instance gave it. Nothing secret. */
 export interface ServerConfig {
@@ -27,6 +33,16 @@ export function needsRegistration(
   return config.usedAt === undefined || nowMs - config.usedAt > CLIENT_FRESH_MS;
 }
 
+/**
+ * What the authorization page answers for a client that the instance does not know (the instance
+ * forgot it for a reason other than idleness: its database was replaced, a restore, a new
+ * installation at the same address): 400 and an error page, without a redirect. A client that it
+ * knows gets the sign-in page. The app asks before it opens the browser, and registers again once
+ * when the answer is this one, so that the driver never lands on an error page that the app cannot
+ * read (the browser reports only that it was closed).
+ */
+export const clientUnknown = (status: number | null): boolean => status === 400;
+
 /** Where the session is kept. On the phone: the Android Keystore through expo-secure-store. */
 export interface SessionStorage {
   loadConfig(): Promise<ServerConfig | null>;
@@ -42,8 +58,23 @@ export type SessionStatus =
   /** The instance ended the sign-in (revoked, or the refresh was refused): sign in again. */
   | "expired";
 
+/**
+ * Why a sign-in ended without the driver asking: the instance refused the refresh (`refused`), or
+ * the refresh was given up after a timeout and the phone cannot tell whether the instance rotated
+ * the token (`unsure`).
+ */
+export type EndedBy = "refused" | "unsure";
+
 export interface Session {
   status(): SessionStatus;
+  /** Why the sign-in ended, while the status is `expired`; `null` otherwise. */
+  endedBy(): EndedBy | null;
+  /**
+   * A number that changes whenever the sign-in changes: completed, signed out, ended, restored.
+   * Work that started under one value must not go on under another (a pass of the outbox that was
+   * running when the driver signed out must not send the next trip with the next person's token).
+   */
+  generation(): number;
   config(): ServerConfig | null;
   /** The `device` record of this sign-in, or `null`. */
   deviceId(): string | null;
@@ -71,7 +102,15 @@ export interface SessionOptions {
   now?: () => number;
   /** An access token is refreshed when it has less than this left. */
   skewMs?: number;
+  /** A refresh that has no answer after this long is given up (the outcome is then unknown). */
+  refreshTimeoutMs?: number;
 }
+
+/** The longest a refresh waits: longer than a slow cellular answer, and the outcome is unknown after it. */
+export const REFRESH_TIMEOUT_MS = 60_000;
+
+/** How long the best-effort end of a sign-in at the instance may take. */
+const END_REVOKE_MS = 5000;
 
 /** The answers of the token endpoint that mean the sign-in is over (RFC 6749 section 5.2). */
 const ENDED: readonly string[] = [
@@ -86,12 +125,24 @@ export function createSession({
   oauth,
   now = Date.now,
   skewMs = 60_000,
+  refreshTimeoutMs = REFRESH_TIMEOUT_MS,
 }: SessionOptions): Session {
   let status: SessionStatus = "signed_out";
+  let ended: EndedBy | null = null;
+  let generation = 0;
   let config: ServerConfig | null = null;
   let tokens: TokenSet | null = null;
   let refreshing: Promise<string | null> | null = null;
   const listeners = new Set<() => void>();
+
+  // Writes to the Keystore go one after the other, so that the write of a sign-out can never be
+  // overtaken by an older write of a refresh that was still on its way.
+  let writes: Promise<void> = Promise.resolve();
+  const save = (value: TokenSet | null): Promise<void> => {
+    const next = writes.catch(() => undefined).then(() => storage.saveTokens(value));
+    writes = next;
+    return next;
+  };
 
   const change = (next: SessionStatus) => {
     const differs = next !== status;
@@ -99,26 +150,45 @@ export function createSession({
     if (differs) for (const l of listeners) l();
   };
 
+  /** The sign-in is over on this phone (not by the driver's choice): the tokens go, the trips stay. */
+  async function end(by: EndedBy): Promise<null> {
+    generation += 1;
+    tokens = null;
+    ended = by;
+    await save(null);
+    change("expired");
+    return null;
+  }
+
   async function refresh(): Promise<string | null> {
     if (!config || !tokens) return null;
     const { baseUrl, clientId } = config;
+    const spent = tokens.refreshToken;
+    const mine = generation;
     try {
       const next = await refreshTokens(oauth, {
         baseUrl,
         clientId,
-        refreshToken: tokens.refreshToken,
+        refreshToken: spent,
         now: now(),
+        timeoutMs: refreshTimeoutMs,
       });
+      // The driver signed out, or signed in again, while the instance was answering: this pair
+      // belongs to a sign-in that is over. It is neither kept nor written. (The instance has
+      // rotated the token; the sign-out told it to end the whole sign-in.)
+      if (mine !== generation) return null;
       // The refresh token is spent: the new pair is kept in memory first, so that a failed write
       // never leaves the spent one in use (the instance ends the whole sign-in when a refresh
       // token is presented twice), and then written, twice if need be.
       tokens = next;
+      ended = null;
       change("signed_in");
       try {
-        await storage.saveTokens(next);
+        await save(next);
       } catch {
+        if (mine !== generation) return null;
         try {
-          await storage.saveTokens(next);
+          await save(next);
         } catch {
           // The Keystore still holds the spent pair: the next start of the app will find the
           // sign-in ended and ask for a new one. Nothing else can be done here.
@@ -126,12 +196,28 @@ export function createSession({
       }
       return next.accessToken;
     } catch (error) {
+      if (mine !== generation) return null;
       if (error instanceof OAuthError && ENDED.includes(error.code)) {
-        // The instance ended this sign-in. Only the tokens go; the trips on the phone stay.
-        tokens = null;
-        await storage.saveTokens(null);
-        change("expired");
-        return null;
+        // The instance ended this sign-in. A client it does not know any more is registered again
+        // at the next sign-in. Only the tokens go; the trips on the phone stay.
+        if (error.code === "invalid_client" || error.code === "unauthorized_client") {
+          config = { ...config, usedAt: undefined };
+          await storage.saveConfig(config).catch(() => undefined);
+        }
+        return end("refused");
+      }
+      if (error instanceof OAuthError && error.timedOut) {
+        // No answer in time: the instance may have rotated the token and the answer is lost. The
+        // old token is spent or soon will be, and the instance ends the whole sign-in when it is
+        // presented again, so it is not presented again: the sign-in ends here, cleanly, and the
+        // instance is told in the background to end it too (the old token still finds the grant).
+        void revokeToken(oauth, {
+          baseUrl,
+          clientId,
+          token: spent,
+          timeoutMs: END_REVOKE_MS,
+        }).catch(() => undefined);
+        return end("unsure");
       }
       throw error;
     }
@@ -139,6 +225,8 @@ export function createSession({
 
   return {
     status: () => status,
+    endedBy: () => (status === "expired" ? ended : null),
+    generation: () => generation,
     config: () => config,
     deviceId: () => tokens?.deviceId ?? null,
     refreshToken: () => tokens?.refreshToken ?? null,
@@ -148,9 +236,13 @@ export function createSession({
       if (tokens.expiresAt - now() > skewMs) return tokens.accessToken;
       // Calls that meet an old token at the same moment share one refresh: a second use of the
       // same refresh token would end the whole sign-in.
-      refreshing ??= refresh().finally(() => {
-        refreshing = null;
-      });
+      if (refreshing === null) {
+        const run: Promise<string | null> = refresh().finally(() => {
+          // A refresh of an earlier sign-in must not clear the one of the current sign-in.
+          if (refreshing === run) refreshing = null;
+        });
+        refreshing = run;
+      }
       return refreshing;
     },
 
@@ -161,6 +253,8 @@ export function createSession({
     async restore() {
       config = await storage.loadConfig();
       tokens = await storage.loadTokens();
+      generation += 1;
+      ended = null;
       status = tokens && config ? "signed_in" : "signed_out";
       for (const l of listeners) l();
     },
@@ -171,14 +265,22 @@ export function createSession({
     },
 
     async completeSignIn(next) {
-      await storage.saveTokens(next);
+      // Anything still waiting for the instance under the earlier sign-in is dropped from here on.
+      generation += 1;
+      ended = null;
+      await save(next);
       tokens = next;
       change("signed_in");
     },
 
     async signOut() {
+      // First, so that a refresh whose answer is still on its way finds the sign-in gone and
+      // neither keeps its tokens nor writes them: a signed-out phone must not end up signed in.
+      generation += 1;
       tokens = null;
-      await storage.saveTokens(null);
+      ended = null;
+      refreshing = null;
+      await save(null);
       change("signed_out");
     },
 

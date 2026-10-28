@@ -16,7 +16,12 @@ export type Failure =
   | { kind: "signed_out" }
   /** 409 `incomplete`: points are still missing on the server; repeat `end` with backoff. */
   | { kind: "incomplete"; waitMs: number | null; message: string }
-  /** Any other 4xx: repeating changes nothing. A trip the server does not hold has the code `gone`. */
+  /**
+   * Any other 4xx: repeating changes nothing. The engine gives two refusals codes of their own: a
+   * trip the server says it does not hold is `gone`, and a 404 (which the server also sends for a
+   * command that is hidden from this person, or not installed) is `unknown`: the state of the trip
+   * on the server is not known, and nothing on the phone is thrown away for it.
+   */
   | { kind: "refused"; status: number; code: string; message: string };
 
 export function classify(error: unknown): Failure {
@@ -82,7 +87,15 @@ class Refused extends Error {
   }
 }
 
-export type DrainState = "idle" | "ok" | "offline" | "rate_limited" | "unavailable" | "signed_out";
+export type DrainState =
+  | "idle"
+  | "ok"
+  | "offline"
+  | "rate_limited"
+  | "unavailable"
+  | "signed_out"
+  /** The sign-in changed while the pass ran (the driver signed out): the pass stopped, and a new one starts under the new sign-in. */
+  | "interrupted";
 
 export interface DrainReport {
   state: DrainState;
@@ -106,8 +119,19 @@ export interface Engine {
 export interface EngineOptions {
   store: OutboxStore;
   api: TripApi;
-  /** Milliseconds between retries when the server gave none: doubles from `baseMs` up to `maxMs`. */
+  /**
+   * Milliseconds between retries when the server gave none: `baseMs` times 2, 4, 8 ... up to
+   * `maxMs` for the failures of the connection, and `baseMs` times 4, 8, 16 ... for the answers
+   * `incomplete` to Stop (production: 8 s, 16 s, 32 s ... up to 5 minutes).
+   */
   backoff?: { baseMs: number; maxMs: number };
+  /**
+   * Something that changes when the sign-in changes (the session's generation). A pass that
+   * started under one value stops before its next call when the value is another, so that the
+   * rest of a pass that was running when the driver signed out is never sent with the next
+   * person's token.
+   */
+  identity?: () => unknown;
 }
 
 /** After this many `incomplete` answers in a row the driver is told; the retries go on. */
@@ -115,33 +139,54 @@ const INCOMPLETE_NOTICE = 5;
 
 const serverWords = (state: string): string => state.replace("_", " ");
 
-/** The server has no such trip for this person (a restored backup, a hidden trip): a 404, or the plain 400 of the module. */
+/**
+ * The server says it has no such trip for this person (a restored backup, a hidden trip): the plain
+ * 400 "no mileage_trip X" of the module (`Gate::load` in obop-commands; docs/ISSUES.md L30). A 404
+ * is not that: the server sends it for a command that is forbidden to this person, not installed or
+ * not on this surface (`errors.rs`, `Kind::Hidden`), and a proxy sends it too.
+ */
 const isGone = (f: Extract<Failure, { kind: "refused" }>): boolean =>
-  f.status === 404 || /\bno mileage_trip\b/i.test(f.message);
+  /^\s*no mileage_trip\b/i.test(f.message);
+
+/** The sign-in changed while a pass ran: nothing more is sent under the old one. */
+class Interrupted extends Error {}
 
 export function createEngine({
   store,
   api,
   backoff = { baseMs: 2000, maxMs: 300_000 },
+  identity,
 }: EngineOptions): Engine {
   let running: Promise<DrainReport> | null = null;
   let again = false;
   let failures = 0;
   let swept = false;
+  /** The identity the running pass started under. */
+  let who: unknown;
+  const sameSignIn = (): boolean => identity === undefined || identity() === who;
 
   const wait = (): number =>
     Math.min(backoff.baseMs * 2 ** Math.max(0, failures - 1), backoff.maxMs);
 
   /** Runs one call of `step`. A failure that is not about this trip becomes a `Halt`. */
   async function call<T>(step: Problem["step"], fn: () => Promise<T>): Promise<T> {
+    if (!sameSignIn()) throw new Interrupted();
     try {
       return await fn();
     } catch (error) {
       const failure = classify(error);
       if (failure.kind === "refused") {
-        // A missing trip is told apart from other refusals so that the driver can be offered a local discard.
-        const gone = step !== "create" && isGone(failure);
-        throw new Refused(step, gone ? { ...failure, code: "gone" } : failure);
+        // A missing trip is told apart from other refusals so that the driver can be offered a
+        // local discard; a 404 is not a missing trip (see `isGone`) and keeps everything.
+        const code =
+          step === "create"
+            ? failure.code
+            : isGone(failure)
+              ? "gone"
+              : failure.status === 404
+                ? "unknown"
+                : failure.code;
+        throw new Refused(step, code === failure.code ? failure : { ...failure, code });
       }
       if (failure.kind === "incomplete") throw new Incomplete(failure.message, failure.waitMs);
       throw new Halt(failure);
@@ -222,8 +267,9 @@ export function createEngine({
             await finishLocally(t);
             return true;
           }
-          // The driver is still recording: say so (the problem is shown on the Recording screen);
-          // Stop and Discard finish the trip here.
+          // The driver is still recording: the trip is flagged (Home and the trip's page show the
+          // problem; the Recording screen does not, docs/ISSUES.md L41). Stop and Discard finish
+          // the trip here.
           throw new Refused("points", {
             kind: "refused",
             status: 400,
@@ -250,7 +296,18 @@ export function createEngine({
       await store.patchTrip(t.clientTripId, { discardDone: true, serverState: "discarded" });
       return;
     }
-    const id = await serverId(t);
+    let id: string;
+    try {
+      id = await serverId(t);
+    } catch (error) {
+      // The create (and the question for a trip made by a create whose answer was lost) was
+      // refused for good, for example because the person may not use mileage any more: the server
+      // has no trip for this phone, so there is nothing to discard there. A connection that is
+      // down is not a refusal and waits.
+      if (!(error instanceof Refused) || error.step !== "create") throw error;
+      await finishLocally(t);
+      return;
+    }
     let server: RemoteTrip;
     try {
       server = await call("discard", () => api.getTrip(id));
@@ -302,7 +359,8 @@ export function createEngine({
     } catch (error) {
       if (error instanceof Incomplete) {
         const attempts = t.attempts + 1;
-        // The wait doubles with every answer (4 s, 8 s, 16 s ...) up to the cap, unless the server named one.
+        // The wait doubles with every answer up to the cap, unless the server named one: four times
+        // the base after the first answer (8 s, 16 s, 32 s ... with the production base of 2 s).
         const delay =
           error.waitMs ?? Math.min(backoff.baseMs * 2 ** Math.min(attempts + 1, 20), backoff.maxMs);
         await store.patchTrip(t.clientTripId, {
@@ -353,6 +411,7 @@ export function createEngine({
   }
 
   async function pass(): Promise<DrainReport> {
+    who = identity?.();
     let state: DrainState = "ok";
     let retryIn: number | null = null;
     const soonest = (ms: number | null) => {
@@ -376,11 +435,19 @@ export function createEngine({
     const trips = all.filter(hasWork).sort((a, b) => a.createdMs - b.createdMs);
     if (trips.length === 0) return { state: "idle", pending: 0, problems: 0, retryInMs: null };
     for (const listed of trips) {
+      if (!sameSignIn()) {
+        state = "interrupted";
+        break;
+      }
       try {
         // Read again: the driver may have pressed Stop or Discard since the list was made.
         const t = (await store.getTrip(listed.clientTripId)) ?? listed;
         if (hasWork(t)) await syncTrip(t);
       } catch (error) {
+        if (error instanceof Interrupted) {
+          state = "interrupted";
+          break;
+        }
         if (error instanceof Incomplete) {
           soonest(error.waitMs);
           continue;

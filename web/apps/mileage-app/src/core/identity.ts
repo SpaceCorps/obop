@@ -7,6 +7,11 @@ import { holdsUnsent, type OutboxStore } from "./store.ts";
  * record. A sign-in as someone else, or at another address, never uploads, shows or deletes the
  * trips of the previous owner on its own: it finds them "foreign" and the driver decides
  * (docs/spec/mobile.md 8.7).
+ *
+ * The instance is identified by its canonical address because that is all the phone can know: the
+ * instance's own database id is not exposed over HTTP (docs/ISSUES.md L39). So the same person at
+ * a new address of the same instance (a new LAN address, a changed `OBOP_PUBLIC_URL`) is foreign
+ * too, and the trips can be uploaded again by signing in at the old address.
  */
 export interface Owner {
   origin: string;
@@ -36,7 +41,12 @@ export function parseOwner(text: string | null): Owner | null {
 export const sameOwner = (a: Owner, b: Owner): boolean =>
   a.origin === b.origin && a.user === b.user;
 
-/** What is on the phone that exists nowhere else: how many trips, and how many points of them. */
+/**
+ * What a sign-out would delete: the trips that are not completely on the server (points not taken
+ * over, a step still to send, or a refusal that stopped them), and the points those trips hold on
+ * the phone. The points count includes points that were uploaded already when their trip is not
+ * finished on the server.
+ */
 export interface Unsent {
   trips: number;
   points: number;

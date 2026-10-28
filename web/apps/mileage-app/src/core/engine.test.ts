@@ -480,6 +480,142 @@ describe("a trip that the server discarded or no longer has", () => {
   });
 });
 
+describe("a refusal that is not a missing trip", () => {
+  /** A 404 as the server sends it for a command that is hidden from this person. */
+  const hidden = () => apiError(404, { message: "not found" });
+
+  test("a 404 on a trip that exists keeps every point and does not say the trip is gone", async () => {
+    const { store, server, engine } = await rig();
+    await start(store);
+    await engine.drain();
+    await store.appendFixes("c1", walk(4));
+    server.fail("createPoints", hidden(), 1);
+    server.fail("getTrip", hidden(), 1);
+    await engine.drain();
+    const stuck = (await store.getTrip("c1"))!;
+    expect(stuck.problem).toMatchObject({ step: "points", code: "unknown" });
+    expect(stuck.problem?.code).not.toBe("gone");
+    expect(await store.pointCount("c1")).toBe(4);
+    // The driver cannot throw the points away on the strength of a state the server did not give.
+    expect(canDiscard(stuck)).toBe(false);
+    // Nothing is deleted, and once the server answers again the trip goes on.
+    await store.clearProblem("c1");
+    await engine.drain();
+    expect((await store.getTrip("c1"))!.problem).toBeNull();
+    expect(server.stored("c1")!.state).toBe("recording");
+    expect(server.pointSeqs(server.stored("c1")!.id)).toHaveLength(4);
+  });
+
+  test("only the plain 400 of the module means that the server does not have the trip", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 6);
+    await engine.drain();
+    await store.patchTrip("c1", { endDone: false, problem: null });
+    server.fail("getTrip", apiError(400, { message: "no mileage_trip 01ab" }), 1);
+    await engine.drain();
+    expect((await store.getTrip("c1"))!.problem).toMatchObject({ code: "gone" });
+    // Other 400 words are an ordinary refusal.
+    await store.clearProblem("c1");
+    server.fail("getTrip", apiError(400, { message: "the trip is odd" }), 1);
+    await engine.drain();
+    expect((await store.getTrip("c1"))!.problem).toMatchObject({ code: "bad_request" });
+  });
+
+  test("a trip whose create was refused can be discarded: the phone has nothing to discard on the server", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    // The person lost the group: every call of mileage is refused, the question for the trip too.
+    server.fail("createTrip", apiError(403, { message: "forbidden" }), 5);
+    server.fail("findTrip", apiError(403, { message: "forbidden" }), 5);
+    await engine.drain();
+    const stuck = (await store.getTrip("c1"))!;
+    expect(stuck.problem).toMatchObject({ step: "create" });
+    expect(canDiscard(stuck)).toBe(true);
+    await store.requestDiscard("c1", "wrong group", new Date(T0 + 99_000).toISOString());
+    expect(await engine.drain()).toMatchObject({ pending: 0, problems: 0 });
+    expect(await store.getTrip("c1")).toMatchObject({
+      discardDone: true,
+      serverState: "discarded",
+      problem: null,
+    });
+    expect(await store.pointCount("c1")).toBe(0);
+  });
+
+  test("a trip whose create was refused but that the server has is discarded there", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    // The create ran and the answer was lost, then calls were refused for a while.
+    server.loseAnswer("createTrip");
+    await engine.drain();
+    expect((await store.getTrip("c1"))!.serverId).toBeNull();
+    await store.requestDiscard("c1", "mine", new Date(T0 + 99_000).toISOString());
+    expect(await engine.drain()).toMatchObject({ pending: 0 });
+    expect(server.stored("c1")!.state).toBe("discarded");
+    expect(await store.pointCount("c1")).toBe(0);
+  });
+
+  test("a discard waits while the server cannot be reached", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    server.fail("createTrip", apiError(403, { message: "forbidden" }), 1);
+    server.fail("findTrip", apiError(403, { message: "forbidden" }), 1);
+    await engine.drain();
+    await store.requestDiscard("c1", "x", new Date(T0 + 99_000).toISOString());
+    server.fail("createTrip", networkError(), 1);
+    expect((await engine.drain()).state).toBe("offline");
+    expect((await store.getTrip("c1"))!.discardDone).toBe(false);
+    expect(await store.pointCount("c1")).toBe(4);
+    expect(await engine.drain()).toMatchObject({ pending: 0 });
+    expect((await store.getTrip("c1"))!.discardDone).toBe(true);
+  });
+});
+
+describe("a sign-in that changes while a pass runs", () => {
+  test("the rest of the pass is not sent under the new sign-in", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    const store = createSqlStore(db);
+    const server = new FakeServer();
+    let generation = 1;
+    let flipped = false;
+    // The driver signs out (and somebody else signs in) while the first trip is being created.
+    const api = new Proxy(server, {
+      get(target, key, receiver) {
+        const value = Reflect.get(target, key, receiver) as unknown;
+        if (key !== "createTrip" || typeof value !== "function") return value;
+        return async (...args: unknown[]) => {
+          const answer = await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+          if (!flipped) generation += 1;
+          flipped = true;
+          return answer;
+        };
+      },
+    });
+    const engine = createEngine({ store, api, identity: () => generation });
+    await recordAndStop(store, 3, "a");
+    await recordAndStop(store, 3, "b");
+    const report = await engine.drain();
+    expect(report.state).toBe("interrupted");
+    // The first trip's create went out (it was in flight); nothing after it did.
+    expect(server.calls.map((c) => c.op)).toEqual(["createTrip"]);
+    expect(server.stored("b")).toBeUndefined();
+    // A pass under the new sign-in starts from the beginning and sends the rest.
+    const next = await engine.drain();
+    expect(next.state).not.toBe("interrupted");
+    expect(server.stored("b")).toBeDefined();
+  });
+
+  test("a pass that nothing interrupts reports as before", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    const store = createSqlStore(db);
+    const server = new FakeServer();
+    const engine = createEngine({ store, api: server, identity: () => 1 });
+    await recordAndStop(store, 3);
+    expect((await engine.drain()).state).toBe("idle");
+  });
+});
+
 describe("Stop", () => {
   test("end is repeated until the points the server is missing are there", async () => {
     const { store, server, engine } = await rig();
@@ -502,7 +638,21 @@ describe("Stop", () => {
     });
   });
 
-  test("the wait for an incomplete end doubles from 4 s up to the cap", async () => {
+  test("with the production base of 2 s the waits for an incomplete end are 8 s, 16 s, 32 s and so on, up to 5 minutes", async () => {
+    // The engine as native/runtime.ts builds it: no backoff option.
+    const db = memoryDb();
+    await migrate(db);
+    const store = createSqlStore(db);
+    const server = new FakeServer();
+    const engine = createEngine({ store, api: server });
+    await recordAndStop(store, 5);
+    server.fail("endTrip", apiError(409, { code: "incomplete", message: "x" }), 9);
+    const waits: Array<number | null> = [];
+    for (let i = 0; i < 9; i++) waits.push((await engine.drain()).retryInMs);
+    expect(waits).toEqual([8000, 16000, 32000, 64000, 128000, 256000, 300_000, 300_000, 300_000]);
+  });
+
+  test("with a base of 1 s the waits for an incomplete end are 4 s, 8 s, 16 s, then the cap", async () => {
     const { store, server, engine } = await rig({ baseMs: 1000, maxMs: 20_000 });
     await recordAndStop(store, 5);
     server.fail("endTrip", apiError(409, { code: "incomplete", message: "4 of 5 points" }), 5);

@@ -57,6 +57,23 @@ function rig(reports: DrainReport[]) {
 }
 
 describe("the sync controller", () => {
+  test("a pass that the sign-in interrupted is followed at once by one under the new sign-in", async () => {
+    const r = rig([report({ state: "interrupted", pending: 1 }), report({ state: "idle" })]);
+    r.sync.kick();
+    await r.settle();
+    expect(r.drains()).toBe(2);
+    expect(r.rejected()).toBe(0);
+    expect(r.sync.status().report?.state).toBe("idle");
+  });
+
+  test("an interrupted pass does not start another one when nobody is signed in", async () => {
+    const r = rig([report({ state: "interrupted", pending: 1 })]);
+    r.signOut();
+    r.sync.kick();
+    await r.settle();
+    expect(r.drains()).toBe(0);
+  });
+
   test("a pass with nothing left schedules nothing", async () => {
     const r = rig([report({ state: "idle" })]);
     r.sync.kick();

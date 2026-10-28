@@ -3,6 +3,7 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   CLIENT_FRESH_MS,
   createSession,
+  clientUnknown,
   needsRegistration,
   type SessionStorage,
 } from "./session.ts";
@@ -15,13 +16,17 @@ const tokens = (n: number, expiresAt: number) => ({
   scope: ["mileage.driver"],
 });
 
-function rig(initial = tokens(1, 100_000)) {
+function rig(initial = tokens(1, 100_000), options: { refreshTimeoutMs?: number } = {}) {
   const saved: (ReturnType<typeof tokens> | null)[] = [];
+  const configs: unknown[] = [];
+  const urls: string[] = [];
   let clock = 0;
   let saveFails = 0;
   const storage: SessionStorage = {
     loadConfig: async () => ({ baseUrl: "http://h", clientId: "cid" }),
-    saveConfig: async () => {},
+    saveConfig: async (c) => {
+      configs.push(c);
+    },
     loadTokens: async () => initial,
     saveTokens: async (t) => {
       if (saveFails > 0) {
@@ -61,16 +66,19 @@ function rig(initial = tokens(1, 100_000)) {
   const oauth: OAuthDeps = {
     sha256: async () => new Uint8Array(32),
     randomBytes: async (n) => new Uint8Array(n),
-    fetch: (async (_url: string, init: RequestInit) => {
+    fetch: (async (url: string, init: RequestInit) => {
       const body = typeof init.body === "string" ? init.body : "";
       bodies.push(body);
+      urls.push(url);
       return respond(body);
     }) as unknown as typeof fetch,
   };
-  const session = createSession({ storage, oauth, now: () => clock });
+  const session = createSession({ storage, oauth, now: () => clock, ...options });
   return {
     session,
     saved,
+    configs,
+    urls,
     bodies,
     setNow: (ms: number) => (clock = ms),
     respond: (fn: typeof respond) => (respond = fn),
@@ -214,6 +222,14 @@ describe("the session", () => {
     );
   });
 
+  test("only the 400 error page of the authorization page means that the instance does not know the client", () => {
+    expect(clientUnknown(400)).toBe(true);
+    // The sign-in page (200), a redirect to it, a server in trouble, or no answer at all: go on.
+    for (const status of [200, 302, 404, 500, 503, null]) {
+      expect(clientUnknown(status)).toBe(false);
+    }
+  });
+
   test("a busy server or a rate limit does not end the sign-in", async () => {
     const r = rig();
     await r.session.restore();
@@ -230,6 +246,104 @@ describe("the session", () => {
     await r.session.restore();
     await r.session.rejected();
     expect(await r.session.accessToken()).toBe("AT-2");
+  });
+
+  /** The instance answers when the test says so: a refresh that is on its way while something else happens. */
+  function held(r: ReturnType<typeof rig>) {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    r.respond(async (body) => {
+      const answer = r.endpoint(body);
+      await gate;
+      return answer;
+    });
+    return release;
+  }
+
+  test("signing out while a refresh is on its way stays signed out and writes nothing", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    const release = held(r);
+    const asked = r.session.accessToken();
+    await Promise.resolve();
+    await r.session.signOut();
+    expect(r.session.status()).toBe("signed_out");
+    const writesAtSignOut = r.saved.length;
+    release();
+    expect(await asked).toBeNull();
+    // The late answer neither brought the session back nor reached the Keystore.
+    expect(r.session.status()).toBe("signed_out");
+    expect(r.session.refreshToken()).toBeNull();
+    expect(await r.session.accessToken()).toBeNull();
+    expect(r.saved).toHaveLength(writesAtSignOut);
+    expect(r.saved.at(-1)).toBeNull();
+  });
+
+  test("a sign-in that finishes while an older refresh is on its way is not overwritten by it", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    const release = held(r);
+    const asked = r.session.accessToken();
+    await Promise.resolve();
+    await r.session.signOut();
+    await r.session.completeSignIn(tokens(9, 10_000_000));
+    release();
+    expect(await asked).toBeNull();
+    expect(r.session.refreshToken()).toBe("RT-9");
+    expect(r.saved.at(-1)).toMatchObject({ refreshToken: "RT-9" });
+    expect(r.session.status()).toBe("signed_in");
+  });
+
+  test("the generation changes when the sign-in changes, and not when a token is refreshed", async () => {
+    const r = rig();
+    await r.session.restore();
+    const first = r.session.generation();
+    r.setNow(99_000);
+    await r.session.accessToken();
+    expect(r.session.generation()).toBe(first);
+    await r.session.signOut();
+    const out = r.session.generation();
+    expect(out).not.toBe(first);
+    await r.session.completeSignIn(tokens(5, 10_000_000));
+    expect(r.session.generation()).not.toBe(out);
+  });
+
+  test("a refresh that is given up after a timeout ends the sign-in cleanly and never presents the old token again", async () => {
+    const r = rig(tokens(1, 100_000), { refreshTimeoutMs: 20 });
+    await r.session.restore();
+    r.setNow(99_000);
+    r.respond(() => new Promise<Response>(() => {}));
+    expect(await r.session.accessToken()).toBeNull();
+    expect(r.session.status()).toBe("expired");
+    expect(r.session.endedBy()).toBe("unsure");
+    expect(r.saved.at(-1)).toBeNull();
+    expect(r.session.refreshToken()).toBeNull();
+    // The instance is told, in the background, with the old token (it still finds the grant).
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(r.urls.at(-1)).toBe("http://h/oauth/revoke");
+    // And the old token is not used for a second refresh.
+    r.respond((body) => r.endpoint(body));
+    expect(await r.session.accessToken()).toBeNull();
+    expect(r.bodies.filter((b) => b.includes("grant_type=refresh_token"))).toHaveLength(1);
+  });
+
+  test("a client that the instance does not know is forgotten, so that the next sign-in registers again", async () => {
+    const r = rig();
+    await r.session.restore();
+    // A client that an earlier sign-in used: the app would reuse it as it is.
+    await r.session.setConfig({ baseUrl: "http://h", clientId: "cid", usedAt: Date.now() });
+    expect(needsRegistration(r.session.config(), "http://h", Date.now())).toBe(false);
+    r.setNow(99_000);
+    r.respond(() => new Response(JSON.stringify({ error: "invalid_client" }), { status: 401 }));
+    expect(await r.session.accessToken()).toBeNull();
+    expect(r.session.status()).toBe("expired");
+    expect(r.session.endedBy()).toBe("refused");
+    expect((r.configs.at(-1) as { usedAt?: number }).usedAt).toBeUndefined();
+    expect(needsRegistration(r.session.config(), "http://h", Date.now())).toBe(true);
   });
 
   test("sign out forgets the tokens and keeps the server", async () => {
