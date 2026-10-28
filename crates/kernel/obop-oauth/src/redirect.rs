@@ -2,6 +2,11 @@
 //! appended to one. A redirect URI is the one place a code can leave the server, so the rules are
 //! strict: `https` anywhere, plain `http` only for a loopback host (RFC 8252), no wildcards, no
 //! fragment, no user information, nothing that a browser could read differently from us.
+//!
+//! A mobile app (the D64 amendment) follows RFC 8252 for native apps more narrowly, see
+//! [`validate_mobile`]: a private-use scheme in reverse domain form, or a loopback address by
+//! number. It never gets `localhost` (the name can be made to point elsewhere, the numbers cannot)
+//! and never an `https` address (nothing here proves a web site belongs to an app).
 
 use crate::util::pct;
 
@@ -103,8 +108,126 @@ pub fn matches(registered: &[String], presented: &str) -> bool {
             .any(|r| parts(r).is_some_and(|(rs, rh, _, rt)| rs == "http" && rh == ph && rt == pt))
 }
 
-/// `scheme://authority` of a valid URI, for the form-action of the consent page.
+/// The scheme and the path of a private-use redirect URI of the form `scheme:/path`, if `uri` is
+/// one that [`validate_mobile`] accepts as such.
+fn private_use(uri: &str) -> Option<(&str, &str)> {
+    let (scheme, path) = uri.split_once(':')?;
+    let labels_ok = scheme.split('.').count() >= 2
+        && scheme.split('.').all(|l| {
+            !l.is_empty()
+                && l.len() <= 63
+                && !l.starts_with('-')
+                && !l.ends_with('-')
+                && l.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        });
+    let path_ok = path.starts_with('/')
+        && !path.starts_with("//")
+        && path
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'~' | b'-' | b'/'));
+    (scheme.len() <= 128
+        && scheme.starts_with(|c: char| c.is_ascii_lowercase())
+        && labels_ok
+        && path_ok
+        && uri.len() <= 256)
+        .then_some((scheme, path))
+}
+
+fn is_loopback_ip(host: &str) -> bool {
+    matches!(host, "127.0.0.1" | "[::1]")
+}
+
+/// Where a redirect sends the browser or the phone, for the words of the consent page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RedirectForm {
+    /// A private-use scheme: the app on this phone that registered the scheme.
+    PrivateUse,
+    /// A loopback address by number: a program on this computer.
+    Loopback,
+    /// Anything else: a web address.
+    #[default]
+    Web,
+}
+
+/// The form of a redirect URI.
+pub fn form_of(uri: &str) -> RedirectForm {
+    if private_use(uri).is_some() {
+        return RedirectForm::PrivateUse;
+    }
+    match parts(uri) {
+        Some(("http", host, _, _)) if is_loopback_ip(&host.to_ascii_lowercase()) => {
+            RedirectForm::Loopback
+        }
+        _ => RedirectForm::Web,
+    }
+}
+
+/// Whether a mobile client may register (and present) `uri`: RFC 8252 sections 7.1 and 7.3.
+///
+/// - a private-use scheme in reverse domain form with a path and nothing else, such as
+///   `org.obop.mileage:/oauth` (no authority, no query, no fragment: section 7.1);
+/// - `http` to `127.0.0.1` or `[::1]` with any port (section 7.3), never `localhost`.
+///
+/// The loopback form also has to pass [`validate`] (length, no control characters, spaces,
+/// wildcards, backslashes or quotes, no fragment, no user information).
+///
+/// Everything else is refused, and above all `https`: an `https` redirect (a universal link or an
+/// app link, section 7.2) is only the app's own when the web site proves it (a digital asset links
+/// file, an apple-app-site-association file), which this server does not check, so a web address
+/// would be a web site collecting codes. Also refused: a scheme without a dot (`claude://callback`,
+/// `javascript:`), `http` to any other host, wildcards, user information, a fragment.
+pub fn validate_mobile(uri: &str) -> Result<(), &'static str> {
+    match form_of(uri) {
+        // Its own strict shape (`private_use`) is the whole check.
+        RedirectForm::PrivateUse => Ok(()),
+        // The address is the one of a program on this computer; the rest of the URI gets the
+        // checks every redirect gets (length, control characters, spaces, wildcards, quotes, a
+        // fragment, user information), or a fragment would swallow the code and a line break
+        // would leave the redirect without a Location.
+        RedirectForm::Loopback => validate(uri),
+        RedirectForm::Web => match parts(uri) {
+            Some(("https", _, _, _)) => Err(
+                "a mobile app may not use an https redirect (it cannot be shown to belong to the app); use a private-use scheme such as org.example.app:/oauth, or http on 127.0.0.1 or [::1]",
+            ),
+            Some(("http", host, _, _)) if is_loopback_host(&host.to_ascii_lowercase()) => Err(
+                "a mobile app may use plain http only for 127.0.0.1 and [::1], not for localhost",
+            ),
+            Some(("http", _, _, _)) => Err(
+                "a mobile app may use plain http only for 127.0.0.1 and [::1], not for another host",
+            ),
+            _ => Err(
+                "a mobile redirect URI must be a private-use scheme in reverse domain form such as org.example.app:/oauth, or http on 127.0.0.1 or [::1]",
+            ),
+        },
+    }
+}
+
+/// As [`matches`], for a mobile client: the match is exact, except that the port of an `http`
+/// loopback address (by number) may change.
+pub fn matches_mobile(registered: &[String], presented: &str) -> bool {
+    if validate_mobile(presented).is_err() {
+        return false;
+    }
+    if registered.iter().any(|r| r == presented) {
+        return true;
+    }
+    let Some((ps, ph, _, pt)) = parts(presented) else {
+        return false;
+    };
+    ps == "http"
+        && is_loopback_ip(ph)
+        && registered
+            .iter()
+            .any(|r| parts(r).is_some_and(|(rs, rh, _, rt)| rs == "http" && rh == ph && rt == pt))
+}
+
+/// What the form-action of the consent page allows: `scheme://authority` of a valid URI, or
+/// `scheme:` for a private-use one.
 pub fn origin(uri: &str) -> String {
+    if let Some((scheme, _)) = private_use(uri) {
+        return format!("{scheme}:");
+    }
     match parts(uri) {
         Some((scheme, host, port, _)) => match port {
             Some(p) => format!("{scheme}://{host}:{p}"),
@@ -114,8 +237,12 @@ pub fn origin(uri: &str) -> String {
     }
 }
 
-/// The host (with port) shown to the person.
+/// Where the browser (or the phone) will go, shown to the person: the host with its port, or the
+/// scheme of a private-use URI.
 pub fn display_host(uri: &str) -> String {
+    if let Some((scheme, _)) = private_use(uri) {
+        return scheme.to_string();
+    }
     origin(uri)
         .split_once("://")
         .map_or(String::new(), |(_, a)| a.to_string())

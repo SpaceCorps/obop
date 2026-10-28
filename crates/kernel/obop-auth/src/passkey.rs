@@ -10,7 +10,7 @@ use crate::webauthn::{self as wa, b64url, b64url_decode, sha256};
 use crate::{Auth, Change, Epoch, bump_epoch, epoch_of, hex, random_bytes, token_hash};
 use obop_commands::audit::rfc3339;
 use obop_commands::{
-    ADMIN_GROUP, LoginOutcome, MfaError, PasskeyApi, Principal, PrincipalKind, Reauth, WebauthnCtx,
+    ADMIN_GROUP, LoginOutcome, MfaError, PasskeyApi, Principal, Reauth, WebauthnCtx,
 };
 use obop_storage::{Fields, Op};
 use serde_json::{Value as J, json};
@@ -28,8 +28,9 @@ const VERIFY_PER_IP: u64 = 40;
 const TRANSPORTS: [&str; 6] = ["usb", "nfc", "ble", "internal", "hybrid", "smart-card"];
 
 fn person(p: &Principal) -> Result<&str, MfaError> {
-    // Agent tokens are not people: they cannot hold a passkey.
-    if p.kind == PrincipalKind::User {
+    // Agent tokens are not people: they cannot hold a passkey. Nor can the narrowed token of a
+    // mobile app.
+    if p.is_person() {
         Ok(&p.id)
     } else {
         Err(MfaError::NotFound)

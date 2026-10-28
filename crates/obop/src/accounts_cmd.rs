@@ -98,11 +98,12 @@ pub fn offboard(o: &Opts, user: &str, note: Option<&str>) -> Exit {
         .operator_offboard(user, note.unwrap_or(""))
         .map_err(|e| fail(&e))?;
     println!(
-        "{} is disabled and offboarded: {} session(s), {} agent token(s) and {} connected app(s) ended for good; recorded in the security log",
+        "{} is disabled and offboarded: {} session(s), {} agent token(s), {} connected app(s) and {} device(s) of mobile apps ended for good; recorded in the security log",
         done["user"].as_str().unwrap_or(user),
         done["revoked_sessions"],
         done["revoked_agent_tokens"],
-        done["revoked_apps"]
+        done["revoked_apps"],
+        done["revoked_devices"]
     );
     Ok(())
 }

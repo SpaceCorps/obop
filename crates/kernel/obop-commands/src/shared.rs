@@ -82,6 +82,8 @@ impl Pending {
                 groups: set(&p["groups"])?,
                 scopes: set(&p["scopes"]),
                 mfa_limited: p["mfa_limited"].as_bool().unwrap_or(false),
+                // A mobile app's token is never refused for approval, so it is never in a plan.
+                device: None,
             },
             id: j["command"].as_str()?.to_string(),
             input: Value::from_json(&j["input"]),

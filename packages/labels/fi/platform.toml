@@ -593,3 +593,63 @@ description = "Poista tili käytöstä: se ei voi kirjautua ja sen tunnisteet la
 [labels.fi.model.user_account.action.enable]
 label = "Ota käyttöön"
 description = "Ota käytöstä poistettu tili uudelleen käyttöön. Lopullisen poiston yhteydessä peruutetut oikeudet pysyvät peruutettuina. Anna id"
+
+[labels.fi.model.device]
+name = "Laite"
+description = "Puhelin tai tabletti, johon mobiilisovellus on kirjautunut: syntyy sovelluksen kirjautuessa ja päättyy mitätöimällä. Henkilö näkee, nimeää uudelleen ja mitätöi omat laitteensa; laitteiden ylläpitäjät näkevät ja mitätöivät kaikki."
+
+[labels.fi.model.device.field.user]
+label = "Käyttäjä"
+description = "Tili, jolle laite kuuluu"
+
+[labels.fi.model.device.field.name]
+label = "Nimi"
+description = "Laitteen nimi; henkilö voi nimetä sen uudelleen"
+
+[labels.fi.model.device.field.client_name]
+label = "Sovellus"
+description = "Kirjautunut mobiilisovellus sellaisena kuin se nimesi itsensä"
+
+[labels.fi.model.device.field.platform]
+label = "Alusta"
+description = "Sovelluksen ilmoittama alusta, esimerkiksi android tai ios"
+
+[labels.fi.model.device.field.app_version]
+label = "Sovelluksen versio"
+description = "Sovelluksen versio sellaisena kuin se ilmoitti sen kirjautuessa ja jokaisella uusimiskerralla"
+
+[labels.fi.model.device.field.push_token]
+label = "Push-tunnus"
+description = "Tämän laitteen push-palvelun osoite. Ei näytetä kenellekään eikä kirjoiteta tässä versiossa: push ei kuulu mobiilin ensimmäiseen vaiheeseen"
+
+[labels.fi.model.device.field.registered_at]
+label = "Kirjautunut"
+description = "Milloin sovellus kirjautui tälle laitteelle"
+
+[labels.fi.model.device.field.last_seen]
+label = "Viimeksi aktiivinen"
+description = "Milloin laite viimeksi uusi kirjautumisensa (viimeisen uusimisen aika, ei jokaisen pyynnön)"
+
+[labels.fi.model.device.field.expires_at]
+label = "Päättyy"
+description = "Milloin laitteen kirjautuminen päättyy, ellei sitä uusita"
+
+[labels.fi.model.device.field.state]
+label = "Tila"
+description = "active niin kauan kuin laite saa kirjautua; revoked, kun se on päätetty"
+
+[labels.fi.model.device.field.state.options]
+active = "Aktiivinen"
+revoked = "Mitätöity"
+
+[labels.fi.model.device.field.revoked_at]
+label = "Mitätöity"
+description = "Milloin laite päätettiin"
+
+[labels.fi.model.device.field.grant]
+label = "Kirjautumisperhe"
+description = "Päivitystunnusten perhe, johon laite on sidottu (tunniste, ei tunnus)"
+
+[labels.fi.model.device.action.revoke]
+label = "Mitätöi"
+description = "Päätä laite lopullisesti: sen päivitystunnukset lakkaavat toimimasta, sen käyttötunnus lakkaa toimimasta seuraavassa pyynnössä ja sovelluksen on kirjauduttava uudelleen. Henkilö mitätöi omat laitteensa; agentti voi vain ehdottaa sitä. Anna id"

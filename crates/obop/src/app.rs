@@ -187,10 +187,20 @@ impl App {
         Ok(())
     }
 
-    /// Bind the `user_account` commands (D69) to the identity provider that serves this
-    /// instance. Not done with `--dev-auth`: the fixed dev principals are not accounts.
+    /// Bind the commands that need the identity provider that serves this instance: the
+    /// `user_account` commands (D69), and the `device` commands of mobile apps (the D64
+    /// amendment), which end a device through the authorization server of the same provider. Not
+    /// done with `--dev-auth`: the fixed dev principals are not accounts and there is no
+    /// authorization server.
     pub fn register_accounts(&self, auth: Arc<dyn Authenticator>) {
-        obop_pkg::register_accounts(&self.dispatcher, auth);
+        obop_pkg::register_accounts(&self.dispatcher, auth.clone());
+        if let Some(oauth) = obop_oauth::OAuth::new(
+            self.store.backend(),
+            auth,
+            obop_oauth::OAuthConfig::default(),
+        ) {
+            obop_pkg::register_devices(&self.dispatcher, &self.store, oauth);
+        }
     }
 
     /// Every permission group the linked modules declare.

@@ -16,6 +16,8 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 use tower::ServiceExt;
 
+mod mobile;
+
 const HOST: &str = "inst.test";
 const BASE: &str = "http://inst.test";
 const REDIRECT: &str = "https://claude.ai/api/mcp/auth_callback";

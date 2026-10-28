@@ -11,7 +11,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use obop_commands::{Authenticator, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind};
+use obop_commands::{Authenticator, LoginOutcome, MfaApi, MfaError, Principal};
 use serde_json::{Value as J, json};
 use std::sync::Arc;
 
@@ -180,7 +180,7 @@ pub(crate) fn human<'a>(
     // Agents and authenticators without two-factor see no such route.
     let api = auth
         .mfa()
-        .filter(|_| p.kind == PrincipalKind::User)
+        .filter(|_| p.is_person())
         .ok_or_else(|| mfa_error(MfaError::NotFound))?;
     Ok((p, token.to_string(), api))
 }

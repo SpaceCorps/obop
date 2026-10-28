@@ -64,6 +64,10 @@ pub struct Principal {
     /// A session that signed in without the second factor the instance requires (D53). It may
     /// only reach the two-factor enrolment routes; every command refuses it.
     pub mfa_limited: bool,
+    /// The `device` record a mobile app's access token was issued to (the D64 amendment). Set only
+    /// for such a token. A principal with a device is the person narrowed to some groups, and the
+    /// device commands let it see and end that one device and no other.
+    pub device: Option<String>,
 }
 
 impl Principal {
@@ -74,6 +78,7 @@ impl Principal {
             groups: set(groups),
             scopes: None,
             mfa_limited: false,
+            device: None,
         }
     }
 
@@ -84,7 +89,16 @@ impl Principal {
             groups: set(on_behalf_groups),
             scopes: Some(set(scopes)),
             mfa_limited: false,
+            device: None,
         }
+    }
+
+    /// A person at the keyboard: a user principal that is not narrowed. The access token of a
+    /// mobile app is also a user principal (it is the person's own client), but its scopes are
+    /// narrowed to the groups the person handed over, and it must never manage the account
+    /// itself: no password, no second factor, no passkey, no agent token, no approval.
+    pub fn is_person(&self) -> bool {
+        self.kind == PrincipalKind::User && self.scopes.is_none()
     }
 
     /// Effective permission: the group is held (`platform.admin` holds every group, so modules
@@ -944,7 +958,7 @@ impl Dispatcher {
         plan_id: &str,
     ) -> Result<Response, CallError> {
         self.sync();
-        if approver.kind != PrincipalKind::User {
+        if !approver.is_person() {
             return Err(CallError::Forbidden("approve".into()));
         }
         let _txn = self.txn_guard()?;
@@ -981,6 +995,15 @@ impl Dispatcher {
         self.plans
             .remove(self.shared.get(), plan_id)
             .map_err(CallError::Handler)?;
+        // The person who approved is who a handler may name in its log; the plan keeps the agent
+        // that proposed it as the caller. Under the prefix every handler already ignores (and
+        // `call` strips from what a client sends).
+        if let Value::Map(m) = &mut input {
+            m.insert(
+                format!("{}_approver", query::ACTOR_PREFIX),
+                Value::text(&approver.id),
+            );
+        }
         let result = self.run(&c, &plan.principal, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back, or the
         // approver's retry (the 503 says to retry) would meet "not found" and the proposal would
@@ -1315,6 +1338,32 @@ pub trait OAuthTokens: Send + Sync {
         audience: &str,
         grant: &str,
     ) -> Result<(String, String), String>;
+    /// As `issue_oauth_access`, for the access token of a mobile app (the D64 amendment): the
+    /// token resolves to the person themselves, with the groups of `scopes` and no more, not to an
+    /// agent, and it works only while the `device` record `device` is in force. Scopes must be
+    /// groups the owner holds.
+    #[allow(clippy::too_many_arguments)]
+    fn issue_mobile_access(
+        &self,
+        _owner: &str,
+        _scopes: &[String],
+        _label: &str,
+        _ttl_secs: u64,
+        _audience: &str,
+        _grant: &str,
+        _device: &str,
+    ) -> Result<(String, String), String> {
+        Err("this identity provider issues no tokens for mobile apps".into())
+    }
+    /// The credential epoch of the account `user`: a value that changes whenever a password, a
+    /// second factor, a passkey, the groups or the state of the account change in a way that ends
+    /// sign-ins (a new password, a reset, a disable, an offboarding, new groups). `Ok(None)` for an
+    /// account that never changed or does not exist; a lookup the store refused is an error, never
+    /// "unchanged". A sign-in flow and a code are bound to it, so that what was begun before such a
+    /// change cannot finish after it.
+    fn credential_epoch(&self, _user: &str) -> Result<Option<String>, String> {
+        Ok(None)
+    }
     /// Revoke a token by the id `issue_oauth_access` returned.
     fn revoke_token_id(&self, id: &str) -> bool;
     /// As `revoke_token_id`, but a call the store refused is an error ("try again"), not `false`
@@ -1570,6 +1619,7 @@ pub mod aggregate;
 pub mod blobs;
 pub mod collate;
 pub mod csv;
+pub mod devices;
 mod engine;
 pub mod errors;
 mod guards;

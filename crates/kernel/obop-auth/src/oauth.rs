@@ -1,10 +1,89 @@
-//! The identity half of the OAuth authorization server (D64): short-lived scoped agent tokens
-//! that carry an audience and the grant they belong to. The protocol itself lives in `obop-oauth`.
+//! The identity half of the OAuth authorization server (D64): short-lived scoped tokens that carry
+//! an audience and the grant they belong to. The protocol itself lives in `obop-oauth`.
+//!
+//! Two kinds of access token come out of it. The token of an MCP client is a scoped agent token
+//! (D18). The token of a mobile app (the D64 amendment) is the person themselves, narrowed to the
+//! groups handed over, and it works only while the `device` record it names is in force.
+//!
+//! A mobile token is **stored as an agent token** (`kind: "agent"`, with its audience, scopes and
+//! grant) plus the marker `mobile: true` and the `device`. Code from before the mobile class reads
+//! it as a scoped agent bound to `<public URL>/api`, which every route of that code refuses, so a
+//! binary that is rolled back, or an older process that runs beside a newer one during an upgrade,
+//! can never read it as a person. Only code that knows the marker (`Auth::resolve_full`) turns it
+//! into the person narrowed to its groups.
 
 use super::{Auth, hex, random_bytes, token_hash};
 use obop_commands::{OAuthTokens, Principal, PrincipalKind};
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
+
+/// What kind of access token to make.
+#[derive(Clone, Copy)]
+enum Issue<'a> {
+    /// A scoped agent token, for an MCP client.
+    Agent,
+    /// A scoped user token, for the device `0`.
+    Mobile(&'a str),
+}
+
+impl Auth {
+    #[allow(clippy::too_many_arguments)]
+    fn issue_scoped(
+        &self,
+        what: Issue<'_>,
+        owner: &str,
+        scopes: &[String],
+        label: &str,
+        ttl_secs: u64,
+        audience: &str,
+        grant: &str,
+    ) -> Result<(String, String), String> {
+        let p = self
+            .user_principal(owner)
+            .ok_or("the account is unknown or disabled")?;
+        if p.kind != PrincipalKind::User {
+            return Err("only a human user can delegate".into());
+        }
+        // An agent needs at least one group. A mobile app may hold none: a sign-in that can do
+        // nothing but sign itself out (the client declared no group, or the person handed none).
+        if scopes.is_empty() && !matches!(what, Issue::Mobile(_)) {
+            return Err("a token needs at least one scope".into());
+        }
+        // Agents and apps may only narrow what the owner holds (D18).
+        if let Some(bad) = scopes.iter().find(|s| !p.groups.contains(*s)) {
+            return Err(format!("{owner} does not hold {bad}"));
+        }
+        // A phone never holds an administrative, approving or standing group, whatever the
+        // authorization server was told.
+        if matches!(what, Issue::Mobile(_))
+            && let Some(bad) = scopes
+                .iter()
+                .find(|s| obop_commands::devices::never_for_mobile(s))
+        {
+            return Err(format!("{bad} can never be handed to a mobile app"));
+        }
+        let token = format!("obop_{}", hex(&random_bytes::<32>()));
+        let id = token_hash(&token);
+        let mut f = Fields::new();
+        f.insert("owner".into(), J::from(owner));
+        // Both kinds are stored as agent tokens; see the module notes for why.
+        f.insert("kind".into(), J::from("agent"));
+        f.insert("scopes".into(), json!(scopes));
+        f.insert("label".into(), J::from(label));
+        f.insert("expires_at".into(), J::from(self.now() + ttl_secs));
+        f.insert("revoked".into(), J::Bool(false));
+        f.insert("limited".into(), J::Bool(false));
+        f.insert("created_at".into(), J::from(self.now()));
+        f.insert("audience".into(), J::from(audience));
+        f.insert("oauth_grant".into(), J::from(grant));
+        if let Issue::Mobile(device) = what {
+            f.insert("mobile".into(), J::Bool(true));
+            f.insert("device".into(), J::from(device));
+        }
+        self.backend.insert("auth_token", &id, &f)?;
+        Ok((token, id))
+    }
+}
 
 impl OAuthTokens for Auth {
     fn principal_of(&self, user: &str) -> Option<Principal> {
@@ -20,34 +99,44 @@ impl OAuthTokens for Auth {
         audience: &str,
         grant: &str,
     ) -> Result<(String, String), String> {
-        let p = self
-            .user_principal(owner)
-            .ok_or("the account is unknown or disabled")?;
-        if p.kind != PrincipalKind::User {
-            return Err("only a human user can delegate".into());
-        }
-        if scopes.is_empty() {
-            return Err("a token needs at least one scope".into());
-        }
-        // Agents may only narrow what the owner holds (D18).
-        if let Some(bad) = scopes.iter().find(|s| !p.groups.contains(*s)) {
-            return Err(format!("{owner} does not hold {bad}"));
-        }
-        let token = format!("obop_{}", hex(&random_bytes::<32>()));
-        let id = token_hash(&token);
-        let mut f = Fields::new();
-        f.insert("owner".into(), J::from(owner));
-        f.insert("kind".into(), J::from("agent"));
-        f.insert("scopes".into(), json!(scopes));
-        f.insert("label".into(), J::from(label));
-        f.insert("expires_at".into(), J::from(self.now() + ttl_secs));
-        f.insert("revoked".into(), J::Bool(false));
-        f.insert("limited".into(), J::Bool(false));
-        f.insert("created_at".into(), J::from(self.now()));
-        f.insert("audience".into(), J::from(audience));
-        f.insert("oauth_grant".into(), J::from(grant));
-        self.backend.insert("auth_token", &id, &f)?;
-        Ok((token, id))
+        self.issue_scoped(
+            Issue::Agent,
+            owner,
+            scopes,
+            label,
+            ttl_secs,
+            audience,
+            grant,
+        )
+    }
+
+    fn issue_mobile_access(
+        &self,
+        owner: &str,
+        scopes: &[String],
+        label: &str,
+        ttl_secs: u64,
+        audience: &str,
+        grant: &str,
+        device: &str,
+    ) -> Result<(String, String), String> {
+        self.issue_scoped(
+            Issue::Mobile(device),
+            owner,
+            scopes,
+            label,
+            ttl_secs,
+            audience,
+            grant,
+        )
+    }
+
+    fn credential_epoch(&self, user: &str) -> Result<Option<String>, String> {
+        let name = user.trim().to_lowercase();
+        Ok(self
+            .backend
+            .get("auth_user", &name)?
+            .and_then(|u| crate::epoch_of(&J::Object(u))))
     }
 
     fn revoke_token_id(&self, id: &str) -> bool {

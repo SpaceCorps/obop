@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod check;
+pub mod devices;
 pub mod files;
 pub mod installer;
 pub mod manifest;
@@ -16,6 +17,7 @@ pub mod views;
 
 pub use accounts::register_accounts;
 pub use check::{Report, check_manifest, check_package};
+pub use devices::register_devices;
 pub use installer::{
     CoreCompat, GateReceipt, GateRequest, Installer, MigrationGate, PackageInfo, RollbackInfo,
     UpdateAll, UpdateInfo, admin_module, register_admin,

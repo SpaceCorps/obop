@@ -8,7 +8,6 @@ import {
   TwoFactorPanel,
   createTwoFactorApi,
   fmt,
-  msg,
   t,
   twoFactorMessage,
   type TwoFactorStatus,
@@ -16,47 +15,16 @@ import {
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
 import { Icon, Logo } from "./ui.tsx";
 import { PasskeysSection } from "./Passkeys.tsx";
-import { ConnectedAppsSection, PasswordSection, SessionsSection } from "./SecurityAccount.tsx";
+import {
+  ConnectedAppsSection,
+  DevicesSection,
+  PasswordSection,
+  SessionsSection,
+} from "./SecurityAccount.tsx";
 import { PeopleSection } from "./People.tsx";
+import { EVENT_KINDS } from "./securityEvents.ts";
 
 type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
-
-/** Event kinds of the security log (the `security_event` model), in plain words. */
-const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
-  enrol_begin: msg("Setup started"),
-  enrol_confirm: msg("Two-factor turned on"),
-  disable: msg("Two-factor turned off"),
-  reset: msg("Two-factor reset"),
-  recovery_regenerate: msg("New recovery codes"),
-  recovery_used: msg("Recovery code used"),
-  code_failed: msg("Wrong code"),
-  lockout: msg("Locked out"),
-  limited_session: msg("Signed in without a second factor"),
-  login_refused: msg("Sign-in refused"),
-  password_change: msg("Password changed"),
-  password_change_failed: msg("Wrong password when changing it"),
-  passkey_register: msg("Passkey added"),
-  passkey_rename: msg("Passkey renamed"),
-  passkey_remove: msg("Passkey removed"),
-  passkey_used: msg("Passkey used as second step"),
-  passkey_login: msg("Signed in with a passkey alone"),
-  passkey_failed: msg("Passkey or password refused"),
-  passkey_clone: msg("Passkey refused: it may have been copied"),
-  passkey_passwordless: msg("Signing in with a passkey alone changed"),
-  password_reset: msg("Password reset by an administrator"),
-  sessions_revoked: msg("Sessions signed out"),
-  user_disable: msg("Account disabled"),
-  user_enable: msg("Account enabled"),
-  user_create: msg("Account created"),
-  user_groups: msg("Groups changed"),
-  user_offboard: msg("Account offboarded"),
-  settings_change: msg("Security setting changed"),
-  oauth_authorize: msg("App connected"),
-  oauth_denied: msg("App refused"),
-  oauth_revoked: msg("App access ended"),
-  oauth_refresh_reuse: msg("App access ended: a token was used twice"),
-  oauth_code_reuse: msg("App access ended: a code was used twice"),
-};
 
 /**
  * Customize > Security: your own two-factor authentication for everyone; for administrators the
@@ -66,6 +34,7 @@ export function SecurityTab({
   token,
   settings,
   isAdmin,
+  me,
   onSettings,
   notify,
   onSignOut,
@@ -73,6 +42,8 @@ export function SecurityTab({
   token: string;
   settings: Settings;
   isAdmin: boolean;
+  /** Who is signed in (the name the sign-in gave), for what is shown as theirs. */
+  me?: string;
   onSettings: (s: Settings) => void;
   notify: Notify;
   onSignOut?: () => void;
@@ -108,6 +79,7 @@ export function SecurityTab({
         onSignOut={onSignOut ?? (() => location.reload())}
       />
       <ConnectedAppsSection token={token} notify={notify} />
+      <DevicesSection token={token} notify={notify} isAdmin={isAdmin} me={me} />
       {isAdmin && (
         <>
           <PeopleSection token={token} notify={notify} />

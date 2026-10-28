@@ -430,6 +430,72 @@
         },
         "type": "object"
       },
+      "device": {
+        "description": "A phone or tablet that a mobile app is signed in on: created when the app signs in, ended by revoking it. A person sees, renames and revokes their own devices; the device administrators see and revoke every one; the app itself sees and signs out only its own device",
+        "properties": {
+          "app_version": {
+            "description": "The version of the app, as it reported it at sign-in and at each refresh",
+            "type": "string"
+          },
+          "client_name": {
+            "description": "The mobile app that signed in, as it called itself",
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "When the sign-in of the device ends unless it is renewed (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "example": "2026-03-29T01:30:00.000000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "grant": {
+            "description": "The refresh-token family the device is bound to (an identifier, not a token)",
+            "type": "string"
+          },
+          "last_seen": {
+            "description": "When the device last refreshed its sign-in (the time of the last refresh, not of every request) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "example": "2026-03-29T01:30:00.000000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "What the device is called; the person can rename it (personal data: agents see it masked)",
+            "type": "string"
+          },
+          "platform": {
+            "description": "The platform the app reported, such as android or ios",
+            "type": "string"
+          },
+          "push_token": {
+            "description": "The address of the push service for this device. Never shown to anyone and not written in this version: push is not part of the first mobile slice",
+            "type": "string"
+          },
+          "registered_at": {
+            "description": "When the app signed in on this device (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "example": "2026-03-29T01:30:00.000000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "revoked_at": {
+            "description": "When the device was ended (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+            "example": "2026-03-29T01:30:00.000000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "description": "active while the device may sign in; revoked once it was ended (moves only through the model's actions)",
+            "enum": [
+              "active",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "user": {
+            "description": "The account the device belongs to (personal data: agents see it masked)",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "egress_policy": {
         "description": "Instance-wide switches for data flows: the master switch, EU-only providers, the agreement requirement and the host allow-list",
         "properties": {
@@ -1186,7 +1252,7 @@
             "type": "string"
           },
           "kind": {
-            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
+            "description": "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
             "type": "string"
           },
           "user": {
@@ -7105,6 +7171,846 @@
         "summary": "Search data_flow_log records with filter, order, limit and offset",
         "tags": [
           "Connectors"
+        ]
+      }
+    },
+    "/api/device/get": {
+      "post": {
+        "operationId": "device.get",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/device"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read one device",
+        "tags": [
+          "Customize"
+        ]
+      }
+    },
+    "/api/device/list": {
+      "post": {
+        "operationId": "device.list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "items": {
+                        "$ref": "#/components/schemas/device"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Records."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List device records",
+        "tags": [
+          "Customize"
+        ]
+      }
+    },
+    "/api/device/revoke": {
+      "post": {
+        "description": "Irreversible or money-moving: an agent token only proposes this and a human approves.",
+        "operationId": "device.revoke",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/device"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "End a device for good: its refresh tokens stop working, its access token stops at the next request and the app has to sign in again. A person revokes their own devices; an agent can only propose it. Give id",
+        "tags": [
+          "Customize"
+        ]
+      }
+    },
+    "/api/device/search": {
+      "post": {
+        "operationId": "device.search",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "aggregate": {
+                    "description": "Groups with counts and sums over every matching record instead of rows",
+                    "properties": {
+                      "group_by": {
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "properties": {
+                                "bucket": {
+                                  "enum": [
+                                    "day",
+                                    "week",
+                                    "iso_week",
+                                    "month",
+                                    "year"
+                                  ],
+                                  "type": "string"
+                                },
+                                "field": {
+                                  "type": "string"
+                                },
+                                "zone": {
+                                  "description": "IANA zone name for a datetime, default the platform zone",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "field"
+                              ],
+                              "type": "object"
+                            }
+                          ]
+                        },
+                        "maxItems": 2,
+                        "type": "array"
+                      },
+                      "measures": {
+                        "items": {
+                          "properties": {
+                            "field": {
+                              "type": "string"
+                            },
+                            "op": {
+                              "enum": [
+                                "count",
+                                "sum",
+                                "min",
+                                "max",
+                                "avg"
+                              ],
+                              "type": "string"
+                            },
+                            "round": {
+                              "description": "avg only",
+                              "enum": [
+                                "half_even",
+                                "half_up",
+                                "down"
+                              ],
+                              "type": "string"
+                            },
+                            "scale": {
+                              "description": "avg only",
+                              "maximum": 12,
+                              "minimum": 0,
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "op"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 8,
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "filter": {
+                    "items": {
+                      "properties": {
+                        "bucket": {
+                          "description": "On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion",
+                          "enum": [
+                            "day",
+                            "week",
+                            "iso_week",
+                            "month",
+                            "year"
+                          ],
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        },
+                        "op": {
+                          "enum": [
+                            "eq",
+                            "ne",
+                            "contains",
+                            "in",
+                            "gt",
+                            "gte",
+                            "lt",
+                            "lte",
+                            "is_null"
+                          ],
+                          "type": "string"
+                        },
+                        "value": {},
+                        "zone": {
+                          "description": "With bucket on a datetime: an IANA zone name, default the platform zone",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "field",
+                        "op"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "lang": {
+                    "description": "BCP-47 tag that picks the text collation",
+                    "type": "string"
+                  },
+                  "limit": {
+                    "maximum": 5000,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "offset": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "order": {
+                    "items": {
+                      "properties": {
+                        "dir": {
+                          "enum": [
+                            "asc",
+                            "desc"
+                          ],
+                          "type": "string"
+                        },
+                        "field": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "value": {
+                      "properties": {
+                        "groups": {
+                          "items": {
+                            "properties": {
+                              "count": {
+                                "type": "integer"
+                              },
+                              "key": {
+                                "type": "object"
+                              },
+                              "measures": {
+                                "type": "object"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "rows": {
+                          "items": {
+                            "$ref": "#/components/schemas/device"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A page of records and the total."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Search device records with filter, order, limit and offset",
+        "tags": [
+          "Customize"
+        ]
+      }
+    },
+    "/api/device/update": {
+      "post": {
+        "operationId": "device.update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "app_version": {
+                    "description": "The version of the app, as it reported it at sign-in and at each refresh",
+                    "type": "string"
+                  },
+                  "client_name": {
+                    "description": "The mobile app that signed in, as it called itself",
+                    "type": "string"
+                  },
+                  "expires_at": {
+                    "description": "When the sign-in of the device ends unless it is renewed (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "example": "2026-03-29T01:30:00.000000Z",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "grant": {
+                    "description": "The refresh-token family the device is bound to (an identifier, not a token)",
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "last_seen": {
+                    "description": "When the device last refreshed its sign-in (the time of the last refresh, not of every request) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "example": "2026-03-29T01:30:00.000000Z",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "name": {
+                    "description": "What the device is called; the person can rename it (personal data: agents see it masked)",
+                    "type": "string"
+                  },
+                  "platform": {
+                    "description": "The platform the app reported, such as android or ios",
+                    "type": "string"
+                  },
+                  "push_token": {
+                    "description": "The address of the push service for this device. Never shown to anyone and not written in this version: push is not part of the first mobile slice",
+                    "type": "string"
+                  },
+                  "registered_at": {
+                    "description": "When the app signed in on this device (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "example": "2026-03-29T01:30:00.000000Z",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "revoked_at": {
+                    "description": "When the device was ended (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)",
+                    "example": "2026-03-29T01:30:00.000000Z",
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "state": {
+                    "description": "active while the device may sign in; revoked once it was ended (moves only through the model's actions)",
+                    "enum": [
+                      "active",
+                      "revoked"
+                    ],
+                    "type": "string"
+                  },
+                  "user": {
+                    "description": "The account the device belongs to (personal data: agents see it masked)",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "denied": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "value": {
+                      "$ref": "#/components/schemas/device"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "A record."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRequired"
+                }
+              }
+            },
+            "description": "Proposed; needs a human to approve."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The input was rejected; the error says which field and why."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Missing, expired or revoked bearer token."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "No such command or record, or it is hidden from this token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before trying again.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Obop-Applied": {
+                "description": "none, unknown or partial: what became of the request's own changes (see the response description).",
+                "schema": {
+                  "enum": [
+                    "none",
+                    "unknown",
+                    "partial"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update a device; a status field only moves along a declared action",
+        "tags": [
+          "Customize"
         ]
       }
     },

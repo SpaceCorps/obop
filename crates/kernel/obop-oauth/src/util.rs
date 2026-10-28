@@ -83,9 +83,8 @@ pub fn clean_text(s: &str, max: usize) -> String {
     let mut last_space = true;
     for c in s.chars() {
         let c = if c.is_whitespace() { ' ' } else { c };
-        if c.is_control()
-            || matches!(c, '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
-        {
+        // The same predicate that refuses a device name (`obop_commands::devices::is_invisible`).
+        if obop_commands::devices::is_invisible(c) {
             continue;
         }
         if c == ' ' {

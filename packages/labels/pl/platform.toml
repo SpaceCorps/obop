@@ -593,3 +593,63 @@ description = "Wyłącz konto: nie może się logować, a jego tokeny przestają
 [labels.pl.model.user_account.action.enable]
 label = "Włącz"
 description = "Włącz ponownie wyłączone konto. Dostępy unieważnione przy wyłączeniu z firmy pozostają unieważnione. Podaj id"
+
+[labels.pl.model.device]
+name = "Urządzenie"
+description = "Telefon lub tablet, na którym zalogowana jest aplikacja mobilna: tworzony przy logowaniu aplikacji, kończony przez unieważnienie. Osoba widzi, zmienia nazwę i unieważnia własne urządzenia; administratorzy urządzeń widzą i unieważniają wszystkie."
+
+[labels.pl.model.device.field.user]
+label = "Użytkownik"
+description = "Konto, do którego należy urządzenie"
+
+[labels.pl.model.device.field.name]
+label = "Nazwa"
+description = "Jak nazywa się urządzenie; osoba może je zmienić"
+
+[labels.pl.model.device.field.client_name]
+label = "Aplikacja"
+description = "Aplikacja mobilna, która się zalogowała, tak jak sama się nazwała"
+
+[labels.pl.model.device.field.platform]
+label = "Platforma"
+description = "Platforma zgłoszona przez aplikację, na przykład android lub ios"
+
+[labels.pl.model.device.field.app_version]
+label = "Wersja aplikacji"
+description = "Wersja aplikacji, tak jak zgłosiła ją przy logowaniu i przy każdym odnowieniu"
+
+[labels.pl.model.device.field.push_token]
+label = "Token push"
+description = "Adres usługi push dla tego urządzenia. Nikomu niepokazywany i w tej wersji niezapisywany: push nie należy do pierwszego etapu mobilnego"
+
+[labels.pl.model.device.field.registered_at]
+label = "Zalogowano"
+description = "Kiedy aplikacja zalogowała się na tym urządzeniu"
+
+[labels.pl.model.device.field.last_seen]
+label = "Ostatnia aktywność"
+description = "Kiedy urządzenie ostatnio odnowiło logowanie (czas ostatniego odnowienia, a nie każdego żądania)"
+
+[labels.pl.model.device.field.expires_at]
+label = "Wygasa"
+description = "Kiedy kończy się logowanie urządzenia, jeśli nie zostanie odnowione"
+
+[labels.pl.model.device.field.state]
+label = "Stan"
+description = "active, dopóki urządzenie może się logować; revoked, gdy zostało zakończone"
+
+[labels.pl.model.device.field.state.options]
+active = "Aktywne"
+revoked = "Unieważnione"
+
+[labels.pl.model.device.field.revoked_at]
+label = "Unieważniono"
+description = "Kiedy urządzenie zostało zakończone"
+
+[labels.pl.model.device.field.grant]
+label = "Rodzina logowania"
+description = "Rodzina tokenów odświeżania, z którą urządzenie jest powiązane (identyfikator, nie token)"
+
+[labels.pl.model.device.action.revoke]
+label = "Unieważnij"
+description = "Zakończ urządzenie na dobre: jego tokeny odświeżania przestają działać, token dostępu przestaje działać przy następnym żądaniu, a aplikacja musi zalogować się ponownie. Osoba unieważnia własne urządzenia; agent może to tylko zaproponować. Podaj id"

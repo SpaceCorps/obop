@@ -160,6 +160,9 @@ fn query(location: &str, key: &str) -> String {
         .to_string()
 }
 
+mod mobile;
+mod mobile_review;
+
 #[test]
 fn full_round_trip_with_pkce_issues_a_narrow_short_lived_agent_token() {
     let r = rig();

@@ -1,6 +1,15 @@
 //! Dynamic client registration (RFC 7591) of public clients. Anybody may register, so the
 //! registration is capped, rate limited, and forgotten when unused; a client name is only ever
 //! shown as plain text next to the address the person will be sent to.
+//!
+//! A client has a class. The class of every client that registered before classes existed, and of
+//! one that does not ask for another, is `mcp`: an agent's connector, whose access token is a
+//! scoped agent token bound to the `/mcp` endpoint. The class `mobile` (the D64 amendment) is for
+//! a native app: redirect URIs by the rules of RFC 8252, an access token bound to the `/api`
+//! endpoint that is the person themselves narrowed to the groups they handed over, and a `device`
+//! record for each sign-in. The class is a label the client picks and the person is shown on the
+//! consent page; it grants nothing by itself (docs/DEPLOY.md "Mobile apps" says what an attacker
+//! who registers a mobile client can and cannot do).
 
 use crate::util::{clean_text, rand_hex};
 use crate::{OAuth, OAuthError, redirect};
@@ -9,11 +18,61 @@ use serde_json::{Value as J, json};
 
 pub const CLIENT_MODEL: &str = "oauth_client";
 
+/// What kind of application a client is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Class {
+    /// An agent's connector (Claude and the like): `/mcp`, a scoped agent token.
+    #[default]
+    Mcp,
+    /// A native mobile app: `/api`, the person narrowed, a device record.
+    Mobile,
+}
+
+impl Class {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Mcp => "mcp",
+            Self::Mobile => "mobile",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "mcp" => Some(Self::Mcp),
+            "mobile" => Some(Self::Mobile),
+            _ => None,
+        }
+    }
+
+    /// The class a stored record names: `mcp` when it names none, as every record made before
+    /// classes existed.
+    pub fn of_fields(rec: &Fields) -> Self {
+        rec.get("class")
+            .and_then(J::as_str)
+            .and_then(Self::parse)
+            .unwrap_or_default()
+    }
+
+    /// As [`Class::of_fields`], for a record held as a JSON value.
+    pub fn of_record(rec: &J) -> Self {
+        rec.as_object().map(Self::of_fields).unwrap_or_default()
+    }
+
+    pub fn is_mobile(self) -> bool {
+        self == Self::Mobile
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Client {
     pub id: String,
     pub name: String,
     pub redirect_uris: Vec<String>,
+    pub class: Class,
+    /// The groups a mobile client declared when it registered (RFC 7591 `scope`): the only groups
+    /// the consent page may offer it. Empty for a client that declared none and for every client of
+    /// the default class, which declares nothing and is offered what its person holds.
+    pub scope: Vec<String>,
 }
 
 fn fields(v: J) -> Fields {
@@ -48,6 +107,13 @@ impl OAuth {
                 &format!("give 1 to {} redirect URIs", self.cfg.max_redirect_uris),
             ));
         }
+        let class = match obj.get("obop_client_class") {
+            None => Class::Mcp,
+            Some(c) => c
+                .as_str()
+                .and_then(Class::parse)
+                .ok_or_else(|| bad("obop_client_class must be \"mcp\" or \"mobile\""))?,
+        };
         let mut redirect_uris: Vec<String> = Vec::new();
         for u in uris {
             let u = u.as_str().ok_or_else(|| {
@@ -57,7 +123,11 @@ impl OAuth {
                     "a redirect URI must be a string",
                 )
             })?;
-            redirect::validate(u).map_err(|e| OAuthError::new(400, "invalid_redirect_uri", e))?;
+            let checked = match class {
+                Class::Mcp => redirect::validate(u),
+                Class::Mobile => redirect::validate_mobile(u),
+            };
+            checked.map_err(|e| OAuthError::new(400, "invalid_redirect_uri", e))?;
             if !redirect_uris.iter().any(|x| x == u) {
                 redirect_uris.push(u.to_string());
             }
@@ -93,6 +163,14 @@ impl OAuth {
         {
             return Err(bad("response_types must be [\"code\"]"));
         }
+        // A mobile client says which groups it will ask for; nothing else is ever offered to it.
+        let declared = match (class, obj.get("scope")) {
+            (Class::Mobile, Some(J::String(raw))) => {
+                obop_commands::devices::parse_declared_scope(raw).map_err(|e| bad(&e))?
+            }
+            (Class::Mobile, Some(_)) => return Err(bad("scope must be a string of group names")),
+            _ => Vec::new(),
+        };
         let name = clean_text(obj.get("client_name").and_then(J::as_str).unwrap_or(""), 80);
         let name = if name.is_empty() {
             "Unnamed application".to_string()
@@ -110,20 +188,23 @@ impl OAuth {
             }
         }
         let id = format!("oc_{}", rand_hex::<16>());
+        let mut record = fields(json!({
+            "name": name,
+            "redirect_uris": redirect_uris,
+            "created_at": now,
+            "last_used_at": now,
+            "used": false,
+        }));
+        // Only a class other than the default is written, so a record of an MCP client is what
+        // it always was.
+        if class.is_mobile() {
+            record.insert("class".into(), J::from(class.as_str()));
+            record.insert("scope".into(), json!(declared));
+        }
         self.backend
-            .insert(
-                CLIENT_MODEL,
-                &id,
-                &fields(json!({
-                    "name": name,
-                    "redirect_uris": redirect_uris,
-                    "created_at": now,
-                    "last_used_at": now,
-                    "used": false,
-                })),
-            )
+            .insert(CLIENT_MODEL, &id, &record)
             .map_err(|_| OAuthError::storage_busy())?;
-        Ok(json!({
+        let mut doc = json!({
             "client_id": id,
             "client_id_issued_at": now,
             "client_name": name,
@@ -131,7 +212,12 @@ impl OAuth {
             "grant_types": ["authorization_code", "refresh_token"],
             "response_types": ["code"],
             "token_endpoint_auth_method": "none",
-        }))
+        });
+        if class.is_mobile() {
+            doc["obop_client_class"] = J::from(class.as_str());
+            doc["scope"] = J::from(declared.join(" "));
+        }
+        Ok(doc)
     }
 
     fn client_expired(&self, rec: &Fields) -> bool {
@@ -166,6 +252,16 @@ impl OAuth {
                 .to_string(),
             redirect_uris: rec
                 .get("redirect_uris")
+                .and_then(J::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            class: Class::of_fields(&rec),
+            scope: rec
+                .get("scope")
                 .and_then(J::as_array)
                 .map(|a| {
                     a.iter()

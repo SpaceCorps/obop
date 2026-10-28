@@ -728,6 +728,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/device/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read one device */
+        post: operations["device.get"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List device records */
+        post: operations["device.list"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a device for good: its refresh tokens stop working, its access token stops at the next request and the app has to sign in again. A person revokes their own devices; an agent can only propose it. Give id
+         * @description Irreversible or money-moving: an agent token only proposes this and a human approves.
+         */
+        post: operations["device.revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search device records with filter, order, limit and offset */
+        post: operations["device.search"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update a device; a status field only moves along a declared action */
+        post: operations["device.update"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/egress_policy/checklist": {
         parameters: {
             query?: never;
@@ -2806,6 +2894,52 @@ export interface components {
             /** @description How many records */
             record_count?: number;
         };
+        /** @description A phone or tablet that a mobile app is signed in on: created when the app signs in, ended by revoking it. A person sees, renames and revokes their own devices; the device administrators see and revoke every one; the app itself sees and signs out only its own device */
+        device: {
+            /** @description The version of the app, as it reported it at sign-in and at each refresh */
+            app_version?: string;
+            /** @description The mobile app that signed in, as it called itself */
+            client_name?: string;
+            /**
+             * Format: date-time
+             * @description When the sign-in of the device ends unless it is renewed (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            expires_at?: string;
+            /** @description The refresh-token family the device is bound to (an identifier, not a token) */
+            grant?: string;
+            /**
+             * Format: date-time
+             * @description When the device last refreshed its sign-in (the time of the last refresh, not of every request) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            last_seen?: string;
+            /** @description What the device is called; the person can rename it (personal data: agents see it masked) */
+            name?: string;
+            /** @description The platform the app reported, such as android or ios */
+            platform?: string;
+            /** @description The address of the push service for this device. Never shown to anyone and not written in this version: push is not part of the first mobile slice */
+            push_token?: string;
+            /**
+             * Format: date-time
+             * @description When the app signed in on this device (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            registered_at?: string;
+            /**
+             * Format: date-time
+             * @description When the device was ended (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @example 2026-03-29T01:30:00.000000Z
+             */
+            revoked_at?: string;
+            /**
+             * @description active while the device may sign in; revoked once it was ended (moves only through the model's actions)
+             * @enum {string}
+             */
+            state?: "active" | "revoked";
+            /** @description The account the device belongs to (personal data: agents see it masked) */
+            user?: string;
+        };
         /** @description Instance-wide switches for data flows: the master switch, EU-only providers, the agreement requirement and the host allow-list */
         egress_policy: {
             /** @description Retention for logs of connections that no longer exist */
@@ -3181,7 +3315,7 @@ export interface components {
             at?: string;
             /** @description A short note without any code or secret */
             detail?: string;
-            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless */
+            /** @description What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, device_limit, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless */
             kind?: string;
             /** @description The account the event is about */
             user?: string;
@@ -6518,6 +6652,483 @@ export interface operations {
                             rows?: components["schemas"]["data_flow_log"][];
                             total?: number;
                         };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "device.get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["device"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "device.list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["device"][];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "device.revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["device"];
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "device.search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Groups with counts and sums over every matching record instead of rows */
+                    aggregate?: {
+                        group_by?: (string | {
+                            /** @enum {string} */
+                            bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                            field: string;
+                            /** @description IANA zone name for a datetime, default the platform zone */
+                            zone?: string;
+                        })[];
+                        measures?: {
+                            field?: string;
+                            /** @enum {string} */
+                            op: "count" | "sum" | "min" | "max" | "avg";
+                            /**
+                             * @description avg only
+                             * @enum {string}
+                             */
+                            round?: "half_even" | "half_up" | "down";
+                            /** @description avg only */
+                            scale?: number;
+                        }[];
+                    };
+                    filter?: {
+                        /**
+                         * @description On a date or datetime: compare the period the field falls in (value is the label, 2026-04 or 2026-W15); the explicit date-in-zone conversion
+                         * @enum {string}
+                         */
+                        bucket?: "day" | "week" | "iso_week" | "month" | "year";
+                        field: string;
+                        /** @enum {string} */
+                        op: "eq" | "ne" | "contains" | "in" | "gt" | "gte" | "lt" | "lte" | "is_null";
+                        value?: unknown;
+                        /** @description With bucket on a datetime: an IANA zone name, default the platform zone */
+                        zone?: string;
+                    }[];
+                    /** @description BCP-47 tag that picks the text collation */
+                    lang?: string;
+                    limit?: number;
+                    offset?: number;
+                    order?: {
+                        /** @enum {string} */
+                        dir?: "asc" | "desc";
+                        field?: string;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description A page of records and the total. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        value?: {
+                            groups?: {
+                                count?: number;
+                                key?: Record<string, never>;
+                                measures?: Record<string, never>;
+                            }[];
+                            rows?: components["schemas"]["device"][];
+                            total?: number;
+                        };
+                    };
+                };
+            };
+            /** @description Proposed; needs a human to approve. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequired"];
+                };
+            };
+            /** @description The input was rejected; the error says which field and why. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing, expired or revoked bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description No such command or record, or it is hidden from this token. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The store was busy, unreachable or too slow (D74): error is storage_busy, storage_unavailable or storage_timeout, and Retry-After says how many seconds to wait. applied (and the X-Obop-Applied header) says what became of the request's own changes: none (nothing was changed: repeat the request), unknown (storage_unavailable only: a change that was in flight when the connection broke may or may not have been applied: read before you repeat a write) or partial (a change was committed and a step the request needed was refused: do not repeat it blindly, read the records it touched and finish or undo the rest). A request that committed a change and lost only an optional follow-up, such as the read-back of what it wrote, keeps its own answer and is not a 503. */
+            503: {
+                headers: {
+                    /** @description Seconds to wait before trying again. */
+                    "Retry-After"?: number;
+                    /** @description none, unknown or partial: what became of the request's own changes (see the response description). */
+                    "X-Obop-Applied"?: "none" | "unknown" | "partial";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    "device.update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The version of the app, as it reported it at sign-in and at each refresh */
+                    app_version?: string;
+                    /** @description The mobile app that signed in, as it called itself */
+                    client_name?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the sign-in of the device ends unless it is renewed (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    expires_at?: string;
+                    /** @description The refresh-token family the device is bound to (an identifier, not a token) */
+                    grant?: string;
+                    id: string;
+                    /**
+                     * Format: date-time
+                     * @description When the device last refreshed its sign-in (the time of the last refresh, not of every request) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    last_seen?: string;
+                    /** @description What the device is called; the person can rename it (personal data: agents see it masked) */
+                    name?: string;
+                    /** @description The platform the app reported, such as android or ios */
+                    platform?: string;
+                    /** @description The address of the push service for this device. Never shown to anyone and not written in this version: push is not part of the first mobile slice */
+                    push_token?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the app signed in on this device (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    registered_at?: string;
+                    /**
+                     * Format: date-time
+                     * @description When the device was ended (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @example 2026-03-29T01:30:00.000000Z
+                     */
+                    revoked_at?: string;
+                    /**
+                     * @description active while the device may sign in; revoked once it was ended (moves only through the model's actions)
+                     * @enum {string}
+                     */
+                    state?: "active" | "revoked";
+                    /** @description The account the device belongs to (personal data: agents see it masked) */
+                    user?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        denied?: string[];
+                        value?: components["schemas"]["device"];
                     };
                 };
             };

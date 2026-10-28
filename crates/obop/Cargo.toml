@@ -18,6 +18,7 @@ obop-http.workspace = true
 obop-community.workspace = true
 obop-site.workspace = true
 obop-auth.workspace = true
+obop-oauth.workspace = true
 obop-pkg.workspace = true
 obop-storage.workspace = true
 obop-migrate.workspace = true
@@ -43,7 +44,6 @@ workspace = true
 
 [dev-dependencies]
 obop-storage = { workspace = true, features = ["test-support"] }
-obop-oauth.workspace = true
 obop-auth = { workspace = true, features = ["test-support"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
