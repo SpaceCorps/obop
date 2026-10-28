@@ -18,7 +18,7 @@ X1 packages cannot run anything, so an administrator can install one from an upl
 
 ### What ships
 
-Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`). Built-in modules version with the core (`0.2.0`, D55); every bundled package declares `license = "AGPL-3.0-or-later"`, `requires_core = "^0.2"`, its own version and its dependencies with ranges:
+Built-in modules (Rust crates, not removable): `base` (model `party`), `product` (`product`), `crm`, `sales` (`sale_order`), `invoicing` (`invoice`), `connectors` (`connection`, `consent`, the provider catalogue and the other records of docs/CONNECTORS.md), `mileage` (`mileage_trip`, `mileage_point`: trips recorded by the Mileage app and reviewed in the back office, docs/spec/mobile.md 8.6). Bundled packages in `packages/*.toml` (installed from the Customize app or `obop modules install-from ID`). Built-in modules version with the core (`0.2.0`, D55); every bundled package declares `license = "AGPL-3.0-or-later"`, `requires_core = "^0.2"`, its own version and its dependencies with ranges:
 
 | Package | Needs | What it holds |
 |---|---|---|
@@ -261,7 +261,7 @@ The table maps a module id to the **range of versions of it that this module sup
 
 **Requirement syntax** (the rules of Cargo, so a Rust developer already knows them): `*` any release; `1.2.3` or `^1.2.3` compatible with 1.2.3 (below 2.0.0; for `0.y.z` the minor is the breaking part, so `^0.2` is `>=0.2.0, <0.3.0`); `~1.2.3` patch updates only (`>=1.2.3, <1.3.0`); `>=1.2`, `>1.2`, `<=1.2`, `<1.2`, `=1.2.3`; partial versions and wildcards (`1.*`, `=1.2`); comma-separated comparators are ANDed (`>=0.2, <0.4`). A pre-release such as `0.3.0-beta.1` satisfies a requirement only when that requirement names a pre-release of the same `major.minor.patch`; otherwise only releases match.
 
-**Built-in modules version with the core.** `base`, `product`, `crm`, `sales`, `invoicing`, `connectors` and `platform` have the version of the running core (`GET /api/meta` says which). A requirement on one of them is therefore a requirement on the core: `base = "^0.2"` holds on core 0.2.x and fails on 0.3.0.
+**Built-in modules version with the core.** `base`, `product`, `crm`, `sales`, `invoicing`, `connectors`, `mileage` and `platform` have the version of the running core (`GET /api/meta` says which). A requirement on one of them is therefore a requirement on the core: `base = "^0.2"` holds on core 0.2.x and fails on 0.3.0.
 
 #### Compatibility policy
 
@@ -739,6 +739,10 @@ A field that is the `field` of at least one action is *governed*. The generic `c
 - Data written outside the commands (seeds, imports straight into the store) is not checked.
 
 The built-in modules follow the same rule: `lead.stage` (actions `qualify`, `mark_won`, `mark_lost`, `reopen`), `sale_order.state` (`confirm`, `cancel`, `reset_to_draft`) and `invoice.state` (`post`, needing `invoicing.manager` and approval, and `cancel`).
+
+### 6.2 A refusal the caller may repeat: `incomplete`
+
+Most refusals are for good: repeating the call gets the same answer. The code `incomplete` (HTTP 409, no `Retry-After`; body `{"error": "...", "code": "incomplete", "hint": "..."}`) says the opposite: the call needs records that have not all arrived yet, nothing was changed, and the same call can be repeated until they have. The built-in module `mileage` returns it for `end` on a trip whose points are still on their way (docs/spec/mobile.md 5.3 and 8.6). A client tells it from a refusal for good by the code alone: a refusal without it, such as a wrong state or a trip with no distance, is a plain 400 and is final. Only built-in modules can return it today; a package assertion cannot name a code (ISSUES M1). The row is in `obop_commands::errors::TABLE` (origin D87), and the table test lists it.
 
 ## 7. Refs, dependencies, installing, upgrading, removing
 

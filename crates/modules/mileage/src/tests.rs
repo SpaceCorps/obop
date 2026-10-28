@@ -1488,3 +1488,22 @@ fn discard_stuck_through_a_refused_store_is_never_done_without_its_log_entry() {
         },
     );
 }
+
+#[test]
+fn a_route_is_not_given_out_when_its_log_entry_cannot_be_written() {
+    use obop_storage::testing::Mode;
+    let r = Rig::flaky();
+    let flaky = r.flaky.clone().unwrap();
+    let (ann, rev) = (driver("ann"), reviewer("rita"));
+    r.in_review(&ann);
+    flaky.refuse_model(obop_commands::audit::EVENT_TABLE, Mode::All);
+    let (answer, _) = request(|| r.raw(&rev, "mileage_point.list", json!({"limit": 100})));
+    let e = answer.expect_err("the points must not be given out unlogged");
+    assert!(format!("{e:?}").contains("audit entry"), "{e:?}");
+    flaky.allow_models();
+    assert!(r.events("mileage_route_read").is_empty());
+    // With the log working again the same read goes through and is logged once.
+    let rows = r.ok(&rev, "mileage_point.list", json!({"limit": 100}));
+    assert_eq!(rows.as_array().unwrap().len(), 10);
+    assert_eq!(r.events("mileage_route_read").len(), 1);
+}
