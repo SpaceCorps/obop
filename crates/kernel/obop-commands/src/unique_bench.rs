@@ -9,7 +9,7 @@
 //!   medians (generous: the old code was linear in the model, a ratio of 10 or more).
 //! * `measure_seeding` is `#[ignore]`d and prints the table of the PR:
 //!   `cargo test -p obop-commands --lib measure_seeding -- --ignored --nocapture`, with
-//!   `OBOP_BENCH_URL` (`sqlite://FILE`, `sqlite::memory:`, `postgres://...`; default a SQLite
+//!   `OBOP_BENCH_URL` (`sqlite://FILE`, `sqlite::memory:`, `postgres://...`, `scratch-postgres`; default a SQLite
 //!   file in the temporary directory), `OBOP_BENCH_ROWS` (default 50000) and `OBOP_BENCH_BLOCK`
 //!   (rows per `bulk_create`, default 1000, at most 1000).
 
@@ -179,15 +179,44 @@ fn the_cost_of_a_create_does_not_grow_with_the_model() {
     );
 }
 
+/// What the server did to the tables: a sequential scan per create would show here.
+fn print_pg_stats(db: &obop_storage::testing::TestDb) {
+    std::thread::sleep(Duration::from_secs(3));
+    let mut c = db.connect();
+    let rows = c
+        .query(
+            "SELECT relname, seq_scan, seq_tup_read, idx_scan, n_tup_ins              FROM pg_stat_user_tables ORDER BY relname",
+            &[],
+        )
+        .unwrap();
+    for r in rows {
+        let (name, seq, seq_rows, idx, ins): (String, i64, i64, i64, i64) =
+            (r.get(0), r.get(1), r.get(2), r.get(3), r.get(4));
+        println!(
+            "table {name}: seq_scan {seq} (rows read {seq_rows}), idx_scan {idx}, inserts {ins}"
+        );
+    }
+}
+
 /// Prints the table: the time of every block of a seed, and a single create at 2,500 and at the
 /// last size.
 #[test]
 #[ignore = "a measurement, not a check: run it with --ignored --nocapture"]
 fn measure_seeding() {
-    let url = std::env::var("OBOP_BENCH_URL").unwrap_or_else(|_| {
-        let path = std::env::temp_dir().join(format!("obop-bench-{}.db", std::process::id()));
-        format!("sqlite://{}", path.display())
-    });
+    // `OBOP_BENCH_URL=scratch-postgres` makes a scratch database on the server of
+    // `OBOP_TEST_POSTGRES_URL` and drops it afterwards.
+    let scratch =
+        (std::env::var("OBOP_BENCH_URL").as_deref() == Ok("scratch-postgres")).then(|| {
+            let base = std::env::var("OBOP_TEST_POSTGRES_URL").expect("OBOP_TEST_POSTGRES_URL");
+            obop_storage::testing::TestDb::create(&base).unwrap()
+        });
+    let url = match &scratch {
+        Some(db) => db.url().to_string(),
+        None => std::env::var("OBOP_BENCH_URL").unwrap_or_else(|_| {
+            let path = std::env::temp_dir().join(format!("obop-bench-{}.db", std::process::id()));
+            format!("sqlite://{}", path.display())
+        }),
+    };
     let rows: usize = std::env::var("OBOP_BENCH_ROWS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -240,6 +269,9 @@ fn measure_seeding() {
         total.elapsed().as_secs_f64(),
         rows as f64 / total.elapsed().as_secs_f64()
     );
+    if let Some(db) = &scratch {
+        print_pg_stats(db);
+    }
     if let [(a, ta), (c, tc)] = single[..] {
         println!(
             "single create: {:.2} ms at {a} rows, {:.2} ms at {c} rows, ratio {:.2}",
@@ -247,5 +279,78 @@ fn measure_seeding() {
             ms(tc),
             ms(tc) / ms(ta)
         );
+    }
+}
+
+/// The same model of N rows, put in through the store without any check (so the old code can be
+/// measured at a size it could not seed in reasonable time), and the median of single creates.
+/// `OBOP_BENCH_URL` and `OBOP_BENCH_ROWS` as for `measure_seeding`; `OBOP_BENCH_URL=
+/// scratch-postgres` makes a scratch database. Prints the round trip floor of the connection too.
+#[test]
+#[ignore = "a measurement, not a check: run it with --ignored --nocapture"]
+fn measure_single_create_at_size() {
+    let scratch =
+        (std::env::var("OBOP_BENCH_URL").as_deref() == Ok("scratch-postgres")).then(|| {
+            let base = std::env::var("OBOP_TEST_POSTGRES_URL").expect("OBOP_TEST_POSTGRES_URL");
+            obop_storage::testing::TestDb::create(&base).unwrap()
+        });
+    let url = match &scratch {
+        Some(db) => db.url().to_string(),
+        None => std::env::var("OBOP_BENCH_URL").unwrap_or_else(|_| {
+            let path = std::env::temp_dir().join(format!("obop-single-{}.db", std::process::id()));
+            format!("sqlite://{}", path.display())
+        }),
+    };
+    let rows: usize = std::env::var("OBOP_BENCH_ROWS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(50_000);
+    let b = Bench::open(&url);
+    if let Some(db) = &scratch {
+        let mut c = db.connect();
+        let t0 = Instant::now();
+        for _ in 0..200 {
+            c.query("SELECT 1", &[]).unwrap();
+        }
+        println!(
+            "round trip floor (SELECT 1): {:.2} ms",
+            ms(t0.elapsed()) / 200.0
+        );
+    }
+    let model = format!("{}_reaction", b.p);
+    let mut at = 0;
+    while at < rows {
+        let end = (at + 5_000).min(rows);
+        let batch: Vec<(String, String, obop_storage::Fields)> = (at..end)
+            .map(|i| {
+                let mut f = obop_storage::Fields::new();
+                f.insert("code".into(), serde_json::json!(format!("R{i:07}")));
+                f.insert("slot".into(), serde_json::json!(format!("S{:07}", i / 3)));
+                f.insert("scope".into(), serde_json::json!(format!("g{}", i % 3)));
+                f.insert("note".into(), serde_json::json!("measured"));
+                (model.clone(), uuid::Uuid::now_v7().to_string(), f)
+            })
+            .collect();
+        b.store.backend.insert_many(&batch).unwrap();
+        at = end;
+    }
+    let who = Bench::user();
+    let probes = if rows >= 5 { 5 } else { 1 };
+    let mut times: Vec<Duration> = (0..probes)
+        .map(|k| b.create_one(&who, rows + 1_000 + k))
+        .collect();
+    times.sort();
+    println!(
+        "{} with {rows} rows stored, build {}: single create median of {probes} = {:.2} ms",
+        b.store.backend.kind(),
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        },
+        ms(times[times.len() / 2])
+    );
+    if let Some(db) = &scratch {
+        print_pg_stats(db);
     }
 }
