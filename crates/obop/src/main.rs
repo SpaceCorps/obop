@@ -13,6 +13,8 @@ mod backup_gate_tests;
 mod blobs_tests;
 mod build_commit;
 #[cfg(test)]
+mod build_commit_tests;
+#[cfg(test)]
 mod bulk_tests;
 #[cfg(test)]
 mod connectors_tests;

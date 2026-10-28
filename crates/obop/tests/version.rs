@@ -2,7 +2,19 @@
 //! then the commit the build was made from in parentheses (`crates/obop/build.rs`), so a check that
 //! pins a build can tell two builds of the same version apart.
 
+use std::path::Path;
 use std::process::Command;
+
+// The rule the build script used, to ask it again here.
+#[path = "../src/build_commit.rs"]
+mod build_commit;
+
+/// Where the build script took the commit from: `env` (the variable `OBOP_BUILD_COMMIT` was set
+/// for the build, as the Docker build does), `git` or `none`. Fixed when the program was built, so
+/// it does not depend on the environment this test runs in.
+const SOURCE: &str = env!("OBOP_BUILD_COMMIT_SOURCE");
+/// The commit as the build script handed it to the compiler.
+const BAKED: &str = env!("OBOP_BUILD_COMMIT");
 
 fn version(args: &[&str]) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_obop"))
@@ -41,45 +53,39 @@ fn the_version_line_keeps_its_prefix_and_ends_in_the_commit() {
     assert_eq!(version(&[]), line);
 }
 
-/// One line of `git -C root args...`, when git ran and succeeded.
-fn git(root: &std::path::Path, args: &[&str]) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()
-        .ok()?;
-    out.status
-        .success()
-        .then(|| String::from_utf8(out.stdout).ok())
-        .flatten()
-        .map(|s| s.trim().to_string())
-}
-
-/// In a checkout of this workspace the build knows the commit it was made from: it is the first
-/// twelve digits of `git rev-parse HEAD`. Skipped when the build was told another commit
-/// (`OBOP_BUILD_COMMIT`, as the Docker build does), when there is no git program, and when the
-/// sources are not the top of a repository (a copy unpacked inside another one says `unknown`).
+/// The binary says what the build script decided, and the build script decided what git says now:
+/// in a checkout of this workspace the first twelve digits of `git rev-parse HEAD`, and `unknown`
+/// only where git has no commit for these sources. Nothing here is skipped: there is a branch for
+/// each place the commit can come from, whatever the environment of the test is.
 #[test]
-fn in_a_checkout_the_commit_is_the_head_of_the_repository() {
-    if std::env::var_os("OBOP_BUILD_COMMIT").is_some() {
-        return;
-    }
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .unwrap();
-    let Some(top) = git(&root, &["rev-parse", "--show-toplevel"]) else {
-        return;
-    };
-    if std::path::Path::new(&top).canonicalize().ok().as_deref() != Some(root.as_path()) {
-        return;
-    }
-    let head = git(&root, &["rev-parse", "HEAD"]).expect("a checkout has a HEAD");
+fn the_commit_is_the_one_the_build_found_and_in_a_checkout_it_is_head() {
     let line = version(&["--version"]);
     let commit = commit_of(&line);
-    assert!(
-        head.starts_with(commit) && commit.len() == 12,
-        "the binary says {commit}, HEAD is {head}"
+    assert_eq!(
+        commit, BAKED,
+        "the binary prints what the build handed over"
     );
+
+    let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let in_git = build_commit::git_head(crate_dir, &crate_dir.join("../.."));
+    match SOURCE {
+        // Told by the variable (the image build). A hash, cut to twelve digits; git is not asked.
+        "env" => assert_eq!(build_commit::short(commit).as_deref(), Some(commit)),
+        // Found in a checkout: it must still be there and must say the same. A commit made since
+        // the build has made Cargo build again (the script watches what git changes).
+        "git" => {
+            let head = in_git.expect("the build found a checkout; the test finds none");
+            assert_eq!(commit, head.commit, "the binary is not at HEAD");
+        }
+        // Found nothing: then git has nothing for these sources either (a copy of the sources, no
+        // git program, no commit yet). A checkout that the build missed is a failure.
+        "none" => {
+            assert_eq!(commit, "unknown");
+            assert_eq!(
+                in_git, None,
+                "the build found no commit, but these sources are a checkout with one"
+            );
+        }
+        other => panic!("OBOP_BUILD_COMMIT_SOURCE is {other:?}"),
+    }
 }
