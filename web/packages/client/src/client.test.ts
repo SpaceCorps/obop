@@ -98,6 +98,48 @@ describe("the language of the app", () => {
     }
   });
 
+  test("also goes as the lang parameter when the app asks for it, which outranks a cookie", async () => {
+    const { client, seen } = setup(() => json({ value: [] }), {
+      getLanguage: () => "sv-SE",
+      languageParam: true,
+    });
+    await client.call("party", "list", { limit: 1 });
+    await client.bulkCreate("party", [{ name: "a" }], { mode: "partial" });
+    const urls = seen.map((r) => new URL(r.url));
+    expect(urls.map((u) => `${u.pathname}${u.search}`)).toEqual([
+      "/api/party/list?lang=sv-SE",
+      "/api/party/bulk_create?lang=sv-SE",
+    ]);
+    // The header goes too, and the body is what the caller sent.
+    expect(seen.map((r) => r.headers.get("accept-language"))).toEqual(["sv-SE", "sv-SE"]);
+  });
+
+  test("the lang parameter is left out without the option, without a tag, and for a list", async () => {
+    for (const [languageParam, getLanguage] of [
+      [undefined, () => "sv"],
+      [false, () => "sv"],
+      [true, undefined],
+      [true, () => undefined],
+      [true, () => "sv-SE,sv;q=0.9,en;q=0.5"],
+      [true, () => "sv&x=1"],
+      [true, () => "x"],
+    ] as const) {
+      const { client, seen } = setup(() => json({ value: [] }), { getLanguage, languageParam });
+      await client.call("party", "list");
+      expect(new URL(seen[0]!.url).search, `${languageParam} ${String(getLanguage)}`).toBe("");
+    }
+  });
+
+  test("an error of a call with the lang parameter names the path without it", async () => {
+    const { client } = setup(() => json({ error: "no" }, { status: 400 }), {
+      getLanguage: () => "sv",
+      languageParam: true,
+    });
+    const e = await rejection(client.call("party", "list"));
+    expect(e.path).toBe("/api/party/list");
+    expect(e.read).toBe(true);
+  });
+
   test("does not replace a header the call carries", async () => {
     const { client, seen } = setup(() => json({ value: [] }), { getLanguage: () => "sv" });
     await client.api.POST("/api/party/list", { headers: { "accept-language": "fi" } });

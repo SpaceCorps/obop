@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "../support/fixtures.ts";
 import type { ModuleSpec } from "../support/modules.ts";
 
@@ -33,6 +34,24 @@ message = ${JSON.stringify(DE)}
 });
 
 const suffix = "(assertion is_set(title) failed)";
+
+/** What the page sends with every call of the action: the `lang` of the address, the header, the cookie. */
+type Asked = { lang: string | null; header: string | null; cookie: string | null };
+
+function watchFinish(page: Page, model: string): Asked[] {
+  const asked: Asked[] = [];
+  page.on("request", async (r) => {
+    const url = new URL(r.url());
+    if (url.pathname !== `/api/${model}/finish`) return;
+    const headers = await r.allHeaders();
+    asked.push({
+      lang: url.searchParams.get("lang"),
+      header: headers["accept-language"] ?? null,
+      cookie: headers["cookie"] ?? null,
+    });
+  });
+  return asked;
+}
 
 test.describe("the message of an assertion in the language of the request", () => {
   test("the API answers in the language the request asks for, in the order query, cookie, header", async ({
@@ -89,16 +108,12 @@ test.describe("the message of an assertion in the language of the request", () =
     allowHttpErrors(400);
     const model = await scratchModule(spec("Assertion screen"));
     const rec = await api.create("root", model, {});
-    const asked: string[] = [];
-    page.on("request", (r) => {
-      if (r.url().endsWith(`/api/${model}/finish`))
-        asked.push(r.headers()["accept-language"] ?? "(none)");
-    });
+    const asked = watchFinish(page, model);
     await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
     const panel = page.locator("aside.record");
     await panel.getByRole("button", { name: "Finish" }).click();
     await expect(page.locator(".toast").filter({ hasText: EN })).toBeVisible();
-    expect(asked).toEqual(["en"]);
+    expect(asked).toMatchObject([{ lang: "en", header: "en" }]);
   });
 
   test.describe("in Swedish, in a German browser", () => {
@@ -114,18 +129,62 @@ test.describe("the message of an assertion in the language of the request", () =
       allowHttpErrors(400);
       const model = await scratchModule(spec("Assertion svenska"));
       const rec = await api.create("root", model, {});
-      const asked: string[] = [];
-      page.on("request", (r) => {
-        if (r.url().endsWith(`/api/${model}/finish`))
-          asked.push(r.headers()["accept-language"] ?? "(none)");
-      });
+      const asked = watchFinish(page, model);
       await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
       await page.locator("aside.record").getByRole("button", { name: "Avsluta" }).click();
       await expect(page.locator(".toast").filter({ hasText: SV })).toBeVisible();
       // The language of the interface went out, not the browser's German.
-      expect(asked).toEqual(["sv"]);
+      expect(asked).toMatchObject([{ lang: "sv", header: "sv" }]);
       // And nothing moved.
       expect((await api.run("root", `${model}.get`, { id: rec.id })).state).toBe("open");
+    });
+  });
+
+  // The cookie outranks Accept-Language on the server, and it can differ from what the interface
+  // shows: an instance default the person never chose is not written to it, and a cookie the forum
+  // set as HttpOnly cannot be overwritten by the page. The page therefore asks with ?lang=.
+  test.describe("an instance default, a browser in another language and a cookie that says otherwise", () => {
+    test.use({ language: null, locale: "de-DE" });
+
+    test("the refusal is in the language the interface shows", async ({
+      page,
+      context,
+      baseURL,
+      signIn,
+      api,
+      scratchModule,
+      allowHttpErrors,
+    }) => {
+      allowHttpErrors(400);
+      const model = await scratchModule(spec("Assertion default"));
+      const rec = await api.create("root", model, {});
+      const before = (await api.run("root", "setting.get", { id: "instance" })) as {
+        value: string;
+      };
+      try {
+        const settings = { ...JSON.parse(before.value || "{}"), language: "sv" };
+        await api.run("root", "setting.update", {
+          id: "instance",
+          value: JSON.stringify(settings),
+        });
+        // English, as the forum would have set it: the page cannot overwrite an HttpOnly cookie.
+        await context.addCookies([
+          { name: "obop_lang", value: "en", url: baseURL!, httpOnly: true },
+        ]);
+        const asked = watchFinish(page, model);
+        await signIn("root", `/${model}/${model}?view=list&id=${rec.id}`);
+        // No saved choice, a German browser: the interface is the administrator's Swedish.
+        await expect(page.locator("html")).toHaveAttribute("lang", "sv");
+        await page.locator("aside.record").getByRole("button", { name: "Avsluta" }).click();
+        await expect(page.locator(".toast").filter({ hasText: SV })).toBeVisible();
+        expect(asked).toHaveLength(1);
+        // The conflict was real: the call carried the English cookie and the German browser's
+        // language was not sent either.
+        expect(asked[0]!.cookie).toContain("obop_lang=en");
+        expect(asked[0]).toMatchObject({ lang: "sv", header: "sv" });
+      } finally {
+        await api.run("root", "setting.update", { id: "instance", value: before.value });
+      }
     });
   });
 });

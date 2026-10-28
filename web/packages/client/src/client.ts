@@ -36,8 +36,21 @@ export interface ObopClientOptions {
    * its language, and an unsupported one is skipped by the server. With no language, or if this
    * throws or answers something that is no header value, the call is sent without the header and
    * the texts are the package's own. A header the call carries already is not replaced.
+   *
+   * The instance chooses the language by `?lang=`, then the `obop_lang` cookie, then
+   * `Accept-Language`. An app with no cookies (the React Native apps) is decided by this header. A
+   * web app on the instance's own origin also sends that cookie, and a cookie that differs from
+   * what the app shows outranks the header: such an app sets `languageParam`.
    */
   getLanguage?: () => Language | Promise<Language>;
+  /**
+   * Also send the language of `getLanguage` as the `lang` query parameter of `call` and
+   * `bulkCreate`, which outranks the `obop_lang` cookie. For a web app on the instance's own
+   * origin, where the browser sends a cookie that may not match the app's language. It takes
+   * effect when `getLanguage` answers one language tag (`sv`, `de-AT`), not a list with q-values.
+   * Calls through `client.api` are not changed: put `?lang=` on their path yourself.
+   */
+  languageParam?: boolean;
   /** The `fetch` to use; the global one when absent (it is looked up at each call, so a test may replace it). */
   fetch?: typeof fetch;
   /**
@@ -181,24 +194,43 @@ export function createObopClient(options: ObopClientOptions): ObopClient {
     return unauthorized;
   };
 
+  // The path of the operation, without the query that `languageParam` adds.
   const callInfo = (request: Request, schemaPath: string): CallInfo => ({
     method: request.method,
-    path: schemaPath,
+    path: schemaPath.split("?")[0]!,
     read: isReadCall(request.method, schemaPath),
   });
 
   // The language is a preference, not a credential: a hook that fails, or a value that is no
   // header, must not take the call down with it.
+  const askLanguage = async (): Promise<string | undefined> => {
+    try {
+      const language = await options.getLanguage?.();
+      return typeof language === "string" && language.trim() !== "" ? language.trim() : undefined;
+    } catch {
+      return undefined; // sent without it
+    }
+  };
+
   const setLanguage = async (request: Request): Promise<void> => {
     if (!options.getLanguage || request.headers.has("accept-language")) return;
+    const language = await askLanguage();
+    if (language === undefined) return;
     try {
-      const language = await options.getLanguage();
-      if (typeof language === "string" && language.trim() !== "") {
-        request.headers.set("accept-language", language.trim());
-      }
+      request.headers.set("accept-language", language);
     } catch {
-      // Sent without it.
+      // Not a header value: sent without it.
     }
+  };
+
+  // `?lang=<tag>` for a call that builds its own path, when `languageParam` is set and the app
+  // answered one tag (not a list with q-values).
+  const languageQuery = async (): Promise<string> => {
+    if (!options.languageParam) return "";
+    const tag = await askLanguage();
+    return tag !== undefined && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(tag)
+      ? `?lang=${encodeURIComponent(tag)}`
+      : "";
   };
 
   const middleware: Middleware = {
@@ -262,7 +294,10 @@ export function createObopClient(options: ObopClientOptions): ObopClient {
   ): Promise<CallResult<T>> {
     const path = `/api/${encodeURIComponent(model)}/${encodeURIComponent(command)}`;
     const info: CallInfo = { method: "POST", path, read: isReadCall("POST", path) };
-    const { data, response } = await untyped.POST(path, { body: input, signal: opts.signal });
+    const { data, response } = await untyped.POST(`${path}${await languageQuery()}`, {
+      body: input,
+      signal: opts.signal,
+    });
     // Every command answers an object; JSON of another shape is some other server's answer.
     const answer: unknown = data ?? {};
     if (typeof answer !== "object" || answer === null || Array.isArray(answer)) {
