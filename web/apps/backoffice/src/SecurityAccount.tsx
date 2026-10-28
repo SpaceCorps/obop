@@ -3,6 +3,7 @@ import { Badge, Button, Input, Notice, Table, createTwoFactorApi, fmt, t } from 
 import { Icon, Logo } from "./ui.tsx";
 import { passkeyMessage } from "./Passkeys.tsx";
 import { proveWithPasskey } from "./passkeys.ts";
+import { call, search, type Row } from "./api.ts";
 
 export type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
 
@@ -397,6 +398,171 @@ export function ConnectedAppsSection({ token, notify }: { token: string; notify:
                 </td>
               </tr>
             ))}
+          </tbody>
+        </Table>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The phones and tablets that a mobile app of this instance is signed in on (the `device` model),
+ * with a way to rename each and to end it. A person sees their own; the device administrators see
+ * everybody's, and a column then says whose each is. Revoking a device ends its sign-in at once:
+ * the app has to sign in again through the system browser.
+ */
+export function DevicesSection({
+  token,
+  notify,
+  isAdmin = false,
+}: {
+  token: string;
+  notify: Notify;
+  isAdmin?: boolean;
+}) {
+  const id = useId();
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const load = useCallback(async () => {
+    const r = await search(token, "device", {
+      order: [{ field: "registered_at", dir: "desc" }],
+      limit: 200,
+    });
+    // An instance without a sign-in server (--dev-auth) has no devices and no such model.
+    setRows("error" in r ? null : r.rows);
+  }, [token]);
+  useEffect(() => void load(), [load]);
+  if (rows === null) return null;
+  const showUser = isAdmin || new Set(rows.map((r) => String(r.user))).size > 1;
+  const text = (r: Row, k: string) => (typeof r[k] === "string" ? (r[k] as string) : "");
+  return (
+    <section className="stack" aria-labelledby={`${id}-h`}>
+      <h3 id={`${id}-h`} className="overline">
+        {t("Devices")}
+      </h3>
+      <p className="hint">
+        {t(
+          "Phones and tablets that a mobile app is signed in on. Revoking one signs the app out at once, and it has to sign in again. Changing your password or turning off a second factor signs all of them out.",
+        )}
+      </p>
+      {rows.length === 0 ? (
+        <p className="hint">{t("No device is signed in.")}</p>
+      ) : (
+        <Table caption={t("Devices")} dense>
+          <thead>
+            <tr>
+              <th scope="col">{t("Device")}</th>
+              {showUser && <th scope="col">{t("Person")}</th>}
+              <th scope="col">{t("App")}</th>
+              <th scope="col">{t("Signed in")}</th>
+              <th scope="col">{t("Last active")}</th>
+              <th scope="col">{t("Ends")}</th>
+              <th scope="col">{t("Status")}</th>
+              <th scope="col">
+                <span className="sr-only">{t("Actions")}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((d) => {
+              const active = d.state === "active";
+              const editing = renaming?.id === d.id ? renaming : null;
+              return (
+                <tr key={d.id}>
+                  <td>
+                    {editing ? (
+                      <form
+                        className="actionrow"
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          setBusy(d.id);
+                          const r = await call(token, "device.update", {
+                            id: d.id,
+                            name: editing.name,
+                          });
+                          setBusy(null);
+                          if (r.kind === "ok") {
+                            setRenaming(null);
+                            notify(t("Device renamed."));
+                            void load();
+                          } else notify(t("Could not rename the device."), "error");
+                        }}
+                      >
+                        <Input
+                          label={t("Device name")}
+                          value={editing.name}
+                          maxLength={80}
+                          onChange={(e) => setRenaming({ id: d.id, name: e.target.value })}
+                          required
+                        />
+                        <Button type="submit" size="sm" variant="primary" loading={busy === d.id}>
+                          {t("Save")}
+                        </Button>
+                        <Button type="button" size="sm" onClick={() => setRenaming(null)}>
+                          {t("Cancel")}
+                        </Button>
+                      </form>
+                    ) : (
+                      <>
+                        <strong>{text(d, "name")}</strong>
+                        <div className="hint">
+                          {[text(d, "platform"), text(d, "app_version")].filter(Boolean).join(" ")}
+                        </div>
+                      </>
+                    )}
+                  </td>
+                  {showUser && <td>{text(d, "user")}</td>}
+                  <td>{text(d, "client_name")}</td>
+                  <td>{text(d, "registered_at") ? fmt.dateTime(text(d, "registered_at")) : ""}</td>
+                  <td>{text(d, "last_seen") ? fmt.dateTime(text(d, "last_seen")) : ""}</td>
+                  <td>
+                    {active
+                      ? text(d, "expires_at")
+                        ? fmt.dateTime(text(d, "expires_at"))
+                        : ""
+                      : text(d, "revoked_at")
+                        ? fmt.dateTime(text(d, "revoked_at"))
+                        : ""}
+                  </td>
+                  <td>
+                    <Badge tone={active ? "success" : "neutral"}>
+                      {active ? t("Signed in") : t("Revoked")}
+                    </Badge>
+                  </td>
+                  <td>
+                    {active && !editing && (
+                      <div className="actionrow">
+                        <Button
+                          size="sm"
+                          aria-label={t("Rename {name}", { name: text(d, "name") })}
+                          onClick={() => setRenaming({ id: d.id, name: text(d, "name") })}
+                        >
+                          {t("Rename")}
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          loading={busy === d.id}
+                          aria-label={t("Revoke {name}", { name: text(d, "name") })}
+                          onClick={async () => {
+                            setBusy(d.id);
+                            const r = await call(token, "device.revoke", { id: d.id });
+                            setBusy(null);
+                            if (r.kind === "ok") {
+                              notify(t("{name} is signed out.", { name: text(d, "name") }));
+                              void load();
+                            } else notify(t("Could not revoke the device."), "error");
+                          }}
+                        >
+                          {t("Revoke")}
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </Table>
       )}

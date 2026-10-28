@@ -16,7 +16,12 @@ import {
 import { search, saveSettings, type Row, type Settings } from "./api.ts";
 import { Icon, Logo } from "./ui.tsx";
 import { PasskeysSection } from "./Passkeys.tsx";
-import { ConnectedAppsSection, PasswordSection, SessionsSection } from "./SecurityAccount.tsx";
+import {
+  ConnectedAppsSection,
+  DevicesSection,
+  PasswordSection,
+  SessionsSection,
+} from "./SecurityAccount.tsx";
 import { PeopleSection } from "./People.tsx";
 
 type Notify = (text: string, tone?: "ok" | "error" | "info") => void;
@@ -56,6 +61,9 @@ const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   oauth_revoked: msg("App access ended"),
   oauth_refresh_reuse: msg("App access ended: a token was used twice"),
   oauth_code_reuse: msg("App access ended: a code was used twice"),
+  device_registered: msg("Device signed in"),
+  device_renamed: msg("Device renamed"),
+  device_revoked: msg("Device signed out"),
 };
 
 /**
@@ -108,6 +116,7 @@ export function SecurityTab({
         onSignOut={onSignOut ?? (() => location.reload())}
       />
       <ConnectedAppsSection token={token} notify={notify} />
+      <DevicesSection token={token} notify={notify} isAdmin={isAdmin} />
       {isAdmin && (
         <>
           <PeopleSection token={token} notify={notify} />
