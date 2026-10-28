@@ -174,7 +174,7 @@ REVOKE ALL ON FUNCTION {schema}.obop_history_drop_partition(date, interval) FROM
 
 /// The relations the part leaves behind (tables, sequence and indexes), as the server resolves the
 /// names (search path).
-const RELATIONS: [&str; 8] = [
+pub(crate) const RELATIONS: [&str; 8] = [
     "obop_record_change_seq",
     "obop_record_change",
     "obop_record_change_default",
@@ -186,7 +186,7 @@ const RELATIONS: [&str; 8] = [
 ];
 
 /// The functions of the part, by signature.
-const FUNCTIONS: [&str; 4] = [
+pub(crate) const FUNCTIONS: [&str; 4] = [
     "obop_history_guard()",
     "obop_history_ensure_partition(date)",
     "obop_history_erase(text, text, text[], text, jsonb, bigint, timestamptz)",

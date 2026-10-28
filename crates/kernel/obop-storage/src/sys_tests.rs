@@ -8,7 +8,7 @@
 //! The clock of every store here is a counter the test moves, so no test waits for time to pass.
 
 use super::*;
-use crate::history::HistoryQuery;
+use crate::history::{ChangeCursor, ChangePage, ChangeQuery, HistoryQuery};
 use crate::sysfields::{self, ChangeRow, Clock, fmt_micros, parse_micros};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -239,16 +239,17 @@ impl Fx {
     }
 }
 
+/// A fresh store of every kind there is here: memory, SQLite in memory and in a file, and
+/// PostgreSQL when a server is configured.
+fn stores() -> Vec<Fx> {
+    let mut v = vec![Fx::memory(), Fx::sqlite(), Fx::sqlite_file()];
+    v.extend(Fx::postgres());
+    v
+}
+
 /// Run `test` on every store that has system fields and history.
 fn each(test: impl Fn(&Fx)) {
-    let stores = [
-        Some(Fx::memory()),
-        Some(Fx::sqlite()),
-        Some(Fx::sqlite_file()),
-    ]
-    .into_iter()
-    .chain([Fx::postgres()]);
-    for fx in stores.flatten() {
+    for fx in stores() {
         eprintln!("--- {}", fx.name);
         test(&fx);
     }
@@ -1803,7 +1804,7 @@ fn the_history_rides_the_export_and_comes_back_with_its_numbers() {
     assert!(ids.windows(2).all(|w| w[0] < w[1]));
     assert_eq!(src.b.total().unwrap(), rows.len());
     // Into every kind of store, wiping what is there.
-    for target in [Fx::memory(), Fx::sqlite(), Fx::sqlite_file()] {
+    for target in stores() {
         eprintln!("--- into {}", target.name);
         target.track_plain("deal", &["n", "stage"]);
         target.ok("ann", &[ins("junk", "j", json!({"x": 1}))]);
@@ -1894,7 +1895,7 @@ fn the_history_rides_the_export_and_comes_back_with_its_numbers() {
             with(sysfields::ENTRY_KEY, json!(true)),
         ),
     ] {
-        for fresh in [Fx::memory(), Fx::sqlite()] {
+        for fresh in stores() {
             let mut feed = Some(vec![(
                 "record_change".to_string(),
                 id.to_string(),
@@ -1937,7 +1938,7 @@ fn a_backup_with_records_of_a_model_called_record_change_and_with_history_restor
         rows.iter().filter(|r| r.0 == "record_change").count(),
         3 + 2
     );
-    for target in [Fx::memory(), Fx::sqlite(), Fx::sqlite_file()] {
+    for target in stores() {
         eprintln!("--- into {}", target.name);
         target.track_plain("deal", &["n"]);
         let mut feed = Some(rows.clone());
@@ -2378,4 +2379,370 @@ fn a_store_without_a_history_refuses_a_model_that_wants_one_and_stamps_one_that_
     );
     let r = crate::atomic::run_ops(&mut tx, &[erase("log", "l")], &ctx, &tracking);
     assert!(matches!(r, Err(ApplyError::Storage(_))), "{r:?}");
+}
+
+// ---- the change feed, the statistics, and a backup between every pair of stores ------------------------
+
+impl Fx {
+    /// One page of the feed. On PostgreSQL the feed holds back what lies behind any transaction
+    /// that is open anywhere on the server (the tests of other databases have some), so the
+    /// answer is asked again until nothing is held back.
+    fn feed_q(&self, q: &ChangeQuery) -> ChangePage {
+        for _ in 0..400 {
+            let page = self
+                .b
+                .changes(q)
+                .unwrap_or_else(|e| panic!("{}: {e}", self.name));
+            if page.horizon_lag_ms.is_none() {
+                return page;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        panic!("{}: the feed stayed held back", self.name);
+    }
+
+    fn feed(&self, after: Option<&ChangeCursor>, limit: usize) -> ChangePage {
+        self.feed_q(&ChangeQuery {
+            after: after.cloned(),
+            limit,
+            ..ChangeQuery::default()
+        })
+    }
+}
+
+#[test]
+fn the_feed_lists_every_entry_once_in_order_and_pages_by_cursor() {
+    each(|fx| {
+        fx.track_plain("deal", &["name", "stage"]);
+        let empty = fx.feed(None, 10);
+        assert!(empty.rows.is_empty() && empty.next.is_none(), "{empty:?}");
+        for (who, ops) in [
+            ("ann", vec![ins("deal", "d1", json!({"name": "A"}))]),
+            ("ann", vec![ins("deal", "d2", json!({"name": "B"}))]),
+            ("bob", vec![merge("deal", "d1", json!({"stage": "x"}))]),
+            ("bob", vec![merge("deal", "d2", json!({"stage": "y"}))]),
+            ("cy", vec![merge("deal", "d1", json!({"stage": "z"}))]),
+            ("cy", vec![del("deal", "d2")]),
+            ("ann", vec![ins("deal", "d3", json!({"name": "C"}))]),
+        ] {
+            fx.tick(1_000);
+            fx.ok(who, &ops);
+        }
+        let all = fx.feed(None, 100);
+        let seen: Vec<(&str, &str)> = all
+            .rows
+            .iter()
+            .map(|r| (r.record_id.as_str(), r.op.as_str()))
+            .collect();
+        assert_eq!(
+            seen,
+            [
+                ("d1", "create"),
+                ("d2", "create"),
+                ("d1", "update"),
+                ("d2", "update"),
+                ("d1", "update"),
+                ("d2", "delete"),
+                ("d3", "create"),
+            ],
+            "{}",
+            fx.name
+        );
+        assert!(all.rows.windows(2).all(|w| w[0].seq < w[1].seq));
+        // The feed and the history of a record say the same about the same entry.
+        let mut of_d1 = fx.hist("deal", "d1");
+        let from_feed: Vec<ChangeRow> = all
+            .rows
+            .iter()
+            .filter(|r| r.record_id == "d1")
+            .cloned()
+            .collect();
+        of_d1.sort_by_key(|r| r.seq);
+        assert_eq!(of_d1, from_feed);
+        // Pages of three: nothing twice, nothing missing, and the cursor of the last page is a
+        // place to wait at for what comes next.
+        let mut got = Vec::new();
+        let mut cursor: Option<ChangeCursor> = None;
+        let mut sizes = Vec::new();
+        loop {
+            let page = fx.feed(cursor.as_ref(), 3);
+            sizes.push(page.rows.len());
+            got.extend(page.rows.clone());
+            let done = page.rows.is_empty();
+            if !done {
+                assert_eq!(
+                    page.next.as_ref().map(|c| c.seq),
+                    page.rows.last().map(|r| r.seq)
+                );
+            } else {
+                assert_eq!(page.next, cursor, "an empty page keeps the place");
+            }
+            cursor = page.next;
+            if done {
+                break;
+            }
+        }
+        assert_eq!(sizes, [3, 3, 1, 0], "{}", fx.name);
+        assert_eq!(got, all.rows);
+        // The cursor is text and back, and what is written later is found from it.
+        let kept = cursor.expect("a cursor after the last entry");
+        let text = kept.to_text();
+        assert_eq!(ChangeCursor::parse(&text).unwrap(), kept);
+        fx.tick(1_000);
+        fx.ok("dee", &[merge("deal", "d3", json!({"stage": "late"}))]);
+        let later = fx.feed(Some(&kept), 10);
+        assert_eq!(later.rows.len(), 1, "{}", fx.name);
+        assert_eq!(later.rows[0].record_id, "d3");
+        assert_eq!(later.rows[0].actor, "dee");
+        assert!(later.rows[0].seq > kept.seq);
+    });
+}
+
+#[test]
+fn the_feed_can_be_asked_for_models_operations_and_a_time() {
+    each(|fx| {
+        fx.track_plain("deal", &["name", "stage"]);
+        fx.track_plain("task", &["title"]);
+        let writes = [
+            ins("deal", "d1", json!({"name": "A"})),
+            ins("task", "t1", json!({"title": "x"})),
+            merge("deal", "d1", json!({"stage": "x"})),
+            del("task", "t1"),
+            merge("deal", "d1", json!({"stage": "y"})),
+        ];
+        for w in writes {
+            fx.tick(1_000_000);
+            fx.ok("ann", &[w]);
+        }
+        let q = |models: &[&str], ops: &[&str], since: Option<i64>| {
+            let page = fx.feed_q(&ChangeQuery {
+                models: models.iter().map(|s| s.to_string()).collect(),
+                ops: ops.iter().map(|s| s.to_string()).collect(),
+                since_at: since.map(fmt_micros),
+                limit: 100,
+                ..ChangeQuery::default()
+            });
+            page.rows
+                .iter()
+                .map(|r| format!("{}:{}", r.model, r.op))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(q(&[], &[], None).len(), 5);
+        assert_eq!(
+            q(&["deal"], &[], None),
+            ["deal:create", "deal:update", "deal:update"]
+        );
+        assert_eq!(q(&[], &["update"], None), ["deal:update", "deal:update"]);
+        assert_eq!(q(&["task"], &["delete"], None), ["task:delete"]);
+        assert_eq!(q(&["task", "deal"], &["create"], None).len(), 2);
+        assert!(q(&["nobody"], &[], None).is_empty());
+        // From the third write on.
+        assert_eq!(
+            q(&[], &[], Some(T0 + 3_000_000)),
+            ["deal:update", "task:delete", "deal:update"]
+        );
+        let e =
+            fx.b.changes(&ChangeQuery {
+                since_at: Some("yesterday".into()),
+                limit: 10,
+                ..ChangeQuery::default()
+            })
+            .unwrap_err();
+        assert!(e.contains("not a canonical instant"), "{e}");
+    });
+}
+
+#[test]
+fn a_page_is_never_longer_than_asked_and_never_longer_than_the_cap() {
+    each(|fx| {
+        fx.track_plain("deal", &["n"]);
+        let ops: Vec<Op> = (0..5)
+            .map(|i| ins("deal", &format!("d{i}"), json!({"n": i})))
+            .collect();
+        fx.ok("ann", &ops);
+        let none = fx.feed(None, 0);
+        assert!(none.rows.is_empty() && none.next.is_none(), "{none:?}");
+        assert_eq!(fx.feed(None, 1).rows.len(), 1);
+        assert_eq!(fx.feed(None, 4).rows.len(), 4);
+        assert_eq!(fx.feed(None, usize::MAX).rows.len(), 5);
+        assert_eq!(crate::history::FEED_PAGE_MAX, 10_000);
+    });
+}
+
+#[test]
+fn a_cursor_of_another_life_or_from_the_future_is_refused_with_a_stable_code() {
+    each(|fx| {
+        fx.track_plain("deal", &["n"]);
+        fx.ok("ann", &[ins("deal", "d1", json!({"n": 1}))]);
+        let kept = fx.feed(None, 10).next.expect("a cursor");
+        let ask = |c: ChangeCursor| {
+            fx.b.changes(&ChangeQuery {
+                after: Some(c),
+                limit: 10,
+                ..ChangeQuery::default()
+            })
+        };
+        assert!(ask(kept.clone()).is_ok());
+        // Another epoch: a restore, or a different database.
+        let e = ask(ChangeCursor {
+            epoch: "0123456789abcdef".into(),
+            ..kept.clone()
+        })
+        .unwrap_err();
+        assert!(e.starts_with("cursor_expired:"), "{}: {e}", fx.name);
+        // Ahead of the newest entry: the database went back in time.
+        let e = ask(ChangeCursor {
+            seq: kept.seq + 1_000,
+            ..kept.clone()
+        })
+        .unwrap_err();
+        assert!(e.starts_with("cursor_expired:"), "{}: {e}", fx.name);
+        // And text that is no cursor never gets this far.
+        assert!(
+            ChangeCursor::parse("c1.nonsense")
+                .unwrap_err()
+                .starts_with("cursor_invalid:")
+        );
+    });
+}
+
+#[test]
+fn a_restore_ends_the_life_of_the_cursors_and_the_numbers_go_on() {
+    each(|fx| {
+        fx.track_plain("deal", &["n"]);
+        fx.ok("ann", &[ins("deal", "d1", json!({"n": 1}))]);
+        fx.tick(1_000);
+        fx.ok("ann", &[merge("deal", "d1", json!({"n": 2}))]);
+        let before = fx.feed(None, 10);
+        let cursor = before.next.clone().unwrap();
+        // A restore of the very backup this store would make.
+        let rows = fx.rows();
+        let mut feed = Some(rows.clone());
+        fx.b.import(true, &mut || Ok(feed.take())).unwrap();
+        let e =
+            fx.b.changes(&ChangeQuery {
+                after: Some(cursor),
+                limit: 10,
+                ..ChangeQuery::default()
+            })
+            .unwrap_err();
+        assert!(e.starts_with("cursor_expired:"), "{}: {e}", fx.name);
+        // From the start the restored entries are all there, with the numbers they had.
+        let after = fx.feed(None, 10);
+        let numbers = |p: &ChangePage| p.rows.iter().map(|r| r.seq).collect::<Vec<_>>();
+        assert_eq!(numbers(&after), numbers(&before));
+        assert_eq!(fx.rows(), rows);
+        // New entries sort after the restored ones.
+        fx.tick(1_000);
+        fx.ok("bob", &[merge("deal", "d1", json!({"n": 3}))]);
+        let next = fx.feed(after.next.as_ref(), 10);
+        assert_eq!(next.rows.len(), 1);
+        assert!(next.rows[0].seq > *numbers(&after).last().unwrap());
+        assert_eq!(next.rows[0].row_version, 3);
+    });
+}
+
+#[test]
+fn the_statistics_count_the_entries_and_name_the_oldest() {
+    each(|fx| {
+        let none = fx.b.history_stats().unwrap();
+        assert_eq!(
+            (none.entries_estimate, none.oldest_at.clone()),
+            (0, None),
+            "{none:?}"
+        );
+        fx.track_plain("deal", &["n"]);
+        fx.ok("ann", &[ins("deal", "d1", json!({"n": 1}))]);
+        fx.tick(5_000_000);
+        fx.ok("ann", &[merge("deal", "d1", json!({"n": 2}))]);
+        let stats = fx.b.history_stats().unwrap();
+        assert_eq!(stats.entries_estimate, 2, "{}", fx.name);
+        assert_eq!(stats.oldest_at.as_deref(), Some(fmt_micros(T0).as_str()));
+        assert_eq!(stats.default_rows, 0);
+        assert_eq!(stats.maintenance_error, None);
+    });
+}
+
+#[test]
+fn asking_for_the_history_to_be_installed_is_always_fine_when_it_can_be() {
+    each(|fx| {
+        fx.b.ensure_history_schema().unwrap();
+        fx.b.ensure_history_schema().unwrap();
+        fx.track_plain("deal", &["n"]);
+        fx.ok("ann", &[ins("deal", "d1", json!({"n": 1}))]);
+        fx.b.ensure_history_schema().unwrap();
+        assert_eq!(fx.hist("deal", "d1").len(), 1);
+    });
+}
+
+/// Entries without the transaction number, which only PostgreSQL has and a restore does not keep.
+fn untimed(mut v: Vec<ChangeRow>) -> Vec<ChangeRow> {
+    for r in &mut v {
+        r.txid = 0;
+    }
+    v
+}
+
+/// Rows in an order every store agrees on: records by model and id, then the entries by number.
+fn normal(mut rows: Vec<Row>) -> Vec<Row> {
+    rows.sort_by_key(|(m, id, _)| {
+        let entry = m == "record_change" && id.parse::<i64>().is_ok();
+        (entry, m.clone(), id.parse::<i64>().unwrap_or(0), id.clone())
+    });
+    rows
+}
+
+#[test]
+fn every_store_restores_the_backup_of_every_store() {
+    let mut backups = Vec::new();
+    for src in stores() {
+        eprintln!("--- backup of {}", src.name);
+        src.track_plain("deal", &["n", "stage"]);
+        src.ok(
+            "ann",
+            &[
+                ins("deal", "d1", json!({"n": 1})),
+                ins("note", "n1", json!({"t": 1})),
+            ],
+        );
+        src.tick(1_000);
+        src.ok(
+            "bob",
+            &[
+                merge("deal", "d1", json!({"n": 2, "stage": "x"})),
+                ins("deal", "d2", json!({})),
+            ],
+        );
+        src.ok("bob", &[del("deal", "d2")]);
+        backups.push((src.name, src.rows(), untimed(src.hist("deal", "d1"))));
+    }
+    // Same fake clock everywhere, so the backups say the same thing in different orders.
+    for (name, rows, _) in &backups {
+        assert_eq!(
+            normal(rows.clone()),
+            normal(backups[0].1.clone()),
+            "the backup of {name}"
+        );
+    }
+    for (from, rows, hist) in &backups {
+        for target in stores() {
+            eprintln!("--- backup of {from} into {}", target.name);
+            target.track_plain("deal", &["n", "stage"]);
+            target.ok("ann", &[ins("junk", "j", json!({"x": 1}))]);
+            let mut feed = Some(rows.clone());
+            assert_eq!(
+                target.b.import(true, &mut || Ok(feed.take())).unwrap(),
+                rows.len()
+            );
+            assert_eq!(normal(target.rows()), normal(rows.clone()));
+            assert_eq!(&untimed(target.hist("deal", "d1")), hist);
+            assert!(target.maybe("junk", "j").is_none());
+            assert_eq!(target.b.total().unwrap(), rows.len());
+            // The feed of the target lists the same entries, in the order of their numbers.
+            let fed = target.feed(None, 100);
+            let numbers: Vec<i64> = fed.rows.iter().map(|r| r.seq).collect();
+            assert!(numbers.windows(2).all(|w| w[0] < w[1]), "{numbers:?}");
+            assert_eq!(fed.rows.len(), 4);
+        }
+    }
 }
