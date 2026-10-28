@@ -89,6 +89,13 @@ export const users = {
   pom: { name: "pom", password: "e2e pom password 1!", groups: "base.user" },
   jo: { name: "jo", password: "e2e jo password 1!", groups: "base.user" },
   pat: { name: "pat", password: "e2e pat password 1!", groups: "base.user" },
+  // Mileage specs (tests/mileage.spec.ts): drew records and submits trips, mina reviews them.
+  drew: { name: "drew", password: "e2e drew password 1", groups: "base.user,mileage.driver" },
+  mina: {
+    name: "mina",
+    password: "e2e mina password 1",
+    groups: "base.user,mileage.driver,mileage.reviewer",
+  },
   cora: {
     name: "cora",
     password: "e2e cora password 1",
