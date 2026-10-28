@@ -614,14 +614,34 @@ fn an_older_database_opens_exactly_as_before_under_a_role_that_may_not_create_an
 }
 
 #[test]
+fn the_wait_before_the_install_is_tried_again_depends_on_what_went_wrong() {
+    use crate::pg_hist::install_backoff;
+    use std::time::Duration;
+    // A fault of the store is over in moments; a refusal by the server is not.
+    for why in [
+        "storage_timeout: a database statement ran into its time limit",
+        "storage_busy: every database connection is in use",
+        "storage_unavailable: the database could not be reached",
+    ] {
+        assert_eq!(install_backoff(why), Duration::from_secs(1), "{why}");
+    }
+    for why in [
+        "db error (SQLSTATE 42501): permission denied for schema public",
+        "a text that merely mentions storage_busy: here",
+    ] {
+        assert_eq!(install_backoff(why), Duration::from_secs(30), "{why}");
+    }
+}
+
+#[test]
 fn a_role_that_may_not_create_is_refused_with_the_reason_and_its_request_goes_on() {
     let Some(mut db) = TestDb::new() else {
         return;
     };
     let rt = serving_role_of_an_older_database(&mut db);
-    let pg = Pg::connect_options(&rt, Some(one()), Ddl::IfMissing).unwrap();
+    let pg = Arc::new(Pg::connect_options(&rt, Some(one()), Ddl::IfMissing).unwrap());
     // The stack of the binary: the guard refuses writes after a fault of the same request.
-    let b = Tracked::new(guarded(Arc::new(pg)));
+    let b = Tracked::new(guarded(pg.clone()));
     b.track("deal", history_of(&["name"]));
     // A request scope, as the HTTP layer opens one: the first write that keeps history tries to
     // install the part, fails, and says why. A refusal by the server (a permission) is no fault
@@ -636,6 +656,10 @@ fn a_role_that_may_not_create_is_refused_with_the_reason_and_its_request_goes_on
         None,
         "the refusal of the install is not a storage fault"
     );
+    // A refusal by the server does not change by itself: the next try is far off (the value, not
+    // a wait; it only shrinks, and 25 seconds is more than a test takes).
+    let wait = pg.hist.install_retry_in().expect("a time to try again");
+    assert!(wait > std::time::Duration::from_secs(25), "{wait:?}");
     // The request goes on: a write that keeps no history is not refused by the guard.
     b.apply_ctx(&ctx, &[ins("note", "n1", json!({"x": 1}))])
         .unwrap();
@@ -649,9 +673,11 @@ fn a_failure_of_the_install_that_is_a_fault_is_isolated_from_the_attempt_and_ref
         return;
     };
     // The statement that waits for the schema lock runs into its limit: a storage fault, the kind
-    // that is noted on the request that meets it.
+    // that is noted on the request that meets it. The limit is that of every batch, the write
+    // that is refused later included, so it is not made so short that a server under load (a
+    // whole workspace of tests at once) cuts the write itself short.
     let cfg = PgPoolConfig {
-        batch_ms: Some(300),
+        batch_ms: Some(2_000),
         ..PgPoolConfig::one_shot()
     };
     let pg = Arc::new(Pg::connect_options(db.url(), Some(cfg), Ddl::IfMissing).unwrap());
@@ -673,6 +699,10 @@ fn a_failure_of_the_install_that_is_a_fault_is_isolated_from_the_attempt_and_ref
         Some(fault::Fault::Timeout),
         "{why}"
     );
+    // A fault of the store is over in moments: the next try is at most a second away (the value
+    // itself, not a wait: the remaining time only shrinks).
+    let wait = pg.hist.install_retry_in().expect("a time to try again");
+    assert!(wait <= std::time::Duration::from_secs(1), "{wait:?}");
     fault::end_request();
     // The write that needs the part is refused with the code of that fault, which is the
     // request's own: it was refused for it, and a 503 that can be tried again is the answer.
@@ -1556,6 +1586,10 @@ fn the_feed_holds_back_what_an_earlier_open_transaction_may_still_commit_and_los
     assert!(held.rows.is_empty(), "{held:?}");
     assert_eq!(held.next.as_ref(), Some(&c0), "the place is kept");
     assert!(held.horizon_lag_ms.is_some_and(|ms| ms >= 0), "{held:?}");
+    // Its number lies between the oldest open transaction and the next number the cluster gives
+    // out: held back by that transaction, and not "foreign" (numbered beyond the cluster).
+    assert_eq!(held.foreign_entries, Some(0), "{held:?}");
+    assert_eq!(px.b.history_stats().unwrap().foreign_rows, 0);
     let whole = px.feed_raw(None, 100);
     assert_eq!(
         whole.rows.len(),
@@ -1583,6 +1617,7 @@ fn the_feed_holds_back_what_an_earlier_open_transaction_may_still_commit_and_los
         page.rows[0].seq > page.rows[1].seq,
         "numbers alone would have lost it"
     );
+    assert_eq!(page.foreign_entries, Some(0), "{page:?}");
     // Nothing more, and the place is kept.
     let end = px.feed(page.next.as_ref(), 100);
     assert!(end.rows.is_empty());

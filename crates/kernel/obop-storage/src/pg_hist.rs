@@ -320,7 +320,7 @@ fn not_installed(why: Option<String>) -> String {
 
 /// How long after a failed install this process leaves the part alone: a refusal by the server
 /// (the role may not create) does not change by itself, a fault of the store is over in moments.
-fn install_backoff(why: &str) -> Duration {
+pub(crate) fn install_backoff(why: &str) -> Duration {
     if Fault::of_message(why).is_some() {
         Duration::from_secs(1)
     } else {
@@ -407,6 +407,16 @@ impl State {
     /// The `Ddl` this process was opened with.
     pub(crate) fn ddl(&self) -> Ddl {
         self.ddl
+    }
+
+    /// Tests: how long from now until a failed install may be tried again, if one failed.
+    #[cfg(test)]
+    pub(crate) fn install_retry_in(&self) -> Option<Duration> {
+        self.install_retry
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|(t, _)| t.saturating_duration_since(Instant::now()))
     }
 
     /// Why this process could not make the part, if it tried and failed.
