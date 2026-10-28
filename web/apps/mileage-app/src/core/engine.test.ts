@@ -429,6 +429,31 @@ describe("a trip that the server discarded or no longer has", () => {
     expect(await store.pointCount("c1")).toBe(3); // the route is not thrown away under the driver
   });
 
+  test("Stop alone leaves the flag of a trip the server discarded; Try again after Stop finishes it", async () => {
+    const { store, server, engine } = await rig();
+    await start(store);
+    await engine.drain();
+    await store.appendFixes("c1", walk(3));
+    server.stored("c1")!.state = "discarded";
+    await engine.drain();
+    expect((await store.getTrip("c1"))!.problem).toMatchObject({ code: "discarded" });
+    await store.stopTrip("c1", new Date(T0 + 40_000).toISOString());
+    // Stop does not clear a problem, and a flagged trip has no work: nothing happens by itself.
+    expect(await engine.drain()).toMatchObject({ pending: 0 });
+    expect(await store.getTrip("c1")).toMatchObject({
+      discardDone: false,
+      serverState: null,
+      problem: { code: "discarded" },
+    });
+    expect(await store.pointCount("c1")).toBe(3);
+    // Try again (it clears the flag) lets the engine meet the discarded trip once more, and now the
+    // trip is stopped: it is finished on the phone.
+    await store.clearProblem("c1");
+    expect(await engine.drain()).toMatchObject({ pending: 0, problems: 0 });
+    expect(await store.getTrip("c1")).toMatchObject({ discardDone: true, problem: null });
+    expect(await store.pointCount("c1")).toBe(0);
+  });
+
   test("a trip the server lost stops with the code gone, and the driver can discard it here", async () => {
     const { store, server, engine } = await rig();
     await recordAndStop(store, 6);
@@ -504,6 +529,19 @@ describe("a refusal that is not a missing trip", () => {
     expect((await store.getTrip("c1"))!.problem).toBeNull();
     expect(server.stored("c1")!.state).toBe("recording");
     expect(server.pointSeqs(server.stored("c1")!.id)).toHaveLength(4);
+  });
+
+  test("a 404 on the create keeps the server's own code and the driver may discard: nothing of the trip is on the server", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 4);
+    server.fail("createTrip", hidden(), 1);
+    server.fail("findTrip", hidden(), 1);
+    await engine.drain();
+    const stuck = (await store.getTrip("c1"))!;
+    expect(stuck.problem).toMatchObject({ step: "create" });
+    expect(stuck.problem?.code).not.toBe("unknown");
+    expect(canDiscard(stuck)).toBe(true);
+    expect(await store.pointCount("c1")).toBe(4);
   });
 
   test("only the plain 400 of the module means that the server does not have the trip", async () => {
