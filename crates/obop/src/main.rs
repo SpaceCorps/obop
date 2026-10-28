@@ -2902,6 +2902,157 @@ label = "In Betrieb nehmen"
                 .all(|m| m["id"] != "fleet")
         );
     }
+
+    /// D52 amendment: a text field that shows the label of an option is described in `/api/meta`
+    /// for the back office and nowhere else. What the API stores, returns, filters and sorts by is
+    /// the text itself, and a field without the attribute has no such keys.
+    #[tokio::test]
+    async fn a_text_field_that_shows_an_option_changes_only_the_metadata() {
+        let (r, auth) = real();
+        auth.create_user(
+            "root",
+            "an admin password!",
+            &["platform.admin".to_string()],
+        )
+        .unwrap();
+        let admin = &login(&r, "root", "an admin password!").await;
+        let log = r#"
+[module]
+id = "fleetlog"
+version = "0.1.0"
+name = "Fleet log"
+description = "What happened to a vehicle"
+requires_core = "^0.2"
+
+[module.dependencies]
+fleet = ">=0.3, <1"
+
+[[model]]
+name = "fleetlog_entry"
+description = "A log entry"
+read_group = "fleetlog.user"
+write_group = "fleetlog.manager"
+
+  [[model.field]]
+  name = "kind"
+  description = "fuel or note"
+  class = "none"
+
+  [[model.field]]
+  name = "text"
+  description = "The fuel as a key, or a free note"
+  class = "none"
+  kind = "longtext"
+  shows_option_of = "fleet_vehicle.fuel"
+  when = 'kind == "fuel"'
+"#;
+        let fleet = format!(
+            "{}\n\n{}",
+            include_str!("../../../packages/fleet.toml"),
+            "[labels.sv.model.fleet_vehicle.field.fuel.options]\nelectric = \"El\"\n"
+        );
+        for manifest in [fleet.as_str(), log] {
+            let (s, b) = post(
+                &r,
+                Some(admin.as_str()),
+                "/api/module/install",
+                json!({"manifest": manifest}),
+            )
+            .await;
+            assert_eq!(s, 200, "{b}");
+        }
+
+        let meta = get_meta(&r, admin.as_str()).await;
+        let fields = |module: &str| -> Vec<J> {
+            meta["modules"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["id"] == module)
+                .unwrap()["models"][0]["fields"]
+                .as_array()
+                .unwrap()
+                .clone()
+        };
+        let field = |module: &str, name: &str| -> J {
+            fields(module)
+                .into_iter()
+                .find(|f| f["name"] == name)
+                .unwrap()
+        };
+        let text = field("fleetlog", "text");
+        assert_eq!(text["shows_option_of"], "fleet_vehicle.fuel");
+        assert_eq!(text["shows_option_when"], "kind == \"fuel\"");
+        assert_eq!(text["kind"], "longtext", "it is still a text field");
+        assert!(text.get("option_labels").is_none() && text.get("options").is_none());
+        let kind = field("fleetlog", "kind");
+        assert!(kind.get("shows_option_of").is_none() && kind.get("shows_option_when").is_none());
+        assert!(
+            meta["modules"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|m| m["models"].as_array().unwrap())
+                .flat_map(|m| m["fields"].as_array().unwrap())
+                .filter(|f| f.get("shows_option_of").is_some())
+                .count()
+                == 1,
+            "no other field has it"
+        );
+        // The labels come from the select it names, by its own translations.
+        let fuel = field("fleet", "fuel");
+        assert_eq!(fuel["option_labels"]["electric"]["sv"], "El");
+
+        // The API keeps the text: the key is stored, returned, filtered by and sorted by as it is.
+        for (kind, text) in [
+            ("fuel", "electric"),
+            ("note", "electric"),
+            ("note", "diesel?"),
+        ] {
+            let (s, b) = post(
+                &r,
+                Some(admin.as_str()),
+                "/api/fleetlog_entry/create",
+                json!({"kind": kind, "text": text}),
+            )
+            .await;
+            assert_eq!(s, 200, "{b}");
+            assert_eq!(b["value"]["text"], text);
+        }
+        let (s, b) = post(
+            &r,
+            Some(admin.as_str()),
+            "/api/fleetlog_entry/search?lang=sv",
+            json!({"filter": [{"field": "text", "op": "eq", "value": "electric"}], "order": [{"field": "kind", "dir": "asc"}]}),
+        )
+        .await;
+        assert_eq!(s, 200, "{b}");
+        assert_eq!(b["value"]["total"], 2);
+        let rows = b["value"]["rows"].as_array().unwrap();
+        assert!(rows.iter().all(|x| x["text"] == "electric"), "{rows:?}");
+        let (_, b) = post(
+            &r,
+            Some(admin.as_str()),
+            "/api/fleetlog_entry/search",
+            json!({"filter": [{"field": "text", "op": "eq", "value": "El"}]}),
+        )
+        .await;
+        assert_eq!(b["value"]["total"], 0, "the label is not a value");
+        let (_, b) = post(
+            &r,
+            Some(admin.as_str()),
+            "/api/fleetlog_entry/search",
+            json!({"order": [{"field": "text", "dir": "asc"}, {"field": "kind", "dir": "asc"}]}),
+        )
+        .await;
+        let order: Vec<&str> = b["value"]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x["text"].as_str().unwrap())
+            .collect();
+        assert_eq!(order, ["diesel?", "electric", "electric"]);
+    }
 }
 
 /// Every bundled package, installed through the real installer and exercised through the one

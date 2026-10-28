@@ -37,6 +37,10 @@
 //! *Instants.* A `datetime` field is an instant. Instants compare with instants and with a text
 //! literal that is a valid RFC 3339 instant (`signed_at < "2026-01-01T00:00:00Z"`); they do not
 //! compare with dates or other text, and have no arithmetic.
+//!
+//! *Display conditions.* The `when` of `shows_option_of` (a field attribute) is evaluated by the
+//! back office in the browser, never by the server, so it may use only the part of the language
+//! the browser implements: see `check_display_subset`.
 
 use crate::{FieldKind, ModelDef};
 use obop_values::{Decimal, Instant, Round};
@@ -866,6 +870,65 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
             }
             Ok(ty)
         }
+    }
+}
+
+// ---- the part of the language a browser evaluates ------------------------------------------
+
+/// The largest whole number a display condition may name: the browser reads every number as a
+/// double, which holds whole numbers exactly up to 2^53 - 1.
+pub const DISPLAY_MAX_INT: i64 = 9_007_199_254_740_991;
+
+/// What a display condition may use, for the message that refuses anything else.
+pub const DISPLAY_SUBSET: &str = "fields of the record (text, select, ref, date, bool, number and money), text in double quotes, whole numbers, true and false, == != < <= > >=, &&, ||, !, parentheses and is_set(field)";
+
+/// Whether `e` stays inside the part of the language the back office evaluates in the browser: the
+/// `when` of a field's `shows_option_of` (D52 amendment). The server never evaluates it (the API
+/// answers what it always did), so the browser must reach the same answer as `eval` does here;
+/// both read `web/apps/backoffice/src/displayCondition.fixtures.json`. That is why the subset is
+/// small: no arithmetic, no decimals or instants, no `if`, `concat` or aggregates, and no minus
+/// sign. Names that are not fields of `model` are left to `check`.
+pub fn check_display_subset(e: &Expr, model: &ModelDef) -> Result<(), String> {
+    let refuse = |what: &str| -> Result<(), String> {
+        Err(format!(
+            "{what} cannot be used in a condition the browser evaluates; it may use {DISPLAY_SUBSET}"
+        ))
+    };
+    let field = |name: &str| -> Result<(), String> {
+        match model
+            .fields
+            .iter()
+            .find(|f| f.name == name)
+            .map(|f| &f.kind)
+        {
+            Some(k @ (FieldKind::Decimal { .. } | FieldKind::Datetime)) => Err(format!(
+                "{name} is {}, which cannot be read by a condition the browser evaluates; it may use {DISPLAY_SUBSET}",
+                if matches!(k, FieldKind::Datetime) {
+                    "a date and time"
+                } else {
+                    "a decimal number"
+                }
+            )),
+            _ => Ok(()),
+        }
+    };
+    match e {
+        Expr::Text(_) | Expr::Bool(_) => Ok(()),
+        Expr::Int(n) if *n > DISPLAY_MAX_INT => Err(format!(
+            "the number {n} is larger than {DISPLAY_MAX_INT}, which the browser cannot compare exactly"
+        )),
+        Expr::Int(_) => Ok(()),
+        Expr::Dec(d) => refuse(&format!("the decimal number {d}")),
+        Expr::Field(f) | Expr::IsSet(f) => field(f),
+        Expr::Neg(_) => refuse("a minus sign"),
+        Expr::Not(a) => check_display_subset(a, model),
+        Expr::Bin(op, a, b) => match op {
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div => refuse("arithmetic"),
+            _ => check_display_subset(a, model).and_then(|()| check_display_subset(b, model)),
+        },
+        Expr::If(..) => refuse("`if`"),
+        Expr::Concat(_) => refuse("`concat`"),
+        Expr::Agg { func, .. } => refuse(&format!("`{}` over child records", func.name())),
     }
 }
 

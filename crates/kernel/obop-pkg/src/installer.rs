@@ -3773,6 +3773,131 @@ label = "Ota käyttöön"
         assert!(driver.labels.is_empty(), "untranslated models stay bare");
     }
 
+    /// A package whose text field shows the label of an option of the select of another package
+    /// (D52 amendment): `field` is the extra keys of the text field.
+    fn fleet_log(version: &str, field: &str) -> String {
+        format!(
+            r#"
+[module]
+id = "fleetlog"
+version = "{version}"
+name = "Fleet log"
+description = "What happened to a vehicle"
+requires_core = "^0.2"
+
+[module.dependencies]
+fleet = ">=0.3, <1"
+
+[[model]]
+name = "fleetlog_entry"
+description = "A log entry"
+read_group = "fleetlog.user"
+write_group = "fleetlog.manager"
+
+  [[model.field]]
+  name = "kind"
+  description = "fuel or note"
+  class = "none"
+
+  [[model.field]]
+  name = "text"
+  description = "The fuel as a key, or a free note"
+  class = "none"
+  kind = "longtext"
+  {field}
+"#
+        )
+    }
+
+    #[test]
+    fn a_text_field_that_shows_an_option_installs_upgrades_and_rolls_back() {
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        inst.install(
+            include_str!("../../../../packages/fleet.toml"),
+            "upload",
+            "root",
+        )
+        .unwrap();
+        let reader = Principal::user("m", &["fleetlog.user", "fleetlog.manager"]);
+        let text = |d: &Dispatcher| {
+            let m = d
+                .meta(Surface::Rest, &reader)
+                .into_iter()
+                .find(|m| m.id == "fleetlog")?;
+            let f = m.models[0]
+                .fields
+                .iter()
+                .find(|f| f.name == "text")?
+                .clone();
+            Some((f.shows_option_of, f.shows_option_when, f.kind))
+        };
+        let shows = |w: &str| {
+            format!("shows_option_of = \"fleet_vehicle.fuel\"\n  when = \"kind == \\\"{w}\\\"\"")
+        };
+
+        // The target is checked against what is installed, as a ref is.
+        let refused = |field: &str| {
+            inst.install(&fleet_log("0.1.0", field), "upload", "root")
+                .unwrap_err()
+        };
+        let e = refused("shows_option_of = \"fleet_ghost.fuel\"");
+        assert!(
+            e.contains("fleetlog_entry.text shows_option_of refers to model fleet_ghost, which no dependency of fleetlog provides"),
+            "{e}"
+        );
+        assert!(
+            refused("shows_option_of = \"fleet_vehicle.plate\"")
+                .contains("that is a text field; it must be a select field")
+        );
+        assert!(
+            refused("shows_option_of = \"fleet_vehicle.nothing\"")
+                .contains("fleet_vehicle has no field nothing")
+        );
+        assert!(
+            refused("shows_option_of = \"fleet_vehicle.fuel\"\n  when = \"nothing == 1\"")
+                .contains("no field `nothing`")
+        );
+        assert!(text(&d).is_none(), "nothing was installed");
+
+        inst.install(&fleet_log("0.1.0", &shows("fuel")), "upload", "root")
+            .unwrap();
+        assert_eq!(
+            text(&d).unwrap(),
+            (
+                Some("fleet_vehicle.fuel".to_string()),
+                Some("kind == \"fuel\"".to_string()),
+                "longtext"
+            )
+        );
+
+        // An upgrade replaces the attribute, and the stored kind and values are untouched.
+        inst.install(&fleet_log("0.2.0", &shows("energy")), "upload", "root")
+            .unwrap();
+        assert_eq!(text(&d).unwrap().1.as_deref(), Some("kind == \"energy\""));
+        // Dropping the attribute is an upgrade too.
+        inst.install(&fleet_log("0.3.0", ""), "upload", "root")
+            .unwrap();
+        assert_eq!(text(&d).unwrap().0, None);
+        assert_eq!(text(&d).unwrap().2, "longtext");
+
+        // Back to the version before, which is the one without it; then forward and restarted.
+        inst.install(&fleet_log("0.4.0", &shows("fuel")), "upload", "root")
+            .unwrap();
+        assert_eq!(text(&d).unwrap().0.as_deref(), Some("fleet_vehicle.fuel"));
+        inst.rollback("fleetlog", "root").unwrap();
+        assert_eq!(text(&d).unwrap().0, None);
+        inst.install(&fleet_log("0.5.0", &shows("fuel")), "upload", "root")
+            .unwrap();
+        let (d2, inst2) = setup(&store);
+        assert!(inst2.load_installed().is_empty());
+        assert_eq!(
+            text(&d2).unwrap().0.as_deref(),
+            Some("fleet_vehicle.fuel"),
+            "registered again when the server starts"
+        );
+    }
+
     #[test]
     fn upgrades_replace_labels_and_a_restart_keeps_them() {
         let store = Store::new();

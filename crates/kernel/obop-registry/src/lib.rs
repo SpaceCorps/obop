@@ -17,7 +17,7 @@ pub use ext::{
 pub use labels::Translations;
 pub use rules::{
     Access, Assertion, Computed, Effect, EffectKind, Lit, Locator, Reset, SeqFormat, SequenceSpec,
-    Src, Target, Unique,
+    ShowsOption, ShowsWhen, Src, Target, Unique,
 };
 
 /// Registry metadata uses `&'static str`. Modules installed at runtime build their names from
@@ -251,6 +251,9 @@ pub struct FieldDef {
     pub unique: Option<Unique>,
     /// Numbered by the system (D57).
     pub sequence: Option<Arc<SequenceSpec>>,
+    /// A text field whose value is shown with the label of the option it equals in a select
+    /// field (D52 amendment). Display only.
+    pub shows_option: Option<Arc<ShowsOption>>,
 }
 
 #[derive(Debug, Clone)]
@@ -342,6 +345,7 @@ impl FieldDef {
             computed: None,
             unique: None,
             sequence: None,
+            shows_option: None,
         }
     }
 
@@ -1004,6 +1008,7 @@ mod tests {
             computed: None,
             unique: None,
             sequence: None,
+            shows_option: None,
         }
     }
 

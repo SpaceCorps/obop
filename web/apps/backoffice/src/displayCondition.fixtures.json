@@ -1,0 +1,435 @@
+{
+  "about": "The condition of a text field's shows_option_of (D52 amendment) is evaluated by the back office in the browser, never by the server. This file is read by two tests, so the server's expression language and the browser's evaluator cannot drift apart: crates/kernel/obop-commands/src/shows_option_tests.rs runs every case through the server's parser, install gate and evaluator, and web/apps/backoffice/src/displayCondition.test.ts runs the same cases through displayCondition.ts. `fields` gives the kind of each field a record may have (a select has the options open and done). Each case is a condition, a record as the API returns it, and whether the condition holds. `invalid` lists sources that the install gate must refuse and that the browser must not compile.",
+  "fields": {
+    "kind": "text",
+    "note": "longtext",
+    "code": "text",
+    "state": "select",
+    "owner": "ref",
+    "due": "date",
+    "n": "number",
+    "amount": "money",
+    "done": "bool"
+  },
+  "cases": [
+    {
+      "name": "text equals text",
+      "when": "kind == \"status\"",
+      "record": { "kind": "status" },
+      "expected": true
+    },
+    {
+      "name": "text differs",
+      "when": "kind == \"status\"",
+      "record": { "kind": "note" },
+      "expected": false
+    },
+    {
+      "name": "a missing field is empty text",
+      "when": "kind == \"status\"",
+      "record": {},
+      "expected": false
+    },
+    {
+      "name": "a missing field equals the empty text",
+      "when": "kind == \"\"",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "null equals the empty text",
+      "when": "kind == \"\"",
+      "record": { "kind": null },
+      "expected": true
+    },
+    {
+      "name": "not equal on a missing field",
+      "when": "kind != \"status\"",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "is_set of text",
+      "when": "is_set(kind)",
+      "record": { "kind": "x" },
+      "expected": true
+    },
+    {
+      "name": "is_set of empty text",
+      "when": "is_set(kind)",
+      "record": { "kind": "" },
+      "expected": false
+    },
+    {
+      "name": "is_set of a missing field",
+      "when": "is_set(kind)",
+      "record": {},
+      "expected": false
+    },
+    {
+      "name": "is_set of zero is true",
+      "when": "is_set(n)",
+      "record": { "n": 0 },
+      "expected": true
+    },
+    {
+      "name": "is_set of false is true",
+      "when": "is_set(done)",
+      "record": { "done": false },
+      "expected": true
+    },
+    {
+      "name": "is_set of an object is false: only numbers, text and bools are values",
+      "when": "is_set(kind)",
+      "record": { "kind": { "a": 1 } },
+      "expected": false
+    },
+    {
+      "name": "greater than",
+      "when": "n > 5",
+      "record": { "n": 7 },
+      "expected": true
+    },
+    {
+      "name": "greater than is strict",
+      "when": "n > 5",
+      "record": { "n": 5 },
+      "expected": false
+    },
+    {
+      "name": "empty is zero against a number: greater",
+      "when": "n > 5",
+      "record": {},
+      "expected": false
+    },
+    {
+      "name": "empty is zero against a number: less",
+      "when": "n < 5",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "empty equals zero",
+      "when": "n == 0",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "a number that is not whole is empty",
+      "when": "n == 0",
+      "record": { "n": 1.5 },
+      "expected": true
+    },
+    {
+      "name": "range with and",
+      "when": "n >= 0 && n <= 10",
+      "record": { "n": 10 },
+      "expected": true
+    },
+    {
+      "name": "range with and, outside",
+      "when": "n >= 0 && n <= 10",
+      "record": { "n": 11 },
+      "expected": false
+    },
+    {
+      "name": "money in minor units",
+      "when": "amount >= 1000",
+      "record": { "amount": 1000 },
+      "expected": true
+    },
+    {
+      "name": "the largest whole number",
+      "when": "n == 9007199254740991",
+      "record": { "n": 9007199254740991 },
+      "expected": true
+    },
+    {
+      "name": "two fields of numbers",
+      "when": "n < amount",
+      "record": { "n": 1, "amount": 2 },
+      "expected": true
+    },
+    {
+      "name": "two fields of text, both empty",
+      "when": "kind == code",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "two fields of text, equal",
+      "when": "kind == code",
+      "record": { "kind": "x", "code": "x" },
+      "expected": true
+    },
+    {
+      "name": "a bool field alone",
+      "when": "done",
+      "record": { "done": true },
+      "expected": true
+    },
+    {
+      "name": "a bool field alone, false",
+      "when": "done",
+      "record": { "done": false },
+      "expected": false
+    },
+    {
+      "name": "a bool field alone, missing",
+      "when": "done",
+      "record": {},
+      "expected": false
+    },
+    {
+      "name": "not of a missing bool",
+      "when": "!done",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "bool equals true",
+      "when": "done == true",
+      "record": { "done": true },
+      "expected": true
+    },
+    {
+      "name": "empty bool equals false",
+      "when": "done == false",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "empty bool does not equal true",
+      "when": "done == true",
+      "record": {},
+      "expected": false
+    },
+    {
+      "name": "a condition holds only when it is exactly true: a whole number in a bool field is not",
+      "when": "done",
+      "record": { "done": 1 },
+      "expected": false
+    },
+    {
+      "name": "zero in a bool field is false",
+      "when": "done",
+      "record": { "done": 0 },
+      "expected": false
+    },
+    {
+      "name": "a whole number in a bool field is true for not",
+      "when": "!done",
+      "record": { "done": 1 },
+      "expected": false
+    },
+    {
+      "name": "a whole number in a bool field equals true",
+      "when": "done == true",
+      "record": { "done": 1 },
+      "expected": true
+    },
+    {
+      "name": "not binds looser than a comparison: equal",
+      "when": "!kind == \"a\"",
+      "record": { "kind": "a" },
+      "expected": false
+    },
+    {
+      "name": "not binds looser than a comparison: different",
+      "when": "!kind == \"a\"",
+      "record": { "kind": "b" },
+      "expected": true
+    },
+    {
+      "name": "not of a parenthesis",
+      "when": "!(kind == \"a\" || kind == \"b\")",
+      "record": { "kind": "c" },
+      "expected": true
+    },
+    {
+      "name": "and binds tighter than or: left",
+      "when": "kind == \"a\" || kind == \"b\" && n > 1",
+      "record": { "kind": "a", "n": 0 },
+      "expected": true
+    },
+    {
+      "name": "and binds tighter than or: right fails",
+      "when": "kind == \"a\" || kind == \"b\" && n > 1",
+      "record": { "kind": "b", "n": 0 },
+      "expected": false
+    },
+    {
+      "name": "and binds tighter than or: right holds",
+      "when": "kind == \"a\" || kind == \"b\" && n > 1",
+      "record": { "kind": "b", "n": 2 },
+      "expected": true
+    },
+    {
+      "name": "parentheses change the grouping",
+      "when": "(kind == \"a\" || kind == \"b\") && n > 1",
+      "record": { "kind": "a", "n": 0 },
+      "expected": false
+    },
+    {
+      "name": "nested parentheses",
+      "when": "((kind == \"a\"))",
+      "record": { "kind": "a" },
+      "expected": true
+    },
+    {
+      "name": "a select field compares as text",
+      "when": "state == \"open\"",
+      "record": { "state": "open" },
+      "expected": true
+    },
+    {
+      "name": "a ref field compares as text",
+      "when": "owner == \"u1\"",
+      "record": { "owner": "u1" },
+      "expected": true
+    },
+    {
+      "name": "a date compares as text, before",
+      "when": "due < \"2026-01-01\"",
+      "record": { "due": "2025-12-31" },
+      "expected": true
+    },
+    {
+      "name": "a date compares as text, equal",
+      "when": "due < \"2026-01-01\"",
+      "record": { "due": "2026-01-01" },
+      "expected": false
+    },
+    {
+      "name": "an empty date is the empty text, which sorts first",
+      "when": "due < \"2026-01-01\"",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "upper case sorts before lower case",
+      "when": "code > \"Z\"",
+      "record": { "code": "a" },
+      "expected": true
+    },
+    {
+      "name": "a prefix sorts before the longer text",
+      "when": "code < \"ab\"",
+      "record": { "code": "a" },
+      "expected": true
+    },
+    {
+      "name": "text orders by code point, not by UTF-16 unit",
+      "when": "code < \"😀\"",
+      "record": { "code": "～" },
+      "expected": true
+    },
+    {
+      "name": "text orders by code point, the other way",
+      "when": "code > \"😀\"",
+      "record": { "code": "～" },
+      "expected": false
+    },
+    {
+      "name": "text with an escaped quote",
+      "when": "kind == \"say \\\"hi\\\"\"",
+      "record": { "kind": "say \"hi\"" },
+      "expected": true
+    },
+    {
+      "name": "text with an escaped backslash",
+      "when": "kind == \"a\\\\b\"",
+      "record": { "kind": "a\\b" },
+      "expected": true
+    },
+    {
+      "name": "text with accents and a space",
+      "when": "kind == \"pågår nu\"",
+      "record": { "kind": "pågår nu" },
+      "expected": true
+    },
+    {
+      "name": "a no-break space is whitespace",
+      "when": "kind == \"a\"",
+      "record": { "kind": "a" },
+      "expected": true
+    },
+    {
+      "name": "the next-line character is whitespace, as in Rust",
+      "when": "kind\u0085==\u0085\"a\"",
+      "record": { "kind": "a" },
+      "expected": true
+    },
+    {
+      "name": "tabs and newlines are whitespace",
+      "when": "kind\t==\n\"a\"\r",
+      "record": { "kind": "a" },
+      "expected": true
+    },
+    {
+      "name": "a number stored in a text field reads as its digits",
+      "when": "kind == \"5\"",
+      "record": { "kind": 5 },
+      "expected": true
+    },
+    {
+      "name": "text stored in a number field reads as text against a number",
+      "when": "n == 7",
+      "record": { "n": "7" },
+      "expected": true
+    },
+    {
+      "name": "the constant true",
+      "when": "true",
+      "record": {},
+      "expected": true
+    },
+    {
+      "name": "the constant false",
+      "when": "false",
+      "record": { "kind": "a" },
+      "expected": false
+    },
+    {
+      "name": "a long chain",
+      "when": "kind == \"a\" || kind == \"b\" || kind == \"c\" || kind == \"d\"",
+      "record": { "kind": "d" },
+      "expected": true
+    }
+  ],
+  "invalid": [
+    "",
+    "   ",
+    "kind ==",
+    "kind == \"a\" &&",
+    "!",
+    "kind = \"a\"",
+    "kind == \"a\" == \"b\"",
+    "n < 5 < 10",
+    "kind == \"a\" kind",
+    "kind == 1.5",
+    "-1 < n",
+    "n + 1 > 2",
+    "n * 2 > 2",
+    "if(done, true, false)",
+    "concat(kind, \"a\") == \"a\"",
+    "count(lines) > 1",
+    "sum(lines.amount) > 1",
+    "kind == \"a\\n\"",
+    "kind == \"abc",
+    "kind == 99999999999999999999",
+    "kind == 9007199254740992",
+    "1x == n",
+    "()",
+    "is_set()",
+    "is_set(kind, n)",
+    "is_set(1)",
+    "foo(kind)",
+    "Kind == \"a\"",
+    "kind == \"a\"\u0001",
+    "kind == \"a\u0001b\"",
+    "kind[0] == \"a\"",
+    "kind.x == \"a\"",
+    "kind﻿== \"a\""
+  ]
+}

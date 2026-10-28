@@ -47,6 +47,11 @@ pub fn field_schema(f: &FieldInfo) -> J {
         ),
         _ => {}
     }
+    if let Some(of) = &f.shows_option_of {
+        desc.push_str(&format!(
+            " (may hold an option key of {of}; the back office shows that option's label, the stored text is the key)"
+        ));
+    }
     if f.personal_data {
         desc.push_str(
             " (personal data: agents read it as a mask token and may send the token back)",
@@ -362,7 +367,31 @@ mod tests {
             computed: false,
             unique: false,
             sequence: false,
+            shows_option_of: None,
+            shows_option_when: None,
         }
+    }
+
+    #[test]
+    fn a_text_field_that_shows_an_option_says_so_to_an_agent() {
+        let mut f = field("text");
+        assert!(
+            !field_schema(&f)["description"]
+                .as_str()
+                .unwrap()
+                .contains("option")
+        );
+        f.shows_option_of = Some("doc.state".into());
+        let d = field_schema(&f)["description"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(d.contains("option key of doc.state"), "{d}");
+        assert_eq!(
+            field_schema(&f)["type"],
+            "string",
+            "the type does not change"
+        );
     }
 
     #[test]
@@ -408,6 +437,8 @@ mod tests {
             computed: false,
             unique: false,
             sequence: false,
+            shows_option_of: None,
+            shows_option_when: None,
         };
         ModelInfo {
             name: "doc".into(),
