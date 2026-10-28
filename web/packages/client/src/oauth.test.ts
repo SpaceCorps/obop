@@ -130,8 +130,10 @@ describe("the redirect", () => {
       "issuer_mismatch",
     );
     expect(code("org.obop.mileage:/oauth?error=access_denied&state=ST")).toBe("access_denied");
-    // A link that any other app opens, with an error and without this sign-in's state, must not
-    // end the sign-in that is waiting.
+    // A link that any other app opens, with an error and without this sign-in's state, is read as
+    // a foreign answer, never as the person's refusal. (It still fails the attempt that waits: the
+    // browser wrapper of the platform hands it to the waiting sign-in. What it cannot do is give a
+    // code that could be exchanged.)
     expect(code("org.obop.mileage:/oauth?error=access_denied")).toBe("state_mismatch");
     expect(code("org.obop.mileage:/oauth?error=access_denied&state=OTHER")).toBe("state_mismatch");
     expect(code("org.obop.mileage:/oauth?state=ST")).toBe("invalid_response");
@@ -299,6 +301,60 @@ describe("revocation", () => {
       revokeToken(never.deps, { baseUrl: "http://h", clientId: "c", token: "t", timeoutMs: 40 }),
     ).rejects.toMatchObject({ code: "network_error" });
     expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  test("a call that timed out says so, and one that failed to connect does not", async () => {
+    const never = deps(() => new Promise<Response>(() => {}));
+    const slow = await revokeToken(never.deps, {
+      baseUrl: "http://h",
+      clientId: "c",
+      token: "t",
+      timeoutMs: 20,
+    }).catch((e: unknown) => e);
+    expect(slow).toMatchObject({ code: "network_error", timedOut: true });
+    const down = deps(() => {
+      throw new TypeError("Network request failed");
+    });
+    const gone = await revokeToken(down.deps, {
+      baseUrl: "http://h",
+      clientId: "c",
+      token: "t",
+    }).catch((e: unknown) => e);
+    expect(gone).toMatchObject({ code: "network_error", timedOut: false });
+  });
+
+  test("an answer that starts and then stalls is given up too", async () => {
+    const stalledBody = deps(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          text: () => new Promise<string>(() => {}),
+        }) as unknown as Response,
+    );
+    const started = Date.now();
+    await expect(
+      revokeToken(stalledBody.deps, {
+        baseUrl: "http://h",
+        clientId: "c",
+        token: "t",
+        timeoutMs: 40,
+      }),
+    ).rejects.toMatchObject({ code: "network_error", timedOut: true });
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  test("a refresh takes its own time limit", async () => {
+    const never = deps(() => new Promise<Response>(() => {}));
+    await expect(
+      refreshTokens(never.deps, {
+        baseUrl: "http://h",
+        clientId: "c",
+        refreshToken: "RT",
+        timeoutMs: 20,
+      }),
+    ).rejects.toMatchObject({ timedOut: true });
   });
 
   test("a fetch that ignores the abort signal is given up as well", async () => {

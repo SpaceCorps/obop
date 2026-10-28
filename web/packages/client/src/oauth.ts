@@ -33,12 +33,24 @@ export class OAuthError extends Error {
   readonly code: string;
   /** The HTTP status, 0 when there was no answer. */
   readonly status: number;
+  /**
+   * The call was given up because no answer (or no end of the answer) came in time. The instance
+   * may have done what was asked: for the rotating refresh token this means the old token may
+   * be spent already (see `refreshTokens`).
+   */
+  readonly timedOut: boolean;
 
-  constructor(code: string, message: string, status = 0, options?: { cause?: unknown }) {
-    super(message, options);
+  constructor(
+    code: string,
+    message: string,
+    status = 0,
+    options?: { cause?: unknown; timedOut?: boolean },
+  ) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
     this.name = "OAuthError";
     this.code = code;
     this.status = status;
+    this.timedOut = options?.timedOut === true;
   }
 }
 
@@ -121,22 +133,27 @@ async function post(
   // The signal stops the request itself; the race covers a fetch that does not honour it.
   const stalled = new Promise<never>((_, reject) => {
     abort.signal.addEventListener("abort", () =>
-      reject(new OAuthError("network_error", "The server did not answer in time")),
+      reject(
+        new OAuthError("network_error", "The server did not answer in time", 0, { timedOut: true }),
+      ),
     );
   });
   stalled.catch(() => undefined);
+  let text: string;
   try {
     response = await Promise.race([
       (deps.fetch ?? globalThis.fetch)(url, { method: "POST", ...init, signal: abort.signal }),
       stalled,
     ]);
+    // The timer runs until the whole answer has been read: a server that sends the headers and
+    // then stops is given up like one that sends nothing.
+    text = await Promise.race([response.text().catch(() => ""), stalled]);
   } catch (cause) {
-    clearTimeout(timer);
     if (cause instanceof OAuthError) throw cause;
     throw new OAuthError("network_error", "Could not reach the server", 0, { cause });
+  } finally {
+    clearTimeout(timer);
   }
-  clearTimeout(timer);
-  const text = await response.text().catch(() => "");
   let body: Record<string, unknown> | undefined;
   try {
     const parsed: unknown = JSON.parse(text);
@@ -254,8 +271,12 @@ export function parseAuthorizationResponse(
   expected: { state: string; baseUrl: string },
 ): string {
   const q = queryOf(redirectUrl);
-  // The state is checked first: any app can open the redirect address, and an `error` in a link
-  // that does not carry this sign-in's state must not end the sign-in that is waiting.
+  // The state is checked first, so a link that does not carry this sign-in's state is read as
+  // `state_mismatch` and never as the person's `access_denied`, and nothing in it (code, error,
+  // issuer) is believed. This does not keep such a link from ending the attempt that waits: any app
+  // can open the redirect address, and the browser wrapper of the platform hands the first link
+  // for that scheme to the waiting sign-in, which then fails (the driver tries again). What it
+  // does keep out is a forged code: it cannot be exchanged without the PKCE verifier.
   if (q.state !== expected.state) {
     throw new OAuthError("state_mismatch", "The answer did not belong to this sign-in");
   }
@@ -320,22 +341,34 @@ export interface RefreshOptions {
   clientId: string;
   refreshToken: string;
   now?: number;
+  /** Gives up after this many milliseconds; `deps.timeoutMs` or 30 seconds when absent. */
+  timeoutMs?: number;
 }
 
 /**
  * `POST /oauth/token`, `refresh_token`. The refresh token rotates: the answer holds the next one,
  * and the one that was sent is spent (a second use of it ends the whole sign-in, RFC 9700), so
  * the caller stores the answer before anything else and never refreshes twice at once.
+ *
+ * A call that is given up (`OAuthError.timedOut`) or that fails on the connection may have been
+ * done by the instance: the old token is then spent and the answer is lost. The instance has no
+ * grace window for the previous token (docs/ISSUES.md L29), so the caller must not present the old
+ * token again after a timeout.
  */
 export async function refreshTokens(deps: OAuthDeps, options: RefreshOptions): Promise<TokenSet> {
-  const body = await post(deps, `${normaliseBaseUrl(options.baseUrl)}/oauth/token`, {
-    headers: FORM,
-    body: formBody({
-      grant_type: "refresh_token",
-      refresh_token: options.refreshToken,
-      client_id: options.clientId,
-    }),
-  });
+  const body = await post(
+    deps,
+    `${normaliseBaseUrl(options.baseUrl)}/oauth/token`,
+    {
+      headers: FORM,
+      body: formBody({
+        grant_type: "refresh_token",
+        refresh_token: options.refreshToken,
+        client_id: options.clientId,
+      }),
+    },
+    options.timeoutMs,
+  );
   return tokenSet(body, options.now ?? Date.now());
 }
 
