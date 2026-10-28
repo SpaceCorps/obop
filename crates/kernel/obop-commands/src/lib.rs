@@ -631,6 +631,19 @@ impl Dispatcher {
         self.register_inner(module, model, command, handler, false);
     }
 
+    /// Like `register`, for a handler that decides by the roles of the caller: the dispatcher
+    /// stamps the actor into its input (`Actor::from_input` reads it back), the way it does for the
+    /// generated handlers. A client cannot send these keys.
+    pub fn register_with_actor(
+        &self,
+        module: &Module,
+        model: &str,
+        command: &str,
+        handler: Handler,
+    ) {
+        self.register_inner(module, model, command, handler, true);
+    }
+
     /// Like `register`, for the generated handlers, which read the caller from their input.
     pub(crate) fn register_generic(
         &self,
