@@ -57,6 +57,29 @@ pub fn record_event(
     }
 }
 
+fn event_record(at: u64, user: &str, kind: &str, actor: &str, detail: &str) -> (String, Fields) {
+    let mut f = Fields::new();
+    f.insert("user".into(), J::from(user));
+    f.insert("kind".into(), J::from(kind));
+    f.insert("actor".into(), J::from(actor));
+    f.insert("detail".into(), J::from(detail));
+    f.insert("at".into(), J::from(rfc3339(at)));
+    // Sortable by time, unique by suffix.
+    (format!("{at:012}-{}", hex6()), f)
+}
+
+/// The operation that appends one event, for a caller that writes the entry in the same atomic
+/// batch as the change it records (`Backend::apply_checked`): the entry then exists exactly when
+/// the change does, and neither exists when the batch is refused.
+pub fn event_op(at: u64, user: &str, kind: &str, actor: &str, detail: &str) -> obop_storage::Op {
+    let (id, fields) = event_record(at, user, kind, actor, detail);
+    obop_storage::Op::Insert {
+        model: EVENT_TABLE.into(),
+        id,
+        fields,
+    }
+}
+
 /// As [`record_event`], and a failure to write is returned, for the caller whose entry is the only
 /// trace of something (it then says so itself, with what it knows).
 pub fn try_record_event(
@@ -67,14 +90,7 @@ pub fn try_record_event(
     actor: &str,
     detail: &str,
 ) -> Result<(), String> {
-    let mut f = Fields::new();
-    f.insert("user".into(), J::from(user));
-    f.insert("kind".into(), J::from(kind));
-    f.insert("actor".into(), J::from(actor));
-    f.insert("detail".into(), J::from(detail));
-    f.insert("at".into(), J::from(rfc3339(at)));
-    // Sortable by time, unique by suffix.
-    let id = format!("{at:012}-{}", hex6());
+    let (id, f) = event_record(at, user, kind, actor, detail);
     // The entry is about a change that has usually committed already: a store that is busy for a
     // moment (D74) is waited out a little, four tries in all. Also when this request was refused
     // before: the guard lets the log through (an entry of a change that committed must not be

@@ -24,13 +24,13 @@ use super::effects::lookup_fn;
 use super::seq;
 use super::unit::{Mark, R, Unit};
 use super::{Actor, Engine};
-use crate::Value;
 use crate::csv;
 use crate::guards::create_guard;
 use crate::kinds::{self, Path};
 use crate::store::declared_fields;
+use crate::{Principal, Value};
 use obop_registry::{FieldKind, MAX_BULK_ROWS, ModelDef};
-use obop_storage::{Fields, Op};
+use obop_storage::{Backend, Fields, Op};
 use serde_json::Value as J;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -242,6 +242,41 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Whether this exact call (the model, the person, the idempotency key and the rows) already has
+/// an unexpired stored answer: `bulk_create` will give that answer again and write nothing. For a
+/// module guard that must let a repeat through although what the call would write is no longer
+/// allowed (a trip that has ended since, a cap that is near); a call with a new key keeps every
+/// check. `now` is in Unix seconds.
+pub fn has_stored_answer(
+    backend: &dyn Backend,
+    now: u64,
+    model: &str,
+    p: &Principal,
+    input: &Value,
+) -> bool {
+    let Value::Map(m) = input else {
+        return false;
+    };
+    let mode = match text(m, "mode") {
+        None | Some("all_or_nothing") => Mode::AllOrNothing,
+        Some("partial") => Mode::Partial,
+        Some(_) => return false,
+    };
+    if m.get("dry_run") == Some(&Value::Bool(true)) {
+        return false;
+    }
+    let Some(key) = text(m, "idempotency_key") else {
+        return false;
+    };
+    let id = idempotency_id(model, &Actor::of(p), key);
+    let Ok(Some(stored)) = backend.get(IDEMPOTENCY_TABLE, &id) else {
+        return false;
+    };
+    stored.get("expires_at").and_then(J::as_u64).unwrap_or(0) > now
+        && stored.get("fingerprint").and_then(J::as_str)
+            == Some(fingerprint(model, mode, m).as_str())
+}
+
 fn idempotency_id(model: &str, actor: &Actor, key: &str) -> String {
     let mut h = Sha256::new();
     h.update(format!("{model}\0{}\0{key}", actor.id).as_bytes());
@@ -347,19 +382,9 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
     };
     let (rows, from_csv) = incoming(def, m)?;
 
-    // A person may start only so many calls a minute, whatever their size.
-    let limit = per_minute();
-    if limit > 0 {
-        let n = eng
-            .backend()
-            .counter_add(&format!("bulk:{}", actor.id), 60_000, false)?;
-        if n > limit {
-            return Err(format!(
-                "too many bulk imports: at most {limit} a minute; wait a minute and retry"
-            ));
-        }
-    }
-
+    // A repeat of a call that was answered is answered from storage and costs nothing, so it is
+    // looked up before the minute's counter: a retry never uses up the budget and is never
+    // refused for it.
     let fp = fingerprint(def.name, mode, m);
     let idem = key
         .as_ref()
@@ -381,6 +406,23 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
             .ok_or("the stored answer for this idempotency_key cannot be read")?;
         first["replayed"] = J::Bool(true);
         return Ok(Value::from_json(&first));
+    }
+
+    // A person may start only so many calls a minute, whatever their size. Over the limit the call
+    // is refused with a code and a wait, and nothing was changed: the same call can be repeated.
+    let limit = per_minute();
+    if limit > 0 {
+        let n = eng
+            .backend()
+            .counter_add(&format!("bulk:{}", actor.id), 60_000, false)?;
+        if n > limit {
+            return Err(crate::errors::coded(
+                crate::errors::code::RATE_LIMITED,
+                &format!(
+                    "too many bulk imports: at most {limit} a minute; wait a minute and retry"
+                ),
+            ));
+        }
     }
 
     let look = lookup_fn(eng);

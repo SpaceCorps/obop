@@ -1952,7 +1952,60 @@ fn bulk_create_is_rate_limited_per_person_and_dry_runs_count() {
             panic!("the 13th call in a minute should be refused")
         };
         assert!(msg.contains("too many bulk imports"), "{msg}");
+        // The refusal is a coded one the caller may repeat: a 429 with a wait, nothing changed.
+        let c = crate::errors::classify(&CallError::Handler(msg));
+        assert_eq!((c.status, c.code), (429, "rate_limited"));
+        assert!(c.retry_after.is_some_and(|s| s > 0));
         assert!(call(&bulk_user()).is_ok(), "another person is not affected");
+    });
+}
+
+#[test]
+fn a_repeat_of_an_answered_call_is_free_and_is_not_refused_when_the_minute_is_used_up() {
+    each_rig(|r| {
+        let who = bulk_user();
+        let keyed = |sku: &str| {
+            m(vec![
+                ("rows", rows(vec![vec![("sku", t(sku))]])),
+                ("idempotency_key", t(&format!("key-{sku}"))),
+            ])
+        };
+        // Twelve different calls use up the minute.
+        for i in 0..12 {
+            r.ok(&who, "stock", "bulk_create", keyed(&format!("S{i}")));
+        }
+        let msg = r.err(&who, "stock", "bulk_create", keyed("S12"));
+        assert!(msg.contains("too many bulk imports"), "{msg}");
+        // The repeat of one of them still gets the first answer, however many times it is sent.
+        for _ in 0..30 {
+            let again = r.ok(&who, "stock", "bulk_create", keyed("S3"));
+            assert_eq!(put(&again, "replayed"), Value::Bool(true));
+        }
+        assert_eq!(r.count("stock"), 12);
+        // A module guard can ask whether a call is such a repeat.
+        let (db, model, now) = (
+            r.store.backend(),
+            format!("{}_stock", r.p),
+            r.d_now() as u64,
+        );
+        let seen = |p: &Principal, at: u64, input: &Value| {
+            crate::has_stored_answer(&*db, at, &model, p, input)
+        };
+        assert!(seen(&who, now, &keyed("S3")));
+        assert!(!seen(&who, now, &keyed("S12")), "a call never answered");
+        let other_rows = m(vec![
+            ("rows", rows(vec![vec![("sku", t("other"))]])),
+            ("idempotency_key", t("key-S3")),
+        ]);
+        assert!(!seen(&who, now, &other_rows), "other rows are not a repeat");
+        assert!(
+            !seen(&bulk_user(), now, &keyed("S3")),
+            "the key is the person's"
+        );
+        assert!(
+            !seen(&who, now + 25 * 3600, &keyed("S3")),
+            "forgotten after a day"
+        );
     });
 }
 

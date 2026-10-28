@@ -742,6 +742,38 @@ impl Dispatcher {
         );
     }
 
+    /// Like `add_guard`, but the new guard runs first: it sees the input as it came in, and the
+    /// guard already on the command (the generated one) sees what it produced. A module uses this
+    /// for the rule that decides what a caller may know exists: a record they may not see must
+    /// answer as a record that does not exist, which the generated guard would otherwise refuse
+    /// in its own words (it names the state, the referrers, the group).
+    pub fn prepend_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        let mut guards = self.guards.write().unwrap();
+        let inner = guards.get(id).cloned();
+        let combined: Guard = match inner {
+            None => guard,
+            Some(second) => Box::new(move |p, input| {
+                let mut v = guard(p, input)?;
+                let seen = v.input.take();
+                let next = (second.guard)(p, seen.as_ref().unwrap_or(input))?;
+                v.requires.extend(next.requires);
+                v.approval |= next.approval;
+                v.pre.extend(next.pre);
+                v.input = next.input.or(seen);
+                Ok(v)
+            }),
+        };
+        let serialize = serialize || guards.get(id).is_some_and(|g| g.serialize);
+        guards.insert(
+            id.to_string(),
+            Arc::new(Guarded {
+                module: module.into(),
+                serialize,
+                guard: combined,
+            }),
+        );
+    }
+
     /// Wrap the handler of command `id` (`model.command`). The wrapper survives the command being
     /// registered again, which happens when a package is reinstalled. Used where a command has
     /// to do something outside the store that must succeed or fail with it, such as returning
@@ -1632,6 +1664,7 @@ pub mod store;
 
 pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
+pub use engine::bulk::has_stored_answer;
 pub use engine::{Actor, ClockFn};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{

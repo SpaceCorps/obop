@@ -152,7 +152,7 @@ impl Actor {
 
     /// The actor a call carries. Without one (a handler called outside the dispatcher) the actor
     /// is nobody: it holds no group and owns nothing.
-    pub(crate) fn from_input(input: &Value) -> Self {
+    pub fn from_input(input: &Value) -> Self {
         let Value::Map(m) = input else {
             return Self::default();
         };
