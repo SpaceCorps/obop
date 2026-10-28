@@ -71,11 +71,11 @@ describe("the calls of the outbox", () => {
     });
   });
 
-  test("a report without the id of the trip is an invalid response, not a guess", async () => {
+  test("a report without the id of the trip is an unexpected answer, not a guess", async () => {
     const { api } = instance({ "/api/mileage_trip/bulk_create": { ok: true, ids: [null] } });
     await expect(
       api.createTrip({ clientTripId: "c1", purpose: "business", startedAt: "x" }, "trip:c1"),
-    ).rejects.toMatchObject({ code: "invalid_response" });
+    ).rejects.toMatchObject({ code: "unexpected_answer" });
   });
 
   test("points go to mileage_point.bulk_create under the key of their range", async () => {

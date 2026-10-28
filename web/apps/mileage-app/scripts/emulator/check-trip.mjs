@@ -4,8 +4,11 @@
 // (docs/spec/mobile.md 8.7 and 9.1). Read only: it signs in with a password on the test instance and
 // reads (the session ends by itself after 12 hours; there is no sign-out route to call).
 //
-//   node scripts/emulator/check-trip.mjs --server http://127.0.0.1:18080 --user rita \
+//   vp run emulator:check -- --server http://127.0.0.1:18080 --user rita \
 //        [--driver dave] [--trip ID] [--reference-m 3989.44] [--tolerance 0.01]
+//
+// (From web/apps/mileage-app, with OBOP_CHECK_PASSWORD set in the environment. The task runs this
+// file with Node, as `android:build` runs Gradle: the mobile-toolchain exception of OR-34.)
 //
 // The password is read from the environment variable OBOP_CHECK_PASSWORD (never from an argument,
 // so that it does not land in a shell history). The exit status is 0 when everything holds and 1
@@ -26,7 +29,7 @@ const tolerance = Number(option("--tolerance", "0.01"));
 const password = process.env.OBOP_CHECK_PASSWORD ?? "";
 if (user === "" || password === "") {
   console.error(
-    "usage: OBOP_CHECK_PASSWORD=... node check-trip.mjs --server URL --user NAME [options]",
+    "usage: OBOP_CHECK_PASSWORD=... vp run emulator:check -- --server URL --user NAME [options]",
   );
   process.exit(2);
 }

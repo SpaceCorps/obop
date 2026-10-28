@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { reduce, type Route } from "./router.ts";
+import { gate, reduce, type Route } from "./router.ts";
 
 const home: Route = { name: "home" };
 
@@ -28,5 +28,44 @@ describe("the screen stack", () => {
     const before: Route[] = [home];
     reduce(before, { type: "push", route: { name: "trips" } });
     expect(before).toEqual([home]);
+  });
+});
+
+describe("what the driver sees before any route", () => {
+  const base = {
+    status: "signed_in",
+    foreign: false,
+    openTrip: false,
+    loaded: true,
+    signingIn: false,
+  } as const;
+
+  test("a signed-in driver gets the app", () => {
+    expect(gate(base)).toBe("app");
+    expect(gate({ ...base, openTrip: true })).toBe("app");
+  });
+
+  test("an ended sign-in during a trip shows the recording, with Stop, not the sign-in", () => {
+    expect(gate({ ...base, status: "expired", openTrip: true })).toBe("recording");
+    expect(gate({ ...base, status: "signed_out", openTrip: true })).toBe("recording");
+  });
+
+  test("the driver can go on to the sign-in from the recording, and back", () => {
+    expect(gate({ ...base, status: "expired", openTrip: true, signingIn: true })).toBe("sign_in");
+  });
+
+  test("an ended sign-in with no open trip shows the sign-in", () => {
+    expect(gate({ ...base, status: "expired" })).toBe("sign_in");
+    expect(gate({ ...base, status: "signed_out" })).toBe("sign_in");
+  });
+
+  test("the sign-in is not shown before the outbox says whether a trip is open", () => {
+    expect(gate({ ...base, status: "expired", loaded: false })).toBe("loading");
+  });
+
+  test("trips of another sign-in block the app and nothing else", () => {
+    expect(gate({ ...base, foreign: true })).toBe("foreign");
+    expect(gate({ ...base, foreign: true, openTrip: true })).toBe("foreign");
+    expect(gate({ ...base, status: "expired", foreign: true })).toBe("sign_in");
   });
 });

@@ -2,7 +2,7 @@
 // rectangle of 41 waypoints, 100 m apart, that starts and ends at one point. Nothing here is a
 // real person's track. Run it to print the lengths:
 //
-//   node scripts/emulator/route.mjs
+//   vp run emulator:route
 //
 // Two lengths are printed. The haversine one is what the server computes (a sphere of the mean
 // radius); the geodesic one (Vincenty's inverse formula on the WGS84 ellipsoid) is an independent

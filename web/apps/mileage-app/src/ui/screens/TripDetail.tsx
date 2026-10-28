@@ -23,8 +23,9 @@ const problemText = (code: string): string => {
     case "state_conflict":
     case "discarded":
     case "gone":
-    case "invalid_response":
       return t(`trip.problem.${code}`);
+    case "unexpected_answer":
+      return t("trip.problem.invalid_response");
     default:
       return t("trip.problem.generic");
   }

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vite-plus/test";
-import type { DrainReport, Engine } from "./engine.ts";
+import { createEngine, type DrainReport, type Engine } from "./engine.ts";
+import { createSqlStore, migrate } from "./sql-store.ts";
 import { createSyncController } from "./sync.ts";
+import { apiError, FakeServer } from "../test-support/fake-server.ts";
+import { memoryDb } from "../test-support/memory-db.ts";
 
 const report = (over: Partial<DrainReport> = {}): DrainReport => ({
   state: "ok",
@@ -9,6 +12,9 @@ const report = (over: Partial<DrainReport> = {}): DrainReport => ({
   retryInMs: null,
   ...over,
 });
+
+/** Differs from every wait below, so a timer cannot be right by accident. */
+const IDLE_MS = 90_000;
 
 function rig(reports: DrainReport[]) {
   const timers: { fn: () => void; ms: number; live: boolean }[] = [];
@@ -26,7 +32,7 @@ function rig(reports: DrainReport[]) {
     onRejected: async () => {
       rejected++;
     },
-    idleMs: 60_000,
+    idleMs: IDLE_MS,
     timers: {
       set: (fn, ms) => {
         const t = { fn, ms, live: true };
@@ -62,12 +68,12 @@ describe("the sync controller", () => {
 
   test("a trip that waits is tried again after the wait the engine asked for", async () => {
     const r = rig([
-      report({ state: "rate_limited", pending: 1, retryInMs: 60_000 }),
+      report({ state: "rate_limited", pending: 1, retryInMs: 3_000 }),
       report({ state: "idle" }),
     ]);
     r.sync.kick();
     await r.settle();
-    expect(r.live().map((t) => t.ms)).toEqual([60_000]);
+    expect(r.live().map((t) => t.ms)).toEqual([3_000]);
     const due = r.live()[0]!;
     due.live = false;
     due.fn();
@@ -76,11 +82,11 @@ describe("the sync controller", () => {
     expect(r.live()).toHaveLength(0);
   });
 
-  test("a recording trip with nothing to wait for is looked at every minute", async () => {
+  test("a recording trip with nothing to wait for is looked at on the idle interval", async () => {
     const r = rig([report({ pending: 1, retryInMs: null })]);
     r.sync.kick();
     await r.settle();
-    expect(r.live().map((t) => t.ms)).toEqual([60_000]);
+    expect(r.live().map((t) => t.ms)).toEqual([IDLE_MS]);
   });
 
   test("signed out: the token is dropped once and the pass is tried again, then it stops", async () => {
@@ -136,5 +142,49 @@ describe("the sync controller", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(sync.status().error).toBe("disk full");
     expect(timers.map((t) => t.ms)).toEqual([30_000]);
+  });
+});
+
+describe("the controller over the real engine", () => {
+  test("the wait the server asks for with Retry-After reaches the timer", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    const store = createSqlStore(db);
+    const server = new FakeServer();
+    const engine = createEngine({ store, api: server, backoff: { baseMs: 1000, maxMs: 8000 } });
+    const T0 = Date.parse("2026-10-15T09:00:00Z");
+    await store.startTrip({
+      clientTripId: "c1",
+      purpose: "business",
+      startedAt: new Date(T0).toISOString(),
+      nowMs: T0,
+    });
+    await store.appendFixes("c1", [
+      { t: T0 + 5000, lat: 52, lon: 13, accuracyM: 5, speedMps: 1.4 },
+      { t: T0 + 10_000, lat: 52.0001, lon: 13, accuracyM: 5, speedMps: 1.4 },
+    ]);
+    server.fail("createPoints", apiError(503, { retryAfter: 3 }));
+
+    const timers: { fn: () => void; ms: number; live: boolean }[] = [];
+    const sync = createSyncController({
+      engine,
+      signedIn: () => true,
+      onRejected: async () => {},
+      idleMs: IDLE_MS,
+      timers: {
+        set: (fn, ms) => {
+          const t = { fn, ms, live: true };
+          timers.push(t);
+          return t;
+        },
+        clear: (h) => {
+          (h as { live: boolean }).live = false;
+        },
+      },
+    });
+    sync.kick();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sync.status().report?.state).toBe("unavailable");
+    expect(timers.filter((t) => t.live).map((t) => t.ms)).toEqual([3000]);
   });
 });

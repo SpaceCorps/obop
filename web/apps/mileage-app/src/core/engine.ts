@@ -32,6 +32,13 @@ export function classify(error: unknown): Failure {
       message: error.message,
     };
   }
+  // A proxy, a captive portal or a gateway answered in place of the server (`invalid_response`,
+  // with the status it sent), or the server timed the request out (408): the request did not reach
+  // the server's own logic, and every write of the outbox carries an idempotency key, so repeating
+  // it later is safe. This is a connection problem, not a refusal.
+  if (error.code === "invalid_response" || error.status === 408) {
+    return { kind: "unavailable", waitMs: null };
+  }
   if (error.status >= 500 && error.applied !== "partial") {
     return {
       kind: "unavailable",

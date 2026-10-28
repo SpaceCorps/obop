@@ -1,5 +1,5 @@
 import type { ExpoConfig } from "expo/config";
-import { withAndroidManifest, type ConfigPlugin } from "expo/config-plugins";
+import { withAndroidManifest, withAppBuildGradle, type ConfigPlugin } from "expo/config-plugins";
 
 // PLACEHOLDER: "org.obop.mileage" is a stand-in application id and bundle id. It is not registered
 // anywhere and no store account, signing key or publication exists (Q37 of docs/DECISIONS.md).
@@ -18,6 +18,20 @@ const withCleartext: ConfigPlugin = (config) =>
   withAndroidManifest(config, (c) => {
     const application = c.modResults.manifest.application?.[0];
     if (application) application.$["android:usesCleartextTraffic"] = CLEARTEXT ? "true" : "false";
+    return c;
+  });
+
+// Android 8.0 (API 26) is the first version where expo-location starts the foreground service that
+// keeps a trip recording and shows its notification; on API 24 and 25 it starts nothing (the
+// notification the disclosure promises would not exist and nothing would protect the process). The
+// template's default is 24, so the app raises its own minimum; no library needs a lower one.
+const MIN_SDK = 26;
+const withMinSdk: ConfigPlugin = (config) =>
+  withAppBuildGradle(config, (c) => {
+    c.modResults.contents = c.modResults.contents.replace(
+      /minSdkVersion\s+rootProject\.ext\.minSdkVersion/,
+      `minSdkVersion Math.max(rootProject.ext.minSdkVersion, ${MIN_SDK})`,
+    );
     return c;
   });
 
@@ -75,4 +89,4 @@ const config: ExpoConfig = {
   ],
 };
 
-export default withCleartext(config);
+export default withMinSdk(withCleartext(config));

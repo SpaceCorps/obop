@@ -46,7 +46,7 @@ function toRemote(value: TripValue | undefined): RemoteTrip {
   if (!value || typeof value.id !== "string" || typeof value.client_trip_id !== "string") {
     throw new ObopApiError({
       status: 200,
-      code: "invalid_response",
+      code: "unexpected_answer",
       message: "The server did not answer with a trip",
     });
   }
@@ -123,7 +123,7 @@ export function createTripApi(client: ObopClient, options: TripApiOptions = {}):
       if (typeof id !== "string" || id === "") {
         throw new ObopApiError({
           status: 200,
-          code: "invalid_response",
+          code: "unexpected_answer",
           message: "The server did not say which trip it created",
         });
       }

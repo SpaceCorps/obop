@@ -12,7 +12,10 @@
     "android:prebuild": "expo prebuild --platform android --no-install",
     "android:build": "node scripts/gradle.mjs assembleDebug",
     "android:build:release": "node scripts/gradle.mjs assembleRelease",
-    "check:sdk:latest": "node scripts/check-sdk.mjs --latest"
+    "check:sdk:latest": "node scripts/check-sdk.mjs --latest",
+    "emulator:route": "node scripts/emulator/route.mjs",
+    "emulator:drive": "node scripts/emulator/drive.mjs",
+    "emulator:check": "node scripts/emulator/check-trip.mjs"
   },
   "dependencies": {
     "@obop/client": "workspace:*",

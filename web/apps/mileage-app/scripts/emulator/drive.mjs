@@ -3,7 +3,10 @@
 // trip itself is started and stopped in the app (by hand or with `adb shell input`); this script
 // only moves the "phone".
 //
-//   node scripts/emulator/drive.mjs [--adb PATH] [--serial emulator-5554] [--every-ms 6000]
+//   vp run emulator:drive -- [--adb PATH] [--serial emulator-5554] [--every-ms 6000]
+//
+// (From web/apps/mileage-app. The task runs this file with Node, as `android:build` runs Gradle:
+// the mobile-toolchain exception of OR-34, started through `vp run`.)
 //
 // The schedule (waypoint index, 0 to 40): the screen goes off at 8 and on at 34; airplane mode goes
 // on at 16 and off at 26, and on again at 36, where it stays: stop the trip while offline, then

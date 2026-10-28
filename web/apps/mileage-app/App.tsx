@@ -15,7 +15,7 @@ import { t } from "./src/i18n/index.ts";
 import { stopRecording } from "./src/native/recorder.ts";
 import type { Runtime } from "./src/native/runtime.ts";
 import { useBinding, useOutbox, useRuntime, useSessionStatus } from "./src/ui/hooks.ts";
-import { reduce, type Nav, type Route } from "./src/ui/router.ts";
+import { gate, reduce, type Nav, type Route } from "./src/ui/router.ts";
 import { Account } from "./src/ui/screens/Account.tsx";
 import { Foreign } from "./src/ui/screens/Foreign.tsx";
 import { Home } from "./src/ui/screens/Home.tsx";
@@ -79,11 +79,18 @@ function Routes({ rt }: { rt: Runtime }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, signedIn]);
 
-  if (!signedIn) {
-    if (!loaded) return <Loading />;
-    if (active !== null && !signingIn) {
-      return <Recording rt={rt} nav={nav} signedOut onSignIn={() => setSigningIn(true)} />;
-    }
+  const where = gate({
+    status,
+    foreign: binding.kind === "foreign",
+    openTrip: active !== null,
+    loaded,
+    signingIn,
+  });
+  if (where === "loading") return <Loading />;
+  if (where === "recording") {
+    return <Recording rt={rt} nav={nav} signedOut onSignIn={() => setSigningIn(true)} />;
+  }
+  if (where === "sign_in") {
     return (
       <SignIn
         rt={rt}
@@ -93,7 +100,9 @@ function Routes({ rt }: { rt: Runtime }) {
     );
   }
   // Trips of another sign-in are on the phone: nothing is uploaded or shown until the driver chooses.
-  if (binding.kind === "foreign") return <Foreign rt={rt} binding={binding} />;
+  if (where === "foreign" && binding.kind === "foreign") {
+    return <Foreign rt={rt} binding={binding} />;
+  }
 
   const route = stack[stack.length - 1]!;
   switch (route.name) {

@@ -1,3 +1,4 @@
+import type { SessionStatus } from "../core/session.ts";
 import type { Purpose } from "../core/types.ts";
 
 /**
@@ -37,4 +38,37 @@ export function reduce(
     case "home":
       return [{ name: "home" }];
   }
+}
+
+/** Which part of the app the driver sees before any route is looked at. */
+export type Gate =
+  /** The outbox is being read. */
+  | "loading"
+  /** Nobody is signed in and a trip is open: the recording, with Stop, comes first. */
+  | "recording"
+  | "sign_in"
+  /** The phone holds trips of another sign-in: only the choice about them is shown. */
+  | "foreign"
+  | "app";
+
+/**
+ * Decided before the routes, and pure so it is tested. The rule that matters: a trip that is open
+ * is never hidden behind the sign-in screen, because the Stop button is on the recording screen
+ * and stopping needs no connection and no sign-in.
+ */
+export function gate(input: {
+  status: SessionStatus;
+  /** The outbox holds trips of another sign-in. */
+  foreign: boolean;
+  openTrip: boolean;
+  /** The outbox has been read at least once. */
+  loaded: boolean;
+  /** The driver chose to sign in from the recording screen. */
+  signingIn: boolean;
+}): Gate {
+  if (input.status !== "signed_in") {
+    if (!input.loaded) return "loading";
+    return input.openTrip && !input.signingIn ? "recording" : "sign_in";
+  }
+  return input.foreign ? "foreign" : "app";
 }

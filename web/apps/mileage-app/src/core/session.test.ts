@@ -103,6 +103,20 @@ describe("the session", () => {
     expect(new URLSearchParams(r.bodies[0]).get("refresh_token")).toBe("RT-1");
   });
 
+  test("the token is refreshed from 60 seconds before it ends, not before", async () => {
+    const early = rig();
+    await early.session.restore();
+    early.setNow(39_999); // 60.001 seconds left
+    expect(await early.session.accessToken()).toBe("AT-1");
+    expect(early.bodies).toHaveLength(0);
+
+    const due = rig();
+    await due.session.restore();
+    due.setNow(40_000); // exactly 60 seconds left
+    expect(await due.session.accessToken()).toBe("AT-2");
+    expect(due.bodies).toHaveLength(1);
+  });
+
   test("the rotated refresh token is stored before the new access token is used", async () => {
     const r = rig();
     await r.session.restore();

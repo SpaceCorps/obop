@@ -85,6 +85,65 @@ describe("the local store", () => {
     expect(points.every((p) => p.lat !== "52.0100000")).toBe(true);
   });
 
+  test("the cached position is dropped from 10 seconds before the start, kept at 9", async () => {
+    const { store } = await rig();
+    await start(store);
+    const at = (ms: number, lat: number) => ({
+      t: T0 + ms,
+      lat,
+      lon: 13,
+      accuracyM: 5,
+      speedMps: 1,
+    });
+    expect(
+      await store.appendFixes("c1", [at(-11_000, 52.011), at(-9_000, 52.009), at(1000, 52.001)]),
+    ).toBe(2);
+    expect((await store.points("c1")).map((p) => p.lat)).toEqual(["52.0090000", "52.0010000"]);
+  });
+
+  test("a trip holds at most 20,000 points; the rest is dropped", async () => {
+    const { store } = await rig();
+    await start(store);
+    const many = (from: number, n: number): NewFix[] =>
+      Array.from({ length: n }, (_, i) => ({
+        t: T0 + (from + i) * 1000,
+        lat: 52 + ((from + i) % 1000) * 0.00001,
+        lon: 13,
+        accuracyM: 5,
+        speedMps: 1,
+      }));
+    expect(await store.appendFixes("c1", many(0, 19_990))).toBe(19_990);
+    expect(await store.appendFixes("c1", many(19_990, 25))).toBe(10);
+    expect(await store.pointCount("c1")).toBe(20_000);
+    expect(await store.appendFixes("c1", many(20_015, 5))).toBe(0);
+  });
+
+  test("a trip that was never uploaded is deleted with its points, a standing refusal is cleared", async () => {
+    const { store } = await rig();
+    await start(store);
+    await store.appendFixes("c1", walk(3));
+    await store.deleteTrip("c1");
+    expect(await store.getTrip("c1")).toBeNull();
+    expect(await store.pointCount("c1")).toBe(0);
+    expect(await store.activeTrip()).toBeNull();
+
+    await recordAndStop(store, 3, "c2");
+    await store.patchTrip("c2", { problem: { step: "end", code: "bad_request", message: "x" } });
+    expect((await store.getTrip("c2"))!.problem).not.toBeNull();
+    await store.clearProblem("c2");
+    expect((await store.getTrip("c2"))!.problem).toBeNull();
+  });
+
+  test("notes kept with the outbox are read back, replaced and removed", async () => {
+    const { store } = await rig();
+    expect(await store.getMeta("k")).toBeNull();
+    await store.setMeta("k", "a");
+    await store.setMeta("k", "b");
+    expect(await store.getMeta("k")).toBe("b");
+    await store.setMeta("k", null);
+    expect(await store.getMeta("k")).toBeNull();
+  });
+
   test("a fix of a phone without accuracy or speed is stored without them", async () => {
     const { store } = await rig();
     await start(store);
@@ -243,6 +302,16 @@ describe("a connection that fails", () => {
 
     expect(await engine.drain()).toMatchObject({ state: "idle", pending: 0 });
     expect(server.stored("c1")!.state).toBe("ended");
+  });
+
+  test("the wait doubles with every failure and stops at the cap", async () => {
+    const { store, server, engine } = await rig();
+    await recordAndStop(store, 6);
+    server.fail("createTrip", networkError(), 6);
+    const waits: (number | null)[] = [];
+    for (let i = 0; i < 6; i++) waits.push((await engine.drain()).retryInMs);
+    expect(waits).toEqual([1000, 2000, 4000, 8000, 8000, 8000]);
+    expect(await engine.drain()).toMatchObject({ state: "idle" }); // a pass that works resets it
   });
 
   test("a lost answer to the trip is repeated with the same key and makes one trip", async () => {
