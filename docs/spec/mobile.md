@@ -31,7 +31,7 @@ An app is a client and nothing more. It has no private backdoor: it calls REST a
 | Start of the first slice | The main session relayed on 2026-10-27 that the owner asked for the decisions to be recorded and the first slice to start; relayed, not a quotation |
 | The mobile sign-in class and the `device` model | Built on 2026-10-28 (8.5); PROPOSED until the owner rules on the design (D87, D64 amendment). Whether `device` and `pos_device` are one model is still open (15, item 2) |
 | Device outbox, the `mileage` package, privacy points, repository layout, the first slice, the kernel capabilities of 5.8 | PROPOSED (D87, D13); not built, except the parts of the layout and the first slice that 8.1 to 8.5 record |
-| Apple and Google accounts, store listings, publishing, push, map tiles, a new data class `location`, legal sign-off for auto-stop, Storybook for the app | Open: Q37 to Q42; Google Play services in the Android app: Q43 |
+| Apple and Google accounts, store listings, publishing, push, map tiles, a new data class `location`, legal sign-off for auto-stop, Storybook for the app | Open: Q37 to Q41; Google Play services in the Android app: Q43; Storybook for the app: decided 2026-10-28 (the web Storybook, components drawn through react-native-web; OR-34 g, Q42 closed) |
 
 ### 1.3 Boundaries with neighbouring areas
 
@@ -260,7 +260,7 @@ web/apps/mileage-app/     the Expo app (development build, config plugins, no ch
 packages/mileage.toml     the package; crates/modules/mileage (the geodesic helper) when needed
 ```
 
-The root `pnpm-workspace.yaml` already globs `web/apps/*` and `web/packages/*`, so the app joins the same workspace. Today the web token source is `web/packages/ui/src/tokens.css`; the proposal is one DTCG source (D35 names DTCG) with two generated targets, not a second hand-kept copy. The app has a small themed component set (Screen, Button, Row, Field, Banner) written for React Native; where it is shown is Q42. obop publishes nothing to the npm registry until the owner rules at W2 (OR-19, Q32), so these packages are workspace-private.
+The root `pnpm-workspace.yaml` already globs `web/apps/*` and `web/packages/*`, so the app joins the same workspace. Today the web token source is `web/packages/ui/src/tokens.css`; the proposal is one DTCG source (D35 names DTCG) with two generated targets, not a second hand-kept copy. The app has a small themed component set (Screen, Button, Row, Field, Banner) written for React Native; it is shown in the normal web Storybook through react-native-web (OR-34 g, Q42 closed on 2026-10-28). The downside is part of the ruling: touch, safe areas, fonts and TalkBack are not shown there and are checked on the phone in the acceptance walk. A hidden gallery screen in the app only if the web Storybook and the phone disagree; Storybook inside the app on a device only if native-only components dominate, past about 15. Not yet checked: that react-native-web renders the five components, which the app's build checks first (if it fails, the question returns to the owner). obop publishes nothing to the npm registry until the owner rules at W2 (OR-19, Q32), so these packages are workspace-private.
 
 ### 8.2 The tooling exception
 
