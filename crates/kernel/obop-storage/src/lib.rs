@@ -347,7 +347,11 @@ pub trait Backend: Send + Sync {
     /// "equal": a JSON string `"5"` and the number `5` are different values. (The records a unit
     /// of work has written and not yet committed come after the stored ones, in no order.)
     ///
-    /// The answer is the same on every backend; only the cost differs. The default reads the model
+    /// The answer is the same on every backend for every value a record can hold; only the cost
+    /// differs. (One value is not answered the same: a text with a NUL in `values[0]`. PostgreSQL
+    /// refuses it with an error, because `jsonb` cannot hold a NUL, as [`Backend::find`] did before
+    /// this method existed; the other backends return no record. Nothing stored on PostgreSQL can
+    /// match it.) The default reads the model
     /// ([`Backend::find`] on `fields[0]`, then the other fields). SQLite and PostgreSQL ask the
     /// database with exactly the expressions of the index [`Backend::ensure_unique`] makes for the
     /// same `fields` in the same order, so with that index the cost does not grow with the model.

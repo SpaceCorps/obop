@@ -87,7 +87,11 @@ impl Keyed {
     }
 }
 
-/// Values as one string that is equal for two lists exactly when the lists are equal as JSON.
+/// Values as one string that is equal for two lists exactly when the lists are equal as JSON,
+/// except for a float zero inside a list or an object (`[-0.0]` and `[0.0]` are equal as JSON
+/// and differ here). No typed kind can hold such a value (K37), and a unique field's value is
+/// not a list or an object; a duplicate of one inside a unit would be caught by the unique
+/// index at commit, not by the overlay.
 fn key_text(values: &[J]) -> String {
     let mut out = String::new();
     for v in values {
@@ -536,10 +540,33 @@ mod tests {
             // A stored record the unit deleted is not there.
             u.delete("t", "gone").unwrap();
             assert!(ask(&u, "G", "x").is_empty(), "{url}");
+            // Zero has two spellings as a float, equal as numbers: the unit's key text makes them
+            // one, as `unique_matches` does, and keeps them apart from the integer 0. (No typed
+            // kind holds a float, K37; this keeps a record that bypassed validation from being
+            // missed inside a unit.)
+            let mut z = two("", Some("x"));
+            z.insert("code".into(), J::from(-0.0));
+            u.insert("t", "negzero", z).unwrap();
+            for probe in [J::from(0.0), J::from(-0.0)] {
+                assert_eq!(ask_value(&u, probe.clone()), ["negzero"], "{url} {probe}");
+            }
+            assert!(ask_value(&u, J::from(0)).is_empty(), "{url}");
             // Nothing was written: the store still has the old keys.
             assert_eq!(ask_plain(&*b, "A", "x"), ["stored"], "{url}");
             assert_eq!(ask_plain(&*b, "G", "x"), ["gone"], "{url}");
         }
+    }
+
+    /// The ids a lookup of `code` (any JSON value) under the scope `"x"` finds in the unit.
+    fn ask_value(u: &Unit<'_>, code: J) -> Vec<String> {
+        let mut ids: Vec<String> =
+            Reads::find_unique(u, "t", &["code", "scope"], &[code, J::from("x")])
+                .unwrap()
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect();
+        ids.sort();
+        ids
     }
 
     fn ask_plain(b: &dyn Backend, code: &str, scope: &str) -> Vec<String> {
