@@ -62,10 +62,17 @@ pub fn is_verifier(s: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~'))
 }
 
-/// A group that runs the instance or an area of it. It is ticked last on the consent page of an
-/// MCP client, and a mobile app is never handed one.
+/// A group that runs the instance or an area of it. It is not ticked at first on the consent page
+/// of an MCP client.
 pub(crate) fn is_admin_like(g: &str) -> bool {
     g.starts_with("platform.") || g.ends_with(".admin")
+}
+
+/// A group a mobile app is never offered or given: the administrative ones above, and the groups
+/// of an administrator of one area (`api.device_admin`, `api.connection_admin`, `*_admin`). A phone
+/// is lost; what it holds must not run the instance, or read and end other people's devices.
+pub(crate) fn never_for_mobile(g: &str) -> bool {
+    is_admin_like(g) || g.ends_with("_admin")
 }
 
 /// What the page needs to show a step.
@@ -307,7 +314,7 @@ impl OAuth {
             .unwrap_or_default();
         // A phone is lost, so a mobile app is never offered a group that runs the instance.
         if class.is_mobile() {
-            groups.retain(|g| !is_admin_like(g));
+            groups.retain(|g| !never_for_mobile(g));
         }
         groups.sort();
         let hint: Vec<&str> = rec["hint"]
@@ -581,7 +588,7 @@ impl OAuth {
             return Ok(DecideOut::Retry("err.scope_widen"));
         }
         let class = Class::of_record(&rec);
-        if class.is_mobile() && groups.iter().any(|g| is_admin_like(g)) {
+        if class.is_mobile() && groups.iter().any(|g| never_for_mobile(g)) {
             return Ok(DecideOut::Retry("err.mobile_admin"));
         }
         let mut chosen: Vec<String> = groups.to_vec();

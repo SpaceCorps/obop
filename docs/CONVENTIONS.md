@@ -245,7 +245,7 @@ Events emitted and consumed inside one document (for example `EquipmentDowntimeS
 | services 2 | `resource.admin`, `project.user`, `project.manager`, `timesheet.user`, `timesheet.approver`, `timesheet.admin`, `timesheet.cost_viewer` (field permission), `helpdesk.agent`, `helpdesk.lead`, `helpdesk.manager`, `planning.user`, `planning.dispatcher`, `planning.technician`, `appointments.host`, `appointments.manager`, `fleet.manager`, `fleet.driver`, `service_contract.manager` |
 | platform 2 | `customize.designer`, `automation.designer`, `approvals.designer`, `analytics.designer`, `documents.user`, `documents.manager`, `knowledge.editor`, `knowledge.admin`, `contacts.manager`, `mail.account_admin`, `sign.user`, `sign.admin` |
 | ai 2 | `ai.admin`, `ai.user`, `ai.operator`, `ai.auditor`, `ai.hr_feature_owner`, `ai.ap_intake` (service group of the intake agent) |
-| integrations 2 | `api.client_admin`, `api.webhook_admin`, `api.connection_admin`, `api.import_operator`, `api.export_owner`, `api.extension_admin` |
+| integrations 2 | `api.client_admin`, `api.webhook_admin`, `api.connection_admin`, `api.import_operator`, `api.export_owner`, `api.extension_admin`, `api.device_admin` (Proposed with the mobile sign-in, spec/mobile 5.7: reads and revokes the `device` records of everybody; a person reads, renames and revokes their own with no group) |
 
 **Rulings.**
 
@@ -531,7 +531,7 @@ These are not owner decisions. The named spec accepts, amends or rejects each wh
 | `obop-calc` as the Layer 0 crate behind `PricingPort` and the tax engine | ARCHITECTURE 4.1; sales-crm 4.2 |
 | Whether `Idempotency-Key` is required on plain CRUD or only accepted (integrations 4.1 "carries", ARCHITECTURE 8.2 "accept") | integrations open question 11 |
 | Device identity: kiosk and POS devices are API-client principals plus a device record (`pos_device`), with no new principal kind (D28) | people 2, retail 4.1 |
-| Whether the `device` model of native apps (D87) and `pos_device` are one model or two | mobile 15 (item 2); people 2; retail 4.1 |
+| Whether the `device` model of native apps (D87, built as `device` in the Customize module on 2026-10-28) and `pos_device` are one model or two; the build decides nothing | mobile 15 (item 2); people 2; retail 4.1 |
 | Package events `PackageInstalled`, `PackageCopied`, `PackageRevoked` (aggregate `package_install`), the `mode` attribute, whether update and removal emit events, and the group for the installed-plugin list | platform 4.18; integrations 2 (`api.extension_admin`); cli 4 |
 | CLI aliases `plan` and `approval`, operational subjects with no model behind them, and the catalogue-based names of 2.4. The alias `plan` collides with the subscription model `plan`; the Proposed default keeps the model id and drops or renames the alias | cli 2.1 (N2, N3); sales-crm 4.5; owner answer Q22 |
 | The per-module wave values of 3.4 after the D86 cut. Which modules are in or out of W1 is RATIFIED (OR-15, and project and timesheet are W3); the landing wave of each other displaced item (for example `PurchaseOrderConfirmed` and `PriceRuleChanged` in W2) and every other placement are Proposed | The owning specs when next edited (D25, D86) |

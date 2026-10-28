@@ -590,6 +590,19 @@ fn what_an_app_says_about_its_device_is_checked_before_the_code_is_spent() {
 fn a_mobile_app_is_never_offered_or_given_an_administrative_group() {
     let r = rig();
     let c = r.mobile_client();
+    // The person also administers devices: the group of an administrator of one area, which a lost
+    // phone must not hold either.
+    let mut held = Fields::new();
+    held.insert(
+        "groups".into(),
+        json!([
+            "base.user",
+            "sales.user",
+            "platform.admin",
+            "api.device_admin"
+        ]),
+    );
+    r.backend.update("auth_user", "ada", &held).unwrap();
     let v =
         r.o.validate_authorize(BASE, &r.mobile_params(&c, APP))
             .unwrap();
@@ -615,7 +628,7 @@ fn a_mobile_app_is_never_offered_or_given_an_administrative_group() {
     );
     assert!(page.html.contains("mobile app") && page.html.contains("org.obop.mileage"));
     assert!(page.html.contains("Customize, Security, Devices"));
-    assert!(!page.html.contains("platform.admin"));
+    assert!(!page.html.contains("platform.admin") && !page.html.contains("device_admin"));
     // A post that names one anyway is refused, and the flow is still open.
     let g = |gs: &[&str]| gs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     assert_eq!(
@@ -626,6 +639,19 @@ fn a_mobile_app_is_never_offered_or_given_an_administrative_group() {
             &csrf,
             true,
             &g(&["base.user", "platform.admin"]),
+            30
+        )
+        .unwrap(),
+        DecideOut::Retry("err.mobile_admin")
+    );
+    assert_eq!(
+        r.o.decide(
+            BASE,
+            &id,
+            &binder,
+            &csrf,
+            true,
+            &g(&["base.user", "api.device_admin"]),
             30
         )
         .unwrap(),
