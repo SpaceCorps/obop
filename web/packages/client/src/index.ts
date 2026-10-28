@@ -33,3 +33,25 @@ export type {
   ObopModuleMeta,
 } from "./meta.ts";
 export type { components, operations, paths } from "./generated/schema.d.ts";
+export {
+  OAuthError,
+  base64Url,
+  buildAuthorizeUrl,
+  createPkce,
+  createState,
+  exchangeCode,
+  normaliseBaseUrl,
+  parseAuthorizationResponse,
+  refreshTokens,
+  registerMobileClient,
+} from "./oauth.ts";
+export type {
+  AuthorizeOptions,
+  DeviceInfo,
+  ExchangeOptions,
+  OAuthDeps,
+  Pkce,
+  RefreshOptions,
+  RegisterOptions,
+  TokenSet,
+} from "./oauth.ts";
