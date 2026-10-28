@@ -10575,8 +10575,6 @@ export interface operations {
                         name: string;
                         /** @description Free-text internal notes (personal data: agents see it masked) */
                         notes?: string;
-                        /** @description Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB) (personal data: agents see it masked) */
-                        photo?: string;
                         /** @description Tax identifier of a natural person (personal data: agents see it masked) */
                         tax_id?: string;
                     }[];
@@ -11999,8 +11997,6 @@ export interface operations {
                     rows?: {
                         /** @description Unit cost in minor currency units */
                         cost_minor?: number;
-                        /** @description Picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB) */
-                        image?: string;
                         /** @description List price in minor currency units */
                         list_price_minor?: number;
                         /** @description Product name */

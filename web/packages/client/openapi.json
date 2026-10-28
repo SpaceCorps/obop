@@ -14136,11 +14136,6 @@
                           "description": "Free-text internal notes (personal data: agents see it masked)",
                           "type": "string"
                         },
-                        "photo": {
-                          "description": "Photo or logo of the contact (PNG, JPEG, WebP or GIF, up to 2 MiB) (personal data: agents see it masked)",
-                          "pattern": "^[0-9a-f]{64}$",
-                          "type": "string"
-                        },
                         "tax_id": {
                           "description": "Tax identifier of a natural person (personal data: agents see it masked)",
                           "type": "string"
@@ -16709,11 +16704,6 @@
                         "cost_minor": {
                           "description": "Unit cost in minor currency units",
                           "type": "integer"
-                        },
-                        "image": {
-                          "description": "Picture of the product (PNG, JPEG, WebP or GIF, up to 5 MiB)",
-                          "pattern": "^[0-9a-f]{64}$",
-                          "type": "string"
                         },
                         "list_price_minor": {
                           "description": "List price in minor currency units",

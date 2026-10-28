@@ -9,9 +9,21 @@ use http_body_util::BodyExt;
 use obop_auth::Auth;
 use obop_commands::{Authenticator, Principal, Surface};
 use serde_json::Value as J;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceExt;
+
+/// Commands of models that have no `list` command: registered on REST, absent from the document.
+const KNOWN_OMITTED: &[&str] = &[
+    "instance_update.check",
+    "instance_update.rollback",
+    "instance_update.start",
+    "instance_update.status",
+    "module_plan.preview",
+    "setting.get",
+    "setting.update",
+];
 
 /// The committed copy: `web/packages/client/openapi.json`, from the root of the workspace.
 fn committed_path() -> PathBuf {
@@ -36,23 +48,77 @@ fn two_runs_write_the_same_bytes_in_a_fixed_shape() {
     assert_eq!(doc["servers"][0]["url"], BASE_URL);
 }
 
-#[test]
-fn nothing_in_the_document_depends_on_the_host_or_the_time() {
-    let text = document();
-    // The placeholder is the only address; no temp dir, home directory or user name leaks in.
-    for needle in [
-        std::env::temp_dir().to_string_lossy().to_string(),
-        std::env::var("USERPROFILE").unwrap_or_default(),
-        std::env::var("HOME").unwrap_or_default(),
-        std::env::var("USERNAME").unwrap_or_default(),
-    ] {
-        if needle.len() > 3 {
-            assert!(!text.contains(&needle), "{needle}");
+/// Every run of the pattern `dddd-dd-dd` (a date) or `dd:dd:dd` (a time of day) in a text.
+fn dates_and_times(text: &str) -> (BTreeSet<String>, BTreeSet<String>) {
+    let b = text.as_bytes();
+    let digits = |from: usize, n: usize| {
+        b.len() >= from + n && b[from..from + n].iter().all(u8::is_ascii_digit)
+    };
+    let sep = |at: usize, c: u8| b.get(at) == Some(&c);
+    let (mut dates, mut times) = (BTreeSet::new(), BTreeSet::new());
+    for i in 0..b.len() {
+        if digits(i, 4)
+            && sep(i + 4, b'-')
+            && digits(i + 5, 2)
+            && sep(i + 7, b'-')
+            && digits(i + 8, 2)
+        {
+            dates.insert(text[i..i + 10].to_string());
+        }
+        if digits(i, 2)
+            && sep(i + 2, b':')
+            && digits(i + 3, 2)
+            && sep(i + 5, b':')
+            && digits(i + 6, 2)
+        {
+            times.insert(text[i..i + 8].to_string());
         }
     }
+    (dates, times)
+}
+
+#[test]
+fn the_document_names_only_the_placeholder_address_and_fixed_dates_and_times() {
+    let text = document();
+    // Addresses: every http(s) URL in the document starts with the placeholder.
+    for scheme in ["http://", "https://"] {
+        for (at, _) in text.match_indices(scheme) {
+            assert!(
+                text[at..].starts_with(BASE_URL),
+                "an address other than {BASE_URL}: {}",
+                &text[at..(at + 40).min(text.len())]
+            );
+        }
+    }
+    // Dates and times: the MCP protocol versions (dates by name) and the one fixed example of a
+    // date-time field are all there is; a timestamp of the run, a build or a file would be a
+    // new date or a new time of day and fail here.
+    let (dates, times) = dates_and_times(&text);
+    let mut known: BTreeSet<String> = obop_mcp::SUPPORTED_VERSIONS
+        .iter()
+        .map(|v| v.to_string())
+        .collect();
+    known.insert("2026-03-29".into()); // the example of every date-time field (openapi.rs)
+    let unknown: Vec<&String> = dates.difference(&known).collect();
+    assert!(unknown.is_empty(), "unknown dates {unknown:?}");
+    assert!(
+        times.iter().all(|t| t == "01:30:00"),
+        "unknown times of day: {times:?}"
+    );
     let doc: J = serde_json::from_str(&text).unwrap();
     assert_eq!(doc["x-mcp"]["url"], format!("{BASE_URL}/mcp"));
     assert_eq!(doc["x-mcp"]["authorization"], "oauth2 or bearer");
+}
+
+#[test]
+fn the_date_and_time_scan_finds_what_it_is_meant_to() {
+    let (dates, times) =
+        dates_and_times("a 2026-10-28T12:34:56Z b 2025-03-26 c 1999-1-1 d 12:34 e 7:00:00");
+    assert_eq!(
+        dates.into_iter().collect::<Vec<_>>(),
+        ["2025-03-26", "2026-10-28"]
+    );
+    assert_eq!(times.into_iter().collect::<Vec<_>>(), ["12:34:56"]);
 }
 
 #[test]
@@ -67,18 +133,21 @@ fn it_lists_every_command_of_an_account_with_every_group() {
     assert!(commands.len() > 100, "{}", commands.len());
     let mut missing = Vec::new();
     for c in &commands {
-        let Some((model, command)) = c.id.split_once('.') else {
-            continue;
-        };
+        let (model, command) =
+            c.id.split_once('.')
+                .unwrap_or_else(|| panic!("a command id without a model: {}", c.id));
         if !paths.contains_key(&format!("/api/{model}/{command}")) {
             missing.push(c.id.clone());
         }
     }
-    // Commands of the built-in models only: the ones that belong to no model of the registry
-    // (for example the instance-wide update commands) are not generated operations.
-    assert!(
-        missing.len() * 4 < commands.len(),
-        "most commands are listed, missing {missing:?}"
+    missing.sort();
+    // The document is made from `Dispatcher::meta`, which skips a model that has no `list`
+    // command, so these seven commands (REST ones included) have no operation, in the document
+    // an instance serves as well (docs/ISSUES.md K26). A new omission fails here; when one of
+    // these gains an operation, remove its id from the list.
+    assert_eq!(
+        missing, KNOWN_OMITTED,
+        "commands without an operation in the document"
     );
     for want in [
         "/api/party/list",
@@ -125,7 +194,12 @@ async fn the_export_is_what_a_running_instance_serves_to_an_administrator() {
     let as_auth: Arc<dyn Authenticator> = auth.clone();
     app.register_accounts(as_auth);
     let token = auth.login("ada", "correct horse battery").unwrap();
-    let state = obop_http::HttpState::new(app.dispatcher.clone(), auth.clone());
+    // `HttpState::new` reads OBOP_PUBLIC_URL; an explicit default configuration reads nothing.
+    let state = obop_http::HttpState::with_mcp(
+        app.dispatcher.clone(),
+        auth.clone(),
+        obop_http::mcp::McpConfig::default(),
+    );
     let router = obop_http::router(state, None);
     let host = BASE_URL.trim_start_matches("http://");
     let req = Request::get("/api/openapi.json")
@@ -198,4 +272,39 @@ fn a_generated_operation_describes_the_503_once() {
         .unwrap();
     assert_eq!(text.matches("storage_busy").count(), 1, "{text}");
     assert!(!text.contains("Also:"));
+}
+
+/// `bulk_create` refuses an image or file field in a row (a blob is uploaded and claimed one record
+/// at a time, D60, D70), so the document does not offer one there, though `create` takes it.
+#[test]
+fn a_bulk_row_does_not_offer_the_image_and_file_fields_that_bulk_create_refuses() {
+    let doc = value();
+    let blob = |p: &J| p["pattern"] == "^[0-9a-f]{64}$";
+    let props = |path: &str, rows: bool| -> J {
+        let body =
+            &doc["paths"][path]["post"]["requestBody"]["content"]["application/json"]["schema"];
+        if rows {
+            body["properties"]["rows"]["items"]["properties"].clone()
+        } else {
+            body["properties"].clone()
+        }
+    };
+    // The party's photo is an image: create takes it, bulk_create rows do not.
+    assert!(blob(&props("/api/party/create", false)["photo"]));
+    let rows = props("/api/party/bulk_create", true);
+    assert!(
+        rows.get("photo").is_none() && rows.get("name").is_some(),
+        "{rows}"
+    );
+    // And for every model of the document, no row property is a blob id.
+    let mut checked = 0;
+    for path in doc["paths"].as_object().unwrap().keys() {
+        if path.ends_with("/bulk_create") {
+            checked += 1;
+            for (field, p) in props(path, true).as_object().unwrap() {
+                assert!(!blob(p), "{path} offers the blob field {field}");
+            }
+        }
+    }
+    assert!(checked > 5, "{checked}");
 }

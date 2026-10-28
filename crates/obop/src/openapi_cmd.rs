@@ -2,8 +2,10 @@
 //! and without a database (D31, D15). The shared TypeScript client (`web/packages/client`) is
 //! generated from this document, so the output is made to be byte for byte the same on every run
 //! and every platform: one in-memory app with every linked module, the caller is an account that
-//! holds every permission group (so every command is listed), the base URL is a fixed placeholder,
-//! keys are sorted, nothing carries a time or a host name, and the text ends with one newline.
+//! holds every permission group (so the document lists every command of every model that has a
+//! `list` command: a model without one, such as `setting` or `instance_update`, has no operation
+//! here, exactly as in the document an instance serves), the base URL is a fixed placeholder, keys
+//! are sorted, nothing carries a time or a host name, and the text ends with one newline.
 
 use super::{Exit, fail};
 use crate::app::App;

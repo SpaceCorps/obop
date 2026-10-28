@@ -342,8 +342,17 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                 );
             }
             if model.can_bulk_create {
-                // A decimal that rounds on import takes any number of fractional digits here.
+                // An image or file field is not accepted by bulk_create (a blob is uploaded and
+                // claimed by the caller one record at a time, D60, D70), so a row does not offer it.
                 let mut row_props = input_props.clone();
+                for f in model
+                    .fields
+                    .iter()
+                    .filter(|f| matches!(f.kind, "image" | "file"))
+                {
+                    row_props.remove(f.name);
+                }
+                // A decimal that rounds on import takes any number of fractional digits here.
                 for f in model
                     .fields
                     .iter()
@@ -353,9 +362,13 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                         p["pattern"] = json!(f.decimal_import_pattern());
                     }
                 }
+                let row_required: Vec<&String> = required
+                    .iter()
+                    .filter(|r| row_props.contains_key(r.as_str()))
+                    .collect();
                 let mut row = json!({"type": "object", "properties": row_props});
-                if !required.is_empty() {
-                    row["required"] = json!(required);
+                if !row_required.is_empty() {
+                    row["required"] = json!(row_required);
                 }
                 paths.insert(
                     format!("/api/{name}/bulk_create"),

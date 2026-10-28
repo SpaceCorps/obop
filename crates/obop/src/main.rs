@@ -219,10 +219,10 @@ const USAGE: &str = "usage: obop <command>
                                                 check of create. By default one bad row creates nothing; --mode partial keeps the good
                                                 rows; --dry-run only checks; --key makes a retry return the first answer
   commands [--token TOKEN]                      list the commands visible to a token
-  openapi [--out FILE]                          the OpenAPI 3.1 document of an instance (the linked modules, every command, a
-                                                placeholder address), the same bytes on every run; no database. `web/packages/client`
-                                                is generated from it; to refresh the committed copy:
-                                                obop openapi --out web/packages/client/openapi.json
+  openapi [--out FILE]                          the OpenAPI 3.1 document of an instance (the linked modules: every command of every
+                                                model that has a list command; a placeholder address), the same bytes on every run;
+                                                no database. `web/packages/client` is generated from it; to refresh the committed
+                                                copy: obop openapi --out web/packages/client/openapi.json
   call [--token TOKEN] <model> <command> [k=v...]
                                                 values are text, converted by field type; for list and search
                                                 filter, order and aggregate are JSON text (in single quotes)
