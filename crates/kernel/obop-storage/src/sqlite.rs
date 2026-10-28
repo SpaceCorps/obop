@@ -2,7 +2,7 @@
 //! file (WAL mode, a busy timeout); cross-process locks are file locks next to the database.
 
 use super::*;
-use crate::history::{Backfilled, HistoryQuery};
+use crate::history::{self, Backfilled, ChangePage, ChangeQuery, HistoryQuery, HistoryStats};
 use crate::sysfields::{self, ChangeRow, Clock};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 
@@ -848,6 +848,84 @@ impl Backend for Sqlite {
             out.push(read_change(r)?);
         }
         Ok(out)
+    }
+
+    fn changes(&self, q: &ChangeQuery) -> Result<ChangePage> {
+        let limit = history::feed_limit(q)?;
+        // The epoch lives in the short-lived values, which take the connection themselves.
+        let epoch = history::feed_epoch(self)?;
+        let g = self.conn.lock().unwrap();
+        if !has_history(&g)? {
+            // Nothing was ever recorded here; a cursor can only be the start.
+            history::resume(&epoch, q.after.as_ref(), 0)?;
+            return Ok(history::page(&epoch, q, Vec::new()));
+        }
+        let newest: i64 = g
+            .query_row(
+                "SELECT COALESCE(MAX(seq), 0) FROM obop_record_change",
+                (),
+                |r| r.get(0),
+            )
+            .map_err(e)?;
+        let (txid, seq) = history::resume(&epoch, q.after.as_ref(), newest)?;
+        let list = |v: &[String]| (!v.is_empty()).then(|| serde_json::json!(v).to_string());
+        let mut rows = Vec::new();
+        // Every entry here has txid 0, so a cursor with a transaction number is past them all.
+        if txid == 0 && limit > 0 {
+            let mut st = g
+                .prepare(&format!(
+                    "SELECT {CHANGE_COLUMNS} FROM obop_record_change
+                     WHERE seq > ?1
+                       AND (?2 IS NULL OR model IN (SELECT value FROM json_each(?2)))
+                       AND (?3 IS NULL OR op IN (SELECT value FROM json_each(?3)))
+                       AND (?4 IS NULL OR at >= ?4)
+                     ORDER BY seq LIMIT ?5"
+                ))
+                .map_err(e)?;
+            let mut it = st
+                .query(rusqlite::params![
+                    seq,
+                    list(&q.models),
+                    list(&q.ops),
+                    q.since_at,
+                    limit as i64
+                ])
+                .map_err(e)?;
+            while let Some(r) = it.next().map_err(e)? {
+                rows.push(read_change(r)?);
+            }
+        }
+        Ok(history::page(&epoch, q, rows))
+    }
+
+    fn ensure_history_schema(&self) -> Result<()> {
+        // The table is made by the first write that needs it; this makes it now, in a
+        // transaction of its own, for a caller that wants to know before the first write.
+        let mut g = self.conn.lock().unwrap();
+        let tx = g
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(e)?;
+        ensure_history(&tx)?;
+        tx.commit().map_err(e)
+    }
+
+    fn history_stats(&self) -> Result<HistoryStats> {
+        let g = self.conn.lock().unwrap();
+        if !has_history(&g)? {
+            return Ok(HistoryStats::default());
+        }
+        let (n, oldest): (i64, Option<String>) = g
+            .query_row(
+                "SELECT COUNT(*), MIN(at) FROM obop_record_change",
+                (),
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(e)?;
+        Ok(HistoryStats {
+            entries_estimate: n,
+            oldest_at: oldest,
+            ..HistoryStats::default()
+        })
     }
 
     fn backfill_sysfields(

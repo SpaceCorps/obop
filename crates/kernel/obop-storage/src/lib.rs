@@ -282,6 +282,44 @@ pub trait Backend: Send + Sync {
     fn history(&self, _q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
         Err("this storage backend keeps no change history".into())
     }
+    /// The entries of the change history of every record, in the order a consumer must read them
+    /// (D75): one page, from `q.after` on. On PostgreSQL the order is `(txid, seq)` and an entry is
+    /// shown only once no transaction that holds a lower transaction number is still open, so a
+    /// consumer that follows the cursor never misses an entry that committed late; memory and
+    /// SQLite order by `seq`. A cursor that cannot be followed (the history was restored, the
+    /// database went back in time, was moved to another cluster or changed time line, which every
+    /// promotion does) is refused with an error that starts `cursor_expired:`. A backend that
+    /// keeps no history refuses.
+    fn changes(&self, _q: &ChangeQuery) -> Result<ChangePage> {
+        Err("this storage backend keeps no change history".into())
+    }
+    /// Check that the store can keep the change history, and under `Ddl::IfMissing` make what is
+    /// missing of it (a start does not; the first write of a model that keeps history does the
+    /// same). Under `Ddl::Never` it creates nothing and answers with an error that says what an
+    /// owner must install. The stores that need no setup say `Ok`.
+    fn ensure_history_schema(&self) -> Result<()> {
+        Ok(())
+    }
+    /// What the store can say about its history without reading it.
+    fn history_stats(&self) -> Result<HistoryStats> {
+        Ok(HistoryStats::default())
+    }
+    /// Make the partition of the month `YYYY-MM` (UTC) of the history, and move into it the
+    /// entries of that month that landed in the default partition. Idempotent. A store without
+    /// partitions does nothing. PostgreSQL refuses a month before 2000 or more than a year ahead.
+    fn history_ensure_partition(&self, _month: &str) -> Result<PartitionEnsured> {
+        Ok(PartitionEnsured::default())
+    }
+    /// Drop the partition of the month `YYYY-MM` and return how many entries it held. The
+    /// database refuses a month that ended less than `min_age_days` days ago, which the caller
+    /// sets to the **longest** retention of the models that have entries in the month (the
+    /// database cannot see the models). A month that is not over is never dropped; the SQL
+    /// function also refuses a missing or negative age, also one that mixes months and days of
+    /// opposite signs (the floor is tested as an instant): it is the check that outlives a
+    /// mistake of the caller.
+    fn history_drop_partition(&self, _month: &str, _min_age_days: u32) -> Result<u64> {
+        Ok(0)
+    }
     /// Stamp up to `batch` records of `models` that predate the system fields: `created_at` from
     /// the UUIDv7 id, else `fallback_at` (canonical text); `row_version` 1; `sys_backfilled`;
     /// no actor; no history entry. Call it until `remaining` is 0.
@@ -492,13 +530,16 @@ pub enum Ddl {
     IfMissing,
     /// Create nothing: a database that lacks the schema is an error that says so. For a
     /// deployment whose serving role may not create tables. It covers the record store
-    /// (`schema::parts`) and the byte store's table (`blob::DbBytes`).
+    /// (`schema::parts`) and the byte store's table (`blob::DbBytes`). The change history of D75
+    /// is not made at start under either mode: under `Never` it is only checked, when a model
+    /// that keeps history is written or `Backend::ensure_history_schema` is asked, and the
+    /// write is refused where it is missing. No shipped process selects `Never` yet.
     Never,
 }
 
 impl Ddl {
     /// What [`open`] uses: `Never` in a production process (see [`production`], which no process
-    /// is yet), else `IfMissing`.
+    /// sets yet, so every shipped process runs `IfMissing`), else `IfMissing`.
     pub fn for_process() -> Ddl {
         if production() {
             Ddl::Never
@@ -631,6 +672,9 @@ pub mod keyexpr;
 pub mod limit;
 mod memory;
 mod pg;
+mod pg_hist;
+#[cfg(test)]
+mod pg_hist_tests;
 #[cfg(test)]
 mod pg_pool_tests;
 mod pgpool;
@@ -645,6 +689,8 @@ mod seams_tests;
 mod shared_tests;
 mod sqlite;
 #[cfg(test)]
+mod start_tests;
+#[cfg(test)]
 mod sys_tests;
 pub mod sysfields;
 #[cfg(any(test, feature = "test-support"))]
@@ -656,7 +702,9 @@ pub mod tracked;
 
 pub use ctx::{ACTOR_PUBLIC, ACTOR_SYSTEM, ActionRun, Via, WriteCtx};
 pub use guard::guarded;
-pub use history::{Backfilled, HistoryQuery};
+pub use history::{
+    Backfilled, ChangeCursor, ChangePage, ChangeQuery, HistoryQuery, HistoryStats, PartitionEnsured,
+};
 pub use pgpool::{PgPoolConfig, Pooler, statement_timeouts};
 pub use sysfields::ChangeRow;
 pub use tracked::{Sealer, Track, Tracked, Tracking, Treat};

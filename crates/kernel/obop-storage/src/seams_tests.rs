@@ -340,6 +340,16 @@ fn read_tx_runs_again_once_on_a_fresh_connection_when_the_reused_one_is_dead() {
 
 // ---- the schema parts ----------------------------------------------------------------------------
 
+/// What an inspection found that makes a check fail. The change history is made when a model
+/// first needs it, so a database that is complete for the record store has it as a warning.
+fn errors(c: &mut postgres::Client) -> Vec<crate::schema::Finding> {
+    crate::schema::inspect(c)
+        .unwrap()
+        .into_iter()
+        .filter(|f| f.error)
+        .collect()
+}
+
 fn tables(c: &mut postgres::Client) -> Vec<String> {
     c.query(
         "SELECT relname::text FROM pg_class WHERE relnamespace = 'public'::regnamespace \
@@ -379,8 +389,18 @@ fn ensure_creates_what_is_missing_only_when_allowed() {
     assert!(tables(&mut c).is_empty());
     // IfMissing creates it; a second time there is nothing to do.
     crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
+    // The change history is not made at start: a process that starts creates the record store and
+    // nothing for a feature no model uses (D75). It is a warning of an inspection, not an error.
     assert_eq!(tables(&mut c), ["obop_counter", "obop_kv", "obop_record"]);
-    assert!(crate::schema::inspect(&mut c).unwrap().is_empty());
+    assert!(errors(&mut c).is_empty());
+    let found = crate::schema::inspect(&mut c).unwrap();
+    assert_eq!(
+        found
+            .iter()
+            .map(|f| (f.object.as_str(), f.error))
+            .collect::<Vec<_>>(),
+        [("history", false)]
+    );
     crate::schema::with_lock(&mut c, |c| crate::schema::ensure(c, Ddl::IfMissing)).unwrap();
     // Now Never is fine, and the store works.
     let b = open_options(
@@ -406,7 +426,7 @@ fn a_missing_object_is_reported_and_put_back() {
         .unwrap();
     for broken in ["DROP INDEX obop_kv_expiry", "DROP TABLE obop_counter"] {
         c.batch_execute(broken).unwrap();
-        let found = crate::schema::inspect(&mut c).unwrap();
+        let found = errors(&mut c);
         assert_eq!(found.len(), 1, "{broken}: {found:?}");
         assert_eq!(
             (found[0].code, found[0].object.as_str(), found[0].error),
@@ -424,10 +444,7 @@ fn a_missing_object_is_reported_and_put_back() {
         assert!(e.contains("missing: base"), "{e}");
         // IfMissing repairs it, and does not touch what is there.
         drop(open_with(db.url(), Some(one())).unwrap());
-        assert!(
-            crate::schema::inspect(&mut c).unwrap().is_empty(),
-            "{broken}"
-        );
+        assert!(errors(&mut c).is_empty(), "{broken}");
         let kept: i64 = c
             .query_one("SELECT count(*) FROM obop_kv WHERE key = 'k'", &[])
             .unwrap()
@@ -520,11 +537,7 @@ fn processes_that_start_together_on_an_empty_database_all_start() {
             h.join().unwrap().unwrap();
         }
     });
-    assert!(
-        crate::schema::inspect(&mut db.connect())
-            .unwrap()
-            .is_empty()
-    );
+    assert!(errors(&mut db.connect()).is_empty());
 }
 
 #[test]
@@ -581,7 +594,7 @@ fn a_catalogue_query_that_fails_is_an_error_and_never_a_missing_part() {
     c.batch_execute("ROLLBACK").unwrap();
     // The same connection answers once the transaction is over: the schema is complete.
     crate::schema::ensure(&mut c, Ddl::Never).unwrap();
-    assert!(crate::schema::inspect(&mut c).unwrap().is_empty());
+    assert!(errors(&mut c).is_empty());
     // 2. The server ends the session between the lock and the check: the connection is gone, which
     // is `storage_unavailable` and not a verdict on the schema.
     let mut gone = db.connect();
@@ -625,7 +638,7 @@ fn the_byte_stores_table_is_created_or_required_like_the_rest_of_the_schema() {
     // it) and is complete without it.
     drop(open_with(db.url(), Some(one())).unwrap());
     assert!(!regclass(&mut c));
-    assert!(crate::schema::inspect(&mut c).unwrap().is_empty());
+    assert!(errors(&mut c).is_empty());
     assert!(DbBytes::open_options(db.url(), &never).is_err());
     // `open_with` makes it, as before.
     DbBytes::open_with(db.url(), Some(one())).unwrap();

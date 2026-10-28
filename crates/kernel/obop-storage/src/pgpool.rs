@@ -814,8 +814,8 @@ impl PgPool {
     /// As [`PgPool::read`]: if the connection was an old one and turns out to be dead (the server
     /// restarted), the idle connections are dropped and `f` runs again, once, on a fresh one. It
     /// is therefore `FnMut`, and must not leave anything behind that a second run would repeat.
-    // Used by the query and index layers of wave 2 (D76, D78); tested here until they land.
-    #[cfg_attr(not(test), allow(dead_code))]
+    // Used by the change feed (D75, `pg_hist::changes`); the query and index layers of wave 2
+    // (D76, D78) will use it too.
     pub(crate) fn read_tx<T>(
         &self,
         class: Class,

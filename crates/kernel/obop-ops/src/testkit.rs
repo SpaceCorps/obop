@@ -2,8 +2,9 @@
 //! behind when storage fails half way.
 
 use obop_storage::{
-    ApplyError, Backend, Backfilled, ChangeRow, Fields, HistoryQuery, LockGuard, Op, Result, Row,
-    RowSink, Sealer, Swap, Track, Tracking, WriteCtx,
+    ApplyError, Backend, Backfilled, ChangePage, ChangeQuery, ChangeRow, Fields, HistoryQuery,
+    HistoryStats, LockGuard, Op, PartitionEnsured, Result, Row, RowSink, Sealer, Swap, Track,
+    Tracking, WriteCtx,
 };
 use serde_json::Value as J;
 use std::sync::Arc;
@@ -147,6 +148,21 @@ impl Backend for Flaky {
     fn history(&self, q: &HistoryQuery) -> Result<Vec<ChangeRow>> {
         self.refused(&q.model)?;
         self.inner.history(q)
+    }
+    fn changes(&self, q: &ChangeQuery) -> Result<ChangePage> {
+        self.inner.changes(q)
+    }
+    fn ensure_history_schema(&self) -> Result<()> {
+        self.inner.ensure_history_schema()
+    }
+    fn history_stats(&self) -> Result<HistoryStats> {
+        self.inner.history_stats()
+    }
+    fn history_ensure_partition(&self, month: &str) -> Result<PartitionEnsured> {
+        self.inner.history_ensure_partition(month)
+    }
+    fn history_drop_partition(&self, month: &str, min_age_days: u32) -> Result<u64> {
+        self.inner.history_drop_partition(month, min_age_days)
     }
     fn backfill_sysfields(
         &self,
