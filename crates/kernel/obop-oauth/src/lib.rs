@@ -12,6 +12,7 @@
 //! key ring and no secret is ever written in the clear.
 
 pub mod client;
+mod devices;
 pub mod flow;
 pub mod page;
 pub mod redirect;
@@ -24,7 +25,7 @@ use serde_json::{Value as J, json};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub use client::Client;
+pub use client::{Class, Client};
 pub use flow::{AuthorizeParams, AuthzError, DecideOut, FlowCtx, FlowError, LoginOut, Validated};
 pub use token::Form;
 
@@ -191,6 +192,12 @@ pub fn mcp_resource(base: &str) -> String {
     format!("{base}/mcp")
 }
 
+/// The resource identifier of the REST surface of an instance: the audience of the access token of
+/// a mobile app (the D64 amendment).
+pub fn api_resource(base: &str) -> String {
+    format!("{base}/api")
+}
+
 /// RFC 8414 metadata of the authorization server of the instance at `base`.
 pub fn authorization_server_metadata(base: &str) -> J {
     json!({
@@ -206,6 +213,9 @@ pub fn authorization_server_metadata(base: &str) -> J {
         "token_endpoint_auth_methods_supported": ["none"],
         "revocation_endpoint_auth_methods_supported": ["none"],
         "authorization_response_iss_parameter_supported": true,
+        // A client says which it is when it registers (`obop_client_class`): an MCP client by
+        // default, or a mobile app, whose access token is for /api (docs/DEPLOY.md "Mobile apps").
+        "obop_client_classes_supported": ["mcp", "mobile"],
         "service_documentation": "https://obop.dev/docs/agents/mcp/",
     })
 }

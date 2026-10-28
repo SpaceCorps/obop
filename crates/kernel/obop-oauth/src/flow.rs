@@ -5,9 +5,9 @@
 //! must present both and the CSRF token of the flow, so a page on another site can neither
 //! continue nor complete somebody's consent.
 
-use crate::client::Client;
+use crate::client::{Class, Client};
 use crate::util::{clean_text, ct_eq, rand_hex, sha_hex};
-use crate::{OAuth, OAuthError, mcp_resource, redirect};
+use crate::{OAuth, OAuthError, api_resource, mcp_resource, redirect};
 use obop_commands::LoginOutcome;
 use serde_json::{Value as J, json};
 
@@ -62,7 +62,9 @@ pub fn is_verifier(s: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~'))
 }
 
-fn is_admin_like(g: &str) -> bool {
+/// A group that runs the instance or an area of it. It is ticked last on the consent page of an
+/// MCP client, and a mobile app is never handed one.
+pub(crate) fn is_admin_like(g: &str) -> bool {
     g.starts_with("platform.") || g.ends_with(".admin")
 }
 
@@ -76,6 +78,9 @@ pub struct FlowCtx {
     pub redirect_origin: String,
     pub redirect_host: String,
     pub user: Option<String>,
+    /// What kind of application asks (a mobile app is told so, and is offered no administrative
+    /// group).
+    pub class: Class,
     /// The groups the signed-in person holds: the most they can hand over.
     pub groups: Vec<String>,
     /// The ones to tick at first.
@@ -135,8 +140,12 @@ impl OAuth {
             .as_deref()
             .and_then(|id| self.client(id))
             .ok_or(page("err.client"))?;
+        let matches = |u: &str| match client.class {
+            Class::Mcp => redirect::matches(&client.redirect_uris, u),
+            Class::Mobile => redirect::matches_mobile(&client.redirect_uris, u),
+        };
         let redirect_uri = match p.redirect_uri.as_deref() {
-            Some(u) if redirect::matches(&client.redirect_uris, u) => u.to_string(),
+            Some(u) if matches(u) => u.to_string(),
             Some(_) => return Err(page("err.redirect")),
             None if client.redirect_uris.len() == 1 => client.redirect_uris[0].clone(),
             None => return Err(page("err.redirect")),
@@ -172,13 +181,19 @@ impl OAuth {
                 "code_challenge_method must be S256",
             ));
         }
-        let resource = mcp_resource(base);
+        let (resource, wrong_resource) = match client.class {
+            Class::Mcp => (
+                mcp_resource(base),
+                "resource must be the /mcp endpoint of this instance",
+            ),
+            Class::Mobile => (
+                api_resource(base),
+                "resource must be the /api endpoint of this instance",
+            ),
+        };
         let ok_resource = |r: &str| r.trim_end_matches('/') == resource;
         if p.resources.iter().any(|r| !ok_resource(r)) {
-            return Err(fail(
-                "invalid_target",
-                "resource must be the /mcp endpoint of this instance",
-            ));
+            return Err(fail("invalid_target", wrong_resource));
         }
         let hint = p
             .scope
@@ -234,6 +249,7 @@ impl OAuth {
         let rec = json!({
             "client_id": v.client.id,
             "client_name": v.client.name,
+            "class": v.client.class.as_str(),
             "redirect_uri": v.redirect_uri,
             "state": v.state,
             "challenge": v.challenge,
@@ -283,11 +299,16 @@ impl OAuth {
 
     fn ctx(&self, id: &str, rec: &J) -> FlowCtx {
         let user = rec["user"].as_str().map(String::from);
+        let class = Class::of_record(rec);
         let mut groups: Vec<String> = user
             .as_deref()
             .and_then(|u| self.tokens().principal_of(u))
             .map(|p| p.groups.into_iter().collect())
             .unwrap_or_default();
+        // A phone is lost, so a mobile app is never offered a group that runs the instance.
+        if class.is_mobile() {
+            groups.retain(|g| !is_admin_like(g));
+        }
         groups.sort();
         let hint: Vec<&str> = rec["hint"]
             .as_array()
@@ -316,6 +337,7 @@ impl OAuth {
             redirect_origin: redirect::origin(uri),
             redirect_host: redirect::display_host(uri),
             user,
+            class,
             groups,
             preselected,
         }
@@ -558,6 +580,10 @@ impl OAuth {
         if groups.iter().any(|g| !principal.groups.contains(g)) {
             return Ok(DecideOut::Retry("err.scope_widen"));
         }
+        let class = Class::of_record(&rec);
+        if class.is_mobile() && groups.iter().any(|g| is_admin_like(g)) {
+            return Ok(DecideOut::Retry("err.mobile_admin"));
+        }
         let mut chosen: Vec<String> = groups.to_vec();
         chosen.sort();
         chosen.dedup();
@@ -576,6 +602,7 @@ impl OAuth {
         let entry = json!({
             "client_id": client_id,
             "client_name": client_name,
+            "class": class.as_str(),
             "redirect_uri": uri,
             "challenge": rec["challenge"],
             "resource": rec["resource"],

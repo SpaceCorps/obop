@@ -147,6 +147,22 @@ impl HttpState {
     /// the shared store, so the same token works on any server process. A session limited to
     /// two-factor enrolment (D53) is refused here with 403 `mfa_enrolment_required`.
     fn auth(&self, h: &HeaderMap) -> Result<(Principal, shared::VaultRef), AuthRejection> {
+        self.auth_for(h, false)
+    }
+
+    /// As `auth`, for the routes a mobile app uses (the commands, the metadata and the OpenAPI
+    /// document): the access token of a mobile app, which is bound to `<base>/api`, is accepted
+    /// there and nowhere else. The account routes (`/api/auth/*`), the approval of a proposal and
+    /// the blob routes stay on `auth`, which refuses every token that carries an audience.
+    fn auth_api(&self, h: &HeaderMap) -> Result<(Principal, shared::VaultRef), AuthRejection> {
+        self.auth_for(h, true)
+    }
+
+    fn auth_for(
+        &self,
+        h: &HeaderMap,
+        mobile_ok: bool,
+    ) -> Result<(Principal, shared::VaultRef), AuthRejection> {
         let token = h
             .get("authorization")
             .and_then(|v| v.to_str().ok())
@@ -156,8 +172,11 @@ impl HttpState {
             .auth
             .resolve_with_audience(token)
             .ok_or(AuthRejection::Unauthorized)?;
-        // A token issued by the OAuth flow is for /mcp only (RFC 8707, D64).
-        if audience.is_some() {
+        // A token issued by the OAuth flow is for one resource only (RFC 8707, D64): /mcp for an
+        // MCP client, /api for a mobile app, and a mobile token is no use on the routes of `auth`.
+        if let Some(a) = audience
+            && !(mobile_ok && a == obop_oauth::api_resource(&self.mcp.base_url(h)))
+        {
             return Err(AuthRejection::Unauthorized);
         }
         if p.mfa_limited {
@@ -354,7 +373,7 @@ async fn instance_openapi(State(s): Shared, h: HeaderMap) -> Response {
 /// token may use; without one it lists only sign-in and the discovery endpoints.
 fn instance_openapi_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
     let base = s.mcp.base_url(&h);
-    let modules = match s.auth(&h) {
+    let modules = match s.auth_api(&h) {
         Ok((p, _)) => s.dispatcher.meta(Surface::Rest, &p),
         Err(_) => Vec::new(),
     };
@@ -456,7 +475,7 @@ async fn meta(State(s): Shared, h: HeaderMap) -> Response {
 
 /// Everything the UI renders from: modules, models, readable fields and actions for this caller.
 fn meta_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
-    let (p, _) = match s.auth(&h) {
+    let (p, _) = match s.auth_api(&h) {
         Ok(x) => x,
         Err(c) => return c.into_response(),
     };
@@ -475,7 +494,7 @@ async fn commands(State(s): Shared, h: HeaderMap) -> Response {
 }
 
 fn commands_blocking(s: Arc<HttpState>, h: HeaderMap) -> Response {
-    let (p, _) = match s.auth(&h) {
+    let (p, _) = match s.auth_api(&h) {
         Ok(x) => x,
         Err(c) => return c.into_response(),
     };
@@ -535,7 +554,7 @@ fn call_blocking(
     command: String,
     body: Option<Json<J>>,
 ) -> Response {
-    let (p, session) = match s.auth(&h) {
+    let (p, session) = match s.auth_api(&h) {
         Ok(x) => x,
         Err(c) => return c.into_response(),
     };

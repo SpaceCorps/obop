@@ -9,7 +9,7 @@
 //! temporary password a creation hands back once.
 
 use crate::{Auth, Change, MIN_PASSWORD_CHARS, str_list, suggest_temporary_password};
-use obop_commands::{ADMIN_GROUP, AccountsApi, MfaError, NewUser, Principal, PrincipalKind};
+use obop_commands::{ADMIN_GROUP, AccountsApi, MfaError, NewUser, Principal};
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
 
@@ -46,7 +46,7 @@ pub struct ImportOutcome {
 /// an agent runs as `alice/agent` (what the dispatcher calls the principal), whose account is
 /// `alice`; user names cannot contain `/`, so the two cannot be mistaken for one another.
 fn admin_of(p: &Principal) -> Result<(&str, &str), MfaError> {
-    if p.kind == PrincipalKind::User && p.groups.contains(ADMIN_GROUP) && !p.mfa_limited {
+    if p.is_person() && p.groups.contains(ADMIN_GROUP) && !p.mfa_limited {
         Ok((&p.id, p.id.strip_suffix("/agent").unwrap_or(&p.id)))
     } else {
         Err(MfaError::NotFound)
@@ -121,6 +121,8 @@ pub(crate) struct Tally {
     pub agents: usize,
     pub apps: usize,
     pub pending: usize,
+    /// The devices of mobile apps that were in force (each also counts as an app: it is a grant).
+    pub devices: usize,
 }
 
 impl Auth {
@@ -408,6 +410,7 @@ impl Auth {
             agents,
             apps,
             pending,
+            devices,
         } = tally;
         // A lockout counter is not worth failing for: it expires by itself.
         let _ = self.backend.counter_reset(&Self::failure_key(&target));
@@ -425,6 +428,7 @@ impl Auth {
             "revoked_sessions": sessions,
             "revoked_agent_tokens": agents,
             "revoked_apps": apps,
+            "revoked_devices": devices,
             "note": note,
         }))
     }
@@ -435,6 +439,7 @@ impl Auth {
     /// run again; a refusal of the store is tried again and then fails as a partial request.
     pub(crate) fn end_account_tokens(&self, tid: &str, ch: &Change) -> Result<Tally, MfaError> {
         let mut t = Tally::default();
+        let mut devices = Vec::new();
         self.needed(ch, "ending the tokens of the account", || {
             for (id, tok) in self.backend.list("auth_token")? {
                 if tok.get("owner").and_then(J::as_str) != Some(tid)
@@ -482,8 +487,20 @@ impl Auth {
                 }
             }
             self.backend.kv_delete(&crate::passkey::proof_key(tid))?;
+            // The devices of mobile apps: their families and tokens are ended above, the
+            // records say so too (and the log, below, names each).
+            self.end_devices(tid, None, &mut devices)?;
             Ok(())
         })?;
+        t.devices = devices.len();
+        for (_, what) in devices {
+            self.event(
+                tid,
+                obop_commands::devices::EVENT_REVOKED,
+                &ch.actor,
+                &format!("{what}: ended by {}", ch.kind),
+            );
+        }
         Ok(t)
     }
 

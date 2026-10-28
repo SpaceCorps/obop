@@ -8,7 +8,7 @@
 //! parameter, then the `Accept-Language` header, then English. Everything that came from outside
 //! (the application's name and address, group names) is escaped.
 
-use crate::flow::{DEFAULT_DAYS, EXPIRY_DAYS, FlowCtx};
+use crate::flow::{DEFAULT_DAYS, EXPIRY_DAYS, FlowCtx, is_admin_like};
 use crate::util::b64std;
 use sha2::{Digest, Sha256};
 
@@ -281,13 +281,20 @@ pub fn mfa_page(ctx: &FlowCtx, mfa_token: &str, error: Option<&str>, passkey: bo
     shell_with(l, t(l, "mfa.title"), &body, "", passkey)
 }
 
-fn is_admin_like(g: &str) -> bool {
-    g.starts_with("platform.") || g.ends_with(".admin")
-}
-
 pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
     let l = ctx.lang.as_str();
     let user = ctx.user.as_deref().unwrap_or("");
+    // A mobile app is told so, with a sentence of its own about where the phone sends the result.
+    let (who_key, f1, f2, f3) = if ctx.class.is_mobile() {
+        (
+            "consent.who_body_mobile",
+            "consent.f1_mobile",
+            "consent.f2_mobile",
+            "consent.f3_mobile",
+        )
+    } else {
+        ("consent.who_body", "consent.f1", "consent.f2", "consent.f3")
+    };
     let mut groups = String::new();
     for g in &ctx.groups {
         let checked = if ctx.preselected.contains(g) {
@@ -343,7 +350,7 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         who = esc(t(l, "consent.who")),
         who_body = tf(
             l,
-            "consent.who_body",
+            who_key,
             &[("app", &ctx.client_name), ("host", &ctx.redirect_host)]
         ),
         glegend = esc(t(l, "consent.groups")),
@@ -352,9 +359,9 @@ pub fn consent_page(ctx: &FlowCtx, error: Option<&str>) -> Rendered {
         expiry = esc(t(l, "consent.expiry")),
         days = days,
         facts = esc(t(l, "consent.facts")),
-        f1 = esc(t(l, "consent.f1")),
-        f2 = esc(t(l, "consent.f2")),
-        f3 = esc(t(l, "consent.f3")),
+        f1 = esc(t(l, f1)),
+        f2 = esc(t(l, f2)),
+        f3 = esc(t(l, f3)),
         deny = esc(t(l, "consent.deny")),
         allow = esc(t(l, "consent.allow")),
     );
@@ -395,6 +402,7 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("err.code_expired", ["The sign-in took too long. Enter your username and password again.", "Die Anmeldung hat zu lange gedauert. Geben Sie Benutzername und Passwort erneut ein.", "La connexion a pris trop de temps. Saisissez à nouveau votre identifiant et votre mot de passe.", "Logowanie trwało zbyt długo. Wpisz nazwę użytkownika i hasło ponownie.", "Kirjautuminen kesti liian kauan. Syötä käyttäjätunnus ja salasana uudelleen.", "Inloggningen tog för lång tid. Ange användarnamn och lösenord igen.", "El inicio de sesión tardó demasiado. Introduzca de nuevo su usuario y contraseña."]),
     ("err.scope_widen", ["You can only hand over groups you hold yourself.", "Sie können nur Gruppen weitergeben, die Sie selbst haben.", "Vous ne pouvez transmettre que les groupes que vous détenez.", "Możesz przekazać tylko grupy, które sam posiadasz.", "Voit antaa vain ryhmiä, jotka itse omistat.", "Du kan bara lämna över grupper som du själv har.", "Solo puede ceder grupos que usted mismo tiene."]),
     ("err.no_scope", ["Choose at least one group, or deny.", "Wählen Sie mindestens eine Gruppe oder lehnen Sie ab.", "Choisissez au moins un groupe, ou refusez.", "Wybierz co najmniej jedną grupę albo odmów.", "Valitse vähintään yksi ryhmä tai kieltäydy.", "Välj minst en grupp, eller neka.", "Elija al menos un grupo, o deniegue."]),
+    ("err.mobile_admin", ["A mobile app is never given administrative groups. Untick them.", "Einer mobilen App werden nie administrative Gruppen gegeben. Entfernen Sie die Haken.", "Une application mobile ne reçoit jamais de groupes d'administration. Décochez-les.", "Aplikacja mobilna nigdy nie otrzymuje grup administracyjnych. Odznacz je.", "Mobiilisovellukselle ei koskaan anneta hallinnollisia ryhmiä. Poista valinnat.", "En mobilapp får aldrig administrativa grupper. Avmarkera dem.", "Una aplicación móvil nunca recibe grupos administrativos. Desmárquelos."]),
     ("err.expiry", ["Choose how long the access lasts.", "Wählen Sie, wie lange der Zugriff gilt.", "Choisissez la durée de l'accès.", "Wybierz, jak długo ma trwać dostęp.", "Valitse, kuinka kauan pääsy kestää.", "Välj hur länge åtkomsten gäller.", "Elija cuánto dura el acceso."]),
     ("login.title", ["Sign in to continue", "Zum Fortfahren anmelden", "Connectez-vous pour continuer", "Zaloguj się, aby kontynuować", "Kirjaudu jatkaaksesi", "Logga in för att fortsätta", "Inicie sesión para continuar"]),
     ("login.lead", ["{app} wants to connect to this obop instance. Sign in with your obop account to decide what it may do.", "{app} möchte sich mit dieser obop-Instanz verbinden. Melden Sie sich mit Ihrem obop-Konto an, um zu entscheiden, was die Anwendung darf.", "{app} souhaite se connecter à cette instance obop. Connectez-vous avec votre compte obop pour décider de ce qu'elle peut faire.", "{app} chce połączyć się z tą instancją obop. Zaloguj się kontem obop, aby zdecydować, na co aplikacja może sobie pozwolić.", "{app} haluaa yhdistää tähän obop-instanssiin. Kirjaudu obop-tililläsi päättääksesi, mitä se saa tehdä.", "{app} vill ansluta till den här obop-instansen. Logga in med ditt obop-konto för att bestämma vad den får göra.", "{app} quiere conectarse a esta instancia de obop. Inicie sesión con su cuenta de obop para decidir qué puede hacer."]),
@@ -428,6 +436,10 @@ pub const CATALOGUE: &[(&str, [&str; 7])] = &[
     ("consent.f1", ["What the application does is recorded as an action of your agent, under your name.", "Was die Anwendung tut, wird als Aktion Ihres Agenten unter Ihrem Namen aufgezeichnet.", "Ce que fait l'application est enregistré comme une action de votre agent, sous votre nom.", "To, co robi aplikacja, jest zapisywane jako działanie Twojego agenta pod Twoim nazwiskiem.", "Sovelluksen toimet tallennetaan agenttisi toimina sinun nimissäsi.", "Det programmet gör registreras som en åtgärd av din agent, under ditt namn.", "Lo que hace la aplicación se registra como una acción de su agente, a su nombre."]),
     ("consent.f2", ["Steps that need approval still wait for a person to approve them in obop. The application cannot approve its own proposals.", "Schritte, die eine Freigabe brauchen, warten weiterhin darauf, dass eine Person sie in obop freigibt. Die Anwendung kann ihre eigenen Vorschläge nicht freigeben.", "Les étapes qui demandent une approbation attendent toujours qu'une personne les approuve dans obop. L'application ne peut pas approuver ses propres propositions.", "Kroki wymagające zatwierdzenia nadal czekają, aż człowiek zatwierdzi je w obop. Aplikacja nie może zatwierdzać własnych propozycji.", "Hyväksyntää vaativat vaiheet odottavat edelleen, että ihminen hyväksyy ne obopissa. Sovellus ei voi hyväksyä omia ehdotuksiaan.", "Steg som kräver godkännande väntar fortfarande på att en person godkänner dem i obop. Programmet kan inte godkänna sina egna förslag.", "Los pasos que requieren aprobación siguen esperando a que una persona los apruebe en obop. La aplicación no puede aprobar sus propias propuestas."]),
     ("consent.f3", ["You can end this at any time under Customize, Security, Connected apps.", "Sie können dies jederzeit unter Anpassen, Sicherheit, Verbundene Apps beenden.", "Vous pouvez y mettre fin à tout moment sous Personnaliser, Sécurité, Applications connectées.", "Możesz to zakończyć w dowolnej chwili w Dostosuj, Bezpieczeństwo, Połączone aplikacje.", "Voit lopettaa tämän milloin tahansa kohdassa Mukauta, Turvallisuus, Yhdistetyt sovellukset.", "Du kan avsluta detta när som helst under Anpassa, Säkerhet, Anslutna appar.", "Puede terminarlo en cualquier momento en Personalizar, Seguridad, Aplicaciones conectadas."]),
+    ("consent.who_body_mobile", ["{app} is a mobile app that registered itself with this instance. obop cannot verify who made it. After you answer, your phone hands the result to the app that owns {host}. Only continue if you started this sign-in yourself, on your own phone.", "{app} ist eine mobile App, die sich selbst bei dieser Instanz registriert hat. obop kann nicht prüfen, wer sie erstellt hat. Nach Ihrer Antwort übergibt Ihr Telefon das Ergebnis an die App, der {host} gehört. Fahren Sie nur fort, wenn Sie diese Anmeldung selbst auf Ihrem eigenen Telefon gestartet haben.", "{app} est une application mobile qui s'est enregistrée elle-même auprès de cette instance. obop ne peut pas vérifier qui l'a créée. Après votre réponse, votre téléphone transmet le résultat à l'application qui détient {host}. Ne continuez que si vous avez lancé cette connexion vous-même, sur votre propre téléphone.", "{app} to aplikacja mobilna, która sama zarejestrowała się w tej instancji. obop nie może sprawdzić, kto ją stworzył. Po Twojej odpowiedzi telefon przekaże wynik aplikacji, do której należy {host}. Kontynuuj tylko wtedy, gdy sam rozpocząłeś to logowanie na własnym telefonie.", "{app} on mobiilisovellus, joka on rekisteröitynyt itse tähän instanssiin. obop ei voi tarkistaa, kuka sen on tehnyt. Vastauksesi jälkeen puhelimesi antaa tuloksen sovellukselle, joka omistaa osoitteen {host}. Jatka vain, jos aloitit tämän kirjautumisen itse omalla puhelimellasi.", "{app} är en mobilapp som har registrerat sig själv hos den här instansen. obop kan inte kontrollera vem som har gjort den. Efter ditt svar lämnar telefonen över resultatet till appen som äger {host}. Fortsätt bara om du själv startade den här inloggningen, på din egen telefon.", "{app} es una aplicación móvil que se registró por sí misma en esta instancia. obop no puede comprobar quién la creó. Tras su respuesta, su teléfono entregará el resultado a la aplicación que posee {host}. Continúe solo si usted mismo inició este acceso, en su propio teléfono."]),
+    ("consent.f1_mobile", ["What the app does is recorded as done by you, from this device.", "Was die App tut, wird als von Ihnen ausgeführt aufgezeichnet, von diesem Gerät aus.", "Ce que fait l'application est enregistré comme fait par vous, depuis cet appareil.", "To, co robi aplikacja, jest zapisywane jako wykonane przez Ciebie, z tego urządzenia.", "Sovelluksen toimet tallennetaan sinun tekeminäsi, tältä laitteelta.", "Det appen gör registreras som gjort av dig, från den här enheten.", "Lo que hace la aplicación se registra como hecho por usted, desde este dispositivo."]),
+    ("consent.f2_mobile", ["The app can never do more than the groups you tick, and never manages your password, second factor, passkeys or other apps. It is never given an administrative group.", "Die App kann nie mehr, als die angekreuzten Gruppen erlauben, und verwaltet nie Ihr Passwort, Ihren zweiten Faktor, Ihre Passkeys oder andere Apps. Sie erhält nie eine administrative Gruppe.", "L'application ne peut jamais faire plus que les groupes cochés, et ne gère jamais votre mot de passe, votre second facteur, vos clés d'accès ou d'autres applications. Elle ne reçoit jamais de groupe d'administration.", "Aplikacja nigdy nie zrobi więcej, niż pozwalają zaznaczone grupy, i nigdy nie zarządza Twoim hasłem, drugim składnikiem, kluczami dostępu ani innymi aplikacjami. Nigdy nie otrzymuje grupy administracyjnej.", "Sovellus ei voi koskaan tehdä enempää kuin valitsemasi ryhmät sallivat, eikä se hallitse salasanaasi, toista tunnistautumisvaihetta, pääsyavaimiasi tai muita sovelluksia. Sille ei koskaan anneta hallinnollista ryhmää.", "Appen kan aldrig göra mer än de grupper du kryssar i tillåter och hanterar aldrig ditt lösenord, din andra faktor, dina nycklar (passkeys) eller andra appar. Den får aldrig en administrativ grupp.", "La aplicación nunca puede hacer más de lo que permiten los grupos marcados, y nunca gestiona su contraseña, su segundo factor, sus claves de acceso ni otras aplicaciones. Nunca recibe un grupo administrativo."]),
+    ("consent.f3_mobile", ["You can end this at any time under Customize, Security, Devices.", "Sie können dies jederzeit unter Anpassen, Sicherheit, Geräte beenden.", "Vous pouvez y mettre fin à tout moment sous Personnaliser, Sécurité, Appareils.", "Możesz to zakończyć w dowolnej chwili w Dostosuj, Bezpieczeństwo, Urządzenia.", "Voit lopettaa tämän milloin tahansa kohdassa Mukauta, Turvallisuus, Laitteet.", "Du kan avsluta detta när som helst under Anpassa, Säkerhet, Enheter.", "Puede terminarlo en cualquier momento en Personalizar, Seguridad, Dispositivos."]),
     ("consent.allow", ["Allow", "Erlauben", "Autoriser", "Zezwól", "Salli", "Tillåt", "Permitir"]),
     ("consent.deny", ["Deny", "Ablehnen", "Refuser", "Odmów", "Kiellä", "Neka", "Denegar"]),
 ];
@@ -472,6 +484,7 @@ mod tests {
             redirect_origin: "https://a.test".into(),
             redirect_host: "a.test".into(),
             user: Some("ada".into()),
+            class: crate::client::Class::Mcp,
             groups: vec!["base.user".into(), "x\"><b>".into()],
             preselected: vec![],
         };
@@ -496,6 +509,7 @@ mod tests {
             redirect_origin: "https://a.test".into(),
             redirect_host: "a.test".into(),
             user: None,
+            class: crate::client::Class::Mcp,
             groups: vec![],
             preselected: vec![],
         };

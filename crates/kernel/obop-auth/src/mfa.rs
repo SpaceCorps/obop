@@ -7,7 +7,7 @@ use crate::{
     Auth, Change, Epoch, bump_epoch, epoch_of, hex, now_system, random_bytes, str_list, token_hash,
 };
 use crate::{seal, totp};
-use obop_commands::{ADMIN_GROUP, LoginOutcome, MfaApi, MfaError, Principal, PrincipalKind};
+use obop_commands::{ADMIN_GROUP, LoginOutcome, MfaApi, MfaError, Principal};
 use obop_keys::KeyRing;
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
@@ -132,8 +132,9 @@ fn recovery_hash(user: &str, code: &str) -> String {
 }
 
 fn person(p: &Principal) -> Result<&str, MfaError> {
-    // Agent tokens are not people: they cannot enrol, disable or reset anything.
-    if p.kind == PrincipalKind::User {
+    // Agent tokens are not people: they cannot enrol, disable or reset anything. Nor can the
+    // narrowed token of a mobile app.
+    if p.is_person() {
         Ok(&p.id)
     } else {
         Err(MfaError::NotFound)

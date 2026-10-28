@@ -4,7 +4,7 @@
 
 use crate::{Auth, Change, bump_epoch, hex, random_bytes, str_list, token_hash};
 use obop_commands::audit::rfc3339;
-use obop_commands::{ADMIN_GROUP, MfaError, Principal, PrincipalKind};
+use obop_commands::{ADMIN_GROUP, MfaError, Principal};
 use obop_storage::Fields;
 use serde_json::{Value as J, json};
 
@@ -12,8 +12,9 @@ use serde_json::{Value as J, json};
 pub const MIN_PASSWORD_CHARS: usize = 12;
 
 fn person(p: &Principal) -> Result<&str, MfaError> {
-    // Agent tokens are not people: they have no password, sessions or accounts to manage.
-    if p.kind == PrincipalKind::User {
+    // Agent tokens are not people: they have no password, sessions or accounts to manage. Nor is
+    // the narrowed token of a mobile app.
+    if p.is_person() {
         Ok(&p.id)
     } else {
         Err(MfaError::NotFound)
@@ -87,6 +88,14 @@ impl Auth {
         ch: &Change,
     ) -> Result<usize, MfaError> {
         let mut n = 0;
+        // The credential that changed was what let the person sign in on a phone too: a device is
+        // a sign-in like a session, and ends with them (the app signs in again through the system
+        // browser, with the new credential). First, so that a step the store refuses leaves the
+        // sessions as live as the entry of the log says.
+        let mut devices = Vec::new();
+        self.needed(ch, "ending the devices", || {
+            self.end_devices(name, until, &mut devices)
+        })?;
         self.needed(ch, "ending the sessions", || {
             for (id, t) in self.backend.list("auth_token")? {
                 let t = J::Object(t);
@@ -105,7 +114,64 @@ impl Auth {
             }
             Ok(())
         })?;
+        for (_, what) in devices {
+            self.event(
+                name,
+                obop_commands::devices::EVENT_REVOKED,
+                &ch.actor,
+                &format!("{what}: ended by {}", ch.kind),
+            );
+        }
         Ok(n)
+    }
+
+    /// End the devices of `name` that are still in force (and, with `until`, were registered at
+    /// that time or before): the refresh-token family and the access token of each, then the
+    /// record. Every step reads again what is left, so a repeat finishes what a refused store left
+    /// undone. `ended` collects `(id, description)` of the devices this call ended, for the log.
+    pub(crate) fn end_devices(
+        &self,
+        name: &str,
+        until: Option<u64>,
+        ended: &mut Vec<(String, String)>,
+    ) -> Result<(), String> {
+        use obop_commands::devices as dev;
+        let cutoff = until.map(dev::instant);
+        for (id, d) in self.backend.find(dev::MODEL, "user", &J::from(name))? {
+            if !dev::is_active(&d) {
+                continue;
+            }
+            if let Some(c) = &cutoff
+                && d.get("registered_at")
+                    .and_then(J::as_str)
+                    .is_some_and(|r| r > c.as_str())
+            {
+                continue;
+            }
+            let now = self.now();
+            if let Some(gid) = d.get("grant").and_then(J::as_str)
+                && let Some(g) = self.backend.get("oauth_grant", gid)?
+            {
+                if g.get("revoked").and_then(J::as_bool) != Some(true) {
+                    let mut p = Fields::new();
+                    p.insert("revoked".into(), J::Bool(true));
+                    p.insert("revoked_at".into(), J::from(now));
+                    self.backend.update("oauth_grant", gid, &p)?;
+                }
+                if let Some(a) = g.get("access_id").and_then(J::as_str) {
+                    let mut p = Fields::new();
+                    p.insert("revoked".into(), J::Bool(true));
+                    self.backend.update("auth_token", a, &p)?;
+                }
+                for (rid, _) in self.backend.find("oauth_refresh", "grant", &J::from(gid))? {
+                    self.backend.delete("oauth_refresh", &rid)?;
+                }
+            }
+            self.backend
+                .update(dev::MODEL, &id, &dev::revoked_patch(now))?;
+            ended.push((id.clone(), dev::describe(&d, &id)));
+        }
+        Ok(())
     }
 
     /// Write down, before the change is made, that its sessions are owed a revocation (`op`

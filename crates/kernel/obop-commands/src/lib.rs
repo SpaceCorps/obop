@@ -87,6 +87,14 @@ impl Principal {
         }
     }
 
+    /// A person at the keyboard: a user principal that is not narrowed. The access token of a
+    /// mobile app is also a user principal (it is the person's own client), but its scopes are
+    /// narrowed to the groups the person handed over, and it must never manage the account
+    /// itself: no password, no second factor, no passkey, no agent token, no approval.
+    pub fn is_person(&self) -> bool {
+        self.kind == PrincipalKind::User && self.scopes.is_none()
+    }
+
     /// Effective permission: the group is held (`platform.admin` holds every group, so modules
     /// installed later need no re-granting) and, if scoped, the scope allows it. An agent's scopes
     /// always list concrete groups, so an admin's agent still gets only what it was scoped to.
@@ -944,7 +952,7 @@ impl Dispatcher {
         plan_id: &str,
     ) -> Result<Response, CallError> {
         self.sync();
-        if approver.kind != PrincipalKind::User {
+        if !approver.is_person() {
             return Err(CallError::Forbidden("approve".into()));
         }
         let _txn = self.txn_guard()?;
@@ -1315,6 +1323,23 @@ pub trait OAuthTokens: Send + Sync {
         audience: &str,
         grant: &str,
     ) -> Result<(String, String), String>;
+    /// As `issue_oauth_access`, for the access token of a mobile app (the D64 amendment): the
+    /// token resolves to the person themselves, with the groups of `scopes` and no more, not to an
+    /// agent, and it works only while the `device` record `device` is in force. Scopes must be
+    /// groups the owner holds.
+    #[allow(clippy::too_many_arguments)]
+    fn issue_mobile_access(
+        &self,
+        _owner: &str,
+        _scopes: &[String],
+        _label: &str,
+        _ttl_secs: u64,
+        _audience: &str,
+        _grant: &str,
+        _device: &str,
+    ) -> Result<(String, String), String> {
+        Err("this identity provider issues no tokens for mobile apps".into())
+    }
     /// Revoke a token by the id `issue_oauth_access` returned.
     fn revoke_token_id(&self, id: &str) -> bool;
     /// As `revoke_token_id`, but a call the store refused is an error ("try again"), not `false`
@@ -1570,6 +1595,7 @@ pub mod aggregate;
 pub mod blobs;
 pub mod collate;
 pub mod csv;
+pub mod devices;
 mod engine;
 pub mod errors;
 mod guards;

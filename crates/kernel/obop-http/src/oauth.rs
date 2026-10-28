@@ -11,7 +11,6 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
-use obop_commands::PrincipalKind;
 use obop_oauth::flow::AuthorizeParams;
 use obop_oauth::page::{self, Rendered};
 use obop_oauth::{AuthzError, DecideOut, FlowCtx, FlowError, Form, LoginOut, OAuthError};
@@ -618,7 +617,7 @@ pub(crate) async fn decision(State(s): Shared, parts: Parts, body: Bytes) -> Res
 /// A signed-in person (not an agent, not a session limited to enrolment).
 fn person(s: &HttpState, h: &HeaderMap) -> Result<obop_commands::Principal, Box<Response>> {
     match s.auth(h) {
-        Ok((p, _)) if p.kind == PrincipalKind::User => Ok(p),
+        Ok((p, _)) if p.is_person() => Ok(p),
         Ok(_) => Err(Box::new(StatusCode::NOT_FOUND.into_response())),
         Err(r) => Err(Box::new(r.into_response())),
     }

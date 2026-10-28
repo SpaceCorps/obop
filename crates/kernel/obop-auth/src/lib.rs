@@ -414,12 +414,28 @@ impl Auth {
         }
         let owner = t["owner"].as_str()?;
         let mut p = self.user_principal(owner)?;
-        if t["kind"].as_str() == Some("agent") {
-            p.id = format!("{owner}/agent");
-            p.kind = PrincipalKind::Agent;
-            p.scopes = Some(str_list(&t["scopes"]).into_iter().collect());
-        } else {
-            p.mfa_limited = t["limited"].as_bool() == Some(true);
+        match t["kind"].as_str() {
+            Some("agent") => {
+                p.id = format!("{owner}/agent");
+                p.kind = PrincipalKind::Agent;
+                p.scopes = Some(str_list(&t["scopes"]).into_iter().collect());
+            }
+            // The access token of a mobile app: the person themselves, narrowed to the groups
+            // they handed over (never more than they hold today), for as long as the device it
+            // was issued to is in force. The device is read at every use: one lookup by key, and
+            // a lookup the store refuses is no principal (fail closed, D74).
+            Some("mobile") => {
+                let device = t["device"].as_str()?;
+                let rec = self
+                    .backend
+                    .get(obop_commands::devices::MODEL, device)
+                    .ok()??;
+                if !obop_commands::devices::is_active(&rec) {
+                    return None;
+                }
+                p.scopes = Some(str_list(&t["scopes"]).into_iter().collect());
+            }
+            _ => p.mfa_limited = t["limited"].as_bool() == Some(true),
         }
         Some((p, t.get("audience").and_then(J::as_str).map(String::from)))
     }
@@ -496,7 +512,7 @@ impl Authenticator for Auth {
         scopes: &[String],
         label: &str,
     ) -> Result<String, String> {
-        if owner.kind != PrincipalKind::User {
+        if !owner.is_person() {
             return Err("only a human user can issue agent tokens".into());
         }
         if scopes.is_empty() {
@@ -511,6 +527,8 @@ impl Authenticator for Auth {
 
 #[cfg(test)]
 mod admin_tests;
+#[cfg(test)]
+mod device_tests;
 #[cfg(test)]
 mod epoch_tests;
 #[cfg(test)]
