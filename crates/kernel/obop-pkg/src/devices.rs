@@ -176,7 +176,7 @@ fn update_guard(store: Store) -> Guard {
             Some(Value::Text(t)) if dev::name_of(t).is_some() => {}
             _ => {
                 return Err(
-                    "device.name must be 1 to 80 characters without control characters or characters that hide text"
+                    "device.name must have 1 to 80 characters that can be seen (characters that hide or reorder text are removed first)"
                         .into(),
                 );
             }

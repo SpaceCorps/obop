@@ -98,16 +98,18 @@ fn check_resource(form: &Form, expected: &str, why: &'static str) -> Result<(), 
 }
 
 /// What a mobile app says about the device in the token request (`device_name`,
-/// `device_platform`, `device_app_version`), checked. An empty value is no value; anything else
-/// that does not pass is refused, before the code is spent.
+/// `device_platform`, `device_app_version`), checked. An empty value is no value. What hides or
+/// reorders text is taken out of a value (`dev::strip_hidden`: a phone named with an emoji family
+/// or in Persian still signs in), and one that has nothing visible left, or does not fit the
+/// rules of its field, is refused, before the code is spent.
 fn device_metadata(form: &Form) -> Result<dev::Metadata, OAuthError> {
     let bad = |what: &str| OAuthError::new(400, "invalid_request", what);
-    let given = |k: &str| form.get(k).map(str::trim).filter(|v| !v.is_empty());
+    let given = |k: &str| form.get(k).filter(|v| !v.trim().is_empty());
     Ok(dev::Metadata {
         name: given("device_name")
             .map(|v| {
                 dev::name_of(v).ok_or_else(|| {
-                    bad("device_name must be 1 to 80 characters without control characters")
+                    bad("device_name must have 1 to 80 characters that can be seen (characters that hide or reorder text are removed first)")
                 })
             })
             .transpose()?,
@@ -125,8 +127,7 @@ fn device_metadata(form: &Form) -> Result<dev::Metadata, OAuthError> {
 /// `device_app_version` of a token request, checked.
 fn version_param(form: &Form) -> Result<Option<String>, OAuthError> {
     form.get("device_app_version")
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
+        .filter(|v| !v.trim().is_empty())
         .map(|v| {
             dev::version_of(v).ok_or_else(|| {
                 OAuthError::new(

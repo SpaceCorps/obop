@@ -169,6 +169,9 @@ pub fn form_of(uri: &str) -> RedirectForm {
 ///   `org.obop.mileage:/oauth` (no authority, no query, no fragment: section 7.1);
 /// - `http` to `127.0.0.1` or `[::1]` with any port (section 7.3), never `localhost`.
 ///
+/// The loopback form also has to pass [`validate`] (length, no control characters, spaces,
+/// wildcards, backslashes or quotes, no fragment, no user information).
+///
 /// Everything else is refused, and above all `https`: an `https` redirect (a universal link or an
 /// app link, section 7.2) is only the app's own when the web site proves it (a digital asset links
 /// file, an apple-app-site-association file), which this server does not check, so a web address
@@ -176,7 +179,13 @@ pub fn form_of(uri: &str) -> RedirectForm {
 /// `javascript:`), `http` to any other host, wildcards, user information, a fragment.
 pub fn validate_mobile(uri: &str) -> Result<(), &'static str> {
     match form_of(uri) {
-        RedirectForm::PrivateUse | RedirectForm::Loopback => Ok(()),
+        // Its own strict shape (`private_use`) is the whole check.
+        RedirectForm::PrivateUse => Ok(()),
+        // The address is the one of a program on this computer; the rest of the URI gets the
+        // checks every redirect gets (length, control characters, spaces, wildcards, quotes, a
+        // fragment, user information), or a fragment would swallow the code and a line break
+        // would leave the redirect without a Location.
+        RedirectForm::Loopback => validate(uri),
         RedirectForm::Web => match parts(uri) {
             Some(("https", _, _, _)) => Err(
                 "a mobile app may not use an https redirect (it cannot be shown to belong to the app); use a private-use scheme such as org.example.app:/oauth, or http on 127.0.0.1 or [::1]",

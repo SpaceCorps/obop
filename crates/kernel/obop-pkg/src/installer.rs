@@ -439,6 +439,24 @@ impl Installer {
     }
 
     fn register(&self, m: &Manifest, module: &Module) -> Result<(), String> {
+        // The model `device` is the built-in model of the devices of mobile apps (the D64
+        // amendment), and a package's records of that name would live in the same table. So no
+        // package module is registered with one, by any route: install, upgrade, rollback, undo,
+        // the sync with another process and the load at start all come through here. (The
+        // install gate refuses the name for a new install; this also catches a package stored
+        // before the name was taken, and one that an older process stored.) Nothing of the
+        // package is touched, and the message says what to do.
+        if module.id != "platform"
+            && module
+                .models
+                .iter()
+                .any(|x| x.name == obop_commands::devices::MODEL)
+        {
+            return Err(
+                "it declares a model named `device`, which this version of obop keeps for the devices of mobile apps (a built-in model of Customize), so it is not registered. Its records are untouched. Rename the model in a new version of the package, or export its records and uninstall it"
+                    .to_string(),
+            );
+        }
         let d = self.d()?;
         // Registers the generated commands and, from the transitions declared in the registry
         // metadata, the guards that govern state fields (D48).
@@ -1447,20 +1465,8 @@ impl Installer {
                 .ok_or_else(|| "no manifest".to_string())
                 .and_then(|t| Self::with_bundled_labels(t, source))
                 .and_then(|m| {
-                    m.to_module_installed().and_then(|module| {
-                        // The model `device` is the built-in model of the devices of mobile apps
-                        // (D64 amendment). A package that was installed before it existed and has
-                        // a model of that name is not loaded: its records live in the same table,
-                        // and they must not be read, changed or ended as devices. Nothing of the
-                        // package is touched; the message says what to do.
-                        if module.models.iter().any(|x| x.name == "device") {
-                            return Err(
-                                "it declares a model named `device`, which this version of obop keeps for the devices of mobile apps (a built-in model of Customize). The package was not loaded and its records are untouched. Rename the model in a new version of the package, or export its records and uninstall it"
-                                    .to_string(),
-                            );
-                        }
-                        self.register(&m, &module)
-                    })
+                    m.to_module_installed()
+                        .and_then(|module| self.register(&m, &module))
                 });
             if let Err(e) = r {
                 failed.push((id, e));
@@ -3170,6 +3176,109 @@ write_group = "gadget.manager"
         assert!(!d2.has_model("device"), "no command of it exists");
         // The package and its rows are still there.
         assert!(store.backend().get(TABLE, "device").unwrap().is_some());
+    }
+
+    fn device_package(version: &str) -> String {
+        format!(
+            r#"
+[module]
+id = "device"
+version = "{version}"
+name = "Gadget"
+description = "Gadgets"
+requires_core = "^0.2"
+
+[[model]]
+name = "device"
+description = "A gadget"
+read_group = "gadget.user"
+write_group = "gadget.manager"
+
+  [[model.field]]
+  name = "label"
+  description = "What it is called"
+  class = "none"
+"#
+        )
+    }
+
+    /// The stored record of a package called `device`, as the installer writes it (with the
+    /// earlier version a rollback goes back to, when given).
+    fn stored_device_package(version: &str, previous: Option<&str>) -> Fields {
+        let mut f: Fields = [
+            ("manifest".to_string(), J::from(device_package(version))),
+            ("version".to_string(), J::from(version)),
+            ("source".to_string(), J::from("upload")),
+            ("installed_by".to_string(), J::from("root")),
+            ("installed_at".to_string(), J::from(1_700_000_000_u64)),
+        ]
+        .into_iter()
+        .collect();
+        if let Some(p) = previous {
+            f.insert("previous_manifest".into(), J::from(device_package(p)));
+            f.insert("previous_version".into(), J::from(p));
+            f.insert("previous_source".into(), J::from("upload"));
+        }
+        f
+    }
+
+    /// The refusal is in the one place every route registers a package: a rollback to a version
+    /// that has a model called `device`, and another process that stored such a package, do not
+    /// give the package commands over the table the devices of people are in (a fault of
+    /// `load_installed` alone, found by the second review of the mobile sign-in).
+    #[test]
+    fn a_rollback_and_a_sync_do_not_register_a_package_with_a_model_called_device() {
+        // Rollback: version 0.2.0 is stored, 0.1.0 is the earlier one, both have the model.
+        let store = Store::new();
+        store
+            .backend()
+            .insert(
+                TABLE,
+                "device",
+                &stored_device_package("0.2.0", Some("0.1.0")),
+            )
+            .unwrap();
+        let (d, inst) = setup(&store);
+        assert_eq!(inst.load_installed().len(), 1, "not registered at start");
+        assert!(!d.has_model("device"));
+        let e = inst.rollback("device", "root").unwrap_err();
+        assert!(
+            e.contains("`device`") && e.contains("not registered"),
+            "{e}"
+        );
+        assert!(!d.has_model("device"), "nothing of it was registered");
+        let after = store.backend().get(TABLE, "device").unwrap().unwrap();
+        assert_eq!(after["version"], "0.2.0", "and the record was not changed");
+        assert!(after.contains_key("previous_manifest"));
+
+        // Sync: another process stores the package after this one started.
+        let store = Store::new();
+        let (d, inst) = setup(&store);
+        assert!(inst.load_installed().is_empty());
+        store
+            .backend()
+            .insert(TABLE, "device", &stored_device_package("0.1.0", None))
+            .unwrap();
+        store
+            .backend()
+            .counter_add("modules.version", 0, false)
+            .unwrap();
+        inst.last_check_ms
+            .store(0, std::sync::atomic::Ordering::Release);
+        inst.sync_modules();
+        assert!(!d.has_model("device"), "the sync did not register it");
+        // And not when it is upgraded elsewhere either (the fingerprint moves).
+        let mut newer = stored_device_package("0.2.0", Some("0.1.0"));
+        newer.insert("installed_at".into(), J::from(1_700_000_100_u64));
+        store.backend().update(TABLE, "device", &newer).unwrap();
+        store
+            .backend()
+            .counter_add("modules.version", 0, false)
+            .unwrap();
+        inst.last_check_ms
+            .store(0, std::sync::atomic::Ordering::Release);
+        inst.sync_modules();
+        assert!(!d.has_model("device"));
     }
 
     /// A package that declares a name the platform reserves later (D75): installing it is

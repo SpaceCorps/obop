@@ -423,11 +423,12 @@ impl OAuth {
             600_000,
         )
         .map_err(|e| FlowError::Busy(e.retry_after.unwrap_or(60)))?;
-        // A mobile sign-in is bound to the credential epoch of the account read before the
-        // credential is looked at (the order the sessions of K10 use): a change that lands after
-        // this read, a new password, a second factor or passkey removed, a reset, a disable, is
-        // seen by the decision and by the code exchange, and what was begun before it cannot
-        // finish after it. A refused read ends the step: it is a 503, never "unchanged".
+        // A mobile sign-in by password is bound to the credential epoch of the account read
+        // before the credential is looked at (the order the sessions of K10 use): a change that
+        // lands after this read, a new password, a second factor or passkey removed, a reset, a
+        // disable, is seen by the decision and by the code exchange, and what was begun before it
+        // cannot finish after it. (A sign-in by passkey alone has no such read; see `after_login`.)
+        // A refused read ends the step: it is a 503, never "unchanged".
         if Class::of_record(&rec).is_mobile() {
             let name = username.trim().to_lowercase();
             let epoch = self
@@ -586,9 +587,17 @@ impl OAuth {
                     return Ok(LoginOut::Failed("err.login"));
                 };
                 if Class::of_record(rec).is_mobile() {
-                    // The epoch read before the credential was looked at, for the same person;
-                    // for a sign-in by passkey alone the person was not known before, so it is
-                    // read now (the exchange of the code closes the rest, atomically).
+                    // The epoch read before the credential was looked at, when it is for the
+                    // same person: a sign-in by password, with or without a second factor. A
+                    // sign-in by passkey alone has no earlier read, because the person is known
+                    // only once the assertion has been checked, so the epoch is read here, after
+                    // it. A credential change (a passkey removed, a reset, a new password) that
+                    // commits between the check of the assertion and this read, the few
+                    // milliseconds of resolving and revoking one session, is therefore not seen
+                    // by the later compares, which hold this baseline: that sign-in can finish
+                    // for a credential that had just been removed, and ends with the next change
+                    // of credentials or by revoking the device (docs/ISSUES.md L19). The exchange
+                    // of the code closes every other window, atomically.
                     let epoch = if rec["pre_user"].as_str() == Some(p.id.as_str()) {
                         rec["pre_epoch"].as_str().map(String::from)
                     } else {

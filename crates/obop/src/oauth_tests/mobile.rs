@@ -443,9 +443,14 @@ async fn a_mobile_app_signs_in_on_the_browser_pages_and_uses_the_api_but_not_mcp
             "push token",
         ),
         (json!({"id": id, "name": ""}), "empty name"),
-        (json!({"id": id, "name": "a\u{0}b"}), "control character"),
-        (json!({"id": id, "name": "a\u{202e}b"}), "text direction"),
-        (json!({"id": id, "name": "a\u{200b}b"}), "zero width"),
+        // Nothing visible is left once what hides text is taken out.
+        (json!({"id": id, "name": "a".repeat(81)}), "too long"),
+        (json!({"id": id, "name": "\u{0}"}), "control character"),
+        (json!({"id": id, "name": "\u{202e}"}), "text direction"),
+        (
+            json!({"id": id, "name": "\u{200b}\u{2800}"}),
+            "zero width and blank",
+        ),
         (json!({"id": id, "name": "x".repeat(81)}), "long name"),
         (json!({"id": id}), "no name"),
         (
@@ -456,6 +461,19 @@ async fn a_mobile_app_signs_in_on_the_browser_pages_and_uses_the_api_but_not_mcp
         let (s, v) = command(r, &bearer, "device.update", body).await;
         assert_eq!(s, 400, "{why}: {v}");
     }
+    // What hides text is taken out of a name, and the joiners of an emoji family stay.
+    let (s, v) = command(
+        r,
+        &bearer,
+        "device.update",
+        json!({"id": id, "name": "Fam\u{200b}ily \u{202e}\u{1F468}\u{200d}\u{1F469}\u{200d}\u{1F467}"}),
+    )
+    .await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(
+        v["value"]["name"],
+        "Family \u{1F468}\u{200d}\u{1F469}\u{200d}\u{1F467}"
+    );
     let (s, v) = command(
         r,
         &bearer,
@@ -472,7 +490,7 @@ async fn a_mobile_app_signs_in_on_the_browser_pages_and_uses_the_api_but_not_mcp
     let kinds = |k: &str| log.iter().filter(|(_, f)| f["kind"] == k).count();
     assert_eq!(
         (kinds("device_registered"), kinds("device_renamed")),
-        (1, 1)
+        (1, 2)
     );
     assert!(
         log.iter().any(|(_, f)| f["kind"] == "device_registered"

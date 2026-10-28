@@ -186,6 +186,18 @@ fn a_mobile_client_registers_only_redirects_that_follow_rfc_8252() {
         "-org.obop:/oauth",
         "org.obop-:/oauth",
         "1org.obop:/oauth",
+        // A loopback address with a tail no redirect may have (the second review: the shared
+        // checks of every redirect also hold for this form).
+        "http://127.0.0.1/cb#frag",
+        "http://[::1]:8080/cb#x",
+        "http://127.0.0.1/cb with space",
+        "http://127.0.0.1/cb\r\nX: y",
+        "http://127.0.0.1/cb\tx",
+        "http://127.0.0.1/cb*",
+        "http://127.0.0.1/\"quoted\"",
+        "http://127.0.0.1/<script>",
+        "http://[::1]/cb\\x",
+        "http://user@127.0.0.1/cb",
         // What no redirect may be.
         "https://*.example.test/cb",
         "https://user@example.test/cb",
@@ -201,6 +213,33 @@ fn a_mobile_client_registers_only_redirects_that_follow_rfc_8252() {
             "{bad:?} must be refused"
         );
     }
+    // Nor a loopback address with a tail of 3000 characters (the limit of every redirect is 2048).
+    let long = format!("http://127.0.0.1/{}", "a".repeat(3000));
+    assert_eq!(
+        r.mobile_with(&[&long]).unwrap_err().error,
+        "invalid_redirect_uri"
+    );
+    // And the same is true of one that is presented: it is not the registered one, and it is not
+    // accepted as the same address with another port either.
+    let c = r.mobile_with(&[LOOP4]).unwrap();
+    for bad in [
+        "http://127.0.0.1:5000/callback#frag",
+        "http://127.0.0.1:5000/callback ",
+        "http://127.0.0.1:5000/callback\r\n",
+    ] {
+        assert_eq!(
+            r.o.validate_authorize(BASE, &r.mobile_params(&c, bad))
+                .unwrap_err(),
+            AuthzError::Page {
+                key: "err.redirect"
+            },
+            "{bad:?}"
+        );
+    }
+    assert!(
+        r.o.validate_authorize(BASE, &r.mobile_params(&c, "http://127.0.0.1:5000/callback"))
+            .is_ok()
+    );
     // A private-use scheme is no redirect for a client of the default class, which is unchanged:
     // it still takes `localhost`, which a mobile client does not.
     let mcp = |u: &str| {
@@ -552,10 +591,13 @@ fn what_an_app_says_about_its_device_is_checked_before_the_code_is_spent() {
     let c = r.mobile_client();
     let code = r.mobile_code(&c, &["base.user"]);
     for bad in [
-        ("device_name", "bell\u{7}"),
-        ("device_name", "two\nlines"),
-        ("device_name", "evil\u{202e}name"),
+        // Nothing visible is left of these once what hides text is taken out.
+        ("device_name", "\u{7}"),
+        ("device_name", "\u{202e}\u{200d}"),
+        ("device_name", "\u{2800}"),
         ("device_name", "x".repeat(81).as_str()),
+        ("device_platform", "\u{2800}"),
+        ("device_app_version", "\u{200b}"),
         ("device_platform", "and roid"),
         ("device_platform", "9ios"),
         ("device_platform", "android;drop table"),
