@@ -30,7 +30,7 @@ export function Row({ title, subtitle, value, trailing, onPress, hint, testID }:
         paddingVertical: t.space[2],
       }}
     >
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, minWidth: "30%" }}>
         <Text variant="label">{title}</Text>
         {subtitle ? (
           <Text variant="caption" tone="muted">
@@ -38,7 +38,12 @@ export function Row({ title, subtitle, value, trailing, onPress, hint, testID }:
           </Text>
         ) : null}
       </View>
-      {value ? <Text tone="muted">{value}</Text> : null}
+      {/* A long value wraps inside its share of the row; it never squeezes the title to nothing. */}
+      {value ? (
+        <View style={{ flexShrink: 1, maxWidth: "65%" }}>
+          <Text tone="muted">{value}</Text>
+        </View>
+      ) : null}
       {trailing}
     </View>
   );

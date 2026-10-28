@@ -39,6 +39,7 @@ export const Rows: Story = {
       <Row title="12 Oct, 08:14" subtitle="Ended" value="12.4 km" onPress={noop} />
       <Row title="11 Oct, 17:02" subtitle="In review" value="8.1 km" onPress={noop} />
       <Row title="Server" value="https://obop.example" />
+      <Row title="Storage" value="Encrypted on this phone (SQLCipher 4.17.0 community)" />
       <Row title="Pixel 9" subtitle="Android 16, this phone" />
     </PhoneFrames>
   ),
