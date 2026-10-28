@@ -112,9 +112,10 @@ labels. Marketplace listings of packages that are not installed still show the E
 `serverMessage()` maps the stable patterns of docs/MODULES.md 3.5 and the D47/D48/D49 error shapes (`x.y is
 required`, `must be one of: …`, `cannot delete …: still referenced by …`, transition refusals) to translatable
 messages. In English it returns the text as received. Unknown text is shown as received. The message of a
-keyed assertion needs no mapping: the back office sends the language it shows as `Accept-Language` with every
-command and the server words the refusal in it where the package translated it (D52 amendment 2026-10-28,
-docs/MODULES.md section 3.8), so it is shown as received.
+keyed assertion needs no mapping: the back office sends the language it shows with every command, as `?lang=`
+(which outranks the `obop_lang` cookie, a cookie that can differ from the displayed language) and as
+`Accept-Language`, and the server words the refusal in it where the package translated it (D52 amendment
+2026-10-28, docs/MODULES.md section 3.8), so it is shown as received. A pseudo-locale sends `en`.
 
 ### 1.5 Pseudo-locales
 
