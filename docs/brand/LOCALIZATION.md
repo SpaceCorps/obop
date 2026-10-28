@@ -113,7 +113,7 @@ A text field that holds the keys of a select (the status an effect wrote into a 
 select with `shows_option_of` (D52 amendment, docs/MODULES.md section 3.3), and `/api/meta` then carries
 `shows_option_of` and, with a condition, `shows_option_when` on it. The backoffice draws such a value with
 `optionLabel(value, select)`, the lookup above, so the field needs no language data of its own: the stored
-value, filters, sorting, CSV export and the API keep the key, and an edit input shows it. The condition is
+value, filters, sorting, the field's own CSV column and the API keep the key, and an edit input shows it (a record named by such a field is named by the label, also in a ref column). The condition is
 evaluated in the browser (`displayCondition.ts`, `shownOption.ts`), on the part of the expression language the
 install gate allows.
 
