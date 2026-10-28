@@ -590,6 +590,11 @@ mod tests {
             "kernel/obop-commands/src/keyexpr_parity.rs",
             "the parity harness writes the earlier wrong expressions on purpose",
         ),
+        (
+            "kernel/obop-storage/src/unique_tests.rs",
+            "pins the text of the unique index and of its lookup as a second spelling, the earlier \
+             `find` statement as the control of the plan test, and what the catalogue prints",
+        ),
     ];
 
     /// Older code that still takes a field out of a document itself, by path (relative to
