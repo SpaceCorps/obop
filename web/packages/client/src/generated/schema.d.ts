@@ -3487,7 +3487,7 @@ export interface components {
              * @example 2026-03-29T01:30:00.000000Z
              */
             confirmed_at?: string;
-            /** @description Why the driver discards the trip; written before discard */
+            /** @description Why the driver discards the trip; written before discard (personal data: agents see it masked) */
             discard_reason?: string;
             /**
              * @description Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client (an exact decimal as a string, never a JSON number: at most 12 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused)
@@ -3508,7 +3508,7 @@ export interface components {
             end_lon?: string;
             /**
              * Format: date-time
-             * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
              * @example 2026-03-29T01:30:00.000000Z
              */
             ended_at?: string;
@@ -3523,11 +3523,11 @@ export interface components {
             /** @description How many points are stored for this trip (computed when read; read-only) */
             readonly point_count?: number;
             /**
-             * @description What the trip was for: business, private or commute
+             * @description What the trip was for: business, private or commute (personal data: agents see it masked)
              * @enum {string}
              */
             purpose?: "business" | "private" | "commute";
-            /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again */
+            /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked) */
             reject_reason?: string;
             /** @description True while the trip is in review, confirmed or rejected: the states a reviewer reads (computed when read; read-only) */
             readonly reviewable?: boolean;
@@ -3545,7 +3545,7 @@ export interface components {
             start_lon?: string;
             /**
              * Format: date-time
-             * @description When the driver pressed Start, by the phone's clock (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+             * @description When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
              * @example 2026-03-29T01:30:00.000000Z
              */
             started_at?: string;
@@ -3554,7 +3554,7 @@ export interface components {
              * @enum {string}
              */
             state?: "recording" | "ended" | "in_review" | "confirmed" | "rejected" | "discarded";
-            /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) */
+            /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) (personal data: agents see it masked) */
             vehicle?: string;
         };
         /** @description An installed module: built in, uploaded or from the marketplace */
@@ -11710,7 +11710,7 @@ export interface operations {
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         confirmed_at?: string;
-                        /** @description Why the driver discards the trip; written before discard */
+                        /** @description Why the driver discards the trip; written before discard (personal data: agents see it masked) */
                         discard_reason?: string;
                         /**
                          * @description Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client (an exact decimal as a string, never a JSON number: at most 12 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused)
@@ -11731,7 +11731,7 @@ export interface operations {
                         end_lon?: string;
                         /**
                          * Format: date-time
-                         * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         ended_at?: string;
@@ -11742,11 +11742,11 @@ export interface operations {
                         /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                         last_seq?: number;
                         /**
-                         * @description What the trip was for: business, private or commute
+                         * @description What the trip was for: business, private or commute (personal data: agents see it masked)
                          * @enum {string}
                          */
                         purpose?: "business" | "private" | "commute";
-                        /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again */
+                        /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked) */
                         reject_reason?: string;
                         /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
                         reviewed_by?: string;
@@ -11762,7 +11762,7 @@ export interface operations {
                         start_lon?: string;
                         /**
                          * Format: date-time
-                         * @description When the driver pressed Start, by the phone's clock (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                         * @description When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                          * @example 2026-03-29T01:30:00.000000Z
                          */
                         started_at: string;
@@ -11771,7 +11771,7 @@ export interface operations {
                          * @enum {string}
                          */
                         state?: "recording" | "ended" | "in_review" | "confirmed" | "rejected" | "discarded";
-                        /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) */
+                        /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) (personal data: agents see it masked) */
                         vehicle?: string;
                     }[];
                 };
@@ -11952,7 +11952,7 @@ export interface operations {
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     confirmed_at?: string;
-                    /** @description Why the driver discards the trip; written before discard */
+                    /** @description Why the driver discards the trip; written before discard (personal data: agents see it masked) */
                     discard_reason?: string;
                     /**
                      * @description Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client (an exact decimal as a string, never a JSON number: at most 12 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused)
@@ -11973,7 +11973,7 @@ export interface operations {
                     end_lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     ended_at?: string;
@@ -11984,11 +11984,11 @@ export interface operations {
                     /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                     last_seq?: number;
                     /**
-                     * @description What the trip was for: business, private or commute
+                     * @description What the trip was for: business, private or commute (personal data: agents see it masked)
                      * @enum {string}
                      */
                     purpose?: "business" | "private" | "commute";
-                    /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again */
+                    /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked) */
                     reject_reason?: string;
                     /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
                     reviewed_by?: string;
@@ -12004,7 +12004,7 @@ export interface operations {
                     start_lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the driver pressed Start, by the phone's clock (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     started_at: string;
@@ -12013,7 +12013,7 @@ export interface operations {
                      * @enum {string}
                      */
                     state?: "recording" | "ended" | "in_review" | "confirmed" | "rejected" | "discarded";
-                    /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) */
+                    /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) (personal data: agents see it masked) */
                     vehicle?: string;
                 };
             };
@@ -12921,7 +12921,7 @@ export interface operations {
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     confirmed_at?: string;
-                    /** @description Why the driver discards the trip; written before discard */
+                    /** @description Why the driver discards the trip; written before discard (personal data: agents see it masked) */
                     discard_reason?: string;
                     /**
                      * @description Distance in metres, computed by the server from the accepted points when the trip ends; never taken from the client (an exact decimal as a string, never a JSON number: at most 12 digits, 2 after the point; answers always carry exactly 2 fractional digits and input with more is refused)
@@ -12942,7 +12942,7 @@ export interface operations {
                     end_lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the driver pressed Stop; taken from the last accepted fix when the app sent none (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     ended_at?: string;
@@ -12954,11 +12954,11 @@ export interface operations {
                     /** @description The sequence number of the last point the device recorded; the driver sets it before ending the trip */
                     last_seq?: number;
                     /**
-                     * @description What the trip was for: business, private or commute
+                     * @description What the trip was for: business, private or commute (personal data: agents see it masked)
                      * @enum {string}
                      */
                     purpose?: "business" | "private" | "commute";
-                    /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again */
+                    /** @description Why the reviewer rejects the trip; written while the trip is in review, before reject; cleared when the driver submits again (personal data: agents see it masked) */
                     reject_reason?: string;
                     /** @description Login of the reviewer who confirmed or rejected the trip, or of the person who approved an agent's proposal to do so (personal data: agents see it masked) */
                     reviewed_by?: string;
@@ -12974,7 +12974,7 @@ export interface operations {
                     start_lon?: string;
                     /**
                      * Format: date-time
-                     * @description When the driver pressed Start, by the phone's clock (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
+                     * @description When the driver pressed Start, by the phone's clock (personal data: agents see it masked) (an instant with microsecond precision: send RFC 3339 with an explicit offset or Z; answers are UTC, always YYYY-MM-DDTHH:MM:SS.ffffffZ; no leap second, years 0001 to 9999)
                      * @example 2026-03-29T01:30:00.000000Z
                      */
                     started_at?: string;
@@ -12983,7 +12983,7 @@ export interface operations {
                      * @enum {string}
                      */
                     state?: "recording" | "ended" | "in_review" | "confirmed" | "rejected" | "discarded";
-                    /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) */
+                    /** @description The vehicle the trip was made with, as the driver names it (a plate or a name) (personal data: agents see it masked) */
                     vehicle?: string;
                 };
             };
