@@ -118,6 +118,24 @@ impl Principal {
     }
 }
 
+/// Who is approving, under the prefix every handler already ignores and `call` strips from what
+/// a client sends: the person's id, whether they hold the instance administrator group, and the
+/// groups they hold (`Actor::of`, the same view of a principal that a generated handler gets).
+/// A module that lets a role count only on top of a base group applies that rule to the approver
+/// as well as to the caller.
+fn stamp_approver(input: &mut Value, approver: &Principal) {
+    if let Value::Map(m) = input {
+        let a = Actor::of(approver);
+        let prefix = format!("{}_approver", query::ACTOR_PREFIX);
+        m.insert(prefix.clone(), Value::text(&approver.id));
+        m.insert(format!("{prefix}_admin"), Value::Bool(a.admin));
+        m.insert(
+            format!("{prefix}_groups"),
+            Value::List(a.groups.iter().map(|g| Value::text(g)).collect()),
+        );
+    }
+}
+
 fn set(items: &[&str]) -> HashSet<String> {
     items.iter().map(|s| s.to_string()).collect()
 }
@@ -631,6 +649,19 @@ impl Dispatcher {
         self.register_inner(module, model, command, handler, false);
     }
 
+    /// Like `register`, for a handler that decides by the roles of the caller: the dispatcher
+    /// stamps the actor into its input (`Actor::from_input` reads it back), the way it does for the
+    /// generated handlers. A client cannot send these keys.
+    pub fn register_with_actor(
+        &self,
+        module: &Module,
+        model: &str,
+        command: &str,
+        handler: Handler,
+    ) {
+        self.register_inner(module, model, command, handler, true);
+    }
+
     /// Like `register`, for the generated handlers, which read the caller from their input.
     pub(crate) fn register_generic(
         &self,
@@ -728,6 +759,38 @@ impl Dispatcher {
                 v.approval |= second.approval;
                 v.pre.extend(second.pre);
                 v.input = second.input.or(seen);
+                Ok(v)
+            }),
+        };
+        let serialize = serialize || guards.get(id).is_some_and(|g| g.serialize);
+        guards.insert(
+            id.to_string(),
+            Arc::new(Guarded {
+                module: module.into(),
+                serialize,
+                guard: combined,
+            }),
+        );
+    }
+
+    /// Like `add_guard`, but the new guard runs first: it sees the input as it came in, and the
+    /// guard already on the command (the generated one) sees what it produced. A module uses this
+    /// for the rule that decides what a caller may know exists: a record they may not see must
+    /// answer as a record that does not exist, which the generated guard would otherwise refuse
+    /// in its own words (it names the state, the referrers, the group).
+    pub fn prepend_guard(&self, module: &str, id: &str, serialize: bool, guard: Guard) {
+        let mut guards = self.guards.write().unwrap();
+        let inner = guards.get(id).cloned();
+        let combined: Guard = match inner {
+            None => guard,
+            Some(second) => Box::new(move |p, input| {
+                let mut v = guard(p, input)?;
+                let seen = v.input.take();
+                let next = (second.guard)(p, seen.as_ref().unwrap_or(input))?;
+                v.requires.extend(next.requires);
+                v.approval |= next.approval;
+                v.pre.extend(next.pre);
+                v.input = next.input.or(seen);
                 Ok(v)
             }),
         };
@@ -979,6 +1042,8 @@ impl Dispatcher {
         // The record may have changed since the proposal, so the guard runs again, and the
         // approver must hold the groups of any transition the call implicitly runs (D48).
         let mut input = plan.input.clone();
+        // The guard sees who is approving, so that it can refuse before the plan is spent.
+        stamp_approver(&mut input, approver);
         let mut pre = Vec::new();
         let guard = self.guards.read().unwrap().get(&plan.id).cloned();
         if let Some(g) = guard {
@@ -996,14 +1061,9 @@ impl Dispatcher {
             .remove(self.shared.get(), plan_id)
             .map_err(CallError::Handler)?;
         // The person who approved is who a handler may name in its log; the plan keeps the agent
-        // that proposed it as the caller. Under the prefix every handler already ignores (and
-        // `call` strips from what a client sends).
-        if let Value::Map(m) = &mut input {
-            m.insert(
-                format!("{}_approver", query::ACTOR_PREFIX),
-                Value::text(&approver.id),
-            );
-        }
+        // that proposed it as the caller. Stamped again after the guard, which may have rewritten
+        // the input.
+        stamp_approver(&mut input, approver);
         let result = self.run(&c, &plan.principal, vault, input, pre);
         // The store refused before the call changed anything: the plan goes back, or the
         // approver's retry (the 503 says to retry) would meet "not found" and the proposal would
@@ -1632,6 +1692,7 @@ pub mod store;
 
 pub use accounts::{AccountsApi, NewUser};
 pub use blobs::{BlobError, BlobService, Served, clean_filename, disposition};
+pub use engine::bulk::has_stored_answer;
 pub use engine::{Actor, ClockFn};
 pub use pay::{FakeView, HookReply, PaymentHooks, PaymentPort, PaymentView, StartPayment, Started};
 pub use public::{

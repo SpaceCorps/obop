@@ -39,4 +39,6 @@ export const EVENT_KINDS: Record<string, ReturnType<typeof msg>> = {
   device_renamed: msg("Device renamed"),
   device_revoked: msg("Device signed out"),
   device_limit: msg("Device sign-in refused: too many devices"),
+  mileage_route_read: msg("Route read"),
+  mileage_discard_stuck: msg("Stuck trip discarded"),
 };

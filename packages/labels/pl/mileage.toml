@@ -1,0 +1,173 @@
+[labels.pl.module]
+name = "Kilometrówka"
+description = "Przejazdy nagrane w aplikacji Mileage, sprawdzane i potwierdzane w panelu administracyjnym. Serwer liczy dystans; liczą się tylko potwierdzone przejazdy."
+summary = "Nagrane przejazdy, sprawdzone na serwerze i potwierdzone przez recenzenta."
+
+[labels.pl.model.mileage_trip]
+name = "Przejazd"
+description = "Przejazd nagrany przez kierowcę: dystans, stan i sprawdzenie"
+
+[labels.pl.model.mileage_trip.field.client_trip_id]
+label = "ID przejazdu z aplikacji"
+description = "Identyfikator utworzony przez aplikację przy starcie (UUIDv7); unikalny dla kierowcy, dzięki niemu aplikacja odnajduje przejazd"
+
+[labels.pl.model.mileage_trip.field.driver]
+label = "Kierowca"
+description = "Login osoby, która nagrała przejazd; serwer wstawia wywołującego"
+
+[labels.pl.model.mileage_trip.field.vehicle]
+label = "Pojazd"
+description = "Pojazd użyty w przejeździe, tak jak nazywa go kierowca (tablica lub nazwa)"
+
+[labels.pl.model.mileage_trip.field.purpose]
+label = "Cel"
+description = "Cel przejazdu: służbowy, prywatny lub dojazd do pracy"
+
+[labels.pl.model.mileage_trip.field.purpose.options]
+business = "Służbowy"
+private = "Prywatny"
+commute = "Dojazd do pracy"
+
+[labels.pl.model.mileage_trip.field.started_at]
+label = "Początek"
+description = "Kiedy kierowca nacisnął Start, według zegara telefonu"
+
+[labels.pl.model.mileage_trip.field.ended_at]
+label = "Koniec"
+description = "Kiedy kierowca nacisnął Stop; gdy aplikacja go nie podała, czas ostatniego przyjętego punktu"
+
+[labels.pl.model.mileage_trip.field.distance_m]
+label = "Dystans (m)"
+description = "Dystans w metrach, liczony przez serwer z przyjętych punktów po zakończeniu; nigdy nie bierze się go od klienta"
+
+[labels.pl.model.mileage_trip.field.expected_points]
+label = "Oczekiwane punkty"
+description = "Ile punktów urządzenie wysłało dla tego przejazdu; kierowca ustawia to przed zakończeniem"
+
+[labels.pl.model.mileage_trip.field.last_seq]
+label = "Ostatni nr kolejny"
+description = "Numer kolejny ostatniego punktu zapisanego przez urządzenie; kierowca ustawia go przed zakończeniem"
+
+[labels.pl.model.mileage_trip.field.point_count]
+label = "Liczba punktów"
+description = "Ile punktów zapisano dla tego przejazdu"
+
+[labels.pl.model.mileage_trip.field.max_seq]
+label = "Największy nr kolejny"
+description = "Najwyższy numer kolejny wśród zapisanych punktów"
+
+[labels.pl.model.mileage_trip.field.integrity]
+label = "Integralność"
+description = "Znaczniki ustawione przy zakończeniu: seq_gap, speed_jump i low_accuracy z liczbą; puste, gdy ślad jest czysty"
+
+[labels.pl.model.mileage_trip.field.start_lat]
+label = "Start (szer.)"
+description = "Szerokość geograficzna pierwszego przyjętego punktu, ustawiana przez serwer"
+
+[labels.pl.model.mileage_trip.field.start_lon]
+label = "Start (dł.)"
+description = "Długość geograficzna pierwszego przyjętego punktu, ustawiana przez serwer"
+
+[labels.pl.model.mileage_trip.field.end_lat]
+label = "Cel (szer.)"
+description = "Szerokość geograficzna ostatniego przyjętego punktu, ustawiana przez serwer; aplikacja może zatrzymać się przed ostatnim przesłaniem, więc koniec nie pochodzi od niej"
+
+[labels.pl.model.mileage_trip.field.end_lon]
+label = "Cel (dł.)"
+description = "Długość geograficzna ostatniego przyjętego punktu, ustawiana przez serwer"
+
+[labels.pl.model.mileage_trip.field.discard_reason]
+label = "Powód anulowania"
+description = "Dlaczego kierowca anuluje przejazd; zapisywany przed anulowaniem"
+
+[labels.pl.model.mileage_trip.field.reject_reason]
+label = "Powód odrzucenia"
+description = "Dlaczego recenzent odrzuca przejazd; zapisywany podczas sprawdzania, czyszczony przy ponownym przesłaniu"
+
+[labels.pl.model.mileage_trip.field.reviewed_by]
+label = "Sprawdził"
+description = "Login recenzenta, który potwierdził lub odrzucił przejazd, albo osoby, która zatwierdziła propozycję agenta"
+
+[labels.pl.model.mileage_trip.field.confirmed_at]
+label = "Potwierdzono"
+description = "Kiedy przejazd potwierdzono, ustawiane przez Potwierdź; miesiąc tej chwili w strefie platformy to miesiąc, w którym przejazd się liczy"
+
+[labels.pl.model.mileage_trip.field.reviewable]
+label = "Do sprawdzenia"
+description = "Prawda, gdy przejazd jest w sprawdzaniu, potwierdzony lub odrzucony: stany, które widzi recenzent"
+
+[labels.pl.model.mileage_trip.field.state]
+label = "Stan"
+description = "Cykl: nagrywanie, zakończony, w sprawdzaniu, potwierdzony, odrzucony lub anulowany; zmienia się tylko przez akcje"
+
+[labels.pl.model.mileage_trip.field.state.options]
+recording = "Nagrywanie"
+ended = "Zakończony"
+in_review = "W sprawdzaniu"
+confirmed = "Potwierdzony"
+rejected = "Odrzucony"
+discarded = "Anulowany"
+
+[labels.pl.model.mileage_trip.action.end]
+label = "Zakończ"
+description = "Zakończ trwający przejazd, gdy dotarły wszystkie punkty: serwer liczy dystans z przyjętych punktów"
+
+[labels.pl.model.mileage_trip.action.submit]
+label = "Prześlij"
+description = "Wyślij zakończony przejazd do sprawdzenia"
+
+[labels.pl.model.mileage_trip.action.confirm]
+label = "Potwierdź"
+description = "Potwierdź przejazd w sprawdzaniu; od teraz się liczy. Recenzent nie może potwierdzić własnego przejazdu"
+
+[labels.pl.model.mileage_trip.action.reject]
+label = "Odrzuć"
+description = "Odrzuć przejazd w sprawdzaniu; najpierw wpisz powód odrzucenia. Recenzent nie może odrzucić własnego przejazdu"
+
+[labels.pl.model.mileage_trip.action.reopen]
+label = "Otwórz ponownie"
+description = "Przywróć odrzucony przejazd do zakończonego, aby kierowca mógł go poprawić i przesłać ponownie"
+
+[labels.pl.model.mileage_trip.action.discard]
+label = "Anuluj"
+description = "Anuluj własny przejazd trwający, zakończony lub odrzucony; najpierw wpisz powód. Anulowany przejazd nigdy się nie liczy"
+
+[labels.pl.model.mileage_trip.action.discard_stuck]
+label = "Anuluj zawieszony"
+description = "Anuluj jako administrator przejazd zawieszony w nagrywaniu lub zakończeniu"
+
+[labels.pl.model.mileage_point]
+name = "Punkt"
+description = "Jedna zapisana pozycja przejazdu; zapisana raz, nigdy nie zmieniana"
+
+[labels.pl.model.mileage_point.field.trip]
+label = "Przejazd"
+description = "Przejazd, do którego należy punkt (jego identyfikator serwera)"
+
+[labels.pl.model.mileage_point.field.seq]
+label = "Nr kolejny"
+description = "Pozycja punktu w przejeździe, liczona przez urządzenie; unikalna w przejeździe"
+
+[labels.pl.model.mileage_point.field.recorded_at]
+label = "Zapisano"
+description = "Kiedy telefon zapisał pozycję"
+
+[labels.pl.model.mileage_point.field.lat]
+label = "Szerokość geogr."
+description = "Szerokość geograficzna w stopniach (WGS84), najwyżej 7 miejsc po przecinku"
+
+[labels.pl.model.mileage_point.field.lon]
+label = "Długość geogr."
+description = "Długość geograficzna w stopniach (WGS84), najwyżej 7 miejsc po przecinku"
+
+[labels.pl.model.mileage_point.field.accuracy_m]
+label = "Dokładność (m)"
+description = "Promień dokładności poziomej w metrach, jeśli telefon go podał"
+
+[labels.pl.model.mileage_point.field.speed_mps]
+label = "Prędkość (m/s)"
+description = "Prędkość względem ziemi w metrach na sekundę, jeśli telefon ją podał"
+
+[labels.pl.model.mileage_point.field.driver]
+label = "Kierowca"
+description = "Login kierowcy przejazdu; serwer ustawia go z przejazdu"

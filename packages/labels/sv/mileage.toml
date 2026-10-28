@@ -1,0 +1,173 @@
+[labels.sv.module]
+name = "Körjournal"
+description = "Resor som registrerats med appen Mileage och granskas och bekräftas i back office. Servern räknar ut sträckan; bara bekräftade resor räknas."
+summary = "Registrerade resor som kontrolleras på servern och bekräftas av en granskare."
+
+[labels.sv.model.mileage_trip]
+name = "Resa"
+description = "En resa som en förare registrerat: sträcka, status och granskning"
+
+[labels.sv.model.mileage_trip.field.client_trip_id]
+label = "Appens resa-id"
+description = "Id som appen skapar vid start (UUIDv7); unikt per förare, så att appen hittar sin resa igen"
+
+[labels.sv.model.mileage_trip.field.driver]
+label = "Förare"
+description = "Inloggning för den som registrerade resan; servern sätter anroparen"
+
+[labels.sv.model.mileage_trip.field.vehicle]
+label = "Fordon"
+description = "Fordonet för resan, som föraren anger det (registreringsnummer eller namn)"
+
+[labels.sv.model.mileage_trip.field.purpose]
+label = "Syfte"
+description = "Vad resan gällde: tjänsteresa, privat eller arbetsresa"
+
+[labels.sv.model.mileage_trip.field.purpose.options]
+business = "Tjänsteresa"
+private = "Privat"
+commute = "Arbetsresa"
+
+[labels.sv.model.mileage_trip.field.started_at]
+label = "Startade"
+description = "När föraren tryckte på Start, enligt telefonens klocka"
+
+[labels.sv.model.mileage_trip.field.ended_at]
+label = "Slutade"
+description = "När föraren tryckte på Stopp; saknas det från appen används sista godkända punkten"
+
+[labels.sv.model.mileage_trip.field.distance_m]
+label = "Sträcka (m)"
+description = "Sträcka i meter som servern räknar ut av de godkända punkterna när resan avslutas; tas aldrig från klienten"
+
+[labels.sv.model.mileage_trip.field.expected_points]
+label = "Förväntade punkter"
+description = "Hur många punkter enheten skickade för resan; föraren anger det före avslut"
+
+[labels.sv.model.mileage_trip.field.last_seq]
+label = "Sista löpnummer"
+description = "Löpnumret på sista punkten enheten registrerade; föraren anger det före avslut"
+
+[labels.sv.model.mileage_trip.field.point_count]
+label = "Antal punkter"
+description = "Hur många punkter som är lagrade för resan"
+
+[labels.sv.model.mileage_trip.field.max_seq]
+label = "Högsta löpnummer"
+description = "Det högsta löpnumret bland de lagrade punkterna"
+
+[labels.sv.model.mileage_trip.field.integrity]
+label = "Integritet"
+description = "Flaggor som kontrollen satte vid avslut: seq_gap, speed_jump och low_accuracy med antal; tomt när spåret var rent"
+
+[labels.sv.model.mileage_trip.field.start_lat]
+label = "Start (latitud)"
+description = "Latitud för första godkända punkten, satt av servern"
+
+[labels.sv.model.mileage_trip.field.start_lon]
+label = "Start (longitud)"
+description = "Longitud för första godkända punkten, satt av servern"
+
+[labels.sv.model.mileage_trip.field.end_lat]
+label = "Slut (latitud)"
+description = "Latitud för sista godkända punkten, satt av servern; appen kan stanna före sista uppladdningen, så slutet kommer inte från den"
+
+[labels.sv.model.mileage_trip.field.end_lon]
+label = "Slut (longitud)"
+description = "Longitud för sista godkända punkten, satt av servern"
+
+[labels.sv.model.mileage_trip.field.discard_reason]
+label = "Orsak till kassering"
+description = "Varför föraren kasserar resan; skrivs före kasseringen"
+
+[labels.sv.model.mileage_trip.field.reject_reason]
+label = "Orsak till avslag"
+description = "Varför granskaren avvisar resan; skrivs under granskningen och rensas när föraren skickar in igen"
+
+[labels.sv.model.mileage_trip.field.reviewed_by]
+label = "Granskad av"
+description = "Inloggning för granskaren som bekräftade eller avvisade resan, eller personen som godkände en agents förslag"
+
+[labels.sv.model.mileage_trip.field.confirmed_at]
+label = "Bekräftad"
+description = "När resan bekräftades, satt av Bekräfta; månaden för tidpunkten i plattformens zon är den månad resan räknas"
+
+[labels.sv.model.mileage_trip.field.reviewable]
+label = "Granskningsbar"
+description = "Sant medan resan är under granskning, bekräftad eller avvisad: de statusar en granskare läser"
+
+[labels.sv.model.mileage_trip.field.state]
+label = "Status"
+description = "Förlopp: pågår, avslutad, under granskning, bekräftad, avvisad eller kasserad; ändras bara genom åtgärderna"
+
+[labels.sv.model.mileage_trip.field.state.options]
+recording = "Pågår"
+ended = "Avslutad"
+in_review = "Under granskning"
+confirmed = "Bekräftad"
+rejected = "Avvisad"
+discarded = "Kasserad"
+
+[labels.sv.model.mileage_trip.action.end]
+label = "Avsluta"
+description = "Avsluta en pågående resa när alla punkter har kommit: servern räknar ut sträckan av de godkända punkterna"
+
+[labels.sv.model.mileage_trip.action.submit]
+label = "Skicka in"
+description = "Skicka en avslutad resa till granskning"
+
+[labels.sv.model.mileage_trip.action.confirm]
+label = "Bekräfta"
+description = "Bekräfta en resa under granskning; från nu räknas den. En granskare kan inte bekräfta sin egen resa"
+
+[labels.sv.model.mileage_trip.action.reject]
+label = "Avvisa"
+description = "Avvisa en resa under granskning; skriv orsaken till avslaget först. En granskare kan inte avvisa sin egen resa"
+
+[labels.sv.model.mileage_trip.action.reopen]
+label = "Öppna igen"
+description = "Återställ en avvisad resa till avslutad så att föraren kan rätta den och skicka in den igen"
+
+[labels.sv.model.mileage_trip.action.discard]
+label = "Kassera"
+description = "Kassera din egen pågående, avslutade eller avvisade resa; skriv orsaken först. En kasserad resa räknas aldrig"
+
+[labels.sv.model.mileage_trip.action.discard_stuck]
+label = "Kassera fastnad"
+description = "Kassera som administratör en resa som fastnat i pågår eller avslutad"
+
+[labels.sv.model.mileage_point]
+name = "Punkt"
+description = "En registrerad position för en resa; skrivs en gång och ändras aldrig"
+
+[labels.sv.model.mileage_point.field.trip]
+label = "Resa"
+description = "Resan som punkten tillhör (dess server-id)"
+
+[labels.sv.model.mileage_point.field.seq]
+label = "Löpnummer"
+description = "Punktens plats i resan, räknad av enheten; unik inom resan"
+
+[labels.sv.model.mileage_point.field.recorded_at]
+label = "Registrerad"
+description = "När telefonen registrerade positionen"
+
+[labels.sv.model.mileage_point.field.lat]
+label = "Latitud"
+description = "Latitud i grader (WGS84), högst 7 decimaler"
+
+[labels.sv.model.mileage_point.field.lon]
+label = "Longitud"
+description = "Longitud i grader (WGS84), högst 7 decimaler"
+
+[labels.sv.model.mileage_point.field.accuracy_m]
+label = "Noggrannhet (m)"
+description = "Radien för den horisontella noggrannheten i meter, när telefonen angav den"
+
+[labels.sv.model.mileage_point.field.speed_mps]
+label = "Hastighet (m/s)"
+description = "Hastighet över mark i meter per sekund, när telefonen angav den"
+
+[labels.sv.model.mileage_point.field.driver]
+label = "Förare"
+description = "Inloggning för resans förare; servern sätter den från resan"

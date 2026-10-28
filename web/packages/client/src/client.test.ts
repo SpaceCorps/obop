@@ -592,8 +592,8 @@ describe("bulkCreate", () => {
 
   test("a model the schema does not know takes untyped rows", async () => {
     const { client, seen } = setup(instance());
-    await client.bulkCreate("mileage_trip", [{ client_trip_id: "t-1", anything: 1 }]);
-    expect(seen[0]!.url).toBe("https://acme.example.com/api/mileage_trip/bulk_create");
+    await client.bulkCreate("inspection_visit", [{ visit_ref: "t-1", anything: 1 }]);
+    expect(seen[0]!.url).toBe("https://acme.example.com/api/inspection_visit/bulk_create");
   });
 
   test.each(["", "has space", "ünïcode", "x".repeat(129), "tab\tkey"])(

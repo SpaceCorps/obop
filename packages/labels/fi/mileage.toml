@@ -1,0 +1,173 @@
+[labels.fi.module]
+name = "Ajopäiväkirja"
+description = "Mileage-sovelluksella tallennetut matkat, jotka tarkastetaan ja vahvistetaan hallintanäkymässä. Palvelin laskee matkan; vain vahvistetut matkat lasketaan."
+summary = "Tallennetut matkat, jotka palvelin tarkastaa ja tarkastaja vahvistaa."
+
+[labels.fi.model.mileage_trip]
+name = "Matka"
+description = "Kuljettajan tallentama matka: sen pituus, tila ja tarkastus"
+
+[labels.fi.model.mileage_trip.field.client_trip_id]
+label = "Sovelluksen matkatunnus"
+description = "Sovelluksen aloitettaessa luoma tunniste (UUIDv7); yksilöllinen kuljettajakohtaisesti, sovellus löytää sen avulla matkansa"
+
+[labels.fi.model.mileage_trip.field.driver]
+label = "Kuljettaja"
+description = "Matkan tallentaneen henkilön tunnus; palvelin asettaa sen kutsujaksi"
+
+[labels.fi.model.mileage_trip.field.vehicle]
+label = "Ajoneuvo"
+description = "Matkalla käytetty ajoneuvo kuljettajan nimeämänä (rekisterinumero tai nimi)"
+
+[labels.fi.model.mileage_trip.field.purpose]
+label = "Tarkoitus"
+description = "Matkan tarkoitus: liikematka, yksityinen tai työmatka"
+
+[labels.fi.model.mileage_trip.field.purpose.options]
+business = "Liikematka"
+private = "Yksityinen"
+commute = "Työmatka"
+
+[labels.fi.model.mileage_trip.field.started_at]
+label = "Alkoi"
+description = "Milloin kuljettaja painoi Aloita, puhelimen kellon mukaan"
+
+[labels.fi.model.mileage_trip.field.ended_at]
+label = "Päättyi"
+description = "Milloin kuljettaja painoi Lopeta; ellei sovellus kertonut, viimeisen hyväksytyn pisteen aika"
+
+[labels.fi.model.mileage_trip.field.distance_m]
+label = "Matka (m)"
+description = "Matka metreinä, jonka palvelin laskee hyväksytyistä pisteistä matkan päättyessä; ei koskaan asiakkaalta"
+
+[labels.fi.model.mileage_trip.field.expected_points]
+label = "Odotetut pisteet"
+description = "Montako pistettä laite lähetti tälle matkalle; kuljettaja asettaa arvon ennen päättämistä"
+
+[labels.fi.model.mileage_trip.field.last_seq]
+label = "Viimeinen järjestysnro"
+description = "Laitteen viimeisen tallentaman pisteen järjestysnumero; kuljettaja asettaa sen ennen päättämistä"
+
+[labels.fi.model.mileage_trip.field.point_count]
+label = "Pisteiden määrä"
+description = "Montako pistettä matkalle on tallennettu"
+
+[labels.fi.model.mileage_trip.field.max_seq]
+label = "Suurin järjestysnro"
+description = "Tallennettujen pisteiden suurin järjestysnumero"
+
+[labels.fi.model.mileage_trip.field.integrity]
+label = "Eheys"
+description = "Päättyessä asetetut merkinnät: seq_gap, speed_jump ja low_accuracy määrineen; tyhjä, kun jälki oli puhdas"
+
+[labels.fi.model.mileage_trip.field.start_lat]
+label = "Alku (leveys)"
+description = "Ensimmäisen hyväksytyn pisteen leveysaste, palvelimen asettama"
+
+[labels.fi.model.mileage_trip.field.start_lon]
+label = "Alku (pituus)"
+description = "Ensimmäisen hyväksytyn pisteen pituusaste, palvelimen asettama"
+
+[labels.fi.model.mileage_trip.field.end_lat]
+label = "Loppu (leveys)"
+description = "Viimeisen hyväksytyn pisteen leveysaste, palvelimen asettama; sovellus voi pysähtyä ennen viimeistä lähetystä, joten loppu ei ole sen ilmoittama"
+
+[labels.fi.model.mileage_trip.field.end_lon]
+label = "Loppu (pituus)"
+description = "Viimeisen hyväksytyn pisteen pituusaste, palvelimen asettama"
+
+[labels.fi.model.mileage_trip.field.discard_reason]
+label = "Mitätöinnin syy"
+description = "Miksi kuljettaja mitätöi matkan; kirjoitetaan ennen mitätöintiä"
+
+[labels.fi.model.mileage_trip.field.reject_reason]
+label = "Hylkäyksen syy"
+description = "Miksi tarkastaja hylkää matkan; kirjoitetaan tarkastuksen aikana ja tyhjennetään uudelleen lähetettäessä"
+
+[labels.fi.model.mileage_trip.field.reviewed_by]
+label = "Tarkastanut"
+description = "Matkan vahvistaneen tai hylänneen tarkastajan tunnus tai agentin ehdotuksen hyväksyneen henkilön tunnus"
+
+[labels.fi.model.mileage_trip.field.confirmed_at]
+label = "Vahvistettu"
+description = "Milloin matka vahvistettiin, Vahvista asettaa sen; hetken kuukausi alustan aikavyöhykkeessä on kuukausi, jona matka lasketaan"
+
+[labels.fi.model.mileage_trip.field.reviewable]
+label = "Tarkastettavissa"
+description = "Tosi, kun matka on tarkastuksessa, vahvistettu tai hylätty: tilat, jotka tarkastaja lukee"
+
+[labels.fi.model.mileage_trip.field.state]
+label = "Tila"
+description = "Elinkaari: tallennetaan, päättynyt, tarkastuksessa, vahvistettu, hylätty tai mitätöity; muuttuu vain toimintojen kautta"
+
+[labels.fi.model.mileage_trip.field.state.options]
+recording = "Tallennetaan"
+ended = "Päättynyt"
+in_review = "Tarkastuksessa"
+confirmed = "Vahvistettu"
+rejected = "Hylätty"
+discarded = "Mitätöity"
+
+[labels.fi.model.mileage_trip.action.end]
+label = "Päätä"
+description = "Päätä käynnissä oleva matka, kun kaikki pisteet ovat perillä: palvelin laskee matkan hyväksytyistä pisteistä"
+
+[labels.fi.model.mileage_trip.action.submit]
+label = "Lähetä tarkastettavaksi"
+description = "Lähetä päättynyt matka tarkastettavaksi"
+
+[labels.fi.model.mileage_trip.action.confirm]
+label = "Vahvista"
+description = "Vahvista tarkastuksessa oleva matka; siitä lähtien se lasketaan. Tarkastaja ei voi vahvistaa omaa matkaansa"
+
+[labels.fi.model.mileage_trip.action.reject]
+label = "Hylkää"
+description = "Hylkää tarkastuksessa oleva matka; kirjoita ensin hylkäyksen syy. Tarkastaja ei voi hylätä omaa matkaansa"
+
+[labels.fi.model.mileage_trip.action.reopen]
+label = "Avaa uudelleen"
+description = "Palauta hylätty matka päättyneeksi, jotta kuljettaja voi korjata sen ja lähettää uudelleen"
+
+[labels.fi.model.mileage_trip.action.discard]
+label = "Mitätöi"
+description = "Mitätöi oma käynnissä oleva, päättynyt tai hylätty matka; kirjoita ensin syy. Mitätöityä matkaa ei lasketa koskaan"
+
+[labels.fi.model.mileage_trip.action.discard_stuck]
+label = "Mitätöi jumiin jäänyt"
+description = "Mitätöi ylläpitäjänä matka, joka on jumissa tilassa tallennetaan tai päättynyt"
+
+[labels.fi.model.mileage_point]
+name = "Piste"
+description = "Yksi matkan tallennettu sijainti; kirjoitetaan kerran, ei muuteta koskaan"
+
+[labels.fi.model.mileage_point.field.trip]
+label = "Matka"
+description = "Matka, johon piste kuuluu (sen palvelintunnus)"
+
+[labels.fi.model.mileage_point.field.seq]
+label = "Järjestysnro"
+description = "Pisteen paikka matkassa, laitteen laskema; yksilöllinen matkan sisällä"
+
+[labels.fi.model.mileage_point.field.recorded_at]
+label = "Tallennettu"
+description = "Milloin puhelin tallensi sijainnin"
+
+[labels.fi.model.mileage_point.field.lat]
+label = "Leveysaste"
+description = "Leveysaste asteina (WGS84), enintään 7 desimaalia"
+
+[labels.fi.model.mileage_point.field.lon]
+label = "Pituusaste"
+description = "Pituusaste asteina (WGS84), enintään 7 desimaalia"
+
+[labels.fi.model.mileage_point.field.accuracy_m]
+label = "Tarkkuus (m)"
+description = "Vaakatarkkuuden säde metreinä, jos puhelin ilmoitti sen"
+
+[labels.fi.model.mileage_point.field.speed_mps]
+label = "Nopeus (m/s)"
+description = "Maanopeus metreinä sekunnissa, jos puhelin ilmoitti sen"
+
+[labels.fi.model.mileage_point.field.driver]
+label = "Kuljettaja"
+description = "Matkan kuljettajan tunnus; palvelin asettaa sen matkasta"

@@ -101,6 +101,12 @@ pub mod code {
     pub const DENIED: &str = "denied";
     /// Step 2: the caller must confirm their identity again.
     pub const REAUTH_REQUIRED: &str = "reauth_required";
+    /// D87: the call needs records that have not all arrived yet (the points of a trip that is
+    /// ended); nothing was changed, and the same call can be repeated until they have.
+    pub const INCOMPLETE: &str = "incomplete";
+    /// D70: the person started more bulk imports in the last minute than the limit allows; nothing
+    /// was changed, and the same call can be repeated after the wait of `Retry-After`.
+    pub const RATE_LIMITED: &str = "rate_limited";
     /// D74: every database connection was in use for the whole acquire timeout, or too many callers
     /// were already waiting. The call did not start.
     pub const STORAGE_BUSY: &str = "storage_busy";
@@ -239,6 +245,20 @@ pub const TABLE: &[Row] = &[
         retry_after: None,
         origin: "step 2",
         hint: "Confirm your identity again, then retry.",
+    },
+    Row {
+        code: code::INCOMPLETE,
+        status: 409,
+        retry_after: None,
+        origin: "D87",
+        hint: "Not every record this call needs has arrived yet. Nothing was changed. Send what is missing, then repeat the same call. If what is missing was lost and will never arrive, repeat it with the counts corrected to what exists.",
+    },
+    Row {
+        code: code::RATE_LIMITED,
+        status: 429,
+        retry_after: Some(60),
+        origin: "D70",
+        hint: "Too many bulk imports in the last minute. Nothing was changed. Repeat the same call after the time in Retry-After.",
     },
     Row {
         code: code::STORAGE_BUSY,
@@ -871,6 +891,8 @@ mod tests {
             ("assertion_failed", 400),
             ("denied", 403),
             ("reauth_required", 400),
+            ("incomplete", 409),
+            ("rate_limited", 429),
             ("storage_busy", 503),
             ("storage_unavailable", 503),
             ("storage_timeout", 503),
@@ -900,8 +922,13 @@ mod tests {
                 r.status
             );
             assert!(r.hint.ends_with('.') && !r.origin.is_empty(), "{}", r.code);
-            // A 503 says when to come back; nothing else does.
-            assert_eq!(r.retry_after.is_some(), r.status == 503, "{}", r.code);
+            // A 503 and a 429 say when to come back; nothing else does.
+            assert_eq!(
+                r.retry_after.is_some(),
+                matches!(r.status, 429 | 503),
+                "{}",
+                r.code
+            );
             // No clash with the classes of the errors that have always existed.
             assert!(
                 ![

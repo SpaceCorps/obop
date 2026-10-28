@@ -38,6 +38,7 @@ sales = { path = "crates/modules/sales" }
 crm = { path = "crates/modules/crm" }
 product = { path = "crates/modules/product" }
 connectors = { path = "crates/modules/connectors" }
+mileage = { path = "crates/modules/mileage" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

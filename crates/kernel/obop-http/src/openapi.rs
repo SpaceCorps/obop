@@ -241,7 +241,12 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                         f.to,
                     ),
                 };
-                let desc = if f.personal_data {
+                let desc = if f.personal_data && withheld_from_agents(f.class) {
+                    format!(
+                        "{} (personal data of a sensitive class: not given to agents at all)",
+                        f.description
+                    )
+                } else if f.personal_data {
                     format!("{} (personal data: agents see it masked)", f.description)
                 } else {
                     f.description.to_string()
@@ -460,9 +465,28 @@ pub fn describe_oauth(doc: &mut J, base: &str) {
         J::from(format!("{base}/.well-known/oauth-authorization-server"));
 }
 
+/// Whether an agent's token is denied a field of this class outright, and not given a mask token
+/// (D40: the sensitive classes and secrets).
+fn withheld_from_agents(class: &str) -> bool {
+    use obop_types::DataClass;
+    DataClass::parse(class).is_some_and(|c| c.is_sensitive() || c == DataClass::Secret)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sensitive_class_is_withheld_from_agents_and_the_rest_is_masked_or_free() {
+        // The text of a personal-data field depends on this: an agent is given a mask token for
+        // `internal` personal data and nothing at all for the sensitive classes and secrets.
+        for class in ["confidential_hr", "special_category", "financial", "secret"] {
+            assert!(withheld_from_agents(class), "{class}");
+        }
+        for class in ["none", "public_directory", "internal", "unknown_class"] {
+            assert!(!withheld_from_agents(class), "{class}");
+        }
+    }
 
     #[test]
     fn describe_oauth_names_the_authorization_server_under_the_base_url() {
