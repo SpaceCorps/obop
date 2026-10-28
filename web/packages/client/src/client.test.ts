@@ -527,3 +527,167 @@ describe("getMeta", () => {
     expect(seen[0]!.headers.get("authorization")).toBe("Bearer tok-1");
   });
 });
+
+describe("onUnauthorized that calls the client itself", () => {
+  const deadlock = { timeout: 3000 };
+
+  test("does not wait for itself when its own call gets a 401 too", deadlock, async () => {
+    let handler = 0;
+    let nested: unknown;
+    let self: ObopClientRef = undefined;
+    const { client, fetch } = setup(() => new Response(null, { status: 401 }), {
+      onUnauthorized: async () => {
+        handler += 1;
+        // A refresh through the same client, still with the expired token: it is a 401 as well.
+        nested = await self!.call("auth", "refresh", {}).catch((e: unknown) => e);
+      },
+    });
+    self = client;
+    const e = await rejection(client.call("party", "list"));
+    expect(e.status).toBe(401);
+    expect(handler).toBe(1);
+    expect(nested).toBeInstanceOf(ObopApiError);
+    expect((nested as ObopApiError).status).toBe(401);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test("runs once for a burst of 401s although its own call gets one", deadlock, async () => {
+    let handler = 0;
+    let self: ObopClientRef = undefined;
+    const { client, fetch } = setup(() => new Response(null, { status: 401 }), {
+      onUnauthorized: async () => {
+        handler += 1;
+        await self!.call("auth", "refresh", {}).catch(() => undefined);
+      },
+    });
+    self = client;
+    const all = await Promise.allSettled([
+      client.call("party", "list"),
+      client.call("product", "list"),
+      client.call("lead", "list"),
+    ]);
+    expect(all.every((r) => r.status === "rejected")).toBe(true);
+    expect(handler).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  test("a refresh that works lets the next call through with the new token", deadlock, async () => {
+    let token = "old";
+    let self: ObopClientRef = undefined;
+    const { client } = setup(
+      (request) =>
+        request.headers.get("authorization") === "Bearer old"
+          ? request.url.endsWith("/api/auth/refresh")
+            ? json({ value: { token: "new" } })
+            : new Response(null, { status: 401 })
+          : json({ value: [{ id: "a" }] }),
+      {
+        getToken: () => token,
+        onUnauthorized: async () => {
+          // The refresh call is sent with the old token and is answered; it is not a 401.
+          const r = await self!.call<{ token: string }>("auth", "refresh", {});
+          token = r.value.token;
+        },
+      },
+    );
+    self = client;
+    expect((await rejection(client.call("party", "list"))).status).toBe(401);
+    expect((await client.call("party", "list")).value).toEqual([{ id: "a" }]);
+  });
+});
+
+type ObopClientRef = ReturnType<typeof createObopClient> | undefined;
+
+describe("an answer that is not what an instance sends", () => {
+  const html = () =>
+    new Response("<!doctype html><title>Welcome</title>", {
+      status: 200,
+      headers: { "content-type": "text/html" },
+    });
+
+  test("a 200 page rejects call with invalid_response, not a SyntaxError", async () => {
+    const { client } = setup(html);
+    const e = await rejection(client.call("party", "list"));
+    expect(e).toMatchObject({ status: 200, code: "invalid_response", path: "/api/party/list" });
+    expect(String(e.body)).toContain("<title>Welcome</title>");
+    expect(isSafeToRetry(e)).toBe(false);
+  });
+
+  test("a 200 page rejects getMeta with invalid_response", async () => {
+    const { client } = setup(html);
+    const e = await rejection(client.getMeta());
+    expect(e).toMatchObject({ status: 200, code: "invalid_response", method: "GET" });
+  });
+
+  test("the typed client is covered too", async () => {
+    const { client } = setup(html);
+    const e = await rejection(client.api.POST("/api/party/list"));
+    expect(e.code).toBe("invalid_response");
+  });
+
+  test("so is JSON that is cut off", async () => {
+    const { client } = setup(
+      () =>
+        new Response('{"value": [{"id": "a"', {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    const e = await rejection(client.call("party", "list"));
+    expect(e).toMatchObject({ status: 200, code: "invalid_response" });
+  });
+
+  test("a write that was answered with a page is not repeated", async () => {
+    const { client } = setup(html);
+    const e = await rejection(
+      client.bulkCreate("party", [{ name: "Ada" }], { idempotencyKey: "k" }),
+    );
+    expect(e.code).toBe("invalid_response");
+    expect(isSafeToRetry(e, { idempotent: true })).toBe(false);
+  });
+
+  test("JSON of another shape is invalid too: a list where an object is, no modules in the metadata", async () => {
+    const listed = setup(() => json([1, 2, 3]));
+    expect((await rejection(listed.client.call("party", "list"))).code).toBe("invalid_response");
+    const other = setup(() => json({ hello: "world" }));
+    expect((await rejection(other.client.getMeta())).code).toBe("invalid_response");
+    const nothing = setup(() => new Response("null", { status: 200 }));
+    expect((await rejection(nothing.client.getMeta())).code).toBe("invalid_response");
+  });
+
+  test("an empty success is not an error for a command", async () => {
+    const { client } = setup(() => new Response(null, { status: 200 }));
+    expect(await client.call("party", "ping")).toEqual({ value: undefined, denied: [] });
+  });
+
+  test("a connection that breaks while the body is read is a network error", async () => {
+    const broken = () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new TypeError("terminated"));
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    const { client } = setup(broken);
+    const read = await rejection(client.call("party", "list"));
+    expect(read).toBeInstanceOf(ObopNetworkError);
+    expect(read.applied).toBe("none");
+    const write = await rejection(client.call("party", "create", { name: "Ada" }));
+    expect(write).toBeInstanceOf(ObopNetworkError);
+    expect(write.applied).toBe("unknown");
+  });
+
+  test("a download is not parsed as JSON", async () => {
+    const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const { client } = setup(
+      () => new Response(bytes, { status: 200, headers: { "content-type": "image/png" } }),
+    );
+    const { data } = await client.api.GET("/api/blobs/{id}", {
+      params: { path: { id: "a".repeat(64) } },
+      parseAs: "blob",
+    });
+    expect((data as Blob).size).toBe(8);
+  });
+});

@@ -16,9 +16,21 @@ export function parseApplied(value: unknown): Applied | undefined {
   return typeof value === "string" && APPLIED.includes(value) ? (value as Applied) : undefined;
 }
 
+/** The longest wait the client believes a `Retry-After` for: one hour. */
+export const MAX_RETRY_AFTER_SECONDS = 60 * 60;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// IMF-fixdate, the HTTP date a server should send: "Tue, 27 Oct 2026 12:00:30 GMT".
+const IMF_FIXDATE =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT$/;
+
 /**
- * The seconds a `Retry-After` header asks for: whole seconds, or an HTTP date (counted from now).
- * `undefined` when the header is absent or unreadable.
+ * The seconds a `Retry-After` header asks for, as HTTP defines it: delta-seconds (digits only) or
+ * an HTTP date in the IMF-fixdate form (counted from `now`; a date in the past is 0). Anything
+ * else (empty, negative, fractional, in exponent form, any other date format) is `undefined`: a
+ * header nobody can read is not a request to retry at once. A wait over `MAX_RETRY_AFTER_SECONDS`
+ * (a proxy's mistake, or a number too large for a timer) is cut to it. The dates are read by hand,
+ * not with `Date.parse`, which accepts all sorts of text and differs between JavaScript engines.
  */
 export function parseRetryAfter(
   value: string | null | undefined,
@@ -26,9 +38,24 @@ export function parseRetryAfter(
 ): number | undefined {
   if (value == null) return undefined;
   const text = value.trim();
-  if (/^\d+$/.test(text)) return Number(text);
-  const at = Date.parse(text);
-  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - now) / 1000));
+  let seconds: number;
+  const date = IMF_FIXDATE.exec(text);
+  if (/^\d+$/.test(text)) {
+    seconds = Number(text);
+  } else if (date) {
+    const day = Number(date[1]);
+    const hour = Number(date[4]);
+    const second = Number(date[6]);
+    const at = new Date(
+      Date.UTC(Number(date[3]), MONTHS.indexOf(date[2]!), day, hour, Number(date[5]), second),
+    );
+    // 31 Feb, 25:00 and the like would roll over into another date: unreadable.
+    if (at.getUTCDate() !== day || at.getUTCHours() !== hour || second > 59) return undefined;
+    seconds = Math.max(0, Math.ceil((at.getTime() - now) / 1000));
+  } else {
+    return undefined;
+  }
+  return Math.min(seconds, MAX_RETRY_AFTER_SECONDS);
 }
 
 /** Commands that only read: a repeat cannot change anything (`get`, `list` and `search`). */
@@ -64,8 +91,9 @@ export interface ObopApiErrorInit extends Partial<CallInfo> {
 }
 
 /**
- * Every failed call rejects with this: an answer with a status of 400 or more, or (as the subclass
- * `ObopNetworkError`) no answer at all.
+ * Every failed call rejects with this: an answer with a status of 400 or more, a success status
+ * whose body is not an obop answer (`code` `invalid_response`, see `invalidResponse`), or (as the
+ * subclass `ObopNetworkError`) no answer at all.
  *
  * - `status`: the HTTP status, 0 when there was no answer.
  * - `code`: the stable machine word of the server (`not_found`, `precondition_failed`,
@@ -139,6 +167,23 @@ export class ObopApiError extends Error {
 }
 
 /**
+ * The server answered with a success status, but what it sent is not what an obop instance sends
+ * (not JSON, or JSON of another shape): typically the address is not an obop instance, or a proxy
+ * or captive portal answered in its place. `code` is `invalid_response`, `status` is the one the
+ * server sent and `body` is the start of the text. A write that gets this was answered, so it is
+ * not repeated blindly: `isSafeToRetry` is false for every status below 500.
+ */
+export function invalidResponse(response: Response, text: string, call?: CallInfo): ObopApiError {
+  return new ObopApiError({
+    status: response.status,
+    message: "The server did not answer like an obop instance. Is the address right?",
+    code: "invalid_response",
+    body: text.slice(0, 2000),
+    ...call,
+  });
+}
+
+/**
  * The server could not be reached, or the connection broke before an answer came: `fetch` threw.
  * `status` is 0 and `code` is `network_error`. For a call that reads, `applied` is `none`; for a
  * call that writes it is `unknown`, because the request may have arrived and been applied.
@@ -178,28 +223,45 @@ export class ObopApprovalRequired extends ObopApiError {
 }
 
 /**
- * Whether the same call may be sent again without risking a change twice (the D74 rule of
- * docs/DEPLOY.md "What a 503 means"):
+ * Whether the same call may be sent again without risking a change twice.
  *
- * - a 429 was refused before it ran: yes, after `retryAfterSeconds`;
- * - a 5xx or a lost connection that says `applied: none`: yes;
- * - the same with `applied: unknown` or `partial`, or no word at all (a gateway, a crash): only
- *   when the call carries an idempotency key or only reads (`idempotent`), because a plain repeat
- *   could change the data twice or finish a half-done change blindly;
- * - everything else (400, 401, 403, 404, 409, 410, 412 ...): no, a repeat gets the same answer.
+ * **From docs/DEPLOY.md "What a 503 means" (D74)**, the three words of `applied`:
  *
- * `idempotent` defaults to whether the failed call only read (`err.read`); pass `true` for a call
- * that carries an idempotency key. Anything that is not an `ObopApiError` is not safe to repeat.
+ * - `none`: nothing was changed; "repeating the request is safe";
+ * - `unknown` (`storage_unavailable`): a change in flight may or may not have been applied, "read
+ *   before you repeat a write". A call that carries an idempotency key (`bulk_create` has one, a
+ *   single create or update has none) can be repeated without reading: the repeat returns the
+ *   first answer or creates the rows once. A call that only reads can always be repeated;
+ * - `partial`: a change was committed and a step it needed was refused: "do not repeat a partial
+ *   request blindly: read the records it touched and finish or undo the rest". So never here,
+ *   with or without a key (a keyed repeat of `bulk_create` returns the stored first answer and
+ *   finishes nothing).
+ *
+ * **Chosen by this client, not written in DEPLOY.md:** a 5xx with no word (a gateway, a crash) and
+ * a lost connection are treated like `unknown` for a write (a lost connection of a read is
+ * `none`); a 429 was refused before it ran and can be repeated after `retryAfterSeconds`; every
+ * other status (400, 401, 403, 404, 409, 410, 412, a 2xx that could not be read ...) never,
+ * because a repeat gets the same answer or does the work twice.
+ *
+ * `idempotent` says the call carries an idempotency key; it defaults to whether the failed call
+ * only read (`err.read`). Anything that is not an `ObopApiError` is not safe to repeat.
  */
 export function isSafeToRetry(err: unknown, opts: { idempotent?: boolean } = {}): boolean {
   if (!(err instanceof ObopApiError)) return false;
   if (err.status === 429) return true;
   if (err.status !== 0 && err.status < 500) return false;
+  if (err.applied === "partial") return false;
   if (err.applied === "none") return true;
   return opts.idempotent ?? err.read;
 }
 
-/** How long to wait before repeating, in milliseconds: what the server asked for, else `fallbackMs`. */
+/**
+ * How long to wait before repeating, in milliseconds: what the server asked for (at most
+ * `MAX_RETRY_AFTER_SECONDS`), else `fallbackMs`. A value that is not a number of seconds from zero
+ * up is not what the server asked for.
+ */
 export function retryDelayMs(err: ObopApiError, fallbackMs = 1000): number {
-  return err.retryAfterSeconds === undefined ? fallbackMs : err.retryAfterSeconds * 1000;
+  const s = err.retryAfterSeconds;
+  if (s === undefined || !Number.isFinite(s) || s < 0) return fallbackMs;
+  return Math.min(s, MAX_RETRY_AFTER_SECONDS) * 1000;
 }

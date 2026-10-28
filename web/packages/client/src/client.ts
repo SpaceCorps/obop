@@ -3,6 +3,7 @@ import {
   ObopApiError,
   ObopApprovalRequired,
   ObopNetworkError,
+  invalidResponse,
   isReadCall,
   type CallInfo,
 } from "./errors.ts";
@@ -28,6 +29,12 @@ export interface ObopClientOptions {
    * expired or revoked. The client does not sign in again or retry; this is where the app signs the
    * person out or starts a refresh. Calls that fail at the same moment share one run of it, and an
    * error it throws is ignored (the call still rejects with the 401).
+   *
+   * The handler may use this client, for example to refresh the token: a call made while the
+   * handler runs neither waits for it nor starts it again. If that call is answered 401 too, it
+   * rejects with the `ObopApiError` (the handler sees it), and the handler does not wait for
+   * itself. A call that was made before the handler began and is answered 401 while it runs waits
+   * for it, so a handler must not wait for such a call.
    */
   onUnauthorized?: () => void | Promise<void>;
 }
@@ -79,8 +86,10 @@ export interface BulkCreateOptions extends CallOptions {
 export interface ObopClient {
   /**
    * The `openapi-fetch` client over the generated `paths`, with the token, the 401 handler and the
-   * error mapping installed: `client.api.POST("/api/party/list", { body: {} })`. A call that does
-   * not succeed rejects with `ObopApiError`; `error` is never set on what it resolves with.
+   * error mapping installed: `client.api.POST("/api/party/list")`. A call that does not succeed,
+   * or succeeds with a body that is not JSON (`invalid_response`), rejects with `ObopApiError`;
+   * `error` is never set on what it resolves with. Calls with another `parseAs` than `json`
+   * (a download) are not read by the client and are returned as they come.
    */
   readonly api: Client<paths>;
   /**
@@ -134,14 +143,21 @@ export function createObopClient(options: ObopClientOptions): ObopClient {
     fetch: (request) => (options.fetch ?? globalThis.fetch)(request),
   });
 
-  // 401s that arrive together share one run of onUnauthorized.
+  // 401s that arrive together share one run of onUnauthorized. While it runs, calls that are made
+  // (the handler's own refresh through this client, or any other) neither wait for it nor start
+  // it again: their 401 rejects the call like any other, or the handler would wait for itself.
   let unauthorized: Promise<void> | undefined;
+  let handlerRunning = false;
+  const issuedDuringHandler = new Set<string>();
   const signedOut = (): Promise<void> => {
     unauthorized ??= (async () => {
+      handlerRunning = true;
       try {
         await options.onUnauthorized?.();
       } catch {
         // The call still rejects with the 401; a failing handler must not hide it.
+      } finally {
+        handlerRunning = false;
       }
     })().finally(() => {
       unauthorized = undefined;
@@ -156,18 +172,48 @@ export function createObopClient(options: ObopClientOptions): ObopClient {
   });
 
   const middleware: Middleware = {
-    async onRequest({ request }) {
+    async onRequest({ request, id }) {
+      const duringHandler = handlerRunning;
       const token = await options.getToken();
+      if (duringHandler) issuedDuringHandler.add(id);
       if (token) request.headers.set("authorization", `Bearer ${token}`);
       return request;
     },
-    async onResponse({ request, response, schemaPath }) {
-      if (response.ok) return undefined;
-      const error = await ObopApiError.fromResponse(response, callInfo(request, schemaPath));
-      if (response.status === 401 && request.headers.has("authorization")) await signedOut();
+    async onResponse({ request, response, schemaPath, options: sent, id }) {
+      const info = callInfo(request, schemaPath);
+      const duringHandler = issuedDuringHandler.delete(id);
+      if (response.ok) {
+        // A success the program cannot read must not escape as a SyntaxError of the parser that
+        // openapi-fetch runs next: the address may not be an obop instance at all.
+        if (sent.parseAs !== "json") return undefined;
+        let text: string;
+        try {
+          text = await response.text();
+        } catch (cause) {
+          throw new ObopNetworkError(cause, info);
+        }
+        if (text.trim() !== "") {
+          try {
+            JSON.parse(text);
+          } catch {
+            throw invalidResponse(response, text, info);
+          }
+        }
+        // The body is read, so openapi-fetch gets the same answer again (a null body for 204).
+        return new Response(text === "" ? null : text, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+      }
+      const error = await ObopApiError.fromResponse(response, info);
+      if (response.status === 401 && request.headers.has("authorization") && !duringHandler) {
+        await signedOut();
+      }
       throw error;
     },
-    onError({ request, error, schemaPath }) {
+    onError({ request, error, schemaPath, id }) {
+      issuedDuringHandler.delete(id);
       // The caller cancelled the call: that is theirs to handle, not a failure of the network.
       if (error instanceof Error && error.name === "AbortError") return undefined;
       return new ObopNetworkError(error, callInfo(request, schemaPath));
@@ -184,15 +230,15 @@ export function createObopClient(options: ObopClientOptions): ObopClient {
     opts: CallOptions = {},
   ): Promise<CallResult<T>> {
     const path = `/api/${encodeURIComponent(model)}/${encodeURIComponent(command)}`;
+    const info: CallInfo = { method: "POST", path, read: isReadCall("POST", path) };
     const { data, response } = await untyped.POST(path, { body: input, signal: opts.signal });
-    const body = (data ?? {}) as { value?: T; denied?: string[]; plan_id?: string };
-    if (response.status === 202) {
-      throw new ObopApprovalRequired(String(body.plan_id ?? ""), {
-        method: "POST",
-        path,
-        read: false,
-      });
+    // Every command answers an object; JSON of another shape is some other server's answer.
+    const answer: unknown = data ?? {};
+    if (typeof answer !== "object" || answer === null || Array.isArray(answer)) {
+      throw invalidResponse(response, JSON.stringify(data), info);
     }
+    const body = answer as { value?: T; denied?: string[]; plan_id?: string };
+    if (response.status === 202) throw new ObopApprovalRequired(String(body.plan_id ?? ""), info);
     return { value: body.value as T, denied: body.denied ?? [] };
   }
 
@@ -213,8 +259,18 @@ export function createObopClient(options: ObopClientOptions): ObopClient {
   }
 
   async function getMeta(opts: CallOptions = {}): Promise<ObopMeta> {
-    const { data } = await api.GET("/api/meta", { signal: opts.signal });
-    return data as unknown as ObopMeta;
+    const { data, response } = await api.GET("/api/meta", { signal: opts.signal });
+    // The first thing an app asks of an address the person typed: JSON that is not the metadata of
+    // an instance (no modules) means the address is some other server.
+    const meta = data as unknown as Partial<ObopMeta> | null | undefined;
+    if (meta === null || typeof meta !== "object" || !Array.isArray(meta.modules)) {
+      throw invalidResponse(response, JSON.stringify(data) ?? "", {
+        method: "GET",
+        path: "/api/meta",
+        read: true,
+      });
+    }
+    return meta as ObopMeta;
   }
 
   return { api, call, bulkCreate: bulkCreate as ObopClient["bulkCreate"], getMeta };

@@ -76,6 +76,10 @@ describe("bulkCreate is typed from the schema", () => {
     expectTypeOf<BulkRow<"party">["name"]>().toEqualTypeOf<string>();
     expectTypeOf<BulkRow<"party">["email"]>().toEqualTypeOf<string | undefined>();
     expectTypeOf<BulkRow<"party">>().not.toHaveProperty("id");
+    // bulk_create refuses an image or file field (a blob is uploaded and claimed one record at a
+    // time), so a row does not offer one, though create does: the schema is the source of this.
+    expectTypeOf<BulkRow<"party">>().not.toHaveProperty("photo");
+    expectTypeOf<components["schemas"]["party"]>().toHaveProperty("photo");
   });
 
   test("the report says whether it is a replay", () => {
@@ -99,6 +103,8 @@ describe("bulkCreate is typed from the schema", () => {
       void client.bulkCreate("party", [{ email: "ada@example.com" }]);
       // @ts-expect-error the schema has no such field
       void client.bulkCreate("party", [{ name: "Ada", nope: 1 }]);
+      // @ts-expect-error an image field is a blob id and bulk_create always refuses it
+      void client.bulkCreate("party", [{ name: "Ada", photo: "a".repeat(64) }]);
       // @ts-expect-error a mode that does not exist
       void client.bulkCreate("party", [{ name: "Ada" }], { mode: "some" });
       // A model of a package installed later is not in the schema: untyped rows.

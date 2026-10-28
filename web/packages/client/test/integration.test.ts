@@ -5,6 +5,7 @@
 //   OBOP_BIN=/path/to/obop vp test integration
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -180,6 +181,28 @@ describe.skipIf(!binary)("against a running instance", () => {
       .catch((x) => x);
     expect(e).toBeInstanceOf(ObopApiError);
     expect(e).toMatchObject({ status: 404, message: "not found" });
+  });
+
+  test("an address that is some other web server is invalid_response, not a SyntaxError", async () => {
+    // What a person gets who types the address of a website: 200 and a page.
+    const site = createHttpServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<!doctype html><title>Not an obop instance</title>");
+    });
+    await new Promise<void>((ok) => site.listen(0, "127.0.0.1", ok));
+    try {
+      const { port } = site.address() as { port: number };
+      const client = createObopClient({
+        baseUrl: `http://127.0.0.1:${port}`,
+        getToken: () => "dev-admin",
+      });
+      const e = await client.getMeta().catch((x) => x);
+      expect(e).toBeInstanceOf(ObopApiError);
+      expect(e).toMatchObject({ status: 200, code: "invalid_response" });
+      expect(String(e.body)).toContain("Not an obop instance");
+    } finally {
+      await new Promise((done) => site.close(done));
+    }
   });
 
   test("an address nobody listens on is a network error that a read may repeat", async () => {
