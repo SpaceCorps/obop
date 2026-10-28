@@ -47,6 +47,9 @@ use sha2::{Digest, Sha256};
 pub(crate) const LOCK_SQL: &str =
     "SELECT pg_advisory_xact_lock(hashtextextended('obop-schema', 0))";
 
+/// What a part says about its data: findings for [`inspect`].
+pub type Audit = fn(&mut Client) -> Result<Vec<Finding>>;
+
 /// One group of schema objects.
 pub struct Part {
     pub name: &'static str,
@@ -57,6 +60,9 @@ pub struct Part {
     /// Is the part there? A catalogue lookup: it issues no DDL and needs no privilege beyond
     /// connecting. `Err` when the lookup itself failed.
     pub check: fn(&mut Client) -> Result<bool>,
+    /// What is wrong with the part's *data* when it is there (not with its objects): findings
+    /// for [`inspect`], which only asks when `check` found the part.
+    pub audit: Option<Audit>,
     /// Must a process that may not create it (`Ddl::Never`) refuse to start without it? The
     /// records are needed by everything; the change history is needed only once a model is
     /// tracked (D75), so a database that was installed before it keeps starting and the history
@@ -133,6 +139,7 @@ const BASE: Part = Part {
     name: "base",
     render: render_base,
     check: base_present,
+    audit: None,
     required: true,
 };
 
@@ -161,6 +168,7 @@ pub static BLOB: Part = Part {
     name: "blob",
     render: render_blob,
     check: blob_present,
+    audit: None,
     required: true,
 };
 
@@ -311,9 +319,10 @@ pub struct Finding {
     pub error: bool,
 }
 
-/// Compare a live database with the parts of the record store and report what differs. Today
-/// that is whether each part is there; roles, triggers, functions and indexes join as their parts
-/// do. `Err` when the database could not be asked: that is not a finding about the schema.
+/// Compare a live database with the parts of the record store and report what differs: whether
+/// each part is there and, for a part that has one, what its data says is wrong (the history:
+/// entries numbered beyond the cluster); roles, triggers, functions and indexes join as their
+/// parts do. `Err` when the database could not be asked: that is not a finding about the schema.
 pub fn inspect(c: &mut Client) -> Result<Vec<Finding>> {
     inspect_parts(c, installable())
 }
@@ -340,6 +349,8 @@ pub(crate) fn inspect_parts(c: &mut Client, parts: &[Part]) -> Result<Vec<Findin
                 // An optional part is a warning: nothing is broken until something needs it.
                 error: p.required,
             });
+        } else if let Some(audit) = p.audit {
+            found.extend(audit(c)?);
         }
     }
     Ok(found)

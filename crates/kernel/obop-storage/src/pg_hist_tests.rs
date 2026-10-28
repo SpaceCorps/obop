@@ -614,7 +614,7 @@ fn an_older_database_opens_exactly_as_before_under_a_role_that_may_not_create_an
 }
 
 #[test]
-fn a_failed_install_of_the_part_does_not_mark_the_request_that_met_it() {
+fn a_role_that_may_not_create_is_refused_with_the_reason_and_its_request_goes_on() {
     let Some(mut db) = TestDb::new() else {
         return;
     };
@@ -624,7 +624,9 @@ fn a_failed_install_of_the_part_does_not_mark_the_request_that_met_it() {
     let b = Tracked::new(guarded(Arc::new(pg)));
     b.track("deal", history_of(&["name"]));
     // A request scope, as the HTTP layer opens one: the first write that keeps history tries to
-    // install the part, fails, and says why; that is housekeeping, not a fault of the request.
+    // install the part, fails, and says why. A refusal by the server (a permission) is no fault
+    // of the store and notes none; the isolation of the attempt itself is tested with a failure
+    // that is one (`a_failure_of_the_install_that_is_a_fault_...`).
     fault::begin_request(fault::Outcome::default());
     let ctx = WriteCtx::new("ann", "rest", "deal.create");
     b.apply_ctx(&ctx, &[ins("deal", "d1", json!({"name": "A"}))])
@@ -638,6 +640,87 @@ fn a_failed_install_of_the_part_does_not_mark_the_request_that_met_it() {
     b.apply_ctx(&ctx, &[ins("note", "n1", json!({"x": 1}))])
         .unwrap();
     assert_eq!(fault::end_request().fault, None);
+}
+
+#[test]
+fn a_failure_of_the_install_that_is_a_fault_is_isolated_from_the_attempt_and_refuses_the_write_with_its_code()
+ {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    // The statement that waits for the schema lock runs into its limit: a storage fault, the kind
+    // that is noted on the request that meets it.
+    let cfg = PgPoolConfig {
+        batch_ms: Some(300),
+        ..PgPoolConfig::one_shot()
+    };
+    let pg = Arc::new(Pg::connect_options(db.url(), Some(cfg), Ddl::IfMissing).unwrap());
+    let b = Tracked::new(guarded(pg.clone()));
+    b.track("deal", history_of(&["name"]));
+    // Somebody else holds the lock of the schema work (another process starting, a migration).
+    let mut holder = db.connect();
+    holder
+        .batch_execute("SELECT pg_advisory_lock(hashtextextended('obop-schema', 0))")
+        .unwrap();
+    // The attempt, on its own: it fails with a fault, and the request that asked for it does not
+    // carry that fault (the attempt is housekeeping on nobody's behalf).
+    fault::begin_request(fault::Outcome::default());
+    pg.hist.install_on_demand(&pg.main);
+    assert_eq!(fault::noted(), None, "the attempt marked the request");
+    let why = pg.hist.install_problem().expect("the attempt failed");
+    assert_eq!(
+        fault::Fault::of_message(&why),
+        Some(fault::Fault::Timeout),
+        "{why}"
+    );
+    fault::end_request();
+    // The write that needs the part is refused with the code of that fault, which is the
+    // request's own: it was refused for it, and a 503 that can be tried again is the answer.
+    fault::begin_request(fault::Outcome::default());
+    let ctx = WriteCtx::new("ann", "rest", "deal.create");
+    let e = b
+        .apply_ctx(&ctx, &[ins("deal", "d1", json!({"name": "A"}))])
+        .unwrap_err();
+    let ApplyError::Storage(m) = e else {
+        panic!("{e:?}");
+    };
+    assert_eq!(
+        fault::Fault::of_message(&m),
+        Some(fault::Fault::Timeout),
+        "the text starts with the code: {m}"
+    );
+    assert!(m.contains("not installed yet"), "{m}");
+    assert_eq!(fault::noted(), Some(fault::Fault::Timeout));
+    assert!(!fault::may_have_applied(&m), "nothing of it was applied");
+    assert!(b.get("deal", "d1").unwrap().is_none());
+    fault::end_request();
+    // The lock is let go: the next write, in a request of its own, makes the part (the wait is
+    // short, not the 30 seconds of a refusal by the server) and goes through.
+    holder
+        .batch_execute("SELECT pg_advisory_unlock_all()")
+        .unwrap();
+    let until = std::time::Instant::now() + budget(30);
+    loop {
+        fault::begin_request(fault::Outcome::default());
+        let r = b.apply_ctx(&ctx, &[ins("deal", "d1", json!({"name": "A"}))]);
+        fault::end_request();
+        match r {
+            Ok(_) => break,
+            Err(e) => {
+                assert!(
+                    std::time::Instant::now() < until,
+                    "the install was not tried again: {e:?}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+    }
+    assert_eq!(
+        b.history(&HistoryQuery::of("deal", "d1", 10))
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -2356,32 +2439,27 @@ fn a_function_of_the_same_name_in_the_history_schema_does_not_take_the_place_of_
             id: "d1".into(),
         }],
     );
-    let old = px.server_month(3);
-    px.b.history_ensure_partition(&old).unwrap();
-    assert_eq!(px.b.history_drop_partition(&old, 30).unwrap(), 0);
+    // A month that no write of this test touches (the fake clock is in October 2026), long over
+    // on any date this test can run on: dropping the server's own "three months back" would take
+    // the entries of the fake clock's month in January 2027.
+    assert_eq!(px.b.history_drop_partition("2026-06", 30).unwrap(), 0);
     // And an ordinary write: the partitions of the month it is in.
     px.ok("ann", &[ins("deal", "d2", json!({"name": "A"}))]);
     assert_eq!(px.placed().len(), 3);
 }
 
-/// What docs/DEPLOY.md lists for a serving role that does not own the tables, and nothing more.
+/// What docs/DEPLOY.md lists for a serving role that does not own the tables: the text of the
+/// document itself, with the names of the example filled in, so that the document and the test
+/// cannot say different things.
 fn documented_grants(owner: &mut postgres::Client, role: &str, restore: bool) {
     let me: String = owner
         .query_one("SELECT quote_ident(current_user)", &[])
         .unwrap()
         .get(0);
-    owner
-        .batch_execute(&format!(
-            "GRANT SELECT, INSERT, UPDATE, DELETE ON obop_record, obop_kv, obop_counter TO {role};
-             GRANT SELECT, INSERT ON obop_record_change TO {role};
-             GRANT SELECT ON ALL TABLES IN SCHEMA public TO {role};
-             ALTER DEFAULT PRIVILEGES FOR ROLE {me} IN SCHEMA public GRANT SELECT ON TABLES TO {role};
-             GRANT USAGE ON SEQUENCE obop_record_change_seq TO {role};
-             GRANT EXECUTE ON FUNCTION obop_history_ensure_partition(date) TO {role};
-             GRANT EXECUTE ON FUNCTION obop_history_erase(text, text, text[], text, jsonb, bigint, timestamptz) TO {role};
-             GRANT EXECUTE ON FUNCTION obop_history_drop_partition(date, interval) TO {role}"
-        ))
-        .unwrap();
+    let sql = deploy_sql("**Grants for a serving role that is not the owner.**")
+        .replace("obop_serving", role)
+        .replace("obop_owner", &me);
+    owner.batch_execute(&sql).unwrap();
     if restore {
         owner
             .batch_execute(&format!(
@@ -2622,6 +2700,133 @@ fn a_role_that_may_not_read_the_control_data_still_reads_the_feed_by_the_numbers
     assert!(
         e.starts_with("cursor_expired") && e.contains("another time line"),
         "{e}"
+    );
+}
+
+/// The first fenced `sql` block of docs/DEPLOY.md after `heading`: the text an operator is told to
+/// run, so that a test can run exactly that.
+fn deploy_sql(heading: &str) -> String {
+    let doc = include_str!("../../../../docs/DEPLOY.md").replace(
+        "
+", "
+",
+    );
+    let at = doc
+        .find(heading)
+        .unwrap_or_else(|| panic!("docs/DEPLOY.md has no {heading:?}"));
+    let rest = &doc[at..];
+    let open = rest
+        .find(
+            "```sql
+",
+        )
+        .expect("a block of sql after it")
+        + "```sql
+"
+        .len();
+    let close = rest[open..].find("```").expect("the end of the block");
+    rest[open..open + close].to_string()
+}
+
+#[test]
+fn entries_numbered_beyond_the_cluster_are_foreign_and_the_documented_renumbering_brings_them_home()
+{
+    let Some(px) = Px::new() else {
+        return;
+    };
+    // What a dump and a load into a cluster with a lower transaction counter leaves: entries
+    // that carry the numbers of the other cluster, and entries written here since.
+    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
+    px.ok("ann", &[merge("deal", "d1", json!({"name": "B"}))]);
+    px.sql()
+        .batch_execute(
+            "BEGIN;
+             SET LOCAL obop.history_maint = 'on';
+             UPDATE obop_record_change
+                SET txid = (pg_snapshot_xmax(pg_current_snapshot())::text::bigint + 1000000)::text::xid8;
+             COMMIT",
+        )
+        .unwrap();
+    px.ok("ann", &[merge("deal", "d1", json!({"name": "C"}))]);
+    let old_cursor = px.feed(None, 1).next.expect("a cursor");
+    // The sequence of a cluster that was filled by replication does not carry the numbers.
+    px.sql()
+        .batch_execute("ALTER SEQUENCE obop_record_change_seq RESTART WITH 1")
+        .unwrap();
+
+    // The feed shows what is numbered here, and says plainly what it hides: not as a transaction
+    // that is still open (nothing is), and not for ever (it would be delivered after newer
+    // entries of the same record once the counter passed it).
+    px.settled();
+    let page = px.feed_raw(None, 10);
+    assert_eq!(page.rows.len(), 1, "{page:?}");
+    assert_eq!(page.rows[0].changed["name"]["a"], json!("C"));
+    assert_eq!(page.horizon_lag_ms, None, "{page:?}");
+    assert_eq!(page.foreign_entries, Some(2), "{page:?}");
+    let stats = px.b.history_stats().unwrap();
+    assert_eq!(
+        (stats.foreign_rows, stats.horizon_lag_ms),
+        (2, 0),
+        "{stats:?}"
+    );
+    // A full page has not looked.
+    assert_eq!(px.feed_raw(None, 1).foreign_entries, None);
+    // The inspection warns, naming the remedy.
+    let found = crate::schema::inspect(&mut px.sql()).unwrap();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        (found[0].code, found[0].object.as_str(), found[0].error),
+        ("history_foreign_numbers", "history", false)
+    );
+    assert!(
+        found[0].detail.contains("2 entries") && found[0].detail.contains("docs/DEPLOY.md"),
+        "{}",
+        found[0].detail
+    );
+
+    // The remedy of docs/DEPLOY.md, as it is written there, run by the owner of the table.
+    px.sql()
+        .batch_execute(&deploy_sql("**Moving a database to another cluster.**"))
+        .unwrap();
+    px.settled();
+    let page = px.feed(None, 10);
+    assert_eq!(page.foreign_entries, Some(0), "{page:?}");
+    // Every entry has number 0 now, as after a restore: the feed is in the order of the entry
+    // numbers, which is the order the changes were made in, those of the other cluster first.
+    let names: Vec<_> = page
+        .rows
+        .iter()
+        .map(|r| (r.txid, r.changed["name"]["a"].clone()))
+        .collect();
+    assert_eq!(
+        names,
+        vec![(0, json!("A")), (0, json!("B")), (0, json!("C"))]
+    );
+    assert_eq!(px.b.history_stats().unwrap().foreign_rows, 0);
+    assert!(crate::schema::inspect(&mut px.sql()).unwrap().is_empty());
+    // The cursors made before are over (the epoch was renewed), as are those of the other cluster.
+    let e =
+        px.b.changes(&ChangeQuery {
+            after: Some(old_cursor),
+            limit: 10,
+            ..ChangeQuery::default()
+        })
+        .unwrap_err();
+    assert!(e.starts_with("cursor_expired"), "{e}");
+    // The sequence is past the numbers that were there, so history by record is in order.
+    px.ok("ann", &[merge("deal", "d1", json!({"name": "D"}))]);
+    let seqs: Vec<i64> = px.placed().iter().map(|p| p.0).collect();
+    assert_eq!(seqs, vec![1, 2, 3, 4], "no number is given twice");
+    let record =
+        px.b.history(&HistoryQuery::of("deal", "d1", 10))
+            .unwrap()
+            .iter()
+            .map(|r| r.changed["name"]["a"].clone())
+            .collect::<Vec<_>>();
+    assert_eq!(
+        record,
+        vec![json!("D"), json!("C"), json!("B"), json!("A")],
+        "newest first"
     );
 }
 

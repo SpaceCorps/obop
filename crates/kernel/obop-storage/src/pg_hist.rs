@@ -11,16 +11,17 @@
 //!   `obop_history_drop_partition`, `obop_history_erase`, and the guard itself). Unlike the
 //!   record store it is **not made at start**: a process that starts touches nothing for a
 //!   feature that no model uses, so a database installed before it opens as it always did, with
-//!   any role that could open it. It is made by `Backend::ensure_history_schema` (the command
-//!   layer calls it when it registers a model that keeps history) under `Ddl::IfMissing`, and
-//!   only checked under `Ddl::Never`; `schema::install_all` makes it with the rest, and a restore
-//!   whose backup carries entries makes it under `IfMissing`.
+//!   any role that could open it. It is made by the first write of a model that keeps history
+//!   (`State::install_on_demand`, under `Ddl::IfMissing`), by `Backend::ensure_history_schema`
+//!   (which the command layer will call when it registers a model that keeps history, D75 WP4
+//!   and WP7: nothing calls it yet; under `Ddl::Never` it only checks), by
+//!   `schema::install_all`, and by a restore whose backup carries entries (under `IfMissing`).
 //! - **The transaction** ([`Tx`]): the lock of a record and the database's clock in one statement
 //!   (the clock is read after the lock is granted, so the stamps of two writers of one record
 //!   follow the order of the locks), the flush of the entries of a batch in one statement, and the
 //!   erasure of the values of a record's entries.
 //! - **Reads**: the history of a record, the change feed (commit-safe: an entry is shown only
-//!   once no transaction that began before its own can still commit), statistics.
+//!   once no transaction that holds a lower transaction number is still open), statistics.
 //! - **Maintenance primitives**: make and drop the partition of a month. The tick that calls
 //!   them is not here.
 //! - **The stamp of old records** (`backfill`), **backup** (`export` of the entries as the rows
@@ -30,6 +31,7 @@
 //! The append-only guard is an accident guard, not a defence against the role that owns the table
 //! (it can set the maintenance setting itself): real separation of roles is D77.
 
+use crate::fault::Fault;
 use crate::history::{
     self, Backfilled, ChangePage, ChangeQuery, HistoryQuery, HistoryStats, PartitionEnsured,
 };
@@ -282,6 +284,7 @@ pub(crate) const PART: Part = Part {
     name: "history",
     render,
     check,
+    audit: Some(audit),
     required: false,
 };
 
@@ -298,13 +301,30 @@ const NOT_INSTALLED: &str = "the change history is not installed in this databas
      (obop_storage::schema::owner_install, or the migration step of the history), or start the \
      process with permission to create the schema";
 
-/// `NOT_INSTALLED`, and why this process could not make the part itself, if it tried.
+/// `NOT_INSTALLED`, and why this process could not make the part itself, if it tried. When the
+/// reason is a fault of the store (the connection broke, a time limit ran out, every connection
+/// was busy), the text starts with that fault's code and says to try again: installing it with
+/// another role is not the remedy for those.
 fn not_installed(why: Option<String>) -> String {
     match why {
+        Some(why) if Fault::of_message(&why).is_some() => format!(
+            "{why}; the change history is not installed yet and this process could not make it \
+             just now (the table obop_record_change is missing): try again"
+        ),
         Some(why) => {
             format!("{NOT_INSTALLED} (this process tried to install it and could not: {why})")
         }
         None => NOT_INSTALLED.to_string(),
+    }
+}
+
+/// How long after a failed install this process leaves the part alone: a refusal by the server
+/// (the role may not create) does not change by itself, a fault of the store is over in moments.
+fn install_backoff(why: &str) -> Duration {
+    if Fault::of_message(why).is_some() {
+        Duration::from_secs(1)
+    } else {
+        Duration::from_secs(30)
     }
 }
 
@@ -361,7 +381,7 @@ impl State {
         {
             let mut last = self.probed.lock().unwrap_or_else(|e| e.into_inner());
             if last.is_some_and(|t| t.elapsed() < Duration::from_secs(1)) {
-                return Err(not_installed(self.install_problem()));
+                return Err(self.refusal());
             }
             *last = Some(Instant::now());
         }
@@ -369,8 +389,19 @@ impl State {
             self.ready.store(true, Ordering::Release);
             Ok(())
         } else {
-            Err(not_installed(self.install_problem()))
+            Err(self.refusal())
         }
+    }
+
+    /// The refusal of a write that needs the part when it is not there. When the reason this
+    /// process could not make it is a fault of the store, that fault is the request's own now
+    /// (it is refused for it): noted, so that the answer is the 503 that can be tried again.
+    fn refusal(&self) -> String {
+        let why = self.install_problem();
+        if let Some(f) = why.as_deref().and_then(Fault::of_message) {
+            crate::fault::note(f);
+        }
+        not_installed(why)
     }
 
     /// The `Ddl` this process was opened with.
@@ -379,7 +410,7 @@ impl State {
     }
 
     /// Why this process could not make the part, if it tried and failed.
-    fn install_problem(&self) -> Option<String> {
+    pub(crate) fn install_problem(&self) -> Option<String> {
         self.install_retry
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -392,7 +423,7 @@ impl State {
     /// once in 30 seconds after a failure. A role that may not create tables fails here and the
     /// write is refused with the reason by [`State::require`]; nothing else is affected, and a
     /// process that never writes history never gets here. Under `Never` nothing is made.
-    fn install_on_demand(&self, main: &PgPool) {
+    pub(crate) fn install_on_demand(&self, main: &PgPool) {
         if self.ddl != Ddl::IfMissing {
             return;
         }
@@ -412,8 +443,9 @@ impl State {
                 *self.install_retry.lock().unwrap_or_else(|e| e.into_inner()) = None;
             }
             Err(why) => {
+                let wait = install_backoff(&why);
                 *self.install_retry.lock().unwrap_or_else(|e| e.into_inner()) =
-                    Some((Instant::now() + Duration::from_secs(30), why));
+                    Some((Instant::now() + wait, why));
             }
         }
     }
@@ -820,21 +852,52 @@ pub(crate) fn epoch_of(stored: &str, cluster: Option<&str>) -> String {
     }
 }
 
-/// How far the clock of the oldest entry the feed holds back is behind: entries that committed
-/// after a transaction that began earlier and is still open.
+/// How far the clock of the oldest entry the feed holds back is behind: entries numbered at or
+/// above the oldest transaction that is still open on the server and below the next number it
+/// will give out. Numbers beyond that belong to no transaction of this cluster ([`FOREIGN`]).
 const HELD_BACK: &str = "SELECT (extract(epoch FROM clock_timestamp() - min(at)) * 1000)::bigint
-       FROM obop_record_change WHERE txid >= pg_snapshot_xmin(pg_current_snapshot())";
+       FROM obop_record_change
+      WHERE txid >= pg_snapshot_xmin(pg_current_snapshot())
+        AND txid < pg_snapshot_xmax(pg_current_snapshot())";
+
+/// How many entries carry a transaction number that this cluster has not given out yet: a dump
+/// loaded into a new cluster, or replication from another, keeps the numbers as plain data, and
+/// the counter of the new one may be lower. The feed shows an entry only below the oldest open
+/// transaction, so it would not show these until the counter passed them, and then after newer
+/// entries of the same record.
+pub(crate) const FOREIGN: &str = "SELECT count(*) FROM obop_record_change
+      WHERE txid >= pg_snapshot_xmax(pg_current_snapshot())";
+
+/// The warning of [`schema::inspect`] about entries counted by [`FOREIGN`], or none.
+fn audit(c: &mut Client) -> Result<Vec<schema::Finding>> {
+    let n: i64 = c.query_one(FOREIGN, &[]).map_err(|e| describe(&e))?.get(0);
+    if n == 0 {
+        return Ok(Vec::new());
+    }
+    Ok(vec![schema::Finding {
+        code: "history_foreign_numbers",
+        object: "history".to_string(),
+        detail: format!(
+            "{n} entries of the change history carry a transaction number that this cluster has \
+             not given out yet (the database was loaded from a dump or replicated from another \
+             cluster), so the change feed cannot show them; renumber them as docs/DEPLOY.md \
+             \"Moving a database to another cluster\" says"
+        ),
+        error: false,
+    }])
+}
 
 /// One page of the feed: in `(txid, seq)` order, only what lies below the oldest transaction that
-/// is still open anywhere in the cluster (its entries, and the entries of everything that began
-/// after it, are held back; none is lost).
+/// holds a transaction number and is still open anywhere in the cluster (its entries, and the
+/// entries of everything numbered after it, are held back; none is lost). Entries numbered beyond
+/// the cluster ([`FOREIGN`]) are not shown and are counted apart.
 pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
     let limit = history::feed_limit(q)?;
     let since = micros_of(&q.since_at)?;
     let stored = history::feed_epoch(pg)?;
     let models = (!q.models.is_empty()).then(|| q.models.clone());
     let ops = (!q.ops.is_empty()).then(|| q.ops.clone());
-    let (rows, lag, epoch) = pg.main.read_tx(Class::List, |tx| {
+    let (rows, lag, foreign, epoch) = pg.main.read_tx(Class::List, |tx| {
         // The cursors are made for this cluster and this time line of it: the order of the feed
         // is that of the transaction numbers of the server, which another cluster (a dump loaded
         // into a new one) or an earlier time line (a point in time recovery, a failover to a
@@ -876,7 +939,7 @@ pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
             .into());
         }
         if !exists || limit == 0 {
-            return Ok((Vec::new(), None, epoch));
+            return Ok((Vec::new(), None, None, epoch));
         }
         let rows = tx.query(
             &feed_sql(),
@@ -891,15 +954,19 @@ pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
         )?;
         let rows: Vec<ChangeRow> = rows.iter().map(read_change).collect::<PR<_>>()?;
         // Only when the page reached the horizon can something lie beyond it.
-        let lag: Option<i64> = if rows.len() < limit {
-            tx.query_one(HELD_BACK, &[])?.get(0)
+        let (lag, foreign): (Option<i64>, Option<i64>) = if rows.len() < limit {
+            (
+                tx.query_one(HELD_BACK, &[])?.get(0),
+                Some(tx.query_one(FOREIGN, &[])?.get(0)),
+            )
         } else {
-            None
+            (None, None)
         };
-        Ok((rows, lag, epoch))
+        Ok((rows, lag, foreign, epoch))
     })?;
     let mut page = history::page(&epoch, q, rows);
     page.horizon_lag_ms = lag.map(|ms| ms.max(0));
+    page.foreign_entries = foreign;
     Ok(page)
 }
 
@@ -964,6 +1031,7 @@ pub(crate) fn stats(pg: &Pg) -> Result<HistoryStats> {
             .query_one(HELD_BACK, &[])?
             .get::<_, Option<i64>>(0)
             .map_or(0, |ms| ms.max(0));
+        out.foreign_rows = c.query_one(FOREIGN, &[])?.get(0);
         Ok(out)
     })?;
     s.maintenance_error = pg

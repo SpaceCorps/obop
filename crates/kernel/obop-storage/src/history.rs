@@ -120,8 +120,17 @@ pub struct ChangePage {
     /// where the question began (`None` only when it began at the start of an empty feed).
     pub next: Option<ChangeCursor>,
     /// On PostgreSQL, how old (in milliseconds) the oldest entry is that the feed holds back
-    /// because a transaction that began before it is still open; `None` when nothing is held back.
+    /// because a transaction with a lower transaction number is still open. Only worked out for a
+    /// page that is not full (a full page has more to say first, and what lies beyond it is not
+    /// looked at): `None` means nothing is held back or that nobody looked.
     pub horizon_lag_ms: Option<i64>,
+    /// On PostgreSQL, how many entries carry a transaction number that the cluster has not given
+    /// out yet, which the feed cannot show: the history was loaded from another cluster by a
+    /// dump or by replication, whose counter ran further (docs/DEPLOY.md, "Moving a database to
+    /// another cluster"). They are not held back by an open transaction and are not counted in
+    /// `horizon_lag_ms`. Worked out with `horizon_lag_ms` (so `None` for a full page); `Some(0)`
+    /// is the normal answer.
+    pub foreign_entries: Option<i64>,
 }
 
 /// What the store can say about its history without reading it (`obop storage check`, the
@@ -141,6 +150,9 @@ pub struct HistoryStats {
     pub partitions: Vec<(String, i64)>,
     /// As [`ChangePage::horizon_lag_ms`], 0 when nothing is held back.
     pub horizon_lag_ms: i64,
+    /// Entries numbered beyond the cluster (see [`ChangePage::foreign_entries`]). Not zero is a
+    /// warning: the feed cannot show them until the owner renumbers them.
+    pub foreign_rows: i64,
     /// Why the last attempt of this process to make the partitions of the current month failed,
     /// if it did. The entries went to the default partition; nothing was lost.
     pub maintenance_error: Option<String>,
@@ -205,7 +217,9 @@ pub(crate) fn resume(epoch: &str, after: Option<&ChangeCursor>, newest: i64) -> 
     };
     if c.epoch != epoch {
         return Err(cursor_expired(
-            "the history was restored since this cursor was made; read the feed again from the start",
+            "the history was restored, or the database moved to another cluster or time line (a \
+             promotion ends every cursor), since this cursor was made; read the feed again from \
+             the start",
         ));
     }
     if c.seq > newest {
@@ -254,6 +268,7 @@ pub(crate) fn page(
         rows,
         next,
         horizon_lag_ms: None,
+        foreign_entries: None,
     }
 }
 

@@ -284,11 +284,12 @@ pub trait Backend: Send + Sync {
     }
     /// The entries of the change history of every record, in the order a consumer must read them
     /// (D75): one page, from `q.after` on. On PostgreSQL the order is `(txid, seq)` and an entry is
-    /// shown only once no transaction that began before its own can still commit, so a consumer
-    /// that follows the cursor never misses an entry that committed late; memory and SQLite order
-    /// by `seq`. A cursor that cannot be followed (the history was restored, the database went
-    /// back in time or was moved to another cluster) is refused with an error that starts `cursor_expired:`. A backend that keeps
-    /// no history refuses.
+    /// shown only once no transaction that holds a lower transaction number is still open, so a
+    /// consumer that follows the cursor never misses an entry that committed late; memory and
+    /// SQLite order by `seq`. A cursor that cannot be followed (the history was restored, the
+    /// database went back in time, was moved to another cluster or changed time line, which every
+    /// promotion does) is refused with an error that starts `cursor_expired:`. A backend that
+    /// keeps no history refuses.
     fn changes(&self, _q: &ChangeQuery) -> Result<ChangePage> {
         Err("this storage backend keeps no change history".into())
     }
@@ -312,8 +313,10 @@ pub trait Backend: Send + Sync {
     /// Drop the partition of the month `YYYY-MM` and return how many entries it held. The
     /// database refuses a month that ended less than `min_age_days` days ago, which the caller
     /// sets to the **longest** retention of the models that have entries in the month (the
-    /// database cannot see the models), and it refuses a missing or negative age: it is the check
-    /// that outlives a mistake of the caller.
+    /// database cannot see the models). A month that is not over is never dropped; the SQL
+    /// function also refuses a missing or negative age, also one that mixes months and days of
+    /// opposite signs (the floor is tested as an instant): it is the check that outlives a
+    /// mistake of the caller.
     fn history_drop_partition(&self, _month: &str, _min_age_days: u32) -> Result<u64> {
         Ok(0)
     }
