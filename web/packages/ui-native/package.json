@@ -1,0 +1,30 @@
+{
+  "name": "@obop/ui-native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The small themed React Native component set of the obop apps (Screen, Button, Row, Field, Banner) and the native design tokens. Drawn in the web Storybook through react-native-web.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens": "./src/tokens.native.ts"
+  },
+  "scripts": {
+    "generate:tokens": "node scripts/generate-tokens.ts"
+  },
+  "devDependencies": {
+    "@storybook/react-vite": "10.6.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  }
+}
