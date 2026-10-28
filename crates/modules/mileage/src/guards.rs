@@ -140,8 +140,19 @@ fn get_trip(db: Db) -> Guard {
 fn get_point(db: Db) -> Guard {
     Box::new(move |p, input| {
         let (who, id) = (Who::of(p), id_of(input)?);
-        match db.get(policy::POINT, &id)? {
-            Some(pt) if !who.plain_driver() || policy::text(&pt, "driver") == who.id => {
+        // A point is as visible as its trip: a reviewer does not learn that the point of a trip
+        // they may not read exists (the model's own row rule would hide it from `get`, but not
+        // from the refusals of `update` and `delete`, which no generated guard stands in front of).
+        let point = db.get(policy::POINT, &id)?;
+        let trip = match &point {
+            Some(pt) => db.get(policy::TRIP, policy::text(pt, "trip"))?,
+            None => None,
+        };
+        match (&point, &trip) {
+            (Some(pt), Some(t))
+                if policy::may_see_trip(&who, t)
+                    && (!who.plain_driver() || policy::text(pt, "driver") == who.id) =>
+            {
                 Ok(Verdict::default())
             }
             _ => Err(policy::no_such(policy::POINT, &id)),
@@ -190,6 +201,9 @@ fn update_trip(db: Db) -> Guard {
         let m = map(input)?;
         let id = id_of(input)?;
         let trip = visible_trip(&db, &who, &id)?;
+        for (k, v) in m {
+            policy::check_count(k, v)?;
+        }
         let changed: Vec<&String> = m
             .iter()
             .filter(|(k, v)| {
@@ -239,6 +253,7 @@ fn trip_row(who: &Who, row: &Value) -> Result<Value, String> {
     };
     for (k, v) in r {
         let k = k.as_str();
+        policy::check_count(k, v)?;
         if policy::CREATE_FIELDS.contains(&k) {
             continue;
         }
@@ -449,7 +464,7 @@ fn point_rows(
     Ok(stamped)
 }
 
-fn create_point(db: Db) -> Guard {
+pub(crate) fn create_point(db: Db) -> Guard {
     Box::new(move |p, input| {
         let rows = point_rows(&db, &Who::of(p), std::slice::from_ref(input), |_| false)?;
         Ok(match rows.into_iter().next() {
@@ -459,7 +474,7 @@ fn create_point(db: Db) -> Guard {
     })
 }
 
-fn bulk_points(db: Db, clock: Clock) -> Guard {
+pub(crate) fn bulk_points(db: Db, clock: Clock) -> Guard {
     Box::new(move |p, input| {
         let m = map(input)?;
         let Some(rows) = rows_of(m)? else {
@@ -489,8 +504,22 @@ fn bulk_points(db: Db, clock: Clock) -> Guard {
 fn action(db: Db, name: &'static str) -> Guard {
     Box::new(move |p: &Principal, input| {
         let who = Who::of(p);
-        let trip = visible_trip(&db, &who, &id_of(input)?)?;
-        policy::check_action(name, &who, None, &trip).map(|_| Verdict::default())
+        let id = id_of(input)?;
+        let trip = visible_trip(&db, &who, &id)?;
+        // The run of an approved plan: the approver stands behind the action, and is held to the
+        // same rule as a caller before the plan is spent.
+        let approver = policy::Approver::of(input);
+        if let Some(a) = &approver {
+            a.check(name, &id)?;
+        }
+        policy::check_action(
+            name,
+            &who,
+            approver.as_ref().map(|a| a.who.id.as_str()),
+            &trip,
+        )?;
+        // The roles are decided here, once, for the principal, and the handler uses them.
+        Ok(new_input(who.stamp_roles(input)))
     })
 }
 

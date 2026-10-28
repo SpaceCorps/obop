@@ -12,7 +12,7 @@ use crate::Clock;
 use crate::policy::{self, Fields, Who};
 use crate::track::{self, Fix, Options};
 use obop_commands::errors::{self, code};
-use obop_commands::{Actor, Dispatcher, Value};
+use obop_commands::{Dispatcher, Value};
 use obop_registry::Module;
 use obop_storage::{ApplyError, Backend, Op};
 use obop_values::Instant;
@@ -120,9 +120,18 @@ fn end(db: &Db, id: &str, trip: &Fields, input: &Value) -> Result<Fields, String
     if expected < 0 || last_seq < 0 {
         return Err("expected_points and last_seq cannot be negative".into());
     }
+    let cap = policy::MAX_POINTS_PER_TRIP as i64;
     let points = stored_points(db, id)?;
     let have = points.len() as i64;
     let highest = points.last().map_or(0, |p| p.seq);
+    // Numbers no set of points can ever meet: a trip holds at most `cap` points, seq counts from 1
+    // (so a trip holds no more points than its last seq), and the call is wrong for good. The
+    // retry that the code `incomplete` invites would never end, so these are not that.
+    if expected > cap || last_seq > cap || expected > last_seq {
+        return Err(format!(
+            "expected_points {expected} and last_seq {last_seq} cannot both be right: a trip holds at most {cap} points, seq counts from 1 and a trip holds no more points than its last seq. The trip holds {have} points and the highest seq is {highest}; call end again with expected_points {have} and last_seq {highest}"
+        ));
+    }
     // Fewer points than the device said, and none beyond its last seq: the rest may still arrive,
     // and the same call can be repeated until it has.
     if have < expected && highest <= last_seq {
@@ -186,11 +195,16 @@ pub(crate) fn run(
     let Some(trip) = db.get(policy::TRIP, &id)? else {
         return Err(policy::no_such(policy::TRIP, &id));
     };
-    let approver = Some(text(input, "_actor_approver")).filter(|a| !a.is_empty());
     // The dispatcher has checked the group and the guard the policy; this is the same decision
-    // again on the record as it is now, for the roles the call carries (a plan that was approved
-    // later runs as the agent that proposed it).
-    let who = Who::from_actor(&Actor::from_input(input));
+    // again on the record as it is now, with the roles the guard decided for the caller (a plan
+    // that was approved later runs as the agent that proposed it) and the standing of the person
+    // who approved it.
+    let who = Who::from_input(input);
+    let approver = policy::Approver::of(input);
+    if let Some(a) = &approver {
+        a.check(action, &id)?;
+    }
+    let approver = approver.map(|a| a.who.id);
     policy::check_action(action, &who, approver.as_deref(), &trip)?;
     let decider = approver.clone().unwrap_or_else(|| who.id.clone());
     let mut patch = match action {

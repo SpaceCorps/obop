@@ -54,7 +54,7 @@ fn trip() -> ModelDef {
         fields: vec![
             F::new(
                 "client_trip_id",
-                "Identifier the app made when the driver pressed Start (a UUIDv7); unique per driver, and how the app finds its trip again",
+                "Identifier the app made when the driver pressed Start (a random UUID, version 4: not a version 7, which carries the time); unique per driver, and how the app finds its trip again",
                 Internal,
                 false,
                 DRIVER,

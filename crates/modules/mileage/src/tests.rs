@@ -1803,7 +1803,9 @@ fn end_is_retryable_only_while_more_points_could_still_arrive() {
         // More points are stored than the device said: no waiting helps, the counts are wrong.
         let id = r.recording(&ann);
         r.walk(&ann, &id, 1, 4);
-        for (expected, last) in [(3, 3), (4, 3), (3, 4), (5, 3)] {
+        // (4, 5): the count is right and the last seq is not; a fifth point would make the count
+        // wrong.
+        for (expected, last) in [(3, 3), (4, 3), (3, 4), (5, 3), (4, 5)] {
             let end = json!({"id": id, "expected_points": expected, "last_seq": last});
             let (status, code) = r.classified(&ann, "mileage_trip.end", end.clone());
             assert_eq!(
@@ -2131,34 +2133,69 @@ fn a_reviewer_or_administrator_without_the_driver_group_acts_on_nothing() {
 }
 
 #[test]
-fn the_handler_checks_the_roles_of_the_actor_again_whatever_the_guard_let_through() {
-    // The actions run in a handler that decides by the actor the dispatcher stamped. Called
-    // directly, as a guard that failed to refuse would let it be, it holds the roles to the same
-    // rule: a role counts only on top of the base group.
+fn the_handler_checks_the_roles_and_the_approver_again_whatever_the_guard_let_through() {
+    // The actions run in a handler that decides by the roles the guard stamped for the caller and
+    // by who approved the plan. Called directly, as a guard that failed to refuse would let it be,
+    // it holds both to the same rule: a role counts only on top of the base group.
     each_rig(|r| {
         let ann = driver("ann");
-        let review = r.in_review(&ann);
-        let stuck = r.recording(&ann);
         let db = r.store.backend();
         let clock: Clock = Arc::new(start);
-        let call = |action: &'static str, id: &str, who: &str, groups: &[&str]| {
-            let input = Value::from_json(&json!({
-                "id": id,
-                "_actor": who,
-                "_actor_caller": who,
-                "_actor_admin": false,
-                "_actor_groups": groups,
-            }));
-            crate::handlers::run(&db, &clock, action, &input)
-        };
-        let e = call("confirm", &review, "rex", &[REVIEWER]).unwrap_err();
+        let call =
+            |action: &'static str, id: &str, roles: &[&str], approver: Option<(&str, &[&str])>| {
+                let mut input = json!({
+                    "id": id,
+                    "_actor": "rex",
+                    "_actor_caller": "rex",
+                    "_actor_mileage_reviewer": roles.contains(&"reviewer"),
+                    "_actor_mileage_admin": roles.contains(&"admin"),
+                });
+                if let Some((who, groups)) = approver {
+                    input["_actor_approver"] = J::from(who);
+                    input["_actor_approver_admin"] = J::from(false);
+                    input["_actor_approver_groups"] = json!(groups);
+                }
+                crate::handlers::run(&db, &clock, action, &Value::from_json(&input))
+            };
+        let review = r.in_review(&ann);
+        let stuck = r.recording(&ann);
+        // No role stamped: a plain driver, who decides nothing.
+        let e = call("confirm", &review, &[], None).unwrap_err();
         assert!(e.contains("only a reviewer"), "{e}");
-        let e = call("discard_stuck", &stuck, "ada", &[ADMIN]).unwrap_err();
+        let e = call("discard_stuck", &stuck, &["reviewer"], None).unwrap_err();
+        assert!(e.contains("only a mileage administrator"), "{e}");
+        // The approver is held to the rule as well: without the base group they decide nothing,
+        // with only the base group they are not a reviewer.
+        for groups in [&[REVIEWER][..], &[ADMIN], &[]] {
+            let e = call("confirm", &review, &["reviewer"], Some(("dan", groups))).unwrap_err();
+            assert!(e.starts_with("no mileage_trip"), "{groups:?}: {e}");
+        }
+        let e = call("confirm", &review, &["reviewer"], Some(("dan", &[DRIVER]))).unwrap_err();
+        assert!(e.contains("only a reviewer"), "{e}");
+        let e = call(
+            "discard_stuck",
+            &stuck,
+            &["admin"],
+            Some(("eve", &[DRIVER, REVIEWER])),
+        )
+        .unwrap_err();
         assert!(e.contains("only a mileage administrator"), "{e}");
         assert_eq!(r.state(&review), "in_review");
         assert_eq!(r.state(&stuck), "recording");
-        call("confirm", &review, "rex", &[DRIVER, REVIEWER]).unwrap();
-        call("discard_stuck", &stuck, "ada", &[DRIVER, ADMIN]).unwrap();
+        call(
+            "confirm",
+            &review,
+            &["reviewer"],
+            Some(("dan", &[DRIVER, REVIEWER])),
+        )
+        .unwrap();
+        call(
+            "discard_stuck",
+            &stuck,
+            &["admin"],
+            Some(("eve", &[DRIVER, ADMIN])),
+        )
+        .unwrap();
         assert_eq!(r.state(&review), "confirmed");
         assert_eq!(r.state(&stuck), "discarded");
     });
@@ -2320,4 +2357,395 @@ fn a_stuck_trip_discard_and_its_log_entry_are_one_write_that_is_never_half_done(
         }
     }
     assert!(conflicts > 0, "the walk never met the compare-and-set");
+}
+
+// ---- the second round of the review ------------------------------------------------------------
+
+fn propose(r: &Rig, agent: &Principal, cmd: &str, id: &str) -> String {
+    match r.raw(agent, cmd, json!({"id": id})) {
+        Err(CallError::ApprovalRequired { plan_id }) => plan_id,
+        other => panic!("{cmd} by {}: expected a proposal, got {other:?}", agent.id),
+    }
+}
+
+fn first_point(r: &Rig, trip: &str) -> String {
+    r.store
+        .backend()
+        .find(POINT, "trip", &J::from(trip))
+        .unwrap()[0]
+        .0
+        .clone()
+}
+
+#[test]
+fn an_approver_without_the_driver_group_stands_behind_nothing() {
+    each_rig(|r| {
+        let (ann, rita) = (driver("ann"), reviewer("rita"));
+        let rex_agent = Principal::agent("rex/agent", &[DRIVER, REVIEWER], &[DRIVER, REVIEWER]);
+        let ada_agent = Principal::agent("ada/agent", &[DRIVER, ADMIN], &[DRIVER, ADMIN]);
+        // A reviewer account with only the role, like an administrator account with only its role,
+        // reads nothing and decides nothing: the approval route is no way round that.
+        let (dan, eve) = (
+            Principal::user("dan", &[REVIEWER]),
+            Principal::user("eve", &[ADMIN]),
+        );
+        let id = r.in_review(&ann);
+        let plan = propose(r, &rex_agent, "mileage_trip.confirm", &id);
+        let refused = r.d.approve(&dan, &mut Vault::new(), &plan);
+        assert!(
+            matches!(refused, Err(CallError::Handler(ref m)) if m.starts_with("no mileage_trip")),
+            "{refused:?}"
+        );
+        assert_eq!(r.state(&id), "in_review");
+        // The refusal did not spend the proposal: a reviewer who may decide still can.
+        r.d.approve(&rita, &mut Vault::new(), &plan).unwrap();
+        let row = r.trip_row(&id);
+        assert_eq!(row["state"], "confirmed");
+        assert_eq!(row["reviewed_by"], "rita");
+
+        let stuck = r.recording(&ann);
+        let plan = propose(r, &ada_agent, "mileage_trip.discard_stuck", &stuck);
+        let refused = r.d.approve(&eve, &mut Vault::new(), &plan);
+        assert!(
+            matches!(refused, Err(CallError::Handler(ref m)) if m.starts_with("no mileage_trip")),
+            "{refused:?}"
+        );
+        assert_eq!(r.state(&stuck), "recording");
+        assert!(r.events("mileage_discard_stuck").is_empty());
+        // The administrator of the platform holds every group, and approves.
+        let root = Principal::user("root", &["platform.admin"]);
+        r.d.approve(&root, &mut Vault::new(), &plan).unwrap();
+        assert_eq!(r.state(&stuck), "discarded");
+        assert_eq!(r.events("mileage_discard_stuck")[0].1, "root");
+    });
+}
+
+#[test]
+fn the_roles_of_an_agent_of_a_platform_administrator_are_the_same_in_the_guard_and_the_handler() {
+    each_rig(|r| {
+        let (ann, rita) = (driver("ann"), reviewer("rita"));
+        // The agent holds the groups of an instance administrator (every group, narrowed by its
+        // scopes): the guard said yes, and the handler used to ask the stamped actor, which holds
+        // only the groups the principal lists by name, and said no after the plan was spent.
+        let agent = Principal::agent(
+            "root/agent",
+            &["platform.admin"],
+            &[DRIVER, REVIEWER, ADMIN],
+        );
+        let id = r.in_review(&ann);
+        let plan = propose(r, &agent, "mileage_trip.confirm", &id);
+        r.d.approve(&rita, &mut Vault::new(), &plan).unwrap();
+        assert_eq!(r.state(&id), "confirmed");
+        let rejected = r.in_review(&ann);
+        r.ok(
+            &rita,
+            "mileage_trip.update",
+            json!({"id": rejected, "reject_reason": "no receipt"}),
+        );
+        r.ok(&rita, "mileage_trip.reject", json!({"id": rejected}));
+        r.ok(&agent, "mileage_trip.reopen", json!({"id": rejected}));
+        assert_eq!(r.state(&rejected), "ended");
+    });
+}
+
+#[test]
+fn what_the_dispatcher_stamps_about_the_approver_cannot_be_sent_by_a_client() {
+    each_rig(|r| {
+        let (ann, rex) = (driver("ann"), reviewer("rex"));
+        let id = r.in_review(&ann);
+        // If the approver stamps were taken from the input, Ann (the driver, and no reviewer)
+        // would be the one standing behind the confirmation, and the call would be refused.
+        r.ok(
+            &rex,
+            "mileage_trip.confirm",
+            json!({"id": id, "_actor_approver": "ann", "_actor_approver_groups": [],
+                   "_actor_approver_admin": false, "_actor_mileage_reviewer": false}),
+        );
+        let row = r.trip_row(&id);
+        assert_eq!(row["state"], "confirmed");
+        assert_eq!(row["reviewed_by"], "rex");
+        // And roles a client claims for itself are not taken either: an account with only the
+        // reviewer group, which the dispatcher lets call the command, is still nobody's reviewer.
+        let other = r.in_review(&ann);
+        let dan = Principal::user("dan", &[REVIEWER]);
+        let e = r.refused(
+            &dan,
+            "mileage_trip.confirm",
+            json!({"id": other, "_actor_mileage_reviewer": true, "_actor_mileage_admin": true}),
+        );
+        assert!(e.starts_with("no mileage_trip"), "{e}");
+        assert_eq!(r.state(&other), "in_review");
+    });
+}
+
+#[test]
+fn a_reviewer_cannot_tell_the_point_of_a_hidden_trip_from_a_missing_one() {
+    each_rig(|r| {
+        let (ann, rev) = (driver("ann"), reviewer("rita"));
+        let recording = r.recording(&ann);
+        r.walk(&ann, &recording, 1, 2);
+        let ended = r.ended(&ann);
+        let discarded = {
+            let id = r.recording(&ann);
+            r.walk(&ann, &id, 1, 2);
+            r.ok(
+                &ann,
+                "mileage_trip.update",
+                json!({"id": id, "discard_reason": "test"}),
+            );
+            r.ok(&ann, "mileage_trip.discard", json!({"id": id}));
+            id
+        };
+        for trip in [&recording, &ended, &discarded] {
+            let point = first_point(r, trip);
+            for (cmd, extra) in [
+                ("mileage_point.get", json!({})),
+                ("mileage_point.update", json!({"lat": "1.0000000"})),
+                ("mileage_point.delete", json!({})),
+            ] {
+                let ask = |pid: &str| {
+                    let mut input = json!({"id": pid});
+                    for (k, v) in extra.as_object().unwrap() {
+                        input[k] = v.clone();
+                    }
+                    r.refused(&rev, cmd, input).replace(pid, "X")
+                };
+                assert_eq!(
+                    ask(&point),
+                    ask("no-such-point"),
+                    "{cmd} on a point of a trip that is {}",
+                    r.state(trip)
+                );
+            }
+        }
+    });
+}
+
+#[test]
+fn counts_that_no_trip_can_meet_are_refused_for_good_and_not_invited_to_a_retry() {
+    each_rig(|r| {
+        let ann = driver("ann");
+        let id = r.recording(&ann);
+        r.walk(&ann, &id, 1, 2);
+        // At the cap the points could still arrive: the retryable answer.
+        let (status, code) = r.classified(
+            &ann,
+            "mileage_trip.end",
+            json!({"id": id, "expected_points": 20_000, "last_seq": 20_000}),
+        );
+        assert_eq!((status, code.as_str()), (409, "incomplete"));
+        // Above the cap, or more points than the last seq has places for, they never will.
+        for (expected, last) in [
+            (20_001, 20_001),
+            (30_000, 30_000),
+            (20_001, 20_000),
+            (5, 3),
+            (3, 2),
+        ] {
+            let end = json!({"id": id, "expected_points": expected, "last_seq": last});
+            let (status, code) = r.classified(&ann, "mileage_trip.end", end.clone());
+            assert_eq!(
+                (status, code.as_str()),
+                (400, "bad_request"),
+                "{expected}/{last}"
+            );
+            let e = r.refused(&ann, "mileage_trip.end", end);
+            assert!(
+                e.contains("expected_points 2") && e.contains("last_seq 2"),
+                "{e}"
+            );
+        }
+        assert_eq!(r.state(&id), "recording");
+        // The device cannot write such numbers to the trip either.
+        for field in ["expected_points", "last_seq"] {
+            let mut too_many = json!({"id": id});
+            too_many[field] = J::from(20_001);
+            let e = r.refused(&ann, "mileage_trip.update", too_many);
+            assert!(e.contains(field) && e.contains("20000"), "{e}");
+            let mut at_the_cap = json!({"id": id});
+            at_the_cap[field] = J::from(20_000);
+            r.ok(&ann, "mileage_trip.update", at_the_cap);
+        }
+        let e = r.refused(
+            &ann,
+            "mileage_trip.create",
+            json!({"client_trip_id": "0192f000-0000-7000-8000-0000000fffff",
+                   "started_at": stamp(start()), "expected_points": 20_001}),
+        );
+        assert!(e.contains("20000"), "{e}");
+        let e = r.refused(
+            &ann,
+            "mileage_trip.bulk_create",
+            json!({"rows": [{"client_trip_id": "0192f000-0000-7000-8000-0000000ffffe",
+                             "started_at": stamp(start()), "last_seq": 20_001}]}),
+        );
+        assert!(e.contains("20000"), "{e}");
+    });
+}
+
+#[test]
+fn a_gap_in_the_middle_is_still_retryable_and_the_late_point_lets_the_trip_end() {
+    each_rig(|r| {
+        let ann = driver("ann");
+        let id = r.recording(&ann);
+        // Batches may arrive out of order: 1, 2, 3 and 5 are stored, 4 is still on its way.
+        for seq in [1, 2, 3, 5] {
+            r.ok(&ann, "mileage_point.create", walk_row(&id, seq));
+        }
+        let end = json!({"id": id, "expected_points": 5, "last_seq": 5});
+        let (status, code) = r.classified(&ann, "mileage_trip.end", end.clone());
+        assert_eq!((status, code.as_str()), (409, "incomplete"));
+        assert_eq!(r.state(&id), "recording");
+        r.ok(&ann, "mileage_point.create", walk_row(&id, 4));
+        r.ok(&ann, "mileage_trip.end", end);
+        assert_eq!(r.state(&id), "ended");
+    });
+}
+
+#[test]
+fn every_position_is_refused_to_sort_group_or_measure_by_for_a_reviewer_and_an_admin() {
+    each_rig(|r| {
+        let (ann, rev, adm) = (driver("ann"), reviewer("rita"), admin("ada"));
+        r.in_review(&ann);
+        for who in [&rev, &adm] {
+            // Spelled out here, not read from the constant the guard uses: a field dropped from
+            // that constant must fail this test.
+            for field in ["start_lat", "start_lon", "end_lat", "end_lon"] {
+                let by_group =
+                    json!({"aggregate": {"group_by": [field], "measures": [{"op": "count"}]}});
+                let by_measure = json!({"aggregate": {"group_by": ["state"],
+                    "measures": [{"op": "min", "field": field}]}});
+                for q in [by_group, by_measure] {
+                    let e = r.refused(who, "mileage_trip.search", q);
+                    assert!(e.contains(field), "{field}: {e}");
+                }
+                let order = json!({"order": [{"field": field, "dir": "asc"}], "limit": 1});
+                for cmd in ["mileage_trip.search", "mileage_trip.list"] {
+                    let e = r.refused(who, cmd, order.clone());
+                    assert!(e.contains(field), "{cmd} {field}: {e}");
+                }
+            }
+            // The positions of the points, one by one.
+            for field in ["lat", "lon", "accuracy_m", "speed_mps", "recorded_at"] {
+                let order = json!({"order": [{"field": field, "dir": "asc"}], "limit": 1});
+                let e = r.refused(who, "mileage_point.list", order);
+                assert!(e.contains(field), "{field}: {e}");
+            }
+        }
+        // The driver sorts and groups their own trips as they like.
+        r.ok(
+            &ann,
+            "mileage_trip.search",
+            json!({"order": [{"field": "end_lat", "dir": "desc"}], "limit": 1}),
+        );
+    });
+}
+
+#[test]
+fn a_replay_is_the_callers_own_and_the_key_is_not_shared_with_another_driver() {
+    each_rig(|r| {
+        let (ann, bob) = (driver("ann"), driver("bob"));
+        let id = r.recording(&ann);
+        let rows: Vec<J> = (1..=3).map(|s| walk_row(&id, s)).collect();
+        let batch = json!({"idempotency_key": "points:c:1-3", "rows": rows});
+        r.ok(&ann, "mileage_point.bulk_create", batch.clone());
+        // The key belongs to the person: Bob, sending Ann's batch under Ann's key, has no stored
+        // answer to be handed, and the trip is not his.
+        let e = r.refused(&bob, "mileage_point.bulk_create", batch.clone());
+        assert!(e.starts_with("no mileage_trip"), "{e}");
+        assert_eq!(r.points_stored(&id), 3);
+    });
+}
+
+#[test]
+fn the_guard_of_a_point_batch_reads_no_point_at_all() {
+    use obop_storage::testing::Mode;
+    // The cap is the range of seq, so no guard needs to count the stored points (a count reads
+    // every point of the instance under the lock of the call). The points are unreadable for this
+    // test: a guard that looks at one fails, a guard that does not passes.
+    let r = Rig::flaky();
+    let flaky = r.flaky.clone().unwrap();
+    let ann = driver("ann");
+    let id = r.recording(&ann);
+    r.walk(&ann, &id, 1, 3);
+    flaky.refuse_model(POINT, Mode::Reads);
+    let clock: Clock = Arc::new(start);
+    let rows: Vec<J> = (4..=1003).map(|s| walk_row(&id, s)).collect();
+    let call = Value::from_json(&json!({"rows": rows}));
+    let batch = crate::guards::bulk_points(r.store.backend(), clock)(&ann, &call);
+    assert!(batch.is_ok(), "{:?}", batch.err());
+    let one = Value::from_json(&walk_row(&id, 2000));
+    let single = crate::guards::create_point(r.store.backend())(&ann, &one);
+    assert!(single.is_ok(), "{:?}", single.err());
+    flaky.allow_models();
+}
+
+#[test]
+fn a_read_of_ones_own_points_or_of_no_named_driver_is_logged_as_the_rules_say() {
+    each_rig(|r| {
+        let (ann, rita) = (driver("ann"), reviewer("rita"));
+        let theirs = r.in_review(&ann);
+        let own = r.in_review(&rita);
+        let eq = |field: &str, v: &str| json!({"field": field, "op": "eq", "value": v});
+        // Rita reads the points of her own trip: nobody else's route, so no entry, with the rows
+        // and with a total alone.
+        r.ok(
+            &rita,
+            "mileage_point.list",
+            json!({"filter": [eq("trip", &own)], "limit": 100}),
+        );
+        r.ok(
+            &rita,
+            "mileage_point.search",
+            json!({"filter": [eq("trip", &own)], "offset": 100, "limit": 1}),
+        );
+        assert!(r.events("mileage_route_read").is_empty());
+        // A total that names a trip is logged for that trip's driver, and the text says which.
+        r.ok(
+            &rita,
+            "mileage_point.search",
+            json!({"filter": [eq("trip", &theirs)], "offset": 100, "limit": 1}),
+        );
+        let log = r.events("mileage_route_read");
+        assert_eq!(log.len(), 1);
+        assert_eq!((log[0].0.as_str(), log[0].1.as_str()), ("ann", "rita"));
+        assert!(
+            log[0].2.contains(&theirs) && log[0].2.contains("counts or totals"),
+            "{}",
+            log[0].2
+        );
+        // A filter that excludes a trip or a driver does not name one: the read is for all.
+        let ne_trip = json!({"field": "trip", "op": "ne", "value": theirs});
+        r.ok(
+            &rita,
+            "mileage_point.search",
+            json!({"filter": [ne_trip], "offset": 100, "limit": 1}),
+        );
+        let ne_driver = json!({"field": "driver", "op": "ne", "value": "zoe"});
+        r.ok(
+            &rita,
+            "mileage_point.search",
+            json!({"filter": [ne_driver], "offset": 100, "limit": 1}),
+        );
+        let all: Vec<_> = r
+            .events("mileage_route_read")
+            .into_iter()
+            .filter(|e| e.0 == "*")
+            .collect();
+        assert_eq!(all.len(), 2, "{all:?}");
+        assert_eq!(r.events("mileage_route_read").len(), 3);
+        // A filter on the driver names the driver.
+        r.ok(
+            &rita,
+            "mileage_point.search",
+            json!({"filter": [eq("driver", "ann")], "offset": 100, "limit": 1}),
+        );
+        assert_eq!(
+            r.events("mileage_route_read")
+                .iter()
+                .filter(|e| e.0 == "ann")
+                .count(),
+            2
+        );
+    });
 }

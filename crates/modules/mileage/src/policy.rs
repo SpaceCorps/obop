@@ -9,7 +9,7 @@
 //! role counts only for a principal that holds `mileage.driver` too (`Who::of`): a reviewer or an
 //! administrator account without it can read nothing, so it decides nothing either.
 
-use obop_commands::{Actor, Principal};
+use obop_commands::{Principal, Value};
 use serde_json::Value as J;
 
 pub type Fields = serde_json::Map<String, J>;
@@ -99,6 +99,21 @@ pub fn check_seq(seq: i64) -> Result<(), String> {
     ))
 }
 
+/// The counts a device says at the end of a trip (`expected_points`, `last_seq`): a whole number
+/// from 0 to the cap. A trip cannot hold more, so a larger number could never be met, and an
+/// `end` that waited for it would wait for ever.
+pub fn check_count(field: &str, v: &Value) -> Result<(), String> {
+    if !matches!(field, "expected_points" | "last_seq") {
+        return Ok(());
+    }
+    match v {
+        Value::Int(n) if !(0..=MAX_POINTS_PER_TRIP as i64).contains(n) => Err(format!(
+            "mileage_trip.{field} must be a whole number from 0 to {MAX_POINTS_PER_TRIP}: a trip holds at most {MAX_POINTS_PER_TRIP} points"
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// The fields of a point that say where and when the person was: a reviewer or an administrator
 /// reads them point by point, with the read logged, and cannot sort, group or total by them.
 pub const POINT_POSITIONS: [&str; 5] = ["lat", "lon", "accuracy_m", "speed_mps", "recorded_at"];
@@ -110,6 +125,72 @@ pub const TRIP_POSITIONS: [&str; 4] = ["start_lat", "start_lon", "end_lat", "end
 /// review is not among them: the reviewer saw it when it was in review or rejected.
 pub fn reviewable(state: &str) -> bool {
     matches!(state, IN_REVIEW | CONFIRMED | REJECTED)
+}
+
+const KEY_REVIEWER: &str = "_actor_mileage_reviewer";
+const KEY_ADMIN: &str = "_actor_mileage_admin";
+
+/// The person who approved an agent's proposal, as the dispatcher stamps them into the input of
+/// the guard and of the handler (`_actor_approver*`): a role counts for them only on top of the
+/// base group as it does for a caller, or an account with only the role could decide a trip by
+/// approving what an agent proposed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Approver {
+    pub who: Who,
+    /// Holds `mileage.driver`, the base group.
+    pub driver: bool,
+}
+
+impl Approver {
+    /// `None` when the call is not the run of an approved plan.
+    pub fn of(input: &Value) -> Option<Self> {
+        let Value::Map(m) = input else {
+            return None;
+        };
+        let id = match m.get("_actor_approver") {
+            Some(Value::Text(t)) if !t.is_empty() => t.clone(),
+            _ => return None,
+        };
+        let platform_admin = m.get("_actor_approver_admin") == Some(&Value::Bool(true));
+        let groups: Vec<&str> = match m.get("_actor_approver_groups") {
+            Some(Value::List(l)) => l
+                .iter()
+                .filter_map(|v| match v {
+                    Value::Text(t) => Some(t.as_str()),
+                    _ => None,
+                })
+                .collect(),
+            _ => vec![],
+        };
+        let holds = |g: &str| platform_admin || groups.contains(&g);
+        let driver = holds(DRIVER);
+        Some(Self {
+            who: Who {
+                id,
+                reviewer: driver && holds(REVIEWER),
+                admin: driver && holds(ADMIN),
+            },
+            driver,
+        })
+    }
+
+    /// Whether the approver may stand behind `action` of the trip `id`. The dispatcher has checked
+    /// the group of the command; this is the base group and the role, answered for a missing
+    /// base group as for a trip that does not exist.
+    pub fn check(&self, action: &str, id: &str) -> Result<(), String> {
+        if !self.driver {
+            return Err(no_such(TRIP, id));
+        }
+        match action {
+            "confirm" | "reject" | "reopen" if !self.who.reviewer => {
+                Err(format!("only a reviewer can {action} a trip"))
+            }
+            "discard_stuck" if !self.who.admin => {
+                Err("only a mileage administrator can discard a stuck trip".into())
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
 /// The person a call acts for and the roles they act in.
@@ -132,14 +213,40 @@ impl Who {
         }
     }
 
-    /// The same, from the actor the dispatcher stamps into the input of a handler.
-    pub fn from_actor(a: &Actor) -> Self {
-        let driver = a.holds(DRIVER);
+    /// The same, as the guard of an action decided it for the principal and stamped it into the
+    /// input of the handler (`stamp_roles`): the one decision (`Who::of`) is made in one place,
+    /// where the principal is known, and the handler uses it as it is. Without the stamp (a
+    /// handler called outside the dispatcher) the caller is a plain driver. The id is the one the
+    /// dispatcher stamps for a handler registered with `register_with_actor`.
+    pub fn from_input(input: &Value) -> Self {
+        let Value::Map(m) = input else {
+            return Self {
+                id: String::new(),
+                reviewer: false,
+                admin: false,
+            };
+        };
+        let flag = |k: &str| m.get(k) == Some(&Value::Bool(true));
         Self {
-            id: a.id.clone(),
-            reviewer: driver && a.holds(REVIEWER),
-            admin: driver && a.holds(ADMIN),
+            id: match m.get("_actor") {
+                Some(Value::Text(t)) => t.clone(),
+                _ => String::new(),
+            },
+            reviewer: flag(KEY_REVIEWER),
+            admin: flag(KEY_ADMIN),
         }
+    }
+
+    /// The input with these roles stamped into it, under keys that start with the prefix the
+    /// dispatcher strips from what a client sends and that this overwrites every time.
+    pub fn stamp_roles(&self, input: &Value) -> std::collections::BTreeMap<String, Value> {
+        let mut m = match input {
+            Value::Map(m) => m.clone(),
+            _ => Default::default(),
+        };
+        m.insert(KEY_REVIEWER.into(), Value::Bool(self.reviewer));
+        m.insert(KEY_ADMIN.into(), Value::Bool(self.admin));
+        m
     }
 
     /// A driver and nothing more: sees only their own trips and points.
