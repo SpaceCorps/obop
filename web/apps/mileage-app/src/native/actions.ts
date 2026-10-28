@@ -147,10 +147,14 @@ export async function leaveSession(rt: Runtime, keepUnsent: boolean): Promise<vo
 }
 
 /**
- * Sign out. The tokens leave the Keystore at once; the instance is told in the background of the
- * same call but never waited for longer than a few seconds, and when it could not be reached the
- * sign-in screen says so while it is open (the notice is gone for good when the screen is left). `keepUnsent` keeps the trips that are only on the phone for the
- * same person's next sign-in; otherwise they are deleted. The caller has asked the driver.
+ * Sign out. The order is: the request to the instance is started first (it needs the refresh
+ * token, which is read before anything is forgotten, `revokeSignIn`), then the phone ends its own
+ * side without waiting for the answer (the sync stops, the open trip is stopped, the tokens leave
+ * memory and the Keystore, the unsent trips are kept or deleted), and last the answer is awaited,
+ * for no more than 5 seconds. When the instance could not be told the sign-in screen says so while
+ * it is open (the notice is gone for good when the screen is left). `keepUnsent` keeps the trips
+ * that are only on the phone for the same person's next sign-in; otherwise they are deleted. The
+ * caller has asked the driver.
  */
 export async function signOut(keepUnsent: boolean): Promise<void> {
   const rt = await getRuntime();

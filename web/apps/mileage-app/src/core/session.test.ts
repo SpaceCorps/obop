@@ -16,19 +16,31 @@ const tokens = (n: number, expiresAt: number) => ({
   scope: ["mileage.driver"],
 });
 
-function rig(initial = tokens(1, 100_000), options: { refreshTimeoutMs?: number } = {}) {
+function rig(
+  initial = tokens(1, 100_000),
+  options: { refreshTimeoutMs?: number; onEndUntold?: () => void } = {},
+) {
   const saved: (ReturnType<typeof tokens> | null)[] = [];
   const configs: unknown[] = [];
   const urls: string[] = [];
   let clock = 0;
   let saveFails = 0;
+  let holdSave: Promise<void> | null = null;
+  let holdConfig: Promise<void> | null = null;
   const storage: SessionStorage = {
     loadConfig: async () => ({ baseUrl: "http://h", clientId: "cid" }),
     saveConfig: async (c) => {
+      const waiting = holdConfig;
+      holdConfig = null;
+      if (waiting) await waiting;
       configs.push(c);
     },
     loadTokens: async () => initial,
     saveTokens: async (t) => {
+      // A slow Keystore: the next write waits until the test lets it go (and then may fail).
+      const waiting = holdSave;
+      holdSave = null;
+      if (waiting) await waiting;
       if (saveFails > 0) {
         saveFails -= 1;
         throw new Error("keystore");
@@ -62,7 +74,7 @@ function rig(initial = tokens(1, 100_000), options: { refreshTimeoutMs?: number 
       { headers: { "content-type": "application/json" } },
     );
   };
-  let respond: (body: string) => Response | Promise<Response> = endpoint;
+  let respond: (body: string, url: string) => Response | Promise<Response> = endpoint;
   const oauth: OAuthDeps = {
     sha256: async () => new Uint8Array(32),
     randomBytes: async (n) => new Uint8Array(n),
@@ -70,7 +82,7 @@ function rig(initial = tokens(1, 100_000), options: { refreshTimeoutMs?: number 
       const body = typeof init.body === "string" ? init.body : "";
       bodies.push(body);
       urls.push(url);
-      return respond(body);
+      return respond(body, url);
     }) as unknown as typeof fetch,
   };
   const session = createSession({ storage, oauth, now: () => clock, ...options });
@@ -85,6 +97,22 @@ function rig(initial = tokens(1, 100_000), options: { refreshTimeoutMs?: number 
     /** The real endpoint that does its work and then loses the answer. */
     endpoint,
     failSaves: (n: number) => (saveFails = n),
+    /** The next write to the Keystore does not happen until the returned function is called. */
+    holdNextSave: () => {
+      let release: () => void = () => undefined;
+      holdSave = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return release;
+    },
+    /** The next write of the config waits until the returned function is called. */
+    holdNextConfig: () => {
+      let release: () => void = () => undefined;
+      holdConfig = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return release;
+    },
   };
 }
 
@@ -344,6 +372,199 @@ describe("the session", () => {
     expect(r.session.endedBy()).toBe("refused");
     expect((r.configs.at(-1) as { usedAt?: number }).usedAt).toBeUndefined();
     expect(needsRegistration(r.session.config(), "http://h", Date.now())).toBe(true);
+  });
+
+  const later = () => new Promise((resolve) => setTimeout(resolve, 15));
+  const fresh = (n: number) =>
+    new Response(
+      JSON.stringify({
+        access_token: `AT-${n}`,
+        refresh_token: `RT-${n}`,
+        expires_in: 3600,
+        scope: "mileage.driver",
+        device_id: "dev-1",
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  const refreshWith = (body: string) => new URLSearchParams(body).get("refresh_token");
+  const isRevoke = (url: string) => url.endsWith("/oauth/revoke");
+
+  test("the write of a sign-out is not overtaken by the slow write of a refresh", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    const release = r.holdNextSave();
+    const asked = r.session.accessToken();
+    await later(); // the refresh is answered and its write to the Keystore is under way
+    const out = r.session.signOut();
+    await later();
+    release();
+    await out;
+    await asked;
+    // Written one after the other: the sign-out is the last word.
+    expect(r.saved.map((t) => t?.refreshToken ?? null)).toEqual(["RT-2", null]);
+    expect(r.session.status()).toBe("signed_out");
+  });
+
+  test("a refresh asked for after a sign-out and a new sign-in does not join the one of the old sign-in", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    const release = held(r);
+    const stale = r.session.accessToken(); // RT-1 is on its way
+    await later();
+    await r.session.signOut();
+    await r.session.completeSignIn(tokens(9, 99_500)); // about to end as well
+    r.respond((body) => (refreshWith(body) === "RT-9" ? fresh(10) : r.endpoint(body)));
+    expect(await r.session.accessToken()).toBe("AT-10");
+    release();
+    expect(await stale).toBeNull();
+    expect(r.session.refreshToken()).toBe("RT-10");
+  });
+
+  test("the end of an old refresh does not free the slot of the refresh of the new sign-in", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    const gates = new Map<string, () => void>();
+    r.respond(async (body) => {
+      const token = refreshWith(body) ?? "";
+      const answer = token === "RT-9" ? fresh(10) : r.endpoint(body);
+      await new Promise<void>((resolve) => gates.set(token, resolve));
+      return answer;
+    });
+    const stale = r.session.accessToken(); // RT-1, held
+    await later();
+    await r.session.signOut();
+    await r.session.completeSignIn(tokens(9, 99_500));
+    const mine = r.session.accessToken(); // RT-9, held
+    await later();
+    gates.get("RT-1")!();
+    expect(await stale).toBeNull();
+    // A third caller still shares the refresh of the new sign-in: RT-9 is presented once.
+    const third = r.session.accessToken();
+    await later();
+    gates.get("RT-9")!();
+    expect(await Promise.all([mine, third])).toEqual(["AT-10", "AT-10"]);
+    expect(r.bodies.filter((b) => refreshWith(b) === "RT-9")).toHaveLength(1);
+  });
+
+  test("a refusal that comes after a sign-out does not end the next sign-in", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    let release: () => void = () => undefined;
+    r.respond(async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 });
+    });
+    const stale = r.session.accessToken();
+    await later();
+    await r.session.signOut();
+    await r.session.completeSignIn(tokens(9, 10_000_000));
+    release();
+    expect(await stale).toBeNull();
+    expect(r.session.status()).toBe("signed_in");
+    expect(r.session.endedBy()).toBeNull();
+    expect(r.session.refreshToken()).toBe("RT-9");
+    expect(r.saved.at(-1)).toMatchObject({ refreshToken: "RT-9" });
+  });
+
+  test("a refresh that times out after a sign-out does not end the next sign-in or tell the instance", async () => {
+    const r = rig(tokens(1, 100_000), { refreshTimeoutMs: 40 });
+    await r.session.restore();
+    r.setNow(99_000);
+    r.respond(() => new Promise<Response>(() => {}));
+    const stale = r.session.accessToken();
+    await later();
+    await r.session.signOut();
+    await r.session.completeSignIn(tokens(9, 10_000_000));
+    expect(await stale).toBeNull(); // given up after 40 ms
+    expect(r.session.status()).toBe("signed_in");
+    expect(r.session.refreshToken()).toBe("RT-9");
+    expect(r.urls.some(isRevoke)).toBe(false);
+  });
+
+  test("a failed write of a refresh is not repeated after a sign-out", async () => {
+    const r = rig();
+    await r.session.restore();
+    r.setNow(99_000);
+    r.failSaves(1);
+    const release = r.holdNextSave(); // the first write waits, and fails when it is let go
+    const asked = r.session.accessToken();
+    await later();
+    const out = r.session.signOut();
+    release();
+    await out;
+    await asked;
+    // The repeat would have come after the sign-out and written the refreshed pair over it.
+    expect(r.saved.map((t) => t?.refreshToken ?? null)).toEqual([null]);
+  });
+
+  test("a sign-in that ends on its own after a timeout says so when the instance could not be told either", async () => {
+    let untold = 0;
+    const r = rig(tokens(1, 100_000), { refreshTimeoutMs: 20, onEndUntold: () => untold++ });
+    await r.session.restore();
+    r.setNow(99_000);
+    // The refresh is not answered, and the revoke fails on the connection.
+    r.respond((_body, url) => {
+      if (isRevoke(url)) throw new TypeError("Network request failed");
+      return new Promise<Response>(() => {});
+    });
+    expect(await r.session.accessToken()).toBeNull();
+    await later();
+    await later();
+    expect(r.session.endedBy()).toBe("unsure");
+    expect(untold).toBe(1);
+  });
+
+  test("it says nothing when the instance was told, or when a newer sign-in has begun", async () => {
+    let untold = 0;
+    const told = rig(tokens(1, 100_000), { refreshTimeoutMs: 20, onEndUntold: () => untold++ });
+    await told.session.restore();
+    told.setNow(99_000);
+    told.respond((_body, url) =>
+      isRevoke(url) ? new Response("{}", { status: 200 }) : new Promise<Response>(() => {}),
+    );
+    await told.session.accessToken();
+    await later();
+    await later();
+    expect(untold).toBe(0);
+
+    const newer = rig(tokens(1, 100_000), { refreshTimeoutMs: 20, onEndUntold: () => untold++ });
+    await newer.session.restore();
+    newer.setNow(99_000);
+    let fail: () => void = () => undefined;
+    newer.respond((_body, url) =>
+      isRevoke(url)
+        ? new Promise<Response>((_resolve, reject) => {
+            fail = () => reject(new TypeError("Network request failed"));
+          })
+        : new Promise<Response>(() => {}),
+    );
+    await newer.session.accessToken();
+    await later();
+    await newer.session.completeSignIn(tokens(9, 10_000_000));
+    fail();
+    await later();
+    expect(untold).toBe(0);
+  });
+
+  test("a refresh refused as invalid_client does not end a sign-in that finished while the config was written", async () => {
+    const r = rig();
+    await r.session.restore();
+    await r.session.setConfig({ baseUrl: "http://h", clientId: "cid", usedAt: Date.now() });
+    r.setNow(99_000);
+    r.respond(() => new Response(JSON.stringify({ error: "invalid_client" }), { status: 401 }));
+    const release = r.holdNextConfig(); // the write of the cleared config is slow
+    const stale = r.session.accessToken();
+    await later();
+    await r.session.signOut();
+    await r.session.completeSignIn(tokens(9, 10_000_000));
+    release();
+    expect(await stale).toBeNull();
+    expect(r.session.status()).toBe("signed_in");
+    expect(r.session.refreshToken()).toBe("RT-9");
   });
 
   test("sign out forgets the tokens and keeps the server", async () => {

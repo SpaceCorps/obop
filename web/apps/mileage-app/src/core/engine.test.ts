@@ -570,6 +570,77 @@ describe("a refusal that is not a missing trip", () => {
   });
 });
 
+/** An api that runs `after` once the first answer of `op` is in, then hands the answer on. */
+function afterAnswer(server: FakeServer, op: string, after: () => void): FakeServer {
+  let done = false;
+  return new Proxy(server, {
+    get(target, key, receiver) {
+      const value = Reflect.get(target, key, receiver) as unknown;
+      if (key !== op || typeof value !== "function") return value;
+      return async (...args: unknown[]) => {
+        const answer = await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+        if (!done) after();
+        done = true;
+        return answer;
+      };
+    },
+  });
+}
+
+/**
+ * An api whose `op` has read its answer from the server but does not hand it on until `release()`:
+ * a late answer. `hold()` arms it for the next call, `reached()` resolves when that call is waiting.
+ */
+function holdAnswer(server: FakeServer, op: string) {
+  let armed = false;
+  let release: () => void = () => undefined;
+  let reached: () => void = () => undefined;
+  let waiting = Promise.resolve();
+  const api = new Proxy(server, {
+    get(target, key, receiver) {
+      const value = Reflect.get(target, key, receiver) as unknown;
+      if (key !== op || typeof value !== "function") return value;
+      return async (...args: unknown[]) => {
+        const answer = await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+        if (!armed) return answer;
+        armed = false;
+        reached();
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return answer;
+      };
+    },
+  });
+  return {
+    api,
+    hold() {
+      armed = true;
+      waiting = new Promise<void>((resolve) => {
+        reached = resolve;
+      });
+    },
+    reached: () => waiting,
+    release: () => release(),
+  };
+}
+
+/** A trip of another phone, as the server lists it. */
+function otherTrip() {
+  return {
+    id: "other-1",
+    clientTripId: "elsewhere",
+    purpose: "private" as const,
+    startedAt: "2026-10-01T08:00:00.000000Z",
+    endedAt: "2026-10-01T08:30:00.000000Z",
+    state: "confirmed" as const,
+    expectedPoints: 9,
+    lastSeq: 9,
+    discardReason: null,
+    distanceM: "5000.00",
+  };
+}
+
 describe("a sign-in that changes while a pass runs", () => {
   test("the rest of the pass is not sent under the new sign-in", async () => {
     const db = memoryDb();
@@ -613,6 +684,86 @@ describe("a sign-in that changes while a pass runs", () => {
     const engine = createEngine({ store, api: server, identity: () => 1 });
     await recordAndStop(store, 3);
     expect((await engine.drain()).state).toBe("idle");
+  });
+
+  test("a sign-in that changes during the last call of a trip stops the pass before the next trip is touched", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    const store = createSqlStore(db);
+    const server = new FakeServer();
+    let generation = 1;
+    // The driver signs out while the end of the first trip is on its way: it is the last call that
+    // trip makes, so the next call to meet the new sign-in would be the second trip's create.
+    const api = afterAnswer(server, "endTrip", () => (generation += 1));
+    const engine = createEngine({ store, api, identity: () => generation });
+    await recordAndStop(store, 3, "a");
+    await recordAndStop(store, 3, "b");
+    const report = await engine.drain();
+    expect(report.state).toBe("interrupted");
+    expect((await store.getTrip("a"))!.endDone).toBe(true);
+    // Nothing of the second trip was touched, not even the mark that a create was tried.
+    expect((await store.getTrip("b"))!.createAttempted).toBe(false);
+    expect(server.stored("b")).toBeUndefined();
+  });
+
+  test("a list that was asked for under one sign-in is not merged under the next", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    const store = createSqlStore(db);
+    const server = new FakeServer();
+    let generation = 1;
+    const held = holdAnswer(server, "listTrips");
+    const engine = createEngine({ store, api: held.api, identity: () => generation });
+    server.trips.set("other-1", otherTrip());
+    held.hold();
+    const listing = engine.refreshRemote();
+    await held.reached();
+    // The driver signs out and somebody else signs in while the instance is still answering.
+    generation += 1;
+    held.release();
+    await listing;
+    expect(await store.listTrips()).toEqual([]);
+  });
+
+  test("a list under an unchanged sign-in is merged", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    const store = createSqlStore(db);
+    const server = new FakeServer();
+    const held = holdAnswer(server, "listTrips");
+    const engine = createEngine({ store, api: held.api, identity: () => 1 });
+    server.trips.set("other-1", otherTrip());
+    held.hold();
+    const listing = engine.refreshRemote();
+    await held.reached();
+    held.release();
+    await listing;
+    expect((await store.listTrips()).map((t) => t.clientTripId)).toEqual(["elsewhere"]);
+  });
+
+  test("the answer for one trip that was asked for under one sign-in is not written under the next", async () => {
+    const db = memoryDb();
+    await migrate(db);
+    const store = createSqlStore(db);
+    const server = new FakeServer();
+    let generation = 1;
+    const held = holdAnswer(server, "getTrip");
+    const engine = createEngine({ store, api: held.api, identity: () => generation });
+    await recordAndStop(store, 3);
+    await engine.drain();
+    const before = (await store.getTrip("c1"))!.serverState;
+    server.stored("c1")!.state = "rejected";
+    held.hold();
+    const refreshing = engine.refreshTrip("c1");
+    await held.reached();
+    generation += 1;
+    held.release();
+    await refreshing;
+    expect((await store.getTrip("c1"))!.serverState).toBe(before);
+
+    // Under the same sign-in the answer is written.
+    await engine.refreshTrip("c1");
+    expect((await store.getTrip("c1"))!.serverState).toBe("rejected");
   });
 });
 

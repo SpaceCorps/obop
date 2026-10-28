@@ -17,10 +17,12 @@ export type Failure =
   /** 409 `incomplete`: points are still missing on the server; repeat `end` with backoff. */
   | { kind: "incomplete"; waitMs: number | null; message: string }
   /**
-   * Any other 4xx: repeating changes nothing. The engine gives two refusals codes of their own: a
-   * trip the server says it does not hold is `gone`, and a 404 (which the server also sends for a
-   * command that is hidden from this person, or not installed) is `unknown`: the state of the trip
-   * on the server is not known, and nothing on the phone is thrown away for it.
+   * Any other 4xx: repeating changes nothing. After the create step the engine gives two refusals
+   * codes of their own: a trip the server says it does not hold is `gone`, and a 404 (which the
+   * server also sends for a command that is hidden from this person, or not installed) is
+   * `unknown`: the state of the trip on the server is not known, and nothing on the phone is thrown
+   * away for it. At the create step the code is the server's own, 404 included: nothing of the
+   * trip is on the server yet, so there is nothing whose state could be unknown.
    */
   | { kind: "refused"; status: number; code: string; message: string };
 
@@ -120,9 +122,10 @@ export interface EngineOptions {
   store: OutboxStore;
   api: TripApi;
   /**
-   * Milliseconds between retries when the server gave none: `baseMs` times 2, 4, 8 ... up to
-   * `maxMs` for the failures of the connection, and `baseMs` times 4, 8, 16 ... for the answers
-   * `incomplete` to Stop (production: 8 s, 16 s, 32 s ... up to 5 minutes).
+   * Milliseconds between retries when the server gave none, up to `maxMs`: `baseMs` times 1, 2, 4,
+   * 8 ... for the failures of the connection (production: 2 s, 4 s, 8 s ...), and `baseMs` times
+   * 4, 8, 16 ... for the answers `incomplete` to Stop (production: 8 s, 16 s, 32 s ... up to 5
+   * minutes).
    */
   backoff?: { baseMs: number; maxMs: number };
   /**
@@ -177,7 +180,8 @@ export function createEngine({
       const failure = classify(error);
       if (failure.kind === "refused") {
         // A missing trip is told apart from other refusals so that the driver can be offered a
-        // local discard; a 404 is not a missing trip (see `isGone`) and keeps everything.
+        // local discard; a 404 is not a missing trip (see `isGone`) and keeps everything. The
+        // create step keeps the server's own code (the trip is not on the server yet).
         const code =
           step === "create"
             ? failure.code
@@ -268,8 +272,8 @@ export function createEngine({
             return true;
           }
           // The driver is still recording: the trip is flagged (Home and the trip's page show the
-          // problem; the Recording screen does not, docs/ISSUES.md L41). Stop and Discard finish
-          // the trip here.
+          // problem; the Recording screen does not, docs/ISSUES.md L41). Stop alone leaves the
+          // flag (it clears no problem); Try again after Stop, and Discard, finish the trip here.
           throw new Refused("points", {
             kind: "refused",
             status: 400,
@@ -515,11 +519,21 @@ export function createEngine({
     async refreshTrip(clientTripId) {
       const t = await store.getTrip(clientTripId);
       if (!t || t.serverId === null) return;
-      await store.patchTrip(clientTripId, fromServer(await api.getTrip(t.serverId)));
+      const started = identity?.();
+      const server = await api.getTrip(t.serverId);
+      // The answer belongs to the sign-in the call was made under: when that has changed, it is
+      // not written (the trip is not the new sign-in's, and the row may be gone).
+      if (identity !== undefined && identity() !== started) return;
+      await store.patchTrip(clientTripId, fromServer(server));
     },
 
     async refreshRemote(limit = 50) {
-      await store.mergeRemote(await api.listTrips(limit));
+      const started = identity?.();
+      const trips = await api.listTrips(limit);
+      // A list of the person who signed out must never land in the next person's outbox: this
+      // is the one place where rows of the server are inserted, so it is the one that matters.
+      if (identity !== undefined && identity() !== started) return;
+      await store.mergeRemote(trips);
     },
   };
 }

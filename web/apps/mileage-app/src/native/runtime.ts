@@ -29,7 +29,11 @@ export interface Runtime {
   bindIdentity(owner: Owner): Promise<Binding>;
   /** The driver chose to delete the other sign-in's trips and go on. */
   takeOverOutbox(): Promise<void>;
-  /** The last sign-out could not tell the instance (shown on the sign-in screen while it is open). */
+  /**
+   * The instance could not be told that this phone is signed out: the last sign-out, or a sign-in
+   * the phone ended on its own after a refresh without an answer (shown on the sign-in screen
+   * while it is open).
+   */
   signOutUntold(): boolean;
   /** Sets the flag and tells the screens (`emitChange`), so that an open sign-in screen follows it. */
   setSignOutUntold(untold: boolean): void;
@@ -43,11 +47,22 @@ const notSignedIn = () =>
 
 async function build(): Promise<Runtime> {
   const store = await getStore();
-  const session = createSession({ storage: secureStorage, oauth: oauthDeps });
+  let untold = false;
+  const setUntold = (value: boolean) => {
+    if (untold === value) return;
+    untold = value;
+    emitChange();
+  };
+  const session = createSession({
+    storage: secureStorage,
+    oauth: oauthDeps,
+    // A sign-in the phone ended on its own and could not tell the instance about: the sign-in
+    // screen says so, as after a sign-out that could not reach the instance.
+    onEndUntold: () => setUntold(true),
+  });
   await session.restore();
   let binding: Binding =
     session.status() === "signed_in" ? await bindingOf(store, session.config()) : { kind: "own" };
-  let untold = false;
 
   let cached: { baseUrl: string; client: ObopClient } | null = null;
   const client = (): ObopClient => {
@@ -133,11 +148,7 @@ async function build(): Promise<Runtime> {
       sync.kick();
     },
     signOutUntold: () => untold,
-    setSignOutUntold(value) {
-      if (untold === value) return;
-      untold = value;
-      emitChange();
-    },
+    setSignOutUntold: setUntold,
   };
 }
 

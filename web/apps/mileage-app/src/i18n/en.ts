@@ -61,7 +61,7 @@ export const en = {
     "The instance did not answer in time, so the phone cannot tell whether it renewed the sign-in. To be safe the sign-in was ended. Sign in again to upload your trips. The trips on this phone are kept until they are uploaded.",
   "signin.untold.title": "The instance was not told",
   "signin.untold.message":
-    "You are signed out on this phone, but the instance could not be reached, so it still lists this phone. Remove it in the back office under Customize, Security, Devices, or it ends by itself when the sign-in runs out.",
+    "The sign-in is over on this phone, but the instance could not be reached, so it still lists this phone as signed in. Remove it in the back office under Customize, Security, Devices, or it ends by itself when the sign-in runs out.",
 
   "home.title": "Mileage",
   "home.start": "Start",

@@ -104,6 +104,12 @@ export interface SessionOptions {
   skewMs?: number;
   /** A refresh that has no answer after this long is given up (the outcome is then unknown). */
   refreshTimeoutMs?: number;
+  /**
+   * The instance could not be told, in the background, that a sign-in the phone ended on its own
+   * (`unsure`) is over: the instance still lists the phone. Not called when a newer sign-in has
+   * begun by the time the revoke fails.
+   */
+  onEndUntold?: () => void;
 }
 
 /** The longest a refresh waits: longer than a slow cellular answer, and the outcome is unknown after it. */
@@ -126,6 +132,7 @@ export function createSession({
   now = Date.now,
   skewMs = 60_000,
   refreshTimeoutMs = REFRESH_TIMEOUT_MS,
+  onEndUntold,
 }: SessionOptions): Session {
   let status: SessionStatus = "signed_out";
   let ended: EndedBy | null = null;
@@ -198,11 +205,17 @@ export function createSession({
     } catch (error) {
       if (mine !== generation) return null;
       if (error instanceof OAuthError && ENDED.includes(error.code)) {
-        // The instance ended this sign-in. A client it does not know any more is registered again
-        // at the next sign-in. Only the tokens go; the trips on the phone stay.
+        // The instance ended this sign-in. Only the tokens go; the trips on the phone stay.
+        // Defence in depth for other servers: the obop server never answers `invalid_client` to a
+        // refresh (an unknown client or token is `invalid_grant`, `exchange_refresh`), so for it
+        // this branch is not reached. Where it is, the client is registered again at the next
+        // sign-in. The real recovery from a client the instance forgot is the probe of the
+        // authorization page before the browser opens (`clientUnknown`, docs/ISSUES.md L40).
         if (error.code === "invalid_client" || error.code === "unauthorized_client") {
           config = { ...config, usedAt: undefined };
           await storage.saveConfig(config).catch(() => undefined);
+          // A sign-in finished while the config was written: it is not ended by this answer.
+          if (mine !== generation) return null;
         }
         return end("refused");
       }
@@ -211,13 +224,24 @@ export function createSession({
         // old token is spent or soon will be, and the instance ends the whole sign-in when it is
         // presented again, so it is not presented again: the sign-in ends here, cleanly, and the
         // instance is told in the background to end it too (the old token still finds the grant).
-        void revokeToken(oauth, {
+        const failed = revokeToken(oauth, {
           baseUrl,
           clientId,
           token: spent,
           timeoutMs: END_REVOKE_MS,
-        }).catch(() => undefined);
-        return end("unsure");
+        }).then(
+          () => false,
+          () => true,
+        );
+        const ending = end("unsure"); // moves the generation at once
+        const endedAt = generation;
+        // When the revoke fails too the instance still lists the phone and nothing else will tell
+        // the driver: the sign-in screen says so (the same notice as after a sign-out that could
+        // not reach the instance), unless a newer sign-in has begun by then.
+        void failed.then((untold) => {
+          if (untold && generation === endedAt) onEndUntold?.();
+        });
+        return ending;
       }
       throw error;
     }
