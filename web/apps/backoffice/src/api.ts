@@ -1,4 +1,4 @@
-import { fmt, t, type Factor } from "@obop/ui";
+import { fmt, getLang, isPseudo, t, type Factor } from "@obop/ui";
 import { NETWORK_MESSAGE, NetworkError, request, serverFault } from "./net.ts";
 
 /** Translations the server may add to metadata: language code -> text (D34; absent today). */
@@ -303,15 +303,52 @@ export async function list(
 /** Commands that only read: safe to repeat when the connection drops. */
 const READS = new Set(["get", "list", "search"]);
 
+/**
+ * The language the interface shows, as the server knows it: a pseudo-locale (the translators'
+ * tooling) is accented English, so it is `en`.
+ */
+function shownLanguage(): string {
+  const lang = getLang();
+  return isPseudo(lang) ? "en" : lang;
+}
+
+/**
+ * The language the interface shows, as `Accept-Language`, so that the server words a refusal (the
+ * message of an assertion, which a package can translate) in it, not in the browser's language
+ * (the person may have chosen another one in the app).
+ */
+export function languageHeader(): Record<string, string> {
+  return { "accept-language": shownLanguage() };
+}
+
+/**
+ * `path` with `lang=<the language the interface shows>` in its query string; a query it has is
+ * kept and a `lang` in it is replaced. The server picks the language of a refusal from `?lang=`,
+ * then the `obop_lang` cookie, then `Accept-Language`. The header alone is not enough here: the
+ * cookie is the same-origin page's, it can differ from what the interface shows (an instance
+ * default the person never chose, a link with `?lang=`, an HttpOnly cookie of the forum that
+ * `document.cookie` cannot overwrite) and it outranks the header. The query outranks the cookie.
+ */
+export function withLanguage(path: string): string {
+  const at = path.indexOf("?");
+  const params = new URLSearchParams(at < 0 ? "" : path.slice(at + 1));
+  params.set("lang", shownLanguage());
+  return `${at < 0 ? path : path.slice(0, at)}?${params}`;
+}
+
 async function send(token: string, path: string, body: object): Promise<Reply> {
   const idempotent = READS.has(path.split("/").pop() ?? "");
   let res: Response;
   try {
     res = await request(
-      path,
+      withLanguage(path),
       {
         method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          ...languageHeader(),
+        },
         body: JSON.stringify(body),
       },
       { retry: idempotent },

@@ -111,7 +111,11 @@ labels. Marketplace listings of packages that are not installed still show the E
 
 `serverMessage()` maps the stable patterns of docs/MODULES.md 3.5 and the D47/D48/D49 error shapes (`x.y is
 required`, `must be one of: …`, `cannot delete …: still referenced by …`, transition refusals) to translatable
-messages. In English it returns the text as received. Unknown text is shown as received.
+messages. In English it returns the text as received. Unknown text is shown as received. The message of a
+keyed assertion needs no mapping: the back office sends the language it shows with every command, as `?lang=`
+(which outranks the `obop_lang` cookie, a cookie that can differ from the displayed language) and as
+`Accept-Language`, and the server words the refusal in it where the package translated it (D52 amendment
+2026-10-28, docs/MODULES.md section 3.8), so it is shown as received. A pseudo-locale sends `en`.
 
 ### 1.5 Pseudo-locales
 
@@ -300,7 +304,9 @@ The translators flagged these for native review (all other strings are equally u
 The names and descriptions of the five built-in modules, the admin module and the 22 bundled packages are
 translated in `packages/labels/<lang>/<id>.toml` (28 files per language, six languages). A file is the
 `[labels.<lang>...]` document of docs/MODULES.md section 3.7; the built-in modules embed theirs with
-`Module::translated`, the bundled packages get theirs appended by the catalogue.
+`Module::translated`, the bundled packages get theirs appended by the catalogue. The slot
+`action.<action>.assert.<key>` (the message of an assertion with a key, 400 characters) is in the template and the
+completeness check like the others; the bundled packages declare no assertion keys, so no file of them has one.
 
 ```sh
 obop modules labels crm fi > packages/labels/fi/crm.toml   # the template: every text, English values

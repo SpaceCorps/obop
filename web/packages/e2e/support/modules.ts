@@ -36,6 +36,8 @@ export type ActionSpec = {
   approval?: boolean;
   /** Group that may run it; defaults to the model's write group (`<id>.manager`). */
   group?: string;
+  /** Conditions that must hold first; `key` is the slot a label table translates `message` by. */
+  assert?: { expr: string; message?: string; key?: string }[];
 };
 
 export type ModuleSpec = {
@@ -44,6 +46,8 @@ export type ModuleSpec = {
   title: string;
   fields: FieldSpec[];
   actions?: ActionSpec[];
+  /** `[labels.<lang>...]` tables, written for the module id the test was given. */
+  labels?: (id: string) => string;
 };
 
 import { coreSeries } from "./env.ts";
@@ -96,6 +100,16 @@ export function manifest(m: ModuleSpec): string {
     lines.push(`  to = ${q(a.to)}`);
     if (a.group) lines.push(`  group = ${q(a.group)}`);
     if (a.approval) lines.push("  approval = true");
+    if (a.assert?.length)
+      lines.push(
+        "  assert = [",
+        ...a.assert.map(
+          (x) =>
+            `    { expr = ${q(x.expr)}${x.message ? `, message = ${q(x.message)}` : ""}${x.key ? `, key = ${q(x.key)}` : ""} },`,
+        ),
+        "  ]",
+      );
   }
+  if (m.labels) lines.push("", m.labels(m.id).trim());
   return `${lines.join("\n")}\n`;
 }

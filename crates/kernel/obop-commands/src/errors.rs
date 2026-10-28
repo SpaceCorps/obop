@@ -15,6 +15,15 @@
 //! and the body `{"error": <string>}`, with no `code` (those bodies are part of the documented API
 //! and do not change).
 //!
+//! # An assertion that refused a REST call
+//!
+//! The text of a refusal by an assertion is the package author's message (see below) and carries no
+//! code word, so that the CLI and MCP print it as they always did. REST opens a request scope
+//! (`locale::scope`) in which the engine notes the assertion that refused; `classify` finds the
+//! note in the text of the error (the engine may wrap it) and answers 400 with
+//! `{"error": <text>, "code": "assertion_failed", "hint", "assert_key"}`, `assert_key` only when the
+//! assertion has a key. Outside that scope the answer is the plain 400 above.
+//!
 //! # Storage faults (D74)
 //!
 //! A refused or failed store call (`storage_busy`, `storage_unavailable`, `storage_timeout`: the
@@ -86,6 +95,8 @@ pub mod code {
     pub const LIMIT_REQUIRED: &str = "limit_required";
     /// D78: the option exists on `search` only.
     pub const USE_SEARCH: &str = "use_search";
+    /// D56: an assertion of the action did not hold (REST names it; see the module comment).
+    pub const ASSERTION_FAILED: &str = "assertion_failed";
     /// Step 2: the caller is known and may not do this.
     pub const DENIED: &str = "denied";
     /// Step 2: the caller must confirm their identity again.
@@ -207,6 +218,13 @@ pub const TABLE: &[Row] = &[
         retry_after: None,
         origin: "D78",
         hint: "Use search: list answers a plain array and has no such option.",
+    },
+    Row {
+        code: code::ASSERTION_FAILED,
+        status: 400,
+        retry_after: None,
+        origin: "D56",
+        hint: "A condition of the action does not hold. Change the record as the message says, then retry.",
     },
     Row {
         code: code::DENIED,
@@ -632,6 +650,17 @@ fn handler(m: &str, debug: impl Fn() -> String) -> Classified {
         c.hint = Some(r.hint);
         return c;
     }
+    // An assertion that refused this REST call: the text is the author's message, unchanged.
+    if let Some(key) = crate::locale::assertion_behind(m) {
+        let r = row(code::ASSERTION_FAILED).expect("the table has assertion_failed");
+        let mut body = json!({"error": m, "code": r.code, "hint": r.hint});
+        if let Some(key) = key {
+            body["assert_key"] = json!(key);
+        }
+        let mut c = Classified::new(Kind::Failed, r.status, r.code, body, debug());
+        c.hint = Some(r.hint);
+        return c;
+    }
     Classified::new(
         Kind::Failed,
         400,
@@ -839,6 +868,7 @@ mod tests {
             ("offset_too_large", 400),
             ("limit_required", 400),
             ("use_search", 400),
+            ("assertion_failed", 400),
             ("denied", 403),
             ("reauth_required", 400),
             ("storage_busy", 503),
@@ -1184,6 +1214,56 @@ mod tests {
         // The errors that have always existed carry no data for a JSON-RPC error.
         let c = classify(&CallError::Handler("name is required".into()));
         assert_eq!(c.rpc_data(), json!({}));
+    }
+
+    /// An assertion that refused a call in a request scope: 400, its code and, for a keyed one,
+    /// its key. The text is the engine's, whole; the line of the command line is what it always was.
+    #[test]
+    fn an_assertion_that_refused_a_rest_call_is_named_by_code_and_key() {
+        use crate::locale;
+        let text = "Fyll i en summa (assertion total > 0 failed)";
+        let hint = row(code::ASSERTION_FAILED).unwrap().hint;
+
+        // No scope (MCP, the command line, a handler called directly): the plain 400.
+        let plain = classify(&CallError::Handler(text.into()));
+        assert_eq!((plain.status, plain.code), (400, "bad_request"));
+        assert_eq!(plain.body, json!({"error": text}));
+
+        let _s = locale::scope(None);
+        locale::note_assertion(text, Some("needs_total"));
+        let c = classify(&CallError::Handler(text.into()));
+        assert_eq!(c.kind, Kind::Failed);
+        assert_eq!((c.status, c.code), (400, "assertion_failed"));
+        assert_eq!(
+            c.body,
+            json!({"error": text, "code": "assertion_failed", "hint": hint, "assert_key": "needs_total"})
+        );
+        assert_eq!(c.hint, Some(hint));
+        assert_eq!(c.cli, format!("Handler({text:?})"));
+        assert_eq!((c.retry_after, c.applied, c.exit), (None, None, 1));
+
+        // Wrapped by the effect that started the action, it is still that assertion.
+        let wrapped = format!("w.finish: effect 1 (set_state) failed, nothing was changed: {text}");
+        let c = classify(&CallError::Handler(wrapped.clone()));
+        assert_eq!((c.status, c.code), (400, "assertion_failed"));
+        assert_eq!(c.body["error"], json!(wrapped));
+        assert_eq!(c.body["assert_key"], "needs_total");
+
+        // Without a key the body has no `assert_key`.
+        locale::note_assertion("Anything goes (assertion true failed)", None);
+        let c = classify(&CallError::Handler(
+            "Anything goes (assertion true failed)".into(),
+        ));
+        assert_eq!(c.code, "assertion_failed");
+        assert!(c.body.get("assert_key").is_none(), "{}", c.body);
+
+        // Another refusal of the same request is not that assertion.
+        let other = classify(&CallError::Handler("name is required".into()));
+        assert_eq!((other.status, other.code), (400, "bad_request"));
+        assert_eq!(other.body, json!({"error": "name is required"}));
+        // Nor does a storage fault become one.
+        let c = classify_with(&CallError::Handler(text.into()), &met(Fault::Busy, false));
+        assert_eq!((c.status, c.code), (503, "storage_busy"));
     }
 
     #[test]

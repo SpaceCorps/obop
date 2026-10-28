@@ -45,6 +45,9 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
+          # What `obop --version` reports after the version: the image has no .git to read it from.
+          build-args: |
+            OBOP_BUILD_COMMIT=${{ github.sha }}
           tags: |
             ${{ env.IMAGE }}:${{ github.sha }}
             ${{ env.IMAGE }}:${{ github.ref_name }}
@@ -59,8 +62,12 @@ jobs:
           # Provenance and an SBOM attached to the image as attestations.
           provenance: mode=max
           sbom: true
-      - name: The pushed image starts
+      - name: The pushed image starts and reports the commit it was built from
         run: |
-          docker run --rm "$IMAGE:${{ github.sha }}" obop --version
+          sha="${{ github.sha }}"
+          line=$(docker run --rm "$IMAGE:$sha" obop --version)
+          echo "$line"
+          # `obop <core version> (<first 12 digits of the commit>)`
+          echo "$line" | grep -Eq "^obop [0-9][^ ]* \(${sha:0:12}\)$"
           echo "digest: ${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
           echo "image: $IMAGE:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"

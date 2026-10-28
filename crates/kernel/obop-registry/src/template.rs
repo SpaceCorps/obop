@@ -15,6 +15,8 @@ pub enum SlotKind {
     OptionLabel,
     ActionLabel,
     ActionDescription,
+    /// The message of an assertion with a key (`assert.<key>` under the action).
+    AssertMessage,
 }
 
 /// One thing a translator fills in, with its English source text.
@@ -24,7 +26,7 @@ pub struct Slot {
     pub model: String,
     /// Field or action name; empty for the module and model slots.
     pub item: String,
-    /// The option value, for `OptionLabel`.
+    /// The option value, for `OptionLabel`; the assertion key, for `AssertMessage`.
     pub option: String,
     /// What the interface shows without a translation.
     pub english: String,
@@ -96,6 +98,13 @@ pub fn slots(module: &Module) -> Vec<Slot> {
                 "",
                 c.description,
             );
+            // An assertion is translatable when it has a key to find the text by and a message
+            // of its own to translate.
+            for a in &c.asserts {
+                if let (Some(key), Some(message)) = (&a.key, &a.message) {
+                    push(SlotKind::AssertMessage, m.name, c.name, key, message);
+                }
+            }
         }
     }
     v
@@ -121,12 +130,21 @@ impl Slot {
                 .and_then(|o| o.get(lang)),
             SlotKind::ActionLabel => action.and_then(|a| pick(a, true)),
             SlotKind::ActionDescription => action.and_then(|a| pick(a, false)),
+            SlotKind::AssertMessage => {
+                return t.assertion_message(&self.model, &self.item, &self.option, lang);
+            }
         }
         .map(String::as_str)
     }
 
     /// A human path for messages: `fleet_vehicle.fuel.option.petrol`.
     pub fn path(&self) -> String {
+        if self.kind == SlotKind::AssertMessage {
+            return format!(
+                "{}.{}.assert.{}.message",
+                self.model, self.item, self.option
+            );
+        }
         let k = match self.kind {
             SlotKind::ModuleName => "module.name",
             SlotKind::ModuleDescription => "module.description",
@@ -137,6 +155,7 @@ impl Slot {
             SlotKind::OptionLabel => "option",
             SlotKind::ActionLabel => "label",
             SlotKind::ActionDescription => "description",
+            SlotKind::AssertMessage => "message",
         };
         let mut parts: Vec<&str> = [&self.model, &self.item, &self.option]
             .into_iter()
@@ -169,6 +188,7 @@ fn toml_str(s: &str) -> String {
         match c {
             '"' => o.push_str("\\\""),
             '\\' => o.push_str("\\\\"),
+            c if c.is_control() => o.push_str(&format!("\\u{:04X}", c as u32)),
             c => o.push(c),
         }
     }
@@ -216,6 +236,13 @@ pub fn template(module: &Module, lang: &str) -> String {
             SlotKind::ActionDescription => (
                 format!("labels.{lang}.model.{model}.action.{item}"),
                 "description",
+            ),
+            SlotKind::AssertMessage => (
+                format!(
+                    "labels.{lang}.model.{model}.action.{item}.assert.{}",
+                    toml_key(&s.option)
+                ),
+                "message",
             ),
         };
         if table != last {
@@ -285,6 +312,109 @@ mod tests {
         assert!(incomplete(&m, &tr, "fr", &[])[0].contains("missing"));
         let allow = vec!["Shop".to_string()];
         assert_eq!(incomplete(&m, &tr, "de", &allow).len(), missing.len() - 1);
+    }
+
+    /// A module whose `sell` action has three assertions: one with a key and a message, one with
+    /// a message but no key, one with a key but no message.
+    fn module_with_assertions() -> Module {
+        let mut m = module();
+        let sell = m.models[0].commands[0].clone();
+        m.models[0].commands[0] = sell
+            .assertion_keyed(
+                "state == \"on_sale\"",
+                "Only an item on sale can be sold",
+                "on_sale_only",
+            )
+            .assertion_msg("title != \"\"", "Give it a title")
+            .assertion("is_set(title)");
+        m.models[0].commands[0].asserts[2].key = Some("bare".into());
+        m
+    }
+
+    #[test]
+    fn a_keyed_assertion_with_a_message_is_a_slot_of_the_template_and_of_completeness() {
+        let m = module_with_assertions();
+        let slot = slots(&m)
+            .into_iter()
+            .find(|s| s.kind == SlotKind::AssertMessage)
+            .expect("the keyed assertion has a slot");
+        assert_eq!(
+            (
+                slot.model.as_str(),
+                slot.item.as_str(),
+                slot.option.as_str()
+            ),
+            ("shop_item", "sell", "on_sale_only")
+        );
+        assert_eq!(slot.english, "Only an item on sale can be sold");
+        assert_eq!(slot.path(), "shop_item.sell.assert.on_sale_only.message");
+        // Only that one: with no key, or no message, there is nothing to find or to translate.
+        assert_eq!(
+            slots(&m)
+                .iter()
+                .filter(|s| s.kind == SlotKind::AssertMessage)
+                .count(),
+            1
+        );
+
+        let t = template(&m, "sv");
+        assert!(
+            t.contains(
+                "[labels.sv.model.shop_item.action.sell.assert.on_sale_only]\nmessage = \"Only an item on sale can be sold\"\n"
+            ),
+            "{t}"
+        );
+        let labels = Translations::parse_labels(&t).unwrap();
+        check_labels(&labels, &Shape::of(&m)).unwrap();
+        // Untranslated, the message is reported as identical to English; translated, it is not.
+        let tr = Translations::from_labels(&labels);
+        assert!(
+            incomplete(&m, &tr, "sv", &[])
+                .iter()
+                .any(|p| p.contains("shop_item.sell.assert.on_sale_only.message (sv): identical"))
+        );
+        let done = t.replace(
+            "Only an item on sale can be sold",
+            "Bara en vara till salu kan saljas",
+        );
+        let tr = Translations::from_labels(&Translations::parse_labels(&done).unwrap());
+        assert!(
+            !incomplete(&m, &tr, "sv", &[])
+                .iter()
+                .any(|p| p.contains("assert")),
+            "{:?}",
+            incomplete(&m, &tr, "sv", &[])
+        );
+        assert_eq!(
+            tr.assertion_message("shop_item", "sell", "on_sale_only", "sv"),
+            Some("Bara en vara till salu kan saljas")
+        );
+        assert_eq!(
+            tr.assertion_message("shop_item", "sell", "on_sale_only", "de"),
+            None
+        );
+        // A language that has no table at all reports the message as missing.
+        let none = Translations::default();
+        assert!(
+            incomplete(&m, &none, "fi", &[])
+                .iter()
+                .any(|p| p.contains("shop_item.sell.assert.on_sale_only.message (fi): missing"))
+        );
+    }
+
+    #[test]
+    fn the_template_escapes_what_a_toml_string_cannot_hold() {
+        let mut m = module();
+        let sell = m.models[0].commands[0].clone();
+        m.models[0].commands[0] =
+            sell.assertion_keyed("is_set(title)", "Line one\nTab\there \"q\" \\", "k");
+        let t = template(&m, "sv");
+        let labels = Translations::parse_labels(&t).expect("the template parses");
+        let tr = Translations::from_labels(&labels);
+        assert_eq!(
+            tr.assertion_message("shop_item", "sell", "k", "sv"),
+            Some("Line one\nTab\there \"q\" \\")
+        );
     }
 
     #[test]

@@ -2604,7 +2604,9 @@ export interface components {
              * @enum {string}
              */
             applied?: "none" | "unknown" | "partial";
-            /** @description Stable machine-readable code such as not_found, unauthorized, invalid_input, forbidden, rate_limited. */
+            /** @description Only on a 400 with code assertion_failed, and only when the assertion that refused has a key (D52): the key the package gave it, unique in its action, so a client that translates by itself does not have to match the text of error. The text of error is in the language of the request (the lang parameter, then the obop_lang cookie, then Accept-Language) when the package translated the assertion's message for it, else the manifest's own, and in both cases has the manifest's pattern: the message, then (assertion <expression> failed). */
+            assert_key?: string;
+            /** @description Stable machine-readable code such as not_found, unauthorized, invalid_input, forbidden, rate_limited, assertion_failed. */
             code?: string;
             /** @description What went wrong, in a sentence. */
             error: string;

@@ -368,6 +368,18 @@ pub struct Assertion {
     pub source: String,
     pub expr: Arc<Expr>,
     pub message: Option<String>,
+    /// A short name, unique in the action (`[a-z_]{1,40}`): the slot a label table translates
+    /// the message in (`assert.<key>`), and the `assert_key` of a REST refusal.
+    pub key: Option<String>,
+}
+
+/// The longest assertion key.
+pub const MAX_ASSERT_KEY: usize = 40;
+
+/// Whether `key` is a usable assertion key: one to forty lowercase letters or underscores.
+pub fn assert_key_ok(key: &str) -> bool {
+    (1..=MAX_ASSERT_KEY).contains(&key.len())
+        && key.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
 }
 
 impl Assertion {
@@ -376,7 +388,14 @@ impl Assertion {
             source: source.trim().to_string(),
             expr: Arc::new(Expr::parse(source)?),
             message: message.map(String::from),
+            key: None,
         })
+    }
+
+    /// The same assertion with a key. The key is checked by the install gate, not here.
+    pub fn keyed(mut self, key: &str) -> Self {
+        self.key = Some(key.to_string());
+        self
     }
 
     /// The text of the error when the assertion does not hold.
@@ -384,6 +403,15 @@ impl Assertion {
         match &self.message {
             Some(m) => format!("{m} (assertion {} failed)", self.source),
             None => format!("assertion failed: {}", self.source),
+        }
+    }
+
+    /// As [`Assertion::failure`], with `translated` in place of the manifest's message. The
+    /// text keeps the pattern of the original, so a client that reads the suffix still can.
+    pub fn failure_in(&self, translated: Option<&str>) -> String {
+        match (translated, &self.message) {
+            (Some(t), Some(_)) => format!("{t} (assertion {} failed)", self.source),
+            _ => self.failure(),
         }
     }
 }
@@ -446,6 +474,16 @@ impl CommandDef {
         self.asserts.push(
             Assertion::parse(source, Some(message))
                 .unwrap_or_else(|e| panic!("{}: bad assertion {source:?}: {e}", self.name)),
+        );
+        self
+    }
+
+    /// An assertion with a message and a key (see [`Assertion::key`]).
+    pub fn assertion_keyed(mut self, source: &str, message: &str, key: &str) -> Self {
+        self.asserts.push(
+            Assertion::parse(source, Some(message))
+                .unwrap_or_else(|e| panic!("{}: bad assertion {source:?}: {e}", self.name))
+                .keyed(key),
         );
         self
     }
@@ -1376,7 +1414,28 @@ pub fn check_rules(module: &Module, lookup_ext: Lookup<'_>, strict: bool) -> Vec
                     format!("an action has at most {MAX_EFFECTS} effects"),
                 );
             }
+            let mut keys: Vec<&str> = Vec::new();
             for a in &c.asserts {
+                if let Some(k) = &a.key {
+                    if !assert_key_ok(k) {
+                        bad(
+                            cp.clone(),
+                            format!(
+                                "assertion `{}`: the key {k:?} must be 1 to {MAX_ASSERT_KEY} lowercase letters or underscores",
+                                a.source
+                            ),
+                        );
+                    } else if keys.contains(&k.as_str()) {
+                        bad(
+                            cp.clone(),
+                            format!(
+                                "assertion `{}`: the key {k:?} is used twice in the action",
+                                a.source
+                            ),
+                        );
+                    }
+                    keys.push(k);
+                }
                 let scope = Scope {
                     model: m,
                     lookup: &lookup,
@@ -1798,6 +1857,53 @@ mod tests {
             "{p:?}"
         );
         assert_eq!(p.len(), 3, "{p:?}");
+    }
+
+    #[test]
+    fn assertion_keys_are_short_names_unique_in_the_action() {
+        for ok in ["open_only", "a", "_", &"x".repeat(40)] {
+            assert!(assert_key_ok(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "Open",
+            "open1",
+            "open-only",
+            "open only",
+            &"x".repeat(41),
+        ] {
+            assert!(!assert_key_ok(bad), "{bad}");
+        }
+        let keyed = |key: &str| Assertion::parse("count > 0", Some("m")).unwrap().keyed(key);
+        let action = |keys: &[&str]| {
+            let mut c =
+                CommandDef::new("finish", "d", "t.user").transition("state", Some("draft"), "done");
+            c.asserts = keys.iter().map(|k| keyed(k)).collect();
+            c
+        };
+        assert!(problems(&base(vec![action(&["a", "b"])])).is_empty());
+        let p = problems(&base(vec![action(&["a", "a"])]));
+        assert!(p.iter().any(|x| x.contains("used twice")), "{p:?}");
+        let p = problems(&base(vec![action(&["Bad"])]));
+        assert!(p.iter().any(|x| x.contains("lowercase letters")), "{p:?}");
+        // The same key in two actions is fine: it is unique per action.
+        let mut second = action(&["a"]);
+        second.name = "close";
+        assert!(problems(&base(vec![action(&["a"]), second])).is_empty());
+    }
+
+    #[test]
+    fn a_translated_failure_keeps_the_pattern_of_the_original() {
+        let a = Assertion::parse("total > 0", Some("needs a total")).unwrap();
+        assert_eq!(a.failure(), "needs a total (assertion total > 0 failed)");
+        assert_eq!(a.failure_in(None), a.failure());
+        assert_eq!(
+            a.failure_in(Some("behover en summa")),
+            "behover en summa (assertion total > 0 failed)"
+        );
+        // Without a message of its own there is nothing to translate.
+        let bare = Assertion::parse("total > 0", None).unwrap();
+        assert_eq!(bare.failure_in(Some("x")), "assertion failed: total > 0");
     }
 
     #[test]
