@@ -561,6 +561,16 @@ mod tests {
             "the table constraint on the whole document, not a field value (the DDL of the base              part, and the text it was moved from, which a test compares it with)",
         ),
         (
+            "kernel/obop-storage/src/pg_hist.rs",
+            "CHECK (jsonb_typeof(via) = 'object')",
+            "the table constraint on a whole column of the change history, not a field value",
+        ),
+        (
+            "kernel/obop-storage/src/pg_hist.rs",
+            "CHECK (jsonb_typeof(changed) = 'object')",
+            "the table constraint on a whole column of the change history, not a field value",
+        ),
+        (
             "kernel/obop-storage/src/pg.rs",
             "data->$2::text=$3",
             "Pg::find, converted to the slots by the index and keyset work (D78)",

@@ -5,23 +5,30 @@
 //! A [`Part`] is one group of objects: how to create it (`render`, idempotent SQL with a
 //! `{schema}` placeholder), how to tell that it is there (`check`, a catalogue lookup that issues
 //! no DDL) and a digest of the SQL it renders (see [`Part::digest`]), which a migration step
-//! pins so that edited SQL cannot reach existing databases unannounced. Today there is one part
-//! of the record store, `base` (see [`parts`]), and one that only some deployments use, [`BLOB`],
-//! the table of the byte store; the record history, the guards and the query support of waves
-//! D75 to D78 each add a part.
+//! pins so that edited SQL cannot reach existing databases unannounced. The record store has one
+//! part that every process makes sure of, `base` (records, counters, short-lived values; see
+//! [`parts`]); `history` (the change history of D75, `pg_hist`) is made when a model needs it;
+//! [`BLOB`] is the table of the byte store, which only some deployments use. The guards and the
+//! query support of waves D76 to D78 each add a part.
 //!
 //! Who calls what:
 //!
 //! - `Pg::connect_options` calls [`ensure`] inside the `obop-schema` advisory lock, so that
 //!   processes that start together do not trip over each other, and the byte store
 //!   (`blob::DbBytes`) does the same for [`BLOB`]. With [`Ddl::IfMissing`] a part that is not
-//!   completely there is created; with [`Ddl::Never`] a part that is not there is an error and
-//!   no DDL is issued (a serving role that may not create tables).
-//! - [`owner_install`] / [`install_all`] create every part, the byte store's too, unconditionally,
-//!   as the role that owns the objects (tests, the control plane, a migration step).
-//! - [`inspect`] compares a live database with the parts of the record store and reports what is
-//!   wrong. It leaves [`BLOB`] out: a deployment that keeps its files in a directory has no such
-//!   table.
+//!   completely there is created; with [`Ddl::Never`] a *required* part that is not there is an
+//!   error and no DDL is issued (a serving role that may not create tables). Only [`parts`] is
+//!   ensured at start, so a database installed by an older version opens as it always did.
+//! - `Backend::ensure_history_schema` asks for the history under the process's `Ddl`: created
+//!   under `IfMissing`, an error that says what is missing under `Never` (the part is not
+//!   [`Part::required`] for the start, only for the feature). A restore whose backup carries
+//!   entries makes it under `IfMissing` too.
+//! - [`owner_install`] / [`install_all`] create every part, the history's and the byte store's
+//!   too, unconditionally, as the role that owns the objects (tests, the control plane, a
+//!   migration step).
+//! - [`inspect`] compares a live database with the parts of the record store and the history and
+//!   reports what is wrong; the history is a warning, the record store an error. It leaves
+//!   [`BLOB`] out: a deployment that keeps its files in a directory has no such table.
 //!
 //! A check that cannot be answered is an error, never "the part is missing": a refused or failed
 //! catalogue query (the connection broke, the statement ran into its limit, the transaction was
@@ -40,6 +47,9 @@ use sha2::{Digest, Sha256};
 pub(crate) const LOCK_SQL: &str =
     "SELECT pg_advisory_xact_lock(hashtextextended('obop-schema', 0))";
 
+/// What a part says about its data: findings for [`inspect`].
+pub type Audit = fn(&mut Client) -> Result<Vec<Finding>>;
+
 /// One group of schema objects.
 pub struct Part {
     pub name: &'static str,
@@ -50,6 +60,14 @@ pub struct Part {
     /// Is the part there? A catalogue lookup: it issues no DDL and needs no privilege beyond
     /// connecting. `Err` when the lookup itself failed.
     pub check: fn(&mut Client) -> Result<bool>,
+    /// What is wrong with the part's *data* when it is there (not with its objects): findings
+    /// for [`inspect`], which only asks when `check` found the part.
+    pub audit: Option<Audit>,
+    /// Must a process that may not create it (`Ddl::Never`) refuse to start without it? The
+    /// records are needed by everything; the change history is needed only once a model is
+    /// tracked (D75), so a database that was installed before it keeps starting and the history
+    /// refuses its first write with the reason (see `pg_hist`).
+    pub required: bool,
 }
 
 impl Part {
@@ -101,7 +119,7 @@ fn render_base(schema: &str) -> String {
 
 /// Are all `names` relations the server finds (through the search path)? An error when the
 /// question could not be asked.
-fn present(c: &mut Client, names: &[&str]) -> Result<bool> {
+pub(crate) fn present(c: &mut Client, names: &[&str]) -> Result<bool> {
     let row = c
         .query_one(
             "SELECT bool_and(to_regclass(n) IS NOT NULL) FROM unnest($1::text[]) AS t(n)",
@@ -115,6 +133,15 @@ fn present(c: &mut Client, names: &[&str]) -> Result<bool> {
 fn base_present(c: &mut Client) -> Result<bool> {
     present(c, &BASE_OBJECTS)
 }
+
+/// The record store proper: everything but the optional parts.
+const BASE: Part = Part {
+    name: "base",
+    render: render_base,
+    check: base_present,
+    audit: None,
+    required: true,
+};
 
 /// The byte store's table (`blob::DbBytes`): chunks of the files kept in the database.
 const BLOB_SQL: &str = "CREATE TABLE IF NOT EXISTS {schema}.obop_blob_data (
@@ -141,15 +168,24 @@ pub static BLOB: Part = Part {
     name: "blob",
     render: render_blob,
     check: blob_present,
+    audit: None,
+    required: true,
 };
 
-/// The parts of the record store, in the order they are created.
+/// The parts every process makes sure of at start: the record store, `base`. The change history
+/// is not among them: a process that starts creates nothing for a feature that no model uses yet,
+/// so a database installed before it opens exactly as it did, with any role that could open it
+/// then. The history is made when a model that keeps it is switched on
+/// (`Backend::ensure_history_schema`), by `install_all`, or by a restore whose backup carries
+/// entries; [`inspect`] reports it.
 pub fn parts() -> &'static [Part] {
-    static PARTS: [Part; 1] = [Part {
-        name: "base",
-        render: render_base,
-        check: base_present,
-    }];
+    static PARTS: [Part; 1] = [BASE];
+    &PARTS
+}
+
+/// The parts [`inspect`] compares and [`install_all`] creates: [`parts`] and the change history.
+pub(crate) fn installable() -> &'static [Part] {
+    static PARTS: [Part; 2] = [BASE, crate::pg_hist::PART];
     &PARTS
 }
 
@@ -182,12 +218,22 @@ fn ddl_error(part: &str, err: &postgres::Error) -> String {
 
 /// Create (`Ddl::IfMissing`) or require (`Ddl::Never`) every part of the schema. Run it inside
 /// the schema lock (`with_lock`): two processes that both find a part missing would otherwise
-/// both create it.
+/// both create it. Under `Never` a part that is not [`Part::required`] may be missing.
 pub fn ensure(c: &mut Client, ddl: Ddl) -> Result<()> {
     ensure_parts(c, parts(), ddl)
 }
 
 pub(crate) fn ensure_parts(c: &mut Client, parts: &[Part], ddl: Ddl) -> Result<()> {
+    ensure_with(c, parts, ddl, false)
+}
+
+/// As [`ensure_parts`], but under `Never` every part named is required, whatever its flag: the
+/// question "is this feature installed?" of the feature itself.
+pub(crate) fn ensure_strict(c: &mut Client, parts: &[Part], ddl: Ddl) -> Result<()> {
+    ensure_with(c, parts, ddl, true)
+}
+
+fn ensure_with(c: &mut Client, parts: &[Part], ddl: Ddl, strict: bool) -> Result<()> {
     let mut missing: Vec<&Part> = Vec::new();
     for p in parts {
         if !(p.check)(c)? {
@@ -198,15 +244,21 @@ pub(crate) fn ensure_parts(c: &mut Client, parts: &[Part], ddl: Ddl) -> Result<(
         return Ok(());
     }
     match ddl {
-        Ddl::Never => Err(format!(
-            "the database does not have the obop schema (missing: {}), and this process may not \
-             create it: create it first with a role that may create tables",
-            missing
+        Ddl::Never => {
+            let needed: Vec<&str> = missing
                 .iter()
+                .filter(|p| strict || p.required)
                 .map(|p| p.name)
-                .collect::<Vec<_>>()
-                .join(", ")
-        )),
+                .collect();
+            if needed.is_empty() {
+                return Ok(());
+            }
+            Err(format!(
+                "the database does not have the obop schema (missing: {}), and this process may not \
+                 create it: create it first with a role that may create tables",
+                needed.join(", ")
+            ))
+        }
         Ddl::IfMissing => {
             let schema = current_schema(c)?;
             for p in missing {
@@ -223,7 +275,7 @@ pub(crate) fn ensure_parts(c: &mut Client, parts: &[Part], ddl: Ddl) -> Result<(
 /// [`owner_install`]).
 pub fn install_all(c: &mut Client) -> Result<()> {
     let schema = current_schema(c)?;
-    for p in parts().iter().chain(std::iter::once(&BLOB)) {
+    for p in installable().iter().chain(std::iter::once(&BLOB)) {
         c.batch_execute(&(p.render)(&schema))
             .map_err(|e| ddl_error(p.name, &e))?;
     }
@@ -267,11 +319,12 @@ pub struct Finding {
     pub error: bool,
 }
 
-/// Compare a live database with the parts of the record store and report what differs. Today
-/// that is whether each part is there; roles, triggers, functions and indexes join as their parts
-/// do. `Err` when the database could not be asked: that is not a finding about the schema.
+/// Compare a live database with the parts of the record store and report what differs: whether
+/// each part is there and, for a part that has one, what its data says is wrong (the history:
+/// entries numbered beyond the cluster); roles, triggers, functions and indexes join as their
+/// parts do. `Err` when the database could not be asked: that is not a finding about the schema.
 pub fn inspect(c: &mut Client) -> Result<Vec<Finding>> {
-    inspect_parts(c, parts())
+    inspect_parts(c, installable())
 }
 
 pub(crate) fn inspect_parts(c: &mut Client, parts: &[Part]) -> Result<Vec<Finding>> {
@@ -281,12 +334,23 @@ pub(crate) fn inspect_parts(c: &mut Client, parts: &[Part]) -> Result<Vec<Findin
             found.push(Finding {
                 code: "schema_part_missing",
                 object: p.name.to_string(),
-                detail: format!(
-                    "part {} of the obop schema is not (completely) there",
-                    p.name
-                ),
-                error: true,
+                detail: if p.required {
+                    format!(
+                        "part {} of the obop schema is not (completely) there",
+                        p.name
+                    )
+                } else {
+                    format!(
+                        "part {} of the obop schema is not (completely) there; the process starts \
+                         without it and the feature that needs it says so when it is used",
+                        p.name
+                    )
+                },
+                // An optional part is a warning: nothing is broken until something needs it.
+                error: p.required,
             });
+        } else if let Some(audit) = p.audit {
+            found.extend(audit(c)?);
         }
     }
     Ok(found)

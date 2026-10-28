@@ -1,7 +1,7 @@
 //! The in-memory backend: tests, `memory:` databases and the contract's reference.
 
 use super::*;
-use crate::history::{Backfilled, HistoryQuery};
+use crate::history::{self, Backfilled, ChangePage, ChangeQuery, HistoryQuery, HistoryStats};
 use crate::sysfields::{self, ChangeRow, Clock};
 
 /// The change history (D75): a list that only grows, except that an erasure rewrites the values
@@ -510,6 +510,29 @@ impl Backend for Memory {
         found.sort_by_key(|r| std::cmp::Reverse(r.seq));
         found.truncate(q.limit);
         Ok(found)
+    }
+    fn changes(&self, q: &ChangeQuery) -> Result<ChangePage> {
+        let limit = history::feed_limit(q)?;
+        // The epoch lives in the short-lived values; no lock of the history is held meanwhile.
+        let epoch = history::feed_epoch(self)?;
+        let h = self.history.lock().unwrap();
+        let (txid, seq) = history::resume(&epoch, q.after.as_ref(), h.last_seq)?;
+        let rows: Vec<ChangeRow> = h
+            .rows
+            .iter()
+            .filter(|r| (0i64, r.seq) > (txid, seq) && history::wanted(q, r))
+            .take(limit)
+            .cloned()
+            .collect();
+        Ok(history::page(&epoch, q, rows))
+    }
+    fn history_stats(&self) -> Result<HistoryStats> {
+        let h = self.history.lock().unwrap();
+        Ok(HistoryStats {
+            entries_estimate: h.rows.len() as i64,
+            oldest_at: h.rows.iter().map(|r| r.at.clone()).min(),
+            ..HistoryStats::default()
+        })
     }
     fn backfill_sysfields(
         &self,
