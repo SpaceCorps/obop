@@ -69,7 +69,7 @@ describe("bulkCreate is typed from the schema", () => {
     expectTypeOf<"party">().toExtend<BulkModel>();
     expectTypeOf<"product">().toExtend<BulkModel>();
     expectTypeOf<"not_a_model">().not.toExtend<BulkModel>();
-    expectTypeOf<"mileage_trip">().not.toExtend<BulkModel>();
+    expectTypeOf<"inspection_visit">().not.toExtend<BulkModel>();
   });
 
   test("a row is the writable fields of the model", () => {
@@ -108,7 +108,7 @@ describe("bulkCreate is typed from the schema", () => {
       // @ts-expect-error a mode that does not exist
       void client.bulkCreate("party", [{ name: "Ada" }], { mode: "some" });
       // A model of a package installed later is not in the schema: untyped rows.
-      void client.bulkCreate("mileage_trip", [{ client_trip_id: "t", anything: 1 }]);
+      void client.bulkCreate("inspection_visit", [{ visit_ref: "t", anything: 1 }]);
       // A model name that is only known at run time is untyped too.
       const model: string = "party";
       void client.bulkCreate(model, [{ whatever: true }]);

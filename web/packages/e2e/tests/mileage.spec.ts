@@ -132,11 +132,7 @@ test.describe("mileage review", () => {
 
     // The totals now hold the distance the server computed, and not before.
     await expect.poll(() => confirmedMetres(api, "drew")).toBe("200.15");
-    const got = await api.post(
-      "/api/mileage_trip/get",
-      { id: submitted },
-      await api.token("mina"),
-    );
+    const got = await api.post("/api/mileage_trip/get", { id: submitted }, await api.token("mina"));
     expect(got.json.value.state).toBe("confirmed");
     expect(got.json.value.reviewed_by).toBe("mina");
     expect(got.json.value.confirmed_at).toMatch(/^20\d\d-\d\d-\d\dT/);
