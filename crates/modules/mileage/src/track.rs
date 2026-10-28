@@ -189,8 +189,16 @@ mod tests {
             let a = analyse(&fixes, &options);
             let want = &c["expect"];
             let name = c["name"].as_str().unwrap();
-            assert_eq!(a.distance_text(), want["distance_m"].as_str().unwrap(), "{name}");
-            assert_eq!(a.accepted as i64, want["accepted"].as_i64().unwrap(), "{name}");
+            assert_eq!(
+                a.distance_text(),
+                want["distance_m"].as_str().unwrap(),
+                "{name}"
+            );
+            assert_eq!(
+                a.accepted as i64,
+                want["accepted"].as_i64().unwrap(),
+                "{name}"
+            );
             assert_eq!(
                 a.skipped_accuracy as i64,
                 want["skipped_accuracy"].as_i64().unwrap(),

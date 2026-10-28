@@ -14,7 +14,7 @@ use crate::track::{self, Fix, Options};
 use obop_commands::errors::{self, code};
 use obop_commands::{Dispatcher, Value};
 use obop_registry::Module;
-use obop_storage::{Backend, Op};
+use obop_storage::{ApplyError, Backend, Op};
 use obop_values::Instant;
 use serde_json::Value as J;
 use std::collections::HashMap;
@@ -44,6 +44,18 @@ fn micros(canonical: &str) -> Option<i64> {
 
 fn number(trip: &Fields, k: &str) -> Option<i64> {
     trip.get(k).and_then(J::as_i64)
+}
+
+/// A whole number the caller gave in the input of the action (a number or its digits).
+fn given(input: &Value, k: &str) -> Option<i64> {
+    match input {
+        Value::Map(m) => match m.get(k) {
+            Some(Value::Int(n)) => Some(*n),
+            Some(Value::Text(t)) => t.trim().parse().ok(),
+            _ => None,
+        },
+        _ => None,
+    }
 }
 
 struct Stored {
@@ -85,15 +97,19 @@ fn stored_points(db: &Db, trip_id: &str) -> Result<Vec<Stored>, String> {
 }
 
 /// `end`: the points must all be there, then the server decides the distance.
-fn end(db: &Db, id: &str, trip: &Fields) -> Result<Fields, String> {
-    let (Some(expected), Some(last_seq)) =
-        (number(trip, "expected_points"), number(trip, "last_seq"))
-    else {
+fn end(db: &Db, id: &str, trip: &Fields, input: &Value) -> Result<Fields, String> {
+    // The device may carry the counts in the call itself or have written them to the trip first.
+    let expected = given(input, "expected_points").or_else(|| number(trip, "expected_points"));
+    let last_seq = given(input, "last_seq").or_else(|| number(trip, "last_seq"));
+    let (Some(expected), Some(last_seq)) = (expected, last_seq) else {
         return Err(
-            "mileage_trip.end needs expected_points and last_seq: set them with update first"
+            "mileage_trip.end needs expected_points and last_seq, in the call or written to the trip first"
                 .into(),
         );
     };
+    if expected < 0 || last_seq < 0 {
+        return Err("expected_points and last_seq cannot be negative".into());
+    }
     let points = stored_points(db, id)?;
     let have = points.len() as i64;
     let highest = points.last().map_or(0, |p| p.seq);
@@ -121,6 +137,8 @@ fn end(db: &Db, id: &str, trip: &Fields) -> Result<Fields, String> {
     );
     let mut patch = Fields::new();
     patch.insert("state".into(), J::from(policy::ENDED));
+    patch.insert("expected_points".into(), J::from(expected));
+    patch.insert("last_seq".into(), J::from(last_seq));
     patch.insert("distance_m".into(), J::from(distance));
     patch.insert("integrity".into(), J::from(a.integrity()));
     patch.insert("start_lat".into(), J::from(first.lat.clone()));
@@ -151,7 +169,7 @@ fn run(db: &Db, clock: &Clock, action: &'static str, input: &Value) -> Result<Va
     policy::check_action(action, &who, approver.as_deref(), &trip)?;
     let decider = approver.clone().unwrap_or(caller);
     let mut patch = match action {
-        "end" => end(db, &id, &trip)?,
+        "end" => end(db, &id, &trip, input)?,
         _ => Fields::new(),
     };
     let to = match action {
@@ -176,24 +194,35 @@ fn run(db: &Db, clock: &Clock, action: &'static str, input: &Value) -> Result<Va
         }
         _ => {}
     }
-    db.apply(&[Op::Patch {
-        model: policy::TRIP.into(),
-        id: id.clone(),
-        patch: patch.clone(),
-        expect: vec![("state".into(), J::from(policy::state(&trip)))],
-    }])
-    .map_err(|e| format!("the trip changed while {action} ran, nothing was changed ({e})"))?;
     if action == "discard_stuck" {
-        // Who discarded it is in the log: no change history keeps it yet (D75 is not active).
-        obop_commands::audit::record_event(
+        // Who discarded it is in the log, written first so that a discard is never unlogged: no
+        // change history keeps it yet (D75 is not active).
+        obop_commands::audit::try_record_event(
             &**db,
             u64::try_from(clock() / 1_000_000).unwrap_or(0),
             policy::text(&trip, "driver"),
             "mileage_discard_stuck",
             &decider,
-            &format!("discarded the stuck trip {id} that was {}", policy::state(&trip)),
-        );
+            &format!(
+                "discard_stuck of trip {id}, which was {}",
+                policy::state(&trip)
+            ),
+        )?;
     }
+    db.apply_checked(&[Op::Patch {
+        model: policy::TRIP.into(),
+        id: id.clone(),
+        patch: patch.clone(),
+        expect: vec![("state".into(), J::from(policy::state(&trip)))],
+    }])
+    .map_err(|e| match e {
+        ApplyError::Conflict { .. } => errors::coded(
+            code::STATE_CONFLICT,
+            &format!("the trip changed while {action} ran; nothing was changed"),
+        ),
+        // A store fault keeps its own words, so that every surface answers it as a 503 (D74).
+        ApplyError::Storage(e) => e,
+    })?;
     let mut out: HashMap<String, Value> = patch
         .iter()
         .map(|(k, v)| (k.clone(), Value::from_json(v)))

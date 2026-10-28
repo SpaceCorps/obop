@@ -186,7 +186,9 @@ fn trip_row(who: &Who, row: &Value) -> Result<Value, String> {
             );
         }
         if SERVER_SET.contains(&k) || policy::COMPUTED.contains(&k) {
-            return Err(format!("mileage_trip.{k} is set by the server and cannot be given"));
+            return Err(format!(
+                "mileage_trip.{k} is set by the server and cannot be given"
+            ));
         }
     }
     match r.get("driver") {
@@ -312,13 +314,7 @@ fn trip_for_points(db: &Db, who: &Who, id: &str, adding: usize) -> Result<(), St
         ));
     }
     let have = db.find(policy::POINT, "trip", &J::from(id))?.len();
-    if have + adding > policy::MAX_POINTS_PER_TRIP {
-        return Err(format!(
-            "a trip holds at most {} points; this one has {have} and {adding} more were sent",
-            policy::MAX_POINTS_PER_TRIP
-        ));
-    }
-    Ok(())
+    policy::room_for(have, adding)
 }
 
 /// Rows of points for one trip: checked against the trip, stamped with its driver.
@@ -420,7 +416,12 @@ pub fn install(d: &Dispatcher, module: &str, db: Db) {
         ),
     );
     d.add_guard(module, &id(pt, "create"), true, create_point(db.clone()));
-    d.add_guard(module, &id(pt, "bulk_create"), true, bulk_points(db.clone()));
+    d.add_guard(
+        module,
+        &id(pt, "bulk_create"),
+        true,
+        bulk_points(db.clone()),
+    );
     d.add_guard(
         module,
         &id(pt, "update"),

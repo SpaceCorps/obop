@@ -84,6 +84,16 @@ pub const POINT_FIELDS: [&str; 8] = [
 /// a three-hour trip at one fix every five seconds is 2,160.
 pub const MAX_POINTS_PER_TRIP: usize = 20_000;
 
+/// Whether a trip that holds `have` points has room for `adding` more.
+pub fn room_for(have: usize, adding: usize) -> Result<(), String> {
+    if have + adding > MAX_POINTS_PER_TRIP {
+        return Err(format!(
+            "a trip holds at most {MAX_POINTS_PER_TRIP} points; this one has {have} and {adding} more were sent"
+        ));
+    }
+    Ok(())
+}
+
 /// The states a reviewer reads (5.7: "from `in_review` on"). A trip that was discarded after
 /// review is not among them: the reviewer saw it when it was in review or rejected.
 pub fn reviewable(state: &str) -> bool {
@@ -169,10 +179,7 @@ pub fn check_action(
     };
     match action {
         "end" | "submit" | "discard" if !mine => {
-            return Err(format!(
-                "only the driver of a trip can {} it",
-                word(action)
-            ));
+            return Err(format!("only the driver of a trip can {} it", word(action)));
         }
         "discard_stuck" if !who.admin => {
             return Err("only a mileage administrator can discard a stuck trip".into());
@@ -197,12 +204,12 @@ pub fn check_action(
         ));
     }
     match action {
-        "reject" if text(trip, "reject_reason").trim().is_empty() => Err(
-            "reject needs a reason: write reject_reason with update first".into(),
-        ),
-        "discard" if text(trip, "discard_reason").trim().is_empty() => Err(
-            "discard needs a reason: write discard_reason with update first".into(),
-        ),
+        "reject" if text(trip, "reject_reason").trim().is_empty() => {
+            Err("reject needs a reason: write reject_reason with update first".into())
+        }
+        "discard" if text(trip, "discard_reason").trim().is_empty() => {
+            Err("discard needs a reason: write discard_reason with update first".into())
+        }
         _ => Ok(()),
     }
 }
@@ -231,6 +238,14 @@ pub fn writable_fields(who: &Who, trip: &Fields) -> Result<&'static [&'static st
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_trip_holds_a_bounded_number_of_points() {
+        use super::{MAX_POINTS_PER_TRIP as TOP, room_for};
+        assert!(room_for(0, TOP).is_ok());
+        assert!(room_for(TOP - 5, 5).is_ok());
+        assert!(room_for(TOP - 5, 6).unwrap_err().contains("at most"));
+    }
+
     use super::*;
     use serde_json::json;
 
@@ -264,7 +279,10 @@ mod tests {
                     "submit" => (st == ENDED, [true, false, false]),
                     "confirm" | "reject" => (st == IN_REVIEW, [false, true, false]),
                     "reopen" => (st == REJECTED, [false, true, false]),
-                    "discard" => (matches!(st, RECORDING | ENDED | REJECTED), [true, false, false]),
+                    "discard" => (
+                        matches!(st, RECORDING | ENDED | REJECTED),
+                        [true, false, false],
+                    ),
                     "discard_stuck" => (matches!(st, RECORDING | ENDED), [false, false, true]),
                     _ => unreachable!(),
                 };
@@ -314,7 +332,11 @@ mod tests {
         for st in STATES {
             let t = trip(st, "ann");
             let d = writable_fields(&driver, &t);
-            assert_eq!(d.is_ok(), matches!(st, RECORDING | ENDED | REJECTED), "driver in {st}");
+            assert_eq!(
+                d.is_ok(),
+                matches!(st, RECORDING | ENDED | REJECTED),
+                "driver in {st}"
+            );
             let r = writable_fields(&reviewer, &t);
             assert_eq!(r.is_ok(), st == IN_REVIEW, "reviewer in {st}");
             assert!(writable_fields(&admin, &t).is_err(), "admin in {st}");
@@ -322,7 +344,10 @@ mod tests {
         // A reviewer who is the driver writes as the driver and never as the reviewer.
         let rob = trip(IN_REVIEW, "rob");
         assert!(writable_fields(&reviewer, &rob).is_err());
-        assert_eq!(writable_fields(&reviewer, &trip(ENDED, "rob")).unwrap(), &DRIVER_FIELDS);
+        assert_eq!(
+            writable_fields(&reviewer, &trip(ENDED, "rob")).unwrap(),
+            &DRIVER_FIELDS
+        );
     }
 
     #[test]
@@ -335,7 +360,11 @@ mod tests {
             let t = trip(st, "ann");
             assert!(may_see_trip(&driver, &t));
             assert!(!may_see_trip(&other, &t), "another driver in {st}");
-            assert_eq!(may_see_trip(&reviewer, &t), reviewable(st), "reviewer in {st}");
+            assert_eq!(
+                may_see_trip(&reviewer, &t),
+                reviewable(st),
+                "reviewer in {st}"
+            );
             assert!(may_see_trip(&admin, &t));
         }
         assert!(!reviewable(DISCARDED) && !reviewable(RECORDING) && !reviewable(ENDED));

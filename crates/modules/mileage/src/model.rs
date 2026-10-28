@@ -2,9 +2,7 @@
 //! actions of 5.2, and the row rules of 5.7.
 
 use crate::policy::{ADMIN, DRIVER, POINT, REVIEWER, TRIP};
-use obop_registry::{
-    Access, CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta,
-};
+use obop_registry::{Access, CommandDef, FieldDef as F, FieldKind, ModelDef, Module, ModuleMeta};
 use obop_types::DataClass::{ConfidentialHr, Internal};
 use obop_values::Round;
 
