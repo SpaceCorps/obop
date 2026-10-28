@@ -15,7 +15,7 @@ import { t } from "./src/i18n/index.ts";
 import { stopRecording } from "./src/native/recorder.ts";
 import type { Runtime } from "./src/native/runtime.ts";
 import { useBinding, useOutbox, useRuntime, useSessionStatus } from "./src/ui/hooks.ts";
-import { gate, reduce, type Nav, type Route } from "./src/ui/router.ts";
+import { gate, keepSigningIn, reduce, type Nav, type Route } from "./src/ui/router.ts";
 import { Account } from "./src/ui/screens/Account.tsx";
 import { Foreign } from "./src/ui/screens/Foreign.tsx";
 import { Home } from "./src/ui/screens/Home.tsx";
@@ -48,6 +48,10 @@ function Routes({ rt }: { rt: Runtime }) {
   // the driver goes to the sign-in from there.
   const [signingIn, setSigningIn] = useState(false);
   const signedIn = status === "signed_in";
+  // A finished sign-in ends the choice: the next end of a sign-in during a trip shows the recording.
+  useEffect(() => {
+    setSigningIn((current) => keepSigningIn(current, status));
+  }, [status]);
 
   const nav: Nav = useMemo(
     () => ({

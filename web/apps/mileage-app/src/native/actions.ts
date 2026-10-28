@@ -129,10 +129,13 @@ export async function unsentSummary(): Promise<Unsent> {
 
 /**
  * The end of a sign-in on this phone, after the instance has been told (or could not be).
- * The trip that is open is stopped on the phone. The trips that are not uploaded are kept for the
- * next sign-in of the same person at the same address (`keepUnsent`, the outbox stays bound to its
- * owner and nobody else uploads or sees it) or deleted; everything that the server holds in full
- * is a copy and goes.
+ * The trip that is open is stopped on the phone. The trips that are not completely on the server
+ * are kept for the next sign-in of the same person at the same address (`keepUnsent`) or deleted.
+ * With nothing unsent, the whole local copy goes (`clearAll`). When trips are kept, the outbox
+ * stays bound to its owner and nobody else uploads or sees it, and everything else in it stays on
+ * the phone with them: the other trips of that person, as the list the server gave (purpose, time,
+ * distance, state, no route points of finished trips). The next sign-in of another person finds the
+ * outbox foreign and the driver decides; "Delete them and continue" removes all of it.
  */
 export async function leaveSession(rt: Runtime, keepUnsent: boolean): Promise<void> {
   rt.sync.stop();
@@ -146,13 +149,15 @@ export async function leaveSession(rt: Runtime, keepUnsent: boolean): Promise<vo
 /**
  * Sign out. The tokens leave the Keystore at once; the instance is told in the background of the
  * same call but never waited for longer than a few seconds, and when it could not be reached the
- * sign-in screen says so once. `keepUnsent` keeps the trips that are only on the phone for the
+ * sign-in screen says so while it is open (the notice is gone for good when the screen is left). `keepUnsent` keeps the trips that are only on the phone for the
  * same person's next sign-in; otherwise they are deleted. The caller has asked the driver.
  */
 export async function signOut(keepUnsent: boolean): Promise<void> {
   const rt = await getRuntime();
   const told = rt.revokeSignIn(); // reads the refresh token now, before it is forgotten
   await leaveSession(rt, keepUnsent);
+  // The flag is set before the screens are told (the setter tells them), and the sign-in screen
+  // that is open by now follows it: the notice appears when the answer is in, at most a few
+  // seconds after the screen did.
   rt.setSignOutUntold(!(await told));
-  emitChange();
 }

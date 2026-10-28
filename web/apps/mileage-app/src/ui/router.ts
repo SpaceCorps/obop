@@ -52,6 +52,14 @@ export type Gate =
   | "app";
 
 /**
+ * Whether the driver's choice to go on to the sign-in from the recording still stands. It ends
+ * when a sign-in has finished: the next time the sign-in ends during a trip, the recording comes
+ * first again, not the sign-in screen.
+ */
+export const keepSigningIn = (signingIn: boolean, status: SessionStatus): boolean =>
+  signingIn && status !== "signed_in";
+
+/**
  * Decided before the routes, and pure so it is tested. The rule that matters: a trip that is open
  * is never hidden behind the sign-in screen, because the Stop button is on the recording screen
  * and stopping needs no connection and no sign-in.

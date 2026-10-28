@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vite-plus/test";
-import { gate, reduce, type Route } from "./router.ts";
+import { gate, keepSigningIn, reduce, type Route } from "./router.ts";
 
 const home: Route = { name: "home" };
 
@@ -52,6 +52,19 @@ describe("what the driver sees before any route", () => {
 
   test("the driver can go on to the sign-in from the recording, and back", () => {
     expect(gate({ ...base, status: "expired", openTrip: true, signingIn: true })).toBe("sign_in");
+  });
+
+  test("the choice to sign in from the recording ends with the sign-in, so the next end shows the recording again", () => {
+    // The driver chose "Sign in" on the recording screen, and the sign-in finished.
+    let signingIn = true;
+    signingIn = keepSigningIn(signingIn, "signed_in");
+    expect(signingIn).toBe(false);
+    // Later the sign-in ends again during a trip: the recording, with Stop, comes first.
+    expect(gate({ ...base, status: "expired", openTrip: true, signingIn })).toBe("recording");
+    // While the sign-in has not finished, the choice stands (it ends only by Back or by success).
+    expect(keepSigningIn(true, "signed_out")).toBe(true);
+    expect(keepSigningIn(true, "expired")).toBe(true);
+    expect(keepSigningIn(false, "expired")).toBe(false);
   });
 
   test("an ended sign-in with no open trip shows the sign-in", () => {

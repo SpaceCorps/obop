@@ -15,7 +15,13 @@ import Constants from "expo-constants";
 import * as WebBrowser from "expo-web-browser";
 import { checkAddress as checkAddressText } from "../core/address.ts";
 import type { Binding, Owner } from "../core/identity.ts";
-import { needsRegistration, type Session } from "../core/session.ts";
+import { withDeadline } from "../core/deadline.ts";
+import {
+  clientUnknown,
+  needsRegistration,
+  type ServerConfig,
+  type Session,
+} from "../core/session.ts";
 import { CLIENT_NAME, REDIRECT_URI, SCOPE } from "./config.ts";
 import { deviceInfo, oauthDeps } from "./platform-deps.ts";
 
@@ -68,19 +74,41 @@ export interface SignInHost {
   bindIdentity(owner: Owner): Promise<Binding>;
 }
 
+/** How long the question "who is this" and the probe of the authorization page may take. */
+const OWNER_CALL_MS = 30_000;
+const PROBE_MS = 8000;
+
 /** The person that the instance reports as the owner of the device of this sign-in. */
 async function ownerOf(baseUrl: string, tokens: TokenSet): Promise<Owner> {
-  if (tokens.deviceId === null) throw new SignInError("failed");
+  const deviceId = tokens.deviceId;
+  if (deviceId === null) throw new SignInError("failed");
   const client = createObopClient({
     baseUrl,
     getToken: async () => tokens.accessToken,
     getLanguage: () => "en",
   });
-  const { value } = await client.call<{ user?: unknown }>("device", "get", {
-    id: tokens.deviceId,
-  });
+  // Bounded: React Native's network stack has no timeout of its own (docs/ISSUES.md L29).
+  const { value } = await withDeadline(OWNER_CALL_MS, (signal) =>
+    client.call<{ user?: unknown }>("device", "get", { id: deviceId }, { signal }),
+  );
   if (typeof value.user !== "string" || value.user === "") throw new SignInError("failed");
   return { origin: baseUrl, user: value.user };
+}
+
+/**
+ * The status that the authorization page answers for this address, or `null` when it did not
+ * answer (any failure: the sign-in goes on and the browser shows what is wrong). The page is read,
+ * not followed, and the instance keeps a sign-in flow for it that runs out by itself.
+ */
+async function probeAuthorize(url: string): Promise<number | null> {
+  try {
+    return await withDeadline(PROBE_MS, async (signal) => {
+      const response = await fetch(url, { signal, redirect: "manual" });
+      return response.status;
+    });
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -95,28 +123,43 @@ export async function signIn(host: SignInHost, input: string): Promise<void> {
   const { session } = host;
   try {
     const baseUrl = checkAddress(input);
-    let config = session.config();
-    if (needsRegistration(config, baseUrl, Date.now())) {
+    const register = async (): Promise<ServerConfig> => {
       const clientId = await registerMobileClient(oauthDeps, {
         baseUrl,
         redirectUri: REDIRECT_URI,
         name: CLIENT_NAME,
         scope: SCOPE,
       });
-      config = { baseUrl, clientId };
-      await session.setConfig(config);
+      const fresh = { baseUrl, clientId };
+      await session.setConfig(fresh);
+      return fresh;
+    };
+    let config = session.config();
+    let registeredNow = false;
+    if (needsRegistration(config, baseUrl, Date.now())) {
+      config = await register();
+      registeredNow = true;
     }
     if (config === null) throw new SignInError("failed");
     const pkce = await createPkce(oauthDeps);
     const state = await createState(oauthDeps);
-    const url = buildAuthorizeUrl({
-      baseUrl,
-      clientId: config.clientId,
-      redirectUri: REDIRECT_URI,
-      challenge: pkce.challenge,
-      state,
-      scope: SCOPE,
-    });
+    const authorizeUrl = (clientId: string) =>
+      buildAuthorizeUrl({
+        baseUrl,
+        clientId,
+        redirectUri: REDIRECT_URI,
+        challenge: pkce.challenge,
+        state,
+        scope: SCOPE,
+      });
+    let url = authorizeUrl(config.clientId);
+    // A client that is used again may have been forgotten by the instance for a reason other than
+    // idleness (a replaced database, a restore): the page then answers 400 and the browser shows
+    // an error that the app cannot read. Register once more and go on (docs/ISSUES.md L40).
+    if (!registeredNow && clientUnknown(await probeAuthorize(url))) {
+      config = await register();
+      url = authorizeUrl(config.clientId);
+    }
     const result = await WebBrowser.openAuthSessionAsync(url, REDIRECT_URI);
     if (result.type !== "success") throw new SignInError("cancelled");
     const code = parseAuthorizationResponse(result.url, { state, baseUrl });

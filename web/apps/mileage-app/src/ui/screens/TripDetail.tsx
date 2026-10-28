@@ -23,6 +23,7 @@ const problemText = (code: string): string => {
     case "state_conflict":
     case "discarded":
     case "gone":
+    case "unknown":
       return t(`trip.problem.${code}`);
     case "unexpected_answer":
       return t("trip.problem.invalid_response");
@@ -123,7 +124,9 @@ export function TripDetail({ rt, nav, id }: { rt: Runtime; nav: Nav; id: string 
           <Banner
             tone="danger"
             title={t("trip.problem.title")}
-            message={`${problemText(trip.problem.code)} ${t("trip.problem.hint")}`}
+            message={`${problemText(trip.problem.code)} ${t(
+              trip.problem.code === "unknown" ? "trip.problem.hint.unknown" : "trip.problem.hint",
+            )}`}
             action={{
               label: t("common.retry"),
               onPress: () => act(() => retryTrip(trip.clientTripId)),

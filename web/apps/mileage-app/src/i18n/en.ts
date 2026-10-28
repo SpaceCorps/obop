@@ -24,7 +24,7 @@ export const en = {
   "error.sync": "The trips could not be sent. The phone keeps them and tries again.",
   "error.database": "The trips on this phone could not be opened.",
   "error.database.hint":
-    "Nothing was deleted. Try again. If a trip is being recorded, the recording goes on until you stop it here.",
+    "Nothing was deleted. Try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here.",
   "error.database.stop": "Stop the location service",
   "error.database.stopped": "The location service was stopped.",
 
@@ -56,6 +56,9 @@ export const en = {
   "signin.expired.title": "Your sign-in has ended",
   "signin.expired.message":
     "Sign in again to upload your trips. The trips on this phone are kept until they are uploaded.",
+  "signin.expired.unsure.title": "Your sign-in was ended on this phone",
+  "signin.expired.unsure.message":
+    "The instance did not answer in time, so the phone cannot tell whether it renewed the sign-in. To be safe the sign-in was ended. Sign in again to upload your trips. The trips on this phone are kept until they are uploaded.",
   "signin.untold.title": "The instance was not told",
   "signin.untold.message":
     "You are signed out on this phone, but the instance could not be reached, so it still lists this phone. Remove it in the back office under Customize, Security, Devices, or it ends by itself when the sign-in runs out.",
@@ -198,13 +201,16 @@ export const en = {
     "The server has not received every point of this trip yet. The phone keeps trying. If it does not finish, discard the trip and record it again.",
   "trip.problem.title": "The server refused a step",
   "trip.problem.hint": "Nothing is lost. You can try again, or discard the trip.",
+  "trip.problem.hint.unknown": "Nothing is lost. You can try again.",
   "trip.problem.generic": "The server refused this step.",
   "trip.problem.state_conflict":
     "The trip is in a state where the server does not accept this step.",
   "trip.problem.discarded":
     "The server discarded this trip. Discard it here too, and the points on this phone are removed.",
   "trip.problem.gone":
-    "The server does not have this trip. Discard it here, and the points on this phone are removed.",
+    "The server says it does not have this trip. Discard it here, and the points on this phone are removed.",
+  "trip.problem.unknown":
+    'The server answered "not found" and the phone cannot tell what that means for this trip. The points are still on this phone and nothing is deleted. Try again later, or ask your administrator.',
   "trip.problem.invalid_response": "The server answered in a way the app does not understand.",
   "trip.problem.details": "Details from the server: {message}",
   "trip.action.failed": "That did not work. Try again.",

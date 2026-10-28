@@ -1,4 +1,5 @@
 import { ObopApiError } from "@obop/client";
+import { withDeadline } from "../core/deadline.ts";
 import { leaveSession } from "./actions.ts";
 import type { Runtime } from "./runtime.ts";
 
@@ -21,6 +22,12 @@ interface DeviceValue {
   state?: string;
 }
 
+/**
+ * How long a call about this phone waits for the instance. React Native's network stack has no
+ * timeout of its own, and a stalled call would leave the Account screen waiting for minutes.
+ */
+const DEVICE_CALL_MS = 30_000;
+
 function deviceId(rt: Runtime): string {
   const id = rt.session.deviceId();
   if (!id) {
@@ -35,7 +42,9 @@ function deviceId(rt: Runtime): string {
 
 export async function readDevice(rt: Runtime): Promise<DeviceView> {
   const id = deviceId(rt);
-  const { value } = await rt.client().call<DeviceValue>("device", "get", { id });
+  const { value } = await withDeadline(DEVICE_CALL_MS, (signal) =>
+    rt.client().call<DeviceValue>("device", "get", { id }, { signal }),
+  );
   return {
     id,
     name: value.name ?? "",
@@ -47,16 +56,26 @@ export async function readDevice(rt: Runtime): Promise<DeviceView> {
 }
 
 export async function renameDevice(rt: Runtime, name: string): Promise<void> {
-  await rt.client().call("device", "update", { id: deviceId(rt), name: name.trim() });
+  const id = deviceId(rt);
+  await withDeadline(DEVICE_CALL_MS, (signal) =>
+    rt.client().call("device", "update", { id, name: name.trim() }, { signal }),
+  );
 }
 
 /**
- * "Remove this phone": the instance ends the sign-in and marks the device revoked; then the app
- * signs out as in `signOut` (`keepUnsent` decides about the trips that are only on the phone). If
- * the instance cannot be reached the call throws and nothing is removed, so the phone is never
- * left listed as active on the instance while the app thinks it is gone.
+ * "Remove this phone": the instance ends the sign-in and marks the device revoked, and only when it
+ * has answered does the app sign out as in `signOut` (`keepUnsent` decides about the trips that are
+ * not completely on the server). If the instance cannot be reached, or does not answer within
+ * 30 seconds, the call throws and nothing is removed on the phone, so the phone is never left
+ * listed as active on the instance while the app thinks it is gone. (After a timeout the instance
+ * may have revoked the device nevertheless: the next call then finds the sign-in ended, and the
+ * app signs out by the ordinary path.) Unlike "Sign out", this does not wait only five seconds
+ * and then go on without an answer: the driver asked for the instance to be told.
  */
 export async function removeThisDevice(rt: Runtime, keepUnsent: boolean): Promise<void> {
-  await rt.client().call("device", "revoke", { id: deviceId(rt) });
+  const id = deviceId(rt);
+  await withDeadline(DEVICE_CALL_MS, (signal) =>
+    rt.client().call("device", "revoke", { id }, { signal }),
+  );
   await leaveSession(rt, keepUnsent);
 }

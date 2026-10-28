@@ -10,7 +10,7 @@ export type ScreenProps = {
   onBack?: () => void;
   /** Actions pinned under the content (the Stop button, Submit). */
   footer?: ReactNode;
-  /** `false` for a screen that never scrolls (the recording screen). */
+  /** `false` only for a placeholder with nothing to scroll (the Loading screens). Every real screen scrolls, the recording screen too, so that large text never hides a banner. */
   scroll?: boolean;
   children: ReactNode;
 };

@@ -83,6 +83,20 @@ export function useSessionStatus(rt: Runtime): SessionStatus {
   return status;
 }
 
+/**
+ * Whether the last sign-out could not tell the instance. Read again whenever something changes: the
+ * answer of the instance comes after the sign-in screen is open (a sign-out waits up to five
+ * seconds for it), so the flag is set while the screen is already there.
+ */
+export function useSignOutUntold(rt: Runtime): boolean {
+  const [untold, setUntold] = useState<boolean>(rt.signOutUntold());
+  useEffect(() => {
+    setUntold(rt.signOutUntold());
+    return onChange(() => setUntold(rt.signOutUntold()));
+  }, [rt]);
+  return untold;
+}
+
 export function useSyncStatus(rt: Runtime): SyncStatus {
   const [status, setStatus] = useState<SyncStatus>(rt.sync.status());
   useEffect(() => {

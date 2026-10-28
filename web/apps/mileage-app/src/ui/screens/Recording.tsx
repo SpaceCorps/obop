@@ -60,7 +60,9 @@ export function Recording({
 }) {
   const { active, loaded } = useOutbox(rt);
   const now = useNow();
-  const [progress, setProgress] = useState<Progress>({ points: 0, metres: 0, lastFixMs: null });
+  // `null` until the stored positions have been read once: nothing is said about them before.
+  const [measured, setMeasured] = useState<Progress | null>(null);
+  const progress: Progress = measured ?? { points: 0, metres: 0, lastFixMs: null };
   const [running, setRunning] = useState(true);
   const [blocked, setBlocked] = useState<Exclude<Readiness, "ready"> | null>(null);
   const [restartFailed, setRestartFailed] = useState(false);
@@ -81,7 +83,7 @@ export function Recording({
       if (at - last < 4000) return;
       last = at;
       progressOf(rt, id).then(
-        (p) => alive && setProgress(p),
+        (p) => alive && setMeasured(p),
         () => undefined,
       );
     };
@@ -162,7 +164,7 @@ export function Recording({
 
   const health = recordingHealth({
     startedAtMs: Date.parse(active.startedAt),
-    lastFixMs: progress.lastFixMs,
+    lastFixMs: measured === null ? undefined : measured.lastFixMs,
     nowMs: now,
   });
 
@@ -294,7 +296,7 @@ export function Recording({
       <Text tone="muted" testID="points">
         {tp("recording.points", progress.points)}
       </Text>
-      {progress.points === 0 && health.kind === "waiting" ? (
+      {measured !== null && progress.points === 0 && health.kind === "waiting" ? (
         <Text tone="muted">{t("recording.nofix")}</Text>
       ) : null}
       <Banner tone="info" title={t("recording.keep.title")} message={t("recording.keep.message")} />

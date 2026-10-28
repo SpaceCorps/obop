@@ -16,7 +16,10 @@ export interface Runtime {
   session: Session;
   engine: Engine;
   sync: SyncController;
-  /** A typed client of the instance the phone is signed in to, or throws a 401 when it is none. */
+  /**
+   * A typed client of the instance the phone is signed in to, or throws a 401 when it is none or
+   * when the trips on the phone belong to somebody else (nothing is sent for them).
+   */
   client(): ObopClient;
   /** Tells the instance to end this sign-in. Best effort, and bounded: false when it could not be reached in time. */
   revokeSignIn(): Promise<boolean>;
@@ -26,8 +29,9 @@ export interface Runtime {
   bindIdentity(owner: Owner): Promise<Binding>;
   /** The driver chose to delete the other sign-in's trips and go on. */
   takeOverOutbox(): Promise<void>;
-  /** The last sign-out could not tell the instance (shown once on the sign-in screen). */
+  /** The last sign-out could not tell the instance (shown on the sign-in screen while it is open). */
   signOutUntold(): boolean;
+  /** Sets the flag and tells the screens (`emitChange`), so that an open sign-in screen follows it. */
   setSignOutUntold(untold: boolean): void;
 }
 
@@ -49,6 +53,8 @@ async function build(): Promise<Runtime> {
   const client = (): ObopClient => {
     const config = session.config();
     if (!config || session.status() !== "signed_in") throw notSignedIn();
+    // Not even a call that is on its way when the outbox turns out to belong to someone else.
+    if (binding.kind !== "own") throw notSignedIn();
     if (cached?.baseUrl !== config.baseUrl) {
       cached = {
         baseUrl: config.baseUrl,
@@ -75,7 +81,9 @@ async function build(): Promise<Runtime> {
     discardTrip: (id) => createTripApi(client()).discardTrip(id),
   };
 
-  const engine = createEngine({ store, api });
+  // A pass that is running when the sign-in changes (sign-out, a new sign-in) stops before its
+  // next call, so that nothing of the old sign-in's outbox is sent with the new sign-in's token.
+  const engine = createEngine({ store, api, identity: () => session.generation() });
   const sync = createSyncController({
     engine,
     // Nothing is uploaded while the trips on the phone belong to somebody else.
@@ -126,7 +134,9 @@ async function build(): Promise<Runtime> {
     },
     signOutUntold: () => untold,
     setSignOutUntold(value) {
+      if (untold === value) return;
       untold = value;
+      emitChange();
     },
   };
 }

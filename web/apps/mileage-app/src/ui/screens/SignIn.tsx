@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { t, type MessageKey } from "../../i18n/index.ts";
 import { SignInError, signIn, type SignInFailure } from "../../native/auth.ts";
 import type { Runtime } from "../../native/runtime.ts";
+import { useSignOutUntold } from "../hooks.ts";
 
 /** A build made for a test instance may carry the address to start from (`extra.defaultServer`). */
 const defaultServer = (): string => {
@@ -27,9 +28,12 @@ export function SignIn({
   const [address, setAddress] = useState(rt.session.config()?.baseUrl ?? defaultServer());
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<SignInFailure | null>(null);
-  // Whether the last sign-out could not tell the instance; said while this screen is open.
-  const [untold] = useState(() => rt.signOutUntold());
+  // Whether the last sign-out could not tell the instance; said while this screen is open (it may
+  // appear a few seconds after the screen: the sign-out waits that long for the instance), and
+  // gone for good when the screen is left.
+  const untold = useSignOutUntold(rt);
   useEffect(() => () => rt.setSignOutUntold(false), [rt]);
+  const unsure = expired && rt.session.endedBy() === "unsure";
 
   const submit = async () => {
     setBusy(true);
@@ -69,8 +73,9 @@ export function SignIn({
       {expired ? (
         <Banner
           tone="warning"
-          title={t("signin.expired.title")}
-          message={t("signin.expired.message")}
+          title={t(unsure ? "signin.expired.unsure.title" : "signin.expired.title")}
+          message={t(unsure ? "signin.expired.unsure.message" : "signin.expired.message")}
+          testID="signin-expired"
         />
       ) : null}
       {untold ? (
