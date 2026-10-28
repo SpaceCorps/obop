@@ -1407,6 +1407,17 @@ fn check_shows_option(
                 w.source, m.name, input.permission_group, input.permission_group
             ));
         }
+        // The browser is a user, and a user is never sent a field of class secret (REST shaping,
+        // `mode_for(User, ..)` of obop-masking; a test in obop-commands keeps the two in step). It
+        // would evaluate the condition on an empty value, and the label would follow that.
+        if let Some(input) = m.fields.iter().find(|d| d.name == name)
+            && input.class.unwrap_or(DataClass::Secret) == DataClass::Secret
+        {
+            bad(format!(
+                "when `{}` reads {}.{name}, which has class secret; the browser is never sent a secret field, so the condition could not see its value",
+                w.source, m.name
+            ));
+        }
     }
 }
 

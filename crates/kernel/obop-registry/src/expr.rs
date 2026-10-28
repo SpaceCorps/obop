@@ -876,11 +876,14 @@ pub fn check(e: &Expr, scope: &Scope<'_>) -> Result<Ty, String> {
 // ---- the part of the language a browser evaluates ------------------------------------------
 
 /// The largest whole number a display condition may name: the browser reads every number as a
-/// double, which holds whole numbers exactly up to 2^53 - 1.
+/// double, which holds whole numbers exactly up to 2^53 - 1. A stored number or money value above
+/// it reaches the browser already rounded (it is a JSON number), so it is still right against a
+/// literal (it rounds to at least 2^53) but two such values compared with each other can differ
+/// from the server's exact answer.
 pub const DISPLAY_MAX_INT: i64 = 9_007_199_254_740_991;
 
 /// What a display condition may use, for the message that refuses anything else.
-pub const DISPLAY_SUBSET: &str = "fields of the record (text, select, ref, date, bool, number and money), text in double quotes, whole numbers, true and false, == != < <= > >=, &&, ||, !, parentheses and is_set(field)";
+pub const DISPLAY_SUBSET: &str = "fields of the record (every kind except decimal and datetime), text in double quotes, whole numbers, true and false, == != < <= > >=, &&, ||, !, parentheses and is_set(field)";
 
 /// Whether `e` stays inside the part of the language the back office evaluates in the browser: the
 /// `when` of a field's `shows_option_of` (D52 amendment). The server never evaluates it (the API

@@ -35,6 +35,11 @@ fn model(fields: &Map<String, J>) -> ModelDef {
                 "date" => f.kind(FieldKind::Date),
                 "select" => f.select(&["open", "done"]),
                 "ref" => f.reference("t_other"),
+                // A sequence is a text field the system numbers; an image or a file holds the id
+                // of its blob. All three are strings in a row.
+                "sequence" => f,
+                "image" => f.kind(FieldKind::Image(0)),
+                "file" => f.kind(FieldKind::File(0)),
                 other => panic!("the fixture has a field of kind {other}"),
             }
         })
@@ -182,4 +187,90 @@ fn a_condition_cannot_read_a_decimal_or_an_instant() {
     assert!(e.contains("rate is a decimal number"), "{e}");
     let e = gate(&def, "is_set(seen)").unwrap_err();
     assert!(e.contains("seen is a date and time"), "{e}");
+}
+
+/// The browser is a user, and REST shaping never sends a user a field it denies. A condition that
+/// reads such a field would see an empty value, so the install gate refuses it: this keeps the
+/// gate in step with `mode_for` of obop-masking for every class.
+#[test]
+fn a_condition_cannot_read_a_field_the_browser_is_never_sent() {
+    use obop_masking::{PrincipalKind, mode_for};
+    use obop_types::MaskMode;
+    let classes = [
+        DataClass::None,
+        DataClass::PublicDirectory,
+        DataClass::Internal,
+        DataClass::ConfidentialHr,
+        DataClass::SpecialCategory,
+        DataClass::Financial,
+        DataClass::Secret,
+    ];
+    let mut refused = 0;
+    for class in classes {
+        for personal in [false, true] {
+            let module = obop_registry::Module {
+                id: "t".into(),
+                name: "T".into(),
+                models: vec![ModelDef {
+                    name: "t_entry",
+                    description: "d",
+                    read_group: "t.user",
+                    write_group: "t.user",
+                    access: None,
+                    fields: vec![
+                        FieldDef::new("status", "d", DataClass::None, false, "t.user")
+                            .select(&["a", "b"]),
+                        FieldDef::new("pin", "d", class, personal, "t.user"),
+                        FieldDef::new("text", "d", DataClass::None, false, "t.user")
+                            .shows_option_of("t_entry.status")
+                            .shows_option_when("is_set(pin)"),
+                    ],
+                    commands: vec![],
+                    ext: Default::default(),
+                }],
+                ..Default::default()
+            };
+            let problems: Vec<String> = obop_registry::check_module(&module)
+                .into_iter()
+                .map(|v| v.problem)
+                .filter(|p| p.contains("is_set(pin)"))
+                .collect();
+            let never_sent = mode_for(PrincipalKind::User, class, personal) != MaskMode::Allow;
+            assert_eq!(
+                !problems.is_empty(),
+                never_sent,
+                "{class:?} personal {personal}: {problems:?}"
+            );
+            if never_sent {
+                refused += 1;
+                assert!(
+                    problems[0].contains("t_entry.pin, which has class secret")
+                        && problems[0].contains("the browser is never sent a secret field"),
+                    "{problems:?}"
+                );
+            }
+        }
+    }
+    assert!(refused > 0, "no class is refused: this test lost its point");
+    // An unclassed field is treated as secret everywhere (`unwrap_or(Secret)` of the shaping).
+    let mut unclassed = FieldDef::new("pin", "d", DataClass::None, false, "t.user");
+    unclassed.class = None;
+    let mut def = model(serde_json::json!({"status": "select"}).as_object().unwrap());
+    def.fields.push(unclassed);
+    def.fields.push(
+        FieldDef::new("text", "d", DataClass::None, false, "t.user")
+            .shows_option_of("t_entry.status")
+            .shows_option_when("is_set(pin)"),
+    );
+    let module = obop_registry::Module {
+        id: "t".into(),
+        name: "T".into(),
+        models: vec![def],
+        ..Default::default()
+    };
+    assert!(
+        obop_registry::check_module(&module)
+            .iter()
+            .any(|v| v.problem.contains("which has class secret"))
+    );
 }
