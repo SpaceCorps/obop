@@ -46,6 +46,87 @@ const rejection = async (p: Promise<unknown>): Promise<ObopApiError> => {
   throw new Error("the call did not reject");
 };
 
+describe("the language of the app", () => {
+  test("is sent as Accept-Language on every call, asked for each time", async () => {
+    let language = "sv";
+    const getLanguage = vi.fn(() => language);
+    const { client, seen } = setup(() => json({ value: [] }), { getLanguage });
+    await client.call("party", "list");
+    language = "de-AT";
+    await client.call("party", "list");
+    await client.api.POST("/api/party/list");
+    await client.getMeta().catch(() => undefined);
+    expect(seen.map((r) => r.headers.get("accept-language"))).toEqual([
+      "sv",
+      "de-AT",
+      "de-AT",
+      "de-AT",
+    ]);
+    expect(getLanguage).toHaveBeenCalledTimes(4);
+    // The token is untouched.
+    expect(seen[0]!.headers.get("authorization")).toBe("Bearer tok-1");
+  });
+
+  test("may answer later, and a full Accept-Language value goes as it is", async () => {
+    const { client, seen } = setup(() => json({ value: [] }), {
+      getLanguage: async () => " sv-SE,sv;q=0.9,en;q=0.5 ",
+    });
+    await client.call("party", "list");
+    expect(seen[0]!.headers.get("accept-language")).toBe("sv-SE,sv;q=0.9,en;q=0.5");
+  });
+
+  test("sends nothing when there is no language, or when asking fails", async () => {
+    for (const getLanguage of [
+      undefined,
+      () => undefined,
+      () => null,
+      () => "",
+      () => "   ",
+      () => {
+        throw new Error("no language store");
+      },
+      async () => {
+        throw new Error("no language store");
+      },
+      // Not a header value: the call still goes.
+      () => "sv\nx-injected: 1",
+    ]) {
+      const { client, seen } = setup(() => json({ value: [] }), { getLanguage });
+      await expect(client.call("party", "list")).resolves.toEqual({ value: [], denied: [] });
+      expect(seen[0]!.headers.has("accept-language")).toBe(false);
+      expect(seen[0]!.headers.has("x-injected")).toBe(false);
+    }
+  });
+
+  test("does not replace a header the call carries", async () => {
+    const { client, seen } = setup(() => json({ value: [] }), { getLanguage: () => "sv" });
+    await client.api.POST("/api/party/list", { headers: { "accept-language": "fi" } });
+    expect(seen[0]!.headers.get("accept-language")).toBe("fi");
+  });
+
+  test("the refusal of an assertion reaches the app with its key and the text as the server worded it", async () => {
+    const text = "En offert behover en kund (assertion is_set(customer) failed)";
+    const { client } = setup(
+      () =>
+        json(
+          { error: text, code: "assertion_failed", hint: "Fix it.", assert_key: "needs_customer" },
+          { status: 400 },
+        ),
+      { getLanguage: () => "sv" },
+    );
+    const e = await rejection(client.call("quote", "send", { id: "1" }));
+    expect(e.status).toBe(400);
+    expect(e.message).toBe(text);
+    expect(e.code).toBe("assertion_failed");
+    expect(e.assertKey).toBe("needs_customer");
+    // Without a key (or with something that is not a name) there is none.
+    const { client: bare } = setup(() =>
+      json({ error: text, code: "assertion_failed", assert_key: 7 }, { status: 400 }),
+    );
+    expect((await rejection(bare.call("quote", "send", {}))).assertKey).toBeUndefined();
+  });
+});
+
 describe("a call", () => {
   test("goes to the base URL with the bearer token and a JSON body", async () => {
     const { client, seen, sent } = setup(() => json({ value: [{ id: "a" }], denied: ["email"] }));

@@ -9,6 +9,7 @@ export type {
   BulkRow,
   CallOptions,
   CallResult,
+  Language,
   ObopClient,
   ObopClientOptions,
   Token,

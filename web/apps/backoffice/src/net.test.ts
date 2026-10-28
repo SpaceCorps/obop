@@ -1,5 +1,6 @@
+import { provideCatalogue, setLanguage } from "@obop/ui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { call, meta } from "./api.ts";
+import { approve, call, languageHeader, meta } from "./api.ts";
 import { NETWORK_MESSAGE, NetworkError, backoff, request } from "./net.ts";
 
 const json = (status: number, body: unknown) =>
@@ -127,6 +128,70 @@ describe("commands", () => {
     );
     const r = await call("tok", "lead.create", {});
     expect(r).toMatchObject({ status: 400, message: "lead.title is required" });
+  });
+});
+
+describe("the language of a refusal", () => {
+  const sent = (fetchMock: ReturnType<typeof vi.fn>) =>
+    new Headers((fetchMock.mock.calls[0]![1] as RequestInit).headers);
+
+  afterEach(async () => setLanguage("en", false));
+
+  it("is the language the interface shows, sent as Accept-Language with every command", async () => {
+    for (const lang of ["sv", "de", "en"] as const) {
+      provideCatalogue(lang, {});
+      await setLanguage(lang, false);
+      const fetchMock = vi.fn().mockResolvedValue(json(200, { value: {} }));
+      vi.stubGlobal("fetch", fetchMock);
+      await call("tok", "lead.create", { title: "x" });
+      expect(sent(fetchMock).get("accept-language")).toBe(lang);
+      // The other headers are as they were.
+      expect(sent(fetchMock).get("authorization")).toBe("Bearer tok");
+      expect(sent(fetchMock).get("content-type")).toBe("application/json");
+    }
+  });
+
+  it("follows a change of language at the next call, and also goes with an approval", async () => {
+    provideCatalogue("fi", {});
+    await setLanguage("fi", false);
+    const first = vi.fn().mockResolvedValue(json(200, { value: {} }));
+    vi.stubGlobal("fetch", first);
+    await call("tok", "lead.list", {});
+    expect(sent(first).get("accept-language")).toBe("fi");
+    await setLanguage("en", false);
+    const second = vi.fn().mockResolvedValue(json(200, { value: {} }));
+    vi.stubGlobal("fetch", second);
+    await approve("tok", "plan-1");
+    expect(sent(second).get("accept-language")).toBe("en");
+  });
+
+  it("is not a pseudo-locale, which is no language a server knows", async () => {
+    provideCatalogue("en-XA", {});
+    await setLanguage("en-XA", false);
+    expect(languageHeader()).toEqual({});
+    const fetchMock = vi.fn().mockResolvedValue(json(200, { value: {} }));
+    vi.stubGlobal("fetch", fetchMock);
+    await call("tok", "lead.create", {});
+    expect(sent(fetchMock).has("accept-language")).toBe(false);
+  });
+
+  it("shows a refusal the server worded in that language as it came", async () => {
+    provideCatalogue("sv", {});
+    await setLanguage("sv", false);
+    const text = "En offert behover en kund (assertion is_set(customer) failed)";
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          json(400, { error: text, code: "assertion_failed", assert_key: "needs_customer" }),
+        ),
+    );
+    expect(await call("tok", "quote.send", { id: "1" })).toMatchObject({
+      kind: "error",
+      status: 400,
+      message: text,
+    });
   });
 });
 

@@ -1,7 +1,7 @@
 /**
  * How a call to an obop instance fails, in one class, and when repeating it is safe.
  *
- * The server answers a failure with JSON `{ error, code?, hint?, applied? }` and sets `Retry-After`
+ * The server answers a failure with JSON `{ error, code?, hint?, assert_key?, applied? }` and sets `Retry-After`
  * and `X-Obop-Applied` on a 503 (D74, docs/DEPLOY.md "What a 503 means"). Nothing here reads a
  * message to decide anything: `status`, `code` and `applied` do.
  */
@@ -83,6 +83,7 @@ export interface ObopApiErrorInit extends Partial<CallInfo> {
   message: string;
   code?: string;
   hint?: string;
+  assertKey?: string;
   applied?: Applied;
   retryAfterSeconds?: number;
   /** The parsed JSON body of the answer, or its text when it was not JSON. */
@@ -100,6 +101,9 @@ export interface ObopApiErrorInit extends Partial<CallInfo> {
  *   `storage_busy`, `mfa_enrolment_required` and so on) when it sent one. The older refusals of a
  *   command carry none: only `message` says what was wrong.
  * - `hint`: what the server suggests doing about it.
+ * - `assertKey`: with `code` `assertion_failed`, the key the package gave the assertion that
+ *   refused (when it has one), so an app that translates by itself does not match the text. The
+ *   text is in the language `getLanguage` asked for where the package translated it.
  * - `applied`: on a 503, what became of the request's own changes (`none`: nothing, `unknown`: a
  *   change in flight may have been applied, `partial`: part of it was). From the body, else the
  *   `X-Obop-Applied` header; `undefined` on every other answer.
@@ -109,6 +113,7 @@ export class ObopApiError extends Error {
   readonly status: number;
   readonly code: string | undefined;
   readonly hint: string | undefined;
+  readonly assertKey: string | undefined;
   readonly applied: Applied | undefined;
   readonly retryAfterSeconds: number | undefined;
   readonly body: unknown;
@@ -123,6 +128,7 @@ export class ObopApiError extends Error {
     this.status = init.status;
     this.code = init.code;
     this.hint = init.hint;
+    this.assertKey = init.assertKey;
     this.applied = init.applied;
     this.retryAfterSeconds = init.retryAfterSeconds;
     this.body = init.body;
@@ -158,6 +164,7 @@ export class ObopApiError extends Error {
       message,
       code: str(json?.code),
       hint: str(json?.hint),
+      assertKey: str(json?.assert_key),
       applied: parseApplied(json?.applied) ?? parseApplied(response.headers.get("x-obop-applied")),
       retryAfterSeconds: parseRetryAfter(response.headers.get("retry-after")),
       body,

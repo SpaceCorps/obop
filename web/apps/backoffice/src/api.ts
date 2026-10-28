@@ -1,4 +1,4 @@
-import { fmt, t, type Factor } from "@obop/ui";
+import { fmt, getLang, isPseudo, t, type Factor } from "@obop/ui";
 import { NETWORK_MESSAGE, NetworkError, request, serverFault } from "./net.ts";
 
 /** Translations the server may add to metadata: language code -> text (D34; absent today). */
@@ -303,6 +303,16 @@ export async function list(
 /** Commands that only read: safe to repeat when the connection drops. */
 const READS = new Set(["get", "list", "search"]);
 
+/**
+ * The language the interface shows, as `Accept-Language`, so that the server words a refusal (the
+ * message of an assertion, which a package can translate) in it, not in the browser's language
+ * (the person may have chosen another one in the app). Nothing for a pseudo-locale.
+ */
+export function languageHeader(): Record<string, string> {
+  const lang = getLang();
+  return isPseudo(lang) ? {} : { "accept-language": lang };
+}
+
 async function send(token: string, path: string, body: object): Promise<Reply> {
   const idempotent = READS.has(path.split("/").pop() ?? "");
   let res: Response;
@@ -311,7 +321,11 @@ async function send(token: string, path: string, body: object): Promise<Reply> {
       path,
       {
         method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          ...languageHeader(),
+        },
         body: JSON.stringify(body),
       },
       { retry: idempotent },

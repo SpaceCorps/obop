@@ -13,6 +13,12 @@ import type { ObopMeta } from "./meta.ts";
 /** What `getToken` may answer: the bearer token, or nothing when nobody is signed in. */
 export type Token = string | null | undefined;
 
+/**
+ * What `getLanguage` may answer: a language tag (`sv`, `de-AT`) or a full `Accept-Language` value
+ * (`sv-SE,sv;q=0.9,en;q=0.5`), or nothing to send none.
+ */
+export type Language = string | null | undefined;
+
 export interface ObopClientOptions {
   /** The address of the instance, for example `https://acme.example.com`. A trailing slash is ignored. */
   baseUrl: string;
@@ -22,6 +28,16 @@ export interface ObopClientOptions {
    * `Authorization`. If it throws, the call rejects with that error and nothing is sent.
    */
   getToken: () => Token | Promise<Token>;
+  /**
+   * The language the app shows, asked for on every call and sent as `Accept-Language`, so that the
+   * instance words its refusals in it where a package translated them (the message of an assertion,
+   * which comes with its `assert_key`): the language of the app, which may not be the one of the
+   * device. Only the seven languages obop ships count (`de en es fi fr pl sv`); a region reads as
+   * its language, and an unsupported one is skipped by the server. With no language, or if this
+   * throws or answers something that is no header value, the call is sent without the header and
+   * the texts are the package's own. A header the call carries already is not replaced.
+   */
+  getLanguage?: () => Language | Promise<Language>;
   /** The `fetch` to use; the global one when absent (it is looked up at each call, so a test may replace it). */
   fetch?: typeof fetch;
   /**
@@ -171,12 +187,27 @@ export function createObopClient(options: ObopClientOptions): ObopClient {
     read: isReadCall(request.method, schemaPath),
   });
 
+  // The language is a preference, not a credential: a hook that fails, or a value that is no
+  // header, must not take the call down with it.
+  const setLanguage = async (request: Request): Promise<void> => {
+    if (!options.getLanguage || request.headers.has("accept-language")) return;
+    try {
+      const language = await options.getLanguage();
+      if (typeof language === "string" && language.trim() !== "") {
+        request.headers.set("accept-language", language.trim());
+      }
+    } catch {
+      // Sent without it.
+    }
+  };
+
   const middleware: Middleware = {
     async onRequest({ request, id }) {
       const duringHandler = handlerRunning;
       const token = await options.getToken();
       if (duringHandler) issuedDuringHandler.add(id);
       if (token) request.headers.set("authorization", `Bearer ${token}`);
+      await setLanguage(request);
       return request;
     },
     async onResponse({ request, response, schemaPath, options: sent, id }) {
