@@ -1089,31 +1089,24 @@ fn writers_of_one_record_get_strictly_increasing_versions_and_the_feed_shows_eac
         h.windows(2).all(|w| instant(&w[0].at) < instant(&w[1].at)),
         "stamps grow"
     );
-    // The same writes, as the feed gives them: all of them, once. The feed promises the order of
-    // (transaction, number) and that nothing is skipped, not that the entries of one record come in
-    // the order of its versions: one full-suite run under heavy parallel load once showed the
-    // first entry of a record after the later ones and nothing has reproduced it (ISSUES K33). The
-    // numbers (`seq`) do follow the versions (checked above); a reader orders one record by
-    // `row_version`. A difference is printed, so that a log shows it, and does not fail the test.
+    // The same writes, as the feed gives them: all of them, once, in the order of the versions.
+    // Batches that name one record queue on the advisory lock of its stripe before anything gives
+    // them a transaction number, so the numbers follow the versions, and the feed is in the order
+    // of (transaction, number). (A run of this test once showed the first entry last; the cause
+    // was the sort key of the feed, which sorted the numbers as text, see
+    // `the_feed_sorts_transaction_numbers_as_numbers_and_walks_every_entry_once`.)
     let fed = px.feed(None, 10_000);
     assert_eq!(fed.rows.len() as i64, 1 + total);
     let order: Vec<i64> = fed.rows.iter().map(|r| r.row_version).collect();
-    let mut sorted = order.clone();
-    sorted.sort_unstable();
-    assert_eq!(
-        sorted,
-        (1..=1 + total).collect::<Vec<_>>(),
-        "every version once"
-    );
-    if order != sorted {
+    if order != (1..=1 + total).collect::<Vec<_>>() {
         let dump: Vec<_> = fed
             .rows
             .iter()
             .filter(|r| r.row_version <= 3 || r.row_version >= total)
             .map(|r| (r.row_version, r.txid, r.seq, r.at.clone(), r.actor.clone()))
             .collect();
-        eprintln!(
-            "NOTE (ISSUES K33): the feed did not follow the versions: {dump:?}
+        panic!(
+            "the feed is out of the order of the versions: {dump:?}
 {}",
             dump_versions(&px, "hot")
         );
@@ -1329,28 +1322,17 @@ fn a_feed_page_is_one_snapshot_while_writers_go_on() {
         seen.windows(2).all(|w| (w[0].0, w[0].1) < (w[1].0, w[1].1)),
         "pages follow the order of (transaction, number) and never repeat an entry"
     );
-    // Every version exactly once, none lost by the pages that were cut while the writers went on:
-    // what a reader that follows the cursor ends up with. The order among the versions is not
-    // asserted (see the test above, ISSUES K33); a difference is printed.
+    // Every version exactly once, none lost by the pages that were cut while the writers went on,
+    // and in the order of the versions: what a reader that follows the cursor ends up with.
     let last = px.b.get("deal", "d0").unwrap().unwrap()["row_version"]
         .as_i64()
         .unwrap();
     let versions: Vec<i64> = seen.iter().map(|e| e.2).collect();
-    let mut sorted = versions.clone();
-    sorted.sort_unstable();
-    if sorted != (1..=last).collect::<Vec<_>>() {
+    if versions != (1..=last).collect::<Vec<_>>() {
         panic!(
-            "every version once, none lost: {} entries for {last} versions: {:?}
+            "every version once, in order: {} entries for {last} versions: {:?}
 {}",
             versions.len(),
-            &seen[..seen.len().min(40)],
-            dump_versions(&px, "d0")
-        );
-    }
-    if versions != sorted {
-        eprintln!(
-            "NOTE (ISSUES K33): the pages did not follow the versions: {:?}
-{}",
             &seen[..seen.len().min(40)],
             dump_versions(&px, "d0")
         );
@@ -2196,4 +2178,156 @@ fn a_number_a_json_reader_cannot_hold_makes_the_export_an_error_and_not_a_panic(
         px.b.export(10, &mut |_| Ok(()))
             .expect_err("the record cannot be read back as JSON");
     assert!(!e.is_empty());
+}
+
+// ---- the order of the feed ----------------------------------------------------------------------------
+
+/// An entry with a transaction number of the test's choosing, written as plain SQL (the table is
+/// what it is for: the owner may insert).
+fn raw_entry(px: &Px, txid: u64, id: &str) {
+    px.sql()
+        .execute(
+            "INSERT INTO obop_record_change
+               (at, txid, model, record_id, op, actor, row_version, changed)
+             VALUES (timestamptz 'epoch' + $1::bigint * interval '1 microsecond',
+                     $2::text::xid8, 'raw', $3, 'update', 'raw', 1, '{}')",
+            &[&Px::T0, &txid.to_string(), &id],
+        )
+        .unwrap();
+}
+
+/// The numbers below the server's horizon among `wanted`: the feed shows nothing at or above it.
+fn below_the_horizon(px: &Px, wanted: &[u64]) -> Vec<u64> {
+    let xmin: String = px
+        .sql()
+        .query_one("SELECT pg_snapshot_xmin(pg_current_snapshot())::text", &[])
+        .unwrap()
+        .get(0);
+    let xmin: u64 = xmin.parse().unwrap();
+    wanted.iter().copied().filter(|t| *t < xmin).collect()
+}
+
+#[test]
+fn the_feed_sorts_transaction_numbers_as_numbers_and_walks_every_entry_once() {
+    // The numbers of 9, 10, 11 and 98 to 101 straddle a power of ten. The feed once sorted the
+    // text of the number ('10' < '9') while its cursor compared numbers, so a page that ended on
+    // 11 never came back for 9, and a page that ended on 9 gave 10 and 11 again.
+    let Some(px) = Px::new() else {
+        return;
+    };
+    let wanted = below_the_horizon(&px, &[8, 9, 10, 11, 98, 99, 100, 101]);
+    assert!(
+        wanted.len() >= 4,
+        "the server's transaction counter is too low for this test: {wanted:?}"
+    );
+    // Written in an order that is neither the order of the numbers nor its reverse.
+    let mut written = wanted.clone();
+    written.rotate_left(3);
+    written.swap(0, 2);
+    for (i, t) in written.iter().enumerate() {
+        raw_entry(&px, *t, &format!("r{i}"));
+    }
+    for size in [1, 2, 3, 7, 100] {
+        let mut got = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = px.feed(cursor.as_ref(), size);
+            if page.rows.is_empty() {
+                break;
+            }
+            assert!(page.rows.len() <= size);
+            got.extend(page.rows.iter().map(|r| r.txid as u64));
+            cursor = page.next;
+        }
+        assert_eq!(got, wanted, "walked in pages of {size}");
+    }
+}
+
+#[test]
+fn the_feed_is_served_by_its_index_and_never_sorted() {
+    let Some(px) = Px::new() else {
+        return;
+    };
+    // A write makes the partitions of the month, so that the plan is the one of a real table.
+    px.ok("ann", &[ins("deal", "d1", json!({"name": "A"}))]);
+    let mut c = px.sql();
+    c.batch_execute("SET enable_seqscan = off; SET enable_sort = off; SET enable_bitmapscan = off")
+        .unwrap();
+    c.batch_execute(&format!(
+        "PREPARE feed(text, bigint, text[], text[], bigint, bigint) AS {}",
+        crate::pg_hist::feed_sql()
+    ))
+    .unwrap();
+    let plan: Vec<String> = c
+        .query(
+            "EXPLAIN (COSTS OFF) EXECUTE feed('0', 0, NULL, NULL, NULL, 100)",
+            &[],
+        )
+        .unwrap()
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    let nodes: Vec<&str> = plan
+        .iter()
+        .map(|l| {
+            l.trim_start_matches(|c| c == ' ' || c == '-' || c == '>')
+                .trim()
+        })
+        .collect();
+    // A node that sorts is a line that is only `Sort`, `Incremental Sort` or `Sort` and a method
+    // (a Merge Append prints a `Sort Key:` line without sorting anything).
+    assert!(
+        !nodes
+            .iter()
+            .any(|n| *n == "Sort" || *n == "Incremental Sort"),
+        "the feed sorts: {plan:#?}"
+    );
+    assert!(
+        nodes.iter().any(|n| n.starts_with("Index Scan")),
+        "the feed does not read its index: {plan:#?}"
+    );
+    assert!(
+        !nodes.iter().any(|n| n.starts_with("Seq Scan")),
+        "the feed reads a table in full: {plan:#?}"
+    );
+}
+
+#[test]
+fn no_order_by_names_an_output_column() {
+    // The source of the part, without its comments: every key of every ORDER BY is either one of
+    // the columns that are the same in the output (`seq`, `at`), or names its table or alias
+    // (`obop_record_change.txid`, `x.ord`). A bare name binds to an output column first.
+    let source = include_str!("pg_hist.rs");
+    let code: String = source
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut found = 0;
+    for part in code.split("ORDER BY").skip(1) {
+        found += 1;
+        let clause: String = part
+            .chars()
+            .take_while(|c| !matches!(c, '"' | ')' | ';' | '\n'))
+            .collect();
+        let clause = clause.split(" LIMIT").next().unwrap_or("");
+        for key in clause.split(',') {
+            let key = key.trim();
+            let name = key.split_whitespace().next().unwrap_or("");
+            assert!(
+                name.contains('.') || matches!(name, "seq" | "at" | "{FEED_ORDER}" | ""),
+                "ORDER BY {key:?} may bind to an output column"
+            );
+            assert_ne!(name, "txid", "a bare txid sorts the text of the number");
+        }
+    }
+    assert!(found >= 4, "found only {found} ORDER BY clauses");
+    assert!(
+        crate::pg_hist::feed_sql()
+            .contains("ORDER BY obop_record_change.txid, obop_record_change.seq LIMIT"),
+        "the feed names the table in its sort keys"
+    );
+    // And the transaction number is read under a name of its own.
+    assert!(code.contains("txid::text AS txid_text"));
+    assert!(!code.contains("txid::text\""));
 }

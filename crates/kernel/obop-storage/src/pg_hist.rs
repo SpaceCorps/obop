@@ -589,8 +589,33 @@ impl<'a> Tx<'a> {
 // ---- reads ---------------------------------------------------------------------------------------------
 
 /// The columns of an entry, in the order [`read_change`] reads them.
+///
+/// The transaction number is read as text under another name. A bare `ORDER BY txid` binds to the
+/// output column of that name before the table's column, and the text of a number sorts as text
+/// ('10' < '9'); the feed's cursor compares the numbers, so the two disagreed whenever the numbers
+/// of a page had different lengths. The sort keys of the feed name the table as well
+/// ([`FEED_ORDER`]), and `no_order_by_names_an_output_column` keeps both true.
 const COLUMNS: &str = "seq, (extract(epoch FROM at) * 1000000)::bigint, model, record_id, op, \
-                       actor, via, row_version, changed, sealed, batch_id, run_id, txid::text";
+                       actor, via, row_version, changed, sealed, batch_id, run_id, \
+                       txid::text AS txid_text";
+
+/// The order of the change feed, naming the table so that it is the column that is sorted.
+const FEED_ORDER: &str = "obop_record_change.txid, obop_record_change.seq";
+
+/// The change feed's statement (`$1` the cursor's transaction number as text, `$2` its number,
+/// `$3` models, `$4` operations, `$5` the earliest instant in microseconds, `$6` the limit).
+pub(crate) fn feed_sql() -> String {
+    format!(
+        "SELECT {COLUMNS} FROM obop_record_change
+          WHERE (txid, seq) > ($1::text::xid8, $2::bigint)
+            AND txid < pg_snapshot_xmin(pg_current_snapshot())
+            AND ($3::text[] IS NULL OR model = ANY ($3))
+            AND ($4::text[] IS NULL OR op = ANY ($4))
+            AND ($5::bigint IS NULL
+                 OR at >= timestamptz 'epoch' + $5 * interval '1 microsecond')
+          ORDER BY {FEED_ORDER} LIMIT $6"
+    )
+}
 
 fn read_change(r: &postgres::Row) -> PR<ChangeRow> {
     let object = |v: J| pg_fields(v);
@@ -677,16 +702,7 @@ pub(crate) fn changes(pg: &Pg, q: &ChangeQuery) -> Result<ChangePage> {
             return Ok((Vec::new(), None));
         }
         let rows = tx.query(
-            &format!(
-                "SELECT {COLUMNS} FROM obop_record_change
-                  WHERE (txid, seq) > ($1::text::xid8, $2::bigint)
-                    AND txid < pg_snapshot_xmin(pg_current_snapshot())
-                    AND ($3::text[] IS NULL OR model = ANY ($3))
-                    AND ($4::text[] IS NULL OR op = ANY ($4))
-                    AND ($5::bigint IS NULL
-                         OR at >= timestamptz 'epoch' + $5 * interval '1 microsecond')
-                  ORDER BY txid, seq LIMIT $6"
-            ),
+            &feed_sql(),
             &[
                 &txid.to_string(),
                 &seq,
