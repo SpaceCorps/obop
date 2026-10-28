@@ -16,6 +16,9 @@ pub type Texts = BTreeMap<String, String>;
 
 pub const MAX_LABEL_CHARS: usize = 80;
 pub const MAX_DESCRIPTION_CHARS: usize = 400;
+/// The refusal message of an assertion: the limit of a description, so that the longest message
+/// of a manifest fits.
+pub const MAX_ASSERT_MESSAGE_CHARS: usize = MAX_DESCRIPTION_CHARS;
 /// The same limit as the manifest's own one-line `summary`.
 pub const MAX_SUMMARY_CHARS: usize = 140;
 
@@ -39,6 +42,8 @@ pub struct ModelTr {
     pub entry: Entry,
     pub fields: BTreeMap<String, FieldTr>,
     pub actions: BTreeMap<String, Entry>,
+    /// Action -> assertion key -> language -> the message of the refusal.
+    pub asserts: BTreeMap<String, BTreeMap<String, Texts>>,
 }
 
 /// All translations of one module.
@@ -96,6 +101,16 @@ pub struct FieldLabels {
 pub struct ActionLabels {
     pub label: Option<String>,
     pub description: Option<String>,
+    /// Assertion key -> its table: `[labels.<lang>.model.<m>.action.<a>.assert.<key>]`.
+    #[serde(default)]
+    pub assert: BTreeMap<String, AssertLabels>,
+}
+
+/// `message`: the refusal of an assertion with a `key`, in this language.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct AssertLabels {
+    pub message: Option<String>,
 }
 
 /// A stand-alone labels document: only `[labels.<lang>]` tables.
@@ -137,7 +152,7 @@ pub fn text_ok(s: &str, max: usize) -> Result<(), &'static str> {
 }
 
 /// What a label document may refer to: the models of a package with their fields (and the
-/// options of a select) and actions.
+/// options of a select), actions and the keys of their assertions.
 #[derive(Debug, Clone, Default)]
 pub struct Shape {
     pub models: BTreeMap<String, ModelShape>,
@@ -147,7 +162,8 @@ pub struct Shape {
 pub struct ModelShape {
     /// Field name -> options (`Some` for a select).
     pub fields: BTreeMap<String, Option<BTreeSet<String>>>,
-    pub actions: BTreeSet<String>,
+    /// Action name -> the keys of its assertions that have a message to translate.
+    pub actions: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl Shape {
@@ -172,7 +188,20 @@ impl Shape {
                                     )
                                 })
                                 .collect(),
-                            actions: m.commands.iter().map(|c| c.name.to_string()).collect(),
+                            actions: m
+                                .commands
+                                .iter()
+                                .map(|c| {
+                                    (
+                                        c.name.to_string(),
+                                        c.asserts
+                                            .iter()
+                                            .filter(|a| a.message.is_some())
+                                            .filter_map(|a| a.key.clone())
+                                            .collect(),
+                                    )
+                                })
+                                .collect(),
                         },
                     )
                 })
@@ -252,15 +281,28 @@ pub fn check_labels(labels: &BTreeMap<String, LangLabels>, shape: &Shape) -> Res
             }
             for (action, al) in &ml.action {
                 let at = format!("{at}.action.{action}");
-                if !ms.actions.contains(action) {
+                let Some(keys) = ms.actions.get(action) else {
                     return Err(format!("labels.{at}: {model} has no action {action:?}"));
-                }
+                };
                 val(format!("{at}.label"), &al.label, MAX_LABEL_CHARS)?;
                 val(
                     format!("{at}.description"),
                     &al.description,
                     MAX_DESCRIPTION_CHARS,
                 )?;
+                for (key, asl) in &al.assert {
+                    let at = format!("{at}.assert.{key}");
+                    if !keys.contains(key) {
+                        return Err(format!(
+                            "labels.{at}: {model}.{action} has no assertion with a message and the key {key:?}"
+                        ));
+                    }
+                    val(
+                        format!("{at}.message"),
+                        &asl.message,
+                        MAX_ASSERT_MESSAGE_CHARS,
+                    )?;
+                }
             }
         }
     }
@@ -301,6 +343,16 @@ impl Translations {
                     let at = mt.actions.entry(action.clone()).or_default();
                     put(&mut at.labels, lang, &al.label);
                     put(&mut at.descriptions, lang, &al.description);
+                    for (key, asl) in &al.assert {
+                        if let Some(text) = &asl.message {
+                            mt.asserts
+                                .entry(action.clone())
+                                .or_default()
+                                .entry(key.clone())
+                                .or_default()
+                                .insert(lang.clone(), text.clone());
+                        }
+                    }
                 }
             }
         }
@@ -316,6 +368,23 @@ impl Translations {
 
     pub fn is_empty(&self) -> bool {
         self == &Self::default()
+    }
+
+    /// The message of the assertion `key` of `model.action` in `lang`, if the tables have one.
+    pub fn assertion_message(
+        &self,
+        model: &str,
+        action: &str,
+        key: &str,
+        lang: &str,
+    ) -> Option<&str> {
+        self.models
+            .get(model)?
+            .asserts
+            .get(action)?
+            .get(key)?
+            .get(lang)
+            .map(String::as_str)
     }
 }
 
@@ -387,6 +456,66 @@ mod tests {
         );
         let markup = parse("[labels.de.module]\nsummary = \"<b>x</b>\"");
         assert!(check_labels(&markup, &shape).is_err());
+    }
+
+    #[test]
+    fn assertion_messages_are_checked_against_the_keys_of_the_action() {
+        let mut shape = Shape::default();
+        shape.models.insert(
+            "m".into(),
+            ModelShape {
+                fields: BTreeMap::new(),
+                actions: BTreeMap::from([
+                    ("go".to_string(), BTreeSet::from(["only_open".to_string()])),
+                    ("stop".to_string(), BTreeSet::new()),
+                ]),
+            },
+        );
+        let doc = |at: &str, msg: &str| format!("[labels.sv.model.m.action.{at}]\nmessage = {msg}");
+        let check = |s: String| check_labels(&Translations::parse_labels(&s).unwrap(), &shape);
+        let ok = doc("go.assert.only_open", "\"Bara en oppen post\"");
+        assert!(check(ok.clone()).is_ok());
+        let t = Translations::from_labels(&Translations::parse_labels(&ok).unwrap());
+        assert_eq!(
+            t.assertion_message("m", "go", "only_open", "sv"),
+            Some("Bara en oppen post")
+        );
+        assert_eq!(t.assertion_message("m", "go", "only_open", "de"), None);
+        assert_eq!(t.assertion_message("m", "go", "other", "sv"), None);
+        assert_eq!(t.assertion_message("n", "go", "only_open", "sv"), None);
+        // An unknown key is refused, whether the action has other keys or none.
+        for at in ["go.assert.only_closed", "stop.assert.only_open"] {
+            let e = check(doc(at, "\"x\"")).unwrap_err();
+            assert!(e.contains(&format!("labels.sv.model.m.action.{at}")), "{e}");
+            assert!(e.contains("no assertion with a message and the key"), "{e}");
+        }
+        // Only `message` goes in the table.
+        assert!(
+            Translations::parse_labels(&doc("go.assert.only_open", "\"x\"\nlabel = \"y\""))
+                .is_err()
+        );
+        // The value rules of a label, with the limit of a description.
+        assert!(
+            check(doc(
+                "go.assert.only_open",
+                &format!("\"{}\"", "x".repeat(400))
+            ))
+            .is_ok()
+        );
+        for bad in [
+            format!("\"{}\"", "x".repeat(401)),
+            "\"\"".to_string(),
+            "\" x\"".to_string(),
+            "\"a\\nb\"".to_string(),
+            "\"Hello {name}\"".to_string(),
+            "\"<b>x</b>\"".to_string(),
+        ] {
+            let e = check(doc("go.assert.only_open", &bad)).unwrap_err();
+            assert!(
+                e.contains("action.go.assert.only_open.message"),
+                "{bad}: {e}"
+            );
+        }
     }
 
     #[test]

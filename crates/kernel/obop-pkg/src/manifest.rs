@@ -6,7 +6,7 @@ use crate::semver::{Req, Version};
 use crate::spdx::{self, LicenseKind};
 use obop_commands::{PublicRead, PublicReceipt, PublicSpec, PublicSubmit};
 use obop_registry::labels::{LangLabels, ModelShape, Shape, Translations, check_labels};
-use obop_registry::rules::{MAX_EFFECTS, SeqFormat};
+use obop_registry::rules::{MAX_ASSERT_KEY, MAX_EFFECTS, SeqFormat, assert_key_ok};
 use obop_registry::{
     Access, Assertion, CommandDef, Computed, Effect, EffectKind, FieldDef, FieldKind,
     GENERATED_COMMANDS, History, Lit, Locator, MATURITIES, MODULE_CATEGORIES, ModelDef, ModelExt,
@@ -27,7 +27,8 @@ pub struct Manifest {
     #[serde(default)]
     pub model: Vec<ModelM>,
     /// Translations (D52): `[labels.<lang>.module]`, `.model.<m>`, `.model.<m>.field.<f>`
-    /// (with `.options`) and `.model.<m>.action.<a>`. Optional; English is the manifest itself.
+    /// (with `.options`), `.model.<m>.action.<a>` and `.model.<m>.action.<a>.assert.<key>` (the
+    /// message of an assertion). Optional; English is the manifest itself.
     #[serde(default)]
     pub labels: std::collections::BTreeMap<String, LangLabels>,
     /// `[[migration]]` (D63): declarative steps that move existing records to the shape of this
@@ -346,7 +347,8 @@ pub struct ActionM {
     pub assert: Vec<AssertM>,
 }
 
-/// An assertion: an expression, or an expression with the message to show when it fails.
+/// An assertion: an expression, or an expression with the message to show when it fails and a
+/// `key` to translate the message by.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum AssertM {
@@ -359,6 +361,9 @@ pub enum AssertM {
 pub struct AssertFull {
     pub expr: String,
     pub message: Option<String>,
+    /// A short name, unique in the action (`[a-z_]{1,40}`): `[labels.<lang>.model.<m>.action.<a>.assert.<key>]`
+    /// translates the message, and a REST refusal names it as `assert_key`.
+    pub key: Option<String>,
 }
 
 /// `[[model.action.effect]]` (D56): one thing an action does in the same operation as its
@@ -511,7 +516,24 @@ impl Manifest {
                                     )
                                 })
                                 .collect(),
-                            actions: m.action.iter().map(|a| a.name.clone()).collect(),
+                            actions: m
+                                .action
+                                .iter()
+                                .map(|a| {
+                                    (
+                                        a.name.clone(),
+                                        a.assert
+                                            .iter()
+                                            .filter_map(|x| match x {
+                                                AssertM::Full(f) if f.message.is_some() => {
+                                                    f.key.clone()
+                                                }
+                                                _ => None,
+                                            })
+                                            .collect(),
+                                    )
+                                })
+                                .collect(),
                         },
                     )
                 })
@@ -1600,14 +1622,30 @@ impl Manifest {
                     c.effects.push(Self::effect_of(m, a, i, e)?);
                 }
                 for x in &a.assert {
-                    let (src, msg) = match x {
-                        AssertM::Plain(s) => (s.as_str(), None),
-                        AssertM::Full(f) => (f.expr.as_str(), f.message.as_deref()),
+                    let (src, msg, key) = match x {
+                        AssertM::Plain(s) => (s.as_str(), None, None),
+                        AssertM::Full(f) => {
+                            (f.expr.as_str(), f.message.as_deref(), f.key.as_deref())
+                        }
                     };
-                    c.asserts.push(
-                        Assertion::parse(src, msg)
-                            .map_err(|e| format!("{}.{}: assert {src:?}: {e}", m.name, a.name))?,
-                    );
+                    let mut parsed = Assertion::parse(src, msg)
+                        .map_err(|e| format!("{}.{}: assert {src:?}: {e}", m.name, a.name))?;
+                    if let Some(k) = key {
+                        if !assert_key_ok(k) {
+                            return Err(format!(
+                                "{}.{}: assert {src:?}: the key {k:?} must be 1 to {MAX_ASSERT_KEY} lowercase letters or underscores",
+                                m.name, a.name
+                            ));
+                        }
+                        if c.asserts.iter().any(|o| o.key.as_deref() == Some(k)) {
+                            return Err(format!(
+                                "{}.{}: assert {src:?}: the key {k:?} is used twice in the action",
+                                m.name, a.name
+                            ));
+                        }
+                        parsed = parsed.keyed(k);
+                    }
+                    c.asserts.push(parsed);
                 }
                 commands.push(c);
             }
@@ -2346,6 +2384,128 @@ name = "Veículo"
         );
         // a value must be a string
         assert!(v("3").contains("invalid obop.toml"));
+    }
+
+    /// FLEET whose action has three assertions: a keyed one with a message, one with a message
+    /// and no key, and a bare expression.
+    fn fleet_with_assertions() -> String {
+        FLEET.replace(
+            "  to = \"in_service\"\n",
+            "  to = \"in_service\"\n  assert = [\n    { expr = \"is_set(plate)\", message = \"A vehicle needs a plate\", key = \"needs_plate\" },\n    { expr = \"is_set(driver)\", message = \"A vehicle needs a driver\" },\n    \"is_set(plate)\",\n  ]\n",
+        )
+    }
+
+    const ASSERT_LABELS: &str = r#"
+[labels.sv.model.fleet_vehicle.action.dispatch.assert.needs_plate]
+message = "Ett fordon behover en registreringsskylt"
+
+[labels.de.model.fleet_vehicle.action.dispatch.assert.needs_plate]
+message = "Ein Fahrzeug braucht ein Kennzeichen"
+"#;
+
+    #[test]
+    fn an_assertion_may_carry_a_key_and_label_tables_translate_its_message() {
+        let text = format!("{}\n{ASSERT_LABELS}", fleet_with_assertions());
+        let module = Manifest::parse(&text).unwrap().to_module().unwrap();
+        let asserts = &module.models[0].commands[0].asserts;
+        assert_eq!(asserts.len(), 3);
+        assert_eq!(asserts[0].key.as_deref(), Some("needs_plate"));
+        assert_eq!(
+            asserts[0].message.as_deref(),
+            Some("A vehicle needs a plate")
+        );
+        assert_eq!(
+            (asserts[1].key.as_deref(), asserts[2].key.as_deref()),
+            (None, None)
+        );
+        let t = &module.translations;
+        let msg = |lang| t.assertion_message("fleet_vehicle", "dispatch", "needs_plate", lang);
+        assert_eq!(msg("sv"), Some("Ett fordon behover en registreringsskylt"));
+        assert_eq!(msg("de"), Some("Ein Fahrzeug braucht ein Kennzeichen"));
+        assert_eq!(msg("fi"), None);
+        // Without the tables the package is what it was.
+        let plain = Manifest::parse(&fleet_with_assertions())
+            .unwrap()
+            .to_module()
+            .unwrap();
+        assert!(plain.translations.is_empty());
+    }
+
+    #[test]
+    fn assertion_keys_and_their_messages_are_checked_when_the_package_is_installed() {
+        let bad = |t: String| err(&t);
+        let fleet = fleet_with_assertions();
+        // The key: 1 to 40 lowercase letters or underscores, unique in the action.
+        for key in [
+            "",
+            "Needs",
+            "needs1",
+            "needs-plate",
+            "needs plate",
+            &"k".repeat(41),
+        ] {
+            let e = bad(fleet.replace("key = \"needs_plate\"", &format!("key = {key:?}")));
+            assert!(
+                e.contains("lowercase letters or underscores"),
+                "{key:?}: {e}"
+            );
+        }
+        let twice = fleet.replace(
+            "    \"is_set(plate)\",\n",
+            "    { expr = \"is_set(plate)\", message = \"again\", key = \"needs_plate\" },\n",
+        );
+        assert!(bad(twice).contains("used twice in the action"));
+        // An unknown key in a label table is refused, with the path of the mistake.
+        let e = bad(format!(
+            "{fleet}\n[labels.sv.model.fleet_vehicle.action.dispatch.assert.needs_plat]\nmessage = \"x\""
+        ));
+        assert!(
+            e.contains("labels.sv.model.fleet_vehicle.action.dispatch.assert.needs_plat")
+                && e.contains("no assertion with a message and the key \"needs_plat\""),
+            "{e}"
+        );
+        // So is a key on an action that has none, and an action that does not exist.
+        let e = bad(format!(
+            "{FLEET}\n[labels.sv.model.fleet_vehicle.action.dispatch.assert.needs_plate]\nmessage = \"x\""
+        ));
+        assert!(e.contains("no assertion with a message"), "{e}");
+        let e = bad(format!(
+            "{fleet}\n[labels.sv.model.fleet_vehicle.action.dispach.assert.needs_plate]\nmessage = \"x\""
+        ));
+        assert!(e.contains("no action \"dispach\""), "{e}");
+        // An assertion without a message has nothing for a table to translate.
+        let nomsg = fleet.replace("message = \"A vehicle needs a plate\", ", "");
+        assert!(Manifest::parse(&nomsg).is_ok(), "a key needs no message");
+        let e = bad(format!(
+            "{nomsg}\n[labels.sv.model.fleet_vehicle.action.dispatch.assert.needs_plate]\nmessage = \"x\""
+        ));
+        assert!(e.contains("no assertion with a message"), "{e}");
+        // The value rules of a label, with 400 characters as the limit.
+        let table = |msg: &str| {
+            format!(
+                "{fleet}\n[labels.sv.model.fleet_vehicle.action.dispatch.assert.needs_plate]\nmessage = {msg}"
+            )
+        };
+        assert!(Manifest::parse(&table(&format!("\"{}\"", "x".repeat(400)))).is_ok());
+        let long = bad(table(&format!("\"{}\"", "x".repeat(401))));
+        assert!(
+            long.contains("assert.needs_plate.message") && long.contains("too long"),
+            "{long}"
+        );
+        assert!(bad(table("\"Hej {namn}\"")).contains("placeholder"));
+        assert!(bad(table("\"a\\nb\"")).contains("control character"));
+        assert!(bad(table("\"\"")).contains("is empty"));
+        // Nothing but `message` is accepted in the table, and `key` only in the full form.
+        assert!(
+            bad(format!(
+                "{fleet}\n[labels.sv.model.fleet_vehicle.action.dispatch.assert.needs_plate]\ntitle = \"x\""
+            ))
+            .contains("invalid obop.toml")
+        );
+        assert!(
+            bad(fleet.replace("key = \"needs_plate\"", "key = \"needs_plate\", other = 1"))
+                .contains("invalid obop.toml")
+        );
     }
 
     #[test]
