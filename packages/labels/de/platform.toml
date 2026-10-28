@@ -593,3 +593,63 @@ description = "Ein Konto deaktivieren: Es kann sich nicht anmelden und seine Tok
 [labels.de.model.user_account.action.enable]
 label = "Aktivieren"
 description = "Ein deaktiviertes Konto wieder aktivieren. Durch ein Ausscheiden widerrufene Zugänge bleiben widerrufen. Angeben: id"
+
+[labels.de.model.device]
+name = "Gerät"
+description = "Ein Telefon oder Tablet, auf dem eine mobile App angemeldet ist: angelegt bei der Anmeldung der App, beendet durch Widerruf. Eine Person sieht, benennt und widerruft ihre eigenen Geräte; die Geräteadministratoren sehen und widerrufen alle."
+
+[labels.de.model.device.field.user]
+label = "Benutzer"
+description = "Das Konto, zu dem das Gerät gehört"
+
+[labels.de.model.device.field.name]
+label = "Name"
+description = "Wie das Gerät heißt; die Person kann es umbenennen"
+
+[labels.de.model.device.field.client_name]
+label = "App"
+description = "Die mobile App, die sich angemeldet hat, so wie sie sich nannte"
+
+[labels.de.model.device.field.platform]
+label = "Plattform"
+description = "Die Plattform, die die App gemeldet hat, etwa android oder ios"
+
+[labels.de.model.device.field.app_version]
+label = "App-Version"
+description = "Die Version der App, wie sie sie bei der Anmeldung und bei jeder Erneuerung meldete"
+
+[labels.de.model.device.field.push_token]
+label = "Push-Token"
+description = "Die Adresse des Push-Dienstes für dieses Gerät. Wird niemandem angezeigt und in dieser Version nicht geschrieben: Push gehört nicht zum ersten Mobile-Abschnitt"
+
+[labels.de.model.device.field.registered_at]
+label = "Angemeldet am"
+description = "Wann sich die App auf diesem Gerät angemeldet hat"
+
+[labels.de.model.device.field.last_seen]
+label = "Zuletzt aktiv"
+description = "Wann das Gerät seine Anmeldung zuletzt erneuert hat (Zeitpunkt der letzten Erneuerung, nicht jeder Anfrage)"
+
+[labels.de.model.device.field.expires_at]
+label = "Läuft ab am"
+description = "Wann die Anmeldung des Geräts endet, wenn sie nicht erneuert wird"
+
+[labels.de.model.device.field.state]
+label = "Status"
+description = "active, solange das Gerät sich anmelden darf; revoked, sobald es beendet wurde"
+
+[labels.de.model.device.field.state.options]
+active = "Aktiv"
+revoked = "Widerrufen"
+
+[labels.de.model.device.field.revoked_at]
+label = "Widerrufen am"
+description = "Wann das Gerät beendet wurde"
+
+[labels.de.model.device.field.grant]
+label = "Anmeldefamilie"
+description = "Die Familie der Refresh-Tokens, an die das Gerät gebunden ist (eine Kennung, kein Token)"
+
+[labels.de.model.device.action.revoke]
+label = "Widerrufen"
+description = "Ein Gerät endgültig beenden: seine Refresh-Tokens funktionieren nicht mehr, sein Zugriffstoken stoppt bei der nächsten Anfrage, und die App muss sich neu anmelden. Eine Person widerruft ihre eigenen Geräte; ein Agent kann es nur vorschlagen. Angabe: id"

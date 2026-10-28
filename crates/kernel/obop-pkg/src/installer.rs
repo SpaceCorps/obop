@@ -2422,7 +2422,7 @@ pub fn admin_module() -> Module {
                     f("user", "The account the event is about"),
                     f(
                         "kind",
-                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
+                        "What happened: enrol_begin, enrol_confirm, disable, reset, recovery_regenerate, recovery_used, code_failed, lockout, limited_session, login_refused, password_change, password_change_failed, password_reset, sessions_revoked, user_disable, user_enable, settings_change, module_install, module_update, module_rollback, module_uninstall, instance_update_requested, instance_update_finished, instance_update_failed, instance_rollback_requested, oauth_authorize, oauth_denied, oauth_revoked, oauth_refresh_reuse, oauth_code_reuse, device_registered, device_renamed, device_revoked, passkey_register, passkey_rename, passkey_remove, passkey_used, passkey_login, passkey_failed, passkey_clone, passkey_passwordless",
                     ),
                     f(
                         "actor",
@@ -2434,6 +2434,9 @@ pub fn admin_module() -> Module {
                 commands: vec![],
                 ext: Default::default(),
             },
+            // Written by the OAuth server when a mobile app signs in (the D64 amendment); its
+            // commands are bound by `register_devices`.
+            crate::devices::device_model(),
         ],
         network_destinations: vec![],
         description: String::new(),

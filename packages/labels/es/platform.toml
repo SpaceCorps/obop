@@ -593,3 +593,63 @@ description = "Desactivar una cuenta: no puede iniciar sesión y sus tokens deja
 [labels.es.model.user_account.action.enable]
 label = "Activar"
 description = "Volver a activar una cuenta desactivada. Los accesos revocados por una baja siguen revocados. Indique id"
+
+[labels.es.model.device]
+name = "Dispositivo"
+description = "Un teléfono o tableta en el que una aplicación móvil tiene la sesión iniciada: se crea cuando la aplicación inicia sesión y termina al revocarla. Una persona ve, renombra y revoca sus propios dispositivos; los administradores de dispositivos ven y revocan todos."
+
+[labels.es.model.device.field.user]
+label = "Usuario"
+description = "La cuenta a la que pertenece el dispositivo"
+
+[labels.es.model.device.field.name]
+label = "Nombre"
+description = "Cómo se llama el dispositivo; la persona puede renombrarlo"
+
+[labels.es.model.device.field.client_name]
+label = "Aplicación"
+description = "La aplicación móvil que inició sesión, tal como se llamó a sí misma"
+
+[labels.es.model.device.field.platform]
+label = "Plataforma"
+description = "La plataforma que indicó la aplicación, por ejemplo android o ios"
+
+[labels.es.model.device.field.app_version]
+label = "Versión de la aplicación"
+description = "La versión de la aplicación, tal como la indicó al iniciar sesión y en cada renovación"
+
+[labels.es.model.device.field.push_token]
+label = "Token push"
+description = "La dirección del servicio push de este dispositivo. No se muestra a nadie y no se escribe en esta versión: el push no forma parte de la primera entrega móvil"
+
+[labels.es.model.device.field.registered_at]
+label = "Sesión iniciada"
+description = "Cuándo inició sesión la aplicación en este dispositivo"
+
+[labels.es.model.device.field.last_seen]
+label = "Última actividad"
+description = "Cuándo renovó el dispositivo su sesión por última vez (la hora de la última renovación, no de cada solicitud)"
+
+[labels.es.model.device.field.expires_at]
+label = "Caduca"
+description = "Cuándo termina la sesión del dispositivo si no se renueva"
+
+[labels.es.model.device.field.state]
+label = "Estado"
+description = "active mientras el dispositivo puede iniciar sesión; revoked una vez terminado"
+
+[labels.es.model.device.field.state.options]
+active = "Activo"
+revoked = "Revocado"
+
+[labels.es.model.device.field.revoked_at]
+label = "Revocado el"
+description = "Cuándo se terminó el dispositivo"
+
+[labels.es.model.device.field.grant]
+label = "Familia de sesión"
+description = "La familia de tokens de renovación a la que está ligado el dispositivo (un identificador, no un token)"
+
+[labels.es.model.device.action.revoke]
+label = "Revocar"
+description = "Terminar un dispositivo para siempre: sus tokens de renovación dejan de funcionar, su token de acceso se detiene en la siguiente solicitud y la aplicación debe iniciar sesión de nuevo. Una persona revoca sus propios dispositivos; un agente solo puede proponerlo. Indique id"

@@ -593,3 +593,63 @@ description = "Inaktivera ett konto: det kan inte logga in och dess token slutar
 [labels.sv.model.user_account.action.enable]
 label = "Aktivera"
 description = "Aktivera ett inaktiverat konto igen. Åtkomster som återkallats vid avslut förblir återkallade. Ange id"
+
+[labels.sv.model.device]
+name = "Enhet"
+description = "En telefon eller surfplatta som en mobilapp är inloggad på: skapas när appen loggar in och avslutas genom återkallelse. En person ser, byter namn på och återkallar sina egna enheter; enhetsadministratörerna ser och återkallar alla."
+
+[labels.sv.model.device.field.user]
+label = "Användare"
+description = "Kontot som enheten tillhör"
+
+[labels.sv.model.device.field.name]
+label = "Namn"
+description = "Vad enheten heter; personen kan byta namn"
+
+[labels.sv.model.device.field.client_name]
+label = "Appen"
+description = "Mobilappen som loggade in, så som den kallade sig själv"
+
+[labels.sv.model.device.field.platform]
+label = "Plattform"
+description = "Plattformen som appen angav, till exempel android eller ios"
+
+[labels.sv.model.device.field.app_version]
+label = "Appversion"
+description = "Appens version så som den angav den vid inloggning och vid varje förnyelse"
+
+[labels.sv.model.device.field.push_token]
+label = "Pushtoken"
+description = "Adressen till pushtjänsten för den här enheten. Visas för ingen och skrivs inte i den här versionen: push ingår inte i den första mobilleveransen"
+
+[labels.sv.model.device.field.registered_at]
+label = "Inloggad"
+description = "När appen loggade in på den här enheten"
+
+[labels.sv.model.device.field.last_seen]
+label = "Senast aktiv"
+description = "När enheten senast förnyade sin inloggning (tiden för den senaste förnyelsen, inte för varje anrop)"
+
+[labels.sv.model.device.field.expires_at]
+label = "Upphör"
+description = "När enhetens inloggning upphör om den inte förnyas"
+
+[labels.sv.model.device.field.state]
+label = "Läge"
+description = "active så länge enheten får logga in; revoked när den har avslutats"
+
+[labels.sv.model.device.field.state.options]
+active = "Aktiv"
+revoked = "Återkallad"
+
+[labels.sv.model.device.field.revoked_at]
+label = "Återkallad"
+description = "När enheten avslutades"
+
+[labels.sv.model.device.field.grant]
+label = "Inloggningsfamilj"
+description = "Familjen av förnyelsetokens som enheten är bunden till (en identifierare, inte en token)"
+
+[labels.sv.model.device.action.revoke]
+label = "Återkalla"
+description = "Avsluta en enhet för gott: dess förnyelsetokens slutar fungera, dess åtkomsttoken upphör vid nästa anrop och appen måste logga in igen. En person återkallar sina egna enheter; en agent kan bara föreslå det. Ange id"

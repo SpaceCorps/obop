@@ -593,3 +593,63 @@ description = "Désactiver un compte : il ne peut pas se connecter et ses jetons
 [labels.fr.model.user_account.action.enable]
 label = "Activer"
 description = "Réactiver un compte désactivé. Les accès révoqués par une mise hors service restent révoqués. Donner id"
+
+[labels.fr.model.device]
+name = "Appareil"
+description = "Un téléphone ou une tablette sur lequel une application mobile est connectée : créé à la connexion de l'application, terminé par une révocation. Une personne voit, renomme et révoque ses propres appareils ; les administrateurs d'appareils voient et révoquent tous les appareils."
+
+[labels.fr.model.device.field.user]
+label = "Utilisateur"
+description = "Le compte auquel appartient l'appareil"
+
+[labels.fr.model.device.field.name]
+label = "Nom"
+description = "Comment l'appareil s'appelle ; la personne peut le renommer"
+
+[labels.fr.model.device.field.client_name]
+label = "Application"
+description = "L'application mobile qui s'est connectée, telle qu'elle s'est nommée"
+
+[labels.fr.model.device.field.platform]
+label = "Plateforme"
+description = "La plateforme indiquée par l'application, par exemple android ou ios"
+
+[labels.fr.model.device.field.app_version]
+label = "Version de l'application"
+description = "La version de l'application, telle qu'elle l'a indiquée à la connexion et à chaque renouvellement"
+
+[labels.fr.model.device.field.push_token]
+label = "Jeton push"
+description = "L'adresse du service push pour cet appareil. N'est montrée à personne et n'est pas écrite dans cette version : le push ne fait pas partie de la première tranche mobile"
+
+[labels.fr.model.device.field.registered_at]
+label = "Connecté le"
+description = "Quand l'application s'est connectée sur cet appareil"
+
+[labels.fr.model.device.field.last_seen]
+label = "Dernière activité"
+description = "Quand l'appareil a renouvelé sa connexion pour la dernière fois (l'heure du dernier renouvellement, pas de chaque requête)"
+
+[labels.fr.model.device.field.expires_at]
+label = "Expire le"
+description = "Quand la connexion de l'appareil prend fin si elle n'est pas renouvelée"
+
+[labels.fr.model.device.field.state]
+label = "État"
+description = "active tant que l'appareil peut se connecter ; revoked une fois terminé"
+
+[labels.fr.model.device.field.state.options]
+active = "Actif"
+revoked = "Révoqué"
+
+[labels.fr.model.device.field.revoked_at]
+label = "Révoqué le"
+description = "Quand l'appareil a été terminé"
+
+[labels.fr.model.device.field.grant]
+label = "Famille de connexion"
+description = "La famille de jetons d'actualisation à laquelle l'appareil est lié (un identifiant, pas un jeton)"
+
+[labels.fr.model.device.action.revoke]
+label = "Révoquer"
+description = "Mettre fin à un appareil pour de bon : ses jetons d'actualisation ne fonctionnent plus, son jeton d'accès s'arrête à la prochaine requête et l'application doit se reconnecter. Une personne révoque ses propres appareils ; un agent ne peut que le proposer. Donner id"
