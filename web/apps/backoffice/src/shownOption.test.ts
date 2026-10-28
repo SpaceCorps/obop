@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { provideCatalogue, setLanguage, type Lang } from "@obop/ui";
 import type { FieldMeta, ModelMeta, ModuleMeta } from "./api.ts";
+import { recordLabelOf, type ModelInfo } from "./data.tsx";
 import { plainText, shownLabel } from "./format.ts";
 import { resolveShownOptions } from "./shownOption.ts";
 
@@ -149,5 +150,86 @@ describe("a text field that shows the label of an option", () => {
     ]);
     await use("sv");
     expect(shownLabel(text, "pagar", {})).toBe("Pågår");
+  });
+});
+
+describe("the label of a record named by such a field", () => {
+  /** desk_entry names itself by its text field, which shows an option; desk_task refers to it. */
+  function world() {
+    const { text, status } = desk();
+    const kind = field("kind", "text");
+    // The text comes first, so it is the label field of the model (the first text field).
+    const entry = model("desk_entry", [text, kind]);
+    const caseModel = model("desk_case", [status]);
+    const entryRef = field("entry_id", "ref", { to: "desk_entry" });
+    const task = model("desk_task", [entryRef]);
+    const modules = [module("desk", [caseModel, entry, task])];
+    resolveShownOptions(modules);
+    const models = new Map<string, ModelInfo>();
+    for (const m of modules) for (const x of m.models) models.set(x.name, { model: x, module: m });
+    return { models, entry, entryRef, text };
+  }
+
+  it("is in the language active when it is asked, not when it was first made", async () => {
+    const { models } = world();
+    const row = { id: "0123456789", kind: "status", text: "pagar" };
+    await use("sv");
+    expect(recordLabelOf(models, "desk_entry", row)).toBe("Pågår");
+    // Nothing is kept from the first answer: a memo that holds this label must be made again
+    // when the language changes (the data context carries `lang` for that).
+    await use("de");
+    expect(recordLabelOf(models, "desk_entry", row)).toBe("In Arbeit");
+    await use("en");
+    expect(recordLabelOf(models, "desk_entry", row)).toBe("Pagar");
+  });
+
+  it("is the stored text where the condition is false, and the short id where there is none", async () => {
+    const { models } = world();
+    await use("sv");
+    expect(
+      recordLabelOf(models, "desk_entry", { id: "0123456789", kind: "note", text: "klar" }),
+    ).toBe("klar");
+    expect(recordLabelOf(models, "desk_entry", { id: "0123456789", kind: "status" })).toBe(
+      "01234567",
+    );
+  });
+
+  it("names the record by its first required text field, else a numbered one, else the first text or long text", async () => {
+    const required = field("title", "text", { required: true });
+    const first = field("note", "longtext", {
+      shows_option_of: "desk_case.status",
+    });
+    const status = field("status", "select", {
+      options: ["pagar"],
+      option_labels: { pagar: { sv: "Pågår" } },
+    });
+    const modules = [
+      module("desk", [model("desk_case", [status]), model("desk_item", [first, required])]),
+    ];
+    resolveShownOptions(modules);
+    const models = new Map<string, ModelInfo>();
+    for (const m of modules) for (const x of m.models) models.set(x.name, { model: x, module: m });
+    await use("sv");
+    // The required text field names the record, although the long text field comes first.
+    expect(
+      recordLabelOf(models, "desk_item", { id: "abcdefghij", note: "pagar", title: "pagar" }),
+    ).toBe("pagar");
+    // Without it, the first text or long text field does, and it shows its option.
+    const open = new Map(models);
+    open.set("desk_item", { model: model("desk_item", [first]), module: modules[0]! });
+    expect(recordLabelOf(open, "desk_item", { id: "abcdefghij", note: "pagar" })).toBe("Pågår");
+  });
+
+  it("is what a ref column shows, sorts and exports, like any record name; the text field itself exports what is stored", async () => {
+    const { models, entryRef, text } = world();
+    const row = { id: "e1", kind: "status", text: "pagar" };
+    const refText = (m: string, id: string) =>
+      id === "e1" ? recordLabelOf(models, m, row) : id.slice(0, 8);
+    await use("sv");
+    expect(plainText(entryRef, "e1", refText)).toBe("Pågår");
+    expect(plainText(text, "pagar", refText)).toBe("pagar");
+    await use("en");
+    expect(plainText(entryRef, "e1", refText)).toBe("Pagar");
+    expect(plainText(text, "pagar", refText)).toBe("pagar");
   });
 });

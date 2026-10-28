@@ -75,7 +75,7 @@ export function ListView(p: ViewProps) {
   const groups = useMemo(
     () => (levels.length ? buildGroups(rows, levels, d.lookup) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, state.group, d.lookup],
+    [rows, state.group, d.lookup, d.lang],
   );
   const items = useMemo(() => {
     if (!groups.length) return rows.map((row, ri): Item => ({ t: "row", row, ri }));

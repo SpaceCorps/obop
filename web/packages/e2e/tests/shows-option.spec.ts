@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Page } from "@playwright/test";
-import { coreSeries } from "../support/env.ts";
+import { coreSeries, repoRoot } from "../support/env.ts";
 import { expect, test } from "../support/fixtures.ts";
 
 // D52 amendment: a text field can declare `shows_option_of = "<model>.<field>"` (with an optional `when`
@@ -42,6 +43,13 @@ write_group = "${id}.manager"
   class = "none"
   kind = "select"
   options = ["owner", "helper"]
+
+  [[model.field]]
+  name = "latest"
+  description = "The latest history entry, which is named by its text"
+  class = "none"
+  kind = "ref"
+  to = "${id}_entry"
 
 [[model]]
 name = "${id}_entry"
@@ -86,6 +94,9 @@ klar = "Klar"
 
 [labels.sv.model.${id}_case.field.role.options]
 owner = "Ägare"
+
+[labels.de.model.${id}_case.field.status.options]
+pagar = "In Arbeit"
 `;
 
 /** The history lines the specs read: a status key, a free note that reads like one, and what is not an option. */
@@ -95,6 +106,14 @@ const lines = [
   { tag: "e3", kind: "status", note: "Fri text", details: "Fri text", role: "stranger" },
   { tag: "e4", kind: "status", note: "klar", details: "klar", role: "helper" },
 ];
+
+const tr = (lang: string, id: string): string => {
+  const cat = JSON.parse(
+    readFileSync(resolve(repoRoot, `web/apps/backoffice/locales/${lang}/messages.json`), "utf8"),
+  );
+  if (!cat[id]) throw new Error(`no ${lang} translation of ${JSON.stringify(id)}`);
+  return cat[id];
+};
 
 const grid = (page: Page) => page.getByRole("grid").first();
 const line = (page: Page, tag: string) => grid(page).getByRole("row").filter({ hasText: tag });
@@ -193,6 +212,36 @@ test.describe("a text field that shows the label of an option", () => {
       await expect(input(page, "details")).toBeEditable();
       // The record is named by the label of its first text field (a header, not an input).
       await expect(page.locator("aside.record h2")).toHaveText("Pågår");
+    });
+
+    test("a ref picker that names records by such a field follows a change of language", async ({
+      page,
+      signIn,
+      api,
+      scratchPackage,
+    }) => {
+      const id = await scratchPackage(manifest);
+      const entry = `${id}_entry`;
+      await api.create("root", entry, lines[0]!);
+      const made = await api.create("root", `${id}_case`, { status: "draft" });
+      await signIn("root", `/${id}/${id}_case?view=list&id=${made.id}`);
+      const picker = page.locator(`aside.record #f-${id}_case-latest`);
+      const options = page.getByRole("listbox").getByRole("option");
+
+      // The entry is named by its text, which shows the status as a label: Swedish now.
+      await picker.focus();
+      await expect(options.filter({ hasText: "Pågår" })).toHaveCount(1);
+      await picker.press("Escape");
+
+      // Switching the language leaves the panel and its picker as they are, and the next look at the
+      // options is in the new language, not in the one the list was first made in.
+      await page.getByRole("button", { name: tr("sv", "Account") }).click();
+      await page.getByRole("menuitem", { name: "Deutsch" }).click();
+      await expect(page.locator("html")).toHaveAttribute("lang", "de");
+      await expect(picker).toBeVisible();
+      await picker.focus();
+      await expect(options.filter({ hasText: "In Arbeit" })).toHaveCount(1);
+      await expect(options.filter({ hasText: "Pågår" })).toHaveCount(0);
     });
 
     test("a person who can only read sees the label in the panel", async ({

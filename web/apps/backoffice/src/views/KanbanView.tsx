@@ -222,7 +222,7 @@ export function KanbanView(p: ViewProps) {
     const present = [...(totals?.keys() ?? [])];
     return domainOf(gf, present, d.lookup);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gf, server, clientRows, totals, d.version]);
+  }, [gf, server, clientRows, totals, d.version, d.lang]);
   const { cols, retry: retryColumns } = useColumnCards({
     enabled: !!server && !!gf && agg.loaded && !agg.error,
     model: model.name,

@@ -17,7 +17,7 @@ import {
   type Reply,
   type Row,
 } from "./api.ts";
-import { t } from "@obop/ui";
+import { t, useI18n } from "@obop/ui";
 import type { App } from "./Chrome.tsx";
 import { isEmpty, shownLabel } from "./format.ts";
 import { registerMeta } from "./serverMessage.ts";
@@ -119,6 +119,11 @@ type Ctx = {
   models: Map<string, ModelInfo>;
   store: RowStore;
   version: number;
+  /**
+   * The language the labels of records (recordLabel, refText) are made in. They follow it when a label
+   * field shows an option (shows_option_of), so a memo that keeps one lists it among its dependencies.
+   */
+  lang: string;
   /** Counts successful writes, so server-side queries know when to ask again. */
   mutations: number;
   notify: (text: string, tone?: Tone) => void;
@@ -169,6 +174,18 @@ export function labelField(model: ModelMeta): FieldMeta | undefined {
   );
 }
 
+/**
+ * The label of one record: its label field, or the short id. A label field that shows an option
+ * (shows_option_of) names the record by that option's label, in the language active now, so the
+ * answer for one record changes when the language does.
+ */
+export function recordLabelOf(models: Map<string, ModelInfo>, model: string, row: Row): string {
+  const m = models.get(model)?.model;
+  const f = m && labelField(m);
+  const v = f ? row[f.name] : undefined;
+  return isEmpty(v) ? row.id.slice(0, 8) : ((f && shownLabel(f, v, row)) ?? String(v));
+}
+
 export function DataProvider(props: {
   token: string;
   modules: ModuleMeta[];
@@ -191,6 +208,10 @@ export function DataProvider(props: {
   const store = useMemo(() => new RowStore(token, (n) => modelsRef.current.get(n)?.model), [token]);
   const version = useSyncExternalStore(store.subscribe, store.getVersion);
   const [mutations, setMutations] = useState(0);
+  // The label of a record (recordLabel, refText) is in the person's language when its label field
+  // shows an option (shows_option_of). The context is a new object when the language changes, and a
+  // memo that keeps such a label lists `d.lang` among its dependencies.
+  const { lang } = useI18n();
 
   // A reloaded module list (install, uninstall) means the cached rows may be stale.
   useEffect(() => {
@@ -199,13 +220,7 @@ export function DataProvider(props: {
   }, [models]);
 
   const value = useMemo<Ctx>(() => {
-    const recordLabel = (model: string, row: Row) => {
-      const m = models.get(model)?.model;
-      const f = m && labelField(m);
-      const v = f ? row[f.name] : undefined;
-      // A label field that shows an option (shows_option_of) names the record by that option's label.
-      return isEmpty(v) ? row.id.slice(0, 8) : ((f && shownLabel(f, v, row)) ?? String(v));
-    };
+    const recordLabel = (model: string, row: Row) => recordLabelOf(models, model, row);
     const refText = (model: string, id: string) => {
       const row = store.peek(model)?.find((r) => r.id === id);
       return row ? recordLabel(model, row) : id.slice(0, 8);
@@ -217,6 +232,7 @@ export function DataProvider(props: {
       models,
       store,
       version,
+      lang,
       mutations,
       notify,
       confirm,
@@ -245,7 +261,8 @@ export function DataProvider(props: {
         return r;
       },
     };
-  }, [token, modules, apps, models, store, version, mutations, notify, confirm, linkFor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, modules, apps, models, store, version, mutations, notify, confirm, linkFor, lang]);
 
   return <DataCtx.Provider value={value}>{props.children}</DataCtx.Provider>;
 }

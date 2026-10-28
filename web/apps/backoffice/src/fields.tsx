@@ -348,7 +348,7 @@ export function RefPicker({
       .filter((o) => !q || o.text.toLowerCase().includes(q))
       .slice(0, 50);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, query, to]);
+  }, [rows, query, to, d.lang]);
   useEffect(() => setActive(0), [query, open]);
   useEffect(() => {
     if (!open) return;
