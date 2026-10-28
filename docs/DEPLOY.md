@@ -227,6 +227,15 @@ OBOP_ALLOWED_ORIGINS=https://app.example.com,http://localhost:5173
 - Set the headers in one place: a reverse proxy that adds its own CORS headers as well produces duplicates that browsers reject.
 - **Not tried in a real browser or behind a CDN**; verified with raw HTTP requests and the Fetch standard's rules.
 
+## The language of a refusal (D52)
+
+A package can translate the message of an assertion that has a `key` (docs/MODULES.md 3.8). A REST call that fails such an assertion answers in the language of the request and falls back to the package's own message:
+
+- **Which language.** The `lang` query parameter, then the `obop_lang` cookie, then `Accept-Language` (q-values honoured, a region read as its language: `sv-SE` is `sv`). Only `de`, `en`, `es`, `fi`, `fr`, `pl` and `sv` count; a source that names none of them is skipped for the next, and a request that names none, or `en`, is answered with the package's message. This is the rule of the forum and the status page.
+- **What the client sees.** The `error` text is `<message> (assertion <expression> failed)` in every language, so a client that reads the suffix keeps working; the 400 body also carries `code` (`assertion_failed`) and, for a keyed assertion, `assert_key`. A request that names no language gets the text it always got.
+- **Only REST.** MCP and the command line print the package's message whatever they are sent. Other refusals are not translated.
+- **A browser app on another origin** sends the language it shows as `Accept-Language`; the header is in the list a preflight allows (above), so nothing needs to be set. The back office does this on its own, from the language it displays and not the browser's. A proxy or CDN that caches `POST` answers must not: nothing here is cached by the server, and a cache in front of the API would have to vary on `Accept-Language`, `Cookie` and the query.
+
 ## More than one process
 
 Several `obop serve` (or `obop platform serve`) processes may share one **PostgreSQL** database, behind any load balancer, without sticky sessions. Give them the same `OBOP_SECRET_KEY` (and `OBOP_SECRET_KEY_PREVIOUS`) and the same `OBOP_DATABASE_URL`.
@@ -527,7 +536,9 @@ See "The published image": build, then `obop platform upgrade-instances --image 
 - `ghcr.io/spacecorps/obop:<git commit sha>` (immutable: what the control plane deploys),
 - `ghcr.io/spacecorps/obop:main` or `:deploy` (moving).
 
-The build attaches SLSA provenance (`mode=max`) and an SBOM as attestations, and the workflow runs `obop --version` from the pushed image. It authenticates with the repository's `GITHUB_TOKEN` (`packages: write`); no other credential exists. Actions are pinned by commit SHA. arm64 is not built: under emulation the Rust build takes hours; add a matrix job on a native arm64 runner and merge the manifests when it is needed. The workflow has never been run from this repository's history (it needs GitHub); the first run is the test, so watch it.
+The build attaches SLSA provenance (`mode=max`) and an SBOM as attestations, and the workflow runs `obop --version` from the pushed image and fails unless it reports the commit that was built. It authenticates with the repository's `GITHUB_TOKEN` (`packages: write`); no other credential exists. Actions are pinned by commit SHA. arm64 is not built: under emulation the Rust build takes hours; add a matrix job on a native arm64 runner and merge the manifests when it is needed. The workflow has never been run from this repository's history (it needs GitHub); the first run is the test, so watch it.
+
+**Which build is running.** `obop --version` prints `obop 0.2.0 (abcdef012345)`: the core version, then the first 12 digits of the commit the binary was built from, so a check that pins a build can tell two builds of one version apart. The commit is read by `crates/obop/build.rs`: the environment variable `OBOP_BUILD_COMMIT` (a hash of 12 or more hexadecimal digits) if it is set, else `git rev-parse HEAD` when the sources are the top of their own checkout, else `unknown`, printed as `obop 0.2.0 (unknown)`. The image has no `.git`, so the Dockerfile takes the build argument of the same name and `image.yml` passes `${{ github.sha }}`; build it yourself with `docker build --build-arg OBOP_BUILD_COMMIT=$(git rev-parse HEAD) -t obop:local .`. The argument is declared after the Rust dependencies are cooked, so a new commit does not rebuild them. There is no `-dirty` mark: Cargo runs a build script again only when a file it names changes, so a mark for uncommitted edits would go stale at the first one. A commit hash is not secret; the line is printed by the program and the log of the pushed image check only.
 
 Build the image locally with `docker build -t obop:local .`. `docker build --target web .` builds only the website and back office (it needs `Cargo.toml` in the build context for the core version, which the Dockerfile copies).
 
