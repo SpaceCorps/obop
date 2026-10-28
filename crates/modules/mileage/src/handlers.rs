@@ -202,7 +202,7 @@ pub(crate) fn run(
     let who = Who::from_input(input);
     let approver = policy::Approver::of(input);
     if let Some(a) = &approver {
-        a.check(action, &id)?;
+        a.check(action, &id, &trip)?;
     }
     let approver = approver.map(|a| a.who.id);
     policy::check_action(action, &who, approver.as_deref(), &trip)?;

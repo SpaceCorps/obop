@@ -510,7 +510,7 @@ fn action(db: Db, name: &'static str) -> Guard {
         // same rule as a caller before the plan is spent.
         let approver = policy::Approver::of(input);
         if let Some(a) = &approver {
-            a.check(name, &id)?;
+            a.check(name, &id, &trip)?;
         }
         policy::check_action(
             name,

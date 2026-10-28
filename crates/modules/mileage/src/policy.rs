@@ -174,10 +174,12 @@ impl Approver {
         })
     }
 
-    /// Whether the approver may stand behind `action` of the trip `id`. The dispatcher has checked
-    /// the group of the command; this is the base group and the role, answered for a missing
-    /// base group as for a trip that does not exist.
-    pub fn check(&self, action: &str, id: &str) -> Result<(), String> {
+    /// Whether the approver may stand behind `action` of `trip` (the trip `id`). The dispatcher
+    /// has checked the group of the command; this is the base group, the role and, for the
+    /// actions of the driver, who the driver is. A missing base group is answered as for a trip
+    /// that does not exist, and so is the approval of a driver's action by someone who may not
+    /// read the trip.
+    pub fn check(&self, action: &str, id: &str, trip: &Fields) -> Result<(), String> {
         if !self.driver {
             return Err(no_such(TRIP, id));
         }
@@ -187,6 +189,16 @@ impl Approver {
             }
             "discard_stuck" if !self.who.admin => {
                 Err("only a mileage administrator can discard a stuck trip".into())
+            }
+            // The proposal was the driver's own; nobody else stands behind it. Nothing is logged
+            // for it (only the decisions of others are), so a stranger's approval would leave no
+            // record of who discarded the trip.
+            "end" | "submit" | "discard" if !owns(&self.who, trip) => {
+                if may_see_trip(&self.who, trip) {
+                    Err(format!("only the driver of a trip can {} it", word(action)))
+                } else {
+                    Err(no_such(TRIP, id))
+                }
             }
             _ => Ok(()),
         }

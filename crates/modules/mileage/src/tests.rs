@@ -2421,6 +2421,83 @@ fn an_approver_without_the_driver_group_stands_behind_nothing() {
 }
 
 #[test]
+fn the_discard_an_agent_proposed_is_approved_only_by_the_driver_of_the_trip() {
+    each_rig(|r| {
+        let (ann, bob, rita, ada) = (driver("ann"), driver("bob"), reviewer("rita"), admin("ada"));
+        let agent = Principal::agent("ann/agent", &[DRIVER], &[DRIVER]);
+        // A rejected trip: Ann may discard it, a reviewer reads it, an administrator reads it.
+        let id = r.in_review(&ann);
+        r.ok(
+            &rita,
+            "mileage_trip.update",
+            json!({"id": id, "reject_reason": "no receipt"}),
+        );
+        r.ok(&rita, "mileage_trip.reject", json!({"id": id}));
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": id, "discard_reason": "wrong trip"}),
+        );
+        let plan = propose(r, &agent, "mileage_trip.discard", &id);
+        // Nobody who is not the driver stands behind the discard of another's trip: a plain
+        // driver is told no such trip, a reviewer and an administrator, who read it, are told
+        // whose action it is. The plan is not spent by any of the refusals.
+        for (approver, needle) in [
+            (&bob, "no mileage_trip"),
+            (&rita, "only the driver of a trip can discard it"),
+            (&ada, "only the driver of a trip can discard it"),
+        ] {
+            let e = r.d.approve(approver, &mut Vault::new(), &plan);
+            assert!(
+                matches!(e, Err(CallError::Handler(ref m)) if m.contains(needle)),
+                "{}: {e:?}",
+                approver.id
+            );
+            assert_eq!(r.state(&id), "rejected", "{}", approver.id);
+        }
+        // The driver approves their own agent's proposal.
+        r.d.approve(&ann, &mut Vault::new(), &plan).unwrap();
+        assert_eq!(r.state(&id), "discarded");
+
+        // The handler holds to the same rule when it is run without the guard in front of it.
+        let stuck = r.recording(&ann);
+        r.ok(
+            &ann,
+            "mileage_trip.update",
+            json!({"id": stuck, "discard_reason": "wrong trip"}),
+        );
+        let db = r.store.backend();
+        let clock: Clock = Arc::new(start);
+        let call = |approver: &str, groups: &[&str]| {
+            crate::handlers::run(
+                &db,
+                &clock,
+                "discard",
+                &Value::from_json(&json!({
+                    "id": stuck,
+                    "_actor": "ann",
+                    "_actor_mileage_reviewer": false,
+                    "_actor_mileage_admin": false,
+                    "_actor_approver": approver,
+                    "_actor_approver_admin": false,
+                    "_actor_approver_groups": groups,
+                })),
+            )
+        };
+        let e = call("bob", &[DRIVER]).unwrap_err();
+        assert!(e.starts_with("no mileage_trip"), "{e}");
+        let e = call("ada", &[DRIVER, ADMIN]).unwrap_err();
+        assert!(
+            e.contains("only the driver of a trip can discard it"),
+            "{e}"
+        );
+        assert_eq!(r.state(&stuck), "recording");
+        call("ann", &[DRIVER]).unwrap();
+        assert_eq!(r.state(&stuck), "discarded");
+    });
+}
+
+#[test]
 fn the_roles_of_an_agent_of_a_platform_administrator_are_the_same_in_the_guard_and_the_handler() {
     each_rig(|r| {
         let (ann, rita) = (driver("ann"), reviewer("rita"));
