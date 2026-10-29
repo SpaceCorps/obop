@@ -21,8 +21,12 @@ describe("tOs", () => {
 describe("the screens and the iOS sentences of the catalogue", () => {
   const dir = fileURLToPath(new URL("./screens/", import.meta.url));
   const used = new Set<string>();
-  for (const file of readdirSync(dir).filter((name) => /\.tsx?$/.test(name))) {
-    const source = readFileSync(dir + file, "utf8");
+  // The screens, and App.tsx (the Failed screen is there).
+  const sources = readdirSync(dir)
+    .filter((name) => /\.tsx?$/.test(name))
+    .map((file) => readFileSync(dir + file, "utf8"));
+  sources.push(readFileSync(fileURLToPath(new URL("../../App.tsx", import.meta.url)), "utf8"));
+  for (const source of sources) {
     for (const match of source.matchAll(/\btOs\(\s*"([\w.]+)"/g)) used.add(match[1]!);
   }
   const iosBases = Object.keys(en)
