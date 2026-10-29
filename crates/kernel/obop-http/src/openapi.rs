@@ -5,6 +5,32 @@
 use obop_commands::ModuleInfo;
 use serde_json::{Value as J, json};
 
+/// The length and range limits of a field (D90) as JSON Schema keywords of its input schema:
+/// `maxLength` and `minLength`, `minimum` and `maximum`. A decimal is a string, which JSON Schema
+/// cannot bound by value, so its bounds are the extensions `x-obop-minimum` and `x-obop-maximum`
+/// (the canonical text). The same as the MCP tool schemas.
+fn limit_keywords(f: &obop_commands::FieldInfo) -> serde_json::Map<String, J> {
+    let mut kw = serde_json::Map::new();
+    if let Some(n) = f.max_length {
+        kw.insert("maxLength".into(), json!(n));
+    }
+    if let Some(n) = f.min_length {
+        kw.insert("minLength".into(), json!(n));
+    }
+    let (lo, hi) = if f.kind == "decimal" {
+        ("x-obop-minimum", "x-obop-maximum")
+    } else {
+        ("minimum", "maximum")
+    };
+    if let Some(b) = f.min {
+        kw.insert(lo.into(), obop_mcp::schema::bound_json(b));
+    }
+    if let Some(b) = f.max {
+        kw.insert(hi.into(), obop_mcp::schema::bound_json(b));
+    }
+    kw
+}
+
 fn error_schema() -> J {
     json!({
         "type": "object",
@@ -221,6 +247,10 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             let name = &model.name;
             let mut props = serde_json::Map::new();
             let mut required = Vec::new();
+            // The limits of the fields (D90) are keywords of the input schemas only: a record that was
+            // stored before a limit was lowered still has to validate as a response.
+            let mut limit_kw: std::collections::HashMap<String, serde_json::Map<String, J>> =
+                Default::default();
             for f in &model.fields {
                 let options: Vec<String> = f.options.iter().map(|o| o.to_string()).collect();
                 let mut sch = match f.kind {
@@ -275,6 +305,8 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
                     desc.push_str(" (a number the system assigns; read-only)");
                     sch["readOnly"] = J::from(true);
                 }
+                desc.push_str(&f.limits_note);
+                limit_kw.insert(f.name.to_string(), limit_keywords(f));
                 if f.unique && !f.sequence {
                     desc.push_str(" (unique)");
                 }
@@ -293,7 +325,13 @@ pub fn instance(base: &str, modules: &[ModuleInfo]) -> J {
             let input_props: serde_json::Map<String, J> = props
                 .iter()
                 .filter(|(_, v)| v.get("readOnly") != Some(&J::from(true)))
-                .map(|(k, v)| (k.clone(), v.clone()))
+                .map(|(k, v)| {
+                    let mut v = v.clone();
+                    for (kw, value) in limit_kw.get(k).into_iter().flatten() {
+                        v[kw] = value.clone();
+                    }
+                    (k.clone(), v)
+                })
                 .collect();
             schemas.insert(name.clone(), rec.clone());
             let op = |id: &str, summary: &str, body: Option<J>, resp: J| {
