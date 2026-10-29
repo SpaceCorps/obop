@@ -56,6 +56,11 @@ export function checkAddress(input: string): string {
   return result.address;
 }
 
+/** Whether the app may talk to an address it stored earlier: the rule of `checkAddress`, as a yes or no. */
+export function addressAllowed(address: string): boolean {
+  return checkAddressText(address, cleartextAllowed()).ok;
+}
+
 function failure(error: unknown): SignInError {
   if (error instanceof SignInError) return error;
   if (error instanceof ObopNetworkError) return new SignInError("network", error);

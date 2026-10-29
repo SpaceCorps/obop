@@ -27,6 +27,17 @@ export interface OAuthDeps {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/**
+ * An app that is suspended (iOS does this to an app in the background that has no reason to run)
+ * runs no timers, and when it wakes every timer that has run out fires at once. A deadline that
+ * fires this much later than it should have has not measured the server's silence but the nap of
+ * the app, and the answer may be in the network stack already. Such a deadline is not acted on at
+ * once: the call gets `SUSPENDED_GRACE_MS` more, once. For a refresh this is what keeps a sign-in
+ * from ending as "unsure" when the answer was about to be read.
+ */
+const SUSPENDED_SLACK_MS = 5_000;
+const SUSPENDED_GRACE_MS = 10_000;
+
 /** A refusal by the authorization server, or an answer that is not what it sends. */
 export class OAuthError extends Error {
   /** The OAuth error word (`invalid_grant`, `invalid_client`, ...), or one of ours (`network_error`, `invalid_response`, `state_mismatch`, `access_denied`). */
@@ -129,7 +140,17 @@ async function post(
 ): Promise<Record<string, unknown>> {
   let response: Response;
   const abort = new AbortController();
-  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  const started = Date.now();
+  let graceGiven = false;
+  const expire = (): void => {
+    if (!graceGiven && Date.now() - started - timeoutMs > SUSPENDED_SLACK_MS) {
+      graceGiven = true;
+      timer = setTimeout(expire, SUSPENDED_GRACE_MS);
+      return;
+    }
+    abort.abort();
+  };
+  let timer = setTimeout(expire, timeoutMs);
   // The signal stops the request itself; the race covers a fetch that does not honour it.
   const stalled = new Promise<never>((_, reject) => {
     abort.signal.addEventListener("abort", () =>

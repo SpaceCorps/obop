@@ -1,5 +1,5 @@
 import { createHash, randomBytes as nodeRandom } from "node:crypto";
-import { describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import {
   OAuthError,
   base64Url,
@@ -371,5 +371,95 @@ describe("revocation", () => {
     await expect(
       revokeToken(down.deps, { baseUrl: "http://h", clientId: "c", token: "t" }),
     ).rejects.toMatchObject({ code: "network_error" });
+  });
+});
+
+describe("a deadline that fires after the app was suspended", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const answer = {
+    access_token: "AT-2",
+    refresh_token: "RT-2",
+    expires_in: 3600,
+    scope: "mileage.driver",
+    device_id: "dev-9",
+  };
+
+  /** A fetch whose answer the test lets through when it wants to. */
+  function held() {
+    let release: (response: Response) => void = () => undefined;
+    const d = deps(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+    return { ...d, release: (response: Response) => release(response) };
+  }
+
+  const refresh = (d: OAuthDeps) =>
+    refreshTokens(d, {
+      baseUrl: "http://h",
+      clientId: "c",
+      refreshToken: "RT-1",
+      timeoutMs: 60_000,
+    });
+
+  test("an app that slept through the deadline gives the answer that is on its way a short time more", async () => {
+    vi.useFakeTimers();
+    const call = held();
+    const result = refresh(call.deps);
+    const settled = vi.fn();
+    result.then(settled, settled);
+    // The app is suspended for ten minutes: the clock moves on, no timer runs, and on waking the
+    // deadline of 60 seconds fires at once.
+    vi.setSystemTime(Date.now() + 600_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(settled).not.toHaveBeenCalled();
+    // The answer arrives in the grace period.
+    call.release(json(answer));
+    const set = await result;
+    expect(set.refreshToken).toBe("RT-2");
+  });
+
+  test("the grace is short and comes once: with no answer in it the call is given up as timed out", async () => {
+    vi.useFakeTimers();
+    const call = held();
+    const result = refresh(call.deps);
+    const failure = result.catch((e: unknown) => e);
+    vi.setSystemTime(Date.now() + 600_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(9_999);
+    let early = true;
+    void failure.then(() => (early = false));
+    await Promise.resolve();
+    expect(early).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await failure).toMatchObject({ code: "network_error", timedOut: true });
+  });
+
+  test("a deadline that fires on time is not given more time", async () => {
+    vi.useFakeTimers();
+    const call = held();
+    const failure = refresh(call.deps).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(59_999);
+    let early = true;
+    void failure.then(() => (early = false));
+    await Promise.resolve();
+    expect(early).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await failure).toMatchObject({ code: "network_error", timedOut: true });
+  });
+
+  test("a small delay of the timer is not a nap", async () => {
+    vi.useFakeTimers();
+    const call = held();
+    const failure = refresh(call.deps).catch((e: unknown) => e);
+    // A busy moment: the clock is 4 seconds ahead of the timers when the deadline runs.
+    vi.setSystemTime(Date.now() + 4_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(await failure).toMatchObject({ code: "network_error", timedOut: true });
   });
 });
