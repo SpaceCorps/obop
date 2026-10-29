@@ -97,6 +97,9 @@ pub mod code {
     pub const USE_SEARCH: &str = "use_search";
     /// D56: an assertion of the action did not hold (REST names it; see the module comment).
     pub const ASSERTION_FAILED: &str = "assertion_failed";
+    /// D90: a value is outside a limit of its field (`max_length`, `min_length`, `min`,
+    /// `max`, or the default length of a text field).
+    pub const LIMIT_VIOLATED: &str = "limit_violated";
     /// Step 2: the caller is known and may not do this.
     pub const DENIED: &str = "denied";
     /// Step 2: the caller must confirm their identity again.
@@ -231,6 +234,13 @@ pub const TABLE: &[Row] = &[
         retry_after: None,
         origin: "D56",
         hint: "A condition of the action does not hold. Change the record as the message says, then retry.",
+    },
+    Row {
+        code: code::LIMIT_VIOLATED,
+        status: 400,
+        retry_after: None,
+        origin: "D90",
+        hint: "A value is outside the limits of its field (max_length, min_length, min and max in GET /api/meta; a text field with no max_length has the default of its kind). Nothing was changed. Shorten the text or change the number so that it fits, then retry.",
     },
     Row {
         code: code::DENIED,
@@ -699,6 +709,13 @@ fn split_code(m: &str) -> Option<(&'static Row, &str)> {
         .map(|r| (r, rest))
 }
 
+/// The message of a handler string without its leading code (`code: message`), for a place that
+/// lists refusals one by one and names the row itself (the rows of `bulk_create`). A text that
+/// does not begin with a code of the table is returned as it is.
+pub fn plain(m: &str) -> &str {
+    split_code(m).map_or(m, |(_, rest)| rest)
+}
+
 /// The `origin` of the three storage rows.
 const STORAGE_ORIGIN: &str = "D74";
 
@@ -889,6 +906,7 @@ mod tests {
             ("limit_required", 400),
             ("use_search", 400),
             ("assertion_failed", 400),
+            ("limit_violated", 400),
             ("denied", 403),
             ("reauth_required", 400),
             ("incomplete", 409),

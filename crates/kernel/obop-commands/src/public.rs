@@ -948,7 +948,7 @@ impl PublicApi {
             crate::kinds::canonicalise_values(&def, &mut fields, crate::kinds::Path::Write)
                 .map_err(SubmitError::Rejected)?;
             validate_with(&def, &self.store, &fields, true, &pending)
-                .map_err(SubmitError::Rejected)?;
+                .map_err(|e| SubmitError::Rejected(crate::errors::plain(&e).to_string()))?;
             let id = uuid::Uuid::now_v7().to_string();
             pending.push((s.model.clone(), id.clone()));
             rows.push((

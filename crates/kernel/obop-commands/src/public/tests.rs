@@ -465,3 +465,35 @@ fn site_settings_reads_only_the_site_object() {
     assert_eq!(site["title"], "Shop");
     assert!(!site.contains_key("theme"));
 }
+
+#[test]
+fn a_visitor_cannot_send_a_text_longer_than_the_field_allows() {
+    // D90: the anonymous submit path checks what the form of a visitor sends like any other write.
+    let (api, s) = api();
+    let default = obop_registry::DEFAULT_TEXT_MAX as usize;
+    let ok = msg(&[("email", t("a@b.test")), ("body", t(&"ä".repeat(default)))]);
+    api.submit_batch("lim1", vec![ok]).unwrap();
+    assert_eq!(s.count("msg"), 1);
+
+    let long = msg(&[
+        ("email", t("a@b.test")),
+        ("body", t(&"ä".repeat(default + 1))),
+    ]);
+    let e = api.submit_batch("lim2", vec![long]);
+    let want = format!(
+        "msg.body must be at most {default} characters; this has {}",
+        default + 1
+    );
+    assert!(
+        matches!(&e, Err(SubmitError::Rejected(m)) if *m == want),
+        "{e:?}"
+    );
+    // The batch is all or nothing: a good submission next to the long one is not kept either.
+    let good = msg(&[("email", t("b@b.test"))]);
+    let long = msg(&[
+        ("email", t("a@b.test")),
+        ("body", t(&"x".repeat(default + 1))),
+    ]);
+    assert!(api.submit_batch("lim3", vec![good, long]).is_err());
+    assert_eq!(s.count("msg"), 1);
+}

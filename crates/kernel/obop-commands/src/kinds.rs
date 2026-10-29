@@ -10,7 +10,8 @@
 //! numbers and instants they stand for wherever strings are compared.
 
 use crate::Value;
-use obop_registry::{FieldKind, ModelDef};
+use crate::errors::{self, code};
+use obop_registry::{Breach, FieldDef, FieldKind, ModelDef};
 use obop_storage::Fields;
 use obop_values::{Decimal, Instant};
 use serde_json::Value as J;
@@ -114,6 +115,38 @@ pub(crate) fn canonicalise_values(
         fields.insert(k, Value::from_json(&v));
     }
     Ok(())
+}
+
+/// The refusal of a value that breaks a limit of its field (D90): `limit_violated: <message>`.
+fn breach(model: &str, f: &FieldDef, b: Breach, value: &str) -> String {
+    errors::coded(code::LIMIT_VIOLATED, &b.message(model, f.name, value))
+}
+
+/// A written text against the length limits of its field, the default included (D90).
+pub(crate) fn check_text_limits(model: &str, f: &FieldDef, s: &str) -> Result<(), String> {
+    f.check_text(s).map_err(|b| breach(model, f, b, ""))
+}
+
+/// A written whole number (`number` or `money`) against `min` and `max` of its field (D90).
+pub(crate) fn check_int_limits(model: &str, f: &FieldDef, n: i64) -> Result<(), String> {
+    f.check_int(n)
+        .map_err(|b| breach(model, f, b, &n.to_string()))
+}
+
+/// A written decimal, in its canonical text, against `min` and `max` of its field (D90). The
+/// comparison is exact, by `Decimal`, and never goes through a float.
+pub(crate) fn check_decimal_limits(
+    model: &str,
+    f: &FieldDef,
+    canonical: &str,
+) -> Result<(), String> {
+    if f.lower_bound().is_none() && f.upper_bound().is_none() {
+        return Ok(());
+    }
+    let d = Decimal::parse(canonical)
+        .map_err(|e| wrong(model, f.name, &f.kind, Some(&e.to_string())))?;
+    f.check_decimal(d)
+        .map_err(|b| breach(model, f, b, canonical))
 }
 
 /// A stored or supplied value must already be in canonical form (see the module notes).

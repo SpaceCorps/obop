@@ -9,7 +9,7 @@
 
 use super::access::{Gate, creator_blocked};
 use super::computed::Computer;
-use super::crud::{check_fields, default_governed, own_default};
+use super::crud::{check_fields, check_fields_against, default_governed, own_default};
 use super::seq;
 use super::unit::{R, Reads, Unit};
 use super::{Actor, Engine, civil};
@@ -597,7 +597,7 @@ impl Runner<'_> {
             .load(def, id)
             .map_err(|_| self.unavailable(def))?;
         kinds::canonicalise(def, &mut patch, Path::Write)?;
-        check_fields(&*unit, &look, self.actor, def, &patch, false)?;
+        check_fields_against(&*unit, &look, self.actor, def, &patch, false, Some(&cur))?;
         let mut after = cur;
         after.extend(patch.clone());
         if let Some(why) = creator_blocked(&Gate::new(&*unit, &look, self.actor), def, &after) {

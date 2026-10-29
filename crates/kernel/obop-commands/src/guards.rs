@@ -10,7 +10,7 @@
 //! - `delete`: refused while another record refers to the one being deleted.
 
 use crate::engine::access::Gate;
-use crate::engine::crud::check_fields;
+use crate::engine::crud::check_fields_against;
 use crate::engine::effects::{lookup_fn, precheck, reachable, required_missing};
 use crate::engine::unit::{Plain, Reads};
 use crate::engine::{Actor, Engine};
@@ -206,7 +206,7 @@ fn update_guard(def: &ModelDef, eng: &Engine) -> Option<Guard> {
                     .map(|(k, v)| (k, v.to_json()))
                     .collect();
             crate::kinds::canonicalise(&def, &mut given, crate::kinds::Path::Write)?;
-            check_fields(&reads, &look, &actor, &def, &given, false)?;
+            check_fields_against(&reads, &look, &actor, &def, &given, false, Some(&current))?;
         }
         Ok(verdict)
     }))
