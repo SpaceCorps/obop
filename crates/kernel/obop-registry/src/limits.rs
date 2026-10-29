@@ -29,16 +29,22 @@ use std::sync::Arc;
 
 /// The longest value, in characters, a `text` field accepts when it declares no `max_length`.
 ///
-/// 2,048 is the length that browsers, sitemaps and most services accept for a URL, the longest
-/// ordinary single-line value; names, titles, addresses and codes are far shorter. A field that
-/// holds a list in one line (a comma-separated list of people) declares its own `max_length`.
+/// A round number with a margin over the longest text value measured in the bundled seed data
+/// (140 characters); names, titles, addresses and codes are far shorter. 2,048 is also the
+/// conservative ceiling for a URL, the longest ordinary single-line value: sitemaps.org asks for
+/// fewer than 2,048 characters and old Internet Explorer stopped near it (modern browsers accept
+/// far more), and it is this project's own limit for an OAuth redirect URI (`obop-oauth`,
+/// `redirect.rs`). A field that holds a list in one line (a comma-separated list of people)
+/// declares its own `max_length`.
 pub const DEFAULT_TEXT_MAX: u32 = 2_048;
 
 /// The longest value, in characters, a `longtext` field accepts when it declares no
 /// `max_length`.
 ///
-/// 100,000 characters is about fifty printed pages, more than GitHub allows for an issue
-/// (65,536) and about the size at which Gmail clips an HTML mail (102,400 bytes).
+/// A round number with a margin over the longest longtext value measured in the bundled seed
+/// data (2,040 characters), about fifty printed pages. Unofficial third-party analogies, for
+/// scale only: GitHub refuses an issue body above 65,536 characters (its error message; it is
+/// not documented), and mail clients are reported to clip HTML mail near 102,400 bytes.
 pub const DEFAULT_LONGTEXT_MAX: u32 = 100_000;
 
 /// The largest `max_length` a `text` field may declare.
@@ -101,21 +107,41 @@ pub enum Breach {
 }
 
 impl Breach {
+    /// What the value must be, with nothing about the value itself: `at most 2000 characters`,
+    /// `at least 0`. This is what a refusal says when the caller may not be told how long or how
+    /// large the value is (an agent holding a masked token; a value an action copied from a
+    /// field the caller cannot read).
+    pub fn requirement(&self) -> String {
+        let chars = |n: u32| format!("{n} character{}", if n == 1 { "" } else { "s" });
+        match self {
+            Self::TooShort { min, .. } => format!("at least {}", chars(*min)),
+            Self::TooLong { max, .. } => format!("at most {}", chars(*max)),
+            Self::Below(b) => format!("at least {b}"),
+            Self::Above(b) => format!("at most {b}"),
+        }
+    }
+
     /// What the value must be and what it was: `at most 2000 characters; this has 2001`. `value` is
     /// the written number, for the two bounds.
     pub fn detail(&self, value: &str) -> String {
-        let chars = |n: u32| format!("{n} character{}", if n == 1 { "" } else { "s" });
+        let req = self.requirement();
         match self {
-            Self::TooShort { min, have } => format!("at least {}; this has {have}", chars(*min)),
-            Self::TooLong { max, have } => format!("at most {}; this has {have}", chars(*max)),
-            Self::Below(b) => format!("at least {b}; this is {value}"),
-            Self::Above(b) => format!("at most {b}; this is {value}"),
+            Self::TooShort { have, .. } | Self::TooLong { have, .. } => {
+                format!("{req}; this has {have}")
+            }
+            Self::Below(_) | Self::Above(_) => format!("{req}; this is {value}"),
         }
     }
 
     /// `model.field must be ...`, naming the field and the limit and saying what was written.
     pub fn message(&self, model: &str, field: &str, value: &str) -> String {
         format!("{model}.{field} must be {}", self.detail(value))
+    }
+
+    /// As [`Breach::message`] without the length or the value that was written: `model.field must
+    /// be at most 10 characters`.
+    pub fn message_without_value(&self, model: &str, field: &str) -> String {
+        format!("{model}.{field} must be {}", self.requirement())
     }
 }
 
@@ -325,9 +351,26 @@ pub fn problems(f: &FieldDef) -> Vec<String> {
             (Some(lo), Some(hi)) if lo > hi => out.push(format!(
                 "`min_length` {lo} is above `max_length` {hi}, so no value fits"
             )),
+            // No `max_length`, so the default applies. Above the cap no `max_length` can help:
+            // say so, and where more room is (a longtext field), rather than advise a number
+            // the gate would refuse next.
+            (Some(lo), None) if lo > cap => out.push(format!(
+                "`min_length` {lo} is above {cap}, the most a {} field can hold{}",
+                f.kind.name(),
+                if f.kind == FieldKind::LongText {
+                    String::new()
+                } else {
+                    format!("; use a longtext field for more (up to {LONGTEXT_MAX_CAP})")
+                }
+            )),
             (Some(lo), None) if lo > default => out.push(format!(
-                "`min_length` {lo} is above the default maximum of a {} field ({default}); declare a `max_length` of at least {lo}",
-                f.kind.name()
+                "`min_length` {lo} is above the default maximum of a {} field ({default}); declare a `max_length` of at least {lo}, at most {cap}{}",
+                f.kind.name(),
+                if f.kind == FieldKind::LongText {
+                    String::new()
+                } else {
+                    format!(" (use a longtext field for more than {cap})")
+                }
             )),
             _ => {}
         }

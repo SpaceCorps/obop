@@ -255,6 +255,44 @@ fn a_breach_says_what_was_wanted_and_what_was_written() {
     );
 }
 
+/// The refusal for a caller who may not be told the size of what was written (an agent holding a
+/// masked token, a value an action copied from a field the caller cannot read; the review of
+/// PR 33, F7) says what the field takes and nothing about the value.
+#[test]
+fn a_refusal_without_the_value_says_only_what_the_field_takes() {
+    let all = [
+        (
+            Breach::TooLong {
+                max: 10,
+                have: 4_000,
+            },
+            "m.f must be at most 10 characters",
+        ),
+        (
+            Breach::TooLong { max: 1, have: 40 },
+            "m.f must be at most 1 character",
+        ),
+        (
+            Breach::TooShort { min: 3, have: 0 },
+            "m.f must be at least 3 characters",
+        ),
+        (Breach::Below(Bound::Int(0)), "m.f must be at least 0"),
+        (Breach::Above(Bound::Int(100)), "m.f must be at most 100"),
+        (Breach::Above(dec("0.90", 2)), "m.f must be at most 0.90"),
+    ];
+    for (b, want) in all {
+        assert_eq!(b.message_without_value("m", "f"), want);
+        assert_eq!(b.requirement(), want.strip_prefix("m.f must be ").unwrap());
+        // The sentence with the value is the same one plus the value.
+        assert!(
+            b.message("m", "f", "73250").starts_with(want),
+            "{}",
+            b.message("m", "f", "73250")
+        );
+        assert!(!b.message_without_value("m", "f").contains("this "));
+    }
+}
+
 #[test]
 fn the_note_for_descriptions_only_speaks_of_declared_limits() {
     assert_eq!(f("a").limits_note(), "");
@@ -403,6 +441,64 @@ fn the_gate_refuses_a_length_that_cannot_hold() {
             ..Default::default()
         }),
         "above the default maximum",
+    );
+}
+
+/// The advice for a `min_length` with no `max_length` must not send the author to a number the
+/// gate refuses next (the review of PR 33, F20): it names the cap, and above the cap it says so
+/// directly and points to a longtext field.
+#[test]
+fn the_advice_for_a_min_length_without_a_max_length_names_the_cap() {
+    let only = |field: FieldDef, min: u32| {
+        gate(with(
+            field,
+            Limits {
+                min_length: Some(min),
+                ..Default::default()
+            },
+        ))
+    };
+    // Between the default and the cap: declare a max_length, at most the cap; text suggests
+    // longtext for more.
+    let found = only(f("a"), DEFAULT_TEXT_MAX + 1);
+    has(
+        found.clone(),
+        "declare a `max_length` of at least 2049, at most 10000",
+    );
+    has(found, "use a longtext field for more than 10000");
+    let found = only(f("a").kind(FieldKind::LongText), DEFAULT_LONGTEXT_MAX + 1);
+    has(
+        found.clone(),
+        "declare a `max_length` of at least 100001, at most 1000000",
+    );
+    assert!(
+        !found.iter().any(|p| p.contains("use a longtext field")),
+        "a longtext field has nowhere larger to go: {found:?}"
+    );
+    // Above the cap no max_length can help: the cap is reported directly, with no advice that
+    // the gate would refuse.
+    let found = only(f("a"), TEXT_MAX_CAP + 1);
+    has(
+        found.clone(),
+        "`min_length` 10001 is above 10000, the most a text field can hold; use a longtext field for more (up to 1000000)",
+    );
+    assert!(
+        !found.iter().any(|p| p.contains("declare a `max_length`")),
+        "no advice to declare a max_length that is itself above the cap: {found:?}"
+    );
+    let found = only(f("a").kind(FieldKind::LongText), LONGTEXT_MAX_CAP + 1);
+    has(
+        found.clone(),
+        "`min_length` 1000001 is above 1000000, the most a longtext field can hold",
+    );
+    assert!(
+        !found.iter().any(|p| p.contains("use a longtext field")),
+        "{found:?}"
+    );
+    // At the cap itself it fits, with the max_length advice.
+    has(
+        only(f("a"), TEXT_MAX_CAP),
+        "declare a `max_length` of at least 10000, at most 10000",
     );
 }
 
