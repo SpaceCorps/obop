@@ -15,6 +15,7 @@ import {
   shownLabel,
 } from "./format.ts";
 import { fieldTitle, modelTitle } from "./labels.ts";
+import { counterState } from "./limits.ts";
 import { BlobInput, BlobThumb, FileChip } from "./BlobFields.tsx";
 import { Badge, Icon } from "./ui.tsx";
 
@@ -142,10 +143,44 @@ type InputProps = {
   shown?: string;
 };
 
+/** The ids a control is described by: the error, and the counter while it shows. */
+function describe(
+  errorId: string | undefined,
+  counterId: string,
+  counter: unknown,
+): string | undefined {
+  return [errorId, counter ? counterId : ""].filter(Boolean).join(" ") || undefined;
+}
+
+/** `1 842 of 2 000 characters`: red once the text is longer than the field allows. */
+function CharCounter({
+  id,
+  state,
+}: {
+  id: string;
+  state: { used: number; max: number; over: boolean } | null;
+}) {
+  if (!state) return null;
+  return (
+    <small className={state.over ? "hint counter over" : "hint counter"} id={id}>
+      {t("{used} of {max, plural, one {# character} other {# characters}}", {
+        used: fmt.number(state.used),
+        max: state.max,
+      })}
+    </small>
+  );
+}
+
 /** The control for one field, chosen by its kind. */
 export function FieldInput(p: InputProps) {
   const { field: f, value, onChange, readOnly } = p;
   const readText = readOnly && p.shown !== undefined ? p.shown : String(value);
+  // How full a text is (D90), shown only near the limit, and only where it can still be edited.
+  const counterId = `${useId()}-count`;
+  const counter =
+    !readOnly && (f.kind === "text" || f.kind === "longtext")
+      ? counterState(f, String(value))
+      : null;
   const common = {
     id: p.id,
     autoFocus: p.autoFocus,
@@ -191,13 +226,17 @@ export function FieldInput(p: InputProps) {
       );
     case "longtext":
       return (
-        <textarea
-          {...common}
-          rows={p.compact ? 2 : 4}
-          value={readText}
-          readOnly={readOnly}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <>
+          <textarea
+            {...common}
+            aria-describedby={describe(p.describedBy, counterId, counter)}
+            rows={p.compact ? 2 : 4}
+            value={readText}
+            readOnly={readOnly}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <CharCounter id={counterId} state={counter} />
+        </>
       );
     case "ref":
       return <RefPicker {...p} />;
@@ -252,6 +291,8 @@ export function FieldInput(p: InputProps) {
           {...common}
           type="number"
           step={1}
+          min={f.min}
+          max={f.max}
           className="num"
           value={String(value)}
           readOnly={readOnly}
@@ -306,13 +347,17 @@ export function FieldInput(p: InputProps) {
     }
     default:
       return (
-        <input
-          {...common}
-          type="text"
-          value={readText}
-          readOnly={readOnly}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <>
+          <input
+            {...common}
+            aria-describedby={describe(p.describedBy, counterId, counter)}
+            type="text"
+            value={readText}
+            readOnly={readOnly}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <CharCounter id={counterId} state={counter} />
+        </>
       );
   }
 }
