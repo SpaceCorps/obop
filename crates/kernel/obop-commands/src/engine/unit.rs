@@ -8,8 +8,9 @@
 //! including no consumed sequence number.
 
 use obop_registry::rules::MAX_EFFECT_RECORDS;
-use obop_storage::{Backend, Fields, Op};
+use obop_storage::{Backend, Fields, Op, unique_matches};
 use serde_json::Value as J;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 pub(crate) type R<T> = Result<T, String>;
@@ -18,6 +19,12 @@ pub(crate) type R<T> = Result<T, String>;
 pub(crate) trait Reads {
     fn get(&self, model: &str, id: &str) -> R<Option<Fields>>;
     fn find(&self, model: &str, field: &str, value: &J) -> R<Vec<(String, Fields)>>;
+    /// The records a uniqueness rule (D57) compares with a new value, as [`Backend::find_unique`]
+    /// says, seen through the writes of the unit. With the rule's index in the store the cost does
+    /// not grow with the model, and the unit's own records are found by key, not by a scan. The
+    /// stored records come first, in insertion order; the unit's own come after them in no order
+    /// (no caller depends on the order).
+    fn find_unique(&self, model: &str, fields: &[&str], values: &[J]) -> R<Vec<(String, Fields)>>;
     fn all(&self, model: &str) -> R<Vec<(String, Fields)>>;
 }
 
@@ -31,12 +38,74 @@ impl Reads for Plain<'_> {
     fn find(&self, model: &str, field: &str, value: &J) -> R<Vec<(String, Fields)>> {
         self.0.find(model, field, value)
     }
+    fn find_unique(&self, model: &str, fields: &[&str], values: &[J]) -> R<Vec<(String, Fields)>> {
+        self.0.find_unique(model, fields, values)
+    }
     fn all(&self, model: &str) -> R<Vec<(String, Fields)>> {
         self.0.list(model)
     }
 }
 
 type Key = (String, String);
+
+/// The unit's own records of one model by the key of one uniqueness rule, so that the check of a
+/// row does not look at every other row the unit has written (a bulk create of 1,000 rows would
+/// otherwise compare each row with all the rows before it).
+///
+/// Invariant: every live record in the overlay is listed under its current key. A list may also
+/// hold an id that was rewound, deleted or changed since; a reader checks each candidate against
+/// the overlay, so a stale entry costs one look and never gives a wrong answer.
+struct Keyed {
+    fields: Vec<String>,
+    ids: HashMap<String, Vec<String>>,
+}
+
+impl Keyed {
+    /// The key of `rec` under this rule: its values for the rule's fields as JSON text, a missing
+    /// or null scope field as the empty text. `None` when the rule does not constrain the record
+    /// (its first field is missing, null or empty).
+    fn key_of(&self, rec: &Fields) -> Option<String> {
+        let mut values = Vec::with_capacity(self.fields.len());
+        for (i, f) in self.fields.iter().enumerate() {
+            values.push(match rec.get(f) {
+                None | Some(J::Null) if i > 0 => J::from(""),
+                None | Some(J::Null) => return None,
+                Some(J::String(s)) if i == 0 && s.is_empty() => return None,
+                Some(v) => v.clone(),
+            });
+        }
+        Some(key_text(&values))
+    }
+
+    fn note(&mut self, id: &str, rec: &Fields) {
+        if let Some(key) = self.key_of(rec) {
+            let ids = self.ids.entry(key).or_default();
+            if !ids.iter().any(|i| i == id) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+}
+
+/// Values as one string that is equal for two lists exactly when the lists are equal as JSON,
+/// except for a float zero inside a list or an object (`[-0.0]` and `[0.0]` are equal as JSON
+/// and differ here). No typed kind can hold such a value (K37), and a unique field's value is
+/// not a list or an object; a duplicate of one inside a unit would be caught by the unique
+/// index at commit, not by the overlay.
+fn key_text(values: &[J]) -> String {
+    let mut out = String::new();
+    for v in values {
+        out.push_str(&match v {
+            // 0.0 and -0.0 are equal as numbers and differ as text.
+            J::Number(n) if n.as_f64() == Some(0.0) && !n.is_i64() && !n.is_u64() => {
+                "0.0".to_string()
+            }
+            other => other.to_string(),
+        });
+        out.push('\u{1f}');
+    }
+    out
+}
 
 /// What one change did to the overlay, so a part of the unit can be taken back (see `Mark`).
 struct Undo {
@@ -68,6 +137,11 @@ pub(crate) struct Unit<'a> {
     touched: Vec<Key>,
     cap: usize,
     undo: Vec<Undo>,
+    /// The overlay by the keys of the uniqueness rules asked about so far, by model.
+    keyed: RefCell<HashMap<String, Vec<Keyed>>>,
+    /// For the tests: the records of the unit that `find_unique` has looked at.
+    #[cfg(test)]
+    examined: std::cell::Cell<usize>,
 }
 
 impl<'a> Unit<'a> {
@@ -81,6 +155,22 @@ impl<'a> Unit<'a> {
             touched: Vec::new(),
             cap: MAX_EFFECT_RECORDS,
             undo: Vec::new(),
+            keyed: RefCell::new(HashMap::new()),
+            #[cfg(test)]
+            examined: std::cell::Cell::new(0),
+        }
+    }
+
+    /// The record at `key` was just written to the overlay: list it under its key in each rule
+    /// that is being asked about.
+    fn note_keyed(&mut self, key: &Key) {
+        let Some(Some(rec)) = self.overlay.get(key) else {
+            return;
+        };
+        if let Some(rules) = self.keyed.get_mut().get_mut(&key.0) {
+            for rule in rules {
+                rule.note(&key.1, rec);
+            }
         }
     }
 
@@ -115,7 +205,9 @@ impl<'a> Unit<'a> {
                     self.overlay.remove(&u.key);
                 }
                 Some(prev) => {
-                    self.overlay.insert(u.key, prev);
+                    self.overlay.insert(u.key.clone(), prev);
+                    // The record is back as it was: list it under that key again.
+                    self.note_keyed(&u.key);
                 }
             }
         }
@@ -175,6 +267,7 @@ impl<'a> Unit<'a> {
             .entry(model.to_string())
             .or_default()
             .push(id.to_string());
+        self.note_keyed(&key);
         self.touched.push(key);
         Ok(())
     }
@@ -198,6 +291,7 @@ impl<'a> Unit<'a> {
             before,
             inserted: false,
         });
+        self.note_keyed(&key);
         self.touched.push(key);
         Ok(())
     }
@@ -265,6 +359,56 @@ impl Reads for Unit<'_> {
                 && !out.iter().any(|(i, _)| i == id)
             {
                 out.push((id.clone(), f.clone()));
+            }
+        }
+        Ok(out)
+    }
+
+    fn find_unique(&self, model: &str, fields: &[&str], values: &[J]) -> R<Vec<(String, Fields)>> {
+        // What is stored and the unit has not touched counts as it is stored. A stored record the
+        // unit changed or deleted is judged by the unit's version, found below.
+        let mut out: Vec<(String, Fields)> = Vec::new();
+        for (id, f) in self.backend.find_unique(model, fields, values)? {
+            if !self.overlay.contains_key(&(model.to_string(), id.clone())) {
+                out.push((id, f));
+            }
+        }
+        // The unit's own records with that key: from the rule's list, built from the overlay the
+        // first time the rule is asked about and kept up to date by every later write.
+        let key = key_text(values);
+        let candidates: Vec<String> = {
+            let mut by_model = self.keyed.borrow_mut();
+            let rules = by_model.entry(model.to_string()).or_default();
+            let at = match rules.iter().position(|r| r.fields == fields) {
+                Some(at) => at,
+                None => {
+                    let mut rule = Keyed {
+                        fields: fields.iter().map(|f| (*f).to_string()).collect(),
+                        ids: HashMap::new(),
+                    };
+                    for ((m, id), slot) in &self.overlay {
+                        #[cfg(test)]
+                        self.examined.set(self.examined.get() + 1);
+                        if m == model
+                            && let Some(rec) = slot
+                        {
+                            rule.note(id, rec);
+                        }
+                    }
+                    rules.push(rule);
+                    rules.len() - 1
+                }
+            };
+            rules[at].ids.get(&key).cloned().unwrap_or_default()
+        };
+        for id in candidates {
+            #[cfg(test)]
+            self.examined.set(self.examined.get() + 1);
+            if let Some(Some(rec)) = self.overlay.get(&(model.to_string(), id.clone()))
+                && unique_matches(rec, fields, values)
+                && !out.iter().any(|(i, _)| *i == id)
+            {
+                out.push((id, rec.clone()));
             }
         }
         Ok(out)
@@ -344,6 +488,135 @@ mod tests {
         }
         let e = u.insert("t", "over", Fields::new()).unwrap_err();
         assert!(e.contains("more than 500 records"), "{e}");
+    }
+
+    // The lookup of a uniqueness rule through the unit (D57, ask 11.4).
+    fn two(code: &str, scope: Option<&str>) -> Fields {
+        let mut m = f("code", J::from(code));
+        if let Some(s) = scope {
+            m.insert("scope".into(), J::from(s));
+        }
+        m
+    }
+
+    fn ask(u: &Unit<'_>, code: &str, scope: &str) -> Vec<String> {
+        let mut ids: Vec<String> =
+            Reads::find_unique(u, "t", &["code", "scope"], &[J::from(code), J::from(scope)])
+                .unwrap()
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect();
+        ids.sort();
+        ids
+    }
+
+    #[test]
+    fn find_unique_sees_the_units_writes_and_not_what_they_replaced() {
+        for url in ["memory:", "sqlite::memory:"] {
+            let b = obop_storage::open(url).unwrap();
+            b.ensure_unique("obop_uq_t_code_scope", "t", &["code", "scope"])
+                .unwrap();
+            b.insert("t", "stored", &two("A", Some("x"))).unwrap();
+            b.insert("t", "bare", &two("A", None)).unwrap();
+            b.insert("t", "gone", &two("G", Some("x"))).unwrap();
+            let mut u = Unit::new(&*b);
+            // Stored and untouched; a missing scope is the empty text.
+            assert_eq!(ask(&u, "A", "x"), ["stored"], "{url}");
+            assert_eq!(ask(&u, "A", ""), ["bare"], "{url}");
+            assert!(ask(&u, "A", "y").is_empty(), "{url}");
+            // Added by the unit, with and without a scope.
+            u.insert("t", "new", two("N", Some("x"))).unwrap();
+            u.insert("t", "newbare", two("N", None)).unwrap();
+            assert_eq!(ask(&u, "N", "x"), ["new"], "{url}");
+            assert_eq!(ask(&u, "N", ""), ["newbare"], "{url}");
+            // A stored record the unit changed is found under its new key and not its old one.
+            u.merge("t", "stored", f("code", J::from("B"))).unwrap();
+            assert!(ask(&u, "A", "x").is_empty(), "{url}");
+            assert_eq!(ask(&u, "B", "x"), ["stored"], "{url}");
+            // A scope that becomes empty again.
+            u.merge("t", "new", f("scope", J::Null)).unwrap();
+            assert!(ask(&u, "N", "x").is_empty(), "{url}");
+            assert_eq!(ask(&u, "N", ""), ["new", "newbare"], "{url}");
+            // A stored record the unit deleted is not there.
+            u.delete("t", "gone").unwrap();
+            assert!(ask(&u, "G", "x").is_empty(), "{url}");
+            // Zero has two spellings as a float, equal as numbers: the unit's key text makes them
+            // one, as `unique_matches` does, and keeps them apart from the integer 0. (No typed
+            // kind holds a float, K37; this keeps a record that bypassed validation from being
+            // missed inside a unit.)
+            let mut z = two("", Some("x"));
+            z.insert("code".into(), J::from(-0.0));
+            u.insert("t", "negzero", z).unwrap();
+            for probe in [J::from(0.0), J::from(-0.0)] {
+                assert_eq!(ask_value(&u, probe.clone()), ["negzero"], "{url} {probe}");
+            }
+            assert!(ask_value(&u, J::from(0)).is_empty(), "{url}");
+            // Nothing was written: the store still has the old keys.
+            assert_eq!(ask_plain(&*b, "A", "x"), ["stored"], "{url}");
+            assert_eq!(ask_plain(&*b, "G", "x"), ["gone"], "{url}");
+        }
+    }
+
+    /// The ids a lookup of `code` (any JSON value) under the scope `"x"` finds in the unit.
+    fn ask_value(u: &Unit<'_>, code: J) -> Vec<String> {
+        let mut ids: Vec<String> =
+            Reads::find_unique(u, "t", &["code", "scope"], &[code, J::from("x")])
+                .unwrap()
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect();
+        ids.sort();
+        ids
+    }
+
+    fn ask_plain(b: &dyn Backend, code: &str, scope: &str) -> Vec<String> {
+        Plain(b)
+            .find_unique("t", &["code", "scope"], &[J::from(code), J::from(scope)])
+            .unwrap()
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    #[test]
+    fn find_unique_follows_a_rewind_in_both_directions() {
+        let b = obop_storage::open("sqlite::memory:").unwrap();
+        let mut u = Unit::new(&*b);
+        u.insert("t", "a", two("K0", Some("x"))).unwrap();
+        let mark = u.mark();
+        // The first question comes after the change, so the list is built from the changed record
+        // and has never seen the key it had before.
+        u.merge("t", "a", f("code", J::from("K1"))).unwrap();
+        u.insert("t", "dropped", two("D", Some("x"))).unwrap();
+        assert_eq!(ask(&u, "K1", "x"), ["a"]);
+        assert_eq!(ask(&u, "D", "x"), ["dropped"]);
+        u.rewind(mark);
+        // The record is as it was: found under the old key, and a stale entry does not show.
+        assert_eq!(ask(&u, "K0", "x"), ["a"]);
+        assert!(ask(&u, "K1", "x").is_empty());
+        assert!(ask(&u, "D", "x").is_empty());
+        // And a new write after the rewind is found too.
+        u.insert("t", "later", two("D", Some("x"))).unwrap();
+        assert_eq!(ask(&u, "D", "x"), ["later"]);
+    }
+
+    #[test]
+    fn find_unique_does_not_look_at_every_record_of_the_unit() {
+        // 2,000 rows in one unit, each asked about twice: the list answers by key.
+        let b = obop_storage::open("sqlite::memory:").unwrap();
+        let mut u = Unit::with_cap(&*b, 5000);
+        for i in 0..2000 {
+            let code = format!("C{i}");
+            assert!(ask(&u, &code, "x").is_empty());
+            u.insert("t", &format!("r{i}"), two(&code, Some("x")))
+                .unwrap();
+            assert_eq!(ask(&u, &code, "x"), [format!("r{i}")]);
+        }
+        assert_eq!(ask(&u, "C1999", "x"), ["r1999"]);
+        // Count, not time: 4,001 questions looked at 2,000 candidates (one for each question
+        // that had an answer) and at no other record of the unit. A scan of the unit for each
+        // question would have looked at about 4 million.
+        assert_eq!(u.examined.get(), 2001);
     }
 
     // Rewinding a unit (D70).

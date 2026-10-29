@@ -18,8 +18,9 @@ webpki-roots = "1"
 tokio = { version = "1", default-features = false }
 
 [features]
-# The `testing` module (a backend that refuses calls like a full pool). Never enabled in a
-# release build: crates that use it enable it in their dev-dependencies.
+# The `testing` module (a backend that refuses calls like a full pool, and the counts of how
+# `find_unique` ran). Never enabled in a release build: crates that use it enable it in their
+# dev-dependencies.
 test-support = []
 
 [lints]

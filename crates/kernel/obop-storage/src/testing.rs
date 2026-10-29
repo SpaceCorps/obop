@@ -23,6 +23,53 @@ pub fn time_budget(secs: u64) -> std::time::Duration {
     std::time::Duration::from_secs_f64(secs as f64 * factor)
 }
 
+// ---- which way the lookup of a unique rule went --------------------------------------------
+
+/// What [`Backend::find_unique`] did on this thread: how often it ran its keyed statement, how
+/// often it went the way of the default (`find` and the exact rule), the work SQLite did for the
+/// keyed statements, and the text of the last keyed statement.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct UniqueRuns {
+    /// Lookups answered by the statement built from the index text.
+    pub keyed: u64,
+    /// Lookups answered by `find` and the exact rule (a value without exact text, or a name the
+    /// index cannot carry).
+    pub fallback: u64,
+    /// SQLite only: the virtual machine steps (`SQLITE_STMTSTATUS_VM_STEP`) the keyed statements
+    /// took, summed. Work that does not depend on the clock: a statement that reads the whole
+    /// model takes a number of steps in proportion to the model, one that uses the index does not.
+    pub vm_steps: u64,
+    /// The text of the keyed statement that ran last.
+    pub last_sql: Option<String>,
+}
+
+thread_local! {
+    static UNIQUE_RUNS: std::cell::RefCell<UniqueRuns> = std::cell::RefCell::new(UniqueRuns::default());
+}
+
+/// The runs of `find_unique` on this thread since it started or since [`reset_unique_runs`].
+pub fn unique_runs() -> UniqueRuns {
+    UNIQUE_RUNS.with(|r| r.borrow().clone())
+}
+
+/// Set the count of [`unique_runs`] for this thread to zero.
+pub fn reset_unique_runs() {
+    UNIQUE_RUNS.with(|r| *r.borrow_mut() = UniqueRuns::default());
+}
+
+pub(crate) fn note_keyed(sql: &str, vm_steps: i32) {
+    UNIQUE_RUNS.with(|r| {
+        let mut r = r.borrow_mut();
+        r.keyed += 1;
+        r.vm_steps += u64::try_from(vm_steps).unwrap_or_default();
+        r.last_sql = Some(sql.to_string());
+    });
+}
+
+pub(crate) fn note_fallback() {
+    UNIQUE_RUNS.with(|r| r.borrow_mut().fallback += 1);
+}
+
 /// Which calls are refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -93,10 +140,37 @@ pub struct Flaky {
     insert_error: std::sync::Mutex<Option<(String, String)>>,
     /// The batches that reached `apply_tracked`: see [`Flaky::seen_writes`].
     seen: std::sync::Mutex<Vec<SeenWrite>>,
+    /// See [`Flaky::reads`].
+    reads: std::sync::Mutex<Reads>,
+    /// Run once, right before the next atomic batch is applied.
+    before_apply: std::sync::Mutex<Option<AfterInsert>>,
 }
 
 /// A batch as `apply_tracked` received it: the context, the steps and the tracked models.
 pub type SeenWrite = (WriteCtx, Vec<Op>, Vec<String>);
+
+/// What the layers above read through a [`Flaky`]: how often each way of reading a model was
+/// used and how many records it handed back. A scan of the model by `list`, `scan` or `find`
+/// shows as rows; a keyed lookup shows as the few rows it returns. See [`Flaky::reads`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Reads {
+    /// Calls of `get`.
+    pub gets: u64,
+    /// Calls of `list` and the records they returned.
+    pub lists: u64,
+    pub list_rows: u64,
+    /// Calls of `scan` and the records visited.
+    pub scans: u64,
+    pub scan_rows: u64,
+    /// Calls of `find` (one field, which the databases answer by reading the model unless an
+    /// index happens to serve it) and the records returned.
+    pub finds: u64,
+    pub find_rows: u64,
+    /// Calls of `find_unique` (the lookup that uses the unique index of a rule) and the records
+    /// returned.
+    pub keyed: u64,
+    pub keyed_rows: u64,
+}
 
 /// What [`Flaky::after_the_next_insert_into`] runs, with the wrapped backend.
 pub type AfterInsert = Box<dyn FnOnce(&dyn Backend) + Send>;
@@ -124,6 +198,8 @@ impl Flaky {
             after_get: std::sync::Mutex::new(None),
             insert_error: std::sync::Mutex::new(None),
             seen: std::sync::Mutex::new(Vec::new()),
+            reads: std::sync::Mutex::new(Reads::default()),
+            before_apply: std::sync::Mutex::new(None),
         })
     }
 
@@ -158,6 +234,16 @@ impl Flaky {
         self.seen.lock().unwrap().clone()
     }
 
+    /// What has been read through this backend since it was made or since [`Flaky::reset_reads`].
+    pub fn reads(&self) -> Reads {
+        *self.reads.lock().unwrap()
+    }
+
+    /// Start the count of [`Flaky::reads`] again from zero.
+    pub fn reset_reads(&self) {
+        *self.reads.lock().unwrap() = Reads::default();
+    }
+
     /// How many calls were refused so far.
     pub fn refused(&self) -> i64 {
         self.refused.load(SeqCst)
@@ -185,6 +271,20 @@ impl Flaky {
         self.run_len.store(0, SeqCst);
         self.vanish.store(false, SeqCst);
         self.lose_ack.store(-1, SeqCst);
+    }
+
+    /// Run `then` once, with the wrapped backend, right before the next atomic batch (`apply`,
+    /// `apply_checked`) is applied: another process committing between the check of a command and
+    /// its commit, with no thread and no sleep.
+    pub fn before_the_next_apply(&self, then: AfterInsert) {
+        *self.before_apply.lock().unwrap() = Some(then);
+    }
+
+    fn run_before_apply(&self) {
+        let hook = self.before_apply.lock().unwrap().take();
+        if let Some(f) = hook {
+            f(&*self.inner);
+        }
     }
 
     /// Run `then` once, right after the next successful insert into `model`.
@@ -399,6 +499,7 @@ impl Backend for Flaky {
     }
     fn get(&self, model: &str, id: &str) -> Result<Option<Fields>> {
         self.gate_m(false, model)?;
+        self.reads.lock().unwrap().gets += 1;
         let found = self.inner.get(model, id)?;
         let hook = {
             let mut g = self.after_get.lock().unwrap();
@@ -421,7 +522,11 @@ impl Backend for Flaky {
     }
     fn list(&self, model: &str) -> Result<Vec<(String, Fields)>> {
         self.gate_m(false, model)?;
-        self.inner.list(model)
+        let rows = self.inner.list(model)?;
+        let mut r = self.reads.lock().unwrap();
+        r.lists += 1;
+        r.list_rows += rows.len() as u64;
+        Ok(rows)
     }
     fn scan(
         &self,
@@ -429,7 +534,11 @@ impl Backend for Flaky {
         visit: &mut dyn FnMut(&str, &Fields) -> Result<bool>,
     ) -> Result<()> {
         self.gate_m(false, model)?;
-        self.inner.scan(model, visit)
+        self.reads.lock().unwrap().scans += 1;
+        self.inner.scan(model, &mut |id, f| {
+            self.reads.lock().unwrap().scan_rows += 1;
+            visit(id, f)
+        })
     }
     fn update(&self, model: &str, id: &str, patch: &Fields) -> Result<bool> {
         self.gate_u(model)?;
@@ -462,10 +571,12 @@ impl Backend for Flaky {
     }
     fn apply(&self, ops: &[Op]) -> Result<()> {
         self.gate_apply()?;
+        self.run_before_apply();
         self.inner.apply(ops)
     }
     fn apply_checked(&self, ops: &[Op]) -> std::result::Result<(), ApplyError> {
         self.gate_apply().map_err(ApplyError::Storage)?;
+        self.run_before_apply();
         self.inner.apply_checked(ops)
     }
     fn apply_ctx(&self, ctx: &WriteCtx, ops: &[Op]) -> std::result::Result<(), ApplyError> {
@@ -535,7 +646,24 @@ impl Backend for Flaky {
     }
     fn find(&self, model: &str, field: &str, value: &J) -> Result<Vec<(String, Fields)>> {
         self.gate_m(false, model)?;
-        self.inner.find(model, field, value)
+        let rows = self.inner.find(model, field, value)?;
+        let mut r = self.reads.lock().unwrap();
+        r.finds += 1;
+        r.find_rows += rows.len() as u64;
+        Ok(rows)
+    }
+    fn find_unique(
+        &self,
+        model: &str,
+        fields: &[&str],
+        values: &[J],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.gate_m(false, model)?;
+        let rows = self.inner.find_unique(model, fields, values)?;
+        let mut r = self.reads.lock().unwrap();
+        r.keyed += 1;
+        r.keyed_rows += rows.len() as u64;
+        Ok(rows)
     }
     fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
         self.gate(true)?;

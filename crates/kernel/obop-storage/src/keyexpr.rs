@@ -203,6 +203,26 @@ pub fn id_pk(alias: Option<&str>) -> Result<String> {
     Ok(format!("{}id", prefix(alias)?))
 }
 
+/// One column of the unique index of a D57 rule (`unique`, `unique_with`) on PostgreSQL, and of
+/// the lookup that must use it ([`crate::Backend::find_unique`]): `position` 0 is the field the
+/// rule is about, where the empty text is no value (`NULLIF`), the others are its scope, where a
+/// missing field and the empty text are the same value (`COALESCE`). The index is
+/// `(<column 0>, <column 1>, ...) WHERE model = '<model>'`.
+///
+/// This is not a typed slot: it compares the text of whatever the JSON holds (`data ->> 'f'`), as
+/// the index has since D57, and **its text must stay byte for byte as deployed databases hold it**:
+/// a lookup written with another text is not served by the index those databases have, and scans.
+/// The test `unique_columns_are_golden` pins it. It is outside the digest of [`EXPR_VERSION`] for
+/// that reason: a new text here is a migration of every deployed index, not a version bump.
+pub fn unique_column(position: usize, field: &str) -> Result<String> {
+    let f = crate::ident(field)?;
+    Ok(if position == 0 {
+        format!("(NULLIF(data ->> '{f}', ''))")
+    } else {
+        format!("(COALESCE(data ->> '{f}', ''))")
+    })
+}
+
 /// The SQL expression of `slot` over `field` of the document `data` (of the table `alias`, when
 /// given). `Slot::SelPos` has its own function ([`select_pos`]); `Slot::Id` takes the field
 /// `id`. The result is parenthesised, so it can be put in any position, including an index.
@@ -378,6 +398,29 @@ mod tests {
         );
     }
 
+    /// The unique-index columns as deployed databases hold them since D57. If this fails, a
+    /// deployed index no longer serves the lookup of `find_unique`: do not edit the strings.
+    #[test]
+    fn unique_columns_are_golden() {
+        assert_eq!(
+            unique_column(0, "sku").unwrap(),
+            "(NULLIF(data ->> 'sku', ''))"
+        );
+        assert_eq!(
+            unique_column(1, "company").unwrap(),
+            "(COALESCE(data ->> 'company', ''))"
+        );
+        assert_eq!(
+            unique_column(7, "a_1").unwrap(),
+            "(COALESCE(data ->> 'a_1', ''))"
+        );
+        for bad in ["", "A", "a b", "a'b", "a;b", "é", "a) OR (1=1"] {
+            assert!(unique_column(0, bad).is_err(), "{bad:?}");
+            assert!(unique_column(1, bad).is_err(), "{bad:?}");
+        }
+        assert!(unique_column(0, &"x".repeat(65)).is_err());
+    }
+
     #[test]
     fn expressions_are_golden_for_the_simple_slots() {
         assert_eq!(
@@ -547,6 +590,11 @@ mod tests {
             "kernel/obop-commands/src/keyexpr_parity.rs",
             "the parity harness writes the earlier wrong expressions on purpose",
         ),
+        (
+            "kernel/obop-storage/src/unique_tests.rs",
+            "pins the text of the unique index and of its lookup as a second spelling, the earlier \
+             `find` statement as the control of the plan test, and what the catalogue prints",
+        ),
     ];
 
     /// Older code that still takes a field out of a document itself, by path (relative to
@@ -574,16 +622,6 @@ mod tests {
             "kernel/obop-storage/src/pg.rs",
             "data->$2::text=$3",
             "Pg::find, converted to the slots by the index and keyset work (D78)",
-        ),
-        (
-            "kernel/obop-storage/src/pg.rs",
-            "NULLIF(data->>'{f}','')",
-            "the D57 unique index; its text must stay as deployed databases hold it",
-        ),
-        (
-            "kernel/obop-storage/src/pg.rs",
-            "COALESCE(data->>'{f}','')",
-            "the D57 unique index; its text must stay as deployed databases hold it",
         ),
         (
             "kernel/obop-storage/src/pg.rs",

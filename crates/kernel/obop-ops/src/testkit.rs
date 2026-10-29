@@ -187,6 +187,15 @@ impl Backend for Flaky {
         self.refused(model)?;
         self.inner.find(model, field, value)
     }
+    fn find_unique(
+        &self,
+        model: &str,
+        fields: &[&str],
+        values: &[J],
+    ) -> Result<Vec<(String, Fields)>> {
+        self.refused(model)?;
+        self.inner.find_unique(model, fields, values)
+    }
     fn kind(&self) -> &'static str {
         self.inner.kind()
     }

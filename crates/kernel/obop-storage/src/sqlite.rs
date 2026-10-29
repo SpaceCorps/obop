@@ -132,6 +132,74 @@ fn e(err: rusqlite::Error) -> String {
     err.to_string()
 }
 
+/// The columns of the unique index of a D57 rule, one per field, in the order of `fields`: the
+/// first is the field the rule is about (the empty text is no value), the others its scope (a
+/// missing field and the empty text are the same). The one place both the index and the lookup
+/// that must use it take them from, so they cannot drift.
+fn unique_columns(fields: &[&str]) -> Result<Vec<String>> {
+    if fields.is_empty() {
+        return Err("a unique rule needs at least one field".to_string());
+    }
+    fields
+        .iter()
+        .enumerate()
+        .map(|(i, f)| {
+            let f = ident(f)?;
+            Ok(if i == 0 {
+                format!("NULLIF(json_extract(data, '$.{f}'), '')")
+            } else {
+                format!("COALESCE(json_extract(data, '$.{f}'), '')")
+            })
+        })
+        .collect()
+}
+
+/// The statement that makes the unique index of `fields` on `model`. Its text is what deployed
+/// databases were given by every version since D57.
+pub(crate) fn unique_index_sql(name: &str, model: &str, fields: &[&str]) -> Result<String> {
+    let model = ident(model)?;
+    Ok(format!(
+        "CREATE UNIQUE INDEX IF NOT EXISTS {name} ON obop_record ({}) WHERE model = '{model}'",
+        unique_columns(fields)?.join(", ")
+    ))
+}
+
+/// The statement of [`Backend::find_unique`]: the same columns, each compared with a bound value,
+/// and the same `model = '...'` as the partial index, so SQLite can use the index. The model is a
+/// validated literal, never a parameter: a literal is the predicate of the index whatever the
+/// version of SQLite and however it treats a parameter, so the plan never depends on that.
+pub(crate) fn unique_lookup_sql(model: &str, fields: &[&str]) -> Result<String> {
+    let model = ident(model)?;
+    let tests: Vec<String> = unique_columns(fields)?
+        .iter()
+        .enumerate()
+        .map(|(i, column)| format!("{column} = ?{}", i + 1))
+        .collect();
+    Ok(format!(
+        "SELECT id, data FROM obop_record WHERE model = '{model}' AND {} ORDER BY seq",
+        tests.join(" AND ")
+    ))
+}
+
+/// The values of a lookup as SQLite compares them with `json_extract`: text for a string, an
+/// integer for an integer and for a boolean (`json_extract` gives 1 and 0 for them); `None` for
+/// anything else, and for an empty first value, which the index treats as no value at all.
+fn unique_binds(values: &[J]) -> Option<Vec<rusqlite::types::Value>> {
+    use rusqlite::types::Value as Sql;
+    if matches!(values.first(), Some(J::String(s)) if s.is_empty()) {
+        return None;
+    }
+    values
+        .iter()
+        .map(|v| match v {
+            J::String(s) => Some(Sql::Text(s.clone())),
+            J::Number(n) => n.as_i64().map(Sql::Integer),
+            J::Bool(b) => Some(Sql::Integer(i64::from(*b))),
+            _ => None,
+        })
+        .collect()
+}
+
 impl Sqlite {
     pub(crate) fn open(path: &str) -> Result<Self> {
         Self::open_with_clock(path, Clock::system())
@@ -164,6 +232,14 @@ impl Sqlite {
             locks: Arc::default(),
             clock,
         })
+    }
+}
+
+#[cfg(test)]
+impl Sqlite {
+    /// Run `f` on the connection (for a test that asks SQLite itself, such as a query plan).
+    pub(crate) fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> T) -> T {
+        f(&self.conn.lock().unwrap())
     }
 }
 
@@ -491,24 +567,59 @@ impl Backend for Sqlite {
         }
         Ok(out)
     }
-    fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
-        let (name, model) = (ident(name)?, ident(model)?);
-        let mut cols = Vec::new();
-        for (i, f) in fields.iter().enumerate() {
-            let f = ident(f)?;
-            cols.push(if i == 0 {
-                format!("NULLIF(json_extract(data, '$.{f}'), '')")
-            } else {
-                format!("COALESCE(json_extract(data, '$.{f}'), '')")
-            });
+    fn find_unique(
+        &self,
+        model: &str,
+        fields: &[&str],
+        values: &[J],
+    ) -> Result<Vec<(String, Fields)>> {
+        unique_head(fields, values)?;
+        // A value SQLite cannot compare exactly (a fraction, a list, an object, an empty first
+        // value) or a name the index cannot carry goes the way of the default, the same answer.
+        let keyed = match (unique_lookup_sql(model, fields), unique_binds(values)) {
+            (Ok(sql), Some(binds)) => Some((sql, binds)),
+            _ => None,
+        };
+        let Some((sql, binds)) = keyed else {
+            #[cfg(any(test, feature = "test-support"))]
+            crate::testing::note_fallback();
+            let (field, value) = unique_head(fields, values)?;
+            return Ok(self
+                .find(model, field, value)?
+                .into_iter()
+                .filter(|(_, rec)| unique_matches(rec, fields, values))
+                .collect());
+        };
+        let g = self.conn.lock().unwrap();
+        let mut st = g.prepare_cached(&sql).map_err(e)?;
+        #[cfg(any(test, feature = "test-support"))]
+        st.reset_status(rusqlite::StatementStatus::VmStep);
+        let rows = st
+            .query_map(rusqlite::params_from_iter(binds), |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })
+            .map_err(e)?;
+        // SQLite compares a bound integer with a stored integer, real or boolean (`1` is `true`,
+        // `5.0` is `5`) and a bound text with a stored text; the candidates are then held to the
+        // exact rule of `unique_matches`.
+        let mut out = Vec::new();
+        for r in rows {
+            let (id, data) = r.map_err(e)?;
+            let rec = parse(&data)?;
+            if unique_matches(&rec, fields, values) {
+                out.push((id, rec));
+            }
         }
+        #[cfg(any(test, feature = "test-support"))]
+        crate::testing::note_keyed(&sql, st.get_status(rusqlite::StatementStatus::VmStep));
+        Ok(out)
+    }
+    fn ensure_unique(&self, name: &str, model: &str, fields: &[&str]) -> Result<()> {
+        let sql = unique_index_sql(ident(name)?, model, fields)?;
         self.conn
             .lock()
             .unwrap()
-            .execute_batch(&format!(
-                "CREATE UNIQUE INDEX IF NOT EXISTS {name} ON obop_record ({}) WHERE model = '{model}'",
-                cols.join(", ")
-            ))
+            .execute_batch(&sql)
             .map_err(|e| e.to_string())
     }
     fn kind(&self) -> &'static str {
