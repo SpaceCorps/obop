@@ -1,5 +1,6 @@
 import type { SqlDb, SqlTx, SqlValue } from "./sql.ts";
 import { TripAlreadyActive, type OutboxStore, type TripPatch } from "./store.ts";
+import { keepFix, RECORDING_THINNING, type Anchor, type Thinning } from "./thin.ts";
 import {
   MAX_POINTS_PER_TRIP,
   PURPOSES,
@@ -225,8 +226,14 @@ async function clearActive(tx: SqlTx, clientTripId: string): Promise<void> {
   if ((await getMeta(tx, ACTIVE)) === clientTripId) await setMeta(tx, ACTIVE, null);
 }
 
-/** The outbox over a SQL database. Run `migrate` on the database first. */
-export function createSqlStore(db: SqlDb): OutboxStore {
+/**
+ * The outbox over a SQL database. Run `migrate` on the database first. `thinning` decides which
+ * of the fixes that come close together are stored (`thin.ts`); `null` stores every fix.
+ */
+export function createSqlStore(
+  db: SqlDb,
+  { thinning = RECORDING_THINNING }: { thinning?: Thinning | null } = {},
+): OutboxStore {
   return {
     async startTrip({ clientTripId, purpose, startedAt, nowMs }) {
       return db.transaction(async (tx) => {
@@ -278,12 +285,17 @@ export function createSqlStore(db: SqlDb): OutboxStore {
       return db.transaction(async (tx) => {
         const trip = await tripOf(tx, clientTripId);
         if (!trip || trip.stopRequested || trip.discardReason !== null) return 0;
-        const last = await tx.one<{ seq: number; t: number }>(
-          "SELECT seq, t FROM point WHERE client_trip_id = ? ORDER BY seq DESC LIMIT 1",
+        const last = await tx.one<{ seq: number; t: number; lat: string; lon: string }>(
+          "SELECT seq, t, lat, lon FROM point WHERE client_trip_id = ? ORDER BY seq DESC LIMIT 1",
           [clientTripId],
         );
         let seq = (last?.seq ?? 0) + 1;
         let lastT = last?.t ?? Number.NEGATIVE_INFINITY;
+        // The last stored fix, for the thinning: read in the same transaction, so that two runs of
+        // the location task cannot both find the same one.
+        let anchor: Anchor | null = last
+          ? { t: last.t, lat: Number(last.lat), lon: Number(last.lon) }
+          : null;
         // A cached position from before the trip is not part of it (see STALE_FIX_MS).
         const startedMs = Date.parse(trip.startedAt ?? "");
         const notBefore = Number.isFinite(startedMs)
@@ -293,6 +305,12 @@ export function createSqlStore(db: SqlDb): OutboxStore {
         const ordered: NewFix[] = [...fixes].sort((a, b) => a.t - b.t);
         for (const fix of ordered) {
           if (!plausible(fix) || fix.t <= lastT || fix.t < notBefore) continue;
+          if (
+            thinning !== null &&
+            !keepFix(anchor, { t: fix.t, lat: fix.lat, lon: fix.lon }, thinning)
+          ) {
+            continue;
+          }
           if (seq > MAX_POINTS_PER_TRIP) break;
           const p = toStored(seq, fix);
           await tx.run(
@@ -300,6 +318,7 @@ export function createSqlStore(db: SqlDb): OutboxStore {
             [clientTripId, p.seq, p.t, p.lat, p.lon, p.accuracyM, p.speedMps],
           );
           lastT = fix.t;
+          anchor = { t: fix.t, lat: fix.lat, lon: fix.lon };
           seq++;
           stored++;
         }

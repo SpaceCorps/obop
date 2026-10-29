@@ -95,4 +95,21 @@ describe("texts", () => {
       false,
     );
   });
+
+  test("a negative accuracy is how CoreLocation says the position is not valid, so it is not stored", () => {
+    const at = (accuracyM: number | null) => ({
+      t: 0,
+      lat: 52,
+      lon: 13,
+      accuracyM,
+      speedMps: null,
+    });
+    expect(plausible(at(-1))).toBe(false);
+    expect(plausible(at(-0.01))).toBe(false);
+    // A zero, a small radius, a wide one and no accuracy at all are positions.
+    expect(plausible(at(0))).toBe(true);
+    expect(plausible(at(4.5))).toBe(true);
+    expect(plausible(at(2000))).toBe(true);
+    expect(plausible(at(null))).toBe(true);
+  });
 });

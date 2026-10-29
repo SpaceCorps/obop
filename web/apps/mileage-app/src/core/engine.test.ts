@@ -104,9 +104,10 @@ describe("the local store", () => {
   test("a trip holds at most 20,000 points; the rest is dropped", async () => {
     const { store } = await rig();
     await start(store);
+    // 5 seconds apart, as Android delivers them: closer fixes are thinned out (`thin.ts`).
     const many = (from: number, n: number): NewFix[] =>
       Array.from({ length: n }, (_, i) => ({
-        t: T0 + (from + i) * 1000,
+        t: T0 + (from + i) * 5000,
         lat: 52 + ((from + i) % 1000) * 0.00001,
         lon: 13,
         accuracyM: 5,
@@ -149,7 +150,7 @@ describe("the local store", () => {
     await start(store);
     await store.appendFixes("c1", [
       { t: T0, lat: 52.1, lon: 13.1, accuracyM: null, speedMps: -1 },
-      { t: T0 + 1000, lat: 52.1, lon: 13.1, accuracyM: Number.NaN, speedMps: null },
+      { t: T0 + 5000, lat: 52.1, lon: 13.1, accuracyM: Number.NaN, speedMps: null },
     ]);
     const points = await store.points("c1");
     expect(points.map((p) => [p.accuracyM, p.speedMps])).toEqual([
