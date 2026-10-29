@@ -161,6 +161,17 @@ final class MileageDrive: XCTestCase {
     print("SIGNIN-SCREEN-SHOWN")
   }
 
+  /// After `xcrun simctl keychain UDID reset` and a sign-in: the app replaced the database file that
+  /// no key fitted and says so on Home (docs/spec/mobile.md 8.8). Run as `test01_SignIn,test11_ExpectRestoredBanner`.
+  func test11_ExpectRestoredBanner() {
+    app.activate()
+    waitFor(app.buttons["start"], 20, "Home")
+    let banner = app.descendants(matching: .any).matching(identifier: "restored-banner").firstMatch
+    waitFor(banner, 10, "the notice about the replaced database file")
+    shot("restored-banner")
+    print("RESTORED-BANNER-SHOWN")
+  }
+
   func test02_Start() {
     app.activate()
     waitFor(app.buttons["start"], 20, "Home")
