@@ -144,6 +144,8 @@ pub(crate) fn declared_fields(
 
 /// Check one non-null value against its field kind (D47). Tokens are already restored by the
 /// dispatcher, so this always sees real values.
+/// The only caller is the public site's submission (D90): the visitor typed every value, so a
+/// limit refusal may state its length or number (`true`); nothing here is read from a record.
 fn check_value(
     store: &Store,
     pending: &[(String, String)],
@@ -154,10 +156,10 @@ fn check_value(
     let (name, kind) = (f.name, &f.kind);
     match (kind, v) {
         (FieldKind::Text | FieldKind::LongText, Value::Text(s)) => {
-            crate::kinds::check_text_limits(model, f, s)
+            crate::kinds::check_text_limits(model, f, s, true)
         }
         (FieldKind::Number | FieldKind::Money, Value::Int(n)) => {
-            crate::kinds::check_int_limits(model, f, *n)
+            crate::kinds::check_int_limits(model, f, *n, true)
         }
         (FieldKind::Bool, Value::Bool(_)) => Ok(()),
         (FieldKind::Image(_) | FieldKind::File(_), Value::Text(id)) => {
@@ -167,7 +169,7 @@ fn check_value(
         (FieldKind::Decimal { .. } | FieldKind::Datetime, Value::Text(t)) => {
             crate::kinds::check_canonical(model, name, kind, t)?;
             if matches!(kind, FieldKind::Decimal { .. }) {
-                crate::kinds::check_decimal_limits(model, f, t)?;
+                crate::kinds::check_decimal_limits(model, f, t, true)?;
             }
             Ok(())
         }

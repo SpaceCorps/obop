@@ -9,10 +9,11 @@
 
 use super::access::{Gate, creator_blocked};
 use super::computed::Computer;
-use super::crud::{check_fields, check_fields_against, default_governed, own_default};
+use super::crud::{check_effect_fields, default_governed, own_default};
 use super::seq;
 use super::unit::{R, Reads, Unit};
 use super::{Actor, Engine, civil};
+use crate::errors;
 use crate::kinds::{self, Path};
 use crate::locale;
 use obop_registry::rules::{MAX_EFFECT_DEPTH, MAX_EFFECT_RECORDS};
@@ -254,12 +255,15 @@ impl Runner<'_> {
                     if obop_storage::fault::Fault::is_transient(&m) {
                         return m;
                     }
-                    format!(
-                        "{}.{}: effect {} ({}) failed, nothing was changed: {m}",
-                        def.name,
-                        cmd.name,
-                        i + 1,
-                        e.kind_name()
+                    errors::wrap(
+                        &format!(
+                            "{}.{}: effect {} ({}) failed, nothing was changed",
+                            def.name,
+                            cmd.name,
+                            i + 1,
+                            e.kind_name()
+                        ),
+                        &m,
                     )
                 })?;
         }
@@ -490,7 +494,10 @@ impl Runner<'_> {
                     for tid in ids {
                         self.action(unit, &target, next, &tid, depth + 1)
                             .map_err(|m| {
-                                format!("{}.{action} on {}: {m}", target.name, "the related record")
+                                errors::wrap(
+                                    &format!("{}.{action} on the related record", target.name),
+                                    &m,
+                                )
                             })?;
                     }
                 }
@@ -568,7 +575,7 @@ impl Runner<'_> {
         default_governed(def, &mut f);
         own_default(def, &mut f, self.actor);
         let look = |n: &str| self.look(n);
-        check_fields(&*unit, &look, self.actor, def, &f, true)?;
+        check_effect_fields(&*unit, &look, self.actor, def, &f, true, None)?;
         seq::assign(unit, def, &mut f, None, self.now)?;
         if let Some(why) = creator_blocked(&Gate::new(&*unit, &look, self.actor), def, &f) {
             return Err(why);
@@ -597,7 +604,7 @@ impl Runner<'_> {
             .load(def, id)
             .map_err(|_| self.unavailable(def))?;
         kinds::canonicalise(def, &mut patch, Path::Write)?;
-        check_fields_against(&*unit, &look, self.actor, def, &patch, false, Some(&cur))?;
+        check_effect_fields(&*unit, &look, self.actor, def, &patch, false, Some(&cur))?;
         let mut after = cur;
         after.extend(patch.clone());
         if let Some(why) = creator_blocked(&Gate::new(&*unit, &look, self.actor), def, &after) {

@@ -304,6 +304,21 @@ pub fn coded(code: &'static str, message: &str) -> String {
     format!("{code}: {message}")
 }
 
+/// `context: message`, for an engine that wraps the refusal of something it started (an effect of
+/// an action, the action a `set_state` effect starts) with where it happened. A refusal that
+/// carries the code `limit_violated` (D90) keeps its code first, so that the wrapped answer is
+/// still that code with its hint on every surface: `limit_violated: context: message`. Every other
+/// refusal is wrapped as it always was (an assertion is recognised by the text it noted, see
+/// `locale::assertion_behind`).
+pub(crate) fn wrap(context: &str, m: &str) -> String {
+    match split_code(m) {
+        Some((r, rest)) if r.code == code::LIMIT_VIOLATED => {
+            coded(code::LIMIT_VIOLATED, &format!("{context}: {rest}"))
+        }
+        _ => format!("{context}: {m}"),
+    }
+}
+
 /// What kind of answer the call earned, apart from its status.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Kind {

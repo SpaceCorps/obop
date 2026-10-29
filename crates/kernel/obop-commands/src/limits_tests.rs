@@ -14,6 +14,7 @@ use obop_values::Decimal;
 use std::sync::Arc;
 
 const U: &str = "lim.user";
+const HR: &str = "lim.hr";
 
 fn m(pairs: Vec<(&str, Value)>) -> Value {
     Value::Map(pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
@@ -109,6 +110,8 @@ fn module(p: &str) -> Module {
                         ..Default::default()
                     }),
                     f("state").select(&["new", "done"]),
+                    // A person's name: an agent sees it only as a masked token.
+                    F::new("person", "d", DataClass::PublicDirectory, true, U),
                 ],
                 vec![
                     // An effect that writes the title of the record into another model.
@@ -129,8 +132,48 @@ fn module(p: &str) -> Module {
                         max_length: Some(3),
                         ..Default::default()
                     }),
+                    // At most 100.
+                    f("cap").kind(FieldKind::Money).with_limits(Limits {
+                        max: Some(Bound::Int(100)),
+                        ..Default::default()
+                    }),
                 ],
                 vec![],
+            ),
+            model(
+                n("payroll"),
+                vec![
+                    // A field of the HR group: nobody else reads it.
+                    F::new("salary", "d", DataClass::None, false, HR).kind(FieldKind::Money),
+                    f("state").select(&["new", "paid"]),
+                ],
+                vec![
+                    // Copies the salary, which the caller may not read, into a field that holds
+                    // at most 100.
+                    CommandDef::new("pay", "Pay", U)
+                        .transition("state", Some("new"), "paid")
+                        .effect(Effect::create(
+                            &format!("{p}_log"),
+                            &[("cap", "$self.salary")],
+                        )),
+                ],
+            ),
+            model(
+                n("batch"),
+                vec![
+                    f("counter_id").reference(&format!("{p}_counter")),
+                    f("state").select(&["open", "run"]),
+                ],
+                vec![
+                    // Starts `counter.apply`, whose adjust effect meets the bound of the document.
+                    CommandDef::new("run", "Run", U)
+                        .transition("state", Some("open"), "run")
+                        .effect(Effect::set_state_ref(
+                            &format!("{p}_counter"),
+                            "counter_id",
+                            "apply",
+                        )),
+                ],
             ),
             model(
                 n("counter"),
@@ -195,6 +238,41 @@ impl Rig {
             &self.cmd(model, c),
             &input,
         )
+    }
+    /// A person who holds the HR group (reads and writes the salary).
+    fn hr(&self) -> Principal {
+        Principal::user(&format!("hr-{}", self.p), &[U, HR])
+    }
+    /// An agent acting for a person with the ordinary group; it sees personal data as tokens.
+    fn bot(&self) -> Principal {
+        Principal::agent(&format!("bot-{}", self.p), &[U], &[U])
+    }
+    fn call_as(
+        &self,
+        who: &Principal,
+        surface: Surface,
+        vault: &mut Vault,
+        model: &str,
+        c: &str,
+        input: Value,
+    ) -> Result<Response, CallError> {
+        self.d
+            .call(surface, who, vault, &self.cmd(model, c), &input)
+    }
+    /// The handler error of a call as `who` over `surface` with `vault`.
+    fn err_as(
+        &self,
+        who: &Principal,
+        surface: Surface,
+        vault: &mut Vault,
+        model: &str,
+        c: &str,
+        input: Value,
+    ) -> String {
+        match self.call_as(who, surface, vault, model, c, input) {
+            Err(CallError::Handler(m)) => m,
+            other => panic!("{model}.{c}: expected a handler error, got {other:?}"),
+        }
     }
     fn ok(&self, model: &str, c: &str, input: Value) -> Value {
         match self.call(model, c, input) {
@@ -613,10 +691,10 @@ fn what_an_action_writes_is_held_to_the_limits_of_the_target() {
 
         let id = r.create("doc", vec![("title", t("long")), ("plain", t("abcd"))]);
         let e = r.err("doc", "finish", m(vec![("id", t(&id))]));
-        assert!(
-            e.contains(".short must be at most 3 characters; this has 4"),
-            "{e}"
-        );
+        // What an action writes is the action's, not the caller's: the refusal says what the
+        // field takes and not how long the value was (D90 Decision 5).
+        assert!(e.contains(".short must be at most 3 characters"), "{e}");
+        assert!(!e.contains("this has"), "{e}");
         // The action did not run at all: no log, and the state did not move.
         assert_eq!(r.count("log"), 1);
         assert_eq!(text(get(&r.read("doc", &id), "state")), "new");
@@ -633,7 +711,8 @@ fn an_adjustment_cannot_push_a_number_past_its_bound() {
 
         let c2 = r.create("counter", vec![("doc_id", t(&doc)), ("by", Value::Int(1))]);
         let e = r.err("counter", "apply", m(vec![("id", t(&c2))]));
-        assert!(e.contains(".qty must be at most 100; this is 101"), "{e}");
+        assert!(e.contains(".qty must be at most 100"), "{e}");
+        assert!(!e.contains("this is"), "{e}");
         // Nothing moved: the quantity and the state are as before.
         assert_eq!(get(&r.read("doc", &doc), "qty"), &Value::Int(100));
         assert_eq!(text(get(&r.read("counter", &c2), "state")), "open");
@@ -676,4 +755,315 @@ fn the_plain_text_of_a_row_error_drops_only_a_code_of_the_table() {
         errors::plain("note: a.b is required"),
         "note: a.b is required"
     );
+}
+
+// ---- the review of PR 33 -------------------------------------------------------------------
+
+/// The answer of an action whose effect met a limit: `limit_violated` first and once, the place
+/// it happened after it, and on every surface the status, code and hint of the table (F0, F8).
+fn assert_effect_limit(e: &str, context: &str) {
+    assert!(e.starts_with("limit_violated: "), "code not first: {e}");
+    assert_eq!(e.matches("limit_violated").count(), 1, "code twice: {e}");
+    assert!(e.contains(context), "wanted `{context}` in: {e}");
+    let c = errors::classify(&CallError::Handler(e.to_string()));
+    assert_eq!((c.status, c.code), (400, "limit_violated"), "{e}");
+    assert_eq!(c.body["code"], "limit_violated");
+    let hint = c.body["hint"].as_str().expect("a hint");
+    assert!(hint.contains("max_length"), "{hint}");
+    // The sentence of the body has no code in it, and the JSON-RPC error of /mcp carries the hint.
+    let said = c.body["error"].as_str().unwrap();
+    assert!(!said.contains("limit_violated"), "{said}");
+    assert!(said.contains(context), "{said}");
+    assert_eq!(c.hint, Some(hint));
+    assert_eq!(c.rpc_data()["hint"], hint);
+    assert_eq!(c.exit, 1);
+}
+
+#[test]
+fn an_effect_that_meets_a_limit_keeps_the_code_and_the_hint() {
+    each(|r| {
+        // 1. A create effect: `finish` copies four characters into a field that holds three.
+        let id = r.create("doc", vec![("title", t("long")), ("plain", t("abcd"))]);
+        let e = r.err("doc", "finish", m(vec![("id", t(&id))]));
+        assert_effect_limit(
+            &e,
+            &format!(
+                "{}: effect 1 (create) failed, nothing was changed: {}_log.short must be at most 3 characters",
+                r.cmd("doc", "finish"),
+                r.p
+            ),
+        );
+
+        // 2. An adjust effect: `apply` pushes the quantity past its bound.
+        let doc = r.create("doc", vec![("title", t("stock")), ("qty", Value::Int(100))]);
+        let c = r.create("counter", vec![("doc_id", t(&doc)), ("by", Value::Int(1))]);
+        let e = r.err("counter", "apply", m(vec![("id", t(&c))]));
+        assert_effect_limit(
+            &e,
+            &format!(
+                "{}: effect 1 (adjust) failed, nothing was changed: {}_doc.qty must be at most 100",
+                r.cmd("counter", "apply"),
+                r.p
+            ),
+        );
+
+        // 3. A nested `set_state`: `batch.run` starts `counter.apply`, whose adjust meets the bound.
+        let b = r.create("batch", vec![("counter_id", t(&c))]);
+        let e = r.err("batch", "run", m(vec![("id", t(&b))]));
+        assert_effect_limit(
+            &e,
+            &format!(
+                "{}: effect 1 (set_state) failed, nothing was changed: {}_counter.apply on the related record: {}: effect 1 (adjust) failed",
+                r.cmd("batch", "run"),
+                r.p,
+                r.cmd("counter", "apply"),
+            ),
+        );
+        // None of the three changed anything.
+        assert_eq!(r.count("log"), 0);
+        assert_eq!(get(&r.read("doc", &doc), "qty"), &Value::Int(100));
+        assert_eq!(text(get(&r.read("counter", &c), "state")), "open");
+        assert_eq!(text(get(&r.read("batch", &b), "state")), "open");
+    });
+}
+
+#[test]
+fn an_error_of_an_effect_that_is_not_a_limit_is_wrapped_as_before() {
+    // Only `limit_violated` moves to the front: the wrapper of every other refusal is unchanged.
+    let outer = "x.y: effect 1 (create) failed, nothing was changed";
+    assert_eq!(
+        errors::wrap(outer, "no lead nope"),
+        format!("{outer}: no lead nope")
+    );
+    assert_eq!(
+        errors::wrap(outer, "assertion_failed: stays where it was"),
+        format!("{outer}: assertion_failed: stays where it was")
+    );
+    assert_eq!(
+        errors::wrap(outer, "limit_violated: a.b must be at most 1 character"),
+        "limit_violated: x.y: effect 1 (create) failed, nothing was changed: a.b must be at most 1 character"
+    );
+}
+
+/// A name of 40 characters (an agent never reads it, only its token).
+const LONG_NAME: &str = "Aleksandra Katarzyna Kowalska-Nowakowska";
+
+#[test]
+fn an_agent_is_not_told_how_long_a_value_it_only_holds_as_a_token_is() {
+    assert_eq!(LONG_NAME.chars().count(), 40);
+    each(|r| {
+        let doc = r.create("doc", vec![("title", t("ok")), ("person", t(LONG_NAME))]);
+        let bot = r.bot();
+        let mut vault = Vault::new();
+        // The agent reads the record and holds the name as a token.
+        let row = r
+            .call_as(
+                &bot,
+                Surface::Mcp,
+                &mut vault,
+                "doc",
+                "get",
+                m(vec![("id", t(&doc))]),
+            )
+            .unwrap()
+            .value;
+        let token = text(get(&row, "person"));
+        assert_ne!(token, LONG_NAME, "the agent must hold a token");
+
+        // It writes the token where three characters fit. The handler sees the real name, 40
+        // characters; the refusal must not say so.
+        let e = r.err_as(
+            &bot,
+            Surface::Mcp,
+            &mut vault,
+            "log",
+            "create",
+            m(vec![("short", t(&token))]),
+        );
+        assert_eq!(
+            e,
+            format!(
+                "limit_violated: {}_log.short must be at most 3 characters",
+                r.p
+            )
+        );
+        // The same through update, bulk_create and a number the agent wrote itself.
+        let e = r.err_as(
+            &bot,
+            Surface::Mcp,
+            &mut vault,
+            "doc",
+            "update",
+            m(vec![("id", t(&doc)), ("title", t(&token))]),
+        );
+        assert_eq!(
+            e,
+            format!(
+                "limit_violated: {}_doc.title must be at most 10 characters",
+                r.p
+            )
+        );
+        let e = r.err_as(
+            &bot,
+            Surface::Mcp,
+            &mut vault,
+            "doc",
+            "create",
+            m(vec![("title", t("ok")), ("qty", Value::Int(1000))]),
+        );
+        assert_eq!(
+            e,
+            format!("limit_violated: {}_doc.qty must be at most 100", r.p)
+        );
+        let e = r.err_as(
+            &bot,
+            Surface::Mcp,
+            &mut vault,
+            "doc",
+            "bulk_create",
+            m(vec![(
+                "rows",
+                Value::List(vec![m(vec![("title", t(&token))])]),
+            )]),
+        );
+        assert!(e.contains("must be at most 10 characters"), "{e}");
+        assert!(!e.contains("this has") && !e.contains("40"), "{e}");
+        assert_eq!(r.count("log"), 0);
+
+        // A person who typed the value, on the other hand, is told how long it was.
+        let e = r.refused("log", vec![("short", t(LONG_NAME))]);
+        assert_limit(&e, "short", "at most 3 characters; this has 40");
+    });
+}
+
+#[test]
+fn an_action_never_states_the_value_it_copied_from_a_field_the_caller_cannot_read() {
+    each(|r| {
+        // The salary is in the HR group; `pay` copies it into `log.cap`, which holds at most 100.
+        let hr = r.hr();
+        let id = text(get(
+            &r.call_as(
+                &hr,
+                Surface::Rest,
+                &mut Vault::new(),
+                "payroll",
+                "create",
+                m(vec![("salary", Value::Int(73_250))]),
+            )
+            .unwrap()
+            .value,
+            "id",
+        ));
+        let want = format!(
+            "limit_violated: {}: effect 1 (create) failed, nothing was changed: {}_log.cap must be at most 100",
+            r.cmd("payroll", "pay"),
+            r.p
+        );
+        let people = [
+            ("an ordinary user", r.who.clone(), Surface::Rest),
+            ("an agent", r.bot(), Surface::Mcp),
+            // Even the person who can read the salary: what the action wrote is not theirs.
+            ("the HR person", hr.clone(), Surface::Rest),
+        ];
+        for (who, p, surface) in people {
+            let e = r.err_as(
+                &p,
+                surface,
+                &mut Vault::new(),
+                "payroll",
+                "pay",
+                m(vec![("id", t(&id))]),
+            );
+            assert_eq!(e, want, "{who}");
+        }
+        // Nothing was written, and the state did not move.
+        assert_eq!(r.count("log"), 0);
+        let row = r
+            .call_as(
+                &hr,
+                Surface::Rest,
+                &mut Vault::new(),
+                "payroll",
+                "get",
+                m(vec![("id", t(&id))]),
+            )
+            .unwrap()
+            .value;
+        assert_eq!(text(get(&row, "state")), "new");
+    });
+}
+
+#[test]
+fn a_state_move_with_an_over_limit_field_is_refused_before_the_action_runs() {
+    each(|r| {
+        // `state` is governed: `update` moves it only as `finish`, which writes a log record.
+        let id = r.create("doc", vec![("title", t("ok")), ("plain", t("ab"))]);
+        let Err(CallError::Handler(e)) =
+            r.update(&id, vec![("state", t("done")), ("title", t("abcdefghijk"))])
+        else {
+            panic!("the update should have been refused")
+        };
+        assert_limit(&e, "title", "at most 10 characters; this has 11");
+        // The action did not run: no log record, the state did not move, the title is as it was.
+        assert_eq!(
+            r.count("log"),
+            0,
+            "the action ran before the update was refused"
+        );
+        let row = r.read("doc", &id);
+        assert_eq!(text(get(&row, "state")), "new");
+        assert_eq!(text(get(&row, "title")), "ok");
+        // Nothing wrong with the same move once the title fits.
+        r.update(&id, vec![("state", t("done")), ("title", t("fits"))])
+            .unwrap();
+        assert_eq!(r.count("log"), 1);
+        assert_eq!(text(get(&r.read("doc", &id), "state")), "done");
+    });
+}
+
+#[test]
+fn a_state_move_that_sends_back_an_over_limit_stored_value_is_not_refused_for_it() {
+    each(|r| {
+        let id = r.create("doc", vec![("title", t("ok")), ("plain", t("ab"))]);
+        // Stored before a limit was lowered, and sent back by a form with the state change.
+        r.corrupt("doc", &id, "title", serde_json::json!("longer than ten"));
+        r.update(
+            &id,
+            vec![("state", t("done")), ("title", t("longer than ten"))],
+        )
+        .unwrap();
+        assert_eq!(r.count("log"), 1);
+        let row = r.read("doc", &id);
+        assert_eq!(text(get(&row, "state")), "done");
+        assert_eq!(text(get(&row, "title")), "longer than ten");
+    });
+}
+
+#[test]
+fn a_decimal_stored_above_a_lowered_bound_stays_editable_whatever_its_spelling() {
+    each(|r| {
+        // `rate` holds 0.1 to 0.9 now; 5.0 was fine before the bound was set.
+        let id = r.create("doc", vec![("title", t("first")), ("rate", t("0.5"))]);
+        r.corrupt("doc", &id, "rate", serde_json::json!("5.0000000"));
+        r.update(&id, vec![("plain", t("edited"))]).unwrap();
+        // The same number written as 5, 5.0 or in full is the stored value: not refused.
+        for (i, spelling) in ["5", "5.0", "5.0000000"].into_iter().enumerate() {
+            r.update(
+                &id,
+                vec![("rate", t(spelling)), ("plain", t(&format!("e{i}")))],
+            )
+            .unwrap_or_else(|e| panic!("{spelling}: {e:?}"));
+        }
+        assert_eq!(text(get(&r.read("doc", &id), "rate")), "5.0000000");
+        // A different value is held to the bound, however close to the stored one.
+        for other in ["6", "5.0000001", "0.9000001"] {
+            let Err(CallError::Handler(e)) = r.update(&id, vec![("rate", t(other))]) else {
+                panic!("{other} should have been refused")
+            };
+            assert_limit(&e, "rate", "at most 0.9000000; this is ");
+        }
+        // Going back inside is always possible.
+        r.update(&id, vec![("rate", t("0.3"))]).unwrap();
+        assert_eq!(text(get(&r.read("doc", &id), "rate")), "0.3000000");
+    });
 }

@@ -118,19 +118,39 @@ pub(crate) fn canonicalise_values(
 }
 
 /// The refusal of a value that breaks a limit of its field (D90): `limit_violated: <message>`.
-fn breach(model: &str, f: &FieldDef, b: Breach, value: &str) -> String {
-    errors::coded(code::LIMIT_VIOLATED, &b.message(model, f.name, value))
+/// `say_value`: the message may state how long or how large the value was. It may not when the
+/// caller cannot know that (an agent holding a masked token, where the handler sees the restored
+/// real value; a value an action copied from a field the caller cannot read): the length or the
+/// number would disclose data the caller may not read, so the message states the requirement only.
+fn breach(model: &str, f: &FieldDef, b: Breach, value: &str, say_value: bool) -> String {
+    let message = if say_value {
+        b.message(model, f.name, value)
+    } else {
+        b.message_without_value(model, f.name)
+    };
+    errors::coded(code::LIMIT_VIOLATED, &message)
 }
 
 /// A written text against the length limits of its field, the default included (D90).
-pub(crate) fn check_text_limits(model: &str, f: &FieldDef, s: &str) -> Result<(), String> {
-    f.check_text(s).map_err(|b| breach(model, f, b, ""))
+pub(crate) fn check_text_limits(
+    model: &str,
+    f: &FieldDef,
+    s: &str,
+    say_value: bool,
+) -> Result<(), String> {
+    f.check_text(s)
+        .map_err(|b| breach(model, f, b, "", say_value))
 }
 
 /// A written whole number (`number` or `money`) against `min` and `max` of its field (D90).
-pub(crate) fn check_int_limits(model: &str, f: &FieldDef, n: i64) -> Result<(), String> {
+pub(crate) fn check_int_limits(
+    model: &str,
+    f: &FieldDef,
+    n: i64,
+    say_value: bool,
+) -> Result<(), String> {
     f.check_int(n)
-        .map_err(|b| breach(model, f, b, &n.to_string()))
+        .map_err(|b| breach(model, f, b, &n.to_string(), say_value))
 }
 
 /// A written decimal, in its canonical text, against `min` and `max` of its field (D90). The
@@ -139,6 +159,7 @@ pub(crate) fn check_decimal_limits(
     model: &str,
     f: &FieldDef,
     canonical: &str,
+    say_value: bool,
 ) -> Result<(), String> {
     if f.lower_bound().is_none() && f.upper_bound().is_none() {
         return Ok(());
@@ -146,7 +167,7 @@ pub(crate) fn check_decimal_limits(
     let d = Decimal::parse(canonical)
         .map_err(|e| wrong(model, f.name, &f.kind, Some(&e.to_string())))?;
     f.check_decimal(d)
-        .map_err(|b| breach(model, f, b, canonical))
+        .map_err(|b| breach(model, f, b, canonical, say_value))
 }
 
 /// A stored or supplied value must already be in canonical form (see the module notes).
