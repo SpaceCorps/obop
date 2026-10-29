@@ -292,8 +292,9 @@ pub struct FieldM {
     /// least 1 and not above `max_length`. A value is counted as stored: nothing is trimmed.
     pub min_length: Option<u32>,
     /// `kind = "number"`, `"money"` or `"decimal"` (D90): the smallest value, inclusive. A whole
-    /// number for `number` and `money`; for `decimal` a string with at most `scale` fractional
-    /// digits (`"0.10"`), because a TOML float is not exact.
+    /// number (a TOML integer) for `number` and `money`; for `decimal` a string (`"0.10"`) or a TOML
+    /// integer with at most `scale` fractional digits (fewer are padded to the scale) that fits the
+    /// precision. A TOML float is refused because it is not exact.
     pub min: Option<toml::Value>,
     /// As `min`: the largest value, inclusive.
     pub max: Option<toml::Value>,
@@ -386,7 +387,7 @@ fn limits_of(f: &FieldM) -> Result<Limits, String> {
 }
 
 /// A field of `f`'s kind and limits, to hold a value against (`set_default`).
-fn probe(f: &FieldM) -> Result<FieldDef, String> {
+pub(crate) fn probe(f: &FieldM) -> Result<FieldDef, String> {
     Ok(
         FieldDef::new(intern(&f.name), "", DataClass::None, false, "")
             .kind(kind_of(f))
@@ -399,7 +400,9 @@ fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
     use toml::Value as T;
     let ok = match (f.kind.as_str(), v) {
         ("text" | "longtext" | "date" | "ref", T::String(_)) => true,
-        ("number" | "money", T::Integer(_) | T::Float(_)) => true,
+        // A whole number: a float is not stored by a write either, and it would also skip the
+        // bounds of the field (D90).
+        ("number" | "money", T::Integer(_)) => true,
         ("datetime", T::String(s)) => obop_values::Instant::parse(s).is_ok(),
         // A decimal default is a string ("12.50") or a whole number; a TOML float is not exact.
         ("decimal", T::String(s)) => match (f.precision, f.scale) {
@@ -430,6 +433,8 @@ fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
                 format!(" (options: {})", f.options.join(", "))
             } else if matches!(f.kind.as_str(), "image" | "file" | "sequence") {
                 " (it cannot be given a default)".to_string()
+            } else if matches!(f.kind.as_str(), "number" | "money") {
+                " (a whole number, written without a decimal point)".to_string()
             } else {
                 String::new()
             }

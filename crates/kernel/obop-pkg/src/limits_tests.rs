@@ -214,6 +214,36 @@ fn a_default_of_a_migration_step_is_held_to_the_limits_of_its_field() {
     );
 }
 
+#[test]
+fn a_float_default_into_a_number_or_money_field_is_refused() {
+    // A float is not a whole number: a write refuses it, and it would also pass the bounds of the
+    // field unseen (review of PR 33, F19). `set_default` takes the integer form only.
+    for kind in ["number", "money"] {
+        let with = |value: &str| {
+            pkg_with_core(
+                "^0.2.1",
+                "0.2.0",
+                &format!(
+                    "{}\n[[migration]]\nfrom = \"<0.2\"\nop = \"set_default\"\nmodel = \"lim_doc\"\nfield = \"qty\"\nvalue = {value}\n",
+                    field("qty", &format!("kind = \"{kind}\"\nmax = 100"))
+                ),
+            )
+        };
+        assert_eq!(problem(&with("50")), None, "{kind}");
+        for float in ["1000.0", "50.5", "50.0"] {
+            let e =
+                problem(&with(float)).unwrap_or_else(|| panic!("{kind} {float} must be refused"));
+            assert!(
+                e.contains("does not fit the") && e.contains("a whole number"),
+                "{kind} {float}: {e}"
+            );
+        }
+        // An integer above the bound is still refused by the limit.
+        let e = problem(&with("1000")).expect("1000 into max 100");
+        assert!(e.contains("at most 100; this is 1000"), "{e}");
+    }
+}
+
 // ---- the version a package that uses limits declares --------------------------------------
 
 /// D88 Decision 14: a feature that widens what the manifest parser accepts takes the next patch
@@ -333,4 +363,107 @@ fn a_changed_limit_is_a_listed_change_and_never_breaking() {
     let a = Manifest::parse(&pkg(&field("qty", "kind = \"number\"\nmax = 10"))).unwrap();
     let b = Manifest::parse(&pkg(&field("qty", "kind = \"number\"\nmax = 5"))).unwrap();
     assert_eq!(kinds(&a, &b).len(), 1);
+}
+
+/// The detail of the one `field_limits` change from `old` to `new`.
+fn limits_change(old: &str, new: &str) -> String {
+    let (a, b) = (
+        Manifest::parse(&pkg(old)).unwrap(),
+        Manifest::parse(&pkg(new)).unwrap(),
+    );
+    let c = diff(&a, &b);
+    assert_eq!(c.len(), 1, "{c:?}");
+    assert_eq!(c[0].kind, "field_limits");
+    assert!(!c[0].breaking);
+    c[0].detail.clone()
+}
+
+#[test]
+fn the_plan_shows_the_default_that_applies_when_a_limit_is_removed_and_which_way_it_goes() {
+    let title = |extra: &str| field("title", extra);
+    // Dropping a max_length does not make the field unlimited: the default of the kind applies.
+    // 5000 to 2048 tightens (review of PR 33, F2).
+    let d = limits_change(&title("max_length = 5000"), &title(""));
+    assert!(
+        d.contains("limits tighten from max_length 5000 to max_length 2048 (default)"),
+        "{d}"
+    );
+    assert!(
+        d.contains("values already stored are not re-checked"),
+        "{d}"
+    );
+    assert!(!d.contains("none"), "{d}");
+    // A longtext has its own default.
+    let d = limits_change(
+        &field("notes", "kind = \"longtext\"\nmax_length = 300000"),
+        &field("notes", "kind = \"longtext\""),
+    );
+    assert!(
+        d.contains("tighten from max_length 300000 to max_length 100000 (default)"),
+        "{d}"
+    );
+    // Declaring a larger one than the default loosens; the old side shows the default it had.
+    let d = limits_change(&title(""), &title("max_length = 5000"));
+    assert!(
+        d.contains("limits loosen from max_length 2048 (default) to max_length 5000"),
+        "{d}"
+    );
+    // A lower maximum or a new minimum tightens; a higher maximum or no minimum loosens.
+    assert!(
+        limits_change(&title("max_length = 100"), &title("max_length = 10"))
+            .contains("tighten from")
+    );
+    assert!(
+        limits_change(&title(""), &title("min_length = 2")).contains(
+            "tighten from max_length 2048 (default) to min_length 2, max_length 2048 (default)"
+        )
+    );
+    assert!(
+        limits_change(&title("min_length = 2"), &title("")).contains(
+            "loosen from min_length 2, max_length 2048 (default) to max_length 2048 (default)"
+        )
+    );
+    // One limit tighter and another looser is said so.
+    let d = limits_change(
+        &title("max_length = 100"),
+        &title("min_length = 3\nmax_length = 200"),
+    );
+    assert!(d.contains("limits tighten and loosen from"), "{d}");
+    // Numbers: nothing is implied, so a removed bound is `none`, and the direction is read from
+    // the bounds, decimals included.
+    let qty = |extra: &str| field("qty", &format!("kind = \"number\"\n{extra}"));
+    assert!(
+        limits_change(&qty("max = 10"), &qty("max = 5"))
+            .contains("limits tighten from max 10 to max 5")
+    );
+    assert!(
+        limits_change(&qty("max = 10"), &qty("")).contains("limits loosen from max 10 to none")
+    );
+    assert!(limits_change(&qty(""), &qty("min = 0")).contains("limits tighten from none to min 0"));
+    let rate = |extra: &str| {
+        field(
+            "rate",
+            &format!("kind = \"decimal\"\nprecision = 8\nscale = 2\n{extra}"),
+        )
+    };
+    assert!(
+        limits_change(&rate("max = \"5.00\""), &rate("max = \"9.50\""))
+            .contains("loosen from max 5.00 to max 9.50")
+    );
+    assert!(
+        limits_change(&rate("min = \"1.00\""), &rate("min = \"0.50\""))
+            .contains("loosen from min 1.00 to min 0.50")
+    );
+    // What is held counts, not what is spelled: a declared max_length equal to the default is the
+    // default, and the same bound spelled as 5 and as "5.00" is the same bound.
+    let (a, b) = (
+        Manifest::parse(&pkg(&title(&format!("max_length = {DEFAULT_TEXT_MAX}")))).unwrap(),
+        Manifest::parse(&pkg(&title(""))).unwrap(),
+    );
+    assert!(diff(&a, &b).is_empty() && diff(&b, &a).is_empty());
+    let (a, b) = (
+        Manifest::parse(&pkg(&rate("max = 5"))).unwrap(),
+        Manifest::parse(&pkg(&rate("max = \"5.00\""))).unwrap(),
+    );
+    assert!(diff(&a, &b).is_empty());
 }
