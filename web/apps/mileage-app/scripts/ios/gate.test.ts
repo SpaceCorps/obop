@@ -1,0 +1,188 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { afterAll, describe, expect, test } from "vite-plus/test";
+import { checkBuild } from "./gate-lib.mjs";
+
+const plain = () => ({
+  config: { extra: { cleartextAllowed: false, defaultServer: "" } } as Record<string, unknown>,
+  infoPlist: {
+    CFBundleIdentifier: "org.obop.mileage",
+    UIBackgroundModes: ["location"],
+    NSLocationWhenInUseUsageDescription: "obop Mileage records the route of a trip that you start.",
+    NSLocalNetworkUsageDescription:
+      "obop Mileage connects to the obop server whose address you enter.",
+    // What the Expo template ships in every build.
+    NSAppTransportSecurity: { NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true },
+  } as Record<string, unknown>,
+});
+
+const failures = (result: ReturnType<typeof checkBuild>) =>
+  result.findings.filter((f) => f.level === "fail").map((f) => f.text);
+
+describe("a release build", () => {
+  test("the plain build passes", () => {
+    const result = checkBuild(plain(), { mode: "release" });
+    expect(failures(result)).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(result.facts).toMatchObject({
+      bundleId: "org.obop.mileage",
+      cleartextAllowed: "false",
+      defaultServer: "(none)",
+      backgroundModes: '["location"]',
+    });
+  });
+
+  test("a build that allows plain http is not a release build", () => {
+    const built = plain();
+    built.config.extra = { cleartextAllowed: true, defaultServer: "http://192.168.1.132:18081" };
+    const result = checkBuild(built, { mode: "release" });
+    expect(result.ok).toBe(false);
+    expect(failures(result).join("\n")).toMatch(/cleartextAllowed=true/);
+    expect(failures(result).join("\n")).toMatch(/https address/);
+  });
+
+  test("a build whose config does not say is refused too", () => {
+    const built = plain();
+    built.config = {};
+    expect(failures(checkBuild(built, { mode: "release" })).join("\n")).toMatch(
+      /no extra\.cleartextAllowed/,
+    );
+    expect(checkBuild({ config: null, infoPlist: null }, { mode: "release" }).ok).toBe(false);
+  });
+
+  test("an https default server is fine", () => {
+    const built = plain();
+    built.config.extra = { cleartextAllowed: false, defaultServer: "https://obop.example.org" };
+    expect(checkBuild(built, { mode: "release" }).ok).toBe(true);
+  });
+
+  test("a leftover of the development client is reported", () => {
+    const built = plain();
+    built.infoPlist.NSBonjourServices = ["_expo._tcp"];
+    const result = checkBuild(built, { mode: "release" });
+    expect(result.ok).toBe(true);
+    expect(
+      result.findings.some((f) => f.level === "warn" && /NSBonjourServices/.test(f.text)),
+    ).toBe(true);
+  });
+});
+
+describe("a test build", () => {
+  test("may allow plain http and says so", () => {
+    const built = plain();
+    built.config.extra = { cleartextAllowed: true, defaultServer: "http://192.168.1.132:18081" };
+    const result = checkBuild(built, { mode: "test" });
+    expect(result.ok).toBe(true);
+    expect(
+      result.findings.some((f) => f.level === "ok" && /plain http is allowed/.test(f.text)),
+    ).toBe(true);
+  });
+});
+
+describe("the Info.plist, in either mode", () => {
+  for (const mode of ["release", "test"] as const) {
+    test(`${mode}: an exception of App Transport Security fails`, () => {
+      const arbitrary = plain();
+      arbitrary.infoPlist.NSAppTransportSecurity = { NSAllowsArbitraryLoads: true };
+      expect(failures(checkBuild(arbitrary, { mode })).join("\n")).toMatch(
+        /NSAllowsArbitraryLoads is true/,
+      );
+
+      const media = plain();
+      media.infoPlist.NSAppTransportSecurity = { NSAllowsArbitraryLoadsForMedia: true };
+      expect(checkBuild(media, { mode }).ok).toBe(false);
+
+      const domain = plain();
+      domain.infoPlist.NSAppTransportSecurity = {
+        NSExceptionDomains: { "192.168.1.132": { NSExceptionAllowsInsecureHTTPLoads: true } },
+      };
+      expect(failures(checkBuild(domain, { mode })).join("\n")).toMatch(
+        /exception domains \(192\.168\.1\.132\)/,
+      );
+    });
+
+    test(`${mode}: location is the only background mode`, () => {
+      for (const modes of [["location", "fetch"], [], ["audio"], undefined]) {
+        const built = plain();
+        built.infoPlist.UIBackgroundModes = modes;
+        expect(failures(checkBuild(built, { mode })).join("\n"), JSON.stringify(modes)).toMatch(
+          /UIBackgroundModes must be exactly \[location\]/,
+        );
+      }
+    });
+
+    test(`${mode}: the app asks for When In Use access only`, () => {
+      const missing = plain();
+      delete missing.infoPlist.NSLocationWhenInUseUsageDescription;
+      expect(failures(checkBuild(missing, { mode })).join("\n")).toMatch(/NSLocationWhenInUse/);
+
+      for (const key of [
+        "NSLocationAlwaysAndWhenInUseUsageDescription",
+        "NSLocationAlwaysUsageDescription",
+      ]) {
+        const built = plain();
+        built.infoPlist[key] = "x";
+        expect(failures(checkBuild(built, { mode })).join("\n"), key).toMatch(
+          /When In Use access only/,
+        );
+      }
+    });
+
+    test(`${mode}: the local network text is the app's own`, () => {
+      const missing = plain();
+      delete missing.infoPlist.NSLocalNetworkUsageDescription;
+      expect(checkBuild(missing, { mode }).ok).toBe(false);
+
+      const dev = plain();
+      dev.infoPlist.NSLocalNetworkUsageDescription =
+        "Expo Dev Launcher uses the local network to discover and connect to development servers running on your computer.";
+      expect(failures(checkBuild(dev, { mode })).join("\n")).toMatch(/development client/);
+    });
+  }
+});
+
+describe("the command", () => {
+  const dir = mkdtempSync(join(tmpdir(), "obop-gate-"));
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  const script = fileURLToPath(new URL("./gate.mjs", import.meta.url));
+
+  function run(built: ReturnType<typeof plain>, ...extra: string[]) {
+    const plist = join(dir, "Info.json");
+    const config = join(dir, "app.config");
+    writeFileSync(plist, JSON.stringify(built.infoPlist));
+    writeFileSync(config, JSON.stringify(built.config));
+    return spawnSync(
+      process.execPath,
+      [script, "--info-plist-json", plist, "--app-config", config, ...extra],
+      { encoding: "utf8" },
+    );
+  }
+
+  test("exits 0 for a plain release build and prints what it found", () => {
+    const result = run(plain());
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("gate passed (release build)");
+    expect(result.stdout).toMatch(/cleartextAllowed\s+false/);
+  });
+
+  test("exits 1 for a release build that allows plain http, and 0 as a test build", () => {
+    const built = plain();
+    built.config.extra = { cleartextAllowed: true, defaultServer: "http://10.0.0.5:18081" };
+    const release = run(built);
+    expect(release.status).toBe(1);
+    expect(release.stdout).toContain("FAIL");
+    expect(release.stdout).toContain("gate FAILED (release build)");
+    const test = run(built, "--test-build");
+    expect(test.status).toBe(0);
+    expect(test.stdout).toContain("gate passed (test build)");
+  });
+
+  test("exits 2 when it is not told what to read", () => {
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("usage:");
+  });
+});
