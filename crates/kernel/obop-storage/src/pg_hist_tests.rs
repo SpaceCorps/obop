@@ -398,6 +398,72 @@ fn processes_that_need_the_part_together_make_it_once() {
     assert_eq!(n, 4);
 }
 
+/// A process that waits for the schema lock while another makes the part must see the part when
+/// the lock is its: the question "is it there?" is answered from the catalogue as of then, not as
+/// of the moment the transaction began or the names were last asked for. Before this was held, the
+/// waiter read the cache of its session (a name it had asked for earlier and found missing stayed
+/// missing), took the part for absent and ran all its SQL again over the objects of the other:
+/// `CREATE INDEX IF NOT EXISTS` takes a lock on the table and on every partition before it finds
+/// the index there, which collided with a third process making a partition (SQLSTATE 40P01).
+#[test]
+fn a_process_that_waited_for_the_schema_lock_sees_what_the_one_before_it_made() {
+    let Some(db) = TestDb::new() else {
+        return;
+    };
+    let mut waiter = db.connect();
+    // As every process does at its start: ask once, with nothing there. The session now holds a
+    // negative answer for each of these names.
+    crate::schema::with_lock(&mut waiter, |c| {
+        assert!(!(crate::pg_hist::PART.check)(c)?);
+        Ok(())
+    })
+    .unwrap();
+    // The maker holds the lock, as a process does while it makes the part.
+    let mut maker = db.connect();
+    maker.batch_execute("BEGIN").unwrap();
+    maker.batch_execute(crate::schema::LOCK_SQL).unwrap();
+    let mut watcher = db.connect();
+    let seen = std::thread::scope(|s| {
+        let waiting = s.spawn(|| {
+            crate::schema::with_lock(&mut waiter, |c| {
+                Ok((
+                    (crate::pg_hist::PART.check)(c)?,
+                    crate::schema::present(c, &crate::pg_hist::RELATIONS)?,
+                ))
+            })
+        });
+        // Wait until the waiter is queued for the lock, which is the situation to be tested; the
+        // maker lets go only then.
+        let deadline = std::time::Instant::now() + crate::testing::time_budget(30);
+        loop {
+            let queued: i64 = watcher
+                .query_one(
+                    "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted                        AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
+                    &[],
+                )
+                .unwrap()
+                .get(0);
+            if queued == 1 {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the waiter never queued for the schema lock"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        crate::schema::install_all(&mut maker).unwrap();
+        maker.batch_execute("COMMIT").unwrap();
+        waiting.join().unwrap()
+    })
+    .unwrap();
+    assert_eq!(
+        seen,
+        (true, true),
+        "the waiter has the lock after the other committed the part: it sees the part (check, relations)"
+    );
+}
+
 /// A model that keeps history, with `names` as plain fields.
 fn history_of(names: &[&str]) -> Track {
     Track {
