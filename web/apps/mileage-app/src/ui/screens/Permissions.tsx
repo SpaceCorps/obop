@@ -11,6 +11,7 @@ import {
   type LocationAccess,
 } from "../../native/permissions.ts";
 import type { Runtime } from "../../native/runtime.ts";
+import { tOs } from "../os-text.ts";
 import type { Nav } from "../router.ts";
 
 /** The key under which the outbox remembers that the driver has read the disclosure. */
@@ -20,7 +21,8 @@ type Step = "check" | "disclosure" | "denied" | "blocked" | "approximate" | "ser
 
 /**
  * Before the first Start: the disclosure in the app, in plain words, before the system dialog
- * (Google Play asks for it when location is collected in the background); then the permission
+ * (Google Play asks for it when location is collected in the background; it is shown on iOS too, with its own wording
+ * where the Android one names a notification); then the permission
  * (precise, not approximate); then the note about keeping the app running. A driver who has done
  * all of it goes straight to the trip. Whatever stops a Start is shown here with a way on: the
  * location switch of the phone, an approximate-only permission, a refused permission, a failure.
@@ -106,7 +108,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
           </>
         }
       >
-        <Text>{t("disclosure.body")}</Text>
+        <Text>{tOs("disclosure.body")}</Text>
       </Screen>
     );
   }
@@ -128,7 +130,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
         <Banner
           tone="warning"
           title={t("permission.services.title")}
-          message={t("permission.services.message")}
+          message={tOs("permission.services.message")}
         />
       </Screen>
     );
@@ -199,7 +201,7 @@ export function Permissions({ rt, nav, purpose }: { rt: Runtime; nav: Nav; purpo
         />
       }
     >
-      <Text>{t("guide.body")}</Text>
+      <Text>{tOs("guide.body")}</Text>
       {notificationsOff ? (
         <Banner
           tone="warning"

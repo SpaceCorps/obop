@@ -14,6 +14,7 @@ import { isRecording } from "../../native/recorder.ts";
 import type { Runtime } from "../../native/runtime.ts";
 import { announce } from "../announce.ts";
 import { useNow, useOutbox } from "../hooks.ts";
+import { tOs } from "../os-text.ts";
 import type { Nav } from "../router.ts";
 
 interface Progress {
@@ -226,7 +227,7 @@ export function Recording({
         <Banner
           tone="danger"
           title={t("recording.services.title")}
-          message={t("recording.services.message")}
+          message={tOs("recording.services.message")}
           action={restart}
           testID="blocked-services"
         />
@@ -265,7 +266,7 @@ export function Recording({
         <Banner
           tone="danger"
           title={t("recording.nofix.title")}
-          message={t("recording.nofix.message")}
+          message={tOs("recording.nofix.message")}
           action={restart}
           testID="no-fix"
         />
@@ -299,7 +300,11 @@ export function Recording({
       {measured !== null && progress.points === 0 && health.kind === "waiting" ? (
         <Text tone="muted">{t("recording.nofix")}</Text>
       ) : null}
-      <Banner tone="info" title={t("recording.keep.title")} message={t("recording.keep.message")} />
+      <Banner
+        tone="info"
+        title={t("recording.keep.title")}
+        message={tOs("recording.keep.message")}
+      />
     </Screen>
   );
 }
