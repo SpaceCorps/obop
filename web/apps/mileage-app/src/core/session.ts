@@ -107,7 +107,8 @@ export interface SessionOptions {
   /**
    * The instance could not be told, in the background, that a sign-in the phone ended on its own
    * (`unsure`) is over: the instance still lists the phone. Not called when a newer sign-in has
-   * begun by the time the revoke fails.
+   * finished (`completeSignIn` was called) by the time the revoke fails; one that is still in the
+   * browser does not stop it.
    */
   onEndUntold?: () => void;
 }
@@ -237,7 +238,7 @@ export function createSession({
         const endedAt = generation;
         // When the revoke fails too the instance still lists the phone and nothing else will tell
         // the driver: the sign-in screen says so (the same notice as after a sign-out that could
-        // not reach the instance), unless a newer sign-in has begun by then.
+        // not reach the instance), unless a newer sign-in has finished by then.
         void failed.then((untold) => {
           if (untold && generation === endedAt) onEndUntold?.();
         });

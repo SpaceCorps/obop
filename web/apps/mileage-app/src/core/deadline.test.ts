@@ -1,13 +1,19 @@
 import { ObopNetworkError } from "@obop/client";
-import { describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { DeadlineError, withDeadline } from "./deadline.ts";
 
 describe("a call with a deadline", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("gives the answer of a call that comes in time", async () => {
     expect(await withDeadline(1000, async () => 7)).toBe(7);
   });
 
-  test("aborts the signal of a call that has no answer in time, and the call ends", async () => {
+  test("aborts the signal of a call that has no answer in time, and the call ends with a network error", async () => {
+    // The call rejects at once when it is aborted, before any other step: its own error must not
+    // win over the deadline's.
     let seen: AbortSignal | null = null;
     const stalled = withDeadline(
       20,
@@ -17,7 +23,9 @@ describe("a call with a deadline", () => {
           signal.addEventListener("abort", () => reject(new Error("aborted")));
         }),
     );
-    await expect(stalled).rejects.toThrow("aborted");
+    const error = await stalled.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ObopNetworkError);
+    expect((error as ObopNetworkError).cause).toBeInstanceOf(DeadlineError);
     expect((seen as AbortSignal | null)?.aborted).toBe(true);
   });
 
@@ -48,12 +56,35 @@ describe("a call with a deadline", () => {
     expect((seen as AbortSignal | null)?.aborted).toBe(true);
   });
 
-  test("leaves nothing unhandled when the call ends before the deadline", async () => {
+  test("leaves no timer running when the call ends, in an answer or in an error", async () => {
+    vi.useFakeTimers();
+    expect(await withDeadline(1000, async () => 1)).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+    await expect(
+      withDeadline(1000, async () => {
+        throw new Error("refused");
+      }),
+    ).rejects.toThrow("refused");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("leaves nothing unhandled when a call that was given up ends later", async () => {
+    // The loser of the race: the deadline came first, the call settles afterwards (a pin of the
+    // behaviour; no change to the function was found that makes it fail).
     const seen: unknown[] = [];
     const listener = (reason: unknown) => seen.push(reason);
     process.on("unhandledRejection", listener);
     try {
-      expect(await withDeadline(20, async () => 1)).toBe(1);
+      let later: (error: Error) => void = () => undefined;
+      const given = withDeadline(
+        20,
+        () =>
+          new Promise<never>((_resolve, reject) => {
+            later = reject;
+          }),
+      );
+      await expect(given).rejects.toBeInstanceOf(ObopNetworkError);
+      later(new Error("late"));
       await new Promise((resolve) => setTimeout(resolve, 60));
     } finally {
       process.off("unhandledRejection", listener);

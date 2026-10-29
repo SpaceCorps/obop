@@ -518,7 +518,7 @@ describe("the session", () => {
     expect(untold).toBe(1);
   });
 
-  test("it says nothing when the instance was told, or when a newer sign-in has begun", async () => {
+  test("it says nothing when the instance was told, or when a newer sign-in has finished", async () => {
     let untold = 0;
     const told = rig(tokens(1, 100_000), { refreshTimeoutMs: 20, onEndUntold: () => untold++ });
     await told.session.restore();

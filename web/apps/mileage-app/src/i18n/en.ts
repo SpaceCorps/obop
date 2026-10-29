@@ -24,7 +24,7 @@ export const en = {
   "error.sync": "The trips could not be sent. The phone keeps them and tries again.",
   "error.database": "The trips on this phone could not be opened.",
   "error.database.hint":
-    "Nothing was deleted. Try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here.",
+    "Nothing was deleted. Try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is Settings, Apps, obop Mileage, Storage, Clear storage, which deletes the trips that were not sent.",
   "error.database.stop": "Stop the location service",
   "error.database.stopped": "The location service was stopped.",
 

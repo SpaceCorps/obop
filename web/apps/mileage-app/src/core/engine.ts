@@ -21,8 +21,10 @@ export type Failure =
    * codes of their own: a trip the server says it does not hold is `gone`, and a 404 (which the
    * server also sends for a command that is hidden from this person, or not installed) is
    * `unknown`: the state of the trip on the server is not known, and nothing on the phone is thrown
-   * away for it. At the create step the code is the server's own, 404 included: nothing of the
-   * trip is on the server yet, so there is nothing whose state could be unknown.
+   * away for it. At the create step the code is the server's own, 404 included: the phone holds no
+   * server id there, so a refusal is final for the create and the driver may discard on the phone.
+   * If an earlier create had been applied and its answer lost, the server may still hold a trip,
+   * and the discard on the phone leaves it there.
    */
   | { kind: "refused"; status: number; code: string; message: string };
 
@@ -181,7 +183,8 @@ export function createEngine({
       if (failure.kind === "refused") {
         // A missing trip is told apart from other refusals so that the driver can be offered a
         // local discard; a 404 is not a missing trip (see `isGone`) and keeps everything. The
-        // create step keeps the server's own code (the trip is not on the server yet).
+        // create step keeps the server's own code (the phone holds no server id there; a trip
+        // made by a create whose answer was lost may still be on the server, see `serverId`).
         const code =
           step === "create"
             ? failure.code

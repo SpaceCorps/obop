@@ -531,7 +531,7 @@ describe("a refusal that is not a missing trip", () => {
     expect(server.pointSeqs(server.stored("c1")!.id)).toHaveLength(4);
   });
 
-  test("a 404 on the create keeps the server's own code and the driver may discard: nothing of the trip is on the server", async () => {
+  test("a 404 on the create keeps the server's own code and the driver may discard on the phone", async () => {
     const { store, server, engine } = await rig();
     await recordAndStop(store, 4);
     server.fail("createTrip", hidden(), 1);
