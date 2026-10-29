@@ -12,7 +12,7 @@ use crate::guards;
 use crate::kinds::{self, Path};
 use crate::query::Query;
 use crate::store::{declared_fields, id_of};
-use obop_registry::{FieldKind, ModelDef, is_valid_date};
+use obop_registry::{FieldDef, FieldKind, ModelDef, is_valid_date};
 use obop_storage::Fields;
 use serde_json::Value as J;
 use std::collections::BTreeMap;
@@ -57,19 +57,45 @@ pub(crate) fn own_default(def: &ModelDef, f: &mut Fields, actor: &Actor) {
     }
 }
 
+/// How one value is held to the limits of its field (D90).
+#[derive(Clone, Copy)]
+struct Held {
+    /// The value is the one already stored (an update that sends the record back as it is). It is
+    /// checked for its kind like any other, but not against the limits of the field: a value is
+    /// held to a limit when it is written, not for being there.
+    unchanged: bool,
+    /// A refusal may state how long or how large the value is. Not when the caller cannot know
+    /// that (an agent holding a masked token, a value an action derived from a record).
+    say_value: bool,
+}
+
 fn check_json(
     reads: &dyn Reads,
     gate: &Gate<'_>,
     lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
     model: &str,
-    name: &str,
-    kind: &FieldKind,
+    f: &FieldDef,
     v: &J,
+    held: Held,
 ) -> R<()> {
+    let Held {
+        unchanged,
+        say_value,
+    } = held;
+    let (name, kind) = (f.name, &f.kind);
     let wrong = || Err(format!("{model}.{name} must be {}", kind.describe()));
     match (kind, v) {
-        (FieldKind::Text | FieldKind::LongText, J::String(_)) => Ok(()),
-        (FieldKind::Number | FieldKind::Money, J::Number(n)) if n.is_i64() => Ok(()),
+        (FieldKind::Text | FieldKind::LongText, J::String(s)) => {
+            if unchanged {
+                Ok(())
+            } else {
+                kinds::check_text_limits(model, f, s, say_value)
+            }
+        }
+        (FieldKind::Number | FieldKind::Money, J::Number(n)) if n.is_i64() => match n.as_i64() {
+            Some(i) if !unchanged => kinds::check_int_limits(model, f, i, say_value),
+            _ => Ok(()),
+        },
         (FieldKind::Bool, J::Bool(_)) => Ok(()),
         // A stored image or file (D60): a well-formed id of an existing blob of the right sort.
         // Who may use which blob is the reference guard's business.
@@ -95,7 +121,11 @@ fn check_json(
         // Decimals and instants are stored as canonical text (D72); every write path
         // canonicalises first, so anything else here is refused.
         (FieldKind::Decimal { .. } | FieldKind::Datetime, J::String(t)) => {
-            kinds::check_canonical(model, name, kind, t)
+            kinds::check_canonical(model, name, kind, t)?;
+            if matches!(kind, FieldKind::Decimal { .. }) && !unchanged {
+                kinds::check_decimal_limits(model, f, t, say_value)?;
+            }
+            Ok(())
         }
         (FieldKind::Select(o), J::String(t)) if o.contains(&t.as_str()) => Ok(()),
         (FieldKind::Ref(to), J::String(id)) => {
@@ -119,8 +149,8 @@ fn check_json(
 }
 
 /// Validate the fields of a create (`creating`: every required field must be present) or of an
-/// update against their kinds (D47), required flags and refs. A ref must name a record the caller
-/// can see.
+/// update against their kinds (D47), required flags, limits (D90) and refs. A ref must name a
+/// record the caller can see.
 pub(crate) fn check_fields(
     reads: &dyn Reads,
     lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
@@ -129,6 +159,79 @@ pub(crate) fn check_fields(
     fields: &Fields,
     creating: bool,
 ) -> R<()> {
+    check_fields_against(reads, lookup, actor, def, fields, creating, None)
+}
+
+/// As [`check_fields`] for an update of a record that is `stored`: a value that equals the stored
+/// one is not held to the limits of its field again (D90 Decision 6), so a record above a limit
+/// that was lowered later can still be saved with its other fields changed, and a form that sends
+/// the whole record back works. Every other check (kind, refs, required) still runs on it.
+///
+/// A refusal of a limit states the length or the number the caller wrote, unless the caller is an
+/// agent: its tokens were restored to the real values before this runs, so the count would tell
+/// it about data it may not read (D90 Decision 5).
+pub(crate) fn check_fields_against(
+    reads: &dyn Reads,
+    lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
+    actor: &Actor,
+    def: &ModelDef,
+    fields: &Fields,
+    creating: bool,
+    stored: Option<&Fields>,
+) -> R<()> {
+    let how = Writing {
+        creating,
+        stored,
+        say_value: !actor.agent,
+    };
+    check_with(reads, lookup, actor, def, fields, how)
+}
+
+/// As [`check_fields_against`] for the values an action effect writes (`create`, `set`, `adjust`):
+/// they are the action's, copied from the record or from the author's constants, and the caller
+/// may not be allowed to read the field they came from (`$self.salary`), so a refusal of a limit
+/// never states their length or number, whoever the caller is (D90 Decision 5).
+pub(crate) fn check_effect_fields(
+    reads: &dyn Reads,
+    lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
+    actor: &Actor,
+    def: &ModelDef,
+    fields: &Fields,
+    creating: bool,
+    stored: Option<&Fields>,
+) -> R<()> {
+    let how = Writing {
+        creating,
+        stored,
+        say_value: false,
+    };
+    check_with(reads, lookup, actor, def, fields, how)
+}
+
+/// What kind of write `check_with` is checking.
+#[derive(Clone, Copy)]
+struct Writing<'a> {
+    /// A create: every required field must be present.
+    creating: bool,
+    /// The record as it is stored, for an update.
+    stored: Option<&'a Fields>,
+    /// A refusal of a limit may state the length or number written.
+    say_value: bool,
+}
+
+fn check_with(
+    reads: &dyn Reads,
+    lookup: &dyn Fn(&str) -> Option<Arc<ModelDef>>,
+    actor: &Actor,
+    def: &ModelDef,
+    fields: &Fields,
+    how: Writing<'_>,
+) -> R<()> {
+    let Writing {
+        creating,
+        stored,
+        say_value,
+    } = how;
     let gate = Gate::new(reads, lookup, actor);
     for f in &def.fields {
         if f.computed.is_some() {
@@ -146,7 +249,13 @@ pub(crate) fn check_fields(
                 ));
             }
             Some(J::Null) => {}
-            Some(v) => check_json(reads, &gate, lookup, def.name, f.name, &f.kind, v)?,
+            Some(v) => {
+                let held = Held {
+                    unchanged: stored.is_some_and(|s| s.get(f.name) == Some(v)),
+                    say_value,
+                };
+                check_json(reads, &gate, lookup, def.name, f, v, held)?
+            }
         }
     }
     Ok(())
@@ -333,7 +442,7 @@ pub(crate) fn update(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R<Valu
         }
     }
     kinds::canonicalise(def, &mut patch, Path::Write)?;
-    check_fields(&unit, &look, &actor, def, &patch, false)?;
+    check_fields_against(&unit, &look, &actor, def, &patch, false, Some(&cur))?;
     let changed: Fields = patch
         .iter()
         .filter(|(k, v)| cur.get(*k) != Some(*v))

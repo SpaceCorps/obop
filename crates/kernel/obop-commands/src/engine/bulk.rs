@@ -445,7 +445,8 @@ pub(crate) fn bulk_create(eng: &Engine, def: &Arc<ModelDef>, input: &Value) -> R
                 ids.push(None);
                 failed += 1;
                 if errors.len() < MAX_LISTED_ERRORS {
-                    errors.push((r.row, r.line, e));
+                    // The list names the row; a refusal with a code (D90) is listed by its text.
+                    errors.push((r.row, r.line, crate::errors::plain(&e).to_string()));
                 }
             }
         }

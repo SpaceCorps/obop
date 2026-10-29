@@ -1,7 +1,7 @@
 # Snapshot of crates/modules/connectors/src/meta.rs (built-in).
 [module]
 id = "connectors"
-version = "0.2.0"
+version = "0.2.1"
 name = "Connectors"
 description = "Connect external systems and let people connect their own accounts, with the controls that support GDPR compliance built in."
 summary = "Connect other systems with a recorded legal basis, field allowlists, signed webhooks and OAuth."

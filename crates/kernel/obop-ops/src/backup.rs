@@ -6,7 +6,7 @@
 //! at a time, so a large database never sits in memory and a running server is not stopped:
 //!
 //! ```text
-//! {"type":"header","format":1,"core_version":"0.2.0","schema_version":2,"created_at":"...","source":"postgres"}
+//! {"type":"header","format":1,"core_version":"0.2.1","schema_version":2,"created_at":"...","source":"postgres"}
 //! {"m":"<model>","i":"<id>","d":{...fields...}}      one line per record, in insertion order
 //! {"blob":"<sha256 id>","ct":"image/png","w":640,"h":480,"created":1,"x":"<base64 bytes>"}
 //! {"type":"end","records":N,"blobs":M,"content_sha256":"..."}

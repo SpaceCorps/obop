@@ -22,17 +22,19 @@
 //! the whole batch fail cleanly (and it is retried against the fresh data) instead of losing the
 //! edit. Everything here is pure except `build_ops`, which reads records.
 
-use crate::manifest::{FieldM, Manifest, MigrationM};
+use crate::manifest::{FieldM, Manifest, MigrationM, probe};
 use crate::semver::{Req, Version};
+use obop_registry::Bound;
 use obop_storage::{Backend, Fields, Op};
 use serde_json::{Value as J, json};
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 /// One thing that differs between two versions of a package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {
     /// `model_added`, `model_removed`, `field_added`, `field_removed`, `field_retyped`,
-    /// `field_reshaped`, `field_required`, `option_added`, `option_removed`, `action_added`,
+    /// `field_reshaped`, `field_limits`, `field_required`, `option_added`, `option_removed`, `action_added`,
     /// `action_removed`.
     pub kind: &'static str,
     pub model: String,
@@ -42,6 +44,156 @@ pub struct Change {
     pub breaking: bool,
     /// The migration step that resolves it, in words, when there is one.
     pub resolved_by: Option<String>,
+}
+
+/// The limits a field has (D90), declared and implied, for the plan: a text or longtext field that
+/// declares no `max_length` still has the default of its kind, so "none" would read as unlimited.
+#[derive(Debug, Clone)]
+struct Held {
+    min_length: Option<u32>,
+    /// The effective maximum (the declared one, else the default of the kind) and whether it is
+    /// the default.
+    max_length: Option<(u32, bool)>,
+    min: Option<Bound>,
+    max: Option<Bound>,
+}
+
+impl Held {
+    fn of(f: &FieldM) -> Self {
+        let Ok(def) = probe(f) else {
+            // Not parseable: the install gate refuses it anyway; show what is declared.
+            return Self {
+                min_length: f.min_length,
+                max_length: f.max_length.map(|n| (n, false)),
+                min: None,
+                max: None,
+            };
+        };
+        // A computed or numbered field is never written: it has no default length.
+        let written = f.computed.is_none() && f.kind != "sequence";
+        let l = def.declared_limits();
+        Self {
+            min_length: l.min_length,
+            max_length: if written {
+                def.effective_max_length()
+                    .map(|n| (n, l.max_length.is_none()))
+            } else {
+                l.max_length.map(|n| (n, false))
+            },
+            min: l.min,
+            max: l.max,
+        }
+    }
+
+    /// Whether both hold a value to the same limits. A declared `max_length` that equals the default
+    /// holds it to the same one.
+    fn same(&self, other: &Self) -> bool {
+        (
+            self.min_length,
+            self.max_length.map(|m| m.0),
+            self.min,
+            self.max,
+        ) == (
+            other.min_length,
+            other.max_length.map(|m| m.0),
+            other.min,
+            other.max,
+        )
+    }
+
+    /// Nothing is held: no length (a number, a date, ...), no bound.
+    fn is_none(&self) -> bool {
+        self.min_length.is_none()
+            && self.max_length.is_none()
+            && self.min.is_none()
+            && self.max.is_none()
+    }
+
+    fn text(&self) -> String {
+        if self.is_none() {
+            return "none".into();
+        }
+        let mut parts = Vec::new();
+        if let Some(n) = self.min_length {
+            parts.push(format!("min_length {n}"));
+        }
+        match self.max_length {
+            Some((n, true)) => parts.push(format!("max_length {n} (default)")),
+            Some((n, false)) => parts.push(format!("max_length {n}")),
+            None => {}
+        }
+        if let Some(b) = self.min {
+            parts.push(format!("min {b}"));
+        }
+        if let Some(b) = self.max {
+            parts.push(format!("max {b}"));
+        }
+        parts.join(", ")
+    }
+
+    /// Whether `new` holds a value to more than `self` does, to less, or both (one limit tighter
+    /// and another looser), comparing what is held and not what is spelled.
+    fn change_to(&self, new: &Self) -> &'static str {
+        let (mut tighter, mut looser) = (false, false);
+        let mut note = |o: Ordering| match o {
+            Ordering::Greater => tighter = true,
+            Ordering::Less => looser = true,
+            Ordering::Equal => {}
+        };
+        note(tighter_upper(
+            self.max_length.map(|m| m.0),
+            new.max_length.map(|m| m.0),
+            |a, b| Some(a.cmp(&b)),
+        ));
+        note(tighter_lower(self.min_length, new.min_length, |a, b| {
+            Some(a.cmp(&b))
+        }));
+        note(tighter_upper(self.max, new.max, cmp_bound));
+        note(tighter_lower(self.min, new.min, cmp_bound));
+        match (tighter, looser) {
+            (true, false) => "tighten",
+            (false, true) => "loosen",
+            (true, true) => "tighten and loosen",
+            (false, false) => "change",
+        }
+    }
+}
+
+/// `Greater` when `new` is the tighter of two upper limits (`None` is no limit), `Less` when it
+/// is the looser.
+fn tighter_upper<T: Copy>(
+    old: Option<T>,
+    new: Option<T>,
+    cmp: impl Fn(T, T) -> Option<Ordering>,
+) -> Ordering {
+    match (old, new) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (Some(o), Some(n)) => cmp(o, n).unwrap_or(Ordering::Equal),
+    }
+}
+
+/// As [`tighter_upper`] for lower limits: the higher one is the tighter.
+fn tighter_lower<T: Copy>(
+    old: Option<T>,
+    new: Option<T>,
+    cmp: impl Fn(T, T) -> Option<Ordering>,
+) -> Ordering {
+    match (old, new) {
+        (None, None) => Ordering::Equal,
+        (None, Some(_)) => Ordering::Greater,
+        (Some(_), None) => Ordering::Less,
+        (Some(o), Some(n)) => cmp(o, n).map_or(Ordering::Equal, Ordering::reverse),
+    }
+}
+
+fn cmp_bound(a: Bound, b: Bound) -> Option<Ordering> {
+    match (a, b) {
+        (Bound::Int(x), Bound::Int(y)) => Some(x.cmp(&y)),
+        (Bound::Dec(x), Bound::Dec(y)) => Some(x.compare(y)),
+        _ => None,
+    }
 }
 
 /// The structural difference between the installed manifest and the new one.
@@ -119,6 +271,26 @@ pub fn diff(old: &Manifest, new: &Manifest) -> Vec<Change> {
                                 format!("{} changes from {} to {}", nf.name, shape(of), shape(nf)),
                                 // Widening the precision alone leaves every stored value valid.
                                 of.scale != nf.scale || nf.precision < of.precision,
+                            ));
+                        }
+                        // Limits (D90) only tighten or loosen what is written from now on; stored
+                        // values are not re-checked, so this is shown and never blocks.
+                        // What is held counts, not what is spelled: a text field that drops its
+                        // `max_length` is held to the default of its kind from then on.
+                        let (held_old, held_new) = (Held::of(of), Held::of(nf));
+                        if !held_old.same(&held_new) {
+                            out.push(ch(
+                                "field_limits",
+                                &nm.name,
+                                Some(&nf.name),
+                                format!(
+                                    "{}: limits {} from {} to {}; values already stored are not re-checked",
+                                    nf.name,
+                                    held_old.change_to(&held_new),
+                                    held_old.text(),
+                                    held_new.text()
+                                ),
+                                false,
                             ));
                         }
                         if nf.required && !of.required && nf.computed.is_none() {

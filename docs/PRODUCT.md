@@ -738,7 +738,7 @@ Which answers block which gate ([ROADMAP.md s2.3](ROADMAP.md#23-gates)): the G0 
 | [LICENSE](../LICENSE), [NOTICE](../NOTICE) | The Apache-2.0 licence text and the attribution ("Copyright 2026 SpaceCorps contributors") for the whole project |
 | [PRODUCT.md](PRODUCT.md) | This document |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Reconciled architecture and stack; the CLI, API and MCP surface |
-| [DECISIONS.md](DECISIONS.md) | Binding register: the owner rulings OR-1 to OR-35, decisions D1 to D89, vocabulary, waves, the W1 cut and slip order, the open boundary (everything is free), open questions |
+| [DECISIONS.md](DECISIONS.md) | Binding register: the owner rulings OR-1 to OR-35, decisions D1 to D90, vocabulary, waves, the W1 cut and slip order, the open boundary (everything is free), open questions |
 | [CONVENTIONS.md](CONVENTIONS.md) | Naming and contract authority: identifiers, events, permission groups, data classes, ports, CLI grammar |
 | [ROADMAP.md](ROADMAP.md) | Waves, calendar, CLI-first sequencing, gates, kill criteria; the team is the owner plus AI agents |
 | [BUSINESS.md](BUSINESS.md) | Licensing and governance, sustainability, community, go-to-market, risk register and counsel items (not a revenue plan) |

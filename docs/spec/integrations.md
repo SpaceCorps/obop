@@ -655,6 +655,6 @@ Tags map to files relative to `docs/spec/`; "D" identifiers refer to [DECISIONS.
 | R26 | [research/26-business-model-pricing-risk.md](../research/26-business-model-pricing-risk.md) |
 | R27 | [research/27-quality-release-engineering.md](../research/27-quality-release-engineering.md) |
 | R28 | [research/28-docs-community-support-brand.md](../research/28-docs-community-support-brand.md) |
-| D1-D89, OR-1 to OR-35, Q1-Q61 | [DECISIONS.md](../DECISIONS.md) |
+| D1-D90, OR-1 to OR-35, Q1-Q61 | [DECISIONS.md](../DECISIONS.md) |
 | CLI | [cli.md](cli.md) (the agentic-first command surface and the plugin registry client) |
 | CONVENTIONS | [CONVENTIONS.md](../CONVENTIONS.md) (spelling of cross-document names; subordinate to DECISIONS.md) |

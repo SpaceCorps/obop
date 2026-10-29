@@ -1,7 +1,7 @@
 # Snapshot of crates/modules/product/src/lib.rs (built-in).
 [module]
 id = "product"
-version = "0.2.0"
+version = "0.2.1"
 name = "Products"
 description = "Goods and services the business sells, with SKU, list price and cost."
 summary = "Products and services with prices and cost, shared by sales, invoicing and stock."

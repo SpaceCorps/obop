@@ -97,6 +97,9 @@ pub mod code {
     pub const USE_SEARCH: &str = "use_search";
     /// D56: an assertion of the action did not hold (REST names it; see the module comment).
     pub const ASSERTION_FAILED: &str = "assertion_failed";
+    /// D90: a value is outside a limit of its field (`max_length`, `min_length`, `min`,
+    /// `max`, or the default length of a text field).
+    pub const LIMIT_VIOLATED: &str = "limit_violated";
     /// Step 2: the caller is known and may not do this.
     pub const DENIED: &str = "denied";
     /// Step 2: the caller must confirm their identity again.
@@ -233,6 +236,13 @@ pub const TABLE: &[Row] = &[
         hint: "A condition of the action does not hold. Change the record as the message says, then retry.",
     },
     Row {
+        code: code::LIMIT_VIOLATED,
+        status: 400,
+        retry_after: None,
+        origin: "D90",
+        hint: "A value is outside the limits of its field (max_length, min_length, min and max in GET /api/meta; a text field with no max_length has the default of its kind). Nothing was changed. Shorten the text or change the number so that it fits, then retry.",
+    },
+    Row {
         code: code::DENIED,
         status: 403,
         retry_after: None,
@@ -292,6 +302,21 @@ pub fn row(code: &str) -> Option<&'static Row> {
 pub fn coded(code: &'static str, message: &str) -> String {
     debug_assert!(row(code).is_some(), "{code} is not a row of errors::TABLE");
     format!("{code}: {message}")
+}
+
+/// `context: message`, for an engine that wraps the refusal of something it started (an effect of
+/// an action, the action a `set_state` effect starts) with where it happened. A refusal that
+/// carries the code `limit_violated` (D90) keeps its code first, so that the wrapped answer is
+/// still that code with its hint on every surface: `limit_violated: context: message`. Every other
+/// refusal is wrapped as it always was (an assertion is recognised by the text it noted, see
+/// `locale::assertion_behind`).
+pub(crate) fn wrap(context: &str, m: &str) -> String {
+    match split_code(m) {
+        Some((r, rest)) if r.code == code::LIMIT_VIOLATED => {
+            coded(code::LIMIT_VIOLATED, &format!("{context}: {rest}"))
+        }
+        _ => format!("{context}: {m}"),
+    }
 }
 
 /// What kind of answer the call earned, apart from its status.
@@ -699,6 +724,13 @@ fn split_code(m: &str) -> Option<(&'static Row, &str)> {
         .map(|r| (r, rest))
 }
 
+/// The message of a handler string without its leading code (`code: message`), for a place that
+/// lists refusals one by one and names the row itself (the rows of `bulk_create`). A text that
+/// does not begin with a code of the table is returned as it is.
+pub fn plain(m: &str) -> &str {
+    split_code(m).map_or(m, |(_, rest)| rest)
+}
+
 /// The `origin` of the three storage rows.
 const STORAGE_ORIGIN: &str = "D74";
 
@@ -889,6 +921,7 @@ mod tests {
             ("limit_required", 400),
             ("use_search", 400),
             ("assertion_failed", 400),
+            ("limit_violated", 400),
             ("denied", 403),
             ("reauth_required", 400),
             ("incomplete", 409),

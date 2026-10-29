@@ -8,9 +8,9 @@ use obop_commands::{PublicRead, PublicReceipt, PublicSpec, PublicSubmit};
 use obop_registry::labels::{LangLabels, ModelShape, Shape, Translations, check_labels};
 use obop_registry::rules::{MAX_ASSERT_KEY, MAX_EFFECTS, SeqFormat, assert_key_ok};
 use obop_registry::{
-    Access, Assertion, CommandDef, Computed, Effect, EffectKind, FieldDef, FieldKind,
-    GENERATED_COMMANDS, History, Lit, Locator, MATURITIES, MODULE_CATEGORIES, ModelDef, ModelExt,
-    Module, ModuleMeta, Reset, SequenceSpec, ShowsOption, Src, Target, Unique,
+    Access, Assertion, Bound, CommandDef, Computed, Effect, EffectKind, FieldDef, FieldKind,
+    GENERATED_COMMANDS, History, Limits, Lit, Locator, MATURITIES, MODULE_CATEGORIES, ModelDef,
+    ModelExt, Module, ModuleMeta, Reset, SequenceSpec, ShowsOption, Src, Target, Unique,
     check_installed_module, check_module, intern,
 };
 use obop_types::DataClass;
@@ -284,14 +284,131 @@ pub struct FieldM {
     /// browser evaluates) on the same record. The label shows only while it holds, because the
     /// field may also hold free text.
     pub when: Option<String>,
+    /// `kind = "text"` or `"longtext"` (D90): the most characters (Unicode scalar values, not
+    /// bytes) a written value has, 1 to 10,000 for `text` and 1 to 1,000,000 for `longtext`.
+    /// Without it the field has the default of its kind (2,048 and 100,000).
+    pub max_length: Option<u32>,
+    /// `kind = "text"` or `"longtext"` (D90): the fewest characters a written value has, at
+    /// least 1 and not above `max_length`. A value is counted as stored: nothing is trimmed.
+    pub min_length: Option<u32>,
+    /// `kind = "number"`, `"money"` or `"decimal"` (D90): the smallest value, inclusive. A whole
+    /// number (a TOML integer) for `number` and `money`; for `decimal` a string (`"0.10"`) or a TOML
+    /// integer with at most `scale` fractional digits (fewer are padded to the scale) that fits the
+    /// precision. A TOML float is refused because it is not exact.
+    pub min: Option<toml::Value>,
+    /// As `min`: the largest value, inclusive.
+    pub max: Option<toml::Value>,
 }
 
-/// Whether `v` is a value the field can hold, for `set_default`.
-fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
+/// The registry kind of a manifest field (`sequence` is a text field that is numbered).
+fn kind_of(f: &FieldM) -> FieldKind {
+    match f.kind.as_str() {
+        "longtext" => FieldKind::LongText,
+        "number" => FieldKind::Number,
+        "money" => FieldKind::Money,
+        "date" => FieldKind::Date,
+        "datetime" => FieldKind::Datetime,
+        "decimal" => FieldKind::Decimal {
+            precision: f.precision.unwrap_or(0) as u8,
+            scale: f.scale.unwrap_or(0) as u8,
+            round: f.round.as_deref().and_then(obop_values::Round::parse),
+        },
+        "bool" => FieldKind::Bool,
+        "select" => FieldKind::Select(
+            f.options
+                .iter()
+                .map(|o| intern(o))
+                .collect::<Vec<_>>()
+                .into(),
+        ),
+        "ref" => FieldKind::Ref(intern(f.to.as_deref().unwrap_or(""))),
+        "image" => FieldKind::Image(f.max_bytes.unwrap_or(0)),
+        "file" => FieldKind::File(f.max_bytes.unwrap_or(0)),
+        _ => FieldKind::Text,
+    }
+}
+
+/// One bound of `min` or `max` (D90) as the registry holds it. A `number` or `money` bound is a
+/// TOML integer; a `decimal` bound is a string (or an integer) that fits the field's precision,
+/// with at most `scale` fractional digits, and is kept at the scale of the field. A float is
+/// refused: it is not exact.
+fn bound_of(key: &str, v: &toml::Value, f: &FieldM) -> Result<Bound, String> {
+    use toml::Value as T;
+    match (f.kind.as_str(), v) {
+        ("number" | "money", T::Integer(n)) => Ok(Bound::Int(*n)),
+        ("number" | "money", T::Float(_)) => Err(format!(
+            "`{key}` must be a whole number for kind {:?}, not a float",
+            f.kind
+        )),
+        ("number" | "money", _) => Err(format!(
+            "`{key}` must be a whole number (a TOML integer without quotes) for kind {:?}",
+            f.kind
+        )),
+        ("decimal", T::Float(_)) => Err(format!(
+            "`{key}` of a decimal field must be written as a string such as \"0.10\": a TOML float is not exact"
+        )),
+        ("decimal", T::String(_) | T::Integer(_)) => {
+            let text = match v {
+                T::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            let (Some(p), Some(sc)) = (f.precision, f.scale) else {
+                return Err(format!(
+                    "`{key}` needs the precision and scale of the decimal"
+                ));
+            };
+            obop_values::Decimal::parse_for(&text, p as u8, sc as u8, None)
+                .map(Bound::Dec)
+                .map_err(|e| {
+                    format!(
+                        "`{key}` {text:?} is not a decimal that fits decimal({p}, {sc}) with at most {sc} digits after the point: {e}"
+                    )
+                })
+        }
+        ("decimal", _) => Err(format!(
+            "`{key}` of a decimal field must be a string such as \"0.10\""
+        )),
+        _ => Err(format!(
+            "`min` and `max` are only valid for kind \"number\", \"money\" or \"decimal\", not {:?}",
+            f.kind
+        )),
+    }
+}
+
+/// The limits a field declares (D90), parsed; their meaning (which kind they fit, `min` above
+/// `max`, a length above the cap) is the D41 gate's, which `field_def` runs on the result.
+fn limits_of(f: &FieldM) -> Result<Limits, String> {
+    Ok(Limits {
+        min_length: f.min_length,
+        max_length: f.max_length,
+        min: f.min.as_ref().map(|v| bound_of("min", v, f)).transpose()?,
+        max: f.max.as_ref().map(|v| bound_of("max", v, f)).transpose()?,
+    })
+}
+
+/// A field of `f`'s kind and limits, to hold a value against (`set_default`).
+pub(crate) fn probe(f: &FieldM) -> Result<FieldDef, String> {
+    Ok(
+        FieldDef::new(intern(&f.name), "", DataClass::None, false, "")
+            .kind(kind_of(f))
+            .with_limits(limits_of(f)?),
+    )
+}
+
+/// Whether `v` is a value the field can hold, for `set_default`. `installed` is true when the
+/// manifest is the text of a package that is already installed: the step was checked, or not
+/// needed, when that copy went in, and it is read as the previous core read it (a float for a
+/// number or money field is let through, no limit applies), so that a server still starts with
+/// the module its data belongs to. Only an install or an upgrade refuses what D90 refuses.
+fn default_matches(f: &FieldM, v: &toml::Value, installed: bool) -> Result<(), String> {
     use toml::Value as T;
     let ok = match (f.kind.as_str(), v) {
         ("text" | "longtext" | "date" | "ref", T::String(_)) => true,
-        ("number" | "money", T::Integer(_) | T::Float(_)) => true,
+        // A whole number: a float is not stored by a write either, and it would also skip the
+        // bounds of the field (D90).
+        ("number" | "money", T::Integer(_)) => true,
+        // The previous core let a float through here, so an installed package may carry one.
+        ("number" | "money", T::Float(_)) if installed => true,
         ("datetime", T::String(s)) => obop_values::Instant::parse(s).is_ok(),
         // A decimal default is a string ("12.50") or a whole number; a TOML float is not exact.
         ("decimal", T::String(s)) => match (f.precision, f.scale) {
@@ -312,7 +429,7 @@ fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
         _ => false,
     };
     if ok {
-        Ok(())
+        if installed { Ok(()) } else { limits_hold(f, v) }
     } else {
         Err(format!(
             "the value does not fit the {} field {}{}",
@@ -322,10 +439,47 @@ fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
                 format!(" (options: {})", f.options.join(", "))
             } else if matches!(f.kind.as_str(), "image" | "file" | "sequence") {
                 " (it cannot be given a default)".to_string()
+            } else if matches!(f.kind.as_str(), "number" | "money") {
+                " (a whole number, written without a decimal point)".to_string()
             } else {
                 String::new()
             }
         ))
+    }
+}
+
+/// A `set_default` value is held to the limits of its field like any write (D90): a step cannot
+/// store what the field would refuse. A field whose limits do not parse is reported where its
+/// limits are read, not here.
+fn limits_hold(f: &FieldM, v: &toml::Value) -> Result<(), String> {
+    use toml::Value as T;
+    let Ok(d) = probe(f) else { return Ok(()) };
+    let refused = |b: obop_registry::Breach, shown: &str| {
+        format!(
+            "the value is outside the limits of {}: it must be {}",
+            f.name,
+            b.detail(shown)
+        )
+    };
+    match (f.kind.as_str(), v) {
+        ("text" | "longtext", T::String(s)) => d.check_text(s).map_err(|b| refused(b, "")),
+        ("number" | "money", T::Integer(n)) => {
+            d.check_int(*n).map_err(|b| refused(b, &n.to_string()))
+        }
+        ("decimal", T::String(_) | T::Integer(_)) => {
+            let (Some(p), Some(sc)) = (f.precision, f.scale) else {
+                return Ok(());
+            };
+            let text = match v {
+                T::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            match obop_values::Decimal::parse_for(&text, p as u8, sc as u8, None) {
+                Ok(x) => d.check_decimal(x).map_err(|b| refused(b, &x.to_string())),
+                Err(_) => Ok(()),
+            }
+        }
+        _ => Ok(()),
     }
 }
 
@@ -672,7 +826,7 @@ impl Manifest {
         self.build_models()?;
         self.public_specs()?;
         check_labels(&self.labels, &self.shape())?;
-        self.validate_migrations()?;
+        self.validate_migrations(installed)?;
         Ok(())
     }
 
@@ -714,7 +868,7 @@ impl Manifest {
     /// `[[migration]]` (D63): each step names a model and field of this package and says what to
     /// do to the records of an older version. The steps are checked against the shape of this
     /// version, so a step that could never run is refused when the package is read.
-    fn validate_migrations(&self) -> Result<(), String> {
+    fn validate_migrations(&self, installed: bool) -> Result<(), String> {
         if self.migration.len() > 100 {
             return Err("a package may declare at most 100 migration steps".into());
         }
@@ -765,7 +919,7 @@ impl Manifest {
                     let Some(v) = &st.value else {
                         return Err(format!("{at}: set_default needs `value`"));
                     };
-                    default_matches(f, v).map_err(|e| format!("{at}: {e}"))?;
+                    default_matches(f, v, installed).map_err(|e| format!("{at}: {e}"))?;
                     if st.to.is_some() || st.confirm {
                         return Err(format!("{at}: set_default takes only `value`"));
                     }
@@ -1555,30 +1709,8 @@ impl Manifest {
 
     fn field_def(&self, m: &ModelM, f: &FieldM) -> Result<FieldDef, String> {
         let at = format!("{}.{}", m.name, f.name);
-        let kind = match f.kind.as_str() {
-            "longtext" => FieldKind::LongText,
-            "number" => FieldKind::Number,
-            "money" => FieldKind::Money,
-            "date" => FieldKind::Date,
-            "datetime" => FieldKind::Datetime,
-            "decimal" => FieldKind::Decimal {
-                precision: f.precision.unwrap_or(0) as u8,
-                scale: f.scale.unwrap_or(0) as u8,
-                round: f.round.as_deref().and_then(obop_values::Round::parse),
-            },
-            "bool" => FieldKind::Bool,
-            "select" => FieldKind::Select(
-                f.options
-                    .iter()
-                    .map(|o| intern(o))
-                    .collect::<Vec<_>>()
-                    .into(),
-            ),
-            "ref" => FieldKind::Ref(intern(f.to.as_deref().unwrap_or(""))),
-            "image" => FieldKind::Image(f.max_bytes.unwrap_or(0)),
-            "file" => FieldKind::File(f.max_bytes.unwrap_or(0)),
-            _ => FieldKind::Text,
-        };
+        let kind = kind_of(f);
+        let limits = limits_of(f).map_err(|e| format!("{at}: {e}"))?;
         let sequence = if f.kind == "sequence" {
             let format = SeqFormat::parse(f.format.as_deref().unwrap_or_default())
                 .map_err(|e| format!("{at}: format: {e}"))?;
@@ -1619,7 +1751,7 @@ impl Manifest {
             )),
             None => None,
         };
-        Ok(FieldDef {
+        let def = FieldDef {
             name: intern(&f.name),
             description: intern(&f.description),
             class: DataClass::parse(&f.class),
@@ -1633,7 +1765,14 @@ impl Manifest {
             }),
             sequence,
             shows_option,
-        })
+            limits: (!limits.is_empty()).then(|| std::sync::Arc::new(limits)),
+        };
+        // The limits are checked here as well as by the gate, so the error of a bad one names the
+        // file's field before anything else is parsed (D90).
+        if let Some(problem) = obop_registry::limits::problems(&def).into_iter().next() {
+            return Err(format!("{at}: {problem}"));
+        }
+        Ok(def)
     }
 
     /// The models as registry data, rules included. Syntax errors in expressions, formats and
@@ -1987,12 +2126,12 @@ write_group = "fleet.manager"
         let t = at("kind = \"decimal\"\n  precision = 6\n  scale = 2");
         let f = Manifest::parse(&t).unwrap().model[0].field[0].clone();
         let v = |s: &str| toml::from_str::<toml::Table>(s).unwrap()["v"].clone();
-        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}"))).is_ok();
+        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}")), false).is_ok();
         assert!(ok("\"12.5\"") && ok("12"));
         assert!(!ok("12.5") && !ok("\"1.234\"") && !ok("\"1e3\"") && !ok("true") && !ok("1234567"));
         let t = at("kind = \"datetime\"");
         let f = Manifest::parse(&t).unwrap().model[0].field[0].clone();
-        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}"))).is_ok();
+        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}")), false).is_ok();
         assert!(ok("\"2026-03-29T01:30:00Z\"") && !ok("\"2026-03-29\"") && !ok("5"));
     }
 

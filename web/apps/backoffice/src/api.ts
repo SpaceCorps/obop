@@ -55,6 +55,20 @@ export type FieldMeta = {
   precision?: number;
   scale?: number;
   round?: "half_even" | "half_up" | "down";
+  /**
+   * Only for `text` and `longtext` (D90): the most characters (Unicode code points, so "å" and an
+   * emoji count one each) a written value has, which is the default of the kind when the package
+   * declares none, and the fewest, when it declares a minimum. Absent for computed and numbered
+   * fields.
+   */
+  max_length?: number;
+  min_length?: number;
+  /**
+   * Only for `number`, `money` (minor units) and `decimal` (a canonical string at the scale of the
+   * field) (D90): the inclusive bounds the package declares.
+   */
+  min?: number | string;
+  max?: number | string;
   /** The model the field belongs to (set when the metadata is loaded). */
   model?: string;
   /** Moves only through the model's actions, also for someone who can run none of them (D48). */

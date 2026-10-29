@@ -4,7 +4,7 @@
 
 use crate::engine::{Engine, crud, seq};
 use crate::{Dispatcher, Value, guards};
-use obop_registry::{FieldKind, ModelDef, Module, is_valid_date};
+use obop_registry::{FieldDef, FieldKind, ModelDef, Module, is_valid_date};
 use obop_storage::blob::{Blobs, Catalog};
 use obop_storage::{Backend, Fields};
 use std::collections::BTreeMap;
@@ -144,24 +144,34 @@ pub(crate) fn declared_fields(
 
 /// Check one non-null value against its field kind (D47). Tokens are already restored by the
 /// dispatcher, so this always sees real values.
+/// The only caller is the public site's submission (D90): the visitor typed every value, so a
+/// limit refusal may state its length or number (`true`); nothing here is read from a record.
 fn check_value(
     store: &Store,
     pending: &[(String, String)],
     model: &str,
-    name: &str,
-    kind: &FieldKind,
+    f: &FieldDef,
     v: &Value,
 ) -> Result<(), String> {
+    let (name, kind) = (f.name, &f.kind);
     match (kind, v) {
-        (FieldKind::Text | FieldKind::LongText, Value::Text(_)) => Ok(()),
-        (FieldKind::Number | FieldKind::Money, Value::Int(_)) => Ok(()),
+        (FieldKind::Text | FieldKind::LongText, Value::Text(s)) => {
+            crate::kinds::check_text_limits(model, f, s, true)
+        }
+        (FieldKind::Number | FieldKind::Money, Value::Int(n)) => {
+            crate::kinds::check_int_limits(model, f, *n, true)
+        }
         (FieldKind::Bool, Value::Bool(_)) => Ok(()),
         (FieldKind::Image(_) | FieldKind::File(_), Value::Text(id)) => {
             crate::blobs::check_field_value(store, model, name, kind, id)
         }
         (FieldKind::Date, Value::Text(t)) if is_valid_date(t) => Ok(()),
         (FieldKind::Decimal { .. } | FieldKind::Datetime, Value::Text(t)) => {
-            crate::kinds::check_canonical(model, name, kind, t)
+            crate::kinds::check_canonical(model, name, kind, t)?;
+            if matches!(kind, FieldKind::Decimal { .. }) {
+                crate::kinds::check_decimal_limits(model, f, t, true)?;
+            }
+            Ok(())
         }
         (FieldKind::Select(o), Value::Text(t)) if o.contains(&t.as_str()) => Ok(()),
         (FieldKind::Ref(to), Value::Text(id))
@@ -213,7 +223,7 @@ pub fn validate_with(
                 ));
             }
             Some(Value::Null) => {}
-            Some(v) => check_value(store, pending, def.name, f.name, &f.kind, v)?,
+            Some(v) => check_value(store, pending, def.name, f, v)?,
         }
     }
     Ok(())

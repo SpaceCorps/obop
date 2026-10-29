@@ -178,6 +178,8 @@ export function RecordPanel({
       value,
       creating ? undefined : (f) => changed(f) || f.required,
       currency,
+      // A value left as stored is not held to limits lowered since it was written (D90).
+      (f) => !creating && !changed(f),
     );
     setErrors(errs);
     if (Object.keys(errs).length) return d.notify(t("Fix the highlighted fields first"), "error");
@@ -569,6 +571,7 @@ export function RecordPanel({
                       currency={currency}
                       invalid={!!err}
                       describedBy={err ? `${fid}-err` : undefined}
+                      unchanged={!creating && !changed(f)}
                       onChange={(v) => {
                         setDraft({ ...draft, [f.name]: v });
                         if (err) setErrors({ ...errors, [f.name]: "" });

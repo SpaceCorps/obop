@@ -29,6 +29,8 @@ mod dependency_tests;
 #[cfg(test)]
 mod ledger_tests;
 #[cfg(test)]
+mod limits_tests;
+#[cfg(test)]
 mod public_tests;
 #[cfg(test)]
 mod update_tests;

@@ -131,7 +131,7 @@ dependencies = [
 
 [[package]]
 name = "base"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-commands",
  "obop-masking",
@@ -299,7 +299,7 @@ checksum = "6e8ccc4ea9f6acc32d102c0f6d471d11d913ad15f20c04de743374861fa1d414"
 
 [[package]]
 name = "connectors"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base",
  "crm",
@@ -339,7 +339,7 @@ dependencies = [
 
 [[package]]
 name = "crm"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-commands",
  "obop-registry",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "invoicing"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-commands",
  "obop-registry",
@@ -1150,7 +1150,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "mileage"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-commands",
  "obop-registry",
@@ -1252,7 +1252,7 @@ dependencies = [
 
 [[package]]
 name = "obop"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "axum",
  "base",
@@ -1293,7 +1293,7 @@ dependencies = [
 
 [[package]]
 name = "obop-auth"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "argon2",
  "getrandom 0.4.3",
@@ -1309,7 +1309,7 @@ dependencies = [
 
 [[package]]
 name = "obop-commands"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "icu_collator",
  "icu_locale",
@@ -1328,7 +1328,7 @@ dependencies = [
 
 [[package]]
 name = "obop-community"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ammonia",
  "form_urlencoded",
@@ -1345,7 +1345,7 @@ dependencies = [
 
 [[package]]
 name = "obop-connectors"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
@@ -1368,7 +1368,7 @@ dependencies = [
 
 [[package]]
 name = "obop-http"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "axum",
  "getrandom 0.4.3",
@@ -1394,7 +1394,7 @@ dependencies = [
 
 [[package]]
 name = "obop-keys"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chacha20poly1305",
  "getrandom 0.4.3",
@@ -1407,7 +1407,7 @@ dependencies = [
 
 [[package]]
 name = "obop-masking"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-types",
  "serde_json",
@@ -1415,24 +1415,25 @@ dependencies = [
 
 [[package]]
 name = "obop-mcp"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-commands",
  "obop-registry",
  "obop-types",
+ "obop-values",
  "serde_json",
 ]
 
 [[package]]
 name = "obop-media"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "image",
 ]
 
 [[package]]
 name = "obop-migrate"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-keys",
  "obop-storage",
@@ -1444,7 +1445,7 @@ dependencies = [
 
 [[package]]
 name = "obop-oauth"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "getrandom 0.4.3",
  "obop-auth",
@@ -1457,7 +1458,7 @@ dependencies = [
 
 [[package]]
 name = "obop-ops"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base64 0.22.1",
  "flate2",
@@ -1474,7 +1475,7 @@ dependencies = [
 
 [[package]]
 name = "obop-payments"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "base",
  "getrandom 0.4.3",
@@ -1492,7 +1493,7 @@ dependencies = [
 
 [[package]]
 name = "obop-pkg"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-commands",
  "obop-migrate",
@@ -1508,7 +1509,7 @@ dependencies = [
 
 [[package]]
 name = "obop-platform"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "getrandom 0.4.3",
  "obop-auth",
@@ -1527,7 +1528,7 @@ dependencies = [
 
 [[package]]
 name = "obop-registry"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-types",
  "obop-values",
@@ -1537,7 +1538,7 @@ dependencies = [
 
 [[package]]
 name = "obop-site"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ammonia",
  "base",
@@ -1555,7 +1556,7 @@ dependencies = [
 
 [[package]]
 name = "obop-storage"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "postgres",
  "rusqlite",
@@ -1569,11 +1570,11 @@ dependencies = [
 
 [[package]]
 name = "obop-types"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "obop-update"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-commands",
  "obop-keys",
@@ -1588,7 +1589,7 @@ dependencies = [
 
 [[package]]
 name = "obop-values"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "jiff",
  "jiff-tzdb",
@@ -1831,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "product"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "obop-commands",
  "obop-registry",
@@ -2010,7 +2011,7 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sales"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "invoicing",
  "obop-commands",

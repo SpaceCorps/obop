@@ -6,6 +6,7 @@ import { getLang, t, tx } from "@obop/ui";
 import type { FieldMeta, ModuleMeta } from "./api.ts";
 import { label, optionLabel } from "./format.ts";
 import { appTitle, fieldTitle, modelTitle } from "./labels.ts";
+import { showNumber, tooBig, tooLong, tooShort, tooSmall } from "./limits.ts";
 
 let modules: ModuleMeta[] = [];
 /** Lets messages name models and fields the way the interface does. */
@@ -128,6 +129,24 @@ const RULES: Rule[] = [
   [
     /^(\w+)\.(\w+) is required$/,
     (m) => t("{field} is required", { field: fieldName(m[1]!, m[2]!) }),
+  ],
+  // Field limits (D90): the length of a text, the range of a number, an amount or a decimal.
+  [
+    /^(\w+)\.(\w+) must be at (most|least) (\d+) characters?; this has (\d+)$/,
+    (m) =>
+      (m[3] === "most" ? tooLong : tooShort)(fieldName(m[1]!, m[2]!), Number(m[4]), Number(m[5])),
+  ],
+  [
+    /^(\w+)\.(\w+) must be at (most|least) (-?[\d.]+); this is (-?[\d.]+)$/,
+    (m) => {
+      const f = named(m);
+      const show = (raw: string) => (f ? showNumber(f, raw) : raw);
+      return (m[3] === "most" ? tooBig : tooSmall)(
+        fieldName(m[1]!, m[2]!),
+        show(m[4]!),
+        show(m[5]!),
+      );
+    },
   ],
   [
     /^(\w+)\.(\w+) must be a string$/,

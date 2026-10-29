@@ -1,5 +1,5 @@
 use super::*;
-use obop_registry::{CommandDef, FieldDef, Module};
+use obop_registry::{Bound, CommandDef, FieldDef, Limits, Module};
 
 fn f(name: &'static str) -> FieldDef {
     FieldDef::new(name, "d", DataClass::None, false, "t.user")
@@ -48,6 +48,16 @@ fn module() -> Module {
             FieldDef::new("email", "d", DataClass::Internal, true, "t.user").required(),
             f("body"),
             f("flag"),
+            f("qty").kind(FieldKind::Number).with_limits(Limits {
+                max: Some(Bound::Int(10)),
+                ..Default::default()
+            }),
+            f("rate").decimal(8, 2).with_limits(Limits {
+                max: Some(Bound::Dec(
+                    obop_values::Decimal::parse_for("5.00", 8, 2, None).unwrap(),
+                )),
+                ..Default::default()
+            }),
             f("page_id").reference("page"),
             f("state").select(&["new", "done"]),
         ],
@@ -107,7 +117,13 @@ fn specs() -> Vec<PublicSpec> {
             model: "msg".into(),
             read: None,
             submit: Some(PublicSubmit {
-                fields: vec!["email".into(), "body".into(), "page_id".into()],
+                fields: vec![
+                    "email".into(),
+                    "body".into(),
+                    "page_id".into(),
+                    "qty".into(),
+                    "rate".into(),
+                ],
                 rate_limit_per_hour: 3,
             }),
             receipt: None,
@@ -464,4 +480,68 @@ fn site_settings_reads_only_the_site_object() {
     let site = api.site_settings();
     assert_eq!(site["title"], "Shop");
     assert!(!site.contains_key("theme"));
+}
+
+#[test]
+fn a_visitor_cannot_send_a_text_longer_than_the_field_allows() {
+    // D90: the anonymous submit path checks what the form of a visitor sends like any other write.
+    let (api, s) = api();
+    let default = obop_registry::DEFAULT_TEXT_MAX as usize;
+    let ok = msg(&[("email", t("a@b.test")), ("body", t(&"ä".repeat(default)))]);
+    api.submit_batch("lim1", vec![ok]).unwrap();
+    assert_eq!(s.count("msg"), 1);
+
+    let long = msg(&[
+        ("email", t("a@b.test")),
+        ("body", t(&"ä".repeat(default + 1))),
+    ]);
+    let e = api.submit_batch("lim2", vec![long]);
+    let want = format!(
+        "msg.body must be at most {default} characters; this has {}",
+        default + 1
+    );
+    assert!(
+        matches!(&e, Err(SubmitError::Rejected(m)) if *m == want),
+        "{e:?}"
+    );
+    // The batch is all or nothing: a good submission next to the long one is not kept either.
+    let good = msg(&[("email", t("b@b.test"))]);
+    let long = msg(&[
+        ("email", t("a@b.test")),
+        ("body", t(&"x".repeat(default + 1))),
+    ]);
+    assert!(api.submit_batch("lim3", vec![good, long]).is_err());
+    assert_eq!(s.count("msg"), 1);
+}
+
+#[test]
+fn a_visitor_cannot_send_a_number_or_a_decimal_past_its_bound() {
+    // D90 (review of PR 33, F10): the anonymous path holds `number` and `decimal` to `max` as it
+    // holds a text to its length, and states what the visitor sent (the visitor typed it).
+    let (api, s) = api();
+    let rejected = |label: &str, kv: &[(&str, Value)]| {
+        let mut all = vec![("email", t("a@b.test"))];
+        all.extend_from_slice(kv);
+        match api.submit_batch(label, vec![msg(&all)]) {
+            Err(SubmitError::Rejected(m)) => m,
+            other => panic!("{label}: wanted a rejection, got {other:?}"),
+        }
+    };
+    assert_eq!(
+        rejected("n1", &[("qty", Value::Int(11))]),
+        "msg.qty must be at most 10; this is 11"
+    );
+    assert_eq!(
+        rejected("d1", &[("rate", t("5.01"))]),
+        "msg.rate must be at most 5.00; this is 5.01"
+    );
+    assert_eq!(s.count("msg"), 0);
+    // The bound itself is inside it.
+    let ok = msg(&[
+        ("email", t("a@b.test")),
+        ("qty", Value::Int(10)),
+        ("rate", t("5")),
+    ]);
+    api.submit_batch("n2", vec![ok]).unwrap();
+    assert_eq!(s.count("msg"), 1);
 }

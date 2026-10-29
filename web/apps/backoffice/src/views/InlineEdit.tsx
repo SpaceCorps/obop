@@ -19,9 +19,10 @@ export function InlineEdit(props: {
   const [busy, setBusy] = useState(false);
 
   async function commit(v: Edit) {
-    const r = fromEdit(f, v, currency);
+    const same = toEdit(f, row[f.name], currency) === v;
+    const r = fromEdit(f, v, currency, same);
     if ("error" in r) return setError(r.error);
-    if (toEdit(f, row[f.name], currency) === v) return props.done();
+    if (same) return props.done();
     setBusy(true);
     const err = await props.update(row.id, { [f.name]: r.value });
     setBusy(false);
@@ -46,6 +47,7 @@ export function InlineEdit(props: {
         optionState={props.optionState}
         invalid={!!error}
         readOnly={busy}
+        unchanged={toEdit(f, row[f.name], currency) === value}
         describedBy={error ? `ie-${row.id}-${f.name}` : undefined}
         onChange={(v) => {
           setError(null);
