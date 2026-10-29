@@ -1,4 +1,6 @@
-import { View } from "react-native";
+import { useEffect } from "react";
+import { AccessibilityInfo, Platform, View } from "react-native";
+import { bannerAnnouncement } from "../platform.ts";
 import { useTheme, useWords } from "../theme.tsx";
 import { Button } from "./Button.tsx";
 import { Text } from "./Text.tsx";
@@ -28,11 +30,17 @@ export function Banner({ tone, title, message, action, testID }: BannerProps) {
   const words = useWords();
   const word = words[tone];
   const sig = t.c[tone];
+  const spoken = [`${word}: ${title}`, message].filter(Boolean).join(". ");
+  // iOS has no live region: a warning or a problem that appears is announced (platform.ts).
+  const announcement = bannerAnnouncement(Platform.OS, tone, spoken);
+  useEffect(() => {
+    if (announcement !== null) AccessibilityInfo.announceForAccessibility(announcement);
+  }, [announcement]);
   return (
     <View
       accessible
       accessibilityRole="alert"
-      accessibilityLabel={[`${word}: ${title}`, message].filter(Boolean).join(". ")}
+      accessibilityLabel={spoken}
       accessibilityLiveRegion={tone === "danger" || tone === "warning" ? "assertive" : "polite"}
       testID={testID}
       style={{

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
+import { screenAvoidsKeyboard } from "../platform.ts";
 import { useInsets, useTheme, useWords } from "../theme.tsx";
 import { Button } from "./Button.tsx";
 import { Text } from "./Text.tsx";
@@ -21,16 +22,15 @@ export function Screen({ title, onBack, footer, scroll = true, children }: Scree
   const insets = useInsets();
   const words = useWords();
   const body = <View style={{ gap: t.space[4], padding: t.space[4] }}>{children}</View>;
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: t.c.bg,
-        paddingTop: insets.top,
-        paddingLeft: insets.left,
-        paddingRight: insets.right,
-      }}
-    >
+  const frame = {
+    flex: 1,
+    backgroundColor: t.c.bg,
+    paddingTop: insets.top,
+    paddingLeft: insets.left,
+    paddingRight: insets.right,
+  } as const;
+  const content = (
+    <>
       <View style={{ paddingHorizontal: t.space[4], paddingTop: t.space[3], gap: t.space[2] }}>
         {onBack ? (
           <View style={{ alignItems: "flex-start" }}>
@@ -62,6 +62,15 @@ export function Screen({ title, onBack, footer, scroll = true, children }: Scree
       ) : (
         <View style={{ height: insets.bottom }} />
       )}
-    </View>
+    </>
+  );
+  // iOS does not resize the window for the keyboard (Android does): the whole screen pads itself, so
+  // that the field and the footer button stay above the keyboard.
+  return screenAvoidsKeyboard(Platform.OS) ? (
+    <KeyboardAvoidingView behavior="padding" style={frame}>
+      {content}
+    </KeyboardAvoidingView>
+  ) : (
+    <View style={frame}>{content}</View>
   );
 }
