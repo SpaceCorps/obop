@@ -9,12 +9,17 @@ use std::sync::{Arc, Mutex, OnceLock};
 pub mod expr;
 pub mod ext;
 pub mod labels;
+pub mod limits;
 pub mod rules;
 pub mod template;
 pub use ext::{
     CondOp, Exit, Guard, History, IndexCond, IndexDef, IndexKind, LockDate, ModelExt, StateSet,
 };
 pub use labels::Translations;
+pub use limits::{
+    Bound, Breach, DEFAULT_LONGTEXT_MAX, DEFAULT_TEXT_MAX, LONGTEXT_MAX_CAP, Limits, TEXT_MAX_CAP,
+    char_count, limits_note,
+};
 pub use rules::{
     Access, Assertion, Computed, Effect, EffectKind, Lit, Locator, Reset, SeqFormat, SequenceSpec,
     ShowsOption, ShowsWhen, Src, Target, Unique,
@@ -254,6 +259,9 @@ pub struct FieldDef {
     /// A text field whose value is shown with the label of the option it equals in a select
     /// field (D52 amendment). Display only.
     pub shows_option: Option<Arc<ShowsOption>>,
+    /// Length and range limits (D90); `None`: none declared (a text field still has the default
+    /// length, see [`FieldDef::effective_max_length`]).
+    pub limits: Option<Arc<Limits>>,
 }
 
 #[derive(Debug, Clone)]
@@ -346,6 +354,7 @@ impl FieldDef {
             unique: None,
             sequence: None,
             shows_option: None,
+            limits: None,
         }
     }
 
@@ -859,6 +868,10 @@ fn check_basics(m: &Module, reserved: bool) -> Vec<Violation> {
             {
                 bad(fp.clone(), &problem);
             }
+            // Length and range limits (D90), also for a package that is registered again.
+            for problem in limits::problems(f) {
+                bad(fp.clone(), &problem);
+            }
             match &f.kind {
                 FieldKind::Select(o) if o.is_empty() => {
                     bad(fp.clone(), "select field has no options")
@@ -991,6 +1004,9 @@ fn check_history_setting(model: &ModelDef, mp: &str, bad: &mut impl FnMut(String
 }
 
 #[cfg(test)]
+mod limits_tests;
+
+#[cfg(test)]
 mod intern_tests {
     #[test]
     fn same_string_same_pointer() {
@@ -1018,6 +1034,7 @@ mod tests {
             unique: None,
             sequence: None,
             shows_option: None,
+            limits: None,
         }
     }
 
