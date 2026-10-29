@@ -517,7 +517,7 @@ Items 1, 3 and 4 of the earlier list (headcount definition, the seed-to-Series-A
 
 ## 10. Sources
 
-Tags map to files relative to this document. D-tags (D1 to D89), F-tags, Q-tags, OR-tags and the sections of DECISIONS.md refer to [DECISIONS.md](DECISIONS.md). Pinned versions and the regulatory calendar come from [R00 s3.2, s3.3, s3.7]. Dates computed in this document (weekdays, day counts, cut and RC dates, the six-week Rust train) were checked by calendar arithmetic. The one other outside fact is the Rust 1.99.0 publication in 5.4, checked on 2026-10-01 against the Rust stable-channel manifest and the release announcement (verified). Module ids and names follow [CONVENTIONS.md](CONVENTIONS.md); command names follow [spec/cli.md](spec/cli.md).
+Tags map to files relative to this document. D-tags (D1 to D90), F-tags, Q-tags, OR-tags and the sections of DECISIONS.md refer to [DECISIONS.md](DECISIONS.md). Pinned versions and the regulatory calendar come from [R00 s3.2, s3.3, s3.7]. Dates computed in this document (weekdays, day counts, cut and RC dates, the six-week Rust train) were checked by calendar arithmetic. The one other outside fact is the Rust 1.99.0 publication in 5.4, checked on 2026-10-01 against the Rust stable-channel manifest and the release announcement (verified). Module ids and names follow [CONVENTIONS.md](CONVENTIONS.md); command names follow [spec/cli.md](spec/cli.md).
 
 | Tag | File |
 |---|---|
