@@ -121,7 +121,7 @@ function onLine(line) {
   log.write(`${text}\n`);
   // Our own output (the test prints these) and the verdicts, not every line of xcodebuild.
   if (
-    /^(SERVER-ADDRESS|SYSTEM ALERT|  ALERT BUTTON|LOCATION-PROMPT|HOME-|RECORDING-SHOWN|READOUT|ROUTE-DONE|APP-STATE|TRIP-|NO-KEYBOARD|DUMP|ALREADY|SIGNIN-|RESTORED-)/.test(
+    /^(SERVER-ADDRESS|SYSTEM ALERT|  ALERT BUTTON|LOCATION-PROMPT|HOME-|RECORDING-SHOWN|READOUT|ROUTE-DONE|APP-STATE|TRIP-|NO-KEYBOARD|DUMP|ALREADY|SIGNIN-|RESTORED-|HTTP-)/.test(
       text,
     ) ||
     /error:|\*\* TEST (SUCCEEDED|FAILED)|Test Case .* (passed|failed)/.test(text)

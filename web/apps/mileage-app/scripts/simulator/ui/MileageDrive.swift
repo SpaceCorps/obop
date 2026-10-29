@@ -110,6 +110,20 @@ final class MileageDrive: XCTestCase {
     return e.exists ? e.label : "(not shown)"
   }
 
+  /// Empties the address field of the sign-in and types `wanted`, then puts the keyboard away so that
+  /// the button below it is in reach.
+  func typeAddress(_ address: XCUIElement, _ wanted: String) {
+    let current = address.value as? String ?? ""
+    if current == wanted { return }
+    address.tap()
+    address.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+    address.typeText(wanted)
+    print("SERVER-ADDRESS-TYPED: \(address.value as? String ?? "")")
+    shot("signin-1b-address")
+    let ret = app.keyboards.buttons["Return"]
+    if ret.exists { ret.tap() }
+  }
+
   // MARK: steps
 
   /// Signs in through the system browser sheet (ASWebAuthenticationSession), as the driver.
@@ -118,20 +132,8 @@ final class MileageDrive: XCTestCase {
     waitFor(address, 20, "the Sign in screen")
     print("SERVER-ADDRESS: \(address.value as? String ?? "")")
     shot("signin-1-screen")
-    // Another instance than the build's default (a test over the local network): the field is
-    // emptied and the address typed, then the keyboard is put away so that the button is in reach.
-    if let wanted = env["OBOP_SERVER_ADDRESS"], !wanted.isEmpty {
-      let current = address.value as? String ?? ""
-      if current != wanted {
-        address.tap()
-        address.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
-        address.typeText(wanted)
-        print("SERVER-ADDRESS-TYPED: \(address.value as? String ?? "")")
-        shot("signin-1b-address")
-        let ret = app.keyboards.buttons["Return"]
-        if ret.exists { ret.tap() }
-      }
-    }
+    // Another instance than the build's default (a test over the local network).
+    if let wanted = env["OBOP_SERVER_ADDRESS"], !wanted.isEmpty { typeAddress(address, wanted) }
     app.buttons["signin-button"].tap()
     let cont = springboard.alerts.firstMatch.buttons["Continue"]
     waitFor(cont, 20, "the system sign-in alert")
@@ -185,6 +187,23 @@ final class MileageDrive: XCTestCase {
     waitFor(banner, 10, "the notice about the replaced database file")
     shot("restored-banner")
     print("RESTORED-BANNER-SHOWN")
+  }
+
+  /// A build made without OBOP_ALLOW_CLEARTEXT (the plain one, bundle id org.obop.mileage) refuses an
+  /// http address on the sign-in screen and starts no browser sheet (docs/spec/mobile.md 8.8).
+  func test12_PlainBuildRefusesHttp() {
+    app.launch()
+    let address = app.textFields["signin-address"]
+    waitFor(address, 20, "the Sign in screen")
+    print("SERVER-ADDRESS: \(address.value as? String ?? "")")
+    typeAddress(address, env["OBOP_SERVER_ADDRESS"] ?? "http://192.168.1.132:18084")
+    app.buttons["signin-button"].tap()
+    let refusal = app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label CONTAINS 'https only'")).firstMatch
+    waitFor(refusal, 10, "the refusal of the http address")
+    shot("plain-build-refuses-http")
+    XCTAssertFalse(springboard.alerts.firstMatch.exists, "a sign-in sheet was started")
+    print("HTTP-REFUSED: \(refusal.label)")
   }
 
   func test02_Start() {
