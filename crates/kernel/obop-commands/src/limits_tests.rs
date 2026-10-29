@@ -137,6 +137,11 @@ fn module(p: &str) -> Module {
                         max: Some(Bound::Int(100)),
                         ..Default::default()
                     }),
+                    // At most 0.90.
+                    f("ratio").decimal(8, 2).with_limits(Limits {
+                        max: Some(dec("0.90", 2)),
+                        ..Default::default()
+                    }),
                 ],
                 vec![],
             ),
@@ -145,9 +150,17 @@ fn module(p: &str) -> Module {
                 vec![
                     // A field of the HR group: nobody else reads it.
                     F::new("salary", "d", DataClass::None, false, HR).kind(FieldKind::Money),
+                    F::new("bonus", "d", DataClass::None, false, HR).decimal(8, 2),
                     f("state").select(&["new", "paid"]),
                 ],
                 vec![
+                    // The same with a decimal: the bonus into a field that holds at most 0.90.
+                    CommandDef::new("grant", "Grant", U)
+                        .transition("state", Some("new"), "paid")
+                        .effect(Effect::create(
+                            &format!("{p}_log"),
+                            &[("ratio", "$self.bonus")],
+                        )),
                     // Copies the salary, which the caller may not read, into a field that holds
                     // at most 100.
                     CommandDef::new("pay", "Pay", U)
@@ -994,6 +1007,65 @@ fn an_action_never_states_the_value_it_copied_from_a_field_the_caller_cannot_rea
 }
 
 #[test]
+fn a_decimal_breach_states_no_value_to_an_agent_or_from_an_effect() {
+    each(|r| {
+        // A person who typed the decimal is told what it was.
+        let e = r.refused("log", vec![("ratio", t("1.00"))]);
+        assert_limit(&e, "ratio", "at most 0.90; this is 1.00");
+        // An agent is not, even for what it typed itself.
+        let e = r.err_as(
+            &r.bot(),
+            Surface::Mcp,
+            &mut Vault::new(),
+            "log",
+            "create",
+            m(vec![("ratio", t("1.00"))]),
+        );
+        assert_eq!(
+            e,
+            format!("limit_violated: {}_log.ratio must be at most 0.90", r.p)
+        );
+        // An action that copies a decimal the caller may not read into the bounded field never
+        // states it, whoever runs it.
+        let hr = r.hr();
+        let id = text(get(
+            &r.call_as(
+                &hr,
+                Surface::Rest,
+                &mut Vault::new(),
+                "payroll",
+                "create",
+                m(vec![("bonus", t("12.50"))]),
+            )
+            .unwrap()
+            .value,
+            "id",
+        ));
+        let want = format!(
+            "limit_violated: {}: effect 1 (create) failed, nothing was changed: {}_log.ratio must be at most 0.90",
+            r.cmd("payroll", "grant"),
+            r.p
+        );
+        for (who, p, surface) in [
+            ("an ordinary user", r.who.clone(), Surface::Rest),
+            ("an agent", r.bot(), Surface::Mcp),
+            ("the HR person", hr.clone(), Surface::Rest),
+        ] {
+            let e = r.err_as(
+                &p,
+                surface,
+                &mut Vault::new(),
+                "payroll",
+                "grant",
+                m(vec![("id", t(&id))]),
+            );
+            assert_eq!(e, want, "{who}");
+        }
+        assert_eq!(r.count("log"), 0);
+    });
+}
+
+#[test]
 fn a_state_move_with_an_over_limit_field_is_refused_before_the_action_runs() {
     each(|r| {
         // `state` is governed: `update` moves it only as `finish`, which writes a log record.
@@ -1013,6 +1085,44 @@ fn a_state_move_with_an_over_limit_field_is_refused_before_the_action_runs() {
         let row = r.read("doc", &id);
         assert_eq!(text(get(&row, "state")), "new");
         assert_eq!(text(get(&row, "title")), "ok");
+        // An agent that holds a name as a token and sends it as the title along with the move
+        // is refused the same way and is not told how long the name behind the token is.
+        let named = r.create("doc", vec![("title", t("ok")), ("person", t(LONG_NAME))]);
+        let (bot, mut vault) = (r.bot(), Vault::new());
+        let seen = r
+            .call_as(
+                &bot,
+                Surface::Mcp,
+                &mut vault,
+                "doc",
+                "get",
+                m(vec![("id", t(&named))]),
+            )
+            .unwrap()
+            .value;
+        let token = text(get(&seen, "person"));
+        assert_ne!(token, LONG_NAME, "the agent must hold a token");
+        let e = r.err_as(
+            &bot,
+            Surface::Mcp,
+            &mut vault,
+            "doc",
+            "update",
+            m(vec![
+                ("id", t(&id)),
+                ("state", t("done")),
+                ("title", t(&token)),
+            ]),
+        );
+        assert_eq!(
+            e,
+            format!(
+                "limit_violated: {}_doc.title must be at most 10 characters",
+                r.p
+            )
+        );
+        assert_eq!(r.count("log"), 0, "the action ran for the agent");
+        assert_eq!(text(get(&r.read("doc", &id), "state")), "new");
         // Nothing wrong with the same move once the title fits.
         r.update(&id, vec![("state", t("done")), ("title", t("fits"))])
             .unwrap();
