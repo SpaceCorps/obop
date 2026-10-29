@@ -32,7 +32,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {
     /// `model_added`, `model_removed`, `field_added`, `field_removed`, `field_retyped`,
-    /// `field_reshaped`, `field_required`, `option_added`, `option_removed`, `action_added`,
+    /// `field_reshaped`, `field_limits`, `field_required`, `option_added`, `option_removed`, `action_added`,
     /// `action_removed`.
     pub kind: &'static str,
     pub model: String,
@@ -42,6 +42,32 @@ pub struct Change {
     pub breaking: bool,
     /// The migration step that resolves it, in words, when there is one.
     pub resolved_by: Option<String>,
+}
+
+/// The limits a field declares (D90) as one line, `none` when it declares none.
+fn limits_text(f: &FieldM) -> String {
+    let mut parts = Vec::new();
+    let show = |v: &toml::Value| match v {
+        toml::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    };
+    if let Some(n) = f.min_length {
+        parts.push(format!("min_length {n}"));
+    }
+    if let Some(n) = f.max_length {
+        parts.push(format!("max_length {n}"));
+    }
+    if let Some(v) = &f.min {
+        parts.push(format!("min {}", show(v)));
+    }
+    if let Some(v) = &f.max {
+        parts.push(format!("max {}", show(v)));
+    }
+    if parts.is_empty() {
+        "none".into()
+    } else {
+        parts.join(", ")
+    }
 }
 
 /// The structural difference between the installed manifest and the new one.
@@ -119,6 +145,22 @@ pub fn diff(old: &Manifest, new: &Manifest) -> Vec<Change> {
                                 format!("{} changes from {} to {}", nf.name, shape(of), shape(nf)),
                                 // Widening the precision alone leaves every stored value valid.
                                 of.scale != nf.scale || nf.precision < of.precision,
+                            ));
+                        }
+                        // Limits (D90) only tighten or loosen what is written from now on; stored
+                        // values are not re-checked, so this is shown and never blocks.
+                        if limits_text(of) != limits_text(nf) {
+                            out.push(ch(
+                                "field_limits",
+                                &nm.name,
+                                Some(&nf.name),
+                                format!(
+                                    "{}: limits change from {} to {}; values already stored are not re-checked",
+                                    nf.name,
+                                    limits_text(of),
+                                    limits_text(nf)
+                                ),
+                                false,
                             ));
                         }
                         if nf.required && !of.required && nf.computed.is_none() {
