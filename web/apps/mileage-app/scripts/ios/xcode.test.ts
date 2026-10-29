@@ -8,9 +8,12 @@ const base = {
 };
 
 describe("the Simulator build", () => {
-  test("is a build for the Simulator that is not signed", () => {
+  test("is a build for the Simulator that is signed ad hoc, with no account", () => {
     const args = simulatorBuildArgs(base);
-    expect(args).toContain("CODE_SIGNING_ALLOWED=NO");
+    // An unsigned app has no entitlements and the Keychain of the Simulator refuses it.
+    expect(args).toContain("CODE_SIGN_IDENTITY=-");
+    expect(args).toContain("CODE_SIGNING_ALLOWED=YES");
+    expect(args).not.toContain("CODE_SIGNING_ALLOWED=NO");
     expect(args).toContain("CODE_SIGNING_REQUIRED=NO");
     expect(args.slice(args.indexOf("-sdk"), args.indexOf("-sdk") + 2)).toEqual([
       "-sdk",

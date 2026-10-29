@@ -6,8 +6,12 @@ const CONFIGURATIONS = new Set(["Debug", "Release"]);
 const SAFE_ARCHS = /^[a-z0-9_]+( [a-z0-9_]+)*$/;
 
 /**
- * `xcodebuild` arguments for a build for the iOS Simulator. No signing: the Simulator needs none,
- * and nothing here signs in to an Apple account.
+ * `xcodebuild` arguments for a build for the iOS Simulator. Signed ad hoc (the identity "-"): that
+ * needs no account, no team and no provisioning profile, and nothing here signs in to an Apple
+ * account. It is signed because an unsigned app carries no entitlements, and the Keychain of the
+ * Simulator then refuses every call of expo-secure-store ("A required entitlement is not present",
+ * seen in the first Simulator run, docs/spec/mobile.md 8.8): with `CODE_SIGNING_ALLOWED=NO` the app
+ * starts and cannot open its database.
  *
  * @param {{ workspace: string, scheme: string, configuration?: string, archs?: string, derivedData: string }} options
  * @returns {string[]}
@@ -47,8 +51,9 @@ export function simulatorBuildArgs(options) {
     "generic/platform=iOS Simulator",
     "-derivedDataPath",
     derivedData,
-    "CODE_SIGNING_ALLOWED=NO",
+    "CODE_SIGN_IDENTITY=-",
     "CODE_SIGNING_REQUIRED=NO",
+    "CODE_SIGNING_ALLOWED=YES",
     `ARCHS=${archs}`,
     "ONLY_ACTIVE_ARCH=NO",
     "build",
