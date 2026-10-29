@@ -8,7 +8,7 @@
 //   vp run simulator:drive -- --device UDID --steps test20_StopAndDiscard --no-route
 //
 // Options: --device UDID (required: `xcrun simctl list devices`), --steps a,b,c (default: the
-// whole trip), --no-route (do not start the route), --speed M/S and --interval S (as route.mjs).
+// whole trip), --no-route (do not start the route), --speed M/S, --interval S or --distance M (as route.mjs).
 // Environment: OBOP_DRIVER_USER, OBOP_DRIVER_PASSWORD (read from the environment only, never from a
 // file or an argument, and removed from everything that is printed or logged), OBOP_APP_BUNDLE_ID
 // (default org.obop.mileage.test), OBOP_BUILD_ROOT (where the test project, its build and its
@@ -103,7 +103,9 @@ function startRoute() {
   const route = startArgs({
     device,
     speed: Number(option("--speed", "16.667")),
-    interval: Number(option("--interval", "1")),
+    ...(args.includes("--distance")
+      ? { distance: Number(option("--distance", "100")) }
+      : { interval: Number(option("--interval", "1")) }),
   });
   const result = spawnSync("xcrun", route, { encoding: "utf8" });
   say(

@@ -37,6 +37,17 @@ describe("the command that moves the Simulator", () => {
     expect(args).toContain("--interval=2");
   });
 
+  test("a distance puts a fix on each waypoint instead of an interval", () => {
+    const args = startArgs({ distance: 100 });
+    expect(args).toContain("--distance=100");
+    expect(args.some((a) => a.startsWith("--interval"))).toBe(false);
+    expect(startArgs().some((a) => a.startsWith("--distance"))).toBe(false);
+    expect(() => startArgs({ distance: 100, interval: 1 })).toThrow(/not both/);
+    expect(() => startArgs({ distance: 0 })).toThrow(/distance/);
+    expect(() => startArgs({ distance: 1001 })).toThrow(/distance/);
+    expect(() => startArgs({ distance: Number.NaN })).toThrow(/distance/);
+  });
+
   test("refuses what is not a Simulator or a sensible pace", () => {
     expect(() => startArgs({ device: "booted; rm -rf /" })).toThrow(/device/);
     expect(() => startArgs({ device: "iPhone 17" })).toThrow(/device/);

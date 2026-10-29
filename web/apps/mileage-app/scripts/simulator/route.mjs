@@ -5,6 +5,7 @@
 //   vp run simulator:route                          # prints the command, runs nothing
 //   vp run simulator:route -- --run                 # starts the route on the booted Simulator
 //   vp run simulator:route -- --run --device UDID --speed 16.7
+//   vp run simulator:route -- --run --distance 100      # one fix per 100 m: a fix on each waypoint, as the Android run
 //   vp run simulator:route -- --clear               # stops a running route and clears the location
 //   vp run simulator:route -- --set-start           # puts the Simulator at the first waypoint
 //
@@ -25,7 +26,8 @@ const option = (name, fallback) => {
 };
 const device = option("--device", "booted");
 const speed = Number(option("--speed", String(DEFAULT_SPEED_MPS)));
-const interval = Number(option("--interval", "1"));
+const interval = args.includes("--distance") ? undefined : Number(option("--interval", "1"));
+const distance = args.includes("--distance") ? Number(option("--distance", "100")) : undefined;
 
 function xcrun(parts) {
   const result = spawnSync("xcrun", parts, { encoding: "utf8" });
@@ -45,7 +47,7 @@ try {
     xcrun(["simctl", "location", device, "set", `${START.lat},${START.lon}`]);
     console.log(`${stamp()} ${device} is at ${START.lat},${START.lon}`);
   } else {
-    const command = startArgs({ device, speed, interval });
+    const command = startArgs({ device, speed, interval, distance });
     const { metres, seconds } = routeTime(speed);
     console.log(
       `route: 41 waypoints, ${metres.toFixed(2)} m (haversine), ${speed.toFixed(2)} m/s, about ${Math.round(seconds)} s`,

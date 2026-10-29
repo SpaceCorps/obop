@@ -96,6 +96,14 @@ final class MileageDrive: XCTestCase {
     field.typeText(text)
   }
 
+  /// The State row of the trip page. A row reads as one element, "State, Ended", so the state is
+  /// looked for in the label of an element that begins with "State".
+  func stateRow(_ state: String) -> XCUIElement {
+    app.descendants(matching: .any)
+      .matching(NSPredicate(format: "label BEGINSWITH 'State' AND label CONTAINS[c] %@", state))
+      .firstMatch
+  }
+
   func readout(_ id: String) -> String {
     let e = app.staticTexts[id]
     return e.exists ? e.label : "(not shown)"
@@ -221,7 +229,7 @@ final class MileageDrive: XCTestCase {
     waitFor(confirm, 10, "the Stop confirmation")
     shot("stop-1-confirm")
     confirm.tap()
-    waitFor(app.staticTexts["Ended"], 180, "the state Ended")
+    waitFor(stateRow("Ended"), 180, "the state Ended")
     shot("stop-2-ended")
     print("TRIP-ENDED")
   }
@@ -231,7 +239,7 @@ final class MileageDrive: XCTestCase {
     let submit = app.buttons["submit"]
     waitFor(submit, 20, "the Submit button")
     submit.tap()
-    waitFor(app.staticTexts["In review"], 60, "the state In review")
+    waitFor(stateRow("In review"), 60, "the state In review")
     shot("submit-1-in-review")
     print("TRIP-IN-REVIEW")
   }

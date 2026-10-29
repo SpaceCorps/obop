@@ -11,15 +11,24 @@ export const DEFAULT_SPEED_MPS = 100 / 6;
 
 /**
  * The arguments of `xcrun` that start the route: `simctl location <device> start`, with the speed
- * in metres per second and the interval (seconds) between the fixes the Simulator issues along the
- * path, and the waypoints as `lat,lon` with seven decimals.
+ * in metres per second, how often the Simulator issues a fix along the path (every `interval`
+ * seconds, 1 by default, or every `distance` metres: not both) and the waypoints as `lat,lon` with
+ * seven decimals.
  *
- * @param {{ device?: string, speed?: number, interval?: number }} options
+ * An interval of 1 second is a continuous drive (a fix every 16.7 m at the default speed). A
+ * distance of 100 metres puts a fix on each waypoint, as the Android emulator run does (the
+ * waypoints are 100 m apart), so the two platforms see the same positions.
+ *
+ * @param {{ device?: string, speed?: number, interval?: number, distance?: number }} options
  * @returns {string[]}
  */
 export function startArgs(options = {}) {
   const device = options.device ?? "booted";
   const speed = options.speed ?? DEFAULT_SPEED_MPS;
+  const { distance } = options;
+  if (distance !== undefined && options.interval !== undefined) {
+    throw new Error("give an interval or a distance for the fixes, not both");
+  }
   const interval = options.interval ?? 1;
   if (!DEVICE.test(device)) {
     throw new Error(
@@ -29,8 +38,11 @@ export function startArgs(options = {}) {
   if (!Number.isFinite(speed) || speed < 1 || speed > 100) {
     throw new Error(`speed must be between 1 and 100 metres per second, got ${speed}`);
   }
-  if (!Number.isFinite(interval) || interval < 0.5 || interval > 10) {
+  if (distance === undefined && (!Number.isFinite(interval) || interval < 0.5 || interval > 10)) {
     throw new Error(`interval must be between 0.5 and 10 seconds, got ${interval}`);
+  }
+  if (distance !== undefined && (!Number.isFinite(distance) || distance < 1 || distance > 1000)) {
+    throw new Error(`distance must be between 1 and 1000 metres, got ${distance}`);
   }
   return [
     "simctl",
@@ -38,7 +50,7 @@ export function startArgs(options = {}) {
     device,
     "start",
     `--speed=${speed.toFixed(3)}`,
-    `--interval=${interval}`,
+    distance === undefined ? `--interval=${interval}` : `--distance=${distance}`,
     ...waypoints().map((p) => `${p.lat.toFixed(7)},${p.lon.toFixed(7)}`),
   ];
 }
