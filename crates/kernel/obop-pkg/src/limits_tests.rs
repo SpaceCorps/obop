@@ -467,3 +467,61 @@ fn the_plan_shows_the_default_that_applies_when_a_limit_is_removed_and_which_way
     );
     assert!(diff(&a, &b).is_empty());
 }
+
+#[test]
+fn an_installed_manifest_is_read_as_the_previous_core_read_it() {
+    // Closure check of PR 33: the float and the limits of a `set_default` value are refused for
+    // what comes in now (an install, an upgrade), never for a package that is already installed.
+    // The previous core let a float through for a number or money field and had no limits, and a
+    // server must still start with the module its data belongs to.
+    let step = |model_field: &str, value: &str| {
+        format!(
+            "\n[[migration]]\nfrom = \"<0.2\"\nop = \"set_default\"\nmodel = \"lim_doc\"\nfield = \"{model_field}\"\nvalue = {value}\n"
+        )
+    };
+    let long = format!("\"{}\"", "x".repeat(DEFAULT_TEXT_MAX as usize + 1));
+    for (fields, step_text, refused) in [
+        (
+            field("qty", "kind = \"number\""),
+            step("qty", "0.0"),
+            "a whole number",
+        ),
+        (
+            field("price", "kind = \"money\""),
+            step("price", "50.5"),
+            "a whole number",
+        ),
+        (
+            field("title", ""),
+            step("title", &long),
+            "outside the limits of title",
+        ),
+        (
+            field("qty", "kind = \"number\"\nmax = 100"),
+            step("qty", "1000"),
+            "at most 100; this is 1000",
+        ),
+    ] {
+        let text = pkg_with_core("^0.2", "0.2.0", &format!("{fields}{step_text}"));
+        let e = Manifest::parse(&text).expect_err("an upload or an upgrade refuses it");
+        assert!(e.contains(refused), "{refused}: {e}");
+        // Read as installed, it parses: only the float and the limits of a step are let through,
+        // so the module still builds.
+        let m = Manifest::parse_installed(&text)
+            .unwrap_or_else(|e| panic!("an installed copy must load ({refused}): {e}"));
+        m.to_module_installed().expect("and build");
+    }
+    // What stays refused when installed is everything else: a step for a field that is not there,
+    // and a string for a number field.
+    let text = pkg_with_core(
+        "^0.2",
+        "0.2.0",
+        &format!(
+            "{}{}",
+            field("qty", "kind = \"number\""),
+            step("qty", "\"x\"")
+        ),
+    );
+    let e = Manifest::parse_installed(&text).expect_err("not a number at all");
+    assert!(e.contains("does not fit the number field qty"), "{e}");
+}

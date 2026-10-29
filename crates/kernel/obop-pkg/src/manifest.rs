@@ -395,14 +395,20 @@ pub(crate) fn probe(f: &FieldM) -> Result<FieldDef, String> {
     )
 }
 
-/// Whether `v` is a value the field can hold, for `set_default`.
-fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
+/// Whether `v` is a value the field can hold, for `set_default`. `installed` is true when the
+/// manifest is the text of a package that is already installed: the step was checked, or not
+/// needed, when that copy went in, and it is read as the previous core read it (a float for a
+/// number or money field is let through, no limit applies), so that a server still starts with
+/// the module its data belongs to. Only an install or an upgrade refuses what D90 refuses.
+fn default_matches(f: &FieldM, v: &toml::Value, installed: bool) -> Result<(), String> {
     use toml::Value as T;
     let ok = match (f.kind.as_str(), v) {
         ("text" | "longtext" | "date" | "ref", T::String(_)) => true,
         // A whole number: a float is not stored by a write either, and it would also skip the
         // bounds of the field (D90).
         ("number" | "money", T::Integer(_)) => true,
+        // The previous core let a float through here, so an installed package may carry one.
+        ("number" | "money", T::Float(_)) if installed => true,
         ("datetime", T::String(s)) => obop_values::Instant::parse(s).is_ok(),
         // A decimal default is a string ("12.50") or a whole number; a TOML float is not exact.
         ("decimal", T::String(s)) => match (f.precision, f.scale) {
@@ -423,7 +429,7 @@ fn default_matches(f: &FieldM, v: &toml::Value) -> Result<(), String> {
         _ => false,
     };
     if ok {
-        limits_hold(f, v)
+        if installed { Ok(()) } else { limits_hold(f, v) }
     } else {
         Err(format!(
             "the value does not fit the {} field {}{}",
@@ -820,7 +826,7 @@ impl Manifest {
         self.build_models()?;
         self.public_specs()?;
         check_labels(&self.labels, &self.shape())?;
-        self.validate_migrations()?;
+        self.validate_migrations(installed)?;
         Ok(())
     }
 
@@ -862,7 +868,7 @@ impl Manifest {
     /// `[[migration]]` (D63): each step names a model and field of this package and says what to
     /// do to the records of an older version. The steps are checked against the shape of this
     /// version, so a step that could never run is refused when the package is read.
-    fn validate_migrations(&self) -> Result<(), String> {
+    fn validate_migrations(&self, installed: bool) -> Result<(), String> {
         if self.migration.len() > 100 {
             return Err("a package may declare at most 100 migration steps".into());
         }
@@ -913,7 +919,7 @@ impl Manifest {
                     let Some(v) = &st.value else {
                         return Err(format!("{at}: set_default needs `value`"));
                     };
-                    default_matches(f, v).map_err(|e| format!("{at}: {e}"))?;
+                    default_matches(f, v, installed).map_err(|e| format!("{at}: {e}"))?;
                     if st.to.is_some() || st.confirm {
                         return Err(format!("{at}: set_default takes only `value`"));
                     }
@@ -2120,12 +2126,12 @@ write_group = "fleet.manager"
         let t = at("kind = \"decimal\"\n  precision = 6\n  scale = 2");
         let f = Manifest::parse(&t).unwrap().model[0].field[0].clone();
         let v = |s: &str| toml::from_str::<toml::Table>(s).unwrap()["v"].clone();
-        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}"))).is_ok();
+        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}")), false).is_ok();
         assert!(ok("\"12.5\"") && ok("12"));
         assert!(!ok("12.5") && !ok("\"1.234\"") && !ok("\"1e3\"") && !ok("true") && !ok("1234567"));
         let t = at("kind = \"datetime\"");
         let f = Manifest::parse(&t).unwrap().model[0].field[0].clone();
-        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}"))).is_ok();
+        let ok = |x: &str| default_matches(&f, &v(&format!("v = {x}")), false).is_ok();
         assert!(ok("\"2026-03-29T01:30:00Z\"") && !ok("\"2026-03-29\"") && !ok("5"));
     }
 
