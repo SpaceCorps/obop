@@ -3,7 +3,7 @@
 // macOS only.
 //
 //   node scripts/ios/xcode.mjs pods                       # pod install in ios/
-//   node scripts/ios/xcode.mjs build-simulator [Debug|Release]   # an app for the iOS Simulator, no signing
+//   node scripts/ios/xcode.mjs build-simulator [Debug|Release]   # an app for the iOS Simulator, signed ad hoc, with no account
 //
 // OBOP_IOS_ARCHS (default arm64) picks the architectures of the Simulator build. The result is
 // ios/build/Build/Products/<configuration>-iphonesimulator/<scheme>.app; the path is printed.
