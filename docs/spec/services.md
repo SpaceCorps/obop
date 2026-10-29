@@ -662,7 +662,7 @@ The last column names an [R04] pain rank only where one applies.
 
 ## 10. Sources
 
-Decision IDs (D1-D90), the owner rulings OR-1 to OR-35, register sections and vocabulary come from [DECISIONS.md](../DECISIONS.md). Names of events, permission groups, data classes and entities follow [CONVENTIONS.md](../CONVENTIONS.md); command names and the CLI grammar follow [cli.md](cli.md) (Proposed until Q22).
+Decision IDs (D1-D90), the owner rulings OR-1 to OR-37, register sections and vocabulary come from [DECISIONS.md](../DECISIONS.md). Names of events, permission groups, data classes and entities follow [CONVENTIONS.md](../CONVENTIONS.md); command names and the CLI grammar follow [cli.md](cli.md) (Proposed until Q22).
 
 | Tag | File |
 |---|---|
