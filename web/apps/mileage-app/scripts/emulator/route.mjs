@@ -8,6 +8,8 @@
 // radius); the geodesic one (Vincenty's inverse formula on the WGS84 ellipsoid) is an independent
 // reference, so a mistake in the shared formula would show.
 
+import { isMain } from "../lib/is-main.mjs";
+
 export const START = { lat: 60.17, lon: 24.94 };
 const LEG_M = 100;
 // North 12 legs, east 8, south 12, west 8: 40 legs.
@@ -115,7 +117,7 @@ export function length(points, distance) {
   return total;
 }
 
-if (import.meta.url === `file:///${process.argv[1].replaceAll("\\", "/")}`) {
+if (isMain(import.meta.url, process.argv[1])) {
   const points = waypoints();
   console.log(`waypoints: ${points.length}`);
   console.log(`haversine (R = ${MEAN_R} m): ${length(points, haversine).toFixed(2)} m`);
