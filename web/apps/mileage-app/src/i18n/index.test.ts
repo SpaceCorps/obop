@@ -54,6 +54,14 @@ describe("sentences for the system the app runs on", () => {
     expect(tOn("web", "guide.body")).toBe(t("guide.body"));
   });
 
+  test("the way out of the Failed screen is the system's own: Clear storage on Android, deleting the app on iOS", () => {
+    expect(tOn("android", "error.database.hint")).toContain("Clear storage");
+    const ios = tOn("ios", "error.database.hint");
+    expect(ios).not.toMatch(/Clear storage|Settings, Apps|Storage/);
+    expect(ios).toContain("delete the app");
+    expect(ios).toContain("which deletes the trips that were not sent");
+  });
+
   test("a sentence without an iOS version is the same on iOS, and placeholders are filled", () => {
     expect(tOn("ios", "recording.stop")).toBe(t("recording.stop"));
     expect(tOn("ios", "home.open.message", { when: "today" })).toBe(

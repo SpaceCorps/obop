@@ -25,6 +25,8 @@ export const en = {
   "error.database": "The trips on this phone could not be opened.",
   "error.database.hint":
     "Nothing was deleted. Try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is Settings, Apps, obop Mileage, Storage, Clear storage, which deletes the trips that were not sent.",
+  "error.database.hint.ios":
+    "Nothing was deleted. Try again. If the phone has only just started, unlock it once and try again. While the trips cannot be opened, new positions are not saved. If the location service is still running, stop it here. If Try again keeps failing, the key of the trips may be lost and they cannot be read: the way out is to delete the app from the Home Screen and install it again, which deletes the trips that were not sent.",
   "error.database.stop": "Stop the location service",
   "error.database.stopped": "The location service was stopped.",
 
