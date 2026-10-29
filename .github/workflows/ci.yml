@@ -78,12 +78,12 @@ jobs:
           git diff --exit-code -- web/packages/client
       - name: Check, lint and type-check every app and the design system
         run: |
-          for app in apps/backoffice apps/platform apps/site apps/mileage-app packages/client packages/trip-core packages/ui; do
+          for app in apps/backoffice apps/platform apps/site apps/mileage-app apps/storybook packages/client packages/trip-core packages/ui packages/ui-native; do
             (cd web/$app && vp check)
           done
       - name: Unit tests (design system, client, trip logic and back office)
         run: |
-          for app in packages/ui packages/client packages/trip-core apps/backoffice; do
+          for app in packages/ui packages/client packages/trip-core packages/ui-native apps/backoffice apps/mileage-app; do
             (cd web/$app && vp test)
           done
       - name: Build every app and the shared packages
@@ -94,6 +94,8 @@ jobs:
           for pkg in client trip-core; do
             (cd web/packages/$pkg && vp build)
           done
+          # The web Storybook that draws the React Native components through react-native-web (Q42).
+          (cd web/apps/storybook && vp run build-storybook)
 
   e2e:
     runs-on: ubuntu-latest
