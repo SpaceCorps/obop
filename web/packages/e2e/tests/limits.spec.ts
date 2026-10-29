@@ -219,6 +219,56 @@ test.describe("field limits", () => {
     expect((await api.list("root", model)).length).toBe(0);
   });
 
+  test("a stored value above a limit that was lowered is not marked invalid until it is changed, in the panel and in a cell", async ({
+    page,
+    signIn,
+    api,
+    scratchPackage,
+    uid,
+  }) => {
+    const id = await scratchPackage(manifest);
+    const model = `${id}_note`;
+    // A note written under the limit of the server (10 characters) ...
+    const headline = uid("Stored");
+    await api.create("root", model, { headline, code: "abcdefgh" });
+    const [note] = await api.list("root", model);
+    // ... seen by a page that was told a lower limit (5), as after a package that lowers a
+    // max_length: the stored 8 characters are over it, and they save as they are (D90 Decision 6).
+    await page.route("**/api/meta", async (route) => {
+      const res = await route.fetch();
+      const body = await res.json();
+      for (const m of body.modules)
+        for (const d of m.models) for (const f of d.fields) if (f.name === "code") f.max_length = 5;
+      await route.fulfill({ response: res, json: body });
+    });
+
+    // The record panel: over the limit as stored, so the counter says so and the control is not
+    // marked; one more character is a change that would be refused, so it is.
+    await signIn("root", `/${id}/${model}?view=list&id=${note.id}`);
+    const code = panel(page).getByLabel("Code");
+    await expect(code).toHaveValue("abcdefgh");
+    await expect(counter(page)).toHaveText("8 of 5 characters");
+    await expect(counter(page)).toHaveClass(/over/);
+    await expect(code).not.toHaveAttribute("aria-invalid", /.*/);
+    await code.fill("abcdefghi");
+    await expect(code).toHaveAttribute("aria-invalid", "true");
+    await code.fill("abcdefgh");
+    await expect(code).not.toHaveAttribute("aria-invalid", /.*/);
+
+    // The same in a cell of the list.
+    await page.goto(`/#/${id}/${model}?view=list`);
+    const row = page.locator("tr").filter({ hasText: headline });
+    await row.locator("td", { hasText: "abcdefgh" }).click();
+    const input = page.locator("td.editing input");
+    await expect(input).toHaveValue("abcdefgh");
+    await expect(input).not.toHaveAttribute("aria-invalid", /.*/);
+    await input.fill("abcdefghi");
+    await expect(input).toHaveAttribute("aria-invalid", "true");
+    await input.fill("abcdefgh");
+    await expect(input).not.toHaveAttribute("aria-invalid", /.*/);
+    await page.keyboard.press("Escape");
+  });
+
   test("an import names the row and the limit", async ({
     page,
     signIn,
