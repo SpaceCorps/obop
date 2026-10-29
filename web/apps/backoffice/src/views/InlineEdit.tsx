@@ -47,6 +47,7 @@ export function InlineEdit(props: {
         optionState={props.optionState}
         invalid={!!error}
         readOnly={busy}
+        unchanged={toEdit(f, row[f.name], currency) === value}
         describedBy={error ? `ie-${row.id}-${f.name}` : undefined}
         onChange={(v) => {
           setError(null);

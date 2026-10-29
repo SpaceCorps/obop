@@ -86,12 +86,20 @@ test.describe("field limits", () => {
     await code.fill("abcdefgh");
     await expect(counter(page)).toHaveText("8 of 10 characters");
     await expect(counter(page)).not.toHaveClass(/over/);
+    // A screen reader is told once, in words, when the text gets close and when it goes over (a
+    // status region that says the same for every count in a band); it is not told every key.
+    const said = panel(page).getByRole("status").filter({ hasText: /limit/ });
+    await expect(said).toHaveText("Close to the limit of 10 characters");
+    await expect(code).not.toHaveAttribute("aria-invalid", /.*/);
     // The control is not cut at the limit (a pasted text would lose its end without a word):
     // it goes red, and the form says what is wrong.
     await code.fill("abcdefghijk");
     await expect(counter(page)).toHaveText("11 of 10 characters");
     await expect(counter(page)).toHaveClass(/over/);
     await expect(code).not.toHaveAttribute("maxlength", /.*/);
+    // The control is invalid as soon as the text is over, before a save says so.
+    await expect(said).toHaveText("Over the limit of 10 characters");
+    await expect(code).toHaveAttribute("aria-invalid", "true");
     await panel(page).getByLabel("Headline").fill(uid("Over"));
     await panel(page).getByRole("button", { name: "Create" }).click();
     await expect(

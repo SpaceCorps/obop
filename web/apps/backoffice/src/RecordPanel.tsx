@@ -571,6 +571,7 @@ export function RecordPanel({
                       currency={currency}
                       invalid={!!err}
                       describedBy={err ? `${fid}-err` : undefined}
+                      unchanged={!creating && !changed(f)}
                       onChange={(v) => {
                         setDraft({ ...draft, [f.name]: v });
                         if (err) setErrors({ ...errors, [f.name]: "" });

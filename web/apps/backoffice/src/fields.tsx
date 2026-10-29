@@ -141,6 +141,8 @@ type InputProps = {
   altHint?: { title: string; empty: boolean };
   /** For a read-only text or longtext: what to draw in place of the stored text (an option's label). */
   shown?: string;
+  /** The value is the one already stored: a counter above the limit is then not an error (D90). */
+  unchanged?: boolean;
 };
 
 /** The ids a control is described by: the error, and the counter while it shows. */
@@ -152,22 +154,43 @@ function describe(
   return [errorId, counter ? counterId : ""].filter(Boolean).join(" ") || undefined;
 }
 
-/** `1 842 of 2 000 characters`: red once the text is longer than the field allows. */
+/** `1 842 of 2 000 characters`: red once the text is longer than the field allows.
+ *
+ * The count itself is read with the field (`aria-describedby`) and changes with every key, so it
+ * is not a live region. A screen reader is told in words when the text gets close to the limit and
+ * when it goes over, once for each and never per key: the message is the same for every count in
+ * a band. The region is always there for a field with a limit, so the first change is announced. */
 function CharCounter({
   id,
   state,
+  max,
 }: {
   id: string;
   state: { used: number; max: number; over: boolean } | null;
+  /** The limit of the field, when it has one. */
+  max: number | undefined;
 }) {
-  if (!state) return null;
+  if (max === undefined) return null;
   return (
-    <small className={state.over ? "hint counter over" : "hint counter"} id={id}>
-      {t("{used} of {max, plural, one {# character} other {# characters}}", {
-        used: fmt.number(state.used),
-        max: state.max,
-      })}
-    </small>
+    <>
+      {state && (
+        <small className={state.over ? "hint counter over" : "hint counter"} id={id}>
+          {t("{used} of {max, plural, one {# character} other {# characters}}", {
+            used: fmt.number(state.used),
+            max: state.max,
+          })}
+        </small>
+      )}
+      <span className="sr-only" role="status">
+        {!state
+          ? ""
+          : state.over
+            ? t("Over the limit of {max, plural, one {# character} other {# characters}}", { max })
+            : t("Close to the limit of {max, plural, one {# character} other {# characters}}", {
+                max,
+              })}
+      </span>
+    </>
   );
 }
 
@@ -177,14 +200,15 @@ export function FieldInput(p: InputProps) {
   const readText = readOnly && p.shown !== undefined ? p.shown : String(value);
   // How full a text is (D90), shown only near the limit, and only where it can still be edited.
   const counterId = `${useId()}-count`;
-  const counter =
-    !readOnly && (f.kind === "text" || f.kind === "longtext")
-      ? counterState(f, String(value))
-      : null;
+  const editableText = !readOnly && (f.kind === "text" || f.kind === "longtext");
+  const limited = editableText ? f.max_length : undefined;
+  const counter = editableText ? counterState(f, String(value)) : null;
   const common = {
     id: p.id,
     autoFocus: p.autoFocus,
-    "aria-invalid": p.invalid || undefined,
+    // Over the limit of the field and about to be sent: invalid before the save says so. A value
+    // left as stored is savable (D90 Decision 6), so it is not marked.
+    "aria-invalid": p.invalid || (counter?.over && !p.unchanged) || undefined,
     "aria-describedby": p.describedBy,
     "aria-required": f.required || undefined,
     onKeyDown: p.onKeyDown,
@@ -235,7 +259,7 @@ export function FieldInput(p: InputProps) {
             readOnly={readOnly}
             onChange={(e) => onChange(e.target.value)}
           />
-          <CharCounter id={counterId} state={counter} />
+          <CharCounter id={counterId} state={counter} max={limited} />
         </>
       );
     case "ref":
@@ -356,7 +380,7 @@ export function FieldInput(p: InputProps) {
             readOnly={readOnly}
             onChange={(e) => onChange(e.target.value)}
           />
-          <CharCounter id={counterId} state={counter} />
+          <CharCounter id={counterId} state={counter} max={limited} />
         </>
       );
   }

@@ -208,8 +208,11 @@ describe("the counter", () => {
 });
 
 describe("the form control", () => {
-  const html = (f: FieldMeta, value: string, extra: { readOnly?: boolean } = {}) =>
-    renderToStaticMarkup(<FieldInput field={f} value={value} onChange={() => {}} {...extra} />);
+  const html = (
+    f: FieldMeta,
+    value: string,
+    extra: { readOnly?: boolean; unchanged?: boolean } = {},
+  ) => renderToStaticMarkup(<FieldInput field={f} value={value} onChange={() => {}} {...extra} />);
 
   it("shows the counter of a long text near its limit, red above it", () => {
     const note = field("note", "longtext", { max_length: 10 });
@@ -220,6 +223,41 @@ describe("the form control", () => {
     // The counter is read with the field.
     const id = /<small class="hint counter over" id="([^"]+)"/.exec(over)![1];
     expect(over).toContain(`aria-describedby="${id}"`);
+  });
+
+  it("tells a screen reader once per band, not per key, and marks the control invalid while over", () => {
+    const note = field("note", "longtext", { max_length: 10 });
+    const status = (h: string) =>
+      /<span class="sr-only" role="status">([^<]*)<\/span>/.exec(h)?.[1];
+    // The region is there from the start, empty, so that its first message is announced.
+    expect(status(html(note, "abc"))).toBe("");
+    expect(html(note, "abc")).not.toContain("aria-invalid");
+    // Four fifths and nine characters are the same band: the same words, so no second announcement,
+    // while the visible count changes.
+    const eight = html(note, "12345678");
+    const nine = html(note, "123456789");
+    expect(status(eight)).toBe("Close to the limit of 10 characters");
+    expect(status(nine)).toBe(status(eight));
+    expect(eight).toContain("8 of 10 characters");
+    expect(nine).toContain("9 of 10 characters");
+    expect(eight).not.toContain("aria-invalid");
+    // Over: a new message, and the control is invalid before the save says so.
+    const over = html(note, "12345678901");
+    const over2 = html(note, "123456789012");
+    expect(status(over)).toBe("Over the limit of 10 characters");
+    expect(status(over2)).toBe(status(over));
+    expect(over).toContain('aria-invalid="true"');
+    // A value left as stored is savable (D90 Decision 6): over the limit, yet not invalid.
+    const stored = html(note, "12345678901", { unchanged: true });
+    expect(stored).not.toContain("aria-invalid");
+    expect(stored).toContain("11 of 10 characters");
+    // The same for a one-line text.
+    const code = field("code", "text", { max_length: 10 });
+    expect(html(code, "12345678901")).toContain('aria-invalid="true"');
+    expect(html(code, "12345678901", { unchanged: true })).not.toContain("aria-invalid");
+    // A field without a limit has no region, and neither has one that cannot be edited.
+    expect(html(field("free", "text"), "x".repeat(5000))).not.toContain('role="status"');
+    expect(html(note, "12345678901", { readOnly: true })).not.toContain('role="status"');
   });
 
   it("does not set the native maxlength, which would cut a pasted text without a word", () => {
