@@ -69,8 +69,9 @@ describe("a call with a deadline", () => {
   });
 
   test("leaves nothing unhandled when a call that was given up ends later", async () => {
-    // The loser of the race: the deadline came first, the call settles afterwards (a pin of the
-    // behaviour; no change to the function was found that makes it fail).
+    // The loser of the race: the deadline came first, the call settles afterwards. This fails when
+    // the late end of a call that was given up has no handler (the late rejection is then reported
+    // as unhandled) and when the race is removed.
     const seen: unknown[] = [];
     const listener = (reason: unknown) => seen.push(reason);
     process.on("unhandledRejection", listener);
